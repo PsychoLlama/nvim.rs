@@ -74,16 +74,14 @@ impl Drop for COwned {
     }
 }
 
-/// Releasing an RHS releases its Lua callback, once, when the last of a
-/// simplified pair lets go of it.
-impl Drop for MapRhs {
+/// A callback is released once, when the last of a simplified pair lets go
+/// of it.
+impl Drop for MapCallback {
     fn drop(&mut self) {
-        if self.luaref != LUA_NOREF {
-            // SAFETY: a reference this bundle owns, and nothing else can hold
-            // an `Rc` to it any more -- this is the last one dropping.
-            unsafe { api_free_luaref(self.luaref) };
-            self.luaref = LUA_NOREF;
-        }
+        // SAFETY: a reference this value owns, and nothing else can hold an
+        // `Rc` to it any more -- this is the last one dropping.
+        unsafe { api_free_luaref(self.0) };
+        self.0 = LUA_NOREF;
     }
 }
 
@@ -338,7 +336,7 @@ pub(crate) unsafe fn map_add(
         m_next: ptr::null_mut(),
         m_alt: ptr::null_mut(),
         m_keys: MapStr::new(keys),
-        m_rhs: Rc::clone(args.rhs()),
+        m_rhs: args.rhs().dup(),
         m_mode: mode,
         m_simplified: simplified,
         m_noremap: noremap,
@@ -545,7 +543,7 @@ pub(crate) unsafe fn check_map(
         move |mp: Mb| {
             // Skip entries with the wrong mode, the wrong length, and the
             // ones that do not match.
-            if mp.m_mode & mode == 0 || (exact && mp.keys().len() != keys.len()) {
+            if mp.m_mode & mode == 0 || (exact && mp.m_keys.len() != keys.len()) {
                 return None;
             }
             let mut lhs = mp.keys();

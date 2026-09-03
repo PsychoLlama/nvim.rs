@@ -178,12 +178,12 @@ pub(crate) unsafe fn set_maparg_rhs(
             vim_snprintf(at, cap, fmt, K_SPECIAL, KS_EXTRA, ke_lua, rhs_lua);
             MapStr::new(cstr::bytes_at(at))
         };
-        args.rhs = Some(Rc::new(MapRhs {
+        args.rhs = Some(MapRhs {
             str,
             orig_str: MapStr::empty(),
             desc,
-            luaref: rhs_lua,
-        }));
+            lua: Some(Rc::new(MapCallback(rhs_lua))),
+        });
         return;
     }
 
@@ -212,12 +212,12 @@ pub(crate) unsafe fn set_maparg_rhs(
     // produce an empty string even when `orig_rhs` is not -- see
     // :h map-empty-rhs.
     args.rhs_is_noop = orig_rhs_len != 0 && str.is_empty();
-    args.rhs = Some(Rc::new(MapRhs {
+    args.rhs = Some(MapRhs {
         str,
         orig_str,
         desc,
-        luaref: LUA_NOREF,
-    }));
+        lua: None,
+    });
 }
 
 /// If `to_parse` starts with `word`, step it past `word` and the whitespace

@@ -182,10 +182,9 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     let silent = mp.m_silent;
     let expr = mp.m_expr;
 
-    // The RHS bundle is held across the insert: an `<expr>` evaluation can
-    // redefine the abbreviation, and the `Rc` is what makes the stored text
-    // outlive that.
-    let rhs = Rc::clone(&mp.m_rhs);
+    // An `<expr>` evaluation can redefine -- and so free -- the abbreviation,
+    // which is why nothing below reads `mp` once it has run; the stored text
+    // is only borrowed on the path where no Vimscript runs at all.
     let evaluated = if expr {
         // SAFETY: `mp` is still linked — nothing above can have run Vimscript.
         unsafe { eval_map_expr(mp, c) }
@@ -195,7 +194,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     if let Some(s) = if expr {
         evaluated.as_ref()
     } else {
-        Some(&rhs.str)
+        Some(&mp.m_rhs.str)
     } {
         // Insert the "to" string.
         // SAFETY: `s` is NUL-terminated by `MapStr`'s own invariant and

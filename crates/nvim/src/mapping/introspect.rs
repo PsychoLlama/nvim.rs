@@ -167,10 +167,10 @@ pub(crate) unsafe fn mapblock_fill_dict(
         c_int::from(mp.m_noremap != 0)
     };
 
-    if rhs.luaref != LUA_NOREF {
+    if rhs.luaref() != LUA_NOREF {
         // SAFETY: the mapping's own reference, of which this takes a new one
         // for the caller to own.
-        let luaref = unsafe { api_new_luaref(rhs.luaref) };
+        let luaref = unsafe { api_new_luaref(rhs.luaref()) };
         out.put(c"callback", Object::LuaRef(luaref));
     } else {
         // SAFETY: `orig_str` and `str` are the mapping's own NUL-terminated
@@ -307,9 +307,9 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
         // Return a string.
         if let Some((mp, _)) = found {
             let rhs = &mp.m_rhs;
-            ret.vval.v_string = if rhs.luaref != LUA_NOREF {
+            ret.vval.v_string = if rhs.luaref() != LUA_NOREF {
                 // SAFETY: `mp` is the matching mapping, still linked.
-                unsafe { nlua_funcref_str(rhs.luaref, ptr::null_mut()) }
+                unsafe { nlua_funcref_str(rhs.luaref(), ptr::null_mut()) }
             } else if rhs.str.is_empty() {
                 owned_cstr(b"<Nop>".to_vec())
             } else {

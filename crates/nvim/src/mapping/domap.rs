@@ -136,7 +136,7 @@ unsafe fn reuse_mapblock(
         unsafe { (*alt).m_alt = ptr::null_mut() };
         mp.m_alt = ptr::null_mut();
     }
-    mp.m_rhs = Rc::clone(args.rhs());
+    mp.m_rhs = args.rhs().dup();
     mp.m_noremap = noremap;
     mp.m_nowait = args.nowait;
     mp.m_silent = args.silent;

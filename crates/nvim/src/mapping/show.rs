@@ -95,9 +95,9 @@ pub(crate) unsafe fn showmap(mp: Mb, local: bool) {
 
     // `false` below would show only things like <Up> as such on the rhs
     // and not M-x etc; `true` gets both -- webb
-    if rhs.luaref != LUA_NOREF {
+    if rhs.luaref() != LUA_NOREF {
         // SAFETY: the mapping's own reference; the rendering is the guard's.
-        let text = unsafe { COwned::new(nlua_funcref_str(rhs.luaref, ptr::null_mut())) };
+        let text = unsafe { COwned::new(nlua_funcref_str(rhs.luaref(), ptr::null_mut())) };
         // SAFETY: a NUL-terminated rendering that outlives the call.
         unsafe { msg_puts_hl(text.as_c_ptr(), HLF_8, false) };
     } else if rhs.str.is_empty() {

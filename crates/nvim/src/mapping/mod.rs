@@ -10,11 +10,15 @@
 //! # Ownership
 //!
 //! Nothing in this module is freed by hand.  A mapping's four strings are
-//! owned: the LHS is a [`MapStr`] on the entry itself, and the three RHS ones
-//! plus the Lua reference are a [`MapRhs`] behind an [`Rc`], because a
-//! `<C-H>`-style mapping and its unsimplified twin *share* one right-hand
-//! side.  Upstream leaves that share to `m_alt` ("the other one still owns
-//! them"); here `m_alt` is only the twin's address and the refcount decides.
+//! owned: the LHS is a [`MapStr`] and the three RHS ones a [`MapRhs`], both
+//! held by value on the entry.  Upstream keeps *one* RHS per `<C-H>`-style
+//! pair and leaves it owned by whichever of the two is freed second, using
+//! `m_alt` as the "the other one still owns them" flag; here the twin gets
+//! its own copy — the pair is rare, and a shared box would be an allocation
+//! and an indirection on every entry of every bucket walk.  Only the Lua
+//! callback is shared (an [`Rc<MapCallback>`], `None` when there is none),
+//! because a registry reference cannot be duplicated; `m_alt` is now no more
+//! than the twin's address.
 //! The entry itself is a `Box` its list holds by raw pointer, so a mapping
 //! keeps the stable address `getchar`'s match loop and the delete-walk need,
 //! and [`mapblock_free`] is `Box::from_raw` plus one unlink.
@@ -76,9 +80,9 @@ use crate::state::{
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
-    LuaRef, LuaRetMode, MapRhs, MapStr, Object, RemapValues, String_0, dict_T, exarg_T, expand_T,
-    fuzmatch_str_T, key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t, regmatch_T, scid_T,
-    size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    LuaRef, LuaRetMode, MapCallback, MapRhs, MapStr, Object, RemapValues, String_0, dict_T,
+    exarg_T, expand_T, fuzmatch_str_T, key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t,
+    regmatch_T, scid_T, size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};
@@ -149,7 +153,7 @@ pub(crate) struct MapArguments {
     /// How long `alt_lhs` was before truncation, or 0 for "did not simplify".
     pub alt_lhs_len: size_t,
     /// The right-hand side, once [`set_maparg_rhs`] has built it.
-    pub rhs: Option<Rc<MapRhs>>,
+    pub rhs: Option<MapRhs>,
     /// Whether the RHS came out empty from a non-empty spelling, which is
     /// what `<Nop>` and a lone CTRL-V both mean.
     pub rhs_is_noop: bool,
@@ -191,7 +195,7 @@ pub(crate) fn skip_white(bytes: &[u8]) -> &[u8] {
 
 impl MapArguments {
     /// The RHS bundle, which every path that reads one has already built.
-    pub(crate) fn rhs(&self) -> &Rc<MapRhs> {
+    pub(crate) fn rhs(&self) -> &MapRhs {
         self.rhs
             .as_ref()
             .expect("the RHS is parsed before it is read")
@@ -199,7 +203,7 @@ impl MapArguments {
 
     /// The Lua callback this parse holds, or `LUA_NOREF`.
     pub(crate) fn rhs_lua(&self) -> LuaRef {
-        self.rhs.as_ref().map_or(LUA_NOREF, |rhs| rhs.luaref)
+        self.rhs.as_ref().map_or(LUA_NOREF, MapRhs::luaref)
     }
 
     /// How long the RHS is in typeahead form.
