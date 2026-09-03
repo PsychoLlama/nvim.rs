@@ -53,7 +53,7 @@ pub(crate) use sps::spell_check_sps;
 use sps::{spell_suggest_expr, spell_suggest_file};
 
 use crate::charset::{skiptowhite, skipwhite};
-use crate::garray::{ga_clear, ga_grow, ga_init};
+use crate::garray::{ga_grow, ga_init};
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
@@ -66,7 +66,7 @@ use crate::spell::{captype, make_case_word, spell_casefold, spell_check, spell_s
 use crate::spellfile::suggest_load_files;
 use crate::spellsuggest::collect::{
     add_banned, add_suggestion, check_suggestions, clean_count, cleanup_suggestions,
-    rescore_suggestions, score_combine, score_comp_sal, suggestions,
+    rescore_suggestions, score_combine, score_comp_sal,
 };
 use crate::spellsuggest::score::spell_isupper;
 use crate::spellsuggest::soundalike::{
@@ -176,13 +176,8 @@ impl Sug {
     /// [`Live::field_ptr`]: a field's address is the object's plus a
     /// constant, so this reads nothing and hands out no borrow -- which is
     /// what `su.su_ga()` was spelling out at every call.
-    pub(super) fn su_ga(self) -> *mut garray_T {
+    pub(super) fn su_ga(self) -> *mut Vec<suggest_T> {
         self.field_ptr(offset_of!(suginfo_T, su_ga))
-    }
-
-    /// [`Self::su_ga`], for the "soundalike" list.
-    pub(super) fn su_sga(self) -> *mut garray_T {
-        self.field_ptr(offset_of!(suginfo_T, su_sga))
     }
 
     /// [`Self::su_ga`], for the table of words already rejected.
@@ -207,8 +202,8 @@ impl Sug {
 }
 
 pub(crate) struct suginfo_T {
-    /// The suggestions found so far, a garray of [`suggest_T`].
-    pub su_ga: garray_T,
+    /// The suggestions found so far, best last until they are sorted.
+    pub su_ga: Vec<suggest_T>,
     /// How many suggestions will be displayed.
     pub su_maxcount: c_int,
     /// The score ceiling for adding to `su_ga`.
@@ -216,7 +211,7 @@ pub(crate) struct suginfo_T {
     /// The same, while working on sound-folded words.
     pub su_sfmaxscore: c_int,
     /// Like `su_ga`, but scored by sound; only used in "double" mode.
-    pub su_sga: garray_T,
+    pub su_sga: Vec<suggest_T>,
     /// Where the bad word starts, in the line it came from.
     pub su_badptr: *mut c_char,
     /// How much of that line the bad word covers.
@@ -240,19 +235,12 @@ impl suginfo_T {
     /// the zeroed struct the transpiled code started from, which a table that
     /// owns its slots no longer permits.
     pub(crate) fn new() -> Self {
-        const NO_GARRAY: garray_T = garray_T {
-            ga_len: 0,
-            ga_maxlen: 0,
-            ga_itemsize: 0,
-            ga_growsize: 0,
-            ga_data: ptr::null_mut(),
-        };
         Self {
-            su_ga: NO_GARRAY,
+            su_ga: Vec::new(),
             su_maxcount: 0,
             su_maxscore: 0,
             su_sfmaxscore: 0,
-            su_sga: NO_GARRAY,
+            su_sga: Vec::new(),
             su_badptr: ptr::null_mut(),
             su_badlen: 0,
             su_badflags: WordFlags::NONE,
@@ -266,11 +254,11 @@ impl suginfo_T {
 }
 
 /// One suggestion.
-#[derive(Copy, Clone)]
 pub(crate) struct suggest_T {
-    /// The suggested word, an allocated string this entry owns.
-    pub st_word: *mut c_char,
-    /// `strlen(st_word)`.
+    /// The suggested word, owned, with the NUL the C helpers below it
+    /// still stop on.
+    pub st_word: Box<[u8]>,
+    /// `st_word`'s length, not counting that NUL.
     pub st_wordlen: c_int,
     /// How much of the bad word it replaces.
     pub st_orglen: c_int,
@@ -284,6 +272,14 @@ pub(crate) struct suggest_T {
     pub st_had_bonus: bool,
     /// The language the word was sound-folded with.
     pub st_slang: *mut slang_T,
+}
+
+impl suggest_T {
+    /// The suggested word as a NUL-terminated string, for the helpers that
+    /// still take one.
+    pub(crate) fn word(&self) -> *mut c_char {
+        self.st_word.as_ptr().cast::<c_char>().cast_mut()
+    }
 }
 
 /// How long the trie walk may run for, in milliseconds; `timeout:` in
@@ -388,15 +384,16 @@ pub(crate) unsafe fn spell_suggest_list(
     let su = unsafe { Sug::new(&raw mut sug) };
     unsafe { spell_find_suggest(word, 0, su, maxcount, false, need_cap, interactive) };
 
-    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, sug.su_ga.ga_len + 1) };
-    unsafe { ga_grow(gap, sug.su_ga.ga_len) };
-    for stp in unsafe { suggestions(&raw mut sug.su_ga) } {
+    let found = sug.su_ga.len() as c_int;
+    unsafe { ga_init(gap, size_of::<*mut c_char>() as c_int, found + 1) };
+    unsafe { ga_grow(gap, found) };
+    for stp in &sug.su_ga {
         // A suggestion may replace only part of `word`; what it does
         // not replace goes on the end.
         let tail = unsafe { sug.su_badptr.offset(stp.st_orglen as isize) };
         let wcopy = unsafe { xmalloc(stp.st_wordlen as usize + cstr::bytes_at(tail).len() + 1) }
             as *mut c_char;
-        unsafe { strcpy(wcopy, stp.st_word) };
+        unsafe { strcpy(wcopy, stp.word()) };
         unsafe { strcpy(wcopy.offset(stp.st_wordlen as isize), tail) };
         unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = wcopy };
         unsafe { (*gap).ga_len += 1 };
@@ -440,9 +437,9 @@ unsafe fn spell_find_suggest(
     let mut buf = [0 as c_char; MAXPATHL as usize];
     let bufp = buf.as_mut_ptr();
 
-    unsafe { ptr::write_bytes(su.raw(), 0, 1) };
-    unsafe { ga_init(su.su_ga(), size_of::<suggest_T>() as c_int, 10) };
-    unsafe { ga_init(su.su_sga(), size_of::<suggest_T>() as c_int, 10) };
+    // Start clean. The two suggestion lists own their entries, so this
+    // cannot be the zero fill the C used.
+    unsafe { *su.raw() = suginfo_T::new() };
     if unsafe { *badptr } as c_int == NUL {
         return;
     }
@@ -593,7 +590,7 @@ unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
         su.su_sfmaxscore = SCORE_MAXINIT * 3;
         unsafe { suggest_try_soundalike(su.raw()) };
         for ceiling in [SCORE_SFMAX2, SCORE_SFMAX3] {
-            if su.su_ga.ga_len >= clean_count(&su) {
+            if su.su_ga.len() as c_int >= clean_count(&su) {
                 break;
             }
             su.su_maxscore = ceiling;
@@ -611,7 +608,7 @@ unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
         got_int.set(false);
     }
 
-    if sps_flags.get() & SPS_DOUBLE == 0 && su.su_ga.ga_len != 0 {
+    if sps_flags.get() & SPS_DOUBLE == 0 && su.su_ga.len() as c_int != 0 {
         if sps_flags.get() & SPS_BEST != 0 {
             unsafe { rescore_suggestions(su.raw()) };
         }
@@ -626,14 +623,11 @@ unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
 ///
 /// `su` must have been filled by [`spell_find_suggest`].
 unsafe fn spell_find_cleanup(mut su: Sug) {
-    // SAFETY: the caller guarantees `su`; each suggestion owns its word
-    // and the banned table owns its keys.
-    for gap in [su.su_ga(), su.su_sga()] {
-        for stp in unsafe { suggestions(gap) } {
-            unsafe { xfree(stp.st_word as *mut c_void) };
-        }
-        unsafe { ga_clear(gap) };
-    }
+    // SAFETY: the caller guarantees `su`; each suggestion owns its word, so
+    // emptying the lists frees them, and the banned table owns its keys.
+    let sug = unsafe { &mut *su.raw() };
+    sug.su_ga = Vec::new();
+    sug.su_sga = Vec::new();
     unsafe { hash_clear_all(su.su_banned(), 0) };
 }
 

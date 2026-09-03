@@ -56,7 +56,6 @@ use crate::smsg;
 use crate::spell::{
     SMT_ALL, check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
 };
-use crate::spellsuggest::collect::suggestions;
 use crate::spellsuggest::{
     MAXWLEN, SPS_BEST, SPS_DOUBLE, Sug, spell_find_cleanup, spell_find_suggest,
     spell_suggest_timeout, sps_flags, sps_limit, suggest_T, suginfo_T,
@@ -145,20 +144,20 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
 
     let mut selected = count;
     unsafe { msg_ext_set_kind(c"confirm".as_ptr()) };
-    if sug.su_ga.ga_len <= 0 {
+    if sug.su_ga.len() as c_int <= 0 {
         msg(gettext(c"No suggestions"), 0);
     } else if count > 0 {
-        if count > sug.su_ga.ga_len {
-            let found = sug.su_ga.ga_len as int64_t;
+        if count > sug.su_ga.len() as c_int {
+            let found = sug.su_ga.len() as c_int as int64_t;
             smsg!(0, "Only {} suggestions", found);
         }
     } else {
         selected = unsafe { ask_which_suggestion(&mut sug, msg_scroll_save) };
     }
 
-    if selected > 0 && selected <= sug.su_ga.ga_len && u_save_cursor().is_ok() {
-        let stp = unsafe { suggestions(&raw mut sug.su_ga) }[selected as usize - 1];
-        unsafe { apply_suggestion(&sug, &stp, line) };
+    if selected > 0 && selected <= sug.su_ga.len() as c_int && u_save_cursor().is_ok() {
+        let stp = &sug.su_ga[selected as usize - 1];
+        unsafe { apply_suggestion(&sug, stp, line) };
     } else {
         cur_win().w_cursor = prev_cursor;
     }
@@ -262,13 +261,10 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
     unsafe { msg_putchar('\n' as c_int) };
 
     msg_scroll.set(1);
-    let last = sug.su_ga.ga_len - 1;
+    let last = sug.su_ga.len() as c_int - 1;
     let badlen = sug.su_badlen;
     let badptr = sug.su_badptr;
-    for (i, stp) in unsafe { suggestions(&raw mut sug.su_ga) }
-        .iter()
-        .enumerate()
-    {
+    for (i, stp) in sug.su_ga.iter().enumerate() {
         unsafe { show_suggestion(i as c_int, stp, badlen, badptr) };
         if !ui_has(kUIMessages) || (i as c_int) < last {
             unsafe { msg_putchar('\n' as c_int) };
@@ -281,7 +277,7 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
     let mut mouse_used = false;
     let mut selected = unsafe { prompt_for_input(ptr::null_mut(), 0, false, &raw mut mouse_used) };
     if mouse_used {
-        selected = sug.su_ga.ga_len + 1 - (cmdline_row.get() - mouse_row.get());
+        selected = sug.su_ga.len() as c_int + 1 - (cmdline_row.get() - mouse_row.get());
     }
 
     lines_left.set(Rows.get()); // avoid the more-prompt
@@ -308,7 +304,7 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
     // rest of it too, as long as that does not get too long.
     let mut wcopy = [0 as c_char; MAXWLEN + 2];
     let wcopyp = wcopy.as_mut_ptr();
-    unsafe { xstrlcpy(wcopyp, stp.st_word, MAXWLEN + 1) };
+    unsafe { xstrlcpy(wcopyp, stp.word(), MAXWLEN + 1) };
     let extra = badlen - stp.st_orglen;
     if extra > 0 && stp.st_wordlen + extra <= MAXWLEN as c_int {
         debug_assert!(!badptr.is_null());
@@ -405,13 +401,13 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
         let restlen = sug.su_badlen - stp.st_orglen;
         let fmt = c"%s%.*s".as_ptr();
         let out = repl.as_mut_ptr();
-        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, stp.st_word, restlen, rest) };
+        unsafe { vim_snprintf(out, IOSIZE as usize, fmt, stp.word(), restlen, rest) };
         repl_to.set(unsafe { xstrdup(repl.as_ptr()) });
     } else {
         // Replacing the whole bad word, or more of the line than it
         // covers.
         repl_from.set(unsafe { xstrnsave(sug.su_badptr, stp.st_orglen as usize) });
-        repl_to.set(unsafe { xstrdup(stp.st_word) });
+        repl_to.set(unsafe { xstrdup(stp.word()) });
     }
 
     // Build the new line: what came before the bad word, the
@@ -421,7 +417,7 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
     let newline = unsafe { xmalloc(size + 1) } as *mut c_char;
     let col = unsafe { sug.su_badptr.offset_from(line) } as c_int;
     unsafe { newline.cast::<u8>().copy_from(line.cast(), col as usize) };
-    unsafe { strcpy(newline.offset(col as isize), stp.st_word) };
+    unsafe { strcpy(newline.offset(col as isize), stp.word()) };
     unsafe { strcat(newline, sug.su_badptr.offset(stp.st_orglen as isize)) };
 
     // Redo is a change-word command.

@@ -46,8 +46,7 @@ use crate::memory::xstrlcpy;
 use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
-    SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suggest_T,
-    suginfo_T,
+    SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suginfo_T,
 };
 use crate::types::{MB_MAXCHAR, NUL, size_t, slang_T, wordcount_T};
 use core::ffi::{c_char, c_int};
@@ -688,12 +687,18 @@ fn pop(
 /// cannot be compared as they stand: whichever side is short gets the
 /// missing stretch of the original line appended before folding.
 ///
+/// The suggestion is named by its own numbers rather than by a reference,
+/// because the list it sits in is one of `su`'s fields and all of `su` is
+/// read here.
+///
 /// # Safety
 ///
-/// `stp` and `su` must be valid, and `su`'s bad word must still point into
-/// the line it was taken from.
+/// `word` must be NUL-terminated and `wordlen` bytes long, `su` valid, and
+/// `su`'s bad word must still point into the line it was taken from.
 pub(super) unsafe fn stp_sal_score(
-    stp: &suggest_T,
+    word: *mut c_char,
+    wordlen: c_int,
+    orglen: c_int,
     su: &suginfo_T,
     slang: *mut slang_T,
     badsound: &SoundBuf,
@@ -703,7 +708,7 @@ pub(super) unsafe fn stp_sal_score(
     let mut goodsound = EMPTY_SOUND;
     let mut goodword = EMPTY_SOUND;
 
-    let lendiff = su.su_badlen - stp.st_orglen;
+    let lendiff = su.su_badlen - orglen;
 
     // SAFETY: the pointers come from the caller's suggestion list and bad
     // word; every buffer below is `MAXWLEN` and every helper is told so.
@@ -718,8 +723,7 @@ pub(super) unsafe fn stp_sal_score(
         // `MAXWLEN` bytes, which is the bound handed over.
         let win = curwin.get();
         let len = MAXWLEN as c_int;
-        let _ =
-            unsafe { spell_casefold(win, su.su_badptr, stp.st_orglen, fword.as_mut_ptr(), len) };
+        let _ = unsafe { spell_casefold(win, su.su_badptr, orglen, fword.as_mut_ptr(), len) };
 
         // Joining two words changes the sound a lot -- "t he" sounds
         // like "t h" where "the" sounds like "@" -- so drop the space,
@@ -729,7 +733,7 @@ pub(super) unsafe fn stp_sal_score(
         // too, and each copy moves a NUL-terminated tail down one byte
         // inside `fword`.
         if ascii_iswhite(unsafe { *su.su_badptr.offset(su.su_badlen as isize) } as c_int)
-            && unsafe { *skiptowhite(stp.st_word) } == NUL as c_char
+            && unsafe { *skiptowhite(word) } == NUL as c_char
         {
             let mut p = fword.as_mut_ptr();
             loop {
@@ -751,20 +755,20 @@ pub(super) unsafe fn stp_sal_score(
         &badsound2
     };
 
-    let pgood = if lendiff > 0 && stp.st_wordlen + lendiff < MAXWLEN as c_int {
+    let pgood = if lendiff > 0 && wordlen + lendiff < MAXWLEN as c_int {
         // Append the part of the bad word the suggestion does not
         // reach, so that what gets folded is the whole replacement.
         //
-        // SAFETY: the test above leaves `st_wordlen + lendiff` under
+        // SAFETY: the test above leaves `wordlen + lendiff` under
         // `MAXWLEN`, so both the word and the tail fit in `goodword`, and
         // the tail really is `lendiff` bytes of the line.
-        unsafe { xstrlcpy(goodword.as_mut_ptr(), stp.st_word, goodword.len()) };
-        let tail = unsafe { goodword.as_mut_ptr().offset(stp.st_wordlen as isize) };
+        unsafe { xstrlcpy(goodword.as_mut_ptr(), word, goodword.len()) };
+        let tail = unsafe { goodword.as_mut_ptr().offset(wordlen as isize) };
         let rest = unsafe { su.su_badptr.offset((su.su_badlen - lendiff) as isize) };
         unsafe { xmemcpyz(tail as *mut _, rest as *const _, lendiff as size_t) };
         goodword.as_mut_ptr()
     } else {
-        stp.st_word
+        word
     };
 
     // SAFETY: `pgood` is one of the two NUL-terminated words above and
