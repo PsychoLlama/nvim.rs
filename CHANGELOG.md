@@ -39,6 +39,14 @@ and this project adheres to [CalVer](https://calver.org/).
   hands back to `:execute`. The ATTENTION message, `:recover`, `swapinfo()`,
   `swapfilelist()`, Replace mode's backspace, `:packadd` and `nvim_cmd()`
   all behave as before, byte for byte.
+- Rewrote how a mapping or abbreviation holds its text: the left- and
+  right-hand sides, the `desc` and the Lua callback are owned by the entry
+  rather than allocated and released by hand, and a `<C-H>`-style mapping
+  and its unsimplified twin no longer share one right-hand side between
+  them. `:map` and `:abbrev` list in the same order, `maparg()`,
+  `maplist()`, `mapcheck()`, `mapset()`, `nvim_get_keymap()` and
+  `nvim_set_keymap()` answer the same dicts, and `:mkexrc`/`:mksession`
+  write the same commands.
 
 ## [2026.09.02-bc9e0f515a]
 
