@@ -78,7 +78,7 @@ pub mod insexpand;
 pub mod keycodes;
 pub(crate) mod kvec;
 pub mod linematch;
-pub(crate) mod log;
+pub mod log;
 pub mod lua;
 pub mod main;
 pub mod map;

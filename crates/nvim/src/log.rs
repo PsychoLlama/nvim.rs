@@ -52,10 +52,10 @@ use ::libc::{
 };
 
 /// The levels [`logmsg_line`] takes, and 'verbose' compares against.
-pub(crate) const LOGLVL_DBG: c_int = 1;
-pub(crate) const LOGLVL_INF: c_int = 2;
-pub(crate) const LOGLVL_WRN: c_int = 3;
-pub(crate) const LOGLVL_ERR: c_int = 4;
+pub const LOGLVL_DBG: c_int = 1;
+pub const LOGLVL_INF: c_int = 2;
+pub const LOGLVL_WRN: c_int = 3;
+pub const LOGLVL_ERR: c_int = 4;
 
 const kXDGStateHome: XDGVarType = 3;
 /// `MAXPATHL + 1`: what `log_file_path[]` is declared as upstream, and the
@@ -244,7 +244,7 @@ fn log_path_init() {
 
 /// Set up the log mutex and decide the log file. Called from startup, after
 /// `init_homedir` and `set_init_1` — the path depends on both (#11501).
-pub(crate) fn log_init() {
+pub fn log_init() {
     // SAFETY: initialising the process-wide mutex once, before any lock.
     unsafe { uv_mutex_init_recursive(mutex_ptr()) };
     log_path_init();
@@ -375,7 +375,7 @@ const EOF: c_int = -1;
 /// The two tags are `'static` literals, which is the whole difference
 /// between this and the `fprintf` it replaced: a log line no longer has a
 /// raw pointer anywhere in it, so the call site needs no `unsafe`.
-pub(crate) fn logmsg_line(
+pub fn logmsg_line(
     log_level: c_int,
     context: Option<&'static CStr>,
     func_name: Option<&'static CStr>,

@@ -28,6 +28,7 @@ mod hashtab;
 mod indent;
 mod keycodes;
 mod linematch;
+mod log;
 mod map;
 mod marktree;
 mod mbyte;
