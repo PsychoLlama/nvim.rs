@@ -762,6 +762,12 @@ pub unsafe fn os_realpath(name: *const c_char, mut buf: *mut c_char, len: size_t
     )
 }
 
+/// [`os_isdir`] for a caller that has the path as a string.
+pub fn dir_exists(path: &CStr) -> bool {
+    // SAFETY: a NUL-terminated path.
+    unsafe { os_isdir(path.as_ptr()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

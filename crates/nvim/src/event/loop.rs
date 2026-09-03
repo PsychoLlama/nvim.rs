@@ -27,21 +27,22 @@ use core::ptr;
 
 use crate::event::libuv::{
     uv_async_init, uv_async_send, uv_close, uv_is_closing, uv_loop_close, uv_loop_init,
-    uv_mutex_destroy, uv_mutex_init, uv_mutex_lock, uv_mutex_unlock, uv_run, uv_signal_init,
-    uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
+    uv_mutex_destroy, uv_mutex_init, uv_mutex_lock, uv_mutex_unlock, uv_print_all_handles, uv_run,
+    uv_signal_init, uv_stop, uv_timer_init, uv_timer_start, uv_timer_stop, uv_walk,
 };
 use crate::event::multiqueue::{
     multiqueue_empty, multiqueue_free, multiqueue_move_events, multiqueue_new,
     multiqueue_new_child, multiqueue_process_events, multiqueue_purge_events, multiqueue_put_event,
     multiqueue_size,
 };
-use crate::log::{LOGLVL_ERR, log_uv_handles, logmsg};
+use crate::log::{LOGLVL_ERR, log_file_path, logmsg, with_log_lock};
+use crate::os::cshim::stderr;
 use crate::os::time::os_hrtime;
 use crate::types::{
     Event, Loop, MultiQueue, Proc, argv_callback, uv_async_t, uv_handle_t, uv_loop_t, uv_mutex_t,
     uv_run_mode, uv_signal_t, uv_timer_t,
 };
-use ::libc::abort;
+use ::libc::{abort, fclose, fopen};
 
 const UV_RUN_DEFAULT: uv_run_mode = 0;
 const UV_RUN_ONCE: uv_run_mode = 1;
@@ -250,11 +251,10 @@ fn drain_until_closed(uv_loop: EventLoop, wait: bool) -> bool {
             return true;
         }
         if os_hrtime().wrapping_sub(start).wrapping_div(1_000_000_000) >= 2 {
-            // SAFETY: the log's own locking; the loop is still readable.
-            unsafe {
-                logmsg!(LOGLVL_ERR, c"loop_close", 172, "uv_loop_close() hang?");
-                log_uv_handles(uv_loop.uv().cast());
-            }
+            logmsg!(LOGLVL_ERR, c"loop_close", 172, "uv_loop_close() hang?");
+            // SAFETY: the loop is still readable, and `log_uv_handles` takes
+            // the log's lock around the write.
+            unsafe { log_uv_handles(uv_loop.uv()) };
             return false;
         }
         if !didstop {
@@ -571,6 +571,36 @@ pub unsafe fn loop_size(uv_loop: *mut Loop) -> usize {
     with_mutex(uv_loop, || unsafe {
         multiqueue_size(uv_loop.thread_events)
     })
+}
+
+/// Dump libuv's handle table to the log — the `:checkhealth`-adjacent view
+/// of what the event loop is still holding.
+///
+/// This is the one caller that needs the log as a `FILE *`, because
+/// `uv_print_all_handles` takes one; `log.rs` writes bytes and hands out only
+/// the path. It sat there for that reason and now sits here, on the side of
+/// the boundary that already makes libuv calls.
+///
+/// # Safety
+/// `uv_loop` is a live `uv_loop_t *`.
+pub(crate) unsafe fn log_uv_handles(uv_loop: *mut uv_loop_t) {
+    with_log_lock(|| {
+        let path = log_file_path();
+        // SAFETY: a NUL-terminated path held alive by `path`; the handle is
+        // closed below and never escapes.
+        let opened = path
+            .as_ref()
+            .map(|path| unsafe { fopen(path.as_ptr(), c"a".as_ptr()) })
+            .filter(|file| !file.is_null());
+        // SAFETY: `stderr` is open for the life of the process.
+        let out = opened.unwrap_or(unsafe { stderr });
+        // SAFETY: the caller's loop, and a handle open for writing.
+        unsafe { uv_print_all_handles(uv_loop, out) };
+        if let Some(file) = opened {
+            // SAFETY: the handle this call opened, closed once.
+            unsafe { fclose(file) };
+        }
+    });
 }
 
 #[cfg(test)]

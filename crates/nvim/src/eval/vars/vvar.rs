@@ -721,3 +721,16 @@ pub unsafe fn reset_v_option_vars() {
         unsafe { set_vim_var_string(idx, ptr::null(), -1) };
     }
 }
+
+/// [`get_vim_var_str`] as owned bytes.
+///
+/// The pointer form's precondition is "`idx` names a `v:` variable", which
+/// [`Vv`] is: the enumeration *is* the proof, so a caller has nothing left to
+/// promise. The bytes are copied because the variable can be assigned to,
+/// and none of the callers here hold the value that long.
+pub fn vim_var_bytes(idx: Vv) -> Vec<u8> {
+    // SAFETY: `idx` is a `Vv`, which is the precondition.
+    unsafe { cstr::at(get_vim_var_str(idx)) }
+        .to_bytes()
+        .to_vec()
+}

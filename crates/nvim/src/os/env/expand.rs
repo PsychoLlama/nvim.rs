@@ -316,3 +316,19 @@ pub unsafe fn expand_env_esc(
         dst.offset_from(dst_start) as size_t
     }
 }
+
+/// [`expand_env`] into an owned buffer of `cap` bytes: the expansion, cut to
+/// fit exactly as upstream's fixed-size destination cuts it.
+///
+/// The pointer form wants a NUL-terminated source it only reads and a
+/// destination big enough for the bound it is handed; a `&CStr` is the first
+/// and a buffer allocated here is the second, so a caller that has the string
+/// rather than a pointer needs no `unsafe` of its own.
+pub fn expand_env_into(src: &CStr, cap: usize) -> Vec<u8> {
+    let mut buf = vec![0 as c_char; cap];
+    let bound = c_int::try_from(cap - 1).expect("a destination buffer smaller than INT_MAX");
+    // SAFETY: `src` is NUL-terminated and `expand_env` only reads it; `buf`
+    // holds `cap` chars and the bound passed is one less, as upstream's is.
+    unsafe { expand_env(src.as_ptr().cast_mut(), buf.as_mut_ptr(), bound) };
+    cstr::in_chars(&buf).to_bytes().to_vec()
+}

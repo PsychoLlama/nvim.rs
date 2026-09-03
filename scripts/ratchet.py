@@ -557,7 +557,6 @@ CELL_PTR_ALLOW = {
     # has none today, and `cell_ptr` still counts it.
     "WATCHERS": "uv_signal_t array whose addresses are registered with uv",
     "REFRESH_TIMER": "TimeWatcher — a uv timer handle",
-    "MUTEX": "uv_mutex_t, const-initialised in place",
     "runtime_search_path_mutex": "uv_mutex_t",
     "main_thread": "uv_thread_t, compared with uv_thread_equal",
     "TERMIOS_DEFAULT": "struct termios handed to tcsetattr",
@@ -2146,7 +2145,7 @@ SELF_TEST_PUB_ITEMS = [
 # matched — receiver-blind `.ptr()`/`.as_raw()`, with the receiver pinned.
 SELF_TEST_CELL_PTR_ALLOW = [
     ("fn f() {\n    main_loop.ptr();\n}\n", 1),
-    ("fn f() {\n    MUTEX.as_raw();\n}\n", 1),
+    ("fn f() {\n    runtime_search_path_mutex.as_raw();\n}\n", 1),
     # Spacing rustfmt never writes is not matched either — the subtraction
     # has to stay a subset of what `cell_ptr`'s substring needle counted.
     ("fn f() {\n    main_loop . ptr();\n}\n", 0),

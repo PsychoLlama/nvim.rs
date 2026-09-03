@@ -11,11 +11,13 @@
 use crate::os::uv_error::UV_EOF;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
+use std::ffi::CString;
 
 use super::{
     LIBUV_SUCCESS, NO_LOOP, PATHSEP, TEMP_FILE_PATH_MAXLEN, UV_STAT_T_INIT, fs_ok, fs_request,
     fs_result, os_isdir, os_stat,
 };
+use crate::cstr;
 use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
     uv_fs_scandir_next, uv_fs_unlink, uv_strerror,
@@ -258,4 +260,39 @@ pub unsafe fn os_closedir(dir: *mut Directory) {
 pub unsafe fn os_remove(path: *const c_char) -> c_int {
     // SAFETY: the caller's NUL-terminated path.
     fs_result(|req| unsafe { uv_fs_unlink(NO_LOOP, req, path, None) })
+}
+
+/// Why [`mkdir_recurse`] gave up: libuv's code, the directory that could not
+/// be made, and libuv's own word for the code — which is here rather than at
+/// the caller because `uv_strerror` is a C call and this is the side of the
+/// boundary that makes those.
+pub struct MkdirFailure {
+    pub code: c_int,
+    pub dir: Option<CString>,
+    pub why: &'static CStr,
+}
+
+/// [`os_mkdir_recurse`] for a caller that has the name as a string and wants
+/// the failure as a value rather than through an out-parameter.
+pub fn mkdir_recurse(dir: &CStr, mode: int32_t) -> Result<(), MkdirFailure> {
+    let mut failed_dir: *mut c_char = ptr::null_mut();
+    // SAFETY: a NUL-terminated directory name, and `failed_dir` is this
+    // frame's -- it receives at most one owned string, read back and freed
+    // here.
+    let code =
+        unsafe { os_mkdir_recurse(dir.as_ptr(), mode, &raw mut failed_dir, ptr::null_mut()) };
+    // SAFETY: null, or one owned NUL-terminated path.
+    let owned = unsafe { cstr::at_opt(failed_dir) }.map(CStr::to_owned);
+    // SAFETY: null, or the string just copied.
+    unsafe { xfree(failed_dir.cast()) };
+    if code == 0 {
+        return Ok(());
+    }
+    // SAFETY: `uv_strerror` answers a static string for any code.
+    let why = unsafe { cstr::at(uv_strerror(code)) };
+    Err(MkdirFailure {
+        code,
+        dir: owned,
+        why,
+    })
 }

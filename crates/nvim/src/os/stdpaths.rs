@@ -253,6 +253,29 @@ pub unsafe fn stdpaths_user_state_subpath(
         .into_raw()
 }
 
+/// [`get_xdg_home`] as an owned string: `{xdg_directory}/$NVIM_APPNAME`, or
+/// `None` when the directory is unset.
+pub fn xdg_home(idx: XDGVarType) -> Option<CString> {
+    let dir = get_xdg_home(idx);
+    // SAFETY: null, or one owned NUL-terminated path.
+    let owned = unsafe { cstr::at_opt(dir) }.map(CStr::to_owned);
+    // SAFETY: as above.
+    unsafe { xfree(dir.cast()) };
+    owned
+}
+
+/// [`stdpaths_user_state_subpath`] as an owned string, with neither trailing
+/// separators nor comma escaping: `$XDG_STATE_HOME/$NVIM_APPNAME/{fname}`.
+pub fn user_state_subpath(fname: &CStr) -> CString {
+    // SAFETY: a NUL-terminated name in, one owned NUL-terminated path out.
+    let path = unsafe { stdpaths_user_state_subpath(fname.as_ptr(), 0, true) };
+    // SAFETY: the owned path just answered.
+    let owned = unsafe { cstr::at(path) }.to_owned();
+    // SAFETY: as above.
+    unsafe { xfree(path.cast()) };
+    owned
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -21,7 +21,9 @@ pub use dirs::{
     home_replace, home_replace_save, vim_env_iter, vim_env_iter_rev, vim_get_prefix_from_exepath,
     vim_getenv,
 };
-pub use expand::{expand_env, expand_env_esc, expand_env_save, expand_env_save_opt};
+pub use expand::{
+    expand_env, expand_env_esc, expand_env_into, expand_env_save, expand_env_save_opt,
+};
 
 use crate::charset::skipwhite;
 use crate::cstr;
@@ -543,4 +545,22 @@ pub unsafe fn vim_setenv_ext(name: *const c_char, val: *const c_char) {
             didset_vimruntime.set(false);
         }
     }
+}
+
+/// [`os_setenv`] for a caller that has both name and value as strings.
+/// Answers whether the variable was set.
+pub fn env_set(name: &CStr, value: &CStr) -> bool {
+    // SAFETY: two NUL-terminated strings; `os_setenv` copies both.
+    unsafe { os_setenv(name.as_ptr(), value.as_ptr(), 1) == 0 }
+}
+
+/// [`os_getenv_buf`] into a buffer this call owns: the value, cut to
+/// [`EnvBuf`]'s length, and empty when the variable is unset or empty.
+pub fn env_get_bounded(name: &CStr) -> Vec<u8> {
+    let mut buf = env_buf();
+    // SAFETY: `name` is NUL-terminated and `buf` is what `EnvBuf` says.
+    // The answer points into `buf`, which outlives the borrow.
+    let value = unsafe { os_getenv_into(name.as_ptr(), &mut buf) };
+    // SAFETY: null for an unset variable, `buf` itself otherwise.
+    unsafe { cstr::at_opt(value) }.map_or_else(Vec::new, |v| v.to_bytes().to_vec())
 }
