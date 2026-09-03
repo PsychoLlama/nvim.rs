@@ -23,7 +23,7 @@ use crate::types::{ExArgt, FAIL, NUL};
 ///
 /// Sets the contained flag, and if the item is not already contained adds it to
 /// the top-level cluster the `:syntax include` named, if any.
-pub(crate) unsafe fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
+pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
     if flags.has(SynFlags::CONTAINED) || cur_syn_block().b_syn_topgrp == 0 {
         return;
     }
@@ -160,7 +160,7 @@ pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
         } else {
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
             if syn_id != 0 {
-                unsafe { syn_incl_toplevel(syn_id, &mut opt.flags) };
+                syn_incl_toplevel(syn_id, &mut opt.flags);
                 // Store the pattern in the item list; the three id lists are
                 // handed over rather than copied.
                 item.sp_syncing = syncing != 0;
@@ -355,7 +355,7 @@ pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
         } else {
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
             if syn_id != 0 {
-                unsafe { syn_incl_toplevel(syn_id, &mut args.opt.flags) };
+                syn_incl_toplevel(syn_id, &mut args.opt.flags);
                 store_region(args, syn_id, syncing != 0);
                 redraw_curbuf_later(UPD_SOME_VALID);
                 syn_stack_free_all(cur_syn_block()); // Need to recompute all.

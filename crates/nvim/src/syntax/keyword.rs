@@ -289,7 +289,7 @@ pub(crate) fn syn_cmd_keyword(eap: &mut exarg_T, _syncing: c_int) {
 
             // Pass 2: an entry per keyword.
             if eap.skip == 0 {
-                unsafe { syn_incl_toplevel(syn_id, &mut opt.flags) };
+                syn_incl_toplevel(syn_id, &mut opt.flags);
                 let def = KeywordDef {
                     id: syn_id,
                     flags: opt.flags,

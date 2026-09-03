@@ -37,7 +37,7 @@ unsafe fn entry_states(p: *mut synstate_T, stacksize: c_int) -> *mut bufstate_T 
 }
 
 /// Free a synblock's whole cache.
-pub(crate) unsafe fn syn_stack_free_block(mut block: SynBlock) {
+pub(crate) fn syn_stack_free_block(mut block: SynBlock) {
     if block.b_sst_array.is_null() {
         return;
     }
@@ -58,7 +58,7 @@ pub(crate) unsafe fn syn_stack_free_block(mut block: SynBlock) {
 /// trusted any more.
 pub(crate) fn syn_stack_free_all(block: SynBlock) {
     // SAFETY: the handle's promise -- a live syntax block.
-    unsafe { syn_stack_free_block(block) };
+    syn_stack_free_block(block);
 
     // With 'foldmethod' "syntax", every fold has to be recomputed too.
     for wp in windows() {
@@ -70,7 +70,7 @@ pub(crate) fn syn_stack_free_all(block: SynBlock) {
 
 /// Allocate `syn_buf`'s cache, or resize it when the buffer's length has moved
 /// far enough that the current size is a poor fit.
-pub(crate) unsafe fn syn_stack_alloc() {
+pub(crate) fn syn_stack_alloc() {
     let mut block = syn_block();
     let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count } as c_int;
     let want = clamp_entries(lines / SST_DIST + Rows.get() * 2);
@@ -83,7 +83,7 @@ pub(crate) unsafe fn syn_stack_alloc() {
     if !block.b_sst_array.is_null() {
         // When shrinking, clean up the existing stack first and make sure
         // every entry that is still valid fits in the new array.
-        while block.b_sst_len - block.b_sst_freecount + 2 > len && unsafe { syn_stack_cleanup() } {}
+        while block.b_sst_len - block.b_sst_freecount + 2 > len && syn_stack_cleanup() {}
         len = len.max(block.b_sst_len - block.b_sst_freecount + 2);
     }
     debug_assert!(len >= 0);
@@ -202,7 +202,7 @@ unsafe fn syn_stack_apply_changes_block(mut block: SynBlock, buf: *mut buf_T) {
 /// Entries closer together than the normal distance are candidates; of those,
 /// the ones carrying the oldest display tick go. Freeing the oldest rather than
 /// the closest is what keeps the lines the user is actually looking at cached.
-pub(crate) unsafe fn syn_stack_cleanup() -> bool {
+pub(crate) fn syn_stack_cleanup() -> bool {
     let mut block = syn_block();
     if block.b_sst_first.is_null() {
         return false;
@@ -272,7 +272,7 @@ pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlock, p: *mut synstate_
 /// Answers null when the list is empty or starts after `lnum` -- which is not
 /// the same as "no entry for this line", so callers that need an exact hit
 /// compare `sst_lnum` themselves.
-pub(crate) unsafe fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
+pub(crate) fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
     let mut p = syn_block().b_sst_first;
     while !p.is_null() {
@@ -292,14 +292,14 @@ pub(crate) unsafe fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
 ///
 /// The current state must be valid for the *start* of that line. Answers the
 /// entry it went into, or null when there was nothing to store or no room.
-pub(crate) unsafe fn store_current_state() -> *mut synstate_T {
+pub(crate) fn store_current_state() -> *mut synstate_T {
     let mut block = syn_block();
-    let mut sp = unsafe { syn_stack_find_entry(current_lnum.get()) };
+    let mut sp = syn_stack_find_entry(current_lnum.get());
 
     // A state that contains a start or end pattern continuing from the
     // previous line cannot be used as a starting point, so it is not
     // stored -- and any entry that already exists for this line is wrong.
-    if unsafe { state_continues_from_previous_line() } {
+    if state_continues_from_previous_line() {
         if !sp.is_null() {
             unsafe { unlink_entry(block, sp) };
             unsafe { syn_stack_free_entry(block, sp) };
@@ -320,7 +320,7 @@ pub(crate) unsafe fn store_current_state() -> *mut synstate_T {
 
 /// Does any item on the current state stack carry a position at or after
 /// `current_lnum`, i.e. does it continue from the previous line?
-unsafe fn state_continues_from_previous_line() -> bool {
+fn state_continues_from_previous_line() -> bool {
     let mut i = state_len() - 1;
     while i >= 0 {
         let cur_si = unsafe { state_at(i) };
@@ -358,9 +358,9 @@ unsafe fn unlink_entry(mut block: SynBlock, sp: *mut synstate_T) {
 /// Answers null when there is no room even after a cleanup.
 unsafe fn new_entry(mut block: SynBlock, mut after: *mut synstate_T) -> *mut synstate_T {
     if block.b_sst_freecount == 0 {
-        unsafe { syn_stack_cleanup() };
+        syn_stack_cleanup();
         // "after" may have been moved to the free list by the cleanup.
-        after = unsafe { syn_stack_find_entry(current_lnum.get()) };
+        after = syn_stack_find_entry(current_lnum.get());
     }
     if block.b_sst_freecount == 0 {
         return ::core::ptr::null_mut(); // must be a strange problem

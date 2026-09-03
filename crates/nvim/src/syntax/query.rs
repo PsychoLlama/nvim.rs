@@ -43,7 +43,7 @@ enum ExpandWhat {
 static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::SubCmd);
 
 /// Done expanding: forget what `:highlight` completion was asked to include.
-pub(crate) unsafe fn reset_expand_highlight() {
+pub(crate) fn reset_expand_highlight() {
     include_none.set(0);
     include_default.set(0);
     include_link.set(0);
@@ -195,7 +195,7 @@ pub(crate) unsafe fn get_syntax_info(seqnrp: *mut c_int) -> SynFlags {
 }
 
 /// The conceal substitution character of the current item.
-pub(crate) unsafe fn syn_get_sub_char() -> c_int {
+pub(crate) fn syn_get_sub_char() -> c_int {
     current_sub_char.get()
 }
 
@@ -203,7 +203,7 @@ pub(crate) unsafe fn syn_get_sub_char() -> c_int {
 /// out of range.
 ///
 /// The caller must have called [`syn_get_id`] first, to fill the stack.
-pub(crate) unsafe fn syn_get_stack_item(i: c_int) -> c_int {
+pub(crate) fn syn_get_stack_item(i: c_int) -> c_int {
     if i >= state_len() {
         // The state was not properly finished for the last character
         // (`keep_state` was true), so it has to be invalidated.
@@ -215,7 +215,7 @@ pub(crate) unsafe fn syn_get_stack_item(i: c_int) -> c_int {
 }
 
 /// How many `fold` items are open at the current position.
-unsafe fn syn_cur_foldlevel() -> c_int {
+fn syn_cur_foldlevel() -> c_int {
     let mut level = 0;
     for i in 0..state_len() {
         if unsafe { state_at(i).si_flags }.has(SynFlags::FOLD) {
@@ -237,14 +237,14 @@ pub(crate) unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: linenr_T) -> c_int 
         unsafe { syntax_start(wp, lnum) };
 
         // Start with the fold level at the start of the line.
-        level = unsafe { syn_cur_foldlevel() };
+        level = syn_cur_foldlevel();
 
         if unsafe { (*(*wp).w_s).b_syn_foldlevel } == SYNFLD_MINIMUM {
             // Find the lowest fold level that is followed by a higher one.
             let mut low_level = level;
             while !current_finished.get() {
                 unsafe { syn_current_attr(false, false, ::core::ptr::null_mut(), false) };
-                let cur_level = unsafe { syn_cur_foldlevel() };
+                let cur_level = syn_cur_foldlevel();
                 if cur_level < low_level {
                     low_level = cur_level;
                 } else if cur_level > low_level {

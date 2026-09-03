@@ -66,7 +66,7 @@ pub(crate) unsafe fn get_syntax_attr(
 
 /// Whether spell checking is done outside every syntax item: only when there is
 /// no `@Spell` cluster, or when `:syntax spell toplevel` was used.
-unsafe fn default_can_spell() -> bool {
+fn default_can_spell() -> bool {
     let mut block = syn_block();
     if block.b_syn_spell == SYNSPL_DEFAULT {
         block.b_spell_cluster_id == 0
@@ -101,7 +101,7 @@ pub(crate) unsafe fn syn_current_attr(
             && next_match_col.get() >= current_col.get()
             && next_match_col.get() != MAXCOL as c_int
         {
-            unsafe { push_next_match() };
+            push_next_match();
         }
         current_finished.set(true);
         current_state_stored.set(false);
@@ -155,7 +155,7 @@ pub(crate) unsafe fn syn_current_attr(
         {
             // 2. A keyword, if we are on a keyword character after a
             //    non-keyword one. Never while syncing.
-            if do_keywords && let Some(si) = unsafe { try_keyword(cur_si) } {
+            if do_keywords && let Some(si) = try_keyword(cur_si) {
                 cur_si = Some(si);
                 found_keyword = true;
             }
@@ -189,7 +189,7 @@ pub(crate) unsafe fn syn_current_attr(
                         zero_width.push(next_match_idx.get());
                         next_match_idx.set(-1);
                     } else {
-                        cur_si = Some(unsafe { push_next_match() });
+                        cur_si = Some(push_next_match());
                     }
                     found_match = true;
                 }
@@ -228,7 +228,7 @@ pub(crate) unsafe fn syn_current_attr(
 
     unsafe { restore_chartab(&raw mut buf_chartab as *mut c_char) };
 
-    let sip = unsafe { pick_current_attr(cur_si) };
+    let sip = pick_current_attr(cur_si);
     if !can_spell.is_null() {
         unsafe {
             *can_spell = match sip {
@@ -243,12 +243,12 @@ pub(crate) unsafe fn syn_current_attr(
         // single-character match. The current column is checked first: the
         // item here may be an empty match, and a containing item might end
         // in this column too.
-        unsafe { check_state_ends() };
+        check_state_ends();
         if state_len() > 0
             && unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int != NUL
         {
             current_col.set(current_col.get() + 1);
-            unsafe { check_state_ends() };
+            check_state_ends();
             current_col.set(current_col.get() - 1);
         }
     }
@@ -279,7 +279,7 @@ pub(crate) unsafe fn syn_current_attr(
 ///
 /// Answers the pushed item, or `None` when the column does not start a keyword
 /// or no keyword matches there.
-unsafe fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
+fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
     // Only on a keyword character that follows a non-keyword one.
     let line = unsafe { syn_getcurline() };
     let cur_pos = unsafe { line.offset(current_col.get() as isize) };
@@ -332,7 +332,7 @@ unsafe fn try_keyword(cur_si: Option<Item>) -> Option<Item> {
     }
     si.si_cont_list = ::core::ptr::null_mut();
     si.si_next_list = kw.next_list;
-    unsafe { check_keepend() };
+    check_keepend();
     Some(si)
 }
 
@@ -397,7 +397,7 @@ unsafe fn scan_patterns(
         }
         // Matched this pattern here before: skip it, and retry in the next
         // column, because it may match from there.
-        if unsafe { did_match_already(idx, zero_width) } {
+        if did_match_already(idx, zero_width) {
             try_next_column.set(true);
             continue;
         }
@@ -543,7 +543,7 @@ unsafe fn pattern_admitted(
 /// the current column into the `current_*` globals, and answer that item.
 ///
 /// Answers `None` when `cur_si` is `None`, i.e. nothing matched here at all.
-unsafe fn pick_current_attr(cur_si: Option<Item>) -> Option<Item> {
+fn pick_current_attr(cur_si: Option<Item>) -> Option<Item> {
     current_attr.set(0);
     current_id.set(0);
     current_trans_id.set(0);
@@ -584,7 +584,7 @@ unsafe fn pick_current_attr(cur_si: Option<Item>) -> Option<Item> {
 
 /// Whether spell checking should be done in the item the attribute walk left
 /// in `sip`.
-unsafe fn item_can_spell(sip: Item) -> bool {
+fn item_can_spell(sip: Item) -> bool {
     let mut block = syn_block();
     let mut sps = sp_syn { inc_tag: 0, id: 0 };
     // The two cluster ids are looked up as bare groups: no `containedin=`.
@@ -625,7 +625,7 @@ unsafe fn item_can_spell(sip: Item) -> bool {
 ///
 /// Two places to look: an item already on the state stack that started here,
 /// and the list of zero-width items with a `nextgroup=` used in this column.
-pub(crate) unsafe fn did_match_already(idx: c_int, gap: &[c_int]) -> bool {
+pub(crate) fn did_match_already(idx: c_int, gap: &[c_int]) -> bool {
     let mut i = state_len();
     while i > 0 {
         i -= 1;

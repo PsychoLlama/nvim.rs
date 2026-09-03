@@ -197,10 +197,10 @@ unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
                 let mut cur_si = unsafe { state_top() };
                 cur_si.si_h_startpos.lnum = found.lnum;
                 cur_si.si_h_startpos.col = found.col;
-                unsafe { update_si_end(cur_si, current_col.get(), true) };
-                unsafe { check_keepend() };
+                update_si_end(cur_si, current_col.get(), true);
+                check_keepend();
             }
-            unsafe { syn_finish_line(false) };
+            syn_finish_line(false);
             current_lnum.set(current_lnum.get() + 1);
         } else {
             // "groupthere": parsing starts at the line we synced for, with
@@ -232,9 +232,9 @@ unsafe fn scan_for_sync_point(
     let mut found: Option<SyncPoint> = None;
     current_lnum.set(from);
     while current_lnum.get() < end_lnum {
-        unsafe { syn_start_line() };
+        syn_start_line();
         loop {
-            let had_sync_point = unsafe { syn_finish_line(true) };
+            let had_sync_point = syn_finish_line(true);
             if !had_sync_point || state_len() == 0 {
                 break;
             }
@@ -279,7 +279,7 @@ unsafe fn scan_for_sync_point(
             if unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int != NUL {
                 current_col.set(current_col.get() + 1);
             }
-            unsafe { check_state_ends() };
+            check_state_ends();
             current_col.set(prev_col);
         }
         current_lnum.set(current_lnum.get() + 1);

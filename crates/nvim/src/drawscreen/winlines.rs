@@ -234,7 +234,7 @@ unsafe fn line_needs_drawing(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) -
                     || (w.did_update == DidUpdate::Line
                         && unsafe { syntax_present(wp.raw()) }
                         && ((foldmethod_is_syntax(unsafe { Win::new(wp.raw()) }) && has_any_folding(unsafe { Win::new(wp.raw()) }) != 0)
-                            || unsafe { syntax_check_changed(w.lnum) }))
+                            || syntax_check_changed(w.lnum)))
                     // A match at a fixed position may need redrawing when
                     // lines were inserted or deleted.
                     || (!wp.w_match_head.is_null()

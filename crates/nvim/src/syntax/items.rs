@@ -55,7 +55,7 @@ pub(crate) unsafe fn state_top() -> Item {
 ///
 /// Answers the item now on top, which is the `matchgroup=` item for a region's
 /// start pattern when there is one and the region itself otherwise.
-pub(crate) unsafe fn push_next_match() -> Item {
+pub(crate) fn push_next_match() -> Item {
     let idx = next_match_idx.get();
     let block = syn_block();
     let spp = block.pattern(idx);
@@ -78,8 +78,8 @@ pub(crate) unsafe fn push_next_match() -> Item {
     if spp.sp_type as c_int == SPTYPE_START && !spp.sp_flags.has(SynFlags::ONELINE) {
         // A start-skip-end that may cross lines: work out how much of it
         // is in this line.
-        unsafe { update_si_end(cur_si, next_match_m_endpos.get().col, true) };
-        unsafe { check_keepend() };
+        update_si_end(cur_si, next_match_m_endpos.get().col, true);
+        check_keepend();
     } else {
         cur_si.si_m_endpos = next_match_m_endpos.get();
         cur_si.si_h_endpos = next_match_h_endpos.get();
@@ -91,7 +91,7 @@ pub(crate) unsafe fn push_next_match() -> Item {
     if keepend_level.get() < 0 && cur_si.si_flags.has(SynFlags::KEEPEND) {
         keepend_level.set(state_len() - 1);
     }
-    unsafe { check_keepend() };
+    check_keepend();
     unsafe { update_si_attr(state_len() - 1) };
 
     let save_flags = cur_si
@@ -116,7 +116,7 @@ pub(crate) unsafe fn push_next_match() -> Item {
             cur_si.si_flags |= SynFlags::CONCEAL;
         }
         cur_si.si_next_list = ::core::ptr::null_mut();
-        unsafe { check_keepend() };
+        check_keepend();
         unsafe { update_si_attr(state_len() - 1) };
     }
 
@@ -136,7 +136,7 @@ fn take_seqnr() -> c_int {
 }
 
 /// Pop every item on the stack whose end the driver has now reached.
-pub(crate) unsafe fn check_state_ends() {
+pub(crate) fn check_state_ends() {
     let mut cur_si = unsafe { state_top() };
     loop {
         if cur_si.si_ends == 0
@@ -195,7 +195,7 @@ pub(crate) unsafe fn check_state_ends() {
             return;
         }
         if had_extend && keepend_level.get() >= 0 {
-            unsafe { syn_update_ends(false) };
+            syn_update_ends(false);
             if state_len() <= 0 {
                 return;
             }
@@ -212,8 +212,8 @@ pub(crate) unsafe fn check_state_ends() {
             && syn_block().pattern(cur_si.si_idx).sp_type as c_int == SPTYPE_START
             && !cur_si.si_flags.has(SynFlags::MATCH | SynFlags::KEEPEND)
         {
-            unsafe { update_si_end(cur_si, current_col.get(), true) };
-            unsafe { check_keepend() };
+            update_si_end(cur_si, current_col.get(), true);
+            check_keepend();
             if current_next_flags.get().has(SynFlags::HAS_EOL)
                 && keepend_level.get() < 0
                 && unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int == NUL
@@ -275,7 +275,7 @@ pub(crate) unsafe fn update_si_attr(idx: c_int) {
 
 /// Propagate the end of every "keepend" item on the stack to the items it
 /// contains, so none of them can reach past it.
-pub(crate) unsafe fn check_keepend() {
+pub(crate) fn check_keepend() {
     // This check can consume a lot of time; only do it from the level
     // where there really is a keepend.
     if keepend_level.get() < 0 {
@@ -328,7 +328,7 @@ fn pos_after(a: lpos_T, b: lpos_T) -> bool {
 ///
 /// `startcol` is where to start looking; `force` overrules an end the item
 /// already has.
-pub(crate) unsafe fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
+pub(crate) fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
     if sip.si_idx < 0 {
         return; // a keyword has no end pattern
     }

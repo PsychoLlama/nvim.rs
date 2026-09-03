@@ -353,7 +353,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         if syntax_flags.has(SynFlags::CONCEAL)
             && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } < 3
         {
-            let mut cchar = schar_from_char(unsafe { syn_get_sub_char() });
+            let mut cchar = schar_from_char(syn_get_sub_char());
             // At 'conceallevel' 1 a group with no `cchar` falls back to
             // 'listchars' "conceal", and to a space if that is unset.
             if cchar == NUL as schar_T && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } == 1 {
@@ -397,7 +397,7 @@ pub unsafe fn f_synstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         // Run the syntax engine, keeping the stack this time.
         unsafe { syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 1) };
         for i in 0.. {
-            let id = unsafe { syn_get_stack_item(i) };
+            let id = syn_get_stack_item(i);
             if id < 0 {
                 break;
             }

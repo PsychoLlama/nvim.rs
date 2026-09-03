@@ -85,7 +85,7 @@ pub(crate) unsafe fn reset_synblock(wp: *mut win_T) {
 }
 
 /// Clear the syncing info for the current window's block.
-unsafe fn syntax_sync_clear() {
+fn syntax_sync_clear() {
     let mut block = cur_syn_block();
     let mut i = block.patterns().len();
     while i > 0 {
@@ -138,7 +138,7 @@ pub(crate) fn syn_cmd_clear(eap: &mut exarg_T, syncing: c_int) {
     if ends_excmd(unsafe { *arg } as c_int) != 0 {
         // No argument: clear all syntax items.
         if syncing != 0 {
-            unsafe { syntax_sync_clear() };
+            syntax_sync_clear();
         } else {
             unsafe { syntax_clear(cur_syn_block().raw()) };
             if cur_syn_block().raw() == unsafe { &raw mut (*(*curwin.get()).w_buffer).b_s } {
@@ -171,7 +171,7 @@ pub(crate) fn syn_cmd_clear(eap: &mut exarg_T, syncing: c_int) {
                     semsg!("E28: No such highlight group name: {arg}");
                     break;
                 }
-                unsafe { syn_clear_one(id, syncing != 0) };
+                syn_clear_one(id, syncing != 0);
             }
             arg = unsafe { skipwhite(arg_end) };
         }
@@ -181,7 +181,7 @@ pub(crate) fn syn_cmd_clear(eap: &mut exarg_T, syncing: c_int) {
 }
 
 /// Clear one syntax group for the current window's block.
-unsafe fn syn_clear_one(id: c_int, syncing: bool) {
+fn syn_clear_one(id: c_int, syncing: bool) {
     // Keywords only when this is not ":syntax sync clear {group}".
     if !syncing {
         unsafe { syn_clear_keyword(id, syn_field!(cur_syn_block(), b_keywtab)) };

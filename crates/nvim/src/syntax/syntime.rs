@@ -19,8 +19,8 @@ pub(crate) unsafe fn ex_syntime(eap: *mut exarg_T) {
     match arg.to_bytes() {
         b"on" => syn_time_on.set(true),
         b"off" => syn_time_on.set(false),
-        b"clear" => unsafe { syntime_clear() },
-        b"report" => unsafe { syntime_report() },
+        b"clear" => syntime_clear(),
+        b"report" => syntime_report(),
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg = unsafe { c_str((*eap).arg) };
@@ -38,7 +38,7 @@ pub(crate) fn syn_clear_time(st: &mut syn_time_T) {
 }
 
 /// `:syntime clear` — forget the timings of every pattern in this window.
-unsafe fn syntime_clear() {
+fn syntime_clear() {
     if !unsafe { syntax_present(curwin.get()) } {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
@@ -82,7 +82,7 @@ unsafe extern "C" fn syn_compare_syntime(v1: *const c_void, v2: *const c_void) -
 }
 
 /// `:syntime report` — the timing table, slowest pattern last.
-unsafe fn syntime_report() {
+fn syntime_report() {
     if !unsafe { syntax_present(curwin.get()) } {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;

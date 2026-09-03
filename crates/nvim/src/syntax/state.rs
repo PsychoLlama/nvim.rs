@@ -39,7 +39,7 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
     changedtick.set(buf_get_changedtick(unsafe { Buf::new(syn_buf.get()) }));
     syn_win.set(wp);
 
-    unsafe { syn_stack_alloc() };
+    syn_stack_alloc();
     if syn_block().b_sst_array.is_null() {
         return; // out of memory
     }
@@ -50,10 +50,10 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
         && current_lnum.get() < lnum
         && current_lnum.get() < unsafe { (*syn_buf.get()).b_ml.ml_line_count }
     {
-        unsafe { syn_finish_line(false) };
+        syn_finish_line(false);
         if !current_state_stored.get() {
             current_lnum.set(current_lnum.get() + 1);
-            unsafe { store_current_state() };
+            store_current_state();
         }
         // If current_lnum is now "lnum", keep the current state -- which
         // happens very often. Otherwise work it out below.
@@ -100,11 +100,11 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
 
     // Advance from the sync point or the saved state to the wanted line,
     // saving some entries along the way to sync with later on.
-    let dist = unsafe { store_distance() };
+    let dist = store_distance();
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
     while current_lnum.get() < lnum {
-        unsafe { syn_start_line() };
-        unsafe { syn_finish_line(false) };
+        syn_start_line();
+        syn_finish_line(false);
         current_lnum.set(current_lnum.get() + 1);
         if current_lnum.get() >= first_stored {
             prev = unsafe { record_line(prev, lnum, dist) };
@@ -118,7 +118,7 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
             break;
         }
     }
-    unsafe { syn_start_line() };
+    syn_start_line();
 }
 
 /// Is the current state valid, i.e. does it describe a real position?
@@ -132,7 +132,7 @@ pub(crate) fn current_state_valid() -> bool {
 
 /// How many lines apart to store cache entries for lines that are not
 /// displayed. Displayed lines get one each; the rest share what is left.
-unsafe fn store_distance() -> linenr_T {
+fn store_distance() -> linenr_T {
     let entries = syn_block().b_sst_len;
     if entries <= Rows.get() {
         999999
@@ -155,7 +155,7 @@ unsafe fn record_line(
     dist: linenr_T,
 ) -> *mut synstate_T {
     if prev.is_null() {
-        prev = unsafe { syn_stack_find_entry(current_lnum.get() - 1) };
+        prev = syn_stack_find_entry(current_lnum.get() - 1);
     }
     let mut sp = if prev.is_null() {
         syn_block().b_sst_first
@@ -191,7 +191,7 @@ unsafe fn record_line(
         || current_lnum.get() == lnum
         || current_lnum.get() >= unsafe { (*prev).sst_lnum } + dist
     {
-        return unsafe { store_current_state() };
+        return store_current_state();
     }
     prev
 }
@@ -237,15 +237,15 @@ pub(crate) fn clear_current_state() {
 }
 
 /// Reset the per-line state before parsing a line.
-pub(crate) unsafe fn syn_start_line() {
+pub(crate) fn syn_start_line() {
     current_finished.set(false);
     current_col.set(0);
 
     // The end of a start/skip/end that continues from the previous line
     // needs updating, and so do regions with "keepend".
     if state_len() > 0 {
-        unsafe { syn_update_ends(true) };
-        unsafe { check_state_ends() };
+        syn_update_ends(true);
+        check_state_ends();
     }
 
     next_match_idx.set(-1);
@@ -258,7 +258,7 @@ pub(crate) unsafe fn syn_start_line() {
 /// `startofline` says we are at the start of a line, in which case the
 /// innermost item is always updated; otherwise the update is forced only on the
 /// items with "keepend", because they influence what they contain.
-pub(crate) unsafe fn syn_update_ends(startofline: bool) {
+pub(crate) fn syn_update_ends(startofline: bool) {
     if startofline {
         // A match carried over from a previous line with a contained
         // region ends as soon as that region ends, so drop the end it has
@@ -306,7 +306,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
             cur_si.si_h_startpos.lnum = current_lnum.get();
 
             if !cur_si.si_flags.has(SynFlags::MATCHCONT) {
-                unsafe { update_si_end(cur_si, current_col.get(), !startofline) };
+                update_si_end(cur_si, current_col.get(), !startofline);
             }
             if !startofline && cur_si.si_flags.has(SynFlags::KEEPEND) {
                 seen_keepend = true;
@@ -314,7 +314,7 @@ pub(crate) unsafe fn syn_update_ends(startofline: bool) {
         }
         i += 1;
     }
-    unsafe { check_keepend() };
+    check_keepend();
 }
 
 /// Stop parsing syntax above line `lnum`.
@@ -327,7 +327,7 @@ pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
     if syn_block().raw() != unsafe { (*wp).w_s } {
         return; // not the right window
     }
-    let mut sp = unsafe { syn_stack_find_entry(lnum) };
+    let mut sp = syn_stack_find_entry(lnum);
     if !sp.is_null() && unsafe { (*sp).sst_lnum } < lnum {
         sp = unsafe { (*sp).sst_next };
     }
@@ -358,25 +358,25 @@ pub(crate) fn validate_current_state() {
 ///
 /// Only called just after [`get_syntax_attr`] for the previous line, to decide
 /// whether the next line has to be redrawn too.
-pub(crate) unsafe fn syntax_check_changed(lnum: linenr_T) -> bool {
+pub(crate) fn syntax_check_changed(lnum: linenr_T) -> bool {
     // Only worth checking when `lnum` is just below the line we last
     // parsed and there is a saved state for it.
     if !current_state_valid() || lnum != current_lnum.get() + 1 {
         return true;
     }
-    let sp = unsafe { syn_stack_find_entry(lnum) };
+    let sp = syn_stack_find_entry(lnum);
     if sp.is_null() || unsafe { (*sp).sst_lnum } != lnum {
         return true;
     }
 
     // Finish the previous line, which is needed when not all of it was
     // drawn, and compare with the state saved for this one.
-    unsafe { syn_finish_line(false) };
+    syn_finish_line(false);
     let changed = !unsafe { syn_stack_equal(sp) };
 
     // Store the current state for later use.
     current_lnum.set(current_lnum.get() + 1);
-    unsafe { store_current_state() };
+    store_current_state();
     changed
 }
 
@@ -385,7 +385,7 @@ pub(crate) unsafe fn syntax_check_changed(lnum: linenr_T) -> bool {
 ///
 /// May start anywhere in the line, as long as the current state is valid.
 /// While syncing, answers whether a sync point was found.
-pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
+pub(crate) fn syn_finish_line(syncing: bool) -> bool {
     while !current_finished.get() {
         unsafe { syn_current_attr(syncing, false, ::core::ptr::null_mut(), false) };
 
@@ -407,7 +407,7 @@ pub(crate) unsafe fn syn_finish_line(syncing: bool) -> bool {
             if unsafe { *syn_getcurline().offset(current_col.get() as isize) } as c_int != NUL {
                 current_col.set(current_col.get() + 1);
             }
-            unsafe { check_state_ends() };
+            check_state_ends();
             current_col.set(prev_col);
         }
         current_col.set(current_col.get() + 1);

@@ -386,5 +386,5 @@ pub unsafe fn expand_generic(
 
     // Reset the variables used for special highlight names expansion, so
     // that they don't show up when getting normal highlight names by ID.
-    unsafe { reset_expand_highlight() };
+    reset_expand_highlight();
 }

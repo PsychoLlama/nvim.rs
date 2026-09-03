@@ -524,7 +524,7 @@ impl Cells {
         let first_of_run = (self.prev_syntax_id != self.syntax_seqnr && syntax_conceal)
             || self.has_match_conc > 1
             || self.decor_conceal > 1;
-        let have_char = (syntax_conceal && unsafe { syn_get_sub_char() } != NUL)
+        let have_char = (syntax_conceal && syn_get_sub_char() != NUL)
             || (self.has_match_conc != 0 && self.match_conc != 0)
             || (self.decor_conceal != 0 && wlv.decor.conceal_char != 0)
             || wp.w_onebuf_opt.wo_cole == 1;
@@ -541,8 +541,8 @@ impl Cells {
                     wlv.char_attr = wlv.decor.conceal_attr;
                 }
                 wlv.decor.conceal_char
-            } else if syntax_conceal && unsafe { syn_get_sub_char() } != NUL {
-                schar_from_char(unsafe { syn_get_sub_char() })
+            } else if syntax_conceal && syn_get_sub_char() != NUL {
+                schar_from_char(syn_get_sub_char())
             } else if wp.w_p_lcs_chars.conceal != NUL as schar_T {
                 wp.w_p_lcs_chars.conceal
             } else {

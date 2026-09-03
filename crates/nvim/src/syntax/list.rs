@@ -34,7 +34,7 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
     }
 
     if syncing != 0 {
-        unsafe { list_sync_items() };
+        list_sync_items();
         return;
     }
 
@@ -43,12 +43,12 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
         // No argument: list every group id, then every cluster.
         let mut id = 1;
         while id <= highlight_num_groups() && !got_int.get() {
-            unsafe { syn_list_one(id, false, false) };
+            syn_list_one(id, false, false);
             id += 1;
         }
         let mut id = 0;
         while id < cur_cluster_count() && !got_int.get() {
-            unsafe { syn_list_cluster(id) };
+            syn_list_cluster(id);
             id += 1;
         }
     } else {
@@ -63,7 +63,7 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
                     let arg = unsafe { c_str(arg) };
                     semsg!("E392: No such syntax cluster: {arg}");
                 } else {
-                    unsafe { syn_list_cluster(id - SYNID_CLUSTER) };
+                    syn_list_cluster(id - SYNID_CLUSTER);
                 }
             } else {
                 let id = unsafe { syn_name2id_len(arg, arg_end.offset_from(arg) as size_t) };
@@ -72,7 +72,7 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
                     let arg = unsafe { c_str(arg) };
                     semsg!("E28: No such highlight group name: {arg}");
                 } else {
-                    unsafe { syn_list_one(id, false, true) };
+                    syn_list_one(id, false, true);
                 }
             }
             arg = unsafe { skipwhite(arg_end) };
@@ -82,12 +82,12 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
 }
 
 /// The `:syntax sync` half of the listing: how this buffer synchronises.
-unsafe fn list_sync_items() {
+fn list_sync_items() {
     let mut block = cur_syn_block();
     if block.b_syn_sync_flags & SF_CCOMMENT != 0 {
         unsafe { msg_puts(gettext(c"syncing on C-style comments").as_ptr()) };
-        unsafe { syn_lines_msg() };
-        unsafe { syn_match_msg() };
+        syn_lines_msg();
+        syn_match_msg();
     } else if block.b_syn_sync_flags & SF_MATCH != 0 {
         unsafe { msg_puts_title(gettext(c"\n--- Syntax sync items ---").as_ptr()) };
         if block.b_syn_sync_minlines > 0
@@ -95,12 +95,12 @@ unsafe fn list_sync_items() {
             || block.b_syn_sync_linebreaks > 0
         {
             unsafe { msg_puts(gettext(c"\nsyncing on items").as_ptr()) };
-            unsafe { syn_lines_msg() };
-            unsafe { syn_match_msg() };
+            syn_lines_msg();
+            syn_match_msg();
         }
         let mut id = 1;
         while id <= highlight_num_groups() && !got_int.get() {
-            unsafe { syn_list_one(id, true, false) };
+            syn_list_one(id, true, false);
             id += 1;
         }
     } else if block.b_syn_sync_minlines == 0 {
@@ -113,12 +113,12 @@ unsafe fn list_sync_items() {
             unsafe { msg_outnum(block.b_syn_sync_minlines) };
             unsafe { msg_puts(gettext(c" lines before top line").as_ptr()) };
         }
-        unsafe { syn_match_msg() };
+        syn_match_msg();
     }
 }
 
 /// "; minimal 5, maximal 10 lines before top line".
-unsafe fn syn_lines_msg() {
+fn syn_lines_msg() {
     let mut block = cur_syn_block();
     if block.b_syn_sync_maxlines <= 0 && block.b_syn_sync_minlines <= 0 {
         return;
@@ -143,7 +143,7 @@ unsafe fn syn_lines_msg() {
 }
 
 /// "; match 3 line breaks".
-unsafe fn syn_match_msg() {
+fn syn_match_msg() {
     let linebreaks = cur_syn_block().b_syn_sync_linebreaks;
     if linebreaks > 0 {
         unsafe { msg_puts(gettext(c"; match ").as_ptr()) };
@@ -174,7 +174,7 @@ const NEXTGROUP_FLAG_NAMES: [(SynFlags, &CStr); 3] = [
 ];
 
 /// Print the names of every flag of `names` that `flags` has.
-unsafe fn syn_list_flags(names: &[(SynFlags, &CStr)], flags: SynFlags, hl_id: c_int) {
+fn syn_list_flags(names: &[(SynFlags, &CStr)], flags: SynFlags, hl_id: c_int) {
     for (flag, name) in names {
         if flags.has(*flag) {
             unsafe { msg_puts_hl(name.as_ptr(), hl_id, false) };
@@ -187,7 +187,7 @@ unsafe fn syn_list_flags(names: &[(SynFlags, &CStr)], flags: SynFlags, hl_id: c_
 ///
 /// `syncing` lists the `:syntax sync` items instead of the ordinary ones;
 /// `link_only` prints a group that has nothing but a link.
-unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
+fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
     let mut did_header = false;
 
     // The keywords of `id`, from both tables.
@@ -212,10 +212,10 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         }
         unsafe { syn_list_header(did_header, 0, id, true) };
         did_header = true;
-        idx = unsafe { put_item_patterns(first) };
+        idx = put_item_patterns(first);
 
         let spp = &block.patterns()[first];
-        unsafe { syn_list_flags(&ITEM_FLAG_NAMES, spp.sp_flags, LIST_HL) };
+        syn_list_flags(&ITEM_FLAG_NAMES, spp.sp_flags, LIST_HL);
         if !spp.sp_cont_list.is_none() {
             unsafe { put_id_list(c"contains", spp.sp_cont_list.as_ptr(), LIST_HL) };
         }
@@ -224,10 +224,10 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         }
         if !spp.sp_next_list.is_none() {
             unsafe { put_id_list(c"nextgroup", spp.sp_next_list.as_ptr(), LIST_HL) };
-            unsafe { syn_list_flags(&NEXTGROUP_FLAG_NAMES, spp.sp_flags, LIST_HL) };
+            syn_list_flags(&NEXTGROUP_FLAG_NAMES, spp.sp_flags, LIST_HL);
         }
         if spp.sp_flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
-            unsafe { put_sync_group(spp.sp_flags, spp.sp_sync_idx) };
+            put_sync_group(spp.sp_flags, spp.sp_sync_idx);
         }
         idx += 1;
     }
@@ -247,29 +247,29 @@ unsafe fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
 ///
 /// A match is one pattern; a region is a run of consecutive entries —
 /// start(s), an optional skip, then end(s) — which are printed together.
-unsafe fn put_item_patterns(mut idx: usize) -> usize {
+fn put_item_patterns(mut idx: usize) -> usize {
     let mut last_matchgroup = 0;
     let block = cur_syn_block();
     let pats = block.patterns();
     let sp_type = |i: usize| pats[i].sp_type as c_int;
 
     if sp_type(idx) == SPTYPE_MATCH {
-        unsafe { put_pattern(&mut last_matchgroup, c"match", ' ' as c_int, &pats[idx]) };
+        put_pattern(&mut last_matchgroup, c"match", ' ' as c_int, &pats[idx]);
         unsafe { msg_putchar(' ' as c_int) };
     } else if sp_type(idx) == SPTYPE_START {
         // The three loops bound themselves on the array; upstream bounds
         // only the last of them and reads past it if a region's END
         // entries are ever missing.
         while idx < pats.len() && sp_type(idx) == SPTYPE_START {
-            unsafe { put_pattern(&mut last_matchgroup, c"start", '=' as c_int, &pats[idx]) };
+            put_pattern(&mut last_matchgroup, c"start", '=' as c_int, &pats[idx]);
             idx += 1;
         }
         if idx < pats.len() && sp_type(idx) == SPTYPE_SKIP {
-            unsafe { put_pattern(&mut last_matchgroup, c"skip", '=' as c_int, &pats[idx]) };
+            put_pattern(&mut last_matchgroup, c"skip", '=' as c_int, &pats[idx]);
             idx += 1;
         }
         while idx < pats.len() && sp_type(idx) == SPTYPE_END {
-            unsafe { put_pattern(&mut last_matchgroup, c"end", '=' as c_int, &pats[idx]) };
+            put_pattern(&mut last_matchgroup, c"end", '=' as c_int, &pats[idx]);
             idx += 1;
         }
         idx -= 1;
@@ -279,7 +279,7 @@ unsafe fn put_item_patterns(mut idx: usize) -> usize {
 }
 
 /// Print `grouphere`/`groupthere` and the region item it names.
-unsafe fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
+fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
     if flags.has(SynFlags::SYNC_HERE) {
         unsafe { msg_puts_hl(c"grouphere".as_ptr(), LIST_HL, false) };
     } else {
@@ -297,7 +297,7 @@ unsafe fn put_sync_group(flags: SynFlags, sync_idx: c_int) {
 }
 
 /// List one cluster and its members.
-unsafe fn syn_list_cluster(id: c_int) {
+fn syn_list_cluster(id: c_int) {
     // Slight hack: roughly duplicate the guts of `syn_list_header`.
     let mut endcol = 15;
     let block = cur_syn_block();
@@ -363,7 +363,7 @@ const SEPCHARS: &[u8] = b"/+=-#@\"|'^&";
 ///
 /// `last_matchgroup` carries the `matchgroup=` in force across the patterns of
 /// one item, so a change is printed once rather than per pattern.
-unsafe fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &synpat_T) {
+fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &synpat_T) {
     // May have to write "matchgroup=group".
     if *last_matchgroup != spp.sp_syn_match_id as c_int {
         *last_matchgroup = spp.sp_syn_match_id as c_int;
@@ -396,12 +396,12 @@ unsafe fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &syn
     unsafe { msg_outtrans(pattern.as_ptr(), 0, false) };
     unsafe { msg_putchar(SEPCHARS[i] as c_int) };
 
-    unsafe { put_pattern_offsets(spp) };
+    put_pattern_offsets(spp);
     unsafe { msg_putchar(' ' as c_int) };
 }
 
 /// Print the `ms=s+1,he=e-2,lc=3` offsets of one pattern.
-unsafe fn put_pattern_offsets(spp: &synpat_T) {
+fn put_pattern_offsets(spp: &synpat_T) {
     let mut first = true;
     for i in 0..SPO_COUNT {
         // A start offset and an end offset share one name; the flag word
