@@ -62,6 +62,14 @@ and this project adheres to [CalVer](https://calver.org/).
   `spellbadword()`, `spellsuggest()` (in all three `'spellsuggest'`
   methods), `soundfold()`, `:spelldump`, `:spellinfo` and `:mkspell` all
   answer as before, byte for byte.
+- Rewrote how spell files are read and written. A `.spl` or `.sug` is now
+  read through a buffered handle whose every answer says what went wrong,
+  and `:mkspell` builds its `REP`/`REPSAL`/`SAL`, `MAP`,
+  `CHECKCOMPOUNDPATTERN` and prefix-condition tables as owned collections
+  and writes them through a buffered sink. Every `E7xx` a malformed spell
+  file draws comes out where it did, and `:mkspell` produces the same bytes
+  for the same dictionary. The one visible change is `E5042`, which now
+  names the error the read actually failed with.
 
 ## [2026.09.02-bc9e0f515a]
 
