@@ -217,13 +217,13 @@ fn syn_list_one(id: c_int, syncing: bool, link_only: bool) {
         let spp = &block.patterns()[first];
         syn_list_flags(&ITEM_FLAG_NAMES, spp.sp_flags, LIST_HL);
         if !spp.sp_cont_list.is_none() {
-            unsafe { put_id_list(c"contains", spp.sp_cont_list.as_ptr(), LIST_HL) };
+            put_id_list(c"contains", spp.sp_cont_list.ids(), LIST_HL);
         }
         if !spp.sp_cont_in_list.is_none() {
-            unsafe { put_id_list(c"containedin", spp.sp_cont_in_list.as_ptr(), LIST_HL) };
+            put_id_list(c"containedin", spp.sp_cont_in_list.ids(), LIST_HL);
         }
         if !spp.sp_next_list.is_none() {
-            unsafe { put_id_list(c"nextgroup", spp.sp_next_list.as_ptr(), LIST_HL) };
+            put_id_list(c"nextgroup", spp.sp_next_list.ids(), LIST_HL);
             syn_list_flags(&NEXTGROUP_FLAG_NAMES, spp.sp_flags, LIST_HL);
         }
         if spp.sp_flags.has(SynFlags::SYNC_HERE | SynFlags::SYNC_THERE) {
@@ -317,18 +317,37 @@ fn syn_list_cluster(id: c_int) {
         unsafe { msg_puts_hl(c"cluster".as_ptr(), LIST_HL, false) };
         unsafe { msg_puts(c"=NONE".as_ptr()) };
     } else {
-        unsafe { put_id_list(c"cluster", cluster.scl_list.as_ptr(), LIST_HL) };
+        put_id_list(c"cluster", cluster.scl_list.ids(), LIST_HL);
     }
 }
 
+/// The ids a bare id-list pointer names, without the terminator.
+///
+/// [`IdList::ids`] for a list that is still raw -- which, since the pattern
+/// and cluster arrays took ownership, means only the two a `keyentry_T`
+/// holds (see [`keyentry`]). Listing keywords is the only reader.
+///
+/// # Safety
+/// `list` must be non-null, 0-terminated, and outlive the answer.
+unsafe fn id_list_ids<'a>(list: *const int16_t) -> &'a [int16_t] {
+    let mut len = 0;
+    // SAFETY: the caller's promise -- the list runs to a 0.
+    while unsafe { *list.add(len) } != 0 {
+        len += 1;
+    }
+    // SAFETY: as above; those `len` ids are the list, terminator excluded.
+    unsafe { ::core::slice::from_raw_parts(list, len) }
+}
+
 /// Print `name=a,b,@cl` for a `contains=`/`containedin=`/`nextgroup=` list.
-unsafe fn put_id_list(name: &CStr, list: *const int16_t, hl_id: c_int) {
+fn put_id_list(name: &CStr, ids: &[int16_t], hl_id: c_int) {
     unsafe { msg_puts_hl(name.as_ptr(), hl_id, false) };
     unsafe { msg_putchar('=' as c_int) };
-    let mut p = list;
-    while unsafe { *p } != 0 {
-        let item = unsafe { *p } as c_int;
-        let more = unsafe { *p.add(1) } != 0;
+    for (at, &id) in ids.iter().enumerate() {
+        let item = id as c_int;
+        // Whether anything follows, which is what tells ALLBUT from ALL and
+        // where the separating comma goes.
+        let more = at + 1 < ids.len();
         if (SYNID_ALLBUT..SYNID_TOP).contains(&item) {
             // ALLBUT is the same marker as ALL, told apart by whether the
             // list goes on to name exceptions.
@@ -350,7 +369,6 @@ unsafe fn put_id_list(name: &CStr, list: *const int16_t, hl_id: c_int) {
         if more {
             unsafe { msg_putchar(',' as c_int) };
         }
-        p = unsafe { p.add(1) };
     }
     unsafe { msg_putchar(' ' as c_int) };
 }
@@ -500,7 +518,7 @@ unsafe fn syn_list_keywords(id: c_int, ht: *const hashtab_T, mut did_header: boo
 /// A keyword whose options differ from its neighbour's forces a new line,
 /// which makes `syn_list_header` answer true and resets `prev` — that reset is
 /// what keeps a NULL `containedin=`/`nextgroup=` from ever reaching
-/// [`put_id_list`], which would walk it.
+/// [`id_list_ids`], which may not be handed one.
 unsafe fn put_keyword(
     kp: *mut keyentry_T,
     id: c_int,
@@ -524,12 +542,12 @@ unsafe fn put_keyword(
         prev.contained = opts.contained;
     }
     if prev.cont_in_list != opts.cont_in_list {
-        unsafe { put_id_list(c"containedin", opts.cont_in_list, LIST_HL) };
+        unsafe { put_id_list(c"containedin", id_list_ids(opts.cont_in_list), LIST_HL) };
         unsafe { msg_putchar(' ' as c_int) };
         prev.cont_in_list = opts.cont_in_list;
     }
     if prev.next_list != opts.next_list {
-        unsafe { put_id_list(c"nextgroup", opts.next_list, LIST_HL) };
+        unsafe { put_id_list(c"nextgroup", id_list_ids(opts.next_list), LIST_HL) };
         unsafe { msg_putchar(' ' as c_int) };
         prev.next_list = opts.next_list;
         // The three skip flags are only meaningful with a `nextgroup=`,
