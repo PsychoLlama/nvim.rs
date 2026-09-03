@@ -10,6 +10,7 @@ use super::*;
 use crate::cstr;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_J, Ctrl_V, Key, key_unescape};
+use crate::memory::handoff::owned_cstr;
 use crate::types::CmdIdx;
 use crate::types::{CpoFlag, ExpandContext, Failed, NUL};
 use crate::winlayer::Buf;
@@ -134,10 +135,7 @@ pub(crate) unsafe fn translate_mapping(
     str_in: *const c_char,
     cpo_val: *const c_char,
 ) -> *mut c_char {
-    let mut ga: garray_T = garray_T::default();
-    let gap = &raw mut ga;
-    // SAFETY: `gap` names the local growarray just above.
-    unsafe { ga_init(gap, 1, 40) };
+    let gap = &mut Vec::<u8>::new();
 
     // SAFETY: the caller's promise — `cpo_val` is NUL-terminated.
     let cpo_bslash = !unsafe { vim_strchr(cpo_val, CpoFlag::BSLASH.as_c_int()) }.is_null();
@@ -180,9 +178,9 @@ pub(crate) unsafe fn translate_mapping(
                 if c < 0 || !modifiers.is_empty() {
                     // A special key.
                     let name = get_special_key_name(c, modifiers);
-                    // SAFETY: `gap` is the local growarray, and `name` is a
-                    // NUL-terminated rendering that outlives the call.
-                    unsafe { ga_concat(gap, name.as_ptr()) };
+                    // SAFETY: `name` is a NUL-terminated rendering that
+                    // outlives the call.
+                    gap.extend_from_slice(unsafe { cstr::bytes_at(name.as_ptr()) });
                     break 'next;
                 }
             }
@@ -195,20 +193,16 @@ pub(crate) unsafe fn translate_mapping(
                 || (c == c_int::from(b'\\') && !cpo_bslash)
             {
                 let escape = if cpo_bslash { Ctrl_V } else { b'\\'.into() } as u8;
-                // SAFETY: `gap` is the local growarray.
-                unsafe { ga_append(gap, escape) };
+                gap.push(escape);
             }
             if c != 0 {
-                // SAFETY: as above.
-                unsafe { ga_append(gap, c as u8) };
+                gap.push(c as u8);
             }
         }
         // SAFETY: `str` is on a non-NUL byte, so the next one is in the string.
         str = unsafe { str.add(1) };
     }
-    // SAFETY: as above.
-    unsafe { ga_append(gap, NUL as u8) };
-    ga.ga_data.cast()
+    owned_cstr(core::mem::take(gap))
 }
 
 /// The `:map-arguments` that may precede the `{lhs}` on a completed command
@@ -320,14 +314,9 @@ pub unsafe fn expand_mappings(
         *matches = ptr::null_mut();
     }
 
-    let mut ga: garray_T = garray_T::default();
-    let itemsize = if fuzzy {
-        size_of::<fuzmatch_str_T>()
-    } else {
-        size_of::<*mut c_char>()
-    };
-    // SAFETY: `ga` is the local growarray just above.
-    unsafe { ga_init(&raw mut ga, itemsize as c_int, 3) };
+    // Exactly one of these fills: `fuzzy` is fixed for the whole call.
+    let mut scored = Vec::<fuzmatch_str_T>::new();
+    let mut plain = Vec::<*mut c_char>::new();
 
     // Whether `p` matches, and with what fuzzy score.
     let matched = |p: *mut c_char| -> Option<c_int> {
@@ -342,30 +331,15 @@ pub unsafe fn expand_mappings(
         }
     };
     // C's `GA_APPEND`, in whichever of the two element shapes is in use.
-    // `ga` is a parameter rather than a capture so the loops below can
-    // still read it.
-    let push = |ga: &mut garray_T, s: *mut c_char, score: c_int| {
-        // SAFETY: `ga_grow` makes room for one more element of `ga_itemsize`,
-        // which is the size of whichever of the two shapes is written below,
-        // and `ga_len` is the index it just made room for.
-        unsafe {
-            ga_grow(ga, 1);
-            if fuzzy {
-                let at = ga
-                    .ga_data
-                    .cast::<fuzmatch_str_T>()
-                    .offset(ga.ga_len as isize);
-                *at = fuzmatch_str_T {
-                    idx: ga.ga_len,
-                    str: s,
-                    score,
-                };
-            } else {
-                let at = ga.ga_data.cast::<*mut c_char>().offset(ga.ga_len as isize);
-                *at = s;
-            }
+    // The two vectors are parameters rather than captures so the loops below
+    // can still read them.
+    let push = |scored: &mut Vec<fuzmatch_str_T>, plain: &mut Vec<*mut c_char>, s, score| {
+        if fuzzy {
+            let idx = c_int::try_from(scored.len()).expect("a match count fits a c_int");
+            scored.push(fuzmatch_str_T { idx, str: s, score });
+        } else {
+            plain.push(s);
         }
-        ga.ga_len += 1;
     };
 
     // First search in map modifier arguments.
@@ -377,7 +351,7 @@ pub unsafe fn expand_mappings(
         if let Some(score) = matched(p) {
             // SAFETY: `p` is a static NUL-terminated word; the copy is owned
             // by the growarray from here on.
-            push(&mut ga, unsafe { xstrdup(p) }, score);
+            push(&mut scored, &mut plain, unsafe { xstrdup(p) }, score);
         }
     }
 
@@ -402,7 +376,7 @@ pub unsafe fn expand_mappings(
             return None;
         }
         match matched(p) {
-            Some(score) => push(&mut ga, p, score),
+            Some(score) => push(&mut scored, &mut plain, p, score),
             // SAFETY: the rendering nothing took ownership of.
             None => unsafe { xfree(p.cast()) },
         }
@@ -412,20 +386,24 @@ pub unsafe fn expand_mappings(
     // entry.
     unsafe { map_walk::<()>(table, abbr, collect) };
 
-    if ga.ga_len == 0 {
+    let found = if fuzzy { scored.len() } else { plain.len() };
+    if found == 0 {
         return Err(Failed);
     }
+    let found = c_int::try_from(found).expect("a match count fits a c_int");
 
-    // SAFETY: the growarray holds `ga_len` elements of the shape `fuzzy`
-    // names, and both out-parameters are the caller's writable slots.
+    // Both handovers give the receiver a boxed slice, which is `xfree`-able
+    // because the tree's allocator is libc's (`allocator.rs`).
+    // SAFETY: both out-parameters are the caller's writable slots.
     let mut count = unsafe {
         if fuzzy {
-            fuzzymatches_to_strmatches(ga.ga_data.cast(), matches, ga.ga_len, false);
+            let raw = Box::into_raw(scored.into_boxed_slice()).cast::<fuzmatch_str_T>();
+            fuzzymatches_to_strmatches(raw, matches, found, false);
         } else {
-            *matches = ga.ga_data.cast();
+            *matches = Box::into_raw(plain.into_boxed_slice()).cast::<*mut c_char>();
         }
-        *numMatches = ga.ga_len;
-        *numMatches
+        *numMatches = found;
+        found
     };
     if count > 1 {
         // SAFETY: `*matches` now holds `count` NUL-terminated strings, which

@@ -7,10 +7,12 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::memory::handoff::owned_cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use core::ffi::{c_char, c_int};
 use core::ptr;
+use core::slice;
 
 use super::*;
 use crate::types::NUL;
@@ -25,11 +27,10 @@ const COMMENT_CHAR: c_char = b'"' as c_char;
 /// skipped `:let` wants.
 ///
 /// # Safety
-/// `p` points at the `{` of a NUL-terminated string, writable in place;
-/// `gap` is a byte garray.
+/// `p` points at the `{` of a NUL-terminated string, writable in place.
 pub unsafe fn eval_one_expr_in_str(
     p: *mut c_char,
-    gap: *mut garray_T,
+    gap: &mut Vec<u8>,
     evaluate: bool,
 ) -> *mut c_char {
     // SAFETY: the caller's obligation throughout -- `p` points at the `{`
@@ -61,7 +62,8 @@ pub unsafe fn eval_one_expr_in_str(
         if expr_val.is_null() {
             return ptr::null_mut();
         }
-        unsafe { ga_concat(gap, expr_val) };
+        // SAFETY: `eval_to_string` answers an owned NUL-terminated string.
+        gap.extend_from_slice(unsafe { cstr::bytes_at(expr_val) });
         unsafe { xfree(expr_val.cast()) };
     }
     unsafe { block_end.add(1) }
@@ -73,14 +75,7 @@ pub unsafe fn eval_one_expr_in_str(
 /// # Safety
 /// `str` is a NUL-terminated string, writable in place.
 unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
-    let mut ga = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut(),
-    };
-    unsafe { ga_init(&raw mut ga, 1, 80) };
+    let mut text = Vec::<u8>::new();
     let mut p = str;
 
     // SAFETY: the caller's obligation throughout -- `str` is NUL-terminated
@@ -104,12 +99,11 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let arg0 = unsafe { c_str(str) };
             semsg!("E1278: Stray '}}' without a matching '{{': {arg0}");
-            unsafe { ga_clear(&raw mut ga) };
             return ptr::null_mut();
         }
 
-        let lit_len = unsafe { p.offset_from(lit_start) } as size_t;
-        unsafe { ga_concat_len(&raw mut ga, lit_start, lit_len) };
+        let lit_len = unsafe { p.offset_from(lit_start) } as usize;
+        text.extend_from_slice(unsafe { slice::from_raw_parts(lit_start.cast::<u8>(), lit_len) });
         if here == 0 {
             break;
         }
@@ -118,14 +112,12 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
             continue;
         }
 
-        p = unsafe { eval_one_expr_in_str(p, &raw mut ga, true) };
+        p = unsafe { eval_one_expr_in_str(p, &mut text, true) };
         if p.is_null() {
-            unsafe { ga_clear(&raw mut ga) };
             return ptr::null_mut();
         }
     }
-    unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    ga.ga_data as *mut c_char
+    owned_cstr(text)
 }
 
 /// Collect the lines of a here-document into a List, or answer NULL.

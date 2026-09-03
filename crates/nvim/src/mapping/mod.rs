@@ -32,7 +32,6 @@ use crate::eval::{eval_to_string, last_set_msg};
 use crate::ex_cmds::check_secure;
 use crate::ex_session::put_eol_unchecked;
 use crate::fuzzy::fuzzy_match_str;
-use crate::garray::{ga_append, ga_concat, ga_grow, ga_init};
 use crate::getchar::{ins_typebuf, noremap_keys};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::HLF_8;
@@ -68,8 +67,8 @@ use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
     LuaRef, LuaRetMode, Object, RemapValues, String_0, dict_T, exarg_T, expand_T, fuzmatch_str_T,
-    garray_T, key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t, regmatch_T, scid_T,
-    size_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    key_value_pair, linenr_T, mapblock_T, optset_T, ptrdiff_t, regmatch_T, scid_T, size_t,
+    typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp, strpbrk};

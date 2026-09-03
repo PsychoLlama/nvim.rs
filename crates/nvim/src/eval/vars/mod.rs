@@ -41,7 +41,6 @@ use crate::eval::{
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
-use crate::garray::{ga_append, ga_clear, ga_concat, ga_concat_len, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
@@ -85,10 +84,10 @@ use crate::types::{
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL,
     VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC,
     VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarType, VimVarFlags,
-    Vv, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T, garray_T, hashtab_T,
-    int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull, list_T, listitem_T,
-    lval_T, partial_T, ptrdiff_t, scid_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T,
-    typval_T, typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
+    Vv, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T, expand_T, hashtab_T, int64_t,
+    kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull, list_T, listitem_T, lval_T,
+    partial_T, ptrdiff_t, scid_T, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T, typval_T,
+    typval_vval_union, uint8_t, uint32_t, varnumber_T, win_T,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

@@ -11,8 +11,9 @@
 
 use crate::cstr;
 use crate::semsg;
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int};
 use core::ptr;
+use core::slice;
 
 use super::{given, strcase_save, strict_bool_arg, xstrnsave};
 use crate::charset::{Str2NrBases, skipwhite, transstr, vim_str2nr};
@@ -21,19 +22,18 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
     tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
-use crate::garray::{ga_append, ga_clear, ga_grow, ga_init};
 use crate::main::e_invarg;
 use crate::mbyte::{
     mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2char, utf_ptr2len,
     utfc_ptr2len,
 };
+use crate::memory::handoff::owned_cstr;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
-    EvalFuncData, VAR_STRING, garray_T, kListLenUnknown, ptrdiff_t, size_t, typval_T, uint8_t,
-    varnumber_T,
+    EvalFuncData, VAR_STRING, kListLenUnknown, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 
 /// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
@@ -314,14 +314,7 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
         n
     };
 
-    let mut ga: garray_T = garray_T {
-        ga_len: 0,
-        ga_maxlen: 0,
-        ga_itemsize: 0,
-        ga_growsize: 0,
-        ga_data: ptr::null_mut::<c_void>(),
-    };
-    unsafe { ga_init(&raw mut ga, ::core::mem::size_of::<c_char>() as c_int, 80) };
+    let mut out = Vec::<u8>::new();
 
     let mut lengths_checked = false;
     'error: {
@@ -358,20 +351,19 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
                 (in_str, inlen)
             };
 
-            unsafe { ga_grow(&raw mut ga, cplen) };
-            let end = unsafe { (ga.ga_data as *mut c_char).offset(ga.ga_len as isize) };
-            unsafe { ptr::copy_nonoverlapping(cpstr, end, cplen as usize) };
-            ga.ga_len += cplen;
+            // SAFETY: `cpstr` names `cplen` readable bytes of one of the
+            // three caller-owned strings.
+            out.extend_from_slice(unsafe {
+                slice::from_raw_parts(cpstr.cast::<u8>(), cplen as usize)
+            });
             in_str = unsafe { in_str.offset(inlen as isize) };
         }
-        unsafe { ga_append(&raw mut ga, 0 as uint8_t) };
-        unsafe { (*rettv).vval.v_string = ga.ga_data as *mut c_char };
+        unsafe { (*rettv).vval.v_string = owned_cstr(out) };
         return;
     }
     // SAFETY: a message argument the caller holds as a NUL-terminated string.
     let fromstr = unsafe { c_str(fromstr) };
     semsg!("E475: Invalid argument: {fromstr}");
-    unsafe { ga_clear(&raw mut ga) };
 }
 
 /// "trim()" function.

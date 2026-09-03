@@ -13,6 +13,7 @@
 use crate::charset::Str2NrBases;
 use crate::cstr;
 use crate::keycodes::ModMask;
+use crate::memory::handoff::owned_cstr;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::null_mut;
@@ -26,7 +27,7 @@ use crate::eval::{
     get_env_len,
 };
 use crate::eval::{Cur, Tv};
-use crate::garray::{ga_append, ga_clear, ga_concat, ga_init};
+use crate::garray::{ga_append, ga_clear};
 use crate::keycodes::{find_special_key, trans_special};
 use crate::mbyte::{mb_copy_char, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc};
@@ -38,7 +39,7 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
     Failed, NUL, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, blob_T, float_T, garray_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    VarLock, blob_T, float_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
 };
 use ::libc::{strtod, toupper};
 
@@ -47,15 +48,6 @@ const UNSET_TV: typval_T = typval_T {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
-};
-
-/// An empty growable array of bytes.
-const UNSET_GA: garray_T = garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: null_mut(),
 };
 
 /// A walk over a NUL-terminated buffer: the `*mut c_char` a scan steps
@@ -673,8 +665,7 @@ pub(crate) unsafe fn eval_interp_string(
     // is this frame's own and is initialised before anything appends to it.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
     let mut ret = Ok(());
-    let mut ga = UNSET_GA;
-    unsafe { ga_init(&raw mut ga, 1, 80) };
+    let mut text = Vec::<u8>::new();
 
     // `*arg` is on the `$`; move it to the first string character.
     cur.bump(1);
@@ -696,7 +687,10 @@ pub(crate) unsafe fn eval_interp_string(
         }
         if evaluate {
             // SAFETY: the piece just parsed is a String typval.
-            unsafe { ga_concat(&raw mut ga, tv.string_or_null()) };
+            let piece = tv.string_or_null();
+            if !piece.is_null() {
+                text.extend_from_slice(unsafe { cstr::bytes_at(piece) });
+            }
             unsafe { tv_clear(two) };
         }
         if cur.byte() != b'{' {
@@ -705,7 +699,7 @@ pub(crate) unsafe fn eval_interp_string(
             break;
         }
         // SAFETY: the cursor is on the `{` of a substitution.
-        let p = unsafe { eval_one_expr_in_str(cur.get(), &raw mut ga, evaluate) };
+        let p = unsafe { eval_one_expr_in_str(cur.get(), &mut text, evaluate) };
         if p.is_null() {
             ret = Err(Failed);
             break;
@@ -714,10 +708,16 @@ pub(crate) unsafe fn eval_interp_string(
     }
 
     rv.v_type = VAR_STRING;
-    if ret.is_ok() && evaluate {
-        unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    }
-    rv.vval.v_string = ga.ga_data as *mut c_char;
+    // The garray answered its `ga_data`, which was null exactly while
+    // nothing had been appended -- a skipped run, or an error before the
+    // first piece. What it did *not* do was terminate the error path's
+    // buffer; that one leaned on `ga_grow`'s zeroed tail, and now carries
+    // its own NUL like every other answer.
+    rv.vval.v_string = if !text.is_empty() || (ret.is_ok() && evaluate) {
+        owned_cstr(text)
+    } else {
+        null_mut()
+    };
     Ok(())
 }
 

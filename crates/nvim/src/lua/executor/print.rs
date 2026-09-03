@@ -17,7 +17,6 @@ use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::{get_user_input, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
-use crate::garray::{ga_append, ga_clear, ga_concat_len, ga_init};
 use crate::lua::ffi::{
     LUA_GLOBALSINDEX, LUA_REGISTRYINDEX, lua_call, lua_error, lua_getfield, lua_getglobal,
     lua_gettop, lua_insert, lua_iscfunction, lua_pcall, lua_pop, lua_pushlstring, lua_pushvalue,
@@ -33,15 +32,12 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, String_0, VAR_STRING, VarLock,
-    intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union, uint8_t,
+    intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union,
 };
 use crate::ui::ui_has;
 
 /// The message kind `print()`'s output is reported under.
 const LUA_PRINT_KIND: &CStr = c"lua_print";
-/// How far the message garray grows at a time.
-const MSG_GROWSIZE: c_int = 80;
-
 /// Show one `print()`'s worth of text.
 ///
 /// `argv[0]` is the NUL-terminated buffer `nlua_print` built and `argv[1]`
@@ -97,8 +93,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
 
         let mut errmsg: *const c_char = ptr::null();
         let mut errmsg_len: size_t = 0;
-        let mut msg_ga = GA_EMPTY;
-        ga_init(&raw mut msg_ga, 1, MSG_GROWSIZE);
+        let mut msg_text = Vec::<u8>::new();
 
         let mut curargidx: c_int = 1;
         'nlua_print_error: {
@@ -116,22 +111,26 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
                     errmsg_len = NULL_TOSTRING.count_bytes();
                     break 'nlua_print_error;
                 }
-                ga_concat_len(&raw mut msg_ga, s, len);
+                msg_text.extend_from_slice(core::slice::from_raw_parts(s.cast::<u8>(), len));
                 if curargidx < nargs {
-                    ga_append(&raw mut msg_ga, b' ');
+                    msg_text.push(b' ');
                 }
                 lua_pop(lstate, 1);
                 curargidx += 1;
             }
-            ga_append(&raw mut msg_ga, 0 as uint8_t);
+            msg_text.push(0);
 
             lua_getfield(lstate, LUA_REGISTRYINDEX, c"nvim.thread".as_ptr());
             let is_thread = lua_toboolean(lstate, -1) != 0;
             lua_pop(lstate, 1);
 
+            // The event owns the buffer from here on and `xfree`s it, which
+            // a boxed slice may cross (`allocator.rs`). The length carried
+            // alongside it includes the terminator, as `ga_len` did.
+            let msg_len = msg_text.len();
             let mut args = [
-                msg_ga.ga_data,
-                ptr::with_exposed_provenance_mut::<c_void>(msg_ga.ga_len as intptr_t as usize),
+                Box::into_raw(msg_text.into_boxed_slice()).cast::<c_void>(),
+                ptr::with_exposed_provenance_mut::<c_void>(msg_len as intptr_t as usize),
             ];
             if is_thread {
                 loop_schedule_deferred(main_loop.ptr(), Event::new(Some(nlua_print_event), args));
@@ -148,7 +147,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
 
         // The conversion failed: nothing is shown, and the failure is thrown
         // at the Lua caller instead.
-        ga_clear(&raw mut msg_ga);
+        drop(msg_text);
         let buff = xmalloc(IOSIZE as size_t).cast::<c_char>();
         let fmt = gettext(c"E5114: Converting print argument #%i: %.*s");
         let len = vim_snprintf(
@@ -291,15 +290,6 @@ pub(crate) unsafe extern "C-unwind" fn nlua_debug(lstate: *mut lua_State) -> c_i
 /// What `print()` reports when `tostring` answers something that is not a
 /// string at all.
 const NULL_TOSTRING: &CStr = c"<Unknown error: lua_tolstring returned NULL for tostring result>";
-
-/// A garray `ga_init` is about to fill.
-const GA_EMPTY: crate::types::garray_T = crate::types::garray_T {
-    ga_len: 0,
-    ga_maxlen: 0,
-    ga_itemsize: 0,
-    ga_growsize: 0,
-    ga_data: ptr::null_mut(),
-};
 
 /// The signature `lua_tocfunction` answers with.
 type CFunction = unsafe extern "C-unwind" fn(*mut lua_State) -> c_int;
