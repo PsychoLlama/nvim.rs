@@ -21,7 +21,7 @@ use crate::main::{
     KeyTyped, e_interr, got_int, p_icm, p_rdt, p_report, p_shm, sub_nlines, sub_nsubs,
 };
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
-use crate::memory::{xfree, xrealloc, xstrdup};
+use crate::memory::{xfree, xrealloc};
 use crate::message::{MSG_BUF_LEN, emsg, messaging, msg_ptr, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;
@@ -37,6 +37,7 @@ use crate::winlayer::Buf;
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 /// An option value that borrows a static C string, for the two options this
 /// module sets and puts back.
@@ -261,7 +262,7 @@ pub(crate) unsafe fn show_sub(
     cmdpreview_bufnr: handle_T,
 ) -> c_int {
     // SAFETY: 'shortmess' is a live string option value.
-    let save_shm_p = unsafe { xstrdup(p_shm.get()) };
+    let save_shm: CString = unsafe { CStr::from_ptr(p_shm.get()) }.into();
     let orig_buf = cur_buf();
 
     // Disable the file info message.
@@ -353,13 +354,17 @@ pub(crate) unsafe fn show_sub(
     if let Some(pv) = pv {
         unsafe { xfree(pv.str as *mut c_void) };
     }
+    // `cstr_as_string` borrows rather than copies, so the saved option must
+    // outlive the call that puts it back -- which is why it is dropped here
+    // and not before.
+    // SAFETY: `save_shm` is this call's own NUL-terminated copy.
     set_option_direct(
         kOptShortmess,
-        OptVal::String(unsafe { cstr_as_string(save_shm_p) }),
+        OptVal::String(unsafe { cstr_as_string(save_shm.as_ptr().cast_mut()) }),
         OptionSetFlags::NONE,
         SID_NONE,
     );
-    unsafe { xfree(save_shm_p as *mut c_void) };
+    drop(save_shm);
 
     if preview { 2 as c_int } else { 1 as c_int }
 }

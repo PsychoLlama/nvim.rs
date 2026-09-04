@@ -19,6 +19,7 @@ use super::{
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
+use crate::ex_cmds::Owned;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
 use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::check_nextcmd;
@@ -39,27 +40,7 @@ use crate::types::{
     AdditionalData, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
 use core::ffi::{c_char, c_int, c_void};
-use core::mem::ManuallyDrop;
 use core::ptr;
-
-/// An `xmalloc`ed C string that frees itself.  Every early exit below is a
-/// `goto` that has to release the replacement text, and this is how it
-/// cannot be forgotten.
-struct Owned(*mut c_char);
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        // SAFETY: our own allocation.
-        unsafe { xfree(self.0 as *mut c_void) };
-    }
-}
-
-impl Owned {
-    /// Hand the pointer to the caller, who owns it from here on.
-    fn release(self) -> *mut c_char {
-        ManuallyDrop::new(self).0
-    }
-}
 
 /// What `do_sub` needs from the command line before it can start matching.
 pub(super) struct SubSetup {
@@ -248,7 +229,7 @@ unsafe fn read_pattern(
 /// Main thread; `cmd` must point into the live argument.
 unsafe fn read_count(eap: &mut exarg_T, cmd: &mut *mut c_char) -> bool {
     // SAFETY: caller's contract.
-    if !unsafe { ascii_isdigit(**cmd as c_int) } {
+    if !ascii_isdigit(unsafe { **cmd } as c_int) {
         return true;
     }
     let count_arg: *const c_char = *cmd;

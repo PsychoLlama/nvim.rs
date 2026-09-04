@@ -351,13 +351,13 @@ pub unsafe fn ex_oldfiles(eap: *mut exarg_T) {
         return;
     }
     // SAFETY: `picked` is a live string, and the expansion is ours to free.
-    let expanded = unsafe { expand_env_save(picked.cast_mut()) };
-    eap.arg = expanded;
+    let expanded = Owned(unsafe { expand_env_save(picked.cast_mut()) });
+    eap.arg = expanded.0;
     eap.cmdidx = CmdIdx::edit;
     cmdmod.with_mut(|m| m.cmod_flags.clear(CmdModFlags::BROWSE));
-    // SAFETY: the command block is the one borrowed here.
+    // SAFETY: the command block is the one borrowed here; the argument it
+    // points at outlives the call.
     unsafe { do_exedit(&raw mut *eap, ptr::null_mut::<win_T>()) };
-    unsafe { xfree(expanded.cast()) };
 }
 
 /// Number and print every entry of `list`, stopping on an interrupt.
@@ -386,6 +386,30 @@ unsafe fn list_oldfiles(list: *mut list_T) {
         }
         // SAFETY: as above.
         item = unsafe { (*item).li_next };
+    }
+}
+
+/// An `xmalloc`ed C string that frees itself.
+///
+/// The family's one documented allocator seam: a C callee (`fix_fname`,
+/// `fname_expand`, `makeswapname`, `make_filter_cmd`, `xstrdup` of an option
+/// or of the previous replacement) answers an allocation that ends its life
+/// with `xfree`, and upstream releases it at every `goto` out. A NULL is
+/// allowed and frees nothing, which stands in for the `char *x = NULL; ...
+/// xfree(x)` shape around a conditional allocation.
+pub(crate) struct Owned(pub(crate) *mut ::core::ffi::c_char);
+
+impl Drop for Owned {
+    fn drop(&mut self) {
+        // SAFETY: the callee's allocation, handed over, or NULL.
+        unsafe { xfree(self.0.cast()) };
+    }
+}
+
+impl Owned {
+    /// Hand the pointer on to a caller who owns it from here.
+    pub(crate) fn release(self) -> *mut ::core::ffi::c_char {
+        ::core::mem::ManuallyDrop::new(self).0
     }
 }
 

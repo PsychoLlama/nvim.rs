@@ -59,7 +59,6 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
-use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -669,7 +668,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 
     // SAFETY: the current window is live.
-    if subflags.with(|flags| flags.do_ask) && unsafe { has_any_folding(Win::current()) } != 0 {
+    if subflags.with(|flags| flags.do_ask) && has_any_folding(cur_win()) != 0 {
         // The cursor position may require updating.
         // SAFETY: as above.
         changed_window_setting(cur_win());

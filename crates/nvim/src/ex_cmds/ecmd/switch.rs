@@ -300,9 +300,10 @@ unsafe fn leave_for_buffer(
     // oldwin->w_buffer to NULL.
     u_sync(false);
     let mode = if unload { DOBUF_UNLOAD as c_int } else { 0 };
-    // SAFETY: the windows and buffers are the editor's own and live.
-    let did_decrement =
-        unsafe { close_buffer(Win::from_raw(oldwin), Buf::current(), mode, false, false) };
+    // SAFETY: `Win::from_raw` is the promise -- the window is the editor's
+    // own and live, or NULL.
+    let win = unsafe { Win::from_raw(oldwin) };
+    let did_decrement = close_buffer(win, cur_buf(), mode, false, false);
 
     // SAFETY: `win_valid` tolerates a stale window pointer.
     // Autocommands may have closed the window.

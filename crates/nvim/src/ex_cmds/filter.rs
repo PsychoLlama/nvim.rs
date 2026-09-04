@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::Owned;
 use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use super::{cur_buf, cur_win};
@@ -382,17 +383,16 @@ unsafe fn do_filter(
         }
 
         'error: {
-            // SAFETY: `cmd` is live and the temp names are ours.
-            let cmd_buf = unsafe {
+            // SAFETY: `cmd` is live and the temp names are ours; the shell
+            // line `make_filter_cmd` builds is ours to free.
+            let cmd_buf = Owned(unsafe {
                 make_filter_cmd(cmd, TempFile::name(&itmp), TempFile::name(&otmp), do_in)
-            };
+            });
             ui_cursor_goto(Rows.get() - 1, 0);
 
             if do_out {
                 // SAFETY: `line2` is a line of the current buffer.
                 if u_save(line2, line2 + 1).is_err() {
-                    // SAFETY: `cmd_buf` is our own allocation.
-                    unsafe { xfree(cmd_buf.cast()) };
                     break 'error;
                 }
                 // SAFETY: main thread, redraw state.
@@ -403,8 +403,8 @@ unsafe fn do_filter(
 
             // SAFETY: `cmd_buf` is a live command line and ours to free.
             // Pass on the DO_OUT flag when the output is redirected.
-            unsafe { call_shell(cmd_buf, ShellOpts::FILTER | shell_flags, ptr::null_mut()) };
-            unsafe { xfree(cmd_buf.cast()) };
+            unsafe { call_shell(cmd_buf.0, ShellOpts::FILTER | shell_flags, ptr::null_mut()) };
+            drop(cmd_buf);
 
             did_check_timestamps.set(false);
             need_check_timestamps.set(true);

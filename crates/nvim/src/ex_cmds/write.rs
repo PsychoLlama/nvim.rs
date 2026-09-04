@@ -14,6 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::Owned;
 use super::{
     GETFILE_ERROR, GETFILE_NOT_WRITTEN, GETFILE_OPEN_OTHER, GETFILE_SAME_FILE, NODE_OTHER,
     VIM_QUESTION, VIM_YES, buf_autocmd, do_bang, do_ecmd,
@@ -65,18 +66,6 @@ use core::ptr;
 
 /// The buffer `dialog_msg` formats a prompt into.
 const DIALOG_MSG_SIZE: usize = 1000;
-
-/// An `xmalloc`ed C string this module owns, freed when it goes out of scope.
-/// A NULL is allowed and frees nothing, so it stands in for the `char *x =
-/// NULL; ... xfree(x)` shape upstream uses around a conditional allocation.
-struct Owned(*mut c_char);
-
-impl Drop for Owned {
-    fn drop(&mut self) {
-        // SAFETY: our own allocation, or NULL.
-        unsafe { xfree(self.0.cast()) };
-    }
-}
 
 /// Is a `:confirm` dialog wanted here -- either from 'confirm' or from the
 /// command's own modifier?

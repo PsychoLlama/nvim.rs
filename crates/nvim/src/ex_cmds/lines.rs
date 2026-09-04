@@ -29,7 +29,6 @@ use crate::os::cshim::{gettext, ngettext};
 use crate::tr_plural;
 use crate::types::{Failed, OptInt, bcount_t, int64_t, linenr_T};
 use crate::undo::u_save;
-use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
 use core::ptr;
@@ -311,8 +310,7 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
     // SAFETY: `count` lines were appended after `n`.
     unsafe { appended_lines_mark(n, count) };
     if visual_active() {
-        // SAFETY: `curbuf` is live and `VIsual` is a global position.
-        with_visual_anchor(|anchor| unsafe { check_pos(Buf::current(), anchor) });
+        with_visual_anchor(|anchor| check_pos(cur_buf(), anchor));
     }
     // SAFETY: message state, main thread.
     say::more(count);

@@ -39,6 +39,21 @@ use ::libc::atol;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
+/// One line `:append` read, freed when it goes out of scope.
+///
+/// The seam: all three sources -- the text after a trailing bar, the script's
+/// next line, and the command line's own `getline` callback -- answer an
+/// `xmalloc`ed string, and the last of the three is a C callee's.  A NULL is
+/// allowed and frees nothing; it is `getline` saying the input ended.
+struct Line(*mut c_char);
+
+impl Drop for Line {
+    fn drop(&mut self) {
+        // SAFETY: our own allocation, or NULL.
+        unsafe { xfree(self.0.cast()) };
+    }
+}
+
 /// The indent `:append`/`:insert`/`:change` gives the first line it reads,
 /// taken from the line the command started on.  `-1` once it has been used.
 static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
@@ -102,13 +117,13 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
             break;
         };
         lines_left.set(Rows.get() - 1);
-        if theline.is_null() {
+        if theline.0.is_null() {
             break;
         }
 
         // Look for the "." after the automatic indent.
         // SAFETY: every source above hands back a NUL-terminated string.
-        let text = unsafe { CStr::from_ptr(theline) }.to_bytes();
+        let text = unsafe { CStr::from_ptr(theline.0) }.to_bytes();
         let mut vcol = 0;
         let mut typed = 0;
         while indent > vcol && typed < text.len() {
@@ -125,27 +140,24 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
         let undo_failed =
             !ended && !did_undo && u_save(lnum, lnum + 1 + linenr_T::from(empty)).is_err();
         if ended || undo_failed {
-            // SAFETY: the line is ours.
-            unsafe { xfree(theline.cast()) };
             break;
         }
 
         // Don't use autoindent if nothing was typed.
         // SAFETY: as above; `theline` is at least one byte long.
         if text.len() == typed {
-            unsafe { *theline = NUL as c_char };
+            unsafe { *theline.0 = NUL as c_char };
         }
 
         did_undo = true;
         // SAFETY: `lnum` is a line of the current buffer, or zero.
-        let _ = unsafe { ml_append(lnum, theline, 0, false) };
+        let _ = unsafe { ml_append(lnum, theline.0, 0, false) };
         if empty {
             // There are no marks below the inserted lines.
             unsafe { appended_lines(lnum, 1) };
         } else {
             unsafe { appended_lines_mark(lnum, 1) };
         }
-        unsafe { xfree(theline.cast()) };
         lnum += 1;
 
         if empty {
@@ -208,14 +220,14 @@ unsafe fn toggle_autoindent() {
 ///
 /// # Safety
 /// `eap.arg`, `eap.nextcmd` and `eap.cstack` must be live.
-unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<*mut c_char> {
+unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<Line> {
     let arg = eap.arg;
     // SAFETY: caller's contract.
     if unsafe { *arg } == '|' as c_char {
         // Get the text after the trailing bar.
         let line = unsafe { xstrdup(arg.add(1)) };
         unsafe { *arg = NUL as c_char };
-        return Some(line);
+        return Some(Line(line));
     }
 
     let Some(getline) = eap.ea_getline else {
@@ -240,7 +252,7 @@ unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<*mut c_ch
             (line, rest)
         };
         eap.nextcmd = rest;
-        return Some(line);
+        return Some(Line(line));
     };
 
     // Set State to avoid the cursor shape being set to MODE_INSERT state
@@ -255,7 +267,7 @@ unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<*mut c_ch
     // SAFETY: the cookie is the one the getter was handed with.
     let line = unsafe { getline(first, eap.cookie, indent, true) };
     State.set(save_state);
-    Some(line)
+    Some(Line(line))
 }
 
 /// `:change` -- delete the range, then append in its place.

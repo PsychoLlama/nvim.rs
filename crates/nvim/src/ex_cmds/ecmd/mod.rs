@@ -587,12 +587,12 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
             return false;
         }
         u_unchanged(cur_buf());
-        unsafe { buf_freeall(Buf::current(), BFA_KEEP_UNDO as c_int) };
+        buf_freeall(cur_buf(), BFA_KEEP_UNDO as c_int);
         // Tell readfile() not to clear or reload undo info.
         state.readfile_flags = READ_KEEP_UNDO as c_int;
     } else {
         // Free all things for buffer.
-        unsafe { buf_freeall(Buf::current(), 0) };
+        buf_freeall(cur_buf(), 0);
     }
 
     // If autocommands deleted the buffer we were going to re-edit, give up
