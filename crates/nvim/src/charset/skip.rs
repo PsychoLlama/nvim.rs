@@ -87,6 +87,22 @@ pub fn to_digit(s: &[u8]) -> usize {
     count(s, |byte| !is_digit(byte))
 }
 
+/// How many bytes of `s` come before the first hexadecimal digit.
+///
+/// The slice form of [`skiptohex`](super::skiptohex). `pub(crate)`, like its
+/// binary twin: no ledger names either, and the crate's boundary is already
+/// wider than it should be.
+pub(crate) fn to_hex(s: &[u8]) -> usize {
+    count(s, |byte| !is_xdigit(byte))
+}
+
+/// How many bytes of `s` come before the first binary digit.
+///
+/// The slice form of [`skiptobin`](super::skiptobin).
+pub(crate) fn to_bin(s: &[u8]) -> usize {
+    count(s, |byte| !is_bdigit(byte))
+}
+
 /// The leading run of `s` that `keep` accepts.
 fn count(s: &[u8], keep: impl Fn(u8) -> bool) -> usize {
     s.iter().position(|&byte| !keep(byte)).unwrap_or(s.len())
@@ -115,6 +131,8 @@ mod tests {
                 hex(s),
                 bin(s),
                 to_digit(s),
+                to_hex(s),
+                to_bin(s),
             ] {
                 assert!(offset <= s.len(), "{s:?} answered {offset}");
                 let _ = &s[offset..];
@@ -139,6 +157,8 @@ mod tests {
         assert_eq!(hex(b"12abg"), 4);
         assert_eq!(bin(b"1012"), 3);
         assert_eq!(to_digit(b"abc1"), 3);
+        assert_eq!(to_hex(b"zzz1F"), 3);
+        assert_eq!(to_bin(b"xy01"), 2);
     }
 
     /// A NUL is a byte like any other here: the pointer forms stop at one
