@@ -48,9 +48,10 @@ static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_append(eap: *mut exarg_T) {
-    let mut did_undo = false;
     // SAFETY: caller's contract.
-    let (cmdidx, forceit, line2) = unsafe { ((*eap).cmdidx, (*eap).forceit, (*eap).line2) };
+    let eap = unsafe { &mut *eap };
+    let mut did_undo = false;
+    let (cmdidx, forceit, line2) = (eap.cmdidx, eap.forceit, eap.line2);
     let mut lnum = line2;
     let mut indent = 0;
     // SAFETY: `curbuf` is the live current buffer.
@@ -96,7 +97,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
             }
         }
 
-        // SAFETY: caller's contract.
+        // SAFETY: the command's argument and script cursor are live.
         let Some(theline) = (unsafe { next_append_line(eap, indent) }) else {
             break;
         };
@@ -206,10 +207,10 @@ unsafe fn toggle_autoindent() {
 /// `Some(NULL)` is the callback saying the input ended.
 ///
 /// # Safety
-/// `eap` must be a live Ex command.
-unsafe fn next_append_line(eap: *mut exarg_T, indent: c_int) -> Option<*mut c_char> {
+/// `eap.arg`, `eap.nextcmd` and `eap.cstack` must be live.
+unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<*mut c_char> {
+    let arg = eap.arg;
     // SAFETY: caller's contract.
-    let arg = unsafe { (*eap).arg };
     if unsafe { *arg } == '|' as c_char {
         // Get the text after the trailing bar.
         let line = unsafe { xstrdup(arg.add(1)) };
@@ -217,40 +218,42 @@ unsafe fn next_append_line(eap: *mut exarg_T, indent: c_int) -> Option<*mut c_ch
         return Some(line);
     }
 
-    // SAFETY: caller's contract -- `eap` is the live command argument.
-    let ea_getline = unsafe { (*eap).ea_getline };
-    let Some(getline) = ea_getline else {
+    let Some(getline) = eap.ea_getline else {
         // No getline() function: use the lines that follow.  This ends
         // when there is no more.
-        let next = unsafe { (*eap).nextcmd };
+        let next = eap.nextcmd;
         if next.is_null() {
             return None;
         }
-        let mut end = unsafe { vim_strchr(next, NL) };
-        if end.is_null() {
-            end = unsafe { next.add(cstr::bytes_at(next).len()) };
-        }
-        let line =
-            unsafe { xmemdupz(next.cast(), end.offset_from(next) as size_t) }.cast::<c_char>();
-        unsafe {
-            (*eap).nextcmd = if *end != NUL as c_char {
+        // SAFETY: caller's contract -- the script's remaining text.
+        let (line, rest) = unsafe {
+            let mut end = vim_strchr(next, NL);
+            if end.is_null() {
+                end = next.add(cstr::bytes_at(next).len());
+            }
+            let line = xmemdupz(next.cast(), end.offset_from(next) as size_t).cast::<c_char>();
+            let rest = if *end != NUL as c_char {
                 end.add(1)
             } else {
                 ptr::null_mut()
-            }
+            };
+            (line, rest)
         };
+        eap.nextcmd = rest;
         return Some(line);
     };
 
     // Set State to avoid the cursor shape being set to MODE_INSERT state
     // when getline() returns.
     let save_state = State.replace(MODE_CMDLINE);
-    let first = if unsafe { (*(*eap).cstack).cs_looplevel } > 0 {
+    // SAFETY: caller's contract -- the condition stack is the command's.
+    let first = if unsafe { (*eap.cstack).cs_looplevel } > 0 {
         -1
     } else {
         NUL
     };
-    let line = unsafe { getline(first, (*eap).cookie, indent, true) };
+    // SAFETY: the cookie is the one the getter was handed with.
+    let line = unsafe { getline(first, eap.cookie, indent, true) };
     State.set(save_state);
     Some(line)
 }
@@ -261,7 +264,8 @@ unsafe fn next_append_line(eap: *mut exarg_T, indent: c_int) -> Option<*mut c_ch
 /// `eap` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_change(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    let (forceit, line1, line2) = unsafe { ((*eap).forceit, (*eap).line1, (*eap).line2) };
+    let eap = unsafe { &mut *eap };
+    let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
     // SAFETY: the range is inside the current buffer.
     if line2 >= line1 && u_save(line1 - 1, line2 + 1).is_err() {
         return;
@@ -295,8 +299,9 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
     check_cursor_lnum(cur_win());
     unsafe { deleted_lines_mark(line1, line2 - lnum) };
     // ":append" on the line above the deleted lines.
-    unsafe { (*eap).line2 = line1 };
-    unsafe { ex_append(eap) };
+    eap.line2 = line1;
+    // SAFETY: the command block is the one borrowed here.
+    unsafe { ex_append(&raw mut *eap) };
 }
 
 /// `:z` -- print a window of lines around the range's last line.
@@ -305,15 +310,9 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
 /// `eap` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_z(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    let (arg, forceit, addr_count, flags, lnum) = unsafe {
-        (
-            (*eap).arg,
-            (*eap).forceit,
-            (*eap).addr_count,
-            (*eap).flags,
-            (*eap).line2,
-        )
-    };
+    let eap = unsafe { &*eap };
+    let (arg, forceit, addr_count, flags, lnum) =
+        (eap.arg, eap.forceit, eap.addr_count, eap.flags, eap.line2);
     // SAFETY: the window layout and 'scroll' are live.
     let mut bigness = unsafe { default_bigness(forceit) }.max(1);
 

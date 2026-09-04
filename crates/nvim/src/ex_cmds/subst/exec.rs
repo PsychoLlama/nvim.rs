@@ -70,7 +70,10 @@ static pre_hl_id: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// What the whole command was asked for, and never changes while it runs.
 pub(super) struct SubArgs {
-    pub eap: *mut exarg_T,
+    /// The command's range, which the `'[`/`']` marks and the preview's
+    /// "is this more than the current line" test are all it wanted the
+    /// command block for.
+    pub range: (linenr_T, linenr_T),
     /// When the substitute takes longer than this the preview gives up.
     pub timeout: proftime_T,
     /// The namespace to draw `'inccommand'` highlights in; `<= 0` means this
@@ -613,7 +616,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
             // Set the '[ and '] marks.
             // SAFETY: the current buffer is live.
-            cur_buf().b_op_start.lnum = unsafe { (*args.eap).line1 };
+            cur_buf().b_op_start.lnum = args.range.0;
             cur_buf().b_op_end.lnum = st.line2;
             cur_buf().b_op_end.col = 0 as colnr_T;
             cur_buf().b_op_start.col = cur_buf().b_op_end.col;
@@ -714,7 +717,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // SAFETY: the preview namespace and buffer are the caller's.
     unsafe {
         show_sub(
-            args.eap,
+            args.range,
             args.old_cursor,
             &st.preview_lines,
             pre_hl_id.get(),
@@ -736,7 +739,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
 pub(crate) unsafe fn do_sub(
-    eap: *mut exarg_T,
+    eap: &mut exarg_T,
     timeout: proftime_T,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: handle_T,
@@ -764,8 +767,9 @@ pub(crate) unsafe fn do_sub(
         save_do_ask,
     } = setup;
 
+    let (line1, line2) = (eap.line1, eap.line2);
     let args = SubArgs {
-        eap,
+        range: (line1, line2),
         timeout,
         cmdpreview_ns,
         cmdpreview_bufnr,
@@ -778,8 +782,6 @@ pub(crate) unsafe fn do_sub(
         save_do_all,
         save_do_ask,
     };
-    // SAFETY: caller's contract.
-    let (line1, line2) = unsafe { ((*eap).line1, (*eap).line2) };
     let mut st = Sub {
         regmatch,
         sub,

@@ -446,7 +446,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     let was_empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
     if eap.usefilter != 0 {
-        do_bang(1, eap.raw(), false, false, true);
+        do_bang(1, &mut eap, false, false, true);
         return;
     }
     if u_save(eap.line2, eap.line2 + 1).is_err() {
@@ -514,7 +514,8 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
 /// `:!cmd`.
 pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
-    do_bang(eap.addr_count, eap.raw(), eap.forceit != 0, true, true);
+    let (addr_count, forceit) = (eap.addr_count, eap.forceit != 0);
+    do_bang(addr_count, &mut eap, forceit, true, true);
 }
 
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
@@ -608,7 +609,7 @@ fn buf_hide(buf: *const buf_T) -> bool {
 }
 
 /// `do_bang()` as checked code.
-fn do_bang(addr_count: c_int, eap: *mut exarg_T, forceit: bool, do_in: bool, do_out: bool) {
+fn do_bang(addr_count: c_int, eap: &mut exarg_T, forceit: bool, do_in: bool, do_out: bool) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_cmds::do_bang(addr_count, eap, forceit, do_in, do_out) }
 }

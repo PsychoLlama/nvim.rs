@@ -210,7 +210,7 @@ pub unsafe fn ex_write(eap: *mut exarg_T) {
     if eap.usefilter != 0 {
         // input lines to shell command
         // SAFETY: the command block is the one just borrowed.
-        unsafe { do_bang(1, &raw mut *eap, false, true, false) };
+        unsafe { do_bang(1, eap, false, true, false) };
     } else {
         let _ = unsafe { do_write(eap) };
     }

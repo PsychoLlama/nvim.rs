@@ -110,10 +110,9 @@ struct GlobalPat {
 /// comes back borrows `eap`'s argument.
 ///
 /// # Safety
-/// `eap` must be the live Ex-command argument; its `arg` must be writable.
-unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
-    // SAFETY: caller's contract.
-    let arg = unsafe { (*eap).arg };
+/// `eap.arg` must be a live, writable Ex-command argument.
+unsafe fn global_pattern(eap: &mut exarg_T) -> Option<GlobalPat> {
+    let arg = eap.arg;
     // SAFETY: an Ex-command argument is NUL-terminated, and nothing below
     // rewrites it before the last read of this borrow.
     let bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
@@ -157,7 +156,7 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
             pat,
             delim as c_int,
             magic_isset() as c_int,
-            &raw mut (*eap).arg,
+            &raw mut eap.arg,
             ptr::null_mut(),
             ptr::null_mut(),
         )
@@ -183,11 +182,10 @@ unsafe fn global_pattern(eap: *mut exarg_T) -> Option<GlobalPat> {
 /// and answer how many were marked.
 ///
 /// # Safety
-/// Main thread; `regmatch` must hold a compiled program and `eap` be the live
-/// Ex-command argument.
-unsafe fn global_mark(eap: *mut exarg_T, regmatch: *mut regmmatch_T, kind: u8) -> c_int {
-    // SAFETY: caller's contract.  Nothing in the loop touches `eap`.
-    let (mut lnum, line2) = unsafe { ((*eap).line1, (*eap).line2) };
+/// Main thread; `regmatch` must hold a compiled program, and the range must
+/// be lines of the current buffer.
+unsafe fn global_mark(eap: &exarg_T, regmatch: *mut regmmatch_T, kind: u8) -> c_int {
+    let (mut lnum, line2) = (eap.line1, eap.line2);
     let mut ndone = 0 as c_int;
     while lnum <= line2 && !got_int.get() {
         // SAFETY: caller's contract.
@@ -223,12 +221,12 @@ unsafe fn global_mark(eap: *mut exarg_T, regmatch: *mut regmmatch_T, kind: u8) -
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
 pub unsafe fn ex_global(eap: *mut exarg_T) {
+    // SAFETY: caller's contract.
+    let eap = unsafe { &mut *eap };
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
     if global_busy.get() != 0 {
-        // SAFETY: caller's contract; `curbuf` is the live buffer.
-        let whole = unsafe { (*eap).line1 == 1 && (*eap).line2 == cur_buf().b_ml.ml_line_count };
-        if !whole {
+        if eap.line1 != 1 || eap.line2 != cur_buf().b_ml.ml_line_count {
             // Will increment global_busy to break out of the loop.
             emsg(gettext(c"E147: Cannot do :global recursive with a range"));
             return;
@@ -236,15 +234,13 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
     }
 
     // ":global!" is like ":vglobal".
-    // SAFETY: caller's contract -- `eap->cmd` is the command word.
-    let kind = unsafe {
-        if (*eap).forceit != 0 {
-            b'v'
-        } else {
-            *(*eap).cmd as u8
-        }
+    let kind = if eap.forceit != 0 {
+        b'v'
+    } else {
+        // SAFETY: `eap.cmd` points at the command word.
+        unsafe { *eap.cmd as u8 }
     };
-    // SAFETY: caller's contract.
+    // SAFETY: `eap.arg` is the command's own writable argument.
     let Some(parsed) = (unsafe { global_pattern(eap) }) else {
         return;
     };

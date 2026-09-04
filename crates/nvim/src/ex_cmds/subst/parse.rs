@@ -104,9 +104,9 @@ pub unsafe fn sub_set_replacement(sub: SubReplacementString) {
 /// `eap->skip`, where nothing is done at all.
 ///
 /// # Safety
-/// Main thread; `eap`, `sub` and `cmd` must be live and `pat` live or null.
+/// Main thread; `sub` and `cmd` must be live and `pat` live or null.
 pub(crate) unsafe fn sub_joining_lines(
-    eap: *mut exarg_T,
+    eap: &mut exarg_T,
     pat: *mut c_char,
     patlen: size_t,
     sub: *const c_char,
@@ -127,33 +127,31 @@ pub(crate) unsafe fn sub_joining_lines(
     if !joins {
         return false;
     }
-    // SAFETY: caller's contract.
-    if unsafe { (*eap).skip } != 0 {
+    if eap.skip != 0 {
         return true;
     }
 
-    // SAFETY: caller's contract; the current window and buffer are live.
-    let joined_lines_count = unsafe {
-        cur_win().w_cursor.lnum = (*eap).line1;
-        (*eap).flags = match *cmd as u8 {
-            b'l' => EXFLAG_LIST,
-            b'#' => EXFLAG_NR,
-            b'p' => EXFLAG_PRINT,
-            _ => (*eap).flags,
-        };
-        // The number of lines joined is the number of lines in the range,
-        // plus one more if this is not the end of the file.
-        (*eap).line2 - (*eap).line1
-            + 1 as linenr_T
-            + linenr_T::from((*eap).line2 < cur_buf().b_ml.ml_line_count)
+    cur_win().w_cursor.lnum = eap.line1;
+    // SAFETY: caller's contract -- `cmd` is a live string.
+    eap.flags = match unsafe { *cmd } as u8 {
+        b'l' => EXFLAG_LIST,
+        b'#' => EXFLAG_NR,
+        b'p' => EXFLAG_PRINT,
+        _ => eap.flags,
     };
+    // The number of lines joined is the number of lines in the range, plus
+    // one more if this is not the end of the file.
+    let joined_lines_count = eap.line2 - eap.line1
+        + 1 as linenr_T
+        + linenr_T::from(eap.line2 < cur_buf().b_ml.ml_line_count);
     if joined_lines_count > 1 as linenr_T {
         // SAFETY: the range is inside the buffer; message state is ready.
         let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
         sub_nsubs.set(joined_lines_count - 1 as linenr_T);
         sub_nlines.set(1 as linenr_T);
         unsafe { do_sub_msg(false) };
-        unsafe { ex_may_print(eap) };
+        // SAFETY: the command block is the one borrowed here.
+        unsafe { ex_may_print(&raw mut *eap) };
     }
 
     if save {

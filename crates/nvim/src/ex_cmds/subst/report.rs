@@ -250,10 +250,10 @@ impl PreviewBuf {
 /// should be shown, which is what `cmdpreview_may_show` switches on.
 ///
 /// # Safety
-/// Main thread; `eap` must be live, and `cmdpreview_bufnr` name the preview
-/// buffer when 'inccommand' is `split`.
+/// Main thread; `cmdpreview_bufnr` must name the preview buffer when
+/// 'inccommand' is `split`.
 pub(crate) unsafe fn show_sub(
-    eap: *mut exarg_T,
+    range: (linenr_T, linenr_T),
     old_cusr: pos_T,
     preview_lines: &PreviewLines,
     hl_id: c_int,
@@ -290,11 +290,9 @@ pub(crate) unsafe fn show_sub(
 
     // Use the preview window only when inccommand=split and the range is more
     // than the current line.
-    // SAFETY: 'inccommand' is a live string option, `eap` is the caller's.
-    let preview = unsafe {
-        *p_icm.get() as u8 == b's'
-            && ((*eap).line1 != old_cusr.lnum || (*eap).line2 != old_cusr.lnum)
-    };
+    // SAFETY: 'inccommand' is a live string option.
+    let preview = unsafe { *p_icm.get() } as u8 == b's'
+        && (range.0 != old_cusr.lnum || range.1 != old_cusr.lnum);
 
     let mut pv = if preview {
         // With 'inccommand' at `split` the caller's contract makes
@@ -372,7 +370,7 @@ pub(crate) unsafe fn show_sub(
 /// Main thread; `eap` must be the live Ex-command argument.
 pub unsafe fn ex_substitute(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    unsafe { do_sub(eap, profile_zero(), 0 as c_int, 0 as handle_T) };
+    unsafe { do_sub(&mut *eap, profile_zero(), 0 as c_int, 0 as handle_T) };
 }
 
 /// The `:substitute` command's `'inccommand'` preview callback.
@@ -384,15 +382,17 @@ pub unsafe fn ex_substitute_preview(
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: handle_T,
 ) -> c_int {
+    // SAFETY: caller's contract.
+    let eap = unsafe { &mut *eap };
     // Only preview once the pattern delimiter has been typed.
-    // SAFETY: caller's contract -- the argument is NUL-terminated.
-    let first = unsafe { *(*eap).arg } as u8;
+    // SAFETY: the argument is NUL-terminated.
+    let first = unsafe { *eap.arg } as u8;
     if first == 0 || first.is_ascii_alphabetic() || ascii_isdigit(first as c_int) {
         return 0 as c_int;
     }
-    // SAFETY: caller's contract; `do_sub` may move `eap->arg`, which the
-    // caller still needs where it was.
-    let save_eap = unsafe { (*eap).arg };
+    // `do_sub` may move `eap.arg`, which the caller still needs where it was.
+    let save_arg = eap.arg;
+    // SAFETY: main thread.
     let retv = unsafe {
         do_sub(
             eap,
@@ -401,6 +401,6 @@ pub unsafe fn ex_substitute_preview(
             cmdpreview_bufnr,
         )
     };
-    unsafe { (*eap).arg = save_eap };
+    eap.arg = save_arg;
     retv
 }

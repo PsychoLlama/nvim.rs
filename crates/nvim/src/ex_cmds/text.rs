@@ -245,10 +245,9 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
 /// `eap` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_align(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    let (mut cmdidx, arg, line1, line2) =
-        unsafe { ((*eap).cmdidx, (*eap).arg, (*eap).line1, (*eap).line2) };
+    let eap = unsafe { &mut *eap };
+    let (mut cmdidx, arg, line1, line2) = (eap.cmdidx, eap.arg, eap.line1, eap.line2);
 
-    // SAFETY: `curwin` is the live current window.
     if cur_win().w_onebuf_opt.wo_rl != 0 {
         // Switch left and right aligning.  Upstream rewrites the command
         // itself, and that outlives the call.
@@ -257,8 +256,7 @@ pub unsafe fn ex_align(eap: *mut exarg_T) {
             CmdIdx::left => CmdIdx::right,
             other => other,
         };
-        // SAFETY: caller's contract.
-        unsafe { (*eap).cmdidx = cmdidx };
+        eap.cmdidx = cmdidx;
     }
 
     // SAFETY: `arg` is the command's NUL-terminated argument.

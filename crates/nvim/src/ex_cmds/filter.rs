@@ -103,13 +103,12 @@ unsafe fn prevcmd_is_set() -> bool {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn do_bang(
     addr_count: c_int,
-    eap: *mut exarg_T,
+    eap: &mut exarg_T,
     forceit: bool,
     do_in: bool,
     do_out: bool,
 ) {
-    // SAFETY: caller's contract.
-    let (arg, line1, line2) = unsafe { ((*eap).arg, (*eap).line1, (*eap).line2) };
+    let (arg, line1, line2) = (eap.arg, eap.line1, eap.line2);
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
     // SAFETY: main thread, message state.
@@ -285,7 +284,7 @@ impl Drop for TempFile {
 unsafe fn do_filter(
     line1: linenr_T,
     line2: linenr_T,
-    eap: *mut exarg_T,
+    eap: &mut exarg_T,
     cmd: *mut c_char,
     do_in: bool,
     do_out: bool,
@@ -379,7 +378,7 @@ unsafe fn do_filter(
                     ptr::null_mut(),
                     line1,
                     line2,
-                    eap,
+                    &raw mut *eap,
                     WriteRequest::filter(),
                 )
             }.is_err()
@@ -452,7 +451,7 @@ unsafe fn do_filter(
                         line2,
                         0,
                         MAXLNUM as linenr_T,
-                        eap,
+                        &raw mut *eap,
                         READ_FILTER as c_int,
                         false,
                     )
