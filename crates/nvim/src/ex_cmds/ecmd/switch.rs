@@ -16,7 +16,10 @@ use super::{Ecmd, EcmdArgs};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
 use crate::ex_cmds::{cur_buf, cur_win};
+use crate::message_fmt::msg_cstr;
 use crate::types::AutoEvent;
+use core::ffi::CStr;
+use std::ffi::CString;
 
 use crate::buffer::current_buf;
 use crate::buffer::{
@@ -31,9 +34,7 @@ use crate::main::{
     au_new_curbuf, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curwin,
     e_cannot_switch_to_a_closing_buffer,
 };
-use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
-use crate::message_fmt::c_str;
 use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg;
@@ -43,7 +44,7 @@ use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
 use crate::winlayer::{Buf, Win};
 use ::libc::atol;
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::ptr;
 
 /// What the "edit another file" stage decided.
@@ -243,12 +244,12 @@ unsafe fn leave_for_buffer(
     //   which then must be closed again.
     // - If we ended up in the new buffer already, need to skip a few things,
     //   set auto_buf.
-    // SAFETY: the buffer's own file name, and `new_name` becomes ours.
-    let new_name = if buf.b_fname.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup(buf.b_fname) }
-    };
+    // The buffer's name, kept for the message an autocommand that deletes it
+    // earns.  Upstream `xstrdup`s it and frees it at five exits and inside
+    // `delbuf_msg`; owning it is one `Drop`.
+    // SAFETY: the buffer's own file name is NUL-terminated.
+    let new_name = (!buf.b_fname.is_null()).then(|| unsafe { CStr::from_ptr(buf.b_fname) }.into());
+    let new_name: Option<CString> = new_name;
     let save_au_new_curbuf = au_new_curbuf.get();
     au_new_curbuf.set(BufRef::of(buf).record());
     buf_autocmd(AutoEvent::BufLeave, cur_buf());
@@ -258,16 +259,13 @@ unsafe fn leave_for_buffer(
     cmdwin_old_curwin.set(save_cmdwin_old_curwin);
 
     if !au_new_curbuf_valid() {
-        // New buffer has been deleted.  `delbuf_msg` frees `new_name`.
-        // SAFETY: `new_name` is ours.
-        unsafe { delbuf_msg(new_name) };
+        // New buffer has been deleted.
+        delbuf_msg(new_name.as_deref());
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
     if aborting() {
         // autocmds may abort script processing
-        // SAFETY: `new_name` is ours.
-        unsafe { xfree(new_name.cast()) };
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
@@ -275,8 +273,6 @@ unsafe fn leave_for_buffer(
     if buf.raw() == curbuf.get() {
         // already in new buffer
         state.auto_buf = true;
-        // SAFETY: `new_name` is ours.
-        unsafe { xfree(new_name.cast()) };
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Ready;
     }
@@ -323,16 +319,13 @@ unsafe fn leave_for_buffer(
     // autocmds may abort script processing
     // SAFETY: `curwin` is live.
     if aborting() && !cur_win().w_buffer.is_null() {
-        // SAFETY: `new_name` is ours.
-        unsafe { xfree(new_name.cast()) };
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
     // Be careful again, like above.
     if !au_new_curbuf_valid() {
-        // New buffer has been deleted.  `delbuf_msg` frees `new_name`.
-        // SAFETY: `new_name` is ours.
-        unsafe { delbuf_msg(new_name) };
+        // New buffer has been deleted.
+        delbuf_msg(new_name.as_deref());
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Abandon;
     }
@@ -375,7 +368,6 @@ unsafe fn leave_for_buffer(
     unsafe { get_winopts(Buf::current()) };
     state.did_get_winopts = true;
 
-    unsafe { xfree(new_name.cast()) };
     au_new_curbuf.set(save_au_new_curbuf);
     Switch::Ready
 }
@@ -386,19 +378,12 @@ fn au_new_curbuf_valid() -> bool {
 }
 /// An autocommand deleted the buffer that was about to be edited.
 ///
-/// # Safety
-/// `name` must be our own allocation, or NULL; it is freed here.
-pub(super) unsafe fn delbuf_msg(name: *mut c_char) {
-    // SAFETY: caller's contract; one `%s` for one string.
-    let arg0 = unsafe {
-        c_str(if name.is_null() {
-            c"".as_ptr()
-        } else {
-            name as *const c_char
-        })
-    };
+/// Upstream frees `name` here, which is why its callers hand over a
+/// `xstrdup` of the buffer's file name and forget it; the name is owned by
+/// the caller now, so this only reads it.
+pub(super) fn delbuf_msg(name: Option<&CStr>) {
+    let arg0 = msg_cstr(name.unwrap_or(c""));
     semsg!("E143: Autocommands unexpectedly deleted new buffer {arg0}");
-    unsafe { xfree(name.cast()) };
     au_new_curbuf.with_mut(|r| {
         r.br_buf = ptr::null_mut();
         r.br_buf_free_count = 0;

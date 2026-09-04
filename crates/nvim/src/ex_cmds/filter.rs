@@ -65,29 +65,14 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// The last `:!` command, so that a later `!` in the argument can stand for
-/// it.  An `xmalloc`ed C string, owned by this module.
-static prevcmd: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-
-/// Copy `bytes` into a fresh `xmalloc` allocation, NUL-terminated.
-///
-/// # Safety
-/// The caller owns the result and must release it with `xfree`.  `bytes` must
-/// hold no interior NUL, or the C string will end early.
-unsafe fn xmalloc_cstr(bytes: &[u8]) -> *mut c_char {
-    // SAFETY: the allocation is `bytes.len() + 1` long, so the copy and the
-    // terminator both land inside it.
-    let buf = unsafe { xmalloc(bytes.len() + 1) } as *mut c_char;
-    unsafe { ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), buf, bytes.len()) };
-    unsafe { *buf.add(bytes.len()) = 0 };
-    buf
-}
+/// it.  Owned, without a terminator; empty means there has not been one --
+/// which is upstream's NULL, and is not reachable any other way, because an
+/// empty command is never remembered.
+static prevcmd: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
 
 /// Check that [`prevcmd`] is set; if it is not, report it.
-///
-/// # Safety
-/// Main thread, message state ready.
-unsafe fn prevcmd_is_set() -> bool {
-    if prevcmd.get().is_null() {
+fn prevcmd_is_set() -> bool {
+    if prevcmd.with(Vec::is_empty) {
         emsg(gettext(e_noprev));
         return false;
     }
@@ -133,14 +118,12 @@ pub unsafe fn do_bang(
     let mut trail = unsafe { cstr::bytes_at(skipwhite(arg)) }.to_vec();
     let mut head: Vec<u8> = Vec::new();
     let assembled = loop {
-        // SAFETY: main thread, message state.
-        if ins_prevcmd && !unsafe { prevcmd_is_set() } {
+        if ins_prevcmd && !prevcmd_is_set() {
             return;
         }
         let mut text = head;
         if ins_prevcmd {
-            // SAFETY: checked non-NULL just above.
-            text.extend_from_slice(unsafe { cstr::bytes_at(prevcmd.get()) });
+            prevcmd.with(|cmd| text.extend_from_slice(cmd));
         }
         // Only the newly appended argument is scanned for a bang, but the
         // escape test may look one byte back into what came before it.
@@ -157,70 +140,64 @@ pub unsafe fn do_bang(
         }
     };
 
-    // SAFETY: the bytes come from C strings, so they hold no interior NUL.
-    let mut newcmd = unsafe { xmalloc_cstr(&assembled) };
-    let mut free_newcmd = assembled.is_empty();
-    if !free_newcmd {
-        // SAFETY: `prevcmd` is our own allocation, or NULL.
-        unsafe { xfree(prevcmd.get().cast()) };
-        prevcmd.set(newcmd);
+    // An empty command is not worth remembering, and upstream's NULL
+    // `prevcmd` is exactly "nothing has been".
+    if !assembled.is_empty() {
+        prevcmd.set(assembled.clone());
     }
+    let mut newcmd = assembled;
+    newcmd.push(NUL as u8);
 
     'theend: {
         if bangredo.get() {
             // Put the command in the redo buffer.
-            // SAFETY: main thread, message state.
-            if !unsafe { prevcmd_is_set() } {
+            if !prevcmd_is_set() {
                 break 'theend;
             }
-            // SAFETY: `prevcmd` is a live C string and `cmd` our own copy.
-            let cmd = unsafe { vim_strsave_escaped(prevcmd.get(), c"%#".as_ptr()) };
-            unsafe { append_to_redobuff_literally(cmd, -1) };
-            unsafe { xfree(cmd.cast()) };
-            unsafe { append_to_redobuff(c"\n".as_ptr()) };
+            let mut remembered = prevcmd.with(Vec::clone);
+            remembered.push(NUL as u8);
+            // SAFETY: `remembered` is this call's own NUL-terminated copy,
+            // and the escaped answer is ours to free.
+            unsafe {
+                let escaped = vim_strsave_escaped(remembered.as_ptr().cast(), c"%#".as_ptr());
+                append_to_redobuff_literally(escaped, -1);
+                xfree(escaped.cast());
+                append_to_redobuff(c"\n".as_ptr());
+            };
             bangredo.set(false);
         }
 
         // SAFETY: 'shellquote' is a live option string.
         let shq = unsafe { cstr::bytes_at(p_shq.get()) };
         if !shq.is_empty() {
-            if free_newcmd {
-                // SAFETY: our own allocation.
-                unsafe { xfree(newcmd.cast()) };
-            }
-            // SAFETY: `prevcmd` is live -- either `prevcmd_is_set` passed
-            // above, or the assembled command was just stored in it.
+            // `prevcmd` is set -- either `prevcmd_is_set` passed above, or
+            // the assembled command was just stored in it.
             let mut quoted = shq.to_vec();
-            quoted.extend_from_slice(unsafe { cstr::bytes_at(prevcmd.get()) });
+            prevcmd.with(|cmd| quoted.extend_from_slice(cmd));
             quoted.extend_from_slice(shq);
-            // SAFETY: option and command bytes, so no interior NUL.
-            newcmd = unsafe { xmalloc_cstr(&quoted) };
-            free_newcmd = true;
+            quoted.push(NUL as u8);
+            newcmd = quoted;
         }
 
+        let cmd = newcmd.as_mut_ptr().cast::<c_char>();
         if addr_count == 0 {
             // Echo the command; it is not remembered in the message history.
-            // SAFETY: main thread, message state; `newcmd` is a live string.
             say::start();
+            // SAFETY: main thread, message state; `cmd` is a live string.
             unsafe { msg_ext_set_kind(c"shell_cmd".as_ptr()) };
             say::putchar(':' as c_int);
             say::putchar('!' as c_int);
-            unsafe { msg_outtrans(newcmd, 0, false) };
+            unsafe { msg_outtrans(cmd, 0, false) };
             say::clear_eos();
             ui_cursor_goto(msg_row.get(), msg_col.get());
             // SAFETY: as above.
-            unsafe { do_shell(newcmd, ShellOpts::NONE) };
+            unsafe { do_shell(cmd, ShellOpts::NONE) };
         } else {
-            // SAFETY: `eap` is the caller's live argument and `newcmd` a live
-            // string; the autocommand runs with the current buffer.
-            unsafe { do_filter(line1, line2, eap, newcmd, do_in, do_out) };
+            // SAFETY: `cmd` is a live string; the autocommand runs with the
+            // current buffer.
+            unsafe { do_filter(line1, line2, eap, cmd, do_in, do_out) };
             buf_autocmd(AutoEvent::ShellFilterPost, cur_buf());
         }
-    }
-
-    if free_newcmd {
-        // SAFETY: our own allocation.
-        unsafe { xfree(newcmd.cast()) };
     }
 }
 

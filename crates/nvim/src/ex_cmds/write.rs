@@ -43,7 +43,7 @@ use crate::main::{
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
-use crate::memory::{xfree, xmalloc};
+use crate::memory::xfree;
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::c_str;
 use crate::option::{copy_option_part, cpo_has, shortmess};
@@ -60,7 +60,6 @@ use crate::types::{
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
 use crate::winlayer::{Buf, first_buffer};
-use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -538,13 +537,10 @@ pub unsafe fn check_overwrite(
 
     // A swap file of the target's own would be silently orphaned by the
     // write, so it is worth a question of its own.
-    // SAFETY: the names are live and `dir` is our own allocation.
-    let swapname = unsafe {
-        let dir = swap_dir();
-        let swapname = makeswapname(fname, ffname, curbuf.get(), dir);
-        xfree(dir.cast());
-        Owned(swapname)
-    };
+    let mut dir = swap_dir();
+    // SAFETY: the names are live and `dir` is this call's own buffer.
+    let swapname =
+        Owned(unsafe { makeswapname(fname, ffname, curbuf.get(), dir.as_mut_ptr().cast()) });
     // SAFETY: `swapname` is a live file name.
     if !unsafe { os_path_exists(swapname.0) } {
         return Ok(());
@@ -573,21 +569,26 @@ pub unsafe fn check_overwrite(
 /// The first entry of 'directory', or `"."` when the option is empty -- where
 /// `makeswapname` should look for the target's swap file.
 ///
-/// # Safety
-/// Main thread; the result is the caller's to `xfree`.
-unsafe fn swap_dir() -> *mut c_char {
-    // SAFETY: 'directory' is a live option string, and both allocations are
-    // large enough for what is copied into them.
+/// NUL-terminated, and `MAXPATHL` long in the second case because that is the
+/// room `copy_option_part` is told it has.
+fn swap_dir() -> Vec<u8> {
+    // SAFETY: 'directory' is a live option string.
     if unsafe { *p_dir.get() } as c_int == NUL {
-        let dir = unsafe { xmalloc(5) } as *mut c_char;
-        unsafe { strcpy(dir, c".".as_ptr()) };
-        dir
-    } else {
-        let dir = unsafe { xmalloc(MAXPATHL as usize) } as *mut c_char;
-        let mut p = p_dir.get();
-        unsafe { copy_option_part(&raw mut p, dir, MAXPATHL as usize, c",".as_ptr().cast_mut()) };
-        dir
+        return b".\0".to_vec();
     }
+    let mut dir = vec![0u8; MAXPATHL as usize];
+    let mut p = p_dir.get();
+    // SAFETY: the buffer really is `MAXPATHL` bytes, and `p` walks the live
+    // option string.
+    unsafe {
+        copy_option_part(
+            &raw mut p,
+            dir.as_mut_ptr().cast(),
+            MAXPATHL as usize,
+            c",".as_ptr().cast_mut(),
+        )
+    };
+    dir
 }
 
 /// `:wnext`, `:wNext` and `:wprevious` -- write, then step through the

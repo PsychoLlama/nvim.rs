@@ -32,6 +32,8 @@ use crate::arglist::check_arg_idx;
 use crate::ex_cmds::say;
 use crate::ex_cmds::{cur_buf, cur_win};
 use crate::types::AutoEvent;
+use core::ffi::CStr;
+use std::ffi::CString;
 
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
@@ -56,7 +58,7 @@ use crate::main::{
     msg_scrolled_ign, p_awa, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
 };
 use crate::mark::set_last_cursor;
-use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::memory::{xfree, xmalloc};
 use crate::message::msg_check_for_delay;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_VIsual;
@@ -118,7 +120,7 @@ pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: linenr_T) -> bool {
 /// `s` must be a live NUL-terminated string.
 unsafe fn strlen_of(s: *const c_char) -> usize {
     // SAFETY: caller's contract.
-    unsafe { core::ffi::CStr::from_ptr(s) }.to_bytes().len()
+    unsafe { CStr::from_ptr(s) }.to_bytes().len()
 }
 
 crate::flag_set! {
@@ -575,11 +577,12 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
         state.solcol = cur_win().w_cursor.col;
     }
     let buf = curbuf.get();
-    let new_name = if unsafe { (*buf).b_fname.is_null() } {
-        ptr::null_mut()
-    } else {
-        unsafe { xstrdup((*buf).b_fname) }
-    };
+    // SAFETY: the buffer's own file name is NUL-terminated; see
+    // [`switch`]'s copy for why it is owned rather than borrowed.
+    let name = unsafe { (*buf).b_fname };
+    // SAFETY: as above.
+    let new_name: Option<CString> =
+        (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) }.into());
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
 
     // If the buffer was used before, store the current contents so that
@@ -591,7 +594,6 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
         // Sync first so that this is a separate undo-able action.
         u_sync(false);
         if u_savecommon(cur_buf(), 0, cur_buf().b_ml.ml_line_count + 1, 0, true).is_err() {
-            unsafe { xfree(new_name.cast()) };
             return false;
         }
         u_unchanged(cur_buf());
@@ -604,12 +606,12 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     }
 
     // If autocommands deleted the buffer we were going to re-edit, give up
-    // and jump to the end.  `delbuf_msg` frees `new_name`.
+    // and jump to the end.
     if !bufref.valid() {
-        unsafe { delbuf_msg(new_name) };
+        delbuf_msg(new_name.as_deref());
         return false;
     }
-    unsafe { xfree(new_name.cast()) };
+    drop(new_name);
 
     // If autocommands change buffers under our fingers, forget about
     // re-editing the file.  Should do the buf_clear_file(), but perhaps
