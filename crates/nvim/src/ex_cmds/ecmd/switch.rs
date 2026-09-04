@@ -280,34 +280,29 @@ unsafe fn leave_for_buffer(
     let the_curwin = curwin.get();
     let was_curbuf = curbuf.get();
 
+    // Set w_locked to avoid that autocommands close the window.  Set
+    // b_locked for the same reason.
+    // SAFETY: the window is the editor's own and live.
+    unsafe { (*the_curwin).w_locked = true };
+    buf.b_locked += 1;
+
+    if curbuf.get() == old_curbuf.raw() {
+        // SAFETY: a live buffer.
+        unsafe { buf_copy_options(buf.raw(), BCO_ENTER as c_int) };
+    }
+
+    // A terminal buffer that is still running is hidden, never unloaded.
+    // SAFETY: the current buffer is live, and its terminal is its own.
+    let unload = !(flags.has(EcmdFlags::HIDE)
+        || !cur_buf().terminal.is_null() && unsafe { terminal_running(cur_buf().terminal) });
+
+    // Close the link to the current buffer.  This will set
+    // oldwin->w_buffer to NULL.
+    u_sync(false);
+    let mode = if unload { DOBUF_UNLOAD as c_int } else { 0 };
     // SAFETY: the windows and buffers are the editor's own and live.
-    let did_decrement = unsafe {
-        // Set w_locked to avoid that autocommands close the window.  Set
-        // b_locked for the same reason.
-        (*the_curwin).w_locked = true;
-        buf.b_locked += 1;
-
-        if curbuf.get() == old_curbuf.raw() {
-            buf_copy_options(buf.raw(), BCO_ENTER as c_int);
-        }
-
-        // Close the link to the current buffer.  This will set
-        // oldwin->w_buffer to NULL.
-        u_sync(false);
-        close_buffer(
-            Win::from_raw(oldwin),
-            Buf::current(),
-            if flags.has(EcmdFlags::HIDE)
-                || !cur_buf().terminal.is_null() && terminal_running(cur_buf().terminal)
-            {
-                0
-            } else {
-                DOBUF_UNLOAD as c_int
-            },
-            false,
-            false,
-        )
-    };
+    let did_decrement =
+        unsafe { close_buffer(Win::from_raw(oldwin), Buf::current(), mode, false, false) };
 
     // SAFETY: `win_valid` tolerates a stale window pointer.
     // Autocommands may have closed the window.

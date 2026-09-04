@@ -306,38 +306,27 @@ pub unsafe fn do_ecmd(
         let must_ask = (!other_file && !flags.has(EcmdFlags::OLDBUF))
             || (cur_buf().b_nwindows == 1
                 && !flags.has(EcmdFlags::HIDE | EcmdFlags::ADDBUF | EcmdFlags::ALTBUF));
+        // What "may we abandon this buffer" should take into account.  Plain
+        // arithmetic, so it belongs outside the call's region.
+        let mut ccgd = 0;
+        if p_awa.get() != 0 {
+            ccgd |= CCGD_AW as c_int;
+        }
+        if !other_file {
+            ccgd |= CCGD_MULTWIN as c_int;
+        }
+        if flags.has(EcmdFlags::FORCEIT) {
+            ccgd |= CCGD_FORCEIT as c_int;
+        }
+        if !eap.is_null() {
+            ccgd |= CCGD_EXCMD as c_int;
+        }
         // SAFETY: as above.
-        if must_ask
-            && unsafe {
-                check_changed(
-                    curbuf.get(),
-                    (if p_awa.get() != 0 {
-                        CCGD_AW as c_int
-                    } else {
-                        0
-                    }) | (if other_file { 0 } else { CCGD_MULTWIN as c_int })
-                        | (if flags.has(EcmdFlags::FORCEIT) {
-                            CCGD_FORCEIT as c_int
-                        } else {
-                            0
-                        })
-                        | (if eap.is_null() {
-                            0
-                        } else {
-                            CCGD_EXCMD as c_int
-                        }),
-                )
-            }
-        {
+        if must_ask && unsafe { check_changed(curbuf.get(), ccgd) } {
             if fnum == 0 && other_file && !ffname.is_null() {
+                let lnum = state.newlnum.max(0);
                 // SAFETY: the names are live.
-                unsafe {
-                    setaltfname(
-                        ffname,
-                        sfname,
-                        if state.newlnum < 0 { 0 } else { state.newlnum },
-                    )
-                };
+                unsafe { setaltfname(ffname, sfname, lnum) };
             }
             break 'theend;
         }
