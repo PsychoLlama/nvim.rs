@@ -4,6 +4,12 @@
 //! swap-remove, and the dict this renders goes out on the wire in that
 //! order. Nothing removes a namespace, so "insertion order" is "creation
 //! order" — and that is what a client sees.
+//!
+//! These cases drive a live editor through `Sandbox`, so they are out under
+//! Miri for the same reason `memline`'s and `spellfile`'s are: `early_init`
+//! reaches libuv and the filesystem, which Miri cannot interpret.
+
+#![cfg(not(miri))]
 
 use std::ffi::CStr;
 use std::ptr;
