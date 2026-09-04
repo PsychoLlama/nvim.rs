@@ -38,8 +38,8 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
 use crate::main::{
-    curbuf, curwin, e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly, emsg_silent, exiting,
-    getout, p_confirm, p_dir, p_wa, p_write, redraw_tabline,
+    e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly, emsg_silent, exiting, getout, p_confirm,
+    p_dir, p_wa, p_write, redraw_tabline,
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
@@ -105,10 +105,10 @@ unsafe fn dialog_yesno_about(fmt: *mut c_char, name: *mut c_char) -> bool {
 /// # Safety
 /// `new_fname` must be a live file name.
 pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
-    let buf = curbuf.get();
+    let buf = cur_buf().raw();
     buf_autocmd(AutoEvent::BufFilePre, cur_buf());
     // buffer changed, don't change name now
-    if buf != curbuf.get() {
+    if buf != cur_buf().raw() {
         return Err(Failed);
     }
     if aborting() {
@@ -341,7 +341,7 @@ pub unsafe fn do_write(eap: &mut exarg_T) -> Result<(), Failed> {
     // command block is the one borrowed here.
     let retval = unsafe {
         buf_write(
-            curbuf.get(),
+            cur_buf().raw(),
             ffname,
             fname,
             line1,
@@ -428,11 +428,11 @@ unsafe fn confirm_partial_write(eap: &mut exarg_T) -> bool {
 /// buffer other than the current one, which is a matter of sense rather than
 /// of soundness -- swapping a buffer's names with its own is a no-op.
 fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
-    let was_curbuf = curbuf.get();
+    let was_curbuf = cur_buf().raw();
     buf_autocmd(AutoEvent::BufFilePre, cur_buf());
     buf_autocmd(AutoEvent::BufFilePre, alt_buf);
     // buffer changed, don't change name now
-    if curbuf.get() != was_curbuf || aborting() {
+    if cur_buf().raw() != was_curbuf || aborting() {
         return None;
     }
 
@@ -452,7 +452,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
         buf_autocmd(AutoEvent::BufAdd, alt_buf);
     }
     // buffer changed, don't write the file
-    if curbuf.get() != was_curbuf || aborting() {
+    if cur_buf().raw() != was_curbuf || aborting() {
         return None;
     }
 
@@ -540,7 +540,7 @@ pub unsafe fn check_overwrite(
     let mut dir = swap_dir();
     // SAFETY: the names are live and `dir` is this call's own buffer.
     let swapname =
-        Owned(unsafe { makeswapname(fname, ffname, curbuf.get(), dir.as_mut_ptr().cast()) });
+        Owned(unsafe { makeswapname(fname, ffname, cur_buf().raw(), dir.as_mut_ptr().cast()) });
     // SAFETY: `swapname` is a live file name.
     if !unsafe { os_path_exists(swapname.0) } {
         return Ok(());
@@ -846,13 +846,13 @@ pub unsafe fn getfile(
     if other
         && !forceit
         && cur_buf().b_nwindows == 1
-        && !unsafe { buf_hide(curbuf.get()) }
+        && !unsafe { buf_hide(cur_buf().raw()) }
         && curbuf_is_changed()
-        && unsafe { autowrite(curbuf.get(), forceit) }.is_err()
+        && unsafe { autowrite(cur_buf().raw(), forceit) }.is_err()
     {
         if p_confirm.get() != 0 && p_write.get() != 0 {
             // SAFETY: as above.
-            unsafe { dialog_changed(curbuf.get(), false) };
+            unsafe { dialog_changed(cur_buf().raw(), false) };
         }
         // SAFETY: as above.
         if curbuf_is_changed() {
@@ -888,8 +888,8 @@ pub unsafe fn getfile(
             sfname,
             ptr::null_mut(),
             lnum,
-            EcmdFlags::HIDE.when(buf_hide(curbuf.get())) | EcmdFlags::FORCEIT.when(forceit),
-            curwin.get(),
+            EcmdFlags::HIDE.when(buf_hide(cur_buf().raw())) | EcmdFlags::FORCEIT.when(forceit),
+            cur_win().raw(),
         )
     }
     .is_ok();

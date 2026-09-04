@@ -54,8 +54,8 @@ use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
-    curbuf, curwin, exiting, exmode_active, keep_help_flag, msg_listdo_overwrite, msg_scroll,
-    msg_scrolled_ign, p_awa, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
+    exiting, exmode_active, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign,
+    p_awa, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};
@@ -322,7 +322,7 @@ pub unsafe fn do_ecmd(
             ccgd |= CCGD_EXCMD as c_int;
         }
         // SAFETY: as above.
-        if must_ask && unsafe { check_changed(curbuf.get(), ccgd) } {
+        if must_ask && unsafe { check_changed(cur_buf().raw(), ccgd) } {
             if fnum == 0 && other_file && !ffname.is_null() {
                 let lnum = state.newlnum.max(0);
                 // SAFETY: the names are live.
@@ -371,7 +371,7 @@ pub unsafe fn do_ecmd(
         // autocommands may cause ml_get errors.
         redraw_off = Some(Suppress::redraw());
 
-        let buf = curbuf.get();
+        let buf = cur_buf().raw();
         // SAFETY: `curbuf` is live.
         if flags.has(EcmdFlags::SET_HELP) || keep_help_flag.get() {
             unsafe { prepare_help_buffer() };
@@ -383,7 +383,7 @@ pub unsafe fn do_ecmd(
 
         // If autocommands change buffers under our fingers, forget about
         // editing the file.  Autocmds may also abort script processing.
-        if buf != curbuf.get() || aborting() {
+        if buf != cur_buf().raw() || aborting() {
             break 'theend;
         }
 
@@ -438,7 +438,7 @@ pub unsafe fn do_ecmd(
             && cur_win().w_onebuf_opt.wo_spell != 0
             && unsafe { *(*cur_win().w_s).b_p_spl } as c_int != NUL
         {
-            unsafe { parse_spelllang(curwin.get()) };
+            unsafe { parse_spelllang(cur_win().raw()) };
         }
 
         if command.is_null() {
@@ -482,7 +482,8 @@ pub unsafe fn do_ecmd(
     {
         unsafe { terminal_check_size(old.terminal) };
     }
-    if (!old_curbuf.valid() || curbuf.get() != old_curbuf.raw()) && !cur_buf().terminal.is_null() {
+    if (!old_curbuf.valid() || cur_buf().raw() != old_curbuf.raw()) && !cur_buf().terminal.is_null()
+    {
         unsafe { terminal_check_size(cur_buf().terminal) };
     }
 
@@ -560,12 +561,12 @@ unsafe fn resolve_target(
 unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // SAFETY: caller's contract.
     // may set b_last_cursor
-    unsafe { set_last_cursor(curwin.get()) };
+    unsafe { set_last_cursor(cur_win().raw()) };
     if state.newlnum == newlnum::LAST as linenr_T || state.newlnum == newlnum::LASTL as linenr_T {
         state.newlnum = cur_win().w_cursor.lnum;
         state.solcol = cur_win().w_cursor.col;
     }
-    let buf = curbuf.get();
+    let buf = cur_buf().raw();
     // SAFETY: the buffer's own file name is NUL-terminated; see
     // [`switch`]'s copy for why it is owned rather than borrowed.
     let name = unsafe { (*buf).b_fname };
@@ -606,7 +607,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // re-editing the file.  Should do the buf_clear_file(), but perhaps
     // the autocommands changed the buffer...  They may also abort script
     // processing.
-    if buf != curbuf.get() || aborting() {
+    if buf != cur_buf().raw() || aborting() {
         return false;
     }
     buf_clear_file(cur_buf());
@@ -636,7 +637,7 @@ unsafe fn enter_new_buffer(
     // It's possible that all lines in the buffer changed.  Need to update
     // automatic folding for all windows where it's used.
     for win in tab_windows() {
-        if win.w_buffer == curbuf.get() {
+        if win.w_buffer == cur_buf().raw() {
             // SAFETY: `win` is a live window.
             fold_update_all(win);
         }

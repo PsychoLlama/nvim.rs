@@ -22,7 +22,6 @@ use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::digraph::get_digraph_for_char;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::indent::{get_indent, set_indent};
-use crate::main::curbuf;
 use crate::mbyte::{
     utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
@@ -119,7 +118,7 @@ unsafe fn describe_byte(
     // seven into `raw` before the `  <%s>` wrapper takes it.
     if unsafe { vim_isprintc(c) } && !(' ' as c_int..='~' as c_int).contains(&c) {
         let mut raw: [c_char; 7] = [0; 7];
-        unsafe { transchar_nonprint(curbuf.get(), raw.as_mut_ptr(), c) };
+        unsafe { transchar_nonprint(cur_buf().raw(), raw.as_mut_ptr(), c) };
         unsafe {
             vim_snprintf(
                 nonprint.as_mut_ptr(),

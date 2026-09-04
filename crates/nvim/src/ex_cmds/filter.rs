@@ -34,8 +34,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
-    Rows, autocmd_busy, bangredo, cmdmod, curbuf, curwin, did_check_timestamps, e_noprev, e_notmp,
-    global_busy, got_int, info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent,
+    Rows, autocmd_busy, bangredo, cmdmod, did_check_timestamps, e_noprev, e_notmp, global_busy,
+    got_int, info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent,
     need_check_timestamps, p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
 };
 use crate::mark::mark_adjust;
@@ -271,7 +271,7 @@ unsafe fn do_filter(
         return; // no filter command
     }
 
-    let old_curbuf = curbuf.get();
+    let old_curbuf = cur_buf().raw();
     // SAFETY: `curbuf` and `curwin` are the live current buffer and window.
     let (orig_start, orig_end, cursor_save) =
         (cur_buf().b_op_start, cur_buf().b_op_end, cur_win().w_cursor);
@@ -350,7 +350,7 @@ unsafe fn do_filter(
             // SAFETY: `eap` is live and the range is the current buffer's.
             && unsafe {
                 buf_write(
-                    curbuf.get(),
+                    cur_buf().raw(),
                     TempFile::name(&itmp),
                     ptr::null_mut(),
                     line1,
@@ -372,7 +372,7 @@ unsafe fn do_filter(
             }
             break 'filterend;
         }
-        if curbuf.get() != old_curbuf {
+        if cur_buf().raw() != old_curbuf {
             break 'filterend;
         }
 
@@ -443,7 +443,7 @@ unsafe fn do_filter(
                     }
                     break 'error;
                 }
-                if curbuf.get() != old_curbuf {
+                if cur_buf().raw() != old_curbuf {
                     break 'filterend;
                 }
             }
@@ -540,7 +540,7 @@ unsafe fn do_filter(
     }
 
     cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
-    if curbuf.get() != old_curbuf {
+    if cur_buf().raw() != old_curbuf {
         // The C decrements here even on the ":w !cmd" path that already
         // did, which would take the counter below where it started; the
         // guard releases once.
@@ -831,7 +831,7 @@ pub unsafe fn print_line_no_prefix(lnum: linenr_T, use_number: bool, list: bool)
                 numbuf.as_mut_ptr(),
                 numbuf.len(),
                 c"%*d ".as_ptr(),
-                number_width(curwin.get()),
+                number_width(cur_win().raw()),
                 lnum,
             )
         };

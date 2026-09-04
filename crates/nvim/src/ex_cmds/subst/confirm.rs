@@ -26,8 +26,8 @@ use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
-    State, curwin, ex_normal_busy, exmode_active, highlight_match, msg_didout, need_wait_return,
-    p_lz, search_match_endcol, search_match_lines,
+    State, ex_normal_busy, exmode_active, highlight_match, msg_didout, need_wait_return, p_lz,
+    search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::xfree;
@@ -42,7 +42,6 @@ use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, CpoFlag, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t};
 use crate::ui::ui_has;
-use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -90,8 +89,8 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     // byte of the match and back is what gives the match's screen columns.
     unsafe {
         getvcol(
-            Win::new(curwin.get()),
-            &raw mut (*curwin.get()).w_cursor,
+            cur_win(),
+            &raw mut (*cur_win().raw()).w_cursor,
             &raw mut sc,
             ptr::null_mut(),
             ptr::null_mut(),
@@ -100,8 +99,8 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     cur_win().w_cursor.col = (st.regmatch.endpos[0].col - 1 as c_int).max(0 as c_int);
     unsafe {
         getvcol(
-            Win::new(curwin.get()),
-            &raw mut (*curwin.get()).w_cursor,
+            cur_win(),
+            &raw mut (*cur_win().raw()).w_cursor,
             ptr::null_mut(),
             ptr::null_mut(),
             &raw mut ec,
@@ -109,7 +108,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     };
     cur_win().w_cursor.col = st.regmatch.startpos[0].col;
     if subflags.with(|flags| flags.do_number) || cur_win().w_onebuf_opt.wo_nu != 0 {
-        let numw = unsafe { number_width(curwin.get()) } + 1 as c_int;
+        let numw = unsafe { number_width(cur_win().raw()) } + 1 as c_int;
         sc += numw;
         ec += numw;
     }
@@ -204,10 +203,10 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     // SAFETY: the current window is live.
     update_topline(cur_win());
     validate_cursor(cur_win());
-    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    unsafe { redraw_later(cur_win().raw(), UPD_SOME_VALID) };
     unsafe { show_cursor_info_later(true) };
     let _ = unsafe { update_screen() };
-    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    unsafe { redraw_later(cur_win().raw(), UPD_SOME_VALID) };
     cur_win().w_onebuf_opt.wo_fen = save_p_fen;
 
     let mut ask = [0 as c_char; IOSIZE as usize];

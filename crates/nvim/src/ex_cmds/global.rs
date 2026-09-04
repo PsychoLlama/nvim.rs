@@ -19,8 +19,8 @@ use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::main::{
-    curbuf, curwin, e_backslash, e_interr, e_invcmd, global_busy, got_int, msg_col, msg_didout,
-    msg_scrolled, sub_nlines, sub_nsubs,
+    e_backslash, e_interr, e_invcmd, global_busy, got_int, msg_col, msg_didout, msg_scrolled,
+    sub_nlines, sub_nsubs,
 };
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
@@ -80,8 +80,8 @@ unsafe fn matches_line(regmatch: *mut regmmatch_T, lnum: linenr_T) -> bool {
     unsafe {
         vim_regexec_multi(
             regmatch,
-            curwin.get(),
-            curbuf.get(),
+            cur_win().raw(),
+            cur_buf().raw(),
             lnum,
             0 as colnr_T,
             ptr::null_mut(),
@@ -225,12 +225,10 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
     let eap = unsafe { &mut *eap };
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
-    if global_busy.get() != 0 {
-        if eap.line1 != 1 || eap.line2 != cur_buf().b_ml.ml_line_count {
-            // Will increment global_busy to break out of the loop.
-            emsg(gettext(c"E147: Cannot do :global recursive with a range"));
-            return;
-        }
+    if global_busy.get() != 0 && (eap.line1 != 1 || eap.line2 != cur_buf().b_ml.ml_line_count) {
+        // Will increment global_busy to break out of the loop.
+        emsg(gettext(c"E147: Cannot do :global recursive with a range"));
+        return;
     }
 
     // ":global!" is like ":vglobal".
@@ -303,7 +301,7 @@ pub unsafe fn ex_global(eap: *mut exarg_T) {
 /// `do_cmdline`, so nothing may be cached across the loop.
 pub unsafe fn global_exe(cmd: *mut c_char) {
     // Remember what buffer we started in.
-    let old_buf = curbuf.get();
+    let old_buf = cur_buf().raw();
 
     // Set the current position only once for a global command.  If
     // global_busy is set, setpcmark() will not do anything.  If there is an
@@ -358,7 +356,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // edge case where the buffer we are in after execution is different from
     // the one we started in.
     // SAFETY: message state; `curbuf` is live.
-    if !unsafe { do_sub_msg(false) } && curbuf.get() == old_buf {
+    if !unsafe { do_sub_msg(false) } && cur_buf().raw() == old_buf {
         say::more(cur_buf().b_ml.ml_line_count as c_int - old_lcount as c_int);
     }
 }

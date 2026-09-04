@@ -26,7 +26,7 @@ use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::guard::Lock;
-use crate::main::{curbuf, sub_nsubs};
+use crate::main::sub_nsubs;
 use crate::mark::mark_adjust;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_replace};
@@ -383,7 +383,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
         // SAFETY: the current buffer is live and the data describes it.
         unsafe {
             extmark_splice(
-                curbuf.get(),
+                cur_buf().raw(),
                 m.lnum_before as c_int - 1 as c_int,
                 m.start_col as colnr_T,
                 m.end.lnum as c_int - m.start.lnum as c_int,

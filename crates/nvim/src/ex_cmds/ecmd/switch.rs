@@ -31,7 +31,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
 use crate::main::{
-    au_new_curbuf, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curwin,
+    au_new_curbuf, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf,
     e_cannot_switch_to_a_closing_buffer,
 };
 use crate::message::emsg;
@@ -134,7 +134,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         };
         // Autocmds may change curwin and curbuf.
         if !oldwin.is_null() {
-            *oldwin = curwin.get();
+            *oldwin = cur_win().raw();
         }
         *old_curbuf = BufRef::of_opt(current_buf());
     }
@@ -177,7 +177,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         unsafe { buf_check_timestamp(Buf::new(buf)) };
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
-        if !bufref.valid() || curbuf.get() != old_curbuf.raw() || aborting() {
+        if !bufref.valid() || cur_buf().raw() != old_curbuf.raw() || aborting() {
             return Switch::Abandon;
         }
     }
@@ -197,7 +197,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     // buffer becomes unused, free it if EcmdFlags::HIDE is false.  If the current
     // buffer was empty and has no file name, curbuf is returned by
     // buflist_new(), and there is nothing to do here.
-    if buf != curbuf.get() {
+    if buf != cur_buf().raw() {
         // SAFETY: the editor's own state.
         match unsafe { leave_for_buffer(Buf::new(buf), args, *oldwin, old_curbuf, state) } {
             Switch::Abandon => return Switch::Abandon,
@@ -270,15 +270,15 @@ unsafe fn leave_for_buffer(
         return Switch::Abandon;
     }
 
-    if buf.raw() == curbuf.get() {
+    if buf.raw() == cur_buf().raw() {
         // already in new buffer
         state.auto_buf = true;
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Ready;
     }
 
-    let the_curwin = curwin.get();
-    let was_curbuf = curbuf.get();
+    let the_curwin = cur_win().raw();
+    let was_curbuf = cur_buf().raw();
 
     // Set w_locked to avoid that autocommands close the window.  Set
     // b_locked for the same reason.
@@ -286,7 +286,7 @@ unsafe fn leave_for_buffer(
     unsafe { (*the_curwin).w_locked = true };
     buf.b_locked += 1;
 
-    if curbuf.get() == old_curbuf.raw() {
+    if cur_buf().raw() == old_curbuf.raw() {
         // SAFETY: a live buffer.
         unsafe { buf_copy_options(buf.raw(), BCO_ENTER as c_int) };
     }
@@ -326,7 +326,7 @@ unsafe fn leave_for_buffer(
     }
 
     // SAFETY: the windows and buffers are live; `eap` is the caller's.
-    if buf.raw() == curbuf.get() {
+    if buf.raw() == cur_buf().raw() {
         // already in new buffer -- close_buffer() has decremented the
         // window count, increment it again here and restore w_buffer.
         if did_decrement && unsafe { buf_valid(was_curbuf) } {

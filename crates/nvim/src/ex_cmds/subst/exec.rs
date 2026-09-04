@@ -34,9 +34,7 @@ use crate::ex_eval::aborting;
 use crate::fold::has_any_folding;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::syn_check_group;
-use crate::main::{
-    curbuf, curwin, e_interr, global_busy, got_int, p_ch, p_cwh, p_icm, sub_nlines, sub_nsubs,
-};
+use crate::main::{e_interr, global_busy, got_int, p_ch, p_cwh, p_icm, sub_nlines, sub_nsubs};
 use crate::mark::setpcmark;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get, ml_get_len};
@@ -61,7 +59,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -234,8 +232,8 @@ pub(super) unsafe fn regexec_at(regmatch: *mut regmmatch_T, lnum: linenr_T, col:
     unsafe {
         vim_regexec_multi(
             regmatch,
-            curwin.get(),
-            curbuf.get(),
+            cur_win().raw(),
+            cur_buf().raw(),
             lnum,
             col,
             ptr::null_mut(),
@@ -585,21 +583,18 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         // Subtract the number of added lines from "last_line" to get the line
         // number before the change (the same as adding the number of deleted
         // lines).
-        // SAFETY: the current buffer is live and the lines are its own.
         let added = cur_buf().b_ml.ml_line_count - args.old_line_count;
-        unsafe {
-            changed_lines(
-                Buf::new(curbuf.get()),
-                st.first_line,
-                0 as colnr_T,
-                st.last_line - added,
-                added,
-                false,
-            )
-        };
+        changed_lines(
+            cur_buf(),
+            st.first_line,
+            0 as colnr_T,
+            st.last_line - added,
+            added,
+            false,
+        );
         let num_added = (st.last_line - st.first_line) as int64_t;
         let num_removed = num_added - added as int64_t;
-        unsafe { buf_updates_send_changes(curbuf.get(), st.first_line, num_added, num_removed) };
+        unsafe { buf_updates_send_changes(cur_buf().raw(), st.first_line, num_added, num_removed) };
     }
 
     // May have to free the allocated copy of the line.

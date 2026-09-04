@@ -17,7 +17,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::say;
-use super::{LineCopy, cur_win};
+use super::{LineCopy, cur_buf, cur_win};
 use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kExtmarkUndo};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -27,7 +27,7 @@ use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::check_nextcmd;
 use crate::extmark::extmark_splice;
-use crate::main::{curbuf, got_int, p_ic};
+use crate::main::{got_int, p_ic};
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append, ml_delete};
 use crate::message::emsg;
@@ -41,7 +41,6 @@ use crate::types::{
     ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
-use crate::winlayer::Buf;
 use ::libc::{strcasecmp, strcoll, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
@@ -739,7 +738,7 @@ unsafe fn finish_sort(line1: linenr_T, line2: linenr_T, count: size_t, placed: &
         // SAFETY: as above.
         unsafe {
             extmark_splice(
-                curbuf.get(),
+                cur_buf().raw(),
                 line1 - 1,
                 0,
                 count as c_int,
@@ -751,7 +750,7 @@ unsafe fn finish_sort(line1: linenr_T, line2: linenr_T, count: size_t, placed: &
                 kExtmarkUndo,
             )
         };
-        unsafe { changed_lines(Buf::new(curbuf.get()), line1, 0, line2 + 1, -deleted, true) };
+        changed_lines(cur_buf(), line1, 0, line2 + 1, -deleted, true);
     }
 
     cur_win().w_cursor.lnum = line1;
@@ -948,7 +947,7 @@ unsafe fn uniq_range(eap: &mut exarg_T) {
         say::more(-deleted);
         if change_occurred {
             // SAFETY: as above.
-            unsafe { changed_lines(Buf::new(curbuf.get()), line1, 0, line2 + 1, -deleted, true) };
+            changed_lines(cur_buf(), line1, 0, line2 + 1, -deleted, true);
         }
         cur_win().w_cursor.lnum = line1;
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);

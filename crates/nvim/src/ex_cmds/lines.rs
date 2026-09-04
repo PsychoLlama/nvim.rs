@@ -19,7 +19,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_move_region;
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
-use crate::main::{curbuf, global_busy, p_report};
+use crate::main::{global_busy, p_report};
 use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset};
 use crate::message::emsg;
@@ -60,9 +60,9 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
     // NULL length is upstream's way of asking only for the byte offset.
     let (start_byte, end_byte, dest_byte) = unsafe {
         (
-            ml_find_line_or_offset(curbuf.get(), line1, ptr::null_mut(), true) as bcount_t,
-            ml_find_line_or_offset(curbuf.get(), line2 + 1, ptr::null_mut(), true) as bcount_t,
-            ml_find_line_or_offset(curbuf.get(), dest + 1, ptr::null_mut(), true) as bcount_t,
+            ml_find_line_or_offset(cur_buf().raw(), line1, ptr::null_mut(), true) as bcount_t,
+            ml_find_line_or_offset(cur_buf().raw(), line2 + 1, ptr::null_mut(), true) as bcount_t,
+            ml_find_line_or_offset(cur_buf().raw(), dest + 1, ptr::null_mut(), true) as bcount_t,
         )
     };
     let extent_byte = end_byte - start_byte;
@@ -107,17 +107,14 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
     // SAFETY: as above; the range is the one just copied.
     unsafe { mark_adjust_nofold(line1, line2, last_line - line2, 0, kExtmarkNOOP) };
     folds_frozen(|| {
-        // SAFETY: the copies occupy the tail of the buffer.
-        unsafe {
-            changed_lines(
-                Buf::new(curbuf.get()),
-                last_line - num_lines + 1,
-                0,
-                last_line + 1,
-                num_lines,
-                false,
-            )
-        };
+        changed_lines(
+            cur_buf(),
+            last_line - num_lines + 1,
+            0,
+            last_line + 1,
+            num_lines,
+            false,
+        );
     });
 
     let (line_off, byte_off) = if dest >= line2 {
@@ -147,22 +144,19 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
         )
     };
     folds_frozen(|| {
-        // SAFETY: as above.
-        unsafe {
-            changed_lines(
-                Buf::new(curbuf.get()),
-                last_line - num_lines + 1,
-                0,
-                last_line + 1,
-                -extra,
-                false,
-            )
-        };
+        changed_lines(
+            cur_buf(),
+            last_line - num_lines + 1,
+            0,
+            last_line + 1,
+            -extra,
+            false,
+        );
     });
 
     // Send an update regarding the new lines that were added.
     // SAFETY: `curbuf` is live.
-    unsafe { buf_updates_send_changes(curbuf.get(), dest + 1, num_lines as int64_t, 0) };
+    unsafe { buf_updates_send_changes(cur_buf().raw(), dest + 1, num_lines as int64_t, 0) };
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
@@ -181,7 +175,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
     // move; `line_off`/`byte_off` correct the destination for the deletion.
     unsafe {
         extmark_move_region(
-            curbuf.get(),
+            cur_buf().raw(),
             line1 - 1,
             0,
             start_byte,
@@ -208,7 +202,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
         changed_lines(cur_buf(), dest + 1, 0, line1 + num_lines, 0, false);
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
-    unsafe { buf_updates_send_changes(curbuf.get(), line1 + extra, 0, num_lines as int64_t) };
+    unsafe { buf_updates_send_changes(cur_buf().raw(), line1 + extra, 0, num_lines as int64_t) };
 
     Ok(())
 }
@@ -241,7 +235,7 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 unsafe fn move_folds_in_windows(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
-        if unsafe { (*wp).w_buffer } == curbuf.get() {
+        if unsafe { (*wp).w_buffer } == cur_buf().raw() {
             unsafe { fold_move_range(&raw mut (*wp).w_folds, line1, line2, dest) };
         }
     }
