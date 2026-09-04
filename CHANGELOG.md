@@ -70,6 +70,18 @@ and this project adheres to [CalVer](https://calver.org/).
   file draws comes out where it did, and `:mkspell` produces the same bytes
   for the same dictionary. The one visible change is `E5042`, which now
   names the error the read actually failed with.
+- Rewrote the built-in Ex commands that read, write and rearrange buffer
+  text: `:write`/`:read`, `:!`/`:range!`, `:sort`/`:uniq`, `:global`,
+  `:append`/`:insert`/`:change`, `:move`/`:copy`, `:edit`, `:normal`,
+  `:left`/`:right`/`:center`, `:z` and `:ascii`. The Ex command block is
+  passed by reference, the text each of them copies out of the buffer is
+  owned, and `:sort` builds each line's key once instead of once per
+  comparison. All of them behave as before; two details differ. `:sort` and
+  `:uniq` are interruptible while they read the lines and build the keys,
+  not while the sort itself runs, so `CTRL-C` during a very large sort is
+  honoured a little later -- the buffer is left untouched either way. And
+  `:s///c` in Ex mode now sizes its `^^^` marker to the columns it has
+  rather than crashing when the match ends on a later line.
 
 ## [2026.09.02-bc9e0f515a]
 
