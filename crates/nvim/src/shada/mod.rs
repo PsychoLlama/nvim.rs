@@ -126,11 +126,13 @@ pub struct WriteMergerState {
     /// One file's marks, filed under its name.
     ///
     /// A [`SlotTable`], not a map: [`Writing::pack_file_marks`] collects the
-    /// values in this table's order and `qsort`s them by timestamp, and
-    /// `qsort` is unstable -- so for the files whose marks share a timestamp
-    /// (every file marked in the same second) the order the walk produced is
-    /// the order they go out in, and the `'N` cut takes the first N of it.
-    /// khash was insertion-ordered; this is the same order.
+    /// values in this table's order and `qsort`s them by timestamp. `qsort`
+    /// is unstable, so it -- not this order -- is what decides between the
+    /// files whose newest mark shares a timestamp (every file marked in the
+    /// same second). What this order still fixes is the *input permutation*
+    /// `qsort` is handed, which is what the tie then falls out of, and which
+    /// the `'N` cut takes the front of. khash was insertion-ordered; matching
+    /// it is what keeps the port's input the same array upstream sorts.
     ///
     /// The values stay raw pointers: [`Writing::file_marks_for`] hands one
     /// out and the caller writes through it while the table is unborrowed.

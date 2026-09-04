@@ -173,6 +173,17 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
         writeln!(fd)?;
     }
     if !sorttab.is_empty() {
+        // A stable `sort_by` where upstream `qsort`s, and the divergence is
+        // real: `profile_cmp` answers equal for two functions with identical
+        // totals, which is the common case (everything never called, and
+        // everything under the clock's resolution). Upstream's order between
+        // those is whatever `qsort` landed on -- unspecified, and not even
+        // fixed across glibc versions, since 2.37 replaced the merge sort
+        // that had made it stable in practice with an introsort. A stable
+        // sort at least answers the collection order, which is the same
+        // `func_hashtab` walk upstream feeds `qsort`. `syntax/syntime.rs`
+        // is the sibling that answered the same question the other way and
+        // kept `qsort`, for the same comparator.
         // SAFETY: the entries this walk collected.
         sorttab.sort_by(|&a, &b| {
             profile_cmp(unsafe { (*a).uf_tm_total }, unsafe { (*b).uf_tm_total }).cmp(&0)
