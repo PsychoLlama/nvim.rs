@@ -48,4 +48,8 @@ Tests only run local, not in CI. Any failure, even out of scope, is your respons
 - `just unittest [paths...]` — unit tests from `test/unit`. Their FFI declarations are generated from the Rust crate (`tools/ffigen`, wired in by `scripts/gen-unit-cdefs.sh`); the specs call the exported symbols of the nvim binary, and the C fixtures (`unit-fixtures.so`) compile against the same generated declarations.
 - Run one suite at a time: the harnesses share `target/` scaffolding and interfere when run concurrently.
 - `just asan <recipe>` — AddressSanitizer equivalents (`build`, `functionaltest`, `oldtest`), defined in `just/asan.just`. Reports land in `target/asan/asan.log.<pid>`.
-- `just benchmark [paths...]` — benchmarks from `test/benchmark`.
+- `just benchmark [paths...]` — benchmarks from `test/benchmark`. It depends on
+  `just build`, so the binary it times is the **dev profile** (only `nvim-mainthread`
+  is optimized); read the numbers as a dev-profile comparison, and build
+  `--release` with `codegen-units = 1` by hand for anything that has to hold
+  against a shipped binary.
