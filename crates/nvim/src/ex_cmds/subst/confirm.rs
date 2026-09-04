@@ -17,6 +17,7 @@ use crate::cstr;
 use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
+use crate::ex_cmds::cur_win;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::guard::{Allow, Suppress};
@@ -199,8 +200,8 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     highlight_match.set(true);
 
     // SAFETY: the current window is live.
-    update_topline(unsafe { Win::current() });
-    validate_cursor(unsafe { Win::current() });
+    update_topline(cur_win());
+    validate_cursor(cur_win());
     unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
     unsafe { show_cursor_info_later(true) };
     let _ = unsafe { update_screen() };
@@ -316,10 +317,4 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
         return Confirm::Quit;
     }
     Confirm::Replace
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

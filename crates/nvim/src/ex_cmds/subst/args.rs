@@ -20,6 +20,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{getdigits_int, skipwhite};
 use crate::cstr;
 use crate::ex_cmds::{INT_MAX, kSubIgnoreCase, kSubMatchCase};
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::check_nextcmd;
 use crate::main::{e_backslash, e_invcmd, e_modifiable, e_nopresub, e_zerocount};
 use crate::memory::{xfree, xstrdup};
@@ -37,7 +38,6 @@ use crate::types::CmdIdx;
 use crate::types::{
     AdditionalData, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
 };
-use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
 use core::ptr;
@@ -418,16 +418,4 @@ pub(super) unsafe fn parse_sub(
         save_do_all,
         save_do_ask,
     })
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

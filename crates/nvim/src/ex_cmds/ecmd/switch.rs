@@ -15,6 +15,7 @@
 use super::{Ecmd, EcmdArgs};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds::newlnum;
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::types::AutoEvent;
 
 use crate::buffer::current_buf;
@@ -402,16 +403,4 @@ pub(super) unsafe fn delbuf_msg(name: *mut c_char) {
         r.br_buf = ptr::null_mut();
         r.br_buf_free_count = 0;
     });
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

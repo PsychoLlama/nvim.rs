@@ -13,7 +13,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
+use super::{cur_buf, cur_win};
 use crate::types::AutoEvent;
 
 use crate::bufwrite::{WriteRequest, buf_write};
@@ -40,9 +42,8 @@ use crate::mark::mark_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc};
 use crate::message::{
-    MSG_BUF_LEN, emsg, message_filtered, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
-    msg_prt_line, msg_ptr, msg_putchar, msg_puts, msg_puts_hl, msg_start, msgmore, set_keep_msg,
-    wait_return,
+    MSG_BUF_LEN, emsg, message_filtered, msg_ext_set_kind, msg_outtrans, msg_prt_line, msg_ptr,
+    msg_puts_hl, set_keep_msg, wait_return,
 };
 use crate::message_fmt::c_str;
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
@@ -59,7 +60,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, NUL, OptInt, exarg_T, linenr_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
-use crate::winlayer::{Buf, Win, buffers};
+use crate::winlayer::buffers;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -201,12 +202,12 @@ pub unsafe fn do_bang(
         if addr_count == 0 {
             // Echo the command; it is not remembered in the message history.
             // SAFETY: main thread, message state; `newcmd` is a live string.
-            unsafe { msg_start() };
+            say::start();
             unsafe { msg_ext_set_kind(c"shell_cmd".as_ptr()) };
-            unsafe { msg_putchar(':' as c_int) };
-            unsafe { msg_putchar('!' as c_int) };
+            say::putchar(':' as c_int);
+            say::putchar('!' as c_int);
             unsafe { msg_outtrans(newcmd, 0, false) };
-            unsafe { msg_clr_eos() };
+            say::clear_eos();
             ui_cursor_goto(msg_row.get(), msg_col.get());
             // SAFETY: as above.
             unsafe { do_shell(newcmd, ShellOpts::NONE) };
@@ -313,7 +314,7 @@ unsafe fn do_filter(
     cur_win().w_cursor.lnum = line1;
     cur_win().w_cursor.col = 0;
     unsafe { changed_line_abv_curs() };
-    invalidate_botline_win(unsafe { Win::current() });
+    invalidate_botline_win(cur_win());
 
     // When using temp files:
     // 1. * Form temp file names
@@ -385,7 +386,7 @@ unsafe fn do_filter(
         {
             if !ui_has(kUIMessages) {
                 // SAFETY: message state. Keep message from buf_write().
-                unsafe { msg_putchar('\n' as c_int) };
+                say::putchar('\n' as c_int);
             }
             drop(no_prompt.take());
             if !aborting() {
@@ -401,7 +402,7 @@ unsafe fn do_filter(
 
         if !do_out {
             // SAFETY: message state.
-            unsafe { msg_putchar('\n' as c_int) };
+            say::putchar('\n' as c_int);
         }
 
         'error: {
@@ -459,7 +460,7 @@ unsafe fn do_filter(
                 if read.is_err() {
                     if !aborting() {
                         // SAFETY: message state; one `%s` for one string.
-                        unsafe { msg_putchar('\n' as c_int) };
+                        say::putchar('\n' as c_int);
                         // SAFETY: a message argument the caller holds as a NUL-terminated string.
                         let arg0 = unsafe { c_str(TempFile::name(&otmp)) };
                         semsg!("E485: Can't read file {arg0}");
@@ -528,7 +529,7 @@ unsafe fn do_filter(
                 // adjust last line for next write
                 unsafe { write_lnum_adjust(-linecount) };
                 fold_update(
-                    unsafe { Win::current() },
+                    cur_win(),
                     cur_buf().b_op_start.lnum,
                     cur_buf().b_op_end.lnum,
                 );
@@ -548,7 +549,7 @@ unsafe fn do_filter(
                     report_filtered(linecount);
                 } else {
                     // SAFETY: message state.
-                    unsafe { msgmore(linecount as c_int) };
+                    say::more(linecount as c_int);
                 }
             }
             break 'filterend;
@@ -609,14 +610,14 @@ fn report_filtered(linecount: linenr_T) {
 pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
     // SAFETY: main thread, message state.
     if check_secure() {
-        unsafe { msg_end() };
+        say::end();
         return;
     }
 
     // For the sake of the terminal, the shell's output starts on a fresh line.
     // SAFETY: message state.
-    unsafe { msg_putchar('\r' as c_int) };
-    unsafe { msg_putchar('\n' as c_int) };
+    say::putchar('\r' as c_int);
+    say::putchar('\n' as c_int);
 
     if p_warn.get() != 0
         && !autocmd_busy.get()
@@ -624,7 +625,7 @@ pub unsafe fn do_shell(cmd: *mut c_char, flags: ShellOpts) {
         && buffers().any(buf_is_changed)
     {
         // SAFETY: a live message string.
-        unsafe { msg_puts(gettext(c"[No write since last change]\n").as_ptr()) };
+        say::puts(gettext(c"[No write since last change]\n"));
     }
 
     ui_cursor_goto(msg_row.get(), msg_col.get());
@@ -884,33 +885,21 @@ pub unsafe fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bo
     info_message.set(true); // use stdout, not stderr
     if (global_busy.get() == 0 || global_need_msg_kind.get()) && first {
         // SAFETY: message state.
-        unsafe { msg_start() };
+        say::start();
         unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
         global_need_msg_kind.set(false);
     } else if !save_silent {
         // don't want trailing newline with regular messaging
         // SAFETY: message state.
-        unsafe { msg_putchar('\n' as c_int) };
+        say::putchar('\n' as c_int);
     }
 
     // SAFETY: caller's contract.
     unsafe { print_line_no_prefix(lnum, use_number, list) };
     if save_silent {
         // SAFETY: message state.
-        unsafe { msg_putchar('\n' as c_int) };
+        say::putchar('\n' as c_int);
         silent_mode.set(save_silent);
     }
     info_message.set(false);
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

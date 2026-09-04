@@ -20,6 +20,7 @@ use crate::ex_cmds::{
     _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, kSubHonorOptions, kSubIgnoreCase,
     kSubMatchCase, subflags_T,
 };
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
 use crate::main::{p_gd, sub_nlines, sub_nsubs};
@@ -32,7 +33,6 @@ use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
 use crate::types::{Failed, NUL, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
-use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -326,16 +326,4 @@ pub(crate) unsafe fn check_regexp_delim(c: c_int) -> Result<(), Failed> {
         return Err(Failed);
     }
     Ok(())
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

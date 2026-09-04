@@ -11,7 +11,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::say;
 use super::{CAR, EOL_MAC, NL, TAB};
+use super::{cur_buf, cur_win};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -24,7 +26,7 @@ use crate::main::curbuf;
 use crate::mbyte::{
     utf_char2bytes, utf_iscomposing_first, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
-use crate::message::{msg, msg_clr_eos, msg_end, msg_multiline, msg_sb_eol, msg_start};
+use crate::message::{msg, msg_multiline, msg_sb_eol};
 use crate::option::get_fileformat;
 use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
@@ -32,7 +34,6 @@ use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
 use crate::types::{IOSIZE, NUL, exarg_T};
 use crate::undo::u_save;
-use crate::winlayer::{Buf, Win};
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -60,7 +61,7 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
     let mut line = [0 as c_char; IOSIZE as usize];
     // SAFETY: message state, main thread.
     unsafe { msg_sb_eol() };
-    unsafe { msg_start() };
+    say::start();
 
     // SAFETY: `data` is a live, NUL-terminated line position.
     let mut c = unsafe { utf_ptr2char(data) };
@@ -93,10 +94,10 @@ pub unsafe fn do_ascii(_eap: *mut exarg_T) {
 
     if need_clear {
         // SAFETY: message state, main thread.
-        unsafe { msg_clr_eos() };
+        say::clear_eos();
     }
     // SAFETY: message state, main thread.
-    unsafe { msg_end() };
+    say::end();
 }
 
 /// The `:ascii` line for a single-byte character: its `<x>` rendering, the
@@ -407,16 +408,4 @@ unsafe fn linelen() -> (c_int, bool) {
         len
     };
     (len, has_tab)
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

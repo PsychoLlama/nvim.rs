@@ -11,7 +11,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::lines::set_op_range;
+use super::say;
 use super::{B_IMODE_LMAP, EXFLAG_LIST, EXFLAG_NR, NL, print_line};
+use super::{cur_buf, cur_win};
 use crate::change::{appended_lines, appended_lines_mark, deleted_lines_mark};
 use crate::cstr;
 use crate::cursor::check_cursor_lnum;
@@ -25,7 +27,7 @@ use crate::main::{
 use crate::memline::MlFlags;
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::{xfree, xmemdupz, xstrdup};
-use crate::message::{emsg, msg_putchar};
+use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;
@@ -33,7 +35,6 @@ use crate::types::CmdIdx;
 use crate::types::{NUL, OptInt, exarg_T, int64_t, linenr_T, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
-use crate::winlayer::{Buf, Win};
 use ::libc::atol;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -179,7 +180,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
 
     // SAFETY: `curwin` is the live current window.
     cur_win().w_cursor.lnum = lnum;
-    check_cursor_lnum(unsafe { Win::current() });
+    check_cursor_lnum(cur_win());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
 
     // Don't use wait_return() now.
@@ -291,7 +292,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
 
     // Make sure the cursor is not beyond the end of the file now.
     // SAFETY: `curwin` is the live current window.
-    check_cursor_lnum(unsafe { Win::current() });
+    check_cursor_lnum(cur_win());
     unsafe { deleted_lines_mark(line1, line2 - lnum) };
     // ":append" on the line above the deleted lines.
     unsafe { (*eap).line2 = line1 };
@@ -436,20 +437,8 @@ unsafe fn default_bigness(forceit: c_int) -> int64_t {
 /// Message state must be usable.
 unsafe fn rule_off() {
     // SAFETY: caller's contract.
-    unsafe { msg_putchar(NL) };
+    say::putchar(NL);
     for _ in 1..Columns.get() {
-        unsafe { msg_putchar('-' as c_int) };
+        say::putchar('-' as c_int);
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

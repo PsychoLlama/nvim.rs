@@ -610,7 +610,7 @@ pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
     if (eap.cmdidx == CmdIdx::wq || curbuf_is_changed())
-        && unsafe { do_write(eap.raw()) }.is_err()
+        && unsafe { do_write(&mut eap) }.is_err()
         // SAFETY: `curwin` is set from startup to exit.
         || unsafe { before_quit_autocmds(curwin.get(), false, eap.forceit != 0) }
         || check_more(true, eap.forceit != 0) == FAIL

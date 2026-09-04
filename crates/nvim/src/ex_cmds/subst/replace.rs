@@ -22,6 +22,7 @@ use crate::cstr;
 use crate::ex_cmds::{
     CAR, LineData, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
 };
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::guard::Lock;
@@ -35,7 +36,6 @@ use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
 use crate::types::{NUL, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
-use crate::winlayer::{Buf, Win};
 use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -431,16 +431,4 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.prev_matchcol = new_len - st.prev_matchcol;
     st.copycol = 0 as colnr_T;
     true
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

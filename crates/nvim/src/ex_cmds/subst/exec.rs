@@ -28,6 +28,7 @@ use crate::cstr;
 use crate::cursor::coladvance;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::{LineData, PreviewLines, SID_NONE, SubResult, print_line, re_multiline};
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fold::has_any_folding;
@@ -623,7 +624,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             if !subflags.with(|flags| flags.do_ask) {
                 // SAFETY: the current window is live.
                 if args.endcolumn {
-                    coladvance(unsafe { Win::current() }, MAXCOL as c_int);
+                    coladvance(cur_win(), MAXCOL as c_int);
                 } else {
                     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
                 }
@@ -673,7 +674,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     if subflags.with(|flags| flags.do_ask) && unsafe { has_any_folding(Win::current()) } != 0 {
         // The cursor position may require updating.
         // SAFETY: as above.
-        changed_window_setting(unsafe { Win::current() });
+        changed_window_setting(cur_win());
     }
 
     // SAFETY: the compiled program and the replacement text are ours.
@@ -823,16 +824,4 @@ pub(super) unsafe fn save_undo_once(st: &mut Sub) {
         let _ = u_save_cursor();
         st.did_save = true;
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

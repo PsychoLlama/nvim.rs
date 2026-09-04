@@ -16,6 +16,7 @@ use crate::ascii::ascii_isdigit;
 use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::main::{
     KeyTyped, e_interr, got_int, p_icm, p_rdt, p_report, p_shm, sub_nlines, sub_nsubs,
 };
@@ -32,7 +33,7 @@ use crate::types::{
     NUL, OptInt, OptVal, OptionSetFlags, String_0, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
     lpos_T, pos_T, size_t,
 };
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::Buf;
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
 use core::ptr;
@@ -402,16 +403,4 @@ pub unsafe fn ex_substitute_preview(
     };
     unsafe { (*eap).arg = save_eap };
     retv
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

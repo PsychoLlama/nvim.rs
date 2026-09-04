@@ -11,7 +11,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::say;
 use super::{check_regexp_delim, do_sub_msg, global_need_beginline, global_need_msg_kind};
+use super::{cur_buf, cur_win};
 use crate::cstr;
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
@@ -22,7 +24,7 @@ use crate::main::{
 };
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
-use crate::message::{emsg, msg, msgmore};
+use crate::message::{emsg, msg};
 use crate::message_fmt::c_str;
 use crate::r#move::changed_line_abv_curs;
 use crate::option::magic_isset;
@@ -34,7 +36,6 @@ use crate::regexp::{
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
 use crate::types::{NUL, colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
-use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -342,7 +343,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
     } else {
         // SAFETY: as above -- the cursor may be beyond the end of the line.
-        check_cursor(unsafe { Win::current() });
+        check_cursor(cur_win());
     }
 
     // The cursor may not have moved in the text but a change in a previous
@@ -362,18 +363,6 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // the one we started in.
     // SAFETY: message state; `curbuf` is live.
     if !unsafe { do_sub_msg(false) } && curbuf.get() == old_buf {
-        unsafe { msgmore(cur_buf().b_ml.ml_line_count as c_int - old_lcount as c_int) };
+        say::more(cur_buf().b_ml.ml_line_count as c_int - old_lcount as c_int);
     }
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

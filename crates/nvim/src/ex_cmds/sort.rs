@@ -16,6 +16,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::cur_win;
+use super::say;
 use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kExtmarkUndo};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -28,7 +30,7 @@ use crate::extmark::extmark_splice;
 use crate::main::{curbuf, got_int, p_ic};
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append, ml_delete};
-use crate::message::{emsg, msgmore};
+use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
@@ -39,7 +41,7 @@ use crate::types::{
     ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
-use crate::winlayer::{Buf, Win};
+use crate::winlayer::Buf;
 use ::libc::{strcasecmp, strcoll, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
@@ -761,7 +763,7 @@ unsafe fn finish_sort(line1: linenr_T, line2: linenr_T, count: size_t, placed: &
                 kExtmarkNOOP,
             )
         };
-        unsafe { msgmore(-deleted) };
+        say::more(-deleted);
     } else if deleted < 0 {
         unsafe { mark_adjust(line2, MAXLNUM as linenr_T, -deleted, 0, kExtmarkNOOP) };
     }
@@ -976,7 +978,7 @@ unsafe fn uniq_range(eap: &mut exarg_T) {
                 } as ExtmarkOp,
             )
         };
-        unsafe { msgmore(-deleted) };
+        say::more(-deleted);
         if change_occurred {
             // SAFETY: as above.
             unsafe { changed_lines(Buf::new(curbuf.get()), line1, 0, line2 + 1, -deleted, true) };
@@ -990,10 +992,4 @@ unsafe fn uniq_range(eap: &mut exarg_T) {
     if got_int.get() {
         emsg(gettext(e_interr));
     }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

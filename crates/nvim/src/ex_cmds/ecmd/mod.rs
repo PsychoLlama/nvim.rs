@@ -29,6 +29,8 @@ use super::{
     READ_NOWINENTER, SEA_DIALOG, SEA_QUIT,
 };
 use crate::arglist::check_arg_idx;
+use crate::ex_cmds::say;
+use crate::ex_cmds::{cur_buf, cur_win};
 use crate::types::AutoEvent;
 
 use crate::buffer::{
@@ -55,7 +57,7 @@ use crate::main::{
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc, xstrdup};
-use crate::message::{msg_check_for_delay, msg_start};
+use crate::message::msg_check_for_delay;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_VIsual;
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
@@ -255,7 +257,7 @@ pub unsafe fn do_ecmd(
     };
     // SAFETY: `curwin` is the live current window, and the handle is used
     // only inside this call.
-    let so = ScrollOff::of(unsafe { Win::current() }, ScrollMargin::Lines);
+    let so = ScrollOff::of(cur_win(), ScrollMargin::Lines);
     // SAFETY: `eap` is live when non-NULL.
     let command = if eap.is_null() {
         ptr::null_mut()
@@ -722,15 +724,15 @@ unsafe fn place_cursor(state: &Ecmd) {
         // position set by autocommands
         cur_win().w_cursor.lnum = state.newlnum;
         cur_win().w_cursor.col = state.newcol;
-        check_cursor(unsafe { Win::current() });
+        check_cursor(cur_win());
     } else if state.newlnum > 0 {
         // line number from caller or old position
         cur_win().w_cursor.lnum = state.newlnum;
-        check_cursor_lnum(unsafe { Win::current() });
+        check_cursor_lnum(cur_win());
         if state.solcol >= 0 && p_sol.get() == 0 {
             // 'sol' is off: use the last known column.
             cur_win().w_cursor.col = state.solcol;
-            check_cursor_col(unsafe { Win::current() });
+            check_cursor_col(cur_win());
             cur_win().w_cursor.coladd = 0;
             cur_win().w_set_curswant = true;
         } else {
@@ -765,7 +767,7 @@ unsafe fn report_file_info() {
         unsafe { msg_check_for_delay(false) };
     }
     // SAFETY: as above.
-    unsafe { msg_start() };
+    say::start();
     msg_scroll.set(msg_scroll_save);
     msg_scrolled_ign.set(true);
 
@@ -789,22 +791,10 @@ unsafe fn recenter(so: ScrollOff, topline: linenr_T, command: *mut c_char) {
         so.set(999);
     }
     // SAFETY: caller's contract; `curwin` is live.
-    update_topline(unsafe { Win::current() });
+    update_topline(cur_win());
     cur_win().w_scbind_pos = unsafe { plines_m_win_fill(Win::current(), 1, cur_win().w_topline) };
     so.set(n);
     // redraw this buffer later
     // SAFETY: no argument beyond the redraw type.
     redraw_curbuf_later(UPD_NOT_VALID);
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
 }

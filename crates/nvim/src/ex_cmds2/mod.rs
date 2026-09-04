@@ -405,7 +405,7 @@ pub(crate) unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
             unsafe { buf_set_name((*buf).handle as c_int, c"Untitled".as_ptr().cast_mut()) };
         }
         let target = unsafe { Buf::new(buf) };
-        if unsafe { check_overwrite(&raw mut ea, target, (*buf).b_fname, (*buf).b_ffname, false) }.is_ok()
+        if unsafe { check_overwrite(&mut ea, target, (*buf).b_fname, (*buf).b_ffname, false) }.is_ok()
             // didn't hit Cancel
             && unsafe { buf_write_all(buf, false) }.is_ok()
         {
@@ -445,7 +445,7 @@ unsafe fn write_all_writable() {
             let bufref = BufRef::of(target);
             if !target.b_fname.is_null()
                 && unsafe {
-                    check_overwrite(&raw mut ea, target, target.b_fname, target.b_ffname, false)
+                    check_overwrite(&mut ea, target, target.b_fname, target.b_ffname, false)
                 }
                 .is_ok()
             {

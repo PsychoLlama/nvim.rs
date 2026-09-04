@@ -9,7 +9,9 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use super::say;
 use super::{CmdModFlags, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
+use super::{cur_buf, cur_win};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
@@ -21,7 +23,7 @@ use crate::main::{curbuf, curwin, global_busy, p_report};
 use crate::mark::mark_adjust_nofold;
 use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
 use crate::memory::xfree;
-use crate::message::{emsg, msgmore};
+use crate::message::emsg;
 use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
@@ -321,17 +323,5 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
         with_visual_anchor(|anchor| unsafe { check_pos(Buf::current(), anchor) });
     }
     // SAFETY: message state, main thread.
-    unsafe { msgmore(count) };
-}
-
-/// The buffer the editor is working in.
-fn cur_buf() -> Buf {
-    // SAFETY: `curbuf` is set from startup to exit.
-    unsafe { Buf::current() }
-}
-
-/// The window the editor is working in.
-fn cur_win() -> Win {
-    // SAFETY: `curwin` is set from startup to exit.
-    unsafe { Win::current() }
+    say::more(count);
 }
