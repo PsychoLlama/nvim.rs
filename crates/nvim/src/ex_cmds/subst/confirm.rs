@@ -18,6 +18,7 @@ use crate::drawscreen::{
     UPD_SOME_VALID, number_width, redraw_later, show_cursor_info_later, update_screen,
 };
 use crate::ex_cmds::cur_win;
+use crate::ex_cmds::say;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::guard::{Allow, Suppress};
@@ -29,8 +30,7 @@ use crate::main::{
     p_lz, search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
-use crate::memory::{xfree, xmallocz, xstrdup};
-use crate::message::msg_putchar;
+use crate::memory::xfree;
 use crate::mouse::setmouse;
 use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,
@@ -114,17 +114,20 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
         ec += numw;
     }
 
-    // SAFETY: the prompt is `ec + 1` bytes of spaces and carets inside an
-    // `ec + 2` byte zeroed allocation.
+    // Spaces up to the match, then a caret under every column of it.
+    // Upstream sizes an `xmallocz` from `ec - sc + 1`, which is a `size_t`:
+    // a match that somehow ended before it started asked for a memset of
+    // four billion bytes.  A `resize` past the end of a shorter buffer
+    // truncates instead.
+    let mut prompt = vec![b' '; sc.max(0) as usize];
+    prompt.resize(ec.max(0) as usize + 1, b'^');
+    prompt.push(NUL as u8);
+    // SAFETY: the prompt is this call's own NUL-terminated buffer, and
+    // `getcmdline_prompt` answers an allocation of ours or NULL.
     let typed = unsafe {
-        let prompt = xmallocz((ec as size_t).wrapping_add(1 as size_t)) as *mut c_char;
-        prompt.cast::<u8>().write_bytes(b' ', sc as size_t);
-        (prompt.offset(sc as isize))
-            .cast::<u8>()
-            .write_bytes(b'^', ((ec - sc) as size_t).wrapping_add(1 as size_t));
         let resp = getcmdline_prompt(
             -1 as c_int,
-            prompt,
+            prompt.as_mut_ptr().cast(),
             0 as c_int,
             ExpandContext::Nothing,
             ptr::null(),
@@ -133,9 +136,8 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
             ptr::null_mut(),
         );
         if !ui_has(kUIMessages) {
-            msg_putchar('\n' as c_int);
+            say::putchar('\n' as c_int);
         }
-        xfree(prompt as *mut c_void);
         if resp.is_null() {
             // getcmdline_prompt() answers NULL when there is no command line
             // to return.
@@ -209,23 +211,25 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     cur_win().w_onebuf_opt.wo_fen = save_p_fen;
 
     let mut ask = [0 as c_char; IOSIZE as usize];
-    // SAFETY: `ask` is `IOSIZE` bytes, the format takes one string, and the
-    // prompt is a fresh copy of it.
-    let typed = unsafe {
-        let iobuff = ask.as_mut_ptr();
+    // SAFETY: `ask` is `IOSIZE` bytes and the format takes one string.
+    let mut prompt = unsafe {
         snprintf(
-            iobuff,
+            ask.as_mut_ptr(),
             IOSIZE as size_t,
             gettext(c"replace with %s? (y)es/(n)o/(a)ll/(q)uit/(l)ast/scroll up(^E)/down(^Y)")
                 .as_ptr(),
             st.sub,
         );
-        let prompt = xstrdup(iobuff);
-        let typed = prompt_for_input(prompt, HLF_R, true, ptr::null_mut());
-        highlight_match.set(false);
-        xfree(prompt as *mut c_void);
-        typed
+        // Upstream hands the prompt on as a fresh copy, because there it is
+        // the shared `IObuff` that a nested command line could overwrite.
+        let mut prompt = cstr::bytes_at(ask.as_ptr()).to_vec();
+        prompt.push(NUL as u8);
+        prompt
     };
+    // SAFETY: the prompt is this call's own NUL-terminated buffer.
+    let typed =
+        unsafe { prompt_for_input(prompt.as_mut_ptr().cast(), HLF_R, true, ptr::null_mut()) };
+    highlight_match.set(false);
 
     msg_didout.set(false); // don't scroll up
     // SAFETY: message state.

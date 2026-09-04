@@ -28,7 +28,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::autocmd::apply_autocmds;
-use crate::charset::{skiptowhite, vim_is_ident_char};
+use crate::charset::{skip, vim_is_ident_char};
+use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
@@ -240,53 +241,76 @@ pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
     );
     true
 }
+/// Step over `:vimgrep`'s pattern argument: a bare word, or a pattern between
+/// two delimiters followed by any of the `g`/`j`/`f` flags.
+///
+/// Answers where the argument ends, or NULL when the closing delimiter is
+/// missing.  When `s` is given it receives the pattern's first byte and the
+/// pattern is NUL-terminated in place; when `flags` is given the trailing
+/// letters are OR-ed into it.
+///
+/// # Safety
+/// `p` must be a NUL-terminated pattern, writable when `s` is given, and `s`
+/// and `flags` must be live or NULL.
 pub unsafe fn skip_vimgrep_pat(
-    mut p: *mut ::core::ffi::c_char,
-    mut s: *mut *mut ::core::ffi::c_char,
-    mut flags: *mut ::core::ffi::c_int,
+    p: *mut ::core::ffi::c_char,
+    s: *mut *mut ::core::ffi::c_char,
+    flags: *mut ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
-    // SAFETY: caller's contract -- `p` walks a NUL-terminated pattern and
-    // every step below follows a byte just read and found non-NUL; `s` and
-    // `flags` are written only after a null check.
-    if unsafe { vim_is_ident_char(*p as uint8_t as ::core::ffi::c_int) } {
+    // SAFETY: caller's contract.
+    let bytes = unsafe { cstr::bytes_at(p) };
+    let first = bytes.first().copied().unwrap_or(NUL as uint8_t);
+    // SAFETY: an ASCII byte widened, which is what the ctype table indexes.
+    if unsafe { vim_is_ident_char(first as ::core::ffi::c_int) } {
+        // A bare word, ending at the first white space.
+        let mut at = skip::to_white(bytes);
         if !s.is_null() {
+            // SAFETY: caller's contract.
             unsafe { *s = p };
-        }
-        p = unsafe { skiptowhite(p) };
-        if !s.is_null() && unsafe { *p } as ::core::ffi::c_int != NUL {
-            unsafe { *p = NUL as ::core::ffi::c_char };
-            p = unsafe { p.offset(1) };
-        }
-    } else {
-        if !s.is_null() {
-            unsafe { *s = p.offset(1 as ::core::ffi::c_int as isize) };
-        }
-        let mut c: ::core::ffi::c_int = unsafe { *p } as uint8_t as ::core::ffi::c_int;
-        p = unsafe { skip_regexp(p.offset(1 as ::core::ffi::c_int as isize), c, 1) };
-        if unsafe { *p } as ::core::ffi::c_int != c {
-            return ::core::ptr::null_mut::<::core::ffi::c_char>();
-        }
-        if !s.is_null() {
-            unsafe { *p = NUL as ::core::ffi::c_char };
-        }
-        p = unsafe { p.offset(1) };
-        while unsafe { *p } as ::core::ffi::c_int == 'g' as ::core::ffi::c_int
-            || unsafe { *p } as ::core::ffi::c_int == 'j' as ::core::ffi::c_int
-            || unsafe { *p } as ::core::ffi::c_int == 'f' as ::core::ffi::c_int
-        {
-            if !flags.is_null() {
-                if unsafe { *p } as ::core::ffi::c_int == 'g' as ::core::ffi::c_int {
-                    unsafe { *flags |= VGR_GLOBAL as ::core::ffi::c_int };
-                } else if unsafe { *p } as ::core::ffi::c_int == 'j' as ::core::ffi::c_int {
-                    unsafe { *flags |= VGR_NOJUMP as ::core::ffi::c_int };
-                } else {
-                    unsafe { *flags |= VGR_FUZZY as ::core::ffi::c_int };
-                }
+            if at < bytes.len() {
+                // Terminate the word in place and resume past the space.
+                unsafe { *p.add(at) = NUL as ::core::ffi::c_char };
+                at += 1;
             }
-            p = unsafe { p.offset(1) };
         }
+        return p.wrapping_add(at);
     }
-    p
+
+    // A delimited pattern.  The delimiter is whatever byte opened it.
+    let delim = first as ::core::ffi::c_int;
+    if !s.is_null() {
+        // SAFETY: caller's contract; the pattern starts past the delimiter.
+        unsafe { *s = p.add(1) };
+    }
+    // SAFETY: as above.
+    let mut end = unsafe { skip_regexp(p.add(1), delim, 1) };
+    // SAFETY: the skip stopped inside the pattern or at its NUL.
+    if unsafe { *end } as ::core::ffi::c_int != delim {
+        return ::core::ptr::null_mut();
+    }
+    if !s.is_null() {
+        // SAFETY: caller's contract -- the closing delimiter is writable.
+        unsafe { *end = NUL as ::core::ffi::c_char };
+    }
+    end = end.wrapping_add(1);
+
+    // SAFETY: one past the closing delimiter is still inside the string.
+    let tail = unsafe { cstr::bytes_at(end) };
+    let mut n = 0;
+    for &byte in tail {
+        let flag = match byte {
+            b'g' => VGR_GLOBAL,
+            b'j' => VGR_NOJUMP,
+            b'f' => VGR_FUZZY,
+            _ => break,
+        };
+        if !flags.is_null() {
+            // SAFETY: caller's contract.
+            unsafe { *flags |= flag as ::core::ffi::c_int };
+        }
+        n += 1;
+    }
+    end.wrapping_add(n)
 }
 /// `:oldfiles` -- list `v:oldfiles`, numbered; under `:browse`, then ask for
 /// a number and edit that file.
@@ -362,6 +386,52 @@ unsafe fn list_oldfiles(list: *mut list_T) {
         }
         // SAFETY: as above.
         item = unsafe { (*item).li_next };
+    }
+}
+
+/// A NUL-terminated copy of one line, refilled in place.
+///
+/// `ml_append` unlocks the memline block the line it is handed lives in, so
+/// every "append a copy of this line" in the family has to take the bytes out
+/// first; `:uniq` and `:sort u` want the same buffer to compare one line with
+/// the one before. Upstream does both with `xmalloc`ed scratch and a `strcpy`
+/// or an `xstrnsave`/`xfree` pair per line. One `Vec` that keeps its capacity
+/// says it once, and starts out holding the empty string so a comparison
+/// against a copy that has not been filled in yet still reads a string.
+pub(crate) struct LineCopy(Vec<u8>);
+
+impl LineCopy {
+    pub(crate) fn new() -> LineCopy {
+        LineCopy(vec![NUL as u8])
+    }
+
+    /// Replace the contents with `bytes` and a NUL.
+    pub(crate) fn fill(&mut self, bytes: &[u8]) {
+        self.0.clear();
+        self.0.extend_from_slice(bytes);
+        self.0.push(NUL as u8);
+    }
+
+    /// Replace the contents with line `lnum` of the current buffer, and
+    /// answer how many bytes that line held.
+    ///
+    /// # Safety
+    /// `lnum` must be a line of the current buffer, and nothing may read
+    /// another line of it while this runs.
+    pub(crate) unsafe fn fill_line(&mut self, lnum: linenr_T) -> usize {
+        // SAFETY: caller's contract.
+        let mut lines = unsafe { crate::memline::Lines::current() };
+        let text = lines.line(lnum);
+        let len = text.len();
+        self.0.clear();
+        self.0.extend_from_slice(text);
+        self.0.push(NUL as u8);
+        len
+    }
+
+    /// The copy as the NUL-terminated string every C neighbour wants.
+    pub(crate) fn as_ptr(&self) -> *mut ::core::ffi::c_char {
+        self.0.as_ptr().cast::<::core::ffi::c_char>().cast_mut()
     }
 }
 

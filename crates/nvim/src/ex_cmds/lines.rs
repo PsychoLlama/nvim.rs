@@ -11,7 +11,7 @@
 
 use super::say;
 use super::{CmdModFlags, ML_DEL_MESSAGE, kExtmarkNOOP, kExtmarkUndo};
-use super::{cur_buf, cur_win};
+use super::{LineCopy, cur_buf, cur_win};
 use crate::buffer_updates::buf_updates_send_changes;
 use crate::change::{appended_lines_mark, changed_lines};
 use crate::cursor::check_pos;
@@ -19,17 +19,15 @@ use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_move_region;
 use crate::fold::fold_move_range;
 use crate::guard::Suppress;
-use crate::main::{curbuf, curwin, global_busy, p_report};
+use crate::main::{curbuf, global_busy, p_report};
 use crate::mark::mark_adjust_nofold;
-use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset, ml_get, ml_get_len};
-use crate::memory::xfree;
+use crate::memline::{ml_append, ml_delete_flags, ml_find_line_or_offset};
 use crate::message::emsg;
 use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
-use crate::strings::xstrnsave;
 use crate::tr_plural;
-use crate::types::{Failed, OptInt, bcount_t, int64_t, linenr_T, size_t};
+use crate::types::{Failed, OptInt, bcount_t, int64_t, linenr_T};
 use crate::undo::u_save;
 use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
@@ -77,12 +75,13 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
 
     // How many lines the copies added before `line1`.
     let mut extra = 0;
+    let mut copy = LineCopy::new();
     for l in line1..=line2 {
         // SAFETY: `l + extra` tracks the source line as the copies push it
-        // down, and `ml_append` takes ownership of nothing.
-        let text = unsafe { xstrnsave(ml_get(l + extra), ml_get_len(l + extra) as size_t) };
-        let _ = unsafe { ml_append(dest + l - line1, text, 0, false) };
-        unsafe { xfree(text.cast()) };
+        // down, and `ml_append` unlocks the block it lives in -- so the copy
+        // is taken first, and `ml_append` takes ownership of nothing.
+        unsafe { copy.fill_line(l + extra) };
+        let _ = unsafe { ml_append(dest + l - line1, copy.as_ptr(), 0, false) };
         if dest < line1 {
             extra += 1;
         }
@@ -289,18 +288,17 @@ pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
         return;
     }
 
-    // SAFETY: `curwin` is the live current window.
     cur_win().w_cursor.lnum = n;
+    let mut copy = LineCopy::new();
     while line1 <= line2 {
         // Need to make a copy because the line will be unlocked within
         // `ml_append`.
         // SAFETY: `line1` is a line of the current buffer throughout.
-        let cursor = unsafe {
-            let text = xstrnsave(ml_get(line1), ml_get_len(line1) as size_t);
-            let _ = ml_append(cur_win().w_cursor.lnum, text, 0, false);
-            xfree(text.cast());
-            &mut (*curwin.get()).w_cursor
-        };
+        unsafe { copy.fill_line(line1) };
+        let at = cur_win().w_cursor.lnum;
+        // SAFETY: the text is this call's own NUL-terminated copy.
+        let _ = unsafe { ml_append(at, copy.as_ptr(), 0, false) };
+        let cursor = &mut cur_win().w_cursor;
 
         // Situation 2: skip the lines already copied.
         if line1 == n {

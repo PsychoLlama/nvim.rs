@@ -16,8 +16,8 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::cur_win;
 use super::say;
+use super::{LineCopy, cur_win};
 use super::{MAXLNUM, RE_MAGIC, e_interr, e_invarg, e_noprevre, kExtmarkNOOP, kExtmarkUndo};
 use crate::ascii::ascii_iswhite;
 use crate::change::changed_lines;
@@ -97,33 +97,6 @@ impl Key {
         owned.extend_from_slice(bytes);
         owned.push(NUL as u8);
         Key(owned.into_boxed_slice())
-    }
-
-    fn as_ptr(&self) -> *const c_char {
-        self.0.as_ptr().cast()
-    }
-}
-
-/// A NUL-terminated scratch key, refilled once per line.
-///
-/// `:uniq` and `:sort u` both compare one line with the one before it, which
-/// upstream does with two `xmalloc`ed buffers of the range's longest line and
-/// a `strcpy`.  Two `Vec`s that swap say the same thing, keep their capacity,
-/// and need no maximum measured up front.
-#[derive(Default)]
-struct Scratch(Vec<u8>);
-
-impl Scratch {
-    /// The empty string, so a comparison against a key that has not been
-    /// filled in yet still reads one.
-    fn empty() -> Scratch {
-        Scratch(vec![NUL as u8])
-    }
-
-    fn fill(&mut self, bytes: &[u8]) {
-        self.0.clear();
-        self.0.extend_from_slice(bytes);
-        self.0.push(NUL as u8);
     }
 
     fn as_ptr(&self) -> *const c_char {
@@ -617,7 +590,7 @@ unsafe fn append_sorted(
         interrupted: false,
     };
     // The previously appended line, which `u` compares the next one with.
-    let (mut previous, mut current) = (Scratch::empty(), Scratch::default());
+    let (mut previous, mut current) = (LineCopy::new(), LineCopy::new());
 
     while placed.done < count {
         let from = if reverse {
@@ -636,13 +609,8 @@ unsafe fn append_sorted(
         // Copy the line out of the memline: `ml_append` may invalidate it,
         // and "unique" needs it next time round.
         // SAFETY: caller's contract, and the handle dies before the append.
-        let bytelen = {
-            let mut lines = unsafe { Lines::current() };
-            let text = lines.line(get_lnum);
-            current.fill(text);
-            // Include the EOL in the byte length.
-            (text.len() + 1) as bcount_t
-        };
+        // Include the EOL in the byte length.
+        let bytelen = unsafe { current.fill_line(get_lnum) } as bcount_t + 1;
         placed.old_bytes += bytelen;
 
         // SAFETY: both scratch buffers are NUL-terminated.
@@ -651,8 +619,7 @@ unsafe fn append_sorted(
             && unsafe { order.compare(current.as_ptr(), previous.as_ptr()) } == Ordering::Equal;
         if !duplicate {
             // SAFETY: the text is this call's own NUL-terminated copy.
-            let failed =
-                unsafe { ml_append(placed.lnum, current.as_ptr().cast_mut(), 0, false) }.is_err();
+            let failed = unsafe { ml_append(placed.lnum, current.as_ptr(), 0, false) }.is_err();
             placed.lnum += 1;
             if failed {
                 return placed;
@@ -919,7 +886,7 @@ unsafe fn uniq_range(eap: &mut exarg_T) {
             done_lnum: line1 - 1,
         };
         // The key of the line the next one is compared against.
-        let (mut previous, mut current) = (Scratch::empty(), Scratch::default());
+        let (mut previous, mut current) = (LineCopy::new(), LineCopy::new());
         let mut i = 0;
         while i < count {
             let get_lnum = line1 + i;
