@@ -42,10 +42,10 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, Failed, MAXPATHL, NUL, OK, OptInt,
-    OptionSetFlags, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, exarg_T,
-    kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow, list_T,
-    listitem_T, optset_T, sctx_T, size_t, typval_T,
+    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, Failed, List, ListItem, MAXPATHL, NUL, OK,
+    OptInt, OptionSetFlags, ScriptCtx, TypVal, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
+    VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
+    kCdScopeWindow, optset_T, size_t,
 };
 
 /// The parsed `'findfunc'`.
@@ -73,9 +73,9 @@ pub(crate) unsafe fn get_findfunc_callback() -> *mut Callback {
 /// `cmdcomplete` tells the callback whether this is completion (which may
 /// answer many names) or a real `:find` (which wants the one at `count`).
 /// The text lock is held across the call: the callback must not edit.
-pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut list_T {
-    let saved_sctx: sctx_T = current_sctx.get();
-    let mut args: [typval_T; 3] = unsafe { core::mem::zeroed() };
+pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut List {
+    let saved_sctx: ScriptCtx = current_sctx.get();
+    let mut args: [TypVal; 3] = unsafe { core::mem::zeroed() };
     args[0].v_type = VAR_STRING;
     args[0].v_lock = VarLock::Unlocked;
     args[0].vval.v_string = pat;
@@ -90,13 +90,13 @@ pub(crate) fn call_findfunc(pat: *mut c_char, cmdcomplete: BoolVarValue) -> *mut
     // against whatever is running now.
     current_sctx.set(option_last_set(kOptFindfunc));
     let cb = unsafe { get_findfunc_callback() };
-    let mut rettv: typval_T = unsafe { core::mem::zeroed() };
+    let mut rettv: TypVal = unsafe { core::mem::zeroed() };
     rettv.v_type = VAR_UNKNOWN;
-    let called = unsafe { callback_call(cb, 2, &raw mut args as *mut typval_T, &raw mut rettv) };
+    let called = unsafe { callback_call(cb, 2, &raw mut args as *mut TypVal, &raw mut rettv) };
     current_sctx.set(saved_sctx);
     drop(locked);
 
-    let mut retlist: *mut list_T = ptr::null_mut();
+    let mut retlist: *mut List = ptr::null_mut();
     if called as c_int == OK {
         if rettv.v_type as c_uint == VAR_LIST as c_uint {
             retlist = unsafe { tv_list_copy(ptr::null(), rettv.vval.v_list, false, get_copy_id()) };
@@ -129,7 +129,7 @@ pub unsafe fn expand_findfunc(
     // strings — so the count answered may be smaller.
     unsafe { *files = xmalloc(size_of::<*mut c_char>() * len as size_t) as *mut *mut c_char };
     let mut idx = 0;
-    let mut li: *const listitem_T = unsafe { (*l).lv_first };
+    let mut li: *const ListItem = unsafe { (*l).lv_first };
     while !li.is_null() {
         if unsafe { (*li).li_tv.v_type } as c_uint == VAR_STRING as c_uint {
             unsafe { *(*files).offset(idx as isize) = xstrdup((*li).li_tv.vval.v_string) };
@@ -425,13 +425,13 @@ fn os_dirname(buf: *mut c_char, len: size_t) -> Result<(), Failed> {
 }
 
 /// `tv_list_free()` as checked code.
-fn tv_list_free(l: *mut list_T) {
+fn tv_list_free(l: *mut List) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::eval::typval::tv_list_free(l) }
 }
 
 /// `tv_list_len()` as checked code.
-fn tv_list_len(l: *const list_T) -> ::core::ffi::c_int {
+fn tv_list_len(l: *const List) -> ::core::ffi::c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::eval::typval::tv_list_len(l) }
 }

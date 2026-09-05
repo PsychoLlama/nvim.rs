@@ -81,8 +81,8 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StlClickRecord, VAR_NUMBER, VarLock, VarNumber,
-    Vv, int64_t, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, win_T,
+    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StlClickRecord, TypVal, VAR_NUMBER, VarLock,
+    VarNumber, Vv, int64_t, size_t, statuscol_T, stl_hlrec_t, typval_vval_union, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
@@ -720,7 +720,7 @@ pub unsafe fn build_stl_str_hl(
     // the format actually used. Evaluating it can fail, in which case the
     // literal text is what gets rendered.
     let usefmt = if fmt_bytes.starts_with(b"%!") {
-        let mut winid = typval_T {
+        let mut winid = TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {

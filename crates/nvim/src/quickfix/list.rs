@@ -128,7 +128,7 @@ pub(crate) struct NewEntry {
     /// The error type: `e`, `w`, `i`, `n`, or 1 for a help entry.
     pub(crate) kind: c_char,
     /// Arbitrary value a `setqflist()` caller attached; may be null.
-    pub(crate) user_data: *mut typval_T,
+    pub(crate) user_data: *mut TypVal,
     /// The entry names a real position and can be jumped to.
     pub(crate) valid: bool,
 }
@@ -348,7 +348,7 @@ pub(crate) unsafe fn copy_loclist(from_qfl: *mut qf_list_T, to_qfl: *mut qf_list
         (*to_qfl).qf_ctx = if (*from_qfl).qf_ctx.is_null() {
             ptr::null_mut()
         } else {
-            let ctx: *mut typval_T = xcalloc(1, size_of::<typval_T>()).cast();
+            let ctx: *mut TypVal = xcalloc(1, size_of::<TypVal>()).cast();
             tv_copy((*from_qfl).qf_ctx, ctx);
             ctx
         }

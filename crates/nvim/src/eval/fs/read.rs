@@ -36,8 +36,8 @@ use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
 use crate::tr_c;
 use crate::types::{
-    EvalFuncData, FILE, FileInfo, FileOffset, READBIN, VAR_STRING, VarLock, blob_T, int64_t,
-    kListLenUnknown, list_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
+    Blob, EvalFuncData, FILE, FileInfo, FileOffset, List, READBIN, TypVal, VAR_STRING, VarLock,
+    int64_t, kListLenUnknown, off_t, ptrdiff_t, size_t, typval_vval_union, uint64_t,
 };
 use ::libc::{fclose, fileno, fread, fseeko};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -105,11 +105,11 @@ impl File {
 
 /// The Blob `readblob()` is filling.
 #[derive(Clone, Copy)]
-struct BlobRef(*mut blob_T);
+struct BlobRef(*mut Blob);
 
 impl BlobRef {
     /// Make `rettv` a fresh, empty Blob.
-    fn alloc(rettv: &mut typval_T) -> Self {
+    fn alloc(rettv: &mut TypVal) -> Self {
         // SAFETY: `rettv` is the builtin's own cleared result slot.
         Self(unsafe { tv_blob_alloc_ret(rettv) })
     }
@@ -141,11 +141,11 @@ impl BlobRef {
 
 /// The List `readfile()` is filling.
 #[derive(Clone, Copy)]
-struct Lines(*mut list_T);
+struct Lines(*mut List);
 
 impl Lines {
     /// Make `rettv` a fresh List whose length is not known in advance.
-    fn alloc(rettv: &mut typval_T) -> Self {
+    fn alloc(rettv: &mut TypVal) -> Self {
         let unknown = kListLenUnknown as c_int as ptrdiff_t;
         // SAFETY: `rettv` is the builtin's own cleared result slot.
         Self(unsafe { tv_list_alloc_ret(rettv, unknown) })
@@ -159,7 +159,7 @@ impl Lines {
     /// Append `s`, a NUL-terminated string in nvim's heap that the list owns
     /// from here on.
     fn push(self, s: *mut c_char) {
-        let tv = typval_T {
+        let tv = TypVal {
             v_type: VAR_STRING,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_string: s },
@@ -281,7 +281,7 @@ impl Carry {
 /// read came up short; the Blob is then given back and `rettv` left empty.
 fn read_blob(
     fd: &File,
-    rettv: &mut typval_T,
+    rettv: &mut TypVal,
     blob: BlobRef,
     offset: FileOffset,
     size_arg: FileOffset,
@@ -473,7 +473,7 @@ fn nr(args: Args<'_>, i: usize) -> int64_t {
 }
 
 /// The body both builtins share.
-fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
+fn read_file_or_blob(args: Args<'_>, rettv: &mut TypVal, always_blob: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -540,7 +540,7 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1..3, and `rettv`
 /// a cleared result.
-pub unsafe fn f_readblob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_readblob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     read_file_or_blob(args, rettv, true);
 }
@@ -549,7 +549,7 @@ pub unsafe fn f_readblob(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 ///
 /// # Safety
 /// As [`f_readblob`].
-pub unsafe fn f_readfile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_readfile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     read_file_or_blob(args, rettv, false);
 }

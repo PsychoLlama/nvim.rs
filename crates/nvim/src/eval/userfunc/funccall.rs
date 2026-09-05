@@ -369,7 +369,7 @@ pub(crate) unsafe fn func_clear_free(fp: *mut ufunc_T, force: bool) {
 ///
 /// # Safety
 /// `fp` is a live function and `rettv` outlives the call.
-pub unsafe fn create_funccal(fp: *mut ufunc_T, rettv: *mut typval_T) -> *mut funccall_T {
+pub unsafe fn create_funccal(fp: *mut ufunc_T, rettv: *mut TypVal) -> *mut funccall_T {
     // SAFETY: a fresh, zeroed allocation of the right size, and the
     // caller's promise that `fp` is live and `rettv` outlives the call.
     let fc = unsafe { xcalloc(1, size_of::<funccall_T>()) } as *mut funccall_T;
@@ -634,7 +634,7 @@ unsafe fn have_funccal_scope() -> bool {
 }
 
 /// The `l:` scope dictionary, or null when there is no call.
-pub unsafe fn get_funccal_local_dict() -> *mut dict_T {
+pub unsafe fn get_funccal_local_dict() -> *mut Dict {
     // SAFETY: `get_funccal` answers a live call, and the address of a field
     // of it is taken without reading the object.
     if !unsafe { have_funccal_scope() } {
@@ -655,7 +655,7 @@ pub unsafe fn get_funccal_local_ht() -> *mut hashtab_T {
 }
 
 /// The `l:` scope variable, or null when there is no call.
-pub unsafe fn get_funccal_local_var() -> *mut dictitem_T {
+pub unsafe fn get_funccal_local_var() -> *mut DictItem {
     // SAFETY: as [`get_funccal_local_dict`].
     if !unsafe { have_funccal_scope() } {
         return ptr::null_mut();
@@ -664,7 +664,7 @@ pub unsafe fn get_funccal_local_var() -> *mut dictitem_T {
 }
 
 /// The `a:` scope dictionary, or null when there is no call.
-pub unsafe fn get_funccal_args_dict() -> *mut dict_T {
+pub unsafe fn get_funccal_args_dict() -> *mut Dict {
     // SAFETY: as [`get_funccal_local_dict`].
     if !unsafe { have_funccal_scope() } {
         return ptr::null_mut();
@@ -684,7 +684,7 @@ pub unsafe fn get_funccal_args_ht() -> *mut hashtab_T {
 }
 
 /// The `a:` scope variable, or null when there is no call.
-pub unsafe fn get_funccal_args_var() -> *mut dictitem_T {
+pub unsafe fn get_funccal_args_var() -> *mut DictItem {
     // SAFETY: as [`get_funccal_local_dict`].
     if !unsafe { have_funccal_scope() } {
         return ptr::null_mut();
@@ -714,7 +714,7 @@ pub unsafe fn list_func_vars(first: *mut c_int) {
 ///
 /// # Safety
 /// `ht` is a live hashtab.
-pub unsafe fn get_current_funccal_dict(ht: *mut hashtab_T) -> *mut dict_T {
+pub unsafe fn get_current_funccal_dict(ht: *mut hashtab_T) -> *mut Dict {
     let fc = current_funccal.get();
     if fc.is_null() {
         return ptr::null_mut();
@@ -803,7 +803,7 @@ pub unsafe fn find_var_in_scoped_ht(
     name: *const c_char,
     namelen: size_t,
     no_autoload: c_int,
-) -> *mut dictitem_T {
+) -> *mut DictItem {
     // SAFETY: `current_funccal` is null or the live call in progress, whose
     // `fc_func` is live too; `name` has `namelen` readable bytes and
     // `varname` is a tail of it.
@@ -858,7 +858,7 @@ pub unsafe fn set_ref_in_previous_funccal(copyID: c_int) -> bool {
 /// `fc` is a live funccall.
 unsafe fn scopes_of(
     fc: *mut funccall_T,
-) -> (*mut hashtab_T, *mut hashtab_T, *mut crate::types::list_T) {
+) -> (*mut hashtab_T, *mut hashtab_T, *mut crate::types::List) {
     // SAFETY: the caller's promise; a field's address is the object's plus a
     // constant, so none of the three reads it.
     unsafe {

@@ -405,17 +405,17 @@ pub struct lval_T {
     pub ll_name: *const ::core::ffi::c_char,
     pub ll_name_len: size_t,
     pub ll_exp_name: *mut ::core::ffi::c_char,
-    pub ll_tv: *mut typval_T,
-    pub ll_li: *mut listitem_T,
-    pub ll_list: *mut list_T,
+    pub ll_tv: *mut TypVal,
+    pub ll_li: *mut ListItem,
+    pub ll_list: *mut List,
     pub ll_range: bool,
     pub ll_empty2: bool,
     pub ll_n1: ::core::ffi::c_int,
     pub ll_n2: ::core::ffi::c_int,
-    pub ll_dict: *mut dict_T,
-    pub ll_di: *mut dictitem_T,
+    pub ll_dict: *mut Dict,
+    pub ll_di: *mut DictItem,
     pub ll_newkey: *mut ::core::ffi::c_char,
-    pub ll_blob: *mut blob_T,
+    pub ll_blob: *mut Blob,
 }
 #[derive(Default)]
 pub struct save_v_event_T {

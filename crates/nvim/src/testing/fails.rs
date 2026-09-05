@@ -29,7 +29,7 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::{gettext, strstr};
 use crate::types::{
-    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv, list_T, typval_T,
+    EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
     typval_vval_union,
 };
 
@@ -71,7 +71,7 @@ struct FailsMismatch {
 ///
 /// # Safety
 /// `argvars` has five slots.
-unsafe fn assert_fails_args_ok(argvars: *mut typval_T) -> bool {
+unsafe fn assert_fails_args_ok(argvars: *mut TypVal) -> bool {
     // SAFETY: the caller's arguments.
     if unsafe { tv_check_for_string_or_number_arg(argvars, 0) }.is_err()
         || unsafe { tv_check_for_opt_string_or_list_arg(argvars, 1) }.is_err()
@@ -95,7 +95,7 @@ unsafe fn assert_fails_args_ok(argvars: *mut typval_T) -> bool {
 ///
 /// # Safety
 /// `argvars` has five slots; `tofree` receives an allocation the caller frees.
-unsafe fn check_reported_error(argvars: *mut typval_T, tofree: &mut *mut c_char) -> FailsCheck {
+unsafe fn check_reported_error(argvars: *mut TypVal, tofree: &mut *mut c_char) -> FailsCheck {
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the caller's arguments and out-parameter.
     let unknown = c"[unknown]".as_ptr().cast_mut();
@@ -119,11 +119,11 @@ unsafe fn check_reported_error(argvars: *mut typval_T, tofree: &mut *mut c_char)
             })
         }
         VAR_LIST => {
-            let list: *const list_T = unsafe { (*arg(argvars, 1)).vval.v_list };
+            let list: *const List = unsafe { (*arg(argvars, 1)).vval.v_list };
             if list.is_null() || !(1..=2).contains(&unsafe { tv_list_len(list) }) {
                 return FailsCheck::BadArg(E_ASSERT_FAILS_SECOND_ARG);
             }
-            let mut tv: *const typval_T = unsafe { &raw mut (*tv_list_first(list)).li_tv };
+            let mut tv: *const TypVal = unsafe { &raw mut (*tv_list_first(list)).li_tv };
             let mut expected = unsafe { tv_get_string_buf_chk(tv, buf.as_mut_ptr()) };
             if expected.is_null() {
                 return FailsCheck::Abandon;
@@ -167,7 +167,7 @@ unsafe fn check_reported_error(argvars: *mut typval_T, tofree: &mut *mut c_char)
 ///
 /// # Safety
 /// `argvars` has five slots.
-unsafe fn check_error_position(argvars: *mut typval_T) -> FailsCheck {
+unsafe fn check_error_position(argvars: *mut TypVal) -> FailsCheck {
     // SAFETY: the caller's arguments.
     if !unsafe { arg_given(argvars, 2) } || !unsafe { arg_given(argvars, 3) } {
         return FailsCheck::Matched;
@@ -207,27 +207,27 @@ unsafe fn check_error_position(argvars: *mut typval_T) -> FailsCheck {
 /// # Safety
 /// `argvars` has five slots and `cmd` is the command that was run.
 unsafe fn report_fails_mismatch(
-    argvars: *mut typval_T,
+    argvars: *mut TypVal,
     cmd: *const c_char,
     mismatch: &FailsMismatch,
 ) {
     // SAFETY: the caller's arguments; `actual_tv` borrows and is never cleared.
     let mut actual_tv = match mismatch.index {
-        3 => typval_T {
+        3 => TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_number: emsg_assert_fails_lnum.get() as VarNumber,
             },
         },
-        4 => typval_T {
+        4 => TypVal {
             v_type: VAR_STRING,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_string: emsg_assert_fails_context.get(),
             },
         },
-        _ => typval_T {
+        _ => TypVal {
             v_type: VAR_STRING,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
@@ -280,11 +280,7 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
-pub(crate) unsafe fn f_assert_fails(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_assert_fails(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
     // runs user code that is expected to fail; every flag disturbed for it is

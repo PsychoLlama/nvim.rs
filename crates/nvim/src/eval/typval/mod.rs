@@ -32,13 +32,12 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    __compar_fn_t, Arena, BoolVarValue, Callback, DictWatcher, EvalFuncData, Float, LineNr, LuaRef,
-    QUEUE, SpecialVarValue, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    __compar_fn_t, Arena, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData,
+    Float, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue,
+    StaticList10, String_0, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
     VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, blob_T, buf_T, dict_T, dictitem_T, funcexe_T, garray_T, hashtab_T, int64_t,
-    kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T, listitem_T, listwatch_T, partial_T,
-    ptrdiff_t, size_t, ssize_t, staticList10_T, typval_T, typval_vval_union, ufunc_T, uint8_t,
-    vimconv_T,
+    VarNumber, buf_T, funcexe_T, garray_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow,
+    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union, ufunc_T, uint8_t, vimconv_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
@@ -87,12 +86,12 @@ pub struct sortinfo_T {
     pub item_compare_numbers: bool,
     pub item_compare_float: bool,
     pub item_compare_func: *const ::core::ffi::c_char,
-    pub item_compare_partial: *mut partial_T,
-    pub item_compare_selfdict: *mut dict_T,
+    pub item_compare_partial: *mut Partial,
+    pub item_compare_selfdict: *mut Dict,
     pub item_compare_func_err: bool,
 }
 pub struct ListSortItem {
-    pub item: *mut listitem_T,
+    pub item: *mut ListItem,
     pub idx: ::core::ffi::c_int,
 }
 pub type ListSorter = Option<
@@ -170,9 +169,9 @@ pub const GARRAY_EMPTY: garray_T = garray_T {
     ga_data: ::core::ptr::null_mut(),
 };
 /// `TV_INITIAL_VALUE`: an unlocked `VAR_UNKNOWN` object, which is what a
-/// `typval_T` is initialised to and what one is left as after being moved out
+/// `TypVal` is initialised to and what one is left as after being moved out
 /// of.  c2rust wrote the designated initialiser out at every use site.
-pub const TV_INITIAL_VALUE: typval_T = typval_T {
+pub const TV_INITIAL_VALUE: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -180,7 +179,7 @@ pub const TV_INITIAL_VALUE: typval_T = typval_T {
 pub static tv_in_free_unref_items: GlobalCell<bool> = GlobalCell::new(false);
 pub const DICT_MAXNEST: ::core::ffi::c_int = 100 as ::core::ffi::c_int;
 pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell::new(c"".as_ptr());
-/// `ARRAY_SIZE(sl->sl_items)`: how many `listitem_T`s a `staticList10_T`
+/// `ARRAY_SIZE(sl->sl_items)`: how many `ListItem`s a `StaticList10`
 /// embeds.  c2rust rendered `ARRAY_SIZE` as a division by the macro's own
 /// `== 0` static assertion; the value it computes is just the length.
 pub const SL_SIZE: usize = 10;
@@ -221,8 +220,8 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_lastline: 0 as LineNr,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
     fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<partial_T>(),
-    fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
-    fe_basetv: ::core::ptr::null_mut::<typval_T>(),
+    fe_partial: ::core::ptr::null_mut::<Partial>(),
+    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
+    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
     fe_found_var: false,
 };

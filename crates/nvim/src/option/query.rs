@@ -32,8 +32,8 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, CpoFlag, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag,
-    VAR_STRING, dict_T, exarg_T, int64_t, size_t, typval_T, uint8_t,
+    BsFlag, Callback, CpoFlag, Dict, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
+    ShmFlag, TypVal, VAR_STRING, exarg_T, int64_t, size_t, uint8_t,
 };
 
 use super::{
@@ -189,7 +189,7 @@ pub(crate) unsafe fn option_set_callback_func(
         }
         tv
     } else {
-        let tv = unsafe { xcalloc(1, size_of::<typval_T>()) }.cast::<typval_T>();
+        let tv = unsafe { xcalloc(1, size_of::<TypVal>()) }.cast::<TypVal>();
         unsafe { (*tv).v_type = VAR_STRING };
         unsafe { (*tv).vval.v_string = xstrdup(optval) };
         tv
@@ -430,7 +430,7 @@ pub(crate) fn fish_like_shell() -> bool {
 
 /// Every buffer-local (or window-local) option of the current buffer and
 /// window, as a dictionary — what `b:` and `w:` expose.
-pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut dict_T {
+pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
     let scope = if bufopt != 0 {
         kOptScopeBuf
     } else {

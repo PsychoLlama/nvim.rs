@@ -1,4 +1,4 @@
-//! `json_decode()`: JSON text into a `typval_T`.
+//! `json_decode()`: JSON text into a `TypVal`.
 //!
 //! One pass over the document, dispatching on the byte under the cursor.  The
 //! two values with a syntax of their own go to [`scan`]; everything else is
@@ -24,8 +24,8 @@ use crate::eval::typval::{
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Failed, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VarLock, kBoolVarFalse,
-    kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T,
+    Failed, List, TypVal, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_UNKNOWN, VarLock,
+    kBoolVarFalse, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull, ptrdiff_t, size_t,
     typval_vval_union,
 };
 
@@ -67,7 +67,7 @@ const E474_UNIDENTIFIED_BYTE: &CStr = c"E474: Unidentified byte: %.*s";
 const E474_TRAILING_CHARACTERS: &CStr = c"E474: Trailing characters: %.*s";
 const E474_UNEXPECTED_END: &CStr = c"E474: Unexpected end of input: %.*s";
 
-const NULL_TV: typval_T = typval_T {
+const NULL_TV: TypVal = TypVal {
     v_type: VAR_SPECIAL,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union {
@@ -75,8 +75,8 @@ const NULL_TV: typval_T = typval_T {
     },
 };
 
-const fn bool_tv(value: bool) -> typval_T {
-    typval_T {
+const fn bool_tv(value: bool) -> TypVal {
+    TypVal {
         v_type: VAR_BOOL,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union {
@@ -95,7 +95,7 @@ const fn bool_tv(value: bool) -> typval_T {
 pub unsafe fn json_decode_string(
     buf: *const c_char,
     buf_len: size_t,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: `buf`/`buf_len` are the caller's obligation, which upstream
     // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
@@ -282,7 +282,7 @@ pub unsafe fn json_decode_string(
                     b'[' => {
                         let list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
                         unsafe { tv_list_ref(list) };
-                        let tv = typval_T {
+                        let tv = TypVal {
                             v_type: VAR_LIST,
                             v_lock: VarLock::Unlocked,
                             vval: typval_vval_union { v_list: list },
@@ -291,7 +291,7 @@ pub unsafe fn json_decode_string(
                     }
                     b'{' => {
                         let mut tv = TV_INITIAL_VALUE;
-                        let mut special_val: *mut list_T = ::core::ptr::null_mut();
+                        let mut special_val: *mut List = ::core::ptr::null_mut();
                         if dec.next_map_special {
                             dec.next_map_special = false;
                             let len = kListLenMayKnow as ptrdiff_t;
@@ -300,7 +300,7 @@ pub unsafe fn json_decode_string(
                         } else {
                             let dict = unsafe { tv_dict_alloc() };
                             unsafe { (*dict).dv_refcount.retain() };
-                            tv = typval_T {
+                            tv = TypVal {
                                 v_type: VAR_DICT,
                                 v_lock: VarLock::Unlocked,
                                 vval: typval_vval_union { v_dict: dict },
@@ -346,7 +346,7 @@ pub unsafe fn json_decode_string(
 impl Decoder<'_> {
     /// Push a container that has just opened, both onto the container stack
     /// and — as a value in its own right — onto the value stack.
-    fn open(&mut self, container: typval_T, special_val: *mut list_T, at: usize) {
+    fn open(&mut self, container: TypVal, special_val: *mut List, at: usize) {
         self.containers.push(Container {
             stack_index: self.stack.len(),
             special_val,

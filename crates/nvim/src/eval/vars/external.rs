@@ -143,7 +143,7 @@ pub unsafe fn eval_patch(origfile: *const c_char, difffile: *const c_char, outfi
 ///
 /// # Safety
 /// `badword` and `expr` are NUL-terminated strings.
-pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut list_T {
+pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut List {
     let mut evalarg = EVALARG_EVALUATE;
     let mut p = unsafe { skipwhite(expr) };
     let saved_sctx = current_sctx.get();
@@ -163,7 +163,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
         Ok(Parsed::NotThis) => unsafe { eval1(&raw mut p, &raw mut rettv, &raw mut evalarg) },
         other => other.map(|_| ()),
     };
-    let mut list: *mut list_T = ptr::null_mut();
+    let mut list: *mut List = ptr::null_mut();
     if r.is_ok() {
         if rettv.v_type == VAR_LIST {
             list = rettv.list_or_null();
@@ -190,7 +190,7 @@ pub unsafe fn eval_spell_expr(badword: *mut c_char, expr: *mut c_char) -> *mut l
 /// `list` is one entry of the suggestion list; `ret_word` is writable, and
 /// is left alone when the answer is -1.
 pub unsafe fn get_spellword(
-    list: *mut list_T,
+    list: *mut List,
     ret_word: *mut *const c_char,
     numbuf: &mut NumBuf,
 ) -> c_int {

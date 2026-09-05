@@ -7,7 +7,7 @@ use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
-use crate::types::{VAR_UNKNOWN, keyvalue_T, size_t, typval_T};
+use crate::types::{TypVal, VAR_UNKNOWN, keyvalue_T, size_t};
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -31,7 +31,7 @@ pub use self::printf::*;
 /// entry rather than by a count, so an absent argument is readable and the
 /// question is a type test. Taking a reference keeps this safe — the
 /// caller's own block already had to produce one.
-pub(crate) fn given(tv: &typval_T) -> bool {
+pub(crate) fn given(tv: &TypVal) -> bool {
     tv.v_type != VAR_UNKNOWN
 }
 
@@ -39,7 +39,7 @@ pub(crate) fn given(tv: &typval_T) -> bool {
 ///
 /// Returns `None` after raising the error, which both callers turn into a
 /// silent `-1` result.
-pub(crate) unsafe fn strict_bool_arg(tv: *mut typval_T) -> Option<bool> {
+pub(crate) unsafe fn strict_bool_arg(tv: *mut TypVal) -> Option<bool> {
     let mut error = false;
     let value = unsafe { tv_get_bool_chk(tv, &raw mut error) };
     if error {

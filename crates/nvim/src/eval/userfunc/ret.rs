@@ -26,7 +26,7 @@ use crate::types::{Failed, IOSIZE, NUL};
 /// One call recorded by `:defer`, to be made when the function returns.
 pub struct defer_T {
     pub dr_name: *mut c_char,
-    pub dr_argvars: [typval_T; MAX_FUNC_ARGS as usize + 1],
+    pub dr_argvars: [TypVal; MAX_FUNC_ARGS as usize + 1],
     pub dr_argcount: c_int,
 }
 
@@ -158,7 +158,7 @@ unsafe fn ex_call_inner(
 unsafe fn ex_defer_inner(
     name: *mut c_char,
     arg: *mut *mut c_char,
-    partial: *const partial_T,
+    partial: *const Partial,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     let mut argvars = [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
@@ -247,7 +247,7 @@ pub unsafe fn can_add_defer() -> bool {
 /// # Safety
 /// A function is running, `name` is NUL-terminated and `argvars` holds
 /// `argcount_arg` values.
-pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, argvars: *mut typval_T) {
+pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, argvars: *mut TypVal) {
     let saved_name = unsafe { xstrdup(name) };
     let mut argcount = argcount_arg;
 
@@ -295,7 +295,7 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut funccall_T) {
             // argument array holds `dr_argcount` values.
             let (argc, args) = unsafe { ((*dr).dr_argcount, &raw mut (*dr).dr_argvars) };
             let (ret, exe) = (&raw mut rettv, &raw mut funcexe);
-            let _ = unsafe { call_func(name, -1, ret, argc, args as *mut typval_T, exe) };
+            let _ = unsafe { call_func(name, -1, ret, argc, args as *mut TypVal, exe) };
 
             unsafe { exception_state_restore(&raw mut estate) };
             unsafe { tv_clear(&raw mut rettv) };
@@ -303,7 +303,7 @@ pub(crate) unsafe fn handle_defer_one(funccal: *mut funccall_T) {
             let mut i = unsafe { (*dr).dr_argcount } - 1;
             while i >= 0 {
                 unsafe {
-                    tv_clear(((&raw mut (*dr).dr_argvars) as *mut typval_T).offset(i as isize))
+                    tv_clear(((&raw mut (*dr).dr_argvars) as *mut TypVal).offset(i as isize))
                 };
                 i -= 1;
             }
@@ -340,7 +340,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
     let mut ea = unsafe { Ea::new(eap) };
     let mut arg = ea.arg;
     let mut fudi = FUNCDICT_INIT;
-    let mut partial: *mut partial_T = ptr::null_mut();
+    let mut partial: *mut Partial = ptr::null_mut();
     let mut evalarg = EVALARG_INIT;
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, ea.skip != 0) };
 
@@ -442,7 +442,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` is a live command with a condition stack, and `rettv` is null or a
-/// `typval_T`.
+/// `TypVal`.
 pub unsafe fn do_return(
     eap: *mut exarg_T,
     reanimate: bool,
@@ -479,9 +479,9 @@ pub unsafe fn do_return(
                 unsafe { (*cstack).set_pending_return(idx as usize, ptr::null_mut()) };
             } else {
                 // Store the value of the pending return.
-                let saved = unsafe { xcalloc(1, size_of::<typval_T>()) };
+                let saved = unsafe { xcalloc(1, size_of::<TypVal>()) };
                 unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                unsafe { *saved.cast::<typval_T>() = *rettv.cast::<typval_T>() };
+                unsafe { *saved.cast::<TypVal>() = *rettv.cast::<TypVal>() };
             }
             if reanimate {
                 // The return value is not available yet.
@@ -494,7 +494,7 @@ pub unsafe fn do_return(
         unsafe { (*current_funccal.get()).fc_returned = 1 };
         if !reanimate && !rettv.is_null() {
             unsafe { tv_clear((*current_funccal.get()).fc_rettv) };
-            unsafe { *(*current_funccal.get()).fc_rettv = *(rettv as *mut typval_T) };
+            unsafe { *(*current_funccal.get()).fc_rettv = *(rettv as *mut TypVal) };
             if !is_cmd {
                 unsafe { xfree(rettv) };
             }
@@ -507,7 +507,7 @@ pub unsafe fn do_return(
 /// Render `:return <expr>` for the debugger, in allocated memory.
 ///
 /// # Safety
-/// `rettv` is null or a `typval_T`.
+/// `rettv` is null or a `TypVal`.
 pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
     // The rendered command. Upstream shares `IObuff`, which the debugger
     // this feeds writes again.
@@ -517,7 +517,7 @@ pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
     let mut slen: size_t = 0;
 
     if !rettv.is_null() {
-        s = unsafe { encode_tv2echo(rettv as *mut typval_T, ptr::null_mut()) };
+        s = unsafe { encode_tv2echo(rettv as *mut TypVal, ptr::null_mut()) };
         tofree = s;
     }
     if s.is_null() {

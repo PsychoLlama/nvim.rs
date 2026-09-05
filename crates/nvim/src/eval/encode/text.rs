@@ -30,7 +30,7 @@ use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_ty
 use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
-use crate::types::{Float, blob_T, dict_T, int64_t, ptrdiff_t, size_t, typval_T};
+use crate::types::{Blob, Dict, Float, TypVal, int64_t, ptrdiff_t, size_t};
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -128,11 +128,11 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         c"_typval_encode_string_convert_one_value()"
     };
 
-    unsafe fn conv_nil(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
         self.gap.extend_from_slice(b"v:null");
     }
 
-    unsafe fn conv_bool(&mut self, _tv: *mut typval_T, num: bool) {
+    unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
         self.gap.extend_from_slice(if num {
             b"v:true".as_slice()
         } else {
@@ -140,13 +140,13 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         });
     }
 
-    unsafe fn conv_number(&mut self, _tv: *mut typval_T, num: int64_t) {
+    unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
         self.concat_num::<NUMBUFLEN, _>(c"%ld", num);
     }
 
     /// NaN and infinity have no Vimscript literal, so they come out as the
     /// `str2float()` call that rebuilds them.
-    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: Float) -> Flow {
+    unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
         match flt.classify() {
             ::core::num::FpCategory::Nan => self.gap.extend_from_slice(b"str2float('nan')"),
             ::core::num::FpCategory::Infinite => {
@@ -160,7 +160,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
-    unsafe fn conv_string(&mut self, _tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
         unsafe { self.quoted(buf, len) };
         Flow::Go
     }
@@ -170,7 +170,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
     /// through leaves the buffer for the walk to free.
     unsafe fn conv_ext_string(
         &mut self,
-        _tv: *mut typval_T,
+        _tv: *mut TypVal,
         _buf: *mut c_char,
         _len: size_t,
         _ext_type: i8,
@@ -178,7 +178,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
-    unsafe fn conv_blob(&mut self, _tv: *mut typval_T, blob: *const blob_T, len: c_int) {
+    unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
         if len == 0 {
             self.gap.extend_from_slice(b"0z");
             return;
@@ -198,7 +198,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
     /// `function('name'` — the closing paren is [`Self::conv_func_end`]'s.
     unsafe fn conv_func_start(
         &mut self,
-        _tv: *mut typval_T,
+        _tv: *mut TypVal,
         fun: *mut c_char,
         prefix: &'static CStr,
         _path: &ConvPath,
@@ -222,61 +222,57 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
         Flow::Go
     }
 
-    unsafe fn conv_func_before_args(&mut self, _tv: *mut typval_T, len: ptrdiff_t) {
+    unsafe fn conv_func_before_args(&mut self, _tv: *mut TypVal, len: ptrdiff_t) {
         if len != 0 {
             self.gap.extend_from_slice(b", ");
         }
     }
 
-    unsafe fn conv_func_before_self(&mut self, _tv: *mut typval_T, len: ptrdiff_t) {
+    unsafe fn conv_func_before_self(&mut self, _tv: *mut TypVal, len: ptrdiff_t) {
         if len != -1 {
             self.gap.extend_from_slice(b", ");
         }
     }
 
-    unsafe fn conv_func_end(&mut self, _tv: *mut typval_T, _copyid: c_int) {
+    unsafe fn conv_func_end(&mut self, _tv: *mut TypVal, _copyid: c_int) {
         self.gap.push(b')');
     }
 
-    unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
         self.gap.extend_from_slice(b"[]");
     }
 
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.extend_from_slice(b"{}");
     }
 
-    unsafe fn conv_list_start(&mut self, _tv: *mut typval_T, _len: c_int) -> Flow {
+    unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, _len: c_int) -> Flow {
         self.gap.push(b'[');
         Flow::Go
     }
 
-    unsafe fn conv_list_between_items(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
         self.gap.extend_from_slice(b", ");
     }
 
-    unsafe fn conv_list_end(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
         self.gap.push(b']');
     }
 
-    unsafe fn conv_dict_start(&mut self, _tv: *mut typval_T, _len: size_t) -> Flow {
+    unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, _len: size_t) -> Flow {
         self.gap.push(b'{');
         Flow::Go
     }
 
-    unsafe fn conv_dict_after_key(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_dict_after_key(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.extend_from_slice(b": ");
     }
 
-    unsafe fn conv_dict_between_items(
-        &mut self,
-        _tv: *mut typval_T,
-        _dictp: Option<*mut *mut dict_T>,
-    ) {
+    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.extend_from_slice(b", ");
     }
 
-    unsafe fn conv_dict_end(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.gap.push(b'}');
     }
 
@@ -314,7 +310,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
 /// `tv` must be a live typval and `objname` NUL-terminated.
 pub(crate) unsafe fn encode_vim_to_string(
     gap: &mut Vec<u8>,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     objname: *const c_char,
 ) -> bool {
     let mut sink = TextSink::<false> { gap };
@@ -327,7 +323,7 @@ pub(crate) unsafe fn encode_vim_to_string(
 /// As [`encode_vim_to_string`].
 pub(crate) unsafe fn encode_vim_to_echo(
     gap: &mut Vec<u8>,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     objname: *const c_char,
 ) -> bool {
     let mut sink = TextSink::<true> { gap };

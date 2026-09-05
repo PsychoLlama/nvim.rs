@@ -196,7 +196,7 @@ unsafe fn iconv_string(
 }
 
 /// `iconv({string}, {from}, {to})`.
-pub unsafe fn f_iconv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_iconv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = core::ptr::null_mut() };

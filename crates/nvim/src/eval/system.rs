@@ -36,8 +36,8 @@ use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, IOSIZE, NUL, OptInt, ProfTime, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarNumber, Vv, kListLenMayKnow, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
+    EvalFuncData, IOSIZE, List, ListItem, NUL, OptInt, ProfTime, TypVal, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, VarNumber, Vv, kListLenMayKnow, ptrdiff_t, size_t,
 };
 
 /// Build a `NULL`-terminated argument vector out of a String (through the
@@ -49,7 +49,7 @@ use crate::types::{
 /// the scratch a Number command is spelled into and must outlive `*cmd`,
 /// which may point into it.
 pub unsafe fn tv_to_argv(
-    cmd_tv: *mut typval_T,
+    cmd_tv: *mut TypVal,
     cmd: *mut *const c_char,
     executable: *mut bool,
     numbuf: &mut NumBuf,
@@ -77,7 +77,7 @@ pub unsafe fn tv_to_argv(
     }
 
     // SAFETY: `VAR_LIST` says `v_list` is the union's live member.
-    let argl: *mut list_T = tv.list_or_null();
+    let argl: *mut List = tv.list_or_null();
     // SAFETY: `argl` is a live List or null.
     let argc = unsafe { tv_list_len(argl) };
     if argc == 0 {
@@ -123,7 +123,7 @@ pub unsafe fn tv_to_argv(
     let mut i = 0;
     if !argl.is_null() {
         // SAFETY: `argl` is a live List.
-        let mut arg: *const listitem_T = unsafe { (*argl).lv_first };
+        let mut arg: *const ListItem = unsafe { (*argl).lv_first };
         while !arg.is_null() {
             // SAFETY: `arg` is one of the List's items, and `numbuf3`
             // outlives the string rendered into it.
@@ -160,7 +160,7 @@ pub(crate) unsafe fn string_to_list(
     str: *const c_char,
     mut len: size_t,
     keepempty: bool,
-) -> *mut list_T {
+) -> *mut List {
     // A trailing newline does not start an empty last line unless the
     // caller asked to keep one.
     // SAFETY: the caller's promise -- `len` bytes are readable, so the
@@ -180,8 +180,8 @@ pub(crate) unsafe fn string_to_list(
 /// # Safety
 /// `argvars` must hold the builtin's arguments; `rettv` must be valid.
 pub(crate) unsafe fn get_system_output_as_rettv(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     retlist: bool,
 ) {
     let mut cmdbuf = NumBuf::new();
@@ -298,7 +298,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe fn f_system(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_system(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { get_system_output_as_rettv(argvars, rettv, false) }
 }
 
@@ -306,7 +306,7 @@ pub unsafe fn f_system(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe fn f_systemlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_systemlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { get_system_output_as_rettv(argvars, rettv, true) }
 }
 
@@ -363,7 +363,7 @@ unsafe fn copy_swapping_nl(src: *const c_char, dest: *mut c_char) -> *mut c_char
 /// # Safety
 /// `tv` and `len` must be valid.
 pub unsafe fn save_tv_as_string(
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     len: *mut ptrdiff_t,
     endnl: bool,
     crlf: bool,
@@ -401,7 +401,7 @@ pub unsafe fn save_tv_as_string(
 ///
 /// # Safety
 /// `tv` must be a `VAR_NUMBER`; `len` valid.
-unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_char {
+unsafe fn buffer_as_string(tv: *mut TypVal, len: *mut ptrdiff_t) -> *mut c_char {
     // SAFETY: the caller's promise -- a `VAR_NUMBER`, so `v_number` is the
     // union's live member.
     let nr = unsafe { Tv::new(tv).number_or_zero() };
@@ -448,7 +448,7 @@ unsafe fn buffer_as_string(tv: *mut typval_T, len: *mut ptrdiff_t) -> *mut c_cha
 /// # Safety
 /// `list` must be null or valid; `len` valid.
 unsafe fn list_as_string(
-    list: *mut list_T,
+    list: *mut List,
     len: *mut ptrdiff_t,
     endnl: bool,
     crlf: bool,
@@ -460,7 +460,7 @@ unsafe fn list_as_string(
     // Measure first, charging every item a separator.
     if !list.is_null() {
         // SAFETY: the caller's promise -- a live List.
-        let mut li: *const listitem_T = unsafe { (*list).lv_first };
+        let mut li: *const ListItem = unsafe { (*list).lv_first };
         while !li.is_null() {
             // SAFETY: `li` is one of the List's items, `numbuf` outlives
             // the string rendered into it, and `len` is the caller's.
@@ -482,7 +482,7 @@ unsafe fn list_as_string(
     let mut end = ret;
     if !list.is_null() {
         // SAFETY: the caller's promise -- a live List.
-        let mut li: *const listitem_T = unsafe { (*list).lv_first };
+        let mut li: *const ListItem = unsafe { (*list).lv_first };
         while !li.is_null() {
             // SAFETY: `li` is one of the List's items, `numbuf2` outlives
             // the string rendered into it, and the measurement above left

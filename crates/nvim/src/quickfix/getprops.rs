@@ -22,7 +22,7 @@ use core::ptr;
 /// # Safety
 ///
 /// `dict` must be a live dictionary.
-unsafe fn add_nr(dict: *mut dict_T, key: &str, value: VarNumber) -> Result<(), KeyTaken> {
+unsafe fn add_nr(dict: *mut Dict, key: &str, value: VarNumber) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
     Ok(unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) }?)
 }
@@ -33,7 +33,7 @@ unsafe fn add_nr(dict: *mut dict_T, key: &str, value: VarNumber) -> Result<(), K
 /// # Safety
 ///
 /// `dict` must be a live dictionary and `value` null or NUL-terminated.
-unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> Result<(), KeyTaken> {
+unsafe fn add_str(dict: *mut Dict, key: &str, value: *const c_char) -> Result<(), KeyTaken> {
     let value = if value.is_null() { c"".as_ptr() } else { value };
     // SAFETY: the caller's dictionary and string.
     Ok(unsafe { tv_dict_add_str(dict, key.as_ptr().cast(), key.len(), value) }?)
@@ -44,7 +44,7 @@ unsafe fn add_str(dict: *mut dict_T, key: &str, value: *const c_char) -> Result<
 /// # Safety
 ///
 /// `dict` and `list` must be live.
-unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> Result<(), KeyTaken> {
+unsafe fn add_list(dict: *mut Dict, key: &str, list: *mut List) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and list.
     Ok(unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), list) }?)
 }
@@ -54,7 +54,7 @@ unsafe fn add_list(dict: *mut dict_T, key: &str, list: *mut list_T) -> Result<()
 /// # Safety
 ///
 /// `dict` must be live and `tv` a live value.
-unsafe fn add_tv(dict: *mut dict_T, key: &str, tv: *mut typval_T) -> Result<(), KeyTaken> {
+unsafe fn add_tv(dict: *mut Dict, key: &str, tv: *mut TypVal) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary and value.
     Ok(unsafe { tv_dict_add_tv(dict, key.as_ptr().cast(), key.len(), tv) }?)
 }
@@ -64,7 +64,7 @@ unsafe fn add_tv(dict: *mut dict_T, key: &str, tv: *mut typval_T) -> Result<(), 
 /// # Safety
 ///
 /// `what` must be null or a live dictionary.
-unsafe fn find(what: *const dict_T, key: &str) -> *mut dictitem_T {
+unsafe fn find(what: *const Dict, key: &str) -> *mut DictItem {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
     unsafe { tv_dict_find(what, key.as_ptr().cast(), key.len() as ptrdiff_t) }
 }
@@ -75,7 +75,7 @@ unsafe fn find(what: *const dict_T, key: &str) -> *mut dictitem_T {
 /// # Safety
 ///
 /// `what` must be null or a live dictionary.
-unsafe fn asked_for(what: *const dict_T, key: &str) -> bool {
+unsafe fn asked_for(what: *const Dict, key: &str) -> bool {
     // SAFETY: forwarded from the caller.
     !unsafe { find(what, key) }.is_null()
 }
@@ -91,7 +91,7 @@ unsafe fn asked_for(what: *const dict_T, key: &str) -> bool {
 /// # Safety
 ///
 /// `qfp` must be a live entry and `list` a live list.
-unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) {
+unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut List) {
     // SAFETY: forwarded from the caller.
     // Handle entries with a non-existing buffer number.
     let mut bufnum = unsafe { (*qfp).qf_fnum };
@@ -136,7 +136,7 @@ pub(crate) unsafe fn get_errorlist(
     wp: Option<Win>,
     mut qf_idx: c_int,
     eidx: c_int,
-    list: *mut list_T,
+    list: *mut List,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     let mut qi = qi_arg;
@@ -190,9 +190,9 @@ pub(crate) unsafe fn get_errorlist(
 ///
 /// `what`, `di` and `retdict` must be live.
 unsafe fn qf_get_list_from_lines(
-    what: *mut dict_T,
-    di: *mut dictitem_T,
-    retdict: *mut dict_T,
+    what: *mut Dict,
+    di: *mut DictItem,
+    retdict: *mut Dict,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     if unsafe { (*di).di_tv.v_type } != VAR_LIST || unsafe { (*di).di_tv.vval.v_list }.is_null() {
@@ -263,7 +263,7 @@ unsafe fn qf_winid(qi: *mut qf_info_T) -> c_int {
 /// # Safety
 ///
 /// `qi` must be null or a live stack, and `retdict` live.
-unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
+unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut Dict) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     let mut bufnum = 0;
     if !qi.is_null() && find_buf(unsafe { (*qi).qf_bufnr }).is_some() {
@@ -295,7 +295,7 @@ const GETLIST_KEYS: [(&str, GetListProps); 12] = [
 /// # Safety
 ///
 /// `what` must be null or a live dictionary.
-unsafe fn qf_getprop_keys2flags(what: *const dict_T, loclist: bool) -> GetListProps {
+unsafe fn qf_getprop_keys2flags(what: *const Dict, loclist: bool) -> GetListProps {
     // SAFETY: forwarded from the caller.
     let mut flags = GetListProps::NONE;
     if unsafe { asked_for(what, "all") } {
@@ -324,7 +324,7 @@ unsafe fn qf_getprop_keys2flags(what: *const dict_T, loclist: bool) -> GetListPr
 /// # Safety
 ///
 /// `qi` must be a live stack and `what` null or a live dictionary.
-unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut dict_T) -> Option<c_int> {
+unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut Dict) -> Option<c_int> {
     // SAFETY: forwarded from the caller.
     let mut qf_idx = unsafe { (*qi).qf_curlist };
 
@@ -375,7 +375,7 @@ unsafe fn qf_getprop_defaults(
     qi: *mut qf_info_T,
     flags: GetListProps,
     locstack: bool,
-    retdict: *mut dict_T,
+    retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     let wanted = |flag: GetListProps| flags.has(flag);
@@ -431,7 +431,7 @@ unsafe fn qf_getprop_defaults(
 unsafe fn qf_getprop_filewinid(
     wp: Option<Win>,
     qi: *const qf_info_T,
-    retdict: *mut dict_T,
+    retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
     let winid = wp
         .filter(|&wp| is_ll_window(wp))
@@ -449,7 +449,7 @@ unsafe fn qf_getprop_filewinid(
 /// # Safety
 ///
 /// `qi` must be a live stack and `retdict` live.
-unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdict: *mut dict_T) {
+unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdict: *mut Dict) {
     // SAFETY: forwarded from the caller.
     let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     let _ = unsafe { get_errorlist(qi, None, qf_idx, eidx, l) };
@@ -462,7 +462,7 @@ unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdi
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
+unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut Dict) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     if unsafe { (*qfl).qf_ctx }.is_null() {
         return unsafe { add_str(retdict, "context", ptr::null()) };
@@ -485,7 +485,7 @@ unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<()
 unsafe fn qf_getprop_idx(
     qfl: *mut qf_list_T,
     mut eidx: c_int,
-    retdict: *mut dict_T,
+    retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     if eidx == 0 {
@@ -502,12 +502,12 @@ unsafe fn qf_getprop_idx(
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(), KeyTaken> {
+unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut Dict) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     if !unsafe { &(*qfl).qf_qftf_cb }.is_set() {
         return unsafe { add_str(retdict, "quickfixtextfunc", ptr::null()) };
     }
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -526,8 +526,8 @@ unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut dict_T) -> Result<(
 /// `what` and `retdict` must be live.
 pub(crate) unsafe fn qf_get_properties(
     wp: Option<Win>,
-    what: *mut dict_T,
-    retdict: *mut dict_T,
+    what: *mut Dict,
+    retdict: *mut Dict,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     let mut qi = QfStack::Global.raw();

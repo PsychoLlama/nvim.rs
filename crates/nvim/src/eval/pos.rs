@@ -19,8 +19,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    ColNr, Failed, LineNr, NUL, VAR_LIST, VAR_STRING, buf_T, fmark_T, list_T, listitem_T, pos_T,
-    typval_T, uint8_t, win_T,
+    ColNr, Failed, LineNr, List, ListItem, NUL, TypVal, VAR_LIST, VAR_STRING, buf_T, fmark_T,
+    pos_T, uint8_t, win_T,
 };
 use crate::winlayer::Win;
 
@@ -110,7 +110,7 @@ pub unsafe fn buf_charidx_to_byteidx(
 /// # Safety
 /// `tv`, `ret_fnum` and `wp` must be valid.
 pub unsafe fn var2fpos(
-    tv: *const typval_T,
+    tv: *const TypVal,
     dollar_lnum: bool,
     ret_fnum: *mut c_int,
     charcol: bool,
@@ -130,7 +130,7 @@ pub unsafe fn var2fpos(
 
     // `[lnum, col]`, `[lnum, col, off]`.
     if tv.v_type == VAR_LIST {
-        let l: *mut list_T = tv.list_or_null();
+        let l: *mut List = tv.list_or_null();
         if l.is_null() {
             return None;
         }
@@ -155,7 +155,7 @@ pub unsafe fn var2fpos(
         };
         // The column may be spelled `"$"`, meaning end of line.
         // SAFETY: `l` is a live List.
-        let li: *mut listitem_T = unsafe { tv_list_find(l, 1) };
+        let li: *mut ListItem = unsafe { tv_list_find(l, 1) };
         // SAFETY: a non-null item holds a typval, and `VAR_STRING` says
         // `v_string` is its live member.
         let dollar = !li.is_null()
@@ -276,7 +276,7 @@ pub unsafe fn var2fpos(
 /// # Safety
 /// `arg` and `posp` must be valid; `fnump` and `curswantp` null or valid.
 pub unsafe fn list2fpos(
-    arg: *mut typval_T,
+    arg: *mut TypVal,
     posp: *mut pos_T,
     fnump: *mut c_int,
     curswantp: *mut ColNr,
@@ -287,7 +287,7 @@ pub unsafe fn list2fpos(
     if arg.v_type != VAR_LIST {
         return Err(Failed);
     }
-    let l: *mut list_T = arg.list_or_null();
+    let l: *mut List = arg.list_or_null();
     if l.is_null() {
         return Err(Failed);
     }

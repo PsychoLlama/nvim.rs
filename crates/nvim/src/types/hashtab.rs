@@ -14,7 +14,7 @@ use super::*;
 pub type HashValue = size_t;
 /// One slot of a [`hashtab_T`].
 ///
-/// `Copy`: `hi_key` points into the `dictitem_T` (or equivalent) that the
+/// `Copy`: `hi_key` points into the `DictItem` (or equivalent) that the
 /// table indexes, which the table does not own.
 #[derive(Copy, Clone)]
 pub struct hashitem_T {

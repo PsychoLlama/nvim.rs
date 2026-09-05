@@ -269,7 +269,7 @@ pub struct expand_T {
     pub xp_prefix: XpPrefix,
     pub xp_arg: *mut ::core::ffi::c_char,
     pub xp_luaref: LuaRef,
-    pub xp_script_ctx: sctx_T,
+    pub xp_script_ctx: ScriptCtx,
     pub xp_backslash: BackslashEscape,
     pub xp_shell: bool,
     pub xp_numfiles: ::core::ffi::c_int,

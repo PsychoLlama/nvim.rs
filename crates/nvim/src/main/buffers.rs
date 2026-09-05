@@ -47,8 +47,8 @@ use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
-    exarg_T, kListLenMayKnow, list_T, ptrdiff_t, size_t, ssize_t,
+    Handle, IOSIZE, Integer, LineNr, List, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
+    exarg_T, kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -81,7 +81,7 @@ fn quit_on_swap_exists(clear_hit_enter: bool) -> ! {
 pub(crate) unsafe fn set_argf_var() {
     let mut full = [0 as c_char; MAXPATHL as usize];
     // SAFETY: the global argument list is initialised by `early_init`.
-    let list: *mut list_T = unsafe { tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t) };
+    let list: *mut List = unsafe { tv_list_alloc(kListLenMayKnow as c_int as ptrdiff_t) };
     let alist = global_arglist();
     for i in 0..unsafe { (*alist).al_ga.len() as c_int } {
         let fname = unsafe { alist_name(((*alist).al_ga.as_mut_ptr()).offset(i as isize)) };

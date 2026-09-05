@@ -47,7 +47,7 @@ pub type Boolean = bool;
 pub type Buffer = Handle;
 #[repr(C)]
 pub struct ChangedtickDictItem {
-    pub di_tv: typval_T,
+    pub di_tv: TypVal,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 12],
 }

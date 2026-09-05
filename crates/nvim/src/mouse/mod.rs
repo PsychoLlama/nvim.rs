@@ -42,8 +42,8 @@ use crate::state::virtual_active;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, VarNumber, cmdarg_T, pos_T,
-    size_t, tabpage_T, typval_T, win_T,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, TypVal, VarNumber, cmdarg_T,
+    pos_T, size_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -600,11 +600,7 @@ pub(crate) fn setmouse() {
 ///
 /// # Safety
 /// `rettv` must be a live, unset return value.
-pub(crate) unsafe fn f_getmousepos(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_getmousepos(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
     let d = unsafe {
         tv_dict_alloc_ret(rettv);

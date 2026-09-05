@@ -23,7 +23,7 @@ use crate::eval::typval::{
     tv_clear, tv_dict_add, tv_dict_find, tv_dict_item_alloc, tv_list_alloc, tv_list_append_list,
     tv_list_append_owned_tv, tv_list_len,
 };
-use crate::types::{VAR_LIST, VAR_STRING, list_T, typval_T};
+use crate::types::{List, TypVal, VAR_LIST, VAR_STRING};
 use ::libc::abort;
 
 /// One container the decoder is currently inside.
@@ -33,14 +33,14 @@ pub(crate) struct Container {
     pub(crate) stack_index: usize,
     /// The `_VAL` list of a special map, or NULL when the container is an
     /// ordinary list or dictionary.
-    pub(crate) special_val: *mut list_T,
+    pub(crate) special_val: *mut List,
     /// Offset of the byte that opened it: what the restart rewinds to, and
     /// what an error inside it is reported against.
     pub(crate) at: usize,
     /// The container's own value: `VAR_LIST` for `[`, `VAR_DICT` for `{`
     /// — a special map's is the special dictionary, with the `_VAL` list in
     /// [`Self::special_val`].
-    pub(crate) container: typval_T,
+    pub(crate) container: TypVal,
 }
 
 /// One decoded value not yet stored in any container.
@@ -53,7 +53,7 @@ pub(crate) struct Value {
     /// recorded per value because the restart has to put them back.
     pub(crate) didcomma: bool,
     pub(crate) didcolon: bool,
-    pub(crate) val: typval_T,
+    pub(crate) val: TypVal,
 }
 
 /// Everything the JSON scanner carries from byte to byte.
@@ -98,7 +98,7 @@ impl<'a> Decoder<'a> {
 
     /// Upstream's `OBJ()`: a scanned value, tagged with the punctuation that
     /// preceded it.
-    pub(crate) fn value(&self, val: typval_T, is_special_string: bool) -> Value {
+    pub(crate) fn value(&self, val: TypVal, is_special_string: bool) -> Value {
         Value {
             is_special_string,
             didcomma: self.didcomma,
@@ -181,7 +181,7 @@ impl<'a> Decoder<'a> {
             }
             let mut key = self.stack.pop().expect("a dictionary key below the value");
             if last.special_val.is_null() {
-                // A key that could not be a `dict_T` key has already sent
+                // A key that could not be a `Dict` key has already sent
                 // this container down the special-map path below.
                 debug_assert!(!(key.is_special_string || key.val.string_or_null().is_null()));
                 let obj_di = unsafe { tv_dict_item_alloc(key.val.string_or_null()) };
@@ -218,7 +218,7 @@ impl<'a> Decoder<'a> {
             return false;
         }
 
-        // Three kinds of key a `dict_T` cannot hold: one that is itself a
+        // Three kinds of key a `Dict` cannot hold: one that is itself a
         // special dictionary, one carrying an embedded NUL (decoded as a
         // blob, so `v_string` is NULL), and a duplicate.  Any of them
         // sends the whole container back to be re-parsed as a special

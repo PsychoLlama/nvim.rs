@@ -18,7 +18,7 @@
 //! pointer and have one unsafe accessor -- `get` -- that turns it into a
 //! borrow; everything else is a field read or a one-line forwarder, so the
 //! builtins are ordinary safe Rust.  [`Container::of`] is the one place the
-//! `typval_T` union is read, under the `v_type` that names the live arm.
+//! `TypVal` union is read, under the `v_type` that names the live arm.
 //!
 //! # Re-entrancy
 //!
@@ -65,9 +65,9 @@ use crate::os::cshim::gettext;
 use crate::strings::reverse_text;
 use crate::tr_c;
 use crate::types::{
-    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
-    VarType, Vv, blob_T, dict_T, dictitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t,
-    typval_T, typval_vval_union, uint8_t, vimconv_T,
+    Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, Vv, int64_t, ptrdiff_t, size_t,
+    typval_vval_union, uint8_t, vimconv_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -88,9 +88,9 @@ static e_argument_of_str_must_be_list_string_or_dictionary: &CStr =
 static e_argument_of_str_must_be_list_string_dictionary_or_blob: &CStr =
     c"E1250: Argument of %s must be a List, String, Dictionary or Blob";
 
-/// A cleared `typval_T`, the `{ .v_type = VAR_UNKNOWN }` every walk starts
+/// A cleared `TypVal`, the `{ .v_type = VAR_UNKNOWN }` every walk starts
 /// its per-item result from.
-pub(crate) const UNKNOWN_TV: typval_T = typval_T {
+pub(crate) const UNKNOWN_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -104,18 +104,18 @@ pub(crate) const UNKNOWN_TV: typval_T = typval_T {
 /// other `f_*` family, and [`frame`] is how a builtin opens onto it.
 pub(crate) use crate::eval::funcs::args::{Args, frame};
 
-/// A live `typval_T` held as a pointer rather than a borrow.
+/// A live `TypVal` held as a pointer rather than a borrow.
 ///
 /// The walks hand a container's item straight to a callback that may remove
 /// or free it, and a Rust reference would have to stay valid for the whole of
 /// that call.  The lifetime says how long the value lives.
 #[derive(Clone, Copy)]
-pub(crate) struct TvRef<'a>(*mut typval_T, PhantomData<&'a mut typval_T>);
+pub(crate) struct TvRef<'a>(*mut TypVal, PhantomData<&'a mut TypVal>);
 
 impl<'a> TvRef<'a> {
     /// A borrow the caller already holds, as a pointer.
     #[inline(always)]
-    pub(crate) fn of(tv: &'a mut typval_T) -> Self {
+    pub(crate) fn of(tv: &'a mut TypVal) -> Self {
         Self(&raw mut *tv, PhantomData)
     }
 }
@@ -124,7 +124,7 @@ impl<'a> TvRef<'a> {
 // The container a typval holds
 // ---------------------------------------------------------------------
 
-/// Which container a `typval_T` holds, read from the arm its `v_type` says
+/// Which container a `TypVal` holds, read from the arm its `v_type` says
 /// is live.  Everything else -- Number, Float, Funcref, ... -- is
 /// [`Container::Other`], which is what the family's type errors report.
 #[derive(Clone, Copy)]
@@ -140,7 +140,7 @@ pub(crate) enum Container {
 impl Container {
     /// Read `tv`'s live union arm.
     #[inline(always)]
-    pub(crate) fn of(tv: &typval_T) -> Self {
+    pub(crate) fn of(tv: &TypVal) -> Self {
         match tv.v_type {
             // SAFETY: `v_type` is what says which arm of `vval` is live.
             VAR_LIST => Self::List(ListRef(tv.list_or_null())),
@@ -156,17 +156,17 @@ impl Container {
 // Lists
 // ---------------------------------------------------------------------
 
-/// A `list_T` the evaluator handed us: live, or NULL.
+/// A `List` the evaluator handed us: live, or NULL.
 ///
 /// NULL is not an error state: `v:_null_list` reaches every builtin here, and
 /// every helper reads it as an empty, `VarLock::Fixed` list.
 #[derive(Clone, Copy)]
-pub(crate) struct ListRef(*mut list_T);
+pub(crate) struct ListRef(*mut List);
 
 impl ListRef {
     /// The list itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
-    fn get<'a>(self) -> Option<&'a mut list_T> {
+    fn get<'a>(self) -> Option<&'a mut List> {
         // SAFETY: the evaluator handed us a live list, or NULL.
         unsafe { self.0.as_mut() }
     }
@@ -176,9 +176,9 @@ impl ListRef {
         self.0.is_null()
     }
 
-    /// The list itself, for the `typval_T` `extendnew()` builds by hand.
+    /// The list itself, for the `TypVal` `extendnew()` builds by hand.
     #[inline(always)]
-    pub(crate) fn raw(self) -> *mut list_T {
+    pub(crate) fn raw(self) -> *mut List {
         self.0
     }
 
@@ -222,28 +222,28 @@ impl ListRef {
 
     /// Store the list in `rettv`, taking a reference to it.
     #[inline(always)]
-    pub(crate) fn set_ret(self, rettv: &mut typval_T) {
+    pub(crate) fn set_ret(self, rettv: &mut TypVal) {
         // SAFETY: live or NULL, and `rettv` is a cleared result slot.
         unsafe { tv_list_set_ret(rettv, self.0) };
     }
 
     /// Append a copy of `tv`.
     #[inline(always)]
-    pub(crate) fn append_tv(self, tv: &mut typval_T) {
+    pub(crate) fn append_tv(self, tv: &mut TypVal) {
         // SAFETY: live or NULL, and `tv` is a live value.
         unsafe { tv_list_append_tv(self.0, tv) };
     }
 
     /// Append `tv`, taking ownership of it.
     #[inline(always)]
-    pub(crate) fn append_owned(self, tv: typval_T) {
+    pub(crate) fn append_owned(self, tv: TypVal) {
         // SAFETY: live, and the caller gives up `tv`.
         unsafe { tv_list_append_owned_tv(self.0, tv) };
     }
 
     /// Insert a copy of `tv` before `before`, or at the end when it is None.
     #[inline(always)]
-    pub(crate) fn insert_tv(self, tv: &mut typval_T, before: Option<Item>) {
+    pub(crate) fn insert_tv(self, tv: &mut TypVal, before: Option<Item>) {
         // SAFETY: live, `tv` is a live value, and `before` is an item of this
         // very list -- `find` is the only thing that produces one.
         unsafe { tv_list_insert_tv(self.0, tv, Item::raw(before)) };
@@ -280,7 +280,7 @@ impl ListRef {
 
 /// Allocate a fresh list into `rettv`, for `mapnew()`.
 #[inline(always)]
-pub(crate) fn list_alloc_ret(rettv: &mut typval_T) -> ListRef {
+pub(crate) fn list_alloc_ret(rettv: &mut TypVal) -> ListRef {
     // `kListLenUnknown`: no idea how long.  Declared here rather than at
     // module level, where `ffigen` would emit it into the unit cdefs.
     const LEN_UNKNOWN: ptrdiff_t = -1;
@@ -290,23 +290,23 @@ pub(crate) fn list_alloc_ret(rettv: &mut typval_T) -> ListRef {
 
 /// One item of a list.  Never NULL -- absence is `Option<Item>`.
 #[derive(Clone, Copy)]
-pub(crate) struct Item(*mut listitem_T);
+pub(crate) struct Item(*mut ListItem);
 
 impl Item {
     /// The item itself.  The one unsafe step.
     #[inline(always)]
-    fn get<'a>(self) -> &'a mut listitem_T {
+    fn get<'a>(self) -> &'a mut ListItem {
         // SAFETY: an `Item` is only ever made from a live list's own item.
         unsafe { &mut *self.0 }
     }
 
     #[inline(always)]
-    fn new(li: *mut listitem_T) -> Option<Self> {
+    fn new(li: *mut ListItem) -> Option<Self> {
         (!li.is_null()).then_some(Self(li))
     }
 
     #[inline(always)]
-    fn raw(item: Option<Self>) -> *mut listitem_T {
+    fn raw(item: Option<Self>) -> *mut ListItem {
         item.map_or(core::ptr::null_mut(), |i| i.0)
     }
 
@@ -332,7 +332,7 @@ impl Item {
 
     /// Replace the item's value with `newtv`, clearing what was there.
     #[inline(always)]
-    pub(crate) fn set_tv(self, mut newtv: typval_T) {
+    pub(crate) fn set_tv(self, mut newtv: TypVal) {
         newtv.v_lock = VarLock::Unlocked;
         let li = self.get();
         clear_tv(&mut li.li_tv);
@@ -341,7 +341,7 @@ impl Item {
 
     /// Whether the item's value equals `needle`, `ic` ignoring case.
     #[inline(always)]
-    pub(crate) fn equals(self, needle: &mut typval_T, ic: bool) -> bool {
+    pub(crate) fn equals(self, needle: &mut TypVal, ic: bool) -> bool {
         equal(&mut self.get().li_tv, needle, ic)
     }
 }
@@ -350,14 +350,14 @@ impl Item {
 // Dicts
 // ---------------------------------------------------------------------
 
-/// A `dict_T` the evaluator handed us: live, or NULL for `v:_null_dict`.
+/// A `Dict` the evaluator handed us: live, or NULL for `v:_null_dict`.
 #[derive(Clone, Copy)]
-pub(crate) struct DictRef(*mut dict_T);
+pub(crate) struct DictRef(*mut Dict);
 
 impl DictRef {
     /// The dict itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
-    fn get<'a>(self) -> Option<&'a mut dict_T> {
+    fn get<'a>(self) -> Option<&'a mut Dict> {
         // SAFETY: the evaluator handed us a live dict, or NULL.
         unsafe { self.0.as_mut() }
     }
@@ -367,9 +367,9 @@ impl DictRef {
         self.0.is_null()
     }
 
-    /// The dict itself, for the `typval_T` `extendnew()` builds by hand.
+    /// The dict itself, for the `TypVal` `extendnew()` builds by hand.
     #[inline(always)]
-    pub(crate) fn raw(self) -> *mut dict_T {
+    pub(crate) fn raw(self) -> *mut Dict {
         self.0
     }
 
@@ -424,10 +424,10 @@ impl DictRef {
                 let key = hi.is_kept().then_some(hi.hi_key);
                 if let Some(key) = key {
                     todo -= 1;
-                    // SAFETY-free: a live slot's key is a `dictitem_T`'s
+                    // SAFETY-free: a live slot's key is a `DictItem`'s
                     // `di_key`, and stepping a pointer back is not a read.
                     return Some(DictItemRef(
-                        key.wrapping_byte_sub(offset_of!(dictitem_T, di_key)).cast(),
+                        key.wrapping_byte_sub(offset_of!(DictItem, di_key)).cast(),
                     ));
                 }
             }
@@ -437,7 +437,7 @@ impl DictRef {
 
     /// Add a copy of `tv` under `key`; false when the key was already there.
     #[inline(always)]
-    pub(crate) fn add_tv(self, key: *mut c_char, tv: &mut typval_T) -> bool {
+    pub(crate) fn add_tv(self, key: *mut c_char, tv: &mut TypVal) -> bool {
         // SAFETY: a live dict, `key` the NUL-terminated key of one of its own
         // items, and `tv` a live value.
         unsafe { tv_dict_add_tv(self.0, key, cstr::bytes_at(key).len(), tv) }.is_ok()
@@ -471,7 +471,7 @@ impl DictRef {
 
     /// Allocate a fresh dict into `rettv`, for `mapnew()`.
     #[inline(always)]
-    pub(crate) fn alloc_ret(rettv: &mut typval_T) -> DictRef {
+    pub(crate) fn alloc_ret(rettv: &mut TypVal) -> DictRef {
         // SAFETY: `rettv` is a cleared result slot.
         unsafe { tv_dict_alloc_ret(rettv) };
         Self(rettv.dict_or_null())
@@ -480,12 +480,12 @@ impl DictRef {
 
 /// One entry of a dict.  Never NULL.
 #[derive(Clone, Copy)]
-pub(crate) struct DictItemRef(*mut dictitem_T);
+pub(crate) struct DictItemRef(*mut DictItem);
 
 impl DictItemRef {
     /// The entry itself.  The one unsafe step.
     #[inline(always)]
-    fn get<'a>(self) -> &'a mut dictitem_T {
+    fn get<'a>(self) -> &'a mut DictItem {
         // SAFETY: a `DictItemRef` is only ever made from a live dict's own slot.
         unsafe { &mut *self.0 }
     }
@@ -516,7 +516,7 @@ impl DictItemRef {
 
     /// Replace the value with `newtv`, clearing what was there.
     #[inline(always)]
-    pub(crate) fn set_tv(self, mut newtv: typval_T) {
+    pub(crate) fn set_tv(self, mut newtv: TypVal) {
         newtv.v_lock = VarLock::Unlocked;
         let di = self.get();
         clear_tv(&mut di.di_tv);
@@ -525,7 +525,7 @@ impl DictItemRef {
 
     /// Whether the value equals `needle`, `ic` ignoring case.
     #[inline(always)]
-    pub(crate) fn equals(self, needle: &mut typval_T, ic: bool) -> bool {
+    pub(crate) fn equals(self, needle: &mut TypVal, ic: bool) -> bool {
         equal(&mut self.get().di_tv, needle, ic)
     }
 }
@@ -534,14 +534,14 @@ impl DictItemRef {
 // Blobs
 // ---------------------------------------------------------------------
 
-/// A `blob_T` the evaluator handed us: live, or NULL for `v:_null_blob`.
+/// A `Blob` the evaluator handed us: live, or NULL for `v:_null_blob`.
 #[derive(Clone, Copy)]
-pub(crate) struct BlobRef(*mut blob_T);
+pub(crate) struct BlobRef(*mut Blob);
 
 impl BlobRef {
     /// The blob itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
-    fn get<'a>(self) -> Option<&'a mut blob_T> {
+    fn get<'a>(self) -> Option<&'a mut Blob> {
         // SAFETY: the evaluator handed us a live blob, or NULL.
         unsafe { self.0.as_mut() }
     }
@@ -636,14 +636,14 @@ impl BlobRef {
 
     /// Store the blob in `rettv`, taking a reference to it.
     #[inline(always)]
-    pub(crate) fn set_ret(self, rettv: &mut typval_T) {
+    pub(crate) fn set_ret(self, rettv: &mut TypVal) {
         // SAFETY: live or NULL, and `rettv` is a cleared result slot.
         unsafe { tv_blob_set_ret(rettv, self.0) };
     }
 
     /// Copy the blob into `rettv` and answer the copy, for `mapnew()`.
     #[inline(always)]
-    pub(crate) fn copy_to(self, rettv: &mut typval_T) -> BlobRef {
+    pub(crate) fn copy_to(self, rettv: &mut TypVal) -> BlobRef {
         // SAFETY: a live blob and a cleared result slot.
         unsafe { tv_blob_copy(self.0, rettv) };
         Self(rettv.blob_or_null())
@@ -656,21 +656,21 @@ impl BlobRef {
 
 /// Copy `from` into `to`, taking a reference to whatever it holds.
 #[inline(always)]
-pub(crate) fn copy_tv(from: &typval_T, to: &mut typval_T) {
+pub(crate) fn copy_tv(from: &TypVal, to: &mut TypVal) {
     // SAFETY: two live typvals.
     unsafe { tv_copy(from, to) };
 }
 
 /// Release whatever `tv` holds and leave it `VAR_UNKNOWN`.
 #[inline(always)]
-pub(crate) fn clear_tv(tv: &mut typval_T) {
+pub(crate) fn clear_tv(tv: &mut TypVal) {
     // SAFETY: a live typval.
     unsafe { tv_clear(tv) };
 }
 
 /// `tv` as a Number, setting `error` (and reporting one) if it is not.
 #[inline(always)]
-pub(crate) fn number_of(tv: &mut typval_T, error: &mut bool) -> VarNumber {
+pub(crate) fn number_of(tv: &mut TypVal, error: &mut bool) -> VarNumber {
     // SAFETY: a live typval.
     unsafe { tv_get_number_chk(tv, error) }
 }
@@ -680,7 +680,7 @@ pub(crate) fn number_of(tv: &mut typval_T, error: &mut bool) -> VarNumber {
 /// `VAR_BOOL` answers too: upstream reads `v_number` for both, the boolean
 /// living in the same word, and the callers accept either tag.
 #[inline(always)]
-pub(crate) fn number_arm(tv: &typval_T) -> VarNumber {
+pub(crate) fn number_arm(tv: &TypVal) -> VarNumber {
     match (tv.as_number(), tv.as_bool()) {
         (Some(n), _) => n,
         (_, Some(b)) => VarNumber::from(b),
@@ -690,7 +690,7 @@ pub(crate) fn number_arm(tv: &typval_T) -> VarNumber {
 
 /// Whether `a` and `b` are equal, `ic` ignoring case in strings.
 #[inline(always)]
-fn equal(a: &mut typval_T, b: &mut typval_T, ic: bool) -> bool {
+fn equal(a: &mut TypVal, b: &mut TypVal, ic: bool) -> bool {
     // SAFETY: two live typvals; `tv_equal` only reads them.
     unsafe { tv_equal(a, b, ic) }
 }
@@ -698,7 +698,7 @@ fn equal(a: &mut typval_T, b: &mut typval_T, ic: bool) -> bool {
 /// The bytes of a String `tv`; empty for `v:_null_string`, and for anything
 /// that is not a String at all.
 #[inline(always)]
-pub(crate) fn string_bytes<'a>(tv: &typval_T) -> &'a [u8] {
+pub(crate) fn string_bytes<'a>(tv: &TypVal) -> &'a [u8] {
     match Container::of(tv) {
         // SAFETY: a `VAR_STRING`'s `v_string` is NUL-terminated.
         Container::Str(s) if !s.is_null() => unsafe { CStr::from_ptr(s) }.to_bytes(),
@@ -712,7 +712,7 @@ pub(crate) fn string_bytes<'a>(tv: &typval_T) -> &'a [u8] {
 /// spelled into; the answer borrows `buf` or the value, whichever it came
 /// from, and lives no longer than either.
 #[inline(always)]
-pub(crate) fn cstr_of<'a>(tv: &mut typval_T, buf: &'a mut NumBuf) -> &'a CStr {
+pub(crate) fn cstr_of<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> &'a CStr {
     // SAFETY: the scratch is the promised length and the answer is
     // NUL-terminated, never NULL.
     unsafe { CStr::from_ptr(tv_get_string_buf(tv, buf.as_mut_ptr())) }
@@ -722,15 +722,15 @@ pub(crate) fn cstr_of<'a>(tv: &mut typval_T, buf: &'a mut NumBuf) -> &'a CStr {
 /// for a type that has no string form. As [`cstr_of`], the caller lends the
 /// scratch a Number is spelled into.
 #[inline(always)]
-pub(crate) fn cstr_of_chk<'a>(tv: &mut typval_T, buf: &'a mut NumBuf) -> Option<&'a CStr> {
+pub(crate) fn cstr_of_chk<'a>(tv: &mut TypVal, buf: &'a mut NumBuf) -> Option<&'a CStr> {
     // SAFETY: as `cstr_of`; the answer may also be NULL.
     unsafe { cstr::at_opt(tv_get_string_buf_chk(tv, buf.as_mut_ptr())) }
 }
 
 /// A `VAR_STRING` owning a fresh copy of `bytes`, NUL-terminated.
 #[inline(always)]
-pub(crate) fn string_tv(bytes: &[u8]) -> typval_T {
-    typval_T {
+pub(crate) fn string_tv(bytes: &[u8]) -> TypVal {
+    TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union {
@@ -804,7 +804,7 @@ pub(crate) fn err_not_countable(func_name: &CStr) {
 /// The value of the `v:` variable `idx`, copied out shallowly the way
 /// `filter_map_one` builds its argument vector.
 #[inline(always)]
-pub(crate) fn vim_var_value(idx: Vv) -> typval_T {
+pub(crate) fn vim_var_value(idx: Vv) -> TypVal {
     // SAFETY: `idx` names a `v:` variable, whose slot is always live.
     unsafe { *get_vim_var_tv(idx) }
 }
@@ -848,7 +848,7 @@ pub(crate) fn set_key_type(v_type: VarType) {
 
 /// Save the `v:` variable `idx` across a walk.
 #[inline(always)]
-pub(crate) fn save_vim_var(idx: Vv) -> typval_T {
+pub(crate) fn save_vim_var(idx: Vv) -> TypVal {
     let mut save = UNKNOWN_TV;
     // SAFETY: `idx` names a `v:` variable.
     unsafe { prepare_vimvar(idx, &raw mut save) };
@@ -857,7 +857,7 @@ pub(crate) fn save_vim_var(idx: Vv) -> typval_T {
 
 /// Put back what [`save_vim_var`] took.
 #[inline(always)]
-pub(crate) fn restore_vim_var(idx: Vv, save: &mut typval_T) {
+pub(crate) fn restore_vim_var(idx: Vv, save: &mut TypVal) {
     // SAFETY: `save` came from `save_vim_var` for that same variable.
     unsafe { restore_vimvar(idx, save) };
 }
@@ -867,11 +867,7 @@ pub(crate) fn restore_vim_var(idx: Vv, save: &mut typval_T) {
 /// family re-enters the evaluator, and so where anything may happen to the
 /// container being walked.
 #[inline(always)]
-pub(crate) fn eval_expr(
-    expr: &mut typval_T,
-    argv: &mut [typval_T; 3],
-    newtv: &mut typval_T,
-) -> bool {
+pub(crate) fn eval_expr(expr: &mut TypVal, argv: &mut [TypVal; 3], newtv: &mut TypVal) -> bool {
     // SAFETY: three live typvals, and `argv` holds the two the count names.
     unsafe { eval_expr_typval(expr, false, argv.as_mut_ptr(), 2, newtv) }.is_ok()
 }
@@ -914,7 +910,7 @@ pub(crate) fn starts_with_ic(hay: &[u8], needle: &[u8]) -> bool {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe fn f_remove(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_remove(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let arg_errmsg = c"remove() argument".as_ptr();
     // SAFETY: the caller's contract.
     let mut args = unsafe { Args::new(argvars) };
@@ -936,7 +932,7 @@ pub unsafe fn f_remove(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
-pub unsafe fn f_reverse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_reverse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract; the check reports E1252 for a type
     // that cannot be reversed.
     if unsafe { tv_check_for_string_or_list_or_blob_arg(argvars, 0) }.is_err() {

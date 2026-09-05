@@ -163,7 +163,7 @@ pub struct mapblock {
     pub(crate) m_silent: bool,
     pub(crate) m_nowait: bool,
     pub(crate) m_expr: bool,
-    pub(crate) m_script_ctx: sctx_T,
+    pub(crate) m_script_ctx: ScriptCtx,
     pub(crate) m_replace_keycodes: bool,
 }
 

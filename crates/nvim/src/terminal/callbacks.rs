@@ -28,9 +28,9 @@ use crate::memory::xmemdupz;
 use crate::options::kOptBoFlagTerm;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Error, Event, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, list_T,
-    ptrdiff_t, ssize_t,
+    Error, Event, List, Object, String_0, VTermPos, VTermProp, VTermRect, VTermScreenCallbacks,
+    VTermSelectionCallbacks, VTermSelectionMask, VTermStringFragment, VTermValue, ptrdiff_t,
+    ssize_t,
 };
 use crate::ui::vim_beep;
 use crate::vterm::vterm::{
@@ -234,11 +234,11 @@ unsafe extern "C" fn term_clipboard_set(argv: *mut *mut c_void) {
         b'+' as c_char
     };
     // SAFETY: a fresh list, which takes ownership of `data`.
-    let lines: *mut list_T = unsafe { tv_list_alloc(1 as ptrdiff_t) };
+    let lines: *mut List = unsafe { tv_list_alloc(1 as ptrdiff_t) };
     // SAFETY: as above.
     unsafe { tv_list_append_allocated_string(lines, data) };
     // SAFETY: a fresh list, which takes ownership of `lines`.
-    let args: *mut list_T = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    let args: *mut List = unsafe { tv_list_alloc(3 as ptrdiff_t) };
     // SAFETY: as above.
     unsafe { tv_list_append_list(args, lines) };
     let regtype = b'v' as c_char;

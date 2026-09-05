@@ -18,13 +18,12 @@ use crate::main::{
 use crate::memory::xfree;
 use crate::runtime::do_source_str;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Error, ExprAST, ExprASTNode, ExprASTNodeType,
+    ApiDict, Arena, Array, Boolean, Dict, DictItem, Error, ExprAST, ExprASTNode, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
     Integer, KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight,
-    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, String_0, TryState, UVarNumber,
-    VAR_DICT, VAR_FUNC, VAR_PARTIAL, dict_T, dictitem_T, exarg_T, funcexe_T, garray_T,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, partial_T, ptrdiff_t, size_t,
-    typval_T, uint64_t,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial, String_0, TryState,
+    TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, exarg_T, funcexe_T, garray_T,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
@@ -123,9 +122,9 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_lastline: 0 as LineNr,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
     fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<partial_T>(),
-    fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
-    fe_basetv: ::core::ptr::null_mut::<typval_T>(),
+    fe_partial: ::core::ptr::null_mut::<Partial>(),
+    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
+    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
     fe_found_var: false,
 };
 /// `TRY_STATE_INIT`: the saved-state block `try_enter` fills in.  Stays a

@@ -61,7 +61,7 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::tr_plural;
 use crate::types::{
-    ExceptType, Failed, IOSIZE, NUL, Vv, cstack_T, except_T, exception_state_T, int64_t, list_T,
+    ExceptType, Failed, IOSIZE, List, NUL, Vv, cstack_T, except_T, exception_state_T, int64_t,
     msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy};
@@ -567,7 +567,7 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
     if excp.is_null() {
         unsafe { set_vim_var_string(Vv::Exception, ptr::null(), -1) };
         unsafe { set_vim_var_string(Vv::Throwpoint, ptr::null(), -1) };
-        unsafe { set_vim_var_list(Vv::Stacktrace, ptr::null_mut::<list_T>()) };
+        unsafe { set_vim_var_list(Vv::Stacktrace, ptr::null_mut::<List>()) };
         return;
     }
     unsafe { set_vim_var_string(Vv::Exception, (*excp).value, -1) };

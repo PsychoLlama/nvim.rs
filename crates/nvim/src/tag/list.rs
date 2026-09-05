@@ -496,7 +496,7 @@ unsafe fn search_pattern(tagp: &TagParts) -> Name {
 ///
 /// # Safety
 /// `d` must be live and `val` NUL-terminated.
-unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }

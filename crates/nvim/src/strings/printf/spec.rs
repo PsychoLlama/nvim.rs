@@ -23,7 +23,7 @@ use core::ptr;
 use crate::ascii::ascii_isdigit;
 use crate::memory::{xcalloc, xfree, xrealloc, xstrchrnul};
 use crate::os::cshim::gettext;
-use crate::types::{VAR_UNKNOWN, size_t, typval_T};
+use crate::types::{TypVal, VAR_UNKNOWN, size_t};
 
 /// The format string cannot be used, and the `E15xx` saying why has already
 /// been reported.
@@ -263,7 +263,7 @@ pub(crate) unsafe fn parse_fmt_types(
     ap_types: &mut *mut *const c_char,
     num_posarg: &mut c_int,
     fmt: *const c_char,
-    tvs: *mut typval_T,
+    tvs: *mut TypVal,
 ) -> Result<(), BadFormat> {
     if fmt.is_null() {
         return Ok(());
@@ -282,7 +282,7 @@ unsafe fn scan_fmt_types(
     ap_types: &mut *mut *const c_char,
     num_posarg: &mut c_int,
     fmt: *const c_char,
-    tvs: *mut typval_T,
+    tvs: *mut TypVal,
 ) -> Result<(), BadFormat> {
     // Whether the arguments are typvals, which is what says an out-of-range
     // width is worth reporting rather than ignoring.

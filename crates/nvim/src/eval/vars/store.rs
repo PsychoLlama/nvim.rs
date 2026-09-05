@@ -55,7 +55,7 @@ pub(crate) fn emsg_static(msg: &'static CStr) {
 /// Safe: `tv_clear`'s only precondition is a live, writable value, which an
 /// exclusive borrow of the caller's own local is. Nothing it frees runs user
 /// code, so the borrow cannot be re-entered through.
-pub(crate) fn clear_local(tv: &mut typval_T) {
+pub(crate) fn clear_local(tv: &mut TypVal) {
     // SAFETY: an exclusive borrow of a live local.
     unsafe { tv_clear(&raw mut *tv) };
 }
@@ -65,7 +65,7 @@ pub(crate) fn clear_local(tv: &mut typval_T) {
 /// # Safety
 /// `name` points at `name_len` readable bytes and is NUL-terminated there;
 /// `tv` is a live value.
-pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: *mut typval_T, copy: bool) {
+pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: *mut TypVal, copy: bool) {
     unsafe { set_var_const(name, name_len, tv, copy, false) }
 }
 
@@ -81,12 +81,12 @@ pub unsafe fn set_var(name: *const c_char, name_len: size_t, tv: *mut typval_T, 
 pub unsafe fn set_var_const(
     name: *const c_char,
     name_len: size_t,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     copy: bool,
     is_const: bool,
 ) {
     let mut varname: *const c_char = ptr::null();
-    let mut dict: *mut dict_T = ptr::null_mut();
+    let mut dict: *mut Dict = ptr::null_mut();
     let ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
     let watched = unsafe { tv_dict_is_watched(dict) };
 
@@ -148,7 +148,7 @@ pub unsafe fn set_var_const(
             return;
         }
 
-        let cur = item.field_ptr(offset_of!(dictitem_T, di_tv));
+        let cur = item.field_ptr(offset_of!(DictItem, di_tv));
         if watched {
             unsafe { tv_copy(cur, &raw mut oldtv) };
         }
@@ -190,7 +190,7 @@ pub unsafe fn set_var_const(
     // so writing a field through a borrow of the whole item would invalidate
     // the pointer the watcher notification and the `:const` lock below are
     // handed. See [`Live`]'s module docs.
-    let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
+    let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     if copy || tvh.v_type == VAR_NUMBER || tvh.v_type == VAR_FLOAT {
         unsafe { tv_copy(tv, cur) };
     } else {

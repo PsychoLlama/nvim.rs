@@ -376,7 +376,7 @@ pub unsafe fn do_c_expr_indent() {
 ///
 /// # Safety
 /// Moves the cursor and restores it; `rettv` must be a valid number typval.
-pub unsafe fn f_cindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_cindent(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let pos = cur_win().w_cursor;
     // SAFETY: the caller's promise -- `argvars` is the call's argument list.
     let lnum = unsafe { tv_get_lnum(argvars) } as LineNr;

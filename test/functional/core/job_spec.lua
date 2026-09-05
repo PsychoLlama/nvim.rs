@@ -791,10 +791,10 @@ describe('jobs', function()
     exec_lua(function()
       local ffi = require('ffi')
       ffi.cdef([[
-        typedef struct listvar_S list_T;
-        list_T *gc_first_list;
-        list_T *tv_list_alloc(ptrdiff_t len);
-        void tv_list_free(list_T *const l);
+        typedef struct List List;
+        List *gc_first_list;
+        List *tv_list_alloc(ptrdiff_t len);
+        void tv_list_free(List *const l);
       ]])
       _G.L = ffi.C.tv_list_alloc(1)
       _G.L_val = ffi.cast('uintptr_t', _G.L)

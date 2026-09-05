@@ -184,7 +184,7 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
 /// The answer is owned. Upstream answers a pointer into the shared `IObuff`
 /// for the two contexts it has to format, and a caller holding one of those
 /// across anything that shows a message loses it.
-pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CString {
+pub(crate) unsafe fn get_scriptname(script_ctx: ScriptCtx, fold_home: bool) -> CString {
     let mut named = [0 as c_char; IOSIZE as usize];
     let fixed = match script_ctx.sc_sid {
         SID_MODELINE => c"modeline",
@@ -265,7 +265,7 @@ fn getline_is_source(fgetline: LineGetter) -> bool {
 /// # Safety
 ///
 /// The global function table must be walkable, which it is outside a rehash.
-unsafe fn get_script_local_funcs(sid: ScriptId) -> *mut list_T {
+unsafe fn get_script_local_funcs(sid: ScriptId) -> *mut List {
     let functbl = func_tbl_get();
     // SAFETY: the process-wide function table, which outlives this walk, and
     // a fresh list with at most one entry per function.
@@ -302,7 +302,7 @@ enum ScriptQuery {
 }
 
 /// `"getscriptinfo()"` function
-pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot, `argvars` its arguments.
     unsafe { tv_list_alloc_ret(rettv, script_count() as ptrdiff_t) };
     if unsafe { tv_check_for_opt_dict_arg(argvars, 0) }.is_err() {
@@ -341,7 +341,7 @@ pub unsafe fn f_getscriptinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 ///
 /// `argvars` must be the builtin's argument vector.
 unsafe fn script_query(
-    argvars: *mut typval_T,
+    argvars: *mut TypVal,
     pat: *mut *mut c_char,
     regmatch: &mut regmatch_T,
 ) -> ScriptQuery {
@@ -389,7 +389,7 @@ unsafe fn script_query(
 /// # Safety
 ///
 /// `l` must be a live list, and `query` must still own its compiled pattern.
-unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut regmatch_T) {
+unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut regmatch_T) {
     let total = VarNumber::from(script_count());
     // A `sid` query asks about exactly one script, and answers nothing at all
     // when that script does not exist.
@@ -446,15 +446,15 @@ fn empty_regmatch() -> regmatch_T {
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that
 /// pair `S_LEN(key)`.
-unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
-unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
+unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
-unsafe fn dict_add_bool(d: *mut dict_T, key: &CStr, val: BoolVarValue) {
+unsafe fn dict_add_bool(d: *mut Dict, key: &CStr, val: BoolVarValue) {
     let _ = unsafe { tv_dict_add_bool(d, key.as_ptr(), key.count_bytes(), val) };
 }
 

@@ -32,9 +32,9 @@ use crate::memory::xstrdup;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VarLock,
-    VarNumber, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
-    kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t, typval_T,
+    LuaRef, TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
+    VarLock, VarNumber, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict,
+    kObjectTypeFloat, kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t,
     typval_vval_union,
 };
 use ::libc::abort;
@@ -49,7 +49,7 @@ const E5101_BAD_TYPE: &CStr = c"E5101: Cannot convert given Lua type";
 #[derive(Copy, Clone)]
 pub struct TVPopStackItem {
     /// Where the conversion's result is to be stored.
-    pub tv: *mut typval_T,
+    pub tv: *mut TypVal,
     /// The list's length, when `tv` is a list.
     pub list_len: size_t,
     /// Whether `tv` is a container: a frame that is suspended rather than
@@ -65,7 +65,7 @@ pub struct TVPopStackItem {
 
 impl TVPopStackItem {
     /// A frame about to be filled in, not a suspended container.
-    const fn leaf(tv: *mut typval_T) -> Self {
+    const fn leaf(tv: *mut TypVal) -> Self {
         Self {
             tv,
             list_len: 0,
@@ -88,10 +88,10 @@ type TVPopStack = InlineStack<TVPopStackItem, 2>;
 /// # Safety
 /// `lstate` must be a live Lua state with a value on top, and `ret_tv` a
 /// writable typval the caller owns.
-pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> bool {
+pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut TypVal) -> bool {
     unsafe {
         // Make `tv` a fresh, referenced, empty dictionary carrying `ref_`.
-        let new_dict = |tv: *mut typval_T, ref_: LuaRef| {
+        let new_dict = |tv: *mut TypVal, ref_: LuaRef| {
             (*tv).v_type = VAR_DICT;
             (*tv).vval.v_dict = tv_dict_alloc();
             (*(*tv).vval.v_dict).dv_refcount.retain();
@@ -168,7 +168,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
                 }
             }
             debug_assert!(!cur.container);
-            *cur.tv = typval_T {
+            *cur.tv = TypVal {
                 v_type: VAR_NUMBER,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
@@ -318,7 +318,7 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
         }
         if !ret {
             tv_clear(ret_tv);
-            *ret_tv = typval_T {
+            *ret_tv = TypVal {
                 v_type: VAR_NUMBER,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },

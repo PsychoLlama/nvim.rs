@@ -29,9 +29,9 @@ use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER,
-    VAR_UNKNOWN, VarNumber, expand_T, kErrorTypeException, kErrorTypeValidation, lua_Integer,
-    lua_State, size_t, typval_T,
+    Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal,
+    VAR_NUMBER, VAR_UNKNOWN, VarNumber, expand_T, kErrorTypeException, kErrorTypeValidation,
+    lua_Integer, lua_State, size_t,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
@@ -72,7 +72,7 @@ unsafe fn free_chunk_buffer(scratch: *const c_char, buf: *mut c_char) {
 ///
 /// # Safety
 /// `str` must be a live api string and `ret_tv` writable.
-pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut typval_T) {
+pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut TypVal, ret_tv: *mut TypVal) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
     unsafe {
@@ -97,9 +97,9 @@ pub unsafe fn nlua_typval_eval(str: String_0, arg: *mut typval_T, ret_tv: *mut t
 pub unsafe fn nlua_typval_call(
     str: *const c_char,
     len: size_t,
-    args: *mut typval_T,
+    args: *mut TypVal,
     argcount: c_int,
-    ret_tv: *mut typval_T,
+    ret_tv: *mut TypVal,
 ) {
     let mut chunk = [0 as c_char; IOSIZE as usize];
     let scratch = chunk.as_mut_ptr();
@@ -133,7 +133,7 @@ pub unsafe fn nlua_typval_call(
 ///
 /// # Safety
 /// `xp` must carry a live `xp_luaref`, and `ret_tv` be writable.
-pub unsafe fn nlua_call_user_expand_func(xp: *mut expand_T, ret_tv: *mut typval_T) {
+pub unsafe fn nlua_call_user_expand_func(xp: *mut expand_T, ret_tv: *mut TypVal) {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, (*xp).xp_luaref);
@@ -161,10 +161,10 @@ pub(crate) unsafe fn nlua_typval_exec(
     lcmd: *const c_char,
     lcmd_len: size_t,
     name: *const c_char,
-    args: *mut typval_T,
+    args: *mut TypVal,
     argcount: c_int,
     special: bool,
-    ret_tv: *mut typval_T,
+    ret_tv: *mut TypVal,
 ) {
     unsafe {
         if check_secure() {
@@ -196,7 +196,7 @@ pub(crate) unsafe fn nlua_typval_exec(
 /// `args` must point at `argcount` live typvals.
 unsafe fn push_typval_args(
     lstate: *mut lua_State,
-    args: *mut typval_T,
+    args: *mut TypVal,
     argcount: c_int,
     special: bool,
 ) {
@@ -238,10 +238,10 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
             code.as_mut_ptr().cast::<c_char>(),
             len,
             name,
-            ptr::null_mut::<typval_T>(),
+            ptr::null_mut::<TypVal>(),
             0,
             false,
-            ptr::null_mut::<typval_T>(),
+            ptr::null_mut::<TypVal>(),
         );
     };
 }
@@ -254,8 +254,8 @@ pub unsafe fn nlua_exec_lines(lines: &[CString], name: *mut c_char) {
 pub unsafe fn typval_exec_lua_callable(
     lua_cb: LuaRef,
     argcount: c_int,
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
 ) -> c_int {
     unsafe {
         let lstate = get_global_lstate();

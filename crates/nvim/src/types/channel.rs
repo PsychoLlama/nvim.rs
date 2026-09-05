@@ -49,7 +49,7 @@ pub struct Unpacker {
 #[derive(Clone)]
 pub struct CallbackReader {
     pub cb: Callback,
-    pub self_0: *mut dict_T,
+    pub self_0: *mut Dict,
     /// What the stream has produced since the last delivery. Owned: the
     /// reader's `Drop` releases it, and `callback_reader_free` is where a
     /// heap-allocated owner (a `Channel`) asks for that early.

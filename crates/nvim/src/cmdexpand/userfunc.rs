@@ -25,7 +25,7 @@ use std::ffi::{CStr, CString};
 /// Only [`call_user_expand_func`] takes one, and both of its callers pass a
 /// real function, so this is the bare pointer rather than upstream's nullable
 /// `user_expand_func_T`.
-type UserExpandFunc = unsafe fn(*const c_char, c_int, *mut typval_T) -> *mut c_void;
+type UserExpandFunc = unsafe fn(*const c_char, c_int, *mut TypVal) -> *mut c_void;
 
 /// Upstream's `STRLEN_LITERAL(PATHSEPSTR)`.
 const PATHSEP_LEN: size_t = PATHSEPSTR.count_bytes() as size_t;
@@ -252,7 +252,7 @@ pub(crate) unsafe fn call_user_expand_func(
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
-    let mut args = [typval_T {
+    let mut args = [TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -375,7 +375,7 @@ pub(crate) unsafe fn expand_user_defined(
 
 /// Copy the strings of a `customlist,` answer into a fresh match array.
 pub(crate) unsafe fn process_user_list(
-    retlist: *mut list_T,
+    retlist: *mut List,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) {
@@ -383,7 +383,7 @@ pub(crate) unsafe fn process_user_list(
 
     // Loop over the items in the list.
     if !retlist.is_null() {
-        let mut li: *const listitem_T = unsafe { (*retlist).lv_first };
+        let mut li: *const ListItem = unsafe { (*retlist).lv_first };
         while !li.is_null() {
             // Skip non-string items and empty strings.
             if unsafe { (*li).li_tv.v_type } == VAR_STRING
@@ -412,7 +412,7 @@ pub(crate) unsafe fn expand_user_list(
     let xp = unsafe { Xp::new(xp) };
     unsafe { *matches = ptr::null_mut() };
     unsafe { *numMatches = 0 };
-    let retlist = unsafe { call_user_expand_func(call_func_retlist, xp.raw()) } as *mut list_T;
+    let retlist = unsafe { call_user_expand_func(call_func_retlist, xp.raw()) } as *mut List;
     if retlist.is_null() {
         return Err(Failed);
     }
@@ -430,7 +430,7 @@ pub(crate) unsafe fn expand_user_lua(
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
-    let mut rettv = typval_T {
+    let mut rettv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

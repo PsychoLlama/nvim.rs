@@ -11,7 +11,7 @@
 //!   *would* have had, so counting continues after the buffer is full; that
 //!   is the whole reason `str_l` and `avail` are separate.
 //! - [`Args`] is where a conversion's argument comes from -- a C `va_list`,
-//!   or the `typval_T` array Vimscript's `printf()` passes instead.  Only the
+//!   or the `TypVal` array Vimscript's `printf()` passes instead.  Only the
 //!   `va_list` needs positioning, which is why `%N$` costs a whole pre-pass
 //!   (see [`super::spec`]).
 //! - [`Body`] is where a rendered conversion ended up: in the scratch buffer,
@@ -37,7 +37,7 @@ use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf};
 use crate::strings::vim_strchr;
 use crate::types::{
-    VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, typval_T, uint16_t, uintmax_t,
+    TypVal, VAR_UNKNOWN, int16_t, intmax_t, ptrdiff_t, size_t, uint16_t, uintmax_t,
 };
 
 const E_TOO_MANY_ARGS: &CStr = c"E767: Too many arguments to printf()";
@@ -124,11 +124,11 @@ impl Sink {
 /// Where a conversion's argument comes from.
 ///
 /// `tvs` non-null means Vimscript's `printf()`, whose arguments are a
-/// `VAR_UNKNOWN`-terminated `typval_T` array that can be indexed; otherwise
+/// `VAR_UNKNOWN`-terminated `TypVal` array that can be indexed; otherwise
 /// it is a C `va_list`, which can only be read forwards -- hence `position`,
 /// `ap_start` and the recorded `ap_types`.
 struct Args<'f> {
-    tvs: *mut typval_T,
+    tvs: *mut TypVal,
     ap: VaList<'f>,
     ap_start: VaList<'f>,
     ap_types: *mut *const c_char,
@@ -851,7 +851,7 @@ pub unsafe fn vim_vsnprintf_typval<'f>(
     str_m: size_t,
     fmt: *const c_char,
     ap_start: VaList<'f>,
-    tvs: *mut typval_T,
+    tvs: *mut TypVal,
 ) -> c_int {
     let mut ap_types = ptr::null_mut::<*const c_char>();
     let mut num_posarg = 0;

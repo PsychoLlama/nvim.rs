@@ -206,7 +206,7 @@ pub(crate) unsafe fn get_func_arguments(
     arg: *mut *mut c_char,
     evalarg: *mut evalarg_T,
     partial_argc: c_int,
-    argvars: *mut typval_T,
+    argvars: *mut TypVal,
     argcount: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `*arg` is on the `(` of a
@@ -295,15 +295,10 @@ pub unsafe fn get_func_arity(
 /// `fc_fixvar` array rather than an allocation.
 ///
 /// # Safety
-/// `v` is a `dictitem_T` whose key member has room for `name`, and `dp` is
+/// `v` is a `DictItem` whose key member has room for `name`, and `dp` is
 /// the dictionary it is being linked into.  `v` must outlive `dp`.
-pub(crate) unsafe fn add_nr_var(
-    dp: *mut dict_T,
-    v: *mut dictitem_T,
-    name: *mut c_char,
-    nr: VarNumber,
-) {
-    // SAFETY: the caller's promise -- `v` is a `dictitem_T` with room for
+pub(crate) unsafe fn add_nr_var(dp: *mut Dict, v: *mut DictItem, name: *mut c_char, nr: VarNumber) {
+    // SAFETY: the caller's promise -- `v` is a `DictItem` with room for
     // `name` in its inline key, and `dp` is the dictionary it joins.
     let key = unsafe { (&raw mut (*v).di_key) as *mut c_char };
     unsafe { strcpy(key, name) };
@@ -343,17 +338,17 @@ pub(crate) unsafe fn check_user_func_argcount(fp: *mut ufunc_T, argcount: c_int)
 /// `new_argvars` has room for `*argcount + 1` values, and the four
 /// out-parameters are writable.
 pub(crate) unsafe fn argv_add_base(
-    basetv: *mut typval_T,
-    argvars: *mut *mut typval_T,
+    basetv: *mut TypVal,
+    argvars: *mut *mut TypVal,
     argcount: *mut c_int,
-    new_argvars: *mut typval_T,
+    new_argvars: *mut TypVal,
     argv_base: *mut c_int,
 ) {
     if !basetv.is_null() {
         // Method call: base->Method()
         // SAFETY: the caller's promise -- `new_argvars` has room for
         // `*argcount + 1` values and the out-parameters are writable.
-        let bytes = unsafe { size_of::<typval_T>().wrapping_mul(*argcount as size_t) };
+        let bytes = unsafe { size_of::<TypVal>().wrapping_mul(*argcount as size_t) };
         let (into, from) = unsafe { (new_argvars.add(1) as *mut c_void, *argvars) };
         unsafe { into.cast::<u8>().copy_from(from.cast(), bytes) };
         unsafe { *new_argvars = *basetv };

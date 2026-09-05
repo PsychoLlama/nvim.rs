@@ -33,9 +33,8 @@ use crate::message::emsg_ptr;
 use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    Callback, CallbackReader, ChannelPart, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VarNumber, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T,
-    uint64_t,
+    Callback, CallbackReader, ChannelPart, EvalFuncData, List, ListItem, TypVal, VAR_DICT,
+    VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, garray_T, kBoolVarTrue, uint64_t,
 };
 use crate::winlayer::buffers;
 
@@ -63,7 +62,7 @@ const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 /// # Safety
 /// `argvars` must be a builtin's own argument vector.
 #[inline(always)]
-unsafe fn args<'a>(argvars: *mut typval_T) -> &'a mut [typval_T] {
+unsafe fn args<'a>(argvars: *mut TypVal) -> &'a mut [TypVal] {
     unsafe { slice::from_raw_parts_mut(argvars, 2) }
 }
 
@@ -72,7 +71,7 @@ unsafe fn args<'a>(argvars: *mut typval_T) -> &'a mut [typval_T] {
 /// # Safety
 /// `list` must be live, and nothing may change it while the iterator is
 /// alive.
-unsafe fn items(list: *const list_T) -> impl Iterator<Item = *const listitem_T> {
+unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
     let mut li = if list.is_null() {
         core::ptr::null()
     } else {
@@ -94,7 +93,7 @@ unsafe fn items(list: *const list_T) -> impl Iterator<Item = *const listitem_T> 
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise about `rettv`.
     let rettv = unsafe { &mut *rettv };
@@ -115,7 +114,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         return;
     }
 
-    let mut args_list: *mut list_T = core::ptr::null_mut();
+    let mut args_list: *mut List = core::ptr::null_mut();
     let mut argsl = 0;
     if argv[1].v_type == VAR_LIST {
         // SAFETY: a `VAR_LIST` holds a live list or NULL.
@@ -189,7 +188,7 @@ pub unsafe fn f_rpcstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 ///
 /// # Safety
 /// As the module doc; arity 1.
-pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
+pub unsafe fn f_rpcstop(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: the caller's promise about `rettv`.
     let ret = unsafe { &mut *rettv };
     ret.v_type = VAR_NUMBER;
@@ -234,7 +233,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
 ///
 /// # Safety
 /// As the module doc; arity 0.
-pub unsafe fn f_last_buffer_nr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_last_buffer_nr(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut n = 0;
     for buf in buffers() {
         n = n.max(buf.handle());
@@ -247,7 +246,7 @@ pub unsafe fn f_last_buffer_nr(_argvars: *mut typval_T, rettv: *mut typval_T, _f
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe fn f_termopen(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
+pub unsafe fn f_termopen(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
         return;

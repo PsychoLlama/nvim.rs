@@ -1,5 +1,5 @@
 //! The Rust twin of `test/unit/eval/testutil.lua`: a value model that
-//! `typval_T` is built from and read back into.
+//! `TypVal` is built from and read back into.
 //!
 //! The Lua harness spelled a value as a Lua table and converted with
 //! `lua2typvalt`/`typvalt2lua`, which is what let a case say
@@ -32,9 +32,9 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xcalloc, xmalloc, xmemdupz};
 use neovim::types::{
-    Callback, DictWatcher, Object, Refcount, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T,
-    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, list_T, listitem_T, partial_T, typval_T,
+    Callback, Dict, DictItem, DictWatcher, List, ListItem, Object, Partial, Refcount, TypVal,
+    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
     typval_vval_union,
 };
 
@@ -43,7 +43,7 @@ use super::cstr;
 /// A Vimscript value, as the spec's Lua tables spelled one.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Tv {
-    /// `VAR_UNKNOWN` — the type a fresh `typval_T` starts in.
+    /// `VAR_UNKNOWN` — the type a fresh `TypVal` starts in.
     Unknown,
     /// `VAR_SPECIAL`, `v:null`; the spec's `nil_value`.
     Nil,
@@ -76,10 +76,10 @@ pub(crate) enum Tv {
     Cycle(usize),
     /// Build by `tv_copy`ing an existing value in, the Lua harness's
     /// `type(l) == 'cdata'` arm. Never produced by a read.
-    Copied(*const typval_T),
+    Copied(*const TypVal),
 }
 
-/// A `partial_T`, as `partial2lua` spelled one.
+/// A `Partial`, as `partial2lua` spelled one.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub(crate) struct Pt {
     /// `pt_name`.
@@ -108,7 +108,7 @@ impl Tv {
         )
     }
 
-    /// The `typval_T` this value describes, owned by the caller.
+    /// The `TypVal` this value describes, owned by the caller.
     ///
     /// The Lua harness attached a `tv_clear` finaliser here; a Rust case
     /// clears explicitly, or hands the value to something that takes it.
@@ -116,7 +116,7 @@ impl Tv {
     /// # Safety
     /// The editor must be up (the caller holds the editor lock): building a
     /// list or a dict calls into the allocator and the hashtab.
-    pub(crate) unsafe fn build(&self) -> typval_T {
+    pub(crate) unsafe fn build(&self) -> TypVal {
         let mut path = Vec::new();
         unsafe { self.build_at(&mut path) }
     }
@@ -124,7 +124,7 @@ impl Tv {
     /// # Safety
     /// As [`Tv::build`]. `path` holds the containers currently being built,
     /// outermost first, for [`Tv::Cycle`] to name.
-    unsafe fn build_at(&self, path: &mut Vec<Container>) -> typval_T {
+    unsafe fn build_at(&self, path: &mut Vec<Container>) -> TypVal {
         let (v_type, vval) = match self {
             Tv::Unknown => (VAR_UNKNOWN, typval_vval_union { v_number: 0 }),
             Tv::Nil => (
@@ -218,7 +218,7 @@ impl Tv {
                 }
             }
             Tv::Copied(from) => {
-                let mut to = typval_T {
+                let mut to = TypVal {
                     v_type: VAR_UNKNOWN,
                     v_lock: VarLock::Unlocked,
                     vval: typval_vval_union { v_number: 0 },
@@ -227,7 +227,7 @@ impl Tv {
                 return to;
             }
         };
-        typval_T {
+        TypVal {
             v_type,
             v_lock: VarLock::Unlocked,
             vval,
@@ -238,12 +238,12 @@ impl Tv {
 impl Pt {
     /// # Safety
     /// As [`Tv::build`].
-    unsafe fn build_at(&self, path: &mut Vec<Container>) -> *mut partial_T {
-        let pt: *mut partial_T = unsafe { xcalloc(1, size_of::<partial_T>()) }.cast();
-        let argv: *mut typval_T = if self.args.is_empty() {
+    unsafe fn build_at(&self, path: &mut Vec<Container>) -> *mut Partial {
+        let pt: *mut Partial = unsafe { xcalloc(1, size_of::<Partial>()) }.cast();
+        let argv: *mut TypVal = if self.args.is_empty() {
             ptr::null_mut()
         } else {
-            unsafe { xmalloc(size_of::<typval_T>() * self.args.len()) }.cast()
+            unsafe { xmalloc(size_of::<TypVal>() * self.args.len()) }.cast()
         };
         for (i, arg) in self.args.iter().enumerate() {
             unsafe { *argv.add(i) = arg.build_at(path) };
@@ -271,8 +271,8 @@ impl Pt {
 /// A container on the path from the root, for [`Tv::Cycle`].
 #[derive(Clone, Copy)]
 enum Container {
-    List(*mut list_T),
-    Dict(*mut dict_T),
+    List(*mut List),
+    Dict(*mut Dict),
 }
 
 impl Container {
@@ -287,8 +287,8 @@ impl Container {
 /// `typvalt2lua`: read a value back out.
 ///
 /// # Safety
-/// `tv` points at a live `typval_T` whose contents are live.
-pub(crate) unsafe fn read(tv: *const typval_T) -> Tv {
+/// `tv` points at a live `TypVal` whose contents are live.
+pub(crate) unsafe fn read(tv: *const TypVal) -> Tv {
     let mut path = Vec::new();
     unsafe { read_at(tv, &mut path) }
 }
@@ -297,7 +297,7 @@ pub(crate) unsafe fn read(tv: *const typval_T) -> Tv {
 ///
 /// # Safety
 /// `l` is NULL or points at a live list.
-pub(crate) unsafe fn read_list(l: *const list_T) -> Tv {
+pub(crate) unsafe fn read_list(l: *const List) -> Tv {
     let mut path = Vec::new();
     unsafe { read_list_at(l, &mut path) }
 }
@@ -306,14 +306,14 @@ pub(crate) unsafe fn read_list(l: *const list_T) -> Tv {
 ///
 /// # Safety
 /// `d` is NULL or points at a live dict.
-pub(crate) unsafe fn read_dict(d: *const dict_T) -> Tv {
+pub(crate) unsafe fn read_dict(d: *const Dict) -> Tv {
     let mut path = Vec::new();
     unsafe { read_dict_at(d, &mut path) }
 }
 
 /// # Safety
 /// As [`read`].
-unsafe fn read_at(tv: *const typval_T, path: &mut Vec<Container>) -> Tv {
+unsafe fn read_at(tv: *const TypVal, path: &mut Vec<Container>) -> Tv {
     let vval = unsafe { (*tv).vval };
     match unsafe { (*tv).v_type } {
         VAR_UNKNOWN => Tv::Unknown,
@@ -345,7 +345,7 @@ unsafe fn read_at(tv: *const typval_T, path: &mut Vec<Container>) -> Tv {
 
 /// # Safety
 /// As [`read_list`].
-unsafe fn read_list_at(l: *const list_T, path: &mut Vec<Container>) -> Tv {
+unsafe fn read_list_at(l: *const List, path: &mut Vec<Container>) -> Tv {
     if l.is_null() {
         return Tv::NullList;
     }
@@ -365,7 +365,7 @@ unsafe fn read_list_at(l: *const list_T, path: &mut Vec<Container>) -> Tv {
 
 /// # Safety
 /// As [`read_dict`].
-unsafe fn read_dict_at(d: *const dict_T, path: &mut Vec<Container>) -> Tv {
+unsafe fn read_dict_at(d: *const Dict, path: &mut Vec<Container>) -> Tv {
     if d.is_null() {
         return Tv::NullDict;
     }
@@ -386,7 +386,7 @@ unsafe fn read_dict_at(d: *const dict_T, path: &mut Vec<Container>) -> Tv {
 ///
 /// # Safety
 /// `pt` is NULL or points at a live partial.
-unsafe fn read_partial(pt: *const partial_T, path: &mut Vec<Container>) -> Pt {
+unsafe fn read_partial(pt: *const Partial, path: &mut Vec<Container>) -> Pt {
     if pt.is_null() {
         return Pt::default();
     }
@@ -413,20 +413,20 @@ fn seen(path: &[Container], at: *const c_void) -> Option<usize> {
 ///
 /// # Safety
 /// The editor must be up.
-pub(crate) unsafe fn list_item_alloc() -> *mut listitem_T {
-    unsafe { xmalloc(size_of::<listitem_T>()) }.cast()
+pub(crate) unsafe fn list_item_alloc() -> *mut ListItem {
+    unsafe { xmalloc(size_of::<ListItem>()) }.cast()
 }
 
 /// The spec's `li_alloc`: an item holding `VAR_UNKNOWN`, unlinked.
 ///
 /// # Safety
 /// As [`list_item_alloc`].
-pub(crate) unsafe fn li_alloc() -> *mut listitem_T {
+pub(crate) unsafe fn li_alloc() -> *mut ListItem {
     let li = unsafe { list_item_alloc() };
     unsafe {
         (*li).li_next = ptr::null_mut();
         (*li).li_prev = ptr::null_mut();
-        (*li).li_tv = typval_T {
+        (*li).li_tv = TypVal {
             v_type: VAR_UNKNOWN,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
@@ -440,7 +440,7 @@ pub(crate) unsafe fn li_alloc() -> *mut listitem_T {
 ///
 /// # Safety
 /// The editor must be up.
-pub(crate) unsafe fn new_list(items: &[Tv]) -> *mut list_T {
+pub(crate) unsafe fn new_list(items: &[Tv]) -> *mut List {
     let tv = unsafe { Tv::List(items.to_vec()).build() };
     unsafe { tv.vval.v_list }
 }
@@ -449,7 +449,7 @@ pub(crate) unsafe fn new_list(items: &[Tv]) -> *mut list_T {
 ///
 /// # Safety
 /// The editor must be up.
-pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut dict_T {
+pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut Dict {
     let entries: Vec<(Vec<u8>, Tv)> = entries
         .iter()
         .map(|(k, v)| (k.as_bytes().to_vec(), v.clone()))
@@ -462,7 +462,7 @@ pub(crate) unsafe fn new_dict(entries: &[(&str, Tv)]) -> *mut dict_T {
 ///
 /// # Safety
 /// `l` is NULL or points at a live list.
-pub(crate) unsafe fn list_items(l: *const list_T) -> Vec<*mut listitem_T> {
+pub(crate) unsafe fn list_items(l: *const List) -> Vec<*mut ListItem> {
     let mut items = Vec::new();
     if l.is_null() {
         return items;
@@ -480,12 +480,12 @@ pub(crate) unsafe fn list_items(l: *const list_T) -> Vec<*mut listitem_T> {
 ///
 /// # Safety
 /// `d` points at a live dict.
-pub(crate) unsafe fn dict_items(d: *const dict_T) -> Vec<(Vec<u8>, *mut dictitem_T)> {
+pub(crate) unsafe fn dict_items(d: *const Dict) -> Vec<(Vec<u8>, *mut DictItem)> {
     let ht = unsafe { &(*d).dv_hashtab };
     let mut out = Vec::new();
     for hi in ht.items() {
         let key = hi.hi_key;
-        let di: *mut dictitem_T = unsafe { key.byte_sub(offset_of!(dictitem_T, di_key)) }.cast();
+        let di: *mut DictItem = unsafe { key.byte_sub(offset_of!(DictItem, di_key)) }.cast();
         out.push((unsafe { CStr::from_ptr(key) }.to_bytes().to_vec(), di));
     }
     out
@@ -496,7 +496,7 @@ pub(crate) unsafe fn dict_items(d: *const dict_T) -> Vec<(Vec<u8>, *mut dictitem
 ///
 /// # Safety
 /// As [`dict_items`].
-pub(crate) unsafe fn di_of(d: *const dict_T, key: &str) -> *mut dictitem_T {
+pub(crate) unsafe fn di_of(d: *const Dict, key: &str) -> *mut DictItem {
     unsafe { dict_items(d) }
         .into_iter()
         .find(|(k, _)| k == key.as_bytes())
@@ -508,7 +508,7 @@ pub(crate) unsafe fn di_of(d: *const dict_T, key: &str) -> *mut dictitem_T {
 ///
 /// # Safety
 /// As [`dict_items`].
-pub(crate) unsafe fn first_di(d: *const dict_T) -> *mut dictitem_T {
+pub(crate) unsafe fn first_di(d: *const Dict) -> *mut DictItem {
     let items = unsafe { dict_items(d) };
     items[0].1
 }
@@ -578,7 +578,7 @@ pub(crate) struct Watcher {
 ///
 /// # Safety
 /// `d` points at a live dict.
-pub(crate) unsafe fn dict_watchers(d: *const dict_T) -> Vec<Watcher> {
+pub(crate) unsafe fn dict_watchers(d: *const Dict) -> Vec<Watcher> {
     let head = unsafe { &raw const (*d).watchers };
     let mut out = Vec::new();
     let mut q = unsafe { (*head).next };
@@ -617,11 +617,11 @@ pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::garra
 ///
 /// # Safety
 /// The editor must be up. The answer owns its contents; clear it.
-pub(crate) unsafe fn eval0(expr: &str) -> Option<typval_T> {
+pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
     use neovim::eval::EVAL_EVALUATE;
     use neovim::types::evalarg_T;
 
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

@@ -255,12 +255,12 @@ fn sorter(info: *const sortinfo_T, keep_zero: bool) -> ListSorter {
 
 /// The record a comparator reads for one list item, at its position in the
 /// list.  Only a `_not_keeping_zero` comparator reads `idx`.
-fn sort_item(item: *mut listitem_T, idx: ::core::ffi::c_int) -> ListSortItem {
+fn sort_item(item: *mut ListItem, idx: ::core::ffi::c_int) -> ListSortItem {
     ListSortItem { item, idx }
 }
 
 /// `sort()` over `l`, in place.
-pub(crate) unsafe fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
+pub(crate) unsafe fn do_sort(l: *mut List, info: *mut sortinfo_T) {
     let len = unsafe { tv_list_len(l) };
 
     // Make an array with each entry pointing to an item in the List.
@@ -299,7 +299,7 @@ pub(crate) unsafe fn do_sort(l: *mut list_T, info: *mut sortinfo_T) {
 }
 
 /// `uniq()` over `l`, in place: drop each item equal to the one before it.
-pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
+pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut sortinfo_T) {
     let len = unsafe { tv_list_len(l) };
 
     // Upstream allocates this array and never fills it — `uniq` walks the
@@ -315,7 +315,7 @@ pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
     let mut li = unsafe { (*tv_list_first(l)).li_next };
     while !li.is_null() {
         // Upstream hands the comparator the addresses of two bare
-        // `listitem_T *` locals and lets it read them as `ListSortItem *`,
+        // `ListItem *` locals and lets it read them as `ListSortItem *`,
         // relying on `item` sitting at offset 0 and on `idx` never being
         // touched (only the `_keeping_zero` comparators reach here).  That
         // pun reads eight bytes past a pointer-sized local unless
@@ -350,7 +350,7 @@ pub(crate) unsafe fn do_uniq(l: *mut list_T, info: *mut sortinfo_T) {
 /// `how` for it: `info.item_compare_func` may borrow it, and the sort
 /// reads that field long after this returns.
 pub(crate) unsafe fn parse_sort_uniq_args(
-    argvars: *mut typval_T,
+    argvars: *mut TypVal,
     info: *mut sortinfo_T,
     how: &mut NumBuf,
 ) -> Result<(), Failed> {
@@ -430,7 +430,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 ///
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
-pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, sort: bool) {
+pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, rettv: *mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(argvars) };
@@ -474,11 +474,11 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut typval_T, rettv: *mut typval_T, 
 }
 
 /// `sort()`.
-pub unsafe fn f_sort(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_sort(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_sort_uniq(argvars, rettv, true) };
 }
 
 /// `uniq()`.
-pub unsafe fn f_uniq(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_uniq(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { do_sort_uniq(argvars, rettv, false) };
 }

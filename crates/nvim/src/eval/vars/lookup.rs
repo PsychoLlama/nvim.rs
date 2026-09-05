@@ -1,4 +1,4 @@
-//! Resolving a name to the `dictitem_T` that holds it.
+//! Resolving a name to the `DictItem` that holds it.
 //!
 //! [`find_var_ht_dict`] picks the scope from the name's prefix,
 //! [`find_var_in_ht`] finds the entry in it (and is where a bare
@@ -145,8 +145,8 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 pub unsafe fn eval_variable(
     name: *const c_char,
     len: c_int,
-    rettv: *mut typval_T,
-    dip: *mut *mut dictitem_T,
+    rettv: *mut TypVal,
+    dip: *mut *mut DictItem,
     verbose: bool,
     no_autoload: bool,
 ) -> Result<(), Failed> {
@@ -166,7 +166,7 @@ pub unsafe fn eval_variable(
     }
     if !rettv.is_null() {
         let item = unsafe { Di::new(v) };
-        unsafe { tv_copy(item.field_ptr(offset_of!(dictitem_T, di_tv)), rettv) };
+        unsafe { tv_copy(item.field_ptr(offset_of!(DictItem, di_tv)), rettv) };
     }
     Ok(())
 }
@@ -202,7 +202,7 @@ pub unsafe fn find_var(
     name_len: size_t,
     htp: *mut *mut hashtab_T,
     no_autoload: bool,
-) -> *mut dictitem_T {
+) -> *mut DictItem {
     let mut varname: *const c_char = ptr::null();
     let ht = unsafe { find_var_ht(name, name_len, &raw mut varname) };
     if !htp.is_null() {
@@ -240,7 +240,7 @@ pub unsafe fn find_var_in_ht(
     varname: *const c_char,
     varname_len: size_t,
     no_autoload: bool,
-) -> *mut dictitem_T {
+) -> *mut DictItem {
     if varname_len == 0 {
         // Something like "s:", or `ht` would have been NULL.
         return match htname as u8 {
@@ -292,7 +292,7 @@ pub(crate) unsafe fn find_var_ht_dict(
     name: *const c_char,
     name_len: size_t,
     varname: *mut *const c_char,
-    d: *mut *mut dict_T,
+    d: *mut *mut Dict,
 ) -> *mut hashtab_T {
     // SAFETY: the caller's obligation -- `name_len` readable bytes, and two
     // writable out-parameters that are the caller's own locals.
@@ -379,7 +379,7 @@ pub unsafe fn find_var_ht(
     name_len: size_t,
     varname: *mut *const c_char,
 ) -> *mut hashtab_T {
-    let mut d: *mut dict_T = ptr::null_mut();
+    let mut d: *mut Dict = ptr::null_mut();
     unsafe { find_var_ht_dict(name, name_len, varname, &raw mut d) }
 }
 
@@ -398,7 +398,7 @@ pub unsafe fn get_var_value(name: *const c_char, numbuf: &mut NumBuf) -> *mut c_
     if v.is_null() {
         return ptr::null_mut();
     }
-    let tv = unsafe { Di::new(v) }.field_ptr(offset_of!(dictitem_T, di_tv));
+    let tv = unsafe { Di::new(v) }.field_ptr(offset_of!(DictItem, di_tv));
     unsafe { numbuf.string(tv) as *mut c_char }
 }
 

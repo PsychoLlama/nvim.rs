@@ -45,7 +45,7 @@ fn arg_check(
 /// `tv` must point at an initialised value.
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
-pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
+pub unsafe fn tv_check_str_or_nr(tv: *const TypVal) -> bool {
     let message = match unsafe { (*tv).v_type } {
         VAR_NUMBER | VAR_STRING => return true,
         VAR_FLOAT => c"E805: Expected a Number or a String, Float found",
@@ -72,7 +72,7 @@ pub unsafe fn tv_check_str_or_nr(tv: *const typval_T) -> bool {
 /// `tv` must point at an initialised value.
 /// The message comes out of the global `num_errors` table, so the caller must
 /// be on the editor's main thread.
-pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
+pub unsafe fn tv_check_num(tv: *const TypVal) -> bool {
     match unsafe { (*tv).v_type } {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING => true,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_FLOAT | VAR_BLOB | VAR_UNKNOWN => {
@@ -89,7 +89,7 @@ pub unsafe fn tv_check_num(tv: *const typval_T) -> bool {
 /// `tv` must point at an initialised value.
 /// The message comes out of the global `str_errors` table, so the caller must
 /// be on the editor's main thread.
-pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
+pub unsafe fn tv_check_str(tv: *const TypVal) -> bool {
     match unsafe { (*tv).v_type } {
         VAR_NUMBER | VAR_BOOL | VAR_SPECIAL | VAR_STRING | VAR_FLOAT => true,
         VAR_PARTIAL | VAR_FUNC | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_UNKNOWN => {
@@ -108,7 +108,7 @@ pub unsafe fn tv_check_str(tv: *const typval_T) -> bool {
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -127,7 +127,7 @@ pub unsafe fn tv_check_for_string_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_nonempty_string_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_string_arg(args, idx) }?;
@@ -148,7 +148,7 @@ pub unsafe fn tv_check_for_nonempty_string_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_string_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
@@ -165,7 +165,7 @@ pub unsafe fn tv_check_for_opt_string_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_number_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -184,7 +184,7 @@ pub unsafe fn tv_check_for_number_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_number_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
@@ -201,7 +201,7 @@ pub unsafe fn tv_check_for_opt_number_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_float_or_nr_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -220,7 +220,7 @@ pub unsafe fn tv_check_for_float_or_nr_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_bool_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -241,7 +241,7 @@ pub unsafe fn tv_check_for_bool_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_bool_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
@@ -258,7 +258,7 @@ pub unsafe fn tv_check_for_opt_bool_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_blob_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -277,7 +277,7 @@ pub unsafe fn tv_check_for_blob_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_list_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -296,7 +296,7 @@ pub unsafe fn tv_check_for_list_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_dict_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -315,7 +315,7 @@ pub unsafe fn tv_check_for_dict_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_nonnull_dict_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_dict_arg(args, idx) }?;
@@ -335,7 +335,7 @@ pub unsafe fn tv_check_for_nonnull_dict_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_dict_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
@@ -352,7 +352,7 @@ pub unsafe fn tv_check_for_opt_dict_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_number_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -371,7 +371,7 @@ pub unsafe fn tv_check_for_string_or_number_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_buffer_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_string_or_number_arg(args, idx) }
@@ -385,7 +385,7 @@ pub unsafe fn tv_check_for_buffer_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_lnum_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     unsafe { tv_check_for_string_or_number_arg(args, idx) }
@@ -399,7 +399,7 @@ pub unsafe fn tv_check_for_lnum_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_list_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -418,7 +418,7 @@ pub unsafe fn tv_check_for_string_or_list_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -437,7 +437,7 @@ pub unsafe fn tv_check_for_string_or_list_or_blob_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_opt_string_or_list_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     if unsafe { (*args.offset(idx as isize)).v_type } == VAR_UNKNOWN {
@@ -454,7 +454,7 @@ pub unsafe fn tv_check_for_opt_string_or_list_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_string_or_func_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };
@@ -473,7 +473,7 @@ pub unsafe fn tv_check_for_string_or_func_arg(
 /// Raising the error goes through the editor's message state, so the
 /// caller must be on the main thread.
 pub unsafe fn tv_check_for_list_or_blob_arg(
-    args: *const typval_T,
+    args: *const TypVal,
     idx: ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let arg = unsafe { &*args.offset(idx as isize) };

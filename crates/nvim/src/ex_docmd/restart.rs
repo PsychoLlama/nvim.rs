@@ -28,9 +28,9 @@ use crate::msgpack_rpc::server::{server_start, server_stop};
 use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, KeyValuePair, NUL,
-    Object, String_0, VarNumber, Vv, exarg_T, key_value_pair, listitem_T, ptrdiff_t, size_t,
-    uint16_t, uint64_t,
+    ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, KeyValuePair, ListItem,
+    NUL, Object, String_0, VarNumber, Vv, exarg_T, key_value_pair, ptrdiff_t, size_t, uint16_t,
+    uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::winlayer::Ea;
@@ -98,7 +98,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
     let mut i: size_t = 0;
     let mut listen_arg: *const c_char = ptr::null();
 
-    let mut li: *const listitem_T = unsafe { (*argv_list).lv_first };
+    let mut li: *const ListItem = unsafe { (*argv_list).lv_first };
     while !li.is_null() {
         let arg = unsafe { numbuf.string(&raw const (*li).li_tv) };
         // `-- [files…]` is dropped: it is almost never wanted, and

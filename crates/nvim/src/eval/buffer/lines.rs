@@ -28,8 +28,8 @@ pub(crate) unsafe fn set_buffer_lines(
     buf: *mut buf_T,
     lnum_arg: LineNr,
     append: bool,
-    lines: *mut typval_T,
-    rettv: *mut typval_T,
+    lines: *mut TypVal,
+    rettv: *mut TypVal,
 ) {
     // SAFETY: the caller's obligation. `cob` is a live local, restored on
     // every path out; `line` is owned here and freed before each replacement
@@ -53,8 +53,8 @@ pub(crate) unsafe fn set_buffer_lines(
     } else {
         cur_buf().line_count()
     };
-    let mut l: *mut list_T = ptr::null_mut();
-    let mut li: *mut listitem_T = ptr::null_mut();
+    let mut l: *mut List = ptr::null_mut();
+    let mut li: *mut ListItem = ptr::null_mut();
     let mut line: *mut c_char = ptr::null_mut();
     let src = unsafe { Tv::new(lines) };
     '_cleanup: {
@@ -75,7 +75,7 @@ pub(crate) unsafe fn set_buffer_lines(
                     break;
                 }
                 let item = unsafe { Li::new(li) };
-                let itv = item.field_ptr(offset_of!(listitem_T, li_tv));
+                let itv = item.field_ptr(offset_of!(ListItem, li_tv));
                 unsafe { xfree(line.cast()) };
                 line = unsafe { typval_tostring(itv, false) };
                 li = item.li_next;
@@ -135,7 +135,7 @@ pub(crate) unsafe fn set_buffer_lines(
 ///
 /// # Safety
 /// The arguments and `rettv` must be live typvals.
-unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut typval_T, append: bool) {
+unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut TypVal, append: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf(args, 0, 0);
@@ -160,7 +160,7 @@ unsafe fn get_buffer_lines(
     mut start: LineNr,
     mut end: LineNr,
     retlist: bool,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
 ) {
     // SAFETY: the caller's obligation; every line index is clamped to the
     // buffer before `ml_get_buf` sees it.
@@ -194,7 +194,7 @@ unsafe fn get_buffer_lines(
 ///
 /// # Safety
 /// The arguments and `rettv` must be live typvals.
-unsafe fn getbufline(args: Args<'_>, rettv: &mut typval_T, retlist: bool) {
+unsafe fn getbufline(args: Args<'_>, rettv: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf_chk(args, 0);
@@ -211,7 +211,7 @@ unsafe fn getbufline(args: Args<'_>, rettv: &mut typval_T, retlist: bool) {
 }
 
 /// `append({lnum}, {string/list})`.
-pub unsafe fn f_append(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_append(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
@@ -222,21 +222,21 @@ pub unsafe fn f_append(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 }
 
 /// `appendbufline({buf}, {lnum}, {string/list})`.
-pub unsafe fn f_appendbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_appendbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe { buf_set_append_line(args, rettv, true) };
 }
 
 /// `setbufline({buf}, {lnum}, {string/list})`.
-pub unsafe fn f_setbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe { buf_set_append_line(args, rettv, false) };
 }
 
 /// `setline({lnum}, {string/list})`.
-pub unsafe fn f_setline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
@@ -247,7 +247,7 @@ pub unsafe fn f_setline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// `getline({lnum} [, {end}])` — one String, or a List for a range.
-pub unsafe fn f_getline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
     let lnum = arg_lnum(args, 0);
@@ -261,21 +261,21 @@ pub unsafe fn f_getline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
-pub unsafe fn f_getbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe { getbufline(args, rettv, true) };
 }
 
 /// `getbufoneline({buf}, {lnum})`.
-pub unsafe fn f_getbufoneline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getbufoneline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals.
     unsafe { getbufline(args, rettv, false) };
 }
 
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
-pub unsafe fn f_deletebufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_deletebufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 1;
     // SAFETY: the arguments and `rettv` are live typvals; `cob` is a live

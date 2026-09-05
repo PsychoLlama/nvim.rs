@@ -79,13 +79,13 @@ use crate::winlayer::{Buf, Live, TabPage, Win, buffers, tab_windows, windows_in_
 
 /// A value whose caller has promised it outlives the handle.
 ///
-/// The builtins here are handed `typval_T`s and `listitem_T`s that belong to
+/// The builtins here are handed `TypVal`s and `ListItem`s that belong to
 /// the evaluator's own argument frame, which outlives the call. Wrapping is
 /// the unsafe step, once; every `(*p).field` after it is checked code.
-pub(super) type Tv = Live<typval_T>;
+pub(super) type Tv = Live<TypVal>;
 
 /// One item of a live list, whose caller has promised the list outlives it.
-pub(super) type Li = Live<listitem_T>;
+pub(super) type Li = Live<ListItem>;
 
 /// Argument `i` as a Number.
 ///

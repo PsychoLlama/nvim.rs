@@ -72,7 +72,7 @@ struct Reading {
     /// Whether `v:oldfiles` is being built from this file.
     get_old_files: bool,
     /// The list behind `v:oldfiles`.
-    oldfiles_list: *mut list_T,
+    oldfiles_list: *mut List,
     /// The file names already in `oldfiles_list`.
     oldfiles_set: IdSet<Box<[u8]>>,
     /// Buffers whose change list grew; the windows showing them are moved

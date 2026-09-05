@@ -13,8 +13,8 @@ use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
-    ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0,
-    buf_T, int64_t, key_value_pair, sctx_T, size_t, win_T,
+    ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, ScriptCtx,
+    String_0, buf_T, int64_t, key_value_pair, size_t, win_T,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -129,13 +129,13 @@ unsafe fn last_set(
     opt_flags: OptionSetFlags,
     buf: *mut buf_T,
     win: *mut win_T,
-) -> sctx_T {
+) -> ScriptCtx {
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live for the scopes reached below.
     if opt_flags == OptionSetFlags::GLOBAL {
         return option_last_set(opt_idx);
     }
-    let mut script_ctx = sctx_T::NONE;
+    let mut script_ctx = ScriptCtx::NONE;
     if option_has_scope(opt_idx, kOptScopeBuf) {
         script_ctx =
             unsafe { (*buf).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize] };

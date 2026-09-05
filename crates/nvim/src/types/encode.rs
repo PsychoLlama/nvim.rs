@@ -15,8 +15,8 @@ use super::*;
 ///
 /// `Copy`: three cursors into a list the reader does not own.
 pub struct ListReaderState {
-    pub list: *const list_T,
-    pub li: *const listitem_T,
+    pub list: *const List,
+    pub li: *const ListItem,
     pub offset: size_t,
     pub li_length: size_t,
 }

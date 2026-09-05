@@ -288,7 +288,7 @@ pub(crate) fn diff_fold_update(
 ///
 /// # Safety
 /// `argvars` and `rettv` must be the evaluator's live cells.
-pub unsafe fn f_diff_filler(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_diff_filler(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // c2rust expanded `MAX(0, ..)` into two calls of an argument that is
     // not free: `diff_check_fill` can trigger a whole recompute, and it
     // already clamps at zero.

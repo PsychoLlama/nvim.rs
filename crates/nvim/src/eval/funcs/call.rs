@@ -42,8 +42,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, NUL, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VarNumber, VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t,
+    EvalFuncData, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, funcdict_T, garray_T, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -68,7 +68,7 @@ impl Drop for Owned {
 }
 
 /// `call({func}, {arglist} [, {dict}])`
-pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_call(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live; every pointer below either belongs to an
@@ -81,7 +81,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         return;
     }
 
-    let mut partial = ptr::null_mut::<partial_T>();
+    let mut partial = ptr::null_mut::<Partial>();
     // Only the Lua-table arm allocates; the others borrow.
     let mut owned = false;
     let mut func = match args.ty(0) {
@@ -136,7 +136,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 }
 
 /// `eval({string})`
-pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_eval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
@@ -168,8 +168,8 @@ pub unsafe fn f_eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 /// Where the `:execute` List form is up to, as `do_cmdline`'s cookie.
 struct ListLines {
     /// Held only to keep the reference count honest; the walk uses `item`.
-    _list: *mut list_T,
-    item: *const listitem_T,
+    _list: *mut List,
+    item: *const ListItem,
 }
 
 /// `do_cmdline`'s line getter for `execute([...])`: one allocated line per
@@ -207,7 +207,7 @@ unsafe fn get_list_line(
 ///
 /// # Safety
 /// `argvars` is a dispatcher argument array and `rettv` its return value.
-pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_off: c_int) {
+pub unsafe fn execute_common(argvars: *mut TypVal, rettv: *mut TypVal, arg_off: c_int) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation, which is `Args::new`'s.
     let args = unsafe { Args::new(argvars) };
@@ -301,14 +301,14 @@ pub unsafe fn execute_common(argvars: *mut typval_T, rettv: *mut typval_T, arg_o
 }
 
 /// `execute({command} [, {silent}])`
-pub unsafe fn f_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: this is the dispatcher's argument array, which is what
     // `execute_common` needs.
     unsafe { execute_common(argvars, rettv, 0) };
 }
 
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
-pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_exists(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live and `p` walks a string an argument owns.
@@ -354,12 +354,12 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// `funcref()` binds the function the name resolves to *now*; `function()`
 /// keeps the name and resolves it at call time.
-fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
+fn common_function(args: Args, rettv: &mut TypVal, is_funcref: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY throughout: the frame is live; the partial built below owns every value
     // it copies, and `trans_name`/`name` are released on every path.
-    let mut arg_pt = ptr::null_mut::<partial_T>();
+    let mut arg_pt = ptr::null_mut::<Partial>();
     let mut use_string = false;
     let mut s = match args.ty(0) {
         // function(MyFunc, [arg], dict)
@@ -437,7 +437,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
     // a third settles it.
     let mut dict_idx = 0;
     let mut arg_idx = 0;
-    let mut list = ptr::null_mut::<list_T>();
+    let mut list = ptr::null_mut::<List>();
     if args.has(1) {
         if args.has(2) {
             arg_idx = 1;
@@ -483,7 +483,7 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         return;
     }
 
-    let pt = unsafe { xcalloc(1, size_of::<partial_T>()) } as *mut partial_T;
+    let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
     if arg_idx > 0 || (!arg_pt.is_null() && unsafe { (*arg_pt).pt_argc } > 0) {
         // The bound arguments of the partial being extended come
         // first, then this call's.
@@ -494,8 +494,8 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
         };
         let lv_len = unsafe { tv_list_len(list) };
         unsafe { (*pt).pt_argc = arg_len + lv_len };
-        let bytes = size_of::<typval_T>() * unsafe { (*pt).pt_argc } as usize;
-        unsafe { (*pt).pt_argv = xmalloc(bytes) as *mut typval_T };
+        let bytes = size_of::<TypVal>() * unsafe { (*pt).pt_argc } as usize;
+        unsafe { (*pt).pt_argv = xmalloc(bytes) as *mut TypVal };
         let mut i = 0;
         while i < arg_len {
             let from = unsafe { (*arg_pt).pt_argv.add(i as usize) };
@@ -545,20 +545,20 @@ fn common_function(args: Args, rettv: &mut typval_T, is_funcref: bool) {
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`
-pub unsafe fn f_funcref(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_funcref(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     common_function(args, rettv, true);
 }
 
 /// `function({name} [, {arglist}] [, {dict}])`
-pub unsafe fn f_function(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_function(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     common_function(args, rettv, false);
 }
 
 /// `garbagecollect([{atexit}])` — schedules a collection; the argument asks
 /// for one on exit as well.
-pub unsafe fn f_garbagecollect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_garbagecollect(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, rettv);
     want_garbage_collect.set(true);
     if args.has(0) && arg_number(args.get(0)) == 1 {
@@ -567,7 +567,7 @@ pub unsafe fn f_garbagecollect(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 }
 
 /// `libcall()` and `libcallnr()`.
-fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
+fn libcall_common(args: Args, rettv: &mut TypVal, out_type: VarType) {
     rettv.v_type = out_type;
     if out_type != VAR_NUMBER {
         rettv.vval.v_string = ptr::null_mut();
@@ -620,19 +620,19 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
 }
 
 /// `libcall({lib}, {func}, {arg})`
-pub unsafe fn f_libcall(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_libcall(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     libcall_common(args, rettv, VAR_STRING);
 }
 
 /// `libcallnr({lib}, {func}, {arg})`
-pub unsafe fn f_libcallnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_libcallnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     libcall_common(args, rettv, VAR_NUMBER);
 }
 
 /// `luaeval({expr} [, {expr}])`
-pub unsafe fn f_luaeval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_luaeval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live and the chunk outlives the call.
@@ -644,19 +644,19 @@ pub unsafe fn f_luaeval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// `py3eval({expr})`
-pub unsafe fn f_py3eval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_py3eval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"python3".as_ptr() as *mut c_char, argvars, rettv) };
 }
 
 /// `perleval({expr})`
-pub unsafe fn f_perleval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_perleval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"perl".as_ptr() as *mut c_char, argvars, rettv) };
 }
 
 /// `rubyeval({expr})`
-pub unsafe fn f_rubyeval(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_rubyeval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { script_host_eval(c"ruby".as_ptr() as *mut c_char, argvars, rettv) };
 }

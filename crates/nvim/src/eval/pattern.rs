@@ -18,7 +18,7 @@ use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, NUL, OptVal, OptionSetFlags, regmatch_T, regprog_T, size_t, typval_T};
+use crate::types::{ColNr, NUL, OptVal, OptionSetFlags, TypVal, regmatch_T, regprog_T, size_t};
 use core::slice;
 
 /// A `regmatch_T` with nothing in it.
@@ -108,7 +108,7 @@ pub unsafe fn do_string_sub(
     len: size_t,
     pat: *mut c_char,
     sub: *mut c_char,
-    expr: *mut typval_T,
+    expr: *mut TypVal,
     flags: *const c_char,
     ret_len: *mut size_t,
 ) -> *mut c_char {

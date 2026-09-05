@@ -1,5 +1,5 @@
 //! `describe('tv')` from `test/unit/eval/typval_spec.lua`: the operations
-//! over a `typval_T` itself rather than over a list or a dict.
+//! over a `TypVal` itself rather than over a list or a dict.
 //!
 //! See `typval_list` for the shape. Every case needs a live editor, which
 //! Miri cannot start.
@@ -18,9 +18,9 @@ use neovim::main::{curwin, kTVCstring};
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{
-    VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarType, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
-    typval_T, typval_vval_union, win_T,
+    TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, kBoolVarFalse, kBoolVarTrue,
+    kSpecialVarNull, typval_vval_union, win_T,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -32,11 +32,11 @@ fn f(n: f64) -> Tv {
     Tv::Float(n)
 }
 
-/// A `typval_T` assembled from a type and a raw union, the spec's
+/// A `TypVal` assembled from a type and a raw union, the spec's
 /// `typvalt(typ, vval)` — used where a case needs a value whose contents
 /// are deliberately not a real one.
-fn raw(v_type: VarType, vval: typval_vval_union) -> typval_T {
-    typval_T {
+fn raw(v_type: VarType, vval: typval_vval_union) -> TypVal {
+    TypVal {
         v_type,
         v_lock: VarLock::Unlocked,
         vval,
@@ -249,7 +249,7 @@ fn locking_never_moves_a_fixed_value() {
 }
 
 /// The same `describe`'s `itp('works with NULL values')`, spec line 2823:
-/// the `typval_T` locks even when there is no container behind it.
+/// the `TypVal` locks even when there is no container behind it.
 #[test]
 fn locking_a_null_container_locks_the_value_itself() {
     let log = AllocLog::start();
@@ -303,7 +303,7 @@ fn a_value_is_locked_by_its_own_lock_or_its_containers() {
         log.clear();
         let d = d_tv.vval.v_dict;
         let l = l_tv.vval.v_list;
-        let locked = |tv: &typval_T| tv_islocked(&raw const *tv);
+        let locked = |tv: &TypVal| tv_islocked(&raw const *tv);
 
         assert_eq!(
             (locked(&tv), locked(&l_tv), locked(&d_tv)),
@@ -482,7 +482,7 @@ fn comparing_values_folds_case_only_when_asked() {
             vec![Tv::s("abc"), Tv::Nil, Tv::s("def")],
             vec![Tv::s("abc"), inner(vec![f(1.0), f(2.0)]), Tv::s("def")],
         ];
-        let mut tvs: Vec<typval_T> = corpus
+        let mut tvs: Vec<TypVal> = corpus
             .into_iter()
             .map(|items| Tv::List(items).build())
             .collect();
@@ -587,7 +587,7 @@ fn the_type_checks_read_only_the_type() {
         );
         log.clear();
 
-        type Check = (&'static str, unsafe fn(*const typval_T) -> bool);
+        type Check = (&'static str, unsafe fn(*const TypVal) -> bool);
         /// One check, and the nine rows it is stated over.
         type Table = (Check, [(VarType, Option<&'static str>); 9]);
         let checks: [Table; 3] = [

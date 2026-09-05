@@ -70,7 +70,7 @@ pub(crate) struct Fields {
     pub(crate) kind: c_char,
     /// Never set by parsing; an entry built from a Vimscript dictionary
     /// carries one, and `qf_add_entry` takes it from the same struct.
-    pub(crate) user_data: *mut typval_T,
+    pub(crate) user_data: *mut TypVal,
     /// The line named a real position, so the entry can be jumped to.
     pub(crate) valid: bool,
 }

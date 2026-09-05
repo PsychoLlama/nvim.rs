@@ -59,14 +59,13 @@ use crate::search::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, ColNr, FileDescriptor, FileInfo,
-    HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
-    KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, MarkGet, MotionType,
-    OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
-    SubReplacementString, Timestamp, VAR_UNKNOWN, VarFlavour, VarLock, bln_values, buf_T,
-    dictitem_T, fmark_T, fmarkv_T, int64_t, list_T, pos_T, ptrdiff_t, size_t, ssize_t, typval_T,
-    typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T,
-    yankreg_T,
+    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, ColNr, DictItem, FileDescriptor,
+    FileInfo, HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
+    KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet,
+    MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
+    SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock, bln_values, buf_T,
+    fmark_T, fmarkv_T, int64_t, pos_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t,
+    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T, yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -356,7 +355,7 @@ pub struct unknown_item {
 #[derive(Copy, Clone)]
 pub struct global_var {
     pub name: *mut ::core::ffi::c_char,
-    pub value: typval_T,
+    pub value: TypVal,
 }
 #[derive(Copy, Clone)]
 pub struct reg {
@@ -663,7 +662,7 @@ const DEFAULT_REGISTER: reg = reg {
 /// What a variable entry defaults to.
 const DEFAULT_VARIABLE: global_var = global_var {
     name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    value: typval_T {
+    value: TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union {

@@ -24,7 +24,7 @@ use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
 use crate::semsg;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, VarNumber, dict_T, int64_t, pos_T, size_t, typval_T, win_T,
+    ColNr, Dict, EvalFuncData, LineNr, TypVal, VarNumber, int64_t, pos_T, size_t, win_T,
 };
 use crate::winlayer::{Pos, Win};
 
@@ -328,7 +328,7 @@ pub unsafe fn textpos2screenpos(
 ///
 /// # Safety
 /// The evaluator's calling convention: `argvars` and `rettv` must be valid.
-pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_screenpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
     let (dict, wp) = unsafe { (alloc_dict_ret(rettv), find_win_by_nr_or_id(argvars)) };
     let Some(wp) = wp else {
@@ -365,7 +365,7 @@ pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// # Safety
 /// `rettv` must be a writable return value.
-unsafe fn alloc_dict_ret(rettv: *mut typval_T) -> *mut dict_T {
+unsafe fn alloc_dict_ret(rettv: *mut TypVal) -> *mut Dict {
     unsafe {
         tv_dict_alloc_ret(rettv);
         (*rettv).vval.v_dict
@@ -376,7 +376,7 @@ unsafe fn alloc_dict_ret(rettv: *mut typval_T) -> *mut dict_T {
 ///
 /// # Safety
 /// `argvars` must hold at least `n + 1` values.
-unsafe fn arg_number(argvars: *mut typval_T, n: isize) -> VarNumber {
+unsafe fn arg_number(argvars: *mut TypVal, n: isize) -> VarNumber {
     unsafe { tv_get_number(argvars.offset(n)) }
 }
 
@@ -384,7 +384,7 @@ unsafe fn arg_number(argvars: *mut typval_T, n: isize) -> VarNumber {
 ///
 /// # Safety
 /// `dict` must be a live Dict.
-unsafe fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: c_int) {
+unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
     let bytes = key.to_bytes();
     let _ = unsafe {
         tv_dict_add_nr(
@@ -425,7 +425,7 @@ unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
 ///
 /// # Safety
 /// The evaluator's calling convention: `argvars` and `rettv` must be valid.
-pub unsafe fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_virtcol2col(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
     unsafe { (*rettv).vval.v_number = -1 };
     // SAFETY: the evaluator's calling convention: three arguments.

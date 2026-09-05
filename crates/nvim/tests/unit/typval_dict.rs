@@ -23,7 +23,7 @@ use neovim::main::{emsg_skip, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::ops::NUMBUFLEN;
-use neovim::types::{Callback, Failed, VarLock, dict_T, vimconv_T};
+use neovim::types::{Callback, Dict, Failed, VarLock, vimconv_T};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Cb, Pt, Tv};
@@ -307,7 +307,7 @@ fn getting_a_number_reads_through_strings_and_reports_otherwise() {
     let log = AllocLog::start();
     // SAFETY: every dict is this case's own.
     unsafe {
-        let get = |d: *const dict_T, key: &str, msg: Option<&str>| {
+        let get = |d: *const Dict, key: &str, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
                 || tv_dict_get_number(d, cstr(key).as_ptr()),
@@ -348,7 +348,7 @@ fn getting_a_string_renders_a_scalar_into_the_lent_buffer() {
     // SAFETY: every dict is this case's own; the answers are borrowed and
     // every buffer lent outlives the answer taken from it.
     unsafe {
-        let get = |d: *const dict_T, key: &str, msg: Option<&str>, buf: &mut [c_char; 65]| {
+        let get = |d: *const Dict, key: &str, msg: Option<&str>, buf: &mut [c_char; 65]| {
             check_emsg(
                 log.editor(),
                 || tv_dict_get_string_buf(d, cstr(key).as_ptr(), buf.as_mut_ptr()),
@@ -419,7 +419,7 @@ fn getting_a_string_with_save_allocates_the_answer() {
     let log = AllocLog::start();
     // SAFETY: every answer with `save` is freed here.
     unsafe {
-        let get = |d: *const dict_T, key: &str, msg: Option<&str>, is_float: bool| {
+        let get = |d: *const Dict, key: &str, msg: Option<&str>, is_float: bool| {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
@@ -480,7 +480,7 @@ fn getting_a_string_into_a_buffer_uses_it_only_for_scalars() {
     // SAFETY: the buffer and the dict are this case's own.
     unsafe {
         let buf: *mut c_char = xmalloc(NUMBUFLEN as usize).cast();
-        let get = |d: *const dict_T, key: &str, is_float: bool| -> Option<(String, bool)> {
+        let get = |d: *const Dict, key: &str, is_float: bool| -> Option<(String, bool)> {
             log.clear();
             let ret = check_emsg(
                 log.editor(),
@@ -544,7 +544,7 @@ fn getting_a_checked_string_falls_back_to_the_default() {
     unsafe {
         let buf: *mut c_char = xmalloc(NUMBUFLEN as usize).cast();
         let def = xstrdup(cstr("DEFAULT").as_ptr());
-        let get = |d: *const dict_T,
+        let get = |d: *const Dict,
                    key: &str,
                    len: Option<isize>,
                    is_float: bool|
@@ -620,7 +620,7 @@ fn getting_a_callback_accepts_a_name_a_funcref_or_a_partial() {
     // SAFETY: each callback is released before the next lookup reuses the
     // slot; the dict is this case's own.
     unsafe {
-        let get = |d: *mut dict_T, key: &str, len: isize, msg: Option<&str>| -> (Cb, bool) {
+        let get = |d: *mut Dict, key: &str, len: isize, msg: Option<&str>| -> (Cb, bool) {
             let slot: *mut Callback = xmalloc(size_of::<Callback>()).cast();
             log.clear();
             let ok = check_emsg(
@@ -783,7 +783,7 @@ fn adding_a_typed_value_takes_the_key_by_length() {
         ];
         log.clear();
 
-        type Add = Box<dyn Fn(*mut dict_T, usize) -> Result<(), Failed>>;
+        type Add = Box<dyn Fn(*mut Dict, usize) -> Result<(), Failed>>;
         let adds: Vec<(&str, Add, Tv, bool)> = vec![
             (
                 "list",
@@ -927,7 +927,7 @@ fn extending_a_dict_keeps_forces_or_reports() {
     let log = AllocLog::start();
     // SAFETY: both dicts are this case's own.
     unsafe {
-        let extend = |d1: *mut dict_T, d2: *mut dict_T, action: &str, msg: Option<&str>| {
+        let extend = |d1: *mut Dict, d2: *mut Dict, action: &str, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
                 || tv_dict_extend(d1, d2, cstr(action).as_ptr()),
@@ -1000,7 +1000,7 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
     let log = AllocLog::start();
     // SAFETY: every dict is this case's own; `sandbox` is put back below.
     unsafe {
-        let extend = |d1: *mut dict_T, d2: *mut dict_T, msg: Option<&str>| {
+        let extend = |d1: *mut Dict, d2: *mut Dict, msg: Option<&str>| {
             check_emsg(
                 log.editor(),
                 || tv_dict_extend(d1, d2, cstr("force").as_ptr()),
@@ -1024,7 +1024,7 @@ fn extending_a_dict_refuses_locked_and_read_only_items() {
 
         let saved_sandbox = sandbox.get();
         sandbox.set(1);
-        let sources: Vec<(*mut dict_T, &str)> = vec![
+        let sources: Vec<(*mut Dict, &str)> = vec![
             (
                 tv::new_dict(&[("tv_locked", f(41.0))]),
                 "E741: Value is locked: extend() argument",

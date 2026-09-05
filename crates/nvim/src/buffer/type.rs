@@ -32,7 +32,7 @@ use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
-    CmdModFlags, LineNr, VAR_NUMBER, VarLock, VarNumber, buf_T, dictitem_T, ptrdiff_t, typval_T,
+    CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, buf_T, ptrdiff_t,
 };
 use crate::winlayer::Buf;
 
@@ -257,7 +257,7 @@ pub unsafe fn buf_inc_changedtick(buf: *mut buf_T) {
 pub unsafe fn buf_set_changedtick(buf: *mut buf_T, changedtick: VarNumber) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut b = unsafe { Buf::new(buf) };
-    let mut old_val: typval_T = b.changedtick_di.di_tv;
+    let mut old_val: TypVal = b.changedtick_di.di_tv;
     check_changedtick_item(b);
     b.changedtick_di.di_tv.vval.v_number = changedtick;
     // SAFETY: `b_vars` is the buffer's own dictionary, allocated with it.
@@ -302,8 +302,8 @@ fn check_changedtick_item(buf: Buf) {
     );
     assert!(
         di == (&raw const buf.changedtick_di)
-            .cast::<dictitem_T>()
+            .cast::<DictItem>()
             .cast_mut(),
-        "changedtick_di == (dictitem_T *)&buf->changedtick_di"
+        "changedtick_di == (DictItem *)&buf->changedtick_di"
     );
 }

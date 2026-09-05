@@ -18,8 +18,8 @@ use crate::eval::typval::{
 use crate::eval::{Cur, EVAL_EVALUATE, Tv, eval1};
 use crate::memory::xmemdupz;
 use crate::types::{
-    Failed, NUL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, evalarg_T, kListLenShouldKnow, list_T,
-    ptrdiff_t, size_t, typval_T, typval_vval_union,
+    Dict, Failed, List, NUL, TypVal, VAR_STRING, VAR_UNKNOWN, VarLock, evalarg_T,
+    kListLenShouldKnow, ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::winlayer::Live;
 
@@ -27,7 +27,7 @@ use crate::winlayer::Live;
 const NUMBUFLEN: usize = 65;
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -47,7 +47,7 @@ unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
 /// `arg` must point at the cursor into a NUL-terminated expression.
 pub(crate) unsafe fn eval_list(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -55,7 +55,7 @@ pub(crate) unsafe fn eval_list(
     // valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
-    let list: *mut list_T = if evaluate {
+    let list: *mut List = if evaluate {
         unsafe { tv_list_alloc(kListLenShouldKnow as ptrdiff_t) }
     } else {
         null_mut()
@@ -116,10 +116,7 @@ pub(crate) unsafe fn eval_list(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression.
-pub(crate) unsafe fn get_literal_key(
-    arg: *mut *mut c_char,
-    tv: *mut typval_T,
-) -> Result<(), Failed> {
+pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut TypVal) -> Result<(), Failed> {
     /// Letters, digits, `_` and `-`: what a literal key may contain.
     fn is_key_char(c: c_char) -> bool {
         let b = c as u8;
@@ -152,7 +149,7 @@ pub(crate) unsafe fn get_literal_key(
 /// `arg` must point at the cursor, on the `{`.
 pub(crate) unsafe fn eval_dict(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     literal: bool,
 ) -> Result<Parsed, Failed> {
@@ -177,7 +174,7 @@ pub(crate) unsafe fn eval_dict(
         return Ok(Parsed::NotThis);
     }
 
-    let dict: *mut dict_T = if evaluate {
+    let dict: *mut Dict = if evaluate {
         unsafe { tv_dict_alloc() }
     } else {
         null_mut()
@@ -285,7 +282,7 @@ pub(crate) unsafe fn eval_dict(
 /// As `eval_dict`.
 pub(crate) unsafe fn eval_lit_dict(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor, on the `#`.

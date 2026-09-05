@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::MaybeUninit;
 
 use crate::types::{
-    Float, blob_T, dict_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t, typval_T,
+    Blob, Dict, Float, List, ListItem, Partial, TypVal, int64_t, ptrdiff_t, size_t,
 };
 
 // The walk itself; this half is the contract it runs against.
@@ -83,31 +83,31 @@ pub(crate) enum PartialStage {
 #[derive(Copy, Clone)]
 pub(crate) enum Frame {
     Dict {
-        dict: *mut dict_T,
+        dict: *mut Dict,
         /// Where the dictionary pointer *lives*, so a sink can clear it.  For
-        /// a `typval_T` that is `&tv->vval.v_dict`; for a partial's self
+        /// a `TypVal` that is `&tv->vval.v_dict`; for a partial's self
         /// dictionary, `&pt->pt_dict`.
-        dictp: *mut *mut dict_T,
+        dictp: *mut *mut Dict,
         /// The slot the walk stands on -- an *index*, because the small run
         /// lives inside the `hashtab_T` and a body may take `&mut` to it.
         idx: usize,
         todo: size_t,
     },
     List {
-        list: *mut list_T,
-        li: *mut listitem_T,
+        list: *mut List,
+        li: *mut ListItem,
     },
     Pairs {
-        list: *mut list_T,
-        li: *mut listitem_T,
+        list: *mut List,
+        li: *mut ListItem,
     },
     Partial {
         stage: PartialStage,
-        pt: *mut partial_T,
+        pt: *mut Partial,
     },
     PartialArgs {
-        arg: *mut typval_T,
-        argv: *mut typval_T,
+        arg: *mut TypVal,
+        argv: *mut TypVal,
         todo: size_t,
     },
 }
@@ -116,9 +116,9 @@ pub(crate) enum Frame {
 /// is popped.
 #[derive(Copy, Clone)]
 pub(crate) struct ConvFrame {
-    /// The `typval_T` this container came out of.  NULL for the two frames a
+    /// The `TypVal` this container came out of.  NULL for the two frames a
     /// partial pushes, which stand for its argument list and self dictionary.
-    pub tv: *mut typval_T,
+    pub tv: *mut TypVal,
     pub saved_copyid: c_int,
     pub frame: Frame,
 }
@@ -276,28 +276,28 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_nil(&mut self, tv: *mut typval_T);
+    unsafe fn conv_nil(&mut self, tv: *mut TypVal);
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_bool(&mut self, tv: *mut typval_T, num: bool);
+    unsafe fn conv_bool(&mut self, tv: *mut TypVal, num: bool);
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_number(&mut self, tv: *mut typval_T, num: int64_t);
+    unsafe fn conv_number(&mut self, tv: *mut TypVal, num: int64_t);
     /// Only reachable through a special dictionary, so sinks that refuse
     /// those leave it empty.
     ///
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_unsigned_number(&mut self, tv: *mut typval_T, num: u64) {
+    unsafe fn conv_unsigned_number(&mut self, tv: *mut TypVal, num: u64) {
         let _ = (tv, num);
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_float(&mut self, tv: *mut typval_T, flt: Float) -> Flow;
+    unsafe fn conv_float(&mut self, tv: *mut TypVal, flt: Float) -> Flow;
 
     /// A `VAR_STRING`, or the `_VAL` of a special string.  `buf` may be NULL.
     ///
@@ -305,7 +305,7 @@ pub(crate) trait TypvalSink {
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. `buf` is null, or readable for `len` bytes and
     /// owned by the value — it must not be freed or kept past the call.
-    unsafe fn conv_string(&mut self, tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow;
+    unsafe fn conv_string(&mut self, tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow;
     /// A string that is known to be text rather than bytes: a dictionary key,
     /// or a special string's contents.  Only msgpack and `nothing` tell the
     /// two apart.
@@ -321,7 +321,7 @@ pub(crate) trait TypvalSink {
     /// a dictionary key it belongs to the dictionary; for a special string it
     /// belongs to the walk and is freed on [`Flow::Go`], so an implementation
     /// must not keep it either way.
-    unsafe fn conv_str_string(&mut self, tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_str_string(&mut self, tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
         unsafe { self.conv_string(tv, buf, len) }
     }
     /// A special `ext` value.
@@ -339,7 +339,7 @@ pub(crate) trait TypvalSink {
     /// the implementation has taken it over and owes it an `xfree`.
     unsafe fn conv_ext_string(
         &mut self,
-        tv: *mut typval_T,
+        tv: *mut TypVal,
         buf: *mut c_char,
         len: size_t,
         ext_type: i8,
@@ -349,7 +349,7 @@ pub(crate) trait TypvalSink {
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. `blob` points at a live blob holding `len` bytes,
     /// borrowed for the call.
-    unsafe fn conv_blob(&mut self, tv: *mut typval_T, blob: *const blob_T, len: c_int);
+    unsafe fn conv_blob(&mut self, tv: *mut TypVal, blob: *const Blob, len: c_int);
 
     /// A funcref or partial, before its arguments.  `fun` may be NULL;
     /// `prefix` is `"g:"` where the name needs qualifying.
@@ -361,7 +361,7 @@ pub(crate) trait TypvalSink {
     /// the call would read a stack that has moved on.
     unsafe fn conv_func_start(
         &mut self,
-        tv: *mut typval_T,
+        tv: *mut TypVal,
         fun: *mut c_char,
         prefix: &'static CStr,
         path: &ConvPath,
@@ -369,7 +369,7 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_func_before_args(&mut self, tv: *mut typval_T, len: ptrdiff_t) {
+    unsafe fn conv_func_before_args(&mut self, tv: *mut TypVal, len: ptrdiff_t) {
         let _ = (tv, len);
     }
     /// `len` is −1 when the partial has no self dictionary.
@@ -377,35 +377,35 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_func_before_self(&mut self, tv: *mut typval_T, len: ptrdiff_t) {
+    unsafe fn conv_func_before_self(&mut self, tv: *mut TypVal, len: ptrdiff_t) {
         let _ = (tv, len);
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. `copyid` is the mark the walk put on this partial.
-    unsafe fn conv_func_end(&mut self, tv: *mut typval_T, copyid: c_int) {
+    unsafe fn conv_func_end(&mut self, tv: *mut TypVal, copyid: c_int) {
         let _ = (tv, copyid);
     }
 
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_empty_list(&mut self, tv: *mut typval_T);
+    unsafe fn conv_empty_list(&mut self, tv: *mut TypVal);
     /// `dictp` is where the dictionary pointer lives, so a sink can clear it;
     /// `None` is upstream's `TYPVAL_ENCODE_NODICT_VAR`, meaning the map being
-    /// emitted has no `dict_T` behind it.
+    /// emitted has no `Dict` behind it.
     ///
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. `dictp`, when given, points at the slot the
     /// dictionary pointer lives in, which an implementation may overwrite but
     /// must not free out from under the walk.
-    unsafe fn conv_empty_dict(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>);
+    unsafe fn conv_empty_dict(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>);
 
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_list_start(&mut self, tv: *mut typval_T, len: c_int) -> Flow;
+    unsafe fn conv_list_start(&mut self, tv: *mut TypVal, len: c_int) -> Flow;
     /// Called with the frame just pushed for this list, which a sink may edit
     /// to make the walk skip its items.
     ///
@@ -417,7 +417,7 @@ pub(crate) trait TypvalSink {
     /// walk.
     unsafe fn conv_real_list_after_start(
         &mut self,
-        tv: *mut typval_T,
+        tv: *mut TypVal,
         frame: &mut ConvFrame,
     ) -> Flow {
         let _ = (tv, frame);
@@ -426,20 +426,20 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_list_between_items(&mut self, tv: *mut typval_T) {
+    unsafe fn conv_list_between_items(&mut self, tv: *mut TypVal) {
         let _ = tv;
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_list_end(&mut self, tv: *mut typval_T) {
+    unsafe fn conv_list_end(&mut self, tv: *mut TypVal) {
         let _ = tv;
     }
 
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_dict_start(&mut self, tv: *mut typval_T, len: size_t) -> Flow;
+    unsafe fn conv_dict_start(&mut self, tv: *mut TypVal, len: size_t) -> Flow;
     /// The dictionary counterpart of [`Self::conv_real_list_after_start`].
     ///
     /// # Safety
@@ -449,8 +449,8 @@ pub(crate) trait TypvalSink {
     /// [`Self::conv_empty_dict`] for `dictp`.
     unsafe fn conv_real_dict_after_start(
         &mut self,
-        tv: *mut typval_T,
-        dictp: Option<*mut *mut dict_T>,
+        tv: *mut TypVal,
+        dictp: Option<*mut *mut Dict>,
         frame: &mut ConvFrame,
     ) -> Flow {
         let _ = (tv, dictp, frame);
@@ -462,30 +462,26 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `key` points at the key the walk is about to emit, live and unaliased
     /// for the call.
-    unsafe fn special_dict_key_check(&mut self, key: *const typval_T) -> Flow {
+    unsafe fn special_dict_key_check(&mut self, key: *const TypVal) -> Flow {
         let _ = key;
         Flow::Go
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_after_key(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_dict_after_key(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
         let _ = (tv, dictp);
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_between_items(
-        &mut self,
-        tv: *mut typval_T,
-        dictp: Option<*mut *mut dict_T>,
-    ) {
+    unsafe fn conv_dict_between_items(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
         let _ = (tv, dictp);
     }
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call. As [`Self::conv_empty_dict`] for `dictp`.
-    unsafe fn conv_dict_end(&mut self, tv: *mut typval_T, dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_dict_end(&mut self, tv: *mut TypVal, dictp: Option<*mut *mut Dict>) {
         let _ = (tv, dictp);
     }
 
@@ -495,8 +491,8 @@ pub(crate) trait TypvalSink {
     /// refuse self-reference outright answer [`Flow::Fail`].
     ///
     /// # Safety
-    /// `val` is the container the walk found itself back at — a `*mut list_T`,
-    /// `*mut dict_T` or `*mut partial_T` according to `conv_type` — live and
+    /// `val` is the container the walk found itself back at — a `*mut List`,
+    /// `*mut Dict` or `*mut Partial` according to `conv_type` — live and
     /// already on the walk's stack. `path` borrows that stack and must not
     /// outlive the call.
     unsafe fn conv_recurse(

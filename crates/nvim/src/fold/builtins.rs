@@ -31,7 +31,7 @@ use crate::types::{VAR_STRING, Vv};
 ///
 /// # Safety
 /// `argvars` and `rettv` must be live typvals.
-pub(super) unsafe fn foldclosed_both(argvars: *mut typval_T, rettv: *mut typval_T, end: bool) {
+pub(super) unsafe fn foldclosed_both(argvars: *mut TypVal, rettv: *mut TypVal, end: bool) {
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(rettv), tv_get_lnum(argvars)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
@@ -52,7 +52,7 @@ pub(super) unsafe fn foldclosed_both(argvars: *mut typval_T, rettv: *mut typval_
 ///
 /// # Safety
 /// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldclosed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_foldclosed(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
     unsafe { foldclosed_both(argvars, rettv, false) };
 }
@@ -61,7 +61,7 @@ pub unsafe fn f_foldclosed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 ///
 /// # Safety
 /// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldclosedend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_foldclosedend(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
     unsafe { foldclosed_both(argvars, rettv, true) };
 }
@@ -70,7 +70,7 @@ pub unsafe fn f_foldclosedend(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 ///
 /// # Safety
 /// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldlevel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_foldlevel(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(rettv), tv_get_lnum(argvars)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
@@ -83,7 +83,7 @@ pub unsafe fn f_foldlevel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// # Safety
 /// `rettv` must be a live typval.
-pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_foldtext(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(rettv) };
     rv.v_type = VAR_STRING;
@@ -150,7 +150,7 @@ pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// # Safety
 /// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldtextresult(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_foldtextresult(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut buf: [c_char; FOLD_TEXT_LEN as usize] = [0; FOLD_TEXT_LEN as usize];
     // 'foldtext' can call `foldtextresult()` again; one level is enough.
     static entered: GlobalCell<bool> = GlobalCell::new(false);
@@ -197,8 +197,8 @@ pub unsafe fn f_foldtextresult(argvars: *mut typval_T, rettv: *mut typval_T, _fp
     entered.set(false);
 }
 
-/// [`Live`]'s shape for the `typval_T` the Vimscript face answers in.
-type Tv = Live<typval_T>;
+/// [`Live`]'s shape for the `TypVal` the Vimscript face answers in.
+type Tv = Live<TypVal>;
 
 /// The buffer the editor is working in.
 fn cur_buf() -> Buf {

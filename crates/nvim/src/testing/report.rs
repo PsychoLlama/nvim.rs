@@ -22,7 +22,7 @@ use crate::eval::vars::assert_error;
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
 use crate::runtime::estack_sfile;
-use crate::types::{LineNr, VAR_DICT, VAR_STRING, VAR_UNKNOWN, typval_T};
+use crate::types::{LineNr, TypVal, VAR_DICT, VAR_STRING, VAR_UNKNOWN};
 
 use super::{AssertType, ESTACK_NONE};
 
@@ -174,7 +174,7 @@ unsafe fn ga_concat_shorten_esc(gap: &mut Vec<u8>, str: *const c_char) {
 ///
 /// # Safety
 /// `gap` is open and `opt_msg_tv` is a live typval.
-unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut typval_T) {
+unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut TypVal) {
     // SAFETY: the caller's garray and typval; `encode_tv2echo` allocates.
     let msg = unsafe { &*opt_msg_tv };
     let blank = msg.v_type == VAR_STRING
@@ -192,7 +192,7 @@ unsafe fn append_opt_msg(gap: &mut Vec<u8>, opt_msg_tv: *mut typval_T) {
 ///
 /// # Safety
 /// `tv` is a live typval.
-unsafe fn is_dict(tv: *mut typval_T) -> bool {
+unsafe fn is_dict(tv: *mut TypVal) -> bool {
     // SAFETY: the caller's typval.
     unsafe { (*tv).v_type == VAR_DICT && !(*tv).vval.v_dict.is_null() }
 }
@@ -205,7 +205,7 @@ unsafe fn is_dict(tv: *mut typval_T) -> bool {
 ///
 /// # Safety
 /// Both typvals hold non-null dictionaries.
-unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -> c_int {
+unsafe fn prune_equal_dict_items(exp_tv: *mut TypVal, got_tv: *mut TypVal) -> c_int {
     // SAFETY: the caller's dictionaries. The two walks only ever add to the
     // *new* dictionaries, so neither hashtab is rehashed under its own walk.
     let (exp_d, got_d) = unsafe { ((*exp_tv).vval.v_dict, (*got_tv).vval.v_dict) };
@@ -253,10 +253,10 @@ unsafe fn prune_equal_dict_items(exp_tv: *mut typval_T, got_tv: *mut typval_T) -
 /// when `exp_str` is not.
 pub(super) unsafe fn fill_assert_error(
     gap: &mut Vec<u8>,
-    opt_msg_tv: *mut typval_T,
+    opt_msg_tv: *mut TypVal,
     exp_str: *const c_char,
-    exp_tv: *mut typval_T,
-    got_tv: *mut typval_T,
+    exp_tv: *mut TypVal,
+    got_tv: *mut TypVal,
     atype: AssertType,
 ) {
     let mut did_copy = false;

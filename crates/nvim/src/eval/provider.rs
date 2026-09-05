@@ -38,15 +38,15 @@ use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, Channel, ColNr, FAIL, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, buf_T, caller_scope, dict_T, estack_T, funccal_entry_T,
-    funcexe_T, list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
+    Callback, CallbackReader, Channel, ColNr, Dict, FAIL, List, NUL, TypVal, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, buf_T, caller_scope, estack_T, funccal_entry_T,
+    funcexe_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live};
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -73,7 +73,7 @@ fn top_estack() -> estack_T {
 /// # Safety
 /// All four pointers must be valid.
 pub unsafe fn common_job_callbacks(
-    vopts: *mut dict_T,
+    vopts: *mut Dict,
     on_stdout: *mut CallbackReader,
     on_stderr: *mut CallbackReader,
     on_exit: *mut Callback,
@@ -119,7 +119,7 @@ pub unsafe fn common_job_callbacks(
 ///
 /// # Safety
 /// `vopts` must be a live Dict and `into` a valid callback slot.
-unsafe fn job_callback(vopts: *mut dict_T, key: &CStr, into: *mut Callback) -> bool {
+unsafe fn job_callback(vopts: *mut Dict, key: &CStr, into: *mut Callback) -> bool {
     let len = key.count_bytes() as ptrdiff_t;
     // SAFETY: the caller's promise; `key` is a NUL-terminated literal of
     // `len` bytes.
@@ -158,7 +158,7 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
 ///
 /// # Safety
 /// `name` must be NUL-terminated; `argvars` and `rettv` valid.
-pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv: *mut typval_T) {
+pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut TypVal, rettv: *mut TypVal) {
     if check_secure() {
         return;
     }
@@ -170,7 +170,7 @@ pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv:
         return;
     }
     // SAFETY: the List is fresh and this frame's.
-    let args: *mut list_T = unsafe { tv_list_alloc(1 as ptrdiff_t) };
+    let args: *mut List = unsafe { tv_list_alloc(1 as ptrdiff_t) };
     // SAFETY: `VAR_STRING` says `v_string` is the union's live member, and
     // -1 asks the callee to measure it.
     unsafe { tv_list_append_string(args, arg.string_or_null(), -1 as ssize_t) };
@@ -191,15 +191,15 @@ pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut typval_T, rettv:
 pub unsafe fn eval_call_provider(
     provider: *mut c_char,
     method: *mut c_char,
-    arguments: *mut list_T,
+    arguments: *mut List,
     discard: bool,
-) -> typval_T {
+) -> TypVal {
     // SAFETY: the caller's promise -- `provider` is NUL-terminated.
     if !unsafe { eval_has_provider(provider, false) } {
         // SAFETY: the format takes one NUL-terminated string.
         let provider = unsafe { c_str(provider) };
         semsg!("E319: No \"{provider}\" provider found. Run \":checkhealth vim.provider\"");
-        return typval_T {
+        return TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
@@ -233,13 +233,13 @@ pub unsafe fn eval_call_provider(
     unsafe { save_funccal(&raw mut funccal_entry) };
     let nesting = Depth::of(&provider_call_nesting);
 
-    let mut argvars: [typval_T; 3] = [
-        typval_T {
+    let mut argvars: [TypVal; 3] = [
+        TypVal {
             v_type: VAR_STRING,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_string: method },
         },
-        typval_T {
+        TypVal {
             v_type: VAR_LIST,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: arguments },

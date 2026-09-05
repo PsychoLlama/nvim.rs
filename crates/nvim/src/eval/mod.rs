@@ -32,9 +32,9 @@ use crate::types::TAB;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, ChannelStreamType, ExprType, Failed, GRegFlags, LineNr, LuaRetMode, MarkGet, MotionType,
-    Object, blob_T, dict_T, funcexe_T, list_T, listwatch_T, lval_T, partial_T, size_t, timer_T,
-    typval_T, uint64_t,
+    Array, Blob, ChannelStreamType, Dict, ExprType, Failed, GRegFlags, LineNr, List, ListWatch,
+    LuaRetMode, MarkGet, MotionType, Object, Partial, TypVal, funcexe_T, lval_T, size_t, timer_T,
+    uint64_t,
 };
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
@@ -80,9 +80,9 @@ pub use self::expr::eval0;
 /// They live here rather than in the module that needed each first because
 /// the same pointee crosses several of this family's files.
 ///
-/// A value the evaluator is working on. The `*const typval_T` arguments the
+/// A value the evaluator is working on. The `*const TypVal` arguments the
 /// builtins take are wrapped with `cast_mut()` and only read.
-pub(crate) type Tv = Live<typval_T>;
+pub(crate) type Tv = Live<TypVal>;
 
 /// A registered timer. The promise is discharged by the reference count:
 /// nothing here holds one across a call that has not taken a reference.
@@ -126,10 +126,10 @@ pub const GLV_FAIL: GlvStatus = 0;
 pub struct forinfo_T {
     pub fi_semicolon: c_int,
     pub fi_varcount: c_int,
-    pub fi_lw: listwatch_T,
-    pub fi_list: *mut list_T,
+    pub fi_lw: ListWatch,
+    pub fi_list: *mut List,
     pub fi_bi: c_int,
-    pub fi_blob: *mut blob_T,
+    pub fi_blob: *mut Blob,
     pub fi_string: *mut c_char,
     pub fi_byte_idx: c_int,
 }
@@ -215,9 +215,9 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_lastline: 0 as LineNr,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
     fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<partial_T>(),
-    fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
-    fe_basetv: ::core::ptr::null_mut::<typval_T>(),
+    fe_partial: ::core::ptr::null_mut::<Partial>(),
+    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
+    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
     fe_found_var: false,
 };
 pub const PROF_YES: c_int = 1 as c_int;

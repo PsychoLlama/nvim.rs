@@ -41,7 +41,7 @@ use crate::path::{
     vim_is_abs_name,
 };
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
-use crate::types::{EvalFuncData, MAXPATHL, buf_T, size_t, typval_T};
+use crate::types::{EvalFuncData, MAXPATHL, TypVal, buf_T, size_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::replace;
 use core::ptr;
@@ -309,7 +309,7 @@ fn string_sub(
     let mut out_len: size_t = 0;
     let (n, expr, fl, ret) = (
         len as size_t,
-        ptr::null_mut::<typval_T>(),
+        ptr::null_mut::<TypVal>(),
         flags.as_ptr(),
         &raw mut out_len,
     );
@@ -633,7 +633,7 @@ pub unsafe fn modify_fname(
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
 /// cleared result.
-pub unsafe fn f_fnamemodify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_fnamemodify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut buf = NumBuf::new();

@@ -247,7 +247,7 @@ unsafe fn call_qftf_func(
     qf_winid: c_int,
     start_idx: c_int,
     end_idx: c_int,
-) -> *mut list_T {
+) -> *mut List {
     // SAFETY: the caller's promise -- a live `qf_list_T`.
     let mut qfl = unsafe { Qfl::new(qfl) };
     /// This does not work properly recursively.
@@ -279,17 +279,17 @@ unsafe fn call_qftf_func(
     add(c"end_idx", end_idx as VarNumber);
     unsafe { (*dict).dv_refcount.retain() };
 
-    let mut args = [typval_T {
+    let mut args = [TypVal {
         v_type: VAR_DICT,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_dict: dict },
     }];
-    let mut rettv = typval_T {
+    let mut rettv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    let mut answer = ptr::null_mut::<list_T>();
+    let mut answer = ptr::null_mut::<List>();
     let locked = Lock::text();
     if unsafe { callback_call(cb, 1, args.as_mut_ptr(), &raw mut rettv) } {
         if rettv.v_type == VAR_LIST {

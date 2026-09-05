@@ -33,7 +33,7 @@ const HL_KEYS: [&str; 4] = ["linehl", "texthl", "culhl", "numhl"];
 ///
 /// # Safety
 /// `d` must be a live dictionary and `val` a NUL-terminated string.
-unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
+unsafe fn put_str(d: *mut Dict, key: &str, val: *const ::core::ffi::c_char) {
     // SAFETY: the caller's dictionary and value.
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr().cast(), key.len(), val) };
 }
@@ -42,7 +42,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
 ///
 /// # Safety
 /// `d` must be a live dictionary.
-unsafe fn put_nr(d: *mut dict_T, key: &str, nr: VarNumber) {
+unsafe fn put_nr(d: *mut Dict, key: &str, nr: VarNumber) {
     // SAFETY: the caller's dictionary.
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
@@ -57,9 +57,9 @@ fn null<T>() -> *mut T {
 ///
 /// # Safety
 /// `d` must be null or a live dictionary; the answer borrows from it.
-unsafe fn key(d: *const dict_T, key: &str) -> Option<*mut typval_T> {
+unsafe fn key(d: *const Dict, key: &str) -> Option<*mut TypVal> {
     // SAFETY: the caller's dictionary.
-    let di: *mut dictitem_T = unsafe {
+    let di: *mut DictItem = unsafe {
         tv_dict_find(
             d,
             key.as_ptr().cast(),
@@ -76,7 +76,7 @@ unsafe fn key(d: *const dict_T, key: &str) -> Option<*mut typval_T> {
 /// # Safety
 /// The caller must already have checked that a supplied argument `i` is a
 /// dictionary -- `tv_check_for_*_dict_arg` is what does that.
-unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut dict_T {
+unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut Dict {
     if !args.has(i) {
         return null();
     }
@@ -89,7 +89,7 @@ unsafe fn dict_arg(args: Args<'_>, i: usize) -> *mut dict_T {
 ///
 /// # Safety
 /// `tv` must be a live typval.
-unsafe fn group_arg(tv: *mut typval_T, numbuf: &mut NumBuf) -> Option<*mut c_char> {
+unsafe fn group_arg(tv: *mut TypVal, numbuf: &mut NumBuf) -> Option<*mut c_char> {
     // SAFETY: the caller's typval.
     let group = unsafe { numbuf.string_chk(tv) }.cast_mut();
     if group.is_null() {
@@ -113,11 +113,11 @@ unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
     if p.is_null() { c"NONE".as_ptr() } else { p }
 }
 
-/// Walks a `list_T`, yielding each item's value in order.
+/// Walks a `List`, yielding each item's value in order.
 ///
 /// # Safety
 /// `l` must be null or a live list the body does not modify.
-unsafe fn list_items(l: *const list_T) -> impl Iterator<Item = *mut typval_T> {
+unsafe fn list_items(l: *const List) -> impl Iterator<Item = *mut TypVal> {
     // SAFETY: the caller's list.
     let mut at = unsafe { tv_list_first(l) };
     ::core::iter::from_fn(move || {
@@ -137,11 +137,7 @@ unsafe fn list_items(l: *const list_T) -> impl Iterator<Item = *mut typval_T> {
 ///
 /// # Safety
 /// `l` and `retlist` must be live lists.
-unsafe fn each_dict(
-    retlist: *mut list_T,
-    l: *const list_T,
-    mut one: impl FnMut(*mut dict_T) -> c_int,
-) {
+unsafe fn each_dict(retlist: *mut List, l: *const List, mut one: impl FnMut(*mut Dict) -> c_int) {
     // SAFETY: the caller's lists.
     unsafe {
         for tv in list_items(l) {
@@ -164,11 +160,7 @@ unsafe fn each_dict(
 ///
 /// # Safety
 /// `args` and `rettv` are the frame's.
-unsafe fn each_dict_arg(
-    args: Args<'_>,
-    rettv: &mut typval_T,
-    one: impl FnMut(*mut dict_T) -> c_int,
-) {
+unsafe fn each_dict_arg(args: Args<'_>, rettv: &mut TypVal, one: impl FnMut(*mut Dict) -> c_int) {
     // SAFETY: the frame's return slot.
     let retlist = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
     if args.ty(0) != VAR_LIST {
@@ -184,7 +176,7 @@ unsafe fn each_dict_arg(
 ///
 /// # Safety
 /// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut dict_T {
+pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut Dict {
     // SAFETY: a definition's name, icon and cells are its own.
     let d = unsafe { tv_dict_alloc() };
     unsafe { put_str(d, "name", sp.sn_name) };
@@ -212,7 +204,7 @@ pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut dict_T {
 ///
 /// # Safety
 /// `mark` must carry a live sign decoration.
-pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
+pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
     // SAFETY: the caller's mark, and the decoration the store names for it.
     let d = unsafe { tv_dict_alloc() };
     let sh = unsafe { Sh::new(decor_find_sign(mt_decor(mark))) };
@@ -228,7 +220,7 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
 ///
 /// # Safety
 /// `buf` must be live.
-pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
+pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut List {
     // SAFETY: the caller's buffer.
     let signs = placed_signs(unsafe { Buf::new(buf) }, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
@@ -252,7 +244,7 @@ unsafe fn sign_get_placed_in_buf(
     lnum: LineNr,
     sign_id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
-    retlist: *mut list_T,
+    retlist: *mut List,
 ) {
     // SAFETY: the caller's buffer.
     let cbuf = unsafe { Buf::new(buf) };
@@ -307,7 +299,7 @@ unsafe fn sign_get_placed(
     lnum: LineNr,
     id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
-    retlist: *mut list_T,
+    retlist: *mut List,
 ) {
     if !buf.is_null() {
         // SAFETY: the caller's buffer and list.
@@ -334,7 +326,7 @@ unsafe fn sign_get_placed(
 /// `name` must be null or NUL-terminated; `dict` must be null or live.
 unsafe fn sign_define_from_dict(
     name: *mut ::core::ffi::c_char,
-    dict: *mut dict_T,
+    dict: *mut Dict,
 ) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
@@ -376,11 +368,7 @@ unsafe fn sign_define_from_dict(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_define(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_sign_define(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if args.ty(0) == VAR_LIST && !args.has(1) {
@@ -412,8 +400,8 @@ pub(crate) unsafe fn f_sign_define(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_getdefined(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();
@@ -437,8 +425,8 @@ pub(crate) unsafe fn f_sign_getdefined(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_getplaced(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();
@@ -497,11 +485,7 @@ pub(crate) unsafe fn f_sign_getplaced(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_jump(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_sign_jump(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
@@ -535,7 +519,7 @@ pub(crate) unsafe fn f_sign_jump(
 ///
 /// # Safety
 /// `tv` and `dict` must be null or live.
-unsafe fn slot(tv: *mut typval_T, dict: *mut dict_T, name: &str) -> Option<*mut typval_T> {
+unsafe fn slot(tv: *mut TypVal, dict: *mut Dict, name: &str) -> Option<*mut TypVal> {
     if !tv.is_null() {
         return Some(tv);
     }
@@ -551,11 +535,11 @@ unsafe fn slot(tv: *mut typval_T, dict: *mut dict_T, name: &str) -> Option<*mut 
 /// # Safety
 /// The typvals and `dict` must be null or live.
 unsafe fn sign_place_from_dict(
-    id_tv: *mut typval_T,
-    group_tv: *mut typval_T,
-    name_tv: *mut typval_T,
-    buf_tv: *mut typval_T,
-    dict: *mut dict_T,
+    id_tv: *mut TypVal,
+    group_tv: *mut TypVal,
+    name_tv: *mut TypVal,
+    buf_tv: *mut TypVal,
+    dict: *mut Dict,
 ) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's typvals and dictionary.
@@ -631,11 +615,7 @@ unsafe fn sign_place_from_dict(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_place(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_sign_place(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     let mut dict = null();
@@ -658,8 +638,8 @@ pub(crate) unsafe fn f_sign_place(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_placelist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let (args, rettv) = frame!(argvars, rettv);
@@ -676,8 +656,8 @@ pub(crate) unsafe fn f_sign_placelist(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_undefine(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();
@@ -717,7 +697,7 @@ pub(crate) unsafe fn f_sign_undefine(
 ///
 /// # Safety
 /// The typval and `dict` must be null or live.
-unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> ::core::ffi::c_int {
+unsafe fn sign_unplace_from_dict(group_tv: *mut TypVal, dict: *mut Dict) -> ::core::ffi::c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's typval and dictionary.
@@ -755,11 +735,7 @@ unsafe fn sign_unplace_from_dict(group_tv: *mut typval_T, dict: *mut dict_T) -> 
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_sign_unplace(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_sign_unplace(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the frame's argument slots.
@@ -779,8 +755,8 @@ pub(crate) unsafe fn f_sign_unplace(
 /// # Safety
 /// The evaluator's argument and return slots.
 pub(crate) unsafe fn f_sign_unplacelist(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let (args, rettv) = frame!(argvars, rettv);

@@ -24,8 +24,8 @@ use crate::eval::vars::msgpack_type_list;
 use crate::garray::ga_concat_len;
 use crate::memory::xmemdupz;
 use crate::types::{
-    MessagePackType, VAR_LIST, VAR_STRING, VarLock, dictitem_T, list_T, ptrdiff_t, size_t,
-    typval_T, typval_vval_union,
+    DictItem, List, MessagePackType, TypVal, VAR_LIST, VAR_STRING, VarLock, ptrdiff_t, size_t,
+    typval_vval_union,
 };
 use ::libc::memchr;
 
@@ -51,14 +51,10 @@ pub(crate) const kMPExt: MessagePackType = 7;
 /// # Safety
 /// `rettv` is writable and holds no value that needs clearing.
 #[inline]
-pub(crate) unsafe fn create_special_dict(
-    rettv: *mut typval_T,
-    type_: MessagePackType,
-    val: typval_T,
-) {
+pub(crate) unsafe fn create_special_dict(rettv: *mut TypVal, type_: MessagePackType, val: TypVal) {
     let dict = unsafe { tv_dict_alloc() };
 
-    let type_di: *mut dictitem_T =
+    let type_di: *mut DictItem =
         unsafe { tv_dict_item_alloc_len("_TYPE".as_ptr() as *const c_char, "_TYPE".len()) };
     // SAFETY: the item just added to the special dictionary.
     let mut type_item = unsafe { Di::new(type_di) };
@@ -68,16 +64,16 @@ pub(crate) unsafe fn create_special_dict(
     unsafe { tv_list_ref((*type_di).di_tv.list_or_null()) };
     let _ = unsafe { tv_dict_add(dict, type_di) };
 
-    let val_di: *mut dictitem_T =
+    let val_di: *mut DictItem =
         unsafe { tv_dict_item_alloc_len("_VAL".as_ptr() as *const c_char, "_VAL".len()) };
     unsafe { (*val_di).di_tv = val };
     let _ = unsafe { tv_dict_add(dict, val_di) };
 
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { *rettv = typval_T::dict(dict) };
+    unsafe { *rettv = TypVal::dict(dict) };
 }
 
-/// The special dictionary a map that cannot be a `dict_T` decodes to.
+/// The special dictionary a map that cannot be a `Dict` decodes to.
 ///
 /// `len` sizes the `_VAL` list in advance (see `ListLenSpecials`); it is only
 /// a hint, and underfilling the list is allowed.  The returned list is the
@@ -86,15 +82,15 @@ pub(crate) unsafe fn create_special_dict(
 ///
 /// # Safety
 /// `ret_tv` is writable and holds no value that needs clearing.
-pub unsafe fn decode_create_map_special_dict(ret_tv: *mut typval_T, len: ptrdiff_t) -> *mut list_T {
+pub unsafe fn decode_create_map_special_dict(ret_tv: *mut TypVal, len: ptrdiff_t) -> *mut List {
     let list = unsafe { tv_list_alloc(len) };
     unsafe { tv_list_ref(list) };
-    let val_tv = typval_T::list(list);
+    let val_tv = TypVal::list(list);
     unsafe { create_special_dict(ret_tv, kMPMap, val_tv) };
     list
 }
 
-/// `len` bytes at `s` as a `typval_T`: a `VAR_STRING`, or a `VAR_BLOB` when
+/// `len` bytes at `s` as a `TypVal`: a `VAR_STRING`, or a `VAR_BLOB` when
 /// it cannot be one.
 ///
 /// A Vimscript string is NUL-terminated, so a run containing an embedded NUL
@@ -112,7 +108,7 @@ pub unsafe fn decode_string(
     len: size_t,
     force_blob: bool,
     s_allocated: bool,
-) -> typval_T {
+) -> TypVal {
     debug_assert!(!s.is_null() || len == 0);
     if force_blob || (!s.is_null() && !unsafe { memchr(s.cast(), 0, len) }.is_null()) {
         let mut tv = TV_INITIAL_VALUE;
@@ -130,7 +126,7 @@ pub unsafe fn decode_string(
         }
         return tv;
     }
-    typval_T {
+    TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union {

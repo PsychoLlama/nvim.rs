@@ -23,7 +23,7 @@ use crate::menu::show_popupmenu;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::pos::{lt, ltoreq};
 use crate::types::{
-    OptInt, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, typval_T, typval_vval_union,
+    OptInt, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, typval_vval_union,
 };
 use crate::ui::ui_flush;
 
@@ -32,12 +32,12 @@ use crate::ui::ui_flush;
 pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_button: c_int) {
     let def = click_defs.at(col);
     let mut modifiers = modifier_letters(mod_mask.get());
-    let number = |v: VarNumber| typval_T {
+    let number = |v: VarNumber| TypVal {
         v_type: VAR_NUMBER,
         v_lock: VarLock::Fixed,
         vval: typval_vval_union { v_number: v },
     };
-    let string = |v: *mut c_char| typval_T {
+    let string = |v: *mut c_char| TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Fixed,
         vval: typval_vval_union { v_string: v },
@@ -48,7 +48,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
         string(button_name(which_button).as_ptr().cast_mut()),
         string(modifiers.as_mut_ptr()),
     ];
-    let mut rettv = typval_T {
+    let mut rettv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

@@ -21,9 +21,9 @@ use crate::eval::{get_copy_id, partial_name};
 use crate::memory::xfree;
 use crate::message::internal_error;
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, dict_T, dictitem_T, int64_t, kBoolVarFalse,
-    kBoolVarTrue, kSpecialVarNull, list_T, partial_T, ptrdiff_t, size_t, typval_T,
+    Dict, DictItem, List, Partial, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, int64_t,
+    kBoolVarFalse, kBoolVarTrue, kSpecialVarNull, ptrdiff_t, size_t,
 };
 
 /// Apply a hook's verdict inside `convert_one_value`, where "stop" is
@@ -55,7 +55,7 @@ macro_rules! walk_hook {
 ///
 /// # Safety
 /// `tv` must point at a live `VAR_STRING` typval.
-pub(crate) unsafe fn tv_strlen(tv: *const typval_T) -> size_t {
+pub(crate) unsafe fn tv_strlen(tv: *const TypVal) -> size_t {
     // SAFETY: the caller's promise: a live VAR_STRING typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     debug_assert!(val.v_type == VAR_STRING);
@@ -102,7 +102,7 @@ unsafe fn check_self_reference<S: TypvalSink>(
 #[inline]
 unsafe fn check_list_seen<S: TypvalSink>(
     sink: &mut S,
-    list: *mut list_T,
+    list: *mut List,
     conv_type: ConvType,
     copyid: c_int,
     path: &ConvPath,
@@ -120,7 +120,7 @@ unsafe fn check_list_seen<S: TypvalSink>(
 #[inline]
 unsafe fn check_dict_seen<S: TypvalSink>(
     sink: &mut S,
-    dict: *mut dict_T,
+    dict: *mut Dict,
     copyid: c_int,
     path: &ConvPath,
 ) -> Flow {
@@ -163,7 +163,7 @@ const SPECIAL_KINDS: [SpecialKind; 8] = [
 unsafe fn convert_one_value<S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     copyid: c_int,
     objname: *const c_char,
 ) -> Result<(), Refused> {
@@ -309,7 +309,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
 unsafe fn convert_special_dict<S: TypvalSink>(
     sink: &mut S,
     stack: &mut ConvStack,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     copyid: c_int,
     objname: *const c_char,
 ) -> Result<Option<Flow>, Refused> {
@@ -317,11 +317,11 @@ unsafe fn convert_special_dict<S: TypvalSink>(
     if unsafe { (*dict).dv_hashtab.ht_used } != 2 {
         return Ok(None);
     }
-    let type_di: *const dictitem_T = unsafe { tv_dict_find(dict, c"_TYPE".as_ptr(), 5) };
+    let type_di: *const DictItem = unsafe { tv_dict_find(dict, c"_TYPE".as_ptr(), 5) };
     if type_di.is_null() || unsafe { (*type_di).di_tv.v_type } != VAR_LIST {
         return Ok(None);
     }
-    let val_di: *const dictitem_T = unsafe { tv_dict_find(dict, c"_VAL".as_ptr(), 4) };
+    let val_di: *const DictItem = unsafe { tv_dict_find(dict, c"_VAL".as_ptr(), 4) };
     if val_di.is_null() {
         return Ok(None);
     }
@@ -530,7 +530,7 @@ unsafe fn convert_special_dict<S: TypvalSink>(
 /// name used only for error messages.
 pub(crate) unsafe fn encode_typval<S: TypvalSink>(
     sink: &mut S,
-    top_tv: *mut typval_T,
+    top_tv: *mut TypVal,
     objname: *const c_char,
 ) -> bool {
     unsafe { walk(sink, top_tv, objname).is_ok() }
@@ -538,7 +538,7 @@ pub(crate) unsafe fn encode_typval<S: TypvalSink>(
 
 unsafe fn walk<S: TypvalSink>(
     sink: &mut S,
-    top_tv: *mut typval_T,
+    top_tv: *mut TypVal,
     objname: *const c_char,
 ) -> Result<(), Refused> {
     let copyid = unsafe { get_copy_id() };
@@ -560,7 +560,7 @@ unsafe fn walk<S: TypvalSink>(
         let idx = stack.len() - 1;
         let cur_tv = stack.get_mut(idx).tv;
         // The value this pass hands to `convert_one_value`.
-        let tv: *mut typval_T;
+        let tv: *mut TypVal;
         match stack.get_mut(idx).frame {
             Frame::Dict {
                 dict,
@@ -661,7 +661,7 @@ unsafe fn walk<S: TypvalSink>(
                             *slot = PartialStage::Self_;
                         }
                         if !pt.is_null() && part.pt_argc > 0 {
-                            let nul: *mut typval_T = ptr::null_mut();
+                            let nul: *mut TypVal = ptr::null_mut();
                             let pt_argc = part.pt_argc;
                             let pt_argv = part.pt_argv;
                             walk_hook!(unsafe { sink.conv_list_start(nul, pt_argc) });
@@ -692,7 +692,7 @@ unsafe fn walk<S: TypvalSink>(
                             let frame_dict = unsafe { Dt::new(dict) };
                             let used = frame_dict.dv_hashtab.ht_used;
                             unsafe { sink.conv_func_before_self(cur_tv, used as ptrdiff_t) };
-                            let dictp = part.field_ptr(::core::mem::offset_of!(partial_T, pt_dict));
+                            let dictp = part.field_ptr(::core::mem::offset_of!(Partial, pt_dict));
                             if used == 0 {
                                 unsafe { sink.conv_empty_dict(ptr::null_mut(), Some(dictp)) };
                                 continue;
@@ -717,7 +717,7 @@ unsafe fn walk<S: TypvalSink>(
                                     todo: used,
                                 },
                             });
-                            let nul: *mut typval_T = ptr::null_mut();
+                            let nul: *mut TypVal = ptr::null_mut();
                             let dp = Some(dictp);
                             walk_hook!(unsafe {
                                 sink.conv_real_dict_after_start(nul, dp, stack.last_mut())

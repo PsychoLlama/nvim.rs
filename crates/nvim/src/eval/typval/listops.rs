@@ -1,7 +1,7 @@
 //! Filling a list, copying one, and finding an item in it.
 //!
 //! The `tv_list_append_*` family is the C header's overload set — one
-//! function per value kind, each allocating a `listitem_T` and linking it at
+//! function per value kind, each allocating a `ListItem` and linking it at
 //! the tail.  [`tv_list_copy`] is `copy()`/`deepcopy()` over a list,
 //! [`tv_list_extend`] and [`tv_list_concat`] the `extend()`/`+` pair, and
 //! [`tv_list_find`] the index walk `list[n]` resolves through, which counts
@@ -19,7 +19,7 @@ use crate::types::Failed;
 /// `l` must point at a live list, `ni` at a fresh item on no list, and
 /// `item` must be null or an item **of `l`** — the links are rewritten
 /// around it, so an item from another list corrupts both.
-pub unsafe fn tv_list_insert(l: *mut list_T, ni: *mut listitem_T, item: *mut listitem_T) {
+pub unsafe fn tv_list_insert(l: *mut List, ni: *mut ListItem, item: *mut ListItem) {
     // SAFETY: the caller's promise: a live list.
     let mut list = unsafe { Ls::new(l) };
     if item.is_null() {
@@ -55,7 +55,7 @@ pub unsafe fn tv_list_insert(l: *mut list_T, ni: *mut listitem_T, item: *mut lis
 /// `l` must point at a live list, `tv` at a value that is safe to copy, and
 /// `item` must be null or an item of `l`. The copy takes its own
 /// references, so `tv` stays the caller's.
-pub unsafe fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut listitem_T) {
+pub unsafe fn tv_list_insert_tv(l: *mut List, tv: *mut TypVal, item: *mut ListItem) {
     let ni = tv_list_item_alloc();
     unsafe { tv_copy(tv, &raw mut (*ni).li_tv) };
     unsafe { tv_list_insert(l, ni, item) };
@@ -66,7 +66,7 @@ pub unsafe fn tv_list_insert_tv(l: *mut list_T, tv: *mut typval_T, item: *mut li
 /// # Safety
 /// `l` must point at a live list and `item` at a fresh item that is on no
 /// list. The list takes it over.
-pub unsafe fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
+pub unsafe fn tv_list_append(l: *mut List, item: *mut ListItem) {
     // SAFETY: the caller's promise: a live list.
     let mut list = unsafe { Ls::new(l) };
     match unsafe { (*l).lv_last.as_mut() } {
@@ -89,7 +89,7 @@ pub unsafe fn tv_list_append(l: *mut list_T, item: *mut listitem_T) {
 /// # Safety
 /// `l` must point at a live list and `tv` at a value that is safe to copy;
 /// `tv` stays the caller's.
-pub unsafe fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
+pub unsafe fn tv_list_append_tv(l: *mut List, tv: *mut TypVal) {
     let li = tv_list_item_alloc();
     unsafe { tv_copy(tv, &raw mut (*li).li_tv) };
     unsafe { tv_list_append(l, li) };
@@ -104,7 +104,7 @@ pub unsafe fn tv_list_append_tv(l: *mut list_T, tv: *mut typval_T) {
 /// and allocations the caller is giving up — the list owns them now. The
 /// returned pointer borrows the item and is invalidated by anything that
 /// removes it.
-pub unsafe fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typval_T {
+pub unsafe fn tv_list_append_owned_tv(l: *mut List, tv: TypVal) -> *mut TypVal {
     let li = tv_list_item_alloc();
     unsafe { (*li).li_tv = tv };
     unsafe { tv_list_append(l, li) };
@@ -116,8 +116,8 @@ pub unsafe fn tv_list_append_owned_tv(l: *mut list_T, tv: typval_T) -> *mut typv
 /// # Safety
 /// `l` must point at a live list, and `itemlist` is null or a live list. A
 /// reference to `itemlist` is taken.
-pub unsafe fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
-    unsafe { tv_list_append_owned_tv(l, typval_T::list(itemlist)) };
+pub unsafe fn tv_list_append_list(l: *mut List, itemlist: *mut List) {
+    unsafe { tv_list_append_owned_tv(l, TypVal::list(itemlist)) };
     unsafe { tv_list_ref(itemlist) };
 }
 
@@ -126,8 +126,8 @@ pub unsafe fn tv_list_append_list(l: *mut list_T, itemlist: *mut list_T) {
 /// # Safety
 /// `l` must point at a live list, and `dict` is null or a live dictionary.
 /// A reference to `dict` is taken.
-pub unsafe fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
-    unsafe { tv_list_append_owned_tv(l, typval_T::dict(dict)) };
+pub unsafe fn tv_list_append_dict(l: *mut List, dict: *mut Dict) {
+    unsafe { tv_list_append_owned_tv(l, TypVal::dict(dict)) };
     if let Some(dict) = unsafe { dict.as_mut() } {
         dict.dv_refcount.retain();
     }
@@ -142,7 +142,7 @@ pub unsafe fn tv_list_append_dict(l: *mut list_T, dict: *mut dict_T) {
 /// `l` must point at a live list. `str` is null, or readable for `len`
 /// bytes, or — when `len` is negative — NUL-terminated. The bytes are
 /// copied, so `str` stays the caller's.
-pub unsafe fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_char, len: ssize_t) {
+pub unsafe fn tv_list_append_string(l: *mut List, str: *const ::core::ffi::c_char, len: ssize_t) {
     let copied = if str.is_null() {
         ::core::ptr::null_mut()
     } else if len >= 0 {
@@ -159,16 +159,16 @@ pub unsafe fn tv_list_append_string(l: *mut list_T, str: *const ::core::ffi::c_c
 /// `l` must point at a live list, and `str` is null or an allocation from
 /// the `xmalloc` family. **The list takes it over**; the caller must not
 /// free it.
-pub unsafe fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::ffi::c_char) {
-    unsafe { tv_list_append_owned_tv(l, typval_T::string(str)) };
+pub unsafe fn tv_list_append_allocated_string(l: *mut List, str: *mut ::core::ffi::c_char) {
+    unsafe { tv_list_append_owned_tv(l, TypVal::string(str)) };
 }
 
 /// Append the number `n` to `l`.
 ///
 /// # Safety
 /// `l` must point at a live list.
-pub unsafe fn tv_list_append_number(l: *mut list_T, n: VarNumber) {
-    unsafe { tv_list_append_owned_tv(l, typval_T::number(n)) };
+pub unsafe fn tv_list_append_number(l: *mut List, n: VarNumber) {
+    unsafe { tv_list_append_owned_tv(l, TypVal::number(n)) };
 }
 
 /// Copy `orig`, deeply when `deep`, converting strings through `conv`.
@@ -184,10 +184,10 @@ pub unsafe fn tv_list_append_number(l: *mut list_T, n: VarNumber) {
 /// this list is already visited.
 pub unsafe fn tv_list_copy(
     conv: *const vimconv_T,
-    orig: *mut list_T,
+    orig: *mut List,
     deep: bool,
     copyID: ::core::ffi::c_int,
-) -> *mut list_T {
+) -> *mut List {
     if orig.is_null() {
         return ::core::ptr::null_mut();
     }
@@ -230,7 +230,7 @@ pub unsafe fn tv_list_copy(
 /// `l1` and `l2` must point at live lists, and `bef` must be null or an
 /// item of `l1`. `l1` and `l2` may be the same list — the walk stops after
 /// the original item count for exactly that case.
-pub unsafe fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listitem_T) {
+pub unsafe fn tv_list_extend(l1: *mut List, l2: *mut List, bef: *mut ListItem) {
     let mut todo = unsafe { tv_list_len(l2) };
     let befbef = if bef.is_null() {
         ::core::ptr::null_mut()
@@ -262,12 +262,8 @@ pub unsafe fn tv_list_extend(l1: *mut list_T, l2: *mut list_T, bef: *mut listite
 ///
 /// # Safety
 /// `l1` and `l2` are each null or a live list, and `tv` must point at a
-/// writable `typval_T` holding no value yet.
-pub unsafe fn tv_list_concat(
-    l1: *mut list_T,
-    l2: *mut list_T,
-    tv: *mut typval_T,
-) -> Result<(), Failed> {
+/// writable `TypVal` holding no value yet.
+pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise: a writable typval.
     let mut val = unsafe { Tv::new(tv) };
     val.v_type = VAR_LIST;
@@ -299,8 +295,8 @@ pub unsafe fn tv_list_concat(
 /// `rettv` must be writable and hold no value yet, and `arg_errmsg` must be
 /// a NUL-terminated string.
 pub unsafe fn tv_list_remove(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let l = unsafe { (*argvars).list_or_null() };
@@ -364,7 +360,7 @@ pub unsafe fn tv_list_remove(
 /// `l1` and `l2` are each null or a live list. Comparing values can
 /// recurse, so a cycle must already have been ruled out by the caller's
 /// `copyID` bookkeeping.
-pub unsafe fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: bool) -> bool {
+pub unsafe fn tv_list_equal(l1: *mut List, l2: *mut List, ic: bool) -> bool {
     if l1 == l2 {
         return true;
     }
@@ -399,7 +395,7 @@ pub unsafe fn tv_list_equal(l1: *mut list_T, l2: *mut list_T, ic: bool) -> bool 
 /// # Safety
 /// `l` is null or points at a live list. Every item's links are rewritten,
 /// so nothing may be walking the list.
-pub unsafe fn tv_list_reverse(l: *mut list_T) {
+pub unsafe fn tv_list_reverse(l: *mut List) {
     if unsafe { tv_list_len(l) } <= 1 {
         return;
     }
@@ -426,7 +422,7 @@ pub unsafe fn tv_list_reverse(l: *mut list_T) {
 /// `l` is null or points at a live list. The item borrows the list; the
 /// index cache this writes into `l` is invalidated by any change to the
 /// list's shape, which the mutating entry points here take care of.
-pub unsafe fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listitem_T {
+pub unsafe fn tv_list_find(l: *mut List, n: ::core::ffi::c_int) -> *mut ListItem {
     if l.is_null() {
         return ::core::ptr::null_mut();
     }
@@ -481,7 +477,7 @@ pub unsafe fn tv_list_find(l: *mut list_T, n: ::core::ffi::c_int) -> *mut listit
 /// `l` is null or points at a live list, and `ret_error` is null or points
 /// at a writable `bool`.
 pub unsafe fn tv_list_find_nr(
-    l: *mut list_T,
+    l: *mut List,
     n: ::core::ffi::c_int,
     ret_error: *mut bool,
 ) -> VarNumber {
@@ -502,7 +498,7 @@ pub unsafe fn tv_list_find_nr(
 /// it is only valid until the list changes; raising `E684` goes through the
 /// editor's message state, so the caller must be on the main thread.
 pub unsafe fn tv_list_find_str(
-    l: *mut list_T,
+    l: *mut List,
     n: ::core::ffi::c_int,
     numbuf: &mut NumBuf,
 ) -> *const ::core::ffi::c_char {
@@ -522,9 +518,9 @@ pub unsafe fn tv_list_find_str(
 /// `l` is null or points at a live list, and `idx` must point at a writable
 /// `c_int`, which is updated to the index actually used.
 pub(crate) unsafe fn tv_list_find_index(
-    l: *mut list_T,
+    l: *mut List,
     idx: *mut ::core::ffi::c_int,
-) -> *mut listitem_T {
+) -> *mut ListItem {
     let li = unsafe { tv_list_find(l, *idx) };
     if !li.is_null() {
         return li;
@@ -541,7 +537,7 @@ pub(crate) unsafe fn tv_list_find_index(
 /// # Safety
 /// `l` is null or points at a live list. `item` is only compared, never
 /// read, so it may be any pointer.
-pub unsafe fn tv_list_idx_of_item(l: *const list_T, item: *const listitem_T) -> ::core::ffi::c_int {
+pub unsafe fn tv_list_idx_of_item(l: *const List, item: *const ListItem) -> ::core::ffi::c_int {
     if l.is_null() {
         return -1;
     }

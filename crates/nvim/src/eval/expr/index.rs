@@ -33,13 +33,13 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
-    EvalFuncData, Failed, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, dict_T, dictitem_T,
-    evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union,
+    Dict, DictItem, EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, evalarg_T, ptrdiff_t, size_t, ssize_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -61,7 +61,7 @@ unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
 /// at the value being subscripted, and `evalarg` must be null or valid.
 pub(crate) unsafe fn eval_index(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -159,7 +159,7 @@ pub(crate) unsafe fn eval_index(
 /// # Safety
 /// `rettv` must be valid.
 pub(crate) unsafe fn check_can_index(
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -188,7 +188,7 @@ pub(crate) unsafe fn check_can_index(
 ///
 /// # Safety
 /// Called through the builtin table with a terminated argument array.
-pub(crate) unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_slice(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { check_can_index(argvars, true, false) }.is_err() {
         return;
     }
@@ -216,10 +216,10 @@ pub(crate) unsafe fn f_slice(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// `keylen` readable bytes (or NUL-terminated when `keylen` is negative).
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn eval_index_inner(
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     is_range: bool,
-    var1: *mut typval_T,
-    var2: *mut typval_T,
+    var1: *mut TypVal,
+    var2: *mut TypVal,
     exclusive: bool,
     key: *const c_char,
     keylen: ptrdiff_t,
@@ -320,7 +320,7 @@ pub(crate) unsafe fn eval_index_inner(
             // SAFETY: the tag says the union holds a Dict, and `key` is the
             // caller's own of `keylen` bytes.
             let dict = rv.dict_or_null();
-            let item: *mut dictitem_T = unsafe { tv_dict_find(dict, key, keylen) };
+            let item: *mut DictItem = unsafe { tv_dict_find(dict, key, keylen) };
             if item.is_null() && verbose {
                 if keylen > 0 {
                     // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -465,7 +465,7 @@ pub(crate) unsafe fn string_slice(
 /// valid.
 pub(crate) unsafe fn handle_subscript(
     arg: *mut *const c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -475,7 +475,7 @@ pub(crate) unsafe fn handle_subscript(
     let (cur, rv) = unsafe { (Cur::new(arg.cast()), Tv::new(rettv)) };
     let evaluate = unsafe { evaluating(evalarg) };
     let mut ret = Ok(());
-    let mut selfdict: *mut dict_T = null_mut();
+    let mut selfdict: *mut Dict = null_mut();
     let mut lua_funcname: *const c_char = null();
 
     if unsafe { tv_is_luafunc(rettv) } {
@@ -569,7 +569,7 @@ pub(crate) unsafe fn handle_subscript(
 /// # Safety
 /// `rettv` must be valid and `selfdict` must be a reference this call takes
 /// over.
-pub(crate) unsafe fn set_selfdict(rettv: *mut typval_T, selfdict: *mut dict_T) {
+pub(crate) unsafe fn set_selfdict(rettv: *mut TypVal, selfdict: *mut Dict) {
     // Not for a partial that was bound explicitly (`pt_auto` clear).
     // SAFETY: the caller's promise -- `rettv` is valid, and the tag says
     // whether the union holds a live partial.

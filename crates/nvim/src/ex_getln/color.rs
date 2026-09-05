@@ -172,14 +172,14 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
     }
 
     let mut arg_allocated = false;
-    let mut arg = typval_T {
+    let mut arg = TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union {
             v_string: colored_ccline.text(),
         },
     };
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -282,13 +282,13 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
 
         let mut prev_end: VarNumber = 0;
         let mut i: ::core::ffi::c_int = 0;
-        let mut li: *const listitem_T = unsafe { (*tv.vval.v_list).lv_first };
+        let mut li: *const ListItem = unsafe { (*tv.vval.v_list).lv_first };
         while !li.is_null() {
             if unsafe { (*li).li_tv.v_type } != VAR_LIST {
                 print_errmsg!("E5401: List item {i} is not a List");
                 break 'body Label::Error;
             }
-            let l: *const list_T = unsafe { (*li).li_tv.vval.v_list };
+            let l: *const List = unsafe { (*li).li_tv.vval.v_list };
             if unsafe { tv_list_len(l) } != 3 {
                 // SAFETY: `l` is the list item just checked.
                 let len = unsafe { tv_list_len(l) };

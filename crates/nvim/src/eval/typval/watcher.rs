@@ -1,4 +1,4 @@
-//! `dict_T` watchers and the `Callback` values they hold.
+//! `Dict` watchers and the `Callback` values they hold.
 //!
 //! [`tv_dict_watcher_add`] threads a `DictWatcher` onto `dv_watchers` and
 //! [`tv_dict_watcher_notify`] fires every watcher whose pattern matches a
@@ -28,7 +28,7 @@ pub(crate) unsafe fn tv_dict_watcher_free(watcher: *mut DictWatcher) {
 /// Register `callback` to fire when a key of `dict` matching `key_pattern`
 /// changes.  A trailing `*` in the pattern matches a prefix.
 pub unsafe fn tv_dict_watcher_add(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     key_pattern: *const ::core::ffi::c_char,
     key_pattern_len: size_t,
     callback: Callback,
@@ -86,7 +86,7 @@ pub unsafe fn callback_free(callback: *mut Callback) {
 /// Store `cb` in `tv` as a Vimscript value, taking a reference to it.
 ///
 /// A Lua callback has no Vimscript form and comes out as `v:null`.
-pub unsafe fn callback_put(cb: *mut Callback, tv: *mut typval_T) {
+pub unsafe fn callback_put(cb: *mut Callback, tv: *mut TypVal) {
     // SAFETY: the caller's promise: a live typval.
     let mut value = unsafe { Tv::new(tv) };
     // SAFETY: as above, and a live callback whose payload it owns.
@@ -177,7 +177,7 @@ pub unsafe fn callback_to_string(cb: *mut Callback, arena: *mut Arena) -> *mut :
 /// caller's to free, which is why it arrives borrowed. Contrast
 /// [`tv_dict_watcher_add`], which takes its callback over.
 pub unsafe fn tv_dict_watcher_remove(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     key_pattern: *const ::core::ffi::c_char,
     key_pattern_len: size_t,
     callback: &Callback,
@@ -249,10 +249,10 @@ pub(crate) unsafe fn tv_dict_watcher_matches(
 /// `busy` flag is what stops a watcher firing inside its own callback, and the
 /// second walk is the deferred deletion the first one could not do.
 pub unsafe fn tv_dict_watcher_notify(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     key: *const ::core::ffi::c_char,
-    newtv: *mut typval_T,
-    oldtv: *mut typval_T,
+    newtv: *mut TypVal,
+    oldtv: *mut TypVal,
 ) {
     let mut argv = [TV_INITIAL_VALUE; 3];
     argv[0].v_type = VAR_DICT;
@@ -269,7 +269,7 @@ pub unsafe fn tv_dict_watcher_notify(
     // `tv_dict_item_alloc_len` copies exactly the length given and appends
     // the NUL itself, so a Rust `&str` is upstream's `S_LEN(…)`.
     let event = argv[2].dict_or_null();
-    let add = |name: &str, from: *mut typval_T| {
+    let add = |name: &str, from: *mut TypVal| {
         let v = unsafe { tv_dict_item_alloc_len(name.as_ptr().cast(), name.len()) };
         unsafe { tv_copy(from, &raw mut (*v).di_tv) };
         let _ = unsafe { tv_dict_add(event, v) };

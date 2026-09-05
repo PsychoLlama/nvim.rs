@@ -41,14 +41,14 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
-    Failed, Float, NUL, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, dictitem_T, evalarg_T, exarg_T, kBoolVarFalse,
-    kBoolVarTrue, size_t, typval_T, typval_vval_union,
+    DictItem, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, evalarg_T, exarg_T,
+    kBoolVarFalse, kBoolVarTrue, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval, which is what every level starts a second
 /// operand as.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -192,7 +192,7 @@ pub(crate) unsafe fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T) {
 /// `arg` must be a NUL-terminated expression; `eap` may be null.
 pub unsafe fn eval0(
     arg: *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     eap: *mut exarg_T,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
@@ -250,7 +250,7 @@ pub unsafe fn eval0(
 /// `arg` must be a NUL-terminated expression.
 pub(crate) unsafe fn may_call_simple_func(
     arg: *const c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is a NUL-terminated expression,
     // so `parens` is inside it and the two bytes of `()` precede its tail.
@@ -287,7 +287,7 @@ pub(crate) unsafe fn may_call_simple_func(
 /// As `eval0`.
 pub(crate) unsafe fn eval0_simple_funccal(
     arg: *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     eap: *mut exarg_T,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
@@ -304,7 +304,7 @@ pub(crate) unsafe fn eval0_simple_funccal(
 /// `arg` must point at the cursor into a NUL-terminated expression.
 pub(crate) unsafe fn eval1(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -409,9 +409,9 @@ pub(crate) unsafe fn eval1(
 /// As `eval1`.
 unsafe fn eval_logical(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
-    operand: unsafe fn(*mut *mut c_char, *mut typval_T, *mut evalarg_T) -> Result<(), Failed>,
+    operand: unsafe fn(*mut *mut c_char, *mut TypVal, *mut evalarg_T) -> Result<(), Failed>,
     op: u8,
     stop_at: bool,
 ) -> Result<(), Failed> {
@@ -486,7 +486,7 @@ unsafe fn eval_logical(
 /// As `eval1`.
 pub(crate) unsafe fn eval2(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     unsafe { eval_logical(arg, rettv, evalarg, eval3, b'|', true) }
@@ -498,7 +498,7 @@ pub(crate) unsafe fn eval2(
 /// As `eval1`.
 pub(crate) unsafe fn eval3(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     unsafe { eval_logical(arg, rettv, evalarg, eval4, b'&', false) }
@@ -510,7 +510,7 @@ pub(crate) unsafe fn eval3(
 /// As `eval1`.
 pub(crate) unsafe fn eval4(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -557,7 +557,7 @@ pub(crate) unsafe fn eval4(
 /// As `eval1`.
 pub(crate) unsafe fn eval5(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -625,7 +625,7 @@ pub(crate) unsafe fn eval5(
 /// As `eval1`.
 pub(crate) unsafe fn eval6(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     want_string: bool,
 ) -> Result<(), Failed> {
@@ -655,7 +655,7 @@ pub(crate) unsafe fn eval6(
 /// As `eval1`.
 pub(crate) unsafe fn eval7(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     want_string: bool,
 ) -> Result<(), Failed> {
@@ -775,7 +775,7 @@ pub(crate) unsafe fn eval7(
                 let func = unsafe { eval_func(arg, evalarg, name, len, rettv, flags, null_mut()) };
                 ret = Parsed::done(func);
             } else if evaluate {
-                let none = null_mut::<*mut dictitem_T>();
+                let none = null_mut::<*mut DictItem>();
                 ret = Parsed::done(unsafe { eval_variable(name, len, rettv, none, true, false) });
             } else {
                 unsafe { check_vars(name, len as size_t) };
@@ -819,7 +819,7 @@ pub(crate) unsafe fn eval7(
 /// # Safety
 /// `start_leader` and `*end_leaderp` must bound the run of prefixes.
 pub(crate) unsafe fn eval7_leader(
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     numeric_only: bool,
     start_leader: *const c_char,
     end_leaderp: *mut *const c_char,

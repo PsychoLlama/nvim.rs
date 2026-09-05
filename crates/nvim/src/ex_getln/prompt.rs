@@ -52,7 +52,7 @@ pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::f
 
     let skip = unsafe { (*eap).skip } != 0;
     let mut text = Vec::<u8>::new();
-    let mut li: *const listitem_T = unsafe { (*l).lv_first };
+    let mut li: *const ListItem = unsafe { (*l).lv_first };
     while !li.is_null() {
         if !skip {
             // SAFETY: the item's rendering is NUL-terminated and outlives
@@ -82,8 +82,8 @@ pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::f
 /// third means completion for `input()` and the cancel value for
 /// `inputdialog()`.
 pub unsafe fn get_user_input(
-    argvars: *const typval_T,
-    rettv: *mut typval_T,
+    argvars: *const TypVal,
+    rettv: *mut TypVal,
     inputdialog: bool,
     secret: bool,
 ) {
@@ -96,8 +96,8 @@ pub unsafe fn get_user_input(
 
     let prompt: *const ::core::ffi::c_char;
     let mut defstr: *const ::core::ffi::c_char = c"".as_ptr();
-    let mut cancelreturn: *mut typval_T = ::core::ptr::null_mut::<typval_T>();
-    let mut cancelreturn_strarg2 = typval_T {
+    let mut cancelreturn: *mut TypVal = ::core::ptr::null_mut::<TypVal>();
+    let mut cancelreturn_strarg2 = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

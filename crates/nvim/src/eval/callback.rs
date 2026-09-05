@@ -23,13 +23,13 @@ use crate::lua::executor::{
 use crate::main::{e_command_too_recursive, p_mfd};
 use crate::memory::xstrdup;
 use crate::types::{
-    Arena, Callback, CallbackReader, FAIL, NUL, OK, OptInt, VAR_DICT, VAR_FUNC, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, funcexe_T, ht_stack_T,
-    list_stack_T, partial_T, typval_T, typval_vval_union,
+    Arena, Callback, CallbackReader, FAIL, HtStack, ListStack, NUL, OK, OptInt, Partial, TypVal,
+    VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv,
+    funcexe_T, typval_vval_union,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -44,7 +44,7 @@ const UNSET_TV: typval_T = typval_T {
 ///
 /// # Safety
 /// `callback` and `arg` must be valid.
-pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const typval_T) -> bool {
+pub unsafe fn callback_from_typval(callback: *mut Callback, arg: *const TypVal) -> bool {
     // SAFETY: the caller's promise -- both pointees outlive the call. `arg`
     // is only ever read through, which is what makes casting its `const`
     // away sound.
@@ -138,8 +138,8 @@ const VLUA: &CStr = c"v:lua.";
 pub unsafe fn callback_call(
     callback: *mut Callback,
     argcount_in: c_int,
-    argvars_in: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars_in: *mut TypVal,
+    rettv: *mut TypVal,
 ) -> bool {
     if callback_depth.get() as OptInt > p_mfd.get() {
         // SAFETY: the message is a NUL-terminated literal.
@@ -149,7 +149,7 @@ pub unsafe fn callback_call(
 
     // SAFETY: the caller's promise -- the callback outlives the call.
     let cb = unsafe { &*callback };
-    let mut partial: *mut partial_T = null_mut();
+    let mut partial: *mut Partial = null_mut();
     let mut name: *mut c_char;
     match cb {
         Callback::Funcref(funcref) => {
@@ -209,8 +209,8 @@ pub unsafe fn callback_call(
 pub unsafe fn set_ref_in_callback(
     callback: *mut Callback,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
-    list_stack: *mut *mut list_stack_T,
+    ht_stack: *mut *mut HtStack,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     // SAFETY: the caller's promise -- the callback outlives the call.
     match unsafe { &*callback } {
@@ -237,8 +237,8 @@ pub unsafe fn set_ref_in_callback(
 pub(crate) unsafe fn set_ref_in_callback_reader(
     reader: *mut CallbackReader,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
-    list_stack: *mut *mut list_stack_T,
+    ht_stack: *mut *mut HtStack,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     // SAFETY: the caller's promise -- the reader outlives the call, and its
     // `cb` is the callback it owns.

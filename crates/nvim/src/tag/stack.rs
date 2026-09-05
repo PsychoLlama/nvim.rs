@@ -156,7 +156,7 @@ impl TagStack {
     ///
     /// # Safety
     /// `l` must be a live list.
-    unsafe fn push_items(&mut self, l: *mut list_T) {
+    unsafe fn push_items(&mut self, l: *mut List) {
         // SAFETY: the list and its items are live for the whole walk, and
         // the two strings taken out of each dict are freshly allocated
         // copies the new entry takes over.
@@ -287,7 +287,7 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Both pointers must be live.
-unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
+unsafe fn tag_details(tag: &taggy_T, retdict: *mut Dict) {
     // SAFETY: the dict is live, and the entry's strings are
     // NUL-terminated.
     unsafe { add_str(retdict, c"tagname", tag.tagname) };
@@ -322,7 +322,7 @@ unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
 ///
 /// # Safety
 /// `retdict` must be a live dict.
-pub unsafe fn get_tagstack(wp: Win, retdict: *mut dict_T) {
+pub unsafe fn get_tagstack(wp: Win, retdict: *mut Dict) {
     // SAFETY: the dict is live, and nothing else holds the window's stack.
     let mut stack = unsafe { TagStack::of(wp) };
     unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
@@ -344,7 +344,7 @@ pub unsafe fn get_tagstack(wp: Win, retdict: *mut dict_T) {
 ///
 /// # Safety
 /// `d` must be a live dict.
-pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> Result<(), Failed> {
+pub unsafe fn set_tagstack(wp: Win, d: *const Dict, action: c_int) -> Result<(), Failed> {
     // SAFETY: the dict is live for the whole call, and nothing else holds
     // the window's tag stack.
     if tfu_in_use.get() {
@@ -354,7 +354,7 @@ pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> Result<(
         return Err(Failed);
     }
 
-    let mut items = ptr::null_mut::<list_T>();
+    let mut items = ptr::null_mut::<List>();
     if let Some(di) = unsafe { find(d, c"items") } {
         if unsafe { (*di).di_tv.v_type } != VAR_LIST {
             emsg(gettext(e_listreq));
@@ -391,7 +391,7 @@ pub unsafe fn set_tagstack(wp: Win, d: *const dict_T, action: c_int) -> Result<(
 ///
 /// # Safety
 /// `d` must be live.
-unsafe fn find(d: *const dict_T, key: &CStr) -> Option<*mut dictitem_T> {
+unsafe fn find(d: *const Dict, key: &CStr) -> Option<*mut DictItem> {
     // SAFETY: the dict is live and the key is NUL-terminated.
     let di = unsafe { tv_dict_find(d, key.as_ptr(), -1) };
     (!di.is_null()).then_some(di)
@@ -401,7 +401,7 @@ unsafe fn find(d: *const dict_T, key: &CStr) -> Option<*mut dictitem_T> {
 ///
 /// # Safety
 /// `d` must be live.
-unsafe fn add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
+unsafe fn add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     // SAFETY: the dict is live and the key is NUL-terminated.
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
@@ -410,7 +410,7 @@ unsafe fn add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
 ///
 /// # Safety
 /// `d` must be live and `val` NUL-terminated.
-unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the dict is live, and both strings are NUL-terminated.
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
@@ -419,7 +419,7 @@ unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
 ///
 /// # Safety
 /// `d` must be live.
-unsafe fn number(d: *const dict_T, key: &CStr) -> c_int {
+unsafe fn number(d: *const Dict, key: &CStr) -> c_int {
     // SAFETY: the dict is live and the key is NUL-terminated.
     unsafe { tv_dict_get_number(d, key.as_ptr()) as c_int }
 }

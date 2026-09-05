@@ -34,12 +34,12 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Failed, NUL, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, funcexe_T,
-    partial_T, size_t, typval_T, typval_vval_union,
+    Dict, Failed, NUL, Partial, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, evalarg_T,
+    funcexe_T, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -62,9 +62,9 @@ pub(crate) unsafe fn eval_func(
     evalarg: *mut evalarg_T,
     name: *mut c_char,
     name_len: c_int,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     flags: c_int,
-    basetv: *mut typval_T,
+    basetv: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `rettv` is the result being built.
@@ -76,7 +76,7 @@ pub(crate) unsafe fn eval_func(
         // SAFETY: `name` is a name of `len` bytes.
         unsafe { check_vars(name, len as size_t) };
     }
-    let mut partial: *mut partial_T = null_mut();
+    let mut partial: *mut Partial = null_mut();
     let (lenp, partialp) = (&raw mut len, &raw mut partial);
     let foundp = &raw mut found_var;
     // SAFETY: `name` is a name of `*lenp` bytes and the three out-parameters
@@ -130,16 +130,16 @@ pub(crate) unsafe fn eval_func(
 pub(crate) unsafe fn call_func_rettv(
     arg: *mut *mut c_char,
     evalarg: *mut evalarg_T,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
-    selfdict: *mut dict_T,
-    basetv: *mut typval_T,
+    selfdict: *mut Dict,
+    basetv: *mut TypVal,
     lua_funcname: *const c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression and `rettv` holds the callee.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    let mut pt: *mut partial_T = null_mut();
+    let mut pt: *mut Partial = null_mut();
     // The callee moves out of `rettv` so the call can fill it. It is
     // cleared at the end rather than here: the arguments are evaluated
     // in between and may delete the Funcref they name.
@@ -208,7 +208,7 @@ pub(crate) unsafe fn call_func_rettv(
 /// As `call_func_rettv`.
 pub(crate) unsafe fn eval_lambda(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -258,7 +258,7 @@ pub(crate) unsafe fn eval_lambda(
 /// As `call_func_rettv`.
 pub(crate) unsafe fn eval_method(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
     verbose: bool,
 ) -> Result<(), Failed> {
@@ -420,7 +420,7 @@ pub(crate) unsafe fn eval_method(
 ///
 /// # Safety
 /// `pt` must be null or valid.
-pub(crate) unsafe fn partial_name(pt: *mut partial_T) -> *mut c_char {
+pub(crate) unsafe fn partial_name(pt: *mut Partial) -> *mut c_char {
     if !pt.is_null() {
         // SAFETY: the caller's promise, and `pt` is not null.
         let pt = unsafe { Live::new(pt) };
@@ -440,7 +440,7 @@ pub(crate) unsafe fn partial_name(pt: *mut partial_T) -> *mut c_char {
 ///
 /// # Safety
 /// `pt` must be valid and unreferenced.
-unsafe fn partial_free(pt: *mut partial_T) {
+unsafe fn partial_free(pt: *mut Partial) {
     // SAFETY: the caller's promise -- `pt` is a live, unreferenced partial.
     let live = unsafe { Live::new(pt) };
     for i in 0..live.pt_argc {
@@ -462,7 +462,7 @@ unsafe fn partial_free(pt: *mut partial_T) {
 ///
 /// # Safety
 /// `pt` must be null or valid.
-pub(crate) unsafe fn partial_unref(pt: *mut partial_T) {
+pub(crate) unsafe fn partial_unref(pt: *mut Partial) {
     if pt.is_null() {
         return;
     }

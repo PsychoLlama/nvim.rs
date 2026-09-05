@@ -23,8 +23,8 @@ use crate::mbyte::mb_strcmp_ic;
 use crate::message::emsg;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::types::{
-    ExprType, Failed, Float, NUL, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VarNumber, dict_T, typval_T,
+    Dict, ExprType, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VarNumber,
 };
 
 /// The scratch a Number or Float is rendered into for a String comparison.
@@ -85,7 +85,7 @@ pub(crate) fn comparison_at(cur: Cur) -> (ExprType, c_int) {
 ///
 /// # Safety
 /// `tv` must be a `VAR_FUNC` or `VAR_PARTIAL` typval.
-unsafe fn callable_name(tv: *mut typval_T) -> *mut c_char {
+unsafe fn callable_name(tv: *mut TypVal) -> *mut c_char {
     // SAFETY: the caller's promise -- the tag says which union member holds
     // the callable, and a partial is null or live.
     let name = if unsafe { (*tv).v_type } == VAR_FUNC {
@@ -107,7 +107,7 @@ unsafe fn callable_name(tv: *mut typval_T) -> *mut c_char {
 ///
 /// # Safety
 /// Both operands must be `VAR_FUNC` or `VAR_PARTIAL` typvals.
-pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool) -> bool {
+pub(crate) unsafe fn func_equal(tv1: *mut TypVal, tv2: *mut TypVal, ic: bool) -> bool {
     let s1 = unsafe { callable_name(tv1) };
     let s2 = unsafe { callable_name(tv2) };
     if s1.is_null() || s2.is_null() {
@@ -119,7 +119,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
     }
 
     // A plain Funcref carries neither a bound dictionary nor arguments.
-    let dict_of = |tv: *mut typval_T| -> *mut dict_T {
+    let dict_of = |tv: *mut TypVal| -> *mut Dict {
         if unsafe { (*tv).v_type } == VAR_FUNC {
             core::ptr::null_mut()
         } else {
@@ -136,7 +136,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
         return false;
     }
 
-    let argc_of = |tv: *mut typval_T| -> c_int {
+    let argc_of = |tv: *mut TypVal| -> c_int {
         if unsafe { (*tv).v_type } == VAR_FUNC {
             0
         } else {
@@ -174,7 +174,7 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
 /// # Safety
 /// `typ1` must be a valid typval the caller has given up ownership of.
 unsafe fn compare_container(
-    typ1: *mut typval_T,
+    typ1: *mut TypVal,
     op: ExprType,
     same_type: bool,
     identical: impl FnOnce() -> bool,
@@ -217,8 +217,8 @@ fn from_ordering(op: ExprType, i: c_int) -> VarNumber {
 /// Both operands must be valid typvals; `typ1` is cleared either way and
 /// receives the result.
 pub(crate) unsafe fn typval_compare(
-    typ1: *mut typval_T,
-    typ2: *mut typval_T,
+    typ1: *mut TypVal,
+    typ2: *mut TypVal,
     op: ExprType,
     ic: bool,
 ) -> Result<(), Failed> {

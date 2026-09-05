@@ -32,8 +32,8 @@ use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Callback, CallbackReader, Channel, ChannelStdinMode, LuaRef, Proc, SocketWatcher, VarNumber,
-    dict_T, uint16_t, uint64_t,
+    Callback, CallbackReader, Channel, ChannelStdinMode, Dict, LuaRef, Proc, SocketWatcher,
+    VarNumber, uint16_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 use ::libc::{dup2, fcntl};
@@ -74,7 +74,7 @@ pub unsafe fn channel_job_start(
     cwd: *const c_char,
     pty_width: uint16_t,
     pty_height: uint16_t,
-    env: *mut dict_T,
+    env: *mut Dict,
     status_out: *mut VarNumber,
 ) -> *mut Channel {
     /// A detached child has no controlling terminal to hand a pty to.

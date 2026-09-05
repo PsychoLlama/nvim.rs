@@ -16,8 +16,9 @@ use crate::eval::typval::{
 use crate::eval::vars::{before_set_vvar, get_vimvar_dict};
 use crate::message_fmt::c_str;
 use crate::types::{
-    Arena, Error, Object, String_0, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    Arena, Dict, DictItem, Error, Object, String_0, TypVal, VAR_UNKNOWN, VarLock,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t,
+    typval_vval_union,
 };
 use core::ffi::c_int;
 use core::ptr;
@@ -27,7 +28,7 @@ use core::ptr;
 /// The value `key` has in `dict`, as an API object. Nil — with `err` set —
 /// when the key is absent.
 pub(crate) unsafe fn dict_get_value(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     key: String_0,
     arena: *mut Arena,
     err: &mut Error,
@@ -51,11 +52,11 @@ pub(crate) unsafe fn dict_get_value(
 /// A null return does not mean failure: an absent key is fine for an
 /// assignment. Callers check `err`.
 pub(crate) unsafe fn dict_check_writable(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     key: String_0,
     del: bool,
     err: &mut Error,
-) -> *mut dictitem_T {
+) -> *mut DictItem {
     // SAFETY: as `dict_get_value`.
     let di = unsafe { tv_dict_find(dict, key.data(), key.len() as ptrdiff_t) };
     if !di.is_null() {
@@ -96,7 +97,7 @@ pub(crate) unsafe fn dict_check_writable(
 /// Set or remove `key` in `dict`. With `retval` the previous value comes
 /// back, otherwise nil. Fires the dictionary's watchers either way.
 pub(crate) unsafe fn dict_set_var(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     key: String_0,
     value: Object,
     del: bool,
@@ -136,7 +137,7 @@ pub(crate) unsafe fn dict_set_var(
         return rv;
     }
 
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -145,7 +146,7 @@ pub(crate) unsafe fn dict_set_var(
     unsafe { object_to_vim(value, &raw mut tv) };
     // Only filled in for a key that already existed; the watchers see an
     // unset value for a key that did not.
-    let mut oldtv = typval_T {
+    let mut oldtv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

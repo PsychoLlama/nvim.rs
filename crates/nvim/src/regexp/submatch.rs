@@ -21,7 +21,7 @@ use crate::eval::typval::{
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, LineNr, NUL, VAR_STRING, list_T, staticList10_T, typval_T, ufunc_T};
+use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, VAR_STRING, ufunc_T};
 use crate::winlayer::Live;
 use ::libc::{strcpy, strncpy};
 
@@ -108,22 +108,22 @@ pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: LineNr) -> ColNr {
 /// there is nothing to free.
 pub(crate) unsafe fn fill_submatch_list(
     _argc: c_int,
-    argv: *mut typval_T,
+    argv: *mut TypVal,
     argskip: c_int,
     fp: *mut ufunc_T,
 ) -> c_int {
     // SAFETY: `argv` has at least `argskip + 1` slots and `argv[argskip]`
-    // holds the `staticList10_T` the caller keeps alive across the call;
+    // holds the `StaticList10` the caller keeps alive across the call;
     // `rsm` describes a live string match.
     let listarg = unsafe { argv.offset(argskip as isize) };
     if unsafe { (*fp).uf_varargs } == 0 && unsafe { (*fp).uf_args.ga_len } <= argskip {
         return argskip;
     }
 
-    // Relies on `sl_list` being the first member of `staticList10_T`.
-    unsafe { tv_list_init_static10((*listarg).vval.v_list as *mut staticList10_T) };
+    // Relies on `sl_list` being the first member of `StaticList10`.
+    unsafe { tv_list_init_static10((*listarg).vval.v_list as *mut StaticList10) };
 
-    // A `staticList10_T` always has exactly ten items, one per capture.
+    // A `StaticList10` always has exactly ten items, one per capture.
     // SAFETY: the caller promises a live string match.
     // SAFETY: the running string match is the caller's structure.
     let match_ = unsafe { Live::new(Rsm::acquire().match_()) };
@@ -143,7 +143,7 @@ pub(crate) unsafe fn fill_submatch_list(
 }
 
 /// Free the strings [`fill_submatch_list`] allocated into `sl`.
-pub(crate) unsafe fn clear_submatch_list(sl: *mut staticList10_T) {
+pub(crate) unsafe fn clear_submatch_list(sl: *mut StaticList10) {
     // SAFETY: `sl` is the caller's list, whose items own their strings.
     let mut li = unsafe { (*sl).sl_list.lv_first };
     while !li.is_null() {
@@ -257,7 +257,7 @@ pub(crate) unsafe fn reg_submatch(no: c_int) -> *mut c_char {
 /// [`reg_submatch`] as one list item per line, which is what
 /// `submatch(no, 1)` returns. Unlike [`reg_submatch`] this keeps NULs in the
 /// text apart from the line breaks, because each line is its own item.
-pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut list_T {
+pub(crate) unsafe fn reg_submatch_list(no: c_int) -> *mut List {
     if !can_f_submatch.get() || no < 0 {
         return core::ptr::null_mut();
     }

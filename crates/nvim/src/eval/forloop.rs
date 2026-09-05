@@ -29,12 +29,12 @@ use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    NUL, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, evalarg_T,
-    exarg_T, listitem_T, size_t, typval_T, typval_vval_union,
+    ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, evalarg_T, exarg_T, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -213,7 +213,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
         return ok;
     }
 
-    let item: *mut listitem_T = fi.fi_lw.lw_item;
+    let item: *mut ListItem = fi.fi_lw.lw_item;
     if item.is_null() {
         return false;
     }
@@ -228,7 +228,7 @@ pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
 ///
 /// # Safety
 /// As `next_for_item`.
-unsafe fn assign(fi: Fi, arg: *mut c_char, tv: *mut typval_T) -> bool {
+unsafe fn assign(fi: Fi, arg: *mut c_char, tv: *mut TypVal) -> bool {
     let (semicolon, varcount) = (fi.fi_semicolon, fi.fi_varcount);
     // SAFETY: the caller's promise -- `arg` is the loop's variable list and
     // `tv` the item being assigned.

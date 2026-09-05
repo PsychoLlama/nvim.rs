@@ -92,13 +92,13 @@ use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
     AdditionalData, ApiDict, Arena, Array, ArrayBuilder, Boolean, Buffer, Channel,
-    ChannelStreamType, Context, Error, Float, Handle, HlAttrs, HlMessage, Integer,
+    ChannelStreamType, Context, DictItem, Error, Float, Handle, HlAttrs, HlMessage, Integer,
     KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LineNr,
     LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal,
     RemapValues, ScreenChar, ScriptId, SignTextAttrs, String_0, StringBuilder, Tabpage,
-    TerminalOptions, VarNumber, Vv, Window, bln_values, buf_T, dictitem_T, dobuf_action_values,
+    TerminalOptions, VarNumber, Vv, Window, bln_values, buf_T, dobuf_action_values,
     dobuf_start_values, foldinfo_T, int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone,
     kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t, statuscol_T,
     uint8_t, uint16_t, uint64_t, win_T, yankreg_T,

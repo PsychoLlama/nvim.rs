@@ -319,10 +319,10 @@ pub(crate) unsafe fn map_add(
     // A given `sid` is upstream's "the block was `xcalloc`ed and only these
     // two fields were filled in", not a tweak of `current_sctx`.
     let script_ctx = if sid != 0 {
-        sctx_T {
+        ScriptCtx {
             sc_sid: sid,
             sc_lnum: lnum,
-            ..sctx_T::NONE
+            ..ScriptCtx::NONE
         }
     } else {
         let mut ctx = current_sctx.get();

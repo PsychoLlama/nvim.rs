@@ -1,4 +1,4 @@
-//! Coercions: reading a `typval_T` as a number, float, string or boolean.
+//! Coercions: reading a `TypVal` as a number, float, string or boolean.
 //!
 //! [`tv_get_number_chk`] is the arithmetic conversion, with the `_chk` half
 //! reporting whether the value was convertible at all.
@@ -16,7 +16,7 @@ use crate::types::NUL;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
-pub unsafe fn tv_get_number(tv: *const typval_T) -> VarNumber {
+pub unsafe fn tv_get_number(tv: *const TypVal) -> VarNumber {
     let mut error = false;
     unsafe { tv_get_number_chk(tv, &raw mut error) }
 }
@@ -26,7 +26,7 @@ pub unsafe fn tv_get_number(tv: *const typval_T) -> VarNumber {
 ///
 /// With a NULL `ret_error` the failure answer is -1 rather than 0, which is
 /// what makes `tv_get_bool` usable as a tri-state.
-pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> VarNumber {
+pub unsafe fn tv_get_number_chk(tv: *const TypVal, ret_error: *mut bool) -> VarNumber {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     match val.v_type {
@@ -63,18 +63,18 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> Va
 }
 
 /// `tv` as a boolean number: -1 when it has no numeric form.
-pub unsafe fn tv_get_bool(tv: *const typval_T) -> VarNumber {
+pub unsafe fn tv_get_bool(tv: *const TypVal) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
 }
 
 /// `tv` as a boolean number, setting `*ret_error` when it has no numeric form.
-pub unsafe fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> VarNumber {
+pub unsafe fn tv_get_bool_chk(tv: *const TypVal, ret_error: *mut bool) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ret_error) }
 }
 
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
-pub unsafe fn tv_get_lnum(tv: *const typval_T) -> LineNr {
+pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
     let did_emsg_before = did_emsg.get();
     let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as LineNr;
     if lnum <= 0 && did_emsg_before == did_emsg.get() && unsafe { (*tv).v_type } != VAR_NUMBER {
@@ -89,7 +89,7 @@ pub unsafe fn tv_get_lnum(tv: *const typval_T) -> LineNr {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> LineNr {
+pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buf: *const buf_T) -> LineNr {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let s = val.string_or_null();
@@ -105,7 +105,7 @@ pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> LineNr 
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no
 /// float form.
-pub unsafe fn tv_get_float(tv: *const typval_T) -> Float {
+pub unsafe fn tv_get_float(tv: *const TypVal) -> Float {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let message = match val.v_type {
@@ -133,7 +133,7 @@ pub unsafe fn tv_get_float(tv: *const typval_T) -> Float {
 ///
 /// Answers NULL with an error raised for a value that has no string form.
 pub unsafe fn tv_get_string_buf_chk(
-    tv: *const typval_T,
+    tv: *const TypVal,
     buf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     // SAFETY: the caller's promise: a live typval.
@@ -205,7 +205,7 @@ impl NumBuf {
     ///
     /// # Safety
     /// `tv` points at a live, initialised value.
-    pub unsafe fn string(&mut self, tv: *const typval_T) -> *const ::core::ffi::c_char {
+    pub unsafe fn string(&mut self, tv: *const TypVal) -> *const ::core::ffi::c_char {
         // SAFETY: the caller's value; the scratch is `NUMBUFLEN` bytes.
         unsafe { tv_get_string_buf(tv, self.as_mut_ptr()) }
     }
@@ -215,7 +215,7 @@ impl NumBuf {
     ///
     /// # Safety
     /// `tv` points at a live, initialised value.
-    pub unsafe fn string_chk(&mut self, tv: *const typval_T) -> *const ::core::ffi::c_char {
+    pub unsafe fn string_chk(&mut self, tv: *const TypVal) -> *const ::core::ffi::c_char {
         // SAFETY: as `string`.
         unsafe { tv_get_string_buf_chk(tv, self.as_mut_ptr()) }
     }
@@ -228,7 +228,7 @@ impl NumBuf {
 
 /// [`tv_get_string_buf_chk`] answering the empty string rather than NULL.
 pub unsafe fn tv_get_string_buf(
-    tv: *const typval_T,
+    tv: *const TypVal,
     buf: *mut ::core::ffi::c_char,
 ) -> *const ::core::ffi::c_char {
     let res = unsafe { tv_get_string_buf_chk(tv, buf) };
@@ -236,7 +236,7 @@ pub unsafe fn tv_get_string_buf(
 }
 
 /// Truthiness of `tv`, as `if` and `while` ask for it.
-pub unsafe fn tv2bool(tv: *const typval_T) -> bool {
+pub unsafe fn tv2bool(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise: a live typval.
     let tv = unsafe { Tv::new(tv.cast_mut()) };
     match tv.v_type {

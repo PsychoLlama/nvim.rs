@@ -46,11 +46,11 @@ fn verbose_report(body: impl FnOnce()) {
 pub unsafe fn call_user_func(
     fp: *mut ufunc_T,
     argcount: c_int,
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     firstline: LineNr,
     lastline: LineNr,
-    selfdict: *mut dict_T,
+    selfdict: *mut Dict,
 ) {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let mut f = unsafe { Uf::new(fp) };
@@ -100,14 +100,14 @@ pub unsafe fn call_user_func(
     // in the funccall_T and cannot be a `Vec`.
     let mut fixvar_idx = 0;
     let fixvar_base = unsafe { &raw mut (*fc).fc_fixvar } as *mut funccall_S_fc_fixvar;
-    let take_fixvar = |idx: &mut c_int| -> *mut dictitem_T {
-        let v = unsafe { fixvar_base.offset(*idx as isize) } as *mut dictitem_T;
+    let take_fixvar = |idx: &mut c_int| -> *mut DictItem {
+        let v = unsafe { fixvar_base.offset(*idx as isize) } as *mut DictItem;
         *idx += 1;
         v
     };
     // A fixvar holding one of the two scope-level names, `l:self` and
     // `a:000`; the value is filled in by the caller.
-    let add_fix_var = |v: *mut dictitem_T, ht: *mut hashtab_T, key: &CStr| {
+    let add_fix_var = |v: *mut DictItem, ht: *mut hashtab_T, key: &CStr| {
         unsafe { strcpy(tv_dict_item_key(v), key.as_ptr()) };
         unsafe { (*v).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX };
         let _ = unsafe { hash_add(ht, tv_dict_item_key(v)) };
@@ -163,7 +163,7 @@ pub unsafe fn call_user_func(
     // parameters are named first, so that a default expression may refer
     // to the parameter to its left.
     let mut numbuf: [c_char; 65] = [0; 65];
-    let mut tv_to_free: [*mut typval_T; MAX_FUNC_ARGS as usize] =
+    let mut tv_to_free: [*mut TypVal; MAX_FUNC_ARGS as usize] =
         [ptr::null_mut(); MAX_FUNC_ARGS as usize];
     let mut tv_to_free_len = 0;
     let mut default_arg_err = false;
@@ -252,7 +252,7 @@ pub unsafe fn call_user_func(
             // Add the extra argument to a:000, through the funccall's own
             // listitem storage.
             let li =
-                unsafe { (&raw mut (*fc).fc_l_listitems as *mut listitem_T).offset(ai as isize) };
+                unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
             unsafe { (*li).li_tv = *argvars.offset(i as isize) };
             unsafe { (*li).li_tv.v_lock = VarLock::Fixed };
             unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
@@ -471,10 +471,10 @@ pub unsafe fn call_user_func(
 pub(crate) unsafe fn call_user_func_check(
     fp: *mut ufunc_T,
     argcount: c_int,
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
     funcexe: *mut funcexe_T,
-    selfdict: *mut dict_T,
+    selfdict: *mut Dict,
 ) -> c_int {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let f = unsafe { Uf::new(fp) };
@@ -550,7 +550,7 @@ pub(crate) unsafe fn user_func_error(error: c_int, name: *const c_char, found_va
 pub unsafe fn call_simple_luafunc(
     funcname: *const c_char,
     len: size_t,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `rettv` is the return value.
     let mut rv = unsafe { Tv::new(rettv) };
@@ -572,7 +572,7 @@ pub unsafe fn call_simple_luafunc(
 pub unsafe fn call_simple_func(
     funcname: *const c_char,
     len: size_t,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `rettv` is the return value.
     let mut rv = unsafe { Tv::new(rettv) };

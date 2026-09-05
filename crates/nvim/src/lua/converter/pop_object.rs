@@ -1,7 +1,7 @@
 //! `nlua_pop_object()`: a Lua value as an API [`Object`].
 //!
 //! The same explicit-stack walk as [`super::pop_typval`], over
-//! [`ObjPopStackItem`] and producing api types instead of `typval_T`s.  It
+//! [`ObjPopStackItem`] and producing api types instead of `TypVal`s.  It
 //! is a separate walk because the two type systems disagree at the leaves:
 //! an `Object` has no `VAR_SPECIAL`, carries `LuaRef`s for functions, and
 //! allocates into an [`Arena`] when it is given one.

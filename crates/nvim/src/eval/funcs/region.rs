@@ -28,8 +28,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, VAR_DICT, VarNumber, block_def,
-    buf_T, kListLenMayKnow, oparg_T, pos_T, typval_T,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, TypVal, VAR_DICT, VarNumber,
+    block_def, buf_T, kListLenMayKnow, oparg_T, pos_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -130,7 +130,7 @@ impl Drop for BufferSwap {
 
 /// Resolve `getregion()`'s and `getregionpos()`'s shared arguments, leaving
 /// the current buffer pointed at the one the positions name.
-fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
+fn resolve(args: Args<'_>, rettv: &mut TypVal) -> Option<Region> {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
@@ -349,7 +349,7 @@ unsafe fn block_def2str(bd: &block_def) -> String_0 {
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
 /// per line.
-pub unsafe fn f_getregion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getregion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
@@ -378,7 +378,7 @@ pub unsafe fn f_getregion(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// `getregionpos({pos1}, {pos2} [, {opts}])` — the selection as a pair of
 /// positions per line.
-pub unsafe fn f_getregionpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getregionpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
@@ -483,7 +483,7 @@ fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: ColNr, allow_eol: boo
 /// Append one line's `[[bufnr, lnum, col, off], [bufnr, lnum, col, off]]`.
 /// `rettv` holds the list being built, and `curbuf` is the region's own
 /// buffer -- the caller's `BufferSwap` has already put it there.
-fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
+fn add_regionpos_range(rettv: &mut TypVal, p1: pos_T, p2: pos_T) {
     // SAFETY: the caller's obligation; each list is handed to its parent
     // immediately, so none is leaked.
     let pair = unsafe { tv_list_alloc(2) };

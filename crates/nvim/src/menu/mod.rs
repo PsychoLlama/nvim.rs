@@ -54,7 +54,7 @@ use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL,
 };
-use crate::types::{VarNumber, dict_T, kListLenMayKnow, list_T, ptrdiff_t, vimmenu_T};
+use crate::types::{Dict, List, VarNumber, kListLenMayKnow, ptrdiff_t, vimmenu_T};
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -518,43 +518,43 @@ pub(crate) fn free_str(s: *mut c_char) {
 // module has just allocated and still owns; the keys are `'static` literals
 // and the values are copied or taken over by the callee.
 
-pub(crate) fn dict_alloc() -> *mut dict_T {
+pub(crate) fn dict_alloc() -> *mut Dict {
     // SAFETY: allocates a fresh Dict and never answers null.
     unsafe { tv_dict_alloc() }
 }
 
-pub(crate) fn dict_len(dict: *const dict_T) -> c_long {
+pub(crate) fn dict_len(dict: *const Dict) -> c_long {
     // SAFETY: a live Dict, or null (which answers 0).
     unsafe { tv_dict_len(dict) }
 }
 
-pub(crate) fn dict_add_str(dict: *mut dict_T, key: &CStr, value: &CStr) {
+pub(crate) fn dict_add_str(dict: *mut Dict, key: &CStr, value: &CStr) {
     dict_add_str_raw(dict, key, value.as_ptr());
 }
 
 /// [`dict_add_str`] for a value that is still a raw pointer.
-pub(crate) fn dict_add_str_raw(dict: *mut dict_T, key: &CStr, value: *const c_char) {
+pub(crate) fn dict_add_str_raw(dict: *mut Dict, key: &CStr, value: *const c_char) {
     // SAFETY: see the section note; `tv_dict_add_str` copies `value`.
     let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
 /// [`dict_add_str`] handing over an allocation the Dict then owns.
-pub(crate) fn dict_add_allocated_str(dict: *mut dict_T, key: &CStr, value: *mut c_char) {
+pub(crate) fn dict_add_allocated_str(dict: *mut Dict, key: &CStr, value: *mut c_char) {
     // SAFETY: see the section note; the Dict takes over `value`.
     let _ = unsafe { tv_dict_add_allocated_str(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
-pub(crate) fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: VarNumber) {
+pub(crate) fn dict_add_nr(dict: *mut Dict, key: &CStr, value: VarNumber) {
     // SAFETY: see the section note.
     let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
-pub(crate) fn dict_add_bool(dict: *mut dict_T, key: &CStr, value: bool) {
+pub(crate) fn dict_add_bool(dict: *mut Dict, key: &CStr, value: bool) {
     // SAFETY: see the section note.
     let _ = unsafe { tv_dict_add_bool(dict, key.as_ptr(), key.count_bytes(), value.into()) };
 }
 
-pub(crate) fn dict_add_list(dict: *mut dict_T, key: &CStr, value: *mut list_T) {
+pub(crate) fn dict_add_list(dict: *mut Dict, key: &CStr, value: *mut List) {
     // SAFETY: see the section note; the Dict takes a reference to the list.
     let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
 }
@@ -562,22 +562,22 @@ pub(crate) fn dict_add_list(dict: *mut dict_T, key: &CStr, value: *mut list_T) {
 /// A nested Dict under a key given as raw bytes -- `menu_get()` files each
 /// mapping under a mode letter, and takes only the *first* byte of one, so
 /// terminal mode lands under `t` rather than `tl`.
-pub(crate) fn dict_add_dict(dict: *mut dict_T, key: &[u8], value: *mut dict_T) {
+pub(crate) fn dict_add_dict(dict: *mut Dict, key: &[u8], value: *mut Dict) {
     // SAFETY: see the section note; `key` is a live slice of `key.len()`.
     let _ = unsafe { tv_dict_add_dict(dict, key.as_ptr().cast(), key.len(), value) };
 }
 
-pub(crate) fn list_alloc() -> *mut list_T {
+pub(crate) fn list_alloc() -> *mut List {
     // SAFETY: allocates a fresh List and never answers null.
     unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) }
 }
 
-pub(crate) fn list_append_dict(list: *mut list_T, dict: *mut dict_T) {
+pub(crate) fn list_append_dict(list: *mut List, dict: *mut Dict) {
     // SAFETY: see the section note.
     unsafe { tv_list_append_dict(list, dict) };
 }
 
-pub(crate) fn list_append_str(list: *mut list_T, value: &CStr) {
+pub(crate) fn list_append_str(list: *mut List, value: &CStr) {
     // SAFETY: see the section note; a negative length means "to the NUL".
     unsafe { tv_list_append_string(list, value.as_ptr(), -1) };
 }

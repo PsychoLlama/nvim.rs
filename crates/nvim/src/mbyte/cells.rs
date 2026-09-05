@@ -255,7 +255,7 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// The install is provisional even then: `'listchars'` and `'fillchars'` must
 /// still agree with the new widths, and the old table comes back if they do
 /// not.
-pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setcellwidths(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { (*argvars).v_type } as c_uint != VAR_LIST as c_uint
         || unsafe { (*argvars).vval.v_list }.is_null()
     {
@@ -290,7 +290,7 @@ pub unsafe fn f_setcellwidths(argvars: *mut typval_T, _rettv: *mut typval_T, _fp
 /// # Safety
 ///
 /// `l` must be a live list.
-unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
+unsafe fn parse_cell_widths(l: *const List) -> Option<Vec<CellWidthRange>> {
     let mut rows: Vec<CellWidthRange> = Vec::with_capacity(unsafe { tv_list_len(l) } as usize);
     let mut li = unsafe { (*l).lv_first };
     let mut item: c_int = 0;
@@ -331,7 +331,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
 /// # Safety
 ///
 /// `li_l` must be a live list.
-unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellWidthRange> {
+unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWidthRange> {
     let mut numbers = [0 as VarNumber; 3];
     let mut seen = 0;
     let mut lili = unsafe { tv_list_first(li_l) };
@@ -377,7 +377,7 @@ unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellW
 
 /// `getcellwidths()` — the table `setcellwidths()` installed, as a List of
 /// `[first, last, width]`.
-pub unsafe fn f_getcellwidths(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcellwidths(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let rows = CELL_WIDTHS.with(|t| t.clone());
     unsafe { tv_list_alloc_ret(rettv, rows.len() as ptrdiff_t) };
     for row in &rows {

@@ -44,7 +44,7 @@ enum Source {
     },
     /// A Vimscript list, one entry per line; non-string entries are
     /// skipped.
-    List(*mut listitem_T),
+    List(*mut ListItem),
     /// A Vimscript string, split on newlines.
     Text(*mut c_char),
     /// A Vimscript value that is neither a string nor a list. Upstream
@@ -100,7 +100,7 @@ impl Reader {
     unsafe fn open(
         enc: *mut c_char,
         efile: *const c_char,
-        tv: *mut typval_T,
+        tv: *mut TypVal,
         buf: Option<Buf>,
         lnumfirst: LineNr,
         lnumlast: LineNr,
@@ -471,7 +471,7 @@ pub(crate) unsafe fn qf_init_ext(
     mut qf_idx: c_int,
     efile: *const c_char,
     buf: Option<Buf>,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     errorformat: *mut c_char,
     newlist: bool,
     lnumfirst: LineNr,

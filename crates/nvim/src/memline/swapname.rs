@@ -647,7 +647,7 @@ fn expanded(
 pub unsafe fn recover_names(
     fname: *mut c_char,
     do_list: bool,
-    ret_list: *mut list_T,
+    ret_list: *mut List,
     nr: c_int,
     fname_out: *mut *mut c_char,
 ) -> c_int {

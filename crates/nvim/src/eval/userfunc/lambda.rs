@@ -100,7 +100,7 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut u
 /// `*arg` points at the `{`, and `rettv` is an uninitialised return value.
 pub unsafe fn get_lambda_tv(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evalarg: *mut evalarg_T,
 ) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
@@ -174,7 +174,7 @@ pub unsafe fn get_lambda_tv(
             let mut flags = FuncFlags::NONE;
             let name = unsafe { get_lambda_name(&mut lambda_buf) };
             let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
-            let pt = unsafe { xcalloc(1, size_of::<partial_T>()) } as *mut partial_T;
+            let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
             // SAFETY: both are this call's own allocations, and `rettv` is
             // the caller's uninitialised return value.
             let (mut f, mut part) = unsafe { (Uf::new(fp), Live::new(pt)) };
@@ -256,7 +256,7 @@ pub unsafe fn get_lambda_tv(
 /// # Safety
 /// `rettv` holds the funcref just read and `selfdict` the dictionary it came
 /// out of.
-pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
+pub unsafe fn make_partial(selfdict: *mut Dict, rettv: *mut TypVal) {
     // SAFETY: the caller's promise -- `rettv` holds the funcref just read.
     let mut rv = unsafe { Tv::new(rettv) };
     let mut fp: *mut ufunc_T = ptr::null_mut();
@@ -295,7 +295,7 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
     if fp.is_null() || !unsafe { (*fp).uf_flags }.has(FuncFlags::DICT) {
         return;
     }
-    let pt = unsafe { xcalloc(1, size_of::<partial_T>()) } as *mut partial_T;
+    let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
     // SAFETY: a fresh partial of this call's own, and `selfdict` is the
     // dictionary the funcref came out of.
     let mut part = unsafe { Live::new(pt) };
@@ -320,8 +320,8 @@ pub unsafe fn make_partial(selfdict: *mut dict_T, rettv: *mut typval_T) {
             unsafe { func_ptr_ref(part.pt_func) };
         }
         if ret_pt.pt_argc > 0 {
-            let arg_size = size_of::<typval_T>().wrapping_mul(ret_pt.pt_argc as size_t);
-            part.pt_argv = unsafe { xmalloc(arg_size) } as *mut typval_T;
+            let arg_size = size_of::<TypVal>().wrapping_mul(ret_pt.pt_argc as size_t);
+            part.pt_argv = unsafe { xmalloc(arg_size) } as *mut TypVal;
             part.pt_argc = ret_pt.pt_argc;
             let (from, into) = (ret_pt.pt_argv, part.pt_argv);
             for i in 0..part.pt_argc {

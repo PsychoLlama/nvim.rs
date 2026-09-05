@@ -276,7 +276,7 @@ pub struct file_buffer {
     pub b_kmap_state: int16_t,
     pub(crate) b_kmap_ga: Vec<KeymapEntry>,
     pub b_p_initialized: bool,
-    pub b_p_script_ctx: [sctx_T; 92],
+    pub b_p_script_ctx: [ScriptCtx; 92],
     pub b_p_ac: ::core::ffi::c_int,
     pub b_p_ai: ::core::ffi::c_int,
     pub b_p_ai_nopaste: ::core::ffi::c_int,
@@ -432,7 +432,7 @@ pub struct file_buffer {
     pub b_bad_char: ::core::ffi::c_int,
     pub b_start_bomb: ::core::ffi::c_int,
     pub b_bufvar: ScopeDictDictItem,
-    pub b_vars: *mut dict_T,
+    pub b_vars: *mut Dict,
     pub b_may_swap: bool,
     pub b_did_warn: bool,
     pub b_help: bool,
@@ -676,7 +676,7 @@ pub struct tabpage_S {
     pub tp_diff_update: ::core::ffi::c_int,
     pub tp_snapshot: [*mut frame_T; 3],
     pub tp_winvar: ScopeDictDictItem,
-    pub tp_vars: *mut dict_T,
+    pub tp_vars: *mut Dict,
     pub tp_localdir: *mut ::core::ffi::c_char,
     pub tp_prevdir: *mut ::core::ffi::c_char,
 }
@@ -844,7 +844,7 @@ pub struct window_S {
     pub w_briopt_vcol: ::core::ffi::c_int,
     pub w_scbind_pos: ::core::ffi::c_int,
     pub w_winvar: ScopeDictDictItem,
-    pub w_vars: *mut dict_T,
+    pub w_vars: *mut Dict,
     pub w_pcmark: pos_T,
     pub w_prev_pcmark: pos_T,
     pub w_jumplist: [xfmark_T; 100],
@@ -956,7 +956,7 @@ pub struct winopt_T {
     pub wo_wbr_flags: uint32_t,
     pub wo_fde_flags: uint32_t,
     pub wo_fdt_flags: uint32_t,
-    pub wo_script_ctx: [sctx_T; 51],
+    pub wo_script_ctx: [ScriptCtx; 51],
 }
 #[derive(Copy, Clone)]
 pub struct wline_T {

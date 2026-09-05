@@ -48,8 +48,8 @@ use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    ChangedtickDictItem, CmdModFlags, ColNr, Failed, LineNr, NUL, OptInt, ShmFlag, Terminal,
-    VAR_NUMBER, VarLock, dictitem_T, time_t, typval_T, typval_vval_union, uint8_t, uint64_t, win_T,
+    ChangedtickDictItem, CmdModFlags, ColNr, DictItem, Failed, LineNr, NUL, OptInt, ShmFlag,
+    Terminal, TypVal, VAR_NUMBER, VarLock, time_t, typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::undo::u_sync;
 use crate::window::{get_last_winid, win_valid};
@@ -203,7 +203,7 @@ fn now() -> time_t {
 
 /// Add `b:changedtick` to the buffer's variable dictionary.
 fn add_changedtick(mut buf: Buf) {
-    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut dictitem_T);
+    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut DictItem);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
     let _ = unsafe { tv_dict_add(vars, di) };
 }
@@ -499,7 +499,7 @@ fn err_static(msg: &'static CStr) {
 // ---------------------------------------------------------------------------
 // b:changedtick
 
-/// `"changedtick"`, in the fixed-size key `dictitem_T` carries. The static
+/// `"changedtick"`, in the fixed-size key `DictItem` carries. The static
 /// assertion upstream writes (`sizeof("changedtick") <= sizeof(di_key)`) is
 /// the array length below.
 const CHANGEDTICK_KEY: [c_char; 12] = {
@@ -516,7 +516,7 @@ const CHANGEDTICK_KEY: [c_char; 12] = {
 /// Initialise `b:changedtick` and its `changedtick_val` attribute.
 pub(crate) fn buf_init_changedtick(mut buf: Buf) {
     buf.changedtick_di = ChangedtickDictItem {
-        di_tv: typval_T {
+        di_tv: TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Fixed,
             vval: typval_vval_union {

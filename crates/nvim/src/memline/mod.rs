@@ -73,9 +73,9 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BlockNr, CmdModFlags, ColNr, Failed, FileInfo, FileOffset, FlushBuffers, LineNr, NUL, OptVal,
-    String_0, Timestamp, VarNumber, bhdr_T, buf_T, dict_T, file_comparison, infoptr_T, int16_t,
-    int64_t, list_T, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
+    BlockNr, CmdModFlags, ColNr, Dict, Failed, FileInfo, FileOffset, FlushBuffers, LineNr, List,
+    NUL, OptVal, String_0, Timestamp, VarNumber, bhdr_T, buf_T, file_comparison, infoptr_T,
+    int16_t, int64_t, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
     uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};

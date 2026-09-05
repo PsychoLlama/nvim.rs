@@ -56,7 +56,7 @@ pub(crate) use self::vimdict::*;
 
 const ET_ERROR: ExceptType = 1;
 
-/// `dictitem_T.di_flags`: the key cannot be changed, cannot be changed right
+/// `DictItem.di_flags`: the key cannot be changed, cannot be changed right
 /// now, and cannot be removed.
 const DI_FLAGS_RO: c_int = 1;
 const DI_FLAGS_FIX: c_int = 4;

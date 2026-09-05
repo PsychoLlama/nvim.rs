@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int, c_void};
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
 use crate::types::{
-    LuaRef, LuaRetMode, dict_T, funcexe_T, garray_T, lua_CFunction, lua_State, partial_T, typval_T,
+    Dict, LuaRef, LuaRetMode, Partial, TypVal, funcexe_T, garray_T, lua_CFunction, lua_State,
     uint64_t, uv_thread_t,
 };
 
@@ -137,9 +137,9 @@ pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_lastline: 0,
     fe_doesrange: ::core::ptr::null_mut(),
     fe_evaluate: false,
-    fe_partial: ::core::ptr::null_mut::<partial_T>(),
-    fe_selfdict: ::core::ptr::null_mut::<dict_T>(),
-    fe_basetv: ::core::ptr::null_mut::<typval_T>(),
+    fe_partial: ::core::ptr::null_mut::<Partial>(),
+    fe_selfdict: ::core::ptr::null_mut::<Dict>(),
+    fe_basetv: ::core::ptr::null_mut::<TypVal>(),
     fe_found_var: false,
 };
 

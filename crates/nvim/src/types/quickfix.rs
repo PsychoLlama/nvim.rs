@@ -72,7 +72,7 @@ pub struct qf_list_T {
     pub qf_nonevalid: bool,
     pub qf_has_user_data: bool,
     pub qf_title: *mut ::core::ffi::c_char,
-    pub qf_ctx: *mut typval_T,
+    pub qf_ctx: *mut TypVal,
     pub qf_qftf_cb: Callback,
     pub qf_dir_stack: *mut DirStack,
     pub qf_directory: *mut ::core::ffi::c_char,
@@ -110,6 +110,6 @@ pub struct qfline_S {
     pub qf_viscol: ::core::ffi::c_char,
     pub qf_cleared: ::core::ffi::c_char,
     pub qf_type: ::core::ffi::c_char,
-    pub qf_user_data: typval_T,
+    pub qf_user_data: TypVal,
     pub qf_valid: ::core::ffi::c_char,
 }

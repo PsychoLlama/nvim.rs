@@ -27,8 +27,7 @@ use crate::lua::ffi::{
 };
 use crate::runtime::script_autoload;
 use crate::types::{
-    Buffer, Error, Handle, String_0, Tabpage, Window, dict_T, dictitem_T, lua_State, ptrdiff_t,
-    size_t,
+    Buffer, Dict, DictItem, Error, Handle, String_0, Tabpage, Window, lua_State, ptrdiff_t, size_t,
 };
 
 /// The dictionary the `(scope, handle)` pair at stack slots 1 and 2 names.
@@ -39,7 +38,7 @@ use crate::types::{
 ///
 /// # Safety
 /// `lstate` must be a live Lua state with a scope string at 1 and a handle at 2.
-unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
+unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
     unsafe {
         let scope = CStr::from_ptr(luaL_checklstring(lstate, 1, ptr::null_mut()));
         let handle = luaL_checkinteger(lstate, 2) as Handle;
@@ -103,7 +102,7 @@ pub unsafe extern "C-unwind" fn nlua_setvar(lstate: *mut lua_State) -> c_int {
         let del = lua_gettop(lstate) < 4 || lua_type(lstate, 4) == LUA_TNIL;
 
         let mut err = Error::none();
-        let mut di: *mut dictitem_T = dict_check_writable(dict, key, del, &mut err);
+        let mut di: *mut DictItem = dict_check_writable(dict, key, del, &mut err);
         if err.is_set() {
             nlua_push_errstr(lstate, c"%s".as_ptr(), err.message_or_empty().as_ptr());
             err.clear();

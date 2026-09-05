@@ -37,8 +37,8 @@ use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::tr_c;
 use crate::types::{
-    EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, VarNumber, blob_T,
-    list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    Blob, EvalFuncData, FileDescriptor, List, ListItem, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING,
+    VarLock, VarNumber, ptrdiff_t, size_t, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -106,15 +106,15 @@ impl Out {
 
 /// One item of the List being written.
 #[derive(Clone, Copy)]
-struct Item(*const listitem_T);
+struct Item(*const ListItem);
 
 impl Item {
-    fn of(p: *const listitem_T) -> Option<Self> {
+    fn of(p: *const ListItem) -> Option<Self> {
         (!p.is_null()).then_some(Self(p))
     }
 
     /// The first item of `list`, which may itself be NULL.
-    fn first(list: *const list_T) -> Option<Self> {
+    fn first(list: *const List) -> Option<Self> {
         // SAFETY: a live list, or NULL, which `as_ref` answers None for.
         Self::of(unsafe { list.as_ref() }.map_or(ptr::null(), |l| l.lv_first))
     }
@@ -144,7 +144,7 @@ impl Item {
 
 /// The items of `list`, front to back.  Nothing below writes to the list, so
 /// the link is read once per step, as upstream's `TV_LIST_ITER_CONST` does.
-fn items(list: *const list_T) -> impl Iterator<Item = Item> {
+fn items(list: *const List) -> impl Iterator<Item = Item> {
     let mut cur = Item::first(list);
     core::iter::from_fn(move || {
         let item = cur?;
@@ -154,7 +154,7 @@ fn items(list: *const list_T) -> impl Iterator<Item = Item> {
 }
 
 /// The List argument 0 holds, which may be NULL.
-fn list_of(tv: &typval_T) -> *const list_T {
+fn list_of(tv: &TypVal) -> *const List {
     tv.list_or_null()
 }
 
@@ -201,7 +201,7 @@ fn err_writing(error: c_int) {
 ///
 /// False when an item has no string form -- which reports on its own and is
 /// the one exit that does not report a write error.
-fn write_list(out: &mut Out, list: *const list_T, binary: bool) -> bool {
+fn write_list(out: &mut Out, list: *const List, binary: bool) -> bool {
     let error;
     'failed: {
         for li in items(list) {
@@ -281,7 +281,7 @@ unsafe fn write_data(out: &mut Out, data: *const c_char, len: usize) -> bool {
     false
 }
 
-fn write_blob(out: &mut Out, blob: *const blob_T) -> bool {
+fn write_blob(out: &mut Out, blob: *const Blob) -> bool {
     // SAFETY: a live blob, whose `ga_data` holds `tv_blob_len` readable
     // bytes.
     let (data, len) = (
@@ -326,7 +326,7 @@ fn defer_delete(fname: &CStr) {
     // SAFETY: `fname` is NUL-terminated; the answer is a string in nvim's
     // heap, which the deferred call takes over.
     let full = unsafe { full_name_save(fname.as_ptr(), false) };
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_string: full },
@@ -404,7 +404,7 @@ impl Flags {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_writefile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1 as VarNumber;
     if secure() || !writable(args) {
@@ -459,12 +459,12 @@ pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// The Blob argument 0 holds, or None when it is the empty one.
-fn blob_of(tv: &typval_T) -> Option<*const blob_T> {
+fn blob_of(tv: &TypVal) -> Option<*const Blob> {
     let blob = tv.blob_or_null();
     (!blob.is_null()).then_some(blob.cast_const())
 }
 
 /// The String argument 0 holds.
-fn string_of(tv: &typval_T) -> *const c_char {
+fn string_of(tv: &TypVal) -> *const c_char {
     tv.string_or_null()
 }

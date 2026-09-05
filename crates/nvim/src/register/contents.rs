@@ -83,7 +83,7 @@ unsafe fn get_reg_wrap_one_line(s: *mut c_char, flags: c_int) -> *mut c_void {
 }
 
 /// The contents of register `regname`, as an allocated string or -- with
-/// `kGRegList` -- a `list_T` of lines.
+/// `kGRegList` -- a `List` of lines.
 ///
 /// `kGRegNoExpr` refuses `"=` outright and `kGRegExprSrc` answers its source
 /// rather than evaluating it, which is what `getreg('=', 1, ...)` wants.

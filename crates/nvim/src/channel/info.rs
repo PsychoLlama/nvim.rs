@@ -28,8 +28,8 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, VAR_DICT, VAR_UNKNOWN, VarLock,
-    key_value_pair, save_v_event_T, typval_T, typval_vval_union, uint64_t,
+    ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, TypVal, VAR_DICT, VAR_UNKNOWN,
+    VarLock, key_value_pair, save_v_event_T, typval_vval_union, uint64_t,
 };
 
 use super::known::*;
@@ -45,21 +45,21 @@ fn literal_obj(text: &'static CStr) -> Object {
     Object::String(unsafe { cstr_as_string(text.as_ptr()) })
 }
 
-/// A fresh `typval_T` of no type, which is what every consumer here starts
+/// A fresh `TypVal` of no type, which is what every consumer here starts
 /// from before something writes into it.
-pub(super) fn unknown_tv() -> typval_T {
-    typval_T {
+pub(super) fn unknown_tv() -> TypVal {
+    TypVal {
         v_type: VAR_UNKNOWN as _,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     }
 }
 
-/// `chan`'s info dict, as the `typval_T` the Vimscript layer wants.
+/// `chan`'s info dict, as the `TypVal` the Vimscript layer wants.
 ///
 /// # Safety
 /// `id` may name any channel; `arena` owns the dict's storage.
-unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> typval_T {
+unsafe fn info_tv(id: uint64_t, arena: *mut Arena) -> TypVal {
     let mut tv = unknown_tv();
     // SAFETY: the caller's arena; `channel_info` answers a dict, which
     // `object_to_vim` converts without ever failing.

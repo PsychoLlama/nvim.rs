@@ -107,7 +107,7 @@ unsafe fn reshape_match(entry: *mut c_char, head: &mut Vec<c_char>) {
 /// # Safety
 /// `list` must be live and `pat` NUL-terminated.
 pub unsafe fn get_tags(
-    list: *mut list_T,
+    list: *mut List,
     pat: *mut c_char,
     buf_fname: *mut c_char,
 ) -> Result<(), Failed> {
@@ -143,7 +143,7 @@ pub unsafe fn get_tags(
 ///
 /// # Safety
 /// `list` must be live and `entry` must be a match [`find_tags`] answered.
-unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
+unsafe fn describe_match(list: *mut List, entry: *mut c_char) -> bool {
     // SAFETY: the caller's promise. Everything written into the dict is
     // copied out of the match, which outlives the call.
     let mut tp = TagParts::default();
@@ -196,7 +196,7 @@ unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
 ///
 /// # Safety
 /// `dict` must be live and `tp` must describe a live match.
-unsafe fn add_extra_fields(dict: *mut dict_T, tp: &TagParts) -> bool {
+unsafe fn add_extra_fields(dict: *mut Dict, tp: &TagParts) -> bool {
     if tp.command_end.is_null() {
         return true;
     }
@@ -324,7 +324,7 @@ impl Scan {
 /// `dict` must be live, `field_name` NUL-terminated, and `start` either
 /// NULL or a readable string reaching `end`.
 unsafe fn add_tag_field(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     field_name: *const c_char,
     start: *const c_char,
     end: *const c_char,

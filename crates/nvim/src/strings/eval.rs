@@ -33,7 +33,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
-    EvalFuncData, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t, size_t, typval_T,
+    EvalFuncData, TypVal, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
 };
 
 /// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
@@ -41,7 +41,7 @@ use crate::types::{
 const NUMBUFLEN: usize = 65;
 
 /// "str2list()" function: the string as a list of code points.
-pub unsafe fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_str2list(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t) };
     let mut p = unsafe { numbuf.string(argvars) };
@@ -56,7 +56,7 @@ pub unsafe fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// The sign is handled here rather than by `vim_str2nr`, so that a base
 /// prefix may follow it and so that whitespace between the two is allowed.
 /// Text after the number is silently ignored.
-pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_str2nr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut base = 10;
     let mut what = Str2NrBases::NONE;
@@ -99,7 +99,7 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 }
 
 /// "stridx()" function: the byte index of the first occurrence.
-pub unsafe fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_stridx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
@@ -132,7 +132,7 @@ pub unsafe fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// "strridx()" function: the byte index of the last occurrence at or
 /// before `end_idx`.
-pub unsafe fn f_strridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strridx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
@@ -177,13 +177,13 @@ pub unsafe fn f_strridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// "string()" function.
-pub unsafe fn f_string(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_string(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = encode_tv2string(argvars, ptr::null_mut()) };
 }
 
 /// "strlen()" function: the length in bytes.
-pub unsafe fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strlen(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = cstr::bytes_at(numbuf.string(argvars)).len() as VarNumber };
 }
@@ -192,7 +192,7 @@ pub unsafe fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// `skipcc` folds a composing character into the base character it
 /// follows; without it each one counts on its own.
-unsafe fn strchar_common(argvars: *mut typval_T, rettv: *mut typval_T, skipcc: bool) {
+unsafe fn strchar_common(argvars: *mut TypVal, rettv: *mut TypVal, skipcc: bool) {
     let mut numbuf = NumBuf::new();
     let next_char: unsafe fn(*mut *const c_char) -> c_int = if skipcc {
         mb_ptr2char_adv
@@ -209,13 +209,13 @@ unsafe fn strchar_common(argvars: *mut typval_T, rettv: *mut typval_T, skipcc: b
 }
 
 /// "strcharlen()" function: characters, composing characters folded in.
-pub unsafe fn f_strcharlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strcharlen(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { strchar_common(argvars, rettv, true) }
 }
 
 /// "strchars()" function: characters, composing ones counted unless the
 /// optional `skipcc` argument says otherwise.
-pub unsafe fn f_strchars(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strchars(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let skipcc = if given(unsafe { &*argvars.add(1) }) {
         match unsafe { strict_bool_arg(argvars.add(1)) } {
             Some(flag) => flag,
@@ -229,7 +229,7 @@ pub unsafe fn f_strchars(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 
 /// "strdisplaywidth()" function: screen cells, tabs expanded against the
 /// optional starting column.
-pub unsafe fn f_strdisplaywidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strdisplaywidth(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let s = unsafe { numbuf.string(argvars) };
     let col = if given(unsafe { &*argvars.add(1) }) {
@@ -241,27 +241,27 @@ pub unsafe fn f_strdisplaywidth(argvars: *mut typval_T, rettv: *mut typval_T, _f
 }
 
 /// "strwidth()" function: screen cells, with a tab counting as one.
-pub unsafe fn f_strwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strwidth(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = mb_string2cells(numbuf.string(argvars)) as VarNumber };
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.
-pub unsafe fn f_strtrans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strtrans(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = transstr(numbuf.string(argvars), true) };
 }
 
 /// "tolower()" function.
-pub unsafe fn f_tolower(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_tolower(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = strcase_save(numbuf.string(argvars), false) };
 }
 
 /// "toupper()" function.
-pub unsafe fn f_toupper(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_toupper(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = strcase_save(numbuf.string(argvars), true) };
@@ -274,7 +274,7 @@ pub unsafe fn f_toupper(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// the end of `tostr`, or once, the first time an input character is *not*
 /// in `fromstr` and the counts can be compared directly. So
 /// `tr('a', 'ab', 'x')` is an error but `tr('a', 'a', 'x')` is not.
-pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_tr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
     let mut buf2 = [0 as c_char; NUMBUFLEN];
@@ -370,7 +370,7 @@ pub unsafe fn f_tr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFunc
 /// no mask the set trimmed is whitespace plus U+00A0; with one it is
 /// exactly the mask's characters, and an empty mask reverts to the
 /// default.
-pub unsafe fn f_trim(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_trim(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf1 = [0 as c_char; NUMBUFLEN];
     let mut buf2 = [0 as c_char; NUMBUFLEN];

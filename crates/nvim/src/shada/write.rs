@@ -250,7 +250,7 @@ impl Writing {
         let mut var_iter: Option<usize> = None;
         let timestamp = os_time();
         loop {
-            let mut vartv: typval_T = unsafe { core::mem::zeroed() };
+            let mut vartv: TypVal = unsafe { core::mem::zeroed() };
             let mut name: *const c_char = core::ptr::null();
             var_iter = unsafe {
                 var_shada_iter(var_iter, &raw mut name, &raw mut vartv, VAR_FLAVOUR_SHADA)
@@ -269,7 +269,7 @@ impl Writing {
 
             // The entry takes a copy, which the pack frees; the value
             // the iterator handed over is this function's to release.
-            let mut tgttv: typval_T = unsafe { core::mem::zeroed() };
+            let mut tgttv: TypVal = unsafe { core::mem::zeroed() };
             unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
             let entry = ShadaEntry {
                 can_free_entry: false,
@@ -666,7 +666,7 @@ impl Writing {
 ///
 /// Functions have no representation in the format, and a container that
 /// refers to itself would not terminate the encoder.
-unsafe fn writable_value(vartv: &typval_T) -> bool {
+unsafe fn writable_value(vartv: &TypVal) -> bool {
     match vartv.v_type {
         VAR_FUNC | VAR_PARTIAL => false,
         VAR_DICT => {

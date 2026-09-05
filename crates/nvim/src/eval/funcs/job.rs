@@ -43,9 +43,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, IOSIZE,
-    Integer, MAXPATHL, NUL, Object, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock,
-    VarNumber, Vv, buf_T, dict_T, dictitem_T, list_T, listitem_T, typval_T, typval_vval_union,
+    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
+    EvalFuncData, IOSIZE, Integer, List, ListItem, MAXPATHL, NUL, Object, TypVal, VAR_BOOL,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, Vv, buf_T, typval_vval_union,
     uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -61,7 +61,7 @@ const NO_CALLBACK: Callback = Callback::None;
 
 /// The job id a `job*()` builtin was handed, or `None` when the argument
 /// was not a Number at all -- in which case the error is already out.
-fn job_id(arg: &typval_T) -> Option<uint64_t> {
+fn job_id(arg: &TypVal) -> Option<uint64_t> {
     if arg.v_type != VAR_NUMBER {
         emsg(gettext(e_invarg));
         return None;
@@ -70,7 +70,7 @@ fn job_id(arg: &typval_T) -> Option<uint64_t> {
 }
 
 /// `jobpid({job})`
-pub unsafe fn f_jobpid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_jobpid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -90,7 +90,7 @@ pub unsafe fn f_jobpid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
-pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_jobresize(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -123,7 +123,7 @@ pub unsafe fn f_jobresize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// `jobstop({job})`
-pub unsafe fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_jobstop(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -153,7 +153,7 @@ pub unsafe fn f_jobstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// `jobwait({jobs} [, {timeout}])`
-pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_jobwait(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -167,7 +167,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         return;
     }
 
-    let list: *mut list_T = args.get(0).list_or_null();
+    let list: *mut List = args.get(0).list_or_null();
     let count = unsafe { tv_list_len(list) };
     let jobs = unsafe { xcalloc(count as usize, size_of::<*mut Channel>()) } as *mut *mut Channel;
     // The waiting jobs' events are parked on a queue of our own so that
@@ -176,7 +176,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 
     let mut i = 0;
     if !list.is_null() {
-        let mut arg: *const listitem_T = unsafe { (*list).lv_first };
+        let mut arg: *const ListItem = unsafe { (*list).lv_first };
         while !arg.is_null() {
             let chan;
             if unsafe { (*arg).li_tv.v_type } != VAR_NUMBER
@@ -293,11 +293,11 @@ const REQUIRED_ENV: [&CStr; 0] = [];
 /// `job_env` is null or a live dict item holding a Dict; `pty_term_name` is
 /// null or a NUL-terminated string, and non-null whenever `pty` is set.
 unsafe fn create_environment(
-    job_env: *const dictitem_T,
+    job_env: *const DictItem,
     clear_env: bool,
     pty: bool,
     pty_term_name: *const c_char,
-) -> *mut dict_T {
+) -> *mut Dict {
     // SAFETY: the caller's obligation; every key below is a `'static`
     // NUL-terminated string and the dict owns what it is given.
     let env = unsafe { tv_dict_alloc() };
@@ -306,7 +306,7 @@ unsafe fn create_environment(
         // Start from our own environment. `f_environ` is the builtin,
         // called directly because it is the only thing that knows how
         // to turn `environ` into a Dict.
-        let mut inherited = typval_T {
+        let mut inherited = TypVal {
             v_type: VAR_UNKNOWN,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },
@@ -374,7 +374,7 @@ unsafe fn create_environment(
 }
 
 /// `jobstart({cmd} [, {opts}])`
-pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_jobstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut cmdbuf = NumBuf::new();
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
@@ -411,7 +411,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         bail!();
     }
 
-    let mut job_opts = ptr::null_mut::<dict_T>();
+    let mut job_opts = ptr::null_mut::<Dict>();
     let mut detach = false;
     let mut rpc = false;
     let mut pty = false;
@@ -423,7 +423,7 @@ pub unsafe fn f_jobstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut on_stderr = NO_READER;
     let mut on_exit = NO_CALLBACK;
     let mut cwd = ptr::null::<c_char>();
-    let mut job_env = ptr::null_mut::<dictitem_T>();
+    let mut job_env = ptr::null_mut::<DictItem>();
 
     if args.ty(1) == VAR_DICT {
         job_opts = args.get(1).dict_or_null();

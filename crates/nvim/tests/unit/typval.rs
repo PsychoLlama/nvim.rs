@@ -33,7 +33,7 @@ use neovim::eval::typval::{
 };
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    Callback, Failed, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown, listitem_T, listwatch_T,
+    Callback, Failed, ListItem, ListWatch, VAR_STRING, VAR_UNKNOWN, VarLock, kListLenUnknown,
     ptrdiff_t,
 };
 
@@ -80,7 +80,7 @@ fn tv_list_append_string_copies_then_appends() {
         // freeing costs. It is worth saying: each item releases its string
         // — a NULL one included, since `xfree(NULL)` still reaches the
         // allocator — before itself, and the list goes last.
-        let items: Vec<(*mut c_char, *mut listitem_T)> = {
+        let items: Vec<(*mut c_char, *mut ListItem)> = {
             let mut items = Vec::new();
             let mut item = (*l).lv_first;
             while !item.is_null() {
@@ -103,7 +103,7 @@ fn tv_list_append_string_copies_then_appends() {
 ///
 /// # Safety
 /// `l` is a live list of `VAR_STRING` items.
-unsafe fn strings(l: *const neovim::types::list_T) -> Vec<Option<&'static str>> {
+unsafe fn strings(l: *const neovim::types::List) -> Vec<Option<&'static str>> {
     let mut out = Vec::new();
     let mut item = unsafe { (*l).lv_first };
     while !item.is_null() {
@@ -117,16 +117,16 @@ unsafe fn strings(l: *const neovim::types::list_T) -> Vec<Option<&'static str>> 
 /// `describe('dict') describe('item') describe('alloc()/free()')
 /// itp('works')`, spec line 1682.
 ///
-/// A `dictitem_T` is over-allocated so the NUL-terminated key fits in its
+/// A `DictItem` is over-allocated so the NUL-terminated key fits in its
 /// flexible `di_key` member — but never below the struct's own size. The
 /// expectation is the *arithmetic*, so it is written as
-/// `offset_of!(dictitem_T, di_key) + len + 1` exactly as the Lua spelled it
+/// `offset_of!(DictItem, di_key) + len + 1` exactly as the Lua spelled it
 /// `ffi.offsetof(...)`, and it would not survive being written as a number.
 #[test]
 fn tv_dict_item_is_allocated_around_its_key() {
     let log = AllocLog::start();
     // The last two rows are not in the spec, and they are the only ones
-    // that can see the arithmetic at all: `size_of::<dictitem_T>()`
+    // that can see the arithmetic at all: `size_of::<DictItem>()`
     // dominates the `max` for every key shorter than seven bytes, so a
     // mutation of the `+ 1` — the room the terminator needs — changes no
     // answer on the spec's five rows. Measured: `+ 1` → `+ 2` is NOT CAUGHT
@@ -269,7 +269,7 @@ fn dropping_items_shortens_the_list() {
     }
 }
 
-/// A `listwatch_T` standing on an item that is being unlinked is advanced to
+/// A `ListWatch` standing on an item that is being unlinked is advanced to
 /// the item *after* it — what keeps `:for` and `filter()` walking a list
 /// whose current item they just removed.
 ///
@@ -289,7 +289,7 @@ fn a_watcher_on_a_dropped_item_advances_past_it() {
         let second = (*tv_list_first(l)).li_next;
         let third = (*second).li_next;
 
-        let mut lw = listwatch_T {
+        let mut lw = ListWatch {
             lw_item: second,
             lw_next: ptr::null_mut(),
         };

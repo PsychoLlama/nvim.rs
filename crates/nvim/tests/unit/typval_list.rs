@@ -29,8 +29,8 @@ use neovim::garray::ga_clear;
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    Refcount, VAR_FLOAT, VAR_LIST, VarLock, list_T, listitem_T, listwatch_T, typval_T,
-    typval_vval_union, vimconv_T,
+    List, ListItem, ListWatch, Refcount, TypVal, VAR_FLOAT, VAR_LIST, VarLock, typval_vval_union,
+    vimconv_T,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -54,8 +54,8 @@ fn floats(ns: impl IntoIterator<Item = i32>) -> Vec<Tv> {
 ///
 /// # Safety
 /// `l` is a live list and `li` one of its items (or NULL).
-unsafe fn watch(l: *mut list_T, li: *mut listitem_T) -> Box<listwatch_T> {
-    let mut lw = Box::new(listwatch_T {
+unsafe fn watch(l: *mut List, li: *mut ListItem) -> Box<ListWatch> {
+    let mut lw = Box::new(ListWatch {
         lw_item: li,
         lw_next: ptr::null_mut(),
     });
@@ -64,7 +64,7 @@ unsafe fn watch(l: *mut list_T, li: *mut listitem_T) -> Box<listwatch_T> {
 }
 
 /// Where each watcher of `lws` is standing.
-fn standing(lws: &[Box<listwatch_T>]) -> Vec<*mut listitem_T> {
+fn standing(lws: &[Box<ListWatch>]) -> Vec<*mut ListItem> {
     lws.iter().map(|lw| lw.lw_item).collect()
 }
 
@@ -198,7 +198,7 @@ fn removing_a_watch_unlinks_it_without_freeing() {
             watch(l, (*l).lv_first),
             watch(l, (*l).lv_first),
         ];
-        let at = |lw: &listwatch_T| (&raw const *lw).cast_mut();
+        let at = |lw: &ListWatch| (&raw const *lw).cast_mut();
         log.clear();
 
         // The newest is at the head, so removing the middle one leaves the
@@ -224,7 +224,7 @@ fn removing_an_unregistered_watch_is_a_no_op() {
     // SAFETY: `lw` was never registered, so nothing links to it.
     unsafe {
         let l = tv::new_list(&floats(1..=7));
-        let mut lw = listwatch_T {
+        let mut lw = ListWatch {
             lw_item: ptr::null_mut(),
             lw_next: ptr::null_mut(),
         };
@@ -242,7 +242,7 @@ fn removing_an_unregistered_watch_is_a_no_op() {
 ///
 /// # Safety
 /// The editor must be up. The caller owns all three.
-unsafe fn three_lists(log: &AllocLog) -> [(*mut list_T, Vec<*mut std::ffi::c_void>); 3] {
+unsafe fn three_lists(log: &AllocLog) -> [(*mut List, Vec<*mut std::ffi::c_void>); 3] {
     let mut out = Vec::new();
     // SAFETY: the lists are the caller's.
     unsafe {
@@ -474,7 +474,7 @@ fn inserting_an_item_puts_it_before_the_one_named() {
 
         let float_item = |n: f64| {
             let li = tv::li_alloc();
-            (*li).li_tv = typval_T {
+            (*li).li_tv = TypVal {
                 v_type: VAR_FLOAT,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_float: n },
@@ -531,7 +531,7 @@ fn inserting_into_an_empty_list_makes_it_the_only_item() {
         assert!((*l).lv_last.is_null());
 
         let li = tv::li_alloc();
-        (*li).li_tv = typval_T {
+        (*li).li_tv = TypVal {
             v_type: VAR_FLOAT,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_float: 100500.0 },
@@ -551,7 +551,7 @@ fn inserting_into_an_empty_list_makes_it_the_only_item() {
 #[test]
 fn inserting_a_value_copies_it() {
     let log = AllocLog::start();
-    // SAFETY: each `typval_T` here is this case's own and is cleared.
+    // SAFETY: each `TypVal` here is this case's own and is cleared.
     unsafe {
         let mut l_tv = Tv::List(vec![]).build();
         let l = l_tv.vval.v_list;
@@ -1402,7 +1402,7 @@ fn joining_a_list_renders_every_item() {
     let log = AllocLog::start();
     // SAFETY: each list and its growarray are this case's own.
     unsafe {
-        let join = |l: *mut list_T, sep: &str| -> String {
+        let join = |l: *mut List, sep: &str| -> String {
             let mut ga = tv::ga_alloc(1, 80);
             assert_eq!(tv_list_join(&raw mut ga, l, cstr(sep).as_ptr()), Ok(()));
             let out = if ga.ga_data.is_null() {
@@ -1451,7 +1451,7 @@ fn joining_a_list_renders_every_item() {
 ///
 /// # Safety
 /// The editor must be up; the caller frees them.
-unsafe fn equality_corpus() -> Vec<*mut list_T> {
+unsafe fn equality_corpus() -> Vec<*mut List> {
     let inner = |items: Vec<Tv>| Tv::List(items);
     [
         vec![
@@ -1622,7 +1622,7 @@ fn finding_a_number_by_index_reads_through_strings() {
     let log = AllocLog::start();
     // SAFETY: every list is this case's own.
     unsafe {
-        let find_nr = |l: *mut list_T, n: c_int, msg: Option<&str>| -> (bool, i64) {
+        let find_nr = |l: *mut List, n: c_int, msg: Option<&str>| -> (bool, i64) {
             let mut err = false;
             let ret = check_emsg(log.editor(), || tv_list_find_nr(l, n, &raw mut err), msg);
             (err, ret)
@@ -1685,7 +1685,7 @@ fn finding_a_string_by_index_renders_scalars() {
     let log = AllocLog::start();
     // SAFETY: every list is this case's own; the answer is borrowed.
     unsafe {
-        let find_str = |l: *mut list_T, n: c_int, msg: Option<&str>| -> Option<String> {
+        let find_str = |l: *mut List, n: c_int, msg: Option<&str>| -> Option<String> {
             let mut numbuf = NumBuf::new();
             let ret = check_emsg(log.editor(), || tv_list_find_str(l, n, &mut numbuf), msg);
             (!ret.is_null()).then(|| CStr::from_ptr(ret).to_string_lossy().into_owned())

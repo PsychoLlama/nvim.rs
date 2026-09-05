@@ -85,7 +85,7 @@ pub struct proc {
     pub cwd: *const ::core::ffi::c_char,
     pub argv: *mut *mut ::core::ffi::c_char,
     pub exepath: *const ::core::ffi::c_char,
-    pub env: *mut dict_T,
+    pub env: *mut Dict,
     pub in_0: Stream,
     pub out: RStream,
     pub err: RStream,

@@ -38,7 +38,7 @@ use crate::types::kListLenMayKnow;
 /// `l` must be a live list, `mname` and `fname` NUL-terminated strings (or
 /// null, for `fname`), and `pos` a live position.
 pub(super) unsafe fn add_mark(
-    l: *mut list_T,
+    l: *mut List,
     mname: *const c_char,
     pos: *const pos_T,
     bufnr: c_int,
@@ -92,7 +92,7 @@ pub(super) unsafe fn add_mark(
 /// # Safety
 /// `buf` must be a live buffer, `l` a live list, and the editor's globals must
 /// be live.
-pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T) {
+pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut List) {
     // SAFETY: the caller promised a live buffer; `curwin`/`curbuf` are live
     // from startup to exit.
     let (buf, win, cur) = unsafe { (Buf::new(buf.cast_mut()), Win::current(), Buf::current()) };
@@ -146,7 +146,7 @@ pub unsafe fn get_buf_local_marks(buf: *const buf_T, l: *mut list_T) {
 ///
 /// # Safety
 /// `l` must be a live list and the editor's globals must be live.
-pub unsafe fn get_global_marks(l: *mut list_T) {
+pub unsafe fn get_global_marks(l: *mut List) {
     let mut mname: [c_char; 3] = c_bytes(b"' \0");
     for (i, mark) in GlobalMarks::indexed() {
         let fnum = mark.fmark().fnum();

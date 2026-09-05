@@ -13,8 +13,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
-    Context, Error, EvalFuncData, Object, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarNumber, typval_T,
+    Context, Error, EvalFuncData, Object, TypVal, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarNumber,
 };
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -27,7 +27,7 @@ const NO_ERROR: Error = Error::none();
 ///
 /// # Safety
 /// `tv` is a live typval from the call frame.
-unsafe fn context_index(tv: *const typval_T, what: &str) -> Option<usize> {
+unsafe fn context_index(tv: *const TypVal, what: &str) -> Option<usize> {
     // SAFETY: the caller's obligation.
     let tv = unsafe { &*tv };
     if tv.v_type == VAR_NUMBER {
@@ -52,7 +52,7 @@ fn context_at(index: usize) -> Option<*mut Context> {
 }
 
 /// `ctxget([{index}])` — the context at `index` as a Dictionary.
-pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_ctxget(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the arena and the error are owned here and freed on the way
     // out; `object_to_vim` copies what it keeps out of the arena's dict.
@@ -74,7 +74,7 @@ pub unsafe fn f_ctxget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 }
 
 /// `ctxpop()` — restore and drop the context on top of the stack.
-pub unsafe fn f_ctxpop(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_ctxpop(_argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: restores from the context stack; main thread only.
     if !unsafe { ctx_restore(ptr::null_mut(), kCtxAll.get()) } {
         semsg!("Context stack is empty");
@@ -83,7 +83,7 @@ pub unsafe fn f_ctxpop(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
 
 /// `ctxpush([{types}])` — push a context holding the named parts of the
 /// editor state, or all of them when no list is given.
-pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_ctxpush(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: walks the argument list, whose items live for the call.
     let types = match args.ty(0) {
@@ -121,7 +121,7 @@ pub unsafe fn f_ctxpush(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Ev
 }
 
 /// `ctxset({context} [, {index}])` — replace the context at `index`.
-pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_ctxset(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: the arena, the error and the scratch context are owned here;
     // `tmp` is either installed in place of `ctx` or freed.
@@ -165,7 +165,7 @@ pub unsafe fn f_ctxset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
 }
 
 /// `ctxsize()` — how many contexts are on the stack.
-pub unsafe fn f_ctxsize(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_ctxsize(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     // SAFETY: reads the context stack's length; main thread only.

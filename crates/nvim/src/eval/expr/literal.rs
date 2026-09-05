@@ -38,13 +38,13 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, blob_T, size_t, typval_T, typval_vval_union, uint8_t,
+    Blob, Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, TypVal, VAR_FLOAT, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, size_t, typval_vval_union, uint8_t,
 };
 use ::libc::{strtod, toupper};
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -151,7 +151,7 @@ impl Walk {
 /// expression; `rettv` must be null or valid.
 pub(crate) unsafe fn eval_option(
     arg: *mut *const c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
@@ -223,7 +223,7 @@ pub(crate) unsafe fn eval_option(
 /// `rettv` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_number(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
     want_string: bool,
 ) -> Result<(), Failed> {
@@ -269,7 +269,7 @@ pub(crate) unsafe fn eval_number(
         }
     } else if cur.byte() == b'0' && matches!(cur.at(1), b'z' | b'Z') {
         // SAFETY: a fresh Blob of this call's own, or none while skipping.
-        let blob: *mut blob_T = if evaluate {
+        let blob: *mut Blob = if evaluate {
             unsafe { tv_blob_alloc() }
         } else {
             null_mut()
@@ -340,7 +340,7 @@ pub(crate) unsafe fn eval_number(
 /// `rettv` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_string(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
     interpolate: bool,
 ) -> Result<(), Failed> {
@@ -562,7 +562,7 @@ pub(crate) unsafe fn eval_string(
 /// As `eval_string`.
 pub(crate) unsafe fn eval_lit_string(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
     interpolate: bool,
 ) -> Result<(), Failed> {
@@ -657,7 +657,7 @@ pub(crate) unsafe fn eval_lit_string(
 /// As `eval_string`.
 pub(crate) unsafe fn eval_interp_string(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
@@ -754,7 +754,7 @@ pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut Float) ->
 /// expression; `rettv` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_env_var(
     arg: *mut *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,

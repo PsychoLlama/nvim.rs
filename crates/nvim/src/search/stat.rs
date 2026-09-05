@@ -328,7 +328,7 @@ unsafe fn update_search_stat(
 ///
 /// # Safety
 /// `dict` must be a readable dictionary.
-unsafe fn dict_number(dict: *mut dict_T, key: &CStr, current: c_int) -> Option<c_int> {
+unsafe fn dict_number(dict: *mut Dict, key: &CStr, current: c_int) -> Option<c_int> {
     let di = unsafe { tv_dict_find(dict, key.as_ptr(), -1 as ptrdiff_t) };
     if di.is_null() {
         return Some(current);
@@ -342,7 +342,7 @@ unsafe fn dict_number(dict: *mut dict_T, key: &CStr, current: c_int) -> Option<c
 ///
 /// # Safety
 /// `list` must be a readable list.
-unsafe fn list_number(list: *mut list_T, index: c_int, current: c_int) -> Option<c_int> {
+unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c_int> {
     let li = unsafe { tv_list_find(list, index) };
     if li.is_null() {
         return Some(current);
@@ -357,7 +357,7 @@ unsafe fn list_number(list: *mut list_T, index: c_int, current: c_int) -> Option
 /// # Safety
 /// The Vimscript function ABI: `argvars` is the argument array and
 /// `rettv` the return value.
-pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_searchcount(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut pos = cur_win().w_cursor;
     let mut pattern = ptr::null_mut::<c_char>();

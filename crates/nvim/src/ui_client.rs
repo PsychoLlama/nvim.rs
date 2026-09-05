@@ -60,8 +60,8 @@ use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    ApiDict, Arena, Array, Callback, CallbackReader, Error, Event, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, Object, ObjectType, ProfTime, TUIData, UIClientHandler, Unpacker, dict_T,
+    ApiDict, Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs,
+    Integer, KeyDict_highlight, Object, ObjectType, ProfTime, TUIData, UIClientHandler, Unpacker,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
     uint16_t,
 };
@@ -92,7 +92,7 @@ static tui_rgb: GlobalCell<bool> = GlobalCell::new(false);
 fn no_reader() -> CallbackReader {
     CallbackReader {
         cb: Callback::None,
-        self_0: core::ptr::null_mut::<dict_T>(),
+        self_0: core::ptr::null_mut::<Dict>(),
         buffer: Vec::new(),
         eof: false,
         buffered: false,
@@ -135,7 +135,7 @@ pub(crate) unsafe fn ui_client_start_server(
     let no_exit_cb = Callback::None;
     let stdin_mode = kChannelStdinPipe;
     let no_term = core::ptr::null();
-    let no_env = core::ptr::null_mut::<dict_T>();
+    let no_env = core::ptr::null_mut::<Dict>();
     let (no_w, no_h) = (0 as uint16_t, 0 as uint16_t);
     let status = &raw mut exit_status;
     let (out, err) = (no_reader(), on_err);

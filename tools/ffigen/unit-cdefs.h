@@ -3,21 +3,23 @@
 typedef struct lua_State lua_State;
 typedef struct Arena Arena;
 typedef struct AutoPatCmd_S AutoPatCmd_S;
+typedef struct Blob Blob;
 typedef struct DecorRange_data DecorRange_data;
 typedef struct DecorVirtText DecorVirtText;
+typedef struct Dict Dict;
 typedef struct Error Error;
 typedef struct EvalFuncData EvalFuncData;
 typedef struct ExtmarkUndoObject ExtmarkUndoObject;
 typedef struct KeySetLink KeySetLink;
+typedef struct ListWatch ListWatch;
 typedef struct ParserLine ParserLine;
+typedef struct Partial Partial;
 typedef struct Scrollback Scrollback;
 typedef struct StringArray StringArray;
 typedef struct VimMenu VimMenu;
-typedef struct blobvar_S blobvar_S;
 typedef struct cleanup_stuff cleanup_stuff;
 typedef struct cmdline_info cmdline_info;
 typedef struct consumed_blk consumed_blk;
-typedef struct dictvar_S dictvar_S;
 typedef struct diffblock_S diffblock_S;
 typedef struct diffline_S diffline_S;
 typedef struct diffline_change_S diffline_change_S;
@@ -30,9 +32,6 @@ typedef struct file_buffer file_buffer;
 typedef struct frame_S frame_S;
 typedef struct funccal_entry funccal_entry;
 typedef struct funccall_S funccall_S;
-typedef struct ht_stack_S ht_stack_S;
-typedef struct list_stack_S list_stack_S;
-typedef struct listwatch_S listwatch_S;
 typedef struct loop loop;
 typedef struct mapblock mapblock;
 typedef struct matchitem matchitem;
@@ -43,7 +42,6 @@ typedef struct multiqueue multiqueue;
 typedef struct optexpand_T optexpand_T;
 typedef struct optset_T optset_T;
 typedef struct packer_buffer_t packer_buffer_t;
-typedef struct partial_S partial_S;
 typedef struct qf_info_S qf_info_S;
 typedef struct qfline_S qfline_S;
 typedef struct queue queue;
@@ -77,7 +75,7 @@ typedef struct ApiDict ApiDict;
 typedef struct Array Array;
 typedef struct Callback Callback;
 typedef union typval_vval_union typval_vval_union;
-typedef struct typval_T typval_T;
+typedef struct TypVal TypVal;
 typedef struct ChangedtickDictItem ChangedtickDictItem;
 typedef struct InternalState InternalState;
 typedef struct uv__queue uv__queue;
@@ -110,6 +108,7 @@ typedef union DecorInlineData DecorInlineData;
 typedef struct DecorRange DecorRange;
 typedef struct DecorRange_data_ui DecorRange_data_ui;
 typedef struct DecorSignHighlight DecorSignHighlight;
+typedef struct DictItem DictItem;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
@@ -159,6 +158,8 @@ typedef struct KeyDict_win_config KeyDict_win_config;
 typedef struct KeyDict_win_text_height KeyDict_win_text_height;
 typedef struct KeyDict_xdl_diff KeyDict_xdl_diff;
 typedef struct key_value_pair key_value_pair;
+typedef struct List List;
+typedef struct ListItem ListItem;
 typedef struct MTPos MTPos;
 typedef struct MTKey MTKey;
 typedef struct mtnode_inner_s mtnode_inner_s;
@@ -170,11 +171,13 @@ typedef struct VTermColor_rgb VTermColor_rgb;
 typedef union VTermColor VTermColor;
 typedef struct ScreenPen ScreenPen;
 typedef struct ScreenCell ScreenCell;
+typedef struct ScriptCtx ScriptCtx;
 typedef struct Set_cstr_t Set_cstr_t;
 typedef struct uv_signal_s_tree_entry uv_signal_s_tree_entry;
 typedef union uv_signal_s_u uv_signal_s_u;
 typedef struct uv_signal_s uv_signal_s;
 typedef struct signal_watcher signal_watcher;
+typedef struct StaticList10 StaticList10;
 typedef struct StrCharInfo StrCharInfo;
 typedef union TermKeyKey_code TermKeyKey_code;
 typedef struct TerminalCursor TerminalCursor;
@@ -221,12 +224,9 @@ typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
 typedef struct addrinfo addrinfo;
 typedef struct bufstate_T bufstate_T;
-typedef struct dictitem_T dictitem_T;
 typedef struct extmark_undo_vec_t extmark_undo_vec_t;
 typedef struct funccall_S_fc_fixvar funccall_S_fc_fixvar;
 typedef struct garray_T garray_T;
-typedef struct listvar_S listvar_S;
-typedef struct listitem_S listitem_S;
 typedef struct luaL_Buffer luaL_Buffer;
 typedef struct luaL_Reg luaL_Reg;
 typedef union mpack_data_t mpack_data_t;
@@ -246,12 +246,10 @@ typedef struct pos_T pos_T;
 typedef union pthread_mutex_t pthread_mutex_t;
 typedef union pthread_rwlock_t pthread_rwlock_t;
 typedef struct regprog regprog;
-typedef struct sctx_T sctx_T;
 typedef struct sockaddr sockaddr;
 typedef struct socket_watcher_uv_pipe socket_watcher_uv_pipe;
 typedef struct socket_watcher_uv_tcp socket_watcher_uv_tcp;
 typedef union socket_watcher_uv socket_watcher_uv;
-typedef struct staticList10_T staticList10_T;
 typedef union syn_state_sst_union syn_state_sst_union;
 typedef struct ufunc_S ufunc_S;
 typedef struct uv__work uv__work;
@@ -283,7 +281,7 @@ typedef unsigned int AlignTextPos;
 typedef Object (*ApiDispatchWrapper)(uint64_t, Array, Arena *, Error *);
 typedef consumed_blk *ArenaMem;
 typedef struct ufunc_S ufunc_T;
-typedef int (*ArgvFunc)(int, typval_T *, int, ufunc_T *);
+typedef int (*ArgvFunc)(int, TypVal *, int, ufunc_T *);
 typedef unsigned int AutoEvent;
 typedef AutoPatCmd_S AutoPatCmd;
 typedef int BackslashEscape;
@@ -475,7 +473,7 @@ typedef unsigned int VarLock;
 typedef unsigned int VarType;
 typedef unsigned int VarTypeCode;
 typedef void *VimAcl;
-typedef void (*VimLFunc)(typval_T *, typval_T *, EvalFuncData);
+typedef void (*VimLFunc)(TypVal *, TypVal *, EvalFuncData);
 typedef vim_state VimState;
 typedef int VimVarFlags;
 typedef unsigned int VirtTextPos;
@@ -491,10 +489,8 @@ typedef void (*argv_callback)(void **);
 typedef ptrdiff_t bcount_t;
 typedef unsigned int bfa_values;
 typedef unsigned int bln_values;
-typedef blobvar_S blob_T;
 typedef cleanup_stuff cleanup_T;
 typedef const char *cstr_t;
-typedef dictvar_S dict_T;
 typedef diffblock_S diff_T;
 typedef diffline_S diffline_T;
 typedef diffline_change_S diffline_change_T;
@@ -511,13 +507,8 @@ typedef funccall_S funccall_T;
 typedef int getf_retvalues;
 typedef unsigned int getf_values;
 typedef unsigned int gid_t;
-typedef ht_stack_S ht_stack_T;
 typedef void (*internal_proc_cb)(Proc *);
 typedef unsigned int key_extra;
-typedef struct listvar_S list_T;
-typedef list_stack_S list_stack_T;
-typedef struct listitem_S listitem_T;
-typedef listwatch_S listwatch_T;
 typedef int (*lua_CFunction)(lua_State *);
 typedef ptrdiff_t lua_Integer;
 typedef double lua_Number;
@@ -538,7 +529,6 @@ typedef unsigned long long mpack_uintmax_t;
 typedef struct mpack_value_s mpack_value_t;
 typedef void (*mpack_walk_cb)(mpack_parser_t *, mpack_node_t *);
 typedef msglist msglist_T;
-typedef partial_S partial_T;
 typedef void (*proc_exit_cb)(Proc *, int, void *);
 typedef void (*proc_state_cb)(Proc *, bool, void *);
 typedef unsigned long pthread_t;
@@ -647,7 +637,7 @@ struct Callback {
   unsigned int tag;
   union {
     char *funcref_;
-    partial_T *partial_;
+    Partial *partial_;
     LuaRef lua_;
   } payload;
 };
@@ -657,18 +647,18 @@ union typval_vval_union {
   SpecialVarValue v_special;
   Float v_float;
   char *v_string;
-  list_T *v_list;
-  dict_T *v_dict;
-  partial_T *v_partial;
-  blob_T *v_blob;
+  List *v_list;
+  Dict *v_dict;
+  Partial *v_partial;
+  Blob *v_blob;
 };
-struct typval_T {
+struct TypVal {
   VarType v_type;
   VarLock v_lock;
   typval_vval_union vval;
 };
 struct ChangedtickDictItem {
-  typval_T di_tv;
+  TypVal di_tv;
   uint8_t di_flags;
   char di_key[12];
 };
@@ -810,7 +800,7 @@ struct proc {
   const char *cwd;
   char **argv;
   const char *exepath;
-  dict_T *env;
+  Dict *env;
   Stream in;
   RStream out;
   RStream err;
@@ -927,6 +917,11 @@ struct DecorSignHighlight {
   int cursorline_hl_id;
   uint32_t next;
   const char *url;
+};
+struct DictItem {
+  TypVal di_tv;
+  uint8_t di_flags;
+  char di_key[0];
 };
 struct ExtmarkMove {
   int start_row;
@@ -1402,6 +1397,26 @@ struct key_value_pair {
   String key;
   Object value;
 };
+struct List {
+  ListItem *lv_first;
+  ListItem *lv_last;
+  ListWatch *lv_watch;
+  ListItem *lv_idx_item;
+  List *lv_copylist;
+  List *lv_used_next;
+  List *lv_used_prev;
+  Refcount lv_refcount;
+  int lv_len;
+  int lv_idx;
+  int lv_copyID;
+  VarLock lv_lock;
+  LuaRef lua_table_ref;
+};
+struct ListItem {
+  ListItem *li_next;
+  ListItem *li_prev;
+  TypVal li_tv;
+};
 struct MTPos {
   int32_t row;
   int32_t col;
@@ -1436,7 +1451,7 @@ struct MapHash {
   uint32_t *hash;
 };
 struct ScopeDictDictItem {
-  typval_T di_tv;
+  TypVal di_tv;
   uint8_t di_flags;
   char di_key[1];
 };
@@ -1479,6 +1494,12 @@ struct ScreenCell {
   ScreenChar schar;
   ScreenPen pen;
 };
+struct ScriptCtx {
+  ScriptId sc_sid;
+  int sc_seq;
+  LineNr sc_lnum;
+  uint64_t sc_chan;
+};
 struct Set_cstr_t {
   MapHash h;
   cstr_t *keys;
@@ -1514,6 +1535,10 @@ struct signal_watcher {
   signal_cb cb;
   signal_close_cb close_cb;
   MultiQueue *events;
+};
+struct StaticList10 {
+  List sl_list;
+  ListItem sl_items[10];
 };
 struct StrCharInfo {
   char *ptr;
@@ -1898,18 +1923,13 @@ struct bufstate_T {
   int bs_cchar;
   reg_extmatch_T *bs_extmatch;
 };
-struct dictitem_T {
-  typval_T di_tv;
-  uint8_t di_flags;
-  char di_key[0];
-};
 struct extmark_undo_vec_t {
   size_t size;
   size_t capacity;
   ExtmarkUndoObject *items;
 };
 struct funccall_S_fc_fixvar {
-  typval_T di_tv;
+  TypVal di_tv;
   uint8_t di_flags;
   char di_key[21];
 };
@@ -1919,26 +1939,6 @@ struct garray_T {
   int ga_itemsize;
   int ga_growsize;
   void *ga_data;
-};
-struct listvar_S {
-  listitem_T *lv_first;
-  listitem_T *lv_last;
-  listwatch_T *lv_watch;
-  listitem_T *lv_idx_item;
-  list_T *lv_copylist;
-  list_T *lv_used_next;
-  list_T *lv_used_prev;
-  Refcount lv_refcount;
-  int lv_len;
-  int lv_idx;
-  int lv_copyID;
-  VarLock lv_lock;
-  LuaRef lua_table_ref;
-};
-struct listitem_S {
-  listitem_T *li_next;
-  listitem_T *li_prev;
-  typval_T li_tv;
 };
 struct luaL_Buffer {
   char *p;
@@ -2053,12 +2053,6 @@ struct regprog {
   unsigned int re_flags;
   bool re_in_use;
 };
-struct sctx_T {
-  ScriptId sc_sid;
-  int sc_seq;
-  LineNr sc_lnum;
-  uint64_t sc_chan;
-};
 struct sockaddr {
   sa_family_t sa_family;
   char sa_data[14];
@@ -2073,10 +2067,6 @@ struct socket_watcher_uv_tcp {
 union socket_watcher_uv {
   socket_watcher_uv_tcp tcp;
   socket_watcher_uv_pipe pipe;
-};
-struct staticList10_T {
-  list_T sl_list;
-  listitem_T sl_items[10];
 };
 union syn_state_sst_union {
   bufstate_T sst_stack[7];
@@ -2105,7 +2095,7 @@ struct ufunc_S {
   ProfTime uf_tml_wait;
   int uf_tml_idx;
   int uf_tml_execed;
-  sctx_T uf_script_ctx;
+  ScriptCtx uf_script_ctx;
   Refcount uf_refcount;
   funccall_T *uf_scoped;
   char *uf_name_exp;
@@ -6469,7 +6459,7 @@ static const int map_result_retry = 2;
 
 extern win_T *curwin;
 extern DispTick display_tick;
-extern list_T *gc_first_list;
+extern List *gc_first_list;
 extern int starting;
 extern bool test_disable_char_avail;
 extern const uint8_t utf8len_tab[256];
@@ -6480,8 +6470,8 @@ void early_init(mparm_T *);
 void event_init(void);
 ScreenCell *getcell(const VTermScreen *, int, int);
 size_t schar_get(char *, ScreenChar);
-list_T *tv_list_alloc(ptrdiff_t);
-void tv_list_free(list_T *);
+List *tv_list_alloc(ptrdiff_t);
+void tv_list_free(List *);
 void ui_call_chdir(String);
 void ui_call_set_title(String);
 void unblock_autocmds(void);

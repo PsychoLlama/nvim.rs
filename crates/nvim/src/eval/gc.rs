@@ -17,15 +17,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::types::{dict_T, list_T};
+use crate::types::{Dict, List};
 
 /// Most recently allocated dict.
-pub static gc_first_dict: GlobalCell<*mut dict_T> =
-    GlobalCell::new(::core::ptr::null_mut::<dict_T>());
+pub static gc_first_dict: GlobalCell<*mut Dict> = GlobalCell::new(::core::ptr::null_mut::<Dict>());
 
 /// Most recently allocated list. Exported because
 /// `test/functional/core/job_spec.lua` reads it through the LuaJIT FFI to
 /// prove a list handed to a job callback is freed again.
 #[unsafe(no_mangle)]
-pub static gc_first_list: GlobalCell<*mut list_T> =
-    GlobalCell::new(::core::ptr::null_mut::<list_T>());
+pub static gc_first_list: GlobalCell<*mut List> = GlobalCell::new(::core::ptr::null_mut::<List>());

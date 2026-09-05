@@ -58,8 +58,8 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, ColNr, EStackArg, Failed, LineNr, MAXPATHL, NUL, buf_T, exarg_T, int32_t, int64_t,
-    regprog_T, size_t, tasave_T, typval_T, uint8_t,
+    Callback, ColNr, EStackArg, Failed, LineNr, MAXPATHL, NUL, TypVal, buf_T, exarg_T, int32_t,
+    int64_t, regprog_T, size_t, tasave_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -90,7 +90,7 @@ pub struct debuggy {
     /// `!` was used.
     pub dbg_forceit: c_int,
     /// Last value of a watched expression.
-    pub dbg_val: *mut typval_T,
+    pub dbg_val: *mut TypVal,
     /// Stored nesting level, for `DBG_EXPR`.
     pub dbg_level: c_int,
 }
@@ -303,7 +303,7 @@ pub fn dbg_breakpoint(name: *mut c_char, lnum: LineNr) {
 ///
 /// # Safety
 /// `bp` must point at a live entry whose `dbg_name` is the expression.
-unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut typval_T {
+unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut TypVal {
     let _no_emsg = Suppress::emsg();
     // SAFETY: caller contract.
     unsafe { eval_expr((*bp).dbg_name, ptr::null_mut()) }
@@ -805,7 +805,7 @@ unsafe fn watch_changed(bp: *mut debuggy) -> bool {
 ///
 /// # Safety
 /// `tv` must be null or a live typval.
-unsafe fn set_oldval(tv: *mut typval_T) {
+unsafe fn set_oldval(tv: *mut TypVal) {
     // SAFETY: caller contract; the cell owns what it holds.
     unsafe { xfree(debug_oldval.get().cast()) };
     debug_oldval.set(unsafe { typval_tostring(tv, true) });
@@ -815,7 +815,7 @@ unsafe fn set_oldval(tv: *mut typval_T) {
 ///
 /// # Safety
 /// As [`set_oldval`].
-unsafe fn set_newval(tv: *mut typval_T) {
+unsafe fn set_newval(tv: *mut TypVal) {
     // SAFETY: as `set_oldval`.
     unsafe { xfree(debug_newval.get().cast()) };
     debug_newval.set(unsafe { typval_tostring(tv, true) });

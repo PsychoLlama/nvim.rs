@@ -19,15 +19,15 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    EvalFuncData, NUL, VarNumber, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
-    typval_T,
+    Dict, EvalFuncData, List, NUL, TypVal, VarNumber, buf_T, kListLenMayKnow, kListLenUnknown,
+    pos_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
-pub unsafe fn f_changenr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_changenr(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `rettv` is the cleared return value.
     unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as VarNumber };
 }
@@ -36,7 +36,7 @@ pub unsafe fn f_changenr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// # Safety
 /// `l` is a live list.
-unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
+unsafe fn append_mark(l: *mut List, mark: pos_T) -> *mut Dict {
     // SAFETY: the caller's obligation; the dict is handed to the list
     // immediately, so it is not leaked.
     let d = unsafe { tv_dict_alloc() };
@@ -48,7 +48,7 @@ unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
 }
 
 /// `getchangelist([{buf}])` — `[changes, index]`.
-pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getchangelist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the arguments and `rettv` are live typvals; `curwin` and its
     // buffer's window-info vector are live for the whole call.
@@ -94,7 +94,7 @@ pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 }
 
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
-pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getjumplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the arguments and `rettv` are live typvals, and the jump
     // list is compacted before it is read so no entry is stale.
@@ -122,7 +122,7 @@ pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
-pub unsafe fn f_getmarklist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getmarklist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the arguments and `rettv` are live typvals.
     let out = list_alloc_ret(rettv, kListLenMayKnow as isize);
@@ -138,7 +138,7 @@ pub unsafe fn f_getmarklist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `gettagstack([{winnr}])`.
-pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_gettagstack(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the arguments and `rettv` are live typvals. The dict is
     // allocated before the window is resolved, so a bad window still
@@ -156,7 +156,7 @@ pub unsafe fn f_gettagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
-pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_settagstack(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
@@ -197,7 +197,7 @@ pub unsafe fn f_settagstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `tagfiles()` — the tags files that would be searched, in order.
-pub unsafe fn f_tagfiles(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_tagfiles(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value; each name the walk
     // answers is NUL-terminated and lives until the next round.
     let out = unsafe { tv_list_alloc_ret(rettv, kListLenUnknown as isize) };
@@ -208,7 +208,7 @@ pub unsafe fn f_tagfiles(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// `taglist({expr} [, {filename}])`.
-pub unsafe fn f_taglist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_taglist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);

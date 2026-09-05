@@ -102,7 +102,7 @@ impl Cursor {
     }
 
     /// One value as a Vimscript value. Answers an `MPACK_*` status.
-    pub(crate) fn typval(&mut self, into: *mut typval_T) -> c_int {
+    pub(crate) fn typval(&mut self, into: *mut TypVal) -> c_int {
         unsafe { unpack_typval(&raw mut self.at, &raw mut self.left, into) }
     }
 }

@@ -79,15 +79,15 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
-    BoolVarValue, EvalFuncData, Failed, GRegFlags, OptIndex, OptInt, OptVal, QUEUE, Refcount,
-    ScopeDictDictItem, ScopeType, ScriptId, SpecialVarValue, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE,
-    VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE,
-    VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT,
-    VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, VarType, VimVarFlags, Vv, aco_save_T, buf_T, dict_T, dictitem_T, evalarg_T, exarg_T,
-    expand_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull,
-    list_T, listitem_T, lval_T, partial_T, ptrdiff_t, scriptvar_T, size_t, ssize_t, switchwin_T,
-    tabpage_T, typval_T, typval_vval_union, uint8_t, uint32_t, win_T,
+    BoolVarValue, Dict, DictItem, EvalFuncData, Failed, GRegFlags, List, ListItem, OptIndex,
+    OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictDictItem, ScopeType, ScriptId,
+    SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING,
+    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
+    VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv,
+    aco_save_T, buf_T, evalarg_T, exarg_T, expand_T, hashtab_T, int64_t, kBoolVarFalse,
+    kBoolVarTrue, kListLenUnknown, kSpecialVarNull, lval_T, ptrdiff_t, scriptvar_T, size_t,
+    ssize_t, switchwin_T, tabpage_T, typval_vval_union, uint8_t, uint32_t, win_T,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -129,7 +129,7 @@ pub const _ISlower: c_uint = 512;
 /// that nothing ever frees one.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 
-/// `dictitem_T::di_flags`.
+/// `DictItem::di_flags`.
 pub const DI_FLAGS_ALLOC: uint8_t = 16;
 pub const DI_FLAGS_LOCK: uint8_t = 8;
 pub const DI_FLAGS_FIX: uint8_t = 4;
@@ -139,15 +139,15 @@ pub const DI_FLAGS_RO: uint8_t = 1;
 /// `get_lval`'s "do not report" flag.
 pub const GLV_QUIET: c_int = 2;
 
-/// One `v:` variable: a `dictitem_T` whose flexible key member is spelled
+/// One `v:` variable: a `DictItem` whose flexible key member is spelled
 /// out at the longest name the table holds (`VIMVAR_KEY_LEN`, 16, plus the
 /// NUL), so that the whole table can be a `static`.
 /// `#[repr(C)]`: the table hands a row's `vv_di` out as a bare
-/// `*mut dictitem_T`, so the three fields have to sit where `dictitem_T`'s
+/// `*mut DictItem`, so the three fields have to sit where `DictItem`'s
 /// do and `di_key` has to stay last.
 #[repr(C)]
 pub struct VimVarItem {
-    pub di_tv: typval_T,
+    pub di_tv: TypVal,
     pub di_flags: uint8_t,
     pub di_key: [c_char; 17],
 }
@@ -162,15 +162,15 @@ pub struct VimVar {
 /// One entry of a scope dictionary, whose caller has promised it outlives the
 /// value.
 ///
-/// The scopes hand their entries around as a bare `*mut dictitem_T` and the
+/// The scopes hand their entries around as a bare `*mut DictItem` and the
 /// promise is discharged by the dictionary outliving the call -- which every
 /// caller here already relies on, because the entry is what it came to read.
 /// Wrapping is the unsafe step, once; every `(*di).field` after it is
 /// ordinary checked code. See [`Live`] for what the promise is and is not.
-pub(crate) type Di = Live<dictitem_T>;
+pub(crate) type Di = Live<DictItem>;
 
 /// A value whose caller has promised it outlives the handle.
-pub(crate) type Tv = Live<typval_T>;
+pub(crate) type Tv = Live<TypVal>;
 
 /// One row of the `v:` table.
 ///
@@ -266,7 +266,7 @@ pub(crate) unsafe fn script_sv(sid: c_int) -> *mut scriptvar_T {
 const EMPTY_HASHTAB: hashtab_T = hashtab_T::new();
 
 /// A scope dictionary before `init_var_dict`.
-const EMPTY_SCOPE_DICT: dict_T = dict_T {
+const EMPTY_SCOPE_DICT: Dict = Dict {
     dv_lock: VarLock::Unlocked,
     dv_scope: VAR_NO_SCOPE,
     dv_refcount: Refcount::ZERO,
@@ -282,7 +282,7 @@ const EMPTY_SCOPE_DICT: dict_T = dict_T {
     lua_table_ref: 0,
 };
 
-/// The `dictitem_T` a scope dictionary is reached through -- what
+/// The `DictItem` a scope dictionary is reached through -- what
 /// `find_var_in_ht` answers for a bare `g:` or `v:`.  Its key is the empty
 /// string; `init_var_dict` fills the rest in.
 const EMPTY_SCOPE_VAR: ScopeDictDictItem = ScopeDictDictItem {
@@ -292,7 +292,7 @@ const EMPTY_SCOPE_VAR: ScopeDictDictItem = ScopeDictDictItem {
 };
 
 static globvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(EMPTY_SCOPE_VAR);
-static globvardict: GlobalCell<dict_T> = GlobalCell::new(EMPTY_SCOPE_DICT);
+static globvardict: GlobalCell<Dict> = GlobalCell::new(EMPTY_SCOPE_DICT);
 
 /// The names that mean `v:version` in every scope: upstream's
 /// `compat_hashtab`, which `evalvars_init` fills from the `VimVarFlags::COMPAT` rows.
@@ -302,7 +302,7 @@ const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimV
     VimVar {
         vv_name: name.as_ptr().cast_mut(),
         vv_di: VimVarItem {
-            di_tv: typval_T {
+            di_tv: TypVal {
                 v_type,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
@@ -429,7 +429,7 @@ static vimvars: GlobalCell<[VimVar; VIMVAR_COUNT]> = GlobalCell::new([
     vv(c"exitreason", VAR_STRING, VimVarFlags::RO),
 ]);
 static vimvars_var: GlobalCell<ScopeDictDictItem> = GlobalCell::new(EMPTY_SCOPE_VAR);
-static vimvardict: GlobalCell<dict_T> = GlobalCell::new(EMPTY_SCOPE_DICT);
+static vimvardict: GlobalCell<Dict> = GlobalCell::new(EMPTY_SCOPE_DICT);
 
 /// The eight `v:msgpack_types` keys, in `MessagePackType` order.
 const msgpack_type_names: [&CStr; 8] = [
@@ -438,5 +438,5 @@ const msgpack_type_names: [&CStr; 8] = [
 
 /// The eight `v:msgpack_types` lists themselves, which the msgpack encoder
 /// and decoder compare against by identity.
-pub static eval_msgpack_type_lists: GlobalCell<[*const list_T; 8]> =
+pub static eval_msgpack_type_lists: GlobalCell<[*const List; 8]> =
     GlobalCell::new([::core::ptr::null(); 8]);

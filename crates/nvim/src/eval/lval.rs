@@ -61,13 +61,13 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::strings::vim_strchr;
 use crate::types::{
-    FAIL, Failed, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock,
-    VarNumber, dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t,
-    typval_T, typval_vval_union, uint8_t,
+    Dict, DictItem, FAIL, Failed, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT,
+    VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, hashtab_T, kListLenUnknown, lval_T, ptrdiff_t,
+    size_t, typval_vval_union, uint8_t,
 };
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -130,10 +130,10 @@ pub(crate) unsafe fn get_lval_dict_item(
     key: *mut c_char,
     len: c_int,
     key_end: *mut *mut c_char,
-    var1: *mut typval_T,
+    var1: *mut TypVal,
     flags: c_int,
     unlet: bool,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
 ) -> GlvStatus {
     let mut numbuf = NumBuf::new();
     let quiet = flags & GLV_QUIET as c_int != 0;
@@ -148,7 +148,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     } else {
         key
     };
-    lp.ll_list = null_mut::<list_T>();
+    lp.ll_list = null_mut::<List>();
 
     // A null Dict is an empty Dict; allocate one now.
     // SAFETY: as above.
@@ -269,8 +269,8 @@ pub(crate) unsafe fn get_lval_dict_item(
 /// `lp` must be valid with `ll_tv` a Blob; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_blob(
     lp: *mut lval_T,
-    var1: *mut typval_T,
-    var2: *mut typval_T,
+    var1: *mut TypVal,
+    var2: *mut TypVal,
     empty1: bool,
     quiet: bool,
 ) -> Result<(), Failed> {
@@ -307,8 +307,8 @@ pub(crate) unsafe fn get_lval_blob(
 /// `lp` must be valid with `ll_tv` a List; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_list(
     lp: *mut lval_T,
-    var1: *mut typval_T,
-    var2: *mut typval_T,
+    var1: *mut TypVal,
+    var2: *mut TypVal,
     empty1: bool,
     _flags: c_int,
     quiet: bool,
@@ -337,7 +337,7 @@ pub(crate) unsafe fn get_lval_list(
     // `rec` is the caller's record.
     unsafe {
         *n1 = first;
-        (*rec).ll_dict = null_mut::<dict_T>();
+        (*rec).ll_dict = null_mut::<Dict>();
         (*rec).ll_list = Tv::new((*rec).ll_tv).list_or_null();
     };
     // SAFETY: `ll_list` is the typval's List and `n1` is `lp`'s own field.
@@ -376,9 +376,9 @@ pub(crate) unsafe fn get_lval_subscript(
     lp: *mut lval_T,
     mut p: *mut c_char,
     name: *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     _ht: *mut hashtab_T,
-    _v: *mut dictitem_T,
+    _v: *mut DictItem,
     unlet: bool,
     flags: c_int,
 ) -> *mut c_char {
@@ -574,7 +574,7 @@ pub(crate) unsafe fn get_lval_subscript(
 /// `rettv` null or the value about to be assigned.
 pub unsafe fn get_lval(
     name: *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     lp: *mut lval_T,
     unlet: bool,
     skip: bool,
@@ -709,7 +709,7 @@ pub unsafe fn clear_lval(lp: *mut lval_T) {
 pub unsafe fn set_var_lval(
     lp: *mut lval_T,
     endp: *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
@@ -754,7 +754,7 @@ pub unsafe fn set_var_lval(
         // null and never reaches this branch. So a Blob reaching it
         // means a List target, and upstream hands its `v_blob` to
         // `tv_list_assign_range` through `vval.v_list` — walking a
-        // `blob_T` as a `list_T`. `let l = [1,2] | let l[0:] = 0z11`
+        // `Blob` as a `List`. `let l = [1,2] | let l[0:] = 0z11`
         // is enough. Report what the assignment actually needs.
         if value.v_type != VAR_LIST {
             emsg_static(e_listreq);
@@ -869,7 +869,7 @@ pub unsafe fn set_var_lval(
 unsafe fn set_whole_var(
     lp: *mut lval_T,
     endp: *mut c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
@@ -899,7 +899,7 @@ unsafe fn set_whole_var(
             return;
         }
         let mut tv = UNSET_TV;
-        let mut di: *mut dictitem_T = null_mut();
+        let mut di: *mut DictItem = null_mut();
         let (name, name_len) = (lp.ll_name, lp.ll_name_len);
         // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
         let (tvp, dip) = (&raw mut tv, &raw mut di);
@@ -938,7 +938,7 @@ unsafe fn set_whole_var(
 ///
 /// # Safety
 /// As `set_var_lval`, with `lp->ll_blob` set.
-unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char) -> bool {
+unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut TypVal, op: *const c_char) -> bool {
     // SAFETY: the caller's promise -- both outlive the call.
     let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {

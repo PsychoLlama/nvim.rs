@@ -47,8 +47,8 @@ use crate::options::{
 use crate::os::env::home_replace_save;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    NUL, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T, dictitem_T,
-    frame_T, int64_t, typval_T, win_T,
+    DictItem, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T,
+    frame_T, int64_t, win_T,
 };
 use crate::window::tabpage_index;
 use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
@@ -576,7 +576,7 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     // it is embedded in.
     let ht = unsafe { &(*get_globvar_dict()).dv_hashtab };
     for hi in ht.items() {
-        let item = unsafe { hi.hi_key.byte_sub(DI_KEY_OFFSET) }.cast::<dictitem_T>();
+        let item = unsafe { hi.hi_key.byte_sub(DI_KEY_OFFSET) }.cast::<DictItem>();
         let key = (unsafe { &raw mut (*item).di_key }).cast::<c_char>();
         let kind = unsafe { (*item).di_tv.v_type };
         let sessionable = unsafe { var_flavour(key) } == VAR_FLAVOUR_SESSION;
@@ -605,7 +605,7 @@ unsafe fn store_session_globals(out: SessionFile) -> bool {
     true
 }
 
-/// A `dictitem_T`'s key sits at a fixed offset inside it, which is how the
+/// A `DictItem`'s key sits at a fixed offset inside it, which is how the
 /// hashtab walk gets from one back to the other.
 const DI_KEY_OFFSET: usize = 17;
 
@@ -619,7 +619,7 @@ unsafe fn put_session_global(
     out: SessionFile,
     key: *const c_char,
     kind: VarType,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
 ) -> bool {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; `escaped` is owned and freed here.

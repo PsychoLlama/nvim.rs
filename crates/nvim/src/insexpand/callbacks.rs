@@ -582,8 +582,8 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
         base
     };
 
-    let mut matchlist: *mut list_T = ptr::null_mut();
-    let mut matchdict: *mut dict_T = ptr::null_mut();
+    let mut matchlist: *mut List = ptr::null_mut();
+    let mut matchdict: *mut Dict = ptr::null_mut();
     let mut rettv = TYPVAL_T_INIT;
     let save_State = State.get();
     let pos = cur_win().w_cursor;

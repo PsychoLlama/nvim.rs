@@ -41,9 +41,9 @@ use crate::runtime::exestack;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, String_0,
-    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, blob_T, funccal_entry_T, funccall_T,
-    sctx_T, typval_T, uint64_t,
+    Arena, ArenaMem, Array, Blob, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
+    ScriptCtx, String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber,
+    funccal_entry_T, funccall_T, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -88,7 +88,7 @@ unsafe fn trailing_args(
 }
 
 /// `chanclose({id} [, {stream}])`
-pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_chanclose(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
@@ -133,7 +133,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// `chansend({id}, {data})`
-pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_chansend(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
@@ -151,7 +151,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let input = if args.ty(1) == VAR_BLOB {
         // A Blob goes over byte for byte; an empty one sends nothing
         // and is reported as a failure below.
-        let b: *const blob_T = args.get(1).blob_or_null();
+        let b: *const Blob = args.get(1).blob_or_null();
         input_len = unsafe { tv_blob_len(b) } as isize;
         if input_len > 0 {
             unsafe { xmemdup((*b).bv_ga.ga_data, input_len as usize) as *mut c_char }
@@ -179,7 +179,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 }
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
-pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcnotify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
@@ -230,7 +230,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// request has to run with *that* script's context, autocommand state and
 /// function call stack, not with whatever the provider left behind.
 struct ProviderScope {
-    sctx: sctx_T,
+    sctx: ScriptCtx,
     autocmd_fname: *mut c_char,
     autocmd_match: *mut c_char,
     autocmd_fname_full: bool,
@@ -288,7 +288,7 @@ impl ProviderScope {
 }
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
-pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcrequest(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
@@ -371,7 +371,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
-pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_serverlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
     // and the strings in it are handed to the List one at a time.
@@ -437,7 +437,7 @@ pub unsafe fn f_serverlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// `serverstart([{address}])`
-pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_serverstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
@@ -483,7 +483,7 @@ pub unsafe fn f_serverstart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `serverstop({address})`
-pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_serverstop(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live.
     if check_secure() {
@@ -506,7 +506,7 @@ pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// `sockconnect({mode}, {address} [, {opts}])`
-pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_sockconnect(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
@@ -563,7 +563,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
-pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_stdioopen(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.

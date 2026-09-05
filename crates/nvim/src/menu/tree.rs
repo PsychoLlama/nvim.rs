@@ -25,7 +25,7 @@ use crate::message::{
     msg_puts_title,
 };
 use crate::message_fmt::msg_cstr;
-use crate::types::{VarNumber, dict_T, list_T};
+use crate::types::{Dict, List, VarNumber};
 
 /// Enable or disable the (sub)menus `name` reaches, recursively.
 ///
@@ -193,7 +193,7 @@ pub(crate) fn free_menu_string(mut menu: Menu, idx: usize) {
 
 /// One node as the nested Dict `menu_get()` answers with, or null when the
 /// node is in none of `modes`.
-fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
+fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut Dict {
     if !menu.in_modes(modes) {
         return ptr::null_mut();
     }
@@ -269,7 +269,7 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
 ///
 /// # Safety
 /// `path_name` must name a NUL-terminated string and `list` a live List.
-pub(crate) unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut list_T) -> bool {
+pub(crate) unsafe fn menu_get(path_name: *mut c_char, modes: c_int, list: *mut List) -> bool {
     // SAFETY: the caller's obligation.
     let path = unsafe { CStr::from_ptr(path_name) };
 

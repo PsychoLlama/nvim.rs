@@ -37,17 +37,17 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, Float, LineNr,
-    MsgpackRpcRequestHandler, NUL, Object, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, blob_T, buf_T, expand_T, kBoolVarTrue, list_T, ptrdiff_t,
-    typval_T, typval_vval_union, win_T,
+    Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Failed, Float, LineNr, List,
+    MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, buf_T, expand_T, kBoolVarTrue, ptrdiff_t, typval_vval_union,
+    win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
 /// A cleared typval, which is what an unfilled argument slot holds.
-const EMPTY_TV: typval_T = typval_T {
+const EMPTY_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -66,7 +66,7 @@ const EMPTY_TV: typval_T = typval_T {
 // guarantee spelled in its signature.
 
 /// Argument `tv` as a Number, reporting for a value that has none.
-pub(crate) fn arg_number(tv: &typval_T) -> VarNumber {
+pub(crate) fn arg_number(tv: &TypVal) -> VarNumber {
     // SAFETY: a reference is a live, initialised value, which is the whole
     // of what the coercion asks for.
     unsafe { tv_get_number(tv) }
@@ -76,33 +76,33 @@ pub(crate) fn arg_number(tv: &typval_T) -> VarNumber {
 ///
 /// With an `error` the failure answer is 0 and the flag is set; without one
 /// it is -1, which is what makes the reading usable as a tri-state.
-pub(crate) fn arg_number_chk(tv: &typval_T, error: Option<&mut bool>) -> VarNumber {
+pub(crate) fn arg_number_chk(tv: &TypVal, error: Option<&mut bool>) -> VarNumber {
     let error = error.map_or(ptr::null_mut(), ptr::from_mut);
     // SAFETY: as [`arg_number`]; `error` is null or a live `bool`.
     unsafe { tv_get_number_chk(tv, error) }
 }
 
 /// Argument `tv` as a boolean Number: -1 when it has no numeric form.
-pub(crate) fn arg_bool(tv: &typval_T) -> VarNumber {
+pub(crate) fn arg_bool(tv: &TypVal) -> VarNumber {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_bool(tv) }
 }
 
 /// Argument `tv` as a boolean Number, setting `error` when it has none.
-pub(crate) fn arg_bool_chk(tv: &typval_T, error: &mut bool) -> VarNumber {
+pub(crate) fn arg_bool_chk(tv: &TypVal, error: &mut bool) -> VarNumber {
     // SAFETY: as [`arg_number_chk`].
     unsafe { tv_get_bool_chk(tv, error) }
 }
 
 /// Argument `tv` as a line number, resolving `"$"` and `"."` the way
 /// `line()` does.
-pub(crate) fn arg_lnum(tv: &typval_T) -> LineNr {
+pub(crate) fn arg_lnum(tv: &TypVal) -> LineNr {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_lnum(tv) }
 }
 
 /// Argument `tv` as a string, the empty string for a value that has none.
-pub(crate) fn arg_string(buf: &mut NumBuf, tv: &typval_T) -> *const c_char {
+pub(crate) fn arg_string(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
     // SAFETY: as [`arg_number`]; a Number is formatted into `buf`, which
     // outlives the borrow the caller holds it through.
     unsafe { buf.string(tv) }
@@ -110,13 +110,13 @@ pub(crate) fn arg_string(buf: &mut NumBuf, tv: &typval_T) -> *const c_char {
 
 /// As [`arg_string`], but NULL rather than the empty string for a value that
 /// has none.
-pub(crate) fn arg_string_chk(buf: &mut NumBuf, tv: &typval_T) -> *const c_char {
+pub(crate) fn arg_string_chk(buf: &mut NumBuf, tv: &TypVal) -> *const c_char {
     // SAFETY: as [`arg_string`].
     unsafe { buf.string_chk(tv) }
 }
 
 /// Copy argument `tv` into `to`, taking a reference on what it points at.
-pub(crate) fn arg_copy(tv: &typval_T, to: &mut typval_T) {
+pub(crate) fn arg_copy(tv: &TypVal, to: &mut TypVal) {
     // SAFETY: both are live values; `to` is the caller's cleared return
     // value or its own local.
     unsafe { tv_copy(tv, to) }
@@ -132,7 +132,7 @@ pub(crate) fn arg_copy(tv: &typval_T, to: &mut typval_T) {
 pub(crate) fn check_arg(
     args: Args<'_>,
     idx: c_int,
-    check: unsafe fn(*const typval_T, c_int) -> Result<(), Failed>,
+    check: unsafe fn(*const TypVal, c_int) -> Result<(), Failed>,
 ) -> Result<(), Failed> {
     debug_assert!(idx >= 0 && idx as usize <= MAX_ARGS);
     // SAFETY: the frame's array is `MAX_ARGS + 1` long and terminated, and
@@ -142,26 +142,26 @@ pub(crate) fn check_arg(
 
 /// Make `rettv` a fresh List of `len` items, or of unknown length for one of
 /// the `kListLen*` hints. The list the builtin then fills in.
-pub(crate) fn list_alloc_ret(rettv: &mut typval_T, len: ptrdiff_t) -> *mut list_T {
+pub(crate) fn list_alloc_ret(rettv: &mut TypVal, len: ptrdiff_t) -> *mut List {
     // SAFETY: `rettv` is the caller's cleared return value.
     unsafe { tv_list_alloc_ret(rettv, len) }
 }
 
 /// Make `rettv` the List `l`, which may be null for an empty one.
-pub(crate) fn list_set_ret(rettv: &mut typval_T, l: *mut list_T) {
+pub(crate) fn list_set_ret(rettv: &mut TypVal, l: *mut List) {
     // SAFETY: `rettv` is the caller's cleared return value; `l` is null or a
     // list the caller owns a reference to.
     unsafe { tv_list_set_ret(rettv, l) }
 }
 
 /// Make `rettv` a fresh, empty Dictionary.
-pub(crate) fn dict_alloc_ret(rettv: &mut typval_T) {
+pub(crate) fn dict_alloc_ret(rettv: &mut TypVal) {
     // SAFETY: `rettv` is the caller's cleared return value.
     unsafe { tv_dict_alloc_ret(rettv) }
 }
 
 /// Make `rettv` a fresh, empty Blob.
-pub(crate) fn blob_alloc_ret(rettv: &mut typval_T) -> *mut blob_T {
+pub(crate) fn blob_alloc_ret(rettv: &mut TypVal) -> *mut Blob {
     // SAFETY: `rettv` is the caller's cleared return value.
     unsafe { tv_blob_alloc_ret(rettv) }
 }
@@ -222,8 +222,8 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
 pub unsafe fn call_internal_func(
     fname: *const c_char,
     argcount: c_int,
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
 ) -> c_int {
     // SAFETY: the caller's obligation. Writing the terminator at `argcount`
     // is what makes `Args` total for the body about to run.
@@ -256,9 +256,9 @@ pub unsafe fn call_internal_func(
 pub unsafe fn call_internal_method(
     fname: *const c_char,
     argcount: c_int,
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    basetv: *mut typval_T,
+    argvars: *mut TypVal,
+    rettv: *mut TypVal,
+    basetv: *mut TypVal,
 ) -> c_int {
     // SAFETY: the caller's obligation; `argv` is `MAX_FUNC_ARGS + 1` long
     // and the arity checks above bound every index written into it.
@@ -388,7 +388,7 @@ pub unsafe fn get_expr_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// `argvars` is a live call frame's argument array.
-pub(crate) unsafe fn non_zero_arg(argvars: *mut typval_T) -> bool {
+pub(crate) unsafe fn non_zero_arg(argvars: *mut TypVal) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
     let tv = unsafe { &*argvars };
@@ -406,7 +406,7 @@ pub(crate) unsafe fn non_zero_arg(argvars: *mut typval_T) -> bool {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut Float) -> bool {
+pub(crate) unsafe fn tv_get_float_chk(tv: *const TypVal, ret_f: *mut Float) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
     match unsafe { (*tv).v_type } {
@@ -425,7 +425,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut Float) ->
 
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
-pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
+pub unsafe fn float_op_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
     let mut f: Float = 0.0;
@@ -443,7 +443,7 @@ pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fpt
 
 /// The body every builtin that is really an API function shares. The
 /// generated table puts the RPC handler in the row's payload.
-pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
+pub unsafe fn api_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; `items`
     // outlives the `Array` that borrows it, and the arena owns what the
     // conversion allocates until it is freed below.
@@ -495,7 +495,7 @@ pub unsafe fn api_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Ev
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
+pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut buf_T {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
     if unsafe { (*tv).v_type } == VAR_NUMBER {
@@ -539,7 +539,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
+pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> *mut buf_T {
     // SAFETY: the caller's obligation.
     if !unsafe { tv_check_str_or_nr(tv) } {
         return ptr::null_mut();
@@ -552,7 +552,7 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut typval_T) -> *mut buf_T {
 ///
 /// # Safety
 /// `arg` is a live typval.
-pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
+pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut buf_T {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
@@ -573,7 +573,7 @@ pub unsafe fn get_buf_arg(arg: *mut typval_T) -> *mut buf_T {
 ///
 /// # Safety
 /// `argvars` is a live call frame's argument array and `idx` is within it.
-pub unsafe fn get_optional_window(argvars: *mut typval_T, idx: c_int) -> *mut win_T {
+pub unsafe fn get_optional_window(argvars: *mut TypVal, idx: c_int) -> *mut win_T {
     // SAFETY: the caller's obligation.
     if unsafe { (*argvars.add(idx as usize)).v_type } == VAR_UNKNOWN {
         return curwin.get();

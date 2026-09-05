@@ -133,5 +133,5 @@ impl Default for scriptitem_T {
 /// owns the items its hash table indexes.
 pub struct scriptvar_T {
     pub sv_var: ScopeDictDictItem,
-    pub sv_dict: dict_T,
+    pub sv_dict: Dict,
 }

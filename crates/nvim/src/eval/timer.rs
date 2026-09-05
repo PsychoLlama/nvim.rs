@@ -31,8 +31,8 @@ use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::memory::{xfree, xmalloc};
 use crate::registry::SlotTable;
 use crate::types::{
-    Callback, Refcount, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, dict_T,
-    dictitem_T, int64_t, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t,
+    Callback, Dict, DictItem, Refcount, TimeWatcher, TypVal, VAR_NUMBER, VAR_UNKNOWN, VarLock,
+    VarNumber, int64_t, ptrdiff_t, size_t, timer_T, typval_vval_union, uint64_t,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -40,7 +40,7 @@ use crate::types::{
 const MAX_ERRORS: c_int = 3;
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -65,11 +65,11 @@ pub fn find_timer_by_nr(id: VarNumber) -> *mut timer_T {
 ///
 /// # Safety
 /// `rettv` must hold a List; `timer` must be valid.
-pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
+pub unsafe fn add_timer_info(rettv: *mut TypVal, timer: *mut timer_T) {
     // SAFETY: the caller's promise -- both pointees outlive the call.
     let (rettv, timer) = unsafe { (Tv::new(rettv), Tm::new(timer)) };
     // SAFETY: `tv_dict_alloc` never answers NULL.
-    let dict: *mut dict_T = unsafe { tv_dict_alloc() };
+    let dict: *mut Dict = unsafe { tv_dict_alloc() };
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is
     // the union's live arm; the append takes over the dictionary's
     // reference.
@@ -89,7 +89,7 @@ pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
     }
 
     // SAFETY: `tv_dict_item_alloc` never answers NULL.
-    let di: *mut dictitem_T = unsafe { tv_dict_item_alloc(c"callback".as_ptr()) };
+    let di: *mut DictItem = unsafe { tv_dict_item_alloc(c"callback".as_ptr()) };
     // SAFETY: `di` is the item just allocated, and it is freed again here
     // when the dictionary refuses it.
     if unsafe { tv_dict_add(dict, di) }.is_err() {
@@ -106,7 +106,7 @@ pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
 ///
 /// # Safety
 /// `rettv` must be valid.
-pub unsafe fn add_timer_info_all(rettv: *mut typval_T) {
+pub unsafe fn add_timer_info_all(rettv: *mut TypVal) {
     let live = timer_snapshot();
     // SAFETY: the caller's promise about `rettv`.
     unsafe { tv_list_alloc_ret(rettv, live.len() as ptrdiff_t) };

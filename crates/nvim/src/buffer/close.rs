@@ -47,7 +47,7 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, Handle, LineNr, Refcount, Timestamp, WinInfo, dictitem_T, fmark_T, fmarkv_T,
+    Callback, ColNr, DictItem, Handle, LineNr, Refcount, Timestamp, WinInfo, fmark_T, fmarkv_T,
     garray_T, hashtab_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
@@ -242,7 +242,7 @@ fn clear_buf_vars(buf: Buf) {
 /// Hand `b:changedtick` to the dictionary before the buffer goes away, for the
 /// script that is still holding a reference to it.
 fn rescue_changedtick(mut buf: Buf) {
-    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut dictitem_T);
+    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut DictItem);
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
     let _ = unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
 }

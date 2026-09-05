@@ -323,8 +323,9 @@ fn walk(at: &Path) -> Vec<PathBuf> {
 /// The one property to preserve when porting a case: **every size is
 /// derived from the layout**, never written as a literal. The Lua
 /// expectations spell them `ffi.sizeof('list_T')` and
-/// `ffi.offsetof('dictitem_T', 'di_key') + n + 1`; here they are
-/// `size_of::<list_T>()` and `offset_of!(dictitem_T, di_key) + n + 1`. That
+/// `ffi.offsetof('dictitem_T', 'di_key') + n + 1` (the C names the LuaJIT
+/// harness knew); here they are `size_of::<List>()` and
+/// `offset_of!(DictItem, di_key) + n + 1`. That
 /// is what makes an expectation a statement about the allocation rather than
 /// about this machine, and it is why the cases port at all.
 #[cfg(not(miri))]
@@ -333,7 +334,7 @@ pub(crate) mod alloc {
     use std::mem::{offset_of, size_of};
 
     use neovim::memory::alloc_log::{AllocEvent, Recorder, clear_tmp_allocs};
-    use neovim::types::{DictWatcher, dict_T, dictitem_T, list_T, listitem_T, partial_T, typval_T};
+    use neovim::types::{Dict, DictItem, DictWatcher, List, ListItem, Partial, TypVal};
 
     /// A recording of this thread's editor allocations, plus the editor lock
     /// — recording only means anything with one case running at a time.
@@ -391,39 +392,39 @@ pub(crate) mod alloc {
     }
 
     /// `tv_list_alloc`'s allocation: `a.list(l)`.
-    pub(crate) fn list(l: *const list_T) -> AllocEvent {
+    pub(crate) fn list(l: *const List) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
-            size: size_of::<list_T>(),
+            size: size_of::<List>(),
             ret: l as *mut c_void,
         }
     }
 
     /// `tv_list_item_alloc`'s allocation: `a.li(li)`.
-    pub(crate) fn li(li: *const listitem_T) -> AllocEvent {
+    pub(crate) fn li(li: *const ListItem) -> AllocEvent {
         AllocEvent::Malloc {
-            size: size_of::<listitem_T>(),
+            size: size_of::<ListItem>(),
             ret: li as *mut c_void,
         }
     }
 
     /// `tv_dict_alloc`'s allocation: `a.dict(d)`.
-    pub(crate) fn dict(d: *const dict_T) -> AllocEvent {
+    pub(crate) fn dict(d: *const Dict) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
-            size: size_of::<dict_T>(),
+            size: size_of::<Dict>(),
             ret: d as *mut c_void,
         }
     }
 
     /// `tv_dict_item_alloc_len`'s allocation: `a.di(di, key_len)`.
     ///
-    /// The size is the whole point of the case — a `dictitem_T` is
+    /// The size is the whole point of the case — a `DictItem` is
     /// over-allocated so the NUL-terminated key fits in its flexible `di_key`
     /// member, but never below the struct's own size.
-    pub(crate) fn di(di: *const dictitem_T, key_len: usize) -> AllocEvent {
+    pub(crate) fn di(di: *const DictItem, key_len: usize) -> AllocEvent {
         AllocEvent::Malloc {
-            size: size_of::<dictitem_T>().max(offset_of!(dictitem_T, di_key) + key_len + 1),
+            size: size_of::<DictItem>().max(offset_of!(DictItem, di_key) + key_len + 1),
             ret: di as *mut c_void,
         }
     }
@@ -444,21 +445,21 @@ pub(crate) mod alloc {
         }
     }
 
-    /// A `partial_T` built by the harness rather than by the code under
+    /// A `Partial` built by the harness rather than by the code under
     /// test: the spec's `a.lua_pt(pt)`.
-    pub(crate) fn partial(pt: *const partial_T) -> AllocEvent {
+    pub(crate) fn partial(pt: *const Partial) -> AllocEvent {
         AllocEvent::Calloc {
             count: 1,
-            size: size_of::<partial_T>(),
+            size: size_of::<Partial>(),
             ret: pt as *mut c_void,
         }
     }
 
     /// A partial's argument vector, likewise the harness's: the spec's
     /// `a.lua_tvs(argv, argc)`.
-    pub(crate) fn argv(argv: *const typval_T, argc: usize) -> AllocEvent {
+    pub(crate) fn argv(argv: *const TypVal, argc: usize) -> AllocEvent {
         AllocEvent::Malloc {
-            size: size_of::<typval_T>() * argc,
+            size: size_of::<TypVal>() * argc,
             ret: argv as *mut c_void,
         }
     }

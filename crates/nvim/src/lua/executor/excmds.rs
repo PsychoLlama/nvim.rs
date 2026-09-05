@@ -30,7 +30,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    ColNr, FileDescriptor, IOSIZE, LineNr, buf_T, exarg_T, lua_Number, size_t, typval_T,
+    ColNr, FileDescriptor, IOSIZE, LineNr, TypVal, buf_T, exarg_T, lua_Number, size_t,
 };
 use crate::undo::u_save;
 
@@ -81,10 +81,10 @@ pub unsafe fn ex_lua(eap: *mut exarg_T) {
             code,
             len,
             c":lua".as_ptr(),
-            ptr::null_mut::<typval_T>(),
+            ptr::null_mut::<TypVal>(),
             0,
             false,
-            ptr::null_mut::<typval_T>(),
+            ptr::null_mut::<TypVal>(),
         );
         xfree(code.cast::<c_void>());
     }

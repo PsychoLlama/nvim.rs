@@ -70,10 +70,10 @@ use crate::message::{emsg, msg_outtrans, msg_putchar, msg_puts, msg_puts_hl, msg
 use crate::os::cshim::{gettext, snprintf};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
-    EvalFuncData, FAIL, Integer, LineNr, MTKey, MarkTreeIter, OK, ScreenChar, SignItem, VarNumber,
-    buf_T, dict_T, dictitem_T, exarg_T, expand_T, int32_t, int64_t, list_T, ptrdiff_t, sign_T,
-    size_t, typval_T, uint32_t,
+    DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText, Dict,
+    DictItem, EvalFuncData, FAIL, Integer, LineNr, List, MTKey, MarkTreeIter, OK, ScreenChar,
+    SignItem, TypVal, VarNumber, buf_T, exarg_T, expand_T, int32_t, int64_t, ptrdiff_t, sign_T,
+    size_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};

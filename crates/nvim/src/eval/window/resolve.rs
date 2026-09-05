@@ -87,7 +87,7 @@ pub fn win_and_tab_by_id(id: c_int) -> Option<(Win, TabPage)> {
 ///
 /// # Safety
 /// `vp` must point at a live typval.
-pub unsafe fn find_win_by_nr(vp: *mut typval_T, tp: Option<TabPage>) -> Option<Win> {
+pub unsafe fn find_win_by_nr(vp: *mut TypVal, tp: Option<TabPage>) -> Option<Win> {
     // SAFETY: the caller's obligation. A value that is not a number reports
     // and answers zero, which reads here as "the current window"; the
     // narrowing is upstream's and is what makes 0x1_0000_0000 read as 0.
@@ -114,7 +114,7 @@ pub unsafe fn find_win_by_nr(vp: *mut typval_T, tp: Option<TabPage>) -> Option<W
 ///
 /// # Safety
 /// `vp` must point at a live typval.
-pub unsafe fn find_win_by_nr_or_id(vp: *mut typval_T) -> Option<Win> {
+pub unsafe fn find_win_by_nr_or_id(vp: *mut TypVal) -> Option<Win> {
     // SAFETY: the caller's obligation.
     let nr = number_as_int(unsafe { tv_get_number_chk(vp, ptr::null_mut()) });
     if nr >= LOWEST_WIN_ID {
@@ -134,7 +134,7 @@ pub unsafe fn find_win_by_nr_or_id(vp: *mut typval_T) -> Option<Win> {
 ///
 /// # Safety
 /// `wvp` and `tvp` must point at live typvals.
-pub unsafe fn find_tabwin(wvp: *mut typval_T, tvp: *mut typval_T) -> Option<Win> {
+pub unsafe fn find_tabwin(wvp: *mut TypVal, tvp: *mut TypVal) -> Option<Win> {
     // SAFETY: the caller's obligation.
     if unsafe { (*wvp).v_type } == VAR_UNKNOWN {
         return Some(cur_win());
@@ -163,7 +163,7 @@ fn tabpage_by_nr(nr: c_int) -> Option<TabPage> {
 ///
 /// # Safety
 /// `argvar` must point at a live typval.
-unsafe fn get_winnr(tp: TabPage, argvar: *mut typval_T) -> c_int {
+unsafe fn get_winnr(tp: TabPage, argvar: *mut TypVal) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut twin = tp.curwin();
     if unsafe { (*argvar).v_type } == VAR_UNKNOWN {
@@ -242,7 +242,7 @@ unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win
 }
 
 /// `win_getid([{winnr} [, {tabnr}]])` — the id of a window named by number.
-pub unsafe fn f_win_getid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_getid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals, and `curwin`/`curtab` are set.
     if !args.has(0) {
@@ -286,7 +286,7 @@ fn nth_numbered_win(tp: TabPage, winnr: c_int) -> Option<Win> {
 }
 
 /// `win_id2tabwin({winid})` — `[tabnr, winnr]`, `[0, 0]` for an unknown id.
-pub unsafe fn f_win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_id2tabwin(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the two counters are
     // live locals the callee writes only when it finds the window.
@@ -299,7 +299,7 @@ pub unsafe fn f_win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 }
 
 /// `win_id2win({winid})` — the window's number in the current tab page, or 0.
-pub unsafe fn f_win_id2win(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_id2win(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals and `curtab` is set.
     let (tp, id) = unsafe { (cur_tab(), number_as_int(tv_get_number(args.ptr(0)))) };
@@ -320,7 +320,7 @@ pub unsafe fn f_win_id2win(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// `win_findbuf({bufnr})` — the ids of every window showing that buffer.
-pub unsafe fn f_win_findbuf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_findbuf(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals, and the list stays
     // alive for the appends because `rettv` owns it.
@@ -332,7 +332,7 @@ pub unsafe fn f_win_findbuf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `win_gotoid({winid})` — 1 when the window was reached, 0 otherwise.
-pub unsafe fn f_win_gotoid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_gotoid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals and `curwin` is set.
     let id = unsafe { number_as_int(tv_get_number(args.ptr(0))) };
@@ -357,7 +357,7 @@ pub unsafe fn f_win_gotoid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// `winnr([{arg}])` — a window number in the current tab page.
-pub unsafe fn f_winnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_winnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals and `curtab` is set.
     let nr = unsafe { get_winnr(cur_tab(), args.ptr(0)) };
@@ -365,7 +365,7 @@ pub unsafe fn f_winnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 }
 
 /// `tabpagenr([{arg}])` — a tab page number.
-pub unsafe fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_tabpagenr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals; the tab page globals are set.
@@ -398,7 +398,7 @@ pub unsafe fn f_tabpagenr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// `tabpagewinnr({tabnr} [, {arg}])` — a window number in another tab page.
-pub unsafe fn f_tabpagewinnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_tabpagewinnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     // SAFETY: the arguments are live typvals.
@@ -411,7 +411,7 @@ pub unsafe fn f_tabpagewinnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 }
 
 /// `winbufnr({nr})` — the buffer number of the window `nr` names, -1 for none.
-pub unsafe fn f_winbufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_winbufnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);

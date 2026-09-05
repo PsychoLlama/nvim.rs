@@ -80,7 +80,7 @@ pub unsafe fn evalvars_init() {
         // SAFETY: the item just allocated.
         let mut item = unsafe { Di::new(di) };
         item.di_flags |= DI_FLAGS_RO | DI_FLAGS_FIX;
-        item.di_tv = typval_T {
+        item.di_tv = TypVal {
             v_type: VAR_LIST,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: type_list },
@@ -134,8 +134,7 @@ pub unsafe fn evalvars_init() {
     unsafe { set_vim_var_bool(Vv::True, kBoolVarTrue) };
     unsafe { set_vim_var_special(Vv::Null, kSpecialVarNull) };
 
-    let vvlua_partial =
-        unsafe { xcalloc(1, ::core::mem::size_of::<partial_T>()) } as *mut partial_T;
+    let vvlua_partial = unsafe { xcalloc(1, ::core::mem::size_of::<Partial>()) } as *mut Partial;
     // The name should never be printed, but do not crash if it is.
     unsafe { (*vvlua_partial).pt_name = xmallocz(0) as *mut c_char };
     // SAFETY: the partial just allocated. The region covers the *call*:
@@ -182,7 +181,7 @@ pub unsafe fn garbage_collect_scriptvars(copyID: c_int) -> bool {
 /// # Safety
 /// `name` is a NUL-terminated string and `value` an owned one.
 pub unsafe fn set_internal_string_var(name: *const c_char, value: *mut c_char) {
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_string: value },
@@ -208,7 +207,7 @@ pub unsafe fn del_menutrans_vars() {
 }
 
 /// The `g:` scope, as a dictionary.
-pub fn get_globvar_dict() -> *mut dict_T {
+pub fn get_globvar_dict() -> *mut Dict {
     globvardict.ptr()
 }
 
@@ -219,7 +218,7 @@ pub fn get_globvar_ht() -> *mut hashtab_T {
 }
 
 /// The `v:` scope, as a dictionary.
-pub fn get_vimvar_dict() -> *mut dict_T {
+pub fn get_vimvar_dict() -> *mut Dict {
     vimvardict.ptr()
 }
 
@@ -240,19 +239,19 @@ pub(crate) fn get_compat_ht() -> *mut hashtab_T {
     compat_hashtab.ptr()
 }
 
-/// The `dictitem_T` a bare `g:` resolves to.
+/// The `DictItem` a bare `g:` resolves to.
 pub(crate) fn globvar_scope_item() -> *mut ScopeDictDictItem {
     globvars_var.ptr()
 }
 
-/// The `dictitem_T` a bare `v:` resolves to.
+/// The `DictItem` a bare `v:` resolves to.
 pub(crate) fn vimvar_scope_item() -> *mut ScopeDictDictItem {
     vimvars_var.ptr()
 }
 
 /// The `v:msgpack_types` list for `type_`, compared by identity by the
 /// msgpack encoder and decoder.
-pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut list_T {
+pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut List {
     eval_msgpack_type_lists.get()[type_ as usize].cast_mut()
 }
 
@@ -274,7 +273,7 @@ pub unsafe fn new_script_vars(id: ScriptId) {
 ///
 /// # Safety
 /// `dict` and `dict_var` are writable and not yet initialised.
-pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem, scope: ScopeType) {
+pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictDictItem, scope: ScopeType) {
     // SAFETY: the caller's obligation -- both are writable and outlive the
     // call; the hashtab and the watcher queue are fields of the dictionary
     // itself, so initialising them in place is what the C does.
@@ -289,10 +288,10 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
     var.di_flags = DI_FLAGS_RO | DI_FLAGS_FIX;
     var.di_key[0] = NUL as c_char;
     // The watcher queue's head points at its own node, so `queue_init` goes
-    // last: a borrow of the whole `dict_T` afterwards would invalidate the
+    // last: a borrow of the whole `Dict` afterwards would invalidate the
     // pointer it has just stored. The hash table has no such constraint any
     // more -- it owns its slots -- but `hash_init` writes over storage that
-    // must not already hold a table, which is what a fresh `dict_T` is.
+    // must not already hold a table, which is what a fresh `Dict` is.
     unsafe { hash_init(&raw mut (*dict).dv_hashtab) };
     unsafe { queue_init(&raw mut (*dict).watchers) };
 }
@@ -301,7 +300,7 @@ pub unsafe fn init_var_dict(dict: *mut dict_T, dict_var: *mut ScopeDictDictItem,
 ///
 /// # Safety
 /// `dict` came from [`init_var_dict`].
-pub unsafe fn unref_var_dict(dict: *mut dict_T) {
+pub unsafe fn unref_var_dict(dict: *mut Dict) {
     // The reference count is what kept the scope alive; take it back to
     // the one reference the caller holds.
     // SAFETY: the caller's obligation -- a dictionary `init_var_dict`
@@ -325,14 +324,14 @@ pub unsafe fn vars_clear(ht: *mut hashtab_T) {
 /// As [`vars_clear`].
 pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
     // SAFETY: the caller's obligation -- a live variable hashtab, whose items
-    // are the `dictitem_T`s the walk frees.
+    // are the `DictItem`s the walk frees.
     unsafe { hash_lock(ht) };
     for hi in unsafe { tv_ht_iter(ht) } {
         // Free the variable, unless it is one of the fixed ones embedded
         // in a `funccall_S` or a scope dictionary.
         let v = unsafe { Di::new(tv_dict_hi2di(hi)) };
         if free_val {
-            unsafe { tv_clear(v.field_ptr(offset_of!(dictitem_T, di_tv))) };
+            unsafe { tv_clear(v.field_ptr(offset_of!(DictItem, di_tv))) };
         }
         if v.di_flags & DI_FLAGS_ALLOC != 0 {
             unsafe { xfree(v.raw().cast()) };
@@ -351,6 +350,6 @@ pub(crate) unsafe fn delete_var(ht: *mut hashtab_T, hi: Slot) {
     // takes out of the table and then frees.
     let di = unsafe { Di::new(tv_dict_hi2di(hi)) };
     unsafe { hash_remove(ht, hi) };
-    unsafe { tv_clear(di.field_ptr(offset_of!(dictitem_T, di_tv))) };
+    unsafe { tv_clear(di.field_ptr(offset_of!(DictItem, di_tv))) };
     unsafe { xfree(di.raw().cast()) };
 }

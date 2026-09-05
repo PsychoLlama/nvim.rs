@@ -19,14 +19,14 @@ use super::{
 };
 use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
-use crate::types::{EvalFuncData, VarNumber, int64_t, typval_T, uint8_t};
+use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, uint8_t};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 ///
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
 /// cleared result.
-pub unsafe fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_add(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     // Default: failed.
@@ -92,7 +92,7 @@ fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> VarNumber {
 }
 
 /// How many items of `l` from index `idx` on equal `needle`.
-fn count_list(l: ListRef, needle: &mut typval_T, idx: int64_t, ic: bool) -> VarNumber {
+fn count_list(l: ListRef, needle: &mut TypVal, idx: int64_t, ic: bool) -> VarNumber {
     if l.len() == 0 {
         return 0;
     }
@@ -113,7 +113,7 @@ fn count_list(l: ListRef, needle: &mut typval_T, idx: int64_t, ic: bool) -> VarN
 }
 
 /// How many values of `d` equal `needle`.
-fn count_dict(d: DictRef, needle: &mut typval_T, ic: bool) -> VarNumber {
+fn count_dict(d: DictRef, needle: &mut TypVal, ic: bool) -> VarNumber {
     if d.is_null() {
         return 0;
     }
@@ -135,7 +135,7 @@ fn count_dict(d: DictRef, needle: &mut typval_T, ic: bool) -> VarNumber {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..4, and `rettv`
 /// a cleared result.
-pub unsafe fn f_count(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_count(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     let mut error = false;

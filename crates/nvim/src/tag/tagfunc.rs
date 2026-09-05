@@ -161,7 +161,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // list's.
     unsafe { (*info).dv_refcount.retain() };
 
-    let mut args = [typval_T {
+    let mut args = [TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -173,7 +173,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     args[2].v_type = VAR_DICT;
     args[2].vval.v_dict = info;
 
-    let mut rettv = typval_T {
+    let mut rettv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -243,7 +243,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
 ///
 /// # Safety
 /// `d` must be a live dictionary.
-unsafe fn tag_of(d: *mut dict_T, flags: c_int) -> Option<Match> {
+unsafe fn tag_of(d: *mut Dict, flags: c_int) -> Option<Match> {
     // SAFETY: the caller's promise; every value is a NUL-terminated
     // string, and the buffer is sized before anything is written.
     let fields = unsafe { string_fields(d) };
@@ -347,17 +347,14 @@ impl Field {
 ///
 /// # Safety
 /// `d` must be a live dictionary.
-unsafe fn string_fields(d: *mut dict_T) -> Vec<Field> {
+unsafe fn string_fields(d: *mut Dict) -> Vec<Field> {
     let mut fields = Vec::new();
     // SAFETY: the caller's promise; every live item's key and value are
     // part of the dictionary.
     let ht = unsafe { &(*d).dv_hashtab };
     for hi in ht.items() {
-        let di = unsafe {
-            hi.hi_key
-                .byte_sub(core::mem::offset_of!(dictitem_T, di_key))
-        }
-        .cast::<dictitem_T>();
+        let di = unsafe { hi.hi_key.byte_sub(core::mem::offset_of!(DictItem, di_key)) }
+            .cast::<DictItem>();
         let tv = unsafe { &raw mut (*di).di_tv };
         if unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).vval.v_string.is_null() } {
             fields.push(Field {
@@ -373,7 +370,7 @@ unsafe fn string_fields(d: *mut dict_T) -> Vec<Field> {
 ///
 /// # Safety
 /// `d` must be live and `val` NUL-terminated.
-unsafe fn add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+unsafe fn add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     // SAFETY: the caller's promise.
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }

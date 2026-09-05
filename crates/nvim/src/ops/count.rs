@@ -119,7 +119,7 @@ struct Selection {
 ///
 /// # Safety
 /// `dict`, when not null, must point to a live dictionary.
-pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
+pub unsafe fn cursor_pos_info(dict: *mut Dict) {
     // The report is assembled across two functions and shown at the end, so
     // it is passed down as a sink rather than left in the shared `IObuff`.
     let mut report = [0 as c_char; IOSIZE as usize];
@@ -438,7 +438,7 @@ fn report_counts(
 /// # Safety
 /// `dict` must point to a live dictionary.
 unsafe fn store_counts(
-    dict: *mut dict_T,
+    dict: *mut Dict,
     counts: &PosCounts,
     bom_count: VarNumber,
     visual_active: bool,

@@ -41,11 +41,11 @@ error and no empty-edit warning. Nothing is applied mid-run, so nothing goes
 stale.
 
 It also makes a table's entries *simultaneous* rather than chained, which is
-what a collision batch wants: `List -> ListRef` and `list_T -> List` in one
-table rename the two distinct symbols they name, in either order, and the
-wrapper's new name is never itself renamed by the entry below it. Two entries
-that resolve to the same span are a conflict and abort; distinct identifiers
-never do.
+what a collision batch wants: `Pos -> PosRef` and `pos_T -> Pos` in one table
+rename the two distinct symbols they name, in either order, and the wrapper's
+new name is never itself renamed by the entry below it. Two entries that
+resolve to the same span are a conflict and abort; distinct identifiers never
+do.
 
 ## `cfg` is the thing that actually under-renames, and it needs two passes
 

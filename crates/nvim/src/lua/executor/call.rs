@@ -1,7 +1,7 @@
 //! `vim.call()` and the rpc entry points.
 //!
 //! [`nlua_call`] invokes a *Vimscript* function from Lua: it converts up to
-//! `MAX_FUNC_ARGS` Lua values to `typval_T`s, calls through `call_func`, and
+//! `MAX_FUNC_ARGS` Lua values to `TypVal`s, calls through `call_func`, and
 //! converts the result back.  `nlua_rpc` is `vim.rpcrequest()` and
 //! `vim.rpcnotify()`, which differ only in whether they wait.
 

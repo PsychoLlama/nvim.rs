@@ -20,8 +20,8 @@
 //! # Safety
 //!
 //! Every `unsafe fn` here forwards its caller's obligations; the `# Safety`
-//! sections say which.  The recurring ones are that a `*mut typval_T` /
-//! `*mut list_T` / `*const listitem_T` is live for the call and that nothing
+//! sections say which.  The recurring ones are that a `*mut TypVal` /
+//! `*mut List` / `*const ListItem` is live for the call and that nothing
 //! removes an item from a list while one of these walks it — the encoders run
 //! with no user code interleaved, which is what makes that hold.
 
@@ -47,8 +47,8 @@ use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::tr_plural;
 use crate::types::{
-    Failed, IOSIZE, ListReaderState, MessagePackType, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_STRING,
-    list_T, listitem_T, ptrdiff_t, size_t, typval_T,
+    Failed, IOSIZE, List, ListItem, ListReaderState, MessagePackType, TypVal, VAR_DICT, VAR_FUNC,
+    VAR_LIST, VAR_STRING, ptrdiff_t, size_t,
 };
 use ::libc::abort;
 
@@ -91,7 +91,7 @@ fn tr(msg: &'static CStr) -> *const c_char {
 /// # Safety
 /// `li` must be a live list item whose value is a `VAR_STRING`.
 #[inline(always)]
-unsafe fn item_string(li: *const listitem_T) -> *mut c_char {
+unsafe fn item_string(li: *const ListItem) -> *mut c_char {
     unsafe { (*li).li_tv.string_or_null() }
 }
 
@@ -100,7 +100,7 @@ unsafe fn item_string(li: *const listitem_T) -> *mut c_char {
 /// # Safety
 /// As [`item_string`].
 #[inline(always)]
-unsafe fn item_strlen(li: *const listitem_T) -> size_t {
+unsafe fn item_strlen(li: *const ListItem) -> size_t {
     let s = unsafe { item_string(li) };
     if s.is_null() {
         0
@@ -114,7 +114,7 @@ unsafe fn item_strlen(li: *const listitem_T) -> size_t {
 /// # Safety
 /// `list` must be live, and nothing may add to or remove from it while the
 /// iterator is alive.
-unsafe fn items(list: *const list_T) -> impl Iterator<Item = *const listitem_T> {
+unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
     let mut li = if list.is_null() {
         core::ptr::null()
     } else {
@@ -146,7 +146,7 @@ fn store_nuls_as_newlines(line: &mut [u8]) {
 /// # Safety
 /// `li` must be a live list item whose value is a `VAR_STRING` this may take
 /// ownership of and replace.
-unsafe fn extend_item(li: *mut listitem_T, line: &[u8]) {
+unsafe fn extend_item(li: *mut ListItem, line: &[u8]) {
     let old_len = unsafe { item_strlen(li) };
     let grown = unsafe { xrealloc(item_string(li).cast::<c_void>(), old_len + line.len() + 1) }
         .cast::<c_char>();
@@ -175,13 +175,13 @@ fn own_line(line: &[u8]) -> *mut c_char {
 /// one continues the item already there.
 ///
 /// # Safety
-/// `data` must be a live `list_T *` and `buf` must be readable for `len`
+/// `data` must be a live `List *` and `buf` must be readable for `len`
 /// bytes.
 pub unsafe fn encode_list_write(data: *mut c_void, buf: *const c_char, len: size_t) {
     if len == 0 {
         return;
     }
-    let list = data.cast::<list_T>();
+    let list = data.cast::<List>();
     // SAFETY: the caller's promise about `buf` and `len`.
     let bytes = unsafe { slice::from_raw_parts(buf.cast::<u8>(), len) };
 
@@ -271,7 +271,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
                 // SAFETY: the frame's dictionary is live and `idx` is a slot
                 // of its hash table, or one past the last.
                 let hi = unsafe { (*dict).dv_hashtab.slot(idx.saturating_sub(1)) };
-                let mut key_tv = typval_T::string(hi.hi_key);
+                let mut key_tv = TypVal::string(hi.hi_key);
                 let key = unsafe { encode_tv2string(&raw mut key_tv, core::ptr::null_mut()) };
                 append_formatted!(tr(c"key %s"), key);
                 // SAFETY: `encode_tv2string` hands back an owned buffer.
@@ -367,7 +367,7 @@ pub(crate) unsafe fn conv_error(msg: *const c_char, path: &ConvPath) -> Flow {
 /// # Safety
 /// `list` must be live, and `ret_len`/`ret_buf` must be writable.
 pub unsafe fn encode_vim_list_to_buf(
-    list: *const list_T,
+    list: *const List,
     ret_len: *mut size_t,
     ret_buf: *mut *mut c_char,
 ) -> bool {
@@ -491,7 +491,7 @@ pub unsafe fn encode_read_from_list(
 ///
 /// # Safety
 /// `list` must be live and must have at least one item.
-pub unsafe fn encode_init_lrstate(list: *const list_T) -> ListReaderState {
+pub unsafe fn encode_init_lrstate(list: *const List) -> ListReaderState {
     // SAFETY: the caller's promise; the first item holds a string or NULL.
     let li = unsafe { tv_list_first(list) };
     ListReaderState {
@@ -737,7 +737,7 @@ pub(crate) unsafe fn convert_to_json_string(
 ///
 /// # Safety
 /// `tv` must be live, as must anything it points at.
-pub unsafe fn encode_check_json_key(tv: *const typval_T) -> bool {
+pub unsafe fn encode_check_json_key(tv: *const TypVal) -> bool {
     // SAFETY: the caller's promise about `tv`.
     let tv = unsafe { &*tv };
     if tv.v_type == VAR_STRING {
@@ -800,7 +800,7 @@ unsafe fn finish_tv2(ga: Vec<u8>, len: *mut size_t) -> *mut c_char {
 ///
 /// # Safety
 /// `tv` must be live; `len` must be NULL or writable.
-pub unsafe fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2string(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`; `string()` never refuses.
     let evs_ret =
@@ -815,7 +815,7 @@ pub unsafe fn encode_tv2string(tv: *mut typval_T, len: *mut size_t) -> *mut c_ch
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2echo(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
     // A string or function reference echoes as its own bytes, which is
@@ -839,7 +839,7 @@ pub unsafe fn encode_tv2echo(tv: *mut typval_T, len: *mut size_t) -> *mut c_char
 ///
 /// # Safety
 /// As [`encode_tv2string`].
-pub unsafe fn encode_tv2json(tv: *mut typval_T, len: *mut size_t) -> *mut c_char {
+pub unsafe fn encode_tv2json(tv: *mut TypVal, len: *mut size_t) -> *mut c_char {
     let mut ga = Vec::<u8>::new();
     // SAFETY: the caller's promise about `tv`.
     let evj_ret = unsafe { encode_vim_to_json(&mut ga, tv, c"encode_tv2json() argument".as_ptr()) };

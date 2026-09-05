@@ -84,7 +84,7 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    CallbackReader, IOSIZE, LineNr, NUL, OptInt, VarNumber, Vv, int64_t, list_T, qf_info_T,
+    CallbackReader, IOSIZE, LineNr, List, NUL, OptInt, VarNumber, Vv, int64_t, qf_info_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -384,7 +384,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     if recoverymode.get() && fname.is_null() {
         // `-r` with no file: list the swap files and leave.
-        let (no_name, no_list) = (ptr::null_mut(), ptr::null_mut::<list_T>());
+        let (no_name, no_list) = (ptr::null_mut(), ptr::null_mut::<List>());
         unsafe { recover_names(no_name, true, no_list, 0, ptr::null_mut()) };
         unsafe { os_exit(0) };
     }

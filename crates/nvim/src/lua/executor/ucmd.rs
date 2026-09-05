@@ -27,7 +27,7 @@ use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CmdModFlags, ExArgt, Handle, LineNr, OptInt, ScriptId, exarg_T, lua_Integer, sctx_T, size_t,
+    CmdModFlags, ExArgt, Handle, LineNr, OptInt, ScriptCtx, ScriptId, exarg_T, lua_Integer, size_t,
     ucmd_T,
 };
 use crate::usercmd::{uc_mods, uc_split_args_iter};
@@ -58,7 +58,7 @@ const MOD_FLAGS: [(CmdModFlags, &CStr); 9] = [
 ///
 /// # Safety
 /// `current` must be a writable script context.
-pub unsafe fn nlua_set_sctx(current: *mut sctx_T) {
+pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
     unsafe {
         if !script_is_lua((*current).sc_sid) {
             return;

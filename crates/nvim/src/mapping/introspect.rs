@@ -30,14 +30,14 @@ const NUMBUFLEN: usize = 65;
 /// turns the staircase into an `Option` and every argument read after it into
 /// ordinary checked code.
 pub(crate) struct Argv {
-    at: *mut typval_T,
+    at: *mut TypVal,
     len: usize,
 }
 
 impl Argv {
     /// # Safety
     /// `argvars` must be a live argument vector terminated by `VAR_UNKNOWN`.
-    pub(crate) unsafe fn new(argvars: *mut typval_T) -> Self {
+    pub(crate) unsafe fn new(argvars: *mut TypVal) -> Self {
         // SAFETY: the caller's promise — the vector runs to a `VAR_UNKNOWN`,
         // so the walk stops inside it.
         let len = (0..)
@@ -47,7 +47,7 @@ impl Argv {
     }
 
     /// Argument `n`, or `None` when the call did not give one.
-    pub(crate) fn get(&self, n: usize) -> Option<*mut typval_T> {
+    pub(crate) fn get(&self, n: usize) -> Option<*mut TypVal> {
         // SAFETY: `n` is below the terminator's index, so the slot is one the
         // caller's vector holds.
         (n < self.len).then(|| unsafe { self.at.add(n) })
@@ -65,7 +65,7 @@ impl Argv {
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_hasmapto(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_hasmapto(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the Vimscript call convention — `argvars` is a live argument
@@ -232,7 +232,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) {
+unsafe fn get_maparg(argvars: *mut TypVal, rettv: *mut TypVal, exact: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise — `rettv` is the writable answer slot.
     let mut ret = unsafe { Live::new(rettv) };
@@ -347,7 +347,7 @@ unsafe fn get_maparg(argvars: *mut typval_T, rettv: *mut typval_T, exact: bool) 
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_maplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let cpo = p_cpo.get();
     // SAFETY: the Vimscript call convention — `argvars` is a live argument
@@ -385,7 +385,7 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
                 (alt, COwned::new(keys_buf))
             };
 
-            let mut d = typval_T {
+            let mut d = TypVal {
                 v_type: VAR_UNKNOWN,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_number: 0 },
@@ -413,7 +413,7 @@ pub unsafe fn f_maplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_maparg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_maparg(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): the Vimscript call convention, passed straight
     // through.
     unsafe { get_maparg(argvars, rettv, true) }
@@ -423,7 +423,7 @@ pub unsafe fn f_maparg(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_mapcheck(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_mapcheck(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_maparg`].
     unsafe { get_maparg(argvars, rettv, false) }
 }

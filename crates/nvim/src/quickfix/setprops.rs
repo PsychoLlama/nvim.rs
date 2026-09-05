@@ -22,7 +22,7 @@ use core::ptr;
 /// # Safety
 ///
 /// `what` must be null or a live dictionary.
-unsafe fn find(what: *const dict_T, key: &str) -> *mut dictitem_T {
+unsafe fn find(what: *const Dict, key: &str) -> *mut DictItem {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
     unsafe { tv_dict_find(what, key.as_ptr().cast(), key.len() as ptrdiff_t) }
 }
@@ -32,7 +32,7 @@ unsafe fn find(what: *const dict_T, key: &str) -> *mut dictitem_T {
 /// # Safety
 ///
 /// `di` must be a live entry.
-unsafe fn qf_setprop_qftf(mut qfl: Qfl, di: *mut dictitem_T) -> Result<(), QfError> {
+unsafe fn qf_setprop_qftf(mut qfl: Qfl, di: *mut DictItem) -> Result<(), QfError> {
     if check_secure() {
         return Err(QfError::Forbidden);
     }
@@ -56,7 +56,7 @@ unsafe fn qf_setprop_qftf(mut qfl: Qfl, di: *mut dictitem_T) -> Result<(), QfErr
 /// `qfl` must be a live list and `d` a live dictionary.
 unsafe fn qf_add_entry_from_dict(
     qfl: *mut qf_list_T,
-    d: *mut dict_T,
+    d: *mut Dict,
     first_entry: bool,
     valid_entry: &mut bool,
 ) {
@@ -85,7 +85,7 @@ unsafe fn qf_add_entry_from_dict(
     if text.is_null() {
         text = unsafe { xcalloc(1, 1) }.cast();
     }
-    let mut user_data = typval_T {
+    let mut user_data = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -219,7 +219,7 @@ fn entry_is_closer_to_target(
 unsafe fn qf_add_entries(
     qi: *mut qf_info_T,
     mut qf_idx: c_int,
-    list: *mut list_T,
+    list: *mut List,
     title: *mut c_char,
     action: c_int,
 ) {
@@ -315,7 +315,7 @@ unsafe fn qf_add_entries(
 /// `qi` must be a live stack and `what` null or a live dictionary.
 unsafe fn qf_setprop_get_qfidx(
     qi: *const qf_info_T,
-    what: *const dict_T,
+    what: *const Dict,
     action: c_int,
     newlist: &mut bool,
 ) -> Option<c_int> {
@@ -382,8 +382,8 @@ unsafe fn qf_setprop_get_qfidx(
 unsafe fn qf_setprop_title(
     qi: *mut qf_info_T,
     qf_idx: c_int,
-    what: *const dict_T,
-    di: *const dictitem_T,
+    what: *const Dict,
+    di: *const DictItem,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     if unsafe { (*di).di_tv.v_type } != VAR_STRING {
@@ -406,7 +406,7 @@ unsafe fn qf_setprop_title(
 unsafe fn qf_setprop_items(
     qi: *mut qf_info_T,
     qf_idx: c_int,
-    di: *mut dictitem_T,
+    di: *mut DictItem,
     action: c_int,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
@@ -435,8 +435,8 @@ unsafe fn qf_setprop_items(
 unsafe fn qf_setprop_items_from_lines(
     qi: *mut qf_info_T,
     qf_idx: c_int,
-    what: *const dict_T,
-    di: *mut dictitem_T,
+    what: *const Dict,
+    di: *mut DictItem,
     action: c_int,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
@@ -486,11 +486,11 @@ unsafe fn qf_setprop_items_from_lines(
 /// # Safety
 ///
 /// `di` must be a live entry.
-unsafe fn qf_setprop_context(mut qfl: Qfl, di: *mut dictitem_T) {
+unsafe fn qf_setprop_context(mut qfl: Qfl, di: *mut DictItem) {
     // SAFETY: the list's own context slot, and the caller's entry.
-    let ctx: *mut typval_T = unsafe {
+    let ctx: *mut TypVal = unsafe {
         tv_free(qfl.qf_ctx);
-        let ctx = xcalloc(1, size_of::<typval_T>()).cast();
+        let ctx = xcalloc(1, size_of::<TypVal>()).cast();
         tv_copy(&raw mut (*di).di_tv, ctx);
         ctx
     };
@@ -502,7 +502,7 @@ unsafe fn qf_setprop_context(mut qfl: Qfl, di: *mut dictitem_T) {
 /// # Safety
 ///
 /// `di` must be a live entry.
-unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const dictitem_T) -> Result<(), QfError> {
+unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const DictItem) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller -- a live dictionary entry.
     let mut newidx = unsafe {
         if (*di).di_tv.v_type == VAR_STRING
@@ -549,7 +549,7 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const dictitem_T) -> Resu
 /// `qi` must be a live stack, `what` live and `title` NUL-terminated.
 unsafe fn qf_set_properties(
     qi: *mut qf_info_T,
-    what: *const dict_T,
+    what: *const Dict,
     action: c_int,
     title: *mut c_char,
 ) -> Result<(), QfError> {
@@ -616,10 +616,10 @@ unsafe fn qf_set_properties(
 /// `list`, `title` and `what` must be null or live.
 pub unsafe fn set_errorlist(
     wp: Option<Win>,
-    list: *mut list_T,
+    list: *mut List,
     action: c_int,
     title: *mut c_char,
-    what: *mut dict_T,
+    what: *mut Dict,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
     let qi = match wp {

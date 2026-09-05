@@ -16,7 +16,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
-    Callback, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber, typval_T,
+    Callback, EvalFuncData, NUL, TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -25,7 +25,7 @@ use core::ptr;
 const NO_CALLBACK: Callback = Callback::None;
 
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
-pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_dictwatcheradd(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: every callee below is a C entry point taking live typvals from
@@ -64,7 +64,7 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut typval_T, _rettv: *mut typval_T, _f
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
-pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_dictwatcherdel(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: as `f_dictwatcheradd`; the callback built here is only used to
@@ -100,7 +100,7 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut typval_T, _rettv: *mut typval_T, _f
 
 /// `islocked({expr})` — 1 when the variable the name resolves to is locked,
 /// 0 when it is not, -1 when there is no such variable.
-pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_islocked(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
@@ -150,7 +150,7 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// The address is formatted by `vim_vsnprintf_typval`'s `%p`, which reads
 /// its operand from the typval array rather than from a `va_list`; the
 /// `va_list` handed in is a zeroed placeholder that is never read.
-pub unsafe fn f_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_id(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the measuring call writes nothing; the second is handed a
     // buffer of exactly the size it reported plus the terminator.

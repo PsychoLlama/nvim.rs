@@ -4,7 +4,7 @@
 //! container being built, so a document nests as deep as `capacity` without
 //! recursing and without ever unwinding through C. Every frame is visited
 //! twice — `enter_cb` on the way down, `exit_cb` on the way back up — and
-//! the callback owns whatever the object actually becomes (a `typval_T` in
+//! the callback owns whatever the object actually becomes (a `TypVal` in
 //! `eval/decode/msgpack`, an `Object` in `msgpack_rpc/unpacker`, a Lua value
 //! in `lmpack`).
 //!

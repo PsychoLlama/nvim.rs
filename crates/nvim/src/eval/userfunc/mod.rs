@@ -81,11 +81,11 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, LineNr, LuaRef, OptInt, String_0, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
-    Vv, dict_T, dictitem_T, estack_T, evalarg_T, exarg_T, exception_state_T, expand_T,
-    funccal_entry_T, funccall_S_fc_fixvar, funccall_T, funcdict_T, funcexe_T, garray_T, hashtab_T,
-    listitem_T, lval_T, partial_T, regmatch_T, save_redo_T, size_t, typval_T, ufunc_T,
+    Callback, Dict, DictItem, LineNr, ListItem, LuaRef, OptInt, Partial, String_0, TypVal,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T, evalarg_T, exarg_T,
+    exception_state_T, expand_T, funccal_entry_T, funccall_S_fc_fixvar, funccall_T, funcdict_T,
+    funcexe_T, garray_T, hashtab_T, lval_T, regmatch_T, save_redo_T, size_t, ufunc_T,
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
@@ -133,7 +133,7 @@ pub(crate) type Fc = Live<funccall_T>;
 /// The refcount an item that must never be freed carries.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
 
-/// `dictitem_T::di_flags`: fixed (the item lives inside its owner), and
+/// `DictItem::di_flags`: fixed (the item lives inside its owner), and
 /// read-only always or only inside the sandbox.
 pub const DI_FLAGS_FIX: u8 = 4;
 pub const DI_FLAGS_RO_SBX: u8 = 2;
@@ -197,7 +197,7 @@ static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T::new());
 /// through it so that a value living only in a caller's argument array is not
 /// collected. The entries are borrowed -- each points into a caller's own
 /// `argvars` -- which is why this is a `Vec` of pointers and not of values.
-static funcargs: GlobalCell<Vec<*mut typval_T>> = GlobalCell::new(Vec::new());
+static funcargs: GlobalCell<Vec<*mut TypVal>> = GlobalCell::new(Vec::new());
 static current_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
 static previous_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
 

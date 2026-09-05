@@ -46,9 +46,8 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, VAR_LIST, VAR_NUMBER, VarNumber, dict_T, dictitem_T, exarg_T,
-    int64_t, list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T,
-    uint8_t, win_T,
+    ColNr, Dict, DictItem, EvalFuncData, LineNr, List, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
+    exarg_T, int64_t, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, uint8_t, win_T,
 };
 use crate::winlayer::{Live, Win};
 
@@ -90,7 +89,7 @@ unsafe fn match_add(
     pat: *const c_char,
     prio: c_int,
     id: c_int,
-    pos_list: *mut list_T,
+    pos_list: *mut List,
     conceal_char: *const c_char,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
@@ -226,7 +225,7 @@ unsafe fn match_add(
 /// # Safety
 /// `m` must be live with `mit_pos_array` sized for the list, and `pos_list`
 /// must be a live list.
-unsafe fn fill_pos_array(m: *mut matchitem_T, pos_list: *mut list_T) -> Option<(LineNr, LineNr)> {
+unsafe fn fill_pos_array(m: *mut matchitem_T, pos_list: *mut List) -> Option<(LineNr, LineNr)> {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let m = unsafe { Mi::new(m) };
     // SAFETY: the caller's match and list.

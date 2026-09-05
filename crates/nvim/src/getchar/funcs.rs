@@ -48,7 +48,7 @@ struct GetcharOpts {
 ///
 /// # Safety
 /// `argvars` must be a valid argument vector.
-unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<GetcharOpts> {
+unsafe fn getchar_opts(argvars: *mut TypVal, allow_number: bool) -> Option<GetcharOpts> {
     let mut numbuf = NumBuf::new();
     let mut opts = GetcharOpts {
         allow_number,
@@ -109,7 +109,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
 ///
 /// # Safety
 /// `argvars` must be a valid argument vector.
-unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> VarNumber {
+unsafe fn getchar_read(argvars: *mut TypVal, cursor: CursorFlag) -> VarNumber {
     let mut error = false;
     loop {
         if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
@@ -200,11 +200,7 @@ unsafe fn set_mouse_vars() {
 ///
 /// # Safety
 /// `argvars` and `rettv` must be a valid argument vector and return slot.
-pub(crate) unsafe fn getchar_common(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    allow_number: bool,
-) {
+pub(crate) unsafe fn getchar_common(argvars: *mut TypVal, rettv: *mut TypVal, allow_number: bool) {
     // SAFETY (this body): as [`getchar_opts`] -- a live argument vector and a
     // writable `rettv`; the scratch buffers are this frame's own.
     let Some(opts) = (unsafe { getchar_opts(argvars, allow_number) }) else {
@@ -271,7 +267,7 @@ pub(crate) unsafe fn getchar_common(
 ///
 /// # Safety
 /// As [`getchar_common`].
-pub unsafe fn f_getchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getchar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): the Vimscript call convention, passed straight
     // through.
     unsafe { getchar_common(argvars, rettv, true) };
@@ -281,7 +277,7 @@ pub unsafe fn f_getchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 ///
 /// # Safety
 /// As [`getchar_common`].
-pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcharstr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
     unsafe { getchar_common(argvars, rettv, false) };
 }
@@ -290,7 +286,7 @@ pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 ///
 /// # Safety
 /// `rettv` must be a valid return slot.
-pub unsafe fn f_getcharmod(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcharmod(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
     unsafe { (*rettv).vval.v_number = VarNumber::from(mod_mask.get().bits()) };
 }

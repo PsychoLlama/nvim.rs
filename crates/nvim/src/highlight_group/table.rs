@@ -32,7 +32,7 @@ use crate::main::{
 };
 use crate::message::{emsg, msg_source};
 use crate::os::cshim::gettext;
-use crate::types::{HlAttrs, NS, RgbValue, int16_t, sctx_T, size_t};
+use crate::types::{HlAttrs, NS, RgbValue, ScriptCtx, int16_t, size_t};
 use crate::ui::ui_mode_info_set;
 
 use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone};
@@ -59,9 +59,9 @@ pub(crate) struct HlGroup {
     /// Which of `cterm=`/`gui=`/`link` have been set: `SG_*`.
     pub set: c_int,
     /// Where the default link was set.
-    pub deflink_sctx: sctx_T,
+    pub deflink_sctx: ScriptCtx,
     /// Where the group was last set.
-    pub script_ctx: sctx_T,
+    pub script_ctx: ScriptCtx,
     /// `cterm=` attributes.
     pub cterm: HlAttrFlags,
     /// `ctermfg=` colour number plus one, 0 for unset.
@@ -100,8 +100,8 @@ impl HlGroup {
         link: 0,
         deflink: 0,
         set: 0,
-        deflink_sctx: sctx_T::NONE,
-        script_ctx: sctx_T::NONE,
+        deflink_sctx: ScriptCtx::NONE,
+        script_ctx: ScriptCtx::NONE,
         cterm: HlAttrFlags::NONE,
         cterm_fg: 0,
         cterm_bg: 0,

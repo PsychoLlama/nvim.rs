@@ -32,7 +32,7 @@ const REQUIRES_EXPR: &CStr = c"\"replace_keycodes\" requires \"expr\"";
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_mapset(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -45,7 +45,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
     let mut buf = [0 as c_char; NUMBUFLEN];
     let which: *const c_char;
     let is_abbr: bool;
-    let d: *mut dict_T;
+    let d: *mut Dict;
 
     // If the first argument is a dict, then that is the only one allowed.
     // SAFETY (this block): the Vimscript call convention — `argvars` is a live

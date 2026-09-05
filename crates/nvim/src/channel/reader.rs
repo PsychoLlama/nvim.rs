@@ -23,15 +23,15 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
 use crate::types::{
-    CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, kListLenMayKnow, list_T, size_t, typval_T, typval_vval_union,
+    CallbackReader, Channel, List, RStream, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber, kListLenMayKnow, size_t, typval_vval_union,
 };
 
 use super::{channel_decref, channel_incref};
 
-/// A `typval_T` of no type, which is what an argument slot starts as.
-fn unknown_tv() -> typval_T {
-    typval_T {
+/// A `TypVal` of no type, which is what an argument slot starts as.
+fn unknown_tv() -> TypVal {
+    TypVal {
         v_type: VAR_UNKNOWN as _,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -237,7 +237,7 @@ unsafe fn deliver_streaming(chan: *mut Channel, reader: *mut CallbackReader) {
 /// # Safety
 /// `chan` is live; `reader` is null or one of its readers.
 unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader) {
-    let mut argv: [typval_T; 4] = [unknown_tv(); 4];
+    let mut argv: [TypVal; 4] = [unknown_tv(); 4];
     argv[0].v_type = VAR_NUMBER as _;
     argv[2].v_type = VAR_STRING as _;
     let mut rettv = unknown_tv();
@@ -274,7 +274,7 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 ///
 /// # Safety
 /// `reader` is live.
-pub unsafe fn reader_lines(reader: *mut CallbackReader) -> *mut list_T {
+pub unsafe fn reader_lines(reader: *mut CallbackReader) -> *mut List {
     let l = unsafe { tv_list_alloc(kListLenMayKnow as isize) };
     // SAFETY: the fresh list, and the caller's garray, which holds `ga_len`
     // readable bytes at `ga_data`.

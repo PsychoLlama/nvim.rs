@@ -31,8 +31,8 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, VAR_UNKNOWN, VarNumber,
-    int64_t, pos_T, searchit_arg_T, size_t, typval_T,
+    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, TypVal, VAR_UNKNOWN,
+    VarNumber, int64_t, pos_T, searchit_arg_T, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -124,7 +124,7 @@ impl Drop for SavedWrapScan {
 ///
 /// # Safety
 /// `varp` is a live typval.
-unsafe fn search_direction(varp: *mut typval_T, flags: &mut c_int) -> c_int {
+unsafe fn search_direction(varp: *mut TypVal, flags: &mut c_int) -> c_int {
     let mut dir = FORWARD as c_int;
     // SAFETY: the caller's obligation; `nbuf` outlives the string
     // `tv_get_string_buf_chk` may park in it.
@@ -308,7 +308,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
-pub unsafe fn f_search(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_search(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut flags = 0;
     // SAFETY: the frame is live.
@@ -317,7 +317,7 @@ pub unsafe fn f_search(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
 /// sub-pattern number under the `p` flag.
-pub unsafe fn f_searchpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_searchpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut match_pos = pos_T {
         lnum: 0,
@@ -342,7 +342,7 @@ pub unsafe fn f_searchpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
 /// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
 /// declaration was found, 1 otherwise.
-pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_searchdecl(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut locally = true;
@@ -444,7 +444,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
                 }
             }
         }
-        args.ptr(4) as *const typval_T
+        args.ptr(4) as *const TypVal
     };
 
     let at = match_pos.map_or(ptr::null_mut(), |p| p as *mut pos_T);
@@ -456,14 +456,14 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
-pub unsafe fn f_searchpair(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_searchpair(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
     rettv.vval.v_number = unsafe { searchpair_cmn(args, None) } as VarNumber;
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
-pub unsafe fn f_searchpairpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_searchpairpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     let mut match_pos = pos_T {
         lnum: 0,
@@ -552,7 +552,7 @@ pub unsafe fn do_searchpair(
     mpat: *const c_char,
     epat: *const c_char,
     dir: c_int,
-    skip: *const typval_T,
+    skip: *const TypVal,
     flags: c_int,
     match_pos: *mut pos_T,
     lnum_stop: LineNr,

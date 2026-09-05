@@ -25,7 +25,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::option::find_option_end;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OptIndex, OptionSetFlags, VAR_PARTIAL, Vv, partial_T, size_t, typval_T, uint8_t,
+    NUL, OptIndex, OptionSetFlags, Partial, TypVal, VAR_PARTIAL, Vv, size_t, uint8_t,
 };
 
 /// The length of the environment-variable name at the cursor, which is
@@ -457,7 +457,7 @@ pub fn eval_isdictc(c: c_int) -> bool {
 ///
 /// # Safety
 /// `partial` must be null or valid.
-pub unsafe fn is_luafunc(partial: *mut partial_T) -> bool {
+pub unsafe fn is_luafunc(partial: *mut Partial) -> bool {
     unsafe { partial == get_vim_var_partial(Vv::Lua) }
 }
 
@@ -465,7 +465,7 @@ pub unsafe fn is_luafunc(partial: *mut partial_T) -> bool {
 ///
 /// # Safety
 /// `tv` must be valid.
-pub(crate) unsafe fn tv_is_luafunc(tv: *mut typval_T) -> bool {
+pub(crate) unsafe fn tv_is_luafunc(tv: *mut TypVal) -> bool {
     unsafe { (*tv).v_type == VAR_PARTIAL && is_luafunc((*tv).partial_or_null()) }
 }
 

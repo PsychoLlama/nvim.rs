@@ -5,7 +5,7 @@
 //! Lua callbacks and asserts, case by case, the exact sequence of
 //! `malloc`/`calloc`/`realloc`/`free` calls a typval operation makes — the
 //! sizes as much as the order, because a size derived from
-//! `offsetof(dictitem_T, di_key) + len + 1` is the only evidence that the
+//! `offsetof(DictItem, di_key) + len + 1` is the only evidence that the
 //! over-allocation happened at all. That assertion is the sole remaining
 //! reason the `mem_*` seam exists. This is its Rust twin, so the cases can
 //! move into the crate and the seam can go.
@@ -23,8 +23,8 @@
 //! - `GlobalAlloc` is handed a `Layout` (size and alignment). The
 //!   `calloc(count, size)` pair and the `malloc(size)` singleton collapse to
 //!   the same `Layout`, and the cases distinguish them:
-//!   `calloc{1, size_of::<list_T>()}` is a different expectation from
-//!   `malloc{size_of::<list_T>()}`. That distinction is unrecoverable below
+//!   `calloc{1, size_of::<List>()}` is a different expectation from
+//!   `malloc{size_of::<List>()}`. That distinction is unrecoverable below
 //!   the seam.
 //! - `arena_alloc(NULL, ..)` falls through to `xmalloc`, which is exactly
 //!   the traffic an arena rewrite has to keep accounting for.

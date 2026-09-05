@@ -14,7 +14,7 @@ use super::*;
 pub type ArgvFunc = Option<
     unsafe fn(
         ::core::ffi::c_int,
-        *mut typval_T,
+        *mut TypVal,
         ::core::ffi::c_int,
         *mut ufunc_T,
     ) -> ::core::ffi::c_int,
@@ -25,9 +25,9 @@ pub struct funccal_entry {
 }
 pub type funccal_entry_T = funccal_entry;
 pub struct funcdict_T {
-    pub fd_dict: *mut dict_T,
+    pub fd_dict: *mut Dict,
     pub fd_newkey: *mut ::core::ffi::c_char,
-    pub fd_di: *mut dictitem_T,
+    pub fd_di: *mut DictItem,
 }
 #[derive(Copy, Clone)]
 pub struct funcexe_T {
@@ -36,8 +36,8 @@ pub struct funcexe_T {
     pub fe_lastline: LineNr,
     pub fe_doesrange: *mut bool,
     pub fe_evaluate: bool,
-    pub fe_partial: *mut partial_T,
-    pub fe_selfdict: *mut dict_T,
-    pub fe_basetv: *mut typval_T,
+    pub fe_partial: *mut Partial,
+    pub fe_selfdict: *mut Dict,
+    pub fe_basetv: *mut TypVal,
     pub fe_found_var: bool,
 }

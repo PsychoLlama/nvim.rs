@@ -237,7 +237,7 @@ pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
 pub(crate) unsafe fn var_shada_iter(
     iter: Option<usize>,
     name: *mut *const c_char,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     flavour: VarFlavour,
 ) -> Option<usize> {
     let globvarht = get_globvar_ht();
@@ -257,7 +257,7 @@ pub(crate) unsafe fn var_shada_iter(
     };
 
     let key = unsafe { (*globvarht).slot(idx) }.hi_key;
-    let di = unsafe { key.sub(offset_of!(dictitem_T, di_key)) } as *mut dictitem_T;
+    let di = unsafe { key.sub(offset_of!(DictItem, di_key)) } as *mut DictItem;
     unsafe { *name = &raw mut (*di).di_key as *mut c_char };
     unsafe { tv_copy(&raw mut (*di).di_tv, rettv) };
 
@@ -394,7 +394,7 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
     let mut var_iter: Option<usize> = None;
     let cur_timestamp = os_time();
     loop {
-        let mut vartv: typval_T = unsafe { core::mem::zeroed() };
+        let mut vartv: TypVal = unsafe { core::mem::zeroed() };
         let mut name = core::ptr::null::<c_char>();
         var_iter = unsafe {
             var_shada_iter(
@@ -409,7 +409,7 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
         }
         // A function reference cannot be written to a file.
         if vartv.v_type != VAR_FUNC && vartv.v_type != VAR_PARTIAL {
-            let mut tgttv: typval_T = unsafe { core::mem::zeroed() };
+            let mut tgttv: TypVal = unsafe { core::mem::zeroed() };
             unsafe { tv_copy(&raw mut vartv, &raw mut tgttv) };
             let entry = ShadaEntry {
                 can_free_entry: false,

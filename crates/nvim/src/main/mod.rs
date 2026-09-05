@@ -16,15 +16,15 @@ use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
     EStackType, EstackInfo, FILE, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos,
     MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime,
-    Refcount, RgbValue, ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT,
-    WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope,
-    cmdmod_T, estack_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, int16_t,
-    int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
-    uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
-    xfmark_T,
+    Refcount, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, UV_MUTEX_INIT,
+    UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
+    caller_scope, cmdmod_T, estack_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T,
+    garray_T, int16_t, int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t,
+    nvim_stats_s, pos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T,
+    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
+    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
+    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    vimmenu_T, win_T, xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -588,11 +588,11 @@ pub static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const SID_CMDARG: c_int = -2 as c_int;
 pub(crate) const SID_CARG: c_int = -3 as c_int;
 pub(crate) const SID_ENV: c_int = -4 as c_int;
-pub static current_sctx: GlobalCell<sctx_T> = GlobalCell::new(sctx_T::NONE);
+pub static current_sctx: GlobalCell<ScriptCtx> = GlobalCell::new(ScriptCtx::NONE);
 pub static current_ui: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub static did_source_packages: GlobalCell<bool> = GlobalCell::new(false);
 pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
-    script_ctx: sctx_T::NONE,
+    script_ctx: ScriptCtx::NONE,
     es_entry: estack_T {
         es_lnum: 0,
         es_name: ::core::ptr::null_mut::<c_char>(),

@@ -31,8 +31,7 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    Float, LuaRef, blob_T, dict_T, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
-    typval_T,
+    Blob, Dict, Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
 };
 
 /// How many Lua slots opening a container needs: its table, the key or index
@@ -133,30 +132,30 @@ impl TypvalSink for LuaSink {
     const ALLOW_SPECIALS: bool = true;
     const CONVERT_FN_NAME: &'static CStr = c"_typval_encode_lua_convert_one_value()";
 
-    unsafe fn conv_nil(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_nil(&mut self, _tv: *mut TypVal) {
         self.push_nil();
     }
 
-    unsafe fn conv_bool(&mut self, _tv: *mut typval_T, num: bool) {
+    unsafe fn conv_bool(&mut self, _tv: *mut TypVal, num: bool) {
         self.pushboolean(num);
     }
 
-    unsafe fn conv_number(&mut self, _tv: *mut typval_T, num: int64_t) {
+    unsafe fn conv_number(&mut self, _tv: *mut TypVal, num: int64_t) {
         self.pushnumber(num as lua_Number);
     }
 
-    unsafe fn conv_unsigned_number(&mut self, _tv: *mut typval_T, num: u64) {
+    unsafe fn conv_unsigned_number(&mut self, _tv: *mut TypVal, num: u64) {
         self.pushnumber(num as lua_Number);
     }
 
-    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: Float) -> Flow {
+    unsafe fn conv_float(&mut self, _tv: *mut TypVal, flt: Float) -> Flow {
         self.pushnumber(flt);
         Flow::Go
     }
 
     /// A Lua string is bytes, so this is the whole of it — NULs included.  It
     /// copies, which is why the walk's buffer-owning hooks need no override.
-    unsafe fn conv_string(&mut self, _tv: *mut typval_T, buf: *mut c_char, len: size_t) -> Flow {
+    unsafe fn conv_string(&mut self, _tv: *mut TypVal, buf: *mut c_char, len: size_t) -> Flow {
         unsafe { self.pushlstring(buf, len) };
         Flow::Go
     }
@@ -164,7 +163,7 @@ impl TypvalSink for LuaSink {
     /// msgpack `ext` has no Lua image, so it comes out as nil.
     unsafe fn conv_ext_string(
         &mut self,
-        _tv: *mut typval_T,
+        _tv: *mut TypVal,
         _buf: *mut c_char,
         _len: size_t,
         _ext_type: i8,
@@ -173,7 +172,7 @@ impl TypvalSink for LuaSink {
         Flow::Go
     }
 
-    unsafe fn conv_blob(&mut self, _tv: *mut typval_T, blob: *const blob_T, len: c_int) {
+    unsafe fn conv_blob(&mut self, _tv: *mut TypVal, blob: *const Blob, len: c_int) {
         unsafe {
             let data = if blob.is_null() {
                 c"".as_ptr()
@@ -190,7 +189,7 @@ impl TypvalSink for LuaSink {
     /// is why no `Partial` frame ever reaches [`LuaSink::backref`].
     unsafe fn conv_func_start(
         &mut self,
-        _tv: *mut typval_T,
+        _tv: *mut TypVal,
         fun: *mut c_char,
         _prefix: &'static CStr,
         _path: &ConvPath,
@@ -214,14 +213,14 @@ impl TypvalSink for LuaSink {
         Flow::Stop
     }
 
-    unsafe fn conv_empty_list(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_empty_list(&mut self, _tv: *mut TypVal) {
         self.createtable(0, 0);
     }
 
     /// An empty table is ambiguous in Lua, so an empty dictionary carries a
     /// marker: the `vim.empty_dict()` metatable, or the `_TYPE` key when the
     /// caller asked for the special form.
-    unsafe fn conv_empty_dict(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_empty_dict(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         if self.special {
             unsafe { nlua_create_typed_table(self.lstate, 0, 0, kObjectTypeDict) };
         } else {
@@ -232,7 +231,7 @@ impl TypvalSink for LuaSink {
     }
 
     /// The table, then the index its first item will be stored under.
-    unsafe fn conv_list_start(&mut self, _tv: *mut typval_T, len: c_int) -> Flow {
+    unsafe fn conv_list_start(&mut self, _tv: *mut TypVal, len: c_int) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
@@ -242,17 +241,17 @@ impl TypvalSink for LuaSink {
     }
 
     /// Store the item just converted and push the next index.
-    unsafe fn conv_list_between_items(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_list_between_items(&mut self, _tv: *mut TypVal) {
         let idx = unsafe { lua_tonumber(self.lstate, -2) };
         self.rawset();
         self.pushnumber(idx + 1.0);
     }
 
-    unsafe fn conv_list_end(&mut self, _tv: *mut typval_T) {
+    unsafe fn conv_list_end(&mut self, _tv: *mut TypVal) {
         self.rawset();
     }
 
-    unsafe fn conv_dict_start(&mut self, _tv: *mut typval_T, len: size_t) -> Flow {
+    unsafe fn conv_dict_start(&mut self, _tv: *mut TypVal, len: size_t) -> Flow {
         if self.check_stack() == Flow::Fail {
             return Flow::Fail;
         }
@@ -262,15 +261,11 @@ impl TypvalSink for LuaSink {
 
     /// The key is already on the stack and the value has just landed on top of
     /// it, so one `rawset` closes the pair.
-    unsafe fn conv_dict_between_items(
-        &mut self,
-        _tv: *mut typval_T,
-        _dictp: Option<*mut *mut dict_T>,
-    ) {
+    unsafe fn conv_dict_between_items(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.rawset();
     }
 
-    unsafe fn conv_dict_end(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
+    unsafe fn conv_dict_end(&mut self, _tv: *mut TypVal, _dictp: Option<*mut *mut Dict>) {
         self.rawset();
     }
 
@@ -297,7 +292,7 @@ impl TypvalSink for LuaSink {
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `tv` a live typval.
-pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut typval_T, flags: c_int) -> bool {
+pub unsafe fn nlua_push_typval(lstate: *mut lua_State, tv: *mut TypVal, flags: c_int) -> bool {
     unsafe {
         let initial_size = lua_gettop(lstate);
         if lua_checkstack(lstate, initial_size + 2) == 0 {

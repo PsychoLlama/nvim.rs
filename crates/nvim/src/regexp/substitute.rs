@@ -44,8 +44,8 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    LineNr, NUL, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, funcexe_T,
-    partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
+    LineNr, NUL, Partial, StaticList10, TypVal, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING,
+    VAR_UNKNOWN, VarLock, funcexe_T, regmatch_T, regmmatch_T,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -328,7 +328,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 pub(crate) unsafe fn vim_regsub(
     rmp: *mut regmatch_T,
     source: *mut c_char,
-    expr: *mut typval_T,
+    expr: *mut TypVal,
     dest: *mut c_char,
     destlen: c_int,
     flags: c_int,
@@ -376,7 +376,7 @@ pub(crate) unsafe fn vim_regsub_multi(
 unsafe fn vim_regsub_both(
     rex: Rex,
     source: *mut c_char,
-    expr: *mut typval_T,
+    expr: *mut TypVal,
     dest: *mut c_char,
     destlen: c_int,
     flags: c_int,
@@ -427,7 +427,7 @@ unsafe fn vim_regsub_both(
 unsafe fn eval_replacement(
     rex: Rex,
     source: *mut c_char,
-    expr: *mut typval_T,
+    expr: *mut TypVal,
     flags: c_int,
     out: &mut Out,
 ) {
@@ -501,17 +501,17 @@ unsafe fn eval_replacement(
 /// Call `expr` — a funcref or a partial — with the submatches as its one
 /// argument, and return its result as an allocated string. Null when the
 /// call failed, which has already reported itself.
-unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
+unsafe fn call_replacement(expr: *mut TypVal) -> *mut c_char {
     // SAFETY: `expr` is the caller's live callable.
     // `fill_submatch_list` fills this in place if the function takes an
     // argument at all, so it must outlive the call.
-    let mut match_list: staticList10_T = unsafe { core::mem::zeroed() };
+    let mut match_list: StaticList10 = unsafe { core::mem::zeroed() };
     match_list.sl_list.lv_lock = VarLock::Fixed;
-    let mut argv: [typval_T; 2] = unsafe { core::mem::zeroed() };
+    let mut argv: [TypVal; 2] = unsafe { core::mem::zeroed() };
     argv[0].v_type = VAR_LIST;
     argv[0].vval.v_list = &raw mut match_list.sl_list;
 
-    let mut rettv: typval_T = unsafe { core::mem::zeroed() };
+    let mut rettv: TypVal = unsafe { core::mem::zeroed() };
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = core::ptr::null_mut();
 
@@ -521,7 +521,7 @@ unsafe fn call_replacement(expr: *mut typval_T) -> *mut c_char {
     let name = if unsafe { (*expr).v_type } == VAR_FUNC {
         Some(unsafe { (*expr).vval.v_string })
     } else if unsafe { (*expr).v_type } == VAR_PARTIAL {
-        let partial: *mut partial_T = unsafe { (*expr).vval.v_partial };
+        let partial: *mut Partial = unsafe { (*expr).vval.v_partial };
         funcexe.fe_partial = partial;
         Some(unsafe { partial_name(partial) })
     } else {

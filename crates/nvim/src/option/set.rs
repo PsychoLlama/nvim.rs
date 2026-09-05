@@ -52,8 +52,8 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned, snprintf};
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptionSetFlags, ScriptId, String_0, Vv, optset_T, ptrdiff_t,
-    sctx_T, size_t, uint32_t, vimoption_T,
+    IOSIZE, NUL, OptIndex, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0, Vv, optset_T,
+    ptrdiff_t, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
@@ -74,7 +74,7 @@ use crate::winlayer::Buf;
 pub(crate) fn set_option_sctx(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    mut script_ctx: sctx_T,
+    mut script_ctx: ScriptCtx,
 ) {
     let both = !opt_flags.has(OptionSetFlags::LOCAL | OptionSetFlags::GLOBAL);
 
@@ -441,7 +441,7 @@ pub(crate) unsafe fn did_set_option(
         let script_ctx = if set_sid == 0 {
             current_sctx.get()
         } else {
-            sctx_T {
+            ScriptCtx {
                 sc_sid: set_sid,
                 sc_seq: 0,
                 sc_lnum: 0,

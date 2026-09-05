@@ -10,7 +10,7 @@ use neovim::eval::decode::json_decode_string;
 use neovim::eval::typval::tv_clear;
 use neovim::main::emsg_silent;
 use neovim::memory::{xfree, xmemdup};
-use neovim::types::{Failed, VAR_UNKNOWN, VarLock, typval_T, typval_vval_union};
+use neovim::types::{Failed, TypVal, VAR_UNKNOWN, VarLock, typval_vval_union};
 
 use crate::support::alloc::AllocLog;
 use crate::support::tv::{self, Tv};
@@ -37,9 +37,9 @@ impl Drop for Silent {
     }
 }
 
-/// An unset `typval_T` for the decoder to write into.
-fn unset() -> typval_T {
-    typval_T {
+/// An unset `TypVal` for the decoder to write into.
+fn unset() -> TypVal {
+    TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -217,10 +217,10 @@ fn a_decoder_error_quotes_no_more_than_it_read() {
     }
 }
 
-/// `test/unit/eval/tricks_spec.lua`, `describe('NULL typval_T')`.
+/// `test/unit/eval/tricks_spec.lua`, `describe('NULL TypVal')`.
 ///
 /// These three expressions are how every other spec in the tree gets hold
-/// of a NULL string, list and dict — the values a `typval_T` can hold that
+/// of a NULL string, list and dict — the values a `TypVal` can hold that
 /// Vimscript has no literal for.
 #[test]
 fn three_expressions_produce_the_null_containers() {

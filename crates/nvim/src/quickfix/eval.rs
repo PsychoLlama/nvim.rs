@@ -3,7 +3,7 @@
 //! [`f_getqflist`]/[`f_setqflist`] and their location-list twins unpack
 //! their arguments and call into `getprops`/`setprops`.
 //! [`set_ref_in_quickfix`] is the other half: every list's context and
-//! every entry's user data is a `typval_T` the collector has to see.
+//! every entry's user data is a `TypVal` the collector has to see.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -36,7 +36,7 @@ pub(super) fn global_qftf() -> *mut Callback {
 /// # Safety
 ///
 /// `tv` must be a live value.
-unsafe fn holds_references(tv: *const typval_T) -> bool {
+unsafe fn holds_references(tv: *const TypVal) -> bool {
     // SAFETY: the caller's value.
     unsafe { !matches!((*tv).v_type, VAR_NUMBER | VAR_STRING | VAR_FLOAT) }
 }
@@ -141,12 +141,7 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
 /// # Safety
 ///
 /// The two values must be live.
-unsafe fn get_qf_loc_list(
-    is_qf: bool,
-    wp: Option<Win>,
-    what_arg: *mut typval_T,
-    rettv: *mut typval_T,
-) {
+unsafe fn get_qf_loc_list(is_qf: bool, wp: Option<Win>, what_arg: *mut TypVal, rettv: *mut TypVal) {
     // SAFETY: forwarded from the caller.
     if unsafe { (*what_arg).v_type } == VAR_UNKNOWN {
         unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
@@ -178,7 +173,7 @@ unsafe fn get_qf_loc_list(
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getloclist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least two values.
     unsafe { get_qf_loc_list(false, find_win_by_nr_or_id(argvars), argvars.add(1), rettv) };
 }
@@ -188,7 +183,7 @@ pub unsafe fn f_getloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getqflist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least one value.
     unsafe { get_qf_loc_list(true, None, argvars, rettv) }
 }
@@ -200,7 +195,7 @@ pub unsafe fn f_getqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// # Safety
 ///
 /// `wp` must be null or a live window, and `args` hold three values.
-unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typval_T) {
+unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut TypVal, rettv: *mut TypVal) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     /// Set while `set_errorlist` runs, because an autocommand it fires may
@@ -223,7 +218,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
 
     let mut action = ' ' as c_char;
     let mut title: *const c_char = ptr::null();
-    let mut what: *mut dict_T = ptr::null_mut();
+    let mut what: *mut Dict = ptr::null_mut();
 
     let action_arg = unsafe { args.add(1) };
     if unsafe { (*action_arg).v_type } != VAR_UNKNOWN {
@@ -279,7 +274,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut typval_T, rettv: *mut typva
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setloclist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least four values.
     unsafe { (*rettv).vval.v_number = -1 };
     if let Some(win) = unsafe { find_win_by_nr_or_id(argvars) } {
@@ -292,7 +287,7 @@ pub unsafe fn f_setloclist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_setqflist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setqflist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least three values.
     unsafe { set_qf_ll_list(None, argvars, rettv) }
 }

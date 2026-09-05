@@ -17,7 +17,7 @@ use crate::types::{VAR_DICT, VAR_UNKNOWN, kListLenMayKnow};
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
+unsafe fn get_buffer_info(buf: Buf) -> *mut Dict {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the closure adds.
@@ -30,7 +30,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
         // SAFETY: a live dictionary, and two NUL-terminated strings.
         let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), value) };
     };
-    let list = |key: &CStr, value: *mut list_T| {
+    let list = |key: &CStr, value: *mut List| {
         // SAFETY: a live dictionary and a live list, which the dictionary
         // takes over.
         let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
@@ -94,7 +94,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
-pub unsafe fn f_getbufinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getbufinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk, and `tv_dict_find` hands back a live entry

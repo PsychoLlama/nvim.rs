@@ -1,10 +1,10 @@
-//! msgpack bytes into a `typval_T`: the two `mpack_parse` callbacks.
+//! msgpack bytes into a `TypVal`: the two `mpack_parse` callbacks.
 //!
 //! `mpack_parse()` walks the byte stream with an explicit node stack and
 //! calls [`typval_parse_enter`] as each node opens and [`typval_parse_exit`]
 //! as it closes.  Most values are finished on the way in; the three that are
 //! not are `str`/`bin` and `ext` (their bytes arrive afterwards, as `chunk`
-//! nodes) and `map` (whether it can be a `dict_T` is only knowable once every
+//! nodes) and `map` (whether it can be a `Dict` is only knowable once every
 //! key has been decoded).  Those three park a buffer in `node.data[1]`, which
 //! is the one thing [`typval_parser_error_free`] has to clean up when a parse
 //! fails part-way.
@@ -39,8 +39,8 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, list_T, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T,
+    List, TypVal, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue,
+    kListLenMayKnow, kSpecialVarNull, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
 use ::libc::abort;
@@ -54,7 +54,7 @@ const MPACK_OK: c_int = 0;
 /// special dictionary to survive the trip into Vimscript.
 const VARNUMBER_MAX: u64 = i64::MAX as u64;
 
-/// A msgpack unsigned integer as a `typval_T`.
+/// A msgpack unsigned integer as a `TypVal`.
 ///
 /// Anything a `VarNumber` can hold is a plain number.  What it cannot is
 /// split across a four-element `{_TYPE: integer, _VAL: [sign, hi, mid, lo]}`
@@ -63,14 +63,14 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 ///
 /// # Safety
 /// `rettv` is writable and holds no value that needs clearing.
-unsafe fn positive_integer_to_special_typval(rettv: *mut typval_T, val: u64) {
+unsafe fn positive_integer_to_special_typval(rettv: *mut TypVal, val: u64) {
     if val <= VARNUMBER_MAX {
-        unsafe { *rettv = typval_T::number(val as VarNumber) };
+        unsafe { *rettv = TypVal::number(val as VarNumber) };
         return;
     }
     let list = unsafe { tv_list_alloc(4) };
     unsafe { tv_list_ref(list) };
-    let val_tv = typval_T::list(list);
+    let val_tv = TypVal::list(list);
     unsafe { create_special_dict(rettv, kMPInteger, val_tv) };
     unsafe { tv_list_append_number(list, 1) };
     unsafe { tv_list_append_number(list, ((val >> 62) & 0x3) as VarNumber) };
@@ -96,7 +96,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         below
     };
 
-    let result: *mut typval_T = if parent.is_null() {
+    let result: *mut TypVal = if parent.is_null() {
         unsafe { (*parser).data.p }.cast()
     } else {
         // SAFETY: the node one level up the parser stack.
@@ -104,13 +104,13 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         match up.tok.type_0 {
             // An array element is appended empty and filled in place.
             MPACK_TOKEN_ARRAY => {
-                let list: *mut list_T = unsafe { (*parent).data[1].p }.cast();
+                let list: *mut List = unsafe { (*parent).data[1].p }.cast();
                 unsafe { tv_list_append_owned_tv(list, TV_INITIAL_VALUE) }
             }
             // A map's pairs go to the scratch array the exit hook reads;
             // `key_visited` picks the key or the value of the pair.
             MPACK_TOKEN_MAP => {
-                let pairs: *mut typval_T = unsafe { (*parent).data[1].p }.cast();
+                let pairs: *mut TypVal = unsafe { (*parent).data[1].p }.cast();
                 let visited = up.key_visited as usize;
                 unsafe { pairs.add((*parent).pos * 2).add(visited) }
             }
@@ -131,16 +131,16 @@ unsafe extern "C-unwind" fn typval_parse_enter(
     let len = n.tok.length as size_t;
     match n.tok.type_0 {
         MPACK_TOKEN_NIL => {
-            unsafe { *result = typval_T::special(kSpecialVarNull) };
+            unsafe { *result = TypVal::special(kSpecialVarNull) };
         }
         MPACK_TOKEN_BOOLEAN => {
             let set = unsafe { mpack_unpack_boolean((*node).tok) };
             let v = if set { kBoolVarTrue } else { kBoolVarFalse };
-            unsafe { *result = typval_T::boolean(v) };
+            unsafe { *result = TypVal::boolean(v) };
         }
         MPACK_TOKEN_SINT => {
             let v = unsafe { mpack_unpack_sint((*node).tok) };
-            unsafe { *result = typval_T::number(v) };
+            unsafe { *result = TypVal::number(v) };
         }
         MPACK_TOKEN_UINT => {
             let v = unsafe { mpack_unpack_uint((*node).tok) };
@@ -148,7 +148,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         }
         MPACK_TOKEN_FLOAT => {
             let v = unsafe { mpack_unpack_float_fast((*node).tok) };
-            unsafe { *result = typval_T::float(v) };
+            unsafe { *result = TypVal::float(v) };
         }
         // Converted in typval_parse_exit, once the chunks have landed.
         MPACK_TOKEN_BIN | MPACK_TOKEN_STR | MPACK_TOKEN_EXT => {
@@ -163,10 +163,10 @@ unsafe extern "C-unwind" fn typval_parse_enter(
         MPACK_TOKEN_ARRAY => {
             let list = unsafe { tv_list_alloc(len as ptrdiff_t) };
             unsafe { tv_list_ref(list) };
-            unsafe { *result = typval_T::list(list) };
+            unsafe { *result = TypVal::list(list) };
             unsafe { (*node).data[1].p = list.cast() };
         }
-        // Whether this can be a dict_T is not knowable yet, so the pairs
+        // Whether this can be a Dict is not knowable yet, so the pairs
         // are decoded into a flat `[key, value] * length` scratch array.
         MPACK_TOKEN_MAP => {
             // `length * 2` is `mpack_uint32_t` arithmetic upstream, so a
@@ -176,7 +176,7 @@ unsafe extern "C-unwind" fn typval_parse_enter(
             // fatal `E41` here where upstream answers `E475: Incomplete
             // msgpack string`.
             let pairs = n.tok.length.wrapping_mul(2) as size_t;
-            unsafe { (*node).data[1].p = xmallocz(pairs * ::core::mem::size_of::<typval_T>()) };
+            unsafe { (*node).data[1].p = xmallocz(pairs * ::core::mem::size_of::<TypVal>()) };
         }
         _ => {}
     }
@@ -204,7 +204,7 @@ pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
     }
 }
 
-/// Build a `dict_T` out of `len` decoded key/value pairs.
+/// Build a `Dict` out of `len` decoded key/value pairs.
 ///
 /// Answers `false` when the map cannot be one — a key that is not a non-empty
 /// string, or a duplicate — leaving every pair in `pairs` untouched and ready
@@ -213,7 +213,7 @@ pub unsafe fn typval_parser_error_free(parser: *mut mpack_parser_t) {
 ///
 /// # Safety
 /// `pairs` points at `len * 2` decoded typvals and `result` is writable.
-unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -> bool {
+unsafe fn map_to_dict(result: *mut TypVal, pairs: *mut TypVal, len: usize) -> bool {
     for i in 0..len {
         let key = unsafe { *pairs.add(i * 2) };
         if key.v_type != VAR_STRING
@@ -226,7 +226,7 @@ unsafe fn map_to_dict(result: *mut typval_T, pairs: *mut typval_T, len: usize) -
 
     let dict = unsafe { tv_dict_alloc() };
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { *result = typval_T::dict(dict) };
+    unsafe { *result = TypVal::dict(dict) };
 
     for i in 0..len {
         let key = unsafe { (*pairs.add(i * 2)).string_or_null() };
@@ -261,7 +261,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
     _parser: *mut mpack_parser_t,
     node: *mut mpack_node_t,
 ) {
-    let result: *mut typval_T = unsafe { (*node).data[0].p }.cast();
+    let result: *mut TypVal = unsafe { (*node).data[0].p }.cast();
     // SAFETY: the node the parser is standing on.
     let n = unsafe { Nd::new(node) };
     let len = n.tok.length as size_t;
@@ -279,7 +279,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
             unsafe { tv_list_append_number(list, (*node).tok.data.ext_type as VarNumber) };
             let ext_val_list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
             unsafe { tv_list_append_list(list, ext_val_list) };
-            let val_tv = typval_T::list(list);
+            let val_tv = TypVal::list(list);
             unsafe { create_special_dict(result, kMPExt, val_tv) };
             let bytes = unsafe { (*node).data[1].p }.cast();
             unsafe { encode_list_write(ext_val_list.cast(), bytes, len) };
@@ -287,7 +287,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
             unsafe { (*node).data[1].p = ptr::null_mut() };
         }
         MPACK_TOKEN_MAP => {
-            let pairs: *mut typval_T = unsafe { (*node).data[1].p }.cast();
+            let pairs: *mut TypVal = unsafe { (*node).data[1].p }.cast();
             if !unsafe { map_to_dict(result, pairs, len) } {
                 let list = unsafe { decode_create_map_special_dict(result, len as ptrdiff_t) };
                 for i in 0..len {
@@ -333,7 +333,7 @@ pub unsafe fn mpack_parse_typval(
 pub unsafe fn unpack_typval(
     data: *mut *const c_char,
     size: *mut size_t,
-    ret: *mut typval_T,
+    ret: *mut TypVal,
 ) -> c_int {
     unsafe { (*ret).v_type = VAR_UNKNOWN };
     // `mpack_parser_init` writes every field this parser will be read

@@ -41,7 +41,7 @@ use core::ptr;
 
 use crate::global_cell::GlobalCell;
 use crate::options::{kOptCount, kOptInvalid};
-use crate::types::{OptIndex, OptVal, sctx_T, uint32_t, vimoption_T};
+use crate::types::{OptIndex, OptVal, ScriptCtx, uint32_t, vimoption_T};
 
 use super::{kOptFlagInsecure, kOptFlagWasSet};
 
@@ -55,7 +55,7 @@ struct OptionState {
     /// startup replaces it with an expanded, owned copy.
     default: OptVal,
     /// Where the global value was last set from.
-    script_ctx: sctx_T,
+    script_ctx: ScriptCtx,
 }
 
 /// Every option's state, indexed by `OptIndex`.
@@ -68,7 +68,7 @@ const fn initial() -> [OptionState; kOptCount as usize] {
     let mut state = [OptionState {
         flags: 0,
         default: table[0].def_val,
-        script_ctx: sctx_T::NONE,
+        script_ctx: ScriptCtx::NONE,
     }; kOptCount as usize];
     let mut i = 0;
     while i < state.len() {
@@ -120,12 +120,12 @@ pub(crate) fn option_default_var(opt_idx: OptIndex) -> *mut c_void {
 }
 
 /// Where the option's global value was last set from.
-pub(crate) fn option_last_set(opt_idx: OptIndex) -> sctx_T {
+pub(crate) fn option_last_set(opt_idx: OptIndex) -> ScriptCtx {
     STATE.with(|state| state[slot(opt_idx)].script_ctx)
 }
 
 /// Record where the option's global value was just set from.
-pub(crate) fn set_option_last_set(opt_idx: OptIndex, script_ctx: sctx_T) {
+pub(crate) fn set_option_last_set(opt_idx: OptIndex, script_ctx: ScriptCtx) {
     STATE.with_mut(|state| state[slot(opt_idx)].script_ctx = script_ctx);
 }
 

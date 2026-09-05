@@ -16,7 +16,7 @@ use crate::winlayer::Win;
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn selected_arglist(arg: *mut typval_T) -> Option<*mut alist_T> {
+unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut alist_T> {
     // SAFETY: caller contract; `find_win_by_nr_or_id` only reads the typval.
     if unsafe { (*arg).v_type } == VAR_UNKNOWN {
         return Some(win_alist(cur_win()));
@@ -32,7 +32,7 @@ unsafe fn selected_arglist(arg: *mut typval_T) -> Option<*mut alist_T> {
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_argc(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
     let count = unsafe { selected_arglist(argvars) }.map_or(-1, alist_count);
@@ -44,7 +44,7 @@ pub unsafe fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argidx(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_argidx(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
     unsafe { (*rettv).vval.v_number = cur_win().w_arg_idx as VarNumber };
 }
@@ -54,7 +54,7 @@ pub unsafe fn f_argidx(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_arglistid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract -- the caller's argument array, which
     // holds both slots.
     let found = unsafe { find_tabwin(argvars.offset(0), argvars.offset(1)) };
@@ -79,7 +79,7 @@ pub unsafe fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 ///
 /// `rettv` must be a valid return-value slot and `entries` hold `count`
 /// argument list entries, or be null.
-unsafe fn arglist_as_rettv(entries: *mut aentry_T, count: c_int, rettv: *mut typval_T) {
+unsafe fn arglist_as_rettv(entries: *mut aentry_T, count: c_int, rettv: *mut TypVal) {
     // SAFETY: caller contract; every entry has a name that outlives the copy
     // `tv_list_append_string` takes.
     unsafe { tv_list_alloc_ret(rettv, count as ptrdiff_t) };
@@ -99,7 +99,7 @@ unsafe fn arglist_as_rettv(entries: *mut aentry_T, count: c_int, rettv: *mut typ
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_argv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; both arguments are optional and are
     // only read once their type says they are present.
     if unsafe { (*argvars.offset(0)).v_type } == VAR_UNKNOWN {

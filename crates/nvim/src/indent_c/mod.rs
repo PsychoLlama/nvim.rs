@@ -42,7 +42,7 @@ use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, VarNumber, int64_t, lpos_T, oparg_T, pos_T, size_t, typval_T,
+    ColNr, EvalFuncData, LineNr, TypVal, VarNumber, int64_t, lpos_T, oparg_T, pos_T, size_t,
 };
 use ::libc::{atoi, tolower};
 

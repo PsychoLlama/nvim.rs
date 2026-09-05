@@ -35,7 +35,7 @@ use crate::types::NUL;
 pub unsafe fn deref_func_name(
     name: *const c_char,
     lenp: *mut c_int,
-    partialp: *mut *mut partial_T,
+    partialp: *mut *mut Partial,
     no_autoload: bool,
     found_var: *mut bool,
 ) -> *mut c_char {
@@ -386,7 +386,7 @@ pub unsafe fn trans_function_name(
     skip: bool,
     flags: c_int,
     fdp: *mut funcdict_T,
-    partial: *mut *mut partial_T,
+    partial: *mut *mut Partial,
 ) -> *mut c_char {
     let mut name: *mut c_char = ptr::null_mut();
     let mut len;

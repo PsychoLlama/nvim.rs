@@ -20,14 +20,14 @@ use crate::winlayer::Buf;
 ///
 /// Module-private on purpose: a *public* safe fn taking a raw pointer trips
 /// `clippy::not_unsafe_ptr_arg_deref`, which is denied tree-wide.
-fn dict_add_nr(dict: *mut dict_T, key: &CStr, val: VarNumber) {
+fn dict_add_nr(dict: *mut Dict, key: &CStr, val: VarNumber) {
     // SAFETY: a dictionary this module just allocated, and a NUL-terminated
     // key with its own length.
     let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), val) };
 }
 
 /// [`dict_add_nr`] for a list value, which the dictionary takes over.
-fn dict_add_list(dict: *mut dict_T, key: &CStr, val: *mut list_T) {
+fn dict_add_list(dict: *mut Dict, key: &CStr, val: *mut List) {
     // SAFETY: as [`dict_add_nr`], plus a list this module just built.
     let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), val) };
 }
@@ -99,13 +99,13 @@ pub unsafe fn ex_undolist(_eap: *mut exarg_T) {
 
 /// One branch of the tree as `undotree()` reports it: a list of dictionaries,
 /// newest change first, each carrying its own alternate branch under `alt`.
-fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
+fn eval_tree(buf: Buf, first: UndoLink) -> *mut List {
     // SAFETY: an empty list, whose length is not known up front.
-    let list: *mut list_T = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
+    let list: *mut List = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     let mut link = first;
     while let Some(uh) = buf.header(link) {
         // SAFETY: a fresh dictionary.
-        let dict: *mut dict_T = unsafe { tv_dict_alloc() };
+        let dict: *mut Dict = unsafe { tv_dict_alloc() };
         dict_add_nr(dict, c"seq", VarNumber::from(uh.uh_seq));
         dict_add_nr(dict, c"time", uh.uh_time);
         if uh.link() == buf.b_u_newhead {
@@ -132,7 +132,7 @@ fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
 /// # Safety
 ///
 /// The eval-function contract: one argument and a return value to fill in.
-pub unsafe fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_undofile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
     unsafe { (*rettv).v_type = VAR_STRING };
@@ -159,10 +159,10 @@ pub unsafe fn f_undofile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 ///
 /// The eval-function contract, and a live current buffer.
-pub unsafe fn f_undotree(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
     unsafe { tv_dict_alloc_ret(rettv) };
-    let tv: *mut typval_T = argvars;
+    let tv: *mut TypVal = argvars;
     // SAFETY: as above.
     let raw = if unsafe { (*tv).v_type } == VAR_UNKNOWN {
         curbuf.get()

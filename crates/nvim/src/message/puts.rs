@@ -417,14 +417,14 @@ pub unsafe fn msg_use_printf() -> c_int {
 pub(crate) unsafe fn msg_puts_printf(str: *const c_char, maxlen: ptrdiff_t) {
     // `vim.on_print` takes the whole message instead, if it is set.
     if unsafe { &*on_print_cb() }.is_set() {
-        let mut argv = [typval_T {
+        let mut argv = [TypVal {
             v_type: VAR_STRING,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
                 v_string: str.cast_mut(),
             },
         }];
-        let mut rettv = typval_T {
+        let mut rettv = TypVal {
             v_type: VAR_UNKNOWN,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: 0 },

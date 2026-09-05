@@ -17,7 +17,7 @@ pub const kBoolVarFalse: BoolVarValue = 0;
 pub const kBoolVarTrue: BoolVarValue = 1;
 /// A Vimscript or Lua callable, held by whatever registered it.
 ///
-/// Not `Copy`. Whichever variant is live -- a funcref name, a `partial_T`
+/// Not `Copy`. Whichever variant is live -- a funcref name, a `Partial`
 /// refcount, a `LuaRef` -- is owned, and `callback_free` releases it.
 /// Duplicating one without `callback_copy` is a second owner of the same
 /// reference, so the copies that remain say `.clone()` and are visible.
@@ -35,7 +35,7 @@ pub enum Callback {
     /// A function name, owned: `func_unref` and `xfree` release it.
     Funcref(*mut ::core::ffi::c_char) = 1,
     /// A partial, holding a reference of its own.
-    Partial(*mut partial_T) = 2,
+    Partial(*mut Partial) = 2,
     /// A Lua value in that state's registry.
     Lua(LuaRef) = 3,
 }
@@ -118,7 +118,7 @@ impl VarLock {
     }
 }
 pub type VarType = ::core::ffi::c_uint;
-/// `typval_T::v_type` — which arm of `typval_T::vval` is live.
+/// `TypVal::v_type` — which arm of `TypVal::vval` is live.
 pub const VAR_UNKNOWN: VarType = 0;
 pub const VAR_NUMBER: VarType = 1;
 pub const VAR_STRING: VarType = 2;
@@ -346,27 +346,25 @@ mod refcount_tests {
     }
 }
 
-pub type blob_T = blobvar_S;
-pub struct blobvar_S {
+pub struct Blob {
     pub bv_ga: garray_T,
     pub bv_refcount: Refcount,
     pub bv_lock: VarLock,
 }
-pub type dict_T = dictvar_S;
-/// A `dict_T`.
+/// A `Dict`.
 ///
 /// Neither `Copy` nor `Clone`: it owns its hashtab -- and through it the
 /// items every key points into -- its watcher queue and a Lua table
 /// reference, none of which a second holder may free.
-pub struct dictvar_S {
+pub struct Dict {
     pub dv_lock: VarLock,
     pub dv_scope: ScopeType,
     pub dv_refcount: Refcount,
     pub dv_copyID: ::core::ffi::c_int,
     pub dv_hashtab: hashtab_T,
-    pub dv_copydict: *mut dict_T,
-    pub dv_used_next: *mut dict_T,
-    pub dv_used_prev: *mut dict_T,
+    pub dv_copydict: *mut Dict,
+    pub dv_used_next: *mut Dict,
+    pub dv_used_prev: *mut Dict,
     pub watchers: QUEUE,
     pub lua_table_ref: LuaRef,
 }
@@ -377,13 +375,13 @@ pub struct funccall_S {
     pub fc_linenr: ::core::ffi::c_int,
     pub fc_returned: ::core::ffi::c_int,
     pub fc_fixvar: [funccall_S_fc_fixvar; 12],
-    pub fc_l_vars: dict_T,
+    pub fc_l_vars: Dict,
     pub fc_l_vars_var: ScopeDictDictItem,
-    pub fc_l_avars: dict_T,
+    pub fc_l_avars: Dict,
     pub fc_l_avars_var: ScopeDictDictItem,
-    pub fc_l_varlist: list_T,
-    pub fc_l_listitems: [listitem_T; 20],
-    pub fc_rettv: *mut typval_T,
+    pub fc_l_varlist: List,
+    pub fc_l_listitems: [ListItem; 20],
+    pub fc_rettv: *mut TypVal,
     pub fc_breakpoint: LineNr,
     pub fc_dbg_tick: ::core::ffi::c_int,
     pub fc_level: ::core::ffi::c_int,
@@ -396,38 +394,34 @@ pub struct funccall_S {
 }
 #[repr(C)]
 pub struct funccall_S_fc_fixvar {
-    pub di_tv: typval_T,
+    pub di_tv: TypVal,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 21],
 }
 pub type funccall_T = funccall_S;
-pub struct ht_stack_S {
+pub struct HtStack {
     pub ht: *mut hashtab_T,
-    pub prev: *mut ht_stack_S,
+    pub prev: *mut HtStack,
 }
-pub type ht_stack_T = ht_stack_S;
-pub type list_T = listvar_S;
-pub struct list_stack_S {
-    pub list: *mut list_T,
-    pub prev: *mut list_stack_S,
+pub struct ListStack {
+    pub list: *mut List,
+    pub prev: *mut ListStack,
 }
-pub type list_stack_T = list_stack_S;
 #[repr(C)]
-pub struct listitem_S {
-    pub li_next: *mut listitem_T,
-    pub li_prev: *mut listitem_T,
-    pub li_tv: typval_T,
+pub struct ListItem {
+    pub li_next: *mut ListItem,
+    pub li_prev: *mut ListItem,
+    pub li_tv: TypVal,
 }
-pub type listitem_T = listitem_S;
 #[repr(C)]
-pub struct listvar_S {
-    pub lv_first: *mut listitem_T,
-    pub lv_last: *mut listitem_T,
-    pub lv_watch: *mut listwatch_T,
-    pub lv_idx_item: *mut listitem_T,
-    pub lv_copylist: *mut list_T,
-    pub lv_used_next: *mut list_T,
-    pub lv_used_prev: *mut list_T,
+pub struct List {
+    pub lv_first: *mut ListItem,
+    pub lv_last: *mut ListItem,
+    pub lv_watch: *mut ListWatch,
+    pub lv_idx_item: *mut ListItem,
+    pub lv_copylist: *mut List,
+    pub lv_used_next: *mut List,
+    pub lv_used_prev: *mut List,
     pub lv_refcount: Refcount,
     pub lv_len: ::core::ffi::c_int,
     pub lv_idx: ::core::ffi::c_int,
@@ -439,42 +433,40 @@ pub struct listvar_S {
 /// into its list, so a duplicate would be a second node claiming the same
 /// place in it.
 #[derive(Clone)]
-pub struct listwatch_S {
-    pub lw_item: *mut listitem_T,
-    pub lw_next: *mut listwatch_T,
+pub struct ListWatch {
+    pub lw_item: *mut ListItem,
+    pub lw_next: *mut ListWatch,
 }
-pub type listwatch_T = listwatch_S;
 /// A partial: a function plus bound arguments and an optional `self` dict.
 ///
 /// Not `Copy`: `pt_name`, `pt_argv` and the two refcounts are owned, and
 /// `partial_unref` is what releases them.
 #[derive(Clone)]
-pub struct partial_S {
+pub struct Partial {
     pub pt_refcount: Refcount,
     pub pt_copyID: ::core::ffi::c_int,
     pub pt_name: *mut ::core::ffi::c_char,
     pub pt_func: *mut ufunc_T,
     pub pt_auto: bool,
     pub pt_argc: ::core::ffi::c_int,
-    pub pt_argv: *mut typval_T,
-    pub pt_dict: *mut dict_T,
+    pub pt_argv: *mut TypVal,
+    pub pt_dict: *mut Dict,
 }
-pub type partial_T = partial_S;
 pub type ScriptId = ::core::ffi::c_int;
 #[derive(Copy, Clone, PartialEq)]
 #[repr(C)]
-pub struct sctx_T {
+pub struct ScriptCtx {
     pub sc_sid: ScriptId,
     pub sc_seq: ::core::ffi::c_int,
     pub sc_lnum: LineNr,
     pub sc_chan: uint64_t,
 }
 
-impl sctx_T {
+impl ScriptCtx {
     /// No script is running: the all-zero context every table of script
     /// contexts starts out holding. A `const` because most of its uses are
     /// `static` initialisers, where `Default` cannot reach.
-    pub const NONE: sctx_T = sctx_T {
+    pub const NONE: ScriptCtx = ScriptCtx {
         sc_sid: 0,
         sc_seq: 0,
         sc_lnum: 0,
@@ -487,33 +479,33 @@ impl sctx_T {
     /// as one expression keeps the "which field" out of the caller's
     /// bookkeeping -- `pos_T::with_col`'s shape.
     pub fn with_sid(self, sc_sid: ScriptId) -> Self {
-        sctx_T { sc_sid, ..self }
+        ScriptCtx { sc_sid, ..self }
     }
 
     /// The same context at a different line inside the script.
     pub fn with_lnum(self, sc_lnum: LineNr) -> Self {
-        sctx_T { sc_lnum, ..self }
+        ScriptCtx { sc_lnum, ..self }
     }
 
     /// The same context under a different sourcing sequence number.
     pub fn with_seq(self, sc_seq: ::core::ffi::c_int) -> Self {
-        sctx_T { sc_seq, ..self }
+        ScriptCtx { sc_seq, ..self }
     }
 }
 
-impl Default for sctx_T {
+impl Default for ScriptCtx {
     fn default() -> Self {
         Self::NONE
     }
 }
 #[repr(C)]
-pub struct staticList10_T {
-    pub sl_list: list_T,
-    pub sl_items: [listitem_T; 10],
+pub struct StaticList10 {
+    pub sl_list: List,
+    pub sl_items: [ListItem; 10],
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct typval_T {
+pub struct TypVal {
     pub v_type: VarType,
     pub v_lock: VarLock,
     pub vval: typval_vval_union,
@@ -526,10 +518,10 @@ pub union typval_vval_union {
     pub v_special: SpecialVarValue,
     pub v_float: Float,
     pub v_string: *mut ::core::ffi::c_char,
-    pub v_list: *mut list_T,
-    pub v_dict: *mut dict_T,
-    pub v_partial: *mut partial_T,
-    pub v_blob: *mut blob_T,
+    pub v_list: *mut List,
+    pub v_dict: *mut Dict,
+    pub v_partial: *mut Partial,
+    pub v_blob: *mut Blob,
 }
 #[repr(C)]
 pub struct ufunc_S {
@@ -555,7 +547,7 @@ pub struct ufunc_S {
     pub uf_tml_wait: ProfTime,
     pub uf_tml_idx: ::core::ffi::c_int,
     pub uf_tml_execed: ::core::ffi::c_int,
-    pub uf_script_ctx: sctx_T,
+    pub uf_script_ctx: ScriptCtx,
     pub uf_refcount: Refcount,
     pub uf_scoped: *mut funccall_T,
     pub uf_name_exp: *mut ::core::ffi::c_char,

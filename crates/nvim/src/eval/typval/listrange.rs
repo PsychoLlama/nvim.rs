@@ -21,10 +21,10 @@ use crate::types::NUL;
 ///
 /// `*n1` is updated to the index actually used.
 pub unsafe fn tv_list_check_range_index_one(
-    l: *mut list_T,
+    l: *mut List,
     n1: *mut ::core::ffi::c_int,
     quiet: bool,
-) -> *mut listitem_T {
+) -> *mut ListItem {
     let li = unsafe { tv_list_find_index(l, n1) };
     if li.is_null() && !quiet {
         // SAFETY: the caller's index cell.
@@ -37,9 +37,9 @@ pub unsafe fn tv_list_check_range_index_one(
 /// Resolve the second index of `l[n1:n2]` against the item `li1` the first one
 /// landed on, normalising both to non-negative indexes.
 pub unsafe fn tv_list_check_range_index_two(
-    l: *mut list_T,
+    l: *mut List,
     n1: *mut ::core::ffi::c_int,
-    li1: *const listitem_T,
+    li1: *const ListItem,
     n2: *mut ::core::ffi::c_int,
     quiet: bool,
 ) -> Result<(), Failed> {
@@ -73,8 +73,8 @@ pub unsafe fn tv_list_check_range_index_two(
 ///
 /// `empty_idx2` means the range had no upper bound (`dest[idx1:]`).
 pub unsafe fn tv_list_assign_range(
-    dest: *mut list_T,
-    src: *mut list_T,
+    dest: *mut List,
+    src: *mut List,
     idx1_arg: ::core::ffi::c_int,
     idx2: ::core::ffi::c_int,
     empty_idx2: bool,
@@ -148,8 +148,8 @@ pub unsafe fn tv_list_assign_range(
 /// `flatten()`: splice the items of any nested list into `list` in place,
 /// starting at `first` and going `maxdepth` levels down.
 pub unsafe fn tv_list_flatten(
-    list: *mut list_T,
-    first: *mut listitem_T,
+    list: *mut List,
+    first: *mut ListItem,
     maxitems: int64_t,
     maxdepth: int64_t,
 ) {
@@ -201,11 +201,7 @@ pub unsafe fn tv_list_flatten(
 }
 
 /// A fresh list holding copies of `ol[n1..=n2]`.
-pub(crate) unsafe fn tv_list_slice(
-    ol: *mut list_T,
-    mut n1: VarNumber,
-    n2: VarNumber,
-) -> *mut list_T {
+pub(crate) unsafe fn tv_list_slice(ol: *mut List, mut n1: VarNumber, n2: VarNumber) -> *mut List {
     let l = unsafe { tv_list_alloc((n2 - n1 + 1) as ptrdiff_t) };
     let mut item = unsafe { tv_list_find(ol, n1 as ::core::ffi::c_int) };
     while n1 <= n2 {
@@ -221,12 +217,12 @@ pub(crate) unsafe fn tv_list_slice(
 /// `rettv` holds the list being subscripted on the way in.  An index out of
 /// range is an error; a *range* out of range is merely empty.
 pub unsafe fn tv_list_slice_or_index(
-    _list: *mut list_T,
+    _list: *mut List,
     range: bool,
     n1_arg: VarNumber,
     n2_arg: VarNumber,
     exclusive: bool,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     verbose: bool,
 ) -> Result<(), Failed> {
     let len = unsafe { tv_list_len((*rettv).list_or_null()) };
@@ -281,7 +277,7 @@ pub unsafe fn tv_list_slice_or_index(
 /// Splitting it in two is what lets `gap` be grown to its final size once.
 pub(crate) unsafe fn list_join_inner(
     gap: *mut garray_T,
-    l: *mut list_T,
+    l: *mut List,
     sep: *const ::core::ffi::c_char,
     join_gap: *mut garray_T,
 ) -> Result<(), Failed> {
@@ -342,7 +338,7 @@ pub(crate) unsafe fn list_join_inner(
 /// `join()`: append `l`'s items to `gap`, separated by `sep`.
 pub unsafe fn tv_list_join(
     gap: *mut garray_T,
-    l: *mut list_T,
+    l: *mut List,
     sep: *const ::core::ffi::c_char,
 ) -> Result<(), Failed> {
     if unsafe { tv_list_len(l) } == 0 {
@@ -368,7 +364,7 @@ pub unsafe fn tv_list_join(
 }
 
 /// `join()` the builtin.
-pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_join(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*argvars).v_type } != VAR_LIST {
         emsg(gettext(e_listreq));
@@ -395,7 +391,7 @@ pub unsafe fn f_join(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 }
 
 /// `list2str()`: a list of codepoints as a string.
-pub unsafe fn f_list2str(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_list2str(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut() };
     // SAFETY: the builtin's argument array.

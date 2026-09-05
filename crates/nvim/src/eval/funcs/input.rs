@@ -31,7 +31,7 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, VarNumber, listitem_T, tasave_T, typval_T,
+    EvalFuncData, FAIL, ListItem, NUL, TypVal, VAR_LIST, VAR_STRING, VarNumber, tasave_T,
 };
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -49,7 +49,7 @@ const DIALOG_TYPES: [(u8, c_int); 5] = [
 ];
 
 /// `confirm({msg} [, {choices} [, {default} [, {type}]]])`
-pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_confirm(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut buttons_buf = NumBuf::new();
@@ -104,7 +104,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 
 /// `debugbreak({pid})` — SIGINT to a process, which on Windows is how a
 /// debugger is attached. Answers FAIL; there is no success value.
-pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_debugbreak(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = FAIL as VarNumber;
     // SAFETY throughout: the frame is live.
@@ -117,7 +117,7 @@ pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// `feedkeys({string} [, {mode}])`
-pub unsafe fn f_feedkeys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_feedkeys(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _rettv) = frame!(argvars, rettv);
     let mut mode_buf = NumBuf::new();
@@ -140,20 +140,20 @@ pub unsafe fn f_feedkeys(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 static INPUTSECRET: GlobalCell<bool> = GlobalCell::new(false);
 
 /// `input({prompt} [, {text} [, {completion}]])`, or the options-Dict form.
-pub unsafe fn f_input(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_input(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { get_user_input(argvars, rettv, false, INPUTSECRET.get()) };
 }
 
 /// `inputdialog()` — as `input()`, but cancelling answers the third
 /// argument rather than an empty string.
-pub unsafe fn f_inputdialog(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_inputdialog(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
     unsafe { get_user_input(argvars, rettv, true, INPUTSECRET.get()) };
 }
 
 /// `inputsecret({prompt} [, {text}])`
-pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
+pub unsafe fn f_inputsecret(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the two
     // globals are restored on the way out, and `f_input` cannot unwind.
     let secret = Suppress::cmdline_echo();
@@ -164,7 +164,7 @@ pub unsafe fn f_inputsecret(argvars: *mut typval_T, rettv: *mut typval_T, fptr: 
 }
 
 /// `inputlist({textlist})` — print the list and read a number.
-pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_inputlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live and the List is held by an argument for the
@@ -184,7 +184,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 
     let list = args.get(0).list_or_null();
     if !list.is_null() {
-        let mut li: *const listitem_T = unsafe { (*list).lv_first };
+        let mut li: *const ListItem = unsafe { (*list).lv_first };
         while !li.is_null() {
             unsafe { msg_puts(numbuf.string(&raw const (*li).li_tv)) };
             // A UI that owns the message area keeps the items in one
@@ -214,7 +214,7 @@ static SAVED_TYPEAHEAD: GlobalCell<Vec<tasave_T>> = GlobalCell::new(Vec::new());
 
 /// `inputsave()` — push the typeahead aside so that a prompt reads real
 /// keys.
-pub unsafe fn f_inputsave(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_inputsave(_argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut saved = tasave_T::default();
     // SAFETY: `saved` is a fresh state of the right type, and the stack owns
     // it from here on.
@@ -224,7 +224,7 @@ pub unsafe fn f_inputsave(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr:
 
 /// `inputrestore()` — pop it back. Answers 1 only for an underflow, and
 /// only when 'verbose' is high enough to have said something.
-pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_inputrestore(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // The pop happens outside the restore: `restore_typeahead` reaches the
     // typeahead cells, not this one, but keeping the borrow a leaf is the rule.
     if let Some(mut saved) = SAVED_TYPEAHEAD.with_mut(Vec::pop) {
@@ -239,7 +239,7 @@ pub unsafe fn f_inputrestore(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 }
 
 /// `interrupt()` — raise the same flag CTRL-C does.
-pub unsafe fn f_interrupt(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_interrupt(_argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     got_int.set(true);
 }
 
@@ -248,7 +248,7 @@ pub unsafe fn f_interrupt(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr:
 ///
 /// # Safety
 /// `arg` is a live typval.
-unsafe fn prompt_buffer(arg: *mut typval_T) -> Option<Buf> {
+unsafe fn prompt_buffer(arg: *mut TypVal) -> Option<Buf> {
     // SAFETY: the caller's obligation -- `tv_get_buf_from_arg` answers a live
     // buffer or null.
     let buf = unsafe { Buf::from_raw(tv_get_buf_from_arg(arg)) };
@@ -257,11 +257,7 @@ unsafe fn prompt_buffer(arg: *mut typval_T) -> Option<Buf> {
 
 /// `prompt_getprompt({buf})` — the prompt text, or "" for a buffer that is
 /// not a prompt buffer.
-pub unsafe fn f_prompt_getprompt(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_prompt_getprompt(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -272,7 +268,7 @@ pub unsafe fn f_prompt_getprompt(
 }
 
 /// `prompt_getinput({buf})` — what has been typed after the prompt.
-pub unsafe fn f_prompt_getinput(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_prompt_getinput(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();

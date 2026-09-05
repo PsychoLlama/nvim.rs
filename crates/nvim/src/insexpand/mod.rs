@@ -107,11 +107,11 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Direction, EvalFuncData, ExpandContext,
-    ExtmarkOp, LineNr, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix,
-    buf_T, dict_T, expand_T, extmark_undo_vec_t, garray_T, hashtab_T, list_T, optset_T, pos_T,
-    ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union,
-    uint8_t, uint64_t, win_T,
+    Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData,
+    ExpandContext, ExtmarkOp, LineNr, List, MB_MAXCHAR, OptInt, ScriptCtx, String_0, TypVal,
+    VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix, buf_T, expand_T, extmark_undo_vec_t, garray_T,
+    hashtab_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, size_t,
+    typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -175,7 +175,7 @@ pub struct compl_S {
     pub cp_match_next: *mut compl_T,
     pub cp_str: String_0,
     pub cp_text: [*mut ::core::ffi::c_char; 4],
-    pub cp_user_data: typval_T,
+    pub cp_user_data: TypVal,
     pub cp_fname: *mut ::core::ffi::c_char,
     pub cp_flags: ::core::ffi::c_int,
     pub cp_number: ::core::ffi::c_int,
@@ -269,9 +269,9 @@ pub(crate) const INS_COMPL_NEXT_STATE_INIT: ins_compl_next_state_T = ins_compl_n
     dict_f: 0,
     func_cb: ptr::null_mut(),
 };
-/// An unset `typval_T`, which the transpile writes out at every declaration
+/// An unset `TypVal`, which the transpile writes out at every declaration
 /// (C leaves these uninitialised and has the callee fill them in).
-pub(crate) const TYPVAL_T_INIT: typval_T = typval_T {
+pub(crate) const TYPVAL_T_INIT: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -575,7 +575,7 @@ static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
     xp_prefix: XP_PREFIX_NONE,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_luaref: 0,
-    xp_script_ctx: sctx_T::NONE,
+    xp_script_ctx: ScriptCtx::NONE,
     xp_backslash: BackslashEscape::NONE,
     xp_shell: false,
     xp_numfiles: 0,

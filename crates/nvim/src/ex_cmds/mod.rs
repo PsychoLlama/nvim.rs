@@ -57,8 +57,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    CmdModFlags, ExtmarkOp, LineNr, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv,
-    bcount_t, bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, list_T, lpos_T,
+    CmdModFlags, ExtmarkOp, LineNr, List, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType,
+    Vv, bcount_t, bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, lpos_T,
     size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
@@ -364,7 +364,7 @@ pub unsafe fn ex_oldfiles(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `list` must be a live list of strings.
-unsafe fn list_oldfiles(list: *mut list_T) {
+unsafe fn list_oldfiles(list: *mut List) {
     let mut number = NumBuf::new();
     let mut text = NumBuf::new();
     // SAFETY: caller's contract.

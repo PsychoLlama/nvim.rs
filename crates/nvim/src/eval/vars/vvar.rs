@@ -6,7 +6,7 @@
 //! side of the same thing: the type enforcement `:let v:x = …` goes through.
 //!
 //! Every one of them indexes the `vimvars` table by [`Vv`], so none
-//! of them can fail; the table's entries are `dictitem_T`-shaped and are the
+//! of them can fail; the table's entries are `DictItem`-shaped and are the
 //! same items `v:` the dictionary holds.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -73,11 +73,11 @@ fn vimvar_key(idx: Vv) -> *mut c_char {
 ///
 /// # Safety
 /// `idx` names a `v:` variable and `save_tv` is writable.
-pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
+pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut TypVal) {
     // Written through the row's *value* rather than through the row: the
     // `v:` hashtab keeps a pointer to `di_key`, which is a member of
     // `VimVar`, and a write through a borrow of the whole row would
-    // invalidate it (see [`Live`]'s module docs). A `Live<typval_T>` borrows
+    // invalidate it (see [`Live`]'s module docs). A `Live<TypVal>` borrows
     // only the value.
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is writable.
@@ -95,7 +95,7 @@ pub unsafe fn prepare_vimvar(idx: Vv, save_tv: *mut typval_T) {
 ///
 /// # Safety
 /// As [`prepare_vimvar`], with the `save_tv` it filled.
-pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut typval_T) {
+pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut TypVal) {
     // Through the value, for [`prepare_vimvar`]'s reason.
     let mut tv = vimvar_val(idx);
     // SAFETY: the caller's obligation -- `save_tv` is the value the paired
@@ -118,7 +118,7 @@ pub unsafe fn restore_vimvar(idx: Vv, save_tv: *mut typval_T) {
 ///
 /// # Safety
 /// `idx` names a `v:` variable and `tv` is a live value.
-pub unsafe fn set_vim_var_tv(idx: Vv, tv: *mut typval_T) {
+pub unsafe fn set_vim_var_tv(idx: Vv, tv: *mut TypVal) {
     let out = vimvar_val(idx).raw();
     // SAFETY: a live `v:` value, and the caller's obligation for `tv`.
     unsafe { tv_clear(out) };
@@ -137,7 +137,7 @@ pub unsafe fn get_vim_var_name(idx: Vv) -> *mut c_char {
 ///
 /// # Safety
 /// `idx` names a `v:` variable.
-pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut typval_T {
+pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut TypVal {
     vimvar_val(idx).raw()
 }
 
@@ -154,7 +154,7 @@ pub unsafe fn get_vim_var_nr(idx: Vv) -> VarNumber {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_list(idx: Vv) -> *mut list_T {
+pub unsafe fn get_vim_var_list(idx: Vv) -> *mut List {
     // SAFETY: the caller's obligation -- the declared type is the List arm.
     vimvar_val(idx).list_or_null()
 }
@@ -163,7 +163,7 @@ pub unsafe fn get_vim_var_list(idx: Vv) -> *mut list_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut dict_T {
+pub unsafe fn get_vim_var_dict(idx: Vv) -> *mut Dict {
     // SAFETY: the caller's obligation -- the declared type is the Dict arm.
     vimvar_val(idx).dict_or_null()
 }
@@ -193,7 +193,7 @@ pub unsafe fn get_vim_var_str(idx: Vv) -> *mut c_char {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_partial(idx: Vv) -> *mut partial_T {
+pub unsafe fn get_vim_var_partial(idx: Vv) -> *mut Partial {
     // SAFETY: the caller's obligation -- the declared type is the Partial arm.
     vimvar_val(idx).partial_or_null()
 }
@@ -278,7 +278,7 @@ pub unsafe fn set_vim_var_string(idx: Vv, val: *const c_char, len: ptrdiff_t) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or a live list.
-pub unsafe fn set_vim_var_list(idx: Vv, val: *mut list_T) {
+pub unsafe fn set_vim_var_list(idx: Vv, val: *mut List) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.v_type = VAR_LIST;
@@ -294,7 +294,7 @@ pub unsafe fn set_vim_var_list(idx: Vv, val: *mut list_T) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is NULL or a live dictionary.
-pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut dict_T) {
+pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut Dict) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.v_type = VAR_DICT;
@@ -316,7 +316,7 @@ pub unsafe fn set_vim_var_dict(idx: Vv, val: *mut dict_T) {
 /// # Safety
 /// As [`get_vim_var_tv`]; `val` is a live partial whose reference the caller
 /// hands over.
-pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut partial_T) {
+pub unsafe fn set_vim_var_partial(idx: Vv, val: *mut Partial) {
     let mut tv = vimvar_val(idx);
     tv.vval.v_partial = val;
 }
@@ -527,8 +527,8 @@ pub unsafe fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
 /// `tv` the value being stored and `type_error` writable.
 pub unsafe fn before_set_vvar(
     varname: *const c_char,
-    di: *mut dictitem_T,
-    tv: *mut typval_T,
+    di: *mut DictItem,
+    tv: *mut TypVal,
     copy: bool,
     watched: bool,
     type_error: *mut bool,
@@ -540,7 +540,7 @@ pub unsafe fn before_set_vvar(
     // so a write through a borrow of the whole item -- which `Live`'s
     // `DerefMut` hands out -- would invalidate the pointer the watcher
     // notification below is handed. See [`Live`]'s module docs.
-    let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
+    let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     let (mut stored, mut tv) = unsafe { (Tv::new(cur), Tv::new(tv)) };
     if stored.v_type == VAR_STRING {
         let mut oldtv = TV_INITIAL_VALUE;
@@ -608,7 +608,7 @@ pub unsafe fn before_set_vvar(
 /// `let v:['name'] = value`.
 ///
 /// The subscripted spelling makes `get_lval` resolve `v:` to a plain
-/// `dict_T` and `set_var_lval` store straight into the `dictitem_T`, so
+/// `Dict` and `set_var_lval` store straight into the `DictItem`, so
 /// upstream never runs [`before_set_vvar`] for it and the declared type of
 /// the variable is simply replaced.  That is a crash and not only a
 /// surprise: `get_vim_var_list(Vv::Oldfiles)` reads `vval.v_list` with no
@@ -625,8 +625,8 @@ pub unsafe fn before_set_vvar(
 /// `di` is an item of the `v:` scope dictionary, `tv` the value being
 /// assigned, and `op` NULL or the assignment's one-character operator.
 pub(crate) unsafe fn set_vvar_item(
-    di: *mut dictitem_T,
-    tv: *mut typval_T,
+    di: *mut DictItem,
+    tv: *mut TypVal,
     copy: bool,
     op: *const c_char,
 ) {
@@ -634,7 +634,7 @@ pub(crate) unsafe fn set_vvar_item(
     // dictionary, live for this call.
     // As [`before_set_vvar`], the item is written through its value, so that
     // `cur` survives the store.
-    let cur: *mut typval_T = unsafe { Di::new(di) }.field_ptr(offset_of!(dictitem_T, di_tv));
+    let cur: *mut TypVal = unsafe { Di::new(di) }.field_ptr(offset_of!(DictItem, di_tv));
     // SAFETY: the caller's obligation, and the `v:` dictionary is a static.
     let varname = tv_dict_item_key(di);
     let watched = unsafe { tv_dict_is_watched(get_vimvar_dict()) };

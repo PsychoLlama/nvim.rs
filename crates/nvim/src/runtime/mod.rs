@@ -87,12 +87,12 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
-    ApiDict, Arena, Array, BoolVarValue, CONV_NONE, DoInRuntimepathCB, DoInRuntimepathCBFn,
+    ApiDict, Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn,
     EStackArg, EStackType, Error, EstackInfo, EvalFuncData, FILE, Integer, LineGetter,
-    LineGetterFn, LineNr, LuaRetMode, Object, OptVal, ProfTime, ScriptId, String_0, UV_MUTEX_INIT,
-    VAR_DICT, VarLock, VarNumber, XDGVarType, dict_T, estack_T, exarg_T, expand_T, funccal_entry_T,
-    garray_T, int64_t, kBoolVarFalse, list_T, optset_T, ptrdiff_t, regmatch_T, scriptitem_T,
-    sctx_T, size_t, typval_T, typval_vval_union, ufunc_T, uv_mutex_t, vimconv_T,
+    LineGetterFn, LineNr, List, LuaRetMode, Object, OptVal, ProfTime, ScriptCtx, ScriptId,
+    String_0, TypVal, UV_MUTEX_INIT, VAR_DICT, VarLock, VarNumber, XDGVarType, estack_T, exarg_T,
+    expand_T, funccal_entry_T, garray_T, int64_t, kBoolVarFalse, optset_T, ptrdiff_t, regmatch_T,
+    scriptitem_T, size_t, typval_vval_union, ufunc_T, uv_mutex_t, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};

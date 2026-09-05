@@ -56,10 +56,10 @@ use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, Buffer, Error, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
+    AlignTextPos, Array, Buffer, Dict, Error, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
     OptVal, ScreenAttr, ScreenChar, String_0, VarNumber, VirtText, VirtTextChunk, WinConfig,
-    WinSplit, WinStyle, Window, dict_T, exarg_T, kBoolVarFalse, kBoolVarTrue, lpos_T, pumitem_T,
-    size_t, tabpage_T, uint32_t, vimmenu_T, win_T,
+    WinSplit, WinStyle, Window, exarg_T, kBoolVarFalse, kBoolVarTrue, lpos_T, pumitem_T, size_t,
+    tabpage_T, uint32_t, vimmenu_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -558,7 +558,7 @@ pub fn pum_get_height() -> c_int {
 ///
 /// # Safety
 /// `dict` must be a live dictionary.
-pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
+pub unsafe fn pum_set_event_info(dict: *mut Dict) {
     // SAFETY: `dict` is live and the keys are static strings.
     if !pum_visible() {
         return;

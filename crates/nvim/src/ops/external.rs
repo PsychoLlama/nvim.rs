@@ -157,7 +157,7 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
         kMTBlockWise => c"block",
         _ => c"char",
     };
-    let mut argv: [typval_T; 2] = [typval_T {
+    let mut argv: [TypVal; 2] = [TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
@@ -172,12 +172,12 @@ pub(crate) unsafe fn op_function(oap: *const oparg_T) {
     let save_finish_op: bool = finish_op.get();
     finish_op.set(false);
 
-    let mut rettv: typval_T = typval_T {
+    let mut rettv: TypVal = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    let args = &raw mut argv as *mut typval_T;
+    let args = &raw mut argv as *mut TypVal;
     if unsafe { callback_call(global_opfunc(), 1, args, &raw mut rettv) } {
         unsafe { tv_clear(&raw mut rettv) };
     }

@@ -409,7 +409,7 @@ pub unsafe fn apply_autocmds_group(
             group,
             event,
             // `getnextac` fills this in from the autocommand it runs.
-            script_ctx: sctx_T::NONE,
+            script_ctx: ScriptCtx::NONE,
             arg_bufnr: autocmd_bufnr.get(),
             data: ::core::ptr::null_mut(),
             next: ::core::ptr::null_mut(),

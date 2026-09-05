@@ -19,12 +19,12 @@ use super::{
 use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
 use crate::types::{
-    EvalFuncData, VAR_DICT, VAR_LIST, VarLock, int64_t, typval_T, typval_vval_union, uint8_t,
+    EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VarLock, int64_t, typval_vval_union, uint8_t,
 };
 
 /// `extend()`/`extendnew()` over two Dicts: merge `argvars[1]`'s keys into
 /// `argvars[0]` (or into a copy of it) under the policy `argvars[2]` names.
-fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T) {
+fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut TypVal) {
     let Container::Dict(mut d1) = Container::of(args.get_mut(0)) else {
         unreachable!("dispatched on VAR_DICT")
     };
@@ -77,7 +77,7 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
     d1.extend_with(d2, action);
 
     if is_new {
-        *rettv = typval_T {
+        *rettv = TypVal {
             v_type: VAR_DICT,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_dict: d1.raw() },
@@ -89,7 +89,7 @@ fn extend_dict(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
 
 /// `extend()`/`extendnew()` over two Lists: splice `argvars[1]` into
 /// `argvars[0]` (or into a copy of it) before index `argvars[2]`.
-fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut typval_T) {
+fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut TypVal) {
     let mut error = false;
     let Container::List(mut l1) = Container::of(args.get_mut(0)) else {
         unreachable!("dispatched on VAR_LIST")
@@ -133,7 +133,7 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
     l1.extend_with(l2, before);
 
     if is_new {
-        *rettv = typval_T {
+        *rettv = TypVal {
             v_type: VAR_LIST,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: l1.raw() },
@@ -145,7 +145,7 @@ fn extend_list(mut args: Args<'_>, arg_errmsg: &CStr, is_new: bool, rettv: &mut 
 
 /// The shared body of `extend()` and `extendnew()`: two Lists or two Dicts,
 /// nothing else.
-fn extend(mut args: Args<'_>, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: bool) {
+fn extend(mut args: Args<'_>, rettv: &mut TypVal, arg_errmsg: &CStr, is_new: bool) {
     match (
         Container::of(args.get_mut(0)),
         Container::of(args.get_mut(1)),
@@ -165,7 +165,7 @@ fn extend(mut args: Args<'_>, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: b
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe fn f_extend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_extend(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extend() argument", false);
@@ -176,7 +176,7 @@ pub unsafe fn f_extend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// # Safety
 /// As [`f_extend`].
-pub unsafe fn f_extendnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_extendnew(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extendnew() argument", true);
@@ -188,7 +188,7 @@ pub unsafe fn f_extendnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
 /// a cleared result.
-pub unsafe fn f_insert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_insert(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     let (mut args, rettv) = frame!(argvars, rettv);
     let mut error = false;

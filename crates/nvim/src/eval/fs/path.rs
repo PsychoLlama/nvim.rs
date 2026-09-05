@@ -32,7 +32,7 @@ use crate::path::{
     add_pathsep, after_pathsep, path_is_absolute, path_next_component, path_tail,
     path_tail_with_sep, shorten_dir_len, simplify_filename,
 };
-use crate::types::{EvalFuncData, MAXPATHL, VAR_STRING, VarNumber, size_t, typval_T};
+use crate::types::{EvalFuncData, MAXPATHL, TypVal, VAR_STRING, VarNumber, size_t};
 use ::libc::readlink;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -168,7 +168,7 @@ fn simplify(s: *mut c_char) {
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
 /// cleared result.
-pub unsafe fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_glob2regpat(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let pat = str_arg_chk(args, 0, &mut numbuf);
@@ -188,7 +188,7 @@ pub unsafe fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_isabsolutepath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
@@ -202,7 +202,7 @@ pub unsafe fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, _fp
 ///
 /// # Safety
 /// As [`f_glob2regpat`], arity 1..2.
-pub unsafe fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_pathshorten(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let trim_len = if args.has(1) {
@@ -229,7 +229,7 @@ pub unsafe fn f_pathshorten(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_simplify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_simplify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
@@ -241,7 +241,7 @@ pub unsafe fn f_simplify(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_resolve(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_resolve(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     ret_string(rettv, ptr::null_mut());

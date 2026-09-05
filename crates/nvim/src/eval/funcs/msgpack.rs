@@ -22,15 +22,15 @@ use crate::mpack::object::mpack_parser_init;
 use crate::msgpack_rpc::packer::{packer_string_buffer, packer_take_string};
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T,
-    kListLenMayKnow, list_T, mpack_parser_t, typval_T, typval_vval_union,
+    Blob, EvalFuncData, List, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarLock, kListLenMayKnow, mpack_parser_t, typval_vval_union,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::fmt::Write as _;
 use core::ptr;
 
 /// A cleared typval, the shape the decoders write their result into.
-const EMPTY_TV: typval_T = typval_T {
+const EMPTY_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -38,7 +38,7 @@ const EMPTY_TV: typval_T = typval_T {
 
 /// `json_decode({expr})` — parse JSON from a String, or from a List of
 /// lines joined by NLs.
-pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_json_decode(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: `tofree` owns whatever the List conversion allocated and is
     // released on every path; `s` points into it or into `numbuf`, both of
@@ -81,7 +81,7 @@ pub unsafe fn f_json_decode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// `json_encode({expr})`.
-pub unsafe fn f_json_encode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_json_encode(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: the encoder reads the argument and returns an owned string,
@@ -91,7 +91,7 @@ pub unsafe fn f_json_encode(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List
 /// of NL-joined lines, or as a Blob when `{type}` is "B".
-pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_msgpackdump(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the packer owns its buffer until `packer_take_string` hands
@@ -125,7 +125,7 @@ pub unsafe fn f_msgpackdump(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     if args.has(1) && unsafe { strequal(arg_string(&mut numbuf, args.get(1)), c"B".as_ptr()) } {
         // The Blob adopts the packer's allocation as-is, capacity and
         // all; nothing copies.
-        let b: *mut blob_T = blob_alloc_ret(rettv);
+        let b: *mut Blob = blob_alloc_ret(rettv);
         unsafe { (*b).bv_ga.ga_data = data.data() as *mut c_void };
         unsafe { (*b).bv_ga.ga_len = data.len() as c_int };
         unsafe { (*b).bv_ga.ga_maxlen = packer.endptr.offset_from(packer.startptr) as c_int };
@@ -152,7 +152,7 @@ fn emsg_mpack_error(status: c_int) {
 ///
 /// # Safety
 /// `list` and `ret_list` are live lists.
-unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
+unsafe fn msgpackparse_unpack_list(list: *const List, ret_list: *mut List) {
     // SAFETY: the caller's obligation. `buf` is an arena block owned for the
     // whole walk and freed at the end; `parser` is initialised before use
     // and its error state released before the last message.
@@ -219,7 +219,7 @@ unsafe fn msgpackparse_unpack_list(list: *const list_T, ret_list: *mut list_T) {
 ///
 /// # Safety
 /// `blob` is a live blob and `ret_list` a live list.
-unsafe fn msgpackparse_unpack_blob(blob: *const blob_T, ret_list: *mut list_T) {
+unsafe fn msgpackparse_unpack_blob(blob: *const Blob, ret_list: *mut List) {
     // SAFETY: the caller's obligation; `unpack_typval` advances the cursor
     // and the remaining count together.
     let len = unsafe { tv_blob_len(blob) };
@@ -240,7 +240,7 @@ unsafe fn msgpackparse_unpack_blob(blob: *const blob_T, ret_list: *mut list_T) {
 }
 
 /// `msgpackparse({data})` — the objects in a List of strings or a Blob.
-pub unsafe fn f_msgpackparse(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_msgpackparse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the argument and the freshly allocated result list are both
     // live for the call.

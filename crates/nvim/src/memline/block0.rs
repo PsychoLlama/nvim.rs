@@ -265,7 +265,7 @@ pub(crate) fn swapfile_proc_running(b0: &ZeroBlock, swap_fname: *const c_char) -
 /// Describe a swap file for the `swapinfo()` builtin: the block-zero fields
 /// if they can be read and make sense, an `error` key saying why not if they
 /// cannot.
-pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
+pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut Dict) {
     let error = |text: &'static CStr| unsafe { dict_add_str(d, c"error", text.as_ptr(), -1) };
     match unsafe { ZeroBlock::read(fname) } {
         Err(NoBlock::CannotOpen) => error(c"Cannot open file"),
@@ -297,11 +297,11 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells
 /// that pair `S_LEN(key)`. A negative `len` means "up to the NUL".
-unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char, len: c_int) {
+unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char, len: c_int) {
     let _ = unsafe { tv_dict_add_str_len(d, key.as_ptr(), key.count_bytes(), val, len) };
 }
 
-unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
+unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 

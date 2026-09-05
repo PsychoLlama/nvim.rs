@@ -36,8 +36,8 @@ use crate::shada::{
 };
 use crate::types::{
     ApiDict, Arena, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
-    OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone, key_value_pair,
-    size_t, typval_T, typval_vval_union, uint8_t,
+    OptionSetFlags, String_0, TypVal, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone,
+    key_value_pair, size_t, typval_vval_union, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -308,7 +308,7 @@ unsafe fn ctx_restore_funcs(ctx: &Context) {
 /// Main-thread editor call; `err` is a live error object.
 unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
     let mut sbuf = String_0::NULL;
-    let mut list_tv = typval_T {
+    let mut list_tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

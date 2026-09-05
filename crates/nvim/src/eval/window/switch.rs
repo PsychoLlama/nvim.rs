@@ -110,7 +110,7 @@ pub unsafe fn win_execute_after(args: *mut win_execute_T) {
 }
 
 /// `win_execute({winid}, {command} [, {silent}])`.
-pub unsafe fn f_win_execute(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();

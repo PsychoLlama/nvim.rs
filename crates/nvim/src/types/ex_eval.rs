@@ -88,6 +88,6 @@ pub struct vim_exception {
     pub messages: *mut msglist_T,
     pub throw_name: *mut ::core::ffi::c_char,
     pub throw_lnum: LineNr,
-    pub stacktrace: *mut list_T,
+    pub stacktrace: *mut List,
     pub caught: *mut except_T,
 }

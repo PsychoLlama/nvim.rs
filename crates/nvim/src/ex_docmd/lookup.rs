@@ -24,7 +24,7 @@ use crate::message::iemsg;
 use crate::os::cshim::gettext;
 
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArgt, NUL, VAR_STRING, exarg_T, expand_T, size_t, typval_T,
+    CmdAddr, EvalFuncData, ExArgt, NUL, TypVal, VAR_STRING, exarg_T, expand_T, size_t,
 };
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 use crate::winlayer::Ea;
@@ -269,7 +269,7 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// The generated builtin-function table holds it as a `VimLFunc` fn
 /// pointer, and apigen's line-based scan needs the declaration spelled out
 /// literally.
-pub unsafe fn f_fullcommand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_fullcommand(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut name = unsafe { numbuf.string(argvars) } as *mut c_char;
     unsafe { (*rettv).v_type = VAR_STRING };

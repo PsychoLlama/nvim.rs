@@ -17,7 +17,7 @@ use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 ///
 /// # Safety
 /// `wp` must be a live window whose buffer is live.
-unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
+unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the two closures add.
@@ -62,7 +62,7 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
 ///
 /// # Safety
 /// `tp` must be a live tab page.
-unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
+unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut Dict {
     // SAFETY: the caller's obligation; both containers are handed on rather
     // than freed here, so both stay alive for the appends below.
     // The keys go in in upstream's order: a dictionary's iteration order is
@@ -87,7 +87,7 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
 }
 
 /// `gettabinfo([{tabnr}])` — every tab page, or just the one named.
-pub unsafe fn f_gettabinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_gettabinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk.
@@ -124,7 +124,7 @@ pub unsafe fn f_gettabinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// place this function knowingly differs: past 32,767 tab pages upstream's
 /// `tabnr` wraps negative while `tabpagenr()`, an `int`, stays right. Reaching
 /// that takes 33,000 `:tabnew`s, so no test can see either answer.
-pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getwininfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk.
@@ -163,7 +163,7 @@ pub unsafe fn f_getwininfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 ///
 /// # Safety
 /// `l` must be a live list that outlives the call.
-unsafe fn get_framelayout(fr: Frame, l: *mut list_T, outer: bool) {
+unsafe fn get_framelayout(fr: Frame, l: *mut List, outer: bool) {
     // SAFETY: the caller's obligation; every list built here is appended to
     // its parent before anything else can fail, so none is leaked.
     // The outer call writes into the caller's list; every nested one gets a
@@ -204,7 +204,7 @@ unsafe fn get_framelayout(fr: Frame, l: *mut list_T, outer: bool) {
 }
 
 /// `winlayout([{tabnr}])` — the tab page's window layout tree.
-pub unsafe fn f_winlayout(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_winlayout(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
     // `rettv` for the whole walk.
@@ -222,7 +222,7 @@ pub unsafe fn f_winlayout(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.
-pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_win_gettype(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -260,7 +260,7 @@ pub unsafe fn f_win_gettype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `getcmdwintype()` — the one-character type of the command-line window, or
 /// the empty string when it is not open.
-pub unsafe fn f_getcmdwintype(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdwintype(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value; `xmallocz(1)` hands back
     // two writable bytes, the second already NUL.
     unsafe { (*rettv).v_type = VAR_STRING };

@@ -203,7 +203,7 @@ unsafe fn do_unlet_var(
         let mut oldtv = TV_INITIAL_VALUE;
         let mut key: *mut c_char = ptr::null_mut();
         if watched {
-            let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
+            let tv = di.field_ptr(offset_of!(DictItem, di_tv));
             unsafe { tv_copy(tv, &raw mut oldtv) };
             // The key has to be saved: removing the item frees it.
             key = unsafe { xstrdup(tv_dict_item_key(di.raw())) };
@@ -226,8 +226,8 @@ unsafe fn do_unlet_var(
 /// # Safety
 /// `l` is a live list and `li_first` one of its items.
 unsafe fn tv_list_unlet_range(
-    l: *mut list_T,
-    li_first: *mut listitem_T,
+    l: *mut List,
+    li_first: *mut ListItem,
     n1_arg: c_int,
     has_n2: bool,
     n2: c_int,
@@ -253,7 +253,7 @@ unsafe fn tv_list_unlet_range(
 /// `name` points at `name_len` readable bytes and is NUL-terminated there.
 pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> Result<(), Failed> {
     let mut varname: *const c_char = ptr::null();
-    let mut dict: *mut dict_T = ptr::null_mut();
+    let mut dict: *mut Dict = ptr::null_mut();
     let mut ht = unsafe { find_var_ht_dict(name, name_len, &raw mut varname, &raw mut dict) };
 
     if !ht.is_null() && unsafe { *varname } != NUL as c_char {
@@ -303,7 +303,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
             let mut oldtv = TV_INITIAL_VALUE;
             let watched = unsafe { tv_dict_is_watched(dict) };
             if watched {
-                let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
+                let tv = di.field_ptr(offset_of!(DictItem, di_tv));
                 unsafe { tv_copy(tv, &raw mut oldtv) };
             }
 
@@ -380,7 +380,7 @@ unsafe fn do_lock_var(
         }
         // The value's address is taken after the flag write: it points into
         // the item, and the write goes through a borrow of the whole item.
-        let tv = di.field_ptr(offset_of!(dictitem_T, di_tv));
+        let tv = di.field_ptr(offset_of!(DictItem, di_tv));
         if deep != 0 {
             unsafe { tv_item_lock(tv, deep, lock, false) };
         }

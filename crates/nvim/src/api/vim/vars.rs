@@ -85,7 +85,7 @@ pub unsafe fn nvim_get_var(name: String_0, arena: *mut Arena) -> Result<Object, 
 ///
 /// # Safety
 /// `name` must name its own bytes.
-unsafe fn find_globvar(name: String_0) -> *mut dictitem_T {
+unsafe fn find_globvar(name: String_0) -> *mut DictItem {
     // SAFETY: the caller's promise; the global dictionary is live from
     // startup to exit.
     unsafe { tv_dict_find(get_globvar_dict(), name.data(), name.len() as ptrdiff_t) }

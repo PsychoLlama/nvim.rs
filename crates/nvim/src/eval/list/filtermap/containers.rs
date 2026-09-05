@@ -37,8 +37,8 @@ use crate::eval::list::{
 use crate::main::{did_emsg, e_invalblob, e_string_required};
 use crate::memory::handoff::owned_cstr;
 use crate::types::{
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
-    typval_T, typval_vval_union,
+    TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
+    typval_vval_union,
 };
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a Dict.
@@ -51,8 +51,8 @@ pub(crate) fn filter_map_dict(
     d: DictRef,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
-    expr: &mut typval_T,
-    rettv: &mut typval_T,
+    expr: &mut TypVal,
+    rettv: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
         rettv.v_type = VAR_DICT;
@@ -121,8 +121,8 @@ pub(crate) fn filter_map_blob(
     blob_arg: BlobRef,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
-    expr: &mut typval_T,
-    rettv: &mut typval_T,
+    expr: &mut TypVal,
+    rettv: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
         rettv.v_type = VAR_BLOB;
@@ -151,7 +151,7 @@ pub(crate) fn filter_map_blob(
     let mut idx = 0;
     while i < b.len() {
         let val = VarNumber::from(b.byte(i));
-        let mut tv = typval_T {
+        let mut tv = TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_number: val },
@@ -198,8 +198,8 @@ pub(crate) fn filter_map_blob(
 pub(crate) fn filter_map_string(
     s: &[u8],
     filtermap: FilterMap,
-    expr: &mut typval_T,
-    rettv: &mut typval_T,
+    expr: &mut TypVal,
+    rettv: &mut TypVal,
 ) {
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -260,8 +260,8 @@ pub(crate) fn filter_map_list(
     l: ListRef,
     filtermap: FilterMap,
     arg_errmsg: &CStr,
-    expr: &mut typval_T,
-    rettv: &mut typval_T,
+    expr: &mut TypVal,
+    rettv: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
         rettv.v_type = VAR_LIST;

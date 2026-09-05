@@ -135,16 +135,16 @@ use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     Arena, Array, BackslashEscape, Boolean, Callback, CmdAddr, CmdBuff, CmdParseInfo,
-    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
+    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, Dict,
     Direction, DispTick, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    Handle, HistoryType, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptVal,
-    ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime,
-    RemapValues, String_0, TryState, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
-    XpPrefix, aco_save_T, buf_T, cmdmod_T, cstack_T, dict_T, dobuf_action_values,
-    dobuf_start_values, exarg_T, except_T, expand_T, hashtab_T, list_T, listitem_T, msglist_T,
-    oparg_T, optset_T, pos_T, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
-    time_t, typval_T, typval_vval_union, uint8_t, uint32_t, win_T,
+    Handle, HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, Object, OptInt,
+    OptMagic, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
+    ParserState, ProfTime, RemapValues, ScriptCtx, String_0, TryState, TypVal, UVarNumber,
+    UndoLink, UndoObjectType, VarNumber, VimState, XpPrefix, aco_save_T, buf_T, cmdmod_T, cstack_T,
+    dobuf_action_values, dobuf_start_values, exarg_T, except_T, expand_T, hashtab_T, msglist_T,
+    oparg_T, optset_T, pos_T, ptrdiff_t, save_v_event_T, searchit_arg_T, size_t, tabpage_T, time_t,
+    typval_vval_union, uint8_t, uint32_t, win_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -487,7 +487,7 @@ pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
     xp_prefix: XP_PREFIX_NONE,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_luaref: 0,
-    xp_script_ctx: sctx_T::NONE,
+    xp_script_ctx: ScriptCtx::NONE,
     xp_backslash: BackslashEscape::NONE,
     xp_shell: false,
     xp_numfiles: 0,

@@ -3,7 +3,7 @@
 //!
 //! Every `f_*` body receives the same three C arguments: a pointer into the
 //! caller's argument array, a pointer to the return value, and the row's
-//! payload from the generated table. The array is a `[typval_T;
+//! payload from the generated table. The array is a `[TypVal;
 //! MAX_FUNC_ARGS + 1]` owned by the evaluator, with a `VAR_UNKNOWN`
 //! terminator written at the supplied argument count — so reading any index
 //! up to [`MAX_ARGS`] is in bounds whatever the caller passed, and reading
@@ -18,11 +18,11 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::{VAR_UNKNOWN, VarType, typval_T};
+use crate::types::{TypVal, VAR_UNKNOWN, VarType};
 use core::marker::PhantomData;
 
 /// The size of the evaluator's argument buffer, minus its terminator slot.
-/// `MAX_FUNC_ARGS` in the C; both dispatchers declare `typval_T argv[MAX +
+/// `MAX_FUNC_ARGS` in the C; both dispatchers declare `TypVal argv[MAX +
 /// 1]`, so indices `0..=MAX_ARGS` are always readable.
 pub(crate) const MAX_ARGS: usize = 20;
 
@@ -33,8 +33,8 @@ pub(crate) const MAX_ARGS: usize = 20;
 /// `VAR_UNKNOWN`, which is exactly the test the C bodies write.
 #[derive(Clone, Copy)]
 pub(crate) struct Args<'a> {
-    base: *mut typval_T,
-    life: PhantomData<&'a mut typval_T>,
+    base: *mut TypVal,
+    life: PhantomData<&'a mut TypVal>,
 }
 
 impl<'a> Args<'a> {
@@ -42,11 +42,11 @@ impl<'a> Args<'a> {
     ///
     /// # Safety
     ///
-    /// `base` must point at an array of at least `MAX_ARGS + 1` `typval_T`
+    /// `base` must point at an array of at least `MAX_ARGS + 1` `TypVal`
     /// with a `VAR_UNKNOWN` terminator at or before the last slot, valid for
     /// reads and writes for `'a`. The two `call_internal_*` dispatchers are
     /// the only callers and both satisfy this.
-    pub(crate) unsafe fn new(base: *mut typval_T) -> Self {
+    pub(crate) unsafe fn new(base: *mut TypVal) -> Self {
         Args {
             base,
             life: PhantomData,
@@ -55,7 +55,7 @@ impl<'a> Args<'a> {
 
     /// A raw pointer to argument `i`, for the typval entry points that still
     /// take one.
-    pub(crate) fn ptr(&self, i: usize) -> *mut typval_T {
+    pub(crate) fn ptr(&self, i: usize) -> *mut TypVal {
         debug_assert!(i <= MAX_ARGS);
         // SAFETY: the constructor's obligation covers every index through
         // `MAX_ARGS`; no dereference happens here.
@@ -63,7 +63,7 @@ impl<'a> Args<'a> {
     }
 
     /// Argument `i`.
-    pub(crate) fn get(&self, i: usize) -> &'a typval_T {
+    pub(crate) fn get(&self, i: usize) -> &'a TypVal {
         // SAFETY: in bounds by the constructor's obligation, and `'a` is the
         // borrow the frame was built from.
         unsafe { &*self.ptr(i) }
@@ -72,7 +72,7 @@ impl<'a> Args<'a> {
     /// Argument `i`, mutably. Builtins that write back through an argument
     /// (`rand()` advancing its seed list, the `getpos()` family) go through
     /// here.
-    pub(crate) fn get_mut(&mut self, i: usize) -> &'a mut typval_T {
+    pub(crate) fn get_mut(&mut self, i: usize) -> &'a mut TypVal {
         // SAFETY: as `get`, and `&mut self` is what keeps the reference
         // exclusive.
         unsafe { &mut *self.ptr(i) }

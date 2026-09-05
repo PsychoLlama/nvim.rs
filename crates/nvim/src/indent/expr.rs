@@ -449,7 +449,7 @@ pub unsafe fn fix_indent() {
 ///
 /// # Safety
 /// The evaluator's contract: `argvars` and `rettv` are live typvals.
-pub unsafe fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_indent(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals, and there is a current buffer.
     let lnum = unsafe { tv_get_lnum(argvars) };
     unsafe {
@@ -464,7 +464,7 @@ pub unsafe fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// # Safety
 /// The evaluator's contract: `argvars` and `rettv` are live typvals.
-pub unsafe fn f_lispindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_lispindent(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's typvals; the cursor is moved onto the asked-for
     // line and put back.
     let win = curwin.get();

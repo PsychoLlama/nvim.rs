@@ -288,7 +288,7 @@ unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
 /// # Safety
 ///
 /// `eap` must be a live command and `tv` a live value.
-unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut typval_T) -> Result<(), Failed> {
+unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap.cast_mut()) };
     // SAFETY: forwarded from the caller.

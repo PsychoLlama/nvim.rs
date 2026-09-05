@@ -36,15 +36,15 @@ use crate::path::concat_fnames_realloc;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArgt, ExpandContext, NUL, OK, OptInt, VAR_DICT, VAR_LIST, VAR_SPECIAL,
-    VAR_STRING, VarNumber, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow,
-    kListLenUnknown, kSpecialVarNull, list_T, typval_T,
+    CmdAddr, EvalFuncData, ExArgt, ExpandContext, List, NUL, OK, OptInt, TypVal, VAR_DICT,
+    VAR_LIST, VAR_SPECIAL, VAR_STRING, VarNumber, XDGVarType, exarg_T, expand_T, kBoolVarFalse,
+    kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 /// `environ()` — the process environment as a Dictionary.
-pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_environ(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY throughout: `env` is an array of `env_size` strings plus a NULL, filled by
     // `os_copy_fullenv` and released by `os_free_fullenv`. Every string is
@@ -81,7 +81,7 @@ pub unsafe fn f_environ(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 }
 
 /// `getenv({name})` — the variable's value, or `v:null` when it is unset.
-pub unsafe fn f_getenv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getenv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: `vim_getenv` returns an owned string or null.
@@ -96,7 +96,7 @@ pub unsafe fn f_getenv(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 }
 
 /// `expand({string} [, {nosuf} [, {list}]])`.
-pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_expand(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL | WildOpts::LIST_NOTFOUND;
@@ -107,7 +107,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     // The `{list}` argument is only honoured when `{nosuf}` was given
     // too, because it is the third.
     if args.has(1) && args.has(2) && arg_number_chk(args.get(2), Some(&mut error)) != 0 && !error {
-        list_set_ret(rettv, ptr::null_mut::<list_T>());
+        list_set_ret(rettv, ptr::null_mut::<List>());
     }
     let s = arg_string(&mut numbuf, args.get(0));
     if matches!(unsafe { *s } as u8, b'%' | b'#' | b'<') {
@@ -174,7 +174,7 @@ pub unsafe fn f_expand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// `expandcmd({string} [, {options}])` — expand the `%`, `#` and wildcard
 /// items in a command line.
-pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_expandcmd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
@@ -209,7 +209,7 @@ pub unsafe fn f_expandcmd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 }
 
 /// `setenv({name}, {val})` — `v:null` unsets.
-pub unsafe fn f_setenv(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setenv(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _rettv) = frame!(argvars, _rettv);
     // SAFETY throughout: the two scratch buffers outlive the strings coerced into them.
     let mut namebuf = NumBuf::new();
@@ -229,7 +229,7 @@ pub unsafe fn f_setenv(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
 
 /// `setfperm({fname}, {mode})` — `{mode}` is nine "rwxrwxrwx" characters,
 /// any of which is "off" only when it is a `-`.
-pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setfperm(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = 0;
@@ -261,7 +261,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search
 /// path, each with the application name appended.
-fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
+fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut TypVal) {
     let appname = get_appname(false);
     // SAFETY: the caller's obligation. `dirs` is owned here; `vim_env_iter`
     // hands back slices of it and null when the walk is done.
@@ -295,7 +295,7 @@ fn get_xdg_var_list(xdg: XDGVarType, rettv: &mut typval_T) {
 }
 
 /// `stdpath({what})`.
-pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_stdpath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
@@ -328,7 +328,7 @@ pub unsafe fn f_stdpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// `swapfilelist()` — every swap file in 'directory'.
-pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_swapfilelist(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY throughout: `recover_names` appends to the list just allocated.
     list_alloc_ret(rettv, kListLenUnknown as isize);
@@ -338,7 +338,7 @@ pub unsafe fn f_swapfilelist(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 }
 
 /// `swapinfo({fname})` — what a swap file says about its buffer.
-pub unsafe fn f_swapinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_swapinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the dict is allocated into the return value first, so
@@ -348,7 +348,7 @@ pub unsafe fn f_swapinfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 }
 
 /// `swapname({buf})` — the swap file a buffer is using, if any.
-pub unsafe fn f_swapname(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_swapname(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_STRING;
     // SAFETY: the buffer comes from the buffer list; the memfile and its

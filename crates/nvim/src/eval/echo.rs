@@ -36,14 +36,14 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    LineNr, NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING,
-    VAR_UNKNOWN, VarFlavour, VarLock, evalarg_T, exarg_T, funccal_entry_T, ptrdiff_t, sctx_T,
-    size_t, typval_T, typval_vval_union,
+    LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA,
+    VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock, evalarg_T, exarg_T, funccal_entry_T, ptrdiff_t,
+    size_t, typval_vval_union,
 };
 use crate::ui::ui_has;
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -291,7 +291,7 @@ pub unsafe fn var_flavour(varname: *mut c_char) -> VarFlavour {
 ///
 /// # Safety
 /// `name` must be NUL-terminated; `vartv`'s ownership moves here.
-pub unsafe fn var_set_global(name: *const c_char, mut vartv: typval_T) {
+pub unsafe fn var_set_global(name: *const c_char, mut vartv: TypVal) {
     let mut funccall_entry = funccal_entry_T {
         top_funccal: null_mut(),
         next: null_mut(),
@@ -309,7 +309,7 @@ pub unsafe fn var_set_global(name: *const c_char, mut vartv: typval_T) {
 ///
 /// # Safety
 /// Called with a script context from an option or a variable.
-pub unsafe fn last_set_msg(script_ctx: sctx_T) {
+pub unsafe fn last_set_msg(script_ctx: ScriptCtx) {
     if script_ctx.sc_sid == 0 {
         return;
     }

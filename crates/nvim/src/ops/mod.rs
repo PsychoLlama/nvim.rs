@@ -86,9 +86,9 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Callback, CharsizeArg, CmdModFlags, ColNr, ExtmarkOp, LineNr, MotionType, OpType, OptInt,
-    StrCharInfo, UVarNumber, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, bcount_t, block_def,
-    cmdarg_T, dict_T, int32_t, int64_t, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
+    Callback, CharsizeArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr, MotionType, OpType, OptInt,
+    StrCharInfo, TypVal, UVarNumber, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, bcount_t,
+    block_def, cmdarg_T, int32_t, int64_t, oparg_T, optset_T, pos_T, size_t, ssize_t,
     typval_vval_union, yankreg_T,
 };
 use crate::ui::vim_beep;

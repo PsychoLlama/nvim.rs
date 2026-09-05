@@ -58,7 +58,7 @@ pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c
 }
 
 /// One match as a locked `v:completed_item` dict.
-pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut compl_T) -> *mut dict_T {
+pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut compl_T) -> *mut Dict {
     // { word, abbr, menu, kind, info, user_data } — the same keys and the
     // same order `complete_info()` fills in, minus its "match" flag.
     let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
@@ -72,7 +72,7 @@ pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut compl_T) -> *mut dict_T 
 /// `fast` uses `fast_breakcheck()` instead of `os_breakcheck()`. Answers
 /// NOTDONE if the string is already in the list, OK if it was added, FAIL on
 /// error.
-pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: bool) -> c_int {
+pub(crate) unsafe fn ins_compl_add_tv(tv: *mut TypVal, dir: Direction, fast: bool) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let word: *const c_char;
@@ -136,7 +136,7 @@ pub(crate) unsafe fn ins_compl_add_tv(tv: *mut typval_T, dir: Direction, fast: b
 }
 
 /// Add every entry of `list` as a match.
-pub(crate) unsafe fn ins_compl_add_list(list: *mut list_T) {
+pub(crate) unsafe fn ins_compl_add_list(list: *mut List) {
     let mut dir = compl_direction.get();
     if list.is_null() {
         return;
@@ -155,7 +155,7 @@ pub(crate) unsafe fn ins_compl_add_list(list: *mut list_T) {
 
 /// Add the matches a `'completefunc'`-style dict answers, and note its
 /// optional `refresh` item.
-pub(crate) unsafe fn ins_compl_add_dict(dict: *mut dict_T) {
+pub(crate) unsafe fn ins_compl_add_dict(dict: *mut Dict) {
     let find =
         |key: &str| unsafe { tv_dict_find(dict, key.as_ptr().cast(), key.len() as ptrdiff_t) };
 
@@ -244,7 +244,7 @@ impl ComplOrigExtmarks {
 
 /// Start the completion `complete()` describes: `startcol` is where the
 /// matched text starts (1 is the first column) and `list` holds the matches.
-pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut list_T) {
+pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
     let cur_cot_flags = unsafe { get_cot_flags() };
     let compl_longest = cur_cot_flags & kOptCotFlagLongest as c_uint != 0;
     let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0;
@@ -313,7 +313,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut list_T) {
 }
 
 /// The `complete()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_complete(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     if State.get() & MODE_INSERT == 0 {
         emsg(gettext(c"E785: complete() can only be used in Insert mode"));
         return;
@@ -337,14 +337,14 @@ pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: E
 }
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_complete_add(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = ins_compl_add_tv(argvars, kDirectionNotSet, false) as VarNumber
     };
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete_check(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_complete_check(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let _redraw = Allow::redraw();
     unsafe { ins_compl_check_keys(0, true) };
     unsafe { (*rettv).vval.v_number = ins_compl_interrupted() as VarNumber };
@@ -352,7 +352,7 @@ pub unsafe fn f_complete_check(_argvars: *mut typval_T, rettv: *mut typval_T, _f
 
 /// Fill `di` with one match, as `complete_info()` reports it.
 pub(crate) unsafe fn fill_complete_info_dict(
-    di: *mut dict_T,
+    di: *mut Dict,
     match_0: *mut compl_T,
     add_match: bool,
 ) {
@@ -384,7 +384,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
 }
 
 /// Fill `retdict` with whatever of `complete_info()` `what_list` asked for.
-pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dict_T) {
+pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict) {
     let mut numbuf = NumBuf::new();
     let add_nr = |key: &str, val: VarNumber| unsafe {
         tv_dict_add_nr(retdict, key.as_ptr().cast(), key.len(), val)
@@ -446,7 +446,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         return;
     }
 
-    let mut li: *mut list_T = ptr::null_mut();
+    let mut li: *mut List = ptr::null_mut();
     let mut selected_idx = -1;
     let has_items = what_flag & CI_WHAT_ITEMS != 0;
     let has_matches = what_flag & CI_WHAT_MATCHES != 0;
@@ -506,10 +506,10 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
 }
 
 /// The `complete_info()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete_info(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_complete_info(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_dict_alloc_ret(rettv) };
 
-    let mut what_list: *mut list_T = ptr::null_mut();
+    let mut what_list: *mut List = ptr::null_mut();
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN {
         if unsafe { (*argvars).v_type } != VAR_LIST {
             emsg(gettext(e_listreq));

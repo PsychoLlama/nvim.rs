@@ -38,8 +38,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, exarg_T, expand_T, regmatch_T, size_t,
-    typval_T,
+    TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, exarg_T, expand_T, regmatch_T, size_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -309,7 +308,7 @@ fn del_history_idx(histype: c_int, num: c_int) -> bool {
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn arg_histtype(arg: *const typval_T) -> HistoryType {
+unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; a non-null result is a NUL-terminated string
     // owned by the typval, which outlives the lookup.
@@ -324,7 +323,7 @@ unsafe fn arg_histtype(arg: *const typval_T) -> HistoryType {
 }
 
 /// "histadd()" function
-pub unsafe fn f_histadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_histadd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
     unsafe { (*rettv).vval.v_number = 0 };
     // SAFETY: reads the 'secure'/sandbox globals.
@@ -354,7 +353,7 @@ pub unsafe fn f_histadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// "histdel()" function
-pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_histdel(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
@@ -383,7 +382,7 @@ pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// "histget()" function
-pub unsafe fn f_histget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_histget(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
     let name = unsafe { numbuf.string_chk(argvars) };
@@ -415,7 +414,7 @@ pub unsafe fn f_histget(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// "histnr()" function
-pub unsafe fn f_histnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_histnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
     let histype = unsafe { arg_histtype(argvars) };
     let n = if histype == HIST_INVALID {

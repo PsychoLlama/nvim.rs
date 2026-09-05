@@ -117,7 +117,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // appending to it -- an empty string.
     let called_emsg_before = called_emsg.get();
     did_emsg.set(0);
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union {
@@ -179,7 +179,7 @@ pub unsafe fn var_redir_stop() {
         // Store the text, unless the start failed.
         if !redir_endp.get().is_null() {
             text.push(NUL as u8);
-            let mut tv = typval_T {
+            let mut tv = TypVal {
                 v_type: VAR_STRING,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union {

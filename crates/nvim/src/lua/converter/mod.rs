@@ -1,7 +1,7 @@
 //! Values across the Lua boundary, in both directions and for both of the
 //! editor's value types.
 //!
-//! Four walks live here. [`push`] converts a `typval_T` to a Lua value and
+//! Four walks live here. [`push`] converts a `TypVal` to a Lua value and
 //! [`pop_typval`] converts one back; [`push_object`] and [`pop_object`] do
 //! the same for the api's [`Object`](crate::types::Object). The
 //! two `pop` directions are separate because the type systems disagree at

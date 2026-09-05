@@ -18,7 +18,7 @@ use crate::types::Failed;
 
 /// An argument array for one call: `MAX_FUNC_ARGS` values plus the slot a
 /// `base->Method()` base is put in front of them.
-const ARGV_INIT: [typval_T; MAX_FUNC_ARGS as usize + 1] =
+const ARGV_INIT: [TypVal; MAX_FUNC_ARGS as usize + 1] =
     [TV_INITIAL_VALUE; MAX_FUNC_ARGS as usize + 1];
 
 /// Evaluate a call written as an expression: read `(a, b)` at `*arg`, then
@@ -30,7 +30,7 @@ const ARGV_INIT: [typval_T; MAX_FUNC_ARGS as usize + 1] =
 pub unsafe fn get_func_tv(
     name: *const c_char,
     len: c_int,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     arg: *mut *mut c_char,
     evalarg: *mut evalarg_T,
     funcexe: *mut funcexe_T,
@@ -94,10 +94,10 @@ pub unsafe fn get_func_tv(
 /// `name` is NUL-terminated and `args` holds a list (or nothing).
 pub unsafe fn func_call(
     name: *mut c_char,
-    args: *mut typval_T,
-    partial: *mut partial_T,
-    selfdict: *mut dict_T,
-    rettv: *mut typval_T,
+    args: *mut TypVal,
+    partial: *mut Partial,
+    selfdict: *mut Dict,
+    rettv: *mut TypVal,
 ) -> Result<(), Failed> {
     let mut argv = ARGV_INIT;
     let mut argc = 0;
@@ -147,7 +147,7 @@ pub unsafe fn func_call(
 pub unsafe fn callback_call_retnr(
     callback: *mut Callback,
     argcount: c_int,
-    argvars: *mut typval_T,
+    argvars: *mut TypVal,
 ) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
     if !unsafe { callback_call(callback, argcount, argvars, &raw mut rettv) } {
@@ -168,9 +168,9 @@ pub unsafe fn callback_call_retnr(
 pub unsafe fn call_func(
     mut funcname: *const c_char,
     mut len: c_int,
-    rettv: *mut typval_T,
+    rettv: *mut TypVal,
     argcount_in: c_int,
-    argvars_in: *mut typval_T,
+    argvars_in: *mut TypVal,
     funcexe: *mut funcexe_T,
 ) -> Result<(), Failed> {
     let mut ret = Err(Failed);

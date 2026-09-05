@@ -32,7 +32,7 @@
 //! let _guard = Allow::messages();         // msg_silent = 0, restored after
 //! ```
 //!
-//! [`Script`] is the odd one out: not a counter but the whole `sctx_T`
+//! [`Script`] is the odd one out: not a counter but the whole `ScriptCtx`
 //! saying which script the running code belongs to, overwritten for a
 //! scope and put back. It is the same save/restore shape as [`Saved`],
 //! over a value rather than an `int`.
@@ -119,7 +119,7 @@ use crate::main::{
     no_mapping, no_u_sync, no_wait_return, no_zero_mapping, sandbox, tabpage_move_disallowed,
     textlock,
 };
-use crate::types::{ScriptId, sctx_T};
+use crate::types::{ScriptCtx, ScriptId};
 use core::ffi::c_int;
 
 /// A counter held one higher for the lifetime of the guard.
@@ -611,7 +611,7 @@ impl Keys {
 /// The script context put back when the guard is dropped.
 #[must_use = "the previous script context is restored as soon as the guard is dropped"]
 pub(crate) struct SavedSctx {
-    saved: sctx_T,
+    saved: ScriptCtx,
 }
 
 impl Drop for SavedSctx {
@@ -632,7 +632,7 @@ pub(crate) struct Script;
 
 impl Script {
     /// Run this scope as `sctx`.
-    pub(crate) fn context(sctx: sctx_T) -> SavedSctx {
+    pub(crate) fn context(sctx: ScriptCtx) -> SavedSctx {
         SavedSctx {
             saved: current_sctx.replace(sctx),
         }

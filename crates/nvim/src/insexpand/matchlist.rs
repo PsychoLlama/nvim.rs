@@ -115,7 +115,7 @@ pub(crate) unsafe fn free_cptext(cptext: *const *mut c_char) {
 /// `str` is readable for `len` bytes, or NUL-terminated when `len < 0`;
 /// `fname` is null or NUL-terminated; `cptext` is null or `CPT_COUNT`
 /// strings; `user_hl` is null or two `c_int`s; `user_data` is null or a live
-/// `typval_T`.
+/// `TypVal`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn ins_compl_add(
     str: *mut c_char,
@@ -123,7 +123,7 @@ pub(crate) unsafe fn ins_compl_add(
     fname: *mut c_char,
     cptext: *const *mut c_char,
     cptext_allocated: bool,
-    user_data: *mut typval_T,
+    user_data: *mut TypVal,
     cdir: Direction,
     flags_arg: c_int,
     adup: bool,
@@ -247,7 +247,7 @@ pub(crate) unsafe fn ins_compl_add(
     }
 
     if !user_data.is_null() {
-        // SAFETY: a non-null `user_data` is a live `typval_T`, which the
+        // SAFETY: a non-null `user_data` is a live `TypVal`, which the
         // caller has handed over.
         match_0.cp_user_data = unsafe { *user_data };
     }

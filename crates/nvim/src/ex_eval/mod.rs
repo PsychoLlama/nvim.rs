@@ -66,7 +66,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    FAIL, Failed, OK, VAR_UNKNOWN, VarLock, cstack_T, eslist_T, evalarg_T, exarg_T, typval_T,
+    FAIL, Failed, OK, TypVal, VAR_UNKNOWN, VarLock, cstack_T, eslist_T, evalarg_T, exarg_T,
     typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -199,10 +199,10 @@ unsafe fn check_skip(cstack: *mut cstack_T) -> bool {
 /// Throw away the value a pending `:return` was carrying.
 ///
 /// # Safety
-/// `p` is a `typval_T` a pending `:return` owned.
+/// `p` is a `TypVal` a pending `:return` owned.
 unsafe fn discard_pending_return(p: *mut c_void) {
     // SAFETY: caller contract.
-    unsafe { tv_free(p.cast::<typval_T>()) }
+    unsafe { tv_free(p.cast::<TypVal>()) }
 }
 
 /// Whether to abort immediately: an error while aborting, an interrupt, or
@@ -253,7 +253,7 @@ pub(crate) fn aborted_in_try() -> bool {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },

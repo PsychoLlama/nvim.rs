@@ -18,7 +18,7 @@ pub struct AutoCmd {
     pub desc: *mut ::core::ffi::c_char,
     pub handler_cmd: *mut ::core::ffi::c_char,
     pub handler_fn: Callback,
-    pub script_ctx: sctx_T,
+    pub script_ctx: ScriptCtx,
     pub once: bool,
     pub nested: bool,
 }
@@ -42,7 +42,7 @@ pub struct AutoPatCmd_S {
     pub tail: *mut ::core::ffi::c_char,
     pub group: ::core::ffi::c_int,
     pub event: AutoEvent,
-    pub script_ctx: sctx_T,
+    pub script_ctx: ScriptCtx,
     pub arg_bufnr: ::core::ffi::c_int,
     pub data: *mut Object,
     pub next: *mut AutoPatCmd,

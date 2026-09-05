@@ -91,8 +91,8 @@ use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
     CmdAddr, CmdModFlags, ColNr, EvalFuncData, ExtmarkOp, FILE, FileInfo, Hlf, LineNr, OptInt,
-    OptScope, OptVal, ScriptId, String_0, VarNumber, aco_save_T, diff_T, diffline_S, diffline_T,
-    diffline_change_T, exarg_T, mmfile_t, size_t, typval_T, uint64_t, win_T, xdemitcb_t,
+    OptScope, OptVal, ScriptId, String_0, TypVal, VarNumber, aco_save_T, diff_T, diffline_S,
+    diffline_T, diffline_change_T, exarg_T, mmfile_t, size_t, uint64_t, win_T, xdemitcb_t,
     xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;

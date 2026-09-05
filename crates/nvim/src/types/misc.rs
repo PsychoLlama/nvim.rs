@@ -37,7 +37,7 @@ pub struct ParserHighlight {
 }
 #[repr(C)]
 pub struct ScopeDictDictItem {
-    pub di_tv: typval_T,
+    pub di_tv: TypVal,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 1],
 }
@@ -88,7 +88,7 @@ pub struct VirtText {
 }
 #[derive(Copy, Clone)]
 pub struct caller_scope {
-    pub script_ctx: sctx_T,
+    pub script_ctx: ScriptCtx,
     pub es_entry: estack_T,
     pub autocmd_fname: *mut ::core::ffi::c_char,
     pub autocmd_match: *mut ::core::ffi::c_char,
@@ -98,8 +98,8 @@ pub struct caller_scope {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct dictitem_T {
-    pub di_tv: typval_T,
+pub struct DictItem {
+    pub di_tv: TypVal,
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 0],
 }

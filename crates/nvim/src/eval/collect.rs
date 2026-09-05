@@ -69,17 +69,17 @@ use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, DictWatcher, Failed, NUL, OptInt,
-    QUEUE, String_0, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, dict_T, dictitem_T, fmark_T,
-    fmarkv_T, hashitem_T, hashtab_T, ht_stack_T, list_T, list_stack_T, listitem_T, partial_T,
-    pos_T, size_t, tabpage_T, timer_T, typval_T, typval_vval_union, ufunc_T, vimconv_T, win_T,
-    xfmark_T, yankreg_T,
+    AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, DictWatcher,
+    Failed, HtStack, List, ListItem, ListStack, NUL, OptInt, Partial, QUEUE, String_0, TypVal,
+    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T,
+    pos_T, size_t, tabpage_T, timer_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T,
+    yankreg_T,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
 /// A freshly declared typval.
-const UNSET_TV: typval_T = typval_T {
+const UNSET_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
@@ -101,13 +101,13 @@ pub unsafe fn get_copy_id() -> c_int {
     CURRENT_COPY_ID.get()
 }
 
-/// The `dictitem_T` a hashtab entry's inline key belongs to; the C spells
+/// The `DictItem` a hashtab entry's inline key belongs to; the C spells
 /// it `TV_DICT_HI2DI`.
 ///
 /// # Safety
 /// `hi` must be a live entry of a dictionary's hashtab.
-unsafe fn hi2di(hi: &hashitem_T) -> *mut dictitem_T {
-    unsafe { hi.hi_key.sub(offset_of!(dictitem_T, di_key)) as *mut dictitem_T }
+unsafe fn hi2di(hi: &hashitem_T) -> *mut DictItem {
+    unsafe { hi.hi_key.sub(offset_of!(DictItem, di_key)) as *mut DictItem }
 }
 
 /// Mark one root's variable, with neither stack: the collector recurses
@@ -115,7 +115,7 @@ unsafe fn hi2di(hi: &hashitem_T) -> *mut dictitem_T {
 ///
 /// # Safety
 /// `tv` must be a live typval.
-unsafe fn mark_root(tv: *mut typval_T, copy_id: c_int) -> bool {
+unsafe fn mark_root(tv: *mut TypVal, copy_id: c_int) -> bool {
     // SAFETY: the caller's promise; the two nulls are what say "recurse".
     unsafe { set_ref_in_item(tv, copy_id, null_mut(), null_mut()) }
 }
@@ -439,10 +439,10 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
 pub unsafe fn set_ref_in_ht(
     ht: *mut hashtab_T,
     copy_id: c_int,
-    list_stack: *mut *mut list_stack_T,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     let mut abort = false;
-    let mut ht_stack: *mut ht_stack_T = null_mut();
+    let mut ht_stack: *mut HtStack = null_mut();
     let mut cur_ht = ht;
     loop {
         if !abort {
@@ -465,7 +465,7 @@ pub unsafe fn set_ref_in_ht(
         }
         cur_ht = unsafe { (*ht_stack).ht };
         let done = ht_stack;
-        ht_stack = unsafe { (*ht_stack).prev } as *mut ht_stack_T;
+        ht_stack = unsafe { (*ht_stack).prev };
         unsafe { xfree(done as *mut c_void) };
     }
     abort
@@ -477,16 +477,16 @@ pub unsafe fn set_ref_in_ht(
 /// # Safety
 /// `l` must be null or valid; `ht_stack` null or valid.
 pub unsafe fn set_ref_in_list_items(
-    l: *mut list_T,
+    l: *mut List,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
+    ht_stack: *mut *mut HtStack,
 ) -> bool {
     let mut abort = false;
-    let mut list_stack: *mut list_stack_T = null_mut();
+    let mut list_stack: *mut ListStack = null_mut();
     let mut cur_l = l;
     loop {
         if !cur_l.is_null() {
-            let mut li: *mut listitem_T = unsafe { (*cur_l).lv_first };
+            let mut li: *mut ListItem = unsafe { (*cur_l).lv_first };
             while !li.is_null() {
                 if abort {
                     break;
@@ -502,7 +502,7 @@ pub unsafe fn set_ref_in_list_items(
         }
         cur_l = unsafe { (*list_stack).list };
         let done = list_stack;
-        list_stack = unsafe { (*list_stack).prev } as *mut list_stack_T;
+        list_stack = unsafe { (*list_stack).prev };
         unsafe { xfree(done as *mut c_void) };
     }
     abort
@@ -514,10 +514,10 @@ pub unsafe fn set_ref_in_list_items(
 /// # Safety
 /// `dd` must be null or valid; the stacks null or valid.
 pub(crate) unsafe fn set_ref_in_item_dict(
-    dd: *mut dict_T,
+    dd: *mut Dict,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
-    list_stack: *mut *mut list_stack_T,
+    ht_stack: *mut *mut HtStack,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     if dd.is_null() || unsafe { (*dd).dv_copyID } == copy_id {
         return false;
@@ -528,7 +528,7 @@ pub(crate) unsafe fn set_ref_in_item_dict(
         return unsafe { set_ref_in_ht(&raw mut (*dd).dv_hashtab, copy_id, list_stack) };
     }
 
-    let newitem = unsafe { xmalloc(size_of::<ht_stack_T>()) } as *mut ht_stack_T;
+    let newitem = unsafe { xmalloc(size_of::<HtStack>()) } as *mut HtStack;
     // SAFETY: `newitem` is the block just allocated, and `dd` is a live
     // Dict whose hashtab lives inside it.
     unsafe { (*newitem).ht = &raw mut (*dd).dv_hashtab };
@@ -557,10 +557,10 @@ pub(crate) unsafe fn set_ref_in_item_dict(
 /// # Safety
 /// `ll` must be null or valid; the stacks null or valid.
 pub(crate) unsafe fn set_ref_in_item_list(
-    ll: *mut list_T,
+    ll: *mut List,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
-    list_stack: *mut *mut list_stack_T,
+    ht_stack: *mut *mut HtStack,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     if ll.is_null() || unsafe { (*ll).lv_copyID } == copy_id {
         return false;
@@ -571,7 +571,7 @@ pub(crate) unsafe fn set_ref_in_item_list(
     }
     // SAFETY: `xmalloc` never answers NULL, and the caller's promise about
     // `list_stack`, which this pushes the new entry onto.
-    let newitem = unsafe { xmalloc(size_of::<list_stack_T>()) } as *mut list_stack_T;
+    let newitem = unsafe { xmalloc(size_of::<ListStack>()) } as *mut ListStack;
     unsafe { (*newitem).list = ll };
     // SAFETY: as above.
     unsafe { (*newitem).prev = *list_stack };
@@ -586,10 +586,10 @@ pub(crate) unsafe fn set_ref_in_item_list(
 /// # Safety
 /// `pt` must be null or valid; the stacks null or valid.
 pub(crate) unsafe fn set_ref_in_item_partial(
-    pt: *mut partial_T,
+    pt: *mut Partial,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
-    list_stack: *mut *mut list_stack_T,
+    ht_stack: *mut *mut HtStack,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     if pt.is_null() || unsafe { (*pt).pt_copyID } == copy_id {
         return false;
@@ -621,10 +621,10 @@ pub(crate) unsafe fn set_ref_in_item_partial(
 /// # Safety
 /// `tv` must be valid; the stacks null or valid.
 pub unsafe fn set_ref_in_item(
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     copy_id: c_int,
-    ht_stack: *mut *mut ht_stack_T,
-    list_stack: *mut *mut list_stack_T,
+    ht_stack: *mut *mut HtStack,
+    list_stack: *mut *mut ListStack,
 ) -> bool {
     // SAFETY: the caller's promise -- the typval outlives the call, and the
     // union member each arm reads is the one its `v_type` names; the stacks
@@ -656,8 +656,8 @@ pub unsafe fn set_ref_in_item(
 /// `from` and `to` must be valid; `conv` null or valid.
 pub unsafe fn var_item_copy(
     conv: *const vimconv_T,
-    from: *mut typval_T,
-    to: *mut typval_T,
+    from: *mut TypVal,
+    to: *mut TypVal,
     deep: bool,
     copy_id: c_int,
 ) -> Result<(), Failed> {
@@ -703,7 +703,7 @@ pub unsafe fn var_item_copy(
             dst.v_lock = VarLock::Unlocked;
             let l = src.list_or_null();
             if l.is_null() {
-                dst.vval.v_list = null_mut::<list_T>();
+                dst.vval.v_list = null_mut::<List>();
             // SAFETY: `l` is the source's live List.
             } else if copy_id != 0 && unsafe { tv_list_copyid(l) } == copy_id {
                 // Already copied under this id: share that copy.
@@ -724,7 +724,7 @@ pub unsafe fn var_item_copy(
             dst.v_lock = VarLock::Unlocked;
             let d = src.dict_or_null();
             if d.is_null() {
-                dst.vval.v_dict = null_mut::<dict_T>();
+                dst.vval.v_dict = null_mut::<Dict>();
             // SAFETY: `d` is the source's live Dict.
             } else if copy_id != 0 && unsafe { (*d).dv_copyID } == copy_id {
                 // SAFETY: as above -- the copy it was given under this id,
@@ -767,7 +767,7 @@ pub unsafe fn var_item_copy(
 /// # Safety
 /// `l` must be valid.
 #[inline]
-pub(crate) unsafe fn tv_list_latest_copy(l: *const list_T) -> *mut list_T {
+pub(crate) unsafe fn tv_list_latest_copy(l: *const List) -> *mut List {
     unsafe { (*l).lv_copylist }
 }
 
@@ -777,6 +777,6 @@ pub(crate) unsafe fn tv_list_latest_copy(l: *const list_T) -> *mut list_T {
 /// # Safety
 /// `l` must be null or valid.
 #[inline]
-pub(crate) unsafe fn tv_list_has_watchers(l: *const list_T) -> bool {
+pub(crate) unsafe fn tv_list_has_watchers(l: *const List) -> bool {
     unsafe { !l.is_null() && !(*l).lv_watch.is_null() }
 }

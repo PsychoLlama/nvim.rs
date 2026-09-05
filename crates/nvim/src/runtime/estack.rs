@@ -277,11 +277,11 @@ unsafe fn render_stack(stack: &[estack_T], which: EStackArg) -> *mut c_char {
 
 /// `tv_dict_add_*` take the key and its length separately; upstream spells that
 /// pair `S_LEN(key)`.
-unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
+unsafe fn dict_add_str(d: *mut Dict, key: &CStr, val: *const c_char) {
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
-unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
+unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
@@ -290,7 +290,7 @@ unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
 /// Exactly one of `fp` (a user function) and `event` (an autocommand event
 /// name) is set; a script frame has neither.
 unsafe fn stacktrace_push_item(
-    l: *mut list_T,
+    l: *mut List,
     fp: *mut ufunc_T,
     event: *const c_char,
     lnum: LineNr,
@@ -300,7 +300,7 @@ unsafe fn stacktrace_push_item(
     // allocated, so every `tv_dict_add_*` writes into memory we own until the
     // final append hands the dict to the list.
     let d = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
-    let mut tv = typval_T {
+    let mut tv = TypVal {
         v_type: VAR_DICT,
         v_lock: VarLock::Locked,
         vval: typval_vval_union { v_dict: d },
@@ -318,7 +318,7 @@ unsafe fn stacktrace_push_item(
 
 /// The execution stack as `getstacktrace()` reports it: one dict per frame,
 /// outermost first.
-pub unsafe fn stacktrace_create() -> *mut list_T {
+pub unsafe fn stacktrace_create() -> *mut List {
     // A copy of the stack, because building the dicts below runs arbitrary
     // allocation and it is not worth holding the cell's borrow across it.
     let stack = exestack.with(|stack| stack.clone());
@@ -384,7 +384,7 @@ pub unsafe fn stacktrace_create() -> *mut list_T {
 /// # Safety
 ///
 /// `sctx` must name a live script context.
-unsafe fn script_path(sctx: sctx_T) -> CString {
+unsafe fn script_path(sctx: ScriptCtx) -> CString {
     if sctx.sc_sid <= 0 {
         return c"".to_owned();
     }
@@ -394,7 +394,7 @@ unsafe fn script_path(sctx: sctx_T) -> CString {
 }
 
 /// `getstacktrace()` function
-pub unsafe fn f_getstacktrace(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getstacktrace(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the caller's return slot.
     unsafe { tv_list_set_ret(rettv, stacktrace_create()) };
 }

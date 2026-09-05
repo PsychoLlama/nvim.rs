@@ -20,19 +20,19 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, blob_T, dictitem_T, typval_T, typval_vval_union,
+    Blob, DictItem, EvalFuncData, NUL, TypVal, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, typval_vval_union,
 };
 use core::ffi::{c_char, c_int, c_void};
 
 /// A cleared typval.
-const EMPTY_TV: typval_T = typval_T {
+const EMPTY_TV: TypVal = TypVal {
     v_type: VAR_UNKNOWN,
     v_lock: VarLock::Unlocked,
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// The byte offset from a `dictitem_T`'s inline key to the item itself, as
+/// The byte offset from a `DictItem`'s inline key to the item itself, as
 /// the C's `TV_DICT_HI2DI` spells it.
 const DI_KEY_OFFSET: isize = 17;
 
@@ -40,8 +40,8 @@ const DI_KEY_OFFSET: isize = 17;
 ///
 /// # Safety
 /// `p` has at least `len` readable bytes.
-unsafe fn owned_str(p: *const c_char, len: c_int) -> typval_T {
-    typval_T {
+unsafe fn owned_str(p: *const c_char, len: c_int) -> TypVal {
+    TypVal {
         v_type: VAR_STRING,
         v_lock: VarLock::Unlocked,
         // SAFETY throughout: the caller's obligation; `xmemdupz` copies and terminates.
@@ -52,8 +52,8 @@ unsafe fn owned_str(p: *const c_char, len: c_int) -> typval_T {
 }
 
 /// A Number typval.
-const fn number_tv(n: VarNumber) -> typval_T {
-    typval_T {
+const fn number_tv(n: VarNumber) -> TypVal {
+    TypVal {
         v_type: VAR_NUMBER,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: n },
@@ -64,7 +64,7 @@ const fn number_tv(n: VarNumber) -> typval_T {
 ///
 /// # Safety
 /// `tv` is a live argument typval and `rettv` the cleared return value.
-unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
+unsafe fn max_min(tv: *const TypVal, rettv: &mut TypVal, domax: bool) {
     // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
     let mut error = false;
@@ -97,7 +97,7 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
             }
             let ht = unsafe { &(*tv.dict_or_null()).dv_hashtab };
             for hi in ht.items() {
-                let di = unsafe { hi.hi_key.offset(-DI_KEY_OFFSET) } as *mut dictitem_T;
+                let di = unsafe { hi.hi_key.offset(-DI_KEY_OFFSET) } as *mut DictItem;
                 let i = unsafe { tv_get_number_chk(&raw mut (*di).di_tv, &raw mut error) };
                 if error {
                     return;
@@ -123,14 +123,14 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
 }
 
 /// `max({expr})`.
-pub unsafe fn f_max(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_max(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the argument is the frame's.
     unsafe { max_min(args.ptr(0), rettv, true) }
 }
 
 /// `min({expr})`.
-pub unsafe fn f_min(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_min(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the argument is the frame's.
     unsafe { max_min(args.ptr(0), rettv, false) }
@@ -177,9 +177,9 @@ const BLOB_CLEANUP: Cleanup = Cleanup {
 /// # Safety
 /// `expr` is a live callable typval and `rettv` the fold's accumulator.
 unsafe fn fold_step(
-    expr: *mut typval_T,
-    rettv: &mut typval_T,
-    item: typval_T,
+    expr: *mut TypVal,
+    rettv: &mut TypVal,
+    item: TypVal,
     cleanup: Cleanup,
     called_emsg_start: c_int,
 ) -> bool {
@@ -205,7 +205,7 @@ unsafe fn fold_step(
 ///
 /// # Safety
 /// `args` is the call frame and `rettv` its cleared return value.
-unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
+unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
     // SAFETY: the caller's obligation; the list is locked against
     // modification for the whole fold and restored afterwards.
     let l = args.get(0).list_or_null();
@@ -241,7 +241,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 ///
 /// # Safety
 /// `args` is the call frame and `rettv` its cleared return value.
-unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
+unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
@@ -280,10 +280,10 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_
 ///
 /// # Safety
 /// `args` is the call frame and `rettv` its cleared return value.
-unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T) {
+unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
-    let b: *const blob_T = args.get(0).blob_or_null();
+    let b: *const Blob = args.get(0).blob_or_null();
     let called_emsg_start = called_emsg.get();
     let (initial, mut i) = if args.has(2) {
         if check_arg(args, 2, tv_check_for_number_arg).is_err() {
@@ -309,7 +309,7 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
 }
 
 /// `reduce({object}, {func} [, {initial}])`.
-pub unsafe fn f_reduce(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_reduce(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: everything read below is the frame's.

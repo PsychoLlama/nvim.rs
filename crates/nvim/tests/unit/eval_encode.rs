@@ -9,7 +9,7 @@ use std::ptr;
 
 use neovim::eval::encode::encode_list_write;
 use neovim::eval::typval::{tv_clear, tv_list_alloc, tv_list_append};
-use neovim::types::{Refcount, VarLock, list_T, typval_T, typval_vval_union};
+use neovim::types::{List, Refcount, TypVal, VarLock, typval_vval_union};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Tv};
@@ -28,7 +28,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
     let _log = AllocLog::start();
     // SAFETY: each list is this case's own and is freed.
     unsafe {
-        let write = |l: *mut list_T, s: &[u8]| {
+        let write = |l: *mut List, s: &[u8]| {
             encode_list_write(l.cast(), s.as_ptr().cast(), s.len());
         };
         let ns = Tv::NullStr;
@@ -116,7 +116,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
                     "after writing {chunk:?}"
                 );
             }
-            let mut tv = typval_T {
+            let mut tv = TypVal {
                 v_type: neovim::types::VAR_LIST,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: l },
@@ -135,7 +135,7 @@ fn writing_to_a_list_splits_on_newlines_and_joins_on_nul() {
 ///
 /// # Safety
 /// The editor must be up. The caller owns the answer.
-unsafe fn sharing(n: usize, inner: &Tv) -> typval_T {
+unsafe fn sharing(n: usize, inner: &Tv) -> TypVal {
     // SAFETY: the caller's.
     unsafe {
         let outer = tv_list_alloc(n as isize);
@@ -154,7 +154,7 @@ unsafe fn sharing(n: usize, inner: &Tv) -> typval_T {
             (*li).li_tv = inner_tv;
             tv_list_append(outer, li);
         }
-        typval_T {
+        TypVal {
             v_type: neovim::types::VAR_LIST,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union { v_list: outer },

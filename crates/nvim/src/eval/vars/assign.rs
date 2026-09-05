@@ -30,7 +30,7 @@ const ARITHMETIC: &CStr = c"+-*/%";
 
 /// One `:let` target parser, dispatched on the sigil the target starts with.
 type LetTarget =
-    unsafe fn(*mut c_char, *mut typval_T, bool, *const c_char, *const c_char) -> *mut c_char;
+    unsafe fn(*mut c_char, *mut TypVal, bool, *const c_char, *const c_char) -> *mut c_char;
 
 /// The assignment's operator character: `None` when there is none, which is
 /// the `op == NULL` every caller below tests for first.
@@ -121,7 +121,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
     // Assign to the target or targets, whatever produced the value. The
     // command's argument text is re-read here rather than reused from above
     // because `heredoc_get` moves it.
-    let assign = |tv: *mut typval_T, op: *const c_char| {
+    let assign = |tv: *mut TypVal, op: *const c_char| {
         let a = ea.arg;
         // SAFETY: the command's own argument text, and a live value.
         let _ = unsafe { ex_let_vars(a, tv, false, semicolon, var_count, is_const, op) };
@@ -202,7 +202,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
 /// `arg_start` is a NUL-terminated string and `tv` a live value.
 pub unsafe fn ex_let_vars(
     arg_start: *mut c_char,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     copy: bool,
     semicolon: c_int,
     var_count: c_int,
@@ -270,7 +270,7 @@ pub unsafe fn ex_let_vars(
                 unsafe { tv_list_append_tv(rest_list, &raw mut (*item).li_tv) };
                 item = unsafe { (*item).li_next };
             }
-            let mut ltv = typval_T {
+            let mut ltv = TypVal {
                 v_type: VAR_LIST,
                 v_lock: VarLock::Unlocked,
                 vval: typval_vval_union { v_list: rest_list },
@@ -383,7 +383,7 @@ unsafe fn skip_var_one(arg: *const c_char) -> *const c_char {
 /// `arg` points at the `$`; `tv` is a live value.
 unsafe fn ex_let_env(
     mut arg: *mut c_char,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     is_const: bool,
     endchars: *const c_char,
     op: *const c_char,
@@ -447,13 +447,13 @@ unsafe fn ex_let_env(
 ///
 /// The compound operators are implemented here rather than through
 /// `eexe_mod_op`, because an option's value is an `OptVal` and not a
-/// `typval_T`: the current value is read, combined, and set back.
+/// `TypVal`: the current value is read, combined, and set back.
 ///
 /// # Safety
 /// `arg` points at the `&`; `tv` is a live value.
 unsafe fn ex_let_option(
     mut arg: *mut c_char,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     is_const: bool,
     endchars: *const c_char,
     op: *const c_char,
@@ -597,7 +597,7 @@ pub(crate) fn tristate_from_int(n: OptInt) -> Option<bool> {
 /// `arg` points at the `@`; `tv` is a live value.
 unsafe fn ex_let_register(
     mut arg: *mut c_char,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     is_const: bool,
     endchars: *const c_char,
     op: *const c_char,
@@ -665,7 +665,7 @@ unsafe fn ex_let_register(
 /// `arg` is a NUL-terminated string; `tv` is a live value.
 unsafe fn ex_let_one(
     arg: *mut c_char,
-    tv: *mut typval_T,
+    tv: *mut TypVal,
     copy: bool,
     is_const: bool,
     endchars: *const c_char,

@@ -102,7 +102,7 @@ unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ExpandContext)> {
 }
 
 /// `getcmdcomplpat()` function: the pattern completion would expand.
-pub unsafe fn f_getcmdcomplpat(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdcomplpat(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>() };
     if let Some((xpc, _)) = unsafe { cmdline_completion_state() } {
@@ -114,11 +114,7 @@ pub unsafe fn f_getcmdcomplpat(_argvars: *mut typval_T, rettv: *mut typval_T, _f
 }
 
 /// `getcmdcompltype()` function: the completion type's name.
-pub unsafe fn f_getcmdcompltype(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcmdcompltype(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe {
         (*rettv).vval.v_string = match cmdline_completion_state() {
@@ -129,18 +125,18 @@ pub unsafe fn f_getcmdcompltype(
 }
 
 /// `getcmdline()` function.
-pub unsafe fn f_getcmdline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdline(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe { (*rettv).vval.v_string = get_cmdline_str() };
 }
 
 /// `getcmdpos()` function.
-pub unsafe fn f_getcmdpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdpos(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as VarNumber) };
 }
 
 /// `getcmdprompt()` function.
-pub unsafe fn f_getcmdprompt(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdprompt(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     unsafe {
         (*rettv).vval.v_string = get_ccline_ptr()
@@ -150,18 +146,14 @@ pub unsafe fn f_getcmdprompt(_argvars: *mut typval_T, rettv: *mut typval_T, _fpt
 }
 
 /// `getcmdscreenpos()` function.
-pub unsafe fn f_getcmdscreenpos(
-    _argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_getcmdscreenpos(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe {
         (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as VarNumber)
     };
 }
 
 /// `getcmdtype()` function.
-pub unsafe fn f_getcmdtype(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdtype(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*rettv).v_type = VAR_STRING };
     // One character plus the terminator `xmallocz` appends.
     unsafe { (*rettv).vval.v_string = xmallocz(1) as *mut ::core::ffi::c_char };
@@ -216,7 +208,7 @@ pub(crate) fn set_cmdline_pos(pos: ::core::ffi::c_int) -> ::core::ffi::c_int {
 }
 
 /// `setcmdline()` function.
-pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setcmdline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
         || unsafe { tv_check_for_opt_number_arg(argvars, 1) }.is_err()
@@ -245,7 +237,7 @@ pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// `setcmdpos()` function.
-pub unsafe fn f_setcmdpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_setcmdpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let pos = unsafe { tv_get_number(argvars.offset(0)) } as ::core::ffi::c_int - 1;
     if pos >= 0 {
         unsafe { (*rettv).vval.v_number = set_cmdline_pos(pos) as VarNumber };
@@ -259,7 +251,7 @@ pub fn get_cmdline_firstc() -> ::core::ffi::c_int {
 
 /// `wildtrigger()` function: ask the key loop to complete, as if `'wildchar'`
 /// had been typed.
-pub unsafe fn f_wildtrigger(_argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_wildtrigger(_argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     if State.get() & MODE_CMDLINE == 0
         || char_avail()
         || wild_menu_showing.get() != 0

@@ -897,7 +897,7 @@ end)
 -- ---------------------------------------------------------------------
 
 section('s4-scopedict', function()
-  -- A scope is a real dict_T behind a ScopeDictDictItem, so every dict
+  -- A scope is a real Dict behind a ScopeDictDictItem, so every dict
   -- builtin reaches it -- and init_var_dict() marks the entry itself
   -- fixed and read-only, which is what most of these answer about.
   -- Every read is filtered to this section's own prefix: `keys(g:)`

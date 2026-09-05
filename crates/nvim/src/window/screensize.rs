@@ -33,8 +33,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    LineNr, OptInt, Refcount, VAR_NUMBER, VarLock, VarNumber, buf_T, dict_T, list_T, ptrdiff_t,
-    save_v_event_T, size_t, typval_T, typval_vval_union,
+    Dict, LineNr, List, OptInt, Refcount, TypVal, VAR_NUMBER, VarLock, VarNumber, buf_T, ptrdiff_t,
+    save_v_event_T, size_t, typval_vval_union,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -141,7 +141,7 @@ pub unsafe fn may_make_initial_scroll_size_snapshot() {
 
 /// A dictionary with the six numbers a `WinScrolled`/`WinResized` `v:event`
 /// entry carries, or null when one of them could not be added.
-fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
+fn win_info_dict(deltas: [c_int; 6]) -> *mut Dict {
     let d = new_dict();
     let keys = [
         c"width".to_bytes(),
@@ -152,7 +152,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
         c"skipcol".to_bytes(),
     ];
     for (key, value) in keys.iter().zip(deltas) {
-        let mut tv = typval_T {
+        let mut tv = TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
@@ -164,7 +164,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
         // value the dictionary takes over.
         if unsafe { tv_dict_add_tv(d, name, len, &raw mut tv) }.is_err() {
             unref_dict(d);
-            return ptr::null_mut::<dict_T>();
+            return ptr::null_mut::<Dict>();
         }
     }
     d
@@ -172,7 +172,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
 
 /// A fresh dictionary with one reference held, which is how upstream's
 /// `v:event` entries start.
-fn new_dict() -> *mut dict_T {
+fn new_dict() -> *mut Dict {
     // SAFETY: `tv_dict_alloc` answers a fresh live dictionary.
     unsafe {
         let d = tv_dict_alloc();
@@ -182,13 +182,13 @@ fn new_dict() -> *mut dict_T {
 }
 
 /// Give up one reference to a dictionary.
-fn unref_dict(d: *mut dict_T) {
+fn unref_dict(d: *mut Dict) {
     // SAFETY: a live dictionary this file holds a reference to.
     unsafe { tv_dict_unref(d) };
 }
 
 /// Give up the caller's reference once the dictionary has an owner.
-fn hand_over(d: *mut dict_T) {
+fn hand_over(d: *mut Dict) {
     // SAFETY: as [`unref_dict`]; the new owner holds the other reference.
     unsafe { (*d).dv_refcount.release() };
 }
@@ -205,9 +205,9 @@ enum Scan<'a> {
         first_size: &'a mut Option<Win>,
     },
     /// A list of the handles of every window that changed size.
-    Winlist(*mut list_T),
+    Winlist(*mut List),
     /// A dictionary of per-window deltas, plus an `all` entry.
-    Deltas(*mut dict_T),
+    Deltas(*mut Dict),
 }
 
 /// Look for windows whose size or view has moved since the last snapshot, and
@@ -229,7 +229,7 @@ fn scan_windows(what: &mut Scan) {
         if size_changed {
             match what {
                 Scan::Winlist(list) => {
-                    let tv = typval_T {
+                    let tv = TypVal {
                         v_type: VAR_NUMBER,
                         v_lock: VarLock::Unlocked,
                         vval: typval_vval_union {
@@ -368,13 +368,13 @@ pub unsafe fn may_trigger_win_scrolled_resized() {
         return;
     }
 
-    let mut windows_list = ptr::null_mut::<list_T>();
+    let mut windows_list = ptr::null_mut::<List>();
     if trigger_resize {
         // SAFETY: a fresh list of the right size.
         windows_list = unsafe { tv_list_alloc(size_count as ptrdiff_t) };
         scan_windows(&mut Scan::Winlist(windows_list));
     }
-    let mut scroll_dict = ptr::null_mut::<dict_T>();
+    let mut scroll_dict = ptr::null_mut::<Dict>();
     if trigger_scroll {
         scroll_dict = new_dict();
         scan_windows(&mut Scan::Deltas(scroll_dict));
@@ -397,7 +397,7 @@ pub unsafe fn may_trigger_win_scrolled_resized() {
 }
 
 /// Fire `WinResized` with `v:event.windows` set to the resized windows.
-fn fire_resized(resize: &mut Subject, windows_list: *mut list_T) {
+fn fire_resized(resize: &mut Subject, windows_list: *mut List) {
     let mut save = save_v_event_T::default();
     // SAFETY: `get_v_event` hands back the dictionary it saved into `save`.
     let v_event = unsafe { get_v_event(&raw mut save) };
@@ -415,7 +415,7 @@ fn fire_resized(resize: &mut Subject, windows_list: *mut list_T) {
 }
 
 /// Fire `WinScrolled` with `v:event` holding the per-window deltas.
-fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut dict_T) {
+fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut Dict) {
     let mut save = save_v_event_T::default();
     // SAFETY: as [`fire_resized`]; `scroll_dict` is live and is unreferenced
     // once its contents have been copied in.

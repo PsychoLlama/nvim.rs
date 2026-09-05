@@ -26,7 +26,7 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::xmemdupz;
-use crate::types::{EvalFuncData, VAR_STRING, VarNumber, int64_t, size_t, typval_T};
+use crate::types::{EvalFuncData, TypVal, VAR_STRING, VarNumber, int64_t, size_t};
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.
@@ -79,7 +79,7 @@ unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
 ///
 /// `comp` is the `byteidxcomp()` spelling, which counts a composing
 /// character as one of its own.
-unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: bool) {
+unsafe fn byteidx_common(argvars: *mut TypVal, rettv: *mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
@@ -123,17 +123,17 @@ unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: boo
 }
 
 /// "byteidx()" function
-pub unsafe fn f_byteidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_byteidx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { byteidx_common(argvars, rettv, false) }
 }
 
 /// "byteidxcomp()" function
-pub unsafe fn f_byteidxcomp(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_byteidxcomp(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { byteidx_common(argvars, rettv, true) }
 }
 
 /// "charidx()" function: the character index of a byte (or UTF-16) offset.
-pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_charidx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
@@ -195,7 +195,7 @@ pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
-pub unsafe fn f_strgetchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strgetchar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
@@ -222,7 +222,7 @@ pub unsafe fn f_strgetchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 }
 
 /// "strutf16len()" function: the string's length in UTF-16 code units.
-pub unsafe fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strutf16len(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 
@@ -249,7 +249,7 @@ pub unsafe fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 }
 
 /// "strcharpart()" function: a substring measured in characters.
-pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strcharpart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let p = unsafe { numbuf.string(argvars) };
     let slen = unsafe { cstr::bytes_at(p) }.len();
@@ -318,7 +318,7 @@ pub unsafe fn f_strcharpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
 /// fourth argument -- in characters starting from a byte offset.
-pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_strpart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut error = false;
     let p = unsafe { numbuf.string(argvars) };
@@ -363,7 +363,7 @@ pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
-pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_utf16idx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*rettv).vval.v_number = -1 };
 

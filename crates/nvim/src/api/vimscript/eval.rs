@@ -49,7 +49,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
     let mut error = Error::none();
     let mut rv = Object::Nil;
     let _nesting = enter_recursive(&recursive);
-    let mut rettv: typval_T = TV_INITIAL_VALUE;
+    let mut rettv: TypVal = TV_INITIAL_VALUE;
     let ok = api_try(&mut error, |_| {
         let no_eap = ptr::null_mut::<exarg_T>();
         let (ret, ea) = (&raw mut rettv, &raw mut evalarg);
@@ -91,7 +91,7 @@ pub unsafe fn nvim_eval(expr: String_0, arena: *mut Arena) -> Result<Object, Err
 unsafe fn call_function_with(
     fn_0: String_0,
     args: Array,
-    self_0: *mut dict_T,
+    self_0: *mut Dict,
     arena: *mut Arena,
     err: &mut Error,
 ) -> Object {
@@ -101,7 +101,7 @@ unsafe fn call_function_with(
         return Object::Nil;
     }
     // MAX_FUNC_ARGS + 1: `call_func` reads one past the last argument.
-    let mut vim_args: [typval_T; 21] = [TV_INITIAL_VALUE; 21];
+    let mut vim_args: [TypVal; 21] = [TV_INITIAL_VALUE; 21];
     for (i, slot) in vim_args[..args.size].iter_mut().enumerate() {
         // SAFETY: `i` is below `size`, so the object is inside `items`; the
         // slot is this frame's and `err` the caller's.
@@ -111,7 +111,7 @@ unsafe fn call_function_with(
     let mut rv = Object::Nil;
     {
         let _nesting = enter_recursive(&recursive);
-        let mut rettv: typval_T = TV_INITIAL_VALUE;
+        let mut rettv: TypVal = TV_INITIAL_VALUE;
         let mut funcexe: funcexe_T = FUNCEXE_INIT;
         // SAFETY: there is always a current window.
         let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
@@ -155,8 +155,7 @@ pub unsafe fn nvim_call_function(
     let mut error = Error::none();
     // SAFETY: `fn_0`/`args`/`arena` are the caller's, and `error` this
     // frame's slot; a null self dictionary means a plain function call.
-    let rv =
-        unsafe { call_function_with(fn_0, args, ptr::null_mut::<dict_T>(), arena, &mut error) };
+    let rv = unsafe { call_function_with(fn_0, args, ptr::null_mut::<Dict>(), arena, &mut error) };
     rv.reported(error)
 }
 
@@ -168,7 +167,7 @@ pub unsafe fn nvim_call_dict_function(
 ) -> Result<Object, Error> {
     let mut evalarg = EVALARG_EVALUATE;
     let mut error = Error::none();
-    let mut rettv: typval_T = TV_INITIAL_VALUE;
+    let mut rettv: TypVal = TV_INITIAL_VALUE;
     // Only the evaluated form owns what it produced.
     let mut mustfree = false;
     if let Some(expr) = dict.as_string() {
@@ -207,7 +206,7 @@ pub unsafe fn nvim_call_dict_function(
     // SAFETY: `rettv` is this frame's; a non-dictionary leaves the union's
     // pointer arm holding whatever the value was, which `call_in_dict`
     // refuses after checking `v_type`.
-    let self_dict: *mut dict_T = unsafe { rettv.vval.v_dict };
+    let self_dict: *mut Dict = unsafe { rettv.vval.v_dict };
     // SAFETY: as above, plus `fn_0`/`args`/`arena` are the caller's.
     let rv = unsafe { call_in_dict(&mut fn_0, dict, args, self_dict, &rettv, arena, &mut error) };
     if mustfree {
@@ -228,8 +227,8 @@ unsafe fn call_in_dict(
     fn_0: &mut String_0,
     dict: Object,
     args: Array,
-    self_dict: *mut dict_T,
-    rettv: &typval_T,
+    self_dict: *mut Dict,
+    rettv: &TypVal,
     arena: *mut Arena,
     err: &mut Error,
 ) -> Object {
@@ -246,7 +245,7 @@ unsafe fn call_in_dict(
     // already `fn_0`; a String argument named a dictionary to look in.
     if !fn_0.data().is_null() && !fn_0.is_empty() && !matches!(dict, Object::Dict(_)) {
         // SAFETY: `self_dict` is live and `fn_0` names its own bytes.
-        let di: *mut dictitem_T =
+        let di: *mut DictItem =
             unsafe { tv_dict_find(self_dict, fn_0.data(), fn_0.len() as ptrdiff_t) };
         if di.is_null() {
             // SAFETY: `fn_0` names its own NUL-terminated bytes.

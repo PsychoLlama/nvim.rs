@@ -94,8 +94,8 @@ use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
     ApiDict, Arena, Array, ColNr, EStackArg, Event, FILE, FlushBuffers, GridView, HlMessage,
     HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
-    ScreenChar, ShmFlag, String_0, Vv, estack_T, exarg_T, int64_t, ptrdiff_t, size_t, ssize_t,
-    typval_T, typval_vval_union, uint64_t,
+    ScreenChar, ShmFlag, String_0, TypVal, Vv, estack_T, exarg_T, int64_t, ptrdiff_t, size_t,
+    ssize_t, typval_vval_union, uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,

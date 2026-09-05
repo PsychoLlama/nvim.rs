@@ -24,7 +24,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::main::e_invarg;
-use crate::types::{EvalFuncData, VAR_UNKNOWN, dict_T, exarg_T, typval_T};
+use crate::types::{Dict, EvalFuncData, TypVal, VAR_UNKNOWN, exarg_T};
 
 /// One `:menutranslate from to` entry.
 struct Translation {
@@ -174,7 +174,7 @@ pub(crate) fn menu_translate_tab_and_shift(arg_start: CText) -> CText {
 
 /// Describe one menu item, or -- for an empty name -- list the top-level
 /// menus.
-fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut dict_T) {
+fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict) {
     if menu_name.is_empty() {
         // All the top-level menus, skipping PopUp[nvoci].
         let list = list_alloc();
@@ -230,11 +230,7 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut dict_
 ///
 /// # Safety
 /// The eval layer must pass live argument and return typvals.
-pub(crate) unsafe fn f_menu_info(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_menu_info(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's obligation.

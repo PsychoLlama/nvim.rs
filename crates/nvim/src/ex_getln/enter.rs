@@ -167,7 +167,7 @@ pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
 pub(crate) unsafe fn cmdline_event_dict(
     save_v_event: *mut save_v_event_T,
     cmdtype: *const ::core::ffi::c_char,
-) -> *mut dict_T {
+) -> *mut Dict {
     let dict = unsafe { get_v_event(save_v_event) };
     let _ =
         unsafe { tv_dict_add_str(dict, c"cmdtype".as_ptr(), c"cmdtype".count_bytes(), cmdtype) };

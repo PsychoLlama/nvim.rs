@@ -1,7 +1,7 @@
 //! The `vim_snprintf` family: entry points and argument fetchers.
 //!
 //! Every spelling funnels into `vim_vsnprintf_typval`, which can be handed
-//! either a C `va_list` or an array of `typval_T` -- the latter being how
+//! either a C `va_list` or an array of `TypVal` -- the latter being how
 //! Vimscript's `printf()` passes its arguments, and the reason
 //! `tv_nr`/`tv_str`/`tv_ptr`/`tv_float` exist: they read one argument out of
 //! that array with the type checking C's varargs cannot do.  `arena_printf`
@@ -25,7 +25,7 @@ use crate::memory::{arena_alloc, arena_alloc_block};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
 use crate::types::{
-    Arena, Float, String_0, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, size_t, typval_T,
+    Arena, Float, String_0, TypVal, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, size_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -44,7 +44,7 @@ const E_EXPECTED_FLOAT: &CStr = c"E807: Expected Float argument for printf()";
 /// -- and the array is terminated by a `VAR_UNKNOWN` entry rather than by a
 /// count, so that entry is the only bound there is. The index moves on only
 /// when an argument was actually there.
-unsafe fn next_arg(tvs: *mut typval_T, idxp: &mut c_int) -> Option<*mut typval_T> {
+unsafe fn next_arg(tvs: *mut TypVal, idxp: &mut c_int) -> Option<*mut TypVal> {
     let tv = unsafe { tvs.offset(*idxp as isize - 1) };
     if !given(unsafe { &*tv }) {
         emsg(gettext(E_INSUFFICIENT_ARGS));
@@ -55,7 +55,7 @@ unsafe fn next_arg(tvs: *mut typval_T, idxp: &mut c_int) -> Option<*mut typval_T
 }
 
 /// The next argument as a number; 0 if it is not one.
-pub(crate) unsafe fn tv_nr(tvs: *mut typval_T, idxp: &mut c_int) -> VarNumber {
+pub(crate) unsafe fn tv_nr(tvs: *mut TypVal, idxp: &mut c_int) -> VarNumber {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0;
     };
@@ -73,7 +73,7 @@ pub(crate) unsafe fn tv_nr(tvs: *mut typval_T, idxp: &mut c_int) -> VarNumber {
 /// # Safety
 /// `numbuf` must be writable for `NUMBUFLEN` bytes.
 pub(crate) unsafe fn tv_str(
-    tvs: *mut typval_T,
+    tvs: *mut TypVal,
     idxp: &mut c_int,
     tofree: &mut *mut c_char,
     numbuf: *mut c_char,
@@ -94,7 +94,7 @@ pub(crate) unsafe fn tv_str(
 ///
 /// Every pointer-shaped value -- String, List, Dict, Blob, Partial --
 /// occupies the same union slot, so reading `v_string` reads all of them.
-pub(crate) unsafe fn tv_ptr(tvs: *const typval_T, idxp: &mut c_int) -> *const c_void {
+pub(crate) unsafe fn tv_ptr(tvs: *const TypVal, idxp: &mut c_int) -> *const c_void {
     match unsafe { next_arg(tvs.cast_mut(), idxp) } {
         Some(tv) => unsafe { (*tv).vval.v_string as *const c_void },
         None => ptr::null(),
@@ -103,7 +103,7 @@ pub(crate) unsafe fn tv_ptr(tvs: *const typval_T, idxp: &mut c_int) -> *const c_
 
 /// The next argument as a float; a Number is widened, anything else is
 /// `E807` and zero.
-pub(crate) unsafe fn tv_float(tvs: *mut typval_T, idxp: &mut c_int) -> Float {
+pub(crate) unsafe fn tv_float(tvs: *mut TypVal, idxp: &mut c_int) -> Float {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0.0;
     };

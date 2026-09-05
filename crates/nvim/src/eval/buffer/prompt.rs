@@ -35,7 +35,7 @@ unsafe fn ends_in_newline(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// `lines` must be a live typval.
-unsafe fn list_last(lines: *mut typval_T) -> *mut listitem_T {
+unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
     // SAFETY: the caller's obligation; under `VAR_LIST` the union's live arm
     // is `v_list`, a live list or NULL.
     let l = unsafe { (*lines).list_or_null() };
@@ -51,11 +51,7 @@ unsafe fn list_last(lines: *mut typval_T) -> *mut listitem_T {
 /// Text appended while the prompt line is being edited joins onto the last
 /// line rather than starting a new one, unless the previous append ended in a
 /// newline.
-pub unsafe fn f_prompt_appendbuf(
-    argvars: *mut typval_T,
-    rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -89,7 +85,7 @@ pub unsafe fn f_prompt_appendbuf(
             let l = tv.list_or_null();
             if !l.is_null() && unsafe { (*l).lv_len } > 0 {
                 let mut item = unsafe { Li::new((*l).lv_first) };
-                let itv = item.field_ptr(offset_of!(listitem_T, li_tv));
+                let itv = item.field_ptr(offset_of!(ListItem, li_tv));
                 let joined = unsafe { concat_str(text, numbuf.string(itv)) };
                 unsafe { tv_clear(itv) };
                 item.li_tv.v_type = VAR_STRING;
@@ -111,7 +107,7 @@ pub unsafe fn f_prompt_appendbuf(
             // appended after it, but only once the replacement worked.
             let l = tv.list_or_null();
             let li = unsafe { (*l).lv_first };
-            let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(listitem_T, li_tv));
+            let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(ListItem, li_tv));
             unsafe { set_buffer_lines(buf.raw(), lnum, false, itv, rettv) };
             if rettv.number_or_zero() == 0 {
                 unsafe { tv_list_item_remove(l, li) };
@@ -126,7 +122,7 @@ pub unsafe fn f_prompt_appendbuf(
         let mut buf = buf;
         buf.b_prompt_append_new_line = if tv.v_type == VAR_LIST {
             let last = unsafe { list_last(lines) };
-            let ltv = unsafe { Li::new(last) }.field_ptr(offset_of!(listitem_T, li_tv));
+            let ltv = unsafe { Li::new(last) }.field_ptr(offset_of!(ListItem, li_tv));
             !last.is_null() && unsafe { ends_in_newline(numbuf3.string(ltv)) }
         } else {
             tv.v_type == VAR_STRING && unsafe { ends_in_newline(numbuf4.string(lines)) }
@@ -135,11 +131,7 @@ pub unsafe fn f_prompt_appendbuf(
 }
 
 /// `prompt_setcallback({buf}, {callback})`.
-pub unsafe fn f_prompt_setcallback(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_prompt_setcallback(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, _) = frame!(argvars, _rettv);
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_callback) };
@@ -147,8 +139,8 @@ pub unsafe fn f_prompt_setcallback(
 
 /// `prompt_setinterrupt({buf}, {callback})`.
 pub unsafe fn f_prompt_setinterrupt(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
+    argvars: *mut TypVal,
+    _rettv: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let (args, _) = frame!(argvars, _rettv);
@@ -188,11 +180,7 @@ unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut buf_T) -> *mut 
 /// changing it has to rewrite the line the old prompt is sitting in — unless
 /// that line no longer starts with the old prompt, in which case the whole
 /// line is replaced.
-pub unsafe fn f_prompt_setprompt(
-    argvars: *mut typval_T,
-    _rettv: *mut typval_T,
-    _fptr: EvalFuncData,
-) {
+pub unsafe fn f_prompt_setprompt(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, _) = frame!(argvars, _rettv);
     // SAFETY: the arguments are live typvals; every line index below is

@@ -37,7 +37,7 @@ use super::{
     vim_var_value,
 };
 use crate::main::did_emsg;
-use crate::types::{EvalFuncData, VAR_UNKNOWN, Vv, typval_T};
+use crate::types::{EvalFuncData, TypVal, VAR_UNKNOWN, Vv};
 
 // The carve of the transpiled module; see each child's docs.
 mod containers;
@@ -88,9 +88,9 @@ impl FilterMap {
 /// clear it here.
 pub(crate) fn filter_map_one(
     tv: TvRef,
-    expr: &mut typval_T,
+    expr: &mut TypVal,
     filtermap: FilterMap,
-    newtv: &mut typval_T,
+    newtv: &mut TypVal,
     rem: &mut bool,
 ) -> bool {
     set_vim_var_tv(Vv::Val, tv);
@@ -133,7 +133,7 @@ pub(crate) fn filter_map_one(
 
 /// The shared body of the four builtins: check the argument, save `v:key`
 /// and `v:val`, dispatch on the container, and put everything back.
-fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap) {
+fn filter_map(argvars: *mut TypVal, rettv: &mut TypVal, filtermap: FilterMap) {
     let (mut args, _) = frame!(argvars, rettv);
     let arg = args.get_mut(0);
     let container = Container::of(arg);
@@ -185,7 +185,7 @@ fn filter_map(argvars: *mut typval_T, rettv: &mut typval_T, filtermap: FilterMap
 /// # Safety
 /// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
 /// cleared result.
-pub unsafe fn f_filter(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_filter(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Filter);
 }
@@ -194,7 +194,7 @@ pub unsafe fn f_filter(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_map(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_map(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Map);
 }
@@ -204,7 +204,7 @@ pub unsafe fn f_map(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_mapnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_mapnew(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::MapNew);
 }
@@ -214,7 +214,7 @@ pub unsafe fn f_mapnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_foreach(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_foreach(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
     filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Foreach);
 }

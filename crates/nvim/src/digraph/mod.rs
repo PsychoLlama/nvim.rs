@@ -36,8 +36,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, KeymapEntry, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, buf_T, exarg_T, int16_t, list_T, typval_T, win_T,
+    BoolVarValue, EvalFuncData, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN, VarNumber, buf_T, exarg_T, int16_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -388,7 +388,7 @@ pub fn listdigraphs(use_headers: bool) {
 /// # Safety
 ///
 /// `l` must be a valid list.
-unsafe fn getlist_append_pair(dp: &Digraph, l: *mut list_T) {
+unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
     let chars = [dp.char1, dp.char2, 0];
     let mut buf = [0u8; 7];
     // SAFETY: `l` is a valid list; `utf_char2bytes` writes at most six bytes
@@ -407,7 +407,7 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut list_T) {
 /// # Safety
 ///
 /// `rettv` must be a valid return-value slot.
-unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut typval_T) {
+unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut TypVal) {
     let user_len = USER_DIGRAPHS.with(|user| user.len());
     let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
     // SAFETY: `rettv` is a valid return slot, so the list it is given owns
@@ -459,7 +459,7 @@ fn next_char(s: &[u8]) -> (c_int, &[u8]) {
 ///
 /// `arg` must be a valid typval, and `buf` — the scratch space a non-string
 /// value is rendered into — must outlive the returned slice.
-unsafe fn tv_string(arg: *const typval_T, buf: &mut [c_char; 65]) -> Option<&[u8]> {
+unsafe fn tv_string(arg: *const TypVal, buf: &mut [c_char; 65]) -> Option<&[u8]> {
     // SAFETY: caller contract; the result is null or a NUL-terminated string
     // owned by the typval or by `buf`, both of which outlive the borrow.
     let s = unsafe { tv_get_string_buf_chk(arg, buf.as_mut_ptr()) };
@@ -491,7 +491,7 @@ fn digraph_chars(chars: Option<&[u8]>) -> Option<(c_int, c_int)> {
 /// # Safety
 ///
 /// Both arguments must be valid typvals.
-unsafe fn digraph_set_common(argchars: *const typval_T, argdigraph: *const typval_T) -> bool {
+unsafe fn digraph_set_common(argchars: *const TypVal, argdigraph: *const TypVal) -> bool {
     let mut buf_chars = [0 as c_char; 65];
     // SAFETY: caller contract; `buf_chars` outlives the borrow.
     let chars = unsafe { tv_string(argchars, &mut buf_chars) };
@@ -518,7 +518,7 @@ unsafe fn digraph_set_common(argchars: *const typval_T, argdigraph: *const typva
 /// # Safety
 ///
 /// `rettv` must be a valid return-value slot.
-unsafe fn set_bool_ret(rettv: *mut typval_T, value: bool) {
+unsafe fn set_bool_ret(rettv: *mut TypVal, value: bool) {
     // SAFETY: caller contract.
     unsafe { (*rettv).v_type = VAR_BOOL };
     unsafe {
@@ -535,7 +535,7 @@ unsafe fn set_bool_ret(rettv: *mut typval_T, value: bool) {
 /// # Safety
 ///
 /// Standard eval-function contract: `argvars` and `rettv` are valid.
-pub unsafe fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_get(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; the result slot starts out empty.
     let digraphs = unsafe {
@@ -570,7 +570,7 @@ pub unsafe fn f_digraph_get(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_digraph_getlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_getlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     if unsafe { tv_check_for_opt_bool_arg(argvars, 0) }.is_err() {
         return;
@@ -587,7 +587,7 @@ pub unsafe fn f_digraph_getlist(argvars: *mut typval_T, rettv: *mut typval_T, _f
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_digraph_set(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_set(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract; `digraph_set()` takes two arguments.
     let set = unsafe { digraph_set_common(argvars, argvars.offset(1)) };
     // SAFETY: caller contract.
@@ -599,7 +599,7 @@ pub unsafe fn f_digraph_set(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_digraph_setlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_setlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     let set = unsafe { digraph_setlist_common(argvars) };
     // SAFETY: caller contract.
@@ -613,7 +613,7 @@ pub unsafe fn f_digraph_setlist(argvars: *mut typval_T, rettv: *mut typval_T, _f
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn digraph_setlist_common(arg: *const typval_T) -> bool {
+unsafe fn digraph_setlist_common(arg: *const TypVal) -> bool {
     // SAFETY: caller contract; the list is only read once its type is known.
     let pl = unsafe {
         if (*arg).v_type != VAR_LIST {
