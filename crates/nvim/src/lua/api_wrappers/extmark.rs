@@ -14,6 +14,8 @@ use super::*;
 /// binding's arguments on top of its stack and nothing of this frame's
 /// below them. The ABI is `C-unwind` because a refused argument ends in
 /// `lua_error`, which unwinds through this frame rather than returning.
+// `nlua_api_nvim__buf_debug_extmarks` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe extern "C-unwind" fn nlua_api_nvim__buf_debug_extmarks(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -72,6 +74,8 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__buf_debug_extmarks(lstate: *mut l
 /// binding's arguments on top of its stack and nothing of this frame's
 /// below them. The ABI is `C-unwind` because a refused argument ends in
 /// `lua_error`, which unwinds through this frame rather than returning.
+// `nlua_api_nvim__ns_get` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe extern "C-unwind" fn nlua_api_nvim__ns_get(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way
@@ -116,6 +120,8 @@ pub unsafe extern "C-unwind" fn nlua_api_nvim__ns_get(lstate: *mut lua_State) ->
 /// binding's arguments on top of its stack and nothing of this frame's
 /// below them. The ABI is `C-unwind` because a refused argument ends in
 /// `lua_error`, which unwinds through this frame rather than returning.
+// `nlua_api_nvim__ns_set` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe extern "C-unwind" fn nlua_api_nvim__ns_set(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way

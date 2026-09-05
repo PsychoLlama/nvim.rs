@@ -23,6 +23,8 @@ pub static _shada_buflist_item_table: ConstTable<[KeySetLink; 4]> = ConstTable::
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
+// `key_dict__shada_buflist_item_get_field` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn key_dict__shada_buflist_item_get_field(
     str: *const c_char,
     len: size_t,
@@ -53,6 +55,8 @@ pub static _shada_mark_table: ConstTable<[KeySetLink; 5]> = ConstTable::new({
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
+// `key_dict__shada_mark_get_field` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn key_dict__shada_mark_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {
     // SAFETY: the caller passes a key of `len` bytes.
     let index: usize = match unsafe { key_bytes(str, len) } {
@@ -82,6 +86,8 @@ pub static _shada_register_table: ConstTable<[KeySetLink; 6]> = ConstTable::new(
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
+// `key_dict__shada_register_get_field` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn key_dict__shada_register_get_field(
     str: *const c_char,
     len: size_t,
@@ -120,6 +126,8 @@ pub static _shada_search_pat_table: ConstTable<[KeySetLink; 11]> = ConstTable::n
 ///
 /// # Safety
 /// `str` points at `len` readable bytes.
+// `key_dict__shada_search_pat_get_field` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn key_dict__shada_search_pat_get_field(
     str: *const c_char,
     len: size_t,
@@ -955,35 +963,3 @@ pub static highlight_cterm_table: ConstTable<[KeySetLink; 17]> = ConstTable::new
         END,
     ]
 });
-
-/// Look a key up in [`highlight_cterm_table`].
-///
-/// # Safety
-/// `str` points at `len` readable bytes.
-pub unsafe fn key_dict_highlight_cterm_get_field(
-    str: *const c_char,
-    len: size_t,
-) -> *const KeySetLink {
-    // SAFETY: the caller passes a key of `len` bytes.
-    let index: usize = match unsafe { key_bytes(str, len) } {
-        b"dim" => 0,
-        b"bold" => 1,
-        b"blink" => 2,
-        b"italic" => 3,
-        b"altfont" => 4,
-        b"conceal" => 5,
-        b"reverse" => 6,
-        b"overline" => 7,
-        b"standout" => 8,
-        b"nocombine" => 9,
-        b"undercurl" => 10,
-        b"underline" => 11,
-        b"underdashed" => 12,
-        b"underdotted" => 13,
-        b"underdouble" => 14,
-        b"strikethrough" => 15,
-        _ => return ptr::null(),
-    };
-    let table: *const KeySetLink = highlight_cterm_table.as_ptr();
-    table.wrapping_add(index)
-}

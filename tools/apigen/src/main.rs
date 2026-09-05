@@ -906,6 +906,27 @@ fn reader(ty: &ApiType, index: usize) -> String {
     }
 }
 
+/// `#[allow(non_snake_case)]`, with its reason, for a generated item whose
+/// name rustc will not accept as snake case -- and nothing at all when it
+/// will.
+///
+/// The API's internal methods are spelled `nvim__something`, and every name
+/// derived from one inherits the double underscore: `handle_nvim__id`,
+/// `nlua_api_nvim__stats`, `key_dict__shada_mark_get_field`. That spelling is
+/// upstream's and it is the RPC surface's, so the generated wrapper cannot
+/// rename it and the crate cannot carry a blanket allow for it either. The
+/// allow goes on the item, where it says which item earned it.
+fn snake_case_allow(name: &str) -> String {
+    let acceptable = !name.contains("__")
+        && !name.ends_with('_')
+        && !name.chars().any(|c| c.is_ascii_uppercase());
+    if acceptable {
+        String::new()
+    } else {
+        format!("// `{name}` is derived from an API method's own name.\n#[allow(non_snake_case)]\n")
+    }
+}
+
 fn emit_fn(
     out: &mut String,
     f: &ApiFn,
@@ -957,6 +978,7 @@ fn emit_fn(
          /// own and live for the call."
     )
     .unwrap();
+    write!(out, "{}", snake_case_allow(&handler)).unwrap();
     writeln!(out, "pub unsafe fn {handler}(").unwrap();
     writeln!(out, "    channel_id: uint64_t,").unwrap();
     writeln!(out, "    args: Array,").unwrap();
@@ -1991,6 +2013,12 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
     writeln!(out, "/// # Safety").unwrap();
     writeln!(out, "/// `str` points at `len` readable bytes.").unwrap();
     if k.keys.is_empty() {
+        write!(
+            out,
+            "{}",
+            snake_case_allow(&format!("key_dict_{name}_get_field"))
+        )
+        .unwrap();
         writeln!(
             out,
             "pub unsafe fn key_dict_{name}_get_field(_str: *const c_char, _len: size_t) -> *const KeySetLink {{"
@@ -2002,6 +2030,12 @@ fn emit_keyset(out: &mut String, k: &Keyset) {
         out.push('\n');
         return;
     }
+    write!(
+        out,
+        "{}",
+        snake_case_allow(&format!("key_dict_{name}_get_field"))
+    )
+    .unwrap();
     writeln!(
         out,
         "pub unsafe fn key_dict_{name}_get_field(str: *const c_char, len: size_t) -> *const KeySetLink {{"
@@ -2768,6 +2802,7 @@ fn emit_lua_fn(out: &mut String, f: &ApiFn, spec: &Spec) -> Result<(), String> {
          /// `lua_error`, which unwinds through this frame rather than returning."
     )
     .unwrap();
+    write!(out, "{}", snake_case_allow(&format!("nlua_api_{name}"))).unwrap();
     writeln!(
         out,
         "pub unsafe extern \"C-unwind\" fn nlua_api_{name}(lstate: *mut lua_State) -> c_int {{"

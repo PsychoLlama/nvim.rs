@@ -18,6 +18,8 @@ use super::*;
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__chan_set_detach` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__chan_set_detach(
     channel_id: uint64_t,
     args: Array,
@@ -60,6 +62,8 @@ pub unsafe fn handle_nvim__chan_set_detach(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__complete_set` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__complete_set(
     channel_id: uint64_t,
     args: Array,
@@ -112,6 +116,8 @@ pub unsafe fn handle_nvim__complete_set(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__exec_lua_fast` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__exec_lua_fast(
     channel_id: uint64_t,
     args: Array,
@@ -158,6 +164,8 @@ pub unsafe fn handle_nvim__exec_lua_fast(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__get_lib_dir` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__get_lib_dir(
     channel_id: uint64_t,
     args: Array,
@@ -194,6 +202,8 @@ pub unsafe fn handle_nvim__get_lib_dir(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__get_runtime` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__get_runtime(
     channel_id: uint64_t,
     args: Array,
@@ -250,6 +260,8 @@ pub unsafe fn handle_nvim__get_runtime(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__id` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__id(
     channel_id: uint64_t,
     args: Array,
@@ -286,6 +298,8 @@ pub unsafe fn handle_nvim__id(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__id_array` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__id_array(
     channel_id: uint64_t,
     args: Array,
@@ -326,6 +340,8 @@ pub unsafe fn handle_nvim__id_array(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__id_dict` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__id_dict(
     channel_id: uint64_t,
     args: Array,
@@ -366,6 +382,8 @@ pub unsafe fn handle_nvim__id_dict(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__id_float` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__id_float(
     channel_id: uint64_t,
     args: Array,
@@ -406,6 +424,8 @@ pub unsafe fn handle_nvim__id_float(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__inspect_cell` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__inspect_cell(
     channel_id: uint64_t,
     args: Array,
@@ -457,6 +477,8 @@ pub unsafe fn handle_nvim__inspect_cell(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__invalidate_glyph_cache` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__invalidate_glyph_cache(
     channel_id: uint64_t,
     args: Array,
@@ -493,6 +515,8 @@ pub unsafe fn handle_nvim__invalidate_glyph_cache(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__redraw` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__redraw(
     channel_id: uint64_t,
     args: Array,
@@ -540,6 +564,8 @@ pub unsafe fn handle_nvim__redraw(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__runtime_inspect` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__runtime_inspect(
     channel_id: uint64_t,
     args: Array,
@@ -576,6 +602,8 @@ pub unsafe fn handle_nvim__runtime_inspect(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__screenshot` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__screenshot(
     channel_id: uint64_t,
     args: Array,
@@ -616,6 +644,8 @@ pub unsafe fn handle_nvim__screenshot(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__stats` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__stats(
     channel_id: uint64_t,
     args: Array,
@@ -652,6 +682,8 @@ pub unsafe fn handle_nvim__stats(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__unpack` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__unpack(
     channel_id: uint64_t,
     args: Array,

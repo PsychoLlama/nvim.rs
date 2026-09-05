@@ -9,6 +9,38 @@
 #[allow(unused_imports)]
 use super::*;
 
+/// Look a key up in [`highlight_cterm_table`].
+///
+/// # Safety
+/// `str` points at `len` readable bytes.
+pub unsafe fn key_dict_highlight_cterm_get_field(
+    str: *const c_char,
+    len: size_t,
+) -> *const KeySetLink {
+    // SAFETY: the caller passes a key of `len` bytes.
+    let index: usize = match unsafe { key_bytes(str, len) } {
+        b"dim" => 0,
+        b"bold" => 1,
+        b"blink" => 2,
+        b"italic" => 3,
+        b"altfont" => 4,
+        b"conceal" => 5,
+        b"reverse" => 6,
+        b"overline" => 7,
+        b"standout" => 8,
+        b"nocombine" => 9,
+        b"undercurl" => 10,
+        b"underline" => 11,
+        b"underdashed" => 12,
+        b"underdotted" => 13,
+        b"underdouble" => 14,
+        b"strikethrough" => 15,
+        _ => return ptr::null(),
+    };
+    let table: *const KeySetLink = highlight_cterm_table.as_ptr();
+    table.wrapping_add(index)
+}
+
 pub static keymap_table: ConstTable<[KeySetLink; 10]> = ConstTable::new({
     type K = KeyDict_keymap;
     [

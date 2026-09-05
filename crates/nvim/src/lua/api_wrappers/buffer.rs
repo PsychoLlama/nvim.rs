@@ -14,6 +14,8 @@ use super::*;
 /// binding's arguments on top of its stack and nothing of this frame's
 /// below them. The ABI is `C-unwind` because a refused argument ends in
 /// `lua_error`, which unwinds through this frame rather than returning.
+// `nlua_api_nvim__buf_stats` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe extern "C-unwind" fn nlua_api_nvim__buf_stats(lstate: *mut lua_State) -> c_int {
     /// Pop the arguments, call the API function, hand the result back.
     /// Each argument that owns Lua references arms a guard, so every way

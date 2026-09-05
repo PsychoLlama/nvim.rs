@@ -18,6 +18,8 @@ use super::*;
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__buf_debug_extmarks` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__buf_debug_extmarks(
     channel_id: uint64_t,
     args: Array,
@@ -69,6 +71,8 @@ pub unsafe fn handle_nvim__buf_debug_extmarks(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__ns_get` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__ns_get(
     channel_id: uint64_t,
     args: Array,
@@ -122,6 +126,8 @@ pub unsafe fn handle_nvim__ns_get(
 /// on: `args` is an `Array` of `size` initialized `Object`s that outlives
 /// the call and stays the caller's to free, and `arena` is the caller's
 /// own and live for the call.
+// `handle_nvim__ns_set` is derived from an API method's own name.
+#[allow(non_snake_case)]
 pub unsafe fn handle_nvim__ns_set(
     channel_id: uint64_t,
     args: Array,
