@@ -22,7 +22,7 @@
   "kvec_sites": 27,
   "khash_sites": 34,
   "ptr_arith": 5905,
-  "t_suffix_types": 177,
+  "t_suffix_types": 172,
   "raw_win_buf_sigs": 625,
   "abbrev_params": 3388,
   "curwin_raw": 1182,

@@ -8,7 +8,7 @@
 //! return early, but one that also updates derived state has to validate
 //! first.
 //!
-//! The generated option table holds them as `opt_did_set_cb_T` function
+//! The generated option table holds them as `OptDidSetCb` function
 //! pointers, which is the only reason they are `pub`.
 
 #![deny(unsafe_op_in_unsafe_fn)]

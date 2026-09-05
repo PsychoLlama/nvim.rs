@@ -197,7 +197,7 @@ const HELPERS: &str = r#"
 /// One row of the Ex command table, spelled the way `ex_cmds.lua` spells it.
 ///
 /// c2rust wrote each of these as a twelve-line struct literal whose
-/// `cmd_func` went through a transmute from `ex_func_T` to `ex_func_T` --
+/// `cmd_func` went through a transmute from `ExFunc` to `ExFunc` --
 /// a no-op that cost three `unsafe ` tokens a row.
 const fn cmd<const N: usize>(
     name: &'static [u8; N],

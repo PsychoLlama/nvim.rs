@@ -524,7 +524,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
 
 /// `v`, `V`, `CTRL-V` and their Select-mode twins.
 ///
-/// Keeps the raw signature: this is an `nv_cmds` row's handler, so `nv_func_T`
+/// Keeps the raw signature: this is an `nv_cmds` row's handler, so `NvFunc`
 /// fixes it.
 pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.

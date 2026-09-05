@@ -131,9 +131,8 @@ pub type OptValType = ::core::ffi::c_int;
 /// The message borrows the frame, because a callback that formats one
 /// writes it into the caller's `os_errbuf`; a callback that only names a
 /// constant answers a `'static` one, which coerces.
-pub type opt_did_set_cb_T =
-    Option<for<'a> unsafe fn(&'a mut optset_T) -> Option<&'a ::core::ffi::CStr>>;
-pub type opt_expand_cb_T = Option<
+pub type OptDidSetCb = Option<for<'a> unsafe fn(&'a mut optset_T) -> Option<&'a ::core::ffi::CStr>>;
+pub type OptExpandCb = Option<
     unsafe fn(
         *mut optexpand_T,
         *mut ::core::ffi::c_int,
@@ -243,8 +242,8 @@ pub struct vimoption_T {
     /// terminated the array with a null pointer besides — three spellings of
     /// one fact, and the walk had to agree with all of them.
     pub values: &'static [&'static ::core::ffi::CStr],
-    pub opt_did_set_cb: opt_did_set_cb_T,
-    pub opt_expand_cb: opt_expand_cb_T,
+    pub opt_did_set_cb: OptDidSetCb,
+    pub opt_expand_cb: OptExpandCb,
     /// The default the table declares — the seed for
     /// `crate::option::state`'s copy, which is the one `:set opt&` reads
     /// and the one startup rewrites once it can expand the environment.

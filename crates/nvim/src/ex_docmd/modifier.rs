@@ -30,7 +30,7 @@ use crate::ex_docmd::onecmd::ex_func_is;
 use crate::ex_docmd::source::getline_equal;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
-    SID_NONE, cmdnames, e_invrange, ex_func_T, ex_msg, ex_pressedreturn, exmode_plus, getexline,
+    ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, exmode_plus, getexline,
 };
 use crate::main::{
     cmdmod, curtab, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col, msg_scroll,
@@ -762,7 +762,7 @@ pub unsafe fn is_map_cmd(cmdidx: CmdIdx) -> bool {
     if is_user_cmd(cmdidx) {
         return false;
     }
-    let func: ex_func_T = cmdnames[cmdidx.index()].cmd_func;
+    let func: ExFunc = cmdnames[cmdidx.index()].cmd_func;
     ex_func_is(func, ex_map)
         || ex_func_is(func, ex_unmap)
         || ex_func_is(func, ex_mapclear)

@@ -43,8 +43,8 @@ use crate::ex_docmd::source::{ex_errmsg, getline_cookie};
 
 use crate::ex_docmd::verify::verify_command;
 use crate::ex_docmd::{
-    DoCmdOpts, PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command,
-    e_not_an_editor_command, ex_func_T, exmode_plus, quitmore,
+    DoCmdOpts, ExFunc, PROF_YES, cmdnames, e_ambiguous_use_of_user_defined_command,
+    e_not_an_editor_command, exmode_plus, quitmore,
 };
 use crate::ex_eval::CsFlags;
 
@@ -94,7 +94,7 @@ pub(crate) fn fresh_exarg() -> exarg_T {
 /// Ex-command callbacks are identified by address, as the C code did; the
 /// comparison is spelled out so the intent survives the
 /// `unpredictable_function_pointer_comparisons` lint.
-pub(crate) fn ex_func_is(func: ex_func_T, f: unsafe fn(*mut exarg_T)) -> bool {
+pub(crate) fn ex_func_is(func: ExFunc, f: unsafe fn(*mut exarg_T)) -> bool {
     func.is_some_and(|g| ptr::fn_addr_eq(g, f))
 }
 

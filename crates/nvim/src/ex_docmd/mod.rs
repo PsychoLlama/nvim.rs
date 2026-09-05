@@ -180,13 +180,13 @@ pub const CSTP_INTERRUPT: c_uint = 2;
 pub const CSTP_ERROR: c_uint = 1;
 /// A command handler. Plain `unsafe fn`, not `extern "C"`: nothing
 /// outside this crate calls the table.
-pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
+pub type ExFunc = Option<unsafe fn(*mut exarg_T)>;
 /// An 'inccommand' preview callback, likewise.
-pub type ex_preview_func_T = Option<unsafe fn(*mut exarg_T, c_int, Handle) -> c_int>;
+pub type ExPreviewFunc = Option<unsafe fn(*mut exarg_T, c_int, Handle) -> c_int>;
 pub struct CommandDefinition {
     pub cmd_name: *mut c_char,
-    pub cmd_func: ex_func_T,
-    pub cmd_preview_func: ex_preview_func_T,
+    pub cmd_func: ExFunc,
+    pub cmd_preview_func: ExPreviewFunc,
     pub cmd_argt: ExArgt,
     pub cmd_addr_type: CmdAddr,
 }

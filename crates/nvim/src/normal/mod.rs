@@ -94,7 +94,7 @@ pub(crate) const FIND_STRING: c_uint = 2;
 pub(crate) const FIND_IDENT: c_uint = 1;
 pub(crate) struct nv_cmd {
     pub cmd_char: c_int,
-    pub cmd_func: nv_func_T,
+    pub cmd_func: NvFunc,
     pub cmd_flags: uint16_t,
     pub cmd_arg: int16_t,
 }
@@ -103,7 +103,7 @@ pub(crate) struct nv_cmd {
 /// Nothing outside this crate reaches the table or its handlers -- neither the
 /// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
 /// ordinary Rust functions rather than `extern "C"` ones.
-pub(crate) type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
+pub(crate) type NvFunc = Option<unsafe fn(*mut cmdarg_T)>;
 pub(crate) const FM_FORWARD: c_uint = 2;
 pub(crate) const SPELL_ADD_BAD: SpellAddType = 1;
 pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
@@ -172,7 +172,7 @@ pub(crate) const NV_NCW: c_int = 0x200 as c_int;
 /// The flags and the argument are written as the `c_int` constants that name
 /// them and narrowed here, so a row reads as the four things it is rather than
 /// as four casts.
-const fn cmd(cmd_char: c_int, cmd_func: nv_func_T, cmd_flags: c_int, cmd_arg: c_int) -> nv_cmd {
+const fn cmd(cmd_char: c_int, cmd_func: NvFunc, cmd_flags: c_int, cmd_arg: c_int) -> nv_cmd {
     nv_cmd {
         cmd_char,
         cmd_func,
