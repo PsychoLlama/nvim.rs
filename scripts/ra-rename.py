@@ -104,6 +104,10 @@ if a `cfg` ever hides code from both.
 
 ## What this still does not reach, and the pitfalls behind each flag
 
+* **The API's parameter names are frozen.** A signature apigen dispatches
+  publishes its parameter names over msgpack-RPC, so `--params` skips those
+  functions outright (see `PARAM_EXEMPT` below). Nothing under `api/` that is
+  not itself an API method is affected.
 * **Comments and doc links.** rust-analyzer renames code. A `///` mention or a
   `[`vimoption_T`]` intra-doc link is left alone, so follow a batch with a
   word-boundary sweep over comments only (`xform.masked` inverted) -- never an
@@ -145,6 +149,13 @@ SRC = ROOT / "crates" / "nvim" / "src"
 # the ratchet's `ABBREV_PARAM_EXEMPT`.
 PARAM_ROOTS = ("crates/nvim/src", "crates/nvim/tests")
 PARAM_EXEMPT = ("crates/nvim/src/lua/", "crates/nvim/src/vterm/")
+# The third carve-out is by function rather than by directory, and it is not
+# a matter of taste: apigen publishes an API method's parameter names in the
+# api-info blob and in every `Invalid '<name>'` message, so renaming one is a
+# breaking change to the msgpack-RPC surface. `param_positions` skips the
+# signatures `ratchet.api_exported()` names, the same set `abbrev_params`
+# stops counting -- otherwise re-running a table the ratchet is already at
+# zero on would move the API.
 
 # The declaration of a type, at the start of a line so a mention inside an
 # expression or a doc comment is not mistaken for one.
@@ -674,10 +685,14 @@ def param_positions(old, new, root, type_filter=None):
     """
     needle = binds(old)
     kind = re.compile(type_filter) if type_filter else None
+    frozen = ratchet.api_exported()
     positions, skipped = [], []
     for path, relative in param_files(root):
         masked = ratchet.mask(path.read_text())
+        in_api = relative.startswith(ratchet.API_DIR)
         for name, start, end, stop in fn_definitions(masked):
+            if in_api and name in frozen:
+                continue
             for match in needle.finditer(masked, start, end):
                 bound = match.group(1)
                 if kind and not kind.search(declared_type(masked, match.end(), end)):
