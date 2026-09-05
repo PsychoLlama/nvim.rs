@@ -24,6 +24,7 @@
   "ptr_arith": 5905,
   "t_suffix_types": 212,
   "raw_win_buf_sigs": 625,
+  "abbrev_params": 3388,
   "curwin_raw": 1182,
   "files_without_forbid_unsafe": 1060,
   "files_without_deny_unsafe_op": 0,

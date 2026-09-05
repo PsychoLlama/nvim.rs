@@ -415,6 +415,14 @@ plus these whole-tree metrics, which are not per-file:
                         from the `fn` keyword through the return type, so a
                         parameter rustfmt wrapped onto its own line still
                         counts and a local variable of that type does not.
+                      abbrev_params   the transpiler's parameter
+                        abbreviations (`wp`, `buf`, `eap`, `rettv`, `ptr` …)
+                        bound in a `fn` signature, over the same span, with
+                        `lua/` and `vterm/` carved out — those two are ports
+                        whose parameter names are the upstream project's. A
+                        leading `_` counts (an unused parameter is still that
+                        parameter), a qualifier does not: `old_buf` already
+                        says what `buf` does not.
                       curwin_raw      `curwin`/`curbuf`/`curtab` `.get()`
                         reads outside `winlayer`, which is the module whose
                         job it is to turn those globals into handles. The
@@ -879,6 +887,23 @@ T_SUFFIX_DECL = re.compile(
 )
 # The raw graph pointers, counted inside `fn` signature spans only.
 RAW_WIN_BUF = re.compile(r"\*mut\s+(?:win_T|buf_T|tabpage_T)\b")
+# The transpiler's parameter abbreviations, also inside `fn` signature spans
+# only: the leading `\b` plus the optional `_` catches both `buf:` and the
+# `_buf:` an unused parameter is spelled with, while keeping the needle off
+# `bufp:` and `old_buf:` — a name with a qualifier in front of it already says
+# more than the bare abbreviation does. `:` is what makes it a *binding* and
+# not a mention, so `ptr.add` and `let buf = …` are not counted.
+ABBREV_PARAM = re.compile(
+    r"\b_?(?:wp|bp|buf|tp|eap|rettv|argvars|cap|oap|xp|fp|lp|sp|pp|cp|ptr)\s*:"
+)
+# The two subtrees the exit clause carves out. `vterm/` is a port of libvterm
+# and `lua/` of the Lua bindings; both keep the upstream project's own
+# spellings, so renaming their parameters would move them away from the code
+# they are read against.
+ABBREV_PARAM_EXEMPT = {
+    "crates/nvim/src/lua/": "the Lua bindings keep LuaJIT's own spellings",
+    "crates/nvim/src/vterm/": "a port of libvterm, read against its C",
+}
 
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
@@ -1678,20 +1703,23 @@ def vocabulary(tree):
     signatures = 0
     aliases = {}
     constants = []
-    for masked in tree.values():
+    abbrevs = 0
+    for file, masked in tree.items():
         names.update(T_SUFFIX_DECL.findall(masked))
         for alias, target in INT_ALIAS_DECL.findall(masked):
             aliases.setdefault(alias, set()).add(target)
         constants.extend(type_ for _, type_ in PUB_CONST_DECL.findall(masked))
-        signatures += sum(
-            len(RAW_WIN_BUF.findall(sig)) for _, sig, _ in fn_signatures(masked)
-        )
+        spans = [sig for _, sig, _ in fn_signatures(masked)]
+        signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
+        if not in_home(file, ABBREV_PARAM_EXEMPT):
+            abbrevs += sum(len(ABBREV_PARAM.findall(sig)) for sig in spans)
     integral = int_aliases(aliases)
     return {
         **counts,
         "const_int_alias": sum(type_ in integral for type_ in constants),
         "t_suffix_types": len(names),
         "raw_win_buf_sigs": signatures,
+        "abbrev_params": abbrevs,
     }
 
 
@@ -1854,6 +1882,7 @@ WHOLE_TREE_LABEL = {
     "ptr_arith": "pointer-arithmetic method calls",
     "t_suffix_types": "distinct `_T` type declarations",
     "raw_win_buf_sigs": "raw win/buf/tabpage pointers in fn signatures",
+    "abbrev_params": "transpiler parameter abbreviations in fn signatures",
     "curwin_raw": "curwin/curbuf/curtab get()s outside winlayer",
 }
 # The C-vocabulary subset of the above, for the run's summary line.
@@ -1864,6 +1893,7 @@ VOCABULARY_KEYS = (
     "const_int_alias",
     "t_suffix_types",
     "raw_win_buf_sigs",
+    "abbrev_params",
 )
 
 
@@ -2485,6 +2515,18 @@ SELF_TEST_VOCABULARY = [
             "type Cb = fn(*mut win_T);\n"
         },
         {"raw_win_buf_sigs": 3},
+    ),
+    (
+        # `_eap` counts, `old_buf` and the local `ptr` do not, and the two
+        # carved-out subtrees are silent however they spell a parameter.
+        {
+            "crates/nvim/src/a.rs": "fn f(\n    wp: *mut win_T,\n"
+            "    _eap: *mut exarg_T,\n    old_buf: *mut buf_T,\n) {\n"
+            "    let ptr: *mut c_char = q;\n}\n",
+            "crates/nvim/src/lua/b.rs": "fn g(buf: *mut buf_T) {\n}\n",
+            "crates/nvim/src/vterm/c.rs": "fn h(cp: *mut c_char) {\n}\n",
+        },
+        {"abbrev_params": 2},
     ),
     (
         {
