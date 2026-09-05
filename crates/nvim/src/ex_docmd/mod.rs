@@ -8,6 +8,7 @@
 //! of `ex_*` handler.
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod state;
 use crate::arglist::{
     ex_all, ex_argadd, ex_argdedupe, ex_argdelete, ex_argedit, ex_args, ex_argument, ex_last,
     ex_next, ex_previous, ex_rewind,

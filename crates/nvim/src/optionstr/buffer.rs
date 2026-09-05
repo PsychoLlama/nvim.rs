@@ -22,9 +22,9 @@ use crate::fold::{
     fold_update_all, foldmethod_is_diff, foldmethod_is_expr, foldmethod_is_indent,
     foldmethod_is_marker, new_fold_level,
 };
+use crate::guard::secure;
 use crate::indent::tabstop_set;
 use crate::indent_c::parse_cino;
-use crate::main::secure;
 use crate::mark::free_fmark;
 use crate::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_setflags;

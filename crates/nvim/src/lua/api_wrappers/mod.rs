@@ -156,6 +156,7 @@ use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::global_cell::ConstTable;
 use crate::guard::Restore;
+use crate::guard::textlock;
 use crate::lua::converter::{
     kNluaPushFreeRefs, kNluaPushSpecial, nlua_pop_array, nlua_pop_boolean, nlua_pop_dict,
     nlua_pop_float, nlua_pop_handle, nlua_pop_integer, nlua_pop_keydict, nlua_pop_luaref,
@@ -170,7 +171,6 @@ use crate::lua::ffi::{
     lua_concat, lua_createtable, lua_error, lua_gettop, lua_pushcclosure, lua_pushstring,
     lua_setfield, luaL_error, luaL_where,
 };
-use crate::main::textlock;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{e_fast_api_disabled, e_textlock};
 use crate::types::{

@@ -44,6 +44,9 @@ use crate::eval::typval::{
 use crate::eval::vars::{get_globvar_dict, heredoc_get, set_vim_var_char};
 use crate::eval::{callback_call, eval_has_provider, get_echo_hl_id, get_v_event, restore_v_event};
 use crate::ex_cmds::rename_buffer;
+use crate::ex_docmd::state::{
+    cmdmod, ex_normal_busy, exec_from_reg, global_busy, new_last_cmdline,
+};
 use crate::ex_docmd::{
     do_cmdline, execute_cmd, expr_map_locked, parse_cmd_address, parse_cmdline,
     parse_command_modifiers, set_no_hlsearch, skip_range, undo_cmdmod,
@@ -55,17 +58,17 @@ use crate::getchar::{
     stuff_readbuf, stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
 };
 use crate::global_cell::GlobalCell;
+use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, allbuf_lock, cmd_silent, cmdline_row, cmdline_star,
-    cmdline_was_last_drawn, cmdmod, cmdmsg_rl, cmdpreview, current_sctx, did_emsg, emsg_on_display,
-    ex_normal_busy, exec_from_reg, global_busy, got_int, highlight_match, lines_left,
-    magic_overruled, mod_mask, mouse_col, mouse_row, msg_col, msg_didout, msg_no_more, msg_row,
-    msg_scroll, msg_scrolled, need_wait_return, new_last_cmdline, no_hlsearch, pum_want, quit_more,
-    redir_off, redraw_cmdline, redraw_tabline, redrawing_cmdline, search_first_line,
-    search_last_line, search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor,
-    textlock, wild_menu_showing,
+    Columns, KeyStuffed, KeyTyped, Rows, cmd_silent, cmdline_row, cmdline_star,
+    cmdline_was_last_drawn, cmdmsg_rl, cmdpreview, current_sctx, did_emsg, emsg_on_display,
+    got_int, highlight_match, lines_left, magic_overruled, mod_mask, mouse_col, mouse_row, msg_col,
+    msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled, need_wait_return, no_hlsearch,
+    pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline, redrawing_cmdline,
+    search_first_line, search_last_line, search_match_endcol, search_match_lines, skip_redraw,
+    skip_win_fix_cursor, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;

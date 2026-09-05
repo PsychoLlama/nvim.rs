@@ -14,6 +14,7 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::event::libuv::uv_strerror;
 use crate::event::multiqueue::multiqueue_empty;
 use crate::ex_cmds::check_secure;
+use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
 use crate::global_cell::GlobalCell;
@@ -25,7 +26,7 @@ use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
     KeyStuffed, KeyTyped, allow_keys, called_emsg, cmd_silent, cmdline_row, cmdline_star,
     ctrl_c_interrupts, debug_did_msg, did_emsg, did_outofmem_msg, did_swapwrite_msg, emsg_silent,
-    ex_normal_busy, got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
+    got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
     may_garbage_collect, mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col,
     msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping,
     no_zero_mapping, pending_end_reg_executing, redraw_cmdline, reg_executing, reg_recording,

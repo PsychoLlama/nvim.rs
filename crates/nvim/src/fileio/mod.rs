@@ -19,18 +19,20 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
 use crate::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_var_string};
 use crate::event::libuv::uv_strerror;
+use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
 use crate::fold::{fold_update_all, foldmethod_is_manual};
 use crate::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
+use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    allbuf_lock, autocmd_busy, did_check_timestamps, emsg_silent, ex_no_reprint, exiting,
-    global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite, msg_scroll,
-    msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
-    need_wait_return, no_check_timestamps, no_wait_return, readonlymode, recoverymode,
-    redraw_cmdline, redraw_tabline, stdin_fd, swap_exists_action, vim_ignored,
+    autocmd_busy, did_check_timestamps, emsg_silent, exiting, got_int, in_assert_fails, keep_msg,
+    msg_col, msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
+    need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
+    readonlymode, recoverymode, redraw_cmdline, redraw_tabline, stdin_fd, swap_exists_action,
+    vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,

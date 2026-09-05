@@ -58,14 +58,13 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var, set_vim_var_string};
 use crate::ex_cmds::{check_overwrite, set_swapcommand};
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{DoCmdOpts, cmdmod_has, dialog_msg, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
-use crate::main::{
-    cmdline_row, cmdmod, exiting, msg_col, msg_didany, msg_didout, msg_row, vgetc_busy,
-};
+use crate::main::{cmdline_row, exiting, msg_col, msg_didany, msg_didout, msg_row, vgetc_busy};
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{

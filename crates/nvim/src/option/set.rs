@@ -34,8 +34,9 @@ use crate::eval::vars::{
     get_vim_var_str, optval_as_tv, reset_v_option_vars, set_vim_var_string, set_vim_var_tv,
 };
 use crate::global_cell::GlobalCell;
+use crate::guard::{sandbox, secure};
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{current_sctx, sandbox, secure, starting, t_colors};
+use crate::main::{current_sctx, starting, t_colors};
 use crate::memory::{xfree, xmalloc, xstrdup, xstrlcpy};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};

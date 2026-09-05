@@ -51,13 +51,14 @@ use crate::ex_eval::CsFlags;
 use crate::ex_eval::{aborting, do_errthrow, do_intthrow, do_throw};
 use crate::ex_getln::{get_text_locked_msg, script_get, text_locked};
 
+use crate::ex_docmd::state::{did_emsg_syntax, ex_nesting_level, global_busy};
+use crate::ex_eval::state::{check_cstack, did_throw, need_rethrow};
 use crate::fold::has_folding;
 use crate::guard::Depth;
+use crate::guard::sandbox;
 use crate::input::ask_yesno;
 use crate::main::{
-    check_cstack, did_emsg, did_emsg_syntax, did_throw, do_profiling, ex_nesting_level, exiting,
-    global_busy, got_int, msg_silent, need_rethrow, pending_end_reg_executing, reg_executing,
-    sandbox,
+    did_emsg, do_profiling, exiting, got_int, msg_silent, pending_end_reg_executing, reg_executing,
 };
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};

@@ -26,6 +26,7 @@ use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
+use crate::guard::secure;
 use crate::hashtab::hash_init;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
@@ -34,7 +35,7 @@ use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events,
     did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
-    last_cursormoved_win, main_loop, msg_col, need_maketitle, reg_recording, secure, starting,
+    last_cursormoved_win, main_loop, msg_col, need_maketitle, reg_recording, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};

@@ -27,6 +27,7 @@ use crate::eval::typval::tv_list_find_str;
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
+use crate::ex_docmd::state::escape_chars;
 use crate::ex_docmd::{
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
     VALID_PATH, dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
@@ -36,9 +37,7 @@ use crate::ex_docmd::{
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
-use crate::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, escape_chars,
-};
+use crate::main::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx};
 use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
 use crate::message::e_usingsid;
 use crate::option::vars::{p_gp, p_mp, p_wic};

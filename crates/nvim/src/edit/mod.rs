@@ -62,6 +62,7 @@ use crate::drawscreen::{
 };
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
+use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, expr_map_locked};
 use crate::fileio::check_timestamps;
 use crate::fold::{
@@ -77,6 +78,7 @@ use crate::global_cell::GlobalCell;
 use crate::grid::{
     grid_line_flush, grid_line_getchar, grid_line_put_schar, grid_line_puts, grid_line_start,
 };
+use crate::guard::{sandbox, textlock};
 use crate::highlight_group::{HLF_8, highlight_changed};
 use crate::indent::{
     change_indent, fix_indent, get_indent, get_sts_value, get_sw_value, inindent, ins_try_si,
@@ -104,10 +106,10 @@ use crate::keycodes::{
 };
 use crate::main::{
     KeyStuffed, KeyTyped, RedrawingDisabled, clear_cmdline, did_check_timestamps, did_cursorhold,
-    dollar_vcol, emsg_on_display, ex_normal_busy, got_int, langmap_mapchar, last_cursormoved,
-    last_cursormoved_win, mod_mask, msg_scroll, msg_silent, must_redraw, need_check_timestamps,
-    need_highlight_changed, pum_want, redraw_cmdline, redraw_mode, reg_recording, sandbox,
-    spell_redraw_lnum, test_disable_char_avail, textlock, u_sync_once, vgetc_busy,
+    dollar_vcol, emsg_on_display, got_int, langmap_mapchar, last_cursormoved, last_cursormoved_win,
+    mod_mask, msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_highlight_changed,
+    pum_want, redraw_cmdline, redraw_mode, reg_recording, spell_redraw_lnum,
+    test_disable_char_avail, u_sync_once, vgetc_busy,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};

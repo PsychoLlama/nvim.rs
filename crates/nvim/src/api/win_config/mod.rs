@@ -10,8 +10,8 @@ use crate::autocmd::{apply_autocmds, block_autocmds, is_aucmd_win, unblock_autoc
 use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
+use crate::guard::textlock;
 use crate::highlight_group::{syn_check_group, syn_id2name};
-use crate::main::textlock;
 use crate::mbyte::{mb_string2cells, mb_string2cells_len};
 use crate::memory::{strequal, xstrdup};
 use crate::message::{e_cmdwin, e_textlock};

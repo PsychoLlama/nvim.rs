@@ -27,6 +27,7 @@ use crate::drawscreen::{UPD_VALID, number_width, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds2::autowrite_all;
 use crate::ex_docmd::cmdmod_has;
+use crate::ex_docmd::state::{cmdmod, global_busy};
 use crate::ex_eval::aborting;
 use crate::fileio::{readfile, vim_tempname, write_lnum_adjust};
 use crate::fold::fold_update;
@@ -35,8 +36,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
-    Rows, autocmd_busy, bangredo, cmdmod, did_check_timestamps, global_busy, got_int, info_message,
-    msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, silent_mode,
+    Rows, autocmd_busy, bangredo, did_check_timestamps, got_int, info_message, msg_col, msg_didout,
+    msg_row, msg_scroll, msg_silent, need_check_timestamps, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;

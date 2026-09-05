@@ -113,14 +113,23 @@
 
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    RedrawingDisabled, allbuf_lock, allow_keys, autocmd_no_enter, autocmd_no_leave, cmdline_star,
+    RedrawingDisabled, allow_keys, autocmd_no_enter, autocmd_no_leave, cmdline_star,
     curbuf_splice_pending, current_sctx, disable_fold_update, emsg_off, emsg_silent, emsg_skip,
     expr_map_lock, inhibit_delete_count, msg_listdo_overwrite, msg_silent, no_check_timestamps,
-    no_mapping, no_u_sync, no_wait_return, no_zero_mapping, sandbox, tabpage_move_disallowed,
-    textlock,
+    no_mapping, no_u_sync, no_wait_return, no_zero_mapping, tabpage_move_disallowed,
 };
 use crate::types::{ScriptCtx, ScriptId};
 use core::ffi::c_int;
+
+/// The four "for the duration of this, don't let anything touch the editor"
+/// counters. They are here rather than in `ex_docmd` because this module is
+/// what raises and lowers three of them — [`Lock::text`], [`Lock::sandbox`],
+/// [`Lock::all_buffers`] — and `secure` is the same vocabulary one step out:
+/// the flag those callers test before deciding to take a lock at all.
+pub(crate) static secure: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static textlock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static allbuf_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub static sandbox: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// A counter held one higher for the lifetime of the guard.
 ///

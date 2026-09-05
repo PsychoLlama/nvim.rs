@@ -19,7 +19,8 @@ use neovim::eval::typval::{
     tv_dict_get_string_buf_chk, tv_dict_item_alloc_len, tv_dict_set_keys_readonly, tv_dict_unref,
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_unref,
 };
-use neovim::main::{emsg_skip, sandbox};
+use neovim::guard::sandbox;
+use neovim::main::emsg_skip;
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::ops::NUMBUFLEN;

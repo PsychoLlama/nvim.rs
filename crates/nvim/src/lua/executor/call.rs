@@ -18,13 +18,14 @@ use crate::api::private::helpers::{api_set_sctx, arena_array, try_enter, try_lea
 use crate::api_error;
 use crate::eval::typval::{TV_INITIAL_VALUE, tv_clear};
 use crate::eval::userfunc::call_func;
+use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::ex_getln::TRY_STATE_INIT;
 use crate::lua::converter::{nlua_pop_object, nlua_pop_typval, nlua_push_object, nlua_push_typval};
 use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
-use crate::main::{did_emsg, did_throw, force_abort, suppress_errthrow};
+use crate::main::did_emsg;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::message::e_fast_api_disabled;
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};

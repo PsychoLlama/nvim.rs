@@ -47,6 +47,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod exception;
+pub(crate) mod state;
 mod trycmd;
 
 use crate::debugger::dbg_check_skipped;
@@ -56,8 +57,9 @@ use crate::eval::{
     next_for_item,
 };
 use crate::ex_docmd::{ends_excmd, modifier_len};
+use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
 use crate::global_cell::GlobalCell;
-use crate::main::{did_emsg, did_endif, did_throw, emsg_silent, force_abort, got_int, trylevel};
+use crate::main::{did_emsg, emsg_silent, got_int};
 use crate::memory::xfree;
 use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::c_str;

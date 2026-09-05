@@ -10,11 +10,10 @@ use crate::eval::typval::{tv_clear, tv_dict_find};
 use crate::eval::userfunc::call_func;
 use crate::eval::{clear_evalarg, eval0};
 use crate::ex_docmd::do_cmdline_cmd;
+use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    capture_ga, did_emsg, did_throw, force_abort, msg_col, redir_off, suppress_errthrow,
-};
+use crate::main::{capture_ga, did_emsg, msg_col, redir_off};
 use crate::memory::xfree;
 use crate::runtime::do_source_str;
 use crate::types::{

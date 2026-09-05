@@ -32,10 +32,9 @@ use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::{text_or_buf_locked, ui_ext_cmdline_block_leave};
 use crate::file_search::{FileNameOpts, vim_findfile_cleanup};
 
+use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::getchar::stuff_readbuf;
-use crate::main::{
-    ex_no_reprint, global_busy, msg_scroll, need_wait_return, readonlymode, recoverymode,
-};
+use crate::main::{msg_scroll, need_wait_return, readonlymode, recoverymode};
 use crate::mark::setpcmark;
 use crate::message::e_trailing_arg;
 use crate::option::vars::{p_awa, p_shada};

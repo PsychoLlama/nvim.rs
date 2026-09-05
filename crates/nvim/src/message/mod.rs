@@ -20,6 +20,7 @@ use crate::eval::vars::{get_vim_var_str, set_vim_var_string, var_redir_str};
 use crate::event::r#loop::loop_schedule_deferred;
 use crate::event::multiqueue::multiqueue_process_events;
 use crate::ex_docmd::do_sleep;
+use crate::ex_docmd::state::global_busy;
 use crate::ex_eval::cause_errthrow;
 use crate::fileio::check_timestamps;
 use crate::garray::ga_concat_len;
@@ -48,16 +49,15 @@ use crate::main::{
     cmdline_was_last_drawn, cmdmsg_rl, did_emsg, did_wait_return, do_redraw, embedded_mode,
     emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
     emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting,
-    full_screen, global_busy, got_int, headless_mode, hl_attr_active, in_assert_fails,
-    info_message, keep_msg, keep_msg_hl_id, lines_left, main_loop, mode_displayed, msg_col,
-    msg_did_scroll, msg_didany, msg_didout, msg_ext_overwrite, msg_ext_skip_flush,
-    msg_ext_skip_verbose, msg_grid, msg_grid_pos, msg_grid_scroll_discount, msg_hist_off,
-    msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
-    msg_scrolled_ign, msg_silent, need_check_timestamps, need_clr_eos, need_fileinfo,
-    need_highlight_changed, need_wait_return, no_wait_return, nvim_testing, on_print, quit_more,
-    redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline, redrawing_cmdline, reg_recording,
-    resize_events, sc_col, scriptout, silent_mode, skip_redraw, vgetc_busy, vgetc_char,
-    vgetc_mod_mask,
+    full_screen, got_int, headless_mode, hl_attr_active, in_assert_fails, info_message, keep_msg,
+    keep_msg_hl_id, lines_left, main_loop, mode_displayed, msg_col, msg_did_scroll, msg_didany,
+    msg_didout, msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid,
+    msg_grid_pos, msg_grid_scroll_discount, msg_hist_off, msg_no_more, msg_nowait, msg_row,
+    msg_scroll, msg_scrolled, msg_scrolled_at_flush, msg_scrolled_ign, msg_silent,
+    need_check_timestamps, need_clr_eos, need_fileinfo, need_highlight_changed, need_wait_return,
+    no_wait_return, nvim_testing, on_print, quit_more, redir_fd, redir_off, redir_reg, redir_vname,
+    redraw_cmdline, redrawing_cmdline, reg_recording, resize_events, sc_col, scriptout,
+    silent_mode, skip_redraw, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,

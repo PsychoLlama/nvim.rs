@@ -50,6 +50,7 @@ use crate::eval::{
 };
 use crate::ex_cmds::{append_redir, check_secure, do_ecmd, do_shell, skip_vimgrep_pat};
 use crate::ex_cmds2::{autowrite_all, can_abandon};
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{do_cmdline_cmd, ex_cd, is_loclist_cmd};
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::ex_getln::get_list_range;
@@ -61,7 +62,7 @@ use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
 use crate::main::{
-    Columns, KeyTyped, cmdline_row, cmdmod, got_int, msg_col, msg_didout, msg_nowait, msg_scroll,
+    Columns, KeyTyped, cmdline_row, got_int, msg_col, msg_didout, msg_nowait, msg_scroll,
     msg_scrolled, must_redraw,
 };
 use crate::mark::setpcmark;

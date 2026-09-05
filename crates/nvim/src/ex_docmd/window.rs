@@ -31,12 +31,13 @@ use crate::ex_docmd::onecmd::fresh_exarg;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::scan::check_nextcmd;
 use crate::ex_docmd::source::ex_errmsg;
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::tags::ex_findpat;
 use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::main::{
-    Columns, Rows, cmdmod, g_do_tagpreview, got_int, msg_col, msg_scroll, must_redraw,
+    Columns, Rows, g_do_tagpreview, got_int, msg_col, msg_scroll, must_redraw,
     postponed_split_flags, postponed_split_tab,
 };
 use crate::memory::{xfree, xstrlcpy};

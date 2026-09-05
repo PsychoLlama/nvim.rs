@@ -50,6 +50,7 @@ use crate::ex_session::put_eol_unchecked;
 use crate::fuzzy::fuzzy_match_str;
 use crate::getchar::{ins_typebuf, noremap_keys};
 use crate::global_cell::GlobalCell;
+use crate::guard::secure;
 use crate::highlight_group::HLF_8;
 use crate::keycodes::{
     K_SPECIAL, get_special_key_name, replace_termcodes, vim_strsave_escape_ks, vim_unescape_ks,
@@ -58,7 +59,7 @@ use crate::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
 };
 use crate::main::{
-    current_sctx, got_int, langmap_mapchar, mapped_ctrl_c, msg_col, msg_row, msg_silent, secure,
+    current_sctx, got_int, langmap_mapchar, mapped_ctrl_c, msg_col, msg_row, msg_silent,
 };
 use crate::message::{e_invarg, e_noabbr, e_nomap};
 use crate::option::vars::{p_cpo, p_langmap, p_verbose};

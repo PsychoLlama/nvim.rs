@@ -28,13 +28,13 @@ use crate::ex_docmd::address::{get_address, skip_range};
 use crate::ex_docmd::onecmd::ex_func_is;
 
 use crate::ex_docmd::source::getline_equal;
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, exmode_plus, getexline,
 };
-use crate::main::{
-    cmdmod, did_emsg, emsg_silent, expr_map_lock, msg_col, msg_scroll, msg_silent, sandbox,
-};
+use crate::guard::sandbox;
+use crate::main::{did_emsg, emsg_silent, expr_map_lock, msg_col, msg_scroll, msg_silent};
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz};
 use crate::option::vars::{p_ei, p_verbose};

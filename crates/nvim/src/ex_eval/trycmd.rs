@@ -53,11 +53,9 @@ use crate::debugger::dbg_check_skipped;
 use crate::eval::eval_to_string_skip;
 use crate::eval::userfunc::do_return;
 use crate::ex_docmd::{ends_excmd, find_nextcmd};
+use crate::ex_eval::state::{current_exception, did_throw, force_abort, msg_list, need_rethrow};
 use crate::guard::Suppress;
-use crate::main::{
-    current_exception, did_emsg, did_throw, emsg_silent, force_abort, got_int, msg_list,
-    need_rethrow,
-};
+use crate::main::{did_emsg, emsg_silent, got_int};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_argreq;
 use crate::message::{emsg_ptr, internal_error};

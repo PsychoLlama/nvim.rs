@@ -40,6 +40,7 @@ use crate::eval::typval::{
 use crate::eval::userfunc::callback_call_retnr;
 use crate::eval::vars::set_vim_var_dict;
 use crate::eval::{callback_call, get_v_event, restore_v_event, set_ref_in_callback};
+use crate::ex_docmd::state::{ex_normal_busy, global_busy};
 use crate::ex_eval::aborting;
 use crate::ex_getln::tilde_replace;
 use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
@@ -56,9 +57,8 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::main::{
-    KeyTyped, did_emsg, dollar_vcol, emsg_silent, ex_normal_busy, g_tag_at_cursor, global_busy,
-    got_int, in_assert_fails, msg_hist_off, pum_want, redraw_cmdline, redraw_mode, sc_col,
-    test_disable_char_avail,
+    KeyTyped, did_emsg, dollar_vcol, emsg_silent, g_tag_at_cursor, got_int, in_assert_fails,
+    msg_hist_off, pum_want, redraw_cmdline, redraw_mode, sc_col, test_disable_char_avail,
 };
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,

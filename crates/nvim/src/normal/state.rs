@@ -29,18 +29,20 @@ use crate::drawscreen::{
 };
 use crate::eval::vars::set_vcount;
 use crate::ex_docmd::do_exmode;
+use crate::ex_docmd::state::{ex_normal_busy, global_busy};
 use crate::ex_eval::discard_current_exception;
+use crate::ex_eval::state::did_throw;
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::main::{
-    KeyTyped, clear_cmdline, did_check_timestamps, did_emsg, did_throw, did_wait_return,
-    diff_need_scrollbind, do_redraw, emsg_on_display, emsg_silent, ex_normal_busy, global_busy,
-    got_int, in_assert_fails, keep_msg, keep_msg_hl_id, last_cursormoved, last_cursormoved_win,
-    may_garbage_collect, mod_mask, msg_didany, msg_didout, msg_hist_off, msg_nowait, msg_scroll,
-    msg_silent, must_redraw, need_check_timestamps, need_fileinfo, need_wait_return, quit_more,
-    redraw_cmdline, redraw_mode, reg_executing, reg_recording, skip_redraw, time_fd,
+    KeyTyped, clear_cmdline, did_check_timestamps, did_emsg, did_wait_return, diff_need_scrollbind,
+    do_redraw, emsg_on_display, emsg_silent, got_int, in_assert_fails, keep_msg, keep_msg_hl_id,
+    last_cursormoved, last_cursormoved_win, may_garbage_collect, mod_mask, msg_didany, msg_didout,
+    msg_hist_off, msg_nowait, msg_scroll, msg_silent, must_redraw, need_check_timestamps,
+    need_fileinfo, need_wait_return, quit_more, redraw_cmdline, redraw_mode, reg_executing,
+    reg_recording, skip_redraw, time_fd,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};

@@ -29,6 +29,7 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, update_screen};
 use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::{tv_clear, tv_dict_add_nr};
 use crate::eval::{callback_call, set_ref_in_callback};
+use crate::ex_docmd::state::repeat_cmdline;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
 use crate::getchar::{
@@ -46,7 +47,7 @@ use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::main::{
     KeyTyped, bangredo, curbuf_splice_pending, got_int, mouse_dragging, msg_scroll, no_lines_msg,
-    repeat_cmdline, repeat_luaref,
+    repeat_luaref,
 };
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{

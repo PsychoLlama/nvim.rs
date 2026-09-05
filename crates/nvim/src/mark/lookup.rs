@@ -19,7 +19,7 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_getfile};
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
-use crate::main::listcmd_busy;
+use crate::ex_docmd::state::listcmd_busy;
 use crate::message::emsg;
 use crate::pos::{MAXCOL, lt};
 use crate::textobject::{findpar, findsent};

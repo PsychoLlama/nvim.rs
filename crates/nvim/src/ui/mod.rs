@@ -47,12 +47,13 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::cmdline_ui_flush;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
+use crate::guard::textlock;
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
     called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, emsg_silent, exiting,
     expr_map_lock, full_screen, in_assert_fails, normal_bg, normal_fg, normal_sp, resize_events,
-    starting, textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
+    starting, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};

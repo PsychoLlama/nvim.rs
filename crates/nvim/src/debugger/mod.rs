@@ -33,6 +33,7 @@ use crate::cstr;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::typval::tv_free;
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
+use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{getcmdline_prompt, getexline};
 use crate::fileio::file_pat_to_reg_pat;
@@ -42,8 +43,8 @@ use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
     Rows, cmd_silent, cmdline_row, debug_backtrace_level, debug_break_level, debug_did_msg,
-    debug_mode, debug_tick, did_emsg, emsg_silent, ex_nesting_level, ex_normal_busy, got_int,
-    ignore_script, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
+    debug_mode, debug_tick, did_emsg, emsg_silent, got_int, ignore_script, lines_left, msg_row,
+    msg_scroll, need_wait_return, redir_off,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;

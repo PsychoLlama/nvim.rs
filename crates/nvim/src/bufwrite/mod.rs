@@ -18,6 +18,7 @@ use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
+use crate::ex_docmd::state::ex_no_reprint;
 use crate::ex_eval::{aborting, should_abort_err};
 use crate::fileio::{
     add_quoted_fname, buf_store_file_info, filemess, get_fio_flags, match_file_list, modname,
@@ -26,9 +27,7 @@ use crate::fileio::{
 };
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::main::{
-    ex_no_reprint, exiting, got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return,
-};
+use crate::main::{exiting, got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return};
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};

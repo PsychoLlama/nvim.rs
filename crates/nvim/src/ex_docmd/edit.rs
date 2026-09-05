@@ -35,11 +35,12 @@ use crate::getchar::{
     beep_flush, restore_typeahead, save_typeahead, stuff_empty, typeahead, vpeekc,
 };
 
+use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, exec_from_reg};
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
 use crate::main::{
-    ex_no_reprint, ex_normal_busy, exec_from_reg, got_int, magic_overruled, main_loop, msg_didout,
-    msg_scroll, pending_end_reg_executing, reg_executing,
+    got_int, magic_overruled, main_loop, msg_didout, msg_scroll, pending_end_reg_executing,
+    reg_executing,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::message::{

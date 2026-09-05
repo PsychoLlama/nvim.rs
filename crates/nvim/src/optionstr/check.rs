@@ -27,8 +27,8 @@ use crate::ascii::ascii_isdigit;
 use crate::charset::transchar;
 use crate::cstr;
 use crate::global_cell::GlobalCell;
+use crate::guard::secure;
 use crate::indent_c::parse_cino;
-use crate::main::secure;
 use crate::memory::xfree;
 use crate::option::{kOptFlagNDname, kOptFlagNFname, valid_name};
 use crate::options::{

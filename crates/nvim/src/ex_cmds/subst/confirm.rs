@@ -20,14 +20,14 @@ use crate::drawscreen::{
 use crate::ex_cmds::cur_win;
 use crate::ex_cmds::say;
 use crate::ex_cmds::{ESC, print_line_no_prefix};
+use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_getln::{getcmdline_prompt, gotocmdline};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
-    ex_normal_busy, highlight_match, msg_didout, need_wait_return, search_match_endcol,
-    search_match_lines,
+    highlight_match, msg_didout, need_wait_return, search_match_endcol, search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::xfree;

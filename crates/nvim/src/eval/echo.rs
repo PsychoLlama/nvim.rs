@@ -20,10 +20,10 @@ use crate::eval::vars::set_var;
 use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_from_eap};
 use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
 use crate::ex_eval::aborting;
+use crate::ex_eval::state::force_abort;
 use crate::highlight_group::{HLF_E, syn_name2id};
 use crate::main::{
-    called_emsg, did_emsg, force_abort, got_int, line_msg, msg_didout, msg_ext_skip_verbose,
-    need_clr_eos,
+    called_emsg, did_emsg, got_int, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
 };
 use crate::memory::xfree;
 use crate::message::{

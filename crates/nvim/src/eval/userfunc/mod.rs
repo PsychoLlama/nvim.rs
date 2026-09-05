@@ -31,7 +31,9 @@ use crate::eval::{
     get_id_len, get_lval, handle_subscript, is_luafunc, last_set_msg, partial_name, partial_unref,
     set_ref_in_ht, set_ref_in_item, set_ref_in_list_items, skip_expr,
 };
+use crate::ex_docmd::state::ex_nesting_level;
 use crate::ex_docmd::{check_nextcmd, checkforcmd, do_cmdline, ends_excmd, skip_range};
+use crate::ex_eval::state::{did_throw, trylevel};
 use crate::ex_eval::{
     aborted_in_try, aborting, cleanup_conditionals, exception_state_clear, exception_state_restore,
     exception_state_save, report_make_pending, update_force_abort,
@@ -40,6 +42,7 @@ use crate::ex_getln::{getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_bl
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
+use crate::guard::sandbox;
 use crate::hashtab::{
     Slot, hash_add, hash_find, hash_find_len, hash_init, hash_remove, hash_set_key,
 };
@@ -50,8 +53,8 @@ use crate::lua::executor::{
 };
 use crate::main::{
     KeyTyped, Rows, cmdline_row, current_sctx, debug_backtrace_level, debug_tick, did_emsg,
-    did_throw, do_profiling, emsg_severe, ex_nesting_level, got_int, lines_left, msg_row,
-    msg_scroll, need_wait_return, sandbox, trylevel, want_garbage_collect,
+    do_profiling, emsg_severe, got_int, lines_left, msg_row, msg_scroll, need_wait_return,
+    want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{

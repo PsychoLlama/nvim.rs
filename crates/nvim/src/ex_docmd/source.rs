@@ -21,19 +21,22 @@ use crate::eval::vars::set_vim_var_string;
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 
+use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
 use crate::ex_docmd::{
     DoCmdOpts, ETYPE_EXCEPT, LoopCookie, MSG_BUF_LEN, SavedDebugState, WhileCmd,
     cmdline_call_depth, ex_pressedreturn,
 };
 use crate::ex_eval::discard_current_exception;
+use crate::ex_eval::state::{
+    caught_stack, check_cstack, current_exception, did_throw, force_abort, need_rethrow,
+    suppress_errthrow, trylevel,
+};
 use crate::ex_getln::{getcmdline, getexline};
 use crate::garray::ga_append_via_ptr;
 use crate::highlight_group::HLF_E;
 use crate::main::{
-    KeyTyped, Rows, caught_stack, check_cstack, cmdline_row, current_exception, did_emsg,
-    did_throw, emsg_silent, ex_no_reprint, ex_normal_busy, exiting, force_abort, global_busy,
-    got_int, lines_left, msg_col, msg_row, msg_scroll, msg_silent, need_rethrow, need_wait_return,
-    suppress_errthrow, trylevel,
+    KeyTyped, Rows, cmdline_row, did_emsg, emsg_silent, exiting, got_int, lines_left, msg_col,
+    msg_row, msg_scroll, msg_silent, need_wait_return,
 };
 use crate::message::e_empty_buffer;
 use crate::option::vars::p_mfd;

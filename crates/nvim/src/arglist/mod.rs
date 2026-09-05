@@ -34,10 +34,11 @@ use crate::eval::typval::{
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::ex_cmds::do_ecmd;
 use crate::ex_cmds2::{autowrite, check_changed};
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, arg_had_last, cmdmod, global_alist, got_int, max_alist_id};
+use crate::main::{Columns, arg_had_last, global_alist, got_int, max_alist_id};
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_VIsual_and_resel;

@@ -23,13 +23,13 @@ use crate::cstr;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
+use crate::ex_eval::state::{
+    current_exception, did_throw, force_abort, msg_list, need_rethrow, trylevel,
+};
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
-use crate::main::{
-    current_exception, current_sctx, did_emsg, did_throw, force_abort, got_int, msg_list,
-    need_rethrow, trylevel,
-};
+use crate::main::{current_sctx, did_emsg, got_int};
 use crate::mark::setmark_pos;
 use crate::memory::xfree;
 use crate::pos::MAXCOL;

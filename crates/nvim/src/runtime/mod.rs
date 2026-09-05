@@ -43,6 +43,7 @@ use crate::eval::userfunc::{func_tbl_get, restore_funccal, save_funccal};
 use crate::eval::vars::new_script_vars;
 use crate::eval::{eval_to_number, get_copy_id};
 use crate::event::libuv::{uv_mutex_init, uv_mutex_lock, uv_mutex_unlock};
+use crate::ex_docmd::state::{cmdmod, ex_nesting_level, global_busy, listcmd_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, getline_equal};
 use crate::ex_eval::{aborting, cleanup_conditionals, report_make_pending};
 use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
@@ -51,8 +52,8 @@ use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::main::{
-    cmdmod, current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling,
-    ex_nesting_level, global_busy, got_int, listcmd_busy, msg_col, time_fd,
+    current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling, got_int,
+    msg_col, time_fd,
 };
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;

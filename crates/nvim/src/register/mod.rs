@@ -43,6 +43,7 @@ use crate::eval::typval::{
 };
 use crate::eval::{eval_to_string, get_v_event, restore_v_event};
 use crate::ex_cmds2::check_fname;
+use crate::ex_docmd::state::{last_cmdline, new_last_cmdline};
 use crate::ex_getln::{cmdline_paste_str, getcmdline};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
@@ -59,8 +60,8 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline,
-    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording,
+    Columns, got_int, msg_ext_skip_flush, must_redraw, pending_end_reg_executing, redir_reg,
+    reg_executing, reg_recorded, reg_recording,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{

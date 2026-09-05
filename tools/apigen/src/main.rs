@@ -1697,7 +1697,7 @@ fn generate(
     uses.push("use crate::api_error;".into());
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());
-        uses.push("use crate::main::textlock;".into());
+        uses.push("use crate::guard::textlock;".into());
         uses.push("use crate::message::e_textlock;".into());
     }
     if referenced.contains("text_locked") {
@@ -3342,7 +3342,7 @@ fn generate_lua(
         .join(", ")
     ));
     for (module, names) in [
-        ("main", referenced_names(&["textlock"])),
+        ("guard", referenced_names(&["textlock"])),
         (
             "message",
             referenced_names(&["e_fast_api_disabled", "e_textlock"]),

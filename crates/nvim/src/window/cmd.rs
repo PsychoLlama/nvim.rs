@@ -28,12 +28,13 @@ use crate::buffer::{buflist_findname_exp, buflist_getfile, find_buf, set_pcmark}
 use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::do_ecmd;
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, cmdmod, g_do_tagpreview, langmap_mapchar, postponed_split,
+    Columns, KeyStuffed, KeyTyped, Rows, g_do_tagpreview, langmap_mapchar, postponed_split,
     vgetc_busy,
 };
 use crate::mapping::langmap_adjust_mb;

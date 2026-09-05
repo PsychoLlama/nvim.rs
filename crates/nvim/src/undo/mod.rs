@@ -30,13 +30,15 @@ use crate::eval::typval::{
 };
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::expr_map_locked;
+use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::extmark::{extmark_apply_undo, extmark_splice_cols};
 use crate::fileio::{get2c, get4c, get8ctime, read_eintr};
 use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::main::{KeyTyped, global_busy, got_int, no_u_sync, sandbox, textlock};
+use crate::guard::{sandbox, textlock};
+use crate::main::{KeyTyped, got_int, no_u_sync};
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;

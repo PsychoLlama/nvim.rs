@@ -19,11 +19,12 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::ex_docmd::do_cmdline_cmd;
+use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::guard::{Bump, Suppress};
 use crate::main::{
     Rows, called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, got_int, in_assert_fails, lines_left, msg_col,
-    need_wait_return, suppress_errthrow, trylevel,
+    need_wait_return,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};

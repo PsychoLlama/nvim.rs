@@ -20,11 +20,11 @@ use std::ffi::CString;
 use crate::cmdexpand::cmdline_fuzzy_complete;
 use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::cstr;
+use crate::ex_docmd::state::escape_chars;
 use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::get_special_key_code;
-use crate::main::escape_chars;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,

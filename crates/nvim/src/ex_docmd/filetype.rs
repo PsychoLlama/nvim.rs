@@ -15,13 +15,14 @@ use crate::autocmd::{check_nomodeline, do_augroup, do_autocmd};
 
 use crate::buffer::do_modelines;
 
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{
     FILETYPE_FILE, FTOFF_FILE, FTPLUGIN_FILE, FTPLUGOF_FILE, INDENT_FILE, INDOFF_FILE,
     cmdmod_split, cmdmod_tab, ex_msg, filetype_detect, filetype_indent, filetype_plugin,
     kRetNilBool,
 };
+use crate::guard::secure;
 use crate::lua::executor::nlua_exec;
-use crate::main::{cmdmod, secure};
 use crate::message::e_curdir;
 use crate::option::vars::p_rtp;
 

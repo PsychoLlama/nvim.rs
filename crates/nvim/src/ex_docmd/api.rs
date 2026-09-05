@@ -38,6 +38,7 @@ use crate::ex_docmd::scan::{
 };
 
 use crate::ex_docmd::source::{do_cmdline_end, do_cmdline_start};
+use crate::ex_docmd::state::{cmdmod, global_busy};
 use crate::ex_docmd::{
     cmdnames, e_ambiguous_use_of_user_defined_command, e_not_an_editor_command, ex_pressedreturn,
 };
@@ -46,7 +47,7 @@ use crate::ex_getln::{
 };
 use crate::fold::has_folding;
 use crate::guard::Suppress;
-use crate::main::{cmdmod, emsg_silent, global_busy};
+use crate::main::emsg_silent;
 use crate::message::{e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange};
 use crate::winlayer::graph::cmdwin_type;
 

@@ -6,10 +6,10 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
-use crate::main::cmdmod;
 use crate::memory::xstrlcat;
 use crate::message::e_shellempty;
 use crate::option::vars::p_sh;

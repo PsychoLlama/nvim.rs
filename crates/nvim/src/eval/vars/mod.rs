@@ -42,14 +42,13 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
+use crate::guard::sandbox;
 use crate::hashtab::{
     Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
     hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{
-    called_emsg, current_sctx, did_emsg, emsg_severe, got_int, no_hlsearch, sandbox, sc_col,
-};
+use crate::main::{called_emsg, current_sctx, did_emsg, emsg_severe, got_int, no_hlsearch, sc_col};
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,

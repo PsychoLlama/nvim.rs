@@ -46,11 +46,13 @@ use crate::eval::typval::{tv_list_ref, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
+use crate::ex_eval::state::{
+    caught_stack, current_exception, did_throw, force_abort, msg_list, need_rethrow,
+    suppress_errthrow, trylevel,
+};
 use crate::guard::{Allow, Suppress};
 use crate::main::{
-    caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_throw,
-    emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, need_rethrow,
-    suppress_errthrow, trylevel,
+    cmdline_row, debug_break_level, did_emsg, emsg_silent, got_int, msg_row, msg_scroll,
 };
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{e_interr, e_outofmem};

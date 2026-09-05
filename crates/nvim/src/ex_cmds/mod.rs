@@ -32,9 +32,11 @@ use crate::charset::{skip, vim_is_ident_char};
 use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
+use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
+use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
-use crate::main::{cmdmod, g_do_tagpreview, got_int, msg_scroll, quit_more, sandbox, secure};
+use crate::main::{g_do_tagpreview, got_int, msg_scroll, quit_more};
 use crate::memory::xfree;
 use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
 use crate::message::{
