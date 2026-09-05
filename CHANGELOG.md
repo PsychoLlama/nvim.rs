@@ -24,6 +24,11 @@ and this project adheres to [CalVer](https://calver.org/).
   is `TypVal`, `vimoption_T` is `VimOption`), and only the names a linked
   library defines keep their own spelling. Nothing about the editor's
   behaviour changes; the crate's public type names do.
+- Renamed the abbreviated parameter names the same transpiler left behind —
+  some 3,400 of them across the tree, so a function's arguments now say what
+  they are. **The API's own parameter names are deliberately unchanged**: they
+  are what `nvim_get_api_info()` publishes and what an `Invalid '<name>'`
+  message prints, so the RPC surface reads exactly as before.
 - Rewrote the growable buffers the editor builds text and match lists in:
   `:execute`/`:echomsg`/`:echoerr`, `string()`, `json_encode()`, `:echo` of
   a container, `substitute()`, `tr()`, `state()`, `winrestcmd()`, the
