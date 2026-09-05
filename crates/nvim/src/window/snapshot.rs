@@ -108,10 +108,10 @@ pub fn reset_lnums() {
 // A snapshot is a frame tree of its own: the same shape, only the sizes and
 // which leaf held `curwin`, and none of its frames is linked into the layout.
 
-/// `tp->tp_snapshot[idx]`, borrowed as one slot.
+/// `tabpage.tp_snapshot[idx]`, borrowed as one slot.
 fn snapshot_slot(tabpage: TabPage, idx: c_int) -> *mut *mut Frame {
-    let mut tp = tabpage;
-    &raw mut tp.tp_snapshot[idx as usize]
+    let mut tabpage = tabpage;
+    &raw mut tabpage.tp_snapshot[idx as usize]
 }
 
 /// The saved frame tree in slot `idx` of `tabpage`, if there is one.
@@ -157,11 +157,11 @@ fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut Frame) {
 
 /// Free the saved tree in slot `idx` of `tabpage`, if there is one.
 pub(crate) fn drop_snapshot(tabpage: TabPage, idx: c_int) {
-    let mut tp = tabpage;
-    if let Some(fr) = snapshot_of(tp, idx) {
+    let mut tabpage = tabpage;
+    if let Some(fr) = snapshot_of(tabpage, idx) {
         clear_snapshot_rec(fr);
     }
-    tp.tp_snapshot[idx as usize] = ptr::null_mut::<Frame>();
+    tabpage.tp_snapshot[idx as usize] = ptr::null_mut::<Frame>();
 }
 
 /// Free `fr` and everything hanging off it.

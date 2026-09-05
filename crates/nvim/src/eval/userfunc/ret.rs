@@ -441,7 +441,7 @@ pub unsafe fn ex_call(args: *mut ExArg) {
 /// than being made pending by a `:finally`.
 ///
 /// # Safety
-/// `args` is a live command with a condition stack, and `rettv` is null or a
+/// `args` is a live command with a condition stack, and `result` is null or a
 /// `TypVal`.
 pub unsafe fn do_return(
     args: *mut ExArg,
@@ -451,7 +451,7 @@ pub unsafe fn do_return(
 ) -> bool {
     // SAFETY: the caller's promise -- `args` is the Ex command being run.
     let ea = unsafe { Ea::new(args) };
-    let mut rettv = result;
+    let mut result = result;
     let cstack = ea.cstack;
 
     if reanimate {
@@ -467,21 +467,21 @@ pub unsafe fn do_return(
         unsafe { (*cstack).cs_pending[idx as usize] = CSTP_RETURN as c_char };
 
         if !is_cmd && !reanimate {
-            // A pending return again gets pending: `rettv` points to an
+            // A pending return again gets pending: `result` points to an
             // allocated variable with the value of the original return.
-            unsafe { (*cstack).set_pending_return(idx as usize, rettv) };
+            unsafe { (*cstack).set_pending_return(idx as usize, result) };
         } else {
             if reanimate {
                 debug_assert!(!unsafe { (*current_funccal.get()).fc_rettv }.is_null());
-                rettv = unsafe { (*current_funccal.get()).fc_rettv } as *mut c_void;
+                result = unsafe { (*current_funccal.get()).fc_rettv } as *mut c_void;
             }
-            if rettv.is_null() {
+            if result.is_null() {
                 unsafe { (*cstack).set_pending_return(idx as usize, ptr::null_mut()) };
             } else {
                 // Store the value of the pending return.
                 let saved = unsafe { xcalloc(1, size_of::<TypVal>()) };
                 unsafe { (*cstack).set_pending_return(idx as usize, saved) };
-                unsafe { *saved.cast::<TypVal>() = *rettv.cast::<TypVal>() };
+                unsafe { *saved.cast::<TypVal>() = *result.cast::<TypVal>() };
             }
             if reanimate {
                 // The return value is not available yet.
@@ -489,14 +489,14 @@ pub unsafe fn do_return(
                 unsafe { (*(*current_funccal.get()).fc_rettv).vval.v_number = 0 };
             }
         }
-        unsafe { report_make_pending(CSTP_RETURN, rettv) };
+        unsafe { report_make_pending(CSTP_RETURN, result) };
     } else {
         unsafe { (*current_funccal.get()).fc_returned = 1 };
-        if !reanimate && !rettv.is_null() {
+        if !reanimate && !result.is_null() {
             unsafe { tv_clear((*current_funccal.get()).fc_rettv) };
-            unsafe { *(*current_funccal.get()).fc_rettv = *(rettv as *mut TypVal) };
+            unsafe { *(*current_funccal.get()).fc_rettv = *(result as *mut TypVal) };
             if !is_cmd {
-                unsafe { xfree(rettv) };
+                unsafe { xfree(result) };
             }
         }
     }

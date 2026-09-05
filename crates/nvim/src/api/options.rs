@@ -279,21 +279,21 @@ fn static_option(text: &'static CStr) -> OptVal {
 /// Take the scratch buffer `do_ft_buf` made back out of existence.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-unsafe fn wipe_ft_buf(buf: *mut Buffer) {
-    // SAFETY: `buf` is the caller's live buffer; the `bufref` re-checks it
+/// `buffer` must be a live buffer.
+unsafe fn wipe_ft_buf(buffer: *mut Buffer) {
+    // SAFETY: `buffer` is the caller's live buffer; the `bufref` re-checks it
     // after each step that can delete it.
     unsafe { block_autocmds() };
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-    unsafe { close_windows(buf, false) };
-    if bufref.valid() && buf != curbuf.get() && unsafe { (*buf).b_nwindows } == 0 {
-        wipe_buffer(unsafe { Buf::new(buf) }, false);
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
+    unsafe { close_windows(buffer, false) };
+    if bufref.valid() && buffer != curbuf.get() && unsafe { (*buffer).b_nwindows } == 0 {
+        wipe_buffer(unsafe { Buf::new(buffer) }, false);
     }
     if bufref.valid() {
-        // SAFETY: `buf` is still live -- `bufref` says so. The region has to
+        // SAFETY: `buffer` is still live -- `bufref` says so. The region has to
         // cover the `clear`: a `flags!` set is `Copy`, so a region ending at
         // the dereference would hand `&mut self` a copy and drop the change.
-        unsafe { (*buf).b_flags.clear(BufFlags::DUMMY) };
+        unsafe { (*buffer).b_flags.clear(BufFlags::DUMMY) };
     }
     unsafe { unblock_autocmds() };
 }

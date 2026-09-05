@@ -305,15 +305,15 @@ pub(crate) unsafe fn eval0_simple_funccal(
 /// `arg` must point at the cursor into a NUL-terminated expression.
 pub(crate) unsafe fn eval1(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` is the result being built and is written whole
+    // expression, `result` is the result being built and is written whole
     // before anything reads it.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    unsafe { write_bytes(rettv, 0, 1) };
-    unsafe { eval2(arg, rettv, evalarg) }?;
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
+    unsafe { write_bytes(result, 0, 1) };
+    unsafe { eval2(arg, result, evalarg) }?;
     if cur.byte() != b'?' {
         return Ok(());
     }
@@ -331,21 +331,21 @@ pub(crate) unsafe fn eval1(
     let orig_flags = used.eval_flags;
     let evaluate = orig_flags & EVAL_EVALUATE as c_int != 0;
 
-    let mut result = false;
+    let mut truthy = false;
     if evaluate {
         let mut error = false;
-        // SAFETY: `rettv` is the operand `eval2` just parsed.
-        result = if op_falsy {
-            unsafe { tv2bool(rettv) }
+        // SAFETY: `result` is the operand `eval2` just parsed.
+        truthy = if op_falsy {
+            unsafe { tv2bool(result) }
         } else {
-            let n = unsafe { tv_get_number_chk(rettv, &raw mut error) };
+            let n = unsafe { tv_get_number_chk(result, &raw mut error) };
             n != 0
         };
         // `??` keeps the left operand when it is truthy; `? :` never
         // does, and neither keeps it after an error.
-        if error || !op_falsy || !result {
+        if error || !op_falsy || !truthy {
             // SAFETY: as above.
-            unsafe { tv_clear(rettv) };
+            unsafe { tv_clear(result) };
         }
         if error {
             return Err(Failed);
@@ -354,7 +354,7 @@ pub(crate) unsafe fn eval1(
 
     // `??` is two bytes, `?` one, and white space follows either.
     cur.skip(if op_falsy { 2 } else { 1 });
-    used.eval_flags = flags_evaluating(orig_flags, if op_falsy { !result } else { result });
+    used.eval_flags = flags_evaluating(orig_flags, if op_falsy { !truthy } else { truthy });
 
     let mut var2 = UNSET_TV;
     // SAFETY: `cur` is still the caller's cursor, `var2` is this frame's own
@@ -363,30 +363,30 @@ pub(crate) unsafe fn eval1(
         used.eval_flags = orig_flags;
         return Err(Failed);
     }
-    if !op_falsy || !result {
+    if !op_falsy || !truthy {
         *rv = var2;
     }
 
     if !op_falsy {
         if cur.byte() != b':' {
             emsg(gettext(c"E109: Missing ':' after '?'"));
-            if evaluate && result {
-                unsafe { tv_clear(rettv) };
+            if evaluate && truthy {
+                unsafe { tv_clear(result) };
             }
             used.eval_flags = orig_flags;
             return Err(Failed);
         }
         cur.skip(1);
-        used.eval_flags = flags_evaluating(orig_flags, !result);
+        used.eval_flags = flags_evaluating(orig_flags, !truthy);
         // SAFETY: as the first branch.
         if unsafe { eval1(arg, &raw mut var2, used.raw()) }.is_err() {
-            if evaluate && result {
-                unsafe { tv_clear(rettv) };
+            if evaluate && truthy {
+                unsafe { tv_clear(result) };
             }
             used.eval_flags = orig_flags;
             return Err(Failed);
         }
-        if evaluate && !result {
+        if evaluate && !truthy {
             *rv = var2;
         }
     }
@@ -410,16 +410,16 @@ pub(crate) unsafe fn eval1(
 /// As `eval1`.
 unsafe fn eval_logical(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
     operand: unsafe fn(*mut *mut c_char, *mut TypVal, *mut EvalArg) -> Result<(), Failed>,
     op: u8,
     stop_at: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression and `rettv` is the result being built.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    unsafe { operand(arg, rettv, evalarg) }?;
+    // expression and `result` is the result being built.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
+    unsafe { operand(arg, result, evalarg) }?;
     // The second byte is read only once the first matched, which is what
     // proves the cursor is not on the terminating NUL.
     let is_op = |cur: Cur| cur.byte() == op && cur.at(1) == op;
@@ -439,12 +439,12 @@ unsafe fn eval_logical(
     let orig_flags = used.eval_flags;
     let evaluate = orig_flags & EVAL_EVALUATE as c_int != 0;
 
-    let mut result = !stop_at;
+    let mut truthy = !stop_at;
     if evaluate {
         let mut error = false;
-        // SAFETY: `rettv` is the operand just parsed.
-        result = unsafe { tv_get_number_chk(rettv, &raw mut error) } != 0;
-        unsafe { tv_clear(rettv) };
+        // SAFETY: `result` is the operand just parsed.
+        truthy = unsafe { tv_get_number_chk(result, &raw mut error) } != 0;
+        unsafe { tv_clear(result) };
         if error {
             return Err(Failed);
         }
@@ -452,15 +452,15 @@ unsafe fn eval_logical(
 
     while is_op(cur) {
         cur.skip(2);
-        used.eval_flags = flags_evaluating(orig_flags, result != stop_at);
+        used.eval_flags = flags_evaluating(orig_flags, truthy != stop_at);
         let mut var2 = UNSET_TV;
         // SAFETY: `arg` is still the caller's cursor and `var2` this
         // frame's own.
         unsafe { operand(arg, &raw mut var2, used.raw()) }?;
-        if evaluate && result != stop_at {
+        if evaluate && truthy != stop_at {
             let mut error = false;
             // SAFETY: `var2` is the operand just parsed.
-            result = unsafe { tv_get_number_chk(&raw mut var2, &raw mut error) } != 0;
+            truthy = unsafe { tv_get_number_chk(&raw mut var2, &raw mut error) } != 0;
             unsafe { tv_clear(&raw mut var2) };
             if error {
                 return Err(Failed);
@@ -468,7 +468,7 @@ unsafe fn eval_logical(
         }
         if evaluate {
             rv.v_type = VAR_NUMBER;
-            rv.vval.v_number = VarNumber::from(result);
+            rv.vval.v_number = VarNumber::from(truthy);
         }
     }
 

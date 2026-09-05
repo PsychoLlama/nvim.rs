@@ -191,21 +191,21 @@ fn with_clean_error_state(f: impl FnOnce()) {
 /// Open a window for every listed buffer, closing the superfluous ones.
 pub unsafe fn ex_buffer_all(args: *mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
-    let eap = unsafe { &*args };
+    let args = unsafe { &*args };
     let mut split_ret = Ok(());
     let mut open_wins = 0;
     let had_tab = cmdmod.with(|m| m.cmod_tab);
 
     // The maximum number of windows to open: as many as possible, or as many
     // as the count asked for.
-    let count: LineNr = if eap.addr_count == 0 {
+    let count: LineNr = if args.addr_count == 0 {
         9999 as LineNr
     } else {
-        eap.line2
+        args.line2
     };
 
     // Whether to load inactive buffers too.
-    let all = eap.cmdidx != CmdIdx::unhide && eap.cmdidx != CmdIdx::sunhide;
+    let all = args.cmdidx != CmdIdx::unhide && args.cmdidx != CmdIdx::sunhide;
 
     // Stop Visual mode: the cursor and "VIsual" may very well be invalid
     // after switching to another buffer.

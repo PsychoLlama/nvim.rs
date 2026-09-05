@@ -317,9 +317,9 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
     // SAFETY: the command table's promise -- the argument block of the
     // `:` command being run, which nothing else holds while it runs.
-    let eap = unsafe { &mut *args };
-    let arg = eap.arg;
-    syn_cmdlinep.set(eap.cmdlinep);
+    let args = unsafe { &mut *args };
+    let arg = args.arg;
+    syn_cmdlinep.set(args.cmdlinep);
 
     // Isolate the subcommand name.
     let mut subcmd_end = arg;
@@ -330,11 +330,11 @@ pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
     let subcmd_name = unsafe { name_at(arg, subcmd_end.offset_from(arg) as usize) };
 
     // Skip the error messages of every subcommand too.
-    let _skipping = (eap.skip != 0).then(Suppress::emsg_skip);
+    let _skipping = (args.skip != 0).then(Suppress::emsg_skip);
     match SUBCOMMANDS.iter().find(|sub| *sub.name == *subcmd_name) {
         Some(sub) => {
-            eap.arg = unsafe { skipwhite(subcmd_end) };
-            (sub.func)(eap, 0);
+            args.arg = unsafe { skipwhite(subcmd_end) };
+            (sub.func)(args, 0);
         }
         None => {
             // SAFETY: `subcmd_name` is live for the whole message.
@@ -349,7 +349,7 @@ pub(crate) unsafe fn ex_syntax(args: *mut ExArg) {
 /// Upstream marks this `@deprecated`.
 pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     // SAFETY: the command table's promise, as `ex_syntax`'s.
-    let eap = unsafe { &mut *args };
+    let args = unsafe { &mut *args };
     let mut numbuf = NumBuf::new();
     if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*(*curwin.get()).w_buffer).b_s } {
         unsafe { (*curwin.get()).w_s = Box::into_raw(empty_synblock()) };
@@ -376,7 +376,7 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     let buf = curbuf.get();
     // SAFETY: the editor's current buffer.
     let fname = unsafe { (*buf).b_fname };
-    let arg = eap.arg;
+    let arg = args.arg;
     unsafe { apply_autocmds(AutoEvent::Syntax, arg, fname, true, buf) };
 
     // Move the value of b:current_syntax to w:current_syntax.

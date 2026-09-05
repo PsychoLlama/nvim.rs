@@ -101,9 +101,9 @@ pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     }
 }
 
-/// Read one `++opt` or `++opt=value` argument off the front of `eap->arg`.
+/// Read one `++opt` or `++opt=value` argument off the front of `args.arg`.
 ///
-/// The three that take a value are stored as *offsets* into `eap->cmd`
+/// The three that take a value are stored as *offsets* into `args.cmd`
 /// rather than as pointers, because the command line is reallocated by the
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.

@@ -136,7 +136,7 @@ pub(crate) unsafe fn ml_upd_block0(buffer: *mut Buffer, what: UpdBlock0) {
 }
 
 /// Write the file's name, timestamp and inode into block zero, and set
-/// `buf->b_mtime` from the same `stat`.
+/// `buffer.b_mtime` from the same `stat`.
 ///
 /// Must not use the caller's name buffer: some of them still hold it.
 pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {

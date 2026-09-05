@@ -85,7 +85,7 @@ fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
 pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut err = Error::none();
@@ -208,11 +208,11 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
             // `:restart {cmd}` runs {cmd} over there, once a UI has
             // arrived.
-            if byte(eap.arg) != NUL {
+            if byte(args.arg) != NUL {
                 let mut opt_items = [
                     entry(c"once", obj_bool(true)),
                     entry(c"nested", obj_bool(true)),
-                    entry(c"command", obj_str(eap.arg)),
+                    entry(c"command", obj_str(args.arg)),
                 ];
                 let mut autocmd_items = [
                     obj_str(c"UIEnter".as_ptr()),
@@ -264,10 +264,10 @@ pub(crate) unsafe fn ex_restart(args: *mut ExArg) {
 
             set_vim_var_string(Vv::Exitreason, c"restart".as_ptr(), 7 as ptrdiff_t);
 
-            let mut quit_cmd = if eap.do_ecmd_cmd.is_null() {
+            let mut quit_cmd = if args.do_ecmd_cmd.is_null() {
                 c"qall".as_ptr() as *mut c_char
             } else {
-                eap.do_ecmd_cmd
+                args.do_ecmd_cmd
             };
             let mut quit_cmd_copy: *mut c_char = ptr::null_mut();
             if cmdmod_has(CmdModFlags::CONFIRM) {
@@ -339,11 +339,11 @@ fn blank_callback() -> Callback {
 
 /// `:detach` — let the UI go, and keep running headless.
 ///
-/// Called with a null `eap` by `:connect`, which has already attached
+/// Called with a null `args` by `:connect`, which has already attached
 /// somewhere else.
 pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if !eap.raw().is_null() && eap.forceit != 0 {
+    let args = unsafe { Ea::new(args) };
+    if !args.raw().is_null() && args.forceit != 0 {
         emsg(c"bang (!) not supported yet".as_ptr());
         return;
     }
@@ -390,10 +390,10 @@ pub(crate) unsafe fn ex_detach(args: *mut ExArg) {
 /// `:connect!` also *exits* when this was the only UI, so that the session
 /// really moves rather than being left running.
 pub(crate) unsafe fn ex_connect(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let stop_server = eap.forceit != 0 && ui_active() == 1;
+    let args = unsafe { Ea::new(args) };
+    let stop_server = args.forceit != 0 && ui_active() == 1;
     let mut err = Error::none();
-    unsafe { remote_ui_connect(current_ui.get(), eap.arg, &mut err) };
+    unsafe { remote_ui_connect(current_ui.get(), args.arg, &mut err) };
     if err.is_set() {
         emsg(err.message_or_empty().as_ptr());
         err.clear();

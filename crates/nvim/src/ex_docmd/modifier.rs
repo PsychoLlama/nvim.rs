@@ -106,7 +106,7 @@ pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
 }
 
 /// Read the run of modifiers at the head of the command line into `cmod`,
-/// advancing `eap->cmd` past them.
+/// advancing `args.cmd` past them.
 ///
 /// Answers `Err` when there is no command at all — a comment, a bare
 /// newline, or an empty line — and `Ok` otherwise, including when the line
@@ -181,7 +181,7 @@ pub(crate) unsafe fn parse_command_modifiers(
         }
 
         // A modifier may follow a range (`:1,2 silent print`), so the
-        // name is looked for past one — but `eap->cmd` only moves for
+        // name is looked for past one — but `args.cmd` only moves for
         // the modifiers that accept that.
         let mut p = unsafe { skip_range(ea.cmd, ptr::null_mut()) };
         match ubyte(p) {
@@ -357,7 +357,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                 if checkforcmd(ea.cmd_ptr(), c"vertical".as_ptr(), 4) {
                     cm.cmod_split |= WSP_VERT as c_int;
                 } else if checkforcmd(&raw mut p, c"verbose".as_ptr(), 4) {
-                    // The count is read from `eap->cmd`, which
+                    // The count is read from `args.cmd`, which
                     // `checkforcmd` left *before* the word: `:5verbose`.
                     // Saturating: the count is whatever the user typed,
                     // so `:2147483647verbose set` would otherwise add one

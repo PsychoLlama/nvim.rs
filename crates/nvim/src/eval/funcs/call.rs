@@ -568,10 +568,10 @@ pub unsafe fn f_garbagecollect(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
 }
 
 /// `libcall()` and `libcallnr()`.
-fn libcall_common(args: Args, rettv: &mut TypVal, out_type: VarType) {
-    rettv.v_type = out_type;
+fn libcall_common(args: Args, result: &mut TypVal, out_type: VarType) {
+    result.v_type = out_type;
     if out_type != VAR_NUMBER {
-        rettv.vval.v_string = ptr::null_mut();
+        result.vval.v_string = ptr::null_mut();
     }
     // SAFETY throughout: the frame is live; the two names and the string argument are
     // owned by arguments and outlive the call.
@@ -602,21 +602,21 @@ fn libcall_common(args: Args, rettv: &mut TypVal, out_type: VarType) {
     } else {
         LibcallReturn::Int
     };
-    let result = if libname.is_null() || funcname.is_null() {
+    let answer = if libname.is_null() || funcname.is_null() {
         None
     } else {
         unsafe { os_libcall(CStr::from_ptr(libname), CStr::from_ptr(funcname), arg, want) }
     };
-    match result {
+    match answer {
         None => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let funcname = unsafe { c_str(funcname) };
             semsg!("E364: Library call failed for \"{funcname}()\"");
         }
         Some(LibcallResult::Str(s)) => {
-            rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);
+            result.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);
         }
-        Some(LibcallResult::Int(n)) => rettv.vval.v_number = n as VarNumber,
+        Some(LibcallResult::Int(n)) => result.vval.v_number = n as VarNumber,
     }
 }
 

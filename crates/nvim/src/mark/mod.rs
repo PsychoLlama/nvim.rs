@@ -328,30 +328,30 @@ pub unsafe fn setmark_pos(
 /// tag stack.
 ///
 /// # Safety
-/// `wp` must be a live window.
+/// `window` must be a live window.
 pub unsafe fn mark_forget_file(window: *mut Window, fnum: c_int) {
     // SAFETY: the caller promised a live window.
-    let mut wp = unsafe { Win::new(window) };
-    unsafe { mark_jumplist_forget_file(wp.raw(), fnum) };
+    let mut window = unsafe { Win::new(window) };
+    unsafe { mark_jumplist_forget_file(window.raw(), fnum) };
     // Backwards, so removing an entry cannot skip the one after it.
-    for i in (0..wp.w_tagstacklen).rev() {
-        if wp.tag_mark(i).fnum() != fnum {
+    for i in (0..window.w_tagstacklen).rev() {
+        if window.tag_mark(i).fnum() != fnum {
             continue;
         }
         let at = usize::try_from(i).expect("tag stack index in range");
         // SAFETY: `i` is inside the tag stack, whose entries are live.
-        unsafe { tagstack_clear_entry(&mut (*wp.raw()).w_tagstack[at]) };
-        if wp.w_tagstackidx > i {
-            wp.w_tagstackidx -= 1;
+        unsafe { tagstack_clear_entry(&mut (*window.raw()).w_tagstack[at]) };
+        if window.w_tagstackidx > i {
+            window.w_tagstackidx -= 1;
         }
-        wp.w_tagstacklen -= 1;
+        window.w_tagstacklen -= 1;
         // SAFETY: source and destination are inside `[Taggy; 20]` and the
         // length is what is left above `i`, so the move stays in the array.
-        let stack = unsafe { &raw mut (*wp.raw()).w_tagstack }.cast::<Taggy>();
+        let stack = unsafe { &raw mut (*window.raw()).w_tagstack }.cast::<Taggy>();
         unsafe {
             (stack.offset(i as isize)).cast::<u8>().copy_from(
                 (stack.offset(i as isize + 1)).cast(),
-                size_t::try_from(wp.w_tagstacklen - i)
+                size_t::try_from(window.w_tagstacklen - i)
                     .unwrap_or(0)
                     .wrapping_mul(size_of::<Taggy>()),
             )
@@ -494,24 +494,24 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
 /// Used for marks that come from the .shada file.
 ///
 /// # Safety
-/// `buf` must be a live buffer, and the editor's window list must be live.
+/// `buffer` must be a live buffer, and the editor's window list must be live.
 pub unsafe fn fmarks_check_names(buffer: *mut Buffer) {
     // SAFETY: the caller promised a live buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    let name = buf.b_ffname;
+    let buffer = unsafe { Buf::new(buffer) };
+    let name = buffer.b_ffname;
     if name.is_null() {
         return;
     }
     for mark in GlobalMarks::all() {
         // SAFETY: `name` is the buffer's own file name, live while it is.
-        unsafe { fmarks_check_one(mark, name, buf) };
+        unsafe { fmarks_check_one(mark, name, buffer) };
     }
     // The current tab page's windows only, as upstream: a mark in another
     // tab page's jumplist keeps its file name until that window is used.
     for win in windows() {
         for jump in win.jumps() {
             // SAFETY: as above.
-            unsafe { fmarks_check_one(jump, name, buf) };
+            unsafe { fmarks_check_one(jump, name, buffer) };
         }
     }
 }
@@ -600,29 +600,29 @@ pub(crate) unsafe fn mark_check_line_bounds(
 ///
 /// Does not trigger "MarkSet" event.
 ///
-/// `buf` — Buffer to clear marks in.
+/// `buffer` — Buffer to clear marks in.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
+/// `buffer` must be a live buffer.
 pub unsafe fn clrallmarks(buffer: *mut Buffer, timestamp: Timestamp) {
     // SAFETY: the caller promised a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
-    for mark in buf.named_marks() {
+    let mut buffer = unsafe { Buf::new(buffer) };
+    for mark in buffer.named_marks() {
         mark.clear(timestamp);
     }
-    buf.last_cursor().clear(timestamp);
+    buffer.last_cursor().clear(timestamp);
     // `'"` is the one store that is cleared to line 1 rather than to 0: the
     // whole point of it is where to put the cursor when the file is opened
     // again, and "the top" is a better answer than "nowhere".
-    buf.last_cursor().set_lnum(1);
-    buf.last_insert().clear(timestamp);
-    buf.last_change().clear(timestamp);
-    buf.b_op_start.lnum = 0;
-    buf.b_op_end.lnum = 0;
-    for change in buf.changes() {
+    buffer.last_cursor().set_lnum(1);
+    buffer.last_insert().clear(timestamp);
+    buffer.last_change().clear(timestamp);
+    buffer.b_op_start.lnum = 0;
+    buffer.b_op_end.lnum = 0;
+    for change in buffer.changes() {
         change.clear(timestamp);
     }
-    buf.b_changelistlen = 0;
+    buffer.b_changelistlen = 0;
 }
 
 /// # Safety

@@ -121,24 +121,24 @@ impl Search {
     ///
     /// # Safety
     ///
-    /// `eap` must be a live command.
+    /// `args` must be a live command.
     unsafe fn parse(args: *mut ExArg) -> Option<(Search, Files)> {
         // SAFETY: the caller's promise -- a live `ExArg`.
-        let eap = unsafe { Ea::new(args) };
+        let args = unsafe { Ea::new(args) };
         // SAFETY: forwarded from the caller.
         let mut search = Search {
             spat: ptr::null_mut(),
             flags: 0,
-            tomatch: if eap.addr_count > 0 {
-                eap.line2 as c_int
+            tomatch: if args.addr_count > 0 {
+                args.line2 as c_int
             } else {
                 MAXLNUM as c_int
             },
             regmatch: RegMMatch::default(),
-            qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*eap.cmdlinep).as_ptr()) },
+            qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*args.cmdlinep).as_ptr()) },
         };
 
-        let p = unsafe { skip_vimgrep_pat(eap.arg, &raw mut search.spat, &raw mut search.flags) };
+        let p = unsafe { skip_vimgrep_pat(args.arg, &raw mut search.spat, &raw mut search.flags) };
         if p.is_null() {
             qf_emsg(e_invalpat.as_ptr());
             return None;
@@ -615,16 +615,16 @@ unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_vimgrep(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    if !check_can_set_curbuf_forceit(eap.forceit) {
+    if !check_can_set_curbuf_forceit(args.forceit) {
         return;
     }
 
-    let au_name = vgr_get_auname(eap.cmdidx);
+    let au_name = vgr_get_auname(args.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
@@ -632,15 +632,15 @@ pub unsafe fn ex_vimgrep(args: *mut ExArg) {
         }
     }
 
-    let (qi, wp) = qf_cmd_stack_or_alloc(eap);
+    let (qi, wp) = qf_cmd_stack_or_alloc(args);
 
-    let parsed = unsafe { Search::parse(eap.raw()) };
+    let parsed = unsafe { Search::parse(args.raw()) };
     let Some((mut search, files)) = parsed else {
         return;
     };
 
     let adding = matches!(
-        eap.cmdidx,
+        args.cmdidx,
         CmdIdx::grepadd | CmdIdx::lgrepadd | CmdIdx::vimgrepadd | CmdIdx::lvimgrepadd
     );
     if !adding || qf_is_empty(qi) {
@@ -683,7 +683,7 @@ pub unsafe fn ex_vimgrep(args: *mut ExArg) {
         let spat = unsafe { c_str(search.spat) };
         semsg!("E480: No match: {spat}");
     } else if search.flags & VGR_NOJUMP as c_int == 0 {
-        unsafe { jump_to_match(qi.raw(), eap.forceit, &mut out) };
+        unsafe { jump_to_match(qi.raw(), args.forceit, &mut out) };
     }
 
     qf_busy_end();

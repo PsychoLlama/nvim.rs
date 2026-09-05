@@ -495,11 +495,11 @@ unsafe fn insert_jump(fm: XFileMark, buffer: *mut Buffer, mut entry: ShadaEntry)
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
 unsafe fn insert_change(buffer: *mut Buffer, fm: FileMark) {
-    // SAFETY: the caller's promise — `buf` is a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
-    let mut i = buf.b_changelistlen;
+    // SAFETY: the caller's promise — `buffer` is a live buffer.
+    let mut buffer = unsafe { Buf::new(buffer) };
+    let mut i = buffer.b_changelistlen;
     while i > 0 {
-        let existing = &buf.b_changelist[i as usize - 1];
+        let existing = &buffer.b_changelist[i as usize - 1];
         if existing.timestamp <= fm.timestamp {
             if marks_equal(existing.mark, fm.mark) {
                 i = -1;
@@ -508,21 +508,21 @@ unsafe fn insert_change(buffer: *mut Buffer, fm: FileMark) {
         }
         i -= 1;
     }
-    if i > 0 && buf.b_changelistlen == JUMPLISTSIZE {
+    if i > 0 && buffer.b_changelistlen == JUMPLISTSIZE {
         // SAFETY: the oldest change is about to be overwritten, so what it
         // holds is this call's to release.
-        unsafe { free_fmark(buf.b_changelist[0].clone()) };
+        unsafe { free_fmark(buffer.b_changelist[0].clone()) };
     }
-    let len = buf.b_changelistlen;
-    let i = marklist_insert(&mut buf.b_changelist, len, i);
+    let len = buffer.b_changelistlen;
+    let i = marklist_insert(&mut buffer.b_changelist, len, i);
     if i == -1 {
         // SAFETY: the mark was read from the file, so it owns its extras.
         unsafe { xfree(fm.additional_data.cast()) };
         return;
     }
-    buf.b_changelist[i as usize] = fm;
-    if buf.b_changelistlen < JUMPLISTSIZE {
-        buf.b_changelistlen += 1;
+    buffer.b_changelist[i as usize] = fm;
+    if buffer.b_changelistlen < JUMPLISTSIZE {
+        buffer.b_changelistlen += 1;
     }
 }
 

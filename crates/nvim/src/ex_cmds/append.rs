@@ -63,12 +63,12 @@ static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
 /// `:insert` and `:append`, also used by [`ex_change`].
 ///
 /// # Safety
-/// `eap` must be a live Ex command whose range is inside the current buffer.
+/// `args` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_append(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *args };
+    let args = unsafe { &mut *args };
     let mut did_undo = false;
-    let (cmdidx, forceit, line2) = (eap.cmdidx, eap.forceit, eap.line2);
+    let (cmdidx, forceit, line2) = (args.cmdidx, args.forceit, args.line2);
     let mut lnum = line2;
     let mut indent = 0;
     // SAFETY: `curbuf` is the live current buffer.
@@ -115,7 +115,7 @@ pub unsafe fn ex_append(args: *mut ExArg) {
         }
 
         // SAFETY: the command's argument and script cursor are live.
-        let Some(theline) = (unsafe { next_append_line(eap, indent) }) else {
+        let Some(theline) = (unsafe { next_append_line(args, indent) }) else {
             break;
         };
         lines_left.set(Rows.get() - 1);
@@ -221,7 +221,7 @@ unsafe fn toggle_autoindent() {
 /// `Some(NULL)` is the callback saying the input ended.
 ///
 /// # Safety
-/// `eap.arg`, `eap.nextcmd` and `eap.cstack` must be live.
+/// `args.arg`, `args.nextcmd` and `args.cstack` must be live.
 unsafe fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
     let arg = args.arg;
     // SAFETY: caller's contract.
@@ -275,11 +275,11 @@ unsafe fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
 /// `:change` -- delete the range, then append in its place.
 ///
 /// # Safety
-/// `eap` must be a live Ex command whose range is inside the current buffer.
+/// `args` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_change(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *args };
-    let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
+    let args = unsafe { &mut *args };
+    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
     // SAFETY: the range is inside the current buffer.
     if line2 >= line1 && u_save(line1 - 1, line2 + 1).is_err() {
         return;
@@ -313,20 +313,25 @@ pub unsafe fn ex_change(args: *mut ExArg) {
     check_cursor_lnum(cur_win());
     unsafe { deleted_lines_mark(line1, line2 - lnum) };
     // ":append" on the line above the deleted lines.
-    eap.line2 = line1;
+    args.line2 = line1;
     // SAFETY: the command block is the one borrowed here.
-    unsafe { ex_append(&raw mut *eap) };
+    unsafe { ex_append(&raw mut *args) };
 }
 
 /// `:z` -- print a window of lines around the range's last line.
 ///
 /// # Safety
-/// `eap` must be a live Ex command whose range is inside the current buffer.
+/// `args` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_z(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &*args };
-    let (arg, forceit, addr_count, flags, lnum) =
-        (eap.arg, eap.forceit, eap.addr_count, eap.flags, eap.line2);
+    let args = unsafe { &*args };
+    let (arg, forceit, addr_count, flags, lnum) = (
+        args.arg,
+        args.forceit,
+        args.addr_count,
+        args.flags,
+        args.line2,
+    );
     // SAFETY: the window layout and 'scroll' are live.
     let mut bigness = unsafe { default_bigness(forceit) }.max(1);
 

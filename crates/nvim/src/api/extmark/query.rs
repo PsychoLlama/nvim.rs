@@ -281,7 +281,7 @@ pub unsafe fn nvim_buf_get_extmarks(
 }
 
 unsafe fn extmark_get_index_from_obj(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     ns_id: Integer,
     obj: Object,
     row: *mut ::core::ffi::c_int,
@@ -301,7 +301,7 @@ unsafe fn extmark_get_index_from_obj(
             *err = err_bad_number(c"mark id", id);
             return false;
         }
-        let extmark: MTPair = unsafe { extmark_from_id(buf, ns_id as uint32_t, id as uint32_t) };
+        let extmark: MTPair = unsafe { extmark_from_id(buffer, ns_id as uint32_t, id as uint32_t) };
         if !(extmark.start.pos.row >= 0 as int32_t) {
             *err = err_bad_number(c"mark id (not found)", id);
             return false;

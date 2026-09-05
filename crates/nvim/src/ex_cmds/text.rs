@@ -241,11 +241,11 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
 /// `:left`, `:center` and `:right` -- re-indent every line of the range.
 ///
 /// # Safety
-/// `eap` must be a live Ex command whose range is inside the current buffer.
+/// `args` must be a live Ex command whose range is inside the current buffer.
 pub unsafe fn ex_align(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *args };
-    let (mut cmdidx, arg, line1, line2) = (eap.cmdidx, eap.arg, eap.line1, eap.line2);
+    let args = unsafe { &mut *args };
+    let (mut cmdidx, arg, line1, line2) = (args.cmdidx, args.arg, args.line1, args.line2);
 
     if cur_win().w_onebuf_opt.wo_rl != 0 {
         // Switch left and right aligning.  Upstream rewrites the command
@@ -255,7 +255,7 @@ pub unsafe fn ex_align(args: *mut ExArg) {
             CmdIdx::left => CmdIdx::right,
             other => other,
         };
-        eap.cmdidx = cmdidx;
+        args.cmdidx = cmdidx;
     }
 
     // SAFETY: `arg` is the command's NUL-terminated argument.

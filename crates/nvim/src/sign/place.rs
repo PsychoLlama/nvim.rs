@@ -24,12 +24,12 @@ use crate::types::Failed;
 /// The `"*"` group's first byte: the "all groups" filter.
 const STAR: c_char = b'*'.cast_signed();
 
-/// Places or replaces the sign extmark `*id` in `buf` at `lnum`.
+/// Places or replaces the sign extmark `*id` in `buffer` at `lnum`.
 ///
 /// Writes `*id` back when it was zero: `extmark_set` allocates one.
 ///
 /// # Safety
-/// `buf` must be live; `group` must be null or NUL-terminated.
+/// `buffer` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_set_sign(
     buffer: *mut Buffer,
     id: *mut uint32_t,
@@ -39,7 +39,7 @@ unsafe fn buf_set_sign(
     def: SignRef,
 ) {
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
     // The definition is copied out: the store and the extmark below can both
     // move the entry it lives in.
     let def = *def;
@@ -80,11 +80,11 @@ unsafe fn buf_set_sign(
             },
         },
     };
-    let row = buf.line_count().min(lnum) - 1;
+    let row = buffer.line_count().min(lnum) - 1;
     // SAFETY: a live buffer, and `id` is the caller's writable out-parameter.
     unsafe {
         extmark_set(
-            buf.raw(),
+            buffer.raw(),
             ns,
             id,
             row,
@@ -151,15 +151,15 @@ unsafe fn placed_ns(group: *const c_char) -> Option<uint32_t> {
 /// Zero rather than an error, so that `:sign jump` still loads the file.
 ///
 /// # Safety
-/// `buf` must be live; `group` must be null or NUL-terminated.
+/// `buffer` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_findsign(buffer: *mut Buffer, id: c_int, group: *const c_char) -> c_int {
     // SAFETY: the caller's group name.
     let Some(ns) = (unsafe { placed_ns(group) }) else {
         return 0;
     };
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    lookup_ns(buf, ns, id.cast_unsigned(), false).pos.row + 1
+    let buffer = unsafe { Buf::new(buffer) };
+    lookup_ns(buffer, ns, id.cast_unsigned(), false).pos.row + 1
 }
 
 /// Orders marks the way `:sign` reports them and removes them: by row, then
@@ -229,14 +229,14 @@ pub(super) enum Keep {
     Stop,
 }
 
-/// Deletes signs from `buf`.
+/// Deletes signs from `buffer`.
 ///
 /// `id` of zero means any id and `group` selects a namespace (see
 /// [`group_get_ns`]). `atlnum` above zero narrows to one line — where,
 /// unlike every other combination, only the **highest priority** sign goes.
 ///
 /// # Safety
-/// `buf` must be live; `group` must be null or NUL-terminated.
+/// `buffer` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_delete_signs(
     buffer: *mut Buffer,
     group: *const c_char,
@@ -249,7 +249,7 @@ unsafe fn buf_delete_signs(
         return FAIL;
     }
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
 
     let mut itr = MarkTreeIter::default();
     let row = if atlnum > 0 { atlnum - 1 } else { 0 };
@@ -258,7 +258,7 @@ unsafe fn buf_delete_signs(
     // The walk continues below as a bare iterator: `extmark_del` steps it
     // itself, which a `Cursor` cannot express.
     {
-        let mut walk = Cursor::in_buffer(buf, &mut itr);
+        let mut walk = Cursor::in_buffer(buffer, &mut itr);
         if atlnum > 0 {
             // Signs that *started* above this row but still cover it.
             if !walk.seek_overlap(row, 0) {
@@ -276,7 +276,7 @@ unsafe fn buf_delete_signs(
         }
     }
 
-    let tree = tree_of(buf);
+    let tree = tree_of(buffer);
     while !itr.x.is_null() {
         // SAFETY: the iterator is positioned in this buffer's live tree.
         let mark = unsafe { marktree_itr_current(&mut itr) };
@@ -287,7 +287,7 @@ unsafe fn buf_delete_signs(
         if wanted && atlnum <= 0 {
             // `extmark_del` advances the iterator itself.
             // SAFETY: as above, plus a live buffer.
-            unsafe { extmark_del(buf.raw(), &raw mut itr, mark, true) };
+            unsafe { extmark_del(buffer.raw(), &raw mut itr, mark, true) };
             continue;
         }
         if wanted {
@@ -305,18 +305,18 @@ unsafe fn buf_delete_signs(
     // SAFETY: every mark collected above carries a live sign decoration.
     unsafe { sort_signs(&mut signs) };
     // SAFETY: a live buffer.
-    unsafe { extmark_del_id(buf.raw(), signs[0].ns, signs[0].id) };
+    unsafe { extmark_del_id(buffer.raw(), signs[0].ns, signs[0].id) };
     OK
 }
 
-/// Whether `buf` carries any sign at all — text or highlight.
+/// Whether `buffer` carries any sign at all — text or highlight.
 ///
 /// # Safety
-/// `buf` must be live.
+/// `buffer` must be live.
 pub(crate) unsafe fn buf_has_signs(buffer: *const Buffer) -> bool {
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer.cast_mut()) };
-    buf.meta_total(kMTMetaSignHL) + buf.meta_total(kMTMetaSignText) != 0
+    let buffer = unsafe { Buf::new(buffer.cast_mut()) };
+    buffer.meta_total(kMTMetaSignHL) + buffer.meta_total(kMTMetaSignText) != 0
 }
 
 /// Places the sign `name` in `buffer`, or changes the existing sign `*id`.
@@ -431,12 +431,12 @@ pub(crate) unsafe fn sign_unplace(
     retval
 }
 
-/// Moves the cursor to the sign `id`, opening `buf` if no window shows it.
+/// Moves the cursor to the sign `id`, opening `buffer` if no window shows it.
 ///
 /// Answers the line jumped to, or `-1`.
 ///
 /// # Safety
-/// `buf` must be live; `group` must be null or NUL-terminated.
+/// `buffer` must be live; `group` must be null or NUL-terminated.
 pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: *mut Buffer) -> LineNr {
     // SAFETY: the caller's buffer and group.
     let lnum = unsafe { buf_findsign(buffer, id, group) };
@@ -445,24 +445,24 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: *mut Buf
         return -1;
     }
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
 
     // SAFETY: a live buffer.
-    if !unsafe { buf_jump_open_win(buf.raw()) }.is_null() {
+    if !unsafe { buf_jump_open_win(buffer.raw()) }.is_null() {
         // SAFETY: `curwin` is live from startup to exit.
         let mut win = unsafe { Win::current() };
         win.w_cursor.lnum = lnum;
         check_cursor_lnum(win);
         beginline(BeginlineOpts::WHITE);
     } else {
-        if buf.b_fname.is_null() {
+        if buffer.b_fname.is_null() {
             emsg(gettext(
                 c"E934: Cannot jump to a buffer that does not have a name",
             ));
             return -1;
         }
         // SAFETY: a live buffer's name is a NUL-terminated string it owns.
-        let cmdlen = unsafe { cstr::bytes_at(buf.b_fname) }.len() + 24;
+        let cmdlen = unsafe { cstr::bytes_at(buffer.b_fname) }.len() + 24;
         let mut cmd = vec![0 as c_char; cmdlen + 1];
         // SAFETY: as above; `cmd` has room for `cmdlen` bytes plus the NUL.
         unsafe {
@@ -471,7 +471,7 @@ pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buffer: *mut Buf
                 cmdlen,
                 c"e +%ld %s".as_ptr(),
                 int64_t::from(lnum),
-                buf.b_fname,
+                buffer.b_fname,
             );
             let _ = do_cmdline_cmd(cmd.as_mut_ptr());
         };

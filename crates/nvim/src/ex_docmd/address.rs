@@ -156,8 +156,8 @@ pub unsafe fn set_cmd_addr_type(args: *mut ExArg, p: *mut c_char) {
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
 /// from.
 pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
-    let eap = unsafe { Ea::new(args) };
-    match eap.addr_type {
+    let args = unsafe { Ea::new(args) };
+    match args.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             // Not the cursor line but the *last* line when the cursor is
             // past it, which a buffer shrinking under a command allows.
@@ -175,8 +175,8 @@ pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(curtab.get()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as LineNr,
+        CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
         _ => 0,
     }
 }
@@ -259,7 +259,7 @@ pub(crate) fn find_excmd_after_range(mut ea: Ea) -> *mut c_char {
 }
 
 /// Read the whole range — one address, or a pair around `,` or `;` — into
-/// `eap->line1`/`line2`/`addr_count`.
+/// `args.line1`/`line2`/`addr_count`.
 ///
 /// `;` differs from `,` in moving the cursor to the first address before
 /// the second is resolved, which is what makes `:.;+3` mean "three lines

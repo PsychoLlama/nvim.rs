@@ -664,56 +664,56 @@ fn locate_arm(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool
     }
 }
 
-/// Step `count` listed buffers away from `buf`, wrapping at either end of the
+/// Step `count` listed buffers away from `buffer`, wrapping at either end of the
 /// list -- what `:bnext`, `:bprevious` and a bare `:buffer` do.
 fn step_to_listed(buffer: Buf, dir: c_int, count: c_int, flags: c_int, unload: bool) -> Located {
-    let mut buf = buffer;
+    let mut buffer = buffer;
     let mut count = count;
     let skip_help = flags & DOBUF_SKIPHELP as c_int != 0;
-    let help_only = skip_help && buf.b_help;
+    let help_only = skip_help && buffer.b_help;
 
     // remember the buffer where we start, we come back there when all buffers
     // are unlisted.
     let mut bp: Option<Buf> = None;
     while count > 0
-        || bp != Some(buf)
+        || bp != Some(buffer)
             && !unload
             && !(if help_only {
-                buf.b_help
+                buffer.b_help
             } else {
-                buf.b_p_bl != 0
+                buffer.b_p_bl != 0
             })
     {
         if bp.is_none() {
-            bp = Some(buf);
+            bp = Some(buffer);
         }
         let step = if dir == FORWARD as c_int {
-            buf.next().or_else(first_buf)
+            buffer.next().or_else(first_buf)
         } else {
-            buf.prev().or_else(last_buf)
+            buffer.prev().or_else(last_buf)
         };
         let Some(next) = step else {
             return Ok(None);
         };
-        buf = next;
+        buffer = next;
         // Avoid non-help buffers if the starting point was a help buffer and
         // vice-versa.  Don't count unlisted buffers.
         let counts = if help_only {
-            buf.b_help
+            buffer.b_help
         } else {
-            buf.b_p_bl != 0 && (!skip_help || !buf.b_help)
+            buffer.b_p_bl != 0 && (!skip_help || !buffer.b_help)
         };
         if unload || counts {
             count -= 1;
             bp = None; // use this buffer as new starting point
         }
-        if bp == Some(buf) {
+        if bp == Some(buffer) {
             // back where we started, didn't find anything.
             err(c"E85: There is no listed buffer");
             return Err(());
         }
     }
-    Ok(Some(buf))
+    Ok(Some(buffer))
 }
 
 /// What the unload half of [`do_buffer_ext`] decided.

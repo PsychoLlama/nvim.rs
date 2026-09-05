@@ -23,7 +23,7 @@ use crate::types::VAR_STRING;
 /// is, because the saved state is written before the switch is attempted.
 ///
 /// # Safety
-/// `args` must point at a writable `WinExecute`, and `wp`/`tabpage` must be a
+/// `args` must point at a writable `WinExecute`, and `window`/`tabpage` must be a
 /// live window and tab page.
 pub unsafe fn win_execute_before(
     args: *mut WinExecute,
@@ -110,8 +110,8 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 }
 
 /// `win_execute({winid}, {command} [, {silent}])`.
-pub unsafe fn f_win_execute(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_win_execute(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
     result.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments and `result` are live typvals; the saved state is a
@@ -122,7 +122,7 @@ pub unsafe fn f_win_execute(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
     };
     let mut saved: WinExecute = unsafe { mem::zeroed() };
     if unsafe { win_execute_before(&raw mut saved, wp.raw(), tp.raw()) } {
-        unsafe { execute_common(argvars, result, 1) };
+        unsafe { execute_common(args.ptr(0), result, 1) };
     }
     unsafe { win_execute_after(&raw mut saved) };
 }

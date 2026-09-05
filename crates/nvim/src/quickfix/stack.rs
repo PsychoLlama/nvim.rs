@@ -621,12 +621,12 @@ pub(crate) fn ll_get_or_alloc_list(mut window: Win) -> *mut QfInfo {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub(crate) unsafe fn qf_cmd_get_stack(args: *mut ExArg, print_emsg: bool) -> *mut QfInfo {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    if !unsafe { is_loclist_cmd(eap.cmdidx) } {
+    if !unsafe { is_loclist_cmd(args.cmdidx) } {
         return QfStack::Global.raw();
     }
     let qi = win_loclist(cur_win());

@@ -161,14 +161,14 @@ fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     Ok(())
 }
 
-/// Give `wp` a fresh leaf frame of its own.
+/// Give `window` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(window: Win) -> FrameRef {
-    let mut wp = window;
+    let mut window = window;
     // SAFETY: a fresh zeroed `Frame`, which is live from here on.
     let mut frp = unsafe { FrameRef::new(zeroed::<Frame>()) };
-    wp.w_frame = frp.raw();
+    window.w_frame = frp.raw();
     frp.fr_layout = FR_LEAF as c_char;
-    frp.fr_win = wp.raw();
+    frp.fr_win = window.raw();
     frp
 }
 
@@ -275,13 +275,13 @@ pub unsafe fn win_free(window: *mut Window, tabpage: *mut Tabpage) {
     unsafe { free_win(Win::new(window), TabPage::from_raw(tabpage)) };
 }
 
-/// Take `wp` off the window list and free everything hanging off it.
+/// Take `window` off the window list and free everything hanging off it.
 fn free_win(window: Win, tabpage: Option<TabPage>) {
-    let mut wp = window;
+    let mut window = window;
     // SAFETY: a live window; reduces the reference count to its argument list.
-    clear_folding(wp);
+    clear_folding(window);
     // SAFETY: the window's own argument list.
-    unsafe { alist_unlink(wp.w_alist) };
+    unsafe { alist_unlink(window.w_alist) };
     // Don't execute autocommands while the window is halfway deleted.
     // SAFETY: matched by the `unblock_autocmds` below.
     unsafe { block_autocmds() };
@@ -289,57 +289,60 @@ fn free_win(window: Win, tabpage: Option<TabPage>) {
     // destructor, so the set's own allocation is released here. `take`
     // rather than `drop_in_place`: what is left is a valid empty set, which
     // the deferred-free path may still be handed.
-    drop(core::mem::take(&mut wp.w_ns_set));
-    clear_options(&raw mut wp.w_onebuf_opt);
-    clear_options(&raw mut wp.w_allbuf_opt);
-    free(wp.w_p_lcs_chars.multispace);
-    free(wp.w_p_lcs_chars.leadmultispace);
+    drop(core::mem::take(&mut window.w_ns_set));
+    clear_options(&raw mut window.w_onebuf_opt);
+    clear_options(&raw mut window.w_allbuf_opt);
+    free(window.w_p_lcs_chars.multispace);
+    free(window.w_p_lcs_chars.leadmultispace);
     // SAFETY: the window's own variable dictionary.
-    let vars = unsafe { &raw mut (*wp.w_vars).dv_hashtab };
+    let vars = unsafe { &raw mut (*window.w_vars).dv_hashtab };
     // SAFETY: as above.
     unsafe { vars_clear(vars) };
     // SAFETY: as above.
     unsafe { hash_init(vars) };
     // SAFETY: as above.
-    unsafe { unref_var_dict(wp.w_vars) };
-    if prevwin.get() == wp.raw() {
+    unsafe { unref_var_dict(window.w_vars) };
+    if prevwin.get() == window.raw() {
         prevwin.set(ptr::null_mut::<Window>());
     }
     for mut ttp in tabs() {
-        if ttp.tp_prevwin == wp.raw() {
+        if ttp.tp_prevwin == window.raw() {
             ttp.tp_prevwin = ptr::null_mut::<Window>();
         }
     }
-    free(wp.w_lines);
-    for i in 0..wp.w_tagstacklen {
+    free(window.w_lines);
+    for i in 0..window.w_tagstacklen {
         // SAFETY: an entry of the window's own tag stack.
-        unsafe { tagstack_clear_entry(&mut wp.w_tagstack[i as usize]) };
+        unsafe { tagstack_clear_entry(&mut window.w_tagstack[i as usize]) };
     }
-    free(wp.w_localdir);
-    free(wp.w_prevdir);
-    free_click_defs(wp.w_status_click_defs, wp.w_status_click_defs_size);
-    free_click_defs(wp.w_winbar_click_defs, wp.w_winbar_click_defs_size);
-    free_click_defs(wp.w_statuscol_click_defs, wp.w_statuscol_click_defs_size);
+    free(window.w_localdir);
+    free(window.w_prevdir);
+    free_click_defs(window.w_status_click_defs, window.w_status_click_defs_size);
+    free_click_defs(window.w_winbar_click_defs, window.w_winbar_click_defs_size);
+    free_click_defs(
+        window.w_statuscol_click_defs,
+        window.w_statuscol_click_defs_size,
+    );
 
     for buf in buffers() {
-        forget_wininfo(buf, wp);
+        forget_wininfo(buf, window);
     }
 
     // Free the border text.
     // SAFETY: the window's own virtual-text arrays.
-    unsafe { clear_virttext(&raw mut wp.w_config.title_chunks) };
+    unsafe { clear_virttext(&raw mut window.w_config.title_chunks) };
     // SAFETY: as above.
-    unsafe { clear_virttext(&raw mut wp.w_config.footer_chunks) };
+    unsafe { clear_virttext(&raw mut window.w_config.footer_chunks) };
     // SAFETY: a live window, whose matches, jump list and quickfix stacks
     // these are.
-    unsafe { clear_matches(wp.raw()) };
+    unsafe { clear_matches(window.raw()) };
     // SAFETY: as above.
-    unsafe { free_jumplist(wp.raw()) };
-    qf_free_all(Some(wp));
-    free(wp.w_p_cc_cols);
-    free_grid(wp, false);
-    if win_valid_any_tab(wp.raw()) {
-        remove(wp, tabpage);
+    unsafe { free_jumplist(window.raw()) };
+    qf_free_all(Some(window));
+    free(window.w_p_cc_cols);
+    free_grid(window, false);
+    if win_valid_any_tab(window.raw()) {
+        remove(window, tabpage);
     }
     // Out of the registry only now, *after* the unlink: the list links are
     // handles, so a window that is still on a list has to stay findable or
@@ -347,22 +350,22 @@ fn free_win(window: Win, tabpage: Option<TabPage>) {
     // function, where a pointer link could not care. Nothing between the two
     // points can look a window up -- `block_autocmds` covers all but the two
     // calls above it, and neither reaches the registry.
-    forget_window(wp.handle());
+    forget_window(window.handle());
     if autocmd_busy.get() {
-        defer_free_window(wp);
+        defer_free_window(window);
     } else {
-        free(wp.raw());
+        free(window.raw());
     }
     // SAFETY: matches the `block_autocmds` above.
     unsafe { unblock_autocmds() };
 }
 
-/// Drop `window` from `buf`'s remembered positions, and with it the older of the
+/// Drop `window` from `buffer`'s remembered positions, and with it the older of the
 /// two entries that would then have no window: only the first such entry is
 /// ever used again.
 fn forget_wininfo(buffer: Buf, window: Win) {
-    let mut buf = buffer;
-    let mut infos = WinInfos::of(&mut buf);
+    let mut buffer = buffer;
+    let mut infos = WinInfos::of(&mut buffer);
     let len = infos.entries_mut().len();
     let mut pos_wip = len;
     let mut pos_null = len;
@@ -400,13 +403,13 @@ pub unsafe fn win_free_grid(window: *mut Window, reinit: bool) {
 
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
 pub(crate) fn free_grid(window: Win, reinit: bool) {
-    let mut wp = window;
-    if wp.w_grid_alloc.handle != 0 && ui_has(kUIMultigrid) {
-        ui_call_grid_destroy(wp.w_grid_alloc.handle as Integer);
+    let mut window = window;
+    if window.w_grid_alloc.handle != 0 && ui_has(kUIMultigrid) {
+        ui_call_grid_destroy(window.w_grid_alloc.handle as Integer);
     }
-    wp.w_grid_alloc.free();
+    window.w_grid_alloc.free();
     if reinit {
-        wp.w_grid_alloc = ScreenGrid::empty();
+        window.w_grid_alloc = ScreenGrid::empty();
     }
 }
 
@@ -425,10 +428,10 @@ pub unsafe fn win_append(after: *mut Window, window: *mut Window, tabpage: *mut 
     };
 }
 
-/// Put `wp` in the window list of `tabpage` (or of the current tab page) after
+/// Put `window` in the window list of `tabpage` (or of the current tab page) after
 /// `after`, or at the front when there is no `after`.
 pub(crate) fn append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) {
-    let mut wp = window;
+    let mut window = window;
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
@@ -438,9 +441,9 @@ pub(crate) fn append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) 
         Some(after) => after.next(),
         None => list_first(tabpage),
     };
-    let id = Some(wp.id());
-    wp.w_next = before.map(Win::id);
-    wp.w_prev = after.map(Win::id);
+    let id = Some(window.id());
+    window.w_next = before.map(Win::id);
+    window.w_prev = after.map(Win::id);
     match after {
         Some(mut after) => after.w_next = id,
         None => set_first(tabpage, id),

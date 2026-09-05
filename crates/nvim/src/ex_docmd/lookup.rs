@@ -99,9 +99,9 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
     false
 }
 
-/// Resolve `eap->cmd` to a command index, and answer where the name ends.
+/// Resolve `args.cmd` to a command index, and answer where the name ends.
 ///
-/// `eap->cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
+/// `args.cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
 /// as a *negative* index for a user command. `full`, when given, is set
 /// when the name was spelled out in full rather than abbreviated.
 pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char {

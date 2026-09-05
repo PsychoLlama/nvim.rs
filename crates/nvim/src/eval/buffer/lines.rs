@@ -151,10 +151,10 @@ unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool)
     }
 }
 
-/// Lines `start..=end` of `buf`, as a List or as one String.
+/// Lines `start..=end` of `buffer`, as a List or as one String.
 ///
 /// # Safety
-/// `buf` must be a live buffer or NULL, and `result` a live typval.
+/// `buffer` must be a live buffer or NULL, and `result` a live typval.
 unsafe fn get_buffer_lines(
     buffer: *mut Buffer,
     mut start: LineNr,
@@ -173,19 +173,19 @@ unsafe fn get_buffer_lines(
         }
         return;
     }
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
     if !retlist {
         let len = |n| size_t::try_from(n).expect("a line length is not negative");
-        let line = (start >= 1 && start <= buf.line_count())
-            .then(|| unsafe { xstrnsave(buf.line(start).raw(), len(buf.line_len(start))) });
+        let line = (start >= 1 && start <= buffer.line_count())
+            .then(|| unsafe { xstrnsave(buffer.line(start).raw(), len(buffer.line_len(start))) });
         ret.vval.v_string = line.unwrap_or(ptr::null_mut());
         return;
     }
     start = start.max(1);
-    end = end.min(buf.line_count());
+    end = end.min(buffer.line_count());
     let list = unsafe { tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t) };
     for lnum in start..=end {
-        let (text, len) = unsafe { (buf.line(lnum).raw(), buf.line_len(lnum) as ssize_t) };
+        let (text, len) = unsafe { (buffer.line(lnum).raw(), buffer.line_len(lnum) as ssize_t) };
         unsafe { tv_list_append_string(list, text, len) };
     }
 }

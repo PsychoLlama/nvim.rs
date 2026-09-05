@@ -76,14 +76,14 @@ pub(crate) type Mi = Live<MatchItem>;
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
 
-/// Adds a match to `wp`'s match list, and answers its id or `-1`.
+/// Adds a match to `window`'s match list, and answers its id or `-1`.
 ///
 /// Exactly one of `pat` and `pos_list` describes what to highlight: a
 /// pattern, or a list of `[lnum]` / `[lnum, col]` / `[lnum, col, len]`
 /// positions. `id` of `-1` allocates the next free one.
 ///
 /// # Safety
-/// `wp` must be live and `grp` NUL-terminated; `pat` and `conceal_char` must
+/// `window` must be live and `grp` NUL-terminated; `pat` and `conceal_char` must
 /// be null or NUL-terminated; `pos_list` must be null or a live list.
 #[allow(clippy::too_many_arguments)]
 unsafe fn match_add(
@@ -96,7 +96,7 @@ unsafe fn match_add(
     conceal_char: *const c_char,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window, strings and list.
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
@@ -112,10 +112,10 @@ unsafe fn match_add(
         return -1;
     }
     if id == -1 {
-        id = wp.w_next_match_id;
-        wp.w_next_match_id += 1;
+        id = window.w_next_match_id;
+        window.w_next_match_id += 1;
     } else {
-        let mut cur = wp.w_match_head;
+        let mut cur = window.w_match_head;
         while !cur.is_null() {
             if unsafe { (*cur).mit_id } == id {
                 semsg!("E801: ID already taken: {}", id as int64_t);
@@ -125,8 +125,8 @@ unsafe fn match_add(
         }
         // Keep the auto-allocated ids above every hand-picked one, with
         // room for a few more to be picked soon.
-        if wp.w_next_match_id < id + 100 {
-            wp.w_next_match_id = id + 100;
+        if window.w_next_match_id < id + 100 {
+            window.w_next_match_id = id + 100;
         }
     }
 
@@ -183,7 +183,7 @@ unsafe fn match_add(
     if !pos_list.is_null() {
         match unsafe { fill_pos_array(m.raw(), pos_list) } {
             Some((toplnum, botlnum)) if toplnum != 0 => {
-                unsafe { redraw_win_range_later(wp.raw(), toplnum, botlnum) };
+                unsafe { redraw_win_range_later(window.raw(), toplnum, botlnum) };
                 m.mit_toplnum = toplnum;
                 m.mit_botlnum = botlnum;
                 rtype = UPD_VALID;
@@ -201,20 +201,20 @@ unsafe fn match_add(
 
     // Insert into the list, which is in ascending priority order — so a
     // new match goes *after* every existing one of equal priority.
-    let mut cur = wp.w_match_head;
+    let mut cur = window.w_match_head;
     let mut prev = cur;
     while !cur.is_null() && prio >= unsafe { (*cur).mit_priority } {
         prev = cur;
         cur = unsafe { (*cur).mit_next };
     }
     if cur == prev {
-        wp.w_match_head = m.raw();
+        window.w_match_head = m.raw();
     } else {
         unsafe { (*prev).mit_next = m.raw() };
     }
     m.mit_next = cur;
 
-    unsafe { redraw_later(wp.raw(), rtype) };
+    unsafe { redraw_later(window.raw(), rtype) };
     id
 }
 
@@ -323,13 +323,13 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
     Some((toplnum, botlnum))
 }
 
-/// Removes the match `id` from `wp`'s list; `-1` when there is no such match.
+/// Removes the match `id` from `window`'s list; `-1` when there is no such match.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 unsafe fn match_delete(window: *mut Window, id: c_int, perr: bool) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     let mut rtype = UPD_SOME_VALID;
 
@@ -343,7 +343,7 @@ unsafe fn match_delete(window: *mut Window, id: c_int, perr: bool) -> c_int {
         return -1;
     }
 
-    let mut cur = wp.w_match_head;
+    let mut cur = window.w_match_head;
     let mut prev = cur;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {
         prev = cur;
@@ -357,52 +357,52 @@ unsafe fn match_delete(window: *mut Window, id: c_int, perr: bool) -> c_int {
     }
 
     if cur == prev {
-        unsafe { wp.w_match_head = (*cur).mit_next };
+        unsafe { window.w_match_head = (*cur).mit_next };
     } else {
         unsafe { (*prev).mit_next = (*cur).mit_next };
     }
     unsafe { vim_regfree((*cur).mit_match.regprog) };
     unsafe { xfree((*cur).mit_pattern.cast()) };
     if unsafe { (*cur).mit_toplnum } != 0 {
-        unsafe { redraw_win_range_later(wp.raw(), (*cur).mit_toplnum, (*cur).mit_botlnum) };
+        unsafe { redraw_win_range_later(window.raw(), (*cur).mit_toplnum, (*cur).mit_botlnum) };
         rtype = UPD_VALID;
     }
     unsafe { xfree((*cur).mit_pos_array.cast()) };
     unsafe { xfree(cur.cast()) };
-    unsafe { redraw_later(wp.raw(), rtype) };
+    unsafe { redraw_later(window.raw(), rtype) };
     0
 }
 
-/// Removes every match from `wp`'s list.
+/// Removes every match from `window`'s list.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 pub(crate) unsafe fn clear_matches(window: *mut Window) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
-    while !wp.w_match_head.is_null() {
+    while !window.w_match_head.is_null() {
         // SAFETY: the window owns every entry of its list until it is
         // unlinked, which is what the line below does.
-        let m = unsafe { Mi::new(wp.w_match_head) };
-        wp.w_match_head = m.mit_next;
+        let m = unsafe { Mi::new(window.w_match_head) };
+        window.w_match_head = m.mit_next;
         unsafe { vim_regfree(m.mit_match.regprog) };
         unsafe { xfree(m.mit_pattern.cast()) };
         unsafe { xfree(m.mit_pos_array.cast()) };
         unsafe { xfree(m.raw().cast()) };
     }
-    unsafe { redraw_later(wp.raw(), UPD_SOME_VALID) };
+    unsafe { redraw_later(window.raw(), UPD_SOME_VALID) };
 }
 
-/// The match `id` in `wp`'s list, or null.
+/// The match `id` in `window`'s list, or null.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 unsafe fn get_match(window: *mut Window, id: c_int) -> *mut MatchItem {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
-    let mut cur = wp.w_match_head;
+    let mut cur = window.w_match_head;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {
         cur = unsafe { (*cur).mit_next };
     }
@@ -412,7 +412,7 @@ unsafe fn get_match(window: *mut Window, id: c_int) -> *mut MatchItem {
 /// `:[N]match {group} {pattern}`, `:[N]match none` and `:[N]match`.
 ///
 /// Also runs while commands are being *skipped* (inside a false `:if`), in
-/// which case nothing is added and only `eap->nextcmd` is set — which is why
+/// which case nothing is added and only `args.nextcmd` is set — which is why
 /// it has to parse the pattern either way.
 ///
 /// # Safety

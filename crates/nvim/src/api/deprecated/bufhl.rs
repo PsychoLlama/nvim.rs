@@ -36,14 +36,14 @@ fn src2ns(src_id: &mut Integer) -> uint32_t {
 }
 
 /// `extmark_set` as the three shims here use it: one decoration over one
-/// range of `buf`, created rather than moved, so it needs no id of its own
+/// range of `buffer`, created rather than moved, so it needs no id of its own
 /// and has nowhere to report.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `decor` must own whatever it points at.
+/// `buffer` must be a live buffer and `decor` must own whatever it points at.
 #[expect(clippy::too_many_arguments, reason = "one per extmark_set parameter")]
 unsafe fn set_decor(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     ns: uint32_t,
     line: ::core::ffi::c_int,
     col: ColNr,
@@ -56,7 +56,7 @@ unsafe fn set_decor(
     // slot; a null error slot is what upstream passes here too.
     unsafe {
         extmark_set(
-            buf,
+            buffer,
             ns,
             ::core::ptr::null_mut::<uint32_t>(),
             line,

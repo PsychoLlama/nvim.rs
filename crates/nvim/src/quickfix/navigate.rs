@@ -28,18 +28,18 @@ struct At {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_cc(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
-    let Some(qi) = qf_cmd_stack(eap, true) else {
+    let args = unsafe { Ea::new(args) };
+    let Some(qi) = qf_cmd_stack(args, true) else {
         return;
     };
 
-    let mut errornr = if eap.addr_count > 0 {
-        eap.line2 as c_int
+    let mut errornr = if args.addr_count > 0 {
+        args.line2 as c_int
     } else {
-        match eap.cmdidx {
+        match args.cmdidx {
             // The current entry.
             CmdIdx::cc | CmdIdx::ll => 0,
             CmdIdx::crewind | CmdIdx::lrewind | CmdIdx::cfirst | CmdIdx::lfirst => 1,
@@ -51,23 +51,23 @@ pub unsafe fn ex_cc(args: *mut ExArg) {
     // :cdo/:ldo jump to the nth valid entry, :cfdo/:lfdo to the first
     // valid entry of the nth file.
     let is_do = matches!(
-        eap.cmdidx,
+        args.cmdidx,
         CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
     );
     if is_do {
-        let n = if eap.addr_count > 0 {
-            debug_assert!(eap.line1 >= 0);
-            eap.line1 as size_t
+        let n = if args.addr_count > 0 {
+            debug_assert!(args.line1 >= 0);
+            args.line1 as size_t
         } else {
             1
         };
-        let per_file = matches!(eap.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
+        let per_file = matches!(args.cmdidx, CmdIdx::cfdo | CmdIdx::lfdo);
         let valid_entry = qf_get_nth_valid_entry(qf_current_list(qi), n, per_file);
         debug_assert!(valid_entry <= c_int::MAX as size_t);
         errornr = valid_entry as c_int;
     }
 
-    qf_goto(qi, 0, errornr, eap.forceit);
+    qf_goto(qi, 0, errornr, args.forceit);
 }
 
 /// `:cnext`, `:cprevious`, `:cnfile`, `:cpfile` and their `:l…` twins, plus
@@ -75,29 +75,29 @@ pub unsafe fn ex_cc(args: *mut ExArg) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_cnext(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
-    let Some(qi) = qf_cmd_stack(eap, true) else {
+    let args = unsafe { Ea::new(args) };
+    let Some(qi) = qf_cmd_stack(args, true) else {
         return;
     };
 
     // A count says how many entries to move — except for the :cdo
     // family, whose count is the entry it started at.
     let is_do = matches!(
-        eap.cmdidx,
+        args.cmdidx,
         CmdIdx::cdo | CmdIdx::ldo | CmdIdx::cfdo | CmdIdx::lfdo
     );
-    let errornr = if eap.addr_count > 0 && !is_do {
-        eap.line2 as c_int
+    let errornr = if args.addr_count > 0 && !is_do {
+        args.line2 as c_int
     } else {
         1
     };
 
     // Depending on the command, jump to either the next or the previous
     // entry, or to one in the next or previous file.
-    let dir = match eap.cmdidx {
+    let dir = match args.cmdidx {
         CmdIdx::cprevious | CmdIdx::lprevious | CmdIdx::cNext | CmdIdx::lNext => BACKWARD,
         CmdIdx::cnfile | CmdIdx::lnfile | CmdIdx::cfdo | CmdIdx::lfdo => FORWARD_FILE,
         CmdIdx::cpfile | CmdIdx::lpfile | CmdIdx::cNfile | CmdIdx::lNfile => BACKWARD_FILE,
@@ -105,7 +105,7 @@ pub unsafe fn ex_cnext(args: *mut ExArg) {
         _ => FORWARD,
     };
 
-    qf_goto(qi, dir, errornr, eap.forceit);
+    qf_goto(qi, dir, errornr, args.forceit);
 }
 
 /// The first entry of the list that belongs to buffer `bnr`.
@@ -374,19 +374,19 @@ unsafe fn nth_adjacent_entry(
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_cbelow(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    if eap.addr_count > 0 && eap.line2 <= 0 {
+    if args.addr_count > 0 && args.line2 <= 0 {
         qf_emsg(e_invrange.as_ptr());
         return;
     }
 
     // Does the current buffer have any entry of the right kind?
     let quickfix = matches!(
-        eap.cmdidx,
+        args.cmdidx,
         CmdIdx::cabove | CmdIdx::cbelow | CmdIdx::cbefore | CmdIdx::cafter
     );
     let buf_has_flag = if quickfix {
@@ -399,7 +399,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
         return;
     }
 
-    let Some(qi) = qf_cmd_stack(eap, true) else {
+    let Some(qi) = qf_cmd_stack(args, true) else {
         return;
     };
     let qfl = qf_current_list(qi);
@@ -409,7 +409,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
     }
 
     let dir = if matches!(
-        eap.cmdidx,
+        args.cmdidx,
         CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cafter | CmdIdx::lafter
     ) {
         FORWARD
@@ -417,7 +417,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
         BACKWARD
     };
     let linewise = matches!(
-        eap.cmdidx,
+        args.cmdidx,
         CmdIdx::cbelow | CmdIdx::lbelow | CmdIdx::cabove | CmdIdx::labove
     );
 
@@ -426,7 +426,7 @@ pub unsafe fn ex_cbelow(args: *mut ExArg) {
     pos.col += 1;
     let bnr2 = cur_buf().handle;
     let pos2 = &raw const pos;
-    let n2 = if eap.addr_count > 0 { eap.line2 } else { 0 };
+    let n2 = if args.addr_count > 0 { args.line2 } else { 0 };
     let errornr = unsafe { nth_adjacent_entry(qfl.raw(), bnr2, pos2, n2, dir, linewise) };
 
     if errornr > 0 {

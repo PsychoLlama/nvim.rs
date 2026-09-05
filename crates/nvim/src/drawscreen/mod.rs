@@ -659,7 +659,7 @@ pub unsafe fn setcursor() {
     unsafe { setcursor_mayforce(curwin.get(), false) }
 }
 
-/// Put the terminal cursor where the cursor is in window `wp`.
+/// Put the terminal cursor where the cursor is in window `window`.
 ///
 /// `force` positions it even when not redrawing.
 pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
@@ -668,16 +668,17 @@ pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
     if !force && !unsafe { redrawing() } {
         return;
     }
-    let wp = unsafe { Win::new(window) };
-    validate_cursor(wp);
+    let window = unsafe { Win::new(window) };
+    validate_cursor(window);
 
-    let mut row = wp.w_wrow;
-    let mut col = wp.w_wcol;
-    if wp.w_onebuf_opt.wo_rl != 0 {
+    let mut row = window.w_wrow;
+    let mut col = window.w_wcol;
+    if window.w_onebuf_opt.wo_rl != 0 {
         // With 'rightleft' and the cursor on a double-width character, the
         // cursor goes on its leftmost column.
-        let cursor =
-            unsafe { ml_get_buf(wp.w_buffer, wp.w_cursor.lnum).add(wp.w_cursor.col as usize) };
+        let cursor = unsafe {
+            ml_get_buf(window.w_buffer, window.w_cursor.lnum).add(window.w_cursor.col as usize)
+        };
         let cells = if unsafe { utf_ptr2cells(cursor) } == 2
             && unsafe { vim_isprintc(utf_ptr2char(cursor)) }
         {
@@ -685,16 +686,16 @@ pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
         } else {
             1
         };
-        col = wp.w_view_width - wp.w_wcol - cells;
+        col = window.w_view_width - window.w_wcol - cells;
     }
 
-    let grid = unsafe { grid_adjust(wp.w_grid, &mut row, &mut col) };
+    let grid = unsafe { grid_adjust(window.w_grid, &mut row, &mut col) };
     if !grid.is_unresolved() {
         ui_grid_cursor_goto(grid.handle, row, col);
     }
 }
 
-/// The width of window `wp`'s fold column, given `col` columns are already
+/// The width of window `window`'s fold column, given `col` columns are already
 /// spoken for.
 ///
 /// `'foldcolumn'` asks for a width; what it gets is bounded by the room left
@@ -702,45 +703,46 @@ pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
 /// leaves one for the current window).
 pub unsafe fn compute_foldcolumn(window: *mut Window, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
-    let wp = unsafe { Win::new(window) };
-    let fdc = unsafe { win_fdccol_count(wp.raw()) };
-    let min_width = if wp.raw() == curwin.get() && p_wmw.get() == 0 {
+    let window = unsafe { Win::new(window) };
+    let fdc = unsafe { win_fdccol_count(window.raw()) };
+    let min_width = if window.raw() == curwin.get() && p_wmw.get() == 0 {
         1
     } else {
         p_wmw.get() as c_int
     };
-    fdc.min(wp.w_view_width - (col + min_width))
+    fdc.min(window.w_view_width - (col + min_width))
 }
 
-/// The width of window `wp`'s `'number'`/`'relativenumber'` column.
+/// The width of window `window`'s `'number'`/`'relativenumber'` column.
 ///
 /// Callers check whether either option is set; this only decides how wide the
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
 pub unsafe fn number_width(window: *mut Window) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
-    let largest = if wp.w_onebuf_opt.wo_rnu != 0 && wp.w_onebuf_opt.wo_nu == 0 {
-        wp.w_view_height as LineNr
+    let largest = if window.w_onebuf_opt.wo_rnu != 0 && window.w_onebuf_opt.wo_nu == 0 {
+        window.w_view_height as LineNr
     } else {
-        unsafe { (*wp.w_buffer).b_ml.ml_line_count }
+        unsafe { (*window.w_buffer).b_ml.ml_line_count }
     };
 
-    if largest == wp.w_nrwidth_line_count {
-        return wp.w_nrwidth_width;
+    if largest == window.w_nrwidth_line_count {
+        return window.w_nrwidth_width;
     }
-    wp.w_nrwidth_line_count = largest;
+    window.w_nrwidth_line_count = largest;
 
-    if unsafe { *wp.w_onebuf_opt.wo_stc } != 0 {
+    if unsafe { *window.w_onebuf_opt.wo_stc } != 0 {
         // 'statuscolumn' draws the number itself, so all that is reserved
         // here is 'numberwidth'; the real width is re-estimated from the
         // expression's output.
-        wp.w_statuscol_line_count = 0;
-        wp.w_nrwidth_width = c_int::from(wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
-            * wp.w_onebuf_opt.wo_nuw as c_int;
-        return wp.w_nrwidth_width;
+        window.w_statuscol_line_count = 0;
+        window.w_nrwidth_width =
+            c_int::from(window.w_onebuf_opt.wo_nu != 0 || window.w_onebuf_opt.wo_rnu != 0)
+                * window.w_onebuf_opt.wo_nuw as c_int;
+        return window.w_nrwidth_width;
     }
 
     // Digits in `largest`, at least one -- upstream's do-while, which
@@ -756,18 +758,18 @@ pub unsafe fn number_width(window: *mut Window) -> c_int {
     }
 
     // 'numberwidth' is the minimal width plus one.
-    n = n.max(wp.w_onebuf_opt.wo_nuw as c_int - 1);
+    n = n.max(window.w_onebuf_opt.wo_nuw as c_int - 1);
 
     // With `'signcolumn'` "number" and a sign to show, the number column
     // needs room for the two-cell sign text.
     if n < 2
-        && buf_meta_total(unsafe { Win::new(wp.raw()) }.buffer(), kMTMetaSignText) != 0
-        && wp.w_minscwidth == SCL_NUM
+        && buf_meta_total(unsafe { Win::new(window.raw()) }.buffer(), kMTMetaSignText) != 0
+        && window.w_minscwidth == SCL_NUM
     {
         n = 2;
     }
 
-    wp.w_nrwidth_width = n;
+    window.w_nrwidth_width = n;
     n
 }
 
@@ -814,18 +816,18 @@ pub unsafe fn win_cursorline_standout(window: *const Window) -> bool {
 /// cursor moves onto it.
 pub unsafe fn win_update_cursorline(window: *mut Window, foldinfo: *mut FoldInfo) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     unsafe {
-        wp.w_cursorline = if win_cursorline_standout(wp.raw()) {
-            wp.w_cursor.lnum
+        window.w_cursorline = if win_cursorline_standout(window.raw()) {
+            window.w_cursor.lnum
         } else {
             0
         }
     };
-    if wp.w_onebuf_opt.wo_cul != 0 {
-        unsafe { *foldinfo = fold_info(Win::new(wp.raw()), wp.w_cursor.lnum) };
+    if window.w_onebuf_opt.wo_cul != 0 {
+        unsafe { *foldinfo = fold_info(Win::new(window.raw()), window.w_cursor.lnum) };
         if unsafe { (*foldinfo).fi_level } != 0 && unsafe { (*foldinfo).fi_lines } > 0 {
-            unsafe { wp.w_cursorline = (*foldinfo).fi_lnum };
+            unsafe { window.w_cursorline = (*foldinfo).fi_lnum };
         }
     }
 }

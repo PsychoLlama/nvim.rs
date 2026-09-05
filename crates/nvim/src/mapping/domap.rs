@@ -593,14 +593,14 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
 /// name, then report whatever [`buf_do_map`] answers.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-unsafe fn do_exmap(eap: *mut ExArg, isabbrev: bool) {
-    // SAFETY: the caller's promise — `eap` is a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
-    let mut cmdp = eap.cmd;
+/// `args` must be a live `ExArg`.
+unsafe fn do_exmap(args: *mut ExArg, isabbrev: bool) {
+    // SAFETY: the caller's promise — `args` is a live `ExArg`.
+    let args = unsafe { Ea::new(args) };
+    let mut cmdp = args.cmd;
     // SAFETY: `cmd` is the command name the dispatcher matched, so it is live
     // and NUL-terminated.
-    let mode = unsafe { get_map_mode(&raw mut cmdp, eap.forceit != 0 || isabbrev) };
+    let mode = unsafe { get_map_mode(&raw mut cmdp, args.forceit != 0 || isabbrev) };
 
     // SAFETY: `get_map_mode` left `cmdp` inside the same name.
     let maptype = match unsafe { *cmdp } as u8 {
@@ -608,16 +608,16 @@ unsafe fn do_exmap(eap: *mut ExArg, isabbrev: bool) {
         b'u' => MAPTYPE_UNMAP as c_int,
         _ => MAPTYPE_MAP as c_int,
     };
-    let mut args = MapArguments::default();
+    let mut parsed = MapArguments::default();
     let is_unmap = maptype == MAPTYPE_UNMAP as c_int;
     // SAFETY: `arg` is the command's own NUL-terminated argument.
-    if unsafe { str_to_mapargs(eap.arg, is_unmap, &mut args) } != 0 {
+    if unsafe { str_to_mapargs(args.arg, is_unmap, &mut parsed) } != 0 {
         emsg(gettext(e_invarg)); // invalid arguments
         return;
     }
     // SAFETY: `curbuf` is live.
-    let answer = unsafe { buf_do_map(maptype, &args, mode, isabbrev, cur_buf()) };
-    let lhs = args.lhs.as_ptr();
+    let answer = unsafe { buf_do_map(maptype, &parsed, mode, isabbrev, cur_buf()) };
+    let lhs = parsed.lhs.as_ptr();
     match answer {
         1 => {
             emsg(gettext(e_invarg));

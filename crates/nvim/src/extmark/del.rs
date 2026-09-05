@@ -100,13 +100,13 @@ pub unsafe fn extmark_clear(
     u_col: ColNr,
 ) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
-    if buf.extmark_ns().is_empty() {
+    let mut buffer = unsafe { Buf::new(buffer) };
+    if buffer.extmark_ns().is_empty() {
         return false;
     }
 
     let all_ns = ns_id == 0;
-    if !all_ns && !ns_has(buf.extmark_ns(), ns_id) {
+    if !all_ns && !ns_has(buffer.extmark_ns(), ns_id) {
         // Nothing to do.
         return false;
     }
@@ -115,7 +115,7 @@ pub unsafe fn extmark_clear(
     let mut marks_cleared_all = l_row == 0 && l_col == 0;
 
     let mut itr = MarkTreeIter::default();
-    itr_get(buf.marktree(), l_row, l_col, &mut itr);
+    itr_get(buffer.marktree(), l_row, l_col, &mut itr);
     loop {
         let mark = itr_current(&mut itr);
         if mark.pos.row < 0
@@ -129,22 +129,22 @@ pub unsafe fn extmark_clear(
         }
         if mark.ns == ns_id || all_ns {
             marks_cleared_any = true;
-            del(buf, &mut itr, mark, true);
+            del(buffer, &mut itr, mark, true);
         } else {
-            itr_next(buf.marktree(), &mut itr);
+            itr_next(buffer.marktree(), &mut itr);
         }
     }
 
     if marks_cleared_all {
         if all_ns {
-            ns_destroy(buf.extmark_ns());
+            ns_destroy(buffer.extmark_ns());
         } else {
-            ns_del(buf.extmark_ns(), ns_id);
+            ns_del(buffer.extmark_ns(), ns_id);
         }
     }
 
     if marks_cleared_any {
-        invalidate_decor_state(buf);
+        invalidate_decor_state(buffer);
     }
 
     marks_cleared_any

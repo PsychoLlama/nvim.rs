@@ -64,34 +64,34 @@ fn raw_win(window: Option<Win>) -> *mut Window {
     window.map_or(ptr::null_mut(), Win::raw)
 }
 
-/// The window after `wp` in that walk, or null at its end.
+/// The window after `window` in that walk, or null at its end.
 ///
 /// # Safety
 ///
-/// `wp` must be a valid window.
+/// `window` must be a valid window.
 unsafe fn next_window_to_walk(window: *mut Window) -> *mut Window {
     // SAFETY: the caller's promise -- a live `Window`.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     // SAFETY: caller contract; the window list is well formed.
-    if wp.w_floating {
-        let prev = wp.prev().expect("a float is never the first window");
+    if window.w_floating {
+        let prev = window.prev().expect("a float is never the first window");
         raw_win(match prev.w_floating {
             true => Some(prev),
             false => first_window(),
         })
     } else {
-        raw_win(wp.next().filter(|next| !next.w_floating))
+        raw_win(window.next().filter(|next| !next.w_floating))
     }
 }
 
-/// Which argument the buffer in `wp` is, or `opened_len` when it is none of
+/// Which argument the buffer in `window` is, or `opened_len` when it is none of
 /// them (and the window is therefore a candidate for closing). On the way it
-/// records how good a candidate `wp` is for becoming the new current window,
+/// records how good a candidate `window` is for becoming the new current window,
 /// and adopts the argument list into it.
 ///
 /// # Safety
 ///
-/// `aall` must be the live state and `wp` a valid window holding `buf`.
+/// `aall` must be the live state and `window` a valid window holding `buffer`.
 unsafe fn arg_index_for_window(
     aall: &mut ArgAllState,
     window: *mut Window,
@@ -100,18 +100,20 @@ unsafe fn arg_index_for_window(
     old_curtab: *mut Tabpage,
 ) -> c_int {
     // SAFETY: the caller's promise -- a live `Buffer`.
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
     // SAFETY: the caller's promise -- a live `Window`.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     // SAFETY: caller contract; the window, its buffer and the argument list
     // are all valid here.
-    // SAFETY: `wp` is the window being considered, live for this walk.
+    // SAFETY: `window` is the window being considered, live for this walk.
     // Reading it here rather than inside the test below costs nothing: the
     // call has no side effect and the chain has no bounds check in it.
-    let aucmd_win = is_aucmd_win(wp.raw());
-    let unwanted = buf.b_ffname.is_null()
+    let aucmd_win = is_aucmd_win(window.raw());
+    let unwanted = buffer.b_ffname.is_null()
         || !aall.keep_tabs
-            && (buf.b_nwindows > 1 || wp.w_width != Columns.get() || wp.w_floating && !aucmd_win);
+            && (buffer.b_nwindows > 1
+                || window.w_width != Columns.get()
+                || window.w_floating && !aucmd_win);
     if unwanted {
         return aall.opened_len;
     }
@@ -126,8 +128,8 @@ unsafe fn arg_index_for_window(
         // put; the buffer is valid.
         // SAFETY: `entry` is the `i`th of a list that holds more than `i`,
         // and both file names are NUL-terminated.
-        let holds_arg = unsafe { (*entry).ae_fnum } == buf.handle
-            || unsafe { same_file(alist_name(entry), buf.b_ffname) };
+        let holds_arg = unsafe { (*entry).ae_fnum } == buffer.handle
+            || unsafe { same_file(alist_name(entry), buffer.b_ffname) };
         if !holds_arg {
             i += 1;
             continue;
@@ -137,7 +139,7 @@ unsafe fn arg_index_for_window(
         let mut weight = 1;
         if old_curtab == curtab.get() {
             weight += 1;
-            if old_curwin == wp.raw() {
+            if old_curwin == window.raw() {
                 weight += 1;
             }
         }
@@ -152,19 +154,19 @@ unsafe fn arg_index_for_window(
                     // SAFETY: as above.
                     unsafe { (*aall.new_curwin).w_arg_idx = aall.opened_len };
                 }
-                aall.new_curwin = wp.raw();
+                aall.new_curwin = window.raw();
                 aall.new_curtab = curtab.get();
             }
         } else if aall.keep_tabs {
             i = aall.opened_len;
         }
-        // SAFETY: `wp` holds a reference of its own to whatever list it has,
+        // SAFETY: `window` holds a reference of its own to whatever list it has,
         // so dropping it here is balanced by the one taken for `aall.alist`.
-        if wp.w_alist != aall.alist {
+        if window.w_alist != aall.alist {
             // Use the current argument list for every window holding a
             // file from it.
-            unsafe { alist_unlink(wp.w_alist) };
-            wp.w_alist = aall.alist;
+            unsafe { alist_unlink(window.w_alist) };
+            window.w_alist = aall.alist;
             unsafe { (*aall.alist).al_refcount.retain() };
         }
         return i;
@@ -179,7 +181,7 @@ unsafe fn arg_index_for_window(
 ///
 /// # Safety
 ///
-/// `aall` must be the live state, `window` a valid window holding `buf`, and
+/// `aall` must be the live state, `window` a valid window holding `buffer`, and
 /// `wpnext` the window the walk would continue to.
 unsafe fn close_unused_window(
     aall: &mut ArgAllState,
@@ -188,26 +190,26 @@ unsafe fn close_unused_window(
     wpnext: *mut Window,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live `Buffer`.
-    let buf = unsafe { Buf::new(buffer) };
-    // SAFETY: caller contract; `buf` is the window's own buffer.
-    // SAFETY: `buf` is the window's buffer, live for the call.
-    let hide = unsafe { buf_hide(buf.raw().cast_const()) };
+    let buffer = unsafe { Buf::new(buffer) };
+    // SAFETY: caller contract; `buffer` is the window's own buffer.
+    // SAFETY: `buffer` is the window's buffer, live for the call.
+    let hide = unsafe { buf_hide(buffer.raw().cast_const()) };
     // SAFETY: as above.
-    let changed = buf_is_changed(buf);
-    let nwindows = buf.b_nwindows;
+    let changed = buf_is_changed(buffer);
+    let nwindows = buffer.b_nwindows;
     if !(hide || aall.forceit || nwindows > 1 || !changed) {
         return wpnext;
     }
     if !hide && nwindows <= 1 && changed {
         // The buffer was changed and we would like to hide it, so try
         // autowriting.
-        // SAFETY: `window` and `buf` are live on entry; both are re-validated
+        // SAFETY: `window` and `buffer` are live on entry; both are re-validated
         // afterwards, since `autowrite` runs autocommands.
-        // `buf` is live until the autowrite -- which is exactly what the
+        // `buffer` is live until the autowrite -- which is exactly what the
         // re-check afterwards is for.
-        let bufref = BufRef::of(buf);
+        let bufref = BufRef::of(buffer);
         // SAFETY: as above; this may fire autocommands.
-        let _ = unsafe { autowrite(buf.raw(), false) };
+        let _ = unsafe { autowrite(buffer.raw(), false) };
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
         let survived = win_valid(window) && bufref.valid();
         if !survived {
@@ -227,8 +229,8 @@ unsafe fn close_unused_window(
     // window runs autocommands. Whether the buffer goes with the window is
     // asked again here rather than reused from above: a successful
     // `autowrite` leaves it unchanged, and then it is the close's to free.
-    // SAFETY: `buf` is `window`'s buffer; a hidden or changed one is kept.
-    let free_buf = unsafe { !buf_hide(buf.raw().cast_const()) } && !buf_is_changed(buf);
+    // SAFETY: `buffer` is `window`'s buffer; a hidden or changed one is kept.
+    let free_buf = unsafe { !buf_hide(buffer.raw().cast_const()) } && !buf_is_changed(buffer);
     // SAFETY: `window` is a live window, and not the last one (checked above).
     unsafe { win_close(window, free_buf, false) };
     if win_valid(wpnext) {
@@ -547,17 +549,17 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command block.
+/// `args` must be a live command block.
 pub unsafe fn ex_all(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     // `:all` takes an optional count as its range.
-    if eap.addr_count == 0 {
-        eap.line2 = 9999 as LineNr;
+    if args.addr_count == 0 {
+        args.line2 = 9999 as LineNr;
     }
-    let count = eap.line2 as c_int;
-    let forceit = eap.forceit != 0;
-    let drop = eap.cmdidx == CmdIdx::drop;
+    let count = args.line2 as c_int;
+    let forceit = args.forceit != 0;
+    let drop = args.cmdidx == CmdIdx::drop;
     // SAFETY: no reference into the command block is held across this.
     unsafe { do_arg_all(count, forceit, drop) };
 }

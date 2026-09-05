@@ -236,7 +236,7 @@ pub unsafe fn mark_adjust_nofold(
 }
 
 /// # Safety
-/// `buf` must be a live buffer, and the editor's window and tab page lists
+/// `buffer` must be a live buffer, and the editor's window and tab page lists
 /// must be live.
 pub unsafe fn mark_adjust_buf(
     buffer: *mut Buffer,
@@ -256,8 +256,8 @@ pub unsafe fn mark_adjust_buf(
     }
 
     // SAFETY: the caller promised a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
-    let fnum = buf.handle as c_int;
+    let mut buffer = unsafe { Buf::new(buffer) };
+    let fnum = buffer.handle as c_int;
     let shift = LineShift {
         line1,
         line2,
@@ -274,60 +274,60 @@ pub unsafe fn mark_adjust_buf(
         // than moving it. Both halves of the table are walked, but only the
         // slots naming *this* buffer are touched.
         for i in 0..NMARKS {
-            shift.mark(buf.named_mark(i));
+            shift.mark(buffer.named_mark(i));
             shift.mark_nodel_in(GlobalMarks::at(i).fmark(), fnum);
         }
         for i in NMARKS..NGLOBALMARKS {
             shift.mark_nodel_in(GlobalMarks::at(i).fmark(), fnum);
         }
 
-        shift.mark(buf.last_insert());
-        shift.mark(buf.last_change());
+        shift.mark(buffer.last_insert());
+        shift.mark(buffer.last_change());
         // `'"` is skipped while it still sits where `clrallmarks` left it —
         // shifting that would invent a position the user never visited — and,
         // for a terminal buffer, while it names the last line, which the
         // terminal is about to rewrite anyway.
-        if !equalpos(buf.last_cursor().pos(), INIT_POS)
-            && (!by_term || buf.last_cursor().lnum() < buf.b_ml.ml_line_count)
+        if !equalpos(buffer.last_cursor().pos(), INIT_POS)
+            && (!by_term || buffer.last_cursor().lnum() < buffer.b_ml.ml_line_count)
         {
-            shift.mark(buf.last_cursor());
+            shift.mark(buffer.last_cursor());
         }
-        if buf_is_prompt(Some(buf)) {
-            shift.mark_nodel(buf.prompt_start());
+        if buf_is_prompt(Some(buffer)) {
+            shift.mark_nodel(buffer.prompt_start());
         }
-        for change in buf.changes() {
+        for change in buffer.changes() {
             shift.mark_nodel(change);
         }
-        shift.line_nodel(&mut buf.b_visual.vi_start.lnum);
-        shift.line_nodel(&mut buf.b_visual.vi_end.lnum);
+        shift.line_nodel(&mut buffer.b_visual.vi_start.lnum);
+        shift.line_nodel(&mut buffer.b_visual.vi_end.lnum);
 
         // The quickfix list is asked once for the buffer and then once per
         // window for that window's location list; a buffer with no surviving
         // entry in either loses the corresponding flag.
-        if !qf_mark_adjust(buf, None, line1, line2, amount, amount_after) {
-            buf.b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
+        if !qf_mark_adjust(buffer, None, line1, line2, amount, amount_after) {
+            buffer.b_has_qf_entry &= !BUF_HAS_QF_ENTRY;
         }
         let mut found_one = false;
         for win in tab_windows() {
-            found_one |= qf_mark_adjust(buf, Some(win), line1, line2, amount, amount_after);
+            found_one |= qf_mark_adjust(buffer, Some(win), line1, line2, amount, amount_after);
         }
         if !found_one {
-            buf.b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
+            buffer.b_has_qf_entry &= !BUF_HAS_LL_ENTRY;
         }
     }
 
     if op as c_uint != kExtmarkNOOP as c_uint {
-        // SAFETY: `buf` is live.
-        unsafe { extmark_adjust(buf.raw(), line1, line2, amount, amount_after, op) };
+        // SAFETY: `buffer` is live.
+        unsafe { extmark_adjust(buffer.raw(), line1, line2, amount, amount_after, op) };
     }
 
     // The context marks and the saved cursor belong to the current window
-    // rather than to `buf`, so they only move when the two agree. They are
+    // rather than to `buffer`, so they only move when the two agree. They are
     // NOT under the `:lockmarks` guard above — upstream leaves them out, and
     // `:lockmarks` is documented as being about the *named* marks.
     // SAFETY: `curwin` is live from startup to exit.
     let mut curwin_handle = unsafe { Win::current() };
-    if curwin_handle.w_buffer == buf.raw() {
+    if curwin_handle.w_buffer == buffer.raw() {
         shift.line(&mut curwin_handle.w_pcmark.lnum);
         shift.line(&mut curwin_handle.w_prev_pcmark.lnum);
         let mut saved = saved_cursor.get();
@@ -343,7 +343,7 @@ pub unsafe fn mark_adjust_buf(
                 shift.mark_nodel_in(jump.fmark(), fnum);
             }
         }
-        if win.w_buffer != buf.raw() {
+        if win.w_buffer != buffer.raw() {
             continue;
         }
         if !cmdmod_has(CmdModFlags::LOCKMARKS) {
@@ -367,7 +367,7 @@ pub unsafe fn mark_adjust_buf(
         // this one calls out to `qf_mark_adjust`, `extmark_adjust` and
         // `fold_mark_adjust`, and upstream reads the field afresh at each of
         // these three tests.
-        if by_api || follows(win, by_term, buf) {
+        if by_api || follows(win, by_term, buffer) {
             if win.w_topline >= line1 && win.w_topline <= line2 {
                 if amount == MAXLNUM.cast_signed() {
                     // An API splice that *replaces* the topline's range with
@@ -388,7 +388,7 @@ pub unsafe fn mark_adjust_buf(
         }
         // The cursor is the one store an API splice leaves alone: the API
         // contract is that a splice does not move the user's cursor.
-        if !by_api && follows(win, by_term, buf) {
+        if !by_api && follows(win, by_term, buffer) {
             let mut cursor = win.w_cursor;
             shift.cursor(&mut cursor);
             win.w_cursor = cursor;
@@ -399,17 +399,17 @@ pub unsafe fn mark_adjust_buf(
         }
     }
 
-    // SAFETY: `buf` is live and the tab page list is the editor's own.
-    diff_mark_adjust(buf, line1, line2, amount, amount_after);
+    // SAFETY: `buffer` is live and the tab page list is the editor's own.
+    diff_mark_adjust(buffer, line1, line2, amount, amount_after);
 
     // The per-window remembered cursor of every window that has ever shown
     // this buffer, including ones that no longer exist.
-    for i in 0..buf.b_wininfo.size {
+    for i in 0..buffer.b_wininfo.size {
         // SAFETY: `b_wininfo` is a kvec of `size` live `WinInfo` pointers
         // owned by the buffer, so the entry and its `wi_mark` are live; the
         // handle reads and writes one position.
-        let mark = unsafe { Fmark::new(&raw mut (**buf.b_wininfo.items.add(i)).wi_mark) };
-        if !by_term || mark.lnum() < buf.b_ml.ml_line_count {
+        let mark = unsafe { Fmark::new(&raw mut (**buffer.b_wininfo.items.add(i)).wi_mark) };
+        if !by_term || mark.lnum() < buffer.b_ml.ml_line_count {
             let mut pos = mark.pos();
             shift.cursor(&mut pos);
             mark.set_pos(pos);

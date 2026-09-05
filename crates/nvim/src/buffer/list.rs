@@ -424,7 +424,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
 /// hand its allocation to the registry, which owns it from here on.
 fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) {
     // The number and the registry entry come first, ahead of upstream's
-    // order: from here on `buf.id()` names the buffer, and the list links
+    // order: from here on `buffer.id()` names the buffer, and the list links
     // are made of exactly that. Nothing between the two reads either.
     buffer.handle = top_file_num.get() as Handle;
     top_file_num.set(top_file_num.get() + 1);

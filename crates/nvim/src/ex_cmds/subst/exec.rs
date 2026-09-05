@@ -725,8 +725,8 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     }
 }
 
-/// Perform a substitution from line `eap->line1` to line `eap->line2` using
-/// the command in `eap->arg`, which should be of the form
+/// Perform a substitution from line `args.line1` to line `args.line2` using
+/// the command in `args.arg`, which should be of the form
 /// `/pattern/substitution/{flags}`.  The usual escapes are supported, as
 /// described in the regexp docs.
 ///

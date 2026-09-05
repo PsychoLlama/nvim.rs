@@ -134,11 +134,11 @@ fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     let mut event = data.object();
     let (data, none) = (&mut event, ::core::ptr::null_mut());
     let (exarg, group) = (::core::ptr::null_mut::<ExArg>(), AUGROUP_ALL);
-    let buf = buffer.raw();
+    let buffer = buffer.raw();
     // SAFETY: TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
     let event = AutoEvent::TermRequest;
-    unsafe { apply_autocmds_group(event, none, none, true, group, buf, exarg, data) };
+    unsafe { apply_autocmds_group(event, none, none, true, group, buffer, exarg, data) };
     term.refcount.release();
 
     // Let writes through again before flushing what the handler wrote, or

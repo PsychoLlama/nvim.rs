@@ -57,10 +57,10 @@ fn emsg_gettext(msg: *const c_char) {
 /// `'patchexpr'` replaces the shell-out entirely.
 ///
 /// # Safety
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_diffpatch(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<ExArg>::new(args) };
+    let mut args = unsafe { Live::<ExArg>::new(args) };
     let old_curwin: *mut Window = curwin.get();
     let mut newname: *mut c_char = ptr::null_mut();
     let mut esc_name: *mut c_char = ptr::null_mut();
@@ -70,10 +70,10 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
     let (tmp_orig, tmp_new) = unsafe { (vim_tempname(), vim_tempname()) };
 
     if !(tmp_orig.is_null() || tmp_new.is_null()) && write_orig(tmp_orig).is_ok() {
-        // SAFETY: `eap.arg` is the command's own argument string.
-        fullname = unsafe { full_name_save(eap.arg, false) };
+        // SAFETY: `args.arg` is the command's own argument string.
+        fullname = unsafe { full_name_save(args.arg, false) };
         let name = if fullname.is_null() {
-            eap.arg
+            args.arg
         } else {
             fullname
         };
@@ -149,11 +149,11 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
             let vertical = diff_flags.get() & DIFF_VERTICAL != 0;
             let flags = if vertical { WSP_VERT as c_int } else { 0 };
             if win_split(0, flags).is_ok() {
-                eap.cmdidx = CmdIdx::split;
-                eap.arg = tmp_new;
+                args.cmdidx = CmdIdx::split;
+                args.arg = tmp_new;
                 // SAFETY: the caller's command, and a window that was live
                 // when it was read.
-                unsafe { do_exedit(eap.raw(), old_curwin) };
+                unsafe { do_exedit(args.raw(), old_curwin) };
                 // SAFETY: `win_valid` takes any pointer and compares it
                 // against the live window list.
                 if curwin.get() != old_curwin && win_valid(old_curwin) {
@@ -161,10 +161,10 @@ pub unsafe fn ex_diffpatch(args: *mut ExArg) {
                     diff_win_options(cur_win(), true);
                     diff_win_options(unsafe { Win::new(old_curwin) }, true);
                     if !newname.is_null() {
-                        eap.arg = newname;
+                        args.arg = newname;
                         // SAFETY: the caller's command; the group name and
                         // the command line are static strings.
-                        unsafe { ex_file(eap.raw()) };
+                        unsafe { ex_file(args.raw()) };
                         if unsafe { augroup_exists(c"filetypedetect".as_ptr()) } {
                             let _ =
                                 unsafe { do_cmdline_cmd(c":doau filetypedetect BufRead".as_ptr()) };
@@ -222,10 +222,10 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
 /// current buffer.
 ///
 /// # Safety
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<ExArg>::new(args) };
+    let mut args = unsafe { Live::<ExArg>::new(args) };
     let old_curwin: *mut Window = curwin.get();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
@@ -237,10 +237,10 @@ pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     if win_split(0, flags).is_err() {
         return;
     }
-    eap.cmdidx = CmdIdx::split;
+    args.cmdidx = CmdIdx::split;
     cur_win().w_onebuf_opt.wo_diff = 1;
     // SAFETY: the caller's command, and a window that was live when read.
-    unsafe { do_exedit(eap.raw(), old_curwin) };
+    unsafe { do_exedit(args.raw(), old_curwin) };
     if curwin.get() == old_curwin {
         return;
     }
@@ -397,14 +397,14 @@ fn strdup_of(p: *const c_char) -> *mut c_char {
 /// in the meantime is left alone.
 ///
 /// # Safety
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_diffoff(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let eap = unsafe { Live::<ExArg>::new(args) };
+    let args = unsafe { Live::<ExArg>::new(args) };
     let mut diffwin = false;
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
     for mut wp in windows() {
-        let wanted = if eap.forceit != 0 {
+        let wanted = if args.forceit != 0 {
             wp.w_onebuf_opt.wo_diff != 0
         } else {
             wp.is_current()
@@ -452,7 +452,7 @@ pub unsafe fn ex_diffoff(args: *mut ExArg) {
         }
         diffwin = diffwin || wp.w_onebuf_opt.wo_diff != 0;
     }
-    if eap.forceit != 0 {
+    if args.forceit != 0 {
         diff_buf_clear();
     }
     let mut tp = cur_tab();

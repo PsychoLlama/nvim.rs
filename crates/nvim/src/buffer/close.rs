@@ -218,7 +218,7 @@ fn free_entry(entry: *mut WinInfo) {
     unsafe { free_wininfo(entry) };
 }
 
-/// `buf->b_vars->dv_hashtab`.
+/// `buffer.b_vars->dv_hashtab`.
 fn buf_vars(mut buffer: Buf) -> *mut HashTab {
     // SAFETY: a live buffer's variable dictionary is live.
     unsafe { &raw mut (*buffer.b_vars).dv_hashtab }

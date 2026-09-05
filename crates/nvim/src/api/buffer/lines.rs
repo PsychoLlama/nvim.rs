@@ -448,7 +448,7 @@ unsafe fn push_linestr(
 }
 
 pub unsafe fn buf_collect_lines(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     n: size_t,
     start: LineNr,
     start_idx: ::core::ffi::c_int,
@@ -460,8 +460,8 @@ pub unsafe fn buf_collect_lines(
     let mut i: size_t = 0 as size_t;
     while i < n {
         let lnum: LineNr = start + i as LineNr;
-        let bufstr: *mut ::core::ffi::c_char = unsafe { ml_get_buf(buf, lnum) };
-        let len: size_t = unsafe { ml_get_buf_len(buf, lnum) } as size_t;
+        let bufstr: *mut ::core::ffi::c_char = unsafe { ml_get_buf(buffer, lnum) };
+        let len: size_t = unsafe { ml_get_buf_len(buffer, lnum) } as size_t;
         let at = start_idx + i as ::core::ffi::c_int;
         // SAFETY: `bufstr` holds `len` bytes, and `l`/`lstate` are the
         // caller's.

@@ -243,18 +243,18 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
     terminal_send(unsafe { Term::new(user_data as *mut Terminal) }, bytes);
 }
 
-/// Create a terminal for `buf` and wire it to vterm.
+/// Create a terminal for `buffer` and wire it to vterm.
 ///
 /// The buffer is emptied: its lines are about to become a mirror of the
 /// emulator's screen, and anything already there would be taken for
 /// scrollback.
-pub(crate) unsafe fn terminal_alloc(buf: *mut Buffer, opts: TerminalOptions) -> *mut Terminal {
+pub(crate) unsafe fn terminal_alloc(buffer: *mut Buffer, opts: TerminalOptions) -> *mut Terminal {
     // SAFETY: the caller hands over a live buffer that has no terminal yet.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buffer = unsafe { Buf::new(buffer) };
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
     // owner; every other reference reaches it through `Buffer::terminal`.
-    let raw: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, buf.handle)));
-    buf.terminal = raw;
+    let raw: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, buffer.handle)));
+    buffer.terminal = raw;
     // SAFETY: just allocated, and nothing else has reached it yet.
     let mut term = unsafe { Term::new(raw) };
     let user = raw.cast::<c_void>();
@@ -279,11 +279,11 @@ pub(crate) unsafe fn terminal_alloc(buf: *mut Buffer, opts: TerminalOptions) -> 
 
     let state = term.state();
     let selection_cbs = &raw const callbacks::SELECTION_CALLBACKS;
-    let buffer = term.selection_buffer.as_mut_ptr();
+    let scratch = term.selection_buffer.as_mut_ptr();
     let size = SELECTIONBUF_SIZE as size_t;
     // SAFETY: the state is the emulator's own; the scratch buffer is the
     // terminal's and is never resized while vterm holds it.
-    unsafe { vterm_state_set_selection_callbacks(state.0, selection_cbs, user, buffer, size) };
+    unsafe { vterm_state_set_selection_callbacks(state.0, selection_cbs, user, scratch, size) };
 
     // Start the child off with the cursor the user configured for terminal
     // mode; it is free to change it.
@@ -310,23 +310,23 @@ pub(crate) unsafe fn terminal_alloc(buf: *mut Buffer, opts: TerminalOptions) -> 
     // SAFETY: a queue with no "on put" hook, freed by `terminal_destroy`.
     term.pending.events = unsafe { multiqueue_new(None, ::core::ptr::null_mut()) };
 
-    if !buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
-        let line_count = buf.line_count();
+    if !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
+        let line_count = buffer.line_count();
         // Not immutable: ml_delete_buf() mutates b_ml behind the pointer.
         #[allow(clippy::while_immutable_condition)]
-        while !buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+        while !buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
             // SAFETY: a live buffer, deleting its own lines down to the one
             // empty line `MlFlags::EMPTY` stands for.
-            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as LineNr, false) };
+            let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
         }
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf.raw(), 1 as LineNr, line_count) };
+        unsafe { deleted_lines_buf(buffer.raw(), 1 as LineNr, line_count) };
     }
     term.old_height = 1;
     raw
 }
 
-/// Make `buf` look and behave like a terminal buffer, and announce it.
+/// Make `buffer` look and behave like a terminal buffer, and announce it.
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
 /// outright — hence the re-check before touching either again.
@@ -335,36 +335,36 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buff
     let mut term = unsafe { Term::new(*termpp) };
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
     // SAFETY: the caller hands over a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
+    let mut buffer = unsafe { Buf::new(buffer) };
 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
     let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
     // SAFETY: paired with the `aucmd_restbuf` below.
-    unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer.raw()) };
     if term.sb.is_sized() {
-        refresh_scrollback(term, buf);
+        refresh_scrollback(term, buffer);
     } else {
         debug_assert!(term.invalid_start >= 0);
     }
-    refresh::refresh_screen(term, buf);
+    refresh::refresh_screen(term, buffer);
 
     // Locked because setting 'buftype' can run OptionSet, and the buffer's
     // lines are the emulator's to write.
-    buf.b_locked += 1;
+    buffer.b_locked += 1;
     set_option_value(
         kOptBuftype,
         OptVal::String(static_cstring(c"terminal")),
         OptionSetFlags::LOCAL,
     );
-    buf.b_locked -= 1;
+    buffer.b_locked -= 1;
 
-    let ffname = buf.b_ffname;
+    let ffname = buffer.b_ffname;
     if !ffname.is_null() {
         // SAFETY: a non-null `b_ffname` is a NUL-terminated file name, read
         // before anything here can free it.
         let title =
             unsafe { ::core::slice::from_raw_parts(ffname.cast(), cstr::bytes_at(ffname).len()) };
-        callbacks::buf_set_term_title(Some(buf), title);
+        callbacks::buf_set_term_title(Some(buffer), title);
     }
     // Both would tie the terminal window's scroll position to another
     // window's, which fights the emulator for the topline.
@@ -381,7 +381,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buff
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or
     // close the terminal, which is what the re-check below is for, and
     // nothing of either is borrowed across it.
-    unsafe { apply_autocmds(AutoEvent::TermOpen, none, none, false, buf.raw()) };
+    unsafe { apply_autocmds(AutoEvent::TermOpen, none, none, false, buffer.raw()) };
     // SAFETY: paired with the `aucmd_prepbuf` above.
     unsafe { aucmd_restbuf(&raw mut aco) };
     // SAFETY: the caller's slot, which TermOpen may have emptied. The
@@ -389,7 +389,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buff
     if unsafe { (*termpp).is_null() } || term.buf_handle == 0 {
         return;
     }
-    if !term_may_alloc_scrollback(term, Some(buf)) {
+    if !term_may_alloc_scrollback(term, Some(buffer)) {
         // SAFETY: there is nothing to unwind; the scrollback could not be
         // sized and the buffer can no longer mirror the screen.
         unsafe { abort() };
@@ -402,8 +402,8 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buff
     let state = term.state();
     for i in 0..16 {
         let key = format!("terminal_color_{i}\0");
-        // SAFETY: `key` is NUL-terminated and `buf` is live.
-        let name = unsafe { get_config_string(buf.raw(), key.as_ptr().cast::<c_char>()) };
+        // SAFETY: `key` is NUL-terminated and `buffer` is live.
+        let name = unsafe { get_config_string(buffer.raw(), key.as_ptr().cast::<c_char>()) };
         if name.is_null() {
             continue;
         }

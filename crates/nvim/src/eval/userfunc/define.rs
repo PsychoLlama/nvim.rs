@@ -112,10 +112,10 @@ pub(crate) unsafe fn list_func_head(
 /// with a `(` it defines.
 ///
 /// # Safety
-/// `eap` is a live `:function` command.
-pub unsafe fn ex_function(eap: *mut ExArg) {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+/// `args` is a live `:function` command.
+pub unsafe fn ex_function(args: *mut ExArg) {
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let mut ea = unsafe { Ea::new(args) };
     let mut line_to_free: *mut c_char = ptr::null_mut();
     let mut line_arg: *mut c_char = ptr::null_mut();
     let mut newargs = GARRAY_EMPTY;
@@ -142,7 +142,7 @@ pub unsafe fn ex_function(eap: *mut ExArg) {
 
     // ":function /pat": list functions matching the pattern.
     if unsafe { *ea.arg } == b'/' as c_char {
-        let p = unsafe { list_functions_matching_pat(eap) };
+        let p = unsafe { list_functions_matching_pat(args) };
         ea.nextcmd = unsafe { check_nextcmd(p) };
         return;
     }
@@ -184,7 +184,7 @@ pub unsafe fn ex_function(eap: *mut ExArg) {
     'ret_free: {
         if !paren {
             // ":function func": list that one function.
-            let _ = unsafe { list_one_function(eap, name, p) };
+            let _ = unsafe { list_one_function(args, name, p) };
             break 'ret_free;
         }
 
@@ -251,12 +251,12 @@ pub unsafe fn ex_function(eap: *mut ExArg) {
         }
 
         'errret_keep: {
-            let (argp, args) = (&raw mut p, &raw mut newargs);
+            let (argp, names) = (&raw mut p, &raw mut newargs);
             let (varp, defs) = (&raw mut varargs, &raw mut default_args);
             let close = b')' as c_char;
             // SAFETY: `p` walks the caller's command line and the three
             // out-parameters are this frame's locals.
-            if unsafe { get_function_args(argp, close, args, varp, defs, ea.skip != 0) }.is_ok() {
+            if unsafe { get_function_args(argp, close, names, varp, defs, ea.skip != 0) }.is_ok() {
                 if KeyTyped.get() && ui_has(kUICmdline) {
                     show_block = true;
                     unsafe { ui_ext_cmdline_block_append(0, ea.cmd) };
@@ -333,10 +333,10 @@ pub unsafe fn ex_function(eap: *mut ExArg) {
                     // Do not define the function when reading the body
                     // fails, and not when skipping.
                     let (lines, freep) = (&raw mut newlines, &raw mut line_to_free);
-                    // SAFETY: `eap` is the live `:function` and both
+                    // SAFETY: `args` is the live `:function` and both
                     // out-parameters are this frame's locals.
                     let read =
-                        unsafe { get_function_body(eap, lines, line_arg, freep, show_block) };
+                        unsafe { get_function_body(args, lines, line_arg, freep, show_block) };
                     if read == FAIL || ea.skip != 0 {
                         break 'erret;
                     }

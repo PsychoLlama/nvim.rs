@@ -523,7 +523,7 @@ fn unload(mut buffer: Buf, can_reload: bool) {
 /// `num_added` lines replaced `num_removed` lines starting at `firstline`.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
+/// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_send_changes(
     buffer: *mut Buffer,
     firstline: LineNr,
@@ -531,8 +531,8 @@ pub unsafe fn buf_updates_send_changes(
     num_removed: int64_t,
 ) {
     // SAFETY: the caller's promise.
-    let buf = unsafe { Buf::new(buffer) };
-    send_changes(buf, firstline, num_added, num_removed);
+    let buffer = unsafe { Buf::new(buffer) };
+    send_changes(buffer, firstline, num_added, num_removed);
 }
 
 fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_removed: int64_t) {
@@ -640,7 +640,7 @@ fn tick_obj(buffer: Buf, send_tick: bool) -> Object {
 /// Callbacks only — no RPC event carries this.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
+/// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_send_splice(
     buffer: *mut Buffer,
     start_row: c_int,
@@ -654,11 +654,11 @@ pub unsafe fn buf_updates_send_splice(
     new_byte: BCount,
 ) {
     // SAFETY: the caller's promise.
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
     let start = Corner::new(start_row, start_col, start_byte);
     let old = Corner::new(old_row, old_col, old_byte);
     let new = Corner::new(new_row, new_col, new_byte);
-    send_splice(buf, start, old, new);
+    send_splice(buffer, start, old, new);
 }
 
 /// One corner of a splice, as `on_bytes` reports it: a row, a column, and a

@@ -329,34 +329,35 @@ fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
 
 /// `:syntax region {group} [matchgroup={group}] start={pat} .. [skip={pat}]
 /// end={pat} .. [{options}]`.
-pub(crate) fn syn_cmd_region(eap: &mut ExArg, syncing: c_int) {
-    let arg = eap.arg;
+pub(crate) fn syn_cmd_region(args: &mut ExArg, syncing: c_int) {
+    let arg = args.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
 
     // Isolate the group name, check for validity.
     let rest = unsafe { get_group_name(arg, &mut group_name_end) };
 
-    let mut args = parse_region_args(eap, rest);
-    let mut rest = args.rest;
+    let mut parsed = parse_region_args(args, rest);
+    let mut rest = parsed.rest;
 
     // Must have a "start" and an "end" pattern.
     if !rest.is_null()
-        && (args.pats[ITEM_START as usize].is_empty() || args.pats[ITEM_END as usize].is_empty())
+        && (parsed.pats[ITEM_START as usize].is_empty()
+            || parsed.pats[ITEM_END as usize].is_empty())
     {
-        args.not_enough = true;
+        parsed.not_enough = true;
         rest = ::core::ptr::null_mut();
     }
 
     if !rest.is_null() {
         // Check for trailing garbage or a command; if OK, add the item.
-        eap.nextcmd = unsafe { check_nextcmd(rest) };
-        if ends_excmd(unsafe { *rest } as c_int) == 0 || eap.skip != 0 {
+        args.nextcmd = unsafe { check_nextcmd(rest) };
+        if ends_excmd(unsafe { *rest } as c_int) == 0 || args.skip != 0 {
             rest = ::core::ptr::null_mut();
         } else {
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
             if syn_id != 0 {
-                syn_incl_toplevel(syn_id, &mut args.opt.flags);
-                store_region(args, syn_id, syncing != 0);
+                syn_incl_toplevel(syn_id, &mut parsed.opt.flags);
+                store_region(parsed, syn_id, syncing != 0);
                 redraw_curbuf_later(UPD_SOME_VALID);
                 syn_stack_free_all(cur_syn_block()); // Need to recompute all.
                 return; // the patterns and the lists belong to the block now
@@ -364,9 +365,9 @@ pub(crate) fn syn_cmd_region(eap: &mut ExArg, syncing: c_int) {
         }
     }
 
-    // Nothing was stored: dropping `args` releases every parsed pattern, its
+    // Nothing was stored: dropping `parsed` releases every parsed pattern, its
     // compiled program and the three lists.
-    if args.not_enough {
+    if parsed.not_enough {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = unsafe { c_str(arg) };
         semsg!("E399: Not enough arguments: syntax region {arg}");

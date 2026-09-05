@@ -40,13 +40,13 @@ pub unsafe fn extmark_get(
     overlap: bool,
 ) -> ExtmarkInfoArray {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
+    let mut buffer = unsafe { Buf::new(buffer) };
     let mut array: ExtmarkInfoArray = KV_INITIAL_VALUE;
     let mut itr = MarkTreeIter::default();
 
     if overlap {
         // Every mark overlapping the start position.
-        if !itr_get_overlap(buf.marktree(), l_row, l_col, &mut itr) {
+        if !itr_get_overlap(buffer.marktree(), l_row, l_col, &mut itr) {
             return array;
         }
 
@@ -54,7 +54,7 @@ pub unsafe fn extmark_get(
             // Invalid until `itr_step_overlap` writes it, which it does
             // whenever it answers true (upstream leaves it uninitialised).
             let mut pair = mtpair_from(MT_INVALID_KEY, MT_INVALID_KEY);
-            if !itr_step_overlap(buf.marktree(), &mut itr, &mut pair) {
+            if !itr_step_overlap(buffer.marktree(), &mut itr, &mut pair) {
                 break;
             }
             push_mark(&mut array, ns_id, type_filter, pair);
@@ -65,7 +65,7 @@ pub unsafe fn extmark_get(
             row: l_row,
             col: l_col,
         };
-        itr_get_ext(buf.marktree(), start, &mut itr);
+        itr_get_ext(buffer.marktree(), start, &mut itr);
     }
 
     while (array.size as int64_t) < amount {
@@ -77,10 +77,10 @@ pub unsafe fn extmark_get(
             break;
         }
         if !mt_end(mark) {
-            let end = tree_get_alt(buf.marktree(), mark, None);
+            let end = tree_get_alt(buffer.marktree(), mark, None);
             push_mark(&mut array, ns_id, type_filter, mtpair_from(mark, end));
         }
-        itr_next(buf.marktree(), &mut itr);
+        itr_next(buffer.marktree(), &mut itr);
     }
     array
 }
@@ -111,14 +111,14 @@ fn push_mark(
 /// The extmark `id` of namespace `ns_id`, paired with its end position.
 pub unsafe fn extmark_from_id(buffer: *mut Buffer, ns_id: uint32_t, id: uint32_t) -> MTPair {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
-    let mark = tree_lookup_ns(buf.marktree(), ns_id, id, false, None);
+    let mut buffer = unsafe { Buf::new(buffer) };
+    let mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, None);
     if mark.id == 0 {
         // Invalid.
         return mtpair_from(mark, mark);
     }
     debug_assert!(mark.pos.row >= 0, "mark.pos.row >= 0");
-    let end = tree_get_alt(buf.marktree(), mark, None);
+    let end = tree_get_alt(buffer.marktree(), mark, None);
 
     mtpair_from(mark, end)
 }
@@ -126,9 +126,9 @@ pub unsafe fn extmark_from_id(buffer: *mut Buffer, ns_id: uint32_t, id: uint32_t
 /// Release every mark of a buffer, as it is freed.
 pub unsafe fn extmark_free_all(buffer: *mut Buffer) {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buffer) };
+    let mut buffer = unsafe { Buf::new(buffer) };
     let mut itr = MarkTreeIter::default();
-    itr_get(buf.marktree(), 0, 0, &mut itr);
+    itr_get(buffer.marktree(), 0, 0, &mut itr);
     loop {
         let mark = itr_current(&mut itr);
         if mark.pos.row < 0 {
@@ -140,13 +140,13 @@ pub unsafe fn extmark_free_all(buffer: *mut Buffer) {
             free_decor(mt_decor(mark));
         }
 
-        itr_next(buf.marktree(), &mut itr);
+        itr_next(buffer.marktree(), &mut itr);
     }
 
-    tree_clear(buf.marktree());
+    tree_clear(buffer.marktree());
 
-    buf.b_signcols.max = 0;
-    buf.b_signcols.count = [0; 9];
+    buffer.b_signcols.max = 0;
+    buffer.b_signcols.count = [0; 9];
 
-    ns_destroy(buf.extmark_ns());
+    ns_destroy(buffer.extmark_ns());
 }

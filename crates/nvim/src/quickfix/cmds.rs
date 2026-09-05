@@ -38,13 +38,13 @@ fn cfile_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_cfile(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut qi = qf_global();
 
-    let au_name = cfile_get_auname(eap.cmdidx);
+    let au_name = cfile_get_auname(args.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, false);
         if claimed && aborting() {
@@ -52,10 +52,10 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
         }
     }
 
-    if unsafe { *eap.arg } as c_int != NUL {
+    if unsafe { *args.arg } as c_int != NUL {
         set_option_direct(
             kOptErrorfile,
-            OptVal::String(unsafe { cstr_as_string(eap.arg) }),
+            OptVal::String(unsafe { cstr_as_string(args.arg) }),
             OptionSetFlags::NONE,
             0 as ScriptId,
         );
@@ -69,15 +69,15 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
     };
 
     // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(eap.cmdidx) }.then(cur_win);
+    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(cur_win);
 
     incr_quickfix_busy();
 
-    let newlist = !matches!(eap.cmdidx, CmdIdx::caddfile | CmdIdx::laddfile);
+    let newlist = !matches!(args.cmdidx, CmdIdx::caddfile | CmdIdx::laddfile);
     let efile = p_ef.get();
     let errorformat2 = p_efm.get();
     let newlist2 = newlist as c_int;
-    let title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
+    let title = unsafe { qf_cmdtitle(*args.cmdlinep) };
     let qf_title2 = title.as_ptr();
     let res = unsafe { qf_init(wp, efile, errorformat2, newlist2, qf_title2, enc) };
 
@@ -98,9 +98,9 @@ pub unsafe fn ex_cfile(args: *mut ExArg) {
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, false);
     }
 
-    let jumps = matches!(eap.cmdidx, CmdIdx::cfile | CmdIdx::lfile);
+    let jumps = matches!(args.cmdidx, CmdIdx::cfile | CmdIdx::lfile);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
-        unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
+        unsafe { qf_jump_first(qi.raw(), save_qfid, args.forceit) };
     }
     qf_busy_end();
 }
@@ -125,15 +125,15 @@ fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 unsafe fn cbuffer_process_args(args: *mut ExArg) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    let buf = if unsafe { *eap.arg } as c_int == NUL {
+    let buf = if unsafe { *args.arg } as c_int == NUL {
         curbuf.get()
-    } else if unsafe { *skipwhite(skipdigits(eap.arg)) } as c_int == NUL {
-        find_buf(unsafe { atoi(eap.arg) }).map_or(ptr::null_mut(), |b| b.raw())
+    } else if unsafe { *skipwhite(skipdigits(args.arg)) } as c_int == NUL {
+        find_buf(unsafe { atoi(args.arg) }).map_or(ptr::null_mut(), |b| b.raw())
     } else {
         ptr::null_mut()
     };
@@ -148,14 +148,14 @@ unsafe fn cbuffer_process_args(args: *mut ExArg) -> Option<Buf> {
         return None;
     }
 
-    if eap.addr_count == 0 {
-        eap.line1 = 1;
-        eap.line2 = buf.b_ml.ml_line_count;
+    if args.addr_count == 0 {
+        args.line1 = 1;
+        args.line2 = buf.b_ml.ml_line_count;
     }
-    if eap.line1 < 1
-        || eap.line1 > buf.b_ml.ml_line_count
-        || eap.line2 < 1
-        || eap.line2 > buf.b_ml.ml_line_count
+    if args.line1 < 1
+        || args.line1 > buf.b_ml.ml_line_count
+        || args.line2 < 1
+        || args.line2 > buf.b_ml.ml_line_count
     {
         qf_emsg(e_invrange.as_ptr());
         return None;
@@ -168,13 +168,13 @@ unsafe fn cbuffer_process_args(args: *mut ExArg) -> Option<Buf> {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn ex_cbuffer(eap: *mut ExArg) {
+/// `args` must be a live command.
+pub unsafe fn ex_cbuffer(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let args = unsafe { Ea::new(args) };
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller.
-    let au_name = cbuffer_get_auname(eap.cmdidx);
+    let au_name = cbuffer_get_auname(args.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
@@ -182,15 +182,15 @@ pub unsafe fn ex_cbuffer(eap: *mut ExArg) {
         }
     }
 
-    let (qi, wp) = qf_cmd_stack_or_alloc(eap);
-    let args = unsafe { cbuffer_process_args(eap.raw()) };
-    let Some(buf) = args else {
+    let (qi, wp) = qf_cmd_stack_or_alloc(args);
+    let parsed = unsafe { cbuffer_process_args(args.raw()) };
+    let Some(buf) = parsed else {
         return;
     };
 
     // The title names the buffer as well as the command. `qf_init_ext`
     // copies it, so this frame can own it.
-    let mut qf_title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
+    let mut qf_title = unsafe { qf_cmdtitle(*args.cmdlinep) };
     if !buf.b_sfname.is_null() {
         let efile = IOSIZE as size_t;
         let fmt = c"%s (%s)".as_ptr();
@@ -201,14 +201,14 @@ pub unsafe fn ex_cbuffer(eap: *mut ExArg) {
 
     incr_quickfix_busy();
 
-    let newlist = !matches!(eap.cmdidx, CmdIdx::caddbuffer | CmdIdx::laddbuffer);
+    let newlist = !matches!(args.cmdidx, CmdIdx::caddbuffer | CmdIdx::laddbuffer);
     let qi2 = qi.raw();
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
     let qf_title2 = ptr::null_mut();
     let errorformat3 = p_efm.get();
-    let line12 = eap.line1;
-    let line22 = eap.line2;
+    let line12 = args.line1;
+    let line22 = args.line2;
     let enc2 = ptr::null_mut();
     let mut res = unsafe {
         qf_init_ext(
@@ -244,9 +244,9 @@ pub unsafe fn ex_cbuffer(eap: *mut ExArg) {
         }
     }
 
-    let jumps = matches!(eap.cmdidx, CmdIdx::cbuffer | CmdIdx::lbuffer);
+    let jumps = matches!(args.cmdidx, CmdIdx::cbuffer | CmdIdx::lbuffer);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
-        unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
+        unsafe { qf_jump_first(qi.raw(), save_qfid, args.forceit) };
     }
     qf_busy_end();
 }
@@ -287,15 +287,15 @@ unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command and `tv` a live value.
+/// `args` must be a live command and `tv` a live value.
 unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args.cast_mut()) };
+    let args = unsafe { Ea::new(args.cast_mut()) };
     // SAFETY: forwarded from the caller.
     // The stack is asked for first, and so allocated for the current
     // window if it had none, even when the value turns out to be
     // unusable.
-    let (qi, wp) = qf_cmd_stack_or_alloc(eap);
+    let (qi, wp) = qf_cmd_stack_or_alloc(args);
 
     let usable = unsafe { (*tv).v_type } == VAR_STRING && !unsafe { (*tv).vval.v_string.is_null() }
         || unsafe { (*tv).v_type } == VAR_LIST;
@@ -304,17 +304,17 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
         return Err(Failed);
     }
 
-    let au_name = cexpr_get_auname(eap.cmdidx);
+    let au_name = cexpr_get_auname(args.cmdidx);
 
     incr_quickfix_busy();
 
-    let newlist = !matches!(eap.cmdidx, CmdIdx::caddexpr | CmdIdx::laddexpr);
+    let newlist = !matches!(args.cmdidx, CmdIdx::caddexpr | CmdIdx::laddexpr);
     let qi2 = qi.raw();
     let curlist = qi.qf_curlist;
     let errorformat2 = ptr::null();
     let buf2 = None;
     let errorformat3 = p_efm.get();
-    let title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
+    let title = unsafe { qf_cmdtitle(*args.cmdlinep) };
     let enc2 = ptr::null_mut();
     let res = unsafe {
         qf_init_ext(
@@ -344,9 +344,9 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
     }
 
-    let jumps = matches!(eap.cmdidx, CmdIdx::cexpr | CmdIdx::lexpr);
+    let jumps = matches!(args.cmdidx, CmdIdx::cexpr | CmdIdx::lexpr);
     if res > 0 && jumps && qf_list_still_valid(wp, save_qfid) {
-        unsafe { qf_jump_first(qi.raw(), save_qfid, eap.forceit) };
+        unsafe { qf_jump_first(qi.raw(), save_qfid, args.forceit) };
     }
     qf_busy_end();
     Ok(())
@@ -356,20 +356,20 @@ unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> 
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_cexpr(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    if !unsafe { trigger_cexpr_autocmd(eap.cmdidx) } {
+    if !unsafe { trigger_cexpr_autocmd(args.cmdidx) } {
         return;
     }
     // Evaluate the expression. When the result is a string or a list of
     // strings, parse each line and add it to the quickfix list.
-    let tv = unsafe { eval_expr(eap.arg, eap.raw()) };
+    let tv = unsafe { eval_expr(args.arg, args.raw()) };
     if tv.is_null() {
         return;
     }
-    let _ = unsafe { cexpr_core(eap.raw().cast_const(), tv) };
+    let _ = unsafe { cexpr_core(args.raw().cast_const(), tv) };
     unsafe { tv_free(tv) };
 }

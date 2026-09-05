@@ -214,29 +214,29 @@ pub unsafe fn get_changelist(buffer: *mut Buffer, win: *mut Window, count: c_int
 /// This function will also adjust the current jump list index.
 ///
 /// # Safety
-/// `wp` must be a live window.
+/// `window` must be a live window.
 pub unsafe fn mark_jumplist_forget_file(window: *mut Window, fnum: c_int) {
     // SAFETY: the caller promised a live window.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     // Backwards, so removing an entry cannot skip the one after it.
-    for i in (0..wp.w_jumplistlen).rev() {
-        if wp.jump(i).fmark().fnum() != fnum {
+    for i in (0..window.w_jumplistlen).rev() {
+        if window.jump(i).fmark().fnum() != fnum {
             continue;
         }
         // SAFETY: `i` is inside the list, so the entry is live and its
         // allocations are the list's to free.
-        unsafe { free_xfmark(wp.jump(i).read()) };
-        if wp.w_jumplistidx > i {
-            wp.w_jumplistidx -= 1;
+        unsafe { free_xfmark(window.jump(i).read()) };
+        if window.w_jumplistidx > i {
+            window.w_jumplistidx -= 1;
         }
-        wp.w_jumplistlen -= 1;
+        window.w_jumplistlen -= 1;
         // SAFETY: source and destination are inside `[XFileMark; 100]` and the
         // length is what is left above `i`, so the move stays in the array.
-        let list = unsafe { &raw mut (*wp.raw()).w_jumplist }.cast::<XFileMark>();
+        let list = unsafe { &raw mut (*window.raw()).w_jumplist }.cast::<XFileMark>();
         unsafe {
             (list.offset(i as isize)).cast::<u8>().copy_from(
                 (list.offset(i as isize + 1)).cast(),
-                size_t::try_from(wp.w_jumplistlen - i)
+                size_t::try_from(window.w_jumplistlen - i)
                     .unwrap_or(0)
                     .wrapping_mul(size_of::<XFileMark>()),
             )
@@ -250,14 +250,14 @@ pub unsafe fn mark_jumplist_forget_file(window: *mut Window, fnum: c_int) {
 /// (this may be a bit slow).
 ///
 /// # Safety
-/// `wp` must be a live window and the editor's globals must be live.
+/// `window` must be a live window and the editor's globals must be live.
 pub unsafe fn cleanup_jumplist(window: *mut Window, loadfiles: bool) {
     // SAFETY: the caller promised a live window.
-    let mut wp = unsafe { Win::new(window) };
+    let mut window = unsafe { Win::new(window) };
     if loadfiles {
         // Every entry that still names its file by name gets its buffer
         // loaded, so that the duplicate test below can compare buffers.
-        for jump in wp.jumps() {
+        for jump in window.jumps() {
             if jump.fmark().fnum() == 0 && jump.fmark().lnum() != 0 {
                 // SAFETY: the entry is live and its name is a C string.
                 unsafe { fname2fnum(jump.raw()) };
@@ -270,14 +270,14 @@ pub unsafe fn cleanup_jumplist(window: *mut Window, loadfiles: bool) {
     // of a run of duplicates is the one kept.
     let mut to: c_int = 0;
     let mut from: c_int = 0;
-    while from < wp.w_jumplistlen {
-        if wp.w_jumplistidx == from {
-            wp.w_jumplistidx = to;
+    while from < window.w_jumplistlen {
+        if window.w_jumplistidx == from {
+            window.w_jumplistidx = to;
         }
-        let here = wp.jump(from).fmark();
+        let here = window.jump(from).fmark();
         let mut i = from + 1;
-        while i < wp.w_jumplistlen {
-            let other = wp.jump(i).fmark();
+        while i < window.w_jumplistlen {
+            let other = window.jump(i).fmark();
             if other.fnum() == here.fnum() && here.fnum() != 0 && other.lnum() == here.lnum() {
                 break;
             }
@@ -287,7 +287,7 @@ pub unsafe fn cleanup_jumplist(window: *mut Window, loadfiles: bool) {
         // next entry: keep it only under 'jumpoptions' "stack", where the
         // list is a history rather than a set. The adjacent duplicate a line
         // deletion just created: always drop.
-        let mustfree = if i >= wp.w_jumplistlen {
+        let mustfree = if i >= window.w_jumplistlen {
             false
         } else if i > from + 1 {
             jop_flags.get() & kOptJopFlagStack as c_uint == 0
@@ -298,35 +298,35 @@ pub unsafe fn cleanup_jumplist(window: *mut Window, loadfiles: bool) {
             // Only the NAME is freed, not `additional_data`: the record is
             // about to be overwritten by a later entry that owns its own.
             // SAFETY: the name is this entry's to free.
-            unsafe { xfree(wp.jump(from).fname().cast()) };
+            unsafe { xfree(window.jump(from).fname().cast()) };
         } else {
             if to != from {
-                let entry = wp.jump(from).read();
-                wp.jump(to).write(entry);
+                let entry = window.jump(from).read();
+                window.jump(to).write(entry);
             }
             to += 1;
         }
         from += 1;
     }
-    if wp.w_jumplistidx == wp.w_jumplistlen {
-        wp.w_jumplistidx = to;
+    if window.w_jumplistidx == window.w_jumplistlen {
+        window.w_jumplistidx = to;
     }
-    wp.w_jumplistlen = to;
+    window.w_jumplistlen = to;
 
     // Standing one past the end, on an entry that names the line the cursor
     // is already on, means the newest jump is where we are: drop it, so
     // `<C-o>` goes somewhere.
-    if !loadfiles || wp.w_jumplistlen == 0 || wp.w_jumplistidx != wp.w_jumplistlen {
+    if !loadfiles || window.w_jumplistlen == 0 || window.w_jumplistidx != window.w_jumplistlen {
         return;
     }
-    let last = wp.jump(wp.w_jumplistlen - 1);
+    let last = window.jump(window.w_jumplistlen - 1);
     // SAFETY: `curbuf` is live from startup to exit.
     let here = unsafe { Buf::current() }.handle;
-    if last.fmark().fnum() == here && last.fmark().lnum() == wp.w_cursor.lnum {
+    if last.fmark().fnum() == here && last.fmark().lnum() == window.w_cursor.lnum {
         // SAFETY: the name is this entry's to free.
         unsafe { xfree(last.fname().cast()) };
-        wp.w_jumplistlen -= 1;
-        wp.w_jumplistidx -= 1;
+        window.w_jumplistlen -= 1;
+        window.w_jumplistidx -= 1;
     }
 }
 
@@ -353,15 +353,15 @@ pub unsafe fn copy_jumplist(from: *mut Window, to: *mut Window) {
 /// Free items in the jumplist of window "wp".
 ///
 /// # Safety
-/// `wp` must be a live window whose jump list entries own their allocations.
+/// `window` must be a live window whose jump list entries own their allocations.
 pub unsafe fn free_jumplist(window: *mut Window) {
     // SAFETY: the caller promised a live window.
-    let mut wp = unsafe { Win::new(window) };
-    for jump in wp.jumps() {
+    let mut window = unsafe { Win::new(window) };
+    for jump in window.jumps() {
         // SAFETY: the entry is live and its allocations are the list's.
         unsafe { free_xfmark(jump.read()) };
     }
-    wp.w_jumplistlen = 0;
+    window.w_jumplistlen = 0;
 }
 
 /// print the jumplist

@@ -341,17 +341,21 @@ impl<T> Reported for T {
 
 // -- Odds and ends ---------------------------------------------------------
 
-/// Set the mark `name` in `buf` to line/column, or delete it when `line` is
+/// Set the mark `name` in `buffer` to line/column, or delete it when `line` is
 /// 0. False, with `err` set, when the position is out of range or the mark
 /// name is not one that can be set.
 pub(crate) unsafe fn set_mark(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     name: String_0,
     line: Integer,
     col: Integer,
     err: &mut Error,
 ) -> bool {
-    let buf = if buf.is_null() { curbuf.get() } else { buf };
+    let buffer = if buffer.is_null() {
+        curbuf.get()
+    } else {
+        buffer
+    };
     let mut col = col;
     let mut deleting = false;
     let out_of_range = c"out of range".as_ptr();
@@ -364,8 +368,8 @@ pub(crate) unsafe fn set_mark(
             *err = err_invalid(c"column", Bad::Bare(unsafe { cstr::at(out_of_range) }));
             return false;
         }
-        // SAFETY: `buf` is the caller's buffer, or the current one.
-        let line_count = unsafe { (*buf).b_ml.ml_line_count } as Integer;
+        // SAFETY: `buffer` is the caller's buffer, or the current one.
+        let line_count = unsafe { (*buffer).b_ml.ml_line_count } as Integer;
         if line < 1 || line > line_count {
             // SAFETY: the names and values are NUL-terminated strings.
             *err = err_invalid(c"line", Bad::Bare(unsafe { cstr::at(out_of_range) }));
@@ -381,8 +385,8 @@ pub(crate) unsafe fn set_mark(
     };
     // SAFETY: `name` names one character, per this function's contract.
     let mark = unsafe { *name.data() } as c_int;
-    // SAFETY: `buf` is live.
-    let handle = unsafe { (*buf).handle };
+    // SAFETY: `buffer` is live.
+    let handle = unsafe { (*buffer).handle };
     let (at, no_view) = (&raw mut pos, ptr::null_mut::<FileMarkView>());
     // SAFETY: `pos` is this frame's, and the mark is set in `handle`.
     let res = unsafe { setmark_pos(mark, at, handle, no_view) }.is_ok();

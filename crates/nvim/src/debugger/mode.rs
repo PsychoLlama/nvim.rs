@@ -500,7 +500,7 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
 /// `args` must be the live `ExArg`.
 pub unsafe fn ex_debug(args: *mut ExArg) {
     let outer_level = debug_break_level.replace(9999);
-    // SAFETY: caller contract; `eap.arg` is the NUL-terminated argument.
+    // SAFETY: caller contract; `args.arg` is the NUL-terminated argument.
     let _ = unsafe { do_cmdline_cmd((*args).arg) };
     debug_break_level.set(outer_level);
 }

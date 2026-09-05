@@ -260,23 +260,26 @@ pub unsafe fn win_setwidth_win(width: c_int, window: *mut Window) {
     setwidth_win(width, unsafe { Win::new(window) });
 }
 
-/// Give `wp` width `width`, moving the other windows around it to fit.
+/// Give `window` width `width`, moving the other windows around it to fit.
 pub(crate) fn setwidth_win(width: c_int, window: Win) {
-    let mut wp = window;
+    let mut window = window;
     // Always keep the current window at least one column wide, even when
     // 'winminwidth' is zero.
-    let width = if wp.is_current() {
+    let width = if window.is_current() {
         width.max(p_wmw.get() as c_int).max(1)
     } else {
         width.max(0)
     };
-    if wp.w_floating {
-        wp.w_config.width = width;
+    if window.w_floating {
+        window.w_config.width = width;
         // SAFETY: a live window.
-        win_config_float(wp, wp.w_config.clone());
-        wp.redraw_later(UPD_NOT_VALID);
+        win_config_float(window, window.w_config.clone());
+        window.redraw_later(UPD_NOT_VALID);
     } else {
-        set_frame_width(wp.frame(), arith::width_with_chrome(width, wp.w_vsep_width));
+        set_frame_width(
+            window.frame(),
+            arith::width_with_chrome(width, window.w_vsep_width),
+        );
         // Recompute the window positions.
         comp_positions();
         redraw_all(UPD_NOT_VALID);

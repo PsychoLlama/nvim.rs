@@ -89,7 +89,7 @@ fn set_global_at_or_after(from: c_int) -> Option<c_int> {
 /// separate fields rather than entries of an array.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `mark_name` must point at live, writable
+/// `buffer` must be a live buffer and `mark_name` must point at live, writable
 /// storage holding one of the names above.
 #[inline]
 pub(super) unsafe fn next_buffer_mark(
@@ -97,18 +97,18 @@ pub(super) unsafe fn next_buffer_mark(
     mark_name: *mut c_char,
 ) -> *const FileMark {
     // SAFETY: the caller promised a live buffer and a live cursor.
-    let buf = unsafe { Buf::new(buffer.cast_mut()) };
+    let buffer = unsafe { Buf::new(buffer.cast_mut()) };
     // SAFETY: as above.
     let here = unsafe { *mark_name };
     let (next, mark): (c_char, Fmark) = match c_int::from(here) {
-        NUL => ('"' as c_char, buf.last_cursor()),
-        34 => ('^' as c_char, buf.last_insert()),
-        94 => ('.' as c_char, buf.last_change()),
-        46 => ('a' as c_char, buf.named_mark(0)),
+        NUL => ('"' as c_char, buffer.last_cursor()),
+        34 => ('^' as c_char, buffer.last_insert()),
+        94 => ('.' as c_char, buffer.last_change()),
+        46 => ('a' as c_char, buffer.named_mark(0)),
         122 => return ptr::null(),
         _ => {
             let next = here + 1;
-            (next, buf.named_mark(c_int::from(next) - 'a' as c_int))
+            (next, buffer.named_mark(c_int::from(next) - 'a' as c_int))
         }
     };
     // SAFETY: as above.

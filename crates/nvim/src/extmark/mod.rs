@@ -446,8 +446,8 @@ pub unsafe fn extmark_adjust(
     undo: ExtmarkOp,
 ) {
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    splice::adjust(buf, line1, line2, amount, amount_after, undo);
+    let buffer = unsafe { Buf::new(buffer) };
+    splice::adjust(buffer, line1, line2, amount, amount_after, undo);
 }
 
 /// Adjust extmarks after a text edit, and emit the `on_bytes` event
@@ -478,8 +478,8 @@ pub unsafe fn extmark_splice(
         byte: new_byte,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    splice::splice(buf, start_row, start_col, old, new, undo);
+    let buffer = unsafe { Buf::new(buffer) };
+    splice::splice(buffer, start_row, start_col, old, new, undo);
 }
 
 /// The single-line shorthand: the column delta is both the column count and
@@ -503,8 +503,8 @@ pub unsafe fn extmark_splice_cols(
         byte: new_col as BCount,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    splice::splice(buf, start_row, start_col, old, new, undo);
+    let buffer = unsafe { Buf::new(buffer) };
+    splice::splice(buffer, start_row, start_col, old, new, undo);
 }
 
 /// Text removed from one place and inserted at another, as `:move` does it.
@@ -537,6 +537,6 @@ pub unsafe fn extmark_move_region(
         byte: new_byte,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    splice::move_region(buf, start, extent, new, undo);
+    let buffer = unsafe { Buf::new(buffer) };
+    splice::move_region(buffer, start, extent, new, undo);
 }

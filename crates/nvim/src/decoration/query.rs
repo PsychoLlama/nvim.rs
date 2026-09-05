@@ -99,16 +99,16 @@ pub unsafe fn next_virt_text_chunk(
 /// namespace when that is 0. Null if the row has none.
 ///
 /// # Safety
-/// `buf` must point to a live buffer.
+/// `buffer` must point to a live buffer.
 pub unsafe fn decor_find_virttext(
     buffer: *mut Buffer,
     row: c_int,
     ns_id: uint64_t,
 ) -> *mut DecorVirtText {
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer) };
+    let buffer = unsafe { Buf::new(buffer) };
     let mut itr = MarkTreeIter::default();
-    let mut walk = Cursor::in_buffer(buf, &mut itr);
+    let mut walk = Cursor::in_buffer(buffer, &mut itr);
     walk.seek(row, 0);
     loop {
         let mark = walk.current();
@@ -125,7 +125,7 @@ pub unsafe fn decor_find_virttext(
     }
 }
 
-/// Whether `row` of `wp` is hidden entirely by a `conceal_lines` decoration.
+/// Whether `row` of `window` is hidden entirely by a `conceal_lines` decoration.
 ///
 /// `check_cursor` asks for the answer the row would get if it were not the
 /// cursor line: the cursor line is normally exempt (unless `'concealcursor'`
@@ -136,24 +136,24 @@ pub unsafe fn decor_find_virttext(
 /// [`decor_providers_invoke_conceal_line`] reports.
 ///
 /// # Safety
-/// `wp` must point to a live window; runs Lua through the providers.
+/// `window` must point to a live window; runs Lua through the providers.
 pub unsafe fn decor_conceal_line(window: *mut Window, row: c_int, check_cursor: bool) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     if row < 0
-        || wp.w_onebuf_opt.wo_cole < 2 as OptInt
+        || window.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
-            && wp.is_current()
-            && row as LineNr + 1 == wp.w_cursor.lnum
-            && !wp.conceals_cursor_line())
+            && window.is_current()
+            && row as LineNr + 1 == window.w_cursor.lnum
+            && !window.conceals_cursor_line())
     {
         return false;
     }
 
     // No need to scan the marktree if there are no conceal_line marks.
-    let buf = wp.buffer();
+    let buf = window.buffer();
     if buf.meta_total(kMTMetaConcealLines) == 0 {
-        return wp.providers_conceal_line(row);
+        return window.providers_conceal_line(row);
     }
 
     let mut itr = MarkTreeIter::default();
@@ -161,7 +161,7 @@ pub unsafe fn decor_conceal_line(window: *mut Window, row: c_int, check_cursor: 
 
     walk.seek_overlap(row, 0);
     while let Some(pair) = walk.step_overlap() {
-        if mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, wp) {
+        if mt_conceal_lines(pair.start) && ns_in_win(pair.start.ns, window) {
             return true;
         }
     }
@@ -172,24 +172,24 @@ pub unsafe fn decor_conceal_line(window: *mut Window, row: c_int, check_cursor: 
         if mark.pos.row > row {
             break;
         }
-        if mt_conceal_lines(mark) && ns_in_win(mark.ns, wp) {
+        if mt_conceal_lines(mark) && ns_in_win(mark.ns, window) {
             return true;
         }
         walk.step_filter(row + 1, 0, &CONCEAL_FILTER);
     }
 
-    wp.providers_conceal_line(row)
+    window.providers_conceal_line(row)
 }
 
-/// Whether `wp` may have folded or concealed lines at all — the cheap test
+/// Whether `window` may have folded or concealed lines at all — the cheap test
 /// that lets the layout code skip the per-row questions above.
 ///
 /// # Safety
-/// `wp` must point to a live window.
+/// `window` must point to a live window.
 pub unsafe fn win_lines_concealed(window: *mut Window) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(window) };
-    wp.has_any_folding() || wp.w_onebuf_opt.wo_cole >= 2 as OptInt
+    let window = unsafe { Win::new(window) };
+    window.has_any_folding() || window.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 
 /// How many virtual lines fall in the window rows `start_row..end_row`.

@@ -193,13 +193,13 @@ unsafe fn hgr_search_in_rtp(qfl: *mut QfList, p_regmatch: *mut RegMatch, lang: *
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_helpgrep(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut qi = qf_global();
 
-    let au_name = match eap.cmdidx {
+    let au_name = match args.cmdidx {
         CmdIdx::helpgrep => Some(c"helpgrep"),
         CmdIdx::lhelpgrep => Some(c"lhelpgrep"),
         _ => None,
@@ -216,23 +216,23 @@ pub unsafe fn ex_helpgrep(args: *mut ExArg) {
     p_cpo.set(empty_option());
 
     let mut new_qi = false;
-    if unsafe { is_loclist_cmd(eap.cmdidx) } {
+    if unsafe { is_loclist_cmd(args.cmdidx) } {
         qi = unsafe { hgr_get_ll(&mut new_qi) };
     }
 
     incr_quickfix_busy();
 
     // Check for a specified language.
-    let lang = unsafe { check_help_lang(eap.arg) };
+    let lang = unsafe { check_help_lang(args.arg) };
     let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp(eap.arg, RE_MAGIC + RE_STRING) },
+        regprog: unsafe { vim_regcomp(args.arg, RE_MAGIC + RE_STRING) },
         rm_ic: false,
         ..RegMatch::default()
     };
     let updated = !regmatch.regprog.is_null();
     if updated {
         // Create a new quickfix list.
-        unsafe { qf_new_list(qi.raw(), qf_cmdtitle(*eap.cmdlinep).as_ptr()) };
+        unsafe { qf_new_list(qi.raw(), qf_cmdtitle(*args.cmdlinep).as_ptr()) };
         let mut qfl = qf_current_list(qi);
 
         unsafe { hgr_search_in_rtp(qfl.raw(), &raw mut regmatch, lang) };
@@ -284,13 +284,13 @@ pub unsafe fn ex_helpgrep(args: *mut ExArg) {
         qf_goto(qi, 0, 0, false as c_int);
     } else {
         // SAFETY: the message macros expand to a `vim_snprintf` over the // format literal above and the editor's message buffers.
-        let arg = unsafe { c_str(eap.arg) };
+        let arg = unsafe { c_str(args.arg) };
         semsg!("E480: No match: {arg}");
     }
 
     qf_busy_end();
 
-    if eap.cmdidx == CmdIdx::lhelpgrep && new_qi {
+    if args.cmdidx == CmdIdx::lhelpgrep && new_qi {
         if !buf_is_help(cur_win().buffer_or_none()) || cur_win().w_llist == qi.raw() {
             // The help window was not opened, or it already points at
             // the right location list: the new one is not wanted.

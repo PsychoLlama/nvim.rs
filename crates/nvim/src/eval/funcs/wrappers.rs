@@ -445,7 +445,7 @@ pub unsafe fn float_op_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: Eva
 
 /// The body every builtin that is really an API function shares. The
 /// generated table puts the RPC handler in the row's payload.
-pub unsafe fn api_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn api_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; `items`
     // outlives the `Array` that borrows it, and the arena owns what the
     // conversion allocates until it is freed below.
@@ -458,35 +458,37 @@ pub unsafe fn api_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFu
     let handler: MsgpackRpcRequestHandler = unsafe { *row };
 
     let mut items = [Object::Nil; MAX_FUNC_ARGS as usize];
-    let mut args: Array = ARRAY_DICT_INIT;
-    args.capacity = MAX_FUNC_ARGS as usize;
-    args.items = items.as_mut_ptr();
+    let mut array: Array = ARRAY_DICT_INIT;
+    array.capacity = MAX_FUNC_ARGS as usize;
+    array.items = items.as_mut_ptr();
     let mut arena: Arena = ARENA_EMPTY;
 
-    let frame = unsafe { Args::new(argvars) };
+    let frame = unsafe { Args::new(args) };
     let mut i = 0;
     while frame.has(i) {
-        unsafe { *args.items.add(args.size) = vim_to_object(frame.ptr(i), &raw mut arena, false) };
-        args.size += 1;
+        unsafe {
+            *array.items.add(array.size) = vim_to_object(frame.ptr(i), &raw mut arena, false)
+        };
+        array.size += 1;
         i += 1;
     }
 
     let mut err = Error::none();
     let call = handler.fn_0.expect("non-null function pointer");
     let mem = &raw mut arena;
-    // SAFETY: `args` is the Array built above and both are locals.
-    let mut result = unsafe { call(VIML_INTERNAL_CALL, args, mem, &mut err) };
+    // SAFETY: `array` is the Array built above and both are locals.
+    let mut answer = unsafe { call(VIML_INTERNAL_CALL, array, mem, &mut err) };
     if err.is_set() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let msg = unsafe { c_str(err.message_or_empty().as_ptr()) };
         semsg_multiline!(c"emsg", "E5555: API call: {msg}");
     } else {
-        unsafe { object_to_vim_take_luaref(&raw mut result, rettv, true) };
+        unsafe { object_to_vim_take_luaref(&raw mut answer, result, true) };
     }
     // Only some handlers allocate their result; the row's handler says
     // which.
     if handler.ret_alloc {
-        unsafe { api_free_object(result) };
+        unsafe { api_free_object(answer) };
     }
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     err.clear();

@@ -522,7 +522,7 @@ pub unsafe fn buf_check_timestamp(mut buffer: Buf) -> c_int {
 /// Reload a buffer that is already loaded, because the file changed outside
 /// of Nvim.
 ///
-/// @param orig_mode       `buf->b_orig_mode` from before the need for
+/// @param orig_mode       `buffer.b_orig_mode` from before the need for
 ///                        reloading was detected; it may have been reset by
 ///                        now.
 /// @param reload_options  re-detect `'fileformat'`, `'fileencoding'` and

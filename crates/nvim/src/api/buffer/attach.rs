@@ -12,8 +12,8 @@ use super::*;
 use crate::api::private::helpers::{Reported, dict_put, has_key};
 use crate::winlayer::{Buf, Live};
 
-pub unsafe fn api_buf_ensure_loaded(buf: BufferHandle, err: &mut Error) -> *mut Buffer {
-    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, err) };
+pub unsafe fn api_buf_ensure_loaded(buffer: BufferHandle, err: &mut Error) -> *mut Buffer {
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buffer, err) };
     if b.is_null() {
         return ::core::ptr::null_mut::<Buffer>();
     }

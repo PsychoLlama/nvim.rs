@@ -183,11 +183,11 @@ unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn qf_list(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
-    let Some(qi) = qf_cmd_stack(eap, true) else {
+    let args = unsafe { Ea::new(args) };
+    let Some(qi) = qf_cmd_stack(args, true) else {
         return;
     };
     if qf_is_empty(qi) || qfl_is_empty(qf_current_list(qi)) {
@@ -197,7 +197,7 @@ pub unsafe fn qf_list(args: *mut ExArg) {
 
     // "+N" lists N entries from the current one; otherwise the argument
     // is a range, counted from the end when negative.
-    let mut arg = eap.arg;
+    let mut arg = args.arg;
     let plus = unsafe { *arg } == b'+' as c_char;
     if plus {
         arg = unsafe { arg.add(1) };
@@ -245,7 +245,7 @@ pub unsafe fn qf_list(args: *mut ExArg) {
 
     // Without "!" only recognised entries are listed — unless none of
     // them is recognised, when they all are.
-    let all = eap.forceit != 0 || qfl.qf_nonevalid;
+    let all = args.forceit != 0 || qfl.qf_nonevalid;
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     let mut i: c_int = 1;
     let mut qfp = qfl.qf_start;
@@ -373,19 +373,19 @@ unsafe fn qf_msg(qi: *mut QfInfo, which: c_int, lead: *const c_char) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn qf_age(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
-    let Some(mut qi) = qf_cmd_stack(eap, true) else {
+    let args = unsafe { Ea::new(args) };
+    let Some(mut qi) = qf_cmd_stack(args, true) else {
         return;
     };
-    let count = if eap.addr_count != 0 {
-        eap.line2 as c_int
+    let count = if args.addr_count != 0 {
+        args.line2 as c_int
     } else {
         1
     };
-    let older = eap.cmdidx == CmdIdx::colder || eap.cmdidx == CmdIdx::lolder;
+    let older = args.cmdidx == CmdIdx::colder || args.cmdidx == CmdIdx::lolder;
     for _ in 0..count {
         if older {
             if qi.qf_curlist == 0 {
@@ -410,17 +410,17 @@ pub unsafe fn qf_age(args: *mut ExArg) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn qf_history(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
-    let stack = qf_cmd_stack(eap, false);
-    if eap.addr_count > 0 {
+    let stack = qf_cmd_stack(args, false);
+    if args.addr_count > 0 {
         match stack {
             None => qf_emsg(e_loclist.as_ptr()),
-            Some(mut qi) if eap.line2 > 0 && eap.line2 <= qi.qf_listcount as LineNr => {
-                qi.qf_curlist = (eap.line2 - 1) as c_int;
+            Some(mut qi) if args.line2 > 0 && args.line2 <= qi.qf_listcount as LineNr => {
+                qi.qf_curlist = (args.line2 - 1) as c_int;
                 // SAFETY: `qi` is live and `qf_curlist` names one of its
                 // lists, which is the whole of `qf_msg`'s precondition.
                 unsafe { qf_msg(qi.raw(), qi.qf_curlist, c"".as_ptr()) };

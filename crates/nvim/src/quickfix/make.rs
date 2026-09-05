@@ -97,14 +97,14 @@ unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
+/// `args` must be a live command.
 pub unsafe fn ex_make(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
-    if unsafe { grep_internal(eap.cmdidx) } {
-        unsafe { ex_vimgrep(eap.raw()) };
+    if unsafe { grep_internal(args.cmdidx) } {
+        unsafe { ex_vimgrep(args.raw()) };
         return;
     }
 
@@ -115,7 +115,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
         p_menc.get()
     };
 
-    let au_name = make_get_auname(eap.cmdidx);
+    let au_name = make_get_auname(args.cmdidx);
     if let Some(name) = au_name {
         let claimed = fire_qf_autocmd(AutoEvent::QuickFixCmdPre, name, true);
         if claimed && aborting() {
@@ -124,7 +124,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     }
 
     // SAFETY: a command's `cmdidx` is one of the table's.
-    let wp = unsafe { is_loclist_cmd(eap.cmdidx) }.then(cur_win);
+    let wp = unsafe { is_loclist_cmd(args.cmdidx) }.then(cur_win);
 
     unsafe { autowrite_all() };
     let fname = unsafe { get_mef_name() };
@@ -134,12 +134,12 @@ pub unsafe fn ex_make(args: *mut ExArg) {
     // In case the name is not unique after all.
     unsafe { os_remove(fname) };
 
-    let cmd = unsafe { make_get_fullcmd(eap.arg, fname) };
+    let cmd = unsafe { make_get_fullcmd(args.arg, fname) };
     unsafe { do_shell(cmd, ShellOpts::NONE) };
 
     incr_quickfix_busy();
 
-    let is_make = matches!(eap.cmdidx, CmdIdx::make | CmdIdx::lmake);
+    let is_make = matches!(args.cmdidx, CmdIdx::make | CmdIdx::lmake);
     let errorformat = if is_make {
         p_efm.get()
     } else {
@@ -150,10 +150,10 @@ pub unsafe fn ex_make(args: *mut ExArg) {
             p_gefm.get()
         }
     };
-    let newlist = !matches!(eap.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
+    let newlist = !matches!(args.cmdidx, CmdIdx::grepadd | CmdIdx::lgrepadd);
 
     let newlist2 = newlist as c_int;
-    let title = unsafe { qf_cmdtitle(*eap.cmdlinep) };
+    let title = unsafe { qf_cmdtitle(*args.cmdlinep) };
     let qf_title = title.as_ptr();
     let res = unsafe { qf_init(wp, fname, errorformat, newlist2, qf_title, enc) };
 
@@ -173,7 +173,7 @@ pub unsafe fn ex_make(args: *mut ExArg) {
         if let Some(name) = au_name {
             fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         }
-        if res > 0 && eap.forceit == 0 && qf_list_still_valid(wp, save_qfid) {
+        if res > 0 && args.forceit == 0 && qf_list_still_valid(wp, save_qfid) {
             // Display the first error.
             unsafe { qf_jump_first(qi.raw(), save_qfid, false as c_int) };
         }

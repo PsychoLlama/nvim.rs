@@ -312,7 +312,7 @@ unsafe fn flag_fallback(
 /// was rejected, with the reason already reported.
 ///
 /// # Safety
-/// `eap.arg` must be the command's NUL-terminated argument.
+/// `args.arg` must be the command's NUL-terminated argument.
 unsafe fn parse_sort_flags(
     args: &mut ExArg,
     spec: &mut SortSpec,
@@ -372,7 +372,7 @@ unsafe fn parse_sort_flags(
 /// was rejected, with the reason already reported.
 ///
 /// # Safety
-/// `eap.arg` must be the command's NUL-terminated argument.
+/// `args.arg` must be the command's NUL-terminated argument.
 unsafe fn parse_uniq_flags(
     args: &mut ExArg,
     mode: &mut UniqMode,
@@ -665,7 +665,7 @@ unsafe fn sort_range(args: &mut ExArg) {
     let mut count = (line2 - line1) as size_t + 1;
 
     'sortend: {
-        // SAFETY: `eap.arg` is the command's own argument.
+        // SAFETY: `args.arg` is the command's own argument.
         let Some(order) = (unsafe { parse_sort_flags(args, &mut spec, &mut regmatch) }) else {
             break 'sortend;
         };
@@ -869,7 +869,7 @@ unsafe fn uniq_range(args: &mut ExArg) {
     let mut deleted = 0;
 
     'uniqend: {
-        // SAFETY: `eap.arg` is the command's own argument.
+        // SAFETY: `args.arg` is the command's own argument.
         let Some(order) =
             (unsafe { parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) })
         else {

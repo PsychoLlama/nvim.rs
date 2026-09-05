@@ -172,7 +172,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     true
 }
 
-/// Position the walk at `eap->line1`, then run `eap->arg` once per item
+/// Position the walk at `args.line1`, then run `args.arg` once per item
 /// until the list runs out, the range does, or something goes wrong.
 ///
 /// # Safety

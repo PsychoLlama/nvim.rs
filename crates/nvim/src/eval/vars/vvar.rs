@@ -374,10 +374,10 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     ptr::null_mut()
 }
 
-/// Set `v:cmdarg` to the `++opt` arguments of `eap`, answering the old value
+/// Set `v:cmdarg` to the `++opt` arguments of `args`, answering the old value
 /// for the caller to restore.
 ///
-/// A NULL `eap` is the restore half: `oldarg` goes back and the value that
+/// A NULL `args` is the restore half: `oldarg` goes back and the value that
 /// was there is freed.  The same happens if any of the pieces fails to
 /// format, which is why the answer is NULL on that path -- there is nothing
 /// left for the caller to put back.
@@ -387,7 +387,7 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 /// what makes the closing bound check meaningful.
 ///
 /// # Safety
-/// `eap` is NULL or a live command; `oldarg` is NULL or an owned string.
+/// `args` is NULL or a live command; `oldarg` is NULL or an owned string.
 pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Cmdarg);
     // SAFETY: `v:cmdarg` is declared a String.
@@ -399,30 +399,30 @@ pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
         }
         // SAFETY: the caller's obligation -- a live command, which outlives
         // this frame because the `do_cmdline` that owns it does.
-        let eap = unsafe { Ea::new(args) };
+        let args = unsafe { Ea::new(args) };
         let mut len: size_t = 0;
-        if eap.force_bin == FORCE_BIN {
+        if args.force_bin == FORCE_BIN {
             len += 6; // " ++bin"
-        } else if eap.force_bin == FORCE_NOBIN {
+        } else if args.force_bin == FORCE_NOBIN {
             len += 8; // " ++nobin"
         }
-        if eap.read_edit != 0 {
+        if args.read_edit != 0 {
             len += 7; // " ++edit"
         }
-        if eap.force_ff != 0 {
+        if args.force_ff != 0 {
             len += 10; // " ++ff=unix"
         }
-        if eap.force_enc != 0 {
+        if args.force_enc != 0 {
             // The encoding name lives inside the command line the `++enc=`
             // was parsed out of, at the offset `force_enc` records.
             // SAFETY: a live command's `cmd` with its own recorded offset.
-            let enc = unsafe { eap.cmd.offset(eap.force_enc as isize) };
+            let enc = unsafe { args.cmd.offset(args.force_enc as isize) };
             len += unsafe { cstr::bytes_at(enc) }.len() + 7;
         }
-        if eap.bad_char != 0 {
+        if args.bad_char != 0 {
             len += 7 + 4; // " ++bad=" + "keep" or "drop"
         }
-        if eap.mkdir_p != 0 {
+        if args.mkdir_p != 0 {
             len += 4; // " ++p"
         }
 
@@ -447,38 +447,38 @@ pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
             }};
         }
 
-        if eap.force_bin == FORCE_BIN {
+        if args.force_bin == FORCE_BIN {
             put!(c" ++bin".as_ptr());
-        } else if eap.force_bin == FORCE_NOBIN {
+        } else if args.force_bin == FORCE_NOBIN {
             put!(c" ++nobin".as_ptr());
         } else {
             // SAFETY: at least one byte was allocated.
             unsafe { *newval = NUL as c_char };
         }
-        if eap.read_edit != 0 {
+        if args.read_edit != 0 {
             put!(c" ++edit".as_ptr());
         }
-        if eap.force_ff != 0 {
-            let ff = match eap.force_ff as u8 {
+        if args.force_ff != 0 {
+            let ff = match args.force_ff as u8 {
                 b'u' => c"unix",
                 b'd' => c"dos",
                 _ => c"mac",
             };
             put!(c" ++ff=%s".as_ptr(), ff.as_ptr());
         }
-        if eap.force_enc != 0 {
+        if args.force_enc != 0 {
             // SAFETY: as the length pass above.
-            let enc = unsafe { eap.cmd.offset(eap.force_enc as isize) };
+            let enc = unsafe { args.cmd.offset(args.force_enc as isize) };
             put!(c" ++enc=%s".as_ptr(), enc);
         }
-        if eap.bad_char == BAD_KEEP {
+        if args.bad_char == BAD_KEEP {
             put!(c" ++bad=keep".as_ptr());
-        } else if eap.bad_char == BAD_DROP {
+        } else if args.bad_char == BAD_DROP {
             put!(c" ++bad=drop".as_ptr());
-        } else if eap.bad_char != 0 {
-            put!(c" ++bad=%c".as_ptr(), eap.bad_char);
+        } else if args.bad_char != 0 {
+            put!(c" ++bad=%c".as_ptr(), args.bad_char);
         }
-        if eap.mkdir_p != 0 {
+        if args.mkdir_p != 0 {
             put!(c" ++p".as_ptr());
         }
         debug_assert!(xlen <= newval_len);

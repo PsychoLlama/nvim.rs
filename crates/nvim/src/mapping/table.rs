@@ -315,7 +315,7 @@ pub(crate) unsafe fn map_add(
     // The buffer's tables are reached through the one raw pointer, not
     // through `Buf`'s `DerefMut`: `map_table` already points into
     // `b_maphash`, and a fresh `&mut Buffer` would invalidate it.
-    let buf = buffer.raw();
+    let buffer = buffer.raw();
     // A given `sid` is upstream's "the block was `xcalloc`ed and only these
     // two fields were filled in", not a tweak of `current_sctx`.
     let script_ctx = if sid != 0 {
@@ -351,9 +351,9 @@ pub(crate) unsafe fn map_add(
     if keys.first().copied().map(c_int::from) == Some(Ctrl_C) {
         // SAFETY: `Buf`'s promise -- a live buffer's own field address; no
         // read happens.
-        if map_table == unsafe { &raw mut (*buf).b_maphash }.cast() {
+        if map_table == unsafe { &raw mut (*buffer).b_maphash }.cast() {
             // SAFETY: as above.
-            unsafe { (*buf).b_mapped_ctrl_c |= mode };
+            unsafe { (*buffer).b_mapped_ctrl_c |= mode };
         } else {
             mapped_ctrl_c.set(mapped_ctrl_c.get() | mode);
         }
@@ -388,12 +388,12 @@ pub(crate) unsafe fn map_add(
 pub unsafe fn map_clear_mode(buffer: Buf, mode: c_int, local: bool, abbr: bool) {
     // As in [`map_add`]: `mpp` points into `b_maphash`, so the tables are
     // reached through the one raw pointer rather than through `DerefMut`.
-    let buf = buffer.raw();
+    let buffer = buffer.raw();
     // SAFETY: `Buf`'s promise — a live buffer.  `&raw` reads nothing, and both
     // addresses come off the one raw pointer rather than off a `&mut`.
-    let local_abbr = unsafe { &raw mut (*buf).b_first_abbr };
+    let local_abbr = unsafe { &raw mut (*buffer).b_first_abbr };
     // SAFETY: as above.
-    let local_maps = unsafe { &raw mut (*buf).b_maphash }.cast::<*mut MapBlock>();
+    let local_maps = unsafe { &raw mut (*buffer).b_maphash }.cast::<*mut MapBlock>();
     // Through raw pointers, not `with_mut`: `mpp` may itself point into one of
     // these two tables, and a `&mut` to the whole array would invalidate it.
     let (abbr_head, map_heads) = if local {

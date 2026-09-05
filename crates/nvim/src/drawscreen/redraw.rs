@@ -90,7 +90,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
     }
 }
 
-/// Redraw window `wp` later, with `w_redr_type` at least `redr_type`.
+/// Redraw window `window` later, with `w_redr_type` at least `redr_type`.
 ///
 /// `must_redraw` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
@@ -101,11 +101,11 @@ pub unsafe fn redraw_later(window: *mut Window, redr_type: c_int) {
     }
     // SAFETY: a live window -- the guard above has ruled out the one caller
     // that may pass a null, which is the editor on its way out.
-    let mut wp = unsafe { Win::new(window) };
-    if wp.w_redr_type < redr_type {
-        wp.w_redr_type = redr_type;
+    let mut window = unsafe { Win::new(window) };
+    if window.w_redr_type < redr_type {
+        window.w_redr_type = redr_type;
         if redr_type >= UPD_NOT_VALID {
-            wp.w_lines_valid = 0;
+            window.w_lines_valid = 0;
         }
         set_must_redraw_unchecked(redr_type);
     }

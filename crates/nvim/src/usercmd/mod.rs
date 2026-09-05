@@ -199,9 +199,9 @@ pub(crate) unsafe fn ucmd_name(cmd: &UserCmd) -> &[u8] {
     unsafe { CStr::from_ptr(cmd.uc_name).to_bytes() }
 }
 
-/// Search both tables for a command matching `eap->cmd`.
+/// Search both tables for a command matching `args.cmd`.
 ///
-/// Sets `eap->cmdidx`, `eap->argt`, `eap->useridx` and `eap->addr_type`,
+/// Sets `args.cmdidx`, `args.argt`, `args.useridx` and `args.addr_type`,
 /// and answers a pointer to just after the command name -- which may be
 /// *before* `p`, because the match may be followed immediately by a count
 /// that `p` has already skipped. Answers null when nothing matched.
@@ -210,7 +210,7 @@ pub(crate) unsafe fn ucmd_name(cmd: &UserCmd) -> &[u8] {
 /// and `complp` given the command's completion type; each may be null.
 ///
 /// # Safety
-/// Module contract; `eap` must be the command being looked up, and `full`,
+/// Module contract; `args` must be the command being looked up, and `full`,
 /// `expand` and `complp` null or writable.
 pub(crate) unsafe fn find_ucmd(
     args: *mut ExArg,
@@ -220,9 +220,10 @@ pub(crate) unsafe fn find_ucmd(
     complp: *mut ExpandContext,
 ) -> *mut c_char {
     // SAFETY: caller contract.
-    let eap = unsafe { &mut *args };
-    // SAFETY: caller contract; `p` points into the same line as `eap.cmd`.
-    let typed = unsafe { slice::from_raw_parts(eap.cmd.cast::<u8>(), p.offset_from(eap.cmd) as _) };
+    let args = unsafe { &mut *args };
+    // SAFETY: caller contract; `p` points into the same line as `args.cmd`.
+    let typed =
+        unsafe { slice::from_raw_parts(args.cmd.cast::<u8>(), p.offset_from(args.cmd) as _) };
 
     let mut matchlen = 0;
     let mut found = false;
@@ -258,14 +259,14 @@ pub(crate) unsafe fn find_ucmd(
             } else {
                 possible = true;
             }
-            eap.cmdidx = if scope == Scope::Global {
+            args.cmdidx = if scope == Scope::Global {
                 CmdIdx::USER
             } else {
                 CmdIdx::USER_BUF
             };
-            eap.argt = uc.uc_argt;
-            eap.useridx = j as c_int;
-            eap.addr_type = uc.uc_addr_type;
+            args.argt = uc.uc_argt;
+            args.useridx = j as c_int;
+            args.addr_type = uc.uc_addr_type;
             if !complp.is_null() {
                 // SAFETY: caller contract.
                 unsafe { *complp = uc.uc_compl };
@@ -681,7 +682,7 @@ pub(crate) unsafe fn uc_clear(table: Table) {
 /// # Safety
 /// Module contract; `args` must be the command being executed.
 pub(crate) unsafe fn ex_delcommand(args: *mut ExArg) {
-    // SAFETY: caller contract; `eap.arg` is NUL-terminated.
+    // SAFETY: caller contract; `args.arg` is NUL-terminated.
     let (mut arg, buffer_only) = unsafe {
         let arg = (*args).arg.cast_const();
         let local = CStr::from_ptr(arg).to_bytes().starts_with(b"-buffer")

@@ -71,8 +71,8 @@ pub unsafe fn replace_makeprg(
     mut arg: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
-    let eap = unsafe { Ea::new(args) };
-    let idx = eap.cmdidx;
+    let args = unsafe { Ea::new(args) };
+    let idx = args.cmdidx;
     let is_grep = idx == CmdIdx::grep
         || idx == CmdIdx::lgrep
         || idx == CmdIdx::grepadd
@@ -80,7 +80,7 @@ pub unsafe fn replace_makeprg(
     let is_make = idx == CmdIdx::make || idx == CmdIdx::lmake;
     // `grep_internal` means 'grepprg' is `internal`, which is not a
     // program at all.
-    if !(is_make || is_grep) || unsafe { grep_internal(eap.cmdidx) } {
+    if !(is_make || is_grep) || unsafe { grep_internal(args.cmdidx) } {
         return arg;
     }
 

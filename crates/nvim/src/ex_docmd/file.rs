@@ -124,38 +124,38 @@ fn run_ecmd_cmd(args: Ea) {
 
 /// `:bmodified`.
 pub(crate) unsafe fn ex_bmodified(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     goto_buffer(
-        eap.raw(),
+        args.raw(),
         DOBUF_MOD as c_int,
         FORWARD as c_int,
-        eap.line2 as c_int,
+        args.line2 as c_int,
     );
-    run_ecmd_cmd(eap);
+    run_ecmd_cmd(args);
 }
 
 /// `:bnext`.
 pub(crate) unsafe fn ex_bnext(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     goto_buffer(
-        eap.raw(),
+        args.raw(),
         DOBUF_CURRENT as c_int,
         FORWARD as c_int,
-        eap.line2 as c_int,
+        args.line2 as c_int,
     );
-    run_ecmd_cmd(eap);
+    run_ecmd_cmd(args);
 }
 
 /// `:bprevious` and `:bNext`.
 pub(crate) unsafe fn ex_bprevious(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     goto_buffer(
-        eap.raw(),
+        args.raw(),
         DOBUF_CURRENT as c_int,
         BACKWARD as c_int,
-        eap.line2 as c_int,
+        args.line2 as c_int,
     );
-    run_ecmd_cmd(eap);
+    run_ecmd_cmd(args);
 }
 
 /// `:brewind` and `:bfirst`.
@@ -177,7 +177,7 @@ pub(crate) unsafe fn ex_preserve(_args: *mut ExArg) {
 
 /// `:recover` — read the buffer back out of a swap file.
 pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // The flag changes what the swap-file machinery does with what it
     // finds, and is read from several modules.
     recoverymode.set(true);
@@ -189,7 +189,7 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
             } else {
                 0
             }) | CCGD_MULTWIN as c_int
-                | (if eap.forceit != 0 {
+                | (if args.forceit != 0 {
                     CCGD_FORCEIT as c_int
                 } else {
                     0
@@ -198,8 +198,8 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
         )
     };
     if !unsaved
-        && (byte(eap.arg) == NUL
-            || unsafe { setfname(Buf::current(), eap.arg, ptr::null_mut(), true) }.is_ok())
+        && (byte(args.arg) == NUL
+            || unsafe { setfname(Buf::current(), args.arg, ptr::null_mut(), true) }.is_ok())
     {
         unsafe { ml_recover(true) };
     }
@@ -208,25 +208,25 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
 pub(crate) unsafe fn ex_find(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
-    if !check_can_set_curbuf_forceit(eap.forceit) {
+    let mut args = unsafe { Ea::new(args) };
+    if !check_can_set_curbuf_forceit(args.forceit) {
         return;
     }
-    let count = if eap.addr_count > 0 {
-        eap.line2 as c_int
+    let count = if args.addr_count > 0 {
+        args.line2 as c_int
     } else {
         1
     };
     let fname = if byte(get_findfunc()) != NUL {
-        unsafe { findfunc_find_file(eap.arg, cstr::bytes_at(eap.arg).len(), count) }
+        unsafe { findfunc_find_file(args.arg, cstr::bytes_at(args.arg).len(), count) }
     } else {
-        unsafe { find_nth_on_path(eap.arg, eap.addr_count, eap.line2) }
+        unsafe { find_nth_on_path(args.arg, args.addr_count, args.line2) }
     };
     if fname.is_null() {
         return;
     }
-    eap.arg = fname;
-    unsafe { do_exedit(eap.raw(), ptr::null_mut()) };
+    args.arg = fname;
+    unsafe { do_exedit(args.raw(), ptr::null_mut()) };
     xfree(fname as *mut c_void);
 }
 
@@ -275,26 +275,26 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
 pub(crate) unsafe fn ex_edit(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let ffname = if eap.cmdidx == CmdIdx::enew {
+    let args = unsafe { Ea::new(args) };
+    let ffname = if args.cmdidx == CmdIdx::enew {
         ptr::null_mut()
     } else {
-        eap.arg
+        args.arg
     };
     // `:badd` and `:balt` only add to the buffer list; they never leave
     // the current buffer, so they are not asked about it.
-    if eap.cmdidx != CmdIdx::badd
-        && eap.cmdidx != CmdIdx::balt
+    if args.cmdidx != CmdIdx::badd
+        && args.cmdidx != CmdIdx::balt
         && unsafe { is_other_file(0, ffname) }
-        && !check_can_set_curbuf_forceit(eap.forceit)
+        && !check_can_set_curbuf_forceit(args.forceit)
     {
         return;
     }
-    if buf_is_prompt(current_buf()) && eap.cmdidx == CmdIdx::edit && byte(eap.arg) == NUL {
+    if buf_is_prompt(current_buf()) && args.cmdidx == CmdIdx::edit && byte(args.arg) == NUL {
         emsg(c"cannot :edit a prompt buffer");
         return;
     }
-    unsafe { do_exedit(eap.raw(), ptr::null_mut()) };
+    unsafe { do_exedit(args.raw(), ptr::null_mut()) };
 }
 
 /// The shared body of every command that opens a file into a window.
@@ -446,42 +446,42 @@ pub(crate) unsafe fn ex_swapname(_args: *mut ExArg) {
 
 /// `:read` — insert a file, or the output of a command.
 pub(crate) unsafe fn ex_read(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     let was_empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
-    if eap.usefilter != 0 {
-        do_bang(1, &mut eap, false, false, true);
+    if args.usefilter != 0 {
+        do_bang(1, &mut args, false, false, true);
         return;
     }
-    if u_save(eap.line2, eap.line2 + 1).is_err() {
+    if u_save(args.line2, args.line2 + 1).is_err() {
         return;
     }
 
-    let read = if byte(eap.arg) == NUL {
+    let read = if byte(args.arg) == NUL {
         if unsafe { check_fname() }.is_err() {
             return;
         }
         readfile(
             cur_buf().b_ffname,
             cur_buf().b_fname,
-            eap.line2,
+            args.line2,
             0,
             MAXLNUM as LineNr,
-            eap.raw(),
+            args.raw(),
             0,
             false,
         )
     } else {
         // 'cpoptions' `a` makes `:read file` set the alternate file.
         if cpo_has(CpoFlag::ALTREAD) {
-            unsafe { setaltfname(eap.arg, eap.arg, 1) };
+            unsafe { setaltfname(args.arg, args.arg, 1) };
         }
         readfile(
-            eap.arg,
+            args.arg,
             ptr::null_mut(),
-            eap.line2,
+            args.line2,
             0,
             MAXLNUM as LineNr,
-            eap.raw(),
+            args.raw(),
             0,
             false,
         )
@@ -490,7 +490,7 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
     if read.is_err() {
         if !aborting() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(eap.arg) };
+            let arg = unsafe { c_str(args.arg) };
             semsg!("E484: Can't open file {arg}");
         }
         return;
@@ -498,7 +498,7 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
     // Reading into an empty buffer in Ex mode leaves the empty line the
     // buffer started with; drop it.
     if was_empty && exmode_active.get() {
-        let lnum = if eap.line2 == 0 {
+        let lnum = if args.line2 == 0 {
             cur_buf().b_ml.ml_line_count
         } else {
             1
@@ -516,21 +516,21 @@ pub(crate) unsafe fn ex_read(args: *mut ExArg) {
 
 /// `:!cmd`.
 pub(crate) unsafe fn ex_bang(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
-    let (addr_count, forceit) = (eap.addr_count, eap.forceit != 0);
-    do_bang(addr_count, &mut eap, forceit, true, true);
+    let mut args = unsafe { Ea::new(args) };
+    let (addr_count, forceit) = (args.addr_count, args.forceit != 0);
+    do_bang(addr_count, &mut args, forceit, true, true);
 }
 
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
 /// buffer text so that reading it back into a different buffer is refused.
 pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
     unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
     unsafe {
         u_write_undo(
-            eap.arg,
-            eap.forceit != 0,
+            args.arg,
+            args.forceit != 0,
             Buf::current(),
             &raw mut hash as *mut uint8_t,
         )
@@ -539,15 +539,15 @@ pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
 
 /// `:rundo`.
 pub(crate) unsafe fn ex_rundo(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
     unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
-    unsafe { u_read_undo(eap.arg, &raw mut hash as *mut uint8_t, ptr::null()) };
+    unsafe { u_read_undo(args.arg, &raw mut hash as *mut uint8_t, ptr::null()) };
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
 pub(crate) unsafe fn ex_checkpath(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     unsafe {
         find_pattern_in_path(
             ptr::null_mut(),
@@ -557,14 +557,14 @@ pub(crate) unsafe fn ex_checkpath(args: *mut ExArg) {
             false,
             CHECK_PATH as c_int,
             1,
-            if eap.forceit != 0 {
+            if args.forceit != 0 {
                 ACTION_SHOW_ALL as c_int
             } else {
                 ACTION_SHOW as c_int
             },
             1,
             MAXLNUM as LineNr,
-            eap.forceit != 0,
+            args.forceit != 0,
             false,
         )
     };
@@ -572,25 +572,25 @@ pub(crate) unsafe fn ex_checkpath(args: *mut ExArg) {
 
 /// `:rshada`, `:wshada` and their `viminfo` spellings.
 pub(crate) unsafe fn ex_shada(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     // An empty 'shada' would mean "save nothing", which is not what an
     // explicit command means.
     let save_shada = p_shada.get();
     if byte(p_shada.get()) == NUL {
         p_shada.set(c"'100".as_ptr() as *mut c_char);
     }
-    if eap.cmdidx == CmdIdx::rviminfo || eap.cmdidx == CmdIdx::rshada {
-        let _ = unsafe { shada_read_everything(eap.arg, eap.forceit != 0, false) };
+    if args.cmdidx == CmdIdx::rviminfo || args.cmdidx == CmdIdx::rshada {
+        let _ = unsafe { shada_read_everything(args.arg, args.forceit != 0, false) };
     } else {
-        unsafe { shada_write_file(eap.arg, eap.forceit != 0) };
+        unsafe { shada_write_file(args.arg, args.forceit != 0) };
     }
     p_shada.set(save_shada);
 }
 
 /// `:fclose` — close a floating window by its handle.
 pub(crate) unsafe fn ex_fclose(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    unsafe { win_float_remove(eap.forceit != 0, eap.line1 as c_int) };
+    let args = unsafe { Ea::new(args) };
+    unsafe { win_float_remove(args.forceit != 0, args.line1 as c_int) };
 }
 
 /// The buffer the editor is working in.

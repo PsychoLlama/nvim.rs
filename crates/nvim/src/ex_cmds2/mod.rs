@@ -200,23 +200,23 @@ pub(crate) unsafe fn ex_perldo(args: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn script_host_execute(name: &CStr, eap: *mut ExArg) {
+unsafe fn script_host_execute(name: &CStr, args: *mut ExArg) {
     // SAFETY: module contract; `script_get` returns an owned string that
     // `tv_list_append_allocated_string` takes over.
     let mut len: size_t = 0;
-    let script = unsafe { script_get(eap, &raw mut len) };
+    let script = unsafe { script_get(args, &raw mut len) };
     if script.is_null() {
         return;
     }
-    let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
-    unsafe { tv_list_append_allocated_string(args, script) };
-    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as VarNumber) };
-    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as VarNumber) };
+    let argv = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    unsafe { tv_list_append_allocated_string(argv, script) };
+    unsafe { tv_list_append_number(argv, (*args).line1 as c_int as VarNumber) };
+    unsafe { tv_list_append_number(argv, (*args).line2 as c_int as VarNumber) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
             c"execute".as_ptr().cast_mut(),
-            args,
+            argv,
             true,
         )
     };
@@ -226,23 +226,23 @@ unsafe fn script_host_execute(name: &CStr, eap: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn script_host_execute_file(name: &CStr, eap: *mut ExArg) {
+unsafe fn script_host_execute_file(name: &CStr, args: *mut ExArg) {
     // SAFETY: module contract; `buffer` is `MAXPATHL` bytes as promised.
-    if unsafe { (*eap).skip } != 0 {
+    if unsafe { (*args).skip } != 0 {
         return;
     }
     let mut buffer: [c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
-    let _ = unsafe { vim_full_name((*eap).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false) };
+    let _ = unsafe { vim_full_name((*args).arg, buffer.as_mut_ptr(), MAXPATHL as usize, false) };
 
-    let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
-    unsafe { tv_list_append_string(args, buffer.as_ptr(), -1 as ssize_t) };
-    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as VarNumber) };
-    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as VarNumber) };
+    let argv = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    unsafe { tv_list_append_string(argv, buffer.as_ptr(), -1 as ssize_t) };
+    unsafe { tv_list_append_number(argv, (*args).line1 as c_int as VarNumber) };
+    unsafe { tv_list_append_number(argv, (*args).line2 as c_int as VarNumber) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
             c"execute_file".as_ptr().cast_mut(),
-            args,
+            argv,
             true,
         )
     };
@@ -252,20 +252,20 @@ unsafe fn script_host_execute_file(name: &CStr, eap: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn script_host_do_range(name: &CStr, eap: *mut ExArg) {
+unsafe fn script_host_do_range(name: &CStr, args: *mut ExArg) {
     // SAFETY: module contract.
-    if unsafe { (*eap).skip } != 0 {
+    if unsafe { (*args).skip } != 0 {
         return;
     }
-    let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
-    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as VarNumber) };
-    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as VarNumber) };
-    unsafe { tv_list_append_string(args, (*eap).arg, -1 as ssize_t) };
+    let argv = unsafe { tv_list_alloc(3 as ptrdiff_t) };
+    unsafe { tv_list_append_number(argv, (*args).line1 as c_int as VarNumber) };
+    unsafe { tv_list_append_number(argv, (*args).line2 as c_int as VarNumber) };
+    unsafe { tv_list_append_string(argv, (*args).arg, -1 as ssize_t) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
             c"do_range".as_ptr().cast_mut(),
-            args,
+            argv,
             true,
         )
     };
@@ -713,7 +713,7 @@ pub(crate) unsafe fn ex_compiler(args: *mut ExArg) {
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
-    // SAFETY: module contract; `eap->arg` is NUL-terminated.
+    // SAFETY: module contract; `args.arg` is NUL-terminated.
     if unsafe { *(*args).arg } == NUL as c_char {
         // List all compiler scripts.
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };

@@ -58,7 +58,7 @@ pub(super) enum Switch {
 /// BufLeave for the old one and closing it when it is no longer wanted.
 ///
 /// # Safety
-/// The names, `eap` and `oldwin` must be live or NULL, and `old_curbuf` must
+/// The names, `args` and `oldwin` must be live or NULL, and `old_curbuf` must
 /// be the bufref taken on entry to [`do_ecmd`]. `oldwin` is an out-parameter
 /// the caller re-checks with `win_valid` after the autocommands below, so it
 /// stays a raw pointer -- a [`Win`] would promise the liveness that check

@@ -88,7 +88,7 @@ pub unsafe fn win_redr_status(window: *mut Window) {
 /// Whether the status line of `window` is connected to the status line of the
 /// window right of it -- as opposed to meeting a vertical separator there.
 ///
-/// Only meaningful when `wp->w_vsep_width != 0`.
+/// Only meaningful when `window.w_vsep_width != 0`.
 ///
 /// # Safety
 /// `window` must be a live window.

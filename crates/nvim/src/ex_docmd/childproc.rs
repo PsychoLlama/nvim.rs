@@ -31,7 +31,7 @@ use crate::winlayer::Ea;
 /// argument therefore has to survive being read as a vimscript string
 /// literal, which is what the `"` and `\` escaping is for.
 pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     const CMD_LEN: usize = 1024;
     let mut ex_cmd: [c_char; CMD_LEN] = [0; CMD_LEN];
     let mut len: size_t = 0;
@@ -59,7 +59,7 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
                 &raw mut ex_cmd as *mut c_char,
                 CMD_LEN,
                 c"enew%s".as_ptr(),
-                if eap.forceit != 0 {
+                if args.forceit != 0 {
                     c"!".as_ptr()
                 } else {
                     c"".as_ptr()
@@ -71,8 +71,8 @@ pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
     }
     debug_assert!(len < CMD_LEN);
 
-    if byte(eap.arg) != NUL {
-        let name = vim_strsave_escaped(eap.arg, c"\"\\".as_ptr());
+    if byte(args.arg) != NUL {
+        let name = vim_strsave_escaped(args.arg, c"\"\\".as_ptr());
         unsafe {
             snprintf(
                 (&raw mut ex_cmd as *mut c_char).add(len as usize),

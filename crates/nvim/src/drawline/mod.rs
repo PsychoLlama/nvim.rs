@@ -125,7 +125,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// state the redraw acquired once and threads down.
 ///
 /// # Safety
-/// `wp` must be a live window, `lnum` one of its buffer's lines, and `spv` a
+/// `window` must be a live window, `lnum` one of its buffer's lines, and `spv` a
 /// live `SpellVars`.
 pub unsafe fn win_line(
     window: *mut Window,
@@ -141,7 +141,7 @@ pub unsafe fn win_line(
     debug_assert!(startrow < endrow);
 
     // SAFETY: the caller's live window.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
 
     // Plain construction, so it sits outside the promise below.
     let mut wlv = WinLineVars {
@@ -197,7 +197,7 @@ pub unsafe fn win_line(
     };
 
     // SAFETY: the caller's window, line and spell state.
-    let buf: *mut Buffer = wp.w_buffer;
+    let buf: *mut Buffer = window.w_buffer;
 
     // The two scratch buffers the loop needs but never owns: the spell
     // look-ahead, filled by the setup half, and the fold text.
@@ -207,7 +207,7 @@ pub unsafe fn win_line(
     let setup = unsafe {
         prepare_line(
             &mut wlv,
-            wp,
+            window,
             endrow,
             col_rows,
             concealed,
@@ -223,8 +223,8 @@ pub unsafe fn win_line(
     if setup.has_terminal {
         unsafe {
             terminal_get_line_attributes(
-                (*wp.w_buffer).terminal,
-                wp.raw(),
+                (*window.w_buffer).terminal,
+                window.raw(),
                 lnum,
                 term_attrs.as_mut_ptr(),
             )
@@ -246,7 +246,7 @@ pub unsafe fn win_line(
         nextline: nextline.as_mut_ptr(),
         fold_buf: fold_buf.as_mut_ptr(),
     };
-    unsafe { Cells::new(setup).run(&mut wlv, wp, buf, &frame) }
+    unsafe { Cells::new(setup).run(&mut wlv, window, buf, &frame) }
 }
 
 /// How many bytes of the next line the spell checker joins onto this one, so

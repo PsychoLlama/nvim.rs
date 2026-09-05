@@ -914,18 +914,18 @@ pub(crate) fn starts_with_ic(hay: &[u8], needle: &[u8]) -> bool {
 /// where the index arithmetic and the `end` argument live.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..3, and `result`
+/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
 /// a cleared result.
-pub unsafe fn f_remove(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_remove(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let arg_errmsg = c"remove() argument".as_ptr();
     // SAFETY: the caller's contract.
-    let mut args = unsafe { Args::new(argvars) };
+    let mut args = unsafe { Args::new(args) };
     match Container::of(args.get_mut(0)) {
         // SAFETY: as above -- these three take the vector itself, and each is
         // reached only for the type it handles.
-        Container::Dict(_) => unsafe { tv_dict_remove(argvars, result, arg_errmsg) },
-        Container::Blob(_) => unsafe { tv_blob_remove(argvars, result, arg_errmsg) },
-        Container::List(_) => unsafe { tv_list_remove(argvars, result, arg_errmsg) },
+        Container::Dict(_) => unsafe { tv_dict_remove(args.ptr(0), result, arg_errmsg) },
+        Container::Blob(_) => unsafe { tv_blob_remove(args.ptr(0), result, arg_errmsg) },
+        Container::List(_) => unsafe { tv_list_remove(args.ptr(0), result, arg_errmsg) },
         _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }

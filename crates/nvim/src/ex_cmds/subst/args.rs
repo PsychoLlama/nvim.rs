@@ -78,7 +78,7 @@ struct Parsed {
 /// pattern and replacement.
 ///
 /// # Safety
-/// Main thread; `eap.arg` and `eap.cmd` must be live.
+/// Main thread; `args.arg` and `args.cmd` must be live.
 unsafe fn read_pattern(
     args: &mut ExArg,
     cmdpreview_ns: c_int,
@@ -256,7 +256,7 @@ unsafe fn read_count(args: &mut ExArg, cmd: &mut *mut c_char) -> bool {
 /// because the `\n` form turned it into a join.
 ///
 /// # Safety
-/// Main thread; `eap.arg` and `eap.cmd` must be live.
+/// Main thread; `args.arg` and `args.cmd` must be live.
 pub(super) unsafe fn parse_sub(
     args: &mut ExArg,
     cmdpreview_ns: c_int,
@@ -324,7 +324,7 @@ pub(super) unsafe fn parse_sub(
         // Not executing commands, only parsing.
         return None;
     }
-    // Upstream asserts here; the `eap->skip` return above is why it holds --
+    // Upstream asserts here; the `args.skip` return above is why it holds --
     // that is the only path that leaves the replacement unset.
     let sub = sub?;
 

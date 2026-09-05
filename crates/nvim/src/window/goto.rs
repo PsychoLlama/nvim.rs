@@ -50,9 +50,9 @@ pub unsafe fn win_goto(window: *mut Window) {
     goto_win(unsafe { Win::new(window) });
 }
 
-/// Make `wp` the current window and redraw what the move uncovers.
+/// Make `window` the current window and redraw what the move uncovers.
 pub(crate) fn goto_win(window: Win) {
-    let mut wp = window;
+    let mut window = window;
     let owp = cur_win();
     // SAFETY: reads the editor's lock state.
     if unsafe { text_or_buf_locked() } {
@@ -60,18 +60,18 @@ pub(crate) fn goto_win(window: Win) {
         return;
     }
 
-    if wp.w_buffer != curbuf.get() {
+    if window.w_buffer != curbuf.get() {
         // careful: triggers ModeChanged autocommand
         reset_VIsual_and_resel();
     } else if visual_active() {
-        wp.w_cursor = cur_win().w_cursor;
+        window.w_cursor = cur_win().w_cursor;
     }
 
-    // autocommand may have made `wp` invalid
-    let Some(wp) = valid_win(wp.raw()) else {
+    // autocommand may have made `window` invalid
+    let Some(window) = valid_win(window.raw()) else {
         return;
     };
-    enter(wp, true);
+    enter(window, true);
 
     // Conceal cursor line in previous window, unconceal in current window.
     if let Some(owp) = valid_win(owp.raw())

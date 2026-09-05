@@ -44,23 +44,23 @@ use crate::winlayer::{Buf, Ea};
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
 pub(crate) unsafe fn ex_autocmd(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     if secure.get() != 0 {
         // 2 means "an error was already reported for this".
         secure.set(2);
-        eap.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
-    } else if eap.cmdidx == CmdIdx::autocmd {
-        unsafe { do_autocmd(eap.raw(), eap.arg, eap.forceit) };
+        args.errmsg = Some(unsafe { ex_msg(e_curdir.as_ptr()) });
+    } else if args.cmdidx == CmdIdx::autocmd {
+        unsafe { do_autocmd(args.raw(), args.arg, args.forceit) };
     } else {
-        unsafe { do_augroup(eap.arg, eap.forceit != 0) };
+        unsafe { do_augroup(args.arg, args.forceit != 0) };
     }
 }
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
 pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let mut arg = eap.arg;
+    let args = unsafe { Ea::new(args) };
+    let mut arg = args.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
     let _ = do_doautocmd(arg, false, &raw mut did_aucmd);
@@ -71,13 +71,13 @@ pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
 
 /// `:filetype [plugin] [indent] on|off|detect`.
 pub(crate) unsafe fn ex_filetype(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if byte(eap.arg) == NUL {
+    let args = unsafe { Ea::new(args) };
+    if byte(args.arg) == NUL {
         unsafe { report_filetype_state() };
         return;
     }
 
-    let mut arg = eap.arg;
+    let mut arg = args.arg;
     let mut plugin = false;
     let mut indent = false;
     loop {
@@ -196,11 +196,11 @@ pub unsafe fn filetype_maybe_enable() {
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
 pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cur_buf().b_did_filetype {
         return;
     }
-    let mut arg = eap.arg;
+    let mut arg = args.arg;
     if starts_with(arg, b"FALLBACK ") {
         arg = unsafe { arg.add(9) };
     }
@@ -209,19 +209,19 @@ pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
         OptVal::String(cstr_as_string(arg)),
         OptionSetFlags::LOCAL,
     );
-    if arg != eap.arg {
+    if arg != args.arg {
         cur_buf().b_did_filetype = false;
     }
 }
 
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
-pub(crate) unsafe fn ex_checkhealth(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_checkhealth(args: *mut ExArg) {
+    let args = unsafe { Ea::new(args) };
     let mut env = env_buf();
     let mut err = Error::none();
     let mut items: [Object; 2] = unsafe { core::mem::zeroed() };
-    let mut args = Array {
+    let mut argv = Array {
         size: 0,
         capacity: 2,
         items: &raw mut items as *mut Object,
@@ -248,15 +248,15 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut ExArg) {
     // `unused_assignments` only sees direct uses of the local and calls it dead.
     #[allow(unused_assignments)]
     {
-        items[1] = Object::String(cstr_as_string(eap.arg));
+        items[1] = Object::String(cstr_as_string(args.arg));
     }
-    args.size = 2;
+    argv.size = 2;
 
     unsafe {
         nlua_exec(
             lua_chunk(c"vim.health._check(...)"),
             ptr::null(),
-            args,
+            argv,
             kRetNilBool,
             ptr::null_mut(),
             &mut err,

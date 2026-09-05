@@ -66,8 +66,8 @@ const fn special_key(code: c_int) -> c_int {
 
 /// `:bdelete`, `:bwipeout` and `:bunload`.
 pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
-    let idx = eap.cmdidx;
+    let mut args = unsafe { Ea::new(args) };
+    let idx = args.cmdidx;
     let action = if idx == CmdIdx::bdelete {
         DOBUF_DEL
     } else if idx == CmdIdx::bwipeout {
@@ -75,14 +75,14 @@ pub(crate) unsafe fn ex_bunload(args: *mut ExArg) {
     } else {
         DOBUF_UNLOAD
     } as c_int;
-    eap.errmsg = unsafe {
+    args.errmsg = unsafe {
         do_bufdel(
             action,
-            eap.arg,
-            eap.addr_count,
-            eap.line1 as c_int,
-            eap.line2 as c_int,
-            eap.forceit,
+            args.arg,
+            args.addr_count,
+            args.line1 as c_int,
+            args.line2 as c_int,
+            args.forceit,
         )
     };
 }
@@ -159,7 +159,7 @@ fn quit_was_cancelled(window: *mut Window, buf: impl FnOnce() -> *mut Buffer) ->
 
 /// `:quit`.
 pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
         // In the command-line window, `:q` closes that instead.
         cmdwin_result.set(Ctrl_C);
@@ -169,8 +169,8 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
         text_locked_msg();
         return;
     }
-    let wp = if eap.addr_count > 0 {
-        window_at(eap.line2)
+    let wp = if args.addr_count > 0 {
+        window_at(args.line2)
     } else {
         curwin.get()
     };
@@ -178,12 +178,12 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
         return;
     }
     // SAFETY: `wp` is the window this `:quit` resolved to.
-    if unsafe { before_quit_autocmds(wp, false, eap.forceit != 0) } {
+    if unsafe { before_quit_autocmds(wp, false, args.forceit != 0) } {
         return;
     }
 
     let save_exiting = exiting.get();
-    if check_more(false, eap.forceit != 0) == OK && only_one_window() {
+    if check_more(false, args.forceit != 0) == OK && only_one_window() {
         exiting.set(true);
     }
     // The three refusals: unsaved changes in this buffer, files left in
@@ -196,30 +196,30 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
                     CCGD_AW as c_int
                 } else {
                     0
-                }) | (if eap.forceit != 0 {
+                }) | (if args.forceit != 0 {
                     CCGD_FORCEIT as c_int
                 } else {
                     0
                 }) | CCGD_EXCMD as c_int,
             )
         }
-        || check_more(true, eap.forceit != 0) == FAIL
-        || only_one_window() && check_changed_any(eap.forceit != 0, true)
+        || check_more(true, args.forceit != 0) == FAIL
+        || only_one_window() && check_changed_any(args.forceit != 0, true)
     {
         not_exiting(save_exiting);
         return;
     }
     // `:1quit` with one window open closes the window rather than
     // exiting; a bare `:quit` exits.
-    if only_one_window() && (firstwin.get() == lastwin.get() || eap.addr_count == 0) {
+    if only_one_window() && (firstwin.get() == lastwin.get() || args.addr_count == 0) {
         getout(0);
     }
     not_exiting(save_exiting);
     unsafe {
         win_close(
             wp,
-            !buf_hide((*wp).w_buffer) || eap.forceit != 0,
-            eap.forceit != 0,
+            !buf_hide((*wp).w_buffer) || args.forceit != 0,
+            args.forceit != 0,
         )
     };
 }
@@ -249,9 +249,9 @@ fn first_win() -> Win {
 /// The signature still says `()` because the command table holds one fn
 /// pointer type and a `-> !` fn item does not coerce to it.
 pub(crate) unsafe fn ex_cquit(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let status = if eap.addr_count > 0 {
-        eap.line2 as c_int
+    let args = unsafe { Ea::new(args) };
+    let status = if args.addr_count > 0 {
+        args.line2 as c_int
     } else {
         EXIT_FAILURE
     };
@@ -263,9 +263,9 @@ pub(crate) unsafe fn ex_cquit(args: *mut ExArg) {
 /// The checks `:qall`, `:xall` and `:wqall` share before any of them
 /// starts writing.
 pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
-        cmdwin_result.set(special_key(if eap.forceit != 0 {
+        cmdwin_result.set(special_key(if args.forceit != 0 {
             KE_XF1 as c_int
         } else {
             KE_XF2 as c_int
@@ -277,7 +277,7 @@ pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
         return Err(Failed);
     }
     // SAFETY: `curwin` is set from startup to exit.
-    if unsafe { before_quit_autocmds(curwin.get(), true, eap.forceit != 0) } {
+    if unsafe { before_quit_autocmds(curwin.get(), true, args.forceit != 0) } {
         return Err(Failed);
     }
     Ok(())
@@ -285,13 +285,13 @@ pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
 
 /// `:qall`.
 pub(crate) unsafe fn ex_quitall(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if unsafe { before_quit_all(eap.raw()) }.is_err() {
+    let args = unsafe { Ea::new(args) };
+    if unsafe { before_quit_all(args.raw()) }.is_err() {
         return;
     }
     let save_exiting = exiting.get();
     exiting.set(true);
-    if eap.forceit != 0 || !check_changed_any(false, false) {
+    if args.forceit != 0 || !check_changed_any(false, false) {
         getout(0);
     }
     not_exiting(save_exiting);
@@ -299,7 +299,7 @@ pub(crate) unsafe fn ex_quitall(args: *mut ExArg) {
 
 /// `:close`.
 pub(crate) unsafe fn ex_close(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(Ctrl_C);
         return;
@@ -307,12 +307,12 @@ pub(crate) unsafe fn ex_close(args: *mut ExArg) {
     if text_locked() || curbuf_locked() {
         return;
     }
-    let win = if eap.addr_count == 0 {
+    let win = if args.addr_count == 0 {
         curwin.get()
     } else {
-        numbered_window(eap.line2)
+        numbered_window(args.line2)
     };
-    unsafe { ex_win_close(eap.forceit, win, ptr::null_mut()) };
+    unsafe { ex_win_close(args.forceit, win, ptr::null_mut()) };
 }
 
 /// The window with this number in the current tab page, or the last one.
@@ -332,10 +332,10 @@ fn numbered_window(nr: LineNr) -> *mut Window {
 
 /// `:pclose` — close the preview window, wherever it is.
 pub(crate) unsafe fn ex_pclose(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     for win in windows() {
         if win.w_onebuf_opt.wo_pvw != 0 {
-            unsafe { ex_win_close(eap.forceit, win.raw(), ptr::null_mut()) };
+            unsafe { ex_win_close(args.forceit, win.raw(), ptr::null_mut()) };
             return;
         }
     }
@@ -392,7 +392,7 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpa
 
 /// `:tabclose`.
 pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(special_key(KE_IGNORE as c_int));
         return;
@@ -404,8 +404,8 @@ pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
     if window_layout_locked(CmdIdx::tabclose) {
         return;
     }
-    let tab_number = get_tabpage_arg(eap);
-    if eap.errmsg.is_some() {
+    let tab_number = get_tabpage_arg(args);
+    if args.errmsg.is_some() {
         return;
     }
     let tp = find_tabpage(tab_number);
@@ -414,15 +414,15 @@ pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
         return;
     }
     if tp != curtab.get() {
-        unsafe { tabpage_close_other(tp, eap.forceit) };
+        unsafe { tabpage_close_other(tp, args.forceit) };
     } else if !text_locked() && !curbuf_locked() {
-        unsafe { tabpage_close(eap.forceit) };
+        unsafe { tabpage_close(args.forceit) };
     }
 }
 
 /// `:tabonly`.
 pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(special_key(KE_IGNORE as c_int));
         return;
@@ -434,8 +434,8 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
     if window_layout_locked(CmdIdx::tabonly) {
         return;
     }
-    let tab_number = get_tabpage_arg(eap);
-    if eap.errmsg.is_some() {
+    let tab_number = get_tabpage_arg(args);
+    if args.errmsg.is_some() {
         return;
     }
     goto_tabpage(tab_number);
@@ -448,7 +448,7 @@ pub(crate) unsafe fn ex_tabonly(args: *mut ExArg) {
     while done < 1000 {
         for tp in tabs() {
             if tp.tp_topframe != topframe.get() {
-                unsafe { tabpage_close_other(tp.raw(), eap.forceit) };
+                unsafe { tabpage_close_other(tp.raw(), args.forceit) };
                 if valid_tabpage(tp.raw()) {
                     done = 1000;
                 }
@@ -541,17 +541,17 @@ pub unsafe fn tabpage_close_other(tabpage: *mut Tabpage, forceit: c_int) {
 
 /// `:only`.
 pub(crate) unsafe fn ex_only(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if window_layout_locked(CmdIdx::only) {
         return;
     }
-    if eap.addr_count > 0 {
-        let wp = window_at_stepwise(eap.line2);
+    if args.addr_count > 0 {
+        let wp = window_at_stepwise(args.line2);
         if wp != curwin.get() {
             unsafe { win_goto(wp) };
         }
     }
-    close_others(1, eap.forceit);
+    close_others(1, args.forceit);
 }
 
 /// The `nr`'th window, counting down rather than up.
@@ -573,25 +573,25 @@ fn window_at_stepwise(nr: LineNr) -> *mut Window {
 
 /// `:hide` used as a command rather than as a modifier.
 pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if eap.skip != 0 {
+    let args = unsafe { Ea::new(args) };
+    if args.skip != 0 {
         return;
     }
-    let win = if eap.addr_count == 0 {
+    let win = if args.addr_count == 0 {
         curwin.get()
     } else {
-        numbered_window(eap.line2)
+        numbered_window(args.line2)
     };
     if !unsafe { (*win).w_floating } && window_layout_locked(CmdIdx::hide) {
         return;
     }
-    win_close(win, false, eap.forceit != 0);
+    win_close(win, false, args.forceit != 0);
 }
 
 /// `:stop` and `:suspend`.
 pub(crate) unsafe fn ex_stop(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if eap.forceit == 0 {
+    let args = unsafe { Ea::new(args) };
+    if args.forceit == 0 {
         unsafe { autowrite_all() };
     }
     may_trigger_vim_suspend_resume(true);
@@ -601,7 +601,7 @@ pub(crate) unsafe fn ex_stop(args: *mut ExArg) {
 
 /// `:xit` and `:wq` — write, then quit.
 pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(Ctrl_C);
         return;
@@ -611,16 +611,16 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
         return;
     }
     let save_exiting = exiting.get();
-    if check_more(false, eap.forceit != 0) == OK && only_one_window() {
+    if check_more(false, args.forceit != 0) == OK && only_one_window() {
         exiting.set(true);
     }
     // `:wq` always writes; `:x` only writes a changed buffer.
-    if (eap.cmdidx == CmdIdx::wq || curbuf_is_changed())
-        && unsafe { do_write(&mut eap) }.is_err()
+    if (args.cmdidx == CmdIdx::wq || curbuf_is_changed())
+        && unsafe { do_write(&mut args) }.is_err()
         // SAFETY: `curwin` is set from startup to exit.
-        || unsafe { before_quit_autocmds(curwin.get(), false, eap.forceit != 0) }
-        || check_more(true, eap.forceit != 0) == FAIL
-        || only_one_window() && check_changed_any(eap.forceit != 0, false)
+        || unsafe { before_quit_autocmds(curwin.get(), false, args.forceit != 0) }
+        || check_more(true, args.forceit != 0) == FAIL
+        || only_one_window() && check_changed_any(args.forceit != 0, false)
     {
         not_exiting(save_exiting);
         return;
@@ -632,7 +632,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     win_close(
         curwin.get(),
         !buf_hide(cur_win().w_buffer),
-        eap.forceit != 0,
+        args.forceit != 0,
     );
 }
 

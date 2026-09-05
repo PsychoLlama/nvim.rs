@@ -276,7 +276,7 @@ pub unsafe fn dbg_check_breakpoint(args: *mut ExArg) {
 }
 
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
-/// skipped because `eap.skip` was set. True when the prompt was shown.
+/// skipped because `args.skip` was set. True when the prompt was shown.
 ///
 /// # Safety
 /// As [`dbg_check_breakpoint`].
@@ -289,7 +289,7 @@ pub unsafe fn dbg_check_skipped(args: *mut ExArg) -> bool {
     let prev_got_int = got_int.get();
     got_int.set(false);
     debug_breakpoint_name.set(debug_skipped_name.get());
-    // SAFETY: caller contract; `eap.skip` is true on entry, and is put back.
+    // SAFETY: caller contract; `args.skip` is true on entry, and is put back.
     unsafe { (*args).skip = 0 };
     unsafe { dbg_check_breakpoint(args) };
     unsafe { (*args).skip = 1 };

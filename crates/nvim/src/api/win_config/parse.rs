@@ -702,7 +702,7 @@ pub(crate) unsafe fn parse_win_config(
 /// [`generate_api_error`] with the window as a handle and the name as a
 /// literal: "this key needs a `relative`", or "not on a split".
 fn generate_error(window: Option<Win>, attribute: &CStr, err: ErrSlot) {
-    let wp = window.map_or(ptr::null_mut(), Win::raw);
-    // SAFETY: `wp` is null or a live window, and `err` names a live slot.
-    unsafe { generate_api_error(wp, attribute, slot_mut(err)) };
+    let window = window.map_or(ptr::null_mut(), Win::raw);
+    // SAFETY: `window` is null or a live window, and `err` names a live slot.
+    unsafe { generate_api_error(window, attribute, slot_mut(err)) };
 }

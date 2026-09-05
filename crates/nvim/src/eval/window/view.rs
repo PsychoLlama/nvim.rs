@@ -123,8 +123,8 @@ unsafe fn splitmove_options(opts: *mut TypVal) -> (c_int, c_int) {
 }
 
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
-pub unsafe fn f_win_splitmove(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_win_splitmove(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; the windows the resolver
     // answers are live, and every callee below re-checks validity because an
@@ -145,7 +145,7 @@ pub unsafe fn f_win_splitmove(argvars: *mut TypVal, result: *mut TypVal, _fptr: 
         return;
     }
     let (flags, size) = if args.has(2) {
-        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) }.is_err() {
+        if unsafe { tv_check_for_nonnull_dict_arg(args.ptr(0), 2) }.is_err() {
             return;
         }
         unsafe { splitmove_options(args.ptr(2)) }

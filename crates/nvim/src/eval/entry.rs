@@ -143,7 +143,7 @@ pub unsafe fn eval_init() {
 /// what lets an expression there run onto a following line.
 ///
 /// # Safety
-/// `evalarg` must be valid; `eap` null or valid.
+/// `evalarg` must be valid; `args` null or valid.
 pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, args: *mut ExArg, skip: bool) {
     // SAFETY: the caller's promise -- `evalarg` outlives the call.
     let mut evalarg = unsafe { Ev::new(evalarg) };
@@ -152,12 +152,12 @@ pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, args: *mut ExArg, ski
     if args.is_null() {
         return;
     }
-    // SAFETY: the caller's promise -- a non-null `eap` is the live Ex
+    // SAFETY: the caller's promise -- a non-null `args` is the live Ex
     // command being run.
-    let eap = unsafe { Ea::new(args) };
-    if unsafe { sourcing_a_script(eap.raw()) } != 0 {
-        evalarg.eval_getline = eap.ea_getline;
-        evalarg.eval_cookie = eap.cookie;
+    let args = unsafe { Ea::new(args) };
+    if unsafe { sourcing_a_script(args.raw()) } != 0 {
+        evalarg.eval_getline = args.ea_getline;
+        evalarg.eval_cookie = args.cookie;
     }
 }
 
@@ -677,17 +677,17 @@ pub unsafe fn call_func_retlist(
 /// one.
 ///
 /// # Safety
-/// `wp` and `marker` must be valid.
+/// `window` and `marker` must be valid.
 pub unsafe fn eval_foldexpr(window: *mut Window, marker: *mut c_int) -> c_int {
     let mut evalarg = EVALARG_EVALUATE;
     let saved_sctx: ScriptCtx = current_sctx.get();
     // SAFETY: the caller's promise -- a live window.
     let use_sandbox = unsafe { was_set_insecurely(window, kOptFoldexpr, OptionSetFlags::LOCAL) };
     // SAFETY: as above; the window outlives this call.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     // SAFETY: an option string is NUL-terminated.
-    let arg = unsafe { skipwhite(wp.w_onebuf_opt.wo_fde) };
-    current_sctx.set(wp.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
+    let arg = unsafe { skipwhite(window.w_onebuf_opt.wo_fde) };
+    current_sctx.set(window.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
     let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
         let _sandboxed = use_sandbox.then(Lock::sandbox);

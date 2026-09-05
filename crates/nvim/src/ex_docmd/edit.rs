@@ -87,21 +87,21 @@ use crate::winlayer::{Buf, Ea, Win, windows};
 
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
         emsg(gettext(e_empty_buffer.as_ptr()));
     } else {
-        let idx = eap.cmdidx;
-        let numbered = idx == CmdIdx::number || idx == CmdIdx::pound || eap.flags & EXFLAG_NR != 0;
-        let listed = idx == CmdIdx::list || eap.flags & EXFLAG_LIST != 0;
-        let mut line = eap.line1;
-        while line <= eap.line2 && !got_int.get() {
-            print_line(line, numbered, listed, line == eap.line1);
+        let idx = args.cmdidx;
+        let numbered = idx == CmdIdx::number || idx == CmdIdx::pound || args.flags & EXFLAG_NR != 0;
+        let listed = idx == CmdIdx::list || args.flags & EXFLAG_LIST != 0;
+        let mut line = args.line1;
+        while line <= args.line2 && !got_int.get() {
+            print_line(line, numbered, listed, line == args.line1);
             line += 1;
             os_breakcheck();
         }
         setpcmark();
-        cur_win().w_cursor.lnum = eap.line2;
+        cur_win().w_cursor.lnum = args.line2;
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     // Ex mode has just printed the line itself; it must not print it
@@ -111,8 +111,8 @@ pub(crate) unsafe fn ex_print(args: *mut ExArg) {
 
 /// `:goto` — the range is a byte offset, not a line number.
 pub(crate) unsafe fn ex_goto(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    unsafe { goto_byte(eap.line2 as c_int) };
+    let args = unsafe { Ea::new(args) };
+    unsafe { goto_byte(args.line2 as c_int) };
 }
 
 /// `:syncbind` — line up every 'scrollbind' window at the same relative
@@ -172,33 +172,33 @@ pub(crate) unsafe fn ex_syncbind(_args: *mut ExArg) {
 /// `:=` — the line number, unless something follows it, in which case it
 /// is `:lua`'s alias.
 pub(crate) unsafe fn ex_equal(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
-    if byte(eap.arg) != NUL && byte(eap.arg) != '|' as c_int {
-        unsafe { ex_lua(eap.raw()) };
+    let mut args = unsafe { Ea::new(args) };
+    if byte(args.arg) != NUL && byte(args.arg) != '|' as c_int {
+        unsafe { ex_lua(args.raw()) };
     } else {
-        eap.nextcmd = unsafe { find_nextcmd(eap.arg) };
-        smsg!(0, "{}", eap.line2 as int64_t);
+        args.nextcmd = unsafe { find_nextcmd(args.arg) };
+        smsg!(0, "{}", args.line2 as int64_t);
     }
 }
 
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
 pub(crate) unsafe fn ex_sleep(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cursor_valid(cur_win()) != 0 {
         unsafe { setcursor_mayforce(curwin.get(), true) };
     }
-    let mut len = eap.line2 as int64_t;
-    match byte(eap.arg) {
+    let mut len = args.line2 as int64_t;
+    match byte(args.arg) {
         c if c == 'm' as c_int => {}
         c if c == NUL => len *= 1000,
         _ => {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(eap.arg) };
+            let arg = unsafe { c_str(args.arg) };
             semsg!("E475: Invalid argument: {arg}");
             return;
         }
     }
-    unsafe { do_sleep(len, eap.forceit != 0) };
+    unsafe { do_sleep(len, args.forceit != 0) };
 }
 
 /// Wait `msec` milliseconds, still serving events, and stop early on an
@@ -225,29 +225,29 @@ pub unsafe fn do_sleep(msec: int64_t, hide_cursor: bool) {
 /// `:delete`, `:yank`, `:<` and `:>` — the four normal-mode operators that
 /// have an Ex spelling.
 pub(crate) unsafe fn ex_operators(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut oa: OpArg = unsafe { core::mem::zeroed() };
     clear_oparg(&raw mut oa);
-    oa.regname = eap.regname;
-    oa.start.lnum = eap.line1;
-    oa.end.lnum = eap.line2;
-    oa.line_count = eap.line2 - eap.line1 + 1;
+    oa.regname = args.regname;
+    oa.start.lnum = args.line1;
+    oa.end.lnum = args.line2;
+    oa.line_count = args.line2 - args.line1 + 1;
     oa.motion_type = kMTLineWise;
     // An Ex range is whole lines, so 'virtualedit' must not apply.
     virtual_op.set(Some(false));
 
     // `:yank` does not move the cursor, so it does not set the previous
     // context mark either.
-    if eap.cmdidx != CmdIdx::yank {
+    if args.cmdidx != CmdIdx::yank {
         setpcmark();
-        cur_win().w_cursor.lnum = eap.line1;
+        cur_win().w_cursor.lnum = args.line1;
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     }
     if visual_active() {
         end_visual_mode();
     }
 
-    match eap.cmdidx {
+    match args.cmdidx {
         CmdIdx::delete => {
             oa.op_type = OpType::Delete;
             // `:delete` reports its own refusals; nothing more to do.
@@ -260,29 +260,29 @@ pub(crate) unsafe fn ex_operators(args: *mut ExArg) {
         _ => {
             // In a 'rightleft' window the two shift commands swap.
             oa.op_type =
-                if (eap.cmdidx == CmdIdx::rshift) as c_int ^ cur_win().w_onebuf_opt.wo_rl != 0 {
+                if (args.cmdidx == CmdIdx::rshift) as c_int ^ cur_win().w_onebuf_opt.wo_rl != 0 {
                     OpType::Rshift
                 } else {
                     OpType::Lshift
                 };
-            unsafe { op_shift(&raw mut oa, false, eap.amount) };
+            unsafe { op_shift(&raw mut oa, false, args.amount) };
         }
     }
     virtual_op.set(None);
-    unsafe { ex_may_print(eap.raw()) };
+    unsafe { ex_may_print(args.raw()) };
 }
 
 /// `:put`.
 pub(crate) unsafe fn ex_put(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    put_lines(eap, PUT_LINE as c_int | PUT_CURSLINE as c_int);
+    let args = unsafe { Ea::new(args) };
+    put_lines(args, PUT_LINE as c_int | PUT_CURSLINE as c_int);
 }
 
 /// `:iput` — the same, re-indenting what is put.
 pub(crate) unsafe fn ex_iput(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     put_lines(
-        eap,
+        args,
         PUT_LINE as c_int | PUT_CURSLINE as c_int | PUT_FIXINDENT as c_int,
     );
 }
@@ -313,13 +313,13 @@ fn put_lines(mut args: Ea, flags: c_int) {
 /// `:copy` and `:move` — both take a destination address after the
 /// command, which is why they parse one more address here.
 pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     let mut errormsg = None;
     let n = unsafe {
         get_address(
-            eap.raw(),
-            eap.arg_ptr(),
-            eap.addr_type,
+            args.raw(),
+            args.arg_ptr(),
+            args.addr_type,
             false,
             false,
             0,
@@ -327,14 +327,14 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
             &mut errormsg,
         )
     };
-    if eap.arg.is_null() {
+    if args.arg.is_null() {
         if let Some(msg) = &errormsg {
             emsg(msg.as_ptr());
         }
-        eap.nextcmd = ptr::null_mut();
+        args.nextcmd = ptr::null_mut();
         return;
     }
-    get_flags(eap);
+    get_flags(args);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
     if n == MAXLNUM as LineNr || n < 0 || n > cur_buf().b_ml.ml_line_count {
@@ -342,26 +342,26 @@ pub(crate) unsafe fn ex_copymove(args: *mut ExArg) {
         return;
     }
 
-    if eap.cmdidx == CmdIdx::r#move {
-        if unsafe { do_move(eap.line1, eap.line2, n) }.is_err() {
+    if args.cmdidx == CmdIdx::r#move {
+        if unsafe { do_move(args.line1, args.line2, n) }.is_err() {
             return;
         }
     } else {
-        unsafe { ex_copy(eap.line1, eap.line2, n) };
+        unsafe { ex_copy(args.line1, args.line2, n) };
     }
     u_clearline(cur_buf());
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    unsafe { ex_may_print(eap.raw()) };
+    unsafe { ex_may_print(args.raw()) };
 }
 
 /// Print the current line, if the command carried an `l`, `p` or `#` flag.
 pub unsafe fn ex_may_print(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if eap.flags != 0 {
+    let args = unsafe { Ea::new(args) };
+    if args.flags != 0 {
         print_line(
             cur_win().w_cursor.lnum,
-            eap.flags & EXFLAG_NR != 0,
-            eap.flags & EXFLAG_LIST != 0,
+            args.flags & EXFLAG_NR != 0,
+            args.flags & EXFLAG_LIST != 0,
             true,
         );
         ex_no_reprint.set(true);
@@ -401,31 +401,31 @@ fn force_magic(args: Ea) -> OptMagic {
 
 /// `:join`.
 pub(crate) unsafe fn ex_join(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
-    cur_win().w_cursor.lnum = eap.line1;
-    if eap.line1 == eap.line2 {
+    let mut args = unsafe { Ea::new(args) };
+    cur_win().w_cursor.lnum = args.line1;
+    if args.line1 == args.line2 {
         // One line: join it with the next, unless a two-address range
         // said exactly one line, or there is no next line.
-        if eap.addr_count >= 2 {
+        if args.addr_count >= 2 {
             return;
         }
-        if eap.line2 == cur_buf().b_ml.ml_line_count {
+        if args.line2 == cur_buf().b_ml.ml_line_count {
             beep_flush();
             return;
         }
-        eap.line2 += 1;
+        args.line2 += 1;
     }
     let _ = unsafe {
         do_join(
-            (eap.line2 as ssize_t - eap.line1 as ssize_t + 1) as size_t,
-            eap.forceit == 0,
+            (args.line2 as ssize_t - args.line1 as ssize_t + 1) as size_t,
+            args.forceit == 0,
             true,
             true,
             true,
         )
     };
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    unsafe { ex_may_print(eap.raw()) };
+    unsafe { ex_may_print(args.raw()) };
 }
 
 /// `:@` — run the contents of a register as Ex commands.
@@ -434,12 +434,12 @@ pub(crate) unsafe fn ex_join(args: *mut ExArg) {
 /// out of it until it is empty. `prev_len` is what tells "empty" from
 /// "there was already typeahead before this".
 pub(crate) unsafe fn ex_at(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let prev_len = typeahead().len();
-    cur_win().w_cursor.lnum = eap.line2;
+    cur_win().w_cursor.lnum = args.line2;
     check_cursor_col(cur_win());
 
-    let mut c = ubyte(eap.arg) as c_int;
+    let mut c = ubyte(args.arg) as c_int;
     if c == NUL {
         c = '@' as c_int;
     }
@@ -470,17 +470,17 @@ pub(crate) unsafe fn ex_at(args: *mut ExArg) {
 /// N rather than moving to it, so it can only go backwards along the
 /// current branch.
 pub(crate) unsafe fn ex_undo(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if eap.addr_count != 1 {
-        if eap.forceit != 0 {
+    let args = unsafe { Ea::new(args) };
+    if args.addr_count != 1 {
+        if args.forceit != 0 {
             u_undo_and_forget(1, true);
         } else {
             unsafe { u_undo(1) };
         }
         return;
     }
-    let step = eap.line2;
-    if eap.forceit == 0 {
+    let step = args.line2;
+    if args.forceit == 0 {
         undo_time(step as c_int, false, false, true);
         return;
     }
@@ -522,11 +522,11 @@ pub(crate) unsafe fn ex_redo(_args: *mut ExArg) {
 /// `:earlier` and `:later` — a count of changes, of seconds (`s`, `m`,
 /// `h`, `d`) or of file writes (`f`).
 pub(crate) unsafe fn ex_later(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     let mut count = 0;
     let mut sec = false;
     let mut file = false;
-    let mut p = eap.arg;
+    let mut p = args.arg;
     if byte(p) == NUL {
         count = 1;
     } else if ascii_isdigit(ubyte(p) as c_int) {
@@ -564,12 +564,12 @@ pub(crate) unsafe fn ex_later(args: *mut ExArg) {
     }
     if byte(p) != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(eap.arg) };
+        let arg = unsafe { c_str(args.arg) };
         semsg!("E475: Invalid argument: {arg}");
         return;
     }
     undo_time(
-        if eap.cmdidx == CmdIdx::earlier {
+        if args.cmdidx == CmdIdx::earlier {
             count.wrapping_neg()
         } else {
             count
@@ -582,23 +582,23 @@ pub(crate) unsafe fn ex_later(args: *mut ExArg) {
 
 /// `:mark` and `:k`.
 pub(crate) unsafe fn ex_mark(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if byte(eap.arg) == NUL {
+    let args = unsafe { Ea::new(args) };
+    if byte(args.arg) == NUL {
         emsg(gettext(e_argreq.as_ptr()));
         return;
     }
-    if byte_at(eap.arg, 1) != NUL {
+    if byte_at(args.arg, 1) != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(eap.arg) };
+        let arg = unsafe { c_str(args.arg) };
         semsg!("E488: Trailing characters: {arg}");
         return;
     }
     // The mark is set at the first non-blank of the addressed line, so
     // the cursor goes there and comes back.
     let pos = cur_win().w_cursor;
-    cur_win().w_cursor.lnum = eap.line2;
+    cur_win().w_cursor.lnum = args.line2;
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
-    if unsafe { setmark(*eap.arg as c_int) }.is_err() {
+    if unsafe { setmark(*args.arg as c_int) }.is_err() {
         emsg(gettext(
             c"E191: Argument must be a letter or forward/backward quote".as_ptr(),
         ));
@@ -664,7 +664,7 @@ pub unsafe fn restore_current_state(sst: *mut SaveState) {
 
 /// `:normal` — run the argument as normal-mode keys.
 pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
+    let mut args = unsafe { Ea::new(args) };
     if !cur_buf().terminal.is_null() && State.get() & MODE_TERMINAL != 0 {
         emsg(c"Can't re-enter normal mode from terminal mode".as_ptr());
         return;
@@ -678,23 +678,23 @@ pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
         return;
     }
 
-    let arg = unsafe { escape_k_special(eap.arg) };
+    let arg = unsafe { escape_k_special(args.arg) };
     let busy = Depth::of(&ex_normal_busy);
     let mut save_state = SaveState::default();
     if unsafe { save_current_state(&raw mut save_state) } {
         loop {
             // With a range, the keys are run once per line, from the
             // first column.
-            if eap.addr_count != 0 {
-                cur_win().w_cursor.lnum = eap.line1;
-                eap.line1 += 1;
+            if args.addr_count != 0 {
+                cur_win().w_cursor.lnum = args.line1;
+                args.line1 += 1;
                 cur_win().w_cursor.col = 0 as ColNr;
                 check_cursor_moved(cur_win());
             }
             unsafe {
                 exec_normal_cmd(
-                    if arg.is_null() { eap.arg } else { arg },
-                    if eap.forceit != 0 {
+                    if arg.is_null() { args.arg } else { arg },
+                    if args.forceit != 0 {
                         REMAP_NONE as c_int
                     } else {
                         REMAP_YES as c_int
@@ -702,7 +702,7 @@ pub(crate) unsafe fn ex_normal(args: *mut ExArg) {
                     false,
                 )
             };
-            if !(eap.addr_count > 0 && eap.line1 <= eap.line2 && !got_int.get()) {
+            if !(args.addr_count > 0 && args.line1 <= args.line2 && !got_int.get()) {
                 break;
             }
         }
@@ -768,8 +768,8 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
 
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
 pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if eap.forceit != 0 {
+    let args = unsafe { Ea::new(args) };
+    if args.forceit != 0 {
         if cur_win().w_cursor.lnum == 0 {
             cur_win().w_cursor.lnum = 1;
         }
@@ -778,7 +778,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
     if State.get() & MODE_INSERT != 0 {
         return;
     }
-    let idx = eap.cmdidx;
+    let idx = args.cmdidx;
     // The upper-case forms are what `edit()` reads as "started from
     // here" rather than "restarted".
     restart_edit.set(if idx == CmdIdx::startinsert {
@@ -788,7 +788,7 @@ pub(crate) unsafe fn ex_startinsert(args: *mut ExArg) {
     } else {
         'V' as c_int
     });
-    if eap.forceit == 0 {
+    if args.forceit == 0 {
         if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }
@@ -835,21 +835,21 @@ pub unsafe fn exec_normal(was_typed: bool, use_vpeekc: bool) {
 
 /// `:fold`.
 pub(crate) unsafe fn ex_fold(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if unsafe { fold_manual_allowed(true) } != 0 {
-        unsafe { fold_create(Win::current(), range_start(eap), range_end(eap)) };
+        unsafe { fold_create(Win::current(), range_start(args), range_end(args)) };
     }
 }
 
 /// `:foldopen` and `:foldclose`.
 pub(crate) unsafe fn ex_foldopen(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     unsafe {
         op_fold_range(
-            range_start(eap),
-            range_end(eap),
-            (eap.cmdidx == CmdIdx::foldopen) as c_int,
-            eap.forceit,
+            range_start(args),
+            range_end(args),
+            (args.cmdidx == CmdIdx::foldopen) as c_int,
+            args.forceit,
             false,
         )
     };
@@ -876,16 +876,16 @@ fn range_end(args: Ea) -> Pos {
 /// `:folddoopen` and `:folddoclosed` — run a command on every line that is
 /// (or is not) inside a closed fold.
 pub(crate) unsafe fn ex_folddo(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let want_closed = (eap.cmdidx == CmdIdx::folddoclosed) as c_int;
-    let mut lnum = eap.line1;
-    while lnum <= eap.line2 {
+    let args = unsafe { Ea::new(args) };
+    let want_closed = (args.cmdidx == CmdIdx::folddoclosed) as c_int;
+    let mut lnum = args.line1;
+    while lnum <= args.line2 {
         if has_folding(cur_win(), lnum, None, None) as c_int == want_closed {
             unsafe { ml_setmarked(lnum) };
         }
         lnum += 1;
     }
-    unsafe { global_exe(eap.arg) };
+    unsafe { global_exe(args.arg) };
     unsafe { ml_clearmarked() };
 }
 

@@ -111,7 +111,7 @@ struct GlobalPat {
 /// comes back borrows `args`'s argument.
 ///
 /// # Safety
-/// `eap.arg` must be a live, writable Ex-command argument.
+/// `args.arg` must be a live, writable Ex-command argument.
 unsafe fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     let arg = args.arg;
     // SAFETY: an Ex-command argument is NUL-terminated, and nothing below
@@ -151,7 +151,7 @@ unsafe fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
     let pat = arg.wrapping_add(1);
     // SAFETY: `pat` is the pattern's first byte, inside the NUL-terminated
     // argument.  `newp` lets the skip hand back a rewritten copy for the `?`
-    // delimiter, which is why it is `eap->arg` that receives it.
+    // delimiter, which is why it is `args.arg` that receives it.
     let mut cmd = unsafe {
         skip_regexp_ex(
             pat,
@@ -220,27 +220,27 @@ unsafe fn global_mark(args: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int
 /// not know where to search for the next match.
 ///
 /// # Safety
-/// Main thread; `eap` must be the live Ex-command argument.
+/// Main thread; `args` must be the live Ex-command argument.
 pub unsafe fn ex_global(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *args };
+    let args = unsafe { &mut *args };
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
-    if global_busy.get() != 0 && (eap.line1 != 1 || eap.line2 != cur_buf().b_ml.ml_line_count) {
+    if global_busy.get() != 0 && (args.line1 != 1 || args.line2 != cur_buf().b_ml.ml_line_count) {
         // Will increment global_busy to break out of the loop.
         emsg(gettext(c"E147: Cannot do :global recursive with a range"));
         return;
     }
 
     // ":global!" is like ":vglobal".
-    let kind = if eap.forceit != 0 {
+    let kind = if args.forceit != 0 {
         b'v'
     } else {
-        // SAFETY: `eap.cmd` points at the command word.
-        unsafe { *eap.cmd as u8 }
+        // SAFETY: `args.cmd` points at the command word.
+        unsafe { *args.cmd as u8 }
     };
-    // SAFETY: `eap.arg` is the command's own writable argument.
-    let Some(parsed) = (unsafe { global_pattern(eap) }) else {
+    // SAFETY: `args.arg` is the command's own writable argument.
+    let Some(parsed) = (unsafe { global_pattern(args) }) else {
         return;
     };
 
@@ -272,7 +272,7 @@ pub unsafe fn ex_global(args: *mut ExArg) {
         }
     } else {
         // SAFETY: as above.
-        let ndone = unsafe { global_mark(eap, &raw mut regmatch, kind) };
+        let ndone = unsafe { global_mark(args, &raw mut regmatch, kind) };
         // Pass 2: execute the command for each line that has been marked.
         if got_int.get() {
             msg(gettext(e_interr), 0 as c_int);

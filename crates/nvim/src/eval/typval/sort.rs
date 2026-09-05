@@ -430,11 +430,11 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 ///
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
-pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, result: *mut TypVal, sort: bool) {
+pub(crate) unsafe fn do_sort_uniq(args: *mut TypVal, result: *mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
-    let args = unsafe { Tv::new(argvars) };
-    if args.v_type != VAR_LIST {
+    let first = unsafe { Tv::new(args) };
+    if first.v_type != VAR_LIST {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe {
             c_str(if sort {
@@ -456,11 +456,11 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, result: *mut TypVal, sor
     } else {
         c"uniq() argument".as_ptr()
     };
-    let l = args.list_or_null();
+    let l = first.list_or_null();
     if !unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
         unsafe { tv_list_set_ret(result, l) };
         if unsafe { tv_list_len(l) } > 1
-            && unsafe { parse_sort_uniq_args(argvars, &raw mut info, &mut how) }.is_ok()
+            && unsafe { parse_sort_uniq_args(args, &raw mut info, &mut how) }.is_ok()
         {
             if sort {
                 unsafe { do_sort(l, &raw mut info) };

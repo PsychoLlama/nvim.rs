@@ -176,13 +176,13 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
 /// `end_exclusive` allows one past the last line, which is what an
 /// end-of-range index means.
 pub(crate) unsafe fn normalize_index(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     index: int64_t,
     end_exclusive: bool,
     oob: *mut bool,
 ) -> int64_t {
-    // SAFETY: the caller's promise -- `buf` is a loaded buffer.
-    let line_count = unsafe { (*buf).b_ml.ml_line_count };
+    // SAFETY: the caller's promise -- `buffer` is a loaded buffer.
+    let line_count = unsafe { (*buffer).b_ml.ml_line_count };
     debug_assert!(line_count > 0);
     let max_index = (line_count + end_exclusive as LineNr - 1) as int64_t;
     let mut index = if index < 0 {
@@ -205,7 +205,7 @@ pub(crate) unsafe fn normalize_index(
 /// The text of line `lnum` between the two columns, as a *borrowed* string
 /// into the buffer's own line. Negative columns count back from the end.
 pub(crate) unsafe fn buf_get_text(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: int64_t,
     start_col: int64_t,
     end_col: int64_t,
@@ -215,11 +215,11 @@ pub(crate) unsafe fn buf_get_text(
         *err = err_out_of_range(c"line index");
         return String_0::NULL;
     }
-    // SAFETY: the caller's promise -- `buf` is a loaded buffer, and `lnum`
+    // SAFETY: the caller's promise -- `buffer` is a loaded buffer, and `lnum`
     // is below `MAXLNUM`.
-    let bufstr = unsafe { ml_get_buf(buf, lnum as LineNr) };
+    let bufstr = unsafe { ml_get_buf(buffer, lnum as LineNr) };
     // SAFETY: as above.
-    let line_length = unsafe { ml_get_buf_len(buf, lnum as LineNr) } as int64_t;
+    let line_length = unsafe { ml_get_buf_len(buffer, lnum as LineNr) } as int64_t;
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
     let start_col = relative(start_col).clamp(0, line_length);

@@ -248,12 +248,12 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 /// to bother with the rest of the machinery.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 pub unsafe fn decor_redraw_reset(window: *mut Window, mut state: DecorStateRef) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     state.row = -1;
-    state.win = wp.raw();
+    state.win = window.raw();
 
     for i in state.list_spans() {
         // Only the ephemeral virtual texts: an owned URL belongs to a range
@@ -271,7 +271,7 @@ pub unsafe fn decor_redraw_reset(window: *mut Window, mut state: DecorStateRef) 
     state.future_begin = 0;
     state.new_range_ordering = 0;
 
-    wp.buffer().b_marktree.n_keys != 0
+    window.buffer().b_marktree.n_keys != 0
 }
 
 /// Whether `decor` occupies a position of its own rather than colouring the
@@ -297,15 +297,15 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 /// `top_row` and reach into it.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 pub unsafe fn decor_redraw_start(
     window: *mut Window,
     top_row: c_int,
     mut state: DecorStateRef,
 ) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(window) };
-    let buf = wp.buffer();
+    let window = unsafe { Win::new(window) };
+    let buf = window.buffer();
     state.top_row = top_row;
     state.itr_valid = true;
 
@@ -362,17 +362,17 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 /// Moves the state on to `row`.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 pub unsafe fn decor_redraw_line(window: *mut Window, row: c_int, mut state: DecorStateRef) {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     decor_state_pack(state);
 
     if state.row == -1 {
         // SAFETY: as above.
-        unsafe { decor_redraw_start(wp.raw(), row, state) };
+        unsafe { decor_redraw_start(window.raw(), row, state) };
     } else if !state.itr_valid {
-        state.seek(wp.buffer(), row);
+        state.seek(window.buffer(), row);
         state.itr_valid = true;
     }
 
@@ -678,7 +678,7 @@ pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef
 /// `decor_redraw_col` skip this entirely for most columns.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 pub unsafe fn decor_redraw_col_impl(
     window: *mut Window,
     col: c_int,
@@ -688,8 +688,8 @@ pub unsafe fn decor_redraw_col_impl(
     max_col_last: c_int,
 ) -> c_int {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(window) };
-    let buf = wp.buffer();
+    let window = unsafe { Win::new(window) };
+    let buf = window.buffer();
     let row = state.row;
     let mut col_last = max_col_last;
 
@@ -703,7 +703,7 @@ pub unsafe fn decor_redraw_col_impl(
             break;
         }
 
-        if !mt_invalid(mark) && !mt_end(mark) && mt_decor_any(mark) && ns_in_win(mark.ns, wp) {
+        if !mt_invalid(mark) && !mt_end(mark) && mt_decor_any(mark) && ns_in_win(mark.ns, window) {
             // SAFETY: `mark` was read out of this buffer's live tree.
             let endpos: MTPos = unsafe { marktree_get_altpos(&mut *tree_of(buf), mark, None) };
             decor_range_add_from_inline(

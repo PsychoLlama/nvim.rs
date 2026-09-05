@@ -133,9 +133,9 @@ pub unsafe fn set_fraction(window: *mut Window) {
 /// Remember where the cursor is as a fraction of the window's height, so a
 /// resize can put it back in the same relative place.
 pub(crate) fn save_fraction(window: Win) {
-    let mut wp = window;
-    if wp.w_view_height > 1 {
-        wp.w_fraction = arith::cursor_fraction(wp.w_wrow, wp.w_view_height);
+    let mut window = window;
+    if window.w_view_height > 1 {
+        window.w_fraction = arith::cursor_fraction(window.w_wrow, window.w_view_height);
     }
 }
 
@@ -239,18 +239,18 @@ pub unsafe fn win_new_height(window: *mut Window, height: c_int) {
     new_win_height(unsafe { Win::new(window) }, height);
 }
 
-/// Give window `wp` height `height`.
+/// Give window `window` height `height`.
 pub(crate) fn new_win_height(window: Win, height: c_int) {
-    let mut wp = window;
+    let mut window = window;
     // Don't want a negative height: happens when splitting a tiny window, and
     // is equalized away soon after.
     let height = height.max(0);
-    if wp.w_height == height {
+    if window.w_height == height {
         return;
     }
-    wp.w_height = height;
-    wp.w_pos_changed = true;
-    set_inner_size(wp, true);
+    window.w_height = height;
+    window.w_pos_changed = true;
+    set_inner_size(window, true);
 }
 
 pub unsafe fn scroll_to_fraction(window: *mut Window, prev_height: c_int) {
@@ -261,87 +261,88 @@ pub unsafe fn scroll_to_fraction(window: *mut Window, prev_height: c_int) {
 /// Put the cursor back at the [`save_fraction`] of the window it was at before
 /// the resize, scrolling the view to suit.
 pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
-    let mut wp = window;
-    let height = wp.w_view_height;
+    let mut window = window;
+    let height = window.w_view_height;
     // Don't change `w_topline` when the window has no height, when
     // `'scrollbind'` is set on a window that is not current, or when the whole
     // buffer fits and its first line is visible.
     if height > 0
-        && (wp.w_onebuf_opt.wo_scb == 0 || wp.is_current())
-        && ((height as LineNr) < wp.buffer().line_count() || wp.w_topline > 1)
+        && (window.w_onebuf_opt.wo_scb == 0 || window.is_current())
+        && ((height as LineNr) < window.buffer().line_count() || window.w_topline > 1)
     {
         // Find a `w_topline` that shows the cursor at the same relative
         // position in the window as before (more or less).
-        let mut lnum = wp.w_cursor.lnum.max(1); // can be 0 during startup
-        wp.w_wrow = arith::fraction_row(wp.w_fraction, height);
-        let mut line_size = plines_to_col(wp, lnum, wp.w_cursor.col as ::core::ffi::c_long) - 1;
-        let mut sline = wp.w_wrow - line_size;
+        let mut lnum = window.w_cursor.lnum.max(1); // can be 0 during startup
+        window.w_wrow = arith::fraction_row(window.w_fraction, height);
+        let mut line_size =
+            plines_to_col(window, lnum, window.w_cursor.col as ::core::ffi::c_long) - 1;
+        let mut sline = window.w_wrow - line_size;
 
         if sline >= 0 {
             // Make sure the whole cursor line is visible, if possible.
-            let rows = plines(wp, lnum, false);
-            if sline > wp.w_view_height - rows {
-                sline = wp.w_view_height - rows;
-                wp.w_wrow -= rows - line_size;
+            let rows = plines(window, lnum, false);
+            if sline > window.w_view_height - rows {
+                sline = window.w_view_height - rows;
+                window.w_wrow -= rows - line_size;
             }
         }
         if sline < 0 {
             // The cursor line would go off the top of the screen: make it the
             // first line in the window, and use `w_skipcol` when it does not
             // fit whole.
-            wp.w_wrow = line_size;
-            if wp.w_wrow >= wp.w_view_height && wp.w_view_width - col_off(wp) > 0 {
-                wp.w_skipcol += wp.w_view_width - col_off(wp);
-                wp.w_wrow -= 1;
-                while wp.w_wrow >= wp.w_view_height {
-                    wp.w_skipcol += wp.w_view_width - col_off(wp) + col_off2(wp);
-                    wp.w_wrow -= 1;
+            window.w_wrow = line_size;
+            if window.w_wrow >= window.w_view_height && window.w_view_width - col_off(window) > 0 {
+                window.w_skipcol += window.w_view_width - col_off(window);
+                window.w_wrow -= 1;
+                while window.w_wrow >= window.w_view_height {
+                    window.w_skipcol += window.w_view_width - col_off(window) + col_off2(window);
+                    window.w_wrow -= 1;
                 }
             }
         } else if sline > 0 {
             while sline > 0 && lnum > 1 {
-                if let Some(first) = wp.fold_first(lnum) {
+                if let Some(first) = window.fold_first(lnum) {
                     lnum = first;
                 }
                 if lnum == 1 {
                     // The first line in the buffer is folded.
                     // SAFETY: a live window; row 0 is the line above line 1.
-                    line_size = !unsafe { decor_conceal_line(wp.raw(), 0, false) } as c_int;
+                    line_size = !unsafe { decor_conceal_line(window.raw(), 0, false) } as c_int;
                     sline -= 1;
                     break;
                 }
                 lnum -= 1;
-                line_size = if lnum == wp.w_topline {
-                    plines_nofill(wp, lnum, true) + wp.w_topfill
+                line_size = if lnum == window.w_topline {
+                    plines_nofill(window, lnum, true) + window.w_topfill
                 } else {
-                    plines(wp, lnum, true)
+                    plines(window, lnum, true)
                 };
                 sline -= line_size;
             }
             if sline < 0 {
                 // The line we want at the top would go off the top of the
                 // screen: use the next one instead.
-                lnum = wp.fold_last(lnum) + 1;
-                wp.w_wrow -= line_size + sline;
+                lnum = window.fold_last(lnum) + 1;
+                window.w_wrow -= line_size + sline;
             } else if sline > 0 {
                 // The first line of the file was reached: use that as topline.
                 lnum = 1;
-                wp.w_wrow -= sline;
+                window.w_wrow -= sline;
             }
         }
         // SAFETY: a live window and a line of its buffer.
-        set_topline(wp, lnum);
+        set_topline(window, lnum);
     }
 
-    if wp.is_current() {
+    if window.is_current() {
         // SAFETY: a live window; validates `w_wrow`.
-        curs_columns(wp, 0);
+        curs_columns(window, 0);
     }
     if prev_height > 0 {
-        wp.w_prev_fraction_row = wp.w_wrow;
+        window.w_prev_fraction_row = window.w_wrow;
     }
-    wp.redraw_later(UPD_SOME_VALID);
-    invalidate_botline(wp);
+    window.redraw_later(UPD_SOME_VALID);
+    invalidate_botline(window);
 }
 
 pub unsafe fn win_set_inner_size(window: *mut Window, valid_cursor: bool) {
@@ -352,83 +353,84 @@ pub unsafe fn win_set_inner_size(window: *mut Window, valid_cursor: bool) {
 /// Give the window's *text area* the size its frame now implies, and tell the
 /// UI, the terminal and the view about it.
 pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
-    let mut wp = window;
-    let mut width = wp.w_width_request;
+    let mut window = window;
+    let mut width = window.w_width_request;
     if width == 0 {
-        width = wp.w_width;
+        width = window.w_width;
     }
-    let prev_height = wp.w_view_height;
-    let mut height = wp.w_height_request;
+    let prev_height = window.w_view_height;
+    let mut height = window.w_height_request;
     if height == 0 {
-        height = (wp.w_height - wp.w_winbar_height).max(0);
+        height = (window.w_height - window.w_winbar_height).max(0);
     }
     // SAFETY: `'splitkeep'` is a NUL-terminated option string.
     let keeps_cursor = unsafe { *p_spk.get() } as c_int == 'c' as c_int;
 
     if height != prev_height {
         if height > 0 && valid_cursor {
-            if wp.is_current() && (keeps_cursor || wp.w_floating) {
+            if window.is_current() && (keeps_cursor || window.w_floating) {
                 cur_win().validate_cursor();
             }
-            if wp.w_view_height != prev_height {
+            if window.w_view_height != prev_height {
                 // Recursive call: the cursor validation resized this window.
                 return;
             }
-            if wp.w_wrow != wp.w_prev_fraction_row {
-                save_fraction(wp);
+            if window.w_wrow != window.w_prev_fraction_row {
+                save_fraction(window);
             }
         }
-        wp.w_view_height = height;
-        comp_scroll(wp);
-        if valid_cursor && !exiting.get() && (keeps_cursor || wp.w_floating) {
-            wp.w_skipcol = 0 as ColNr;
-            to_fraction(wp, prev_height);
+        window.w_view_height = height;
+        comp_scroll(window);
+        if valid_cursor && !exiting.get() && (keeps_cursor || window.w_floating) {
+            window.w_skipcol = 0 as ColNr;
+            to_fraction(window, prev_height);
         }
-        wp.redraw_later(UPD_SOME_VALID);
+        window.redraw_later(UPD_SOME_VALID);
     }
-    if width != wp.w_view_width {
-        wp.w_view_width = width;
-        wp.w_lines_valid = 0;
+    if width != window.w_view_width {
+        window.w_view_width = width;
+        window.w_lines_valid = 0;
         if valid_cursor {
             // SAFETY: a live window.
-            changed_line_abv_curs_win(wp);
-            invalidate_botline(wp);
-            if wp.is_current() && (keeps_cursor || wp.w_floating) {
+            changed_line_abv_curs_win(window);
+            invalidate_botline(window);
+            if window.is_current() && (keeps_cursor || window.w_floating) {
                 // SAFETY: a live window.
-                curs_columns(wp, 1);
+                curs_columns(window, 1);
             }
         }
-        wp.redraw_later(UPD_NOT_VALID);
+        window.redraw_later(UPD_NOT_VALID);
     }
-    if !wp.buffer().terminal.is_null() {
+    if !window.buffer().terminal.is_null() {
         // SAFETY: the buffer's own terminal.
-        unsafe { terminal_check_size(wp.buffer().terminal) };
+        unsafe { terminal_check_size(window.buffer().terminal) };
     }
 
     // SAFETY: a live window; both read its border configuration.
-    let (border_height, border_width) = (win_border_height(wp), win_border_width(wp));
-    let float_stl = if wp.w_floating && wp.w_status_height != 0 {
+    let (border_height, border_width) = (win_border_height(window), win_border_width(window));
+    let float_stl = if window.w_floating && window.w_status_height != 0 {
         STATUS_HEIGHT as c_int
     } else {
         0
     };
-    wp.w_height_outer = wp.w_view_height + border_height + wp.w_winbar_height + float_stl;
-    wp.w_width_outer = wp.w_view_width + border_width;
-    wp.w_winrow_off = wp.w_border_adj[0] + wp.w_winbar_height;
-    wp.w_wincol_off = wp.w_border_adj[3];
+    window.w_height_outer =
+        window.w_view_height + border_height + window.w_winbar_height + float_stl;
+    window.w_width_outer = window.w_view_width + border_width;
+    window.w_winrow_off = window.w_border_adj[0] + window.w_winbar_height;
+    window.w_wincol_off = window.w_border_adj[3];
     if ui_has(kUIMultigrid) {
         {
             ui_call_win_viewport_margins(
-                wp.w_grid_alloc.handle as Integer,
-                wp.handle as WindowHandle,
-                wp.w_winrow_off as Integer,
-                wp.w_border_adj[2] as Integer,
-                wp.w_wincol_off as Integer,
-                wp.w_border_adj[1] as Integer,
+                window.w_grid_alloc.handle as Integer,
+                window.handle as WindowHandle,
+                window.w_winrow_off as Integer,
+                window.w_border_adj[2] as Integer,
+                window.w_wincol_off as Integer,
+                window.w_border_adj[1] as Integer,
             );
         }
     }
-    wp.w_redr_status = true;
+    window.w_redr_status = true;
 }
 
 pub unsafe fn win_new_width(window: *mut Window, width: c_int) {
@@ -436,12 +438,12 @@ pub unsafe fn win_new_width(window: *mut Window, width: c_int) {
     new_win_width(unsafe { Win::new(window) }, width);
 }
 
-/// Give window `wp` width `width`.
+/// Give window `window` width `width`.
 pub(crate) fn new_win_width(window: Win, width: c_int) {
-    let mut wp = window;
-    wp.w_width = width.max(0);
-    wp.w_pos_changed = true;
-    set_inner_size(wp, true);
+    let mut window = window;
+    window.w_width = width.max(0);
+    window.w_pos_changed = true;
+    set_inner_size(window, true);
 }
 
 pub unsafe fn win_default_scroll(window: *mut Window) -> OptInt {
@@ -463,11 +465,11 @@ pub unsafe fn win_comp_scroll(window: *mut Window) {
 /// Recompute `'scroll'` after a resize, marking it as set by the layout rather
 /// than by the user.
 pub(crate) fn comp_scroll(window: Win) {
-    let mut wp = window;
-    let old = wp.w_onebuf_opt.wo_scr;
-    wp.w_onebuf_opt.wo_scr = default_scroll(wp);
-    if wp.w_onebuf_opt.wo_scr != old {
-        let ctx = &mut wp.w_onebuf_opt.wo_script_ctx[kWinOptScroll as usize];
+    let mut window = window;
+    let old = window.w_onebuf_opt.wo_scr;
+    window.w_onebuf_opt.wo_scr = default_scroll(window);
+    if window.w_onebuf_opt.wo_scr != old {
+        let ctx = &mut window.w_onebuf_opt.wo_script_ctx[kWinOptScroll as usize];
         ctx.sc_sid = SID_WINLAYOUT as ScriptId;
         ctx.sc_lnum = 0 as LineNr;
     }
@@ -566,26 +568,26 @@ pub unsafe fn win_remove_status_line(window: *mut Window, add_hsep: bool) {
     remove_status_line(unsafe { Win::new(window) }, add_hsep);
 }
 
-/// Take `wp`'s status line away, giving its row either to a horizontal
+/// Take `window`'s status line away, giving its row either to a horizontal
 /// separator or back to the window's text.
 pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
-    let mut wp = window;
-    wp.w_status_height = 0;
+    let mut window = window;
+    window.w_status_height = 0;
     if add_hsep {
-        wp.w_hsep_height = 1;
+        window.w_hsep_height = 1;
     } else {
-        let text = if wp.w_floating {
-            wp.w_view_height
+        let text = if window.w_floating {
+            window.w_view_height
         } else {
-            wp.w_height
+            window.w_height
         };
-        new_win_height(wp, text + STATUS_HEIGHT as c_int);
+        new_win_height(window, text + STATUS_HEIGHT as c_int);
     }
     // SAFETY: recomputes the column the message area starts in.
     unsafe { comp_col() };
-    free_click_defs(wp.w_status_click_defs, wp.w_status_click_defs_size);
-    wp.w_status_click_defs_size = 0 as size_t;
-    wp.w_status_click_defs = ptr::null_mut::<StlClickDefinition>();
+    free_click_defs(window.w_status_click_defs, window.w_status_click_defs_size);
+    window.w_status_click_defs_size = 0 as size_t;
+    window.w_status_click_defs = ptr::null_mut::<StlClickDefinition>();
 }
 
 /// The nearest frame at or above `fr` that has a row to spare, from
@@ -677,31 +679,31 @@ pub unsafe fn set_winbar_win(window: *mut Window, make_room: bool, valid_cursor:
     winbar_win(unsafe { Win::new(window) }, make_room, valid_cursor)
 }
 
-/// Give `wp` the window bar `'winbar'` asks for, or take it away.
+/// Give `window` the window bar `'winbar'` asks for, or take it away.
 fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
-    let mut wp = window;
+    let mut window = window;
     // SAFETY: both are NUL-terminated option strings.
-    let (global, local) = unsafe { (*p_wbr.get() as c_int, *wp.w_onebuf_opt.wo_wbr as c_int) };
-    let winbar_height = if wp.w_floating {
+    let (global, local) = unsafe { (*p_wbr.get() as c_int, *window.w_onebuf_opt.wo_wbr as c_int) };
+    let winbar_height = if window.w_floating {
         (local != NUL) as c_int
     } else {
         (global != NUL || local != NUL) as c_int
     };
-    if wp.w_winbar_height != winbar_height {
-        if winbar_height == 1 && wp.w_view_height <= 1 {
-            if wp.w_floating {
+    if window.w_winbar_height != winbar_height {
+        if winbar_height == 1 && window.w_view_height <= 1 {
+            if window.w_floating {
                 err(e_noroom.as_ptr());
                 return NOTDONE;
-            } else if !make_room || !resize_frame_for_winbar(wp.frame()) {
+            } else if !make_room || !resize_frame_for_winbar(window.frame()) {
                 return FAIL;
             }
         }
-        wp.w_winbar_height = winbar_height;
-        set_inner_size(wp, valid_cursor);
+        window.w_winbar_height = winbar_height;
+        set_inner_size(window, valid_cursor);
         if winbar_height == 0 {
-            free_click_defs(wp.w_winbar_click_defs, wp.w_winbar_click_defs_size);
-            wp.w_winbar_click_defs_size = 0 as size_t;
-            wp.w_winbar_click_defs = ptr::null_mut::<StlClickDefinition>();
+            free_click_defs(window.w_winbar_click_defs, window.w_winbar_click_defs_size);
+            window.w_winbar_click_defs_size = 0 as size_t;
+            window.w_winbar_click_defs = ptr::null_mut::<StlClickDefinition>();
         }
     }
     OK

@@ -47,11 +47,11 @@ use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) unsafe fn ex_colorscheme(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if byte(eap.arg) != NUL {
-        if unsafe { load_colors(eap.arg) }.is_err() {
+    let args = unsafe { Ea::new(args) };
+    if byte(args.arg) != NUL {
+        if unsafe { load_colors(args.arg) }.is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(eap.arg) };
+            let arg = unsafe { c_str(args.arg) };
             semsg!("E185: Cannot find color scheme '{arg}'");
         }
         return;
@@ -75,11 +75,11 @@ pub(crate) unsafe fn ex_colorscheme(args: *mut ExArg) {
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) unsafe fn ex_highlight(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if byte(eap.arg) == NUL && byte_at(eap.cmd, 2) == '!' as c_int {
+    let args = unsafe { Ea::new(args) };
+    if byte(args.arg) == NUL && byte_at(args.cmd, 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
-    unsafe { do_highlight(eap.arg, eap.forceit != 0, false) };
+    unsafe { do_highlight(args.arg, args.forceit != 0, false) };
 }
 
 /// `:redir` — send message output to a file, a register or a variable
@@ -88,9 +88,9 @@ pub(crate) unsafe fn ex_highlight(args: *mut ExArg) {
 /// Only one destination at a time: every form closes whatever was open
 /// first.
 pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let mut arg = eap.arg;
-    if unsafe { strcasecmp(eap.arg, c"END".as_ptr() as *mut c_char) } == 0 {
+    let args = unsafe { Ea::new(args) };
+    let mut arg = args.arg;
+    if unsafe { strcasecmp(args.arg, c"END".as_ptr() as *mut c_char) } == 0 {
         close_redir();
     } else if byte(arg) == '>' as c_int {
         // `:redir > file` truncates, `:redir >> file` appends.
@@ -107,7 +107,7 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
         if fname.is_null() {
             return;
         }
-        redir_fd.set(unsafe { open_exfile(fname, eap.forceit, mode) });
+        redir_fd.set(unsafe { open_exfile(fname, args.forceit, mode) });
         xfree(fname as *mut c_void);
     } else if byte(arg) == '@' as c_int {
         close_redir();
@@ -132,7 +132,7 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
         if byte(arg) != NUL {
             redir_reg.set(0);
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(eap.arg) };
+            let arg = unsafe { c_str(args.arg) };
             semsg!("E475: Invalid argument: {arg}");
         }
     } else if byte(arg) == '=' as c_int && byte_at(arg, 1) == '>' as c_int {
@@ -147,7 +147,7 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
         }
     } else {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(eap.arg) };
+        let arg = unsafe { c_str(args.arg) };
         semsg!("E475: Invalid argument: {arg}");
     }
     // Whichever form succeeded, output is being captured again.
@@ -159,14 +159,14 @@ pub(crate) unsafe fn ex_redir(args: *mut ExArg) {
 /// `:redraw` — draw now, with 'lazyredraw' and the redraw suppression
 /// counter out of the way.
 pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdpreview.get() {
         return;
     }
     let lazyredraw_off = suspend_lazyredraw();
     validate_cursor(cur_win());
     update_topline(cur_win());
-    if eap.forceit != 0 {
+    if args.forceit != 0 {
         redraw_all_later(UPD_NOT_VALID);
         redraw_cmdline.set(true);
     } else if visual_active() {
@@ -187,11 +187,11 @@ pub(crate) unsafe fn ex_redraw(args: *mut ExArg) {
 /// `:redrawstatus` — the status lines only, unless a full redraw is
 /// needed to show them.
 pub(crate) unsafe fn ex_redrawstatus(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
+    let args = unsafe { Ea::new(args) };
     if cmdpreview.get() {
         return;
     }
-    if eap.forceit != 0 {
+    if args.forceit != 0 {
         unsafe { status_redraw_all() };
     } else {
         unsafe { status_redraw_curbuf() };
@@ -255,11 +255,11 @@ pub(crate) fn close_redir() {
 
 /// `:digraphs` — define digraphs, or list them.
 pub(crate) unsafe fn ex_digraphs(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if byte(eap.arg) != NUL {
-        putdigraph(unsafe { core::ffi::CStr::from_ptr(eap.arg) }.to_bytes());
+    let args = unsafe { Ea::new(args) };
+    if byte(args.arg) != NUL {
+        putdigraph(unsafe { core::ffi::CStr::from_ptr(args.arg) }.to_bytes());
     } else {
-        listdigraphs(eap.forceit != 0);
+        listdigraphs(args.forceit != 0);
     }
 }
 

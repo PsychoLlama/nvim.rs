@@ -62,7 +62,7 @@ const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 /// # Safety
 /// `args` must be a builtin's own argument vector.
 #[inline(always)]
-unsafe fn args<'a>(args: *mut TypVal) -> &'a mut [TypVal] {
+unsafe fn arg_slice<'a>(args: *mut TypVal) -> &'a mut [TypVal] {
     unsafe { slice::from_raw_parts_mut(args, 2) }
 }
 
@@ -93,20 +93,20 @@ unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe fn f_rpcstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise about `rettv`.
-    let rettv = unsafe { &mut *result };
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+    // SAFETY: the caller's promise about `result`.
+    let result = unsafe { &mut *result };
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
 
     // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
         return;
     }
 
-    // SAFETY: the caller's promise about `argvars`.
-    let argv = unsafe { args(argvars) };
+    // SAFETY: the caller's promise about `args`.
+    let argv = unsafe { arg_slice(args) };
     if argv[0].v_type != VAR_STRING || (argv[1].v_type != VAR_LIST && argv[1].v_type != VAR_UNKNOWN)
     {
         // Wrong argument types.
@@ -175,7 +175,7 @@ pub unsafe fn f_rpcstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
             0,
             0,
             core::ptr::null_mut(),
-            &raw mut rettv.vval.v_number,
+            &raw mut result.vval.v_number,
         )
     };
     if !chan.is_null() {
@@ -188,7 +188,7 @@ pub unsafe fn f_rpcstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As the module doc; arity 1.
-pub unsafe fn f_rpcstop(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn f_rpcstop(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: the caller's promise about `result`.
     let ret = unsafe { &mut *result };
     ret.v_type = VAR_NUMBER;
@@ -199,8 +199,8 @@ pub unsafe fn f_rpcstop(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFun
         return;
     }
 
-    // SAFETY: the caller's promise about `argvars`.
-    let argv = unsafe { args(argvars) };
+    // SAFETY: the caller's promise about `args`.
+    let argv = unsafe { arg_slice(args) };
     if argv[0].v_type != VAR_NUMBER {
         // Wrong argument types.
         emsg_static(e_invarg);
@@ -213,7 +213,7 @@ pub unsafe fn f_rpcstop(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFun
     // SAFETY: `find_job` only looks the id up.
     if !unsafe { find_job(id, false) }.is_null() {
         // SAFETY: the arguments are this call's own.
-        unsafe { f_jobstop(argvars, result, fptr) };
+        unsafe { f_jobstop(args, result, fptr) };
     } else {
         let mut error: *const c_char = core::ptr::null();
         // SAFETY: `error` is written whenever the close fails.
@@ -246,14 +246,14 @@ pub unsafe fn f_last_buffer_nr(_args: *mut TypVal, result: *mut TypVal, _fptr: E
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe fn f_termopen(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn f_termopen(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
         return;
     }
 
-    // SAFETY: the caller's promise about `argvars`.
-    let argv = unsafe { args(argvars) };
+    // SAFETY: the caller's promise about `args`.
+    let argv = unsafe { arg_slice(args) };
     // With no options at all, borrow a dictionary for the one flag this adds
     // and free it again on the way out.
     let must_free = argv[1].v_type == VAR_UNKNOWN;
@@ -275,7 +275,7 @@ pub unsafe fn f_termopen(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFu
     // SAFETY: as above -- `dict` is that dictionary.
     let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
     // SAFETY: as above -- the whole argument vector goes to `jobstart()`.
-    unsafe { f_jobstart(argvars, result, fptr) };
+    unsafe { f_jobstart(args, result, fptr) };
     if must_free {
         // SAFETY: the dictionary was borrowed for this call only.
         unsafe { tv_dict_free(dict) };

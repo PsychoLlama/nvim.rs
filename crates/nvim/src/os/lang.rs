@@ -204,7 +204,7 @@ pub unsafe fn ex_language(args: *mut ExArg) {
         None => (LC_ALL, c"", arg),
     };
 
-    // SAFETY: `name` points into `eap->arg`, so reading its first byte is in
+    // SAFETY: `name` points into `args.arg`, so reading its first byte is in
     // bounds.
     if unsafe { *name } == 0 {
         report(what, whatstr);

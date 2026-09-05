@@ -497,7 +497,7 @@ pub(crate) unsafe fn ex_mkrc(args: *mut ExArg) {
 
     // ":mkview" or ":mkview 9": the name comes from 'viewdir'.
     let mut view_file = ptr::null_mut::<c_char>();
-    // SAFETY: caller contract; `eap.arg` is NUL-terminated.
+    // SAFETY: caller contract; `args.arg` is NUL-terminated.
     let fname = unsafe {
         let arg = (*args).arg;
         if cmdidx == CmdIdx::mkview

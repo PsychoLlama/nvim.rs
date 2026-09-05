@@ -336,15 +336,15 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
 pub unsafe fn ex_cd(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    let new_dir = eap.arg;
+    let args = unsafe { Ea::new(args) };
+    let new_dir = args.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
     if byte(new_dir) == NUL && p_cdh.get() == 0 {
         unsafe { ex_pwd(ptr::null_mut()) };
         return;
     }
-    let idx = eap.cmdidx;
+    let idx = args.cmdidx;
     let scope = if idx == CmdIdx::tcd || idx == CmdIdx::tchdir {
         kCdScopeTabpage
     } else if idx == CmdIdx::lcd || idx == CmdIdx::lchdir {
@@ -355,7 +355,7 @@ pub unsafe fn ex_cd(args: *mut ExArg) {
     if unsafe { changedir_func(new_dir, scope) }
         && (KeyTyped.get() || p_verbose.get() >= 5 as OptInt)
     {
-        unsafe { ex_pwd(eap.raw()) };
+        unsafe { ex_pwd(args.raw()) };
     }
 }
 

@@ -389,7 +389,7 @@ pub(crate) unsafe fn fix_cursor(win: *mut Window, lo: LineNr, hi: LineNr, extra:
 }
 
 unsafe fn fix_pos_col(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     pos: *mut Pos,
     start_row: LineNr,
     start_col: ColNr,
@@ -429,7 +429,7 @@ unsafe fn fix_pos_col(
     let new_end_row: LineNr = start_row + new_rows - 1 as LineNr;
     if pos.lnum > new_end_row {
         pos.lnum = new_end_row;
-        let len: ColNr = unsafe { ml_get_buf_len(buf, new_end_row) };
+        let len: ColNr = unsafe { ml_get_buf_len(buffer, new_end_row) };
         if pos.col < len {
             pos.col = len;
         }

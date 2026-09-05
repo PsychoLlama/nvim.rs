@@ -214,7 +214,7 @@ pub unsafe fn ex_profile(args: *mut ExArg) {
     /// Time at which `:profile pause` stopped the clock.
     static PAUSE_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 
-    // SAFETY: `eap.arg` is the command's NUL-terminated argument, so both
+    // SAFETY: `args.arg` is the command's NUL-terminated argument, so both
     // walkers stay inside it and the two views borrow from it for the length
     // of this call.
     let (subcmd, full, e) = unsafe {

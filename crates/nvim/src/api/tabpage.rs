@@ -32,7 +32,7 @@ use ::libc::abort;
 use core::ffi::CStr;
 use core::ptr;
 
-/// The windows of `tp`, oldest first.
+/// The windows of `tabpage`, oldest first.
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
@@ -113,7 +113,7 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Re
     ().reported(err)
 }
 
-/// The window `tp` is showing.
+/// The window `tabpage` is showing.
 pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Error> {
     let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
@@ -163,7 +163,7 @@ pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result
     ().reported(err)
 }
 
-/// `tp`'s 1-based position in the tab line.
+/// `tabpage`'s 1-based position in the tab line.
 pub fn nvim_tabpage_get_number(tabpage: TabpageHandle) -> Result<Integer, Error> {
     let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {

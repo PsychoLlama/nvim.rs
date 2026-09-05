@@ -228,7 +228,7 @@ unsafe fn spell_load_cb(
 /// autocommand can open a new buffer with `'spell'` set.
 static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
-/// Parse `'spelllang'` and fill `wp->w_s->b_langp`.
+/// Parse `'spelllang'` and fill `window.w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
 pub unsafe fn parse_spelllang(window: *mut Window) -> Option<&'static CStr> {

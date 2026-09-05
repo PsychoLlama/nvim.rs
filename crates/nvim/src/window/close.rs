@@ -94,24 +94,24 @@ pub unsafe fn win_init_empty(window: *mut Window) {
     init_empty(unsafe { Win::new(window) });
 }
 
-/// Point `wp` at the top of an empty buffer.
+/// Point `window` at the top of an empty buffer.
 pub(crate) fn init_empty(window: Win) {
-    let mut wp = window;
-    wp.redraw_later(UPD_NOT_VALID);
-    wp.w_lines_valid = 0;
-    wp.w_cursor.lnum = 1;
-    wp.w_cursor.col = 0;
-    wp.w_curswant = wp.w_cursor.col;
-    wp.w_cursor.coladd = 0 as ColNr;
-    wp.w_pcmark.lnum = 1; // pcmark not cleared but set to line 1
-    wp.w_pcmark.col = 0;
-    wp.w_prev_pcmark.lnum = 0 as LineNr;
-    wp.w_prev_pcmark.col = 0;
-    wp.w_topline = 1;
-    wp.w_topfill = 0;
-    wp.w_botline = 2;
-    wp.w_valid = WinValid::NONE;
-    wp.w_s = &raw mut wp.buffer().b_s;
+    let mut window = window;
+    window.redraw_later(UPD_NOT_VALID);
+    window.w_lines_valid = 0;
+    window.w_cursor.lnum = 1;
+    window.w_cursor.col = 0;
+    window.w_curswant = window.w_cursor.col;
+    window.w_cursor.coladd = 0 as ColNr;
+    window.w_pcmark.lnum = 1; // pcmark not cleared but set to line 1
+    window.w_pcmark.col = 0;
+    window.w_prev_pcmark.lnum = 0 as LineNr;
+    window.w_prev_pcmark.col = 0;
+    window.w_topline = 1;
+    window.w_topfill = 0;
+    window.w_botline = 2;
+    window.w_valid = WinValid::NONE;
+    window.w_s = &raw mut window.buffer().b_s;
 }
 
 /// Init the current window. Called when a new file is being edited.

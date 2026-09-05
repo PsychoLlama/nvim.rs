@@ -625,7 +625,7 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 /// Count this line for `:profile`, if profiling is on and the line is one
 /// that will really run.
 ///
-/// The `skip` this recomputes is not `eap->skip`: a `:catch` that is about
+/// The `skip` this recomputes is not `args.skip`: a `:catch` that is about
 /// to be entered, an `:else` whose branch is about to be taken and a
 /// `:finally` all execute even though the surrounding construct is
 /// inactive, and each is worth a profile sample.
@@ -781,9 +781,9 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 /// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
 pub unsafe fn ex_ni(args: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(args) };
-    if eap.skip == 0 {
-        eap.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
+    let mut args = unsafe { Ea::new(args) };
+    if args.skip == 0 {
+        args.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
     }
 }
 
@@ -791,12 +791,12 @@ pub unsafe fn ex_ni(args: *mut ExArg) {
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
 pub(crate) unsafe fn ex_script_ni(args: *mut ExArg) {
-    let eap = unsafe { Ea::new(args) };
-    if eap.skip == 0 {
-        unsafe { ex_ni(eap.raw()) };
+    let args = unsafe { Ea::new(args) };
+    if args.skip == 0 {
+        unsafe { ex_ni(args.raw()) };
     } else {
         let mut len: size_t = 0;
-        unsafe { xfree(script_get(eap.raw(), &raw mut len) as *mut c_void) };
+        unsafe { xfree(script_get(args.raw(), &raw mut len) as *mut c_void) };
     }
 }
 

@@ -294,10 +294,10 @@ pub enum SignCountHalf {
 }
 
 /// Re-counts the signs on rows `row1..=row2` and folds the difference into
-/// `buf->b_signcols`, the histogram `'signcolumn'`'s `auto:N` reads.
+/// `buffer.b_signcols`, the histogram `'signcolumn'`'s `auto:N` reads.
 ///
 /// # Safety
-/// `buf` must point to a live buffer.
+/// `buffer` must point to a live buffer.
 pub unsafe fn buf_signcols_count_range(
     buffer: *mut Buffer,
     row1: c_int,
@@ -306,8 +306,8 @@ pub unsafe fn buf_signcols_count_range(
     half: SignCountHalf,
 ) {
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buffer) };
-    buf_signcols_count(buf, row1, row2, add, half);
+    let buffer = unsafe { Buf::new(buffer) };
+    buf_signcols_count(buffer, row1, row2, add, half);
 }
 
 /// [`buf_signcols_count_range`] for a buffer already promised live.

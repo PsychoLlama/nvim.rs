@@ -376,22 +376,24 @@ pub unsafe fn ui_ext_win_viewport(window: *mut Window) {
     ext_win_viewport(unsafe { Win::new(window) });
 }
 
-/// Tell the UI which part of its buffer `wp` shows, and how far the text
+/// Tell the UI which part of its buffer `window` shows, and how far the text
 /// scrolled since the last time it was told.
 fn ext_win_viewport(window: Win) {
-    let mut wp = window;
-    if !((wp.is_current() || ui_has(kUIMultigrid)) && wp.w_viewport_invalid && wp.w_redr_type == 0)
+    let mut window = window;
+    if !((window.is_current() || ui_has(kUIMultigrid))
+        && window.w_viewport_invalid
+        && window.w_redr_type == 0)
     {
         return;
     }
-    let line_count = wp.buffer().line_count();
-    let cur_topline = wp.w_topline.min(line_count);
-    let cur_botline = wp.w_botline.min(line_count);
+    let line_count = window.buffer().line_count();
+    let cur_topline = window.w_topline.min(line_count);
+    let cur_botline = window.w_botline.min(line_count);
     let mut delta = 0 as int64_t;
-    let mut last_topline = wp.w_viewport_last_topline;
-    let mut last_botline = wp.w_viewport_last_botline;
-    let mut last_topfill = wp.w_viewport_last_topfill as c_int;
-    let mut last_skipcol = wp.w_viewport_last_skipcol as int64_t;
+    let mut last_topline = window.w_viewport_last_topline;
+    let mut last_botline = window.w_viewport_last_botline;
+    let mut last_topfill = window.w_viewport_last_topfill as c_int;
+    let mut last_skipcol = window.w_viewport_last_skipcol as int64_t;
     // Lines were removed below the last known top line.
     if last_topline > line_count {
         delta -= (last_topline - line_count) as int64_t;
@@ -402,7 +404,7 @@ fn ext_win_viewport(window: Win) {
     last_botline = last_botline.min(line_count);
 
     if cur_topline < last_topline
-        || (cur_topline == last_topline && (wp.w_skipcol as int64_t) < last_skipcol)
+        || (cur_topline == last_topline && (window.w_skipcol as int64_t) < last_skipcol)
     {
         // Scrolled up: measure the text between the two positions.
         let mut vcole = last_skipcol;
@@ -413,51 +415,51 @@ fn ext_win_viewport(window: Win) {
             vcole = 0;
         }
         delta -= text_height(
-            wp,
+            window,
             cur_topline,
-            wp.w_skipcol as int64_t,
+            window.w_skipcol as int64_t,
             &mut lnume,
             &mut vcole,
         );
     } else if cur_topline > last_topline
-        || (cur_topline == last_topline && wp.w_skipcol as int64_t > last_skipcol)
+        || (cur_topline == last_topline && window.w_skipcol as int64_t > last_skipcol)
     {
         // Scrolled down.
-        let mut vcole = wp.w_skipcol as int64_t;
+        let mut vcole = window.w_skipcol as int64_t;
         let mut lnume = cur_topline;
         if last_botline > 0 && cur_topline > last_botline {
             delta += (cur_topline - last_botline) as int64_t;
             lnume = last_botline;
             vcole = 0;
         }
-        delta += text_height(wp, last_topline, last_skipcol, &mut lnume, &mut vcole);
+        delta += text_height(window, last_topline, last_skipcol, &mut lnume, &mut vcole);
     }
     delta += last_topfill as int64_t;
-    delta -= wp.w_topfill as int64_t;
+    delta -= window.w_topfill as int64_t;
 
     // `w_botline` is one past the last line, except when the last line is not
     // fully visible.
-    let mut ev_botline = wp.w_botline;
-    if ev_botline == line_count + 1 && wp.w_empty_rows == 0 {
+    let mut ev_botline = window.w_botline;
+    if ev_botline == line_count + 1 && window.w_empty_rows == 0 {
         ev_botline = line_count;
     }
     {
         ui_call_win_viewport(
-            wp.w_grid_alloc.handle as Integer,
-            wp.handle as WindowHandle,
-            (wp.w_topline - 1) as Integer,
+            window.w_grid_alloc.handle as Integer,
+            window.handle as WindowHandle,
+            (window.w_topline - 1) as Integer,
             ev_botline as Integer,
-            (wp.w_cursor.lnum - 1) as Integer,
-            wp.w_cursor.col as Integer,
+            (window.w_cursor.lnum - 1) as Integer,
+            window.w_cursor.col as Integer,
             line_count as Integer,
             delta as Integer,
         );
     }
-    wp.w_viewport_invalid = false;
-    wp.w_viewport_last_topline = wp.w_topline;
-    wp.w_viewport_last_botline = wp.w_botline;
-    wp.w_viewport_last_topfill = wp.w_topfill as LineNr;
-    wp.w_viewport_last_skipcol = wp.w_skipcol as LineNr;
+    window.w_viewport_invalid = false;
+    window.w_viewport_last_topline = window.w_topline;
+    window.w_viewport_last_botline = window.w_botline;
+    window.w_viewport_last_topfill = window.w_topfill as LineNr;
+    window.w_viewport_last_skipcol = window.w_skipcol as LineNr;
 }
 
 /// The screen lines between two buffer positions, `win_text_height()` with its

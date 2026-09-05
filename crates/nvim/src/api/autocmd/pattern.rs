@@ -58,7 +58,7 @@ pub(crate) unsafe fn unpack_string_or_array(
 pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     pattern: Object,
     has_buf: bool,
-    buf: BufferHandle,
+    buffer: BufferHandle,
     fallback: *mut ::core::ffi::c_char,
     arena: *mut Arena,
     err: &mut Error,
@@ -144,7 +144,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             };
         }
     } else if has_buf {
-        let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, err) };
+        let b: *mut Buffer = unsafe { find_buffer_by_handle(buffer, err) };
         if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Array {
                 size: 0 as size_t,

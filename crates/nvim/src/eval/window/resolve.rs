@@ -100,13 +100,13 @@ pub unsafe fn find_win_by_nr(vp: *mut TypVal, tabpage: Option<TabPage>) -> Optio
         return Some(cur_win());
     }
     // SAFETY: `curtab` is set from startup to exit.
-    let tp = tabpage.unwrap_or_else(cur_tab);
+    let tabpage = tabpage.unwrap_or_else(cur_tab);
     if nr >= LOWEST_WIN_ID {
-        return windows_in_tab(tp).find(|wp| wp.handle == nr);
+        return windows_in_tab(tabpage).find(|wp| wp.handle == nr);
     }
     // Window numbers count from one, and this counting does *not* skip the
     // windows `winnr()` has no number for.
-    windows_in_tab(tp).nth(usize::try_from(nr).ok()?.checked_sub(1)?)
+    windows_in_tab(tabpage).nth(usize::try_from(nr).ok()?.checked_sub(1)?)
 }
 
 /// The window `vp` names: a window id in any tab page, or a window number in

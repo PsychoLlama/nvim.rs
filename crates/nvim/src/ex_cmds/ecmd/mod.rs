@@ -236,7 +236,7 @@ pub unsafe fn do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: *mut Window,
@@ -264,10 +264,10 @@ pub unsafe fn do_ecmd(
     // only inside this call.
     let so = ScrollOff::of(cur_win(), ScrollMargin::Lines);
     // SAFETY: `eap` is live when non-NULL.
-    let command = if eap.is_null() {
+    let command = if args.is_null() {
         ptr::null_mut()
     } else {
-        unsafe { (*eap).do_ecmd_cmd }
+        unsafe { (*args).do_ecmd_cmd }
     };
 
     let mut old_curbuf = BufRef::of_opt(current_buf());
@@ -282,11 +282,11 @@ pub unsafe fn do_ecmd(
                 Target::Nothing => break 'theend,
                 Target::Editing(other) => other,
             };
-        let args = EcmdArgs {
+        let ecmd = EcmdArgs {
             fnum,
             ffname,
             sfname,
-            eap,
+            eap: args,
             flags,
             command,
         };
@@ -321,7 +321,7 @@ pub unsafe fn do_ecmd(
         if flags.has(EcmdFlags::FORCEIT) {
             ccgd |= CCGD_FORCEIT as c_int;
         }
-        if !eap.is_null() {
+        if !args.is_null() {
             ccgd |= CCGD_EXCMD as c_int;
         }
         // SAFETY: as above.
@@ -353,7 +353,7 @@ pub unsafe fn do_ecmd(
         // Otherwise we re-use the current buffer.
         if other_file {
             // SAFETY: everything in the stage is the caller's or the editor's.
-            match unsafe { switch_to_other_buffer(&args, &mut oldwin, &mut old_curbuf, &mut state) }
+            match unsafe { switch_to_other_buffer(&ecmd, &mut oldwin, &mut old_curbuf, &mut state) }
             {
                 Switch::Abandon => break 'theend,
                 Switch::Ready => {}
@@ -424,7 +424,7 @@ pub unsafe fn do_ecmd(
 
         if !state.auto_buf {
             // SAFETY: the editor's own state; `eap` is the caller's.
-            unsafe { enter_new_buffer(&args, &mut old_curbuf, &mut state, &mut retval) };
+            unsafe { enter_new_buffer(&ecmd, &mut old_curbuf, &mut state, &mut retval) };
         }
 
         // Tell the diff stuff that this buffer is new and/or needs updating.

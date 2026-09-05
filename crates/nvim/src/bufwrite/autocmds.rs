@@ -163,7 +163,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     unsafe { aucmd_restbuf(&raw mut aco) };
 
     // The buffer is gone if the autocommands deleted or unloaded it.
-    let buf = if bufref.valid() {
+    let buffer = if bufref.valid() {
         buffer
     } else {
         core::ptr::null_mut()
@@ -172,15 +172,15 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     // In three situations the file is not written here: the buffer is
     // gone, script processing was aborted, or one of the "Cmd"
     // autocommands already did it.
-    if buf.is_null()
-        || (unsafe { (*buf).b_ml.ml_mfp }.is_null() && !empty_memline)
+    if buffer.is_null()
+        || (unsafe { (*buffer).b_ml.ml_mfp }.is_null() && !empty_memline)
         || did_cmd
         || nofile_err
         || aborting()
     {
-        if !buf.is_null() && cmdmod_has(CmdModFlags::LOCKMARKS) {
-            unsafe { (*buf).b_op_start = orig.start };
-            unsafe { (*buf).b_op_end = orig.end };
+        if !buffer.is_null() && cmdmod_has(CmdModFlags::LOCKMARKS) {
+            unsafe { (*buffer).b_op_start = orig.start };
+            unsafe { (*buffer).b_op_end = orig.end };
         }
         no_wait_return.set(no_wait_return.get() - 1);
         msg_scroll.set(msg_save);
@@ -196,22 +196,22 @@ pub(crate) unsafe fn buf_write_do_autocmds(
             return PreWrite::Finished(Err(Failed));
         }
         if did_cmd {
-            if buf.is_null() {
+            if buffer.is_null() {
                 // The buffer was deleted. Assume it was written; there is
                 // no retrying anyway.
                 return PreWrite::Finished(Ok(()));
             }
             if mode.overwriting {
                 // Assume the buffer was written; update the timestamp.
-                unsafe { ml_timestamp(buf) };
+                unsafe { ml_timestamp(buffer) };
                 if mode.req.append {
-                    unsafe { (*buf).b_flags.clear(BufFlags::NEW) };
+                    unsafe { (*buffer).b_flags.clear(BufFlags::NEW) };
                 } else {
-                    unsafe { (*buf).b_flags.clear(BufFlags::WRITE_MASK) };
+                    unsafe { (*buffer).b_flags.clear(BufFlags::WRITE_MASK) };
                 }
             }
             if mode.req.reset_changed
-                && unsafe { (*buf).b_changed } != 0
+                && unsafe { (*buffer).b_changed } != 0
                 && !mode.req.append
                 && (mode.overwriting || cpo_has(CpoFlag::PLUS))
             {
@@ -232,13 +232,13 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     // When writing the whole file, adjust the end. When writing part of
     // it, assume they only changed the number of lines to be written
     // (tricky!).
-    if unsafe { (*buf).b_ml.ml_line_count } != old_line_count {
+    if unsafe { (*buffer).b_ml.ml_line_count } != old_line_count {
         if mode.whole {
-            *end = unsafe { (*buf).b_ml.ml_line_count };
-        } else if unsafe { (*buf).b_ml.ml_line_count } > old_line_count {
-            *end += unsafe { (*buf).b_ml.ml_line_count } - old_line_count;
+            *end = unsafe { (*buffer).b_ml.ml_line_count };
+        } else if unsafe { (*buffer).b_ml.ml_line_count } > old_line_count {
+            *end += unsafe { (*buffer).b_ml.ml_line_count } - old_line_count;
         } else {
-            *end -= old_line_count - unsafe { (*buf).b_ml.ml_line_count };
+            *end -= old_line_count - unsafe { (*buffer).b_ml.ml_line_count };
             if *end < start {
                 no_wait_return.set(no_wait_return.get() - 1);
                 msg_scroll.set(msg_save);
@@ -252,16 +252,16 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     // The autocommands may have renamed the buffer; the names that came
     // from it have to be re-read.
     if buf_ffname {
-        names.ffname = unsafe { (*buf).b_ffname };
+        names.ffname = unsafe { (*buffer).b_ffname };
     }
     if buf_sfname {
-        names.sfname = unsafe { (*buf).b_sfname };
+        names.sfname = unsafe { (*buffer).b_sfname };
     }
     if buf_fname_f {
-        names.fname = unsafe { (*buf).b_ffname };
+        names.fname = unsafe { (*buffer).b_ffname };
     }
     if buf_fname_s {
-        names.fname = unsafe { (*buf).b_sfname };
+        names.fname = unsafe { (*buffer).b_sfname };
     }
     PreWrite::Proceed
 }

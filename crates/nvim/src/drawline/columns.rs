@@ -135,14 +135,15 @@ impl WinLineVars {
 /// Whether the `CursorLineSign`/`CursorLineFold` highlights apply to `lnum`.
 ///
 /// # Safety
-/// `wp` must be a live window.
+/// `window` must be a live window.
 pub unsafe fn use_cursor_line_highlight(window: *mut Window, lnum: LineNr) -> bool {
     // SAFETY: the caller's live window.
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
-    wp.w_onebuf_opt.wo_cul != 0
-        && lnum == wp.w_cursorline
-        && wp.w_p_culopt_flags as ::core::ffi::c_int & kOptCuloptFlagNumber as ::core::ffi::c_int
+    window.w_onebuf_opt.wo_cul != 0
+        && lnum == window.w_cursorline
+        && window.w_p_culopt_flags as ::core::ffi::c_int
+            & kOptCuloptFlagNumber as ::core::ffi::c_int
             != 0
 }
 
@@ -242,7 +243,7 @@ unsafe fn fold_column_cells(
 /// Fill a caller's arrays with the fold column, for `'statuscolumn'`'s `%C`.
 ///
 /// # Safety
-/// `wp` must be live, `fdc` may not exceed [`MAX_FOLDCOLUMN`], and both arrays
+/// `window` must be live, `fdc` may not exceed [`MAX_FOLDCOLUMN`], and both arrays
 /// must have `fdc` entries.
 pub unsafe fn fill_foldcolumn(
     window: *mut Window,
@@ -254,8 +255,8 @@ pub unsafe fn fill_foldcolumn(
     out_buffer: *mut ScreenChar,
 ) {
     // SAFETY: the caller's window and arrays.
-    let wp = unsafe { Win::new(window) };
-    let cells = unsafe { fold_column_cells(wp, foldinfo, lnum, fdc, is_virt) };
+    let window = unsafe { Win::new(window) };
+    let cells = unsafe { fold_column_cells(window, foldinfo, lnum, fdc, is_virt) };
     for (i, &(symbol, vcol)) in cells.iter().enumerate().take(fdc as usize) {
         unsafe { *out_vcol.add(i) = vcol };
         unsafe { *out_buffer.add(i) = symbol };

@@ -45,10 +45,10 @@ pub unsafe fn extmark_set(
 ) {
     // SAFETY: the caller's promise -- a live buffer, and an `idp` that is
     // NULL or points at a mark id.
-    let mut buf = unsafe { Buf::new(buffer) };
+    let mut buffer = unsafe { Buf::new(buffer) };
     // Registers the namespace at 0 if it had none, which `extmark_clear`
     // reads as "this buffer has marks in it".
-    ns_counter(buf.extmark_ns(), ns_id);
+    ns_counter(buffer.extmark_ns(), ns_id);
     let mut id = if idp.is_null() {
         0
     } else {
@@ -59,31 +59,31 @@ pub unsafe fn extmark_set(
     let flags = mt_flags(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
     let mut revised = false;
     if id == 0 {
-        id = ns_counter(buf.extmark_ns(), ns_id) + 1;
-        ns_set_counter(buf.extmark_ns(), ns_id, id);
+        id = ns_counter(buffer.extmark_ns(), ns_id) + 1;
+        ns_set_counter(buffer.extmark_ns(), ns_id, id);
     } else {
         let mut itr = MarkTreeIter::default();
-        let old_mark = tree_lookup_ns(buf.marktree(), ns_id, id, false, Some(&mut itr));
+        let old_mark = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut itr));
         if old_mark.id != 0 {
             if mt_paired(old_mark) || end_row > -1 {
-                del_id(buf, ns_id, id);
+                del_id(buffer, ns_id, id);
             } else {
                 debug_assert!(!itr.x.is_null(), "marktree_itr_valid(itr)");
                 if old_mark.pos.row == row && old_mark.pos.col == col {
                     // Not paired: the key can be revised where it lies.
                     if !mt_invalid(old_mark) && mt_decor_any(old_mark) {
                         itr_rawkey(&mut itr).flags.clear(MtFlags::EXTERNAL_MASK);
-                        decor_remove(buf, row, row, col, mt_decor(old_mark), true);
+                        decor_remove(buffer, row, row, col, mt_decor(old_mark), true);
                     }
                     itr_rawkey(&mut itr).flags |= flags;
                     itr_rawkey(&mut itr).decor_data = decor.data;
-                    tree_revise_meta(buf.marktree(), &mut itr, old_mark);
+                    tree_revise_meta(buffer.marktree(), &mut itr, old_mark);
                     revised = true;
                 } else {
-                    tree_del_itr(buf.marktree(), &mut itr, false);
+                    tree_del_itr(buffer.marktree(), &mut itr, false);
                     if !mt_invalid(old_mark) {
                         decor_remove(
-                            buf,
+                            buffer,
                             old_mark.pos.row,
                             old_mark.pos.row,
                             old_mark.pos.col,
@@ -94,8 +94,8 @@ pub unsafe fn extmark_set(
                 }
             }
         } else {
-            let highest = ns_counter(buf.extmark_ns(), ns_id).max(id);
-            ns_set_counter(buf.extmark_ns(), ns_id, highest);
+            let highest = ns_counter(buffer.extmark_ns(), ns_id).max(id);
+            ns_set_counter(buffer.extmark_ns(), ns_id, highest);
         }
     }
 
@@ -107,14 +107,14 @@ pub unsafe fn extmark_set(
             flags,
             decor_data: decor.data,
         };
-        tree_put(buf.marktree(), mark, end_row, end_col, end_right_gravity);
-        invalidate_decor_state(buf);
+        tree_put(buffer.marktree(), mark, end_row, end_col, end_right_gravity);
+        invalidate_decor_state(buffer);
     }
 
     if !decor_flags.is_empty() || decor.ext {
         let last_row = if end_row > -1 { end_row } else { row };
-        put_decor(buf, decor, row, last_row);
-        redraw_decor(buf, row, last_row, col, decor);
+        put_decor(buffer, decor, row, last_row);
+        redraw_decor(buffer, row, last_row, col, decor);
     }
 
     if !idp.is_null() {

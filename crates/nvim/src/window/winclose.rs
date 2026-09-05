@@ -381,16 +381,16 @@ fn leave_closing_window(win: Win) -> Leave {
 /// The cursor would land on the preview or quickfix window: walk on round the
 /// window list looking for one it may sit in instead.
 fn away_from_preview(window: Win) -> Win {
-    let mut wp = window;
+    let mut window = window;
     loop {
-        wp = wp.next().unwrap_or_else(first_win);
-        if wp.is_current() {
-            return wp;
+        window = window.next().unwrap_or_else(first_win);
+        if window.is_current() {
+            return window;
         }
-        let hidden = wp.w_floating && (wp.w_config.hide || !wp.w_config.focusable);
-        if wp.w_onebuf_opt.wo_pvw == 0 && !buf_is_quickfix(wp.buffer_or_none()) && !hidden {
-            curwin.set(wp.raw());
-            return wp;
+        let hidden = window.w_floating && (window.w_config.hide || !window.w_config.focusable);
+        if window.w_onebuf_opt.wo_pvw == 0 && !buf_is_quickfix(window.buffer_or_none()) && !hidden {
+            curwin.set(window.raw());
+            return window;
         }
     }
 }

@@ -771,17 +771,17 @@ pub unsafe fn win_scroll_lines(window: *mut Window, row: c_int, line_count: c_in
     if !unsafe { redrawing() } || line_count == 0 {
         return;
     }
-    let wp = unsafe { Win::new(window) };
+    let window = unsafe { Win::new(window) };
 
     let mut col = 0;
     let mut row_off = 0;
-    let grid = unsafe { grid_adjust(wp.w_grid, &mut row_off, &mut col) };
+    let grid = unsafe { grid_adjust(window.w_grid, &mut row_off, &mut col) };
 
     // The bounds are the grid's rather than the window's because
     // `curs_columns` reaches here from outside `update_screen`, when the
     // two may disagree.
-    let checked_width = (grid.cols - col).min(wp.w_view_width);
-    let checked_height = (grid.rows - row_off).min(wp.w_view_height);
+    let checked_width = (grid.cols - col).min(window.w_view_width);
+    let checked_height = (grid.rows - row_off).min(window.w_view_height);
 
     // Nothing would be moved; the caller draws over the whole area.
     if row + line_count.abs() >= checked_height {

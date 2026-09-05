@@ -494,9 +494,9 @@ fn fire(event: AutoEvent, buffer: Buf) -> bool {
 /// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
 /// file name for `TabNew`. `None` is the buffer-less form two events take.
 fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buffer: Option<Buf>) -> bool {
-    let buf = buffer.map_or(ptr::null_mut(), Buf::raw);
+    let buffer = buffer.map_or(ptr::null_mut(), Buf::raw);
     // SAFETY: a live buffer or null, and a NUL-terminated name or null.
-    unsafe { apply_autocmds(event, name, name, false, buf) }
+    unsafe { apply_autocmds(event, name, name, false, buffer) }
 }
 
 /// Ring the bell and drop the typeahead, the family's answer to a move that

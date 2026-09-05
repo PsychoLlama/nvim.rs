@@ -60,11 +60,11 @@ pub unsafe fn unuse_tabpage(tabpage: *mut Tabpage) {
 /// Store the layout the globals currently describe in `tabpage`. To be used before
 /// [`adopt_tabpage`].
 pub(crate) fn stash_tabpage(tabpage: TabPage) {
-    let mut tp = tabpage;
-    tp.tp_topframe = topframe.get();
-    tp.tp_firstwin = firstwin.get();
-    tp.tp_lastwin = lastwin.get();
-    tp.tp_curwin = curwin.get();
+    let mut tabpage = tabpage;
+    tabpage.tp_topframe = topframe.get();
+    tabpage.tp_firstwin = firstwin.get();
+    tabpage.tp_lastwin = lastwin.get();
+    tabpage.tp_curwin = curwin.get();
 }
 
 pub unsafe fn use_tabpage(tabpage: *mut Tabpage) {
@@ -641,8 +641,8 @@ pub unsafe fn goto_tabpage_tp(
     trigger_leave_autocmds: bool,
 ) {
     // SAFETY: the caller's promise -- a live tab page.
-    let tp = unsafe { TabPage::new(tabpage) };
-    goto_tab(tp, trigger_enter_autocmds, trigger_leave_autocmds);
+    let tabpage = unsafe { TabPage::new(tabpage) };
+    goto_tab(tabpage, trigger_enter_autocmds, trigger_leave_autocmds);
 }
 
 /// Go to tab page `tabpage`. Note: does not update the GUI tab.
