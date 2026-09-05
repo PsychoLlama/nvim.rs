@@ -59,10 +59,10 @@ enum Place {
 /// `z<n><CR>` sets the window height and is finished here. `z<n>l` and its
 /// three friends multiply the command's own count by this one and hand the
 /// key back to the caller through `nchar_arg`; everything else is an error.
-pub(crate) unsafe fn nv_z_get_count(cap: *mut CmdArg, nchar_arg: *mut c_int) -> bool {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY: `cap` is the caller's live command argument and `nchar_arg`
+pub(crate) unsafe fn nv_z_get_count(cmd_arg: *mut CmdArg, nchar_arg: *mut c_int) -> bool {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY: `cmd_arg` is the caller's live command argument and `nchar_arg`
     // points at the caller's own second character.
     if check_clear_op(ca.op()) {
         return false;
@@ -108,9 +108,9 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut CmdArg, nchar_arg: *mut c_int) -> 
 ///
 /// Answers `Err` when there was no word to act on, which stops `nv_zet`
 /// running its tail.
-pub(crate) unsafe fn nv_zg_zw(cap: *mut CmdArg, mut nchar: c_int) -> Result<(), Failed> {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<(), Failed> {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
     let mut undo = false;
     if nchar == 'u' as c_int {
@@ -129,7 +129,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut CmdArg, mut nchar: c_int) -> Result<(), 
     // misspelling the cursor is inside, and the identifier under it.
     let mut word: *mut c_char = ptr::null_mut();
     let mut len: size_t = 0;
-    if visual_active() && !unsafe { get_visual_text(cap, &raw mut word, &raw mut len) } {
+    if visual_active() && !unsafe { get_visual_text(cmd_arg, &raw mut word, &raw mut len) } {
         return Err(Failed);
     }
     if word.is_null() {
@@ -174,9 +174,9 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut CmdArg, mut nchar: c_int) -> Result<(), 
 }
 
 /// Scroll sideways by `count1` columns, which 'wrap' makes meaningless.
-unsafe fn scroll_sideways(cap: *mut CmdArg, right: bool) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn scroll_sideways(cmd_arg: *mut CmdArg, right: bool) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let win = cur_win();
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
@@ -229,9 +229,9 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
 }
 
 /// The fold half of the `z` tree. Answers whether the key was one of them.
-unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn nv_zet_fold(cmd_arg: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut win = cur_win();
     // Whether the cursor is inside a fold, which is what decides between
     // opening and closing for the toggles.
@@ -242,10 +242,10 @@ unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bo
         Ok(b'F' | b'f') => {
             if unsafe { fold_manual_allowed(true) } != 0 {
                 ca.nchar = 'f' as c_int;
-                unsafe { nv_operator(cap) };
+                unsafe { nv_operator(cmd_arg) };
                 win.w_onebuf_opt.wo_fen = 1;
                 if nchar == 'F' as c_int && ca.op().op_type == OpType::Fold {
-                    unsafe { nv_operator(cap) };
+                    unsafe { nv_operator(cmd_arg) };
                     finish_op.set(true);
                 }
             } else {
@@ -256,7 +256,7 @@ unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bo
         Ok(b'd' | b'D') => {
             if unsafe { fold_manual_allowed(false) } != 0 {
                 if visual_active() {
-                    unsafe { nv_operator(cap) };
+                    unsafe { nv_operator(cmd_arg) };
                 } else {
                     let lnum = win.w_cursor.lnum;
                     let deep = (nchar == 'D' as c_int) as c_int;
@@ -300,14 +300,14 @@ unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bo
         // `zo`/`zO`: open. With a selection they are the operator form.
         Ok(b'o') => {
             if visual_active() {
-                unsafe { nv_operator(cap) };
+                unsafe { nv_operator(cmd_arg) };
             } else {
                 unsafe { open_fold(win.w_cursor, ca.count1) };
             }
         }
         Ok(b'O') => {
             if visual_active() {
-                unsafe { nv_operator(cap) };
+                unsafe { nv_operator(cmd_arg) };
             } else {
                 unsafe { open_fold_recurse(win.w_cursor) };
             }
@@ -316,7 +316,7 @@ unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bo
         // there would be nothing to see otherwise.
         Ok(b'c') => {
             if visual_active() {
-                unsafe { nv_operator(cap) };
+                unsafe { nv_operator(cmd_arg) };
             } else {
                 unsafe { close_fold(win.w_cursor, ca.count1) };
             }
@@ -324,7 +324,7 @@ unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bo
         }
         Ok(b'C') => {
             if visual_active() {
-                unsafe { nv_operator(cap) };
+                unsafe { nv_operator(cmd_arg) };
             } else {
                 unsafe { close_fold_recurse(win.w_cursor) };
             }
@@ -387,16 +387,16 @@ unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bo
 
 /// `z`, whose second character says what part of the view or of the folding
 /// it is about.
-pub(crate) unsafe fn nv_zet(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_zet(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut win = cur_win();
     let mut nchar = ca.nchar;
     let mut old_fdl = win.w_onebuf_opt.wo_fdl as c_int;
     let old_fen = win.w_onebuf_opt.wo_fen;
 
     // `z` may take a count of its own between the `z` and the command.
-    if ascii_isdigit(nchar) && !unsafe { nv_z_get_count(cap, &raw mut nchar) } {
+    if ascii_isdigit(nchar) && !unsafe { nv_z_get_count(cmd_arg, &raw mut nchar) } {
         return;
     }
     // The commands that are operators or motions of their own answer for
@@ -428,11 +428,11 @@ pub(crate) unsafe fn nv_zet(cap: *mut CmdArg) {
         // The three keys that are not bytes.
         Ok(Key::Kenter) => Some((Place::Top, true)),
         Ok(Key::Left) => {
-            unsafe { scroll_sideways(cap, false) };
+            unsafe { scroll_sideways(cmd_arg, false) };
             None
         }
         Ok(Key::Right) => {
-            unsafe { scroll_sideways(cap, true) };
+            unsafe { scroll_sideways(cmd_arg, true) };
             None
         }
         _ => match u8::try_from(nchar) {
@@ -469,20 +469,20 @@ pub(crate) unsafe fn nv_zet(cap: *mut CmdArg) {
             // `set_leftcol` clamps whatever comes out.
             Ok(b'H') => {
                 ca.count1 = ca.count1.wrapping_mul(win.w_view_width / 2);
-                unsafe { scroll_sideways(cap, false) };
+                unsafe { scroll_sideways(cmd_arg, false) };
                 None
             }
             Ok(b'h') => {
-                unsafe { scroll_sideways(cap, false) };
+                unsafe { scroll_sideways(cmd_arg, false) };
                 None
             }
             Ok(b'L') => {
                 ca.count1 = ca.count1.wrapping_mul(win.w_view_width / 2);
-                unsafe { scroll_sideways(cap, true) };
+                unsafe { scroll_sideways(cmd_arg, true) };
                 None
             }
             Ok(b'l') => {
-                unsafe { scroll_sideways(cap, true) };
+                unsafe { scroll_sideways(cmd_arg, true) };
                 None
             }
             Ok(b's') => {
@@ -496,17 +496,17 @@ pub(crate) unsafe fn nv_zet(cap: *mut CmdArg) {
             // `zp`/`zP`: put a blockwise register without widening the
             // lines it lands on.
             Ok(b'P' | b'p') => {
-                unsafe { nv_put(cap) };
+                unsafe { nv_put(cmd_arg) };
                 None
             }
             // `zy`: yank without a trailing newline.
             Ok(b'y') => {
-                unsafe { nv_operator(cap) };
+                unsafe { nv_operator(cmd_arg) };
                 None
             }
             // `zg`/`zG`/`zw`/`zW`/`zu…`: the spellfile.
             Ok(b'u' | b'g' | b'w' | b'G' | b'W') => {
-                if unsafe { nv_zg_zw(cap, nchar) }.is_err() {
+                if unsafe { nv_zg_zw(cmd_arg, nchar) }.is_err() {
                     return;
                 }
                 None
@@ -519,7 +519,7 @@ pub(crate) unsafe fn nv_zet(cap: *mut CmdArg) {
                 None
             }
             _ => {
-                if !unsafe { nv_zet_fold(cap, nchar, &mut old_fdl) } {
+                if !unsafe { nv_zet_fold(cmd_arg, nchar, &mut old_fdl) } {
                     clear_op_beep(ca.op());
                 }
                 None

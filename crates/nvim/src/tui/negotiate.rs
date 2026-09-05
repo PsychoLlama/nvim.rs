@@ -312,13 +312,13 @@ const DEL_STR: [c_char; 2] = [DEL, 0];
 const CTRL_H_STR: [c_char; 2] = [CTRL_H, 0];
 
 /// Log a capability libtermkey asked for.
-fn log_termkey(cap: &str, value: *const c_char) {
+fn log_termkey(capability: &str, value: *const c_char) {
     // SAFETY: libtermkey's own NUL-terminated capability string.
     let value = unsafe { c_str(value) };
     logmsg!(
         LOGLVL_DBG,
         c"tui_tk_ti_getstr",
         0,
-        "libtermkey:{cap}={value}"
+        "libtermkey:{capability}={value}"
     );
 }

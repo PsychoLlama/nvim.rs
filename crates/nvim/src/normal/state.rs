@@ -128,10 +128,10 @@ pub(crate) struct CmdArgRef(*mut CmdArg);
 
 impl CmdArgRef {
     /// # Safety
-    /// `cap` must stay a live command argument for as long as the value is
+    /// `cmd_arg` must stay a live command argument for as long as the value is
     /// used.
-    pub(crate) const unsafe fn new(cap: *mut CmdArg) -> Self {
-        Self(cap)
+    pub(crate) const unsafe fn new(cmd_arg: *mut CmdArg) -> Self {
+        Self(cmd_arg)
     }
     /// The operator this command is pending on.
     pub(crate) fn op(self) -> Op {
@@ -613,9 +613,9 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 ///
 /// An operator's count and the motion's multiply; a zero count reports as 1
 /// in `v:count1` and as itself in `v:count`.
-pub(crate) unsafe fn set_vcount_ca(cap: *mut CmdArg, set_prevcount: &mut bool) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn set_vcount_ca(cmd_arg: *mut CmdArg, set_prevcount: &mut bool) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut count = ca.count0 as int64_t;
     if ca.opcount != 0 {
         count = ca.opcount as int64_t * if count == 0 { 1 } else { count };

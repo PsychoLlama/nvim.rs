@@ -340,14 +340,14 @@ pub(crate) fn to_bytes(text: &str) -> Vec<u8> {
 /// The formatted message as the C string the message layer takes, truncated
 /// where the C wrapper's scratch buffer truncated it.
 ///
-/// `cap` is that buffer's size, terminator included. An interior NUL from an
+/// `capacity` is that buffer's size, terminator included. An interior NUL from an
 /// argument ends the message there, as it did in the C caller.
-pub(crate) fn to_message(text: String, cap: usize) -> CString {
+pub(crate) fn to_message(text: String, capacity: usize) -> CString {
     let mut bytes = to_bytes(&text);
     if let Some(nul) = bytes.iter().position(|&b| b == 0) {
         bytes.truncate(nul);
     }
-    bytes.truncate(cap - 1);
+    bytes.truncate(capacity - 1);
     CString::new(bytes).unwrap_or_default()
 }
 

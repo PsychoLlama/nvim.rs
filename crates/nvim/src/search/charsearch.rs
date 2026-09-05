@@ -1,6 +1,6 @@
 //! The character search: `f`, `t`, `F`, `T` and their `;`/`,` repeats.
 //!
-//! One line, one character, `cap->count1` times. The five statics are
+//! One line, one character, `cmd_arg.count1` times. The five statics are
 //! what `;` and `,` replay; `set_last_csearch` and friends exist so that
 //! `getcharsearch()`/`setcharsearch()` can read and write them.
 
@@ -72,19 +72,19 @@ pub fn set_csearch_until(t_cmd: c_int) {
     last_t_cmd.set(t_cmd != 0);
 }
 
-/// Search for a character in the current line, `cap->count1` times.
+/// Search for a character in the current line, `cmd_arg.count1` times.
 ///
 /// With `t_cmd` the cursor lands just before the character rather than on
-/// it. A NUL `cap->nchar` repeats the last character search instead of
+/// it. A NUL `cmd_arg.nchar` repeats the last character search instead of
 /// starting a new one — that is `;` and `,`.
 ///
 /// # Safety
-/// `cap` and `cap->oap` must be valid.
-pub unsafe fn searchc(cap: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
-    let mut c = unsafe { (*cap).nchar }; // char to search for
-    let mut dir = unsafe { (*cap).arg }; // true for searching forward
+/// `cmd_arg` and `cmd_arg.oap` must be valid.
+pub unsafe fn searchc(cmd_arg: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
+    let mut c = unsafe { (*cmd_arg).nchar }; // char to search for
+    let mut dir = unsafe { (*cmd_arg).arg }; // true for searching forward
     let mut t_cmd = t_cmd;
-    let mut count = unsafe { (*cap).count1 }; // repeat count
+    let mut count = unsafe { (*cmd_arg).count1 }; // repeat count
     let mut stop = true;
 
     if c != NUL {
@@ -95,13 +95,17 @@ pub unsafe fn searchc(cap: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
             set_csearch_direction(dir as Direction);
             set_csearch_until(c_int::from(t_cmd));
             let mut bytes = lastc_bytes.get();
-            if unsafe { (*cap).nchar_len } != 0 {
-                lastc_bytelen.set(unsafe { (*cap).nchar_len });
+            if unsafe { (*cmd_arg).nchar_len } != 0 {
+                lastc_bytelen.set(unsafe { (*cmd_arg).nchar_len });
                 // SAFETY: `nchar_composing` holds `nchar_len` bytes, and
                 // `bytes` is a `MB_MAXBYTES`-sized array of this frame.
                 unsafe {
-                    let from = (&raw const (*cap).nchar_composing).cast::<c_char>();
-                    ptr::copy_nonoverlapping(from, bytes.as_mut_ptr(), (*cap).nchar_len as usize)
+                    let from = (&raw const (*cmd_arg).nchar_composing).cast::<c_char>();
+                    ptr::copy_nonoverlapping(
+                        from,
+                        bytes.as_mut_ptr(),
+                        (*cmd_arg).nchar_len as usize,
+                    )
                 };
             } else {
                 lastc_bytelen.set(unsafe { utf_char2bytes(c, bytes.as_mut_ptr()) });
@@ -130,7 +134,7 @@ pub unsafe fn searchc(cap: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
         }
     }
 
-    unsafe { (*(*cap).oap).inclusive = dir != BACKWARD as c_int };
+    unsafe { (*(*cmd_arg).oap).inclusive = dir != BACKWARD as c_int };
 
     let line = get_cursor_line_ptr();
     let len = get_cursor_line_len();

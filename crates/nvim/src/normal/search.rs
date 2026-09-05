@@ -53,16 +53,16 @@ fn current_match_is_distinct() -> bool {
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.
-pub(crate) unsafe fn nv_search(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_search(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     let op = ca.op();
     let save_cursor = cur_win().w_cursor;
     // `g?` is rot13; `?` after it is the operator, not a search.
     if ca.cmdchar == '?' as c_int && op.op_type == OpType::Rot13 {
         ca.cmdchar = 'g' as c_int;
         ca.nchar = '?' as c_int;
-        unsafe { nv_operator(cap) };
+        unsafe { nv_operator(cmd_arg) };
         return;
     }
     ca.searchbuf = unsafe { getcmdline(ca.cmdchar, ca.count1, 0, true) };
@@ -81,24 +81,24 @@ pub(crate) unsafe fn nv_search(cap: *mut CmdArg) {
     let (pat, none) = (ca.searchbuf, ptr::null_mut());
     // SAFETY: `pat` is the NUL-terminated pattern just read.
     let len = unsafe { cstr::bytes_at(pat) }.len();
-    unsafe { normal_search(cap, ca.cmdchar, pat, len, mark, none) };
+    unsafe { normal_search(cmd_arg, ca.cmdchar, pat, len, mark, none) };
 }
 
 /// `n` and `N`: search again for the last pattern.
-pub(crate) unsafe fn nv_next(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_next(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     let old = cur_win().w_cursor;
     let mut wrapped: c_int = 0;
     let (none, opt) = (ptr::null_mut(), SEARCH_MARK as c_int | ca.arg);
-    let i = unsafe { normal_search(cap, 0, none, 0, opt, &raw mut wrapped) };
+    let i = unsafe { normal_search(cmd_arg, 0, none, 0, opt, &raw mut wrapped) };
     // A match that lands where the cursor already is, without having
     // wrapped, is the one we are standing on: search once more so `n`
     // always moves.
     if i == 1 && wrapped == 0 && equalpos(old, cur_win().w_cursor) {
         ca.count1 += 1;
         let again = SEARCH_MARK as c_int | ca.arg;
-        unsafe { normal_search(cap, 0, none, 0, again, ptr::null_mut()) };
+        unsafe { normal_search(cmd_arg, 0, none, 0, again, ptr::null_mut()) };
         ca.count1 -= 1;
     }
     if i > 0 && current_match_is_distinct() {
@@ -111,16 +111,16 @@ pub(crate) unsafe fn nv_next(cap: *mut CmdArg) {
 /// Answers `do_search`'s result: 0 for no match, 1 for a match, 2 for a match
 /// the offset made linewise.
 pub(crate) unsafe fn normal_search(
-    cap: *mut CmdArg,
+    cmd_arg: *mut CmdArg,
     dir: c_int,
     pat: *mut c_char,
     patlen: size_t,
     opt: c_int,
     wrapped: *mut c_int,
 ) -> c_int {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY: `cap` is the caller's live command argument, `pat` is null or a
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY: `cmd_arg` is the caller's live command argument, `pat` is null or a
     // pattern `patlen` bytes long, and `wrapped` is null or an out-parameter.
     let mut sia: SearchItArg = unsafe { core::mem::zeroed() };
     let prev_cursor = cur_win().w_cursor;
@@ -162,9 +162,9 @@ pub(crate) unsafe fn normal_search(
 }
 
 /// `m`: set a mark.
-pub(crate) unsafe fn nv_mark(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_mark(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -175,13 +175,13 @@ pub(crate) unsafe fn nv_mark(cap: *mut CmdArg) {
 
 /// Jump to a mark, and describe the jump to the operator that may be pending.
 pub(crate) unsafe fn nv_mark_move_to(
-    cap: *mut CmdArg,
+    cmd_arg: *mut CmdArg,
     flags: MarkMove,
     fm: *mut FileMark,
 ) -> MarkMoveRes {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY: `cap` is the caller's live command argument and `fm` is null or
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY: `cmd_arg` is the caller's live command argument and `fm` is null or
     // a mark `mark_move_to` may read.
     let res = unsafe { mark_move_to(fm, flags) };
     if res & kMarkMoveFailed as MarkMoveRes != 0 {
@@ -216,9 +216,9 @@ fn view_flag() -> MarkMove {
 ///
 /// `old_KeyTyped` rather than the current value: the jump itself may have
 /// consumed the "typed" flag.
-unsafe fn may_open_fold(cap: *mut CmdArg, moved: bool, old_key_typed: bool) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn may_open_fold(cmd_arg: *mut CmdArg, moved: bool, old_key_typed: bool) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.op().op_type == OpType::Nop
         && moved
         && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
@@ -229,9 +229,9 @@ unsafe fn may_open_fold(cap: *mut CmdArg, moved: bool, old_key_typed: bool) {
 }
 
 /// `'` and `` ` ``, and their `g` forms.
-pub(crate) unsafe fn nv_gomark(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     // A mark used as an operator's motion must not restore the view.
     let mut flags = if ca.op().op_type != OpType::Nop {
         0
@@ -259,21 +259,21 @@ pub(crate) unsafe fn nv_gomark(cap: *mut CmdArg) {
     // The record the lookup answers into; it outlives the jump below.
     let mut slot = FileMark::UNSET;
     let fm = unsafe { mark_get(curbuf.get(), curwin.get(), &raw mut slot, kMarkAll, name) };
-    let move_res = unsafe { nv_mark_move_to(cap, flags, fm) };
+    let move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
     if !virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = 0;
     }
     let moved = move_res & kMarkMoveSuccess as MarkMoveRes != 0
         && (move_res & kMarkSwitchedBuf as MarkMoveRes != 0
             || move_res & kMarkChangedCursor as MarkMoveRes != 0);
-    unsafe { may_open_fold(cap, moved, old_key_typed) };
+    unsafe { may_open_fold(cmd_arg, moved, old_key_typed) };
 }
 
 /// `CTRL-O`, `CTRL-I` and `g;`/`g,`: step along the jump list or the change
 /// list.
-pub(crate) unsafe fn nv_pcmark(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut flags = view_flag();
     let mut move_res: MarkMoveRes = 0;
     let old_key_typed = KeyTyped.get();
@@ -296,7 +296,7 @@ pub(crate) unsafe fn nv_pcmark(cap: *mut CmdArg) {
     };
 
     if !fm.is_null() {
-        move_res = unsafe { nv_mark_move_to(cap, flags, fm) };
+        move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
     } else if ca.cmdchar == 'g' as c_int {
         // Three different reasons the change list had nothing.
         if cur_buf().b_changelistlen == 0 {
@@ -312,7 +312,7 @@ pub(crate) unsafe fn nv_pcmark(cap: *mut CmdArg) {
 
     let moved = move_res & kMarkSwitchedBuf as MarkMoveRes != 0
         || move_res & kMarkChangedLine as MarkMoveRes != 0;
-    unsafe { may_open_fold(cap, moved, old_key_typed) };
+    unsafe { may_open_fold(cmd_arg, moved, old_key_typed) };
 }
 
 /// The buffer the editor is working in.

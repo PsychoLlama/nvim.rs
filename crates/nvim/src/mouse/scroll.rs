@@ -84,7 +84,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
 ///
 /// Default action is to scroll `'mousescroll'` lines (or columns, depending on
 /// the scroll direction) or one page when Shift or Ctrl is used.  Direction is
-/// indicated by `cap->arg`: `K_MOUSEUP` is `MSCR_UP`, `K_MOUSEDOWN` is
+/// indicated by `cmd_arg->arg`: `K_MOUSEUP` is `MSCR_UP`, `K_MOUSEDOWN` is
 /// `MSCR_DOWN`, `K_MOUSELEFT` is `MSCR_LEFT` and `K_MOUSERIGHT` is
 /// `MSCR_RIGHT`.
 ///
@@ -92,13 +92,13 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
 /// differ from the window that actually has focus.
 ///
 /// # Safety
-/// `cap` must be a live command argument.
-pub(crate) unsafe fn do_mousescroll(cap: *mut CmdArg) {
+/// `cmd_arg` must be a live command argument.
+pub(crate) unsafe fn do_mousescroll(cmd_arg: *mut CmdArg) {
     let shift_or_ctrl = mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL);
     // SAFETY: `curwin` is live from startup to exit.
     let win = unsafe { Win::current() };
     // SAFETY: the caller's promise.
-    let arg = unsafe { (*cap).arg };
+    let arg = unsafe { (*cmd_arg).arg };
 
     if arg == MSCR_UP || arg == MSCR_DOWN {
         // Vertical scrolling.
@@ -117,10 +117,10 @@ pub(crate) unsafe fn do_mousescroll(cap: *mut CmdArg) {
         // The count is written even when it is zero, as the C is.
         // SAFETY: the caller's promise, and `nv_scroll_line` reads the counts
         // just written.
-        unsafe { (*cap).count1 = count };
+        unsafe { (*cmd_arg).count1 = count };
         if count > 0 {
-            unsafe { (*cap).count0 = count };
-            unsafe { nv_scroll_line(cap) };
+            unsafe { (*cmd_arg).count0 = count };
+            unsafe { nv_scroll_line(cmd_arg) };
         }
         return;
     }
@@ -140,12 +140,12 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     // SAFETY: `CmdArg` and `OpArg` are C aggregates of scalars and
     // pointers, which is what the C's `CLEAR_FIELD` zeroes; `clear_oparg`
     // then initialises the operator properly.
-    let (mut cap, mut oa): (CmdArg, OpArg) = unsafe { core::mem::zeroed() };
+    let (mut cmd_arg, mut oa): (CmdArg, OpArg) = unsafe { core::mem::zeroed() };
     // SAFETY: a live local operator.
     unsafe { clear_oparg(&raw mut oa) };
-    cap.oap = &raw mut oa;
-    cap.arg = dir;
-    cap.cmdchar = match dir {
+    cmd_arg.oap = &raw mut oa;
+    cmd_arg.arg = dir;
+    cmd_arg.cmdchar = match dir {
         MSCR_UP => Key::Mouseup.code(),
         MSCR_DOWN => Key::Mousedown.code(),
         MSCR_LEFT => Key::Mouseleft.code(),
@@ -182,8 +182,8 @@ pub(crate) fn ins_mousescroll(dir: c_int) {
     let orig_cursor = win.w_cursor;
 
     // Call the common mouse scroll function shared with other modes.
-    // SAFETY: `cap` is a live local command argument.
-    unsafe { do_mousescroll(&raw mut cap) };
+    // SAFETY: `cmd_arg` is a live local command argument.
+    unsafe { do_mousescroll(&raw mut cmd_arg) };
 
     // SAFETY: `curwin` may have moved under `do_mousescroll`.
     win = unsafe { Win::current() };

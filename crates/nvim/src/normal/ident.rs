@@ -603,7 +603,7 @@ impl CmdBuf {
 /// in which case `out` has already been freed.
 #[allow(clippy::too_many_arguments)]
 unsafe fn build_keywordprg_cmd(
-    cap: *mut CmdArg,
+    cmd_arg: *mut CmdArg,
     kp: *mut c_char,
     kp_help: bool,
     kp_ex: bool,
@@ -611,8 +611,8 @@ unsafe fn build_keywordprg_cmd(
     mut n: size_t,
     out: &mut CmdBuf,
 ) -> size_t {
-    // SAFETY (throughout): `cap` is live, and nothing below reaches back into it.
-    let count0 = unsafe { (*cap).count0 };
+    // SAFETY (throughout): `cmd_arg` is live, and nothing below reaches back into it.
+    let count0 = unsafe { (*cmd_arg).count0 };
     if kp_help {
         out.set(c"help! ");
         return n;
@@ -752,11 +752,11 @@ unsafe fn append_escaped(
 
 /// `*`, `#`, `K`, `]`, `CTRL-]` and their `g` forms: look up the identifier
 /// under the cursor.
-pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
-    // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let (typed, nchar) = unsafe { ((*cap).cmdchar, (*cap).nchar) };
+pub(crate) unsafe fn nv_ident(cmd_arg: *mut CmdArg) {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let (typed, nchar) = unsafe { ((*cmd_arg).cmdchar, (*cmd_arg).nchar) };
     // The `g` forms carry the real command in `nchar`.
     let g_cmd = typed == 'g' as c_int;
     let mut cmdchar = if g_cmd { nchar } else { typed };
@@ -770,8 +770,8 @@ pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
     // under the cursor.
     let mut visual_sel = false;
     if cmdchar == ']' as c_int || cmdchar == Ctrl_RSB || cmdchar == 'K' as c_int {
-        // SAFETY: `cap` is live and `word`/`n` are this frame's own.
-        if visual_active() && !unsafe { get_visual_text(cap, &raw mut word, &raw mut n) } {
+        // SAFETY: `cmd_arg` is live and `word`/`n` are this frame's own.
+        if visual_active() && !unsafe { get_visual_text(cmd_arg, &raw mut word, &raw mut n) } {
             return;
         }
         visual_sel = !word.is_null();
@@ -840,7 +840,9 @@ pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
         }
         Ok(b'K') => {
             // SAFETY: all of these are live, and `word` is this frame's own.
-            n = unsafe { build_keywordprg_cmd(cap, kp, kp_help, kp_ex, &mut word, n, &mut out) };
+            n = unsafe {
+                build_keywordprg_cmd(cmd_arg, kp, kp_help, kp_ex, &mut word, n, &mut out)
+            };
             if n == 0 {
                 return;
             }
@@ -852,7 +854,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
         // CTRL-] and everything else: a plain tag jump.
         _ => {
             tag_cmd = true;
-            let count0 = unsafe { (*cap).count0 };
+            let count0 = unsafe { (*cmd_arg).count0 };
             let cmd: &CStr = if cur_buf().b_help {
                 c"help! "
             } else if g_cmd {
@@ -912,7 +914,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
         let dir = if star { '/' as c_int } else { '?' as c_int };
         let cmd = out.as_ptr();
         let used = out.used();
-        unsafe { normal_search(cap, dir, cmd, used, 0, ptr::null_mut()) };
+        unsafe { normal_search(cmd_arg, dir, cmd, used, 0, ptr::null_mut()) };
     } else {
         // `taglist()` and friends need to know the tag came from under
         // the cursor rather than from a command line.
@@ -932,31 +934,31 @@ pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
 }
 
 /// `CTRL-T`: back up the tag stack.
-pub(crate) unsafe fn nv_tagpop(cap: *mut CmdArg) {
-    // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY (throughout): `cap` is the caller's live command argument.
+pub(crate) unsafe fn nv_tagpop(cmd_arg: *mut CmdArg) {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     if check_clear_op_quit(ca.op()) {
         return;
     }
     let none = c"".as_ptr() as *mut c_char;
-    // SAFETY: `cap` is live and `none` is an empty NUL-terminated literal.
-    unsafe { do_tag(none, DT_POP as c_int, (*cap).count1, 0, true) };
+    // SAFETY: `cmd_arg` is live and `none` is an empty NUL-terminated literal.
+    unsafe { do_tag(none, DT_POP as c_int, (*cmd_arg).count1, 0, true) };
 }
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.
-pub(crate) unsafe fn nv_gotofile(cap: *mut CmdArg) {
-    // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY (throughout): `cap` is the caller's live command argument, and
+pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument, and
     // the current window and buffer are live.
-    if unsafe { check_text_or_curbuf_locked((*cap).oap) } || !check_can_set_curbuf_disabled() {
+    if unsafe { check_text_or_curbuf_locked((*cmd_arg).oap) } || !check_can_set_curbuf_disabled() {
         return;
     }
     // `gF` also takes a line number off the end of the name.
     let mut lnum: LineNr = -1;
     // SAFETY: `lnum` is this frame's own out-parameter.
-    let name = unsafe { grab_file_name((*cap).count1, &raw mut lnum) };
+    let name = unsafe { grab_file_name((*cmd_arg).count1, &raw mut lnum) };
     if name.is_null() {
         clear_op(ca.op());
         return;
@@ -975,7 +977,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut CmdArg) {
     let win = curwin.get();
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
-    if opened.is_ok() && unsafe { (*cap).nchar } == 'F' as c_int && lnum >= 0 {
+    if opened.is_ok() && unsafe { (*cmd_arg).nchar } == 'F' as c_int && lnum >= 0 {
         cur_win().w_cursor.lnum = lnum;
         check_cursor_lnum(unsafe { Win::current() });
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);

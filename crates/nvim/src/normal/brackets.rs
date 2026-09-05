@@ -32,9 +32,9 @@ use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
-unsafe fn direction(cap: *mut CmdArg) -> c_int {
-    // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn direction(cmd_arg: *mut CmdArg) -> c_int {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.cmdchar == ']' as c_int {
         FORWARD as c_int
     } else {
@@ -44,9 +44,9 @@ unsafe fn direction(cap: *mut CmdArg) -> c_int {
 
 /// The same choice spelled in `findmatchlimit`'s own flags, which are not the
 /// `Direction` constants.
-unsafe fn match_direction(cap: *mut CmdArg) -> c_int {
-    // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn match_direction(cmd_arg: *mut CmdArg) -> c_int {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.cmdchar == '[' as c_int {
         FM_BACKWARD as c_int
     } else {
@@ -62,10 +62,10 @@ unsafe fn match_direction(cap: *mut CmdArg) -> c_int {
 /// cursor is inside; the second walks back in from there, counting the braces
 /// the count asked for. `prev_pos` carries the second-outermost block between
 /// the two, which is what makes `2[m` mean "the method one level out".
-unsafe fn nv_bracket_block(cap: *mut CmdArg, old_pos: *const Pos) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY: `cap` is the caller's live command argument and `old_pos` is the
+unsafe fn nv_bracket_block(cmd_arg: *mut CmdArg, old_pos: *const Pos) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY: `cmd_arg` is the caller's live command argument and `old_pos` is the
     // cursor position its caller saved.
     let mut new_pos = Pos {
         lnum: 0,
@@ -96,7 +96,7 @@ unsafe fn nv_bracket_block(cap: *mut CmdArg, old_pos: *const Pos) {
     let mut n = if method { 9999 } else { ca.count1 };
 
     while n > 0 {
-        pos = unsafe { findmatchlimit(ca.oap, findc, match_direction(cap), 0) };
+        pos = unsafe { findmatchlimit(ca.oap, findc, match_direction(cmd_arg), 0) };
         let Some(found) = pos else {
             if new_pos.lnum == 0 {
                 // Nothing found at all. A method search says so by leaving
@@ -160,7 +160,7 @@ unsafe fn nv_bracket_block(cap: *mut CmdArg, old_pos: *const Pos) {
                 } else {
                     // A brace of the other kind: step over the block it
                     // opens or closes.
-                    pos = unsafe { findmatchlimit(ca.oap, findc, match_direction(cap), 0) };
+                    pos = unsafe { findmatchlimit(ca.oap, findc, match_direction(cmd_arg), 0) };
                     match pos {
                         None => n = 0,
                         Some(found) => cur_win().w_cursor = found,
@@ -181,7 +181,7 @@ unsafe fn nv_bracket_block(cap: *mut CmdArg, old_pos: *const Pos) {
         setpcmark();
         cur_win().w_cursor = pos;
         cur_win().w_set_curswant = true;
-        unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
     }
 }
 
@@ -192,9 +192,9 @@ unsafe fn nv_bracket_block(cap: *mut CmdArg, old_pos: *const Pos) {
 /// jumps to it. `d`-family keys (`d`, `D`, CTRL-D) search for a `#define`
 /// rather than for any occurrence, which is what the low-nibble comparison
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
-unsafe fn nv_bracket_ident(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn nv_bracket_ident(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut found: *mut c_char = ptr::null_mut();
     let len =
         unsafe { find_ident_under_cursor(&raw mut found, FIND_IDENT as c_int, ptr::null_mut()) };
@@ -242,9 +242,9 @@ unsafe fn nv_bracket_ident(cap: *mut CmdArg) {
 
 /// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
 /// mark in this buffer.
-unsafe fn nv_bracket_mark(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn nv_bracket_mark(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
     let mut here = FileMark::UNSET;
@@ -255,7 +255,7 @@ unsafe fn nv_bracket_mark(cap: *mut CmdArg) {
     let mut n = ca.count1;
     while n > 0 {
         prev_fm = fm;
-        fm = unsafe { getnextmark(&raw mut (*fm).mark, direction(cap), linewise as c_int) };
+        fm = unsafe { getnextmark(&raw mut (*fm).mark, direction(cmd_arg), linewise as c_int) };
         if fm.is_null() {
             break;
         }
@@ -269,13 +269,13 @@ unsafe fn nv_bracket_mark(cap: *mut CmdArg) {
     if linewise {
         flags |= kMarkBeginLine as MarkMove;
     }
-    unsafe { nv_mark_move_to(cap, flags, fm) };
+    unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
 }
 
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
-unsafe fn nv_bracket_spell(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn nv_bracket_spell(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     setpcmark();
     let what = match u8::try_from(ca.nchar) {
         Ok(b's') => SMT_ALL as SpellMoveType,
@@ -283,20 +283,28 @@ unsafe fn nv_bracket_spell(cap: *mut CmdArg) {
         _ => SMT_BAD as SpellMoveType,
     };
     for _ in 0..ca.count1 {
-        if unsafe { spell_move_to(curwin.get(), direction(cap), what, false, ptr::null_mut()) } == 0
+        if unsafe {
+            spell_move_to(
+                curwin.get(),
+                direction(cmd_arg),
+                what,
+                false,
+                ptr::null_mut(),
+            )
+        } == 0
         {
             clear_op_beep(ca.op());
             break;
         }
         cur_win().w_set_curswant = true;
     }
-    unsafe { may_fold_open(cap, kOptFdoFlagSearch as c_uint) };
+    unsafe { may_fold_open(cmd_arg, kOptFdoFlagSearch as c_uint) };
 }
 
 /// `[` and `]`, whose second character says what kind of jump this is.
-pub(crate) unsafe fn nv_brackets(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_brackets(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     let old_pos = cur_win().w_cursor;
@@ -309,11 +317,11 @@ pub(crate) unsafe fn nv_brackets(cap: *mut CmdArg) {
     let block_chars: &CStr = if opening { c"{(*/#mM" } else { c"})*/#mM" };
 
     if nchar == 'f' as c_int {
-        unsafe { nv_gotofile(cap) };
+        unsafe { nv_gotofile(cmd_arg) };
     } else if !unsafe { vim_strchr(c"iI\tdD\x04".as_ptr(), nchar) }.is_null() {
-        unsafe { nv_bracket_ident(cap) };
+        unsafe { nv_bracket_ident(cmd_arg) };
     } else if !unsafe { vim_strchr(block_chars.as_ptr(), nchar) }.is_null() {
-        unsafe { nv_bracket_block(cap, &raw const old_pos) };
+        unsafe { nv_bracket_block(cmd_arg, &raw const old_pos) };
     } else if nchar == '[' as c_int || nchar == ']' as c_int {
         // `[[` and `]]` look for a section start, `[]` and `][` for its
         // end.
@@ -332,27 +340,27 @@ pub(crate) unsafe fn nv_brackets(cap: *mut CmdArg) {
             if ca.op().op_type == OpType::Nop {
                 beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
             }
-            unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };
+            unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
         }
     } else if nchar == 'p' as c_int || nchar == 'P' as c_int {
         // The put that reindents to the current line.
-        unsafe { nv_put_opt(cap, true) };
+        unsafe { nv_put_opt(cmd_arg, true) };
     } else if nchar == '\'' as c_int || nchar == '`' as c_int {
-        unsafe { nv_bracket_mark(cap) };
+        unsafe { nv_bracket_mark(cmd_arg) };
     } else if (Key::Rightrelease.code()..=Key::Leftmouse.code()).contains(&nchar) {
         // A mouse click after `[` or `]` pastes at the click, reindenting.
-        let (dir, n) = (unsafe { direction(cap) }, ca.count1);
+        let (dir, n) = (unsafe { direction(cmd_arg) }, ca.count1);
         unsafe { do_mouse(ca.oap, nchar, dir, n, PUT_FIXINDENT as c_int != 0) };
     } else if nchar == 'z' as c_int {
-        if unsafe { fold_move_to(false, direction(cap), ca.count1) } == 0 {
+        if unsafe { fold_move_to(false, direction(cmd_arg), ca.count1) } == 0 {
             clear_op_beep(ca.op());
         }
     } else if nchar == 'c' as c_int {
-        if unsafe { diff_move_to(direction(cap), ca.count1) }.is_err() {
+        if unsafe { diff_move_to(direction(cmd_arg), ca.count1) }.is_err() {
             clear_op_beep(ca.op());
         }
     } else if nchar == 'r' as c_int || nchar == 's' as c_int || nchar == 'S' as c_int {
-        unsafe { nv_bracket_spell(cap) };
+        unsafe { nv_bracket_spell(cmd_arg) };
     } else {
         clear_op_beep(ca.op());
     }

@@ -712,10 +712,10 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
     1
 }
 
-/// Record a command for `.`, taking its second character from `cap`.
-pub(crate) unsafe fn prep_redo_cmd(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+/// Record a command for `.`, taking its second character from `cmd_arg`.
+pub(crate) unsafe fn prep_redo_cmd(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     prep_redo(ca.op().regname, ca.count0, NUL, ca.cmdchar, NUL, NUL, NUL);
     // A character with a combining tail is replayed as its whole encoding.
     if ca.nchar_len > 0 {
@@ -854,19 +854,19 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 /// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
-pub(crate) unsafe fn may_fold_open(cap: *mut CmdArg, fdo_flag: c_uint) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn may_fold_open(cmd_arg: *mut CmdArg, fdo_flag: c_uint) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
         unsafe { fold_open_cursor() };
     }
 }
 
 /// Turn a shifted special key into its unshifted self.
-pub(crate) unsafe fn unshift_special(cap: *mut CmdArg) {
-    // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
-    // SAFETY: `cap` is the caller's live command argument.
+pub(crate) unsafe fn unshift_special(cmd_arg: *mut CmdArg) {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
+    // SAFETY: `cmd_arg` is the caller's live command argument.
     ca.cmdchar = match Key::try_from(ca.cmdchar) {
         Ok(Key::SRight) => Key::Right.code(),
         Ok(Key::SLeft) => Key::Left.code(),

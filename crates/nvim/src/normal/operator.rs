@@ -3,7 +3,7 @@
 //! Several of these are two commands sharing a key: `u` is undo at the top
 //! level but the `gu` operator once one is pending or a selection is up, and
 //! `q` is a recording unless the pending operator is `gq`. The redirection is
-//! always the same shape -- rewrite `cap` as the `g` form and call
+//! always the same shape -- rewrite `cmd_arg` as the `g` form and call
 //! [`nv_operator`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -34,19 +34,19 @@ use crate::winlayer::graph::cmdwin_type;
 use core::ffi::{c_char, c_int};
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.
-unsafe fn as_g_operator(cap: *mut CmdArg, nchar: u8) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn as_g_operator(cmd_arg: *mut CmdArg, nchar: u8) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.cmdchar = 'g' as c_int;
     ca.nchar = nchar as c_int;
-    unsafe { nv_operator(cap) };
+    unsafe { nv_operator(cmd_arg) };
 }
 
 /// Play a register back `count1` times, stopping at the first failure or
 /// interrupt.
-unsafe fn replay(cap: *mut CmdArg, regname: c_int) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+unsafe fn replay(cmd_arg: *mut CmdArg, regname: c_int) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     while ca.count1 != 0 && !got_int.get() {
         ca.count1 -= 1;
         if unsafe { do_execreg(regname, 0, 0, 0) }.is_err() {
@@ -58,19 +58,19 @@ unsafe fn replay(cap: *mut CmdArg, regname: c_int) {
 }
 
 /// `@@`: replay whatever `@` last played.
-pub(crate) unsafe fn nv_regreplay(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_regreplay(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op(ca.op()) {
         return;
     }
-    unsafe { replay(cap, reg_recorded.get()) };
+    unsafe { replay(cmd_arg, reg_recorded.get()) };
 }
 
 /// `@`: replay a named register.
-pub(crate) unsafe fn nv_at(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_at(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -78,25 +78,25 @@ pub(crate) unsafe fn nv_at(cap: *mut CmdArg) {
     if ca.nchar == '=' as c_int && unsafe { get_expr_register() } == NUL {
         return;
     }
-    unsafe { replay(cap, ca.nchar) };
+    unsafe { replay(cmd_arg, ca.nchar) };
 }
 
 /// `u`: undo, or the `gu` operator when one is already pending or a Visual
 /// selection is up.
-pub(crate) unsafe fn nv_undo(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_undo(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.op().op_type == OpType::Lower || visual_active() {
-        unsafe { as_g_operator(cap, b'u') };
+        unsafe { as_g_operator(cmd_arg, b'u') };
     } else {
-        unsafe { nv_kundo(cap) };
+        unsafe { nv_kundo(cmd_arg) };
     }
 }
 
 /// `u` proper.
-pub(crate) unsafe fn nv_kundo(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_kundo(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op_quit(ca.op()) {
         return;
     }
@@ -105,11 +105,11 @@ pub(crate) unsafe fn nv_kundo(cap: *mut CmdArg) {
 }
 
 /// `U`: undo the whole line, or the `gU` operator.
-pub(crate) unsafe fn nv_undo_line(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_undo_line(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.op().op_type == OpType::Upper || visual_active() {
-        unsafe { as_g_operator(cap, b'U') };
+        unsafe { as_g_operator(cmd_arg, b'U') };
         return;
     }
     if check_clear_op_quit(ca.op()) {
@@ -120,9 +120,9 @@ pub(crate) unsafe fn nv_undo_line(cap: *mut CmdArg) {
 }
 
 /// `"`: name the register the next command works on.
-pub(crate) unsafe fn nv_regname(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_regname(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -141,9 +141,9 @@ pub(crate) unsafe fn nv_regname(cap: *mut CmdArg) {
 }
 
 /// `.`: repeat the last change.
-pub(crate) unsafe fn nv_dot(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_dot(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op_quit(ca.op()) {
         return;
     }
@@ -157,9 +157,9 @@ pub(crate) unsafe fn nv_dot(cap: *mut CmdArg) {
 
 /// `CTRL-R`: redo -- or, in Select mode, the register the replacement text
 /// should go to.
-pub(crate) unsafe fn nv_redo_or_register(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_redo_or_register(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if visual_select() && visual_active() {
         // SAFETY: reads one key with mappings suppressed.
         let unmapped = Keys::unmapped();
@@ -177,7 +177,7 @@ pub(crate) unsafe fn nv_redo_or_register(cap: *mut CmdArg) {
         });
         return;
     }
-    // SAFETY: `cap` is the caller's live command argument.
+    // SAFETY: `cmd_arg` is the caller's live command argument.
     if check_clear_op_quit(ca.op()) {
         return;
     }
@@ -187,9 +187,9 @@ pub(crate) unsafe fn nv_redo_or_register(cap: *mut CmdArg) {
 
 /// Start an operator, or apply the pending one to whole lines when it is the
 /// same one again (`dd`, `yy`, `gugu`).
-pub(crate) unsafe fn nv_operator(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_operator(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let op_type = get_op_type(ca.cmdchar, ca.nchar);
     // A prompt buffer only lets its own last line be changed.
     if buf_is_prompt(current_buf()) && op_is_change(op_type) && !unsafe { prompt_curpos_editable() }
@@ -198,7 +198,7 @@ pub(crate) unsafe fn nv_operator(cap: *mut CmdArg) {
         return;
     }
     if op_type == ca.op().op_type {
-        unsafe { nv_lineop(cap) };
+        unsafe { nv_lineop(cmd_arg) };
     } else if !check_clear_op(ca.op()) {
         ca.op().start = cur_win().w_cursor;
         ca.op().op_type = op_type;
@@ -227,9 +227,9 @@ pub(crate) fn set_op_var(optype: OpType) {
 }
 
 /// The linewise form of an operator: `count1` lines from this one.
-pub(crate) unsafe fn nv_lineop(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_lineop(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTLineWise;
     let op = ca.op();
     if unsafe { cursor_down(ca.count1 - 1, op.op_type == OpType::Nop) }.is_err() {
@@ -250,11 +250,11 @@ pub(crate) unsafe fn nv_lineop(cap: *mut CmdArg) {
 
 /// `q`: start or stop a recording -- or open the command-line window, or the
 /// `gq` operator when that is what is pending.
-pub(crate) unsafe fn nv_record(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_record(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.op().op_type == OpType::Format {
-        unsafe { as_g_operator(cap, b'q') };
+        unsafe { as_g_operator(cmd_arg, b'q') };
         return;
     }
     if check_clear_op(ca.op()) {

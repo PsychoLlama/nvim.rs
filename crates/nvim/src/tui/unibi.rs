@@ -72,23 +72,23 @@ pub struct Term {
 
 impl Term {
     /// `unibi_get_bool`: false when absent (or out of range).
-    pub fn get_bool(&self, cap: u32) -> bool {
-        debug_assert!(cap > BOOL_BEGIN && cap < BOOL_END);
-        let i = cap.wrapping_sub(BOOL_BEGIN + 1) as usize;
+    pub fn get_bool(&self, capability: u32) -> bool {
+        debug_assert!(capability > BOOL_BEGIN && capability < BOOL_END);
+        let i = capability.wrapping_sub(BOOL_BEGIN + 1) as usize;
         self.bools.get(i).copied().unwrap_or(false)
     }
 
     /// `unibi_get_num`: -1 when absent.
-    pub fn get_num(&self, cap: u32) -> i32 {
-        debug_assert!(cap > NUM_BEGIN && cap < NUM_END);
-        let i = cap.wrapping_sub(NUM_BEGIN + 1) as usize;
+    pub fn get_num(&self, capability: u32) -> i32 {
+        debug_assert!(capability > NUM_BEGIN && capability < NUM_END);
+        let i = capability.wrapping_sub(NUM_BEGIN + 1) as usize;
         self.nums.get(i).copied().unwrap_or(-2)
     }
 
     /// `unibi_get_str`: `None` when absent.
-    pub fn get_str(&self, cap: u32) -> Option<&CStr> {
-        debug_assert!(cap > STR_BEGIN && cap < STR_END);
-        let i = cap.wrapping_sub(STR_BEGIN + 1) as usize;
+    pub fn get_str(&self, capability: u32) -> Option<&CStr> {
+        debug_assert!(capability > STR_BEGIN && capability < STR_END);
+        let i = capability.wrapping_sub(STR_BEGIN + 1) as usize;
         self.strs.get(i)?.as_deref()
     }
 

@@ -156,9 +156,9 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
 
 /// `CTRL-F` and `CTRL-B`: a page forwards or backwards. With CTRL held they
 /// are a tab page instead.
-pub(crate) unsafe fn nv_page(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_page(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -175,18 +175,18 @@ pub(crate) unsafe fn nv_page(cap: *mut CmdArg) {
 
 /// `CTRL-E` and `CTRL-Y`: scroll one line, leaving the cursor where it is on
 /// the screen for as long as it can.
-pub(crate) unsafe fn nv_scroll_line(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_scroll_line(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op(ca.op()) {
         unsafe { scroll_redraw(ca.arg, ca.count1 as LineNr) };
     }
 }
 
 /// `CTRL-D` and `CTRL-U`: half a page.
-pub(crate) unsafe fn nv_halfpage(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_halfpage(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op(ca.op()) {
         let dir = if ca.cmdchar == Ctrl_D {
             FORWARD as c_int
@@ -199,9 +199,9 @@ pub(crate) unsafe fn nv_halfpage(cap: *mut CmdArg) {
 }
 
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
-pub(crate) unsafe fn nv_exit_command(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_exit_command(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op_quit(ca.op()) {
         return;
     }

@@ -43,27 +43,27 @@ use core::ffi::{c_int, c_uint};
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
-pub(crate) unsafe fn nv_ignore(cap: *mut CmdArg) {
-    // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_ignore(cmd_arg: *mut CmdArg) {
+    // SAFETY: `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.retval |= CA_COMMAND_BUSY as c_int;
 }
 
 /// A key with no effect at all -- unlike [`nv_ignore`], the command still
 /// counts as having run.
-pub(crate) unsafe fn nv_nop(_cap: *mut CmdArg) {}
+pub(crate) unsafe fn nv_nop(_cmd_arg: *mut CmdArg) {}
 
 /// A key that is not a command: beep and drop whatever was pending.
-pub(crate) unsafe fn nv_error(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_error(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     clear_op_beep(ca.op());
 }
 
 /// `<Help>`: open the help window.
-pub(crate) unsafe fn nv_help(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_help(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op_quit(ca.op()) {
         unsafe { ex_help(ptr::null_mut()) };
     }
@@ -71,15 +71,15 @@ pub(crate) unsafe fn nv_help(cap: *mut CmdArg) {
 
 /// `:`, and the two synthetic keys that carry a command or a Lua callback in
 /// from a mapping.
-pub(crate) unsafe fn nv_colon(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_colon(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let is_cmdkey = ca.cmdchar == Key::Command.code();
     let is_lua = ca.cmdchar == Key::Lua.code();
     // A plain `:` during a selection is the `:` *operator*, which puts the
     // selection's range on the command line. The synthetic keys are not.
     if visual_active() && !is_cmdkey && !is_lua {
-        unsafe { nv_operator(cap) };
+        unsafe { nv_operator(cmd_arg) };
         return;
     }
     let mut op = ca.op();
@@ -131,9 +131,9 @@ pub(crate) unsafe fn nv_colon(cap: *mut CmdArg) {
 
 /// `CTRL-G`: report the file's position -- or toggle between Visual and
 /// Select mode when a selection is up.
-pub(crate) unsafe fn nv_ctrlg(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_ctrlg(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if visual_active() {
         set_visual_select(!visual_select());
         unsafe { may_trigger_modechanged() };
@@ -144,22 +144,22 @@ pub(crate) unsafe fn nv_ctrlg(cap: *mut CmdArg) {
 }
 
 /// `CTRL-H`: one character left -- or delete the selection in Select mode.
-pub(crate) unsafe fn nv_ctrlh(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_ctrlh(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if visual_active() && visual_select() {
         ca.cmdchar = 'x' as c_int;
-        unsafe { v_visop(cap) };
+        unsafe { v_visop(cmd_arg) };
     } else {
-        unsafe { nv_left(cap) };
+        unsafe { nv_left(cmd_arg) };
     }
 }
 
 /// `CTRL-L`: throw the screen away and redraw it, and let syntax highlighting
 /// that timed out try again.
-pub(crate) unsafe fn nv_clear(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_clear(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -176,9 +176,9 @@ pub(crate) unsafe fn nv_clear(cap: *mut CmdArg) {
 
 /// `CTRL-O`: jump back in the jump list -- or leave Select mode for one
 /// command.
-pub(crate) unsafe fn nv_ctrlo(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_ctrlo(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if visual_active() && visual_select() {
         set_visual_select(false);
         unsafe { may_trigger_modechanged() };
@@ -189,14 +189,14 @@ pub(crate) unsafe fn nv_ctrlo(cap: *mut CmdArg) {
         // A backwards jump is a negative count to the same handler `CTRL-I`
         // uses forwards.
         ca.count1 = -ca.count1;
-        unsafe { nv_pcmark(cap) };
+        unsafe { nv_pcmark(cmd_arg) };
     }
 }
 
 /// `CTRL-^`: edit the alternate file.
-pub(crate) unsafe fn nv_hat(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_hat(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if !check_clear_op_quit(ca.op()) {
         let flags = GETF_SETMARK as c_int | GETF_ALT as c_int;
         let _ = unsafe { buflist_getfile(ca.count0, 0 as LineNr, flags, 0) };
@@ -205,13 +205,13 @@ pub(crate) unsafe fn nv_hat(cap: *mut CmdArg) {
 
 /// `CTRL-W`: a window command. `CTRL-W :` is `:` with the window prefix
 /// dropped.
-pub(crate) unsafe fn nv_window(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_window(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.nchar == ':' as c_int {
         ca.cmdchar = ':' as c_int;
         ca.nchar = NUL;
-        unsafe { nv_colon(cap) };
+        unsafe { nv_colon(cmd_arg) };
     } else if !check_clear_op(ca.op()) {
         do_window(ca.nchar, ca.count0, NUL);
     }
@@ -219,9 +219,9 @@ pub(crate) unsafe fn nv_window(cap: *mut CmdArg) {
 
 /// `CTRL-Z`: suspend, through `:stop` so that 'autowrite' and the autocommands
 /// happen.
-pub(crate) unsafe fn nv_suspend(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_suspend(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     clear_op(ca.op());
     if visual_active() {
         end_visual_mode();
@@ -231,9 +231,9 @@ pub(crate) unsafe fn nv_suspend(cap: *mut CmdArg) {
 
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean
 /// "back to Normal mode".
-pub(crate) unsafe fn nv_normal(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_normal(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.nchar != Ctrl_N && ca.nchar != Ctrl_G {
         clear_op_beep(ca.op());
         return;
@@ -254,9 +254,9 @@ pub(crate) unsafe fn nv_normal(cap: *mut CmdArg) {
 
 /// `<Esc>` and `CTRL-C`. The table's argument says which: `CTRL-C` is the one
 /// that offers the "how do I quit" hint.
-pub(crate) unsafe fn nv_esc(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_esc(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     // Nothing was pending, so the key had no work to do and is worth a
     // beep or a hint.
     let no_reason =
@@ -297,22 +297,22 @@ pub(crate) unsafe fn nv_esc(cap: *mut CmdArg) {
 }
 
 /// The key the terminal sends to repeat a bracketed paste.
-pub(crate) unsafe fn nv_paste(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_paste(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     unsafe { paste_repeat(ca.count1) };
 }
 
 /// The synthetic key that stands for "the event loop has work": run it, then
 /// tell the command loop whether a mode was waiting to be restarted.
-pub(crate) unsafe fn nv_event(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_event(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     // An event's callback is not a safe point for a collection: it may be
     // holding values the marker cannot see.
     may_garbage_collect.set(false);
     let may_restart = restart_edit.get() != 0 || restart_VIsual_select.get() != 0;
-    // SAFETY: `cap` is the caller's live command argument.
+    // SAFETY: `cmd_arg` is the caller's live command argument.
     unsafe { state_handle_k_event() };
     finish_op.set(false);
     if may_restart {

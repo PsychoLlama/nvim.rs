@@ -64,10 +64,10 @@ struct Cmd(*mut CmdArg);
 
 impl Cmd {
     /// # Safety
-    /// `cap` must stay a live `CmdArg` for as long as the value is used.
+    /// `cmd_arg` must stay a live `CmdArg` for as long as the value is used.
     #[inline(always)]
-    const unsafe fn new(cap: *mut CmdArg) -> Self {
-        Self(cap)
+    const unsafe fn new(cmd_arg: *mut CmdArg) -> Self {
+        Self(cmd_arg)
     }
 }
 
@@ -101,8 +101,8 @@ pub unsafe fn clear_oparg(oap: *mut OpArg) {
 /// Was the operator reached through a command line rather than a key?
 ///
 /// `:` and `<Cmd>` both arrive here as an operator over the Visual area.
-fn is_ex_cmdchar(cap: Cmd) -> bool {
-    cap.cmdchar == ':' as c_int || cap.cmdchar == Key::Command.code()
+fn is_ex_cmdchar(cmd_arg: Cmd) -> bool {
+    cmd_arg.cmdchar == ':' as c_int || cmd_arg.cmdchar == Key::Command.code()
 }
 
 /// Run the operator that a motion (or a Visual selection) has just completed.
@@ -112,14 +112,14 @@ fn is_ex_cmdchar(cap: Cmd) -> bool {
 /// must not clear the selection, redraw, or leave a `.` behind.
 ///
 /// # Safety
-/// `cap` must point to a live `CmdArg` whose `oap` describes a region of the
+/// `cmd_arg` must point to a live `CmdArg` whose `oap` describes a region of the
 /// current buffer.
-pub unsafe fn do_pending_operator(cap: *mut CmdArg, old_col: c_int, gui_yank: bool) {
+pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank: bool) {
     // SAFETY: the caller's promise -- a live `CmdArg` whose `oap` is a live
     // `OpArg`. The two wrappers carry that promise on from here, so every
     // field access below is the compiler's business rather than a note.
-    let cap = unsafe { Cmd::new(cap) };
-    let mut oap = unsafe { Op::new(cap.oap) };
+    let cmd_arg = unsafe { Cmd::new(cmd_arg) };
+    let mut oap = unsafe { Op::new(cmd_arg.oap) };
     let lbr_saved = cur_win().w_onebuf_opt.wo_lbr;
     let old_cursor = cur_win().w_cursor;
 
@@ -136,11 +136,11 @@ pub unsafe fn do_pending_operator(cap: *mut CmdArg, old_col: c_int, gui_yank: bo
     reset_lbr();
     oap.is_VIsual = visual_active();
     apply_motion_force(oap);
-    record_operator_redo(cap, oap, redo_yank);
+    record_operator_redo(cmd_arg, oap, redo_yank);
 
     let mut include_line_break = false;
     if redo_VIsual_busy.get() {
-        resume_redo_visual(cap, oap);
+        resume_redo_visual(cmd_arg, oap);
     } else if visual_active() {
         include_line_break = start_visual_region(oap, gui_yank);
     }
@@ -157,7 +157,7 @@ pub unsafe fn do_pending_operator(cap: *mut CmdArg, old_col: c_int, gui_yank: bo
 
     if visual_active() || redo_VIsual_busy.get() {
         get_op_vcol(oap, REDO_VISUAL.get().rv_vcol, true);
-        prepare_visual_redo(cap, oap, gui_yank, redo_yank);
+        prepare_visual_redo(cmd_arg, oap, gui_yank, redo_yank);
         finish_visual_region(oap, include_line_break, gui_yank, lbr_saved);
     }
 
@@ -193,8 +193,8 @@ pub unsafe fn do_pending_operator(cap: *mut CmdArg, old_col: c_int, gui_yank: bo
         redraw_curbuf_later(UPD_INVERTED);
     }
 
-    adjust_region_end(cap, oap);
-    run_operator(cap, oap, empty_region_error, gui_yank, lbr_saved);
+    adjust_region_end(cmd_arg, oap);
+    run_operator(cmd_arg, oap, empty_region_error, gui_yank, lbr_saved);
 
     virtual_op.set(None);
     if gui_yank {
@@ -249,7 +249,7 @@ fn apply_motion_force(mut oap: Op) {
 /// Yank is only redoable under 'cpoptions' `y`, `zf` never is, and neither is
 /// any of the fold operators; a search or a `:` command has to have its own
 /// text appended so that the repeat really is the same command.
-fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
+fn record_operator_redo(cmd_arg: Cmd, oap: Op, redo_yank: bool) {
     let is_fold_op = matches!(
         oap.op_type,
         OpType::Fold
@@ -264,8 +264,8 @@ fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
         && (!visual_active()
             || oap.motion_force != 0
             // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cap) || cap.cmdchar == Key::Lua.code()) && oap.op_type != OpType::Colon))
-        && cap.cmdchar != 'D' as c_int
+            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == Key::Lua.code()) && oap.op_type != OpType::Colon))
+        && cmd_arg.cmdchar != 'D' as c_int
         && !is_fold_op;
     if !replayable {
         return;
@@ -273,32 +273,32 @@ fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
 
     prep_redo(
         oap.regname,
-        cap.count0,
+        cmd_arg.count0,
         get_op_char(oap.op_type),
         get_extra_op_char(oap.op_type),
         oap.motion_force,
-        cap.cmdchar,
-        cap.nchar,
+        cmd_arg.cmdchar,
+        cmd_arg.nchar,
     );
 
     // SAFETY: every call below only appends to the redo buffer, and the two
-    // strings handed to it are `cap.searchbuf` and `repeat_cmdline`, both
+    // strings handed to it are `cmd_arg.searchbuf` and `repeat_cmdline`, both
     // NUL-terminated for as long as the editor owns them.
-    if cap.cmdchar == '/' as c_int || cap.cmdchar == '?' as c_int {
+    if cmd_arg.cmdchar == '/' as c_int || cmd_arg.cmdchar == '?' as c_int {
         // A search: without 'cpoptions' `r` the pattern goes in too, so
         // that the repeat really is the same command.
         if !cpo_has(CpoFlag::REDO) {
-            unsafe { append_to_redobuff_literally(cap.searchbuf, -1) };
+            unsafe { append_to_redobuff_literally(cmd_arg.searchbuf, -1) };
         }
         unsafe { append_to_redobuff(c"\n".as_ptr()) };
-    } else if is_ex_cmdchar(cap) {
+    } else if is_ex_cmdchar(cmd_arg) {
         // `do_cmdline` stored the first typed line in `repeat_cmdline`.
         // When several lines were typed, repeating is not possible.
         let line = repeat_cmdline.get();
         if line.is_null() {
             unsafe { reset_redobuff() };
         } else {
-            if cap.cmdchar == ':' as c_int {
+            if cmd_arg.cmdchar == ':' as c_int {
                 unsafe { append_to_redobuff_literally(line, -1) };
             } else {
                 unsafe { append_to_redobuff_keys(line) };
@@ -307,7 +307,7 @@ fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
             unsafe { xfree(line as *mut c_void) };
             repeat_cmdline.set(::core::ptr::null_mut());
         }
-    } else if cap.cmdchar == Key::Lua.code() {
+    } else if cmd_arg.cmdchar == Key::Lua.code() {
         append_to_redobuff_number(repeat_luaref.get() as c_int);
         unsafe { append_to_redobuff(c"\n".as_ptr()) };
     }
@@ -315,7 +315,7 @@ fn record_operator_redo(cap: Cmd, oap: Op, redo_yank: bool) {
 
 /// `.` replaying a Visual operator: rebuild a region of the recorded size at
 /// the cursor.
-fn resume_redo_visual(mut cap: Cmd, mut oap: Op) {
+fn resume_redo_visual(mut cmd_arg: Cmd, mut oap: Op) {
     let redo = REDO_VISUAL.get();
     oap.start = cur_win().w_cursor;
     cur_win().w_cursor.lnum += redo.rv_line_count - 1;
@@ -336,8 +336,12 @@ fn resume_redo_visual(mut cap: Cmd, mut oap: Op) {
         }
         cur_win().coladvance(cur_win().w_curswant);
     }
-    cap.count0 = redo.rv_count;
-    cap.count1 = if cap.count0 == 0 { 1 } else { cap.count0 };
+    cmd_arg.count0 = redo.rv_count;
+    cmd_arg.count1 = if cmd_arg.count0 == 0 {
+        1
+    } else {
+        cmd_arg.count0
+    };
 }
 
 /// The operator was typed after a selection: the region is the selection.
@@ -433,7 +437,7 @@ fn order_region(mut oap: Op) {
 /// build one like it.
 ///
 /// A Visual selection must be active or being replayed.
-fn prepare_visual_redo(cap: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
+fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
     if !redo_VIsual_busy.get() && !gui_yank {
         resel_VIsual_mode.set(visual_mode());
         if cur_win().w_curswant == MAXCOL {
@@ -476,24 +480,26 @@ fn prepare_visual_redo(cap: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
         return;
     }
 
-    if cap.cmdchar == 'g' as c_int && (cap.nchar == 'n' as c_int || cap.nchar == 'N' as c_int) {
+    if cmd_arg.cmdchar == 'g' as c_int
+        && (cmd_arg.nchar == 'n' as c_int || cmd_arg.nchar == 'N' as c_int)
+    {
         // `gn`/`gN` carry their own region, so the whole command repeats.
         prep_redo(
             oap.regname,
-            cap.count0,
+            cmd_arg.count0,
             get_op_char(oap.op_type),
             get_extra_op_char(oap.op_type),
             oap.motion_force,
-            cap.cmdchar,
-            cap.nchar,
+            cmd_arg.cmdchar,
+            cmd_arg.nchar,
         );
-    } else if !is_ex_cmdchar(cap) && cap.cmdchar != Key::Lua.code() {
+    } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != Key::Lua.code() {
         let opchar = get_op_char(oap.op_type);
         let extra_opchar = get_extra_op_char(oap.op_type);
         // Only `r` uses `nchar`; for anything else it would be the
         // operator's own second character.
         let mut nchar = if oap.op_type == OpType::Replace {
-            cap.nchar
+            cmd_arg.nchar
         } else {
             NUL
         };
@@ -511,7 +517,7 @@ fn prepare_visual_redo(cap: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
                 0,
                 NUL,
                 'v' as c_int,
-                cap.count0,
+                cmd_arg.count0,
                 opchar,
                 extra_opchar,
                 nchar,
@@ -534,8 +540,8 @@ fn prepare_visual_redo(cap: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
             rv_mode: resel_VIsual_mode.get().raw(),
             rv_vcol: resel_VIsual_vcol.get(),
             rv_line_count: resel_VIsual_line_count.get(),
-            rv_count: cap.count0,
-            rv_arg: cap.arg,
+            rv_count: cmd_arg.count0,
+            rv_arg: cmd_arg.arg,
         });
     }
 }
@@ -598,11 +604,11 @@ fn finish_visual_region(mut oap: Op, include_line_break: bool, gui_yank: bool, l
 ///
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
-fn adjust_region_end(cap: Cmd, mut oap: Op) {
+fn adjust_region_end(cmd_arg: Cmd, mut oap: Op) {
     // SAFETY: 'sel' is a NUL-terminated option string.
     if !(oap.motion_type == kMTCharWise
         && !oap.inclusive
-        && cap.retval & CA_NO_ADJ_OP_END as c_int == 0
+        && cmd_arg.retval & CA_NO_ADJ_OP_END as c_int == 0
         && oap.end.col == 0
         && (!oap.is_VIsual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
         && oap.line_count > 1)
@@ -635,7 +641,13 @@ fn adjust_region_end(cap: Cmd, mut oap: Op) {
 /// 'linebreak' as it was before the dispatcher turned it off -- the arms that
 /// give control away (Insert mode, 'operatorfunc', an external filter) have to
 /// put it back first, because the user is about to look at the screen.
-fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool, lbr_saved: c_int) {
+fn run_operator(
+    cmd_arg: Cmd,
+    mut oap: Op,
+    empty_region_error: bool,
+    gui_yank: bool,
+    lbr_saved: c_int,
+) {
     /// Refuse an empty region: beep and drop the half-recorded `.`.
     fn refuse() {
         // SAFETY: neither touches anything but editor-wide state.
@@ -647,7 +659,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
     // current window, which is exactly what each of them asks for.
     match oap.op_type {
         OpType::Lshift | OpType::Rshift => {
-            let amount = if oap.is_VIsual { cap.count1 } else { 1 };
+            let amount = if oap.is_VIsual { cmd_arg.count1 } else { 1 };
             unsafe { op_shift(oap.raw(), true, amount) };
             unsafe { auto_format(false, true) };
         }
@@ -690,7 +702,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
             } else {
                 restore_lbr(lbr_saved != 0);
                 // `zy` yanks without the trailing white space.
-                oap.excl_tr_ws = cap.cmdchar == 'z' as c_int;
+                oap.excl_tr_ws = cmd_arg.cmdchar == 'z' as c_int;
                 unsafe { op_yank(oap.raw(), !gui_yank) };
             }
             check_cursor_col(unsafe { Win::current() });
@@ -701,7 +713,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
             if empty_region_error {
                 refuse();
             } else {
-                run_change(cap, oap, lbr_saved);
+                run_change(cmd_arg, oap, lbr_saved);
             }
         }
 
@@ -755,7 +767,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
             if empty_region_error {
                 refuse();
             } else {
-                run_block_insert(cap, oap, lbr_saved);
+                run_block_insert(cmd_arg, oap, lbr_saved);
             }
         }
 
@@ -765,7 +777,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
                 refuse();
             } else {
                 restore_lbr(lbr_saved != 0);
-                let _ = unsafe { op_replace(oap.raw(), cap.nchar) };
+                let _ = unsafe { op_replace(oap.raw(), cmd_arg.nchar) };
             }
         }
 
@@ -799,7 +811,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
                 // has already switched it off.
                 set_visual_active(true);
                 restore_lbr(lbr_saved != 0);
-                let (count, g) = (cap.count1 as LineNr, REDO_VISUAL.get().rv_arg != 0);
+                let (count, g) = (cmd_arg.count1 as LineNr, REDO_VISUAL.get().rv_arg != 0);
                 unsafe { op_addsub(oap.raw(), count, g) };
                 set_visual_active(false);
             }
@@ -839,7 +851,7 @@ fn indent_or_colon(oap: Op) {
 }
 
 /// The `c` arm: run `op_change`, which enters Insert mode.
-fn run_change(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
+fn run_change(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
     // A new edit command, not a restart. Remembering that is what makes
     // `i_CTRL-O` work with a mapping for Visual mode -- but only when the
     // key was not typed.
@@ -858,7 +870,7 @@ fn run_change(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
 
     if unsafe { op_change(oap.raw()) } != 0 {
         // `edit()` returned because of a CTRL-O command.
-        cap.retval |= CA_COMMAND_BUSY as c_int;
+        cmd_arg.retval |= CA_COMMAND_BUSY as c_int;
     }
     if restart_edit.get() == 0 {
         restart_edit.set(restart_edit_save);
@@ -866,7 +878,7 @@ fn run_change(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
 }
 
 /// The `I`/`A` arm: run `op_insert`, which enters Insert mode.
-fn run_block_insert(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
+fn run_block_insert(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
     let restart_edit_save = restart_edit.get();
     restart_edit.set(0);
 
@@ -874,7 +886,7 @@ fn run_block_insert(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
     // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
-    unsafe { op_insert(oap.raw(), cap.count1) };
+    unsafe { op_insert(oap.raw(), cmd_arg.count1) };
 
     // Back off again, so that formatting measures columns correctly.
     reset_lbr();
@@ -883,7 +895,7 @@ fn run_block_insert(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
     if restart_edit.get() == 0 {
         restart_edit.set(restart_edit_save);
     } else {
-        cap.retval |= CA_COMMAND_BUSY as c_int;
+        cmd_arg.retval |= CA_COMMAND_BUSY as c_int;
     }
 }
 

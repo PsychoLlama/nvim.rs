@@ -198,9 +198,9 @@ pub(crate) unsafe fn nv_screengo(
 }
 
 /// `H`, `M` and `L`: to the top, middle or bottom line of the window.
-pub(crate) unsafe fn nv_scroll(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_scroll(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
     let mut win = cur_win();
@@ -288,19 +288,19 @@ pub(crate) unsafe fn nv_scroll(cap: *mut CmdArg) {
 }
 
 /// `l`, `<Space>` and `<Right>`.
-pub(crate) unsafe fn nv_right(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     // A modifier turns this into a word move.
     if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
         if mod_mask.get().has(ModMask::CTRL) {
             ca.arg = 1;
         }
-        // SAFETY: `cap` is the caller's live command argument.
-        unsafe { nv_wordcmd(cap) };
+        // SAFETY: `cmd_arg` is the caller's live command argument.
+        unsafe { nv_wordcmd(cmd_arg) };
         return;
     }
-    // SAFETY: `cap` is the caller's live command argument.
+    // SAFETY: `cmd_arg` is the caller's live command argument.
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
     let mut win = cur_win();
@@ -379,22 +379,22 @@ pub(crate) unsafe fn nv_right(cap: *mut CmdArg) {
         n -= 1;
     }
     if n != count1 {
-        // SAFETY: `cap` is the caller's live command argument.
-        unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+        // SAFETY: `cmd_arg` is the caller's live command argument.
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
     }
 }
 
 /// `h`, `<BS>`, CTRL-H and `<Left>`.
-pub(crate) unsafe fn nv_left(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_left(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     let mut win = cur_win();
     // A modifier turns this into a word move.
     if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
         if mod_mask.get().has(ModMask::CTRL) {
             ca.arg = 1;
         }
-        unsafe { nv_bck_word(cap) };
+        unsafe { nv_bck_word(cmd_arg) };
         return;
     }
     ca.op().motion_type = kMTCharWise;
@@ -444,17 +444,17 @@ pub(crate) unsafe fn nv_left(cap: *mut CmdArg) {
         n -= 1;
     }
     if n != ca.count1 {
-        unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
     }
 }
 
 /// `k`, `CTRL-P`, `-` and `<Up>`. Shifted, it is a page up.
-pub(crate) unsafe fn nv_up(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_up(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if mod_mask.get().has(ModMask::SHIFT) {
         ca.arg = BACKWARD as c_int;
-        unsafe { nv_page(cap) };
+        unsafe { nv_page(cmd_arg) };
         return;
     }
     ca.op().motion_type = kMTLineWise;
@@ -467,12 +467,12 @@ pub(crate) unsafe fn nv_up(cap: *mut CmdArg) {
 }
 
 /// `j`, `CTRL-N`, `+`, `<CR>` and `<Down>`. Shifted, it is a page down.
-pub(crate) unsafe fn nv_down(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_down(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if mod_mask.get().has(ModMask::SHIFT) {
         ca.arg = FORWARD as c_int;
-        unsafe { nv_page(cap) };
+        unsafe { nv_page(cmd_arg) };
         return;
     }
     // In three kinds of window `<CR>` means "act on this line" rather
@@ -506,22 +506,22 @@ pub(crate) unsafe fn nv_down(cap: *mut CmdArg) {
 
 /// `<End>`: the end of the line -- of the last line with CTRL, which is what
 /// the argument says.
-pub(crate) unsafe fn nv_end(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_end(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if ca.arg != 0 || mod_mask.get().has(ModMask::CTRL) {
         ca.arg = 1;
-        unsafe { nv_goto(cap) };
+        unsafe { nv_goto(cmd_arg) };
         // The count named the line, so `$` must not use it again.
         ca.count1 = 1;
     }
-    unsafe { nv_dollar(cap) };
+    unsafe { nv_dollar(cmd_arg) };
 }
 
 /// `$`: the end of the line, `count1 - 1` lines down.
-pub(crate) unsafe fn nv_dollar(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_dollar(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
     // Under 'virtualedit' an operator that starts past the end of the
@@ -532,14 +532,14 @@ pub(crate) unsafe fn nv_dollar(cap: *mut CmdArg) {
     if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
     } else {
-        unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
     }
 }
 
 /// `f`, `F`, `t`, `T`, `;` and `,`: search this line for a character.
-pub(crate) unsafe fn nv_csearch(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_csearch(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     // An exclusive Select-mode selection was widened by one when it was
     // made; the search has to run against the real cursor position.
     let mut cursor_dec = false;
@@ -554,10 +554,10 @@ pub(crate) unsafe fn nv_csearch(cap: *mut CmdArg) {
     // `t` and `T` stop *before* the character.
     let t_cmd = ca.cmdchar == 't' as c_int || ca.cmdchar == 'T' as c_int;
     ca.op().motion_type = kMTCharWise;
-    if ca.nchar < 0 || unsafe { searchc(cap, t_cmd) }.is_err() {
+    if ca.nchar < 0 || unsafe { searchc(cmd_arg, t_cmd) }.is_err() {
         clear_op_beep(ca.op());
         if cursor_dec {
-            unsafe { adjust_for_sel(cap) };
+            unsafe { adjust_for_sel(cmd_arg) };
         }
         return;
     }
@@ -575,15 +575,15 @@ pub(crate) unsafe fn nv_csearch(cap: *mut CmdArg) {
     } else {
         cur_win().w_cursor.coladd = 0;
     }
-    unsafe { adjust_for_sel(cap) };
-    unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+    unsafe { adjust_for_sel(cmd_arg) };
+    unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
 }
 
 /// `%`: to the matching bracket, or with a count to that percentage of the
 /// file.
-pub(crate) unsafe fn nv_percent(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let count0 = ca.count0;
     let mut op = ca.op();
     let mut win = cur_win();
@@ -614,27 +614,27 @@ pub(crate) unsafe fn nv_percent(cap: *mut CmdArg) {
         // SAFETY: `op` is the command's live operator.
         let pos = unsafe { findmatch(op.raw(), NUL) };
         if let Some(pos) = pos {
-            // SAFETY: the jump list is live and `cap` is the caller's.
+            // SAFETY: the jump list is live and `cmd_arg` is the caller's.
             setpcmark();
             win.w_cursor = pos;
             win.w_set_curswant = true;
             win.w_cursor.coladd = 0;
-            unsafe { adjust_for_sel(cap) };
+            unsafe { adjust_for_sel(cmd_arg) };
         } else {
             // SAFETY: `oap` is the command's live operator.
             clear_op_beep(op);
         }
     }
     if lnum != win.w_cursor.lnum {
-        // SAFETY: `cap` is the caller's live command argument.
-        unsafe { may_fold_open(cap, kOptFdoFlagPercent as c_uint) };
+        // SAFETY: `cmd_arg` is the caller's live command argument.
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagPercent as c_uint) };
     }
 }
 
 /// `(` and `)`: back and forward a sentence.
-pub(crate) unsafe fn nv_brace(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_brace(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().use_reg_one = true;
     ca.op().inclusive = false;
@@ -645,13 +645,13 @@ pub(crate) unsafe fn nv_brace(cap: *mut CmdArg) {
     }
     unsafe { adjust_cursor(ca.oap) };
     cur_win().w_cursor.coladd = 0;
-    unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };
+    unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
 }
 
 /// `{` and `}`: back and forward a paragraph.
-pub(crate) unsafe fn nv_findpar(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_findpar(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     ca.op().use_reg_one = true;
@@ -661,27 +661,27 @@ pub(crate) unsafe fn nv_findpar(cap: *mut CmdArg) {
         return;
     }
     cur_win().w_cursor.coladd = 0;
-    unsafe { may_fold_open(cap, kOptFdoFlagBlock as c_uint) };
+    unsafe { may_fold_open(cmd_arg, kOptFdoFlagBlock as c_uint) };
 }
 
 /// `<Home>`: the first column -- the first line with CTRL.
-pub(crate) unsafe fn nv_home(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_home(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let mut ca = unsafe { CmdArgRef::new(cmd_arg) };
     if mod_mask.get().has(ModMask::CTRL) {
-        unsafe { nv_goto(cap) };
+        unsafe { nv_goto(cmd_arg) };
     } else {
         // `<Home>` is `1|`.
         ca.count0 = 1;
-        unsafe { nv_pipe(cap) };
+        unsafe { nv_pipe(cmd_arg) };
     }
     ins_at_eol.set(false);
 }
 
 /// `|`: to a screen column.
-pub(crate) unsafe fn nv_pipe(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_pipe(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     beginline(BeginlineOpts::NONE);
@@ -696,23 +696,23 @@ pub(crate) unsafe fn nv_pipe(cap: *mut CmdArg) {
 }
 
 /// `b` and `B`: back a word.
-pub(crate) unsafe fn nv_bck_word(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_bck_word(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     cur_win().w_set_curswant = true;
     if unsafe { bck_word(ca.count1, ca.arg != 0, false) }.is_err() {
         clear_op_beep(ca.op());
     } else {
-        unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
     }
 }
 
 /// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
-pub(crate) unsafe fn nv_wordcmd(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let startpos = cur_win().w_cursor;
     let mut word_end = ca.cmdchar == 'e' as c_int || ca.cmdchar == 'E' as c_int;
     ca.op().inclusive = word_end;
@@ -744,8 +744,8 @@ pub(crate) unsafe fn nv_wordcmd(cap: *mut CmdArg) {
     if moved.is_err() && ca.op().op_type == OpType::Nop {
         clear_op_beep(ca.op());
     } else {
-        unsafe { adjust_for_sel(cap) };
-        unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+        unsafe { adjust_for_sel(cmd_arg) };
+        unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
     }
 }
 
@@ -768,20 +768,20 @@ pub(crate) unsafe fn adjust_cursor(oap: *mut OpArg) {
 
 /// `0` and `^`: the first column, or the first non-blank, which is what the
 /// argument says.
-pub(crate) unsafe fn nv_beginline(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_beginline(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     beginline(BeginlineOpts::from_bits(ca.arg));
-    unsafe { may_fold_open(cap, kOptFdoFlagHor as c_uint) };
+    unsafe { may_fold_open(cmd_arg, kOptFdoFlagHor as c_uint) };
     ins_at_eol.set(false);
 }
 
 /// `gg` and `G`: to the first or last line, or to the count'th.
-pub(crate) unsafe fn nv_goto(cap: *mut CmdArg) {
-    // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArgRef::new(cap) };
+pub(crate) unsafe fn nv_goto(cmd_arg: *mut CmdArg) {
+    // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
+    let ca = unsafe { CmdArgRef::new(cmd_arg) };
     let last = cur_buf().b_ml.ml_line_count;
     let mut lnum = if ca.arg != 0 { last } else { 1 };
     ca.op().motion_type = kMTLineWise;
@@ -791,7 +791,7 @@ pub(crate) unsafe fn nv_goto(cap: *mut CmdArg) {
     }
     cur_win().w_cursor.lnum = lnum.max(1).min(last);
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
-    unsafe { may_fold_open(cap, kOptFdoFlagJump as c_uint) };
+    unsafe { may_fold_open(cmd_arg, kOptFdoFlagJump as c_uint) };
 }
 
 /// The buffer the editor is working in.
