@@ -37,7 +37,7 @@ use crate::types::{CpoFlag, NUL};
 /// least `y_idx + 1` slots.
 unsafe fn yank_copy_line(
     reg: *mut YankReg,
-    bd: *mut block_def,
+    bd: *mut BlockDef,
     y_idx: size_t,
     exclude_trailing_space: bool,
 ) {
@@ -229,7 +229,7 @@ pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg,
     let mut yank_type = op.motion_type;
     let mut yanklines = op.line_count as size_t;
     let mut yankendlnum = op.end.lnum;
-    let mut bd = block_def {
+    let mut bd = BlockDef {
         startspaces: 0,
         endspaces: 0,
         textlen: 0,

@@ -56,9 +56,9 @@ use crate::memline::ml_find_line_or_offset;
 use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
-    Buffer, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
+    BCount, Buffer, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
     ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoHeader,
-    UndoObjectType, bcount_t, extmark_undo_vec_t, int32_t, size_t, uint16_t, uint32_t, uint64_t,
+    UndoObjectType, extmark_undo_vec_t, int32_t, size_t, uint16_t, uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -347,7 +347,7 @@ fn splice_pending() -> bool {
 pub(crate) struct Extent {
     pub row: c_int,
     pub col: ColNr,
-    pub byte: bcount_t,
+    pub byte: BCount,
 }
 
 /// `buf_updates_send_splice`: the `on_bytes` half of every change.
@@ -452,10 +452,10 @@ pub unsafe fn extmark_splice(
     start_col: ColNr,
     old_row: c_int,
     old_col: ColNr,
-    old_byte: bcount_t,
+    old_byte: BCount,
     new_row: c_int,
     new_col: ColNr,
-    new_byte: bcount_t,
+    new_byte: BCount,
     undo: ExtmarkOp,
 ) {
     let old = Extent {
@@ -486,12 +486,12 @@ pub unsafe fn extmark_splice_cols(
     let old = Extent {
         row: 0,
         col: old_col,
-        byte: old_col as bcount_t,
+        byte: old_col as BCount,
     };
     let new = Extent {
         row: 0,
         col: new_col,
-        byte: new_col as bcount_t,
+        byte: new_col as BCount,
     };
     // SAFETY: the caller's promise -- a live buffer.
     let buf = unsafe { Buf::new(buf) };
@@ -503,13 +503,13 @@ pub unsafe fn extmark_move_region(
     buf: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
-    start_byte: bcount_t,
+    start_byte: BCount,
     extent_row: c_int,
     extent_col: ColNr,
-    extent_byte: bcount_t,
+    extent_byte: BCount,
     new_row: c_int,
     new_col: ColNr,
-    new_byte: bcount_t,
+    new_byte: BCount,
     undo: ExtmarkOp,
 ) {
     let start = Extent {

@@ -46,7 +46,7 @@ use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::types::{
     Directory, Failed, FileComparison, FileID, FileInfo, GArray, MAXPATHL, PATHSEPSTR, RegMatch,
-    file_comparison, size_t,
+    size_t,
 };
 use ::libc::{qsort, strcasecmp, strcpy};
 
@@ -107,11 +107,11 @@ crate::flag_set! {
     /// Do not let CTRL-C out of the `**` walk.
     const NOBREAK = 262144;
 }
-pub const kEqualFileNames: file_comparison = 7;
-pub const kOneFileMissing: file_comparison = 6;
-pub const kBothFilesMissing: file_comparison = 4;
-pub const kDifferentFiles: file_comparison = 2;
-pub const kEqualFiles: file_comparison = 1;
+pub const kEqualFileNames: FileComparison = 7;
+pub const kOneFileMissing: FileComparison = 6;
+pub const kBothFilesMissing: FileComparison = 4;
+pub const kDifferentFiles: FileComparison = 2;
+pub const kEqualFiles: FileComparison = 1;
 pub const URL_BACKSLASH: ::core::ffi::c_uint = 2;
 pub const URL_SLASH: ::core::ffi::c_uint = 1;
 pub const PATHSEP: c_int = '/' as c_int;

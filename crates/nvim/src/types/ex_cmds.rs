@@ -15,10 +15,10 @@ use crate::types::CmdIdx;
 #[derive(Clone)]
 pub struct CmdParseInfo {
     pub cmdmod: CmdMod,
-    pub magic: CmdParseInfo_magic,
+    pub magic: CmdParseMagic,
 }
 #[derive(Copy, Clone)]
-pub struct CmdParseInfo_magic {
+pub struct CmdParseMagic {
     pub file: bool,
     pub bar: bool,
 }

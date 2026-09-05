@@ -14,7 +14,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::guard::Lock;
 use crate::memline::MlFlags;
-use crate::types::{MAXPATHL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, bcount_t};
+use crate::types::{BCount, MAXPATHL, OptionSetFlags, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock};
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -372,8 +372,8 @@ unsafe fn finish_qf_buffer() {
 /// rows, columns and bytes the old and the new text took from there.
 struct Splice {
     start: (LineNr, ColNr),
-    old: (LineNr, ColNr, bcount_t),
-    new: (LineNr, ColNr, bcount_t),
+    old: (LineNr, ColNr, BCount),
+    new: (LineNr, ColNr, BCount),
 }
 
 /// [`extmark_splice`] for a quickfix-buffer rewrite, which is never undoable.

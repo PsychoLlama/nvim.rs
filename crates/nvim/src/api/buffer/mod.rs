@@ -34,12 +34,11 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::types::{
-    AcoSave, AlignTextPos, ApiDict, Arena, Array, Boolean, BufUpdateCallbacks, Buffer,
+    AcoSave, AlignTextPos, ApiDict, Arena, Array, BCount, Boolean, BufUpdateCallbacks, Buffer,
     BufferHandle, ColNr, DoBufAction, DoBufStart, Error, Exception, ExtmarkOp, FileMark, Integer,
     KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair, LineNr,
     LuaRef, MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType,
-    WinSplit, WinStyle, Window, bcount_t, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t,
-    uint64_t,
+    WinSplit, WinStyle, Window, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
 

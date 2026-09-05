@@ -76,7 +76,7 @@ pub(crate) type Al = Live<ArgList>;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{BlnFlags, c_uint, file_comparison};
+    use super::{BlnFlags, FileComparison, c_uint};
 
     /// `buflist_new` flags.
     pub(super) const BLN_CURBUF: BlnFlags = 1;
@@ -89,7 +89,7 @@ mod flag {
     pub(super) const CCGD_EXCMD: c_uint = 16;
 
     /// `path_full_compare` result bit meaning "the same file".
-    pub(super) const kEqualFiles: file_comparison = 1;
+    pub(super) const kEqualFiles: FileComparison = 1;
 }
 use flag::*;
 

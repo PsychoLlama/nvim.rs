@@ -16,6 +16,8 @@
 //! `bomb_size`/`remove_bom` are the byte-order-mark half of the question.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// `nl_item`, from POSIX's `<langinfo.h>`.
+#![allow(non_camel_case_types)]
 
 use super::*;
 use crate::cstr;

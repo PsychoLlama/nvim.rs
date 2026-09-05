@@ -91,22 +91,22 @@ pub unsafe fn nvim_buf_set_text(
     // SAFETY: `replacement` is the caller's array.
     unsafe { check_string_array(replacement, c"replacement string", disallow_nl) }?;
     let new_len: size_t = replacement.size;
-    let mut new_byte: bcount_t = 0 as bcount_t;
-    let mut old_byte: bcount_t = 0 as bcount_t;
+    let mut new_byte: BCount = 0 as BCount;
+    let mut old_byte: BCount = 0 as BCount;
     if start_row == end_row {
-        old_byte = end_col as bcount_t - start_col as bcount_t;
+        old_byte = end_col as BCount - start_col as BCount;
     } else {
         old_byte = (old_byte as ::core::ffi::c_long
             + (len_at_start as Integer - start_col) as ::core::ffi::c_long)
-            as bcount_t;
+            as BCount;
         let mut i: int64_t = 1 as int64_t;
         while i < end_row - start_row {
             let lnum: int64_t = start_row as int64_t + i;
-            old_byte += (unsafe { ml_get_buf_len(b, lnum as LineNr) } + 1 as ::core::ffi::c_int)
-                as bcount_t;
+            old_byte +=
+                (unsafe { ml_get_buf_len(b, lnum as LineNr) } + 1 as ::core::ffi::c_int) as BCount;
             i += 1;
         }
-        old_byte += end_col as bcount_t + 1 as bcount_t;
+        old_byte += end_col as BCount + 1 as BCount;
     }
     let last_index = replacement.size.wrapping_sub(1 as size_t);
     // Every item is a String: `check_string_array` above turned anything else
@@ -175,7 +175,7 @@ pub unsafe fn nvim_buf_set_text(
         )
     } as *mut *mut ::core::ffi::c_char;
     unsafe { *lines.offset(0 as ::core::ffi::c_int as isize) = first };
-    new_byte += first_item.len() as bcount_t;
+    new_byte += first_item.len() as BCount;
     let mut i_0: size_t = 1 as size_t;
     while i_0 < new_len.wrapping_sub(1 as size_t) {
         // SAFETY: `i_0` is below `replacement.size`.
@@ -187,12 +187,12 @@ pub unsafe fn nvim_buf_set_text(
         let line = unsafe { *lines.add(i_0) } as *mut ::core::ffi::c_void;
         // SAFETY: `line` holds `l.len()` bytes.
         unsafe { memchrsub(line, nul, nl, l.len()) };
-        new_byte += l.len() as bcount_t + 1 as bcount_t;
+        new_byte += l.len() as BCount + 1 as BCount;
         i_0 = i_0.wrapping_add(1);
     }
     if replacement.size > 1 as size_t {
         unsafe { *lines.add(replacement.size.wrapping_sub(1 as size_t)) = last };
-        new_byte += last_item.len() as bcount_t + 1 as bcount_t;
+        new_byte += last_item.len() as BCount + 1 as BCount;
     }
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<Exception>(),

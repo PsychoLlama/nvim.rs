@@ -29,7 +29,6 @@ pub struct ExprASTError {
     pub arg: *const ::core::ffi::c_char,
     pub arg_len: ::core::ffi::c_int,
 }
-pub type ExprASTNode = expr_ast_node;
 pub type ExprASTNodeType = ::core::ffi::c_uint;
 pub type ExprAssignmentType = ::core::ffi::c_uint;
 pub type ExprCaseCompareStrategy = ::core::ffi::c_uint;
@@ -37,7 +36,7 @@ pub type ExprComparisonType = ::core::ffi::c_uint;
 pub type ExprOptScope = ::core::ffi::c_uint;
 pub type ExprParserFlags = ::core::ffi::c_uint;
 pub type ExprVarScope = ::core::ffi::c_uint;
-pub struct expr_ast_node {
+pub struct ExprASTNode {
     pub type_0: ExprASTNodeType,
     pub children: *mut ExprASTNode,
     pub next: *mut ExprASTNode,

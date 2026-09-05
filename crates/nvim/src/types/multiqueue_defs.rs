@@ -16,7 +16,7 @@ use super::*;
 ///
 /// Not `Copy`: `items` is a `Box<ItemList>` this queue owns.
 #[derive(Clone)]
-pub struct multiqueue {
+pub struct MultiQueue {
     pub parent: *mut MultiQueue,
     pub on_put: PutCallback,
     pub data: *mut ::core::ffi::c_void,

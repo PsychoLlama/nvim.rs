@@ -32,7 +32,7 @@
 )]
 
 use crate::types::multiqueue_list::{Item, ItemList};
-use crate::types::{Event, MultiQueue, PutCallback, Refcount, multiqueue, size_t};
+use crate::types::{Event, MultiQueue, PutCallback, Refcount, size_t};
 use core::ffi::c_void;
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -129,7 +129,7 @@ pub unsafe fn multiqueue_new_child(parent: *mut MultiQueue) -> *mut MultiQueue {
 }
 
 fn new_queue(parent: *mut MultiQueue, on_put: PutCallback, data: *mut c_void) -> *mut MultiQueue {
-    Box::into_raw(Box::new(multiqueue {
+    Box::into_raw(Box::new(MultiQueue {
         parent,
         on_put,
         data,

@@ -135,16 +135,15 @@ use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
-    CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr,
-    ColoredCmdline, CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error,
-    EvalFuncData, ExArg, ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType,
-    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    Handle, HashTab, HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList,
-    Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk,
-    ParserLine, ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx,
-    SearchItArg, String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
-    VarNumber, VimState, Window, XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t,
-    uint32_t,
+    CmdParseInfo, CmdParseMagic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
+    CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error, EvalFuncData, ExArg,
+    ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
+    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
+    HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
+    OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
+    ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg,
+    String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
+    Window, XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -564,7 +563,7 @@ pub(crate) const EXARG_T_INIT: ExArg = ExArg {
 /// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.
 pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
     cmdmod: CmdMod::NONE,
-    magic: CmdParseInfo_magic {
+    magic: CmdParseMagic {
         file: false,
         bar: false,
     },

@@ -29,7 +29,7 @@ pub struct Arena {
     pub pos: size_t,
     pub size: size_t,
 }
-pub type ArenaMem = *mut consumed_blk;
+pub type ArenaMem = *mut ConsumedBlk;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Array {

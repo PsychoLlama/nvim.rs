@@ -16,7 +16,7 @@
 use core::ffi::c_int;
 use core::mem::{offset_of, size_of};
 
-use crate::types::{ExtmarkMove, ExtmarkSplice, bcount_t};
+use crate::types::{BCount, ExtmarkMove, ExtmarkSplice};
 
 /// The nine bytes every undo file starts with.
 pub const UF_START_MAGIC: [u8; 9] = *b"Vim\x9fUnDo\xe5";
@@ -73,7 +73,7 @@ pub const EXTMARK_PAYLOAD_LEN: usize = 48;
 /// Where each field of the image begins.
 const PAYLOAD_INTS: usize = 6;
 const INT_LEN: usize = size_of::<c_int>();
-const BYTE_LEN: usize = size_of::<bcount_t>();
+const BYTE_LEN: usize = size_of::<BCount>();
 const BYTES_AT: usize = PAYLOAD_INTS * INT_LEN;
 
 /// The claim the codec rests on: the layout it writes out by hand is exactly
@@ -115,23 +115,23 @@ const _: () = {
 /// every such sum still fits, whatever else the file says. A real record is
 /// bounded by the buffer it describes and is nowhere near this.
 const MAX_COORD: c_int = c_int::MAX / 4;
-const MAX_BYTE: bcount_t = bcount_t::MAX / 4;
+const MAX_BYTE: BCount = BCount::MAX / 4;
 
 /// Whether a decoded payload names coordinates a buffer could actually have.
-fn in_range(ints: [c_int; PAYLOAD_INTS], bytes: [bcount_t; 3]) -> bool {
+fn in_range(ints: [c_int; PAYLOAD_INTS], bytes: [BCount; 3]) -> bool {
     ints.iter().all(|&n| (0..=MAX_COORD).contains(&n))
         && bytes.iter().all(|&n| (0..=MAX_BYTE).contains(&n))
 }
 
 /// Splits an extmark payload into its six counts and three byte offsets.
-fn payload_fields(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> ([c_int; PAYLOAD_INTS], [bcount_t; 3]) {
+fn payload_fields(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> ([c_int; PAYLOAD_INTS], [BCount; 3]) {
     let int_at = |i: usize| {
         let at = i * INT_LEN;
         c_int::from_ne_bytes(image[at..at + INT_LEN].try_into().expect("4 bytes"))
     };
     let byte_at = |i: usize| {
         let at = BYTES_AT + i * BYTE_LEN;
-        bcount_t::from_ne_bytes(image[at..at + BYTE_LEN].try_into().expect("8 bytes"))
+        BCount::from_ne_bytes(image[at..at + BYTE_LEN].try_into().expect("8 bytes"))
     };
     (
         [
@@ -147,7 +147,7 @@ fn payload_fields(image: &[u8; EXTMARK_PAYLOAD_LEN]) -> ([c_int; PAYLOAD_INTS], 
 }
 
 /// Lays six counts and three byte offsets back out as an extmark payload.
-fn payload_image(ints: [c_int; PAYLOAD_INTS], bytes: [bcount_t; 3]) -> [u8; EXTMARK_PAYLOAD_LEN] {
+fn payload_image(ints: [c_int; PAYLOAD_INTS], bytes: [BCount; 3]) -> [u8; EXTMARK_PAYLOAD_LEN] {
     let mut image = [0u8; EXTMARK_PAYLOAD_LEN];
     for (i, n) in ints.iter().enumerate() {
         image[i * INT_LEN..(i + 1) * INT_LEN].copy_from_slice(&n.to_ne_bytes());
@@ -330,7 +330,7 @@ mod tests {
         assert!(decode_splice(&encode_splice(&evil)).is_none());
 
         let mut huge_byte = a_splice();
-        huge_byte.old_byte = bcount_t::MAX;
+        huge_byte.old_byte = BCount::MAX;
         assert!(decode_splice(&encode_splice(&huge_byte)).is_none());
 
         // Negative coordinates are not something a change produces either,
@@ -351,7 +351,7 @@ mod tests {
             new_byte: 0,
         };
         assert!(decode_move(&encode_move(&moved)).is_some());
-        moved.new_byte = bcount_t::MIN;
+        moved.new_byte = BCount::MIN;
         assert!(decode_move(&encode_move(&moved)).is_none());
     }
 

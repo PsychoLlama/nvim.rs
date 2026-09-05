@@ -6,6 +6,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// the msgpack packer's buffer type, named as the codec names it.
+#![allow(non_camel_case_types)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.

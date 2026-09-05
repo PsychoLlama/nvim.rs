@@ -236,7 +236,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
     } else {
         1
     };
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     let mut last_check: VarNumber = 100_000;
 
     for lnum in 1..=cur_buf().line_count() {
@@ -287,7 +287,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
 fn count_selected_line(
     counts: &mut PosCounts,
     sel: &mut Selection,
-    bd: &mut block_def,
+    bd: &mut BlockDef,
     lnum: LineNr,
     eol_size: c_int,
 ) {
@@ -475,28 +475,28 @@ pub fn get_region_bytecount(
     end_lnum: LineNr,
     start_col: ColNr,
     end_col: ColNr,
-) -> bcount_t {
+) -> BCount {
     let max_lnum = buf.line_count();
     if start_lnum > max_lnum {
         return 0;
     }
     if start_lnum == end_lnum {
-        return (end_col - start_col) as bcount_t;
+        return (end_col - start_col) as BCount;
     }
 
     // The rest of the first line, its break included.
     let first_len = unsafe { buf.line_len(start_lnum) };
-    let mut bytes = (first_len - start_col + 1) as bcount_t;
+    let mut bytes = (first_len - start_col + 1) as BCount;
     for i in 1..=end_lnum - start_lnum - 1 {
         if start_lnum + i > max_lnum {
             return bytes;
         }
-        bytes += (unsafe { buf.line_len(start_lnum + i) } + 1) as bcount_t;
+        bytes += (unsafe { buf.line_len(start_lnum + i) } + 1) as BCount;
     }
     if end_lnum > max_lnum {
         return bytes;
     }
-    bytes + end_col as bcount_t
+    bytes + end_col as BCount
 }
 
 /// The buffer the editor is working in.

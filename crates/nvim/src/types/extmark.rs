@@ -20,9 +20,9 @@ pub struct ExtmarkMove {
     pub extent_col: ::core::ffi::c_int,
     pub new_row: ::core::ffi::c_int,
     pub new_col: ::core::ffi::c_int,
-    pub start_byte: bcount_t,
-    pub extent_byte: bcount_t,
-    pub new_byte: bcount_t,
+    pub start_byte: BCount,
+    pub extent_byte: BCount,
+    pub new_byte: BCount,
 }
 pub type ExtmarkOp = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
@@ -42,13 +42,13 @@ pub struct ExtmarkSplice {
     pub old_col: ColNr,
     pub new_row: ::core::ffi::c_int,
     pub new_col: ColNr,
-    pub start_byte: bcount_t,
-    pub old_byte: bcount_t,
-    pub new_byte: bcount_t,
+    pub start_byte: BCount,
+    pub old_byte: BCount,
+    pub new_byte: BCount,
 }
 pub type ExtmarkType = ::core::ffi::c_uint;
 pub type UndoObjectType = ::core::ffi::c_uint;
-pub type bcount_t = ptrdiff_t;
+pub type BCount = ptrdiff_t;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct extmark_undo_vec_t {

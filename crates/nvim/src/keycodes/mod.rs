@@ -39,7 +39,7 @@ use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::strings::vim_strchr;
-use crate::types::{CpoFlag, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, key_extra, size_t};
+use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, size_t};
 
 mod codes;
 pub use self::codes::*;
@@ -48,7 +48,7 @@ pub use self::tables::*;
 
 /// The key code of a `KS_EXTRA` key — everything with no termcap name of its
 /// own, which is most of what a modern terminal sends.
-const fn extra(ke: key_extra) -> c_int {
+const fn extra(ke: KeyExtra) -> c_int {
     -(KS_EXTRA + ((ke as c_int) << 8))
 }
 

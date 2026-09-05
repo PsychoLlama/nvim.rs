@@ -56,7 +56,7 @@ struct BlockInsertPre {
 pub(crate) unsafe fn op_insert(oap: *mut OpArg, count1: c_int) {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     let mut oap = unsafe { Op::new(oap) };
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
     bd.is_MAX = c_int::from(cur_win().w_curswant == MAXCOL);
 
@@ -110,7 +110,7 @@ pub(crate) unsafe fn op_insert(oap: *mut OpArg, count1: c_int) {
 /// `None` means undo could not be prepared and the operator must stop.
 ///
 /// `oap` must be blockwise.
-fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> {
+fn measure_before_insert(oap: Op, bd: &mut BlockDef) -> Option<BlockInsertPre> {
     // With 'virtualedit' the spaces have to go in before `block_prep`
     // runs. When only "block" is set, virtual edit is already off here,
     // but `coladvance_force` still needs it -- and it reads the
@@ -150,7 +150,7 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
 /// Put the cursor where `A` should start typing; false means give up.
 ///
 /// `bd` must describe `oap`'s first line.
-fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
+fn move_cursor_for_append(oap: Op, bd: &mut BlockDef) -> bool {
     // SAFETY: the cursor is on a line of the current buffer throughout, which
     // is what each of these asks for.
     if oap.motion_type == kMTBlockWise && cur_win().w_cursor.coladd == 0 {
@@ -191,7 +191,7 @@ fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
 /// `$` the block has no right edge to measure against.
 ///
 /// `oap` must be blockwise, and its first line the cursor line.
-fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, start_insert: Pos) {
+fn replay_insert(mut oap: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_insert: Pos) {
     // SAFETY: the cursor is on the region's first line, which is a line of
     // the current buffer, and every other line asked for below is one of the
     // region's.
@@ -239,7 +239,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
         oap.end.col += ind_post_col - pre.ind_pre_col;
         oap.end_vcol += ind_post_vcol - pre.ind_pre_vcol;
     }
-    let mut bd2 = block_def::ZERO;
+    let mut bd2 = BlockDef::ZERO;
     unsafe { block_prep(oap.raw(), &raw mut bd2, oap.start.lnum, true) };
     if shift_for_indent {
         // `oap` is used below, so put it back.
@@ -338,7 +338,7 @@ pub(crate) unsafe fn op_change(oap: *mut OpArg) -> c_int {
         inc_cursor();
     }
 
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     let mut pre_textlen = 0;
     let mut pre_indent = 0;
     if oap.motion_type == kMTBlockWise {
@@ -376,7 +376,7 @@ pub(crate) unsafe fn op_change(oap: *mut OpArg) -> c_int {
 /// block.
 ///
 /// `oap` must be blockwise, and `bd.textcol` the column the insert started at.
-fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent: c_int) {
+fn replay_change(oap: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: c_int) {
     // SAFETY: every line the walk reaches is one of the region's, so it is a
     // line of the current buffer.
     let firstline = ml_get(oap.start.lnum);

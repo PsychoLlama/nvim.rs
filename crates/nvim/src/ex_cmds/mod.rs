@@ -57,8 +57,9 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos, LineNr, List,
-    NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, Window, bcount_t, size_t, uint8_t,
+    BCount, BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos,
+    LineNr, List, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, Window, size_t,
+    uint8_t,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -152,9 +153,9 @@ pub struct LineData {
     pub start: LPos,
     pub end: LPos,
     pub matchcols: ::core::ffi::c_int,
-    pub matchbytes: bcount_t,
+    pub matchbytes: BCount,
     pub subcols: ::core::ffi::c_int,
-    pub subbytes: bcount_t,
+    pub subbytes: BCount,
     pub lnum_before: LineNr,
     pub lnum_after: LineNr,
 }

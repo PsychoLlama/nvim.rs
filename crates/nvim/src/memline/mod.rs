@@ -73,9 +73,9 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BlockHdr, BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileInfo, FileOffset,
-    FlushBuffers, InfoPtr, LineNr, List, MemFile, NUL, OptVal, Pos, String_0, Timestamp, VarNumber,
-    file_comparison, int16_t, int64_t, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
+    BlockHdr, BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileComparison, FileInfo,
+    FileOffset, FlushBuffers, InfoPtr, LineNr, List, MemFile, NUL, OptVal, Pos, String_0,
+    Timestamp, VarNumber, int16_t, int64_t, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
     uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
@@ -192,7 +192,7 @@ pub const ML_APPEND_NEW: ::core::ffi::c_int = 1;
 /// `flags` for `ml_delete_int`: say "--No lines in buffer--" if the buffer
 /// ends up empty.
 pub const ML_DEL_MESSAGE: ::core::ffi::c_int = 1;
-pub const kEqualFiles: file_comparison = 1;
+pub const kEqualFiles: FileComparison = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const O_RDONLY: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
 pub const O_RDWR: ::core::ffi::c_int = 0o2 as ::core::ffi::c_int;

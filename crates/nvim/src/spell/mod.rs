@@ -47,8 +47,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, ExArg, LangP, LineNr, OpArg, Pos, SearchItArg, SpellLang, SpellMoveType, SpellTab,
-    Window, file_comparison, size_t, uint8_t,
+    ColNr, ExArg, FileComparison, LangP, LineNr, OpArg, Pos, SearchItArg, SpellLang, SpellMoveType,
+    SpellTab, Window, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy};
@@ -88,7 +88,7 @@ pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;
 pub use wordtree::WordTree;
 
-pub const kEqualFiles: file_comparison = 1;
+pub const kEqualFiles: FileComparison = 1;
 
 /// The longest word, in bytes, that any of this can handle. Every word
 /// buffer in the subsystem is this size.

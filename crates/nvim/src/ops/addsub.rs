@@ -126,7 +126,7 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
         return;
     }
 
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     let mut change_cnt: ssize_t = 0;
     let mut startpos = Pos {
         lnum: 0,
@@ -176,7 +176,7 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
 /// length in bytes.
 ///
 /// `pos.lnum` must be a line of the region.
-fn addsub_line_span(mut oap: Op, bd: &mut block_def, pos: &mut Pos) -> c_int {
+fn addsub_line_span(mut oap: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
     // SAFETY: every line touched below is one of the region's, so it is a
     // line of the current buffer.
     if oap.motion_type == kMTBlockWise {

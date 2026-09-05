@@ -20,6 +20,8 @@
 //! are reproduced in full in licenses/utf8proc-LICENSE.md.
 
 #![forbid(unsafe_code)]
+// utf8proc's option and property types, vendored with the library's names.
+#![allow(non_camel_case_types)]
 
 mod tables;
 

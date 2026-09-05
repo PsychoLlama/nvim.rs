@@ -80,9 +80,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdArg, ColNr, Dict, Direction, EvalFuncData, FILE, LPos, LineNr, List, Magic, MotionType,
-    OpArg, Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset, SearchPattern, TypVal,
-    VarNumber, Window, file_comparison, int64_t, ptrdiff_t, size_t,
+    CmdArg, ColNr, Dict, Direction, EvalFuncData, FILE, FileComparison, LPos, LineNr, List, Magic,
+    MotionType, OpArg, Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset,
+    SearchPattern, TypVal, VarNumber, Window, int64_t, ptrdiff_t, size_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};
@@ -120,7 +120,7 @@ pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
 pub const HIST_SEARCH: ::core::ffi::c_int = 1;
 pub const kMTLineWise: MotionType = 1;
-pub const kEqualFiles: file_comparison = 1;
+pub const kEqualFiles: FileComparison = 1;
 pub const CHECK_PATH: ::core::ffi::c_uint = 3;
 pub const FIND_DEFINE: ::core::ffi::c_uint = 2;
 pub const ACTION_EXPAND: ::core::ffi::c_uint = 5;

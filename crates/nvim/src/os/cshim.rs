@@ -9,6 +9,8 @@
 //! handful of string functions it reaches, which Miri cannot call through.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// `wint_t`, from the C library's `<wctype.h>`.
+#![allow(non_camel_case_types)]
 
 // No forbid(unsafe_code): edition 2024 trips the unsafe_code lint on the
 // extern block below, and declaring the foreign surface is this file's

@@ -56,8 +56,8 @@ use crate::smsg;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Array, ArrayBuf, CmdModFlags, Error, ExArg, Failed, IOSIZE, LuaRetMode, NUL, Object, OptInt,
-    OptVal, OptionSetFlags, file_comparison, size_t,
+    Array, ArrayBuf, CmdModFlags, Error, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, NUL,
+    Object, OptInt, OptVal, OptionSetFlags, size_t,
 };
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::windows;
@@ -69,7 +69,7 @@ pub(crate) use tags::ex_helptags;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{LuaRetMode, file_comparison};
+    use super::{FileComparison, LuaRetMode};
     use core::ffi::c_uint;
 
     /// `find_tags` flags.
@@ -85,7 +85,7 @@ mod flag {
     pub(super) const DT_HELP: c_uint = 8;
 
     /// `path_full_compare`'s "same file" answer.
-    pub(super) const kEqualFiles: file_comparison = 1;
+    pub(super) const kEqualFiles: FileComparison = 1;
     /// `nlua_exec` return modes.
     pub(super) const kRetObject: LuaRetMode = 0;
     pub(super) const kRetNilBool: LuaRetMode = 1;

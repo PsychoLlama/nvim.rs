@@ -44,7 +44,7 @@ use core::ptr;
 use crate::global_cell::GlobalCell;
 use crate::main::arena_alloc_count;
 use crate::memory::{cbytes, copy_bytes, xfree, xmalloc};
-use crate::types::{Arena, ArenaMem, consumed_blk};
+use crate::types::{Arena, ArenaMem, ConsumedBlk};
 
 pub const ARENA_BLOCK_SIZE: usize = 4096;
 const REUSE_MAX: usize = 4;
@@ -55,7 +55,7 @@ pub const ARENA_EMPTY: Arena = Arena {
     size: 0,
 };
 
-static arena_reuse_blk: GlobalCell<*mut consumed_blk> = GlobalCell::new(ptr::null_mut());
+static arena_reuse_blk: GlobalCell<*mut ConsumedBlk> = GlobalCell::new(ptr::null_mut());
 static arena_reuse_blk_count: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Take the front block off the reuse list. `None` when it is empty.
@@ -63,7 +63,7 @@ static arena_reuse_blk_count: GlobalCell<usize> = GlobalCell::new(0);
 /// # Safety
 ///
 /// The list holds only blocks this module put there, all still allocated.
-unsafe fn pop_reuse_blk() -> Option<*mut consumed_blk> {
+unsafe fn pop_reuse_blk() -> Option<*mut ConsumedBlk> {
     let count = arena_reuse_blk_count.get();
     if count == 0 {
         return None;
@@ -99,7 +99,7 @@ pub unsafe fn arena_finish(arena: *mut Arena) -> ArenaMem {
     // SAFETY: the caller's arena. The chain moves to the result; nothing
     // is freed here.
     let arena = unsafe { &mut *arena };
-    let res = arena.cur_blk.cast::<consumed_blk>();
+    let res = arena.cur_blk.cast::<ConsumedBlk>();
     *arena = ARENA_EMPTY;
     res
 }
@@ -130,12 +130,12 @@ pub unsafe fn arena_alloc_block(arena: *mut Arena) {
     // SAFETY: the caller's arena. The header the block opens with is the
     // first thing allocated out of it, so `blk` is that block's own start.
     unsafe {
-        let prev_blk = (*arena).cur_blk.cast::<consumed_blk>();
+        let prev_blk = (*arena).cur_blk.cast::<ConsumedBlk>();
         (*arena).cur_blk = alloc_block().cast::<c_char>();
         (*arena).pos = 0;
         (*arena).size = ARENA_BLOCK_SIZE;
         // The block's first bytes link to the previous block.
-        let blk = arena_alloc(arena, size_of::<consumed_blk>(), true).cast::<consumed_blk>();
+        let blk = arena_alloc(arena, size_of::<ConsumedBlk>(), true).cast::<ConsumedBlk>();
         (*blk).prev = prev_blk;
     }
 }
@@ -158,7 +158,7 @@ fn align_offset(off: usize) -> usize {
 /// Allocations that would waste more than half a block get their own
 /// exactly-sized block instead.
 fn is_oversize(size: usize) -> bool {
-    size > (ARENA_BLOCK_SIZE - size_of::<consumed_blk>()) / 2
+    size > (ARENA_BLOCK_SIZE - size_of::<ConsumedBlk>()) / 2
 }
 
 /// Where an allocation starts, given the block's current fill and whether
@@ -170,7 +170,7 @@ fn bump_to(pos: usize, align: bool) -> usize {
 /// The room an over-sized block reserves for its own `prev` link before the
 /// payload starts.
 fn header_bytes(align: bool) -> usize {
-    bump_to(size_of::<consumed_blk>(), align)
+    bump_to(size_of::<ConsumedBlk>(), align)
 }
 
 /// What a request resolves to before any pointer is formed: the whole of the
@@ -231,8 +231,8 @@ pub unsafe fn arena_alloc(arena: *mut Arena, size: usize, align: bool) -> *mut c
             // current block's own header is where its `prev` lives.
             return unsafe {
                 let alloc = xmalloc(size.wrapping_add(hdr)).cast::<c_char>();
-                let cur_blk = (*arena).cur_blk.cast::<consumed_blk>();
-                let fix_blk = alloc.cast::<consumed_blk>();
+                let cur_blk = (*arena).cur_blk.cast::<ConsumedBlk>();
+                let fix_blk = alloc.cast::<ConsumedBlk>();
                 (*fix_blk).prev = (*cur_blk).prev;
                 (*cur_blk).prev = fix_blk;
                 alloc.add(hdr).cast::<c_void>()
@@ -265,7 +265,7 @@ pub unsafe extern "C" fn free_block(block: *mut c_void) {
         unsafe { xfree(block) };
         return;
     }
-    let reuse_blk = block.cast::<consumed_blk>();
+    let reuse_blk = block.cast::<ConsumedBlk>();
     // SAFETY: a block's first bytes are its `prev` link.
     unsafe { (*reuse_blk).prev = arena_reuse_blk.get() };
     arena_reuse_blk.set(reuse_blk);
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn oversize_threshold_is_half_a_block_minus_header() {
-        let threshold = (ARENA_BLOCK_SIZE - size_of::<consumed_blk>()) / 2;
+        let threshold = (ARENA_BLOCK_SIZE - size_of::<ConsumedBlk>()) / 2;
         assert!(!is_oversize(threshold));
         assert!(is_oversize(threshold + 1));
     }
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn oversize_only_decides_what_happens_once_the_block_is_too_full() {
-        let big = (ARENA_BLOCK_SIZE - size_of::<consumed_blk>()) / 2 + 1;
+        let big = (ARENA_BLOCK_SIZE - size_of::<ConsumedBlk>()) / 2 + 1;
         // An over-sized request that still fits is served from the block,
         // however over-sized it is: the first question is whether it fits,
         // and only then whether it deserves a block of its own.
@@ -413,7 +413,7 @@ mod tests {
         // This is what `arena_alloc`'s `NewBlock` arm relies on: after
         // `arena_alloc_block` the position is the header, and every
         // non-oversize request fits after it, aligned or not.
-        let biggest = (ARENA_BLOCK_SIZE - size_of::<consumed_blk>()) / 2;
+        let biggest = (ARENA_BLOCK_SIZE - size_of::<ConsumedBlk>()) / 2;
         for size in [1, 2, 17, 1000, biggest] {
             for align in [false, true] {
                 assert!(

@@ -23,8 +23,8 @@ use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    ApiDict, Arena, ArenaMem, Array, ArrayBuilder, Error, HlMessage, HlMessageChunk, KeyValuePair,
-    Object, ObjectType, String_0, consumed_blk, kObjectTypeArray, kObjectTypeBoolean,
+    ApiDict, Arena, ArenaMem, Array, ArrayBuilder, ConsumedBlk, Error, HlMessage, HlMessageChunk,
+    KeyValuePair, Object, ObjectType, String_0, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
     size_t,
@@ -283,7 +283,7 @@ pub(crate) unsafe fn copy_object(obj: Object, arena: *mut Arena) -> Object {
 
 /// The arena `api_metadata`'s unpacked tree lives in, kept alive for the
 /// process's lifetime because the tree is handed out by reference.
-static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<consumed_blk>());
+static METADATA_ARENA: GlobalCell<ArenaMem> = GlobalCell::new(ptr::null_mut::<ConsumedBlk>());
 
 /// The API description, as the `nvim_get_api_info` reply carries it. Unpacked
 /// from the blob on first use and then shared.

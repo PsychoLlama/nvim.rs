@@ -6,6 +6,9 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// libuv's callback signatures, and the loop objects `event/` hands the
+// library by address.
+#![allow(non_camel_case_types)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
@@ -41,7 +44,6 @@ impl Event {
         Self { handler, argv }
     }
 }
-pub type MultiQueue = multiqueue;
 pub type Proc = proc;
 pub type ProcType = ::core::ffi::c_uint;
 pub type PutCallback =

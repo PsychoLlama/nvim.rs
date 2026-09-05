@@ -52,7 +52,7 @@ pub(crate) unsafe fn block_insert(
     s: *const c_char,
     slen: size_t,
     b_insert: bool,
-    bdp: *mut block_def,
+    bdp: *mut BlockDef,
 ) {
     // SAFETY: the caller's promise -- both point to live structs.
     let (oap, bdp) = unsafe { (&mut *oap, &mut *bdp) };
@@ -248,7 +248,7 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// # Safety
 /// `oap` and `bdp` must point to live structs, and `lnum` must be a line of
 /// the current buffer.
-pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut block_def, lnum: LineNr, is_del: bool) {
+pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_del: bool) {
     // SAFETY: the caller's promise -- both point to live structs.
     let (oap, bdp) = unsafe { (&mut *oap, &mut *bdp) };
     // Unwanted line breaks would move every column measured below.
@@ -393,7 +393,7 @@ pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut block_def, lnum: LineNr, is_
 pub unsafe fn charwise_block_prep(
     mut start: Pos,
     mut end: Pos,
-    bdp: *mut block_def,
+    bdp: *mut BlockDef,
     lnum: LineNr,
     inclusive: bool,
 ) {

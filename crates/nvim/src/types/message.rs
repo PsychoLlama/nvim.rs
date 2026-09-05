@@ -17,8 +17,7 @@ pub struct HlMessageChunk {
     pub text: String_0,
     pub hl_id: ::core::ffi::c_int,
 }
-pub type MessageData = msg_data;
-pub struct msg_data {
+pub struct MessageData {
     pub source: String_0,
     pub percent: Integer,
     pub title: String_0,

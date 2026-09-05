@@ -6,6 +6,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// libtermkey's internal `keyinfo`, and the `ssize_t` its headers spell.
+#![allow(non_camel_case_types)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.

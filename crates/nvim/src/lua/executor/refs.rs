@@ -18,7 +18,7 @@ use crate::lua::ffi::{
     lua_pushstring, lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_ref, luaL_unref,
 };
 use crate::main::nlua_global_refs;
-use crate::types::{LuaRef, lua_State, nlua_ref_state_t};
+use crate::types::{LuaRef, NluaRefState, lua_State};
 
 /// The registry key the per-state reference table is parked under.
 const REF_STATE_KEY: &core::ffi::CStr = c"nlua.ref_state";
@@ -31,13 +31,12 @@ const REF_STATE_KEY: &core::ffi::CStr = c"nlua.ref_state";
 pub(crate) unsafe fn nlua_new_ref_state(
     lstate: *mut lua_State,
     is_thread: bool,
-) -> *mut nlua_ref_state_t {
+) -> *mut NluaRefState {
     unsafe {
-        let ref_state =
-            lua_newuserdata(lstate, size_of::<nlua_ref_state_t>()).cast::<nlua_ref_state_t>();
+        let ref_state = lua_newuserdata(lstate, size_of::<NluaRefState>()).cast::<NluaRefState>();
         ref_state
             .cast::<u8>()
-            .write_bytes(0, size_of::<nlua_ref_state_t>());
+            .write_bytes(0, size_of::<NluaRefState>());
         (*ref_state).nil_ref = LUA_NOREF;
         (*ref_state).empty_dict_ref = LUA_NOREF;
         if !is_thread {
@@ -51,10 +50,10 @@ pub(crate) unsafe fn nlua_new_ref_state(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state whose [`nlua_new_ref_state`] has run.
-pub(crate) unsafe fn nlua_get_ref_state(lstate: *mut lua_State) -> *mut nlua_ref_state_t {
+pub(crate) unsafe fn nlua_get_ref_state(lstate: *mut lua_State) -> *mut NluaRefState {
     unsafe {
         lua_getfield(lstate, LUA_REGISTRYINDEX, REF_STATE_KEY.as_ptr());
-        let ref_state = lua_touserdata(lstate, -1).cast::<nlua_ref_state_t>();
+        let ref_state = lua_touserdata(lstate, -1).cast::<NluaRefState>();
         lua_pop(lstate, 1);
         ref_state
     }
@@ -113,7 +112,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_empty_dict_tostring(lstate: *mut lua
 /// that state's own bookkeeping.
 pub unsafe fn nlua_ref(
     lstate: *mut lua_State,
-    ref_state: *mut nlua_ref_state_t,
+    ref_state: *mut NluaRefState,
     index: c_int,
 ) -> LuaRef {
     unsafe {
@@ -138,7 +137,7 @@ pub unsafe fn nlua_ref_global(lstate: *mut lua_State, index: c_int) -> LuaRef {
 ///
 /// # Safety
 /// `ref_0` must have come from [`nlua_ref`] against `ref_state`.
-pub unsafe fn nlua_unref(lstate: *mut lua_State, ref_state: *mut nlua_ref_state_t, ref_0: LuaRef) {
+pub unsafe fn nlua_unref(lstate: *mut lua_State, ref_state: *mut NluaRefState, ref_0: LuaRef) {
     unsafe {
         if ref_0 > 0 {
             (*ref_state).ref_count -= 1;

@@ -13,7 +13,7 @@ use super::*;
 
 pub type GRegFlags = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-pub struct block_def {
+pub struct BlockDef {
     pub startspaces: ::core::ffi::c_int,
     pub endspaces: ::core::ffi::c_int,
     pub textlen: ::core::ffi::c_int,
@@ -30,12 +30,12 @@ pub struct block_def {
     pub start_char_vcols: ColNr,
 }
 
-impl block_def {
+impl BlockDef {
     /// All zeros — the state `block_prep` and `charwise_block_prep` overwrite.
     ///
     /// C declares these uninitialised and fills them in; every caller in the
     /// tree does exactly that, so the zeros are never read.
-    pub const ZERO: Self = block_def {
+    pub const ZERO: Self = BlockDef {
         startspaces: 0,
         endspaces: 0,
         textlen: 0,
@@ -53,7 +53,7 @@ impl block_def {
     };
 }
 
-impl Default for block_def {
+impl Default for BlockDef {
     fn default() -> Self {
         Self::ZERO
     }

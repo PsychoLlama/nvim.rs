@@ -292,7 +292,7 @@ fn measure_join(
         if t > 0 && curbuf_splice_pending.get() == 0 {
             let removed = unsafe { plan.curr.offset_from(plan.curr_start) } as ColNr;
             let row = cur_win().w_cursor.lnum as c_int - 1;
-            let (old, new) = ((removed + 1) as bcount_t, added as bcount_t);
+            let (old, new) = ((removed + 1) as BCount, added as BCount);
             let op = kExtmarkUndo;
             unsafe {
                 extmark_splice(

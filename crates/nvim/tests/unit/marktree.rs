@@ -30,7 +30,7 @@ use neovim::marktree::key::mt_end;
 use neovim::marktree::meta::META_COUNT;
 use neovim::marktree::splice::marktree_splice;
 use neovim::marktree::{marktree_clear, marktree_del_itr, marktree_lookup_ns, marktree_move};
-use neovim::types::{MTKey, MTNode, MTPair, MTPos, MarkTree, MarkTreeIter, MarkTreeIter_s};
+use neovim::types::{MTKey, MTNode, MTPair, MTPos, MarkTree, MarkTreeIter, MarkTreeIterLevel};
 
 /// The namespace every mark in this file lives in.
 const NS: u32 = 10;
@@ -69,7 +69,7 @@ fn zeroed_iter() -> MarkTreeIter {
         lvl: 0,
         x: ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [MarkTreeIter_s { oldcol: 0, i: 0 }; 20],
+        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },

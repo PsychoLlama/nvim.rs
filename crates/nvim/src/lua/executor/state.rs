@@ -29,7 +29,7 @@ use crate::lua::treesitter::nlua_treesitter_init;
 use crate::main::{os_exit, time_fd};
 use crate::os::cshim::{gettext, stderr};
 use crate::runtime::runtime_search_path_validate;
-use crate::types::{lua_Integer, lua_State, nlua_ref_state_t, uv_thread_t};
+use crate::types::{NluaRefState, lua_Integer, lua_State, uv_thread_t};
 use ::libc::{exit, fprintf};
 
 /// Populate the global `arg` table from the command line, with `arg[0]` the
@@ -214,7 +214,7 @@ pub(crate) unsafe fn nlua_init_state(thread: bool) -> *mut lua_State {
 /// `lstate` must be a state [`nlua_init_state`] built, and unused afterwards.
 unsafe extern "C-unwind" fn nlua_common_free_all_mem(lstate: *mut lua_State) {
     unsafe {
-        let ref_state: *mut nlua_ref_state_t = nlua_get_ref_state(lstate);
+        let ref_state: *mut NluaRefState = nlua_get_ref_state(lstate);
         nlua_unref(lstate, ref_state, (*ref_state).nil_ref);
         nlua_unref(lstate, ref_state, (*ref_state).empty_dict_ref);
         lua_close(lstate);

@@ -515,7 +515,7 @@ struct MouseCode {
     event: MouseEvent,
 }
 
-const fn mouse_code(code: key_extra, button: c_int, is_click: bool, is_drag: bool) -> MouseCode {
+const fn mouse_code(code: KeyExtra, button: c_int, is_click: bool, is_drag: bool) -> MouseCode {
     MouseCode {
         code: code as c_int,
         event: MouseEvent {

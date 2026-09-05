@@ -31,7 +31,7 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Arena, ArenaMem, Array, Error, Object, consumed_blk, kErrorTypeException, kErrorTypeValidation,
+    Arena, ArenaMem, Array, ConsumedBlk, Error, Object, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
 };
 
@@ -197,7 +197,7 @@ unsafe fn nlua_rpc(lstate: *mut lua_State, request: bool) -> c_int {
             }
 
             if request {
-                let mut res_mem: ArenaMem = ptr::null_mut::<consumed_blk>();
+                let mut res_mem: ArenaMem = ptr::null_mut::<ConsumedBlk>();
                 let mut result = rpc_send_call(chan_id, name, args, &raw mut res_mem, &mut err);
                 if !err.is_set() {
                     nlua_push_object(lstate, &raw mut result, 0);

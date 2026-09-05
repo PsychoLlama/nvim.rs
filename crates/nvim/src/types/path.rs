@@ -10,5 +10,4 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 
-pub type FileComparison = file_comparison;
-pub type file_comparison = ::core::ffi::c_uint;
+pub type FileComparison = ::core::ffi::c_uint;

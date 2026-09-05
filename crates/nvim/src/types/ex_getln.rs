@@ -18,7 +18,6 @@ pub struct CmdlineColorChunk {
     pub end: ::core::ffi::c_int,
     pub hl_id: ::core::ffi::c_int,
 }
-pub type CmdlineInfo = cmdline_info;
 
 /// The command line's text: an owned, NUL-terminated growable buffer.
 ///
@@ -224,7 +223,7 @@ impl ColoredCmdline {
     }
 }
 #[derive(Clone)]
-pub struct cmdline_info {
+pub struct CmdlineInfo {
     pub(crate) cmdbuff: CmdBuff,
     pub cmdpos: ::core::ffi::c_int,
     pub cmdspos: ::core::ffi::c_int,

@@ -27,7 +27,7 @@ use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
 use crate::tr_plural;
-use crate::types::{Failed, LineNr, OptInt, bcount_t, int64_t};
+use crate::types::{BCount, Failed, LineNr, OptInt, int64_t};
 use crate::undo::u_save;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
@@ -59,9 +59,9 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // NULL length is upstream's way of asking only for the byte offset.
     let (start_byte, end_byte, dest_byte) = unsafe {
         (
-            ml_find_line_or_offset(cur_buf().raw(), line1, ptr::null_mut(), true) as bcount_t,
-            ml_find_line_or_offset(cur_buf().raw(), line2 + 1, ptr::null_mut(), true) as bcount_t,
-            ml_find_line_or_offset(cur_buf().raw(), dest + 1, ptr::null_mut(), true) as bcount_t,
+            ml_find_line_or_offset(cur_buf().raw(), line1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(cur_buf().raw(), line2 + 1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(cur_buf().raw(), dest + 1, ptr::null_mut(), true) as BCount,
         )
     };
     let extent_byte = end_byte - start_byte;

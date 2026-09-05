@@ -77,13 +77,13 @@ pub struct MarkTreeIter {
     pub lvl: ::core::ffi::c_int,
     pub x: *mut MTNode,
     pub i: ::core::ffi::c_int,
-    pub s: [MarkTreeIter_s; 20],
+    pub s: [MarkTreeIterLevel; 20],
     pub intersect_idx: size_t,
     pub intersect_pos: MTPos,
     pub intersect_pos_x: MTPos,
 }
 #[derive(Copy, Clone, Default)]
-pub struct MarkTreeIter_s {
+pub struct MarkTreeIterLevel {
     pub oldcol: ::core::ffi::c_int,
     pub i: ::core::ffi::c_int,
 }

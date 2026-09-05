@@ -44,7 +44,7 @@ use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::AutoEvent;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
-    Event, MultiQueue, RStream, Stream, String_0, key_extra, size_t, uint8_t, uint64_t,
+    Event, KeyExtra, MultiQueue, RStream, Stream, String_0, size_t, uint8_t, uint64_t,
     uv_handle_type,
 };
 use core::ffi::{c_char, c_int, c_uint, c_void};
@@ -471,7 +471,7 @@ fn check_multiclick(code: c_int, grid: c_int, row: c_int, col: c_int) -> Option<
         KE_X1MOUSE,
         KE_X2MOUSE,
     ]
-    .contains(&(code as key_extra))
+    .contains(&(code as KeyExtra))
     {
         // For a click event the run length is updated; a drag or a release
         // keeps whatever the click before it established.

@@ -218,8 +218,8 @@ unsafe fn truncate_old_line(
         let row = lnum - 1;
         let at = mincol - 1 - cols_spliced;
         let off = less_cols_off;
-        let old_b = off as bcount_t;
-        let new_b = (1 + added) as bcount_t;
+        let old_b = off as BCount;
+        let new_b = (1 + added) as BCount;
         let undo = kExtmarkUndo;
         let (cur_lnum, cur_col) = (cur_win().w_cursor.lnum, cur_win().w_cursor.col);
         // SAFETY: the current buffer is live, and the row names the line that
@@ -571,7 +571,7 @@ pub unsafe fn open_line(
             let cb = curbuf.get();
             let at = cur_win().w_cursor.lnum;
             // SAFETY: the current buffer is live and `at` is the new line.
-            let extra = ml_get_len(at) as bcount_t;
+            let extra = ml_get_len(at) as BCount;
             // SAFETY: as above.
             unsafe {
                 extmark_splice(cb, at - 1, 0, 0, 0, 0, 1, 0, 1 + extra, kExtmarkUndo);

@@ -34,7 +34,7 @@ use crate::memory::xfree;
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
-use crate::types::{ColNr, LPos, LineNr, NUL, bcount_t, size_t};
+use crate::types::{BCount, ColNr, LPos, LineNr, NUL, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
@@ -261,15 +261,15 @@ pub(super) unsafe fn build_replacement(
     // TODO(bfredl): this has some robustness issues, look into later.
     let start: LPos = st.regmatch.startpos[0];
     let end: LPos = st.regmatch.endpos[0];
-    let mut replaced_bytes = 0 as bcount_t;
+    let mut replaced_bytes = 0 as BCount;
     let mut i = 0 as c_int;
     while i < st.nmatch - 1 as c_int {
         // SAFETY: the lines of a multi-line match are all in the buffer.
         let line = unsafe { cstr::bytes_at(ml_get(st.lnum_start + i as LineNr)) };
-        replaced_bytes += line.len() as bcount_t + 1 as bcount_t;
+        replaced_bytes += line.len() as BCount + 1 as BCount;
         i += 1;
     }
-    replaced_bytes += (end.col - start.col) as bcount_t;
+    replaced_bytes += (end.col - start.col) as BCount;
 
     // Save the line number before processing newlines.
     let lnum_before_newlines = st.lnum;
@@ -305,7 +305,7 @@ pub(super) unsafe fn build_replacement(
         matchcols,
         matchbytes: replaced_bytes,
         subcols,
-        subbytes: (st.sublen - 1 as c_int) as bcount_t,
+        subbytes: (st.sublen - 1 as c_int) as BCount,
         lnum_before: lnum_before_newlines,
         lnum_after: st.lnum,
     });

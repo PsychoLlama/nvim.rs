@@ -66,9 +66,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Dict, DictItem, ExArg, Expand, FILE, FileMark, FileMarkView,
-    FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptInt, OptMagic, OptSet, Pos, RegMatch,
-    Taggy, Timestamp, TypVal, VarNumber, VimConv, file_comparison, int64_t, ptrdiff_t, size_t,
+    AdditionalData, Callback, ColNr, Dict, DictItem, ExArg, Expand, FILE, FileComparison, FileMark,
+    FileMarkView, FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptInt, OptMagic, OptSet,
+    Pos, RegMatch, Taggy, Timestamp, TypVal, VarNumber, VimConv, int64_t, ptrdiff_t, size_t,
     typval_vval_union,
 };
 use crate::ui::ui_has;
@@ -104,7 +104,7 @@ pub const GETF_SETMARK: GetFileFlags = 1;
 pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
 pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
-pub const kEqualFiles: file_comparison = 1;
+pub const kEqualFiles: FileComparison = 1;
 pub const LSIZE: ::core::ffi::c_uint = 512;
 pub const DT_LTAG: ::core::ffi::c_uint = 11;
 pub const DT_JUMP: ::core::ffi::c_uint = 9;

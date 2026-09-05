@@ -407,15 +407,15 @@ impl Put {
                 let splits_a_line =
                     self.y_type == kMTLineWise && self.flags & PUT_LINE_SPLIT as c_int != 0;
                 if self.y_type == kMTCharWise || splits_a_line {
-                    let mut totsize: bcount_t = 0;
+                    let mut totsize: BCount = 0;
                     for i in 0..self.y_size.wrapping_sub(1) {
                         // SAFETY: `i` is below `y_size`.
-                        totsize += unsafe { (*self.y_array.add(i)).len() } as bcount_t + 1;
+                        totsize += unsafe { (*self.y_array.add(i)).len() } as BCount + 1;
                     }
                     let last = self.y_size.wrapping_sub(1);
                     // SAFETY: `y_size` is at least one, so `last` names a line.
                     let lastsize = unsafe { (*self.y_array.add(last)).len() } as c_int;
-                    totsize += lastsize as bcount_t;
+                    totsize += lastsize as BCount;
 
                     let buf = curbuf.get();
                     let at = new_cursor.lnum - 1;

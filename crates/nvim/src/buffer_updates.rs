@@ -37,8 +37,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Arena, Array, BufUpdateCallbacks, Buffer, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object,
-    bcount_t, int64_t, size_t, uint64_t,
+    Arena, Array, BCount, BufUpdateCallbacks, Buffer, ColNr, Integer, LineNr, LuaRef, LuaRetMode,
+    Object, int64_t, size_t, uint64_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -639,13 +639,13 @@ pub unsafe fn buf_updates_send_splice(
     buf: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
-    start_byte: bcount_t,
+    start_byte: BCount,
     old_row: c_int,
     old_col: ColNr,
-    old_byte: bcount_t,
+    old_byte: BCount,
     new_row: c_int,
     new_col: ColNr,
-    new_byte: bcount_t,
+    new_byte: BCount,
 ) {
     // SAFETY: the caller's promise.
     let buf = unsafe { Buf::new(buf) };
@@ -662,11 +662,11 @@ pub unsafe fn buf_updates_send_splice(
 struct Corner {
     row: c_int,
     col: ColNr,
-    byte: bcount_t,
+    byte: BCount,
 }
 
 impl Corner {
-    fn new(row: c_int, col: ColNr, byte: bcount_t) -> Self {
+    fn new(row: c_int, col: ColNr, byte: BCount) -> Self {
         Self { row, col, byte }
     }
 }

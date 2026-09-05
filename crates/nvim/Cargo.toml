@@ -91,6 +91,18 @@ unused_mut = "deny"
 # `Array.items`) reads as dead when it is the whole point of the statement.
 unused_assignments = "deny"
 
+# Every type c2rust emitted wore the C's name, so the crate root allowed this
+# for the whole transpile — 452 findings when the allow came off. Phase 27
+# renamed the tree's own types (the 212 `_T` typedefs, the `_S` tags and the
+# lowercase struct tags under them); what is left is 171 names that belong to
+# somebody else — libuv's `uv_loop_t`, libc's `size_t`, LuaJIT's
+# `lua_CFunction`, libmpack's tokens — plus c2rust's names for anonymous
+# struct members. Those 26 files carry a per-file `#![allow]` with a one-line
+# reason, and scripts/ratchet.py holds the count of them shrink-only under
+# `files_allowing_non_camel_case_types`. Denied here rather than in lib.rs so
+# it also governs the bin/test/bench roots, which were already clean.
+non_camel_case_types = "deny"
+
 # `just lint` runs clippy with correctness at its deny default; suspicious/
 # complexity/perf/style warn and burn down through the ratchet
 # (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,

@@ -28,7 +28,7 @@ use super::{
 use crate::decoration::SignCountHalf;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    ColNr, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, LineNr, MTPos, bcount_t,
+    BCount, ColNr, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, LineNr, MTPos,
     extmark_undo_vec_t,
 };
 
@@ -45,7 +45,7 @@ pub(crate) fn adjust(
     if splice_pending() {
         return;
     }
-    let start_byte = line_offset(buf, line1) as bcount_t;
+    let start_byte = line_offset(buf, line1) as BCount;
     let mut old_byte = 0;
     let mut new_byte = 0;
     let old_row;
@@ -53,7 +53,7 @@ pub(crate) fn adjust(
     if amount == MAXLNUM as LineNr {
         old_row = line2 - line1 + 1;
         // TODO(bfredl): ej kasta?
-        old_byte = buf.deleted_bytes2 as bcount_t;
+        old_byte = buf.deleted_bytes2 as BCount;
         new_row = amount_after + old_row;
     } else {
         // A region is either deleted (amount == MAXLNUM) or added
@@ -64,7 +64,7 @@ pub(crate) fn adjust(
         new_row = amount;
     }
     if new_row > 0 {
-        new_byte = line_offset(buf, line1 + new_row) as bcount_t - start_byte;
+        new_byte = line_offset(buf, line1 + new_row) as BCount - start_byte;
     }
     let start = Extent {
         row: line1 - 1,
@@ -107,7 +107,7 @@ pub(crate) fn splice(
     let start = Extent {
         row: start_row,
         col: start_col,
-        byte: (offset + start_col) as bcount_t,
+        byte: (offset + start_col) as BCount,
     };
     splice_impl(buf, start, old, new, undo);
 }

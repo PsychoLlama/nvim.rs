@@ -28,8 +28,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0, TypVal,
-    VAR_DICT, VarNumber, block_def, kListLenMayKnow,
+    BlockDef, Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0,
+    TypVal, VAR_DICT, VarNumber, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -44,7 +44,7 @@ const NOWHERE: Pos = Pos {
 
 /// A cleared block description. `block_prep` and `charwise_block_prep`
 /// fill it; nothing reads it before they do.
-const NO_BLOCK: block_def = block_def {
+const NO_BLOCK: BlockDef = BlockDef {
     startspaces: 0,
     endspaces: 0,
     textlen: 0,
@@ -325,7 +325,7 @@ fn block_oparg(p1: Pos, p2: Pos, is_select_exclusive: bool, block_width: c_int) 
 ///
 /// # Safety
 /// `bd` has been filled by one of the block-prep functions.
-unsafe fn block_def2str(bd: &block_def) -> String_0 {
+unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
     // SAFETY throughout: the caller's obligation. The allocation is exactly the three
     // pieces plus a terminator, and each piece is written once in order.
     let size = bd.startspaces as usize + bd.endspaces as usize + bd.textlen as usize;

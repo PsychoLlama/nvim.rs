@@ -15,16 +15,15 @@ use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, ArgList, Array, AucmdWin, BlnFlags, BreakAt, Buffer, BufferRef, Callback,
     Channel, CmdMod, CmdModFlags, ColNr, DecorState, DispTick, EStack, EStackType, EstackInfo,
-    Exception, FILE, FileMark, FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop,
-    LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MatchState, MsgList,
-    MultiQueue, NS, Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch,
-    RegMMatch, RegMatch, RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
-    Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType, XFileMark,
-    caller_scope, file_comparison, int16_t, int32_t, int64_t, nlua_ref_state_t, nvim_stats_s,
-    size_t, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
-    uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
-    uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u,
-    uv_timer_t,
+    Exception, FILE, FileComparison, FileMark, FileMarkView, Frame, GArray, Handle, Hlf, LPos,
+    LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MatchState,
+    MsgList, MultiQueue, NS, NluaRefState, Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount,
+    RegExtMatch, RegMMatch, RegMatch, RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition,
+    StlSyntax, Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType,
+    XFileMark, caller_scope, int16_t, int32_t, int64_t, nvim_stats_s, size_t, uint8_t, uint32_t,
+    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -124,7 +123,7 @@ pub(crate) const WIN_TABS: c_uint = 3;
 pub(crate) const WIN_VER: c_uint = 2;
 pub(crate) const WIN_HOR: c_uint = 1;
 pub(crate) const EDIT_STDIN: c_uint = 2;
-pub(crate) const kEqualFiles: file_comparison = 1;
+pub(crate) const kEqualFiles: FileComparison = 1;
 pub(crate) const DOSO_VIMRC: c_uint = 1;
 pub(crate) const DOSO_NONE: c_uint = 0;
 pub(crate) const EDIT_FILE: c_uint = 1;
@@ -215,7 +214,7 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
         lvl: 0,
         x: ::core::ptr::null_mut::<MTNode>(),
         i: 0,
-        s: [MarkTreeIter_s { oldcol: 0, i: 0 }; 20],
+        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
         intersect_idx: 0,
         intersect_pos: MTPos { row: 0, col: 0 },
         intersect_pos_x: MTPos { row: 0, col: 0 },
@@ -1213,8 +1212,8 @@ pub static hl_attr_active: GlobalCell<*mut c_int> =
     GlobalCell::new((highlight_attr.as_raw() as *const _) as *mut c_int);
 pub static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const LUA_GLOBALSINDEX: c_int = -10002 as c_int;
-pub static nlua_global_refs: GlobalCell<*mut nlua_ref_state_t> =
-    GlobalCell::new(::core::ptr::null_mut::<nlua_ref_state_t>());
+pub static nlua_global_refs: GlobalCell<*mut NluaRefState> =
+    GlobalCell::new(::core::ptr::null_mut::<NluaRefState>());
 pub static nlua_disable_preload: SharedCell<bool> = SharedCell::new(false);
 pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
     uv: uv_loop_t {

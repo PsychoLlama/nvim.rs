@@ -6,6 +6,9 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// libxdiff's interface: `mmfile_t` and the emit callbacks keep the vendored
+// engine's C names.
+#![allow(non_camel_case_types)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.

@@ -119,7 +119,7 @@ pub(crate) unsafe fn op_replace(oap: *mut OpArg, mut c: c_int) -> Result<(), Fai
 ///
 /// `oap` must be blockwise.
 fn replace_block(oap: Op, c: c_int, had_ctrl_v_cr: bool) {
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     bd.is_MAX = c_int::from(cur_win().w_curswant == MAXCOL);
     while cur_win().w_cursor.lnum <= oap.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
@@ -142,7 +142,7 @@ fn replace_block(oap: Op, c: c_int, had_ctrl_v_cr: bool) {
 /// `\n` and no CTRL-V there is no "after": the tail becomes a new line.
 ///
 /// `oap` and `bd` must describe the cursor line, as [`block_prep`] left them.
-fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: bool) {
+fn replace_block_line(mut oap: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bool) {
     // Replacing with `\r`/`\n` splits the line rather than overwriting.
     let splits_line = !had_ctrl_v_cr && (c == '\r' as c_int || c == '\n' as c_int);
 
@@ -242,8 +242,8 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
         unsafe { xfree(after_p as *mut c_void) };
     }
     drop(splice);
-    let old_bytes = bd.textlen as bcount_t;
-    let new_bytes = (newrows + newcols) as bcount_t;
+    let old_bytes = bd.textlen as BCount;
+    let new_bytes = (newrows + newcols) as BCount;
     let row = baselnum as c_int - 1;
     let (col, len) = (bd.textcol, bd.textlen);
     let op = kExtmarkUndo;

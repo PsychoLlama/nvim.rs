@@ -42,7 +42,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut OpArg) {
 
     let mut pos: Pos = oap.start;
     if oap.motion_type == kMTBlockWise {
-        let mut bd = block_def::ZERO;
+        let mut bd = BlockDef::ZERO;
         while pos.lnum <= oap.end.lnum {
             unsafe { block_prep(oap.raw(), &raw mut bd, pos.lnum, false) };
             pos.col = bd.textcol;

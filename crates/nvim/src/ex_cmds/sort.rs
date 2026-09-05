@@ -38,7 +38,7 @@ use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg;
 use crate::types::{
-    ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, RegMatch, VarNumber, bcount_t, size_t,
+    BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, RegMatch, VarNumber, size_t,
 };
 use crate::undo::u_save;
 use ::libc::{strcasecmp, strcoll, strtod};
@@ -556,8 +556,8 @@ struct Placed {
     /// The line below the last one appended.
     lnum: LineNr,
     /// What was read and what was written, for the extmark splice.
-    old_bytes: bcount_t,
-    new_bytes: bcount_t,
+    old_bytes: BCount,
+    new_bytes: BCount,
     /// A line ended up somewhere other than where it started.
     moved: bool,
     /// The user interrupted the walk.
@@ -605,7 +605,7 @@ unsafe fn append_sorted(
         // and "unique" needs it next time round.
         // SAFETY: caller's contract, and the handle dies before the append.
         // Include the EOL in the byte length.
-        let bytelen = unsafe { current.fill_line(get_lnum) } as bcount_t + 1;
+        let bytelen = unsafe { current.fill_line(get_lnum) } as BCount + 1;
         placed.old_bytes += bytelen;
 
         // SAFETY: both scratch buffers are NUL-terminated.

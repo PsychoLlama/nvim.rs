@@ -233,7 +233,7 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
     let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
     u_save(above, below)?;
 
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     let mut lnum = cur_win().w_cursor.lnum;
     while lnum <= oap.end.lnum {
         unsafe { block_prep(oap.raw(), &raw mut bd, lnum, true) };
@@ -457,7 +457,7 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
     let (lnum, col) = (startpos.lnum, startpos.col);
     let buf = cur_buf();
     let spanned = get_region_bytecount(buf, lnum, oap.end.lnum, col, oap.end.col);
-    let deleted_bytes = spanned + bcount_t::from(oap.inclusive);
+    let deleted_bytes = spanned + BCount::from(oap.inclusive);
 
     // From the cursor to the end of the line.
     unsafe { truncate_line(1) };

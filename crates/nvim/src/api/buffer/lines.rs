@@ -151,7 +151,7 @@ pub unsafe fn nvim_buf_set_lines(
             let why = c"Failed to save undo information";
             error = Error::exception(why);
         } else {
-            let deleted_bytes: bcount_t =
+            let deleted_bytes: BCount =
                 get_region_bytecount(buf, start as LineNr, end as LineNr, 0 as ColNr, 0 as ColNr);
             let to_delete: size_t = if new_len < old_len {
                 old_len.wrapping_sub(new_len)
@@ -172,7 +172,7 @@ pub unsafe fn nvim_buf_set_lines(
                 extra -= to_delete as ptrdiff_t;
             }
             let to_replace: size_t = if old_len < new_len { old_len } else { new_len };
-            let mut inserted_bytes: bcount_t = 0 as bcount_t;
+            let mut inserted_bytes: BCount = 0 as BCount;
             let mut i_1: size_t = 0 as size_t;
             while i_1 < to_replace {
                 let lnum: int64_t = start as int64_t + i_1 as int64_t;
@@ -192,8 +192,8 @@ pub unsafe fn nvim_buf_set_lines(
                     error = Error::exception(why);
                     break 's_382;
                 } else {
-                    inserted_bytes += unsafe { cstr::bytes_at(*lines.add(i_1)) }.len() as bcount_t
-                        + 1 as bcount_t;
+                    inserted_bytes +=
+                        unsafe { cstr::bytes_at(*lines.add(i_1)) }.len() as BCount + 1 as BCount;
                     i_1 = i_1.wrapping_add(1);
                 }
             }
@@ -217,8 +217,8 @@ pub unsafe fn nvim_buf_set_lines(
                     error = Error::exception(why);
                     break 's_382;
                 } else {
-                    inserted_bytes += unsafe { cstr::bytes_at(*lines.add(i_2)) }.len() as bcount_t
-                        + 1 as bcount_t;
+                    inserted_bytes +=
+                        unsafe { cstr::bytes_at(*lines.add(i_2)) }.len() as BCount + 1 as BCount;
                     extra += 1;
                     i_2 = i_2.wrapping_add(1);
                 }

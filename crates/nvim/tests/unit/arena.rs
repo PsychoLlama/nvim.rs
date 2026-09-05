@@ -35,7 +35,7 @@ use neovim::memory::arena::{
     arena_mem_free,
 };
 use neovim::memory::xfree;
-use neovim::types::{Arena, consumed_blk};
+use neovim::types::{Arena, ConsumedBlk};
 
 use crate::support::alloc::{AllocLog, freed};
 
@@ -49,7 +49,7 @@ fn malloc<T>(size: usize, ret: *const T) -> AllocEvent {
 
 /// The size at which a request stops being worth a shared block.
 fn oversize_threshold() -> usize {
-    (ARENA_BLOCK_SIZE - size_of::<consumed_blk>()) / 2
+    (ARENA_BLOCK_SIZE - size_of::<ConsumedBlk>()) / 2
 }
 
 /// Empty the module's reuse list, so a case measures its own allocations

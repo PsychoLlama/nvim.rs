@@ -326,7 +326,7 @@ fn shift_block(oap: Op, amount: c_int) {
     p_ri.set(0);
     State.set(MODE_INSERT);
 
-    let mut bd = block_def::ZERO;
+    let mut bd = BlockDef::ZERO;
     let lnum = cur_win().w_cursor.lnum;
     unsafe { block_prep(oap.raw(), &raw mut bd, lnum, true) };
     if bd.is_short != 0 {
@@ -366,7 +366,7 @@ fn shift_block(oap: Op, amount: c_int) {
 /// the run starts, because the caller reports the change from there.
 ///
 /// `bd` must describe the cursor line, as [`block_prep`] left it.
-fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine {
+fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it
     // and every walk below stops at a non-white character or its NUL.
     let old_p = get_cursor_line_ptr();
@@ -461,7 +461,7 @@ fn shift_block_right(bd: &mut block_def, mut total: c_int) -> ShiftedLine {
 /// gap, and a TAB the destination lands inside becomes `fill` spaces.
 ///
 /// `bd` must describe the cursor line, as [`block_prep`] left it.
-fn shift_block_left(oap: Op, bd: &mut block_def, total: c_int) -> ShiftedLine {
+fn shift_block_left(oap: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it
     // and both walks below stop at a character the line really holds.
     let old_p = get_cursor_line_ptr();

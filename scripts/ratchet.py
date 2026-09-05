@@ -482,6 +482,21 @@ plus these whole-tree metrics, which are not per-file:
                     a marker — which is exactly the state the criterion
                     describes, and why lib.rs went last.
 
+  files_allowing_non_camel_case_types  the number of source files carrying
+                    #![allow(non_camel_case_types)]. The same shape as the
+                    three above, one step further along: the lint was allowed
+                    at the crate root for the whole transpile, because every
+                    type c2rust emitted wore the C's name. Phase 27 renamed
+                    them, so the root allow is gone and the lint is denied in
+                    Cargo.toml; what still needs the allow is a file whose
+                    type names are a *foreign* library's -- libuv's
+                    `uv_loop_t`, libc's `size_t`, LuaJIT's `lua_CFunction` --
+                    or one still holding c2rust's name for an anonymous
+                    member. Each such file writes the allow with a one-line
+                    reason and the count of them may only fall. A new file has
+                    no business taking it unless it is describing someone
+                    else's ABI.
+
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
 every local and CI build instead, so the counter is retired.
@@ -909,6 +924,10 @@ DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
 # A module's claim to have finished its casts. `.` spans newlines so the list
 # may be wrapped; `clippy::cast_lossless` is the family's marker (see above).
 DENY_CASTS = re.compile(r"#!\[deny\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
+# A file's claim that its type names are someone else's -- a linked library's
+# ABI, or c2rust's spelling of an anonymous member. Counted per file, not per
+# finding: the unit of work is emptying a file of them.
+ALLOW_NON_CAMEL = "#![allow(non_camel_case_types)]"
 # A `# Safety` heading in a doc comment. Any heading level, any case, because
 # what is being counted is whether the obligation is written down.
 SAFETY_HEADING = re.compile(r"^\s*///\s*#+\s*safety\b", re.IGNORECASE)
@@ -1561,12 +1580,14 @@ def measure():
     number of files not carrying the forbid attribute,
     number of files carrying neither forbid nor the unsafe-op deny,
     number of files not carrying the cast deny,
+    number of files allowing non_camel_case_types,
     repo-relative file -> its masked source, for the whole-tree checks)."""
     stats = {}
     tree = {}
     without_forbid = 0
     without_deny = 0
     without_casts = 0
+    allowing_non_camel = 0
     for path in sorted(
         [*ROOT.glob("crates/*/src/**/*.rs"), *ROOT.glob("crates/*/*.rs")]
     ):
@@ -1587,7 +1608,8 @@ def measure():
         without_forbid += FORBID not in masked
         without_deny += FORBID not in masked and DENY_UNSAFE_OP not in masked
         without_casts += DENY_CASTS.search(masked) is None
-    return stats, without_forbid, without_deny, without_casts, tree
+        allowing_non_camel += ALLOW_NON_CAMEL in masked
+    return stats, without_forbid, without_deny, without_casts, allowing_non_camel, tree
 
 
 def ledgers():
@@ -1824,7 +1846,14 @@ def check_names(tree):
         )
 
 
-def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
+def render(
+    stats,
+    ledger_counts,
+    without_forbid,
+    without_deny,
+    without_casts,
+    allowing_non_camel,
+):
     """The baseline document: only metrics with ratchet room are recorded
     (nonzero counts, over-cap line counts), so files that are already clean
     and under the cap don't churn the file as they're edited."""
@@ -1847,6 +1876,7 @@ def render(stats, ledger_counts, without_forbid, without_deny, without_casts):
         f'  "files_without_forbid_unsafe": {without_forbid},\n'
         f'  "files_without_deny_unsafe_op": {without_deny},\n'
         f'  "files_without_deny_casts": {without_casts},\n'
+        f'  "files_allowing_non_camel_case_types": {allowing_non_camel},\n'
         f'  "files": {{\n{body}\n  }}\n'
         "}\n"
     )
@@ -1896,7 +1926,15 @@ VOCABULARY_KEYS = (
 )
 
 
-def violations(stats, counts, without_forbid, without_deny, without_casts, baseline):
+def violations(
+    stats,
+    counts,
+    without_forbid,
+    without_deny,
+    without_casts,
+    allowing_non_camel,
+    baseline,
+):
     """Every metric that grew past the committed baseline."""
     found = []
     for name, label in WHOLE_TREE_LABEL.items():
@@ -1916,6 +1954,14 @@ def violations(stats, counts, without_forbid, without_deny, without_casts, basel
     base_casts = baseline.get("files_without_deny_casts", without_casts)
     if without_casts > base_casts:
         found.append(f"files without the cast deny: {base_casts} -> {without_casts}")
+    base_non_camel = baseline.get(
+        "files_allowing_non_camel_case_types", allowing_non_camel
+    )
+    if allowing_non_camel > base_non_camel:
+        found.append(
+            f"files allowing non_camel_case_types: "
+            f"{base_non_camel} -> {allowing_non_camel}"
+        )
     base_files = baseline["files"]
     counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     for file in sorted(stats.keys() | base_files.keys()):
@@ -1931,7 +1977,9 @@ def violations(stats, counts, without_forbid, without_deny, without_casts, basel
     return found
 
 
-def summary(stats, counts, without_forbid, without_deny, without_casts):
+def summary(
+    stats, counts, without_forbid, without_deny, without_casts, allowing_non_camel
+):
     counted = (*COUNTED, *COUNTED_RE, *DERIVED)
     totals = {name: sum(c[name] for c in stats.values()) for name in counted}
     over = sum(c["lines"] > LINE_CAP for c in stats.values())
@@ -1948,6 +1996,7 @@ def summary(stats, counts, without_forbid, without_deny, without_casts):
         f"{without_forbid} files without forbid(unsafe_code)",
         f"{without_deny} files also without deny(unsafe_op_in_unsafe_fn)",
         f"{without_casts} files without the cast deny",
+        f"{allowing_non_camel} files allowing non_camel_case_types",
     ]
     parts += [f"{counts[name]} {name}" for name in VOCABULARY_KEYS]
     return ", ".join(parts)
@@ -2047,6 +2096,15 @@ SELF_TEST_DENY_CASTS = [
     ("#![deny(clippy::ptr_as_ptr)]\n", False),
     # Prose about the attribute does not switch it on.
     ("//! Adopt `#![deny(clippy::cast_lossless)]` here one day.\n", False),
+]
+# (source, expected: does the file allow non_camel_case_types?)
+SELF_TEST_ALLOW_NON_CAMEL = [
+    ("#![allow(non_camel_case_types)]\n", True),
+    ("#![allow(non_snake_case)]\n", False),
+    # An item-level allow is a different attribute and is not the claim.
+    ("#[allow(non_camel_case_types)]\nstruct uv_loop_t;\n", False),
+    # Prose about the attribute does not switch it on.
+    ("//! `#![allow(non_camel_case_types)]` is what libuv's names need.\n", False),
 ]
 # (source, expected number of lines exempted from the line cap)
 SELF_TEST_TEST_MODULE = [
@@ -2557,6 +2615,11 @@ def self_test():
     for source, expected in SELF_TEST_DENY_CASTS:
         got = DENY_CASTS.search(mask(source)) is not None
         assert got == expected, f"cast deny={got}, want {expected}, for {source!r}"
+    for source, expected in SELF_TEST_ALLOW_NON_CAMEL:
+        got = ALLOW_NON_CAMEL in mask(source)
+        assert got == expected, (
+            f"allow non_camel_case_types={got}, want {expected}, for {source!r}"
+        )
     for source, expected in SELF_TEST_TEST_MODULE:
         got = len(test_module_lines(mask(source)))
         assert got == expected, (
@@ -2676,7 +2739,9 @@ def main():
         sys.exit(f"ratchet: unknown argument(s): {' '.join(sorted(unknown))}")
 
     self_test()
-    stats, without_forbid, without_deny, without_casts, tree = measure()
+    stats, without_forbid, without_deny, without_casts, allowing_non_camel, tree = (
+        measure()
+    )
     check_place_writes(tree)
     check_borrowed_derefs(tree)
     check_deref_temporary_mutations(tree)
@@ -2687,7 +2752,9 @@ def main():
     check_names(tree)
     check_perimeter(stats)
     counts = {**ledgers(), **whole_tree(stats, tree)}
-    content = render(stats, counts, without_forbid, without_deny, without_casts)
+    content = render(
+        stats, counts, without_forbid, without_deny, without_casts, allowing_non_camel
+    )
     committed = BASELINE.read_text() if BASELINE.exists() else None
 
     if "--check" in args:
@@ -2701,6 +2768,7 @@ def main():
             without_forbid,
             without_deny,
             without_casts,
+            allowing_non_camel,
             json.loads(committed),
         ):
             print("\n".join(grew), file=sys.stderr)
@@ -2723,6 +2791,7 @@ def main():
             without_forbid,
             without_deny,
             without_casts,
+            allowing_non_camel,
             json.loads(committed),
         ):
             print("\n".join(grew), file=sys.stderr)
@@ -2733,7 +2802,7 @@ def main():
     BASELINE.write_text(content)
     print(
         f"wrote {BASELINE.relative_to(ROOT)}: "
-        f"{summary(stats, counts, without_forbid, without_deny, without_casts)}"
+        f"{summary(stats, counts, without_forbid, without_deny, without_casts, allowing_non_camel)}"
     )
 
 
