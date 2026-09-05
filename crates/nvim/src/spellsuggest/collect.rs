@@ -1,7 +1,7 @@
 //! Keeping the list of candidate suggestions.
 //!
 //! Everything that finds a candidate word funnels into [`add_suggestion`],
-//! which is the only place a `suggest_T` is created. It also decides what
+//! which is the only place a `Suggest` is created. It also decides what
 //! "the same suggestion" means: two candidates are the same when they
 //! replace the same stretch of the bad word with the same text, and the
 //! lower of the two scores wins.
@@ -33,8 +33,8 @@ use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memory::{xmemdupz, xstrlcpy};
 use crate::spell::{spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
-use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs};
-use crate::types::{__compar_fn_t, Hlf, size_t, slang_T};
+use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
+use crate::types::{__compar_fn_t, Hlf, SpellLang, size_t};
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -52,7 +52,7 @@ fn rescore(word_score: c_int, sound_score: c_int) -> c_int {
 /// How many suggestions to keep when the list is cleaned up. Always
 /// comfortably more than will be displayed, because a later pass can
 /// rescore them and change the order.
-pub(super) fn clean_count(su: &suginfo_T) -> c_int {
+pub(super) fn clean_count(su: &SugInfo) -> c_int {
     if su.su_maxcount < 130 {
         150
     } else {
@@ -61,7 +61,7 @@ pub(super) fn clean_count(su: &suginfo_T) -> c_int {
 }
 
 /// The size the list is allowed to reach before it gets cleaned up.
-fn max_count(su: &suginfo_T) -> c_int {
+fn max_count(su: &SugInfo) -> c_int {
     clean_count(su) + 50
 }
 
@@ -77,14 +77,14 @@ fn max_count(su: &suginfo_T) -> c_int {
 /// word must still point into the line it came from.
 #[allow(clippy::too_many_arguments)]
 pub(super) unsafe fn add_suggestion(
-    su: *mut suginfo_T,
-    gap: *mut Vec<suggest_T>,
+    su: *mut SugInfo,
+    gap: *mut Vec<Suggest>,
     goodword: *const c_char,
     badlenarg: c_int,
     score: c_int,
     altscore: c_int,
     had_bonus: bool,
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     maxsf: bool,
 ) {
     // Minimise "badlen" for consistency: changing "the the" to "thee
@@ -192,7 +192,7 @@ pub(super) unsafe fn add_suggestion(
     word.push(0);
     // SAFETY: as above.
     let list = unsafe { &mut *gap };
-    list.push(suggest_T {
+    list.push(Suggest {
         st_word: word.into_boxed_slice(),
         st_wordlen: goodlen,
         st_orglen: badlen,
@@ -224,8 +224,8 @@ pub(super) unsafe fn add_suggestion(
 ///
 /// # Safety
 ///
-/// `su` and `gap` must be valid and `gap` must hold `suggest_T`s.
-pub(super) unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut Vec<suggest_T>) {
+/// `su` and `gap` must be valid and `gap` must hold `Suggest`s.
+pub(super) unsafe fn check_suggestions(su: *mut SugInfo, gap: *mut Vec<Suggest>) {
     let mut longword = [0 as c_char; MAXWLEN + 1];
     // SAFETY: `gap` is one of `su`'s two lists by the contract above, and
     // the list is taken afresh at each step rather than held across
@@ -269,7 +269,7 @@ pub(super) unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut Vec<suggest
 /// # Safety
 ///
 /// `su` must be valid and `word` NUL-terminated.
-pub(super) unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
+pub(super) unsafe fn add_banned(su: *mut SugInfo, word: *mut c_char) {
     // SAFETY: `word` is NUL-terminated and `su` is valid by the contract
     // above, so `su_banned` is a live hash table; `hash_add_item` is handed
     // back the `hi`/`hash` pair `hash_lookup` just produced for it, and the
@@ -290,7 +290,7 @@ pub(super) unsafe fn add_banned(su: *mut suginfo_T, word: *mut c_char) {
 /// # Safety
 ///
 /// `su` must be valid.
-pub(super) unsafe fn rescore_suggestions(su: *mut suginfo_T) {
+pub(super) unsafe fn rescore_suggestions(su: *mut SugInfo) {
     // SAFETY: `su` is valid by the contract above, so `su_ga` is its own
     // suggestion list.
     if unsafe { (*su).su_sallang }.is_null() {
@@ -311,7 +311,7 @@ pub(super) unsafe fn rescore_suggestions(su: *mut suginfo_T) {
 /// # Safety
 ///
 /// `su` must be valid and `gap` be one of its two lists, with `at` inside it.
-pub(super) unsafe fn rescore_one(su: *mut suginfo_T, gap: *mut Vec<suggest_T>, at: usize) {
+pub(super) unsafe fn rescore_one(su: *mut SugInfo, gap: *mut Vec<Suggest>, at: usize) {
     // SAFETY: the caller guarantees `gap` and `at`.
     let stp = &unsafe { &*gap }[at];
     let (slang, had_bonus) = (stp.st_slang, stp.st_had_bonus);
@@ -348,8 +348,8 @@ pub(super) unsafe fn rescore_one(su: *mut suginfo_T, gap: *mut Vec<suggest_T>, a
 /// `su` must be valid, `slang` loaded, and `word` a NUL-terminated string
 /// of `wordlen` bytes that outlives the call.
 unsafe fn sal_rescore(
-    su: *mut suginfo_T,
-    slang: *mut slang_T,
+    su: *mut SugInfo,
+    slang: *mut SpellLang,
     word: *mut c_char,
     wordlen: c_int,
     orglen: c_int,
@@ -384,11 +384,11 @@ unsafe fn sal_rescore(
 ///
 /// # Safety
 ///
-/// Both pointers must be to `suggest_T`s, as `qsort` guarantees.
+/// Both pointers must be to `Suggest`s, as `qsort` guarantees.
 pub(super) unsafe extern "C" fn sug_compare(s1: *const c_void, s2: *const c_void) -> c_int {
     // SAFETY: `qsort` passes pointers to the elements of the array it was
-    // given, which is an array of `suggest_T`.
-    let (p1, p2) = unsafe { (&*(s1 as *const suggest_T), &*(s2 as *const suggest_T)) };
+    // given, which is an array of `Suggest`.
+    let (p1, p2) = unsafe { (&*(s1 as *const Suggest), &*(s2 as *const Suggest)) };
     match p1.st_score.cmp(&p2.st_score) {
         core::cmp::Ordering::Less => -1,
         core::cmp::Ordering::Greater => 1,
@@ -410,7 +410,7 @@ pub(super) unsafe extern "C" fn sug_compare(s1: *const c_void, s2: *const c_void
 ///
 /// `gap` must be a live suggestion list.
 pub(super) unsafe fn cleanup_suggestions(
-    gap: *mut Vec<suggest_T>,
+    gap: *mut Vec<Suggest>,
     maxscore: c_int,
     keep: c_int,
 ) -> c_int {
@@ -422,11 +422,11 @@ pub(super) unsafe fn cleanup_suggestions(
 
     let cmp = Some(sug_compare as unsafe extern "C" fn(*const c_void, *const c_void) -> c_int)
         as __compar_fn_t;
-    // SAFETY: the buffer really is `len` `suggest_T`s, which is the size
+    // SAFETY: the buffer really is `len` `Suggest`s, which is the size
     // the comparator reads at each of the pointers `qsort` hands it, and
     // `qsort` only permutes them -- which for these is a move.
     let (data, len) = (list.as_mut_ptr().cast::<c_void>(), list.len());
-    unsafe { qsort(data, len as size_t, size_of::<suggest_T>() as size_t, cmp) };
+    unsafe { qsort(data, len as size_t, size_of::<Suggest>() as size_t, cmp) };
 
     let keep = keep.max(0) as usize;
     if list.len() <= keep {
@@ -447,7 +447,7 @@ pub(super) unsafe fn cleanup_suggestions(
 ///
 /// `su` must be valid and the current window must have its languages
 /// loaded.
-pub(super) unsafe fn score_comp_sal(su: *mut suginfo_T) {
+pub(super) unsafe fn score_comp_sal(su: *mut SugInfo) {
     // Use the sound folding of the first language that has any.
     //
     // SAFETY: the languages come from the current window's loaded list.
@@ -481,7 +481,7 @@ pub(super) unsafe fn score_comp_sal(su: *mut suginfo_T) {
         }
         let copy = unsafe { &(*su).su_ga }[i].st_word.clone();
         unsafe {
-            (*su).su_sga.push(suggest_T {
+            (*su).su_sga.push(Suggest {
                 st_word: copy,
                 st_wordlen: wordlen,
                 st_orglen: orglen,
@@ -505,16 +505,16 @@ pub(super) unsafe fn score_comp_sal(su: *mut suginfo_T) {
 /// # Safety
 ///
 /// `su` must be valid.
-pub(super) unsafe fn score_combine(su: *mut suginfo_T) {
+pub(super) unsafe fn score_combine(su: *mut SugInfo) {
     let mut badsound = EMPTY_SOUND;
-    let mut slang: *mut slang_T = ptr::null_mut();
+    let mut slang: *mut SpellLang = ptr::null_mut();
 
     // Give the edit-distance list a sound-a-like score.
     //
     // SAFETY: the languages come from the current window's loaded list;
     // `su` is valid by the contract above, so `su_fbadword` is the bad
     // word's NUL-terminated fold and `su_ga` one of its own growarrays of
-    // `suggest_T`. `badsound` has room for a soundfold.
+    // `Suggest`. `badsound` has room for a soundfold.
     let langs = unsafe { window_langs() };
     if let Some(lp) = langs
         .iter()
@@ -591,7 +591,7 @@ pub(super) unsafe fn score_combine(su: *mut suginfo_T) {
             mem::take(&mut (*su).su_sga).into_iter(),
         )
     };
-    let mut merged: Vec<suggest_T> = Vec::new();
+    let mut merged: Vec<Suggest> = Vec::new();
     loop {
         let round = [main.next(), sound.next()];
         if round.iter().all(Option::is_none) {

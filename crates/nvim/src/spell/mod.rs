@@ -47,8 +47,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, ExArg, LineNr, OpArg, Pos, SpellMoveType, Window, file_comparison, langp_T,
-    searchit_arg_T, size_t, slang_T, spelltab_T, uint8_t,
+    ColNr, ExArg, LangP, LineNr, OpArg, Pos, SpellLang, SpellMoveType, SpellTab, Window,
+    file_comparison, searchit_arg_T, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy};
@@ -114,7 +114,7 @@ crate::flag_set! {
     const AFX = 0x20;
     /// A mix of upper and lower case: "macaRONI". **The same bit as
     /// [`Self::AFX`]**, and upstream means it: this one appears only in
-    /// `suginfo_T::su_badflags`, which never holds a tree flag, and that one
+    /// `SugInfo::su_badflags`, which never holds a tree flag, and that one
     /// only in the tree.
     const MIXCAP = 0x20;
     /// Do not accept the word spelled in all capitals.
@@ -195,18 +195,18 @@ pub const CHAR_DIGIT: CharType = 2;
 
 /// The longest `SYLLABLE` item.
 pub const SY_MAXLEN: c_int = 30;
-/// A `wordcount_T`'s key starts this far into it, so a hash item's key
+/// A `WordCount`'s key starts this far into it, so a hash item's key
 /// pointer can be walked back to the struct. Derived from the type rather
 /// than spelled out: the word-count table stores the record and hashes on
 /// the inline `wc_word`, so a wrong value here is a wild pointer.
-pub const WC_KEY_OFF: usize = ::core::mem::offset_of!(crate::types::wordcount_T, wc_word);
+pub const WC_KEY_OFF: usize = ::core::mem::offset_of!(crate::types::WordCount, wc_word);
 
 /// State threaded through one word's lookup, so that the tree walk and the
 /// compound recursion can pass it around in one piece rather than a dozen
 /// arguments.
-pub struct matchinf_T {
+pub struct MatchInf {
     /// The language being tried.
-    pub mi_lp: *mut langp_T,
+    pub mi_lp: *mut LangP,
     /// The word as written, at its first character.
     pub mi_word: *mut c_char,
     /// One past the last character accepted so far.
@@ -244,28 +244,28 @@ pub struct matchinf_T {
 
 /// One `SYLLABLE` item: a short sequence of characters counting as one
 /// syllable.
-pub struct syl_item_T {
+pub struct SylItem {
     pub sy_chars: [c_char; SY_MAXLEN as usize],
     pub sy_len: c_int,
 }
 
 /// The cookie `do_in_runtimepath` carries while loading a language.
-pub struct spelload_T {
+pub struct SpellLoad {
     /// The language name, truncated when an error is found.
     pub sl_lang: [c_char; MAXWLEN + 1],
     /// The last file loaded.
-    pub sl_slang: *mut slang_T,
+    pub sl_slang: *mut SpellLang,
     /// Whether any file so far declared NOBREAK.
     pub sl_nobreak: c_int,
 }
 
 /// Every language loaded, chained on `sl_next`.
-pub static first_lang: GlobalCell<*mut slang_T> = GlobalCell::new(::core::ptr::null_mut());
+pub static first_lang: GlobalCell<*mut SpellLang> = GlobalCell::new(::core::ptr::null_mut());
 /// The word list `zg` appends to when `'spellfile'` is empty.
 pub static int_wordlist: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut());
 
 /// The character table currently in force.
-pub static spelltab: GlobalCell<spelltab_T> = GlobalCell::new(spelltab_T {
+pub static spelltab: GlobalCell<SpellTab> = GlobalCell::new(SpellTab {
     st_isw: [false; 256],
     st_isu: [false; 256],
     st_fold: [0; 256],

@@ -38,8 +38,8 @@ use super::aff::AffState;
 use super::flags::{aff_process_flags, affitem2flag, check_renumber};
 use super::wordtree::tree_add_word;
 use super::{
-    AH_KEY_LEN, MAXLINELEN, PFX_FLAGS, WFP_COMPFORBID, WFP_COMPPERMIT, WFP_NC, WFP_UP, affentry_T,
-    afffile_T, affheader_T, spellinfo_T, vim_regcomp, vim_regfree,
+    AH_KEY_LEN, AffEntry, AffFile, AffHeader, MAXLINELEN, PFX_FLAGS, SpellInfo, WFP_COMPFORBID,
+    WFP_COMPPERMIT, WFP_NC, WFP_UP, vim_regcomp, vim_regfree,
 };
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
@@ -49,8 +49,8 @@ use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn handle_affix_header(
-    spin: &mut spellinfo_T,
-    aff: &mut afffile_T,
+    spin: &mut SpellInfo,
+    aff: &mut AffFile,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -72,7 +72,7 @@ pub(super) unsafe fn handle_affix_header(
 
     if hi.is_kept() {
         // A continued block for an affix already defined.
-        st.cur_aff = unsafe { affheader_T::of_key(hi.hi_key) };
+        st.cur_aff = unsafe { AffHeader::of_key(hi.hi_key) };
         if (unsafe { (*st.cur_aff).ah_combine } != 0) != combines {
             // SAFETY: the affix file's name and the item, NUL-terminated.
             let (file, item) = unsafe { (c_str(fname), c_str(items[1])) };
@@ -87,7 +87,7 @@ pub(super) unsafe fn handle_affix_header(
             smsg!(0, "Duplicate affix in {fname} line {}: {arg2}", lnum);
         }
     } else {
-        st.cur_aff = spin.si_arena.alloc::<affheader_T>();
+        st.cur_aff = spin.si_arena.alloc::<AffHeader>();
         unsafe { (*st.cur_aff).ah_flag = affitem2flag(aff.af_flagtype, items[1], fname, lnum) };
         // An unusable name is fatal: the key would not fit, or the
         // flag could not be read.
@@ -115,8 +115,8 @@ pub(super) unsafe fn handle_affix_header(
                 lnum
             );
         }
-        unsafe { strcpy(affheader_T::key(st.cur_aff), items[1]) };
-        let _ = unsafe { hash_add(tp, affheader_T::key(st.cur_aff)) };
+        unsafe { strcpy(AffHeader::key(st.cur_aff), items[1]) };
+        let _ = unsafe { hash_add(tp, AffHeader::key(st.cur_aff)) };
         unsafe { (*st.cur_aff).ah_combine = combines as c_int };
     }
 
@@ -164,8 +164,8 @@ pub(super) unsafe fn handle_affix_header(
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn handle_affix_entry(
-    spin: &mut spellinfo_T,
-    aff: &mut afffile_T,
+    spin: &mut SpellInfo,
+    aff: &mut AffFile,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -185,7 +185,7 @@ pub(super) unsafe fn handle_affix_entry(
     }
     st.aff_todo -= 1;
 
-    let entry = spin.si_arena.alloc::<affentry_T>();
+    let entry = spin.si_arena.alloc::<AffEntry>();
     if unsafe { !cstr::eq_bytes(items[2], b"0") } {
         unsafe { (*entry).ae_chop = spin.si_arena.save_str(items[2]) };
     }
@@ -239,9 +239,9 @@ pub(super) unsafe fn handle_affix_entry(
 ///
 /// As [`handle_affix_entry`].
 pub(super) unsafe fn postpone_prefix(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     st: &mut AffState,
-    entry: *mut affentry_T,
+    entry: *mut AffEntry,
     items: &[*mut c_char],
 ) {
     // SAFETY: the caller promises the entry and the items.
@@ -312,9 +312,9 @@ pub(super) unsafe fn postpone_prefix(
 ///
 /// As [`postpone_prefix`].
 pub(super) unsafe fn file_postponed_prefix(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     st: &mut AffState,
-    entry: *mut affentry_T,
+    entry: *mut AffEntry,
     upper: bool,
 ) {
     // SAFETY: the caller promises the entry.

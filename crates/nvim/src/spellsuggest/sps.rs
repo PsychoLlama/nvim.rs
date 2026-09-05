@@ -115,7 +115,7 @@ pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller guarantees the pointers; the list the expression
     // returns is owned here until it is unreferenced.
-    // The work is split up so that `suginfo_T` need not be exported to
+    // The work is split up so that `SugInfo` need not be exported to
     // the evaluator.
     let list = unsafe { eval_spell_expr(su.su_badword() as *mut c_char, expr) };
     if !list.is_null() {
@@ -132,7 +132,7 @@ pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
                     let badlen = su.su_badlen;
                     let lang = su.su_sallang;
                     // SAFETY: `su` is live by the contract above, so `ga` is
-                    // its own list of `suggest_T`; `word` is the
+                    // its own list of `Suggest`; `word` is the
                     // NUL-terminated string the list item yielded.
                     unsafe { add_suggestion(sug, ga, word, badlen, score, 0, true, lang, false) };
                 }
@@ -200,7 +200,7 @@ pub(super) unsafe fn spell_suggest_file(su: Sug, fname: *mut c_char) {
         let badlen = su.su_badlen;
         let lang = su.su_sallang;
         // SAFETY: `su` is live by the contract above, so `ga` is its own
-        // list of `suggest_T`; `p` is a NUL-terminated word in `line` or in
+        // list of `Suggest`; `p` is a NUL-terminated word in `line` or in
         // `cword`, both of which outlive the call.
         unsafe { add_suggestion(sug, ga, p, badlen, SCORE_FILE, 0, true, lang, false) };
     }

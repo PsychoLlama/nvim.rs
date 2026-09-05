@@ -54,7 +54,7 @@ use neovim::garray::{ga_clear, ga_grow, ga_init};
 use neovim::main::curwin;
 use neovim::spell::{REGION_ALL, init_spell_chartab, spell_check};
 use neovim::spellfile::{mkspell, spell_check_msm, spell_load_file};
-use neovim::types::{langp_T, slang_T};
+use neovim::types::{LangP, SpellLang};
 
 use crate::support::{Sandbox, cstr};
 
@@ -143,7 +143,7 @@ fn tree_words(byts: &[u8], idxs: &[i32]) -> Vec<String> {
 /// # Safety
 ///
 /// `lp` must be a language `spell_load_file` answered.
-unsafe fn fold_words(lp: *const slang_T) -> Vec<String> {
+unsafe fn fold_words(lp: *const SpellLang) -> Vec<String> {
     // SAFETY: the caller promises the language.
     let (byts, idxs) = unsafe { (*lp).sl_fold_tree.as_slices() };
     tree_words(byts, idxs)
@@ -398,9 +398,9 @@ fn the_golden_answers_spell_check() {
     let langp = unsafe { &raw mut (*(*wp).w_s).b_langp };
     // SAFETY: as above; one entry, this language, every region.
     unsafe {
-        ga_init(langp, size_of::<langp_T>() as c_int, 1);
+        ga_init(langp, size_of::<LangP>() as c_int, 1);
         ga_grow(langp, 1);
-        (*langp).ga_data.cast::<langp_T>().write(langp_T {
+        (*langp).ga_data.cast::<LangP>().write(LangP {
             lp_slang: lp,
             lp_sallang: lp,
             lp_replang: lp,

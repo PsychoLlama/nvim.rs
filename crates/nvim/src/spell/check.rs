@@ -42,13 +42,13 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{ColNr, GArray, Hlf, LineNr, RegMatch, Window, langp_T, size_t, uint8_t};
+use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, Window, size_t, uint8_t};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
 use super::{
     CHAR_DIGIT, CHAR_OTHER, CHAR_UPPER, FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPWORD, MAXWLEN,
-    SP_BAD, SP_BANNED, SP_OK, SP_RARE, count_common_word, matchinf_T, spelltab_isu,
+    MatchInf, SP_BAD, SP_BANNED, SP_OK, SP_RARE, count_common_word, spelltab_isu,
 };
 use crate::highlight_group::{HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 
@@ -98,7 +98,7 @@ pub unsafe fn spell_check(
 
     // Nearly everything lives in "mi" so that it can be handed to the
     // lookup functions in one go.
-    let mut mi: matchinf_T = unsafe { mem::zeroed() };
+    let mut mi: MatchInf = unsafe { mem::zeroed() };
 
     // A number is always fine, including hex and binary literals. The
     // word is still checked, so that "3GPP" and "11 julifeest" are
@@ -179,7 +179,7 @@ pub unsafe fn spell_check(
     mi.mi_result2 = SP_BAD;
 
     // Every language is tried, because a later one may match longer.
-    let langp_data = unsafe { (*(*wp).w_s).b_langp.ga_data } as *mut langp_T;
+    let langp_data = unsafe { (*(*wp).w_s).b_langp.ga_data } as *mut LangP;
     let langp_len = unsafe { (*(*wp).w_s).b_langp.ga_len };
     for lpi in 0..langp_len {
         mi.mi_lp = unsafe { langp_data.offset(lpi as isize) };

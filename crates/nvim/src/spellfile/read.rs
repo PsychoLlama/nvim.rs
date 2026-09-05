@@ -54,7 +54,7 @@ use crate::spell::{
     e_format, first_lang, init_syl_tab, open_spellbuf, parse_spelllang, slang_alloc, slang_clear,
     slang_clear_sug, slang_free,
 };
-use crate::types::{ColNr, LineNr, NUL, OptInt, SpellIdx, langp_T, slang_T, time_t, uint8_t};
+use crate::types::{ColNr, LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
 use ::libc::{strcpy, strrchr};
 
 use super::sections::{
@@ -116,14 +116,14 @@ fn spell_check_magic_string(spl: &mut Spl) -> SplResult<()> {
 pub unsafe fn spell_load_file(
     fname: *mut c_char,
     lang: *mut c_char,
-    old_lp: *mut slang_T,
+    old_lp: *mut SpellLang,
     silent: bool,
-) -> *mut slang_T {
+) -> *mut SpellLang {
     // SAFETY: the caller promises the path.
     let path = Path::new(OsStr::from_bytes(unsafe { cstr::bytes_at(fname) }));
     let opened = Spl::open(path);
 
-    let mut lp: *mut slang_T = core::ptr::null_mut();
+    let mut lp: *mut SpellLang = core::ptr::null_mut();
     let mut did_estack_push = false;
 
     let (out, pushed) = (&mut lp, &mut did_estack_push);
@@ -158,9 +158,9 @@ unsafe fn load_spl(
     opened: std::io::Result<Spl>,
     fname: *mut c_char,
     lang: *mut c_char,
-    old_lp: *mut slang_T,
+    old_lp: *mut SpellLang,
     silent: bool,
-    lpp: &mut *mut slang_T,
+    lpp: &mut *mut SpellLang,
     did_estack_push: &mut bool,
 ) -> bool {
     let Ok(mut spl) = opened else {
@@ -221,7 +221,7 @@ unsafe fn load_spl(
 /// `fname` and `lang` are as [`spell_load_file`]'s.
 unsafe fn read_spl(
     spl: &mut Spl,
-    slang: &mut slang_T,
+    slang: &mut SpellLang,
     fname: *mut c_char,
     lang: *mut c_char,
     fresh: bool,
@@ -302,7 +302,7 @@ unsafe fn read_spl(
 /// `slang` must be live for as long as the section readers hold it.
 unsafe fn read_section(
     spl: &mut Spl,
-    slang: &mut slang_T,
+    slang: &mut SpellLang,
     id: c_int,
     flags: c_int,
     mut len: c_int,
@@ -370,7 +370,7 @@ unsafe fn read_section(
 
 /// Read the three trees that close a `.spl`: case-folded words, keep-case
 /// words, and prefixes.
-fn read_trees(spl: &mut Spl, slang: &mut slang_T) -> SplResult<()> {
+fn read_trees(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     spell_read_tree(spl, &mut slang.sl_fold_tree, false, 0)?;
     spell_read_tree(spl, &mut slang.sl_keep_tree, false, 0)?;
     // The prefix tree's entries name a prefix condition by number, so
@@ -385,11 +385,11 @@ fn read_trees(spl: &mut Spl, slang: &mut slang_T) -> SplResult<()> {
 /// A `.sug` is optional and best-effort: anything wrong with it is
 /// reported and the language carries on without sound-a-like suggestions.
 pub unsafe fn suggest_load_files() {
-    // SAFETY: `b_langp` holds `ga_len` live `langp_T`s.
+    // SAFETY: `b_langp` holds `ga_len` live `LangP`s.
     let langp = unsafe { (*(*curwin.get()).w_s).b_langp };
     for lpi in 0..langp.ga_len {
         // SAFETY: `lpi` is inside the array's own length.
-        let lp = unsafe { langp.ga_data.cast::<langp_T>().offset(lpi as isize) };
+        let lp = unsafe { langp.ga_data.cast::<LangP>().offset(lpi as isize) };
         // SAFETY: every entry names a live language.
         let slang = unsafe { &mut *(*lp).lp_slang };
         if slang.sl_sugtime == 0 as time_t || slang.sl_sugloaded {
@@ -426,7 +426,7 @@ pub unsafe fn suggest_load_files() {
 /// # Safety
 ///
 /// `slang.sl_fname` must be a NUL-terminated path, for the messages.
-unsafe fn load_sug(spl: &mut Spl, slang: &mut slang_T) {
+unsafe fn load_sug(spl: &mut Spl, slang: &mut SpellLang) {
     let mut buf = [0u8; VIMSUGMAGICL as usize];
     let _ = spl.read_exact(&mut buf);
     if buf != VIMSUGMAGIC.to_bytes() {
@@ -473,7 +473,7 @@ unsafe fn load_sug(spl: &mut Spl, slang: &mut slang_T) {
 /// # Safety
 ///
 /// The language must be live; a spell buffer is opened into it.
-unsafe fn read_sug_body(spl: &mut Spl, slang: &mut slang_T) -> SplResult<()> {
+unsafe fn read_sug_body(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     spell_read_tree(spl, &mut slang.sl_sound_tree, false, 0)?;
 
     // SAFETY: the scratch buffer the suggestion search indexes by line.

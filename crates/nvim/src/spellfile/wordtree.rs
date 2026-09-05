@@ -1,8 +1,8 @@
 //! The word tree `:mkspell` builds, and the arena it lives in.
 //!
 //! Every word of a dictionary is added to a trie: one node per byte, with
-//! siblings chained through [`wordnode_S::wn_sibling`] in ascending byte
-//! order and the continuation hanging off [`wordnode_S::wn_child`]. A node
+//! siblings chained through [`WordNode::wn_sibling`] in ascending byte
+//! order and the continuation hanging off [`WordNode::wn_child`]. A node
 //! whose byte is NUL terminates a word and carries that word's flags,
 //! region mask and affix id instead of a child.
 //!
@@ -17,7 +17,7 @@
 //! [`wordtree_compress`] walks it bottom-up and replaces each child chain
 //! with an identical one already seen, bumping that one's reference count.
 //! The lookup is a hash table keyed on a five-byte digest stored inside the
-//! node itself ([`wordnode_S::wn_digest`]), so no separate key allocation is
+//! node itself ([`WordNode::wn_digest`]), so no separate key allocation is
 //! needed — the table's key pointer points *into* the node, and
 //! [`node_of_digest_key`] is how [`node_compress`] gets back out.
 //!
@@ -40,7 +40,7 @@
 //!    object. Indices would have to reproduce that identity exactly.
 //! 2. **It is a reference-counted DAG, not a tree.** After the first
 //!    compression run a node is reachable from several parents
-//!    ([`wordnode_S::wn_refs`]); [`tree_add_word`] copies one before
+//!    ([`WordNode::wn_refs`]); [`tree_add_word`] copies one before
 //!    modifying it, and [`deref_wordnode`] returns a chain to the free list
 //!    when the last reference goes. Rust ownership does not describe that
 //!    shape without an `Rc`, and an `Rc` per node is a box per node.
@@ -73,7 +73,7 @@ use crate::spell::{captype, spell_casefold};
 use crate::types::{Failed, HashTab, NUL, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
 
-use super::{MAXWLEN, spell_message_fmt, spellinfo_T};
+use super::{MAXWLEN, SpellInfo, spell_message_fmt};
 
 /// Bytes handed out per arena block.
 const SBLOCKSIZE: usize = 16000;
@@ -166,8 +166,6 @@ impl SpellArena {
     }
 }
 
-pub(super) type wordnode_T = wordnode_S;
-
 /// One byte of one word, or — when [`wn_byte`](Self::wn_byte) is NUL — the
 /// end of a word and the properties that go with it.
 ///
@@ -185,10 +183,10 @@ pub(super) type wordnode_T = wordnode_S;
 /// `a_node_costs_no_more_than_the_union` pins down.
 ///
 /// [`wn_link`](Self::wn_link) is the other overlay, whose two arms were
-/// *both* `*mut wordnode_T` — documentation of the phase change rather
+/// *both* `*mut WordNode` — documentation of the phase change rather
 /// than a representation. It is one field, and the phases are written down
 /// on it instead.
-pub struct wordnode_S {
+pub struct WordNode {
     /// Compression phase: five digest bytes over this node's whole sibling
     /// chain, plus a terminator, so the hash table can key on it as a
     /// string. None of the five is ever zero. See [`node_compress`].
@@ -208,9 +206,9 @@ pub struct wordnode_S {
     ///
     /// [`clear_node`](super::write::clear_node) is the handover: it drops
     /// the compression meaning and starts the write one.
-    pub wn_link: *mut wordnode_T,
-    pub wn_child: *mut wordnode_T,
-    pub wn_sibling: *mut wordnode_T,
+    pub wn_link: *mut WordNode,
+    pub wn_child: *mut WordNode,
+    pub wn_sibling: *mut WordNode,
     /// How many parents point here; above one the sub-tree is shared.
     pub wn_refs: c_int,
     pub wn_byte: uint8_t,
@@ -224,7 +222,7 @@ pub struct wordnode_S {
 ///
 /// The table stores key *pointers*, so this is also how a node gets into
 /// the table at all: [`node_of_digest_key`] is the way back.
-fn digest_key(node: *mut wordnode_T) -> *mut c_char {
+fn digest_key(node: *mut WordNode) -> *mut c_char {
     // SAFETY: the offset lands inside the node; nothing is read.
     unsafe { (&raw mut (*node).wn_digest).cast::<c_char>() }
 }
@@ -234,10 +232,10 @@ fn digest_key(node: *mut wordnode_T) -> *mut c_char {
 /// # Safety
 ///
 /// `key` must be a pointer [`digest_key`] returned for a still-live node.
-unsafe fn node_of_digest_key(key: *mut c_char) -> *mut wordnode_T {
+unsafe fn node_of_digest_key(key: *mut c_char) -> *mut WordNode {
     // SAFETY: the caller promises the pointer names a live node's digest
     // field, so stepping back over the field's offset lands on the node.
-    unsafe { key.byte_sub(mem::offset_of!(wordnode_S, wn_digest)).cast() }
+    unsafe { key.byte_sub(mem::offset_of!(WordNode, wn_digest)).cast() }
 }
 
 /// Arena blocks in use before the first compression run.
@@ -260,8 +258,8 @@ pub(super) const fn block_size() -> c_int {
 }
 
 /// Allocate a tree's root node.
-pub(super) fn wordtree_alloc(spin: &mut spellinfo_T) -> *mut wordnode_T {
-    spin.si_arena.alloc::<wordnode_T>()
+pub(super) fn wordtree_alloc(spin: &mut SpellInfo) -> *mut WordNode {
+    spin.si_arena.alloc::<WordNode>()
 }
 
 /// Reject words a spell file cannot represent: invalid UTF-8, control
@@ -299,7 +297,7 @@ pub(super) unsafe fn valid_spell_word(word: *const c_char, end: *const c_char) -
 ///
 /// `word` must be NUL-terminated, and `pfxlist` either null or likewise.
 pub(super) unsafe fn store_word(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     word: *mut c_char,
     flags: WordFlags,
     region: c_int,
@@ -345,9 +343,9 @@ pub(super) unsafe fn store_word(
 /// `word` must be NUL-terminated, `pfxlist` null or NUL-terminated, and
 /// `root` a node of this arena's tree.
 unsafe fn add_per_affix(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     word: *const c_char,
-    root: *mut wordnode_T,
+    root: *mut WordNode,
     flags: WordFlags,
     region: c_int,
     pfxlist: *const c_char,
@@ -384,9 +382,9 @@ unsafe fn add_per_affix(
 ///
 /// `word` must be NUL-terminated and `root` a node of this arena's tree.
 pub(super) unsafe fn tree_add_word(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     word: *const c_char,
-    root: *mut wordnode_T,
+    root: *mut WordNode,
     flags: c_int,
     region: c_int,
     affixID: c_int,
@@ -396,7 +394,7 @@ pub(super) unsafe fn tree_add_word(
     let mut node = root;
     // Where to write back a replaced node: the parent's child or
     // sibling slot, or null at the root.
-    let mut prev: *mut *mut wordnode_T = ptr::null_mut();
+    let mut prev: *mut *mut WordNode = ptr::null_mut();
     let mut i: isize = 0;
 
     loop {
@@ -507,8 +505,8 @@ pub(super) unsafe fn tree_add_word(
 /// `node` must be a live node.
 #[inline]
 unsafe fn sorts_before(
-    spin: &spellinfo_T,
-    node: *mut wordnode_T,
+    spin: &SpellInfo,
+    node: *mut WordNode,
     byte: c_char,
     flags: c_int,
     region: c_int,
@@ -547,9 +545,9 @@ unsafe fn sorts_before(
 /// `prev`, when non-null, must point at the slot holding `*node`.
 #[inline]
 unsafe fn insert_before(
-    spin: &mut spellinfo_T,
-    node: &mut *mut wordnode_T,
-    prev: *mut *mut wordnode_T,
+    spin: &mut SpellInfo,
+    node: &mut *mut WordNode,
+    prev: *mut *mut WordNode,
     byte: c_char,
 ) -> bool {
     let np = get_wordnode(spin);
@@ -576,10 +574,10 @@ unsafe fn insert_before(
 }
 
 /// Take a node from the free list, or a fresh one from the arena.
-fn get_wordnode(spin: &mut spellinfo_T) -> *mut wordnode_T {
+fn get_wordnode(spin: &mut SpellInfo) -> *mut WordNode {
     let n = spin.si_first_free;
     if n.is_null() {
-        return spin.si_arena.alloc::<wordnode_T>();
+        return spin.si_arena.alloc::<WordNode>();
     }
     // SAFETY: the free list only holds nodes this module released.
     spin.si_first_free = unsafe { (*n).wn_child };
@@ -596,7 +594,7 @@ fn get_wordnode(spin: &mut spellinfo_T) -> *mut wordnode_T {
 /// # Safety
 ///
 /// `node` must be a live node of this arena's tree.
-unsafe fn deref_wordnode(spin: &mut spellinfo_T, node: *mut wordnode_T) -> c_int {
+unsafe fn deref_wordnode(spin: &mut SpellInfo, node: *mut WordNode) -> c_int {
     // SAFETY: the caller promises a live node; the walk stays inside the
     // tree it roots.
     let mut cnt = 0;
@@ -621,7 +619,7 @@ unsafe fn deref_wordnode(spin: &mut spellinfo_T, node: *mut wordnode_T) -> c_int
 /// # Safety
 ///
 /// `n` must be a node no longer reachable from any tree.
-unsafe fn free_wordnode(spin: &mut spellinfo_T, n: *mut wordnode_T) {
+unsafe fn free_wordnode(spin: &mut SpellInfo, n: *mut WordNode) {
     // SAFETY: the caller promises the node is unreachable.
     unsafe { (*n).wn_child = spin.si_first_free };
     spin.si_first_free = n;
@@ -634,8 +632,8 @@ unsafe fn free_wordnode(spin: &mut spellinfo_T, n: *mut wordnode_T) {
 ///
 /// `root` must be the root node of one of this arena's trees.
 pub(super) unsafe fn wordtree_compress(
-    spin: &mut spellinfo_T,
-    root: *mut wordnode_T,
+    spin: &mut SpellInfo,
+    root: *mut WordNode,
     name: &core::ffi::CStr,
 ) {
     // SAFETY: the caller promises a live root.
@@ -684,8 +682,8 @@ fn remaining_percentage(compressed: c_int, total: c_int) -> core::ffi::c_long {
 /// `node` must head a live sibling chain and `ht` be an initialised table
 /// holding only nodes of the same tree.
 unsafe fn node_compress(
-    spin: &mut spellinfo_T,
-    node: *mut wordnode_T,
+    spin: &mut SpellInfo,
+    node: *mut WordNode,
     ht: *mut HashTab,
     tot: &mut c_int,
 ) -> c_int {
@@ -743,7 +741,7 @@ unsafe fn node_compress(
     compressed
 }
 
-/// Digest `node`'s whole sibling chain into [`wordnode_S::wn_digest`]: the
+/// Digest `node`'s whole sibling chain into [`WordNode::wn_digest`]: the
 /// chain's length, then a rolling hash over every sibling's byte and either
 /// its child pointer or, at a word end, its flags.
 ///
@@ -755,7 +753,7 @@ unsafe fn node_compress(
 /// # Safety
 ///
 /// `node` must head a live sibling chain.
-unsafe fn write_digest(node: *mut wordnode_T, len: c_int) {
+unsafe fn write_digest(node: *mut WordNode, len: c_int) {
     // SAFETY: the caller promises a live chain, and `siblings` walks it to
     // its null terminator without changing it.
     let mut nr: c_uint = 0;
@@ -789,7 +787,7 @@ unsafe fn write_digest(node: *mut wordnode_T, len: c_int) {
 ///
 /// `node` must be null or head a live sibling chain, and nothing may change
 /// a `wn_sibling` link in it while the iterator is alive.
-unsafe fn siblings(node: *mut wordnode_T) -> impl Iterator<Item = *mut wordnode_T> {
+unsafe fn siblings(node: *mut WordNode) -> impl Iterator<Item = *mut WordNode> {
     let mut next = node;
     core::iter::from_fn(move || {
         let cur = next;
@@ -812,7 +810,7 @@ unsafe fn siblings(node: *mut wordnode_T) -> impl Iterator<Item = *mut wordnode_
 /// # Safety
 ///
 /// Both arguments must head live sibling chains.
-unsafe fn node_equal(n1: *mut wordnode_T, n2: *mut wordnode_T) -> bool {
+unsafe fn node_equal(n1: *mut WordNode, n2: *mut WordNode) -> bool {
     // SAFETY: the caller promises live chains.
     let mut p1 = n1;
     let mut p2 = n2;
@@ -842,8 +840,8 @@ unsafe fn node_equal(n1: *mut wordnode_T, n2: *mut wordnode_T) -> bool {
 mod tests {
     use super::*;
 
-    fn blank_node() -> wordnode_S {
-        wordnode_S {
+    fn blank_node() -> WordNode {
+        WordNode {
             wn_digest: [0; 6],
             wn_index: 0,
             wn_link: ptr::null_mut(),
@@ -862,8 +860,8 @@ mod tests {
     /// which is exactly what an `int` beside the array costs. One node per
     /// byte of dictionary is why anyone cares.
     ///
-    /// Measured over the *fields*, not over `size_of::<wordnode_S>()`.
-    /// `wordnode_S` is `repr(Rust)`, so a layout-randomising build is free
+    /// Measured over the *fields*, not over `size_of::<WordNode>()`.
+    /// `WordNode` is `repr(Rust)`, so a layout-randomising build is free
     /// to order it badly and pad it past the `repr(C)` original — which
     /// would say something about that build and nothing about this struct.
     /// Summing the declared fields is the comparison that means what the
@@ -871,7 +869,7 @@ mod tests {
     /// the order.
     #[test]
     fn a_node_costs_no_more_than_the_union() {
-        /// `wordnode_S` as upstream lays it out, with both overlays.
+        /// `WordNode` as upstream lays it out, with both overlays.
         #[repr(C)]
         struct AsUnion {
             u1: [uint8_t; 8],
@@ -884,9 +882,9 @@ mod tests {
             flags: uint16_t,
             region: int16_t,
         }
-        // Exhaustive: a field added to `wordnode_S` stops compiling here,
+        // Exhaustive: a field added to `WordNode` stops compiling here,
         // which is the half of the claim a size cannot make.
-        let wordnode_S {
+        let WordNode {
             wn_digest,
             wn_index,
             wn_link,
@@ -913,7 +911,7 @@ mod tests {
             "{fields} bytes of fields against {} for the union",
             size_of::<AsUnion>()
         );
-        assert_eq!(align_of::<wordnode_S>(), align_of::<AsUnion>());
+        assert_eq!(align_of::<WordNode>(), align_of::<AsUnion>());
     }
 
     /// The compression table stores a pointer into the node, not to it, so

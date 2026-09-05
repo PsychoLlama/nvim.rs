@@ -59,8 +59,8 @@ use ::libc::fclose;
 use super::flags::{flag_in_afflist, get_affitem};
 use super::wordtree::store_word;
 use super::{
-    AFT_NUM, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF, MAXLINELEN, MAXWLEN, affentry_T,
-    afffile_T, affheader_T, compitem_T, spell_message_fmt, spellinfo_T, vim_regexec_prog,
+    AFT_NUM, AffEntry, AffFile, AffHeader, CONDIT_AFF, CONDIT_CFIX, CONDIT_COMB, CONDIT_SUF,
+    CompItem, MAXLINELEN, MAXWLEN, SpellInfo, spell_message_fmt, vim_regexec_prog,
 };
 
 /// Read a `.dic` file: a count line, then one stem per line with the affix
@@ -71,9 +71,9 @@ use super::{
 /// `fname` must be a NUL-terminated path and `affile` the affix file that
 /// goes with it.
 pub(super) unsafe fn spell_read_dic(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     fname: *mut c_char,
-    affile: &mut afffile_T,
+    affile: &mut AffFile,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises the path and the affix file; every buffer
     // below is sized for what is written into it.
@@ -295,7 +295,7 @@ pub(super) unsafe fn spell_read_dic(
 /// # Safety
 ///
 /// `afflist` must be a NUL-terminated flag list and `affile` live.
-unsafe fn get_affix_flags(affile: &afffile_T, afflist: *mut c_char) -> WordFlags {
+unsafe fn get_affix_flags(affile: &AffFile, afflist: *mut c_char) -> WordFlags {
     let flagtype = affile.af_flagtype;
     let mut flags = WordFlags::NONE;
     for (declared, bits) in [
@@ -323,7 +323,7 @@ unsafe fn get_affix_flags(affile: &afffile_T, afflist: *mut c_char) -> WordFlags
 /// `store_afflist` must have room for one byte per flag in `afflist` plus a
 /// terminator.
 unsafe fn get_pfxlist(
-    affile: &mut afffile_T,
+    affile: &mut AffFile,
     afflist: *mut c_char,
     store_afflist: *mut c_char,
 ) -> c_int {
@@ -341,7 +341,7 @@ unsafe fn get_pfxlist(
             if hi.is_kept() {
                 // Only prefixes that were actually postponed have an
                 // id; the rest were expanded into the word list.
-                let id = unsafe { (*affheader_T::of_key(hi.hi_key)).ah_newID };
+                let id = unsafe { (*AffHeader::of_key(hi.hi_key)).ah_newID };
                 if id != 0 {
                     unsafe { *store_afflist.offset(cnt as isize) = id as uint8_t as c_char };
                     cnt += 1;
@@ -361,7 +361,7 @@ unsafe fn get_pfxlist(
 /// # Safety
 ///
 /// As [`get_pfxlist`].
-unsafe fn get_compflags(affile: &mut afffile_T, afflist: *mut c_char, store_afflist: *mut c_char) {
+unsafe fn get_compflags(affile: &mut AffFile, afflist: *mut c_char, store_afflist: *mut c_char) {
     // SAFETY: as above.
     let mut cnt = 0;
     let mut key: [c_char; 17] = [0; 17];
@@ -375,7 +375,7 @@ unsafe fn get_compflags(affile: &mut afffile_T, afflist: *mut c_char, store_affl
             if hi.is_kept() {
                 unsafe {
                     *store_afflist.offset(cnt as isize) =
-                        (*compitem_T::of_key(hi.hi_key)).ci_newID as uint8_t as c_char
+                        (*CompItem::of_key(hi.hi_key)).ci_newID as uint8_t as c_char
                 };
                 cnt += 1;
             }
@@ -399,7 +399,7 @@ pub(super) struct AffWord {
     pub word: *mut c_char,
     pub afflist: *mut c_char,
     /// The `.aff` file the affixes came from.
-    pub affile: *mut afffile_T,
+    pub affile: *mut AffFile,
     /// The affix table to apply, and the *other* one -- suffixes when this
     /// pass is doing prefixes. `xht` being non-null is also what tells the
     /// body it is adding a prefix rather than a suffix.
@@ -424,7 +424,7 @@ pub(super) struct AffWord {
 ///
 /// `word` and `afflist` must be NUL-terminated; `ht` and `affile` live;
 /// `pfxlist`, when given, must have room past `pfxlen` for more ids.
-pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Result<(), Failed> {
+pub(super) unsafe fn store_aff_word(spin: &mut SpellInfo, call: AffWord) -> Result<(), Failed> {
     let AffWord {
         word,
         afflist,
@@ -451,7 +451,7 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
         if retval.is_err() {
             break;
         }
-        let ah = unsafe { affheader_T::of_key(hi.hi_key) };
+        let ah = unsafe { AffHeader::of_key(hi.hi_key) };
 
         if (condit & CONDIT_COMB == 0 || unsafe { (*ah).ah_combine } != 0)
             && unsafe { flag_in_afflist(affile.af_flagtype, afflist, (*ah).ah_flag) }
@@ -642,8 +642,8 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
 ///
 /// `ae` must be a live entry and `word` NUL-terminated.
 unsafe fn affix_applies(
-    affile: &afffile_T,
-    ae: *mut affentry_T,
+    affile: &AffFile,
+    ae: *mut AffEntry,
     xht: *mut HashTab,
     word: *mut c_char,
     wordlen: usize,
@@ -688,7 +688,7 @@ unsafe fn affix_applies(
 unsafe fn build_affixed_word(
     newword: &mut [c_char; MAXWLEN],
     word: *mut c_char,
-    ae: *mut affentry_T,
+    ae: *mut AffEntry,
     xht: *mut HashTab,
 ) {
     // SAFETY: every write is bounded by MAXWLEN, the array's size.

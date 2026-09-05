@@ -45,8 +45,8 @@ use crate::types::{NUL, size_t, uint8_t};
 use ::libc::{strcat, strcpy};
 
 use super::{
-    AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, ZERO_FLAG, affentry_T, afffile_T, affheader_T,
-    compitem_T, spellinfo_T, vim_regfree,
+    AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, AffEntry, AffFile, AffHeader, CompItem, SpellInfo,
+    ZERO_FLAG, vim_regfree,
 };
 
 /// Decode one flag and advance `pp` past it. Returns 0 when there is none.
@@ -177,7 +177,7 @@ pub(super) unsafe fn flag_in_afflist(flagtype: c_int, afflist: *mut c_char, flag
 /// # Safety
 ///
 /// `entry` and `affile` must be live, and `ae_flags` NUL-terminated.
-pub(super) unsafe fn aff_process_flags(affile: &afffile_T, entry: *mut affentry_T) {
+pub(super) unsafe fn aff_process_flags(affile: &AffFile, entry: *mut AffEntry) {
     // SAFETY: the caller promises both; the memmove closes a gap inside one
     // string, so source and destination share an allocation.
     if unsafe { (*entry).ae_flags }.is_null()
@@ -217,8 +217,8 @@ pub(super) unsafe fn aff_process_flags(affile: &afffile_T, entry: *mut affentry_
 ///
 /// `compflags` must be NUL-terminated and `aff` live.
 pub(super) unsafe fn process_compflags(
-    spin: &mut spellinfo_T,
-    aff: &mut afffile_T,
+    spin: &mut SpellInfo,
+    aff: &mut AffFile,
     compflags: *mut c_char,
 ) {
     // SAFETY: the destination is sized for the old pattern, a separator and
@@ -258,10 +258,10 @@ pub(super) unsafe fn process_compflags(
             };
             let hi = unsafe { hash_find(&raw mut aff.af_comp, key.as_mut_ptr()) };
             let id = if hi.is_kept() {
-                unsafe { (*compitem_T::of_key(hi.hi_key)).ci_newID }
+                unsafe { (*CompItem::of_key(hi.hi_key)).ci_newID }
             } else {
-                let ci = spin.si_arena.alloc::<compitem_T>();
-                unsafe { strcpy(compitem_T::key(ci), key.as_mut_ptr()) };
+                let ci = spin.si_arena.alloc::<CompItem>();
+                unsafe { strcpy(CompItem::key(ci), key.as_mut_ptr()) };
                 unsafe { (*ci).ci_flag = flag };
                 // Ids count downwards, skipping any byte that would be
                 // meaningful in the pattern this becomes.
@@ -274,7 +274,7 @@ pub(super) unsafe fn process_compflags(
                     }
                 };
                 unsafe { (*ci).ci_newID = id };
-                let _ = unsafe { hash_add(&raw mut aff.af_comp, compitem_T::key(ci)) };
+                let _ = unsafe { hash_add(&raw mut aff.af_comp, CompItem::key(ci)) };
                 id
             };
             unsafe { *tp = id as uint8_t };
@@ -296,7 +296,7 @@ pub(super) unsafe fn process_compflags(
 /// # Safety
 ///
 /// `spin` must be live.
-pub(super) unsafe fn check_renumber(spin: &mut spellinfo_T) {
+pub(super) unsafe fn check_renumber(spin: &mut SpellInfo) {
     // SAFETY: the caller promises `spin`.
     if spin.si_newprefID == spin.si_newcompID && spin.si_newcompID < 128 {
         spin.si_newprefID = 127;
@@ -310,14 +310,14 @@ pub(super) unsafe fn check_renumber(spin: &mut spellinfo_T) {
 /// # Safety
 ///
 /// `aff` must be a live affix file that is not used again.
-pub(super) unsafe fn spell_free_aff(aff: &mut afffile_T) {
+pub(super) unsafe fn spell_free_aff(aff: &mut AffFile) {
     // SAFETY: the caller promises the affix file; the regexps below are the
     // only heap allocations the entries own.
     unsafe { xfree(aff.af_enc.cast()) };
 
     for ht in [&aff.af_pref, &aff.af_suff] {
         for hi in ht.items() {
-            let ah = unsafe { affheader_T::of_key(hi.hi_key) };
+            let ah = unsafe { AffHeader::of_key(hi.hi_key) };
             let mut ae = unsafe { (*ah).ah_first };
             while !ae.is_null() {
                 unsafe { vim_regfree((*ae).ae_prog) };

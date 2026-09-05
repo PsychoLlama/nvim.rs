@@ -92,8 +92,8 @@ use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     Buffer, ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Frame,
     Handle, Hlf, Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg,
-    ScreenChar, VarNumber, VirtText, VirtTextChunk, Window, WindowHandle, int64_t, size_t,
-    spellvars_T, uint16_t,
+    ScreenChar, SpellVars, VarNumber, VirtText, VirtTextChunk, Window, WindowHandle, int64_t,
+    size_t, uint16_t,
 };
 use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,

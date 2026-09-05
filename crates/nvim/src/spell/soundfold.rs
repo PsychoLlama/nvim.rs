@@ -7,7 +7,7 @@
 //! word in the dictionary to build its second tree.
 //!
 //! A language picks one of two schemes in its `.aff` file, and the `.spl`
-//! reader records which in [`slang_T::sl_sofo`]:
+//! reader records which in [`SpellLang::sl_sofo`]:
 //!
 //! * `SOFOFROM`/`SOFOTO` — a plain character-for-character mapping, done
 //!   by [`spell_soundfold_sofo`]. Fast, and all that most languages need.
@@ -28,7 +28,7 @@ use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::memory::xstrdup;
-use crate::types::{MB_MAXBYTES, NUL, langp_T, slang_T};
+use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
@@ -42,7 +42,7 @@ pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
         // SAFETY: `win` is the current window; its syntax block is live.
         let langp = unsafe { &(*(*win).w_s).b_langp };
         for lpi in 0..langp.ga_len {
-            let lp = unsafe { (langp.ga_data as *mut langp_T).offset(lpi as isize) };
+            let lp = unsafe { (langp.ga_data as *mut LangP).offset(lpi as isize) };
             if unsafe { (*(*lp).lp_slang).has_soundfold() } {
                 let mut sound = [0 as c_char; MAXWLEN];
                 let slang = unsafe { (*lp).lp_slang };
@@ -62,7 +62,7 @@ pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
 /// here first. The SOFO scheme folds case as part of its mapping and does
 /// not care.
 pub unsafe fn spell_soundfold(
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     inword: *mut c_char,
     folded: bool,
     res: *mut c_char,
@@ -87,7 +87,7 @@ pub unsafe fn spell_soundfold(
 /// Characters below 256 are looked up in the flat `sl_sal_first` table.
 /// Wider ones select a list by their low byte, where the reader left a
 /// zero-terminated run of from/to pairs to scan.
-unsafe fn spell_soundfold_sofo(slang: *mut slang_T, inword: *const c_char, res: *mut c_char) {
+unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
     let mut ri = 0;
     let mut prevc = 0;
     let mut s = inword;
@@ -152,7 +152,7 @@ unsafe fn spell_soundfold_sofo(slang: *mut slang_T, inword: *const c_char, res: 
 /// that many *bytes*. Every index derived from a rule match names a
 /// character the match already compared against the word and found
 /// non-NUL, or the NUL that terminates it, so no index passes `wordlen`.
-unsafe fn spell_soundfold_wsal(slang: *mut slang_T, inword: *const c_char, res: *mut c_char) {
+unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
     // Widen the word, dropping what the language does not consider part
     // of a word when it asked for accents to be removed.
     let mut word = [0 as c_int; MAXWLEN];

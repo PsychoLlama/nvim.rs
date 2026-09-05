@@ -50,13 +50,13 @@ use crate::spell::{spelltab_fold, spelltab_isu, spelltab_isw};
 use crate::types::{Failed, NUL, time_t};
 use ::libc::time;
 
-use super::wordtree::wordnode_T;
+use super::wordtree::WordNode;
 use super::{
     BY_FLAGS, BY_FLAGS2, BY_INDEX, BY_NOFLAGS, CF_UPPER, CF_WORD, PFX_FLAGS, SAL_COLLAPSE,
     SAL_F0LLOWUP, SAL_REM_ACCENTS, SN_CHARFLAGS, SN_COMPOUND, SN_END, SN_INFO, SN_MAP, SN_MIDWORD,
     SN_NOBREAK, SN_NOCOMPOUNDSUGS, SN_NOSPLITSUGS, SN_PREFCOND, SN_REGION, SN_REP, SN_REPSAL,
-    SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, VIMSPELLMAGIC,
-    VIMSPELLVERSION, spellinfo_T,
+    SN_SAL, SN_SOFO, SN_SUGFILE, SN_SYLLABLE, SN_WORDS, SNF_REQUIRED, SpellInfo, VIMSPELLMAGIC,
+    VIMSPELLVERSION,
 };
 
 /// A `.spl` or `.sug` file being written.
@@ -119,7 +119,7 @@ impl SplWriter {
 /// `fname` must be a NUL-terminated path and `spin` must hold finished,
 /// compressed trees.
 pub(super) unsafe fn write_vim_spell(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     fname: *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises the path.
@@ -175,7 +175,7 @@ pub(super) unsafe fn write_vim_spell(
 }
 
 /// `SN_INFO`: the free-form text `:spellinfo` shows.
-unsafe fn put_info(w: &mut SplWriter, spin: &spellinfo_T) {
+unsafe fn put_info(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_info.is_null() {
         return;
     }
@@ -187,7 +187,7 @@ unsafe fn put_info(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_REGION`: the two-letter region names. Returns the mask of all
 /// regions, which the tree writer uses to spot words that are in every one.
-fn put_region(w: &mut SplWriter, spin: &spellinfo_T) -> c_int {
+fn put_region(w: &mut SplWriter, spin: &SpellInfo) -> c_int {
     if spin.si_region_count <= 1 {
         return 0;
     }
@@ -204,7 +204,7 @@ fn put_region(w: &mut SplWriter, spin: &spellinfo_T) -> c_int {
 ///
 /// Only meaningful for a non-ASCII base dictionary; an `.add` file inherits
 /// the table from the file it extends.
-fn put_charflags(w: &mut SplWriter, spin: &spellinfo_T) {
+fn put_charflags(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_ascii != 0 || spin.si_add != 0 {
         return;
     }
@@ -240,7 +240,7 @@ fn put_charflags(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_MIDWORD`: characters that may appear inside a word without ending
 /// it, such as an apostrophe.
-unsafe fn put_midword(w: &mut SplWriter, spin: &spellinfo_T) {
+unsafe fn put_midword(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_midword.is_null() {
         return;
     }
@@ -253,7 +253,7 @@ unsafe fn put_midword(w: &mut SplWriter, spin: &spellinfo_T) {
 /// `SN_PREFCOND`: the regexps a prefix's condition compiles from, one per
 /// prefix id. Measured with a null file first, since the length has to
 /// precede the payload.
-fn put_prefcond(w: &mut SplWriter, spin: &mut spellinfo_T) {
+fn put_prefcond(w: &mut SplWriter, spin: &mut SpellInfo) {
     if spin.si_prefcond.is_empty() {
         return;
     }
@@ -268,7 +268,7 @@ fn put_prefcond(w: &mut SplWriter, spin: &mut spellinfo_T) {
 /// byte; `SAL` must keep the order the affix file gave, because sound
 /// folding applies its rules in sequence. `SAL` is skipped entirely when
 /// the language uses a `SOFOFROM`/`SOFOTO` pair instead.
-fn put_rep_and_sal(w: &mut SplWriter, spin: &mut spellinfo_T) {
+fn put_rep_and_sal(w: &mut SplWriter, spin: &mut SpellInfo) {
     let sofo = !spin.si_sofofr.is_null() && !spin.si_sofoto.is_null();
     for round in 1..=3 {
         let (table, sect_id) = match round {
@@ -332,7 +332,7 @@ fn put_rep_and_sal(w: &mut SplWriter, spin: &mut spellinfo_T) {
 }
 
 /// `SN_SOFO`: the simple character-mapping alternative to `SAL`.
-unsafe fn put_sofo(w: &mut SplWriter, spin: &spellinfo_T) {
+unsafe fn put_sofo(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_sofofr.is_null() || spin.si_sofoto.is_null() {
         return;
     }
@@ -353,7 +353,7 @@ unsafe fn put_sofo(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_WORDS`: the `COMMON` word list, which makes suggestions of everyday
 /// words score better. Counted on the first pass, written on the second.
-unsafe fn put_words(w: &mut SplWriter, spin: &spellinfo_T) {
+unsafe fn put_words(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_commonwords.ht_used == 0 {
         return;
     }
@@ -375,7 +375,7 @@ unsafe fn put_words(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_MAP`: groups of characters that count as near-equivalent when
 /// scoring a suggestion.
-fn put_map(w: &mut SplWriter, spin: &spellinfo_T) {
+fn put_map(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_map.is_empty() {
         return;
     }
@@ -385,7 +385,7 @@ fn put_map(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_SUGFILE`: a timestamp stamped into both this file and the `.sug`
 /// beside it, so a stale `.sug` can be spotted and ignored.
-unsafe fn put_sugfile(w: &mut SplWriter, spin: &mut spellinfo_T) {
+unsafe fn put_sugfile(w: &mut SplWriter, spin: &mut SpellInfo) {
     let wanted =
         !spin.si_sal.is_empty() || (!spin.si_sofofr.is_null() && !spin.si_sofoto.is_null());
     if spin.si_nosugfile != 0 || !wanted {
@@ -398,7 +398,7 @@ unsafe fn put_sugfile(w: &mut SplWriter, spin: &mut spellinfo_T) {
 }
 
 /// The sections that are pure on/off flags, carrying no payload.
-fn put_flag_sections(w: &mut SplWriter, spin: &spellinfo_T) {
+fn put_flag_sections(w: &mut SplWriter, spin: &SpellInfo) {
     for (set, id) in [
         (spin.si_nosplitsugs != 0, SN_NOSPLITSUGS),
         (spin.si_nocompoundsugs != 0, SN_NOCOMPOUNDSUGS),
@@ -411,7 +411,7 @@ fn put_flag_sections(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_COMPOUND`: the compounding limits, the `CHECKCOMPOUNDPATTERN` pairs
 /// and the flags that say which words may join.
-unsafe fn put_compound(w: &mut SplWriter, spin: &spellinfo_T) {
+unsafe fn put_compound(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_compflags.is_null() {
         return;
     }
@@ -442,7 +442,7 @@ unsafe fn put_compound(w: &mut SplWriter, spin: &spellinfo_T) {
 
 /// `SN_SYLLABLE`: the character groups that count as one syllable, for
 /// `COMPOUNDSYLMAX`. Emitted after `SN_NOBREAK`, which shares this test.
-unsafe fn put_syllable(w: &mut SplWriter, spin: &spellinfo_T) {
+unsafe fn put_syllable(w: &mut SplWriter, spin: &SpellInfo) {
     if spin.si_nobreak != 0 {
         w.section(SN_NOBREAK as c_int, 0, 0);
     }
@@ -460,7 +460,7 @@ unsafe fn put_syllable(w: &mut SplWriter, spin: &spellinfo_T) {
 /// The count is what [`put_node`] returns from a null-file pass, and it
 /// also feeds the "estimated runtime memory use" figure `:mkspell` prints:
 /// one byte plus one `int` per node is what the reader will allocate.
-unsafe fn put_trees(w: &mut SplWriter, spin: &mut spellinfo_T, regionmask: c_int) {
+unsafe fn put_trees(w: &mut SplWriter, spin: &mut SpellInfo, regionmask: c_int) {
     // SAFETY: the three roots are live and their trees compressed.
     spin.si_memtot = 0;
     for (round, root) in [spin.si_foldroot, spin.si_keeproot, spin.si_prefroot]
@@ -487,7 +487,7 @@ unsafe fn put_trees(w: &mut SplWriter, spin: &mut spellinfo_T, regionmask: c_int
 /// # Safety
 ///
 /// `node` must be null or head a live sibling chain.
-pub(super) unsafe fn clear_node(node: *mut wordnode_T) {
+pub(super) unsafe fn clear_node(node: *mut WordNode) {
     // SAFETY: the caller promises the chain; recursion stays inside it.
     let mut np = node;
     while !np.is_null() {
@@ -508,7 +508,7 @@ pub(super) unsafe fn clear_node(node: *mut wordnode_T) {
 ///
 /// A shared sub-tree is written once, under whichever parent reaches it
 /// first; the others emit a [`BY_INDEX`] reference to it.
-/// [`wn_link`](wordnode_T::wn_link) records that first parent, so the
+/// [`wn_link`](WordNode::wn_link) records that first parent, so the
 /// second pass makes the same choice as the first.
 ///
 /// # Safety
@@ -517,7 +517,7 @@ pub(super) unsafe fn clear_node(node: *mut wordnode_T) {
 /// just been run over.
 pub(super) unsafe fn put_node(
     mut w: Option<&mut SplWriter>,
-    node: *mut wordnode_T,
+    node: *mut WordNode,
     idx: c_int,
     regionmask: c_int,
     prefixtree: bool,
@@ -592,12 +592,7 @@ pub(super) unsafe fn put_node(
 /// # Safety
 ///
 /// `np` must be a live node whose byte is NUL.
-unsafe fn put_word_end(
-    w: &mut SplWriter,
-    np: *mut wordnode_T,
-    regionmask: c_int,
-    prefixtree: bool,
-) {
+unsafe fn put_word_end(w: &mut SplWriter, np: *mut WordNode, regionmask: c_int, prefixtree: bool) {
     // SAFETY: the caller promises a live node.
     if prefixtree {
         // Prefix ids carry their own flag set; the common case has

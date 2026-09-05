@@ -52,16 +52,15 @@ use crate::message::emsg;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, RegProg, langp_T, slang_T, uint8_t};
+use crate::types::{LangP, NUL, RegProg, SpellLang, uint8_t};
 
 use super::Tree;
 use super::chartab::{
     byte_in_str, captype, nofold_len, spell_casefold, spell_iswordp, spell_iswordp_nmw,
 };
 use super::{
-    FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, SP_BAD,
-    SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, count_syllables, e_format, matchinf_T,
-    spell_valid_case,
+    FIND_COMPOUND, FIND_FOLDWORD, FIND_KEEPCOMPOUND, FIND_KEEPWORD, FIND_PREFIX, MAXWLEN, MatchInf,
+    SP_BAD, SP_BANNED, SP_LOCAL, SP_OK, SP_RARE, TAB, count_syllables, e_format, spell_valid_case,
 };
 
 /// Advance `p` past one character.
@@ -85,7 +84,7 @@ macro_rules! mb_ptr_adv {
 ///   already matched.
 /// * `FIND_COMPOUND` / `FIND_KEEPCOMPOUND` — either tree, after the
 ///   compound parts found so far.
-pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
+pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
 
     let ptr;
@@ -337,8 +336,7 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
 
                     // For NOBREAK every language has to be tried, if only to
                     // reach the ".add" files.
-                    let langp_data =
-                        unsafe { (*(*mip.mi_win).w_s).b_langp.ga_data } as *mut langp_T;
+                    let langp_data = unsafe { (*(*mip.mi_win).w_s).b_langp.ga_data } as *mut LangP;
                     let langp_len = unsafe { (*(*mip.mi_win).w_s).b_langp.ga_len };
                     for lpi in 0..langp_len {
                         if unsafe { (*slang).sl_nobreak } {
@@ -436,7 +434,7 @@ pub(super) unsafe fn find_word(mip: &mut matchinf_T, mode: c_int) {
 /// way through.
 #[inline]
 unsafe fn compound_part_allowed(
-    mip: &mut matchinf_T,
+    mip: &mut MatchInf,
     ptr: *mut c_char,
     wlen: c_int,
     flags: WordFlags,
@@ -602,7 +600,7 @@ pub unsafe fn match_checkcompoundpattern(
 /// COMPOUNDSYLMAX is still accepted while it has fewer parts than
 /// COMPOUNDWORDMAX.
 pub unsafe fn can_compound(
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     word: *const c_char,
     flags: *const uint8_t,
 ) -> bool {
@@ -638,7 +636,7 @@ pub unsafe fn can_compound(
 /// The caller must have checked that `sl_comprules` is not null. A rule is
 /// a sequence of flags, `[abc]` standing for any one of them, with `/`
 /// separating rules.
-pub unsafe fn match_compoundrule(slang: *mut slang_T, compflags: *const uint8_t) -> bool {
+pub unsafe fn match_compoundrule(slang: *mut SpellLang, compflags: *const uint8_t) -> bool {
     let mut p = unsafe { (*slang).sl_comprules } as *mut c_char;
     while unsafe { *p } != 0 {
         let mut i = 0;
@@ -693,7 +691,7 @@ pub unsafe fn valid_word_prefix(
     arridx: usize,
     flags: WordFlags,
     word: *mut c_char,
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     cond_req: bool,
 ) -> c_int {
     // SAFETY: the caller's language, whose prefix tree `arridx` indexes.
@@ -731,7 +729,7 @@ pub unsafe fn valid_word_prefix(
 /// if so look the remainder up with [`find_word`].
 ///
 /// `FIND_COMPOUND` does the same after the compound parts found so far.
-pub(super) unsafe fn find_prefix(mip: &mut matchinf_T, mode: c_int) {
+pub(super) unsafe fn find_prefix(mip: &mut MatchInf, mode: c_int) {
     let slang = unsafe { (*mip.mi_lp).lp_slang };
     let tree = unsafe { (*slang).sl_prefix_tree.view() };
     if tree.is_empty() {
@@ -808,7 +806,7 @@ pub(super) unsafe fn find_prefix(mip: &mut matchinf_T, mode: c_int) {
 /// Folding runs to the next non-word character rather than one character at
 /// a time, and includes that character, so that the caller can see where
 /// the word ends.
-unsafe fn fold_more(mip: &mut matchinf_T) -> c_int {
+unsafe fn fold_more(mip: &mut MatchInf) -> c_int {
     let p = mip.mi_fend;
     loop {
         mb_ptr_adv!(mip.mi_fend);

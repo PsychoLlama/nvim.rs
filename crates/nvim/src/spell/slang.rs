@@ -1,6 +1,6 @@
 //! The lifetime of one loaded language.
 //!
-//! A [`slang_T`] is everything a single `.spl` file turned into: three word
+//! A [`SpellLang`] is everything a single `.spl` file turned into: three word
 //! trees, the affix and compound rules, the sound-folding tables, the REP
 //! list, and — once a `.sug` file has been read — a fourth tree of
 //! sound-folded forms. They are chained on `sl_next` from the global
@@ -34,10 +34,10 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Buffer, HashValue, NUL, OK, RegProg, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
+    Buffer, HashValue, NUL, OK, RegProg, SpellLang, WordCount, size_t, uint8_t, uint16_t,
 };
 
-use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
+use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, SylItem, WC_KEY_OFF, WordTree};
 
 /// Free `*p` and null it.
 unsafe fn xfree_clear<T>(p: *mut *mut T) {
@@ -47,13 +47,13 @@ unsafe fn xfree_clear<T>(p: *mut *mut T) {
 
 /// Allocate an empty language named `lang` (which may be null). The caller
 /// fills in `sl_next`.
-pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
-    let lp = unsafe { xcalloc(1, size_of::<slang_T>()) } as *mut slang_T;
+pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
+    let lp = unsafe { xcalloc(1, size_of::<SpellLang>()) } as *mut SpellLang;
 
     // The four trees are owned values, and an all-zero `Box<[u8]>` is not
     // one: its pointer would be null where the type promises it is not.
-    // Every other field of a `slang_T` is happy zeroed.
-    // SAFETY: `xcalloc` just handed back room for one `slang_T`, so these
+    // Every other field of a `SpellLang` is happy zeroed.
+    // SAFETY: `xcalloc` just handed back room for one `SpellLang`, so these
     // are the addresses of four uninitialised fields of it.
     unsafe {
         core::ptr::write(&raw mut (*lp).sl_fold_tree, WordTree::default());
@@ -74,7 +74,7 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
     unsafe { (*lp).sl_compmax = MAXWLEN as c_int };
     unsafe { (*lp).sl_compsylmax = MAXWLEN as c_int };
     // All three tables, not just the one the caller is about to fill: a
-    // `slang_T` reached by reference must be a valid value throughout, and
+    // `SpellLang` reached by reference must be a valid value throughout, and
     // `slang_clear` empties `sl_map_hash` whether or not a MAP section was
     // ever read.
     unsafe { hash_init(&raw mut (*lp).sl_wordcount) };
@@ -85,7 +85,7 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut slang_T {
 }
 
 /// Free a language and everything it owns.
-pub unsafe fn slang_free(lp: *mut slang_T) {
+pub unsafe fn slang_free(lp: *mut SpellLang) {
     unsafe { xfree((*lp).sl_name as *mut c_void) };
     unsafe { xfree((*lp).sl_fname as *mut c_void) };
     unsafe { slang_clear(lp) };
@@ -94,7 +94,7 @@ pub unsafe fn slang_free(lp: *mut slang_T) {
 
 /// Empty a language so its file can be read again, leaving the struct
 /// itself usable and its name and chain link intact.
-pub unsafe fn slang_clear(lp: *mut slang_T) {
+pub unsafe fn slang_clear(lp: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe {
         (*lp).sl_fold_tree = WordTree::default();
@@ -148,7 +148,7 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
 }
 
 /// Drop what the `.sug` file contributed, so it can be read again.
-pub unsafe fn slang_clear_sug(lp: *mut slang_T) {
+pub unsafe fn slang_clear_sug(lp: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe { (*lp).sl_sound_tree = WordTree::default() };
     unsafe { close_spellbuf((*lp).sl_sugbuf) };
@@ -163,7 +163,7 @@ pub unsafe fn slang_clear_sug(lp: *mut slang_T) {
 /// `len` is the word's length, or -1 when it is NUL terminated. `count` is
 /// 1 to count one use and 10 to seed a word the `.spl` file declared
 /// common. The count saturates rather than wrapping.
-pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int, count: uint8_t) {
+pub unsafe fn count_common_word(lp: *mut SpellLang, word: *mut c_char, len: c_int, count: uint8_t) {
     let mut buf = [0 as c_char; MAXWLEN];
     let p = if len == -1 {
         word
@@ -179,14 +179,14 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
     let p_len = unsafe { cstr::bytes_at(p) }.len();
     let hi = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
     if !hi.is_kept() {
-        let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut wordcount_T;
+        let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut WordCount;
         let key = unsafe { &raw mut (*wc).wc_word }.cast::<c_char>();
         let into = key.cast::<u8>();
         unsafe { into.copy_from_nonoverlapping(p.cast(), p_len + 1) };
         unsafe { (*wc).wc_count = count as uint16_t };
         unsafe { hash_add_item(&raw mut (*lp).sl_wordcount, hi, key, hash) };
     } else {
-        let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
+        let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut WordCount;
         // The C adds and then checks for the wrap, which is a saturate
         // spelled the long way round.
         let total = unsafe { (*wc).wc_count }.wrapping_add(count as uint16_t);
@@ -204,10 +204,10 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
 /// entry in `sl_syl_items`.
 ///
 /// Returns `SP_FORMERROR` for an entry longer than [`SY_MAXLEN`].
-pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
+pub unsafe fn init_syl_tab(slang: *mut SpellLang) -> c_int {
     // SAFETY: the caller's language, whose `sl_syllable` is a live
     // NUL-terminated string this splits in place.
-    let mut items: Vec<syl_item_T> = Vec::new();
+    let mut items: Vec<SylItem> = Vec::new();
     let mut p = unsafe { vim_strchr((*slang).sl_syllable, '/' as c_int) };
     while !p.is_null() {
         unsafe { *p = NUL as c_char };
@@ -226,7 +226,7 @@ pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
             return SP_FORMERROR;
         }
 
-        let mut syl = syl_item_T {
+        let mut syl = SylItem {
             sy_chars: [0; SY_MAXLEN as usize],
             sy_len: l as c_int,
         };
@@ -245,7 +245,7 @@ pub unsafe fn init_syl_tab(slang: *mut slang_T) -> c_int {
 ///
 /// A space resets the count, so what is returned is the count after the
 /// last space. Zero means the language defines no syllables.
-pub(super) unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -> c_int {
+pub(super) unsafe fn count_syllables(slang: *mut SpellLang, word: *const c_char) -> c_int {
     if unsafe { (*slang).sl_syllable }.is_null() {
         return 0;
     }
@@ -301,7 +301,7 @@ pub unsafe fn open_spellbuf() -> *mut Buffer {
     // Never registered and never on the buffer list -- see
     // `alloc_unregistered_buffer`.
     // The allocation travels as a bare address: it is stored in a
-    // `slang_T`'s `sl_sugbuf`, and `close_spellbuf` takes it back.
+    // `SpellLang`'s `sl_sugbuf`, and `close_spellbuf` takes it back.
     let buf = alloc_unregistered_buffer().into_raw();
 
     unsafe { (*buf).b_spell = true };

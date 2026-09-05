@@ -47,10 +47,10 @@ use crate::spellsuggest::score::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::spellsuggest::{
-    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, sps_flags,
-    suginfo_T,
+    MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, SugInfo, TAB,
+    sps_flags,
 };
-use crate::types::{LineNr, NUL, int16_t, langp_T, slang_T, uint8_t};
+use crate::types::{LangP, LineNr, NUL, SpellLang, int16_t, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -58,14 +58,14 @@ use core::{mem, ptr};
 /// stored inline after it. The hash table of soundfolds already handled
 /// keys on the inline word.
 #[repr(C)]
-struct sftword_T {
+struct SftWord {
     sft_score: int16_t,
     sft_word: [uint8_t; 0],
 }
 
-/// Where the inline soundfolded word sits inside a `sftword_T`; the hash
+/// Where the inline soundfolded word sits inside a `SftWord`; the hash
 /// table keys on that field, so the record is recovered by stepping back.
-const SFT_WORD_OFF: usize = mem::offset_of!(sftword_T, sft_word);
+const SFT_WORD_OFF: usize = mem::offset_of!(SftWord, sft_word);
 
 /// Does a language have both a sound-folding table and a loaded `.sug`?
 /// Without both there is nothing to walk.
@@ -73,7 +73,7 @@ const SFT_WORD_OFF: usize = mem::offset_of!(sftword_T, sft_word);
 /// # Safety
 ///
 /// `slang` must be a loaded language.
-unsafe fn has_sound_tree(slang: *mut slang_T) -> bool {
+unsafe fn has_sound_tree(slang: *mut SpellLang) -> bool {
     // SAFETY: the caller guarantees the language.
     unsafe { (*slang).has_soundfold() && !(*slang).sl_sound_tree.is_empty() }
 }
@@ -103,7 +103,7 @@ pub(super) unsafe fn suggest_try_soundalike_prep() {
 ///
 /// `su` must be valid and the current window must have its languages
 /// loaded.
-pub(super) unsafe fn suggest_try_soundalike(su: *mut suginfo_T) {
+pub(super) unsafe fn suggest_try_soundalike(su: *mut SugInfo) {
     // SAFETY: by the contract above, the window's languages are loaded.
     for lp in unsafe { crate::spellsuggest::window_langs() } {
         // SAFETY: `lp` came out of the window's language list, so
@@ -146,7 +146,7 @@ pub(super) unsafe fn suggest_try_soundalike_finish() {
         let done = unsafe { &mut (*slang).sl_sounddone };
         for hi in done.items() {
             // SAFETY: every key in this table is the inline word of a
-            // `sftword_T` this module allocated, so stepping back by
+            // `SftWord` this module allocated, so stepping back by
             // `SFT_WORD_OFF` recovers that allocation's start.
             unsafe { xfree(hi.hi_key.sub(SFT_WORD_OFF) as *mut c_void) };
         }
@@ -199,10 +199,10 @@ fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
 ///
 /// `su` and `lp` must be valid and the language must have a loaded `.sug`.
 pub(super) unsafe fn add_sound_suggest(
-    su: *mut suginfo_T,
+    su: *mut SugInfo,
     goodword: *mut c_char,
     score: c_int,
-    lp: *mut langp_T,
+    lp: *mut LangP,
 ) {
     // SAFETY: `lp` is valid by the contract above.
     let slang = unsafe { (*lp).lp_slang };
@@ -222,15 +222,15 @@ pub(super) unsafe fn add_sound_suggest(
         // SAFETY: the allocation is `SFT_WORD_OFF + goodword_len + 1`
         // bytes, so the record's header and the word after it both fit,
         // and `goodword` really is `goodword_len + 1` bytes with its NUL.
-        let sft = unsafe { xmalloc(SFT_WORD_OFF + goodword_len + 1) } as *mut sftword_T;
+        let sft = unsafe { xmalloc(SFT_WORD_OFF + goodword_len + 1) } as *mut SftWord;
         unsafe { (*sft).sft_score = score as int16_t };
         let word = unsafe { (sft as *mut u8).add(SFT_WORD_OFF) };
         unsafe { ptr::copy_nonoverlapping(goodword as *const u8, word, goodword_len + 1) };
         unsafe { hash_add_item(sounddone, hi, word as *mut c_char, hash) };
     } else {
-        // SAFETY: the key is the inline word of a `sftword_T` allocated
+        // SAFETY: the key is the inline word of a `SftWord` allocated
         // above, so stepping back by `SFT_WORD_OFF` recovers the record.
-        let sft = unsafe { hi.hi_key.sub(SFT_WORD_OFF) } as *mut sftword_T;
+        let sft = unsafe { hi.hi_key.sub(SFT_WORD_OFF) } as *mut SftWord;
         if score >= unsafe { (*sft).sft_score } as c_int {
             return;
         }
@@ -275,7 +275,7 @@ pub(super) unsafe fn add_sound_suggest(
 ///
 /// `slang` must have a case-folded tree.
 unsafe fn word_number_to_letters(
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     orgnr: c_int,
 ) -> ([c_char; MAXWLEN], usize, usize) {
     // SAFETY: the caller guarantees the tree, and it stays loaded for as
@@ -346,9 +346,9 @@ unsafe fn word_number_to_letters(
 /// [`word_number_to_letters`].
 #[allow(clippy::too_many_arguments)]
 unsafe fn emit_word(
-    su: *mut suginfo_T,
-    lp: *mut langp_T,
-    slang: *mut slang_T,
+    su: *mut SugInfo,
+    lp: *mut LangP,
+    slang: *mut SpellLang,
     theword: &mut [c_char; MAXWLEN],
     n: usize,
     mut i: usize,
@@ -467,7 +467,7 @@ unsafe fn emit_word(
 /// # Safety
 ///
 /// `slang` must have a loaded `.sug` and `word` must be NUL-terminated.
-pub(super) unsafe fn soundfold_find(slang: *mut slang_T, word: *mut c_char) -> c_int {
+pub(super) unsafe fn soundfold_find(slang: *mut SpellLang, word: *mut c_char) -> c_int {
     // SAFETY: the caller guarantees the loaded `.sug`, so the sound-fold
     // tree is there and stays loaded for as long as this walk.
     let tree = unsafe { (*slang).sl_sound_tree.view() };
@@ -566,7 +566,7 @@ struct KeepCapLevel {
 /// `fword` must be NUL-terminated and `kword` must have room for
 /// `MAXWLEN` bytes.
 pub(super) unsafe fn find_keepcap_word(
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     fword: *mut c_char,
     kword: *mut c_char,
 ) {

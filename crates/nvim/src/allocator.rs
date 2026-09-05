@@ -159,7 +159,7 @@ impl<T> Owned<T> {
     /// Give up ownership, answering the address.
     ///
     /// For the objects whose ownership travels as a bare pointer through
-    /// transpiled code — `open_spellbuf`'s buffer lives in a `slang_T` field
+    /// transpiled code — `open_spellbuf`'s buffer lives in a `SpellLang` field
     /// — and which are taken back with [`Owned::from_raw`] at their free
     /// point. Prefer holding the `Owned` where the shape allows it.
     pub(crate) fn into_raw(self) -> *mut T {

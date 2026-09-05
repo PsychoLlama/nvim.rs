@@ -87,8 +87,8 @@ use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spell::Tree;
-use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
-use crate::types::{ProfTime, SpellIdx, int64_t, langp_T, slang_T};
+use crate::spellsuggest::{MAXWLEN, SugInfo, spell_suggest_timeout};
+use crate::types::{LangP, ProfTime, SpellIdx, SpellLang, int64_t};
 use core::ffi::{c_char, c_int};
 
 /// One level per byte of the bad word is all the walk can ever need.
@@ -240,9 +240,9 @@ const _: () = assert!(size_of::<Frame>() == 32);
 /// storage.
 pub(crate) struct Walk<'a> {
     /// The suggestion list being filled, and the language being searched.
-    pub su: *mut suginfo_T,
-    pub lp: *mut langp_T,
-    pub slang: *mut slang_T,
+    pub su: *mut SugInfo,
+    pub lp: *mut LangP,
+    pub slang: *mut SpellLang,
     /// Walking the sound-fold tree rather than the case-folded one. Word
     /// flags, case, banned words, splitting and `similar_chars` all do not
     /// apply then; see [`suggest_trie_walk`].
@@ -303,8 +303,8 @@ pub(crate) struct Walk<'a> {
 /// `su` and `lp` must be valid, `lp`'s language must have its trees
 /// loaded, and `fword` must be a NUL-terminated buffer of `MAXWLEN` bytes.
 pub(super) unsafe fn suggest_trie_walk(
-    su: *mut suginfo_T,
-    lp: *mut langp_T,
+    su: *mut SugInfo,
+    lp: *mut LangP,
     fword: *mut c_char,
     soundfold: bool,
 ) {
@@ -320,8 +320,8 @@ impl Walk<'_> {
     ///
     /// As [`suggest_trie_walk`].
     unsafe fn new(
-        su: *mut suginfo_T,
-        lp: *mut langp_T,
+        su: *mut SugInfo,
+        lp: *mut LangP,
         fword: *mut c_char,
         soundfold: bool,
     ) -> Walk<'static> {

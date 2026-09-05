@@ -32,7 +32,7 @@ use crate::types::NUL;
 /// behind a decoration.
 ///
 /// # Safety
-/// `wp` must be a live window, `spv` a live `spellvars_T`, and `wlv` must have
+/// `wp` must be a live window, `spv` a live `SpellVars`, and `wlv` must have
 /// been initialised for this line (`lnum`, `foldinfo`, `startrow`).
 pub(crate) unsafe fn prepare_line(
     wlv: &mut WinLineVars,
@@ -40,7 +40,7 @@ pub(crate) unsafe fn prepare_line(
     endrow: ::core::ffi::c_int,
     col_rows: ::core::ffi::c_int,
     concealed: bool,
-    spv: *mut spellvars_T,
+    spv: *mut SpellVars,
     nextline: &mut SpellLookahead,
 ) -> LineSetup {
     // SAFETY: the caller's window, spell state and line.
@@ -591,7 +591,7 @@ impl LineSetup {
         &mut self,
         wp: Win,
         lnum: LineNr,
-        spv: *mut spellvars_T,
+        spv: *mut SpellVars,
         nextline: &mut SpellLookahead,
     ) {
         // SAFETY: the caller's window and spell state.
@@ -716,7 +716,7 @@ impl LineSetup {
     /// # Safety
     /// `wp` must be a live window, `spv` its spell state, and
     /// [`LineSetup::line`] its line.
-    unsafe fn skip_to_start_vcol(&mut self, wlv: &mut WinLineVars, wp: Win, spv: *mut spellvars_T) {
+    unsafe fn skip_to_start_vcol(&mut self, wlv: &mut WinLineVars, wp: Win, spv: *mut SpellVars) {
         let start_vcol = self.start_vcol;
         // SAFETY: the caller's window and line.
         let mut prev_ptr = self.ptr;

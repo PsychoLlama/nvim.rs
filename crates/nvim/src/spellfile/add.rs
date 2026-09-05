@@ -50,7 +50,7 @@ use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispaths
 use crate::spell::{int_wordlist, spell_enc};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    Buffer, FILE, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, langp_T, size_t,
+    Buffer, FILE, LangP, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, size_t,
     uint8_t,
 };
 use crate::undo::buf_is_changed;
@@ -336,7 +336,7 @@ unsafe fn init_spellfile() {
     // The suffix has to match the file actually loaded, which may be
     // the ASCII build of the language rather than the current encoding.
     let fname =
-        unsafe { (*(*((*(*curwin.get()).w_s).b_langp.ga_data as *mut langp_T)).lp_slang).sl_fname };
+        unsafe { (*(*((*(*curwin.get()).w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
     let enc_suffix = if !fname.is_null()
         && !unsafe { strstr(path_tail(fname), c".ascii.".as_ptr()) }.is_null()
     {

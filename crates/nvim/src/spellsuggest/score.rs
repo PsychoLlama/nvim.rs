@@ -46,9 +46,9 @@ use crate::memory::xstrlcpy;
 use crate::spell::{WC_KEY_OFF, spell_casefold, spell_soundfold, spelltab_fold, spelltab_isu};
 use crate::spellsuggest::{
     MAXWLEN, SCORE_COMMON1, SCORE_COMMON2, SCORE_COMMON3, SCORE_DEL, SCORE_ICASE, SCORE_INS,
-    SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, suginfo_T,
+    SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
 };
-use crate::types::{MB_MAXCHAR, NUL, size_t, slang_T, wordcount_T};
+use crate::types::{MB_MAXCHAR, NUL, SpellLang, WordCount, size_t};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -109,7 +109,7 @@ unsafe fn word_chars(word: *const c_char, out: &mut [c_int; MAXWLEN]) -> usize {
 
 /// Returns true if `c1` and `c2` are similar characters according to the
 /// `MAP` lines in the .aff file.
-pub(super) fn similar_chars(slang: &slang_T, c1: c_int, c2: c_int) -> bool {
+pub(super) fn similar_chars(slang: &SpellLang, c1: c_int, c2: c_int) -> bool {
     let m1 = map_class(slang, c1);
     // A character with no MAP entry is similar to nothing, not even to
     // another character with no entry.
@@ -117,7 +117,7 @@ pub(super) fn similar_chars(slang: &slang_T, c1: c_int, c2: c_int) -> bool {
 }
 
 /// The `MAP` group a character belongs to, or 0 for none.
-fn map_class(slang: &slang_T, c: c_int) -> c_int {
+fn map_class(slang: &SpellLang, c: c_int) -> c_int {
     if c < 256 {
         return slang.sl_map_array[c as usize];
     }
@@ -144,19 +144,19 @@ fn map_class(slang: &slang_T, c: c_int) -> c_int {
 ///
 /// `word` must be a NUL-terminated string.
 pub(super) unsafe fn score_wordcount_adj(
-    slang: &slang_T,
+    slang: &SpellLang,
     score: c_int,
     word: *mut c_char,
     split: bool,
 ) -> c_int {
     // SAFETY: the caller guarantees a NUL-terminated word; the hash table
-    // stores `wordcount_T`s whose key is an inline field at `WC_KEY_OFF`,
+    // stores `WordCount`s whose key is an inline field at `WC_KEY_OFF`,
     // so stepping back by that offset recovers the record.
     let hi = unsafe { &*hash_find(&raw const slang.sl_wordcount, word) };
     if !hi.is_kept() {
         return score;
     }
-    let count = unsafe { (*(hi.hi_key.sub(WC_KEY_OFF) as *mut wordcount_T)).wc_count } as c_int;
+    let count = unsafe { (*(hi.hi_key.sub(WC_KEY_OFF) as *mut WordCount)).wc_count } as c_int;
 
     let bonus = if count < SCORE_THRES2 {
         SCORE_COMMON1
@@ -448,7 +448,7 @@ pub(super) fn soundalike_score(goodstart: &SoundBuf, badstart: &SoundBuf) -> c_i
 /// Both words must be NUL-terminated and shorter than `MAXWLEN`
 /// characters.
 pub(super) unsafe fn spell_edit_score(
-    slang: Option<&slang_T>,
+    slang: Option<&SpellLang>,
     badword: *const c_char,
     goodword: *const c_char,
 ) -> c_int {
@@ -496,7 +496,7 @@ pub(super) unsafe fn spell_edit_score(
 /// What replacing `bc` with `gc` costs: a case difference is cheap, a
 /// difference the language's `MAP` lines call similar is cheaper than a
 /// plain substitution.
-fn substitute_cost(slang: Option<&slang_T>, bc: c_int, gc: c_int) -> c_int {
+fn substitute_cost(slang: Option<&SpellLang>, bc: c_int, gc: c_int) -> c_int {
     if spell_tofold(bc) == spell_tofold(gc) {
         return SCORE_ICASE;
     }
@@ -530,7 +530,7 @@ const SCORE_EDIT_MIN: c_int = SCORE_SIMILAR;
 /// Both words must be NUL-terminated and shorter than `MAXWLEN`
 /// characters.
 pub(super) unsafe fn spell_edit_score_limit(
-    slang: Option<&slang_T>,
+    slang: Option<&SpellLang>,
     badword: *const c_char,
     goodword: *const c_char,
     limit: c_int,
@@ -699,8 +699,8 @@ pub(super) unsafe fn stp_sal_score(
     word: *mut c_char,
     wordlen: c_int,
     orglen: c_int,
-    su: &suginfo_T,
-    slang: *mut slang_T,
+    su: &SugInfo,
+    slang: *mut SpellLang,
     badsound: &SoundBuf,
 ) -> c_int {
     let mut badsound2 = EMPTY_SOUND;

@@ -2,9 +2,9 @@
 //!
 //! `'spelllang'` is a comma-separated list of names — `en`, `en_us`,
 //! `de`, `cjk`, or a path ending in `.spl`. [`parse_spelllang`] resolves
-//! each of them to a [`slang_T`], loading it from `'runtimepath'` if it is
+//! each of them to a [`SpellLang`], loading it from `'runtimepath'` if it is
 //! not already in the global chain, and leaves the result in the window's
-//! `b_langp` as a list of [`langp_T`]: a language plus the region mask
+//! `b_langp` as a list of [`LangP`]: a language plus the region mask
 //! selected for it.
 //!
 //! `'spellfile'` entries are appended to the same list, along with the
@@ -52,15 +52,15 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    Failed, GArray, MAXPATHL, NUL, RegProg, SPL_FNAME_TMPL, SynBlock, Window, langp_T, size_t,
-    slang_T,
+    Failed, GArray, LangP, MAXPATHL, NUL, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock, Window,
+    size_t,
 };
 use crate::window::win_valid_any_tab;
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
 use super::{
-    MAXWLEN, REGION_ALL, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to, spelload_T,
+    MAXWLEN, REGION_ALL, SpellLoad, first_lang, int_wordlist, kEqualFiles, repl_from, repl_to,
 };
 use crate::runtime::RuntimeOpts;
 use crate::winlayer::{Buf, buffers, windows};
@@ -102,7 +102,7 @@ unsafe fn int_wordlist_spl(fname: *mut c_char) {
 /// a warning is printed.
 unsafe fn spell_load_lang(lang: *mut c_char) {
     let mut fname_enc = [0 as c_char; 85];
-    let mut sl: spelload_T = unsafe { core::mem::zeroed() };
+    let mut sl: SpellLoad = unsafe { core::mem::zeroed() };
 
     // The name is passed to spell_load_cb() as a cookie, and truncated
     // there when an error is found.
@@ -177,7 +177,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
 unsafe fn do_in_runtimepath_cb(
     name: *mut c_char,
     flags: RuntimeOpts,
-    sl: *mut spelload_T,
+    sl: *mut SpellLoad,
 ) -> Result<(), Failed> {
     unsafe {
         crate::runtime::do_in_runtimepath(name, flags, Some(spell_load_cb), sl as *mut c_void)
@@ -195,7 +195,7 @@ unsafe fn spell_load_cb(
     all: bool,
     cookie: *mut c_void,
 ) -> bool {
-    let slp = cookie as *mut spelload_T;
+    let slp = cookie as *mut SpellLoad;
     for i in 0..num_fnames {
         let fname = unsafe { *fnames.offset(i as isize) };
         let lang = unsafe { (*slp).sl_lang.as_mut_ptr() };
@@ -245,7 +245,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw((*wp).w_buffer) });
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };
-    unsafe { ga_init(&raw mut ga, size_of::<langp_T>() as c_int, 2) };
+    unsafe { ga_init(&raw mut ga, size_of::<LangP>() as c_int, 2) };
     clear_midword(wp);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
@@ -269,7 +269,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
             continue;
         }
 
-        let mut slang: *mut slang_T;
+        let mut slang: *mut SpellLang;
         let filename;
         if len > 4
             && unsafe { path_fnamecmp(lang.as_ptr().offset(len as isize - 4), c".spl".as_ptr()) }
@@ -376,8 +376,8 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                 }
 
                 if region_mask != 0 {
-                    let p_ = unsafe { ga_append_via_ptr(&raw mut ga, size_of::<langp_T>()) }
-                        as *mut langp_T;
+                    let p_ =
+                        unsafe { ga_append_via_ptr(&raw mut ga, size_of::<LangP>()) } as *mut LangP;
                     unsafe { (*p_).lp_slang = slang };
                     unsafe { (*p_).lp_region = region_mask };
 
@@ -413,7 +413,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                 // Skip it if the loop above already took it.
                 let mut c = 0;
                 while c < ga.ga_len {
-                    let entry = ga.ga_data as *mut langp_T;
+                    let entry = ga.ga_data as *mut LangP;
                     let p = unsafe { (*(*entry.offset(c as isize)).lp_slang).sl_fname };
                     if !p.is_null()
                         && unsafe { path_full_compare(spf_name.as_mut_ptr(), p, false, true) }
@@ -476,8 +476,8 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                 }
 
                 if region_mask != 0 {
-                    let p_ = unsafe { ga_append_via_ptr(&raw mut ga, size_of::<langp_T>()) }
-                        as *mut langp_T;
+                    let p_ =
+                        unsafe { ga_append_via_ptr(&raw mut ga, size_of::<LangP>()) } as *mut LangP;
                     unsafe { (*p_).lp_slang = slang };
                     unsafe { (*p_).lp_sallang = core::ptr::null_mut() };
                     unsafe { (*p_).lp_replang = core::ptr::null_mut() };
@@ -496,7 +496,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
         // A language with no sound folding or no REP items of its own
         // borrows from the first similarly-named one that has them, so
         // that "en-math" gets "en"'s.
-        let entries = ga.ga_data as *mut langp_T;
+        let entries = ga.ga_data as *mut LangP;
         for i in 0..ga.ga_len {
             let lp = unsafe { entries.offset(i as isize) };
             // The first two bytes of `sl_name` are the language; a region
@@ -699,7 +699,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
-unsafe fn use_midword(lp: *mut slang_T, wp: *mut Window) {
+unsafe fn use_midword(lp: *mut SpellLang, wp: *mut Window) {
     if unsafe { (*lp).sl_midword }.is_null() {
         return;
     }

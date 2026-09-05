@@ -46,7 +46,7 @@ use crate::spellsuggest::walk::{
     FLAG_PREFIX_OK, PFD_NOTSPECIAL, PFD_PREFIXTREE, STACK_SIZE, State, Walk,
 };
 use crate::spellsuggest::{
-    MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, badword_captype, suginfo_T,
+    MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, SugInfo, badword_captype,
 };
 use crate::types::{NUL, SpellIdx, size_t};
 use ::libc::strcpy;
@@ -762,7 +762,7 @@ impl Walk<'_> {
 /// # Safety
 ///
 /// `su` must be valid and `word` NUL-terminated.
-unsafe fn was_banned(su: *mut suginfo_T, word: *const c_char) -> bool {
+unsafe fn was_banned(su: *mut SugInfo, word: *const c_char) -> bool {
     // SAFETY: the caller guarantees both; a miss returns an empty item
     // rather than null.
     unsafe { (*hash_find(&raw const (*su).su_banned, word)).is_kept() }

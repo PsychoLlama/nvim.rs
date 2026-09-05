@@ -69,7 +69,7 @@ pub(crate) unsafe fn draw_window_lines(
     buf: *mut Buffer,
     rg: &mut Regions,
     cursorline_fi: FoldInfo,
-    spv: &mut spellvars_T,
+    spv: &mut SpellVars,
     decor: DecorStateRef,
 ) -> LineNr {
     // Plain construction but for the one field, so it sits outside the
@@ -165,7 +165,7 @@ pub(crate) unsafe fn draw_window_lines(
                 unsafe { wp.w_botline = (*buf).b_ml.ml_line_count + 1 };
                 let fill = unsafe { win_get_fill(Win::new(wp.raw()), wp.w_botline) };
                 if fill > 0 && !wp.w_botfill && w.row < wp.w_view_height {
-                    let mut zero_spv = spellvars_T::default();
+                    let mut zero_spv = SpellVars::default();
                     w.row = unsafe {
                         win_line(
                             wp.raw(),
@@ -260,7 +260,7 @@ unsafe fn draw_one_line(
     rg: &mut Regions,
     w: &mut Walk,
     cursorline_fi: FoldInfo,
-    spv: &mut spellvars_T,
+    spv: &mut SpellVars,
     decor: DecorStateRef,
 ) -> bool {
     // SAFETY: the caller's window, buffer and `w_lines` array.
@@ -322,8 +322,8 @@ unsafe fn draw_one_line(
         let display_buf_line =
             !concealed && (foldinfo.fi_lines == 0 || unsafe { *wp.w_onebuf_opt.wo_fdt } == 0);
 
-        let mut zero_spv = spellvars_T::default();
-        let spv_arg: *mut spellvars_T = if display_buf_line {
+        let mut zero_spv = SpellVars::default();
+        let spv_arg: *mut SpellVars = if display_buf_line {
             &raw mut *spv
         } else {
             &raw mut zero_spv
@@ -597,7 +597,7 @@ unsafe fn skip_one_line(
     rg: &Regions,
     w: &mut Walk,
     cursorline_fi: FoldInfo,
-    spv: &mut spellvars_T,
+    spv: &mut SpellVars,
     decor: DecorStateRef,
 ) {
     // SAFETY: the caller's window, buffer and `w_lines` array.

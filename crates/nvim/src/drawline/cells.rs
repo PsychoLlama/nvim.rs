@@ -69,7 +69,7 @@ pub(crate) struct LineFrame {
     /// screen rows.
     pub(crate) col_rows: ::core::ffi::c_int,
     /// The redraw's spell state.
-    pub(crate) spv: *mut spellvars_T,
+    pub(crate) spv: *mut SpellVars,
     /// `'statuscolumn'` request. Its `sattrs` points into
     /// [`WinLineVars::sign_attrs`].
     pub(crate) statuscol: *mut statuscol_T,

@@ -231,7 +231,7 @@ pub(crate) unsafe fn win_update(wp: Win) {
 
     unsafe { win_check_ns_hl(wp.raw()) };
 
-    let mut spv = spellvars_T::default();
+    let mut spv = SpellVars::default();
     if unsafe { spell_check_window(wp.raw()) } {
         spv.spv_has_spell = true;
         spv.spv_unchanged = rg.mod_top == 0;

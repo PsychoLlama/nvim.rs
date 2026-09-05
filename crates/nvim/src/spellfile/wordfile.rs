@@ -26,7 +26,7 @@ use crate::types::{CONV_NONE, Failed, LineNr, NUL, size_t, uint8_t};
 use ::libc::{fclose, strcpy};
 
 use super::wordtree::store_word;
-use super::{MAXLINELEN, MAXREGIONS, spell_message_fmt, spellinfo_T};
+use super::{MAXLINELEN, MAXREGIONS, SpellInfo, spell_message_fmt};
 
 /// Read a plain word list: one word per line, with optional `/` flags, and
 /// `/encoding=` and `/regions=` header lines.
@@ -35,7 +35,7 @@ use super::{MAXLINELEN, MAXREGIONS, spell_message_fmt, spellinfo_T};
 ///
 /// `fname` must be a NUL-terminated path.
 pub(super) unsafe fn spell_read_wordfile(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     fname: *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, which is
@@ -167,7 +167,7 @@ pub(super) unsafe fn spell_read_wordfile(
 ///
 /// `line` and `fname` must be NUL-terminated.
 unsafe fn read_wordfile_header(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     mut line: *mut c_char,
     fname: *mut c_char,
     lnum: LineNr,

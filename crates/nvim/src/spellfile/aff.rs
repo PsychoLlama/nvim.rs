@@ -55,9 +55,8 @@ use super::affix::{handle_affix_entry, handle_affix_header};
 use super::flags::{affitem2flag, process_compflags};
 use super::tables::{add_comppat, add_rep_entry, append_info, handle_map, handle_sal};
 use super::{
-    _ISdigit, AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, COMP_CHECKCASE, COMP_CHECKDUP,
-    COMP_CHECKREP, COMP_CHECKTRIPLE, MAXLINELEN, TAB, afffile_T, affheader_T, spell_message_fmt,
-    spellinfo_T,
+    _ISdigit, AFT_CAPLONG, AFT_CHAR, AFT_LONG, AFT_NUM, AffFile, AffHeader, COMP_CHECKCASE,
+    COMP_CHECKDUP, COMP_CHECKREP, COMP_CHECKTRIPLE, MAXLINELEN, SpellInfo, TAB, spell_message_fmt,
 };
 
 /// The most items one `.aff` line is split into; the rest are ignored.
@@ -71,7 +70,7 @@ pub(super) const MAXITEMCNT: usize = 30;
 pub(super) struct AffState {
     /// Entries still expected in the affix block being read.
     pub aff_todo: c_int,
-    pub cur_aff: *mut affheader_T,
+    pub cur_aff: *mut AffHeader,
     /// Whether any entry of the current prefix block actually went into the
     /// prefix tree; if none did, its id is handed back.
     pub did_postpone_prefix: bool,
@@ -116,7 +115,7 @@ enum FlagField {
 
 impl FlagField {
     /// The field of `aff` this keyword sets.
-    fn slot(self, aff: &mut afffile_T) -> &mut c_uint {
+    fn slot(self, aff: &mut AffFile) -> &mut c_uint {
         match self {
             Self::Rare => &mut aff.af_rare,
             Self::KeepCase => &mut aff.af_keepcase,
@@ -271,7 +270,7 @@ unsafe fn spell_info_item(s: *mut c_char) -> bool {
 /// # Safety
 ///
 /// `fname` must be a NUL-terminated path.
-pub(super) unsafe fn spell_read_aff(spin: &mut spellinfo_T, fname: *mut c_char) -> *mut afffile_T {
+pub(super) unsafe fn spell_read_aff(spin: &mut SpellInfo, fname: *mut c_char) -> *mut AffFile {
     // SAFETY: the caller promises the path; `rline` is MAXLINELEN, the
     // bound `vim_fgets` is given.
     let fd = unsafe { os_fopen(fname, c"r".as_ptr()) };
@@ -308,7 +307,7 @@ pub(super) unsafe fn spell_read_aff(spin: &mut spellinfo_T, fname: *mut c_char) 
         do_mapline: spin.si_map.is_empty(),
     };
 
-    let aff_raw = spin.si_arena.alloc::<afffile_T>();
+    let aff_raw = spin.si_arena.alloc::<AffFile>();
     // SAFETY: the arena just handed this out, zeroed and aligned. Its
     // block is a heap allocation of its own, so a reference into it stays
     // live across the `spin` borrows below.
@@ -423,8 +422,8 @@ unsafe fn split_items(line: *mut c_char, items: &mut [*mut c_char; MAXITEMCNT]) 
 /// `items` must hold live NUL-terminated strings, and `aff` and `spin` be
 /// live.
 unsafe fn handle_line(
-    spin: &mut spellinfo_T,
-    aff: &mut afffile_T,
+    spin: &mut SpellInfo,
+    aff: &mut AffFile,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -608,7 +607,7 @@ unsafe fn handle_line(
     }
     if is_affix
         && st.aff_todo > 0
-        && unsafe { cstr::eq(affheader_T::key(st.cur_aff), items[1]) }
+        && unsafe { cstr::eq(AffHeader::key(st.cur_aff), items[1]) }
         && items.len() >= 5
     {
         unsafe { handle_affix_entry(spin, aff, st, items, fname, lnum) };
@@ -708,7 +707,7 @@ pub(super) unsafe fn is_digit_byte(c: c_char) -> bool {
 ///
 /// As [`handle_line`].
 unsafe fn handle_flag_type(
-    aff: &mut afffile_T,
+    aff: &mut AffFile,
     items: &[*mut c_char],
     fname: *mut c_char,
     lnum: c_int,
@@ -751,8 +750,8 @@ unsafe fn handle_flag_type(
 ///
 /// `spin`, `aff` and the state must be live.
 unsafe fn finish_aff(
-    spin: &mut spellinfo_T,
-    aff: &mut afffile_T,
+    spin: &mut SpellInfo,
+    aff: &mut AffFile,
     st: &mut AffState,
     fname: *mut c_char,
 ) {

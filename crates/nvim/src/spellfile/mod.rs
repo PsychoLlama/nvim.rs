@@ -21,8 +21,8 @@ use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
     Buffer, CONV_NONE, EStackType, ExArg, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt,
-    RegProg, RepItem, SPL_FNAME_TMPL, SpellAddType, XDGVarType, file_comparison, size_t,
-    spelltab_T, time_t, vimconv_T,
+    RegProg, RepItem, SPL_FNAME_TMPL, SpellAddType, SpellTab, XDGVarType, file_comparison, size_t,
+    time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -49,7 +49,7 @@ pub use read::{spell_load_file, suggest_load_files};
 use sugfile::spell_make_sugfile;
 use wordfile::spell_read_wordfile;
 use wordtree::{
-    MSG_COMPRESSING, SpellArena, set_compression_limits, wordnode_T, wordtree_alloc,
+    MSG_COMPRESSING, SpellArena, WordNode, set_compression_limits, wordtree_alloc,
     wordtree_compress,
 };
 use write::write_vim_spell;
@@ -101,17 +101,17 @@ pub const SN_CHARFLAGS: ::core::ffi::c_uint = 1;
 pub const SN_REGION: ::core::ffi::c_uint = 0;
 pub const SN_INFO: ::core::ffi::c_uint = 15;
 pub const SN_END: ::core::ffi::c_uint = 255;
-pub struct spellinfo_T {
-    pub si_foldroot: *mut wordnode_T,
+pub struct SpellInfo {
+    pub si_foldroot: *mut WordNode,
     pub si_foldwcount: ::core::ffi::c_int,
-    pub si_keeproot: *mut wordnode_T,
+    pub si_keeproot: *mut WordNode,
     pub si_keepwcount: ::core::ffi::c_int,
-    pub si_prefroot: *mut wordnode_T,
+    pub si_prefroot: *mut WordNode,
     pub si_sugtree: ::core::ffi::c_int,
     pub si_arena: SpellArena,
     pub si_did_emsg: ::core::ffi::c_int,
     pub si_compress_cnt: ::core::ffi::c_int,
-    pub si_first_free: *mut wordnode_T,
+    pub si_first_free: *mut WordNode,
     pub si_free_count: ::core::ffi::c_int,
     pub si_spellbuf: *mut Buffer,
     pub si_ascii: ::core::ffi::c_int,
@@ -167,7 +167,7 @@ pub struct spellinfo_T {
 /// file as a struct image, none is named by `tools/ffigen/unit-cdefs.h` or
 /// the ABI ledger, and none crosses an `extern` boundary — so none of them
 /// carries `repr(C)`, and the compiler is free to lay them out.
-pub struct afffile_T {
+pub struct AffFile {
     pub af_enc: *mut ::core::ffi::c_char,
     pub af_flagtype: ::core::ffi::c_int,
     pub af_rare: ::core::ffi::c_uint,
@@ -186,10 +186,9 @@ pub struct afffile_T {
     pub af_suff: HashTab,
     pub af_comp: HashTab,
 }
-pub type affentry_T = affentry_S;
 /// One `PFX`/`SFX` line: what to chop, what to add, and when.
-pub struct affentry_S {
-    pub ae_next: *mut affentry_T,
+pub struct AffEntry {
+    pub ae_next: *mut AffEntry,
     pub ae_chop: *mut ::core::ffi::c_char,
     pub ae_add: *mut ::core::ffi::c_char,
     pub ae_flags: *mut ::core::ffi::c_char,
@@ -203,16 +202,16 @@ pub struct affentry_S {
 /// The `af_pref`/`af_suff` tables key on [`ah_key`](Self::ah_key), which
 /// the header owns, so the table's key pointer points *into* the header;
 /// [`Self::key`] and [`Self::of_key`] are the two directions.
-pub struct affheader_T {
+pub struct AffHeader {
     pub ah_key: [::core::ffi::c_char; 17],
     pub ah_flag: ::core::ffi::c_uint,
     pub ah_newID: ::core::ffi::c_int,
     pub ah_combine: ::core::ffi::c_int,
     pub ah_follows: ::core::ffi::c_int,
-    pub ah_first: *mut affentry_T,
+    pub ah_first: *mut AffEntry,
 }
 
-impl affheader_T {
+impl AffHeader {
     /// This header's affix name, as the NUL-terminated string `af_pref` and
     /// `af_suff` key on.
     fn key(this: *mut Self) -> *mut ::core::ffi::c_char {
@@ -236,14 +235,14 @@ impl affheader_T {
 /// One `COMPOUNDFLAG` value and the internal id standing in for it.
 ///
 /// `af_comp` keys on [`ci_key`](Self::ci_key) exactly as `af_pref` keys on
-/// an affix name; see [`affheader_T`].
-pub struct compitem_T {
+/// an affix name; see [`AffHeader`].
+pub struct CompItem {
     pub ci_key: [::core::ffi::c_char; 17],
     pub ci_flag: ::core::ffi::c_uint,
     pub ci_newID: ::core::ffi::c_int,
 }
 
-impl compitem_T {
+impl CompItem {
     /// This item's compound flag, as the NUL-terminated string `af_comp`
     /// keys on.
     fn key(this: *mut Self) -> *mut ::core::ffi::c_char {
@@ -258,7 +257,7 @@ impl compitem_T {
     /// `key` must be a pointer [`key`](Self::key) returned for an item that
     /// is still live.
     unsafe fn of_key(key: *mut ::core::ffi::c_char) -> *mut Self {
-        // SAFETY: as for `affheader_T::of_key`.
+        // SAFETY: as for `AffHeader::of_key`.
         unsafe { key.byte_sub(::core::mem::offset_of!(Self, ci_key)).cast() }
     }
 }
@@ -293,7 +292,7 @@ pub const CONDIT_COMB: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const CONDIT_CFIX: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const CONDIT_SUF: ::core::ffi::c_int = 4 as ::core::ffi::c_int;
 pub const CONDIT_AFF: ::core::ffi::c_int = 8 as ::core::ffi::c_int;
-impl spellinfo_T {
+impl SpellInfo {
     /// A spell file under construction, with nothing read yet.
     ///
     /// The C listed an initialiser and then `memset` the whole struct to
@@ -475,8 +474,8 @@ pub unsafe fn mkspell(
     added_word: bool,
 ) {
     let mut fname = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut afile = [::core::ptr::null_mut::<afffile_T>(); MAXREGIONS as usize];
-    let mut spin = spellinfo_T::new();
+    let mut afile = [::core::ptr::null_mut::<AffFile>(); MAXREGIONS as usize];
+    let mut spin = SpellInfo::new();
     spin.si_verbose = !added_word as ::core::ffi::c_int;
     spin.si_ascii = ascii as ::core::ffi::c_int;
     spin.si_followup = 1;
@@ -661,7 +660,7 @@ unsafe fn output_is_writable(
 ///
 /// `innames` must hold `incount` NUL-terminated paths.
 unsafe fn read_region_names(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     innames: *mut *mut ::core::ffi::c_char,
     incount: ::core::ffi::c_int,
 ) -> bool {
@@ -706,11 +705,11 @@ fn to_lower_ascii(c: ::core::ffi::c_char) -> ::core::ffi::c_char {
 /// `innames` must hold `incount` NUL-terminated paths, `fname` must have
 /// room for [`MAXPATHL`] bytes, and `afile` at least `incount` slots.
 unsafe fn read_inputs(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     innames: *mut *mut ::core::ffi::c_char,
     incount: ::core::ffi::c_int,
     fname: *mut ::core::ffi::c_char,
-    afile: &mut [*mut afffile_T],
+    afile: &mut [*mut AffFile],
 ) -> bool {
     // SAFETY: the caller promises the paths and the buffer's size, which is
     // the bound `vim_snprintf` is given.
@@ -740,7 +739,7 @@ unsafe fn read_inputs(
 
 /// Show `text` while `:mkspell` runs, quietly unless it was asked to be
 /// verbose or `'verbose'` is high enough to want it anyway.
-fn spell_message(spin: &spellinfo_T, text: &CStr) {
+fn spell_message(spin: &SpellInfo, text: &CStr) {
     if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
         return;
     }
@@ -761,7 +760,7 @@ fn spell_message(spin: &spellinfo_T, text: &CStr) {
 /// Every progress line upstream formats goes through the shared `IObuff`,
 /// which `msg` -- and the autocommands it can run -- may write in the middle
 /// of the report. The message is built here and owned until it is shown.
-pub(super) fn spell_message_fmt(spin: &spellinfo_T, args: core::fmt::Arguments<'_>) {
+pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>) {
     if spin.si_verbose == 0 && p_verbose.get() <= 2 as OptInt {
         return;
     }
@@ -804,7 +803,7 @@ pub unsafe fn ex_spell(eap: *mut ExArg) {
 ///
 /// The table is global, so two spell files that disagree about which bytes
 /// are word characters cannot be loaded together.
-fn set_spell_finish(new_st: &spelltab_T) -> Result<(), Failed> {
+fn set_spell_finish(new_st: &SpellTab) -> Result<(), Failed> {
     if !did_set_spelltab.get() {
         spelltab.set(*new_st);
         did_set_spelltab.set(true);
@@ -834,7 +833,7 @@ mod tests {
     /// parse-time structs costs nothing.
     #[test]
     fn an_affix_key_names_the_header_it_came_from() {
-        let mut ah = affheader_T {
+        let mut ah = AffHeader {
             ah_key: [0; 17],
             ah_flag: 0,
             ah_newID: 0,
@@ -843,23 +842,23 @@ mod tests {
             ah_first: ::core::ptr::null_mut(),
         };
         let at = &raw mut ah;
-        let key = affheader_T::key(at);
+        let key = AffHeader::key(at);
         assert_eq!(key, (&raw mut ah.ah_key).cast());
         // SAFETY: `key` is this header's key field and the header is alive.
-        assert_eq!(unsafe { affheader_T::of_key(key) }, at);
+        assert_eq!(unsafe { AffHeader::of_key(key) }, at);
     }
 
     #[test]
     fn a_compound_key_names_the_item_it_came_from() {
-        let mut ci = compitem_T {
+        let mut ci = CompItem {
             ci_key: [0; 17],
             ci_flag: 0,
             ci_newID: 0,
         };
         let at = &raw mut ci;
-        let key = compitem_T::key(at);
+        let key = CompItem::key(at);
         assert_eq!(key, (&raw mut ci.ci_key).cast());
         // SAFETY: `key` is this item's key field and the item is alive.
-        assert_eq!(unsafe { compitem_T::of_key(key) }, at);
+        assert_eq!(unsafe { CompItem::of_key(key) }, at);
     }
 }

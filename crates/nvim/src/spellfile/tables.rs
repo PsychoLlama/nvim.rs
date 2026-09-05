@@ -25,14 +25,14 @@ use crate::types::{NUL, RepItem};
 use ::libc::{strcat, strcpy};
 
 use super::aff::{AffState, is_digit_byte};
-use super::{MAXWLEN, spellinfo_T};
+use super::{MAXWLEN, SpellInfo};
 
 /// Append `KEYWORD value` to the text `:spellinfo` shows.
 ///
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn append_info(spin: &mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn append_info(spin: &mut SpellInfo, items: &[*mut c_char]) {
     // SAFETY: the buffer is sized for the old text, a newline, both items
     // and a space, plus the terminator.
     let old = if spin.si_info.is_null() {
@@ -65,7 +65,7 @@ pub(super) unsafe fn append_info(spin: &mut spellinfo_T, items: &[*mut c_char]) 
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn add_comppat(spin: &mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn add_comppat(spin: &mut SpellInfo, items: &[*mut c_char]) {
     // SAFETY: the caller promises the items.
     let (a, b) = unsafe { (cstr::bytes_at(items[1]), cstr::bytes_at(items[2])) };
     let pats = &mut spin.si_comppat;
@@ -86,7 +86,7 @@ pub(super) unsafe fn add_comppat(spin: &mut spellinfo_T, items: &[*mut c_char]) 
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn add_rep_entry(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     st: &AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -128,7 +128,7 @@ pub(super) unsafe fn add_rep_entry(
 ///
 /// As [`handle_line`].
 pub(super) unsafe fn handle_map(
-    spin: &mut spellinfo_T,
+    spin: &mut SpellInfo,
     st: &mut AffState,
     items: &[*mut c_char],
     fname: *mut c_char,
@@ -182,7 +182,7 @@ fn chars_of(bytes: &[u8]) -> impl Iterator<Item = c_int> + '_ {
 /// # Safety
 ///
 /// As [`handle_line`].
-pub(super) unsafe fn handle_sal(spin: &mut spellinfo_T, items: &[*mut c_char]) {
+pub(super) unsafe fn handle_sal(spin: &mut SpellInfo, items: &[*mut c_char]) {
     // SAFETY: the caller promises the items.
     // SAFETY: the caller promises the items.
     let name = unsafe { cstr::bytes_at(items[1]) };

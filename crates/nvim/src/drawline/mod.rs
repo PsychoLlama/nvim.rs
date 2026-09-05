@@ -73,8 +73,8 @@ use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
     Buffer, CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, FoldInfo, GridView,
-    HlMode, Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber,
-    VirtLines, VirtText, WinExtmark, Window, ptrdiff_t, size_t, spellvars_T, ssize_t, statuscol_T,
+    HlMode, Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, SpellVars,
+    VarNumber, VirtLines, VirtText, WinExtmark, Window, ptrdiff_t, size_t, ssize_t, statuscol_T,
     uint8_t, uint32_t, uint64_t, virt_line,
 };
 use crate::ui::ui_rgb_attached;
@@ -123,7 +123,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 ///
 /// # Safety
 /// `wp` must be a live window, `lnum` one of its buffer's lines, and `spv` a
-/// live `spellvars_T`.
+/// live `SpellVars`.
 pub unsafe fn win_line(
     wp: *mut Window,
     lnum: LineNr,
@@ -131,7 +131,7 @@ pub unsafe fn win_line(
     endrow: ::core::ffi::c_int,
     col_rows: ::core::ffi::c_int,
     concealed: bool,
-    spv: *mut spellvars_T,
+    spv: *mut SpellVars,
     foldinfo: FoldInfo,
     decor: DecorStateRef,
 ) -> ::core::ffi::c_int {

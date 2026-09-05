@@ -31,7 +31,7 @@ use crate::mbyte::{
 };
 use crate::memory::xstrlcpy;
 use crate::strings::vim_strchr;
-use crate::types::{Failed, MB_MAXBYTES, NUL, Window, spelltab_T, uint8_t};
+use crate::types::{Failed, MB_MAXBYTES, NUL, SpellTab, Window, uint8_t};
 use ::libc::strcpy;
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};
@@ -41,8 +41,8 @@ use super::{MAXWLEN, did_set_spelltab, spelltab};
 ///
 /// Digits are included even though a word may not *start* with one; that
 /// restriction is handled where words are looked up.
-pub fn ascii_spell_chartab() -> spelltab_T {
-    let mut sp = spelltab_T {
+pub fn ascii_spell_chartab() -> SpellTab {
+    let mut sp = SpellTab {
         st_isw: [false; 256],
         st_isu: [false; 256],
         st_fold: [0; 256],
@@ -70,7 +70,7 @@ pub fn ascii_spell_chartab() -> spelltab_T {
 /// The table in force, by address: the four questions below read one element
 /// each rather than copying a kilobyte, so this is where its address is
 /// taken.
-fn spell_chartab() -> *mut spelltab_T {
+fn spell_chartab() -> *mut SpellTab {
     spelltab.ptr()
 }
 

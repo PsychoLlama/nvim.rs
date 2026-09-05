@@ -41,7 +41,6 @@ typedef struct s_mmfile s_mmfile;
 typedef struct s_xdemitcb s_xdemitcb;
 typedef struct s_xdemitconf s_xdemitconf;
 typedef struct s_xpparam s_xpparam;
-typedef struct slang_S slang_S;
 typedef struct socket_watcher socket_watcher;
 typedef struct stl_hlrec stl_hlrec;
 typedef struct vim_state vim_state;
@@ -207,6 +206,7 @@ typedef struct VTermStateFallbacks VTermStateFallbacks;
 typedef struct VTermStateFields VTermStateFields;
 typedef struct VTermStringFragment VTermStringFragment;
 typedef union VTermValue VTermValue;
+typedef struct WordCount WordCount;
 typedef struct addrinfo addrinfo;
 typedef struct extmark_undo_vec_t extmark_undo_vec_t;
 typedef struct funccall_S_fc_fixvar funccall_S_fc_fixvar;
@@ -256,7 +256,6 @@ typedef struct uv_timeval64_t uv_timeval64_t;
 typedef union uv_tty_s_u uv_tty_s_u;
 typedef struct uv_tty_s uv_tty_s;
 typedef struct uv_write_s uv_write_s;
-typedef struct wordcount_T wordcount_T;
 typedef unsigned int AlignTextPos;
 typedef Object (*ApiDispatchWrapper)(uint64_t, Array, Arena *, Error *);
 typedef consumed_blk *ArenaMem;
@@ -498,7 +497,6 @@ typedef qfline_S qfline_T;
 typedef unsigned short sa_family_t;
 typedef void (*signal_cb)(SignalWatcher *, int, void *);
 typedef void (*signal_close_cb)(SignalWatcher *, void *);
-typedef slang_S slang_T;
 typedef void (*socket_cb)(SocketWatcher *, int, void *);
 typedef void (*socket_close_cb)(SocketWatcher *, void *);
 typedef unsigned int socklen_t;
@@ -1916,6 +1914,10 @@ union VTermValue {
   VTermStringFragment string;
   VTermColor color;
 };
+struct WordCount {
+  uint16_t wc_count;
+  char wc_word[0];
+};
 struct addrinfo {
   int ai_flags;
   int ai_family;
@@ -2308,10 +2310,6 @@ struct uv_write_s {
   unsigned int nbufs;
   int error;
   uv_buf_t bufsml[4];
-};
-struct wordcount_T {
-  uint16_t wc_count;
-  char wc_word[0];
 };
 
 static const int ABBR_OFF = 256;

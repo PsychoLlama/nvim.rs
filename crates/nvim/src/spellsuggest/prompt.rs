@@ -57,8 +57,8 @@ use crate::spell::{
     SMT_ALL, check_need_cap, parse_spelllang, repl_from, repl_to, spell_iswordp_nmw, spell_move_to,
 };
 use crate::spellsuggest::{
-    MAXWLEN, SPS_BEST, SPS_DOUBLE, Sug, spell_find_cleanup, spell_find_suggest,
-    spell_suggest_timeout, sps_flags, sps_limit, suggest_T, suginfo_T,
+    MAXWLEN, SPS_BEST, SPS_DOUBLE, Sug, SugInfo, Suggest, spell_find_cleanup, spell_find_suggest,
+    spell_suggest_timeout, sps_flags, sps_limit,
 };
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::ui::kUIMessages;
@@ -134,7 +134,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
     // List at most as many as fit on the screen, or as `'spellsuggest'`
     // allows, whichever is smaller.
     let limit = sps_limit.get().min(Rows.get() - 2);
-    let mut sug = suginfo_T::new();
+    let mut sug = SugInfo::new();
     // SAFETY: `sug` is this frame's own, live for the whole call.
     let su = unsafe { Sug::new(&raw mut sug) };
     // SAFETY: `line` is the copy of the cursor line taken above, so the
@@ -234,7 +234,7 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
 ///
 /// `sug` must have been filled by `spell_find_suggest` and its bad word
 /// must still point into a live line.
-unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c_int {
+unsafe fn ask_which_suggestion(sug: &mut SugInfo, msg_scroll_save: c_int) -> c_int {
     // Each message gets a buffer of its own; upstream shares `IObuff`,
     // which the message machinery writes as it shows one.
     let mut line = [0 as c_char; IOSIZE as usize];
@@ -293,7 +293,7 @@ unsafe fn ask_which_suggestion(sug: &mut suginfo_T, msg_scroll_save: c_int) -> c
 ///
 /// `stp` must be a live suggestion and `badptr` must point into a live
 /// line.
-unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut c_char) {
+unsafe fn show_suggestion(i: c_int, stp: &Suggest, badlen: c_int, badptr: *mut c_char) {
     // Each message gets a buffer of its own; upstream shares `IObuff`,
     // which the message machinery writes as it shows one.
     let mut line = [0 as c_char; IOSIZE as usize];
@@ -342,7 +342,7 @@ unsafe fn show_suggestion(i: c_int, stp: &suggest_T, badlen: c_int, badptr: *mut
 /// # Safety
 ///
 /// `stp` must be a live suggestion.
-unsafe fn show_score(stp: &suggest_T) {
+unsafe fn show_score(stp: &Suggest) {
     // Each message gets a buffer of its own; upstream shares `IObuff`,
     // which the message machinery writes as it shows one.
     let mut line = [0 as c_char; IOSIZE as usize];
@@ -377,7 +377,7 @@ unsafe fn show_score(stp: &suggest_T) {
 /// `sug` and `stp` must be live, `line` must be the owned copy of the
 /// cursor line that `sug`'s bad word points into, and the undo state must
 /// already have been saved.
-unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) {
+unsafe fn apply_suggestion(sug: &SugInfo, stp: &Suggest, line: *mut c_char) {
     // The replacement text gets a buffer of its own; upstream shares
     // `IObuff`, which the message machinery writes as it shows a message.
     let mut repl = [0 as c_char; IOSIZE as usize];

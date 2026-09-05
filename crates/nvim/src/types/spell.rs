@@ -10,7 +10,7 @@
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
-use crate::spell::{WordTree, syl_item_T};
+use crate::spell::{SylItem, WordTree};
 
 /// `int_wordlist`'s compiled name, as a `vim_snprintf` template.
 pub const SPL_FNAME_TMPL: &::core::ffi::CStr = c"%s.%s.spl";
@@ -24,10 +24,10 @@ pub struct RepItem {
     pub to: Box<[u8]>,
 }
 pub type SpellIdx = ::core::ffi::c_int;
-pub struct langp_T {
-    pub lp_slang: *mut slang_T,
-    pub lp_sallang: *mut slang_T,
-    pub lp_replang: *mut slang_T,
+pub struct LangP {
+    pub lp_slang: *mut SpellLang,
+    pub lp_sallang: *mut SpellLang,
+    pub lp_replang: *mut SpellLang,
     pub lp_region: ::core::ffi::c_int,
 }
 pub type SalFirst = ::core::ffi::c_int;
@@ -37,7 +37,7 @@ pub type SalFirst = ::core::ffi::c_int;
 /// the file stores existed to be widened, and nothing but the reader ever
 /// looked at them. `sm_rules` stays narrow because it is a run of ASCII
 /// flag characters.
-pub struct salitem_T {
+pub struct SalItem {
     /// The characters this rule matches, terminated by a `NUL`.
     pub sm_lead_w: Box<[::core::ffi::c_int]>,
     /// How many of them there are.
@@ -49,8 +49,8 @@ pub struct salitem_T {
     /// What the match is replaced by.
     pub sm_to_w: Option<Box<[::core::ffi::c_int]>>,
 }
-pub struct slang_S {
-    pub sl_next: *mut slang_T,
+pub struct SpellLang {
+    pub sl_next: *mut SpellLang,
     pub sl_name: *mut ::core::ffi::c_char,
     pub sl_fname: *mut ::core::ffi::c_char,
     pub sl_add: bool,
@@ -76,13 +76,13 @@ pub struct slang_S {
     pub sl_compallflags: *mut uint8_t,
     pub sl_nobreak: bool,
     pub sl_syllable: *mut ::core::ffi::c_char,
-    pub sl_syl_items: Vec<syl_item_T>,
+    pub sl_syl_items: Vec<SylItem>,
     pub sl_prefixcnt: ::core::ffi::c_int,
     pub sl_prefprog: *mut *mut RegProg,
     pub sl_rep: Vec<RepItem>,
     pub sl_rep_first: [int16_t; 256],
     /// The `SAL` rules, grouped by the low byte of their first character.
-    pub sl_sal: Vec<salitem_T>,
+    pub sl_sal: Vec<SalItem>,
     /// `SOFOFROM`/`SOFOTO`'s table for characters at or above 256: one
     /// list of `from, to` pairs per low byte, each ending in a zero. 256
     /// entries while the scheme is in force, none otherwise.
@@ -108,9 +108,8 @@ pub struct slang_S {
     pub sl_map_array: [::core::ffi::c_int; 256],
     pub sl_sounddone: HashTab,
 }
-pub type slang_T = slang_S;
 
-impl slang_S {
+impl SpellLang {
     /// Whether this language can sound-fold at all, under either scheme.
     pub(crate) fn has_soundfold(&self) -> bool {
         if self.sl_sofo {
@@ -122,7 +121,7 @@ impl slang_S {
 }
 pub type SpellMoveType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
-pub struct spelltab_T {
+pub struct SpellTab {
     pub st_isw: [bool; 256],
     pub st_isu: [bool; 256],
     pub st_fold: [uint8_t; 256],
@@ -133,7 +132,7 @@ pub struct spelltab_T {
 /// word, stepping back by `WC_KEY_OFF` to recover the record -- which only
 /// describes the allocation while `wc_word` is last.
 #[repr(C)]
-pub struct wordcount_T {
+pub struct WordCount {
     pub wc_count: uint16_t,
     pub wc_word: [::core::ffi::c_char; 0],
 }

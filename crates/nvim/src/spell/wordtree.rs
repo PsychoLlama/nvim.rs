@@ -67,7 +67,7 @@ impl WordTree {
     ///
     /// A walk steps the tree several times per character, and reaching the
     /// arrays through the tree costs a dependent load each time — the
-    /// borrow is a field of a `slang_T`, and nothing lets the compiler
+    /// borrow is a field of a `SpellLang`, and nothing lets the compiler
     /// hoist it past the calls in between. Copying the two slices into the
     /// walk once puts them in registers instead; it was worth 25% of the
     /// suggestion search.

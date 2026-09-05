@@ -18,7 +18,7 @@ pub struct WinExtmark {
     pub win_col: ::core::ffi::c_int,
 }
 #[derive(Default)]
-pub struct spellvars_T {
+pub struct SpellVars {
     pub spv_has_spell: bool,
     pub spv_unchanged: bool,
     pub spv_checked_col: ::core::ffi::c_int,

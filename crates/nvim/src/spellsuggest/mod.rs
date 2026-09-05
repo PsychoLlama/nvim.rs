@@ -2,7 +2,7 @@
 //!
 //! One run starts with a bad word and ends with a scored, sorted list of
 //! replacements. [`spell_find_suggest`] is the top of it: it fills a
-//! [`suginfo_T`] with everything the search needs — the bad word as typed,
+//! [`SugInfo`] with everything the search needs — the bad word as typed,
 //! case-folded and sound-folded, its capitalisation flags and the score
 //! ceiling — and then walks `'spellsuggest'` to decide which methods run.
 //!
@@ -73,7 +73,7 @@ use crate::spellsuggest::soundalike::{
     suggest_try_soundalike, suggest_try_soundalike_finish, suggest_try_soundalike_prep,
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{GArray, HashTab, Hlf, MAXPATHL, NUL, langp_T, slang_T};
+use crate::types::{GArray, HashTab, Hlf, LangP, MAXPATHL, NUL, SpellLang};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -165,45 +165,45 @@ pub(crate) const SPS_FAST: c_int = 2;
 pub(crate) const SPS_DOUBLE: c_int = 4;
 
 /// What is known while looking for suggestions.
-/// A live [`suginfo_T`]: the suggestion search's whole state, which every
+/// A live [`SugInfo`]: the suggestion search's whole state, which every
 /// step of the search is handed by pointer.
-pub(super) type Sug = Live<suginfo_T>;
+pub(super) type Sug = Live<SugInfo>;
 
 impl Sug {
-    /// The address of one of the `suginfo_T`'s own arrays or tables, for the
+    /// The address of one of the `SugInfo`'s own arrays or tables, for the
     /// `garray`/`hashtab` calls that take a pointer to it.
     ///
     /// [`Live::field_ptr`]: a field's address is the object's plus a
     /// constant, so this reads nothing and hands out no borrow -- which is
     /// what `su.su_ga()` was spelling out at every call.
-    pub(super) fn su_ga(self) -> *mut Vec<suggest_T> {
-        self.field_ptr(offset_of!(suginfo_T, su_ga))
+    pub(super) fn su_ga(self) -> *mut Vec<Suggest> {
+        self.field_ptr(offset_of!(SugInfo, su_ga))
     }
 
     /// [`Self::su_ga`], for the table of words already rejected.
     pub(super) fn su_banned(self) -> *mut HashTab {
-        self.field_ptr(offset_of!(suginfo_T, su_banned))
+        self.field_ptr(offset_of!(SugInfo, su_banned))
     }
 
     /// The bad word as typed, as a NUL-terminated string.
     pub(super) fn su_badword(self) -> *mut c_char {
-        self.field_ptr(offset_of!(suginfo_T, su_badword))
+        self.field_ptr(offset_of!(SugInfo, su_badword))
     }
 
     /// [`Self::su_badword`], case-folded.
     pub(super) fn su_fbadword(self) -> *mut c_char {
-        self.field_ptr(offset_of!(suginfo_T, su_fbadword))
+        self.field_ptr(offset_of!(SugInfo, su_fbadword))
     }
 
     /// [`Self::su_badword`], sound-folded.
     pub(super) fn su_sal_badword(self) -> *mut c_char {
-        self.field_ptr(offset_of!(suginfo_T, su_sal_badword))
+        self.field_ptr(offset_of!(SugInfo, su_sal_badword))
     }
 }
 
-pub(crate) struct suginfo_T {
+pub(crate) struct SugInfo {
     /// The suggestions found so far, best last until they are sorted.
-    pub su_ga: Vec<suggest_T>,
+    pub su_ga: Vec<Suggest>,
     /// How many suggestions will be displayed.
     pub su_maxcount: c_int,
     /// The score ceiling for adding to `su_ga`.
@@ -211,7 +211,7 @@ pub(crate) struct suginfo_T {
     /// The same, while working on sound-folded words.
     pub su_sfmaxscore: c_int,
     /// Like `su_ga`, but scored by sound; only used in "double" mode.
-    pub su_sga: Vec<suggest_T>,
+    pub su_sga: Vec<Suggest>,
     /// Where the bad word starts, in the line it came from.
     pub su_badptr: *mut c_char,
     /// How much of that line the bad word covers.
@@ -227,10 +227,10 @@ pub(crate) struct suginfo_T {
     /// Words that must never be suggested.
     pub su_banned: HashTab,
     /// The language sound folding defaults to.
-    pub su_sallang: *mut slang_T,
+    pub su_sallang: *mut SpellLang,
 }
 
-impl suginfo_T {
+impl SugInfo {
     /// An empty one, as `spell_find_suggest` expects to be handed. Replaces
     /// the zeroed struct the transpiled code started from, which a table that
     /// owns its slots no longer permits.
@@ -254,7 +254,7 @@ impl suginfo_T {
 }
 
 /// One suggestion.
-pub(crate) struct suggest_T {
+pub(crate) struct Suggest {
     /// The suggested word, owned, with the NUL the C helpers below it
     /// still stop on.
     pub st_word: Box<[u8]>,
@@ -271,10 +271,10 @@ pub(crate) struct suggest_T {
     /// The sound-a-like bonus is already in `st_score`.
     pub st_had_bonus: bool,
     /// The language the word was sound-folded with.
-    pub st_slang: *mut slang_T,
+    pub st_slang: *mut SpellLang,
 }
 
-impl suggest_T {
+impl Suggest {
     /// The suggested word as a NUL-terminated string, for the helpers that
     /// still take one.
     pub(crate) fn word(&self) -> *mut c_char {
@@ -298,7 +298,7 @@ static sps_limit: GlobalCell<c_int> = GlobalCell::new(9999);
 ///
 /// The current window must have its spell state set up, which it has
 /// whenever `'spell'` is on.
-pub(crate) unsafe fn window_langs<'a>() -> &'a mut [langp_T] {
+pub(crate) unsafe fn window_langs<'a>() -> &'a mut [LangP] {
     // SAFETY: the caller guarantees the window's spell state; an empty
     // garray has a null data pointer, which `from_raw_parts_mut` rejects
     // even at length zero.
@@ -306,7 +306,7 @@ pub(crate) unsafe fn window_langs<'a>() -> &'a mut [langp_T] {
     if unsafe { (*gap).ga_data.is_null() } || unsafe { (*gap).ga_len } <= 0 {
         &mut []
     } else {
-        let data = unsafe { (*gap).ga_data } as *mut langp_T;
+        let data = unsafe { (*gap).ga_data } as *mut LangP;
         let len = unsafe { (*gap).ga_len } as usize;
         unsafe { ::core::slice::from_raw_parts_mut(data, len) }
     }
@@ -379,7 +379,7 @@ pub(crate) unsafe fn spell_suggest_list(
 ) {
     // SAFETY: the caller guarantees the pointers; each string built below
     // is sized from the two pieces copied into it.
-    let mut sug = suginfo_T::new();
+    let mut sug = SugInfo::new();
     // SAFETY: `sug` is this frame's own, live for the whole call.
     let su = unsafe { Sug::new(&raw mut sug) };
     unsafe { spell_find_suggest(word, 0, su, maxcount, false, need_cap, interactive) };
@@ -439,7 +439,7 @@ unsafe fn spell_find_suggest(
 
     // Start clean. The two suggestion lists own their entries, so this
     // cannot be the zero fill the C used.
-    unsafe { *su.raw() = suginfo_T::new() };
+    unsafe { *su.raw() = SugInfo::new() };
     if unsafe { *badptr } as c_int == NUL {
         return;
     }
@@ -480,7 +480,7 @@ unsafe fn spell_find_suggest(
     // languages rather than the window's.
     let langp = unsafe { &raw const (*curbuf.get()).b_s.b_langp };
     for i in 0..unsafe { (*langp).ga_len } {
-        let lp = unsafe { ((*langp).ga_data as *mut langp_T).offset(i as isize) };
+        let lp = unsafe { ((*langp).ga_data as *mut LangP).offset(i as isize) };
         if !unsafe { (*lp).lp_sallang.is_null() } {
             su.su_sallang = unsafe { (*lp).lp_sallang };
             break;
@@ -503,7 +503,7 @@ unsafe fn spell_find_suggest(
         let ga = su.su_ga();
         let badlen = su.su_badlen;
         let lang = su.su_sallang;
-        // SAFETY: `su` is live, so `ga` is its own list of `suggest_T`, and
+        // SAFETY: `su` is live, so `ga` is its own list of `Suggest`, and
         // `bufp` is the NUL-terminated word just capitalised into `buf`.
         unsafe { add_suggestion(sug, ga, bufp, badlen, SCORE_ICASE, 0, true, lang, false) };
     }
@@ -664,7 +664,7 @@ unsafe fn suggest_try_special(mut su: Sug) {
     let badlen = su.su_badlen;
     let lang = su.su_sallang;
     // SAFETY: `su` is live by the contract above, so `ga` is its own list
-    // of `suggest_T`, and `wordp` is the NUL-terminated word built above.
+    // of `Suggest`, and `wordp` is the NUL-terminated word built above.
     let score = 3 * SCORE_REP / 4;
     unsafe { add_suggestion(sug, ga, wordp, badlen, score, 0, true, lang, false) };
 }

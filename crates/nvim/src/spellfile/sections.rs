@@ -34,7 +34,7 @@ use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
-    HashValue, NUL, RegProg, RepItem, SalFirst, int16_t, salitem_T, slang_T, uint8_t,
+    HashValue, NUL, RegProg, RepItem, SalFirst, SalItem, SpellLang, int16_t, uint8_t,
 };
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
@@ -45,7 +45,7 @@ use super::{
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
 /// `SN_REGION`: two letters per region, at most [`MAXREGIONS`] of them.
-pub(super) fn read_region_section(spl: &mut Spl, lp: &mut slang_T, len: c_int) -> SplResult<()> {
+pub(super) fn read_region_section(spl: &mut Spl, lp: &mut SpellLang, len: c_int) -> SplResult<()> {
     // `sl_regions` holds MAXREGIONS * 2 letters plus a terminator.
     if len > MAXREGIONS as c_int * 2 {
         return Err(SpellReadError::Format);
@@ -79,7 +79,7 @@ pub(super) fn read_charflags_section(spl: &mut Spl) -> SplResult<()> {
 /// # Safety
 ///
 /// `lp` must be a language whose `sl_prefprog` is free to be replaced.
-pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, lp: &mut slang_T) -> SplResult<()> {
+pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, lp: &mut SpellLang) -> SplResult<()> {
     // Both counts below take the end of the file as `-1` and let the range
     // test reject it: a truncated `SN_PREFCOND` is a *format* error, which
     // `test_spellfile.vim` pins.
@@ -159,7 +159,7 @@ pub(super) fn read_rep_section(
 /// set of alternatives for the character after it, and the rule characters,
 /// laid out end to end — which is why the parsing is one pass that cuts the
 /// blob into three.
-pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut slang_T) -> SplResult<()> {
+pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     slang.sl_sofo = false;
 
     // A missing flags byte reads as -1, which sets all three.
@@ -175,7 +175,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut slang_T) -> SplResult<
     }
 
     let cnt = spl.get2c()?;
-    let mut rules: Vec<salitem_T> = Vec::with_capacity(cnt as usize + 1);
+    let mut rules: Vec<SalItem> = Vec::with_capacity(cnt as usize + 1);
 
     while (rules.len() as c_int) < cnt {
         // The whole item arrives as `ccnt` bytes: the lead, then an
@@ -226,7 +226,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut slang_T) -> SplResult<
         };
 
         let sm_lead_w = bytes2wide(lead);
-        rules.push(salitem_T {
+        rules.push(SalItem {
             sm_leadlen: sm_lead_w.len() as c_int - 1,
             sm_lead_w,
             sm_oneof_w: oneof.map(|set| bytes2wide(trim_nul(set))),
@@ -237,7 +237,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut slang_T) -> SplResult<
 
     if !rules.is_empty() {
         // A final empty rule, so the search always has one to stop on.
-        rules.push(salitem_T {
+        rules.push(SalItem {
             sm_lead_w: Box::new([NUL]),
             sm_leadlen: 0,
             sm_oneof_w: None,
@@ -258,7 +258,7 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut slang_T) -> SplResult<
 /// `lp` must be a language whose `sl_wordcount` table is initialised.
 pub(super) unsafe fn read_words_section(
     spl: &mut Spl,
-    lp: &mut slang_T,
+    lp: &mut SpellLang,
     len: c_int,
 ) -> SplResult<()> {
     let mut done = 0;
@@ -285,7 +285,7 @@ pub(super) unsafe fn read_words_section(
 }
 
 /// `SN_SOFO`: a from/to character mapping used instead of `SAL` rules.
-pub(super) fn read_sofo_section(spl: &mut Spl, slang: &mut slang_T) -> SplResult<()> {
+pub(super) fn read_sofo_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     slang.sl_sofo = true;
 
     let from = spl.read_cnt_string(2)?;
@@ -332,7 +332,7 @@ fn byte_in_flags(flags: &[u8], c: u8) -> bool {
 /// `slang` must be a language whose compound fields are free to be replaced.
 pub(super) unsafe fn read_compound(
     spl: &mut Spl,
-    slang: &mut slang_T,
+    slang: &mut SpellLang,
     len: c_int,
 ) -> SplResult<()> {
     let mut todo = len;
@@ -473,7 +473,7 @@ pub(super) unsafe fn read_compound(
 ///
 /// Characters below 256 map directly through `sl_sal_first`. Above that,
 /// the low byte selects a list of from/to pairs, terminated by a zero.
-fn set_sofo(lp: &mut slang_T, from: &[u8], to: &[u8]) -> SplResult<()> {
+fn set_sofo(lp: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
     let (from, to) = (bytes2wide(from), bytes2wide(to));
     // The two strings must describe the same number of characters.
     if from.len() != to.len() {
@@ -522,7 +522,7 @@ fn set_sofo(lp: &mut slang_T, from: &[u8], to: &[u8]) -> SplResult<()> {
 /// Index the `SAL` rules by the low byte of their first character, and
 /// gather the rules that share one so the search can stop at the first
 /// mismatch.
-fn set_sal_first(lp: &mut slang_T) {
+fn set_sal_first(lp: &mut SpellLang) {
     lp.sl_sal_first.fill(-1);
     let rules = &mut lp.sl_sal;
     let sfirst = &mut lp.sl_sal_first;
@@ -573,7 +573,7 @@ fn bytes2wide(bytes: &[u8]) -> Box<[c_int]> {
 ///
 /// `lp`'s `sl_map_hash` must be an initialised table; every key added to it
 /// is an allocation the table then owns.
-pub(super) unsafe fn set_map_str(lp: &mut slang_T, map: &[u8]) {
+pub(super) unsafe fn set_map_str(lp: &mut SpellLang, map: &[u8]) {
     if map.is_empty() {
         lp.sl_has_map = false;
         return;

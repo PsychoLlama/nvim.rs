@@ -48,8 +48,8 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, ExArg, IOSIZE, LineNr, NUL, OK, OptVal, OptionSetFlags, langp_T, size_t, slang_T,
-    wordcount_T,
+    Direction, ExArg, IOSIZE, LangP, LineNr, NUL, OK, OptVal, OptionSetFlags, SpellLang, WordCount,
+    size_t,
 };
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
@@ -81,7 +81,7 @@ pub unsafe fn ex_spellinfo(_eap: *mut ExArg) {
     let langp = unsafe { &(*(*curwin.get()).w_s).b_langp };
     let mut lpi = 0;
     while lpi < langp.ga_len && !got_int.get() {
-        let lp = unsafe { (langp.ga_data as *mut langp_T).offset(lpi as isize) };
+        let lp = unsafe { (langp.ga_data as *mut LangP).offset(lpi as isize) };
         unsafe { msg_puts(c"file: ".as_ptr()) };
         unsafe { msg_puts((*(*lp).lp_slang).sl_fname) };
         let p = unsafe { (*(*lp).lp_slang).sl_info };
@@ -174,7 +174,7 @@ pub unsafe fn spell_dump_compl(
     }
 
     // Regions can only be dumped when every language agrees on them.
-    let langp_data = unsafe { (*(*curwin.get()).w_s).b_langp.ga_data } as *mut langp_T;
+    let langp_data = unsafe { (*(*curwin.get()).w_s).b_langp.ga_data } as *mut LangP;
     let langp_len = unsafe { (*(*curwin.get()).w_s).b_langp.ga_len };
     for lpi in 0..langp_len {
         let lp = unsafe { langp_data.offset(lpi as isize) };
@@ -318,7 +318,7 @@ pub unsafe fn spell_dump_compl(
 /// `=` to keep the case as written, `!` for banned, `?` for rare, and the
 /// region numbers.
 unsafe fn dump_word(
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     word: *mut c_char,
     pat: *mut c_char,
     dir: *mut Direction,
@@ -384,7 +384,7 @@ unsafe fn dump_word(
             // ":spelldump!" wants the word's COMMON count.
             let hi = unsafe { hash_find(&raw mut (*slang).sl_wordcount, tw) };
             if hi.is_kept() {
-                let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut wordcount_T;
+                let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut WordCount;
                 let (buf, size) = (counted.as_mut_ptr(), IOSIZE as size_t);
                 let fmt = c"%s\t%d".as_ptr();
                 let count = unsafe { (*wc).wc_count } as c_int;
@@ -418,7 +418,7 @@ unsafe fn dump_word(
 /// letter upper-cased, which is how "Un-" style prefixes reach words that
 /// are stored lower-case.
 unsafe fn dump_prefixes(
-    slang: *mut slang_T,
+    slang: *mut SpellLang,
     word: *mut c_char,
     pat: *mut c_char,
     dir: *mut Direction,
