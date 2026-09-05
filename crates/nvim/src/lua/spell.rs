@@ -14,7 +14,8 @@ use crate::lua::ffi::{
     LUA_TSTRING, lua_createtable, lua_gettop, lua_pushinteger, lua_pushlstring, lua_pushstring,
     lua_rawseti, lua_tolstring, lua_type, luaL_argerror, luaL_error, luaL_register,
 };
-use crate::main::{curwin, e_no_spell};
+use crate::main::curwin;
+use crate::message::e_no_spell;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};

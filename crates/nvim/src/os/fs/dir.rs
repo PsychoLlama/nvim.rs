@@ -22,8 +22,8 @@ use crate::event::libuv::{
     uv_fs_mkdir, uv_fs_mkdtemp, uv_fs_rename, uv_fs_req_cleanup, uv_fs_rmdir, uv_fs_scandir,
     uv_fs_scandir_next, uv_fs_unlink, uv_strerror,
 };
-use crate::main::e_noname;
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
+use crate::message::e_noname;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;

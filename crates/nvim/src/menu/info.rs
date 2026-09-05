@@ -23,7 +23,7 @@ use crate::eval::vars::del_menutrans_vars;
 use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
-use crate::main::e_invarg;
+use crate::message::e_invarg;
 use crate::types::{Dict, EvalFuncData, ExArg, TypVal, VAR_UNKNOWN};
 
 /// One `:menutranslate from to` entry.

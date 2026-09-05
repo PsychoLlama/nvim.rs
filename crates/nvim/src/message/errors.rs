@@ -13,6 +13,9 @@
 //! checked, truncates it to the buffer size the C wrapper owned, and hands
 //! the bytes to the reporting functions here. Same bytes, same truncation --
 //! and no C-variadic definition, which only a nightly compiler can write.
+//!
+//! The shared message text -- upstream's `errors.h`, every `e_*` wording
+//! raised from more than one place -- sits at the end of the file.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -453,3 +456,183 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
     drop(no_prompt);
     msg_hist_off.set(save_msg_hist_off);
 }
+
+// The shared message text. Upstream keeps these in `errors.h` as one
+// `EXTERN char[]` per message so that a wording appears once however many
+// call sites raise it, and c2rust parked the header in `main/mod.rs`. Only
+// the ones raised from more than one place are here; a message with a single
+// caller is written at the call.
+//
+// The name is upstream's and follows the wording, not the error number: the
+// `E<n>` code is part of the text.
+
+pub(crate) static e_api_spawn_failed: &CStr = c"E903: Could not spawn API job";
+pub(crate) static e_argreq: &CStr = c"E471: Argument required";
+pub(crate) static e_backslash: &CStr = c"E10: \\ should be followed by /, ? or &";
+pub(crate) static e_cmdwin: &CStr =
+    c"E11: Invalid in command-line window; <CR> executes, CTRL-C quits";
+pub(crate) static e_curdir: &CStr =
+    c"E12: Command not allowed in secure mode in current dir or tag search";
+pub(crate) static e_command_too_recursive: &CStr = c"E169: Command too recursive";
+pub(crate) static e_buffer_is_not_loaded: &CStr = c"E681: Buffer is not loaded";
+pub(crate) static e_endif: &CStr = c"E171: Missing :endif";
+pub(crate) static e_endtry: &CStr = c"E600: Missing :endtry";
+pub(crate) static e_endwhile: &CStr = c"E170: Missing :endwhile";
+pub(crate) static e_endfor: &CStr = c"E170: Missing :endfor";
+pub(crate) static e_while: &CStr = c"E588: :endwhile without :while";
+pub(crate) static e_for: &CStr = c"E588: :endfor without :for";
+pub(crate) static e_exists: &CStr = c"E13: File exists (add ! to override)";
+pub(crate) static e_failed: &CStr = c"E472: Command failed";
+pub(crate) static e_intern2: &CStr = c"E685: Internal error: %s";
+pub(crate) static e_interr: &CStr = c"Interrupted";
+pub(crate) static e_invarg: &CStr = c"E474: Invalid argument";
+pub(crate) static e_invarg2: &CStr = c"E475: Invalid argument: %s";
+pub(crate) static e_invargval: &CStr = c"E475: Invalid value for argument %s";
+pub(crate) static e_invargNval: &CStr = c"E475: Invalid value for argument %s: %s";
+pub(crate) static e_invexpr2: &CStr = c"E15: Invalid expression: \"%s\"";
+pub(crate) static e_invrange: &CStr = c"E16: Invalid range";
+pub(crate) static e_invcmd: &CStr = c"E476: Invalid command";
+pub(crate) static e_isadir2: &CStr = c"E17: \"%s\" is a directory";
+pub(crate) static e_no_spell: &CStr = c"E756: Spell checking is not possible";
+pub(crate) static e_invchan: &CStr = c"E900: Invalid channel id";
+pub(crate) static e_invchanjob: &CStr = c"E900: Invalid channel id: not a job";
+pub(crate) static e_channotpty: &CStr = c"E904: channel is not a pty";
+pub(crate) static e_invstream: &CStr = c"E906: invalid stream for channel";
+pub(crate) static e_invstreamrpc: &CStr = c"E906: invalid stream for rpc channel, use 'rpc'";
+pub(crate) static e_fsync: &CStr = c"E667: Fsync failed: %s";
+pub(crate) static e_mkdir: &CStr = c"E739: Cannot create directory %s: %s";
+pub(crate) static e_markinval: &CStr = c"E19: Mark has invalid line number";
+pub(crate) static e_marknotset: &CStr = c"E20: Mark not set";
+pub(crate) static e_modifiable: &CStr = c"E21: Cannot make changes, 'modifiable' is off";
+pub(crate) static e_nesting: &CStr = c"E22: Scripts nested too deep";
+pub(crate) static e_noalt: &CStr = c"E23: No alternate file";
+pub(crate) static e_noabbr: &CStr = c"E24: No such abbreviation";
+pub(crate) static e_nobang: &CStr = c"E477: No ! allowed";
+pub(crate) static e_noinstext: &CStr = c"E29: No inserted text yet";
+pub(crate) static e_nolastcmd: &CStr = c"E30: No previous command line";
+pub(crate) static e_nomap: &CStr = c"E31: No such mapping";
+pub(crate) static e_noident: &CStr = c"E349: No identifier under cursor";
+pub(crate) static e_nomatch: &CStr = c"E479: No match";
+pub(crate) static e_noname: &CStr = c"E32: No file name";
+pub(crate) static e_nopresub: &CStr = c"E33: No previous substitute regular expression";
+pub(crate) static e_noprev: &CStr = c"E34: No previous command";
+pub(crate) static e_noprevre: &CStr = c"E35: No previous regular expression";
+pub(crate) static e_norange: &CStr = c"E481: No range allowed";
+pub(crate) static e_noroom: &CStr = c"E36: Not enough room";
+pub(crate) static e_notmp: &CStr = c"E483: Can't get temp file name";
+pub(crate) static e_notopen: &CStr = c"E484: Can't open file %s";
+pub(crate) static e_cant_read_file_str: &CStr = c"E485: Can't read file %s";
+pub(crate) static e_null: &CStr = c"E38: Null argument";
+pub(crate) static e_outofmem: &CStr = c"E41: Out of memory!";
+pub(crate) static e_patnotf: &CStr = c"Pattern not found";
+pub(crate) static e_patnotf2: &CStr = c"E486: Pattern not found: %s";
+pub(crate) static e_positive: &CStr = c"E487: Argument must be positive";
+pub(crate) static e_prev_dir: &CStr = c"E459: Cannot go back to previous directory";
+pub(crate) static e_no_errors: &CStr = c"E42: No Errors";
+pub(crate) static e_loclist: &CStr = c"E776: No location list";
+pub(crate) static e_re_damg: &CStr = c"E43: Damaged match string";
+pub(crate) static e_re_corr: &CStr = c"E44: Corrupted regexp program";
+pub(crate) static e_readonly: &CStr = c"E45: 'readonly' option is set (add ! to override)";
+pub(crate) static e_cannot_mod: &CStr = c"E995: Cannot modify existing variable";
+pub(crate) static e_cannot_change_readonly_variable_str: &CStr =
+    c"E46: Cannot change read-only variable \"%.*s\"";
+pub(crate) static e_dictreq: &CStr = c"E715: Dictionary required";
+pub(crate) static e_invalblob: &CStr = c"E978: Invalid operation for Blob";
+pub(crate) static e_toomanyarg: &CStr = c"E118: Too many arguments for function: %s";
+pub(crate) static e_toofewarg: &CStr = c"E119: Not enough arguments for function: %s";
+pub(crate) static e_listreq: &CStr = c"E714: List required";
+pub(crate) static e_listblobreq: &CStr = c"E897: List or Blob required";
+pub(crate) static e_listblobarg: &CStr = c"E899: Argument of %s must be a List or Blob";
+pub(crate) static e_listdictarg: &CStr = c"E712: Argument of %s must be a List or Dictionary";
+pub(crate) static e_listdictblobarg: &CStr =
+    c"E896: Argument of %s must be a List, Dictionary or Blob";
+pub(crate) static e_readerrf: &CStr = c"E47: Error while reading errorfile";
+pub(crate) static e_sandbox: &CStr = c"E48: Not allowed in sandbox";
+pub(crate) static e_secure: &CStr = c"E523: Not allowed here";
+pub(crate) static e_textlock: &CStr = c"E565: Not allowed to change text or change window";
+pub(crate) static e_screenmode: &CStr = c"E359: Screen mode setting not supported";
+pub(crate) static e_scroll: &CStr = c"E49: Invalid scroll size";
+pub(crate) static e_shellempty: &CStr = c"E91: 'shell' option is empty";
+pub(crate) static e_swapclose: &CStr = c"E72: Close error on swap file";
+pub(crate) static e_toocompl: &CStr = c"E74: Command too complex";
+pub(crate) static e_longname: &CStr = c"E75: Name too long";
+pub(crate) static e_toomany: &CStr = c"E77: Too many file names";
+pub(crate) static e_trailing: &CStr = c"E488: Trailing characters";
+pub(crate) static e_trailing_arg: &CStr = c"E488: Trailing characters: %s";
+pub(crate) static e_umark: &CStr = c"E78: Unknown mark";
+pub(crate) static e_wildexpand: &CStr = c"E79: Cannot expand wildcards";
+pub(crate) static e_winheight: &CStr = c"E591: 'winheight' cannot be smaller than 'winminheight'";
+pub(crate) static e_winwidth: &CStr = c"E592: 'winwidth' cannot be smaller than 'winminwidth'";
+pub(crate) static e_write: &CStr = c"E80: Error while writing";
+pub(crate) static e_zerocount: &CStr = c"E939: Positive count required";
+pub(crate) static e_usingsid: &CStr = c"E81: Using <SID> not in a script context";
+pub(crate) static e_empty_buffer: &CStr = c"E749: Empty buffer";
+pub(crate) static e_no_write_since_last_change: &CStr = c"E37: No write since last change";
+pub(crate) static e_no_write_since_last_change_add_bang_to_override: &CStr =
+    c"E37: No write since last change (add ! to override)";
+pub(crate) static e_buffer_nr_not_found: &CStr = c"E92: Buffer %d not found";
+pub(crate) static e_unknown_function_str: &CStr = c"E117: Unknown function: %s";
+pub(crate) static e_job_still_running: &CStr = c"E948: Job still running";
+pub(crate) static e_job_still_running_add_bang_to_end_the_job: &CStr =
+    c"E948: Job still running (add ! to end the job)";
+pub(crate) static e_invalpat: &CStr = c"E682: Invalid search pattern or delimiter";
+pub(crate) static e_bufloaded: &CStr = c"E139: File is loaded in another buffer";
+pub(crate) static e_au_recursive: &CStr = c"E952: Autocommand caused recursive behavior";
+pub(crate) static e_menu_only_exists_in_another_mode: &CStr =
+    c"E328: Menu only exists in another mode";
+pub(crate) static e_autocmd_close: &CStr = c"E813: Cannot close autocmd window";
+pub(crate) static e_list_index_out_of_range_nr: &CStr = c"E684: List index out of range: %ld";
+pub(crate) static e_unsupportedoption: &CStr = c"E519: Option not supported";
+pub(crate) static e_fnametoolong: &CStr = c"E856: Filename too long";
+pub(crate) static e_using_float_as_string: &CStr = c"E806: Using a Float as a String";
+pub(crate) static e_cannot_edit_other_buf: &CStr = c"E788: Not allowed to edit another buffer now";
+pub(crate) static e_auabort: &CStr = c"E855: Autocommands caused command to abort";
+pub(crate) static e_fast_api_disabled: &CStr =
+    c"E5560: %s must not be called in a fast event context";
+pub(crate) static e_floatonly: &CStr =
+    c"E5601: Cannot close window, only floating window would remain";
+pub(crate) static e_floatexchange: &CStr = c"E5602: Cannot exchange or rotate float";
+pub(crate) static e_cant_find_directory_str_in_cdpath: &CStr =
+    c"E344: Can't find directory \"%s\" in cdpath";
+pub(crate) static e_cant_find_file_str_in_path: &CStr = c"E345: Can't find file \"%s\" in path";
+pub(crate) static e_no_more_directory_str_found_in_cdpath: &CStr =
+    c"E346: No more directory \"%s\" found in cdpath";
+pub(crate) static e_no_more_file_str_found_in_path: &CStr =
+    c"E347: No more file \"%s\" found in path";
+pub(crate) static e_value_is_locked: &CStr = c"E741: Value is locked";
+pub(crate) static e_value_is_locked_str: &CStr = c"E741: Value is locked: %.*s";
+pub(crate) static e_cannot_change_value: &CStr = c"E742: Cannot change value";
+pub(crate) static e_cannot_change_value_of_str: &CStr = c"E742: Cannot change value of %.*s";
+pub(crate) static e_cannot_set_variable_in_sandbox_str: &CStr =
+    c"E794: Cannot set variable in the sandbox: \"%.*s\"";
+pub(crate) static e_invalwindow: &CStr = c"E957: Invalid window number";
+pub(crate) static e_problem_creating_internal_diff: &CStr =
+    c"E960: Problem creating the internal diff";
+pub(crate) static e_cannot_define_autocommands_for_all_events: &CStr =
+    c"E1155: Cannot define autocommands for ALL events";
+pub(crate) static e_resulting_text_too_long: &CStr = c"E1240: Resulting text too long";
+pub(crate) static e_line_number_out_of_range: &CStr = c"E1247: Line number out of range";
+pub(crate) static e_highlight_group_name_invalid_char: &CStr =
+    c"E5248: Invalid character in group name";
+pub(crate) static e_highlight_group_name_too_long: &CStr = c"E1249: Highlight group name too long";
+pub(crate) static e_string_required: &CStr = c"E928: String required";
+pub(crate) static e_cannot_change_menus_while_listing: &CStr =
+    c"E1310: Cannot change menus while listing";
+pub(crate) static e_not_allowed_to_change_window_layout_in_this_autocmd: &CStr =
+    c"E1312: Not allowed to change the window layout in this autocmd";
+pub(crate) static e_undobang_cannot_redo_or_move_branch: &CStr =
+    c"E5767: Cannot use :undo! to redo or move to a different undo branch";
+pub(crate) static e_winfixbuf_cannot_go_to_buffer: &CStr =
+    c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
+pub(crate) static e_invalid_return_type_from_findfunc: &CStr =
+    c"E1514: 'findfunc' did not return a List type";
+pub(crate) static e_cannot_switch_to_a_closing_buffer: &CStr =
+    c"E1546: Cannot switch to a closing buffer";
+pub(crate) static e_failed_to_find_all_diff_anchors: &CStr =
+    c"E1550: Failed to find all diff anchors";
+pub(crate) static e_diff_anchors_with_hidden_windows: &CStr =
+    c"E1562: Diff anchors cannot be used with hidden diff windows";
+pub(crate) static e_leadtab_requires_tab: &CStr =
+    c"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified";
+pub(crate) static e_invalid_format_string_single_percent_s: &CStr =
+    c"E1577: Invalid format string, only one \"%s\" is allowed";

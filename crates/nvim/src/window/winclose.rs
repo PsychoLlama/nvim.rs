@@ -25,10 +25,11 @@ use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::main::{
-    curbuf, curtab, curwin, e_autocmd_close, e_floatonly, first_tabpage, firstwin, getout, lastwin,
-    redraw_cmdline, redraw_tabline,
+    curbuf, curtab, curwin, first_tabpage, firstwin, getout, lastwin, redraw_cmdline,
+    redraw_tabline,
 };
 use crate::message::internal_error;
+use crate::message::{e_autocmd_close, e_floatonly};
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::strings::vim_snprintf;

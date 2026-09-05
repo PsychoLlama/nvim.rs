@@ -20,8 +20,9 @@ use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 use crate::event::proc::{proc_stop, proc_wait};
 use crate::ex_docmd::{cmdmod_has, kChannelPartAll};
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::{current_ui, e_invchan, exiting, getout};
+use crate::main::{current_ui, exiting, getout};
 use crate::memory::{xcalloc, xmemdupz};
+use crate::message::e_invchan;
 
 use crate::msgpack_rpc::server::{server_start, server_stop};
 

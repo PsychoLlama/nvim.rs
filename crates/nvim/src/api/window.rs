@@ -21,8 +21,9 @@ use crate::ex_docmd::ex_win_close;
 
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
-use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab, e_autocmd_close, e_cmdwin};
+use crate::main::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab};
 use crate::message::emsg;
+use crate::message::{e_autocmd_close, e_cmdwin};
 use crate::r#move::{update_topline, validate_cursor};
 use crate::narrow::number_as_int;
 use crate::os::cshim::gettext_ptr;

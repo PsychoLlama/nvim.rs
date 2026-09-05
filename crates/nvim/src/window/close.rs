@@ -28,8 +28,9 @@ use crate::guard::Suppress;
 use crate::keycodes::Ctrl_C;
 use crate::main::{
     State, autocmd_busy, clear_cmdline, cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win,
-    curbuf, curtab, curwin, e_cmdwin, e_floatonly, mode_displayed, restart_edit, stop_insert_mode,
+    curbuf, curtab, curwin, mode_displayed, restart_edit, stop_insert_mode,
 };
+use crate::message::{e_cmdwin, e_floatonly};
 use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;

@@ -40,11 +40,12 @@ use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::main::{
-    Columns, Rows, clear_cmdline, cmdline_row, curtab, e_invarg, firstwin, full_screen, lastwin,
+    Columns, Rows, clear_cmdline, cmdline_row, curtab, firstwin, full_screen, lastwin,
     need_maketitle, readonlymode, starting, topframe, updating_screen,
 };
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
+use crate::message::e_invarg;
 use crate::message::{msg, msg_source};
 use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};

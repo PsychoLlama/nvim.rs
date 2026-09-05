@@ -34,9 +34,9 @@ use crate::ex_docmd::{
 use crate::getchar::beep_flush;
 use crate::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
 use crate::main::{
-    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, e_autocmd_close, exiting, firstwin,
-    lastwin, topframe,
+    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, exiting, firstwin, lastwin, topframe,
 };
+use crate::message::e_autocmd_close;
 use crate::option::vars::{p_awa, p_confirm, p_write};
 
 use crate::message::msg_ptr;

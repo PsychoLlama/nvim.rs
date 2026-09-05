@@ -28,10 +28,11 @@ use crate::ex_docmd::{
     BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
     dollar_command, quitmore,
 };
-use crate::main::{arg_had_last, curtab, e_invarg2, e_invargval, e_invrange, lastused_tabpage};
+use crate::main::{arg_had_last, curtab, lastused_tabpage};
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
+use crate::message::{e_invarg2, e_invargval, e_invrange};
 use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};

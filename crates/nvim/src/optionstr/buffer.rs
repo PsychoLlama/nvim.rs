@@ -24,11 +24,12 @@ use crate::fold::{
 };
 use crate::indent::tabstop_set;
 use crate::indent_c::parse_cino;
-use crate::main::{e_modifiable, e_unsupportedoption, secure};
+use crate::main::secure;
 use crate::mark::free_fmark;
 use crate::mbyte::{enc_canonize, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_setflags;
 use crate::memory::xfree;
+use crate::message::{e_modifiable, e_unsupportedoption};
 use crate::option::option_var;
 use crate::option::vars::{bkc_flags, p_bex, p_bkc, p_bs, p_enc, p_pm};
 use crate::option::{

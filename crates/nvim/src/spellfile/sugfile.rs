@@ -41,9 +41,10 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::garray::{ga_clear, ga_grow, ga_init};
-use crate::main::{e_write, got_int};
+use crate::main::got_int;
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::message::e_write;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;

@@ -47,15 +47,15 @@ use crate::lua::executor::{
 };
 use crate::main::{
     Columns, KeyTyped, Rows, cmd_silent, cmdline_row, cmdline_win, curbuf, current_sctx, curwin,
-    e_invarg, e_toomany, got_int, hl_attr_active, msg_col, msg_didany, msg_row, msg_scrolled,
-    pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line, topframe,
-    wild_menu_showing,
+    got_int, hl_attr_active, msg_col, msg_didany, msg_row, msg_scrolled, pum_want, save_p_ls,
+    save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstpcpy, xstrdup};
 use crate::menu::{get_menu_name, get_menu_names, menu_is_separator, set_context_in_menu_cmd};
+use crate::message::{e_invarg, e_toomany};
 use crate::message::{
     emsg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_grid_view, msg_outtrans,
     msg_outtrans_long, msg_putchar, msg_puts, msg_puts_hl, msg_scroll_up, msg_start,

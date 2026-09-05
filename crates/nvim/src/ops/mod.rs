@@ -46,10 +46,9 @@ use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::main::{
     Insstart, KeyTyped, State, VIsual_reselect, VIsual_select_reg, ai_col, bangredo, can_si,
-    curbuf, curbuf_splice_pending, curwin, did_ai, e_invarg, e_modifiable, finish_op, got_int,
-    motion_force, mouse_dragging, msg_scroll, no_lines_msg, redo_VIsual_busy, repeat_cmdline,
-    repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit,
-    virtual_op,
+    curbuf, curbuf_splice_pending, curwin, did_ai, finish_op, got_int, motion_force,
+    mouse_dragging, msg_scroll, no_lines_msg, redo_VIsual_busy, repeat_cmdline, repeat_luaref,
+    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
 };
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
@@ -62,6 +61,7 @@ use crate::memline::{
     ml_get_pos_len, ml_replace, ml_replace_len,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
+use crate::message::{e_invarg, e_modifiable};
 use crate::message::{emsg, msg, msg_keep, msg_start, msgmore};
 use crate::mouse::setmouse;
 use crate::r#move::validate_virtcol;

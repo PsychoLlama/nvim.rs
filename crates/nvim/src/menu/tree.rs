@@ -18,8 +18,9 @@ use core::ptr;
 
 use super::*;
 use crate::highlight_group::{HLF_8, HLF_D};
-use crate::main::{e_menu_only_exists_in_another_mode, got_int};
+use crate::main::got_int;
 use crate::memory::xfree;
+use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::{
     msg_outnum, msg_outtrans, msg_outtrans_special, msg_putchar, msg_puts, msg_puts_hl,
     msg_puts_title,

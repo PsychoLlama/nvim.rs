@@ -17,7 +17,8 @@ use crate::api::vim::nvim_get_current_win;
 
 use crate::api_error;
 use crate::guard::Suppress;
-use crate::main::{cmdwin_buf, cmdwin_type, curwin, e_cmdwin};
+use crate::main::{cmdwin_buf, cmdwin_type, curwin};
+use crate::message::e_cmdwin;
 use crate::narrow::number_as_int;
 use crate::types::{
     Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,

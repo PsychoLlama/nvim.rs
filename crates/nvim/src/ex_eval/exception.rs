@@ -48,11 +48,12 @@ use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
 use crate::ex_docmd::handle_did_throw;
 use crate::guard::{Allow, Suppress};
 use crate::main::{
-    caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_throw, e_interr,
-    e_outofmem, emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, need_rethrow,
+    caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_throw,
+    emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, need_rethrow,
     suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
+use crate::message::{e_interr, e_outofmem};
 use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::p_vfile;

@@ -170,8 +170,9 @@ use crate::lua::ffi::{
     lua_concat, lua_createtable, lua_error, lua_gettop, lua_pushcclosure, lua_pushstring,
     lua_setfield, luaL_error, luaL_where,
 };
-use crate::main::{e_fast_api_disabled, e_textlock, textlock};
+use crate::main::textlock;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::message::{e_fast_api_disabled, e_textlock};
 use crate::types::{
     Arena, Error, FieldHashfn, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_clear_autocmds,
     KeyDict_cmd, KeyDict_cmd_opts, KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup,

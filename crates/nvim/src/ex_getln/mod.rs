@@ -61,14 +61,12 @@ use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, State, allbuf_lock, cmd_silent, cmdline_row, cmdline_star,
     cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl, cmdpreview, cmdwin_buf, cmdwin_level,
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, current_sctx, curwin,
-    did_emsg, e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2, e_invarg,
-    e_positive, e_textlock, emsg_on_display, ex_normal_busy, exec_from_reg, exmode_active,
-    global_busy, got_int, highlight_match, lines_left, magic_overruled, mod_mask, mouse_col,
-    mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled,
-    need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, pum_want, quit_more, redir_off,
-    redraw_cmdline, redraw_tabline, redrawing_cmdline, restart_edit, search_first_line,
-    search_last_line, search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor,
-    textlock, wild_menu_showing,
+    did_emsg, emsg_on_display, ex_normal_busy, exec_from_reg, exmode_active, global_busy, got_int,
+    highlight_match, lines_left, magic_overruled, mod_mask, mouse_col, mouse_row, msg_col,
+    msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled, need_wait_return, new_last_cmdline,
+    no_abbr, no_hlsearch, pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline,
+    redrawing_cmdline, restart_edit, search_first_line, search_last_line, search_match_endcol,
+    search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
@@ -81,6 +79,10 @@ use crate::memline::{decl, incl, ml_append, ml_replace};
 use crate::memory::{
     ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree, xmalloc, xmallocz, xmemdupz,
     xrealloc, xstrdup,
+};
+use crate::message::{
+    e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2, e_invarg, e_positive,
+    e_textlock,
 };
 use crate::message::{
     emsg, msg, msg_check, msg_clr_eos, msg_cursor_goto, msg_grid_validate, msg_outtrans_len,

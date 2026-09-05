@@ -22,13 +22,14 @@ use crate::eval::typval::{tv_dict_add_bool, tv_dict_add_str, tv_dict_set_keys_re
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    curbuf, curwin, e_cant_find_directory_str_in_cdpath, e_cant_find_file_str_in_path,
-    e_no_more_directory_str_found_in_cdpath, e_no_more_file_str_found_in_path, got_int, line_msg,
-};
+use crate::main::{curbuf, curwin, got_int, line_msg};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::message::emsg;
+use crate::message::{
+    e_cant_find_directory_str_in_cdpath, e_cant_find_file_str_in_path,
+    e_no_more_directory_str_found_in_cdpath, e_no_more_file_str_found_in_path,
+};
 use crate::normal::get_visual_text;
 use crate::option::vars::{p_cdpath, p_fic};
 use crate::option::{copy_option_part, was_set_insecurely};

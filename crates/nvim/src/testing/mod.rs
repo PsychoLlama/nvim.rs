@@ -28,10 +28,9 @@ use crate::eval::typval::{
 use crate::eval::vars::{get_vim_var_nr, get_vim_var_str, get_vim_var_tv};
 use crate::eval::{garbage_collect, pattern_match};
 use crate::ex_docmd::do_cmdline_cmd;
-use crate::main::{
-    called_vim_beep, e_cant_read_file_str, emsg_on_display, emsg_silent, suppress_errthrow,
-};
+use crate::main::{called_vim_beep, emsg_on_display, emsg_silent, suppress_errthrow};
 use crate::memory::{xfree, xstrlcpy};
+use crate::message::e_cant_read_file_str;
 use crate::message::emsg;
 use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::os_fopen;

@@ -12,8 +12,9 @@
 use super::{profile_start, profile_sub};
 use crate::event::libuv::uv_err_name;
 use crate::global_cell::GlobalCell;
-use crate::main::{e_notopen, time_fd};
+use crate::main::time_fd;
 use crate::memory::{xfree, xmalloc};
+use crate::message::e_notopen;
 use crate::os::cshim::{gettext, stderr};
 use crate::types::ProfTime;
 use ::libc::{fclose, fopen, fprintf, setvbuf};

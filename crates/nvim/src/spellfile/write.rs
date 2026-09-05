@@ -41,8 +41,8 @@ use std::io::{BufWriter, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use crate::main::e_write;
 use crate::mbyte::encode_char;
+use crate::message::e_write;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;

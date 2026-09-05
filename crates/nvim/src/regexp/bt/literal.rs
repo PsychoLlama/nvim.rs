@@ -8,8 +8,9 @@ use core::ffi::c_int;
 
 use super::compile::{regc, regmbc, regnode, regnode_nl, use_multibytecode};
 use super::op::BtOp;
-use crate::main::{e_nopresub, rc_did_emsg};
+use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len};
+use crate::message::e_nopresub;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{

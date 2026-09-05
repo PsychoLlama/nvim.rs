@@ -18,8 +18,9 @@ use super::parse::re2post;
 use super::postfix;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
-use crate::main::{e_null, re_extmatch_out};
+use crate::main::re_extmatch_out;
 use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{

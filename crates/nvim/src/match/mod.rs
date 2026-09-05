@@ -34,13 +34,13 @@ use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
 use crate::main::{
-    called_emsg, curwin, e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg, got_int,
-    search_first_line, search_hl_has_cursor_lnum, search_last_line,
+    called_emsg, curwin, got_int, search_first_line, search_hl_has_cursor_lnum, search_last_line,
 };
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
+use crate::message::{e_dictreq, e_invalwindow, e_invcmd, e_listreq, e_trailing_arg};
 use crate::message_fmt::c_str;
 use crate::option::vars::p_rdt;
 use crate::os::cshim::{gettext, strncasecmp};

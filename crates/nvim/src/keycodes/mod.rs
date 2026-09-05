@@ -31,12 +31,13 @@ use crate::ascii::{ascii_isdigit, ascii_isident};
 use crate::charset::{transchar, vim_isprintc, vim_str2nr};
 use crate::eval::typval::NumBuf;
 use crate::eval::vars::get_var_value;
-use crate::main::{current_sctx, e_invarg, e_usingsid};
+use crate::main::current_sctx;
 use crate::mbyte::{
     utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2len_len,
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
+use crate::message::{e_invarg, e_usingsid};
 use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::strings::vim_strchr;
 use crate::types::{CpoFlag, KeyExtra, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, size_t};

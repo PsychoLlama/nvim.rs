@@ -57,11 +57,9 @@ use crate::eval::{
 };
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    did_emsg, did_endif, did_throw, e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while,
-    emsg_silent, force_abort, got_int, trylevel,
-};
+use crate::main::{did_emsg, did_endif, did_throw, emsg_silent, force_abort, got_int, trylevel};
 use crate::memory::xfree;
+use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;

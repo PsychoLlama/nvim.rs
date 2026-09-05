@@ -17,7 +17,7 @@ use super::{
     Args, Container, check_lock, copy_tv, cstr_of, cstr_of_chk, err_nr, err_str, frame, number_of,
 };
 use crate::eval::typval::NumBuf;
-use crate::main::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
+use crate::message::{e_invarg2, e_list_index_out_of_range_nr, e_listblobarg, e_listdictarg};
 use crate::types::{
     EvalFuncData, TypVal, VAR_DICT, VAR_LIST, VarLock, int64_t, typval_vval_union, uint8_t,
 };

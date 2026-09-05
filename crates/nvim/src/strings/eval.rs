@@ -22,12 +22,12 @@ use crate::eval::typval::{
     NumBuf, tv_check_for_opt_string_arg, tv_get_bool, tv_get_number, tv_get_number_chk,
     tv_get_string_buf_chk, tv_list_alloc_ret, tv_list_append_number,
 };
-use crate::main::e_invarg;
 use crate::mbyte::{
     mb_cptr2char_adv, mb_ptr2char_adv, mb_string2cells, utf_head_off, utf_ptr2char, utf_ptr2len,
     utfc_ptr2len,
 };
 use crate::memory::handoff::owned_cstr;
+use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};

@@ -36,11 +36,11 @@ use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::main::{
-    Columns, Rows, cmdmod, curbuf, curwin, e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode,
-    g_do_tagpreview, got_int, lastused_tabpage, msg_col, msg_scroll, must_redraw,
-    postponed_split_flags, postponed_split_tab,
+    Columns, Rows, cmdmod, curbuf, curwin, g_do_tagpreview, got_int, lastused_tabpage, msg_col,
+    msg_scroll, must_redraw, postponed_split_flags, postponed_split_tab,
 };
 use crate::memory::{xfree, xstrlcpy};
+use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
 use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
 use crate::message_fmt::c_str;
 use crate::normal::do_check_scrollbind;

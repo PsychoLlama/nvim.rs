@@ -28,8 +28,8 @@ use crate::eval::typval::{
     tv_list_first, tv_list_item_remove, tv_list_len,
 };
 use crate::garray::ga_grow;
-use crate::main::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::memory::{xfree, xmemdupz, xrealloc};
+use crate::message::{e_cant_read_file_str, e_isadir2, e_notopen};
 use crate::message_fmt::{c_str, emsg_text};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};

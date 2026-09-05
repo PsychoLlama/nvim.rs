@@ -11,8 +11,9 @@ use crate::siemsg;
 use core::ffi::{c_char, c_int};
 
 use super::{Parsed, Rejected, cursor, postfix};
-use crate::main::{e_nopresub, rc_did_emsg};
+use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
+use crate::message::e_nopresub;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{

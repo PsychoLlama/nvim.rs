@@ -12,7 +12,7 @@
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
-use crate::main::e_invarg;
+use crate::message::e_invarg;
 use crate::types::{OptSet, Window};
 
 /// "E474: Invalid argument", the message almost every string option's check

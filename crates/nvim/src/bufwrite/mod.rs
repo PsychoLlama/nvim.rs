@@ -27,12 +27,12 @@ use crate::fileio::{
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::main::{
-    curbuf, e_empty_buffer, e_fsync, e_interr, e_longname, ex_no_reprint, exiting, got_int,
-    msg_scroll, msg_silent, need_maketitle, no_wait_return,
+    curbuf, ex_no_reprint, exiting, got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return,
 };
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
+use crate::message::{e_empty_buffer, e_fsync, e_interr, e_longname};
 use crate::message::{emsg, emsg_ptr, msg, msg_progress, msg_puts_hl, set_keep_msg};
 use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::{p_bdir, p_bex, p_bk, p_bsk, p_ccv, p_fs, p_pm, p_wb};

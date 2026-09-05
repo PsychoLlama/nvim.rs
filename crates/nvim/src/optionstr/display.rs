@@ -21,9 +21,10 @@ use crate::eval::vars::{do_unlet, get_var_value};
 use crate::ex_getln::check_opt_wim;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
-use crate::main::{cmdpreview, curwin, e_unsupportedoption, km_startsel, km_stopsel};
+use crate::main::{cmdpreview, curwin, km_startsel, km_stopsel};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
+use crate::message::e_unsupportedoption;
 use crate::message::{messagesopt_changed, msg_grid_validate};
 use crate::r#move::validate_virtcol;
 use crate::option::vars::{

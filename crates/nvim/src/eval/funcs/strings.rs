@@ -20,11 +20,12 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::garray::{ga_clear, ga_grow};
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::vim_strsave_escape_ks;
-use crate::main::{curbuf, curwin, did_emsg, e_no_spell};
+use crate::main::{curbuf, curwin, did_emsg};
 use crate::mbyte::{
     convert_setup, enc_locale, string_convert, utf_char2bytes, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz, xstrdup};
+use crate::message::e_no_spell;
 use crate::message::{emsg, str2special_save};
 use crate::option::vars::{p_cpo, p_enc};
 use crate::optionstr::empty_option;

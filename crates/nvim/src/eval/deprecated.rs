@@ -27,9 +27,9 @@ use crate::eval::funcs::{f_jobstart, f_jobstop};
 use crate::eval::typval::{NumBuf, tv_dict_add_bool, tv_dict_alloc, tv_dict_free, tv_list_len};
 use crate::eval::vars::emsg_static;
 use crate::ex_cmds::check_secure;
-use crate::main::{e_api_spawn_failed, e_invarg};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::emsg_ptr;
+use crate::message::{e_api_spawn_failed, e_invarg};
 use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{

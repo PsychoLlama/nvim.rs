@@ -24,7 +24,7 @@ use crate::file_search::grab_file_name;
 use crate::fold::fold_open_cursor;
 use crate::keycodes::Ctrl_RSB;
 use crate::main::{
-    KeyTyped, clear_cmdline, curbuf, curwin, e_noident, g_tag_at_cursor, msg_silent, no_smartcase,
+    KeyTyped, clear_cmdline, curbuf, curwin, g_tag_at_cursor, msg_silent, no_smartcase,
     restart_edit,
 };
 use crate::mapping::add_map;
@@ -32,6 +32,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::{mb_get_class, mb_prevptr, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{strequal, xfree, xmalloc, xrealloc};
+use crate::message::e_noident;
 use crate::message::{emsg, messaging};
 use crate::normal::{
     CmdArgRef, DT_POP, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH, POUND,

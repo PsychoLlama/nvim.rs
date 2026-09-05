@@ -149,7 +149,8 @@ use crate::api_error;
 use crate::ex_docmd::expr_map_locked;
 use crate::ex_getln::{get_text_locked_msg, text_locked};
 use crate::log::logmsg_line;
-use crate::main::{e_textlock, textlock};
+use crate::main::textlock;
+use crate::message::e_textlock;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeyDict_buf_attach,

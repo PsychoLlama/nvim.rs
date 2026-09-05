@@ -49,11 +49,11 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::is_in_cmdwin;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    curtab, curwin, e_not_allowed_to_change_window_layout_in_this_autocmd,
-    e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, lastwin, prevwin, topframe,
-};
+use crate::main::{curtab, curwin, first_tabpage, firstwin, lastwin, prevwin, topframe};
 use crate::memory::xfree;
+use crate::message::{
+    e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
+};
 use crate::message::{emsg, emsg_ptr, msg};
 use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};

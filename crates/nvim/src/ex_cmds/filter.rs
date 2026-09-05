@@ -35,9 +35,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
-    Rows, autocmd_busy, bangredo, cmdmod, did_check_timestamps, e_noprev, e_notmp, global_busy,
-    got_int, info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent,
-    need_check_timestamps, silent_mode,
+    Rows, autocmd_busy, bangredo, cmdmod, did_check_timestamps, global_busy, got_int, info_message,
+    msg_col, msg_didout, msg_row, msg_scroll, msg_silent, need_check_timestamps, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
@@ -46,6 +45,7 @@ use crate::message::{
     MSG_BUF_LEN, emsg, message_filtered, msg_ext_set_kind, msg_outtrans, msg_prt_line, msg_ptr,
     msg_puts_hl, set_keep_msg, wait_return,
 };
+use crate::message::{e_noprev, e_notmp};
 use crate::message_fmt::c_str;
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;

@@ -15,10 +15,11 @@ use crate::eval::typval::{
 };
 use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
-use crate::main::{curbuf, curwin, e_invarg, skip_update_topline};
+use crate::main::{curbuf, curwin, skip_update_topline};
 use crate::mark::setmark_pos;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
+use crate::message::e_invarg;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::r#move::{WinValid, update_curswant};

@@ -34,11 +34,12 @@ use crate::eval::userfunc::call_func;
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{Ctrl_H, K_SPECIAL};
-use crate::main::{curbuf, e_null, e_re_damg, e_resulting_text_too_long};
+use crate::main::curbuf;
 use crate::mbyte::{
     mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::message::{e_null, e_re_damg, e_resulting_text_too_long};
 use crate::message::{emsg, iemsg};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;

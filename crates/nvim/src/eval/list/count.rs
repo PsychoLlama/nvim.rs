@@ -18,7 +18,7 @@ use super::{
     err_not_countable, err_nr, frame, number_of, starts_with_ic, string_bytes,
 };
 use crate::eval::typval::NumBuf;
-use crate::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
+use crate::message::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
 use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, uint8_t};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.

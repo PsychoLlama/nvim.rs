@@ -19,7 +19,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
 
-use crate::main::e_invarg;
+use crate::message::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
 use crate::strings::vim_strchr;

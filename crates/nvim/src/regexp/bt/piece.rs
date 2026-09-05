@@ -19,9 +19,10 @@ use super::compile::{
     regoptail, regtail,
 };
 use super::op::BtOp;
-use crate::main::{e_null, rc_did_emsg};
+use crate::main::rc_did_emsg;
 use crate::mbyte::utf_ptr2char;
 use crate::memory::xfree;
+use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{

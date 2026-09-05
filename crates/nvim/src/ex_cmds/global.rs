@@ -18,12 +18,10 @@ use crate::cstr;
 use crate::cursor::check_cursor;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
-use crate::main::{
-    e_backslash, e_interr, e_invcmd, global_busy, got_int, msg_col, msg_didout, msg_scrolled,
-    sub_nlines, sub_nsubs,
-};
+use crate::main::{global_busy, got_int, msg_col, msg_didout, msg_scrolled, sub_nlines, sub_nsubs};
 use crate::mark::setpcmark;
 use crate::memline::{ml_clearmarked, ml_firstmarked, ml_setmarked};
+use crate::message::{e_backslash, e_interr, e_invcmd};
 use crate::message::{emsg, msg};
 use crate::message_fmt::c_str;
 use crate::r#move::changed_line_abv_curs;

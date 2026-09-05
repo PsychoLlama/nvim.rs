@@ -28,11 +28,12 @@ use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    Columns, Rows, cmdmod, cmdwin_type, curbuf, curtab, curwin, diff_need_scrollbind, e_cmdwin,
+    Columns, Rows, cmdmod, cmdwin_type, curbuf, curtab, curwin, diff_need_scrollbind,
     first_tabpage, firstwin, lastused_tabpage, lastwin, postponed_split_tab, prevwin,
     redraw_tabline, skip_win_fix_scroll, starting, tabpage_move_disallowed, topframe,
 };
 use crate::memory::xstrdup;
+use crate::message::e_cmdwin;
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
 use crate::normal::reset_VIsual_and_resel;

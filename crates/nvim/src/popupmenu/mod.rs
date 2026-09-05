@@ -35,12 +35,13 @@ use crate::insexpand::{
 };
 use crate::main::{
     Columns, PumWant, RedrawingDisabled, Rows, State, cmdline_row, cmdline_win, cmdwin_type,
-    curbuf, curtab, curwin, e_menu_only_exists_in_another_mode, g_do_tagpreview, hl_attr_active,
-    mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync, pum_grid, pum_want,
+    curbuf, curtab, curwin, g_do_tagpreview, hl_attr_active, mouse_col, mouse_grid, mouse_row,
+    must_redraw_pum, no_u_sync, pum_grid, pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
+use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::emsg;
 use crate::mouse::{MousePos, find_win_outer};
 use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_cursor_col};

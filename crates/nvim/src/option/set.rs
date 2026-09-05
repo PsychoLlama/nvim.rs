@@ -35,12 +35,10 @@ use crate::eval::vars::{
 };
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{
-    curbuf, current_sctx, curwin, e_invarg, e_sandbox, e_secure, e_unsupportedoption, sandbox,
-    secure, starting, t_colors,
-};
+use crate::main::{curbuf, current_sctx, curwin, sandbox, secure, starting, t_colors};
 use crate::memory::{xfree, xmalloc, xstrdup, xstrlcpy};
 use crate::message::emsg;
+use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::message_fmt::msg_cstr;
 use crate::mouse::setmouse;
 

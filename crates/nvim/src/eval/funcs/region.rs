@@ -14,10 +14,11 @@ use crate::eval::typval::{
     tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
 };
 use crate::keycodes::Ctrl_V;
-use crate::main::{curbuf, curwin, e_buffer_is_not_loaded, virtual_op};
+use crate::main::{curbuf, curwin, virtual_op};
 use crate::mbyte::{mb_prevptr, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf_len, ml_get_len, ml_get_pos};
 use crate::memory::xmalloc;
+use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::normal::unadjust_for_sel_inner;

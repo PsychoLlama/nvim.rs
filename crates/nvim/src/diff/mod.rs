@@ -60,8 +60,7 @@ use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::main::{
     KeyTyped, curbuf, curtab, curwin, diff_context, diff_foldcolumn, diff_need_scrollbind,
-    e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
-    e_problem_creating_internal_diff, need_diff_redraw,
+    need_diff_redraw,
 };
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
@@ -71,6 +70,10 @@ use crate::mbyte::{
 use crate::memline::{ml_append, ml_delete, ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
+use crate::message::{
+    e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
+    e_problem_creating_internal_diff,
+};
 use crate::r#move::{
     changed_line_abv_curs, changed_line_abv_curs_win, changed_window_setting,
     invalidate_botline_win, validate_cursor,

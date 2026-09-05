@@ -33,12 +33,12 @@ use crate::file_search::grab_file_name;
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, cmdmod, cmdwin_type, curtab, curwin,
-    e_buffer_nr_not_found, e_cmdwin, e_noalt, firstwin, g_do_tagpreview, langmap_mapchar, lastwin,
-    postponed_split, prevwin, vgetc_busy,
+    Columns, KeyStuffed, KeyTyped, Rows, cmdmod, cmdwin_type, curtab, curwin, firstwin,
+    g_do_tagpreview, langmap_mapchar, lastwin, postponed_split, prevwin, vgetc_busy,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
+use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};
 use crate::message_fmt::emsg_text;
 use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,

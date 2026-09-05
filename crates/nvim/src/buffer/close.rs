@@ -35,11 +35,12 @@ use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
 use crate::hashtab::{hash_find, hash_remove};
 use crate::main::{
-    autocmd_busy, curbuf, curtab, curwin, e_auabort, exiting, firstbuf, lastbuf, updating_screen,
+    autocmd_busy, curbuf, curtab, curwin, exiting, firstbuf, lastbuf, updating_screen,
 };
 use crate::mapping::map_clear_mode;
 use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
+use crate::message::e_auabort;
 use crate::normal::visual_active;
 use crate::pos::MAXLNUM;
 use crate::semsg;

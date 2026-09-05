@@ -21,9 +21,10 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
     lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::main::{curbuf, e_argreq, got_int};
+use crate::main::{curbuf, got_int};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
+use crate::message::e_argreq;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_open_stdin};

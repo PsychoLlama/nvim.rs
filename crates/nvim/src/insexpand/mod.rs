@@ -57,10 +57,10 @@ use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::main::{
     KeyTyped, State, arrow_used, can_si, can_si_back, cmdwin_type, curbuf, curwin, did_ai,
-    did_emsg, did_si, dollar_vcol, e_invarg, e_listreq, e_patnotf, edit_submode,
-    edit_submode_extra, edit_submode_highl, edit_submode_pre, emsg_silent, ex_normal_busy,
-    g_tag_at_cursor, global_busy, got_int, in_assert_fails, msg_hist_off, pum_want, redraw_cmdline,
-    redraw_mode, sc_col, test_disable_char_avail,
+    did_emsg, did_si, dollar_vcol, edit_submode, edit_submode_extra, edit_submode_highl,
+    edit_submode_pre, emsg_silent, ex_normal_busy, g_tag_at_cursor, global_busy, got_int,
+    in_assert_fails, msg_hist_off, pum_want, redraw_cmdline, redraw_mode, sc_col,
+    test_disable_char_avail,
 };
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
@@ -72,6 +72,7 @@ use crate::memory::{
     MergeSortCompareFunc, MergeSortGetFunc, MergeSortSetFunc, mergesort_list, strequal, xcalloc,
     xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy,
 };
+use crate::message::{e_invarg, e_listreq, e_patnotf};
 use crate::message::{
     emsg, internal_error, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
 };

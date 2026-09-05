@@ -21,13 +21,14 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
-use crate::main::{
-    curwin, did_emsg, e_cannot_change_value, e_cannot_change_value_of_str, e_invarg, e_invrange,
-    e_listreq, e_value_is_locked, e_value_is_locked_str, got_int,
-};
+use crate::main::{curwin, did_emsg, got_int};
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;
+use crate::message::{
+    e_cannot_change_value, e_cannot_change_value_of_str, e_invarg, e_invrange, e_listreq,
+    e_value_is_locked, e_value_is_locked_str,
+};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;

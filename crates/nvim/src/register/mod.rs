@@ -59,9 +59,9 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, curbuf, e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long,
-    got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline,
-    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit,
+    Columns, State, curbuf, got_int, last_cmdline, msg_ext_skip_flush, must_redraw,
+    new_last_cmdline, pending_end_reg_executing, redir_reg, reg_executing, reg_recorded,
+    reg_recording, restart_edit,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -72,6 +72,7 @@ use crate::memline::{decl, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace
 use crate::memory::{
     memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup,
 };
+use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};
 use crate::message::{
     emsg, emsg_invreg, message_filtered, msg, msg_ext_set_kind, msg_outtrans_len, msg_putchar,
     msg_puts, msg_puts_hl, msg_puts_title, msgmore,

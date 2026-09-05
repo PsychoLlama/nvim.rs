@@ -50,13 +50,15 @@ use crate::lua::executor::{
 };
 use crate::main::{
     KeyTyped, Rows, cmdline_row, current_sctx, debug_backtrace_level, debug_tick, did_emsg,
-    did_throw, do_profiling, e_invarg2, e_invrange, e_toofewarg, e_toomanyarg,
-    e_unknown_function_str, e_usingsid, emsg_severe, ex_nesting_level, got_int, lines_left,
-    msg_row, msg_scroll, need_wait_return, sandbox, trylevel, want_garbage_collect,
+    did_throw, do_profiling, emsg_severe, ex_nesting_level, got_int, lines_left, msg_row,
+    msg_scroll, need_wait_return, sandbox, trylevel, want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
+};
+use crate::message::{
+    e_invarg2, e_invrange, e_toofewarg, e_toomanyarg, e_unknown_function_str, e_usingsid,
 };
 use crate::message::{
     emsg, iemsg, internal_error, message_filtered, msg_clr_eos, msg_ext_set_kind, msg_outnum,

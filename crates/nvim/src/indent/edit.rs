@@ -22,12 +22,12 @@ use crate::extmark::extmark_splice_cols;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::main::{
-    Insstart, State, ai_col, can_si, can_si_back, did_si, e_interr, e_modifiable,
-    e_resulting_text_too_long, got_int, old_indent, trylevel,
+    Insstart, State, ai_col, can_si, can_si_back, did_si, got_int, old_indent, trylevel,
 };
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
+use crate::message::{e_interr, e_modifiable, e_resulting_text_too_long};
 use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;

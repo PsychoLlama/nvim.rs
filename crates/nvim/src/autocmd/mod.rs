@@ -33,12 +33,12 @@ use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin,
-    deferred_events, did_cursorhold, did_emsg, do_profiling, e_argreq,
-    e_cannot_define_autocommands_for_all_events, globaldir, got_int, last_cursormoved,
+    deferred_events, did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
     last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, prevwin, reg_recording,
     secure, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
+use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{
     emsg, give_warning, msg_advance, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,
     msg_putchar, msg_puts, msg_puts_hl, msg_puts_title, msg_start, verbose_enter,

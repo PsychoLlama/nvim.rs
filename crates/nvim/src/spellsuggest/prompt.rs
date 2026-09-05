@@ -39,12 +39,12 @@ use crate::getchar::{
 };
 use crate::input::prompt_for_input;
 use crate::main::{
-    Rows, cmdline_row, cmdmsg_rl, curwin, e_no_spell, lines_left, mouse_row, msg_col, msg_row,
-    msg_scroll,
+    Rows, cmdline_row, cmdmsg_rl, curwin, lines_left, mouse_row, msg_col, msg_row, msg_scroll,
 };
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
+use crate::message::e_no_spell;
 use crate::message::{
     emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start,
 };

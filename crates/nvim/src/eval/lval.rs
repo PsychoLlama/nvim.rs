@@ -56,9 +56,10 @@ use crate::eval::{
 use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
 use crate::ex_eval::aborting;
-use crate::main::{e_cannot_mod, e_listreq, emsg_severe};
+use crate::main::emsg_severe;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
+use crate::message::{e_cannot_mod, e_listreq};
 use crate::strings::vim_strchr;
 use crate::types::{
     Dict, DictItem, FAIL, Failed, HashTab, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE,

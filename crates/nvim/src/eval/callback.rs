@@ -20,8 +20,8 @@ use crate::eval::{
 use crate::lua::executor::{
     nlua_call_ref_quiet, nlua_is_table_from_lua, nlua_register_table_as_callable,
 };
-use crate::main::e_command_too_recursive;
 use crate::memory::xstrdup;
+use crate::message::e_command_too_recursive;
 use crate::option::vars::p_mfd;
 use crate::types::{
     Arena, Callback, CallbackReader, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt, Partial,

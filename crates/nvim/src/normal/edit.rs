@@ -28,10 +28,11 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::main::{State, curbuf, curwin, e_modifiable, got_int, restart_edit};
+use crate::main::{State, curbuf, curwin, got_int, restart_edit};
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;
+use crate::message::e_modifiable;
 use crate::message::emsg;
 use crate::r#move::WinValid;
 use crate::normal::{

@@ -1697,7 +1697,8 @@ fn generate(
     uses.push("use crate::api_error;".into());
     if referenced.contains("expr_map_locked") {
         uses.push("use crate::ex_docmd::expr_map_locked;".into());
-        uses.push("use crate::main::{e_textlock, textlock};".into());
+        uses.push("use crate::main::textlock;".into());
+        uses.push("use crate::message::e_textlock;".into());
     }
     if referenced.contains("text_locked") {
         uses.push("use crate::ex_getln::{get_text_locked_msg, text_locked};".into());
@@ -3340,10 +3341,17 @@ fn generate_lua(
         ])
         .join(", ")
     ));
-    uses.push(format!(
-        "use crate::main::{{{}}};",
-        referenced_names(&["e_fast_api_disabled", "e_textlock", "textlock"]).join(", ")
-    ));
+    for (module, names) in [
+        ("main", referenced_names(&["textlock"])),
+        (
+            "message",
+            referenced_names(&["e_fast_api_disabled", "e_textlock"]),
+        ),
+    ] {
+        if !names.is_empty() {
+            uses.push(format!("use crate::{module}::{{{}}};", names.join(", ")));
+        }
+    }
     uses.push("use crate::global_cell::ConstTable;".into());
     uses.push("use crate::guard::Restore;".into());
     uses.push("use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};".into());

@@ -25,10 +25,11 @@ use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
+    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx,
     provider_call_nesting, provider_caller_scope,
 };
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
+use crate::message::e_invarg;
 use crate::message::on_print_cb;
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::{c_str, msg_cstr};

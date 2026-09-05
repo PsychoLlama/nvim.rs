@@ -20,10 +20,11 @@ use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, e_argreq, e_invarg, got_int};
+use crate::main::{Columns, got_int};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
+use crate::message::{e_argreq, e_invarg};
 use crate::message::{
     emsg, message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
 };

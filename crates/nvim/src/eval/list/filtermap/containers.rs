@@ -34,8 +34,9 @@ use crate::eval::list::{
     clear_tv, clear_vim_var, err, list_alloc_ret, number_arm, set_key_nr, set_key_string,
     set_key_type, string_bytes, string_tv,
 };
-use crate::main::{did_emsg, e_invalblob, e_string_required};
+use crate::main::did_emsg;
 use crate::memory::handoff::owned_cstr;
+use crate::message::{e_invalblob, e_string_required};
 use crate::types::{
     TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
     typval_vval_union,

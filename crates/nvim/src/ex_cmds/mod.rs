@@ -34,11 +34,9 @@ use crate::eval::typval::{NumBuf, tv_list_find_str, tv_list_len};
 use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::input::prompt_for_input;
-use crate::main::{
-    cmdmod, e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox, g_do_tagpreview, got_int,
-    msg_scroll, quit_more, sandbox, secure,
-};
+use crate::main::{cmdmod, g_do_tagpreview, got_int, msg_scroll, quit_more, sandbox, secure};
 use crate::memory::xfree;
+use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
 use crate::message::{
     emsg, message_filtered, msg, msg_clr_eos, msg_end, msg_outnum, msg_outtrans, msg_putchar,
     msg_puts, msg_start, msg_starthere, msgmore,

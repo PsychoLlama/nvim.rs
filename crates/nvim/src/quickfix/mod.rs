@@ -61,11 +61,8 @@ use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
 use crate::main::{
-    Columns, KeyTyped, cmdline_row, cmdmod, curbuf, curtab, curwin, e_au_recursive,
-    e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invrange, e_listreq, e_loclist,
-    e_no_errors, e_nomatch, e_noprevre, e_notmp, e_readerrf, e_string_required,
-    e_winfixbuf_cannot_go_to_buffer, firstwin, got_int, lastwin, msg_col, msg_didout, msg_nowait,
-    msg_scroll, msg_scrolled, must_redraw, prevwin, restart_edit,
+    Columns, KeyTyped, cmdline_row, cmdmod, curbuf, curtab, curwin, firstwin, got_int, lastwin,
+    msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled, must_redraw, prevwin, restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
@@ -75,6 +72,11 @@ use crate::memline::{
 };
 use crate::memory::{
     strequal, xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
+};
+use crate::message::{
+    e_au_recursive, e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invrange, e_listreq,
+    e_loclist, e_no_errors, e_nomatch, e_noprevre, e_notmp, e_readerrf, e_string_required,
+    e_winfixbuf_cannot_go_to_buffer,
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg, msg_clr_eos, msg_ext_set_kind, msg_keep,

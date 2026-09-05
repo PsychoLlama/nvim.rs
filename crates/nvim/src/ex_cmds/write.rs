@@ -38,13 +38,11 @@ use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
-use crate::main::{
-    e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly, emsg_silent, exiting, getout,
-    redraw_tabline,
-};
+use crate::main::{emsg_silent, exiting, getout, redraw_tabline};
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
 use crate::memory::xfree;
+use crate::message::{e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly};
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_confirm, p_dir, p_wa, p_write};

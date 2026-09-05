@@ -48,14 +48,16 @@ use crate::hashtab::{
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
-    called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg,
-    e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
-    e_invarg, e_listreq, e_string_required, emsg_severe, got_int, lastused_tabpage, no_hlsearch,
-    sandbox, sc_col,
+    called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg, emsg_severe, got_int,
+    lastused_tabpage, no_hlsearch, sandbox, sc_col,
 };
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,
+};
+use crate::message::{
+    e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
+    e_invarg, e_listreq, e_string_required,
 };
 use crate::message::{
     emsg, internal_error, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind,

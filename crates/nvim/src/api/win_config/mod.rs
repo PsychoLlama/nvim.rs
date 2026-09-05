@@ -13,10 +13,11 @@ use crate::ex_docmd::expr_map_locked;
 use crate::highlight_group::{syn_check_group, syn_id2name};
 use crate::main::{
     cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
-    e_cmdwin, e_textlock, textlock,
+    textlock,
 };
 use crate::mbyte::{mb_string2cells, mb_string2cells_len};
 use crate::memory::{strequal, xstrdup};
+use crate::message::{e_cmdwin, e_textlock};
 use crate::r#move::changed_window_setting;
 use crate::option::vars::{p_sb, p_spr, p_winborder};
 use crate::option::{copy_option_part, didset_window_options};

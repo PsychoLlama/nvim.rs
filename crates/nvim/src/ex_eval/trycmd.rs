@@ -55,10 +55,11 @@ use crate::eval::userfunc::do_return;
 use crate::ex_docmd::{ends_excmd, find_nextcmd};
 use crate::guard::Suppress;
 use crate::main::{
-    current_exception, did_emsg, did_throw, e_argreq, emsg_silent, force_abort, got_int, msg_list,
+    current_exception, did_emsg, did_throw, emsg_silent, force_abort, got_int, msg_list,
     need_rethrow,
 };
 use crate::memory::{xfree, xmalloc};
+use crate::message::e_argreq;
 use crate::message::{emsg_ptr, internal_error};
 use crate::message_fmt::c_str;
 use crate::option::vars::p_cpo;

@@ -21,8 +21,9 @@ use crate::eval::vars::{
     get_vim_var_tv, prepare_vimvar, restore_vimvar, set_vim_var_nr, set_vim_var_type,
 };
 use crate::eval::{eval_expr_typval, get_copy_id, partial_name, var_item_copy};
-use crate::main::{called_emsg, did_emsg, e_listblobreq};
+use crate::main::{called_emsg, did_emsg};
 use crate::memory::xstrdup;
+use crate::message::e_listblobreq;
 use crate::message::{emsg, internal_error};
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;

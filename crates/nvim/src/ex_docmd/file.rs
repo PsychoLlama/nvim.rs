@@ -34,10 +34,11 @@ use crate::file_search::{FileNameOpts, vim_findfile_cleanup};
 
 use crate::getchar::stuff_readbuf;
 use crate::main::{
-    curbuf, curwin, e_trailing_arg, ex_no_reprint, exmode_active, global_busy, msg_scroll,
-    need_wait_return, pending_exmode_active, readonlymode, recoverymode,
+    curbuf, curwin, ex_no_reprint, exmode_active, global_busy, msg_scroll, need_wait_return,
+    pending_exmode_active, readonlymode, recoverymode,
 };
 use crate::mark::setpcmark;
+use crate::message::e_trailing_arg;
 use crate::option::vars::{p_awa, p_shada};
 
 use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};

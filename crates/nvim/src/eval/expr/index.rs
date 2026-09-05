@@ -26,9 +26,9 @@ use crate::eval::{
     e_missbrac, eval_isdictc, eval_lambda, eval_method, eval1, tv_is_luafunc,
 };
 use crate::ex_eval::aborting;
-use crate::main::e_using_float_as_string;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memory::xmemdupz;
+use crate::message::e_using_float_as_string;
 use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};

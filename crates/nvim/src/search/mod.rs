@@ -42,10 +42,9 @@ use crate::insexpand::{
 };
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, State, bot_top_msg, called_emsg, cmd_silent, curbuf,
-    curwin, dollar_vcol, e_interr, e_nopresub, e_noprevre, e_patnotf2, g_do_tagpreview, got_int,
-    msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent, no_hlsearch,
-    no_smartcase, rc_did_emsg, sc_col, search_match_endcol, search_match_lines, searchcmdlen,
-    top_bot_msg,
+    curwin, dollar_vcol, g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait,
+    msg_row, msg_scrolled, msg_silent, no_hlsearch, no_smartcase, rc_did_emsg, sc_col,
+    search_match_endcol, search_match_lines, searchcmdlen, top_bot_msg,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -54,6 +53,7 @@ use crate::mbyte::{
 };
 use crate::memline::{decl, inc, incl, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrlcpy};
+use crate::message::{e_interr, e_nopresub, e_noprevre, e_patnotf2};
 use crate::message::{
     emsg, give_warning, iemsg, messaging, msg, msg_check, msg_clr_eos, msg_end, msg_ext_set_kind,
     msg_home_replace, msg_outtrans, msg_prt_line, msg_putchar, msg_puts, msg_puts_hl,

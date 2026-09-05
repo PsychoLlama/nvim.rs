@@ -25,9 +25,10 @@ use crate::event::multiqueue::{
 use crate::event::proc::{proc_is_stopped, proc_stop, proc_wait};
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
-use crate::main::{curbuf, curwin, e_channotpty, e_invarg, main_loop};
+use crate::main::{curbuf, curwin, main_loop};
 use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
+use crate::message::{e_channotpty, e_invarg};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
 use crate::r#move::win_col_off;

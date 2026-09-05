@@ -25,10 +25,11 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
 use crate::main::{
-    Columns, Rows, cmdline_row, e_noroom, exiting, full_screen, msg_row, msg_scrolled,
-    redraw_cmdline, skip_update_topline, skip_win_fix_cursor,
+    Columns, Rows, cmdline_row, exiting, full_screen, msg_row, msg_scrolled, redraw_cmdline,
+    skip_update_topline, skip_win_fix_cursor,
 };
 use crate::mark::setmark;
+use crate::message::e_noroom;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::r#move::{
     WinValid, changed_line_abv_curs_win, curs_columns, invalidate_botline_win, set_topline,

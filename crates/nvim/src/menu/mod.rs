@@ -43,9 +43,10 @@ use crate::eval::typval::{
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
-use crate::main::{State, curbuf, e_cannot_change_menus_while_listing, finish_op, root_menu};
+use crate::main::{State, curbuf, finish_op, root_menu};
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
+use crate::message::e_cannot_change_menus_while_listing;
 use crate::message::{emsg_ptr, str2special_save};
 use crate::normal::{visual_active, visual_select};
 use crate::os::cshim::gettext;

@@ -37,11 +37,10 @@ use crate::ex_cmds::{check_secure, make_filter_cmd};
 use crate::fileio::vim_tempname;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
-use crate::main::{
-    State, curbuf, curwin, do_profiling, e_notmp, e_shellempty, emsg_silent, main_loop,
-};
+use crate::main::{State, curbuf, curwin, do_profiling, emsg_silent, main_loop};
 use crate::memline::ml_append;
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
+use crate::message::{e_notmp, e_shellempty};
 use crate::message::{
     emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_puts, verbose_enter, verbose_leave,
 };

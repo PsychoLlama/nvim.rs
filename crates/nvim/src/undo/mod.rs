@@ -36,15 +36,13 @@ use crate::fileio::{get2c, get4c, get8ctime, read_eintr};
 use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    KeyTyped, curbuf, curwin, e_modifiable, e_sandbox, e_textlock, global_busy, got_int, no_u_sync,
-    sandbox, textlock,
-};
+use crate::main::{KeyTyped, curbuf, curwin, global_busy, got_int, no_u_sync, sandbox, textlock};
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;
 use crate::memline::{ml_append_flags, ml_delete, ml_get, ml_get_buf, ml_replace, resolve_symlink};
 use crate::memory::{time_to_bytes, xfree, xmalloc, xmallocz, xrealloc, xstrdup};
+use crate::message::{e_modifiable, e_sandbox, e_textlock};
 use crate::message::{
     emsg, give_warning, iemsg, internal_error, messaging, msg, msg_end, msg_ext_set_kind,
     msg_putchar, msg_puts, msg_puts_hl, msg_start, verb_msg, verbose_enter, verbose_leave,
