@@ -51,7 +51,7 @@ impl RegionEnd {
     }
 }
 
-/// The `synpat_T` at `idx` in the current syntax block's pattern array.
+/// The `SynPat` at `idx` in the current syntax block's pattern array.
 ///
 /// Run pattern `idx`'s program over `lnum` from `col`, into a fresh match.
 ///
@@ -540,7 +540,7 @@ pub(crate) unsafe fn check_keyword_id(
     let buf = &raw mut keyword as *mut c_char;
     unsafe { xmemcpyz(buf.cast(), kwp.cast(), kwlen as size_t) };
 
-    let mut kp = ::core::ptr::null_mut::<keyentry_T>();
+    let mut kp = ::core::ptr::null_mut::<KeyEntry>();
     if syn_block().b_keywtab.ht_used != 0 {
         kp = unsafe { match_keyword(buf, syn_field!(syn_block(), b_keywtab), cur_si) };
     }
@@ -572,7 +572,7 @@ unsafe fn match_keyword(
     keyword: *mut c_char,
     ht: *mut HashTab,
     cur_si: Option<Item>,
-) -> *mut keyentry_T {
+) -> *mut KeyEntry {
     let hi = unsafe { hash_find(ht, keyword) };
     if !hi.is_kept() {
         return ::core::ptr::null_mut();
@@ -583,8 +583,8 @@ unsafe fn match_keyword(
     // own trailing array, so the subtraction stays inside the allocation.
     let mut kp = unsafe {
         hi.hi_key
-            .offset(-(::core::mem::offset_of!(keyentry, keyword) as isize))
-    } as *mut keyentry_T;
+            .offset(-(::core::mem::offset_of!(KeyEntry, keyword) as isize))
+    } as *mut KeyEntry;
     while !kp.is_null() {
         // SAFETY: `kp` walks a chain of live keyword entries.
         let (syn, cont_in, flags) = unsafe { ((*kp).k_syn, (*kp).cont_in_list, (*kp).flags) };

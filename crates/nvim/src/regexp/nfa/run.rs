@@ -22,10 +22,10 @@ use crate::mbyte::{
 use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
 use crate::regexp::{
-    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, RA_MATCH,
-    Rex, cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, match_with_backref, nfa_endp,
-    nfa_ll_index, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out,
-    reg_getline, reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
+    _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, NfaPim,
+    NfaRegProg, NfaState, RA_MATCH, RegSub, RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr,
+    cstrchr, cstrncmp, match_with_backref, nfa_endp, nfa_ll_index, nfa_match, nfa_time_limit,
+    nfa_timed_out, reg_getline, reg_getline_len, reg_iswordc,
 };
 use crate::types::{ColNr, Failed, uint8_t};
 
@@ -71,7 +71,7 @@ pub(crate) fn check_char_class(rex: Rex, cls: c_int, c: c_int) -> Result<(), Fai
 
 /// Match what capture group `subidx` captured. On success `*bytelen` is how
 /// far to advance — on the *last* line, for a capture that spans lines.
-pub(crate) fn match_backref(rex: Rex, sub: &regsub_T, subidx: c_int, bytelen: &mut c_int) -> bool {
+pub(crate) fn match_backref(rex: Rex, sub: &RegSub, subidx: c_int, bytelen: &mut c_int) -> bool {
     // An unset group matches the empty string rather than failing.
     if sub.in_use <= subidx {
         *bytelen = 0;
@@ -137,9 +137,9 @@ pub(crate) fn match_zref(rex: Rex, subidx: c_int, bytelen: &mut c_int) -> bool {
 ///
 /// A lookaround runs a whole match of its own over the same program, so it
 /// needs the generation counters to itself; these two put them back.
-fn nfa_save_listids(prog: *mut nfa_regprog_T, list: &mut [c_int]) {
+fn nfa_save_listids(prog: *mut NfaRegProg, list: &mut [c_int]) {
     // SAFETY: `prog` is the running program and `list` is `prog.nstate` long.
-    let states = unsafe { &raw mut (*prog).state } as *mut nfa_state_T;
+    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
     for (i, slot) in list.iter_mut().enumerate() {
         let s = unsafe { states.add(i) };
         *slot = unsafe { (*s).lastlist[1] };
@@ -147,9 +147,9 @@ fn nfa_save_listids(prog: *mut nfa_regprog_T, list: &mut [c_int]) {
     }
 }
 
-fn nfa_restore_listids(prog: *mut nfa_regprog_T, list: &[c_int]) {
+fn nfa_restore_listids(prog: *mut NfaRegProg, list: &[c_int]) {
     // SAFETY: as `nfa_save_listids`.
-    let states = unsafe { &raw mut (*prog).state } as *mut nfa_state_T;
+    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
     for (i, &saved) in list.iter().enumerate() {
         unsafe { (*states.add(i)).lastlist[1] = saved };
     }
@@ -172,11 +172,11 @@ pub(crate) fn nfa_re_num_cmp(val: u64, op: c_int, pos: u64) -> bool {
 /// `listids` is the caller's scratch buffer for the generation counters.
 pub(crate) fn recursive_regmatch(
     rex: Rex,
-    state: *mut nfa_state_T,
-    pim: *mut nfa_pim_T,
-    prog: *mut nfa_regprog_T,
-    submatch: *mut regsubs_T,
-    m: *mut regsubs_T,
+    state: *mut NfaState,
+    pim: *mut NfaPim,
+    prog: *mut NfaRegProg,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
     listids: &mut Vec<c_int>,
 ) -> c_int {
     // SAFETY: everything below reads and restores the match context, which
@@ -262,7 +262,7 @@ pub(crate) fn recursive_regmatch(
 ///
 /// The match context must be live, and `state` one of the lookbehind
 /// opcodes.
-unsafe fn start_lookbehind(rex: Rex, state: *mut nfa_state_T) {
+unsafe fn start_lookbehind(rex: Rex, state: *mut NfaState) {
     let val = unsafe { (*state).val };
     if val <= 0 {
         // Unknown width: try from the start of the previous line.
@@ -305,7 +305,7 @@ unsafe fn start_lookbehind(rex: Rex, state: *mut nfa_state_T) {
 /// Roughly how unlikely the machine from `state` is to match, as a
 /// percentage. Only the ordering matters: it decides whether a lookaround is
 /// cheaper to run now or after the rest of the pattern.
-pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
+pub(crate) fn failure_chance(state: *mut NfaState, depth: c_int) -> c_int {
     if depth > 4 {
         return 1;
     }

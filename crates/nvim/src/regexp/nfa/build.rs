@@ -20,7 +20,7 @@ use super::run::failure_chance;
 use super::sub::match_follows;
 use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
-use crate::regexp::{istate, nfa_regprog_T, nfa_state_T, nstate, state_ptr};
+use crate::regexp::{NfaRegProg, NfaState, istate, nstate, state_ptr};
 use crate::semsg;
 use crate::types::MB_MAXBYTES;
 
@@ -33,11 +33,11 @@ const MAX_DEPTH: c_int = 4;
 /// The list has no storage of its own: each unset `out`/`out1` field holds
 /// the address of the *next* unset slot until [`patch`] overwrites it with
 /// the state the edge goes to. So a `Ptrlist` is an edge slot, and the two
-/// things it can hold are the two things a `*mut nfa_state_T` can be made
+/// things it can hold are the two things a `*mut NfaState` can be made
 /// to hold — which is why it is a newtype over that field's own type rather
 /// than a `Vec`.
 #[repr(transparent)]
-struct Ptrlist(*mut nfa_state_T);
+struct Ptrlist(*mut NfaState);
 
 impl Ptrlist {
     /// The next slot in the list, or null at its end.
@@ -47,11 +47,11 @@ impl Ptrlist {
 
     /// Link this slot to `next`, keeping it unpatched.
     fn set_next(&mut self, next: *mut Ptrlist) {
-        self.0 = next.cast::<nfa_state_T>();
+        self.0 = next.cast::<NfaState>();
     }
 
     /// Patch this slot: the edge goes to `state` from now on.
-    fn set_state(&mut self, state: *mut nfa_state_T) {
+    fn set_state(&mut self, state: *mut NfaState) {
         self.0 = state;
     }
 }
@@ -60,7 +60,7 @@ impl Ptrlist {
 /// still has to be told where to go.
 #[derive(Clone, Copy)]
 struct Frag {
-    start: *mut nfa_state_T,
+    start: *mut NfaState,
     out: *mut Ptrlist,
 }
 
@@ -68,7 +68,7 @@ struct Frag {
 ///
 /// `None` once the counting pass's estimate is used up, which the callers
 /// treat as "give up on this pattern" — silently, as upstream does.
-fn state(c: c_int, out: *mut nfa_state_T, out1: *mut nfa_state_T) -> Option<*mut nfa_state_T> {
+fn state(c: c_int, out: *mut NfaState, out1: *mut NfaState) -> Option<*mut NfaState> {
     if istate.get() >= nstate.get() {
         return None;
     }
@@ -86,7 +86,7 @@ fn state(c: c_int, out: *mut nfa_state_T, out1: *mut nfa_state_T) -> Option<*mut
 }
 
 /// A one-element patch list over the edge slot `slot`.
-fn list1(slot: *mut *mut nfa_state_T) -> *mut Ptrlist {
+fn list1(slot: *mut *mut NfaState) -> *mut Ptrlist {
     // SAFETY: `slot` is an `out`/`out1` field of a live state; writing a
     // list link into it is what the list is for, and `patch` overwrites it
     // with a state before the machine runs.
@@ -96,7 +96,7 @@ fn list1(slot: *mut *mut nfa_state_T) -> *mut Ptrlist {
 }
 
 /// Point every edge in `list` at `state`.
-fn patch(list: *mut Ptrlist, state: *mut nfa_state_T) {
+fn patch(list: *mut Ptrlist, state: *mut NfaState) {
     // SAFETY: every node in the chain is an edge slot of a live state.
     let mut node = list;
     while !node.is_null() {
@@ -117,12 +117,12 @@ fn append(first: *mut Ptrlist, second: *mut Ptrlist) -> *mut Ptrlist {
     first
 }
 
-fn out_edge(s: *mut nfa_state_T) -> *mut *mut nfa_state_T {
+fn out_edge(s: *mut NfaState) -> *mut *mut NfaState {
     // SAFETY: `s` is a live state; this only takes the field's address.
     unsafe { &raw mut (*s).out }
 }
 
-fn out1_edge(s: *mut nfa_state_T) -> *mut *mut nfa_state_T {
+fn out1_edge(s: *mut NfaState) -> *mut *mut NfaState {
     // SAFETY: as `out_edge`.
     unsafe { &raw mut (*s).out1 }
 }
@@ -137,7 +137,7 @@ struct Stack {
 }
 
 impl Stack {
-    fn push(&mut self, start: *mut nfa_state_T, out: *mut Ptrlist) {
+    fn push(&mut self, start: *mut NfaState, out: *mut Ptrlist) {
         if self.frags.len() < self.cap {
             self.frags.push(Frag { start, out });
         }
@@ -165,7 +165,7 @@ pub(crate) enum Pass {
 
 /// The widest match the machine from `startstate` can make, or -1 when that
 /// cannot be bounded. Backs `\@<=`, which has to know how far back to start.
-fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
+fn nfa_max_width(startstate: *mut NfaState, depth: c_int) -> c_int {
     if depth > MAX_DEPTH {
         return -1;
     }
@@ -272,7 +272,7 @@ fn nfa_max_width(startstate: *mut nfa_state_T, depth: c_int) -> c_int {
 ///
 /// [`Pass::Count`] only adds up `nstate` and returns null; [`Pass::Build`]
 /// returns the machine's entry state, or null once it has said why not.
-pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut nfa_state_T {
+pub(crate) fn post2nfa(items: &[c_int], pass: Pass) -> *mut NfaState {
     let counting = pass == Pass::Count;
     let cap = if counting {
         0
@@ -630,10 +630,10 @@ fn closing_bracket(open: NfaOp) -> NfaOp {
 ///
 /// Postponing pays when the lookaround is expensive and what follows it is
 /// cheap, because the cheap test rejects most positions first.
-pub(crate) fn nfa_postprocess(prog: *mut nfa_regprog_T) {
+pub(crate) fn nfa_postprocess(prog: *mut NfaRegProg) {
     // SAFETY: `prog` is a program this module just built, with `nstate`
     // states inline.
-    let states = unsafe { &raw mut (*prog).state } as *mut nfa_state_T;
+    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
     for i in 0..unsafe { (*prog).nstate } {
         let s = unsafe { states.offset(i as isize) };
         let c = NfaOp::try_from(unsafe { (*s).c });

@@ -15,8 +15,8 @@ use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use super::{
-    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, REX_ALL,
-    Rex, bt_regengine, nfa_regengine, nfa_regprog_T, regexp_engine, rex_in_use,
+    AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
+    REX_ALL, Rex, bt_regengine, nfa_regengine, regexp_engine, rex_in_use,
 };
 use crate::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
 use crate::memory::{xfree, xstrdup};
@@ -139,7 +139,7 @@ pub unsafe fn vim_regfree(prog: *mut RegProg) {
 unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
-    let pat = unsafe { xstrdup((*(prog as *mut nfa_regprog_T)).pattern) };
+    let pat = unsafe { xstrdup((*(prog as *mut NfaRegProg)).pattern) };
     let save_p_re = p_re.get();
     p_re.set(BACKTRACKING_ENGINE as c_int as OptInt);
     if p_verbose.get() > 0 as OptInt {

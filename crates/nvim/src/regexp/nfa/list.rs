@@ -15,7 +15,7 @@
 //!
 //! A list grows in the steps upstream's `nfa_list_T` did — `len * 3 / 2 + 50`
 //! slots — and refuses to grow past 'maxmempattern' kilobytes of
-//! `nfa_thread_T`. That is the only bound on how many threads a pattern may
+//! `NfaThread`. That is the only bound on how many threads a pattern may
 //! spawn, so both the step and the byte count are load-bearing: they decide
 //! at what point E363 is reported rather than the editor running out of
 //! memory. [`ThreadList::slots`] is that count and is deliberately not
@@ -33,8 +33,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,
-    NSUBEXP, PimResult, PosKind, Rex, nfa_endp, nfa_ll_index, nfa_pim_T, nfa_state_T, nfa_thread_T,
-    regsub_T, regsubs_T,
+    NSUBEXP, NfaPim, NfaState, NfaThread, PimResult, PosKind, RegSub, RegSubs, Rex, nfa_endp,
+    nfa_ll_index,
 };
 use crate::types::NUL;
 
@@ -49,7 +49,7 @@ const ADDSTATE_MAX_DEPTH: c_int = 5000;
 /// match. These three are how the rest of the engine reads a state without
 /// an `unsafe` block of its own.
 #[inline(always)]
-pub(crate) fn op(state: *const nfa_state_T) -> c_int {
+pub(crate) fn op(state: *const NfaState) -> c_int {
     unsafe { (*state).c }
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn op(state: *const nfa_state_T) -> c_int {
 ///
 /// SAFETY: as `op`.
 #[inline(always)]
-pub(crate) fn out_of(state: *const nfa_state_T) -> *mut nfa_state_T {
+pub(crate) fn out_of(state: *const NfaState) -> *mut NfaState {
     unsafe { (*state).out }
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn out_of(state: *const nfa_state_T) -> *mut nfa_state_T {
 ///
 /// SAFETY: as `op`.
 #[inline(always)]
-pub(crate) fn out1_of(state: *const nfa_state_T) -> *mut nfa_state_T {
+pub(crate) fn out1_of(state: *const NfaState) -> *mut NfaState {
     unsafe { (*state).out1 }
 }
 
@@ -74,17 +74,17 @@ pub(crate) fn out1_of(state: *const nfa_state_T) -> *mut nfa_state_T {
 ///
 /// SAFETY: as `op`.
 #[inline(always)]
-fn id_of(state: *mut nfa_state_T) -> c_int {
+fn id_of(state: *mut NfaState) -> c_int {
     unsafe { (*state).id }
 }
 
 /// A slot that has never held a thread. Written once per slot, the first time
 /// the list reaches that far, so that reusing a slot on the next character
 /// costs only the fields the C original wrote.
-const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
+const BLANK_THREAD: NfaThread = NfaThread {
     state: core::ptr::null_mut(),
     count: 0,
-    pim: nfa_pim_T {
+    pim: NfaPim {
         result: PimResult::Unused,
         state: core::ptr::null_mut(),
         subs: BLANK_SUBS,
@@ -93,7 +93,7 @@ const BLANK_THREAD: nfa_thread_T = nfa_thread_T {
     subs: BLANK_SUBS,
 };
 
-const BLANK_SUB: regsub_T = regsub_T {
+const BLANK_SUB: RegSub = RegSub {
     in_use: 0,
     list: [Capture {
         start: MatchPos::NOWHERE,
@@ -102,7 +102,7 @@ const BLANK_SUB: regsub_T = regsub_T {
     orig_start_col: 0,
 };
 
-const BLANK_SUBS: regsubs_T = regsubs_T {
+const BLANK_SUBS: RegSubs = RegSubs {
     norm: BLANK_SUB,
     synt: BLANK_SUB,
 };
@@ -113,7 +113,7 @@ pub(crate) struct ThreadList {
     /// The slots that have ever been used. Everything below `n` is live;
     /// everything from `n` to the end is a slot a previous character left
     /// behind and this one may reuse.
-    threads: Vec<nfa_thread_T>,
+    threads: Vec<NfaThread>,
     /// How many threads are live.
     n: usize,
     /// The slot count 'maxmempattern' is charged against — see the module
@@ -163,14 +163,14 @@ impl ThreadList {
     /// the natural spelling and costs a second check on the hottest accessor
     /// the match loop has. `n` is never past `threads.len()`.
     #[inline(always)]
-    pub(crate) fn thread(&self, i: usize) -> &nfa_thread_T {
+    pub(crate) fn thread(&self, i: usize) -> &NfaThread {
         debug_assert!(i < self.n);
         &self.threads[i]
     }
 
     /// The `i`th live thread, to write to.
     #[inline(always)]
-    pub(crate) fn thread_mut(&mut self, i: usize) -> &mut nfa_thread_T {
+    pub(crate) fn thread_mut(&mut self, i: usize) -> &mut NfaThread {
         debug_assert!(i < self.n);
         &mut self.threads[i]
     }
@@ -178,7 +178,7 @@ impl ThreadList {
     /// Reserve the next slot size up, or report E363 and refuse.
     fn grow(&mut self) -> bool {
         let newlen = self.slots * 3 / 2 + 50;
-        if (((newlen * size_of::<nfa_thread_T>()) >> 10) as i64) >= p_mmp.get() {
+        if (((newlen * size_of::<NfaThread>()) >> 10) as i64) >= p_mmp.get() {
             emsg(gettext(E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN));
             return false;
         }
@@ -190,7 +190,7 @@ impl ThreadList {
     /// Append a thread for `state`, carrying `subs` and `pim`.
     ///
     /// The caller has already made room.
-    fn push(&mut self, state: *mut nfa_state_T, subs: &regsubs_T, pim: Option<&nfa_pim_T>) {
+    fn push(&mut self, state: *mut NfaState, subs: &RegSubs, pim: Option<&NfaPim>) {
         let rex = self.rex;
         if self.n == self.threads.len() {
             // The first character to reach this far pays for the slot; every
@@ -217,7 +217,7 @@ impl ThreadList {
     /// The generation check alone is enough unless the pattern has a
     /// back-reference, when two threads on the same state may still differ in
     /// what they captured.
-    pub(crate) fn holds(&self, state: *mut nfa_state_T, subs: &regsubs_T) -> bool {
+    pub(crate) fn holds(&self, state: *mut NfaState, subs: &RegSubs) -> bool {
         let rex = self.rex;
         // SAFETY: `state` is a live state of the running program.
         let seen = unsafe { (*state).lastlist[nfa_ll_index.get() as usize] == self.id };
@@ -226,12 +226,7 @@ impl ThreadList {
 
     /// Is `state` on this list with exactly these captures and this postponed
     /// lookaround?
-    fn holds_with(
-        &self,
-        state: *mut nfa_state_T,
-        subs: &regsubs_T,
-        pim: Option<&nfa_pim_T>,
-    ) -> bool {
+    fn holds_with(&self, state: *mut NfaState, subs: &RegSubs, pim: Option<&NfaPim>) -> bool {
         let rex = self.rex;
         let has_z = has_zsubexpr(rex);
         let id = id_of(state);
@@ -264,9 +259,9 @@ impl ThreadList {
 /// as `NFA_TOO_EXPENSIVE`.
 pub(crate) fn addstate(
     l: &mut ThreadList,
-    state: *mut nfa_state_T,
-    subs: &mut regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &mut RegSubs,
+    pim: Option<&NfaPim>,
     off: c_int,
 ) -> bool {
     walk(l, state, subs, pim, off, 0)
@@ -283,9 +278,9 @@ pub(crate) fn addstate(
 /// below both reads and rewrites the list, so nothing may point into it.
 pub(crate) fn addstate_here(
     l: &mut ThreadList,
-    state: *mut nfa_state_T,
-    subs: &mut regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &mut RegSubs,
+    pim: Option<&NfaPim>,
     ip: &mut c_int,
 ) -> bool {
     let listidx = *ip as usize;
@@ -327,9 +322,9 @@ pub(crate) fn addstate_here(
 /// The body of [`addstate`], with the recursion depth it has reached.
 fn walk(
     l: &mut ThreadList,
-    state: *mut nfa_state_T,
-    subs: &mut regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &mut RegSubs,
+    pim: Option<&NfaPim>,
     off_arg: c_int,
     depth: c_int,
 ) -> bool {
@@ -407,9 +402,9 @@ enum Place {
 /// Put `state` on `l` unless it is already there.
 fn place(
     l: &mut ThreadList,
-    state: *mut nfa_state_T,
-    subs: &regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &RegSubs,
+    pim: Option<&NfaPim>,
     add_here: bool,
     listindex: usize,
 ) -> Place {
@@ -472,9 +467,9 @@ fn past_line_start(rex: Rex) -> bool {
 fn follow(
     l: &mut ThreadList,
     c: Result<NfaOp, NotAnOpcode>,
-    state: *mut nfa_state_T,
-    subs: &mut regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &mut RegSubs,
+    pim: Option<&NfaPim>,
     off: c_int,
     off_arg: c_int,
     depth: c_int,
@@ -511,7 +506,7 @@ fn follow(
 }
 
 /// Has a `\ze` already put group 0's end somewhere?
-fn has_zend_set(rex: Rex, subs: &regsubs_T) -> bool {
+fn has_zend_set(rex: Rex, subs: &RegSubs) -> bool {
     rex.nfa_has_zend() != 0 && subs.norm.list[0].end.is_set(rex.pos_kind())
 }
 
@@ -589,9 +584,9 @@ enum Saved {
 fn open(
     l: &mut ThreadList,
     c: NfaOp,
-    state: *mut nfa_state_T,
-    subs: &mut regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &mut RegSubs,
+    pim: Option<&NfaPim>,
     off: c_int,
     off_arg: c_int,
     depth: c_int,
@@ -641,9 +636,9 @@ fn open(
 fn close(
     l: &mut ThreadList,
     c: NfaOp,
-    state: *mut nfa_state_T,
-    subs: &mut regsubs_T,
-    pim: Option<&nfa_pim_T>,
+    state: *mut NfaState,
+    subs: &mut RegSubs,
+    pim: Option<&NfaPim>,
     off: c_int,
     off_arg: c_int,
     depth: c_int,
@@ -678,7 +673,7 @@ fn group_count(subidx: usize) -> c_int {
 mod tests {
     use super::*;
 
-    /// 'maxmempattern' is charged in `nfa_thread_T`s — see the module docs —
+    /// 'maxmempattern' is charged in `NfaThread`s — see the module docs —
     /// so how large one is decides at what thread count E363 is reported,
     /// which a user sees. Four capture sets ride in every thread, so a tag
     /// saying which of the two shapes their positions are in would have cost
@@ -686,16 +681,16 @@ mod tests {
     /// It is not in there: a set is its ten captures plus its two `int`s.
     ///
     /// Stated as a claim about the *fields* rather than about
-    /// `size_of::<regsub_T>()`, so that a layout-randomising build can run
-    /// it: `regsub_T` is `repr(Rust)`, and a build that shuffles its two
+    /// `size_of::<RegSub>()`, so that a layout-randomising build can run
+    /// it: `RegSub` is `repr(Rust)`, and a build that shuffles its two
     /// `int`s to opposite sides of the array pads it — which says something
     /// about the compiler's freedom and nothing about this struct. What the
     /// paragraph above actually asserts is that there is no fourth field and
     /// that a capture is a pair of positions, and both survive the shuffle.
     #[test]
     fn a_thread_carries_no_capture_tag() {
-        // Exhaustive: a tag field added to `regsub_T` stops compiling here.
-        let regsub_T {
+        // Exhaustive: a tag field added to `RegSub` stops compiling here.
+        let RegSub {
             in_use,
             list,
             orig_start_col,
@@ -714,10 +709,10 @@ mod tests {
             "a capture carries no tag naming the shape of its positions"
         );
         // And a thread's pair of sets is a pair, not a pair plus a tag.
-        let regsubs_T { norm, synt } = BLANK_SUBS;
+        let RegSubs { norm, synt } = BLANK_SUBS;
         assert_eq!(
             size_of_val(&norm) + size_of_val(&synt),
-            2 * size_of::<regsub_T>()
+            2 * size_of::<RegSub>()
         );
     }
 

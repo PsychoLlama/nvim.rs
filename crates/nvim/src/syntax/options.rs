@@ -156,10 +156,10 @@ unsafe fn find_flag(arg: *const c_char, keyword: bool) -> Option<&'static SynFla
 ///
 /// Callable at any point in an argument list and repeatedly, so that options
 /// before, between and after the patterns of a `:syntax region` all land in
-/// the same [`syn_opt_arg_T`].
+/// the same [`SynOptArg`].
 pub(crate) unsafe fn get_syn_options(
     mut arg: *mut c_char,
-    opt: &mut syn_opt_arg_T,
+    opt: &mut SynOptArg,
     conceal_char: &mut c_int,
     skip: c_int,
 ) -> *mut c_char {
@@ -228,7 +228,7 @@ pub(crate) unsafe fn get_syn_options(
 /// index it names in `opt.sync_idx`.
 ///
 /// Answers what follows it, or NULL after reporting an error.
-unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &mut syn_opt_arg_T) -> *mut c_char {
+unsafe fn sync_group_arg(mut arg: *mut c_char, opt: &mut SynOptArg) -> *mut c_char {
     if !opt.takes_sync_idx {
         emsg(gettext(c"E393: group[t]here not accepted here"));
         return ::core::ptr::null_mut();
@@ -490,8 +490,8 @@ unsafe fn parse_id_name(
 
 /// Copy an id list into the `xmalloc`ed array a keyword entry holds.
 ///
-/// The one place a list is still raw: a `keyentry_T` is one allocation with
-/// its text inside it and has no destructor (see [`keyentry`]).
+/// The one place a list is still raw: a `KeyEntry` is one allocation with
+/// its text inside it and has no destructor (see [`KeyEntry`]).
 pub(crate) fn copy_id_list(list: &IdList) -> *mut int16_t {
     if list.is_none() {
         return ::core::ptr::null_mut();

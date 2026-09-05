@@ -22,8 +22,8 @@ pub struct BufState {
     pub bs_extmatch: *mut RegExtMatch,
 }
 #[derive(Copy, Clone)]
-pub struct syn_state {
-    pub sst_next: *mut synstate_T,
+pub struct SynState {
+    pub sst_next: *mut SynState,
     pub sst_lnum: LineNr,
     pub sst_union: syn_state_sst_union,
     pub sst_next_flags: SynFlags,
@@ -35,7 +35,7 @@ pub struct syn_state {
 /// A cached entry's state stack: either inline in the entry, or on the heap
 /// when there are more than `SST_FIX_STATES` items.
 ///
-/// Discriminated by `syn_state::sst_stacksize`, which is also the *length* of
+/// Discriminated by `SynState::sst_stacksize`, which is also the *length* of
 /// both arms -- so the heap arm needs no length of its own, and upstream's
 /// growarray here carried one that was always a copy of it. `syntax::stack`'s
 /// `entry_states` is the one place the discrimination is written down.

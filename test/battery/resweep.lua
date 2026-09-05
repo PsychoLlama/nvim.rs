@@ -12,7 +12,7 @@
 -- artifacts and the scrub.
 --
 -- THE AXIS THAT MATTERS is `'regexpengine'`.  Both engines share `rex`
--- (the `regexec_T` the whole family threads through itself), so a bug in
+-- (the `RegExec` the whole family threads through itself), so a bug in
 -- the shared state shows on ONE engine and not the other -- and nothing
 -- else in this tree drives them side by side.  Every corpus row is run
 -- under `re=0` (NFA, falling back to BT when compilation fails),

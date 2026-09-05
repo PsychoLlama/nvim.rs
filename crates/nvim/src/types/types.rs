@@ -65,5 +65,4 @@ pub type Handle = ::core::ffi::c_int;
 pub type ProfTime = uint64_t;
 pub type ScreenAttr = int32_t;
 pub type ScreenChar = uint32_t;
-pub type synstate_T = syn_state;
 pub type VimAcl = *mut ::core::ffi::c_void;

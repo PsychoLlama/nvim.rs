@@ -14,11 +14,11 @@ use super::atom::nfa_regatom as regatom;
 use super::{Parsed, Rejected, postfix};
 use crate::main::rc_did_emsg;
 use crate::regexp::{
-    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP, RE_AUTO,
+    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP, ParseState, RE_AUTO,
     REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, curchr,
-    getchr, getdecchrs, had_endbrace, magic, magic_prefix, nfa_re_flags, parse_state_T, peekchr,
-    re_multi_type, read_limits, reg_magic, regflags, regnpar, regnzpar, restore_parse_state,
-    save_parse_state, skipchr, skipchr_keepstart, unmagic, wants_nfa,
+    getchr, getdecchrs, had_endbrace, magic, magic_prefix, nfa_re_flags, peekchr, re_multi_type,
+    read_limits, reg_magic, regflags, regnpar, regnzpar, restore_parse_state, save_parse_state,
+    skipchr, skipchr_keepstart, unmagic, wants_nfa,
 };
 use crate::semsg;
 use crate::types::NUL;
@@ -47,8 +47,8 @@ const AUTO_MAX_REPEAT: c_int = 500;
 const AUTO_MAX_SPAN: c_int = 200;
 
 /// A blank parse-cursor snapshot for [`save_parse_state`] to fill in.
-fn no_state() -> parse_state_T {
-    parse_state_T {
+fn no_state() -> ParseState {
+    ParseState {
         regparse: core::ptr::null_mut(),
         prevchr_len: 0,
         curchr: 0,
@@ -116,7 +116,7 @@ enum Repeat {
 ///
 /// `atom_start` is where the atom's own items begin; the first pass is
 /// thrown away and re-emitted from there.
-fn counted_repeat(rex: Rex, before_atom: &parse_state_T, atom_start: usize) -> Repeat {
+fn counted_repeat(rex: Rex, before_atom: &ParseState, atom_start: usize) -> Repeat {
     // `\{-n,m}` asks for the shortest match.
     let mut greedy = true;
     let c = peekchr();

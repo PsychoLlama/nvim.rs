@@ -4,7 +4,7 @@
 //! record a position differently: a string match holds a pointer into the one
 //! string it was handed, a buffer match a line/column pair. Upstream wrote
 //! that choice out three separate times — `save_se_T.se_u`, `regsave_T.rs_u`
-//! and `nfa_pim_T.end` — as three anonymous unions with the same two arms.
+//! and `NfaPim.end` — as three anonymous unions with the same two arms.
 //! This is the one type all three became.
 //!
 //! ## Why there is no tag in here
@@ -15,7 +15,7 @@
 //! the shape of every position the match will ever save. A tagged enum would
 //! store that one global answer once per saved position — and the values are
 //! not scarce. The backtracker pushes a [`SavedInput`] per decision and a
-//! `regbehind_T` carries twenty [`MatchPos`]es, so a tag would cost a
+//! `RegBehind` carries twenty [`MatchPos`]es, so a tag would cost a
 //! quarter of the frame stack and half of every look-behind snapshot, and
 //! `'maxmempattern'` is charged in bytes of that stack: growing the frame
 //! moves the depth at which E363 fires, which is user-visible behaviour.
@@ -27,9 +27,9 @@
 //! not use is meaningless rather than undefined, and the meaning is what the
 //! `kind` argument and the accessor names carry.
 //!
-//! ## What that leaves of `regitem_T`'s union
+//! ## What that leaves of `RegItem`'s union
 //!
-//! Once the three spellings are one type, `regitem_T`'s `rs_un` — upstream's
+//! Once the three spellings are one type, `RegItem`'s `rs_un` — upstream's
 //! union of `save_se_T` against `regsave_T` — has two arms that differ only
 //! by a trailing `int`. There is no pun left to express: a frame saves a
 //! position, and the frames that save the *input* position additionally save
@@ -199,13 +199,13 @@ impl MatchPos {
 ///
 /// Upstream wrote this twice, as `multipos` (four `int`s: two line numbers
 /// and two columns) and `linepos` (two pointers), and unioned arrays of the
-/// two into `regsub_T.list`. Both arms are a *pair of positions* and
+/// two into `RegSub.list`. Both arms are a *pair of positions* and
 /// [`MatchPos`] is what a position is, so there is nothing left to union: the
 /// two shapes are one type, sixteen bytes either way, and the arm is still
 /// picked once per match by [`super::rex::Rex::pos_kind`].
 ///
 /// That the size did not move is load-bearing. A capture set rides in every
-/// `nfa_thread_T`, twice over, and 'maxmempattern' is charged in threads —
+/// `NfaThread`, twice over, and 'maxmempattern' is charged in threads —
 /// so a tag on the two shapes would have cost eight bytes a set, thirty-two a
 /// thread, and moved the depth at which E363 is reported by about four per
 /// cent.
@@ -332,7 +332,7 @@ mod tests {
     }
 
     /// A frame is a position plus one `int`, and that is all the union
-    /// `regitem_T.rs_un` was hiding.
+    /// `RegItem.rs_un` was hiding.
     #[test]
     fn a_blank_input_save_is_nowhere_with_no_backpos() {
         assert!(SavedInput::NOWHERE.pos.as_ptr().is_null());

@@ -17,8 +17,8 @@ use super::run::{check_char_class, match_backref, match_zref, recursive_regmatch
 use super::sub::{copy_sub, copy_sub_off, copy_ze_off, has_zsubexpr};
 use crate::mbyte::{mb_get_class_tab, utf_fold, utf_iscomposing_legacy};
 use crate::regexp::{
-    NFA_TOO_EXPENSIVE, PimResult, Rex, nfa_endp, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T,
-    reg_prev_class, regsubs_T,
+    NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult, RegSubs, Rex, nfa_endp, nfa_match,
+    reg_prev_class,
 };
 use crate::types::NUL;
 
@@ -28,12 +28,12 @@ pub(crate) enum Step {
     Dead,
     /// Add `state` to the *current* list, at this position — the state
     /// consumes no input.
-    Here(*mut nfa_state_T),
+    Here(*mut NfaState),
     /// Add `state` to the next list, `off` bytes on. `count` is how many
     /// more bytes it has still to consume before it may advance again,
     /// which is how a back-reference longer than one character waits.
     Next {
-        state: *mut nfa_state_T,
+        state: *mut NfaState,
         off: c_int,
         count: c_int,
     },
@@ -44,7 +44,7 @@ pub(crate) enum Step {
 }
 
 impl Step {
-    fn next(state: *mut nfa_state_T, off: c_int) -> Step {
+    fn next(state: *mut NfaState, off: c_int) -> Step {
         Step::Next {
             state,
             off,
@@ -53,7 +53,7 @@ impl Step {
     }
 
     /// A test that either advances over the character or kills the thread.
-    fn consuming(matched: bool, state: *mut nfa_state_T, clen: c_int) -> Step {
+    fn consuming(matched: bool, state: *mut NfaState, clen: c_int) -> Step {
         if matched {
             Step::next(state, clen)
         } else {
@@ -62,7 +62,7 @@ impl Step {
     }
 
     /// A test that either continues at this position or kills the thread.
-    fn zero_width(matched: bool, state: *mut nfa_state_T) -> Step {
+    fn zero_width(matched: bool, state: *mut NfaState) -> Step {
         if matched {
             Step::Here(state)
         } else {
@@ -74,18 +74,18 @@ impl Step {
 /// The state of the match this step belongs to, for the arms that run a
 /// sub-match of their own.
 pub(crate) struct Run<'a> {
-    pub(crate) prog: *mut nfa_regprog_T,
-    pub(crate) submatch: *mut regsubs_T,
-    pub(crate) m: *mut regsubs_T,
+    pub(crate) prog: *mut NfaRegProg,
+    pub(crate) submatch: *mut RegSubs,
+    pub(crate) m: *mut RegSubs,
     pub(crate) listids: &'a mut Vec<c_int>,
     /// Scratch for the capture set `addstate_here` is handed, which may not
     /// be one that lives in the list it rewrites.
-    pub(crate) here: &'a mut regsubs_T,
+    pub(crate) here: &'a mut RegSubs,
 }
 
 /// Is `state` one of the negated lookarounds, whose sub-match must *fail*
 /// for the thread to survive?
-fn is_negated(state: *mut nfa_state_T) -> bool {
+fn is_negated(state: *mut NfaState) -> bool {
     // SAFETY: `state` is a live state of the running program.
 
     matches!(
@@ -98,12 +98,12 @@ fn is_negated(state: *mut nfa_state_T) -> bool {
 }
 
 /// Did a sub-match come out the way its lookaround wanted?
-pub(crate) fn lookaround_held(state: *mut nfa_state_T, result: c_int) -> bool {
+pub(crate) fn lookaround_held(state: *mut NfaState, result: c_int) -> bool {
     (result != 0) != is_negated(state)
 }
 
 /// Copy the normal and — when the pattern has any — the `\z(` captures.
-fn copy_both(rex: Rex, to: &mut regsubs_T, from: &regsubs_T) {
+fn copy_both(rex: Rex, to: &mut RegSubs, from: &RegSubs) {
     copy_sub(&mut to.norm, &from.norm);
     if has_zsubexpr(rex) {
         copy_sub(&mut to.synt, &from.synt);
@@ -112,7 +112,7 @@ fn copy_both(rex: Rex, to: &mut regsubs_T, from: &regsubs_T) {
 
 /// As [`copy_both`], but leaving group 0 alone: a lookaround must not move
 /// the whole match's start or end.
-fn copy_both_off(rex: Rex, to: &mut regsubs_T, from: &regsubs_T) {
+fn copy_both_off(rex: Rex, to: &mut RegSubs, from: &RegSubs) {
     copy_sub_off(&mut to.norm, &from.norm);
     if has_zsubexpr(rex) {
         copy_sub_off(&mut to.synt, &from.synt);
@@ -333,7 +333,7 @@ fn group_number(index: usize) -> c_int {
 /// A thread that matched `bytelen` bytes: it may be shorter than the
 /// character under the input, exactly it, or longer — in which case an
 /// `NFA_SKIP` waits out the remainder.
-fn spanning(out: *mut nfa_state_T, bytelen: c_int, clen: c_int) -> Step {
+fn spanning(out: *mut NfaState, bytelen: c_int, clen: c_int) -> Step {
     // SAFETY: `out` is a live state of the running program.
     if bytelen == 0 {
         Step::Here(unsafe { (*out).out })
@@ -402,7 +402,7 @@ unsafe fn at_word_end(rex: Rex) -> bool {
 /// # Safety
 ///
 /// `start` must be an `NFA_START_COLL`/`NFA_START_NEG_COLL` state.
-unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, clen: c_int) -> bool {
+unsafe fn collection_matches(rex: Rex, start: *mut NfaState, curc: c_int, clen: c_int) -> bool {
     // A negated collection accepts exactly what its members reject.
     let member_wins = unsafe { (*start).c } == NfaOp::StartColl.code();
     let mut state = unsafe { (*start).out };
@@ -451,7 +451,7 @@ unsafe fn collection_matches(rex: Rex, start: *mut nfa_state_T, curc: c_int, cle
 
 /// A lookaround: run its pattern as a match of its own, either now or —
 /// when the loop would rather try the cheaper rest of the pattern first —
-/// postponed as a `nfa_pim_T` carried along with the thread.
+/// postponed as a `NfaPim` carried along with the thread.
 ///
 /// # Safety
 ///
@@ -476,7 +476,7 @@ unsafe fn start_lookaround(
         );
     if !run_now {
         // Hand the lookaround to whatever comes after it.
-        let mut pim: nfa_pim_T = unsafe { core::mem::zeroed() };
+        let mut pim: NfaPim = unsafe { core::mem::zeroed() };
         pim.state = state;
         pim.result = PimResult::Todo;
         pim.subs.norm.in_use = 0;

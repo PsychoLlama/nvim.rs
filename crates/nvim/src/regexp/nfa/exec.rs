@@ -23,10 +23,10 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    NFA_TOO_EXPENSIVE, NSUBEXP, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, cleanup_subexpr,
-    cleanup_zsubexpr, init_regexec, init_regexec_multi, make_extmatch, nfa_re_flags, nfa_regengine,
-    nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, nfa_timed_out, nstate, re_has_z,
-    reg_getline, regflags, regnpar, regsubs_T, state_ptr, unref_extmatch,
+    NFA_TOO_EXPENSIVE, NSUBEXP, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
+    RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,
+    make_extmatch, nfa_re_flags, nfa_regengine, nfa_time_count, nfa_time_limit, nfa_timed_out,
+    nstate, re_has_z, reg_getline, regflags, regnpar, state_ptr, unref_extmatch,
 };
 use crate::strings::xstrnsave;
 use crate::types::{
@@ -40,7 +40,7 @@ use crate::types::{
 /// the match ended on.
 fn nfa_regtry(
     rex: Rex,
-    prog: *mut nfa_regprog_T,
+    prog: *mut NfaRegProg,
     col: ColNr,
     tm: *mut ProfTime,
     timed_out: *mut c_int,
@@ -48,8 +48,8 @@ fn nfa_regtry(
     // SAFETY: `prog` is a live program and `rex` the match context set up by
     // `nfa_regexec_both`; the capture arrays below are the caller's, sized
     // `NSUBEXP`.
-    let mut subs: regsubs_T = unsafe { core::mem::zeroed() };
-    let mut m: regsubs_T = unsafe { core::mem::zeroed() };
+    let mut subs: RegSubs = unsafe { core::mem::zeroed() };
+    let mut m: RegSubs = unsafe { core::mem::zeroed() };
     rex.set_input(unsafe { rex.line().offset(col as isize) });
     nfa_time_limit.set(tm);
     nfa_timed_out.set(timed_out);
@@ -91,7 +91,7 @@ fn nfa_regtry(
 }
 
 /// Copy the capture positions of a buffer match into the caller's arrays.
-fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
+fn report_buffer_match(rex: Rex, subs: &RegSubs, col: ColNr) {
     // SAFETY: a buffer match's context holds the caller's position arrays,
     // `NSUBEXP` slots each.
     let (starts, ends) = unsafe {
@@ -124,7 +124,7 @@ fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
 }
 
 /// As [`report_buffer_match`], for a match over a plain string.
-fn report_string_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
+fn report_string_match(rex: Rex, subs: &RegSubs, col: ColNr) {
     // SAFETY: as `report_buffer_match`; a string match's slots are pointers.
     let (starts, ends) = unsafe {
         (
@@ -148,7 +148,7 @@ fn report_string_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
 /// Copy what the `\z(` groups matched into the set the highlighter reads.
 ///
 /// SAFETY: `re_extmatch_out` holds a fresh capture set.
-fn save_z_captures(rex: Rex, subs: &regsubs_T) {
+fn save_z_captures(rex: Rex, subs: &RegSubs) {
     // Group 0 is the whole match, which the highlighter does not want.
     for i in 1..slots(subs.synt.in_use) {
         let capture = subs.synt.list[i];
@@ -187,7 +187,7 @@ fn nfa_regexec_both(
     timed_out: *mut c_int,
 ) -> c_int {
     let mut col = startcol;
-    let prog: *mut nfa_regprog_T = if rex.multi() {
+    let prog: *mut NfaRegProg = if rex.multi() {
         line = reg_getline(rex, 0) as *mut uint8_t;
         rex.set_reg_startpos((unsafe { &raw mut (*rex.reg_mmatch()).startpos }).cast());
         rex.set_reg_endpos((unsafe { &raw mut (*rex.reg_mmatch()).endpos }).cast());
@@ -262,7 +262,7 @@ enum Attempt {
 /// SAFETY: As `nfa_regexec_both`.
 fn try_match(
     rex: Rex,
-    prog: *mut nfa_regprog_T,
+    prog: *mut NfaRegProg,
     col: &mut ColNr,
     tm: *mut ProfTime,
     timed_out: *mut c_int,
@@ -302,7 +302,7 @@ fn try_match(
 
     // Every state starts out on no list.
     nstate.set(0);
-    let states = unsafe { &raw mut (*prog).state } as *mut nfa_state_T;
+    let states = unsafe { &raw mut (*prog).state } as *mut NfaState;
     for i in 0..unsafe { (*prog).nstate } {
         let s = unsafe { states.offset(i as isize) };
         unsafe { (*s).id = i };
@@ -328,14 +328,14 @@ pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut Re
     let rex = unsafe { Rex::acquire() };
     unsafe { nfa_regcomp_start(rex, expr, re_flags) };
 
-    let mut prog: *mut nfa_regprog_T = core::ptr::null_mut();
+    let mut prog: *mut NfaRegProg = core::ptr::null_mut();
     if re2post(rex).is_ok() {
         // The first pass counts the states, because the program is one
         // block with them inline.
         postfix::with_items(|items| post2nfa(items, Pass::Count));
-        let size = 80 + size_of::<nfa_state_T>() * nstate.get() as usize;
-        prog = unsafe { xmalloc(size) } as *mut nfa_regprog_T;
-        state_ptr.set(unsafe { &raw mut (*prog).state } as *mut nfa_state_T);
+        let size = 80 + size_of::<NfaState>() * nstate.get() as usize;
+        prog = unsafe { xmalloc(size) } as *mut NfaRegProg;
+        state_ptr.set(unsafe { &raw mut (*prog).state } as *mut NfaState);
         unsafe { (*prog).re_in_use = false };
         unsafe { (*prog).start = postfix::with_items(|items| post2nfa(items, Pass::Build)) };
         if unsafe { (*prog).start.is_null() } {
@@ -358,7 +358,7 @@ pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut Re
     }
 
     postfix::finish();
-    state_ptr.set(core::ptr::null_mut::<nfa_state_T>());
+    state_ptr.set(core::ptr::null_mut::<NfaState>());
     prog.cast()
 }
 
@@ -371,7 +371,7 @@ pub(crate) unsafe fn nfa_regfree(prog: *mut RegProg) {
     if prog.is_null() {
         return;
     }
-    let prog = prog as *mut nfa_regprog_T;
+    let prog = prog as *mut NfaRegProg;
     unsafe { xfree((*prog).match_text.cast()) };
     unsafe { xfree((*prog).pattern.cast()) };
     unsafe { xfree(prog.cast()) };

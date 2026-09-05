@@ -1,6 +1,6 @@
 //! The state stack's item operations.
 //!
-//! The stack is a `Vec` of `stateitem_T`, innermost last. These are the
+//! The stack is a `Vec` of `StateItem`, innermost last. These are the
 //! operations on it: pushing what a match found ([`push_next_match`]), working
 //! out an item's highlight attributes and containment ([`update_si_attr`]) and
 //! where it ends ([`update_si_end`]), applying `keepend`/`extend`
@@ -378,7 +378,7 @@ pub(crate) fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
 /// A push on an invalid stack is dropped; upstream would grow the garray it
 /// had just declared dead.
 pub(crate) fn push_current_state(idx: c_int) {
-    let item = stateitem_T {
+    let item = StateItem {
         si_idx: idx,
         ..EMPTY_STATE_ITEM
     };

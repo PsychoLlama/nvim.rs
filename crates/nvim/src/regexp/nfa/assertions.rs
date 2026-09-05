@@ -15,9 +15,7 @@ use crate::main::curwin;
 use crate::mark::mark_get;
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
-use crate::regexp::{
-    Rex, kMarkBufLocal, nfa_state_T, reg_getline, reg_getline_len, reg_match_visual,
-};
+use crate::regexp::{NfaState, Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, Window, uint8_t};
 
 use crate::winlayer::Win;
@@ -44,7 +42,7 @@ fn window(rex: Rex) -> *mut Window {
 ///
 /// Only a buffer match has line numbers, so a string match never satisfies
 /// it.
-pub(crate) fn at_line(rex: Rex, state: *mut nfa_state_T) -> bool {
+pub(crate) fn at_line(rex: Rex, state: *mut NfaState) -> bool {
     // SAFETY: `state` is a live state of the running program.
     let want = unsafe { (*state).val };
     assert!(
@@ -60,7 +58,7 @@ pub(crate) fn at_line(rex: Rex, state: *mut nfa_state_T) -> bool {
 }
 
 /// `\%23c`: the byte column, counted from one.
-pub(crate) fn at_col(rex: Rex, state: *mut nfa_state_T) -> bool {
+pub(crate) fn at_col(rex: Rex, state: *mut NfaState) -> bool {
     // SAFETY: as `at_line`.
     debug_assert!(
         unsafe { (*state).val } >= 0,
@@ -76,7 +74,7 @@ pub(crate) fn at_col(rex: Rex, state: *mut nfa_state_T) -> bool {
 
 /// `\%23v`: the virtual column, counted from one — what the character looks
 /// like it is at once tabs are expanded.
-pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
+pub(crate) fn at_vcol(rex: Rex, state: *mut NfaState) -> bool {
     // SAFETY: as `at_line`; `reg_getline` re-reads the line because
     // `win_linetabsize` can move the memline's buffer.
     let op = op(state) - NfaOp::Vcol.code();
@@ -107,7 +105,7 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
 }
 
 /// `\%'m`: the position of mark `m`.
-pub(crate) fn at_mark(rex: Rex, state: *mut nfa_state_T) -> bool {
+pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
     // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
     // store of its own, so it is computed straight into this frame's slot.
     let mut slot = FileMark::UNSET;

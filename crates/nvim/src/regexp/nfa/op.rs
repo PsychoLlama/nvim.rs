@@ -2,7 +2,7 @@
 //!
 //! Upstream keeps them in one anonymous C enum whose values are negative so
 //! that a state's `c` can hold either an opcode or a literal character, and
-//! that seam survives here: `nfa_state.c` and the postfix program are still
+//! that seam survives here: `NfaState.c` and the postfix program are still
 //! `c_int`, because a character is not an opcode. [`NfaOp`] is the *named*
 //! half of that space and `try_from` is the only way in.
 //!

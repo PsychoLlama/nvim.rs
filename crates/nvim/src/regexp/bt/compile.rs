@@ -24,8 +24,8 @@ use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
-    JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC, RE_STRICT, RE_STRING, REX_SET, Rex,
-    bt_regprog_T, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,
+    BtRegProg, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC, RE_STRICT, RE_STRING,
+    REX_SET, Rex, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,
     re_multi_type, refresh_cpo_flags, reg_magic, reg_strict, reg_string, reg_toolong, regcode,
     regflags, regnpar, regnzpar, regparse, regsize,
 };
@@ -38,7 +38,7 @@ const NODE_HDR: usize = 3;
 ///
 /// One `xmalloc` block: a fixed head, then the `REGMAGIC` stamp, then the
 /// nodes. The head opens with the same five fields `RegProg` and the NFA's
-/// `nfa_regprog_T` open with — C's single inheritance, and what lets
+/// `NfaRegProg` open with — C's single inheritance, and what lets
 /// `vim_regexec` hand any program to any engine and lets each engine cast the
 /// pointer back to its own shape. **That prefix is the layout and stays
 /// exactly as it is**: this is a handle round the pointer, not a new
@@ -50,7 +50,7 @@ const NODE_HDR: usize = 3;
 /// out `(*prog).` inside `unsafe` regions of their own, and several of their
 /// functions stop being one `unsafe` block from brace to brace.
 #[derive(Clone, Copy)]
-pub(crate) struct BtProg(*mut bt_regprog_T);
+pub(crate) struct BtProg(*mut BtRegProg);
 
 impl BtProg {
     /// The program the running match is for, or `None` if the caller handed
@@ -75,8 +75,7 @@ impl BtProg {
     pub(crate) fn alloc(nodes: usize) -> BtProg {
         // SAFETY: `xmalloc` returns a block of the size asked for or does not
         // return, so the head is inside it.
-        let prog =
-            unsafe { xmalloc(offset_of!(bt_regprog_T, program) + nodes) }.cast::<bt_regprog_T>();
+        let prog = unsafe { xmalloc(offset_of!(BtRegProg, program) + nodes) }.cast::<BtRegProg>();
         unsafe { (*prog).re_in_use = false };
         BtProg(prog)
     }

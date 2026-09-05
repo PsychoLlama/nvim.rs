@@ -1,8 +1,8 @@
 //! The syntax-item flags.
 //!
-//! One bitmask, shared by three carriers: `synpat_T::sp_flags` (what a
-//! `:syntax match`/`region` item was defined with), `keyentry::flags` (the
-//! same for a `:syntax keyword`) and `stateitem_T::si_flags` (what the state
+//! One bitmask, shared by three carriers: `SynPat::sp_flags` (what a
+//! `:syntax match`/`region` item was defined with), `KeyEntry::flags` (the
+//! same for a `:syntax keyword`) and `StateItem::si_flags` (what the state
 //! machine has since worked out about the item it is standing in). A handful
 //! are only ever set on one of the three — [`SynFlags::MATCHCONT`] and
 //! [`SynFlags::TRANS_CONT`] are state-machine deductions with no `:syntax`

@@ -25,9 +25,9 @@ use core::ffi::{c_char, c_int};
 use super::api::with_rex;
 use super::submatch::{Rsm, clear_submatch_list, fill_submatch_list};
 use super::{
-    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, Rex, TAB,
-    can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len, reg_prev_sub, reg_prev_sublen,
-    regsubmatch_T, rsm,
+    CAR, E_SUBSTITUTE_NESTING_TOO_DEEP, NL, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC,
+    RegSubMatch, Rex, TAB, can_f_submatch, prog_magic_wrong, reg_getline, reg_getline_len,
+    reg_prev_sub, reg_prev_sublen, rsm,
 };
 use crate::eval::typval::{tv_clear, tv_get_string_buf_chk, tv_list_len};
 use crate::eval::userfunc::call_func;
@@ -464,7 +464,7 @@ unsafe fn eval_replacement(
     // `replace` rather than a `get` and a `set`: the snapshot holds the
     // outer match's structures, and a copy alongside the cell would be a
     // second holder of them for the length of the evaluation.
-    let outer_rsm = rsm.replace(regsubmatch_T {
+    let outer_rsm = rsm.replace(RegSubMatch {
         sm_match: rex.reg_match(),
         sm_mmatch: rex.reg_mmatch(),
         sm_firstlnum: rex.reg_firstlnum(),

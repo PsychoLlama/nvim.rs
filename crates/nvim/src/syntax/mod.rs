@@ -19,17 +19,17 @@
 //! # Ownership
 //!
 //! Everything a syntax block holds is owned by value: `b_syn_patterns` and
-//! `b_syn_clusters` are `Vec`s of [`synpat_T`]/[`syn_cluster_T`], a pattern's
+//! `b_syn_clusters` are `Vec`s of [`SynPat`]/[`SynCluster`], a pattern's
 //! text is a `CString` and its `contains=`/`containedin=`/`nextgroup=` lists
 //! are [`IdList`]s. **An `xfree` in this module is a bug** unless it is one of
 //! the three carve-outs, each of which says so at its own field:
 //!
-//! - [`keyentry`] -- one `xmalloc` block with the keyword text inside it,
+//! - [`KeyEntry`] -- one `xmalloc` block with the keyword text inside it,
 //!   which the hash tables key on by *interior address*, and the two raw id
 //!   lists [`copy_id_list`](options::copy_id_list) makes for it.
 //! - `SynBlock::b_sst_array` -- the state cache's slab, threaded into two
 //!   intrusive lists of interior pointers.
-//! - [`synpat_T::sp_prog`] and `SynBlock::b_syn_linecont_prog` -- compiled
+//! - [`SynPat::sp_prog`] and `SynBlock::b_syn_linecont_prog` -- compiled
 //!   programs, which belong to `regexp/`'s allocator discipline.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -86,8 +86,8 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
     BufState, Buffer, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegExtMatch,
-    RegMMatch, RegMatch, RegProg, SynBlock, SynTime, VarNumber, Window, int16_t, size_t,
-    synstate_T, uint8_t, uint64_t,
+    RegMMatch, RegMatch, RegProg, SynBlock, SynState, SynTime, VarNumber, Window, int16_t, size_t,
+    uint8_t, uint64_t,
 };
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
@@ -150,14 +150,14 @@ pub(crate) struct sp_syn {
 /// trailing `keyword` array holds the text, and the hash tables key on
 /// *that address*: `key_to_entry` finds the entry by subtracting
 /// [`KEYWORD_OFFSET`](keyword::KEYWORD_OFFSET) from a key. So the entry
-/// cannot be a `Box<keyentry_T>` (the text would not be inside it) and its
+/// cannot be a `Box<KeyEntry>` (the text would not be inside it) and its
 /// two id lists cannot be [`IdList`]s (nothing would run their destructor).
 /// Retiring it needs the keyword tables to stop keying on an interior
 /// address -- a `HashTab` that owns its keys, or an id-keyed table with
 /// the text beside the entry.
 #[repr(C)]
-pub(crate) struct keyentry {
-    pub ke_next: *mut keyentry_T,
+pub(crate) struct KeyEntry {
+    pub ke_next: *mut KeyEntry,
     pub k_syn: sp_syn,
     /// `containedin=`, this entry's own `xmalloc`ed list.
     pub cont_in_list: *mut int16_t,
@@ -167,7 +167,6 @@ pub(crate) struct keyentry {
     pub k_char: ::core::ffi::c_int,
     pub keyword: [::core::ffi::c_char; 0],
 }
-pub(crate) type keyentry_T = keyentry;
 
 /// A `contains=` / `containedin=` / `nextgroup=` list: the syntax ids it
 /// names, followed by the 0 terminator upstream's `int16_t *` carried.
@@ -240,7 +239,7 @@ pub(crate) const SYNID_ALLBUT: ::core::ffi::c_int = MAX_HL_ID as ::core::ffi::c_
 /// `do_source` flag: this is not a plugin or a package.
 pub(crate) const DOSO_NONE: ::core::ffi::c_uint = 0;
 #[derive(Copy, Clone)]
-pub(crate) struct stateitem_T {
+pub(crate) struct StateItem {
     pub si_idx: ::core::ffi::c_int,
     pub si_id: ::core::ffi::c_int,
     pub si_trans_id: ::core::ffi::c_int,
@@ -262,7 +261,7 @@ pub(crate) struct stateitem_T {
 }
 /// One `:syntax match` pattern, or one start/skip/end pattern of a
 /// `:syntax region`. Lives in its block's `b_syn_patterns`.
-pub(crate) struct synpat_T {
+pub(crate) struct SynPat {
     pub sp_type: ::core::ffi::c_char,
     pub sp_syncing: bool,
     pub sp_syn_match_id: int16_t,
@@ -293,7 +292,7 @@ pub(crate) struct synpat_T {
     pub sp_time: SynTime,
 }
 
-impl synpat_T {
+impl SynPat {
     /// The pattern's `ms=`/`me=`/`hs=`/... offsets, copied out.
     ///
     /// [`syn_add_start_off`] and [`syn_add_end_off`] want only these, and
@@ -309,7 +308,7 @@ impl synpat_T {
 }
 
 /// One pattern's offset suffixes: the `SPO_*` flag word and the seven values
-/// it selects. See [`synpat_T::offsets`].
+/// it selects. See [`SynPat::offsets`].
 #[derive(Copy, Clone)]
 pub(crate) struct PatOffsets {
     pub flags: int16_t,
@@ -317,7 +316,7 @@ pub(crate) struct PatOffsets {
 }
 
 /// A half-built pattern: what upstream's `CLEAR_FIELD` left.
-pub(crate) const EMPTY_SYNPAT: synpat_T = synpat_T {
+pub(crate) const EMPTY_SYNPAT: SynPat = SynPat {
     sp_type: 0,
     sp_syncing: false,
     sp_syn_match_id: 0,
@@ -343,7 +342,7 @@ pub(crate) const EMPTY_SYNPAT: synpat_T = synpat_T {
     },
 };
 
-impl Drop for synpat_T {
+impl Drop for SynPat {
     fn drop(&mut self) {
         // SAFETY: the compiled program is this pattern's own and nothing
         // else holds it; `vim_regfree` accepts a null one.
@@ -352,7 +351,7 @@ impl Drop for synpat_T {
 }
 
 /// One `:syntax cluster`: a name and the ids it stands for.
-pub(crate) struct syn_cluster_T {
+pub(crate) struct SynCluster {
     pub scl_name: ::std::ffi::CString,
     /// The name upper-cased, because a lookup compares that rather than
     /// paying `stricmp` per cluster.
@@ -363,7 +362,7 @@ pub(crate) struct syn_cluster_T {
 /// The options a `:syntax` item definition accepts, as they are parsed.
 ///
 /// The owner of the three lists until an item takes them.
-pub(crate) struct syn_opt_arg_T {
+pub(crate) struct SynOptArg {
     pub flags: SynFlags,
     pub keyword: bool,
     /// Whether `grouphere`/`groupthere` is accepted here, which only
@@ -505,43 +504,43 @@ impl SynBlockRef {
     /// array — as long as both go through the same handle. Take one handle
     /// per function and reach everything through it.
     #[inline]
-    pub(crate) fn patterns(&self) -> &[synpat_T] {
+    pub(crate) fn patterns(&self) -> &[SynPat] {
         &self.b_syn_patterns
     }
 
     /// The block's patterns, to add to or remove from.
     #[inline]
-    pub(crate) fn patterns_mut(&mut self) -> &mut Vec<synpat_T> {
+    pub(crate) fn patterns_mut(&mut self) -> &mut Vec<SynPat> {
         &mut self.b_syn_patterns
     }
 
     /// The pattern at `idx`, which must be one the block has.
     #[inline]
-    pub(crate) fn pattern(&self, idx: ::core::ffi::c_int) -> &synpat_T {
+    pub(crate) fn pattern(&self, idx: ::core::ffi::c_int) -> &SynPat {
         &self.b_syn_patterns[idx as usize]
     }
 
     /// The pattern at `idx`, to write to.
     #[inline]
-    pub(crate) fn pattern_mut(&mut self, idx: ::core::ffi::c_int) -> &mut synpat_T {
+    pub(crate) fn pattern_mut(&mut self, idx: ::core::ffi::c_int) -> &mut SynPat {
         &mut self.b_syn_patterns[idx as usize]
     }
 
     /// The cluster at `idx`, which must be one the block has.
     #[inline]
-    pub(crate) fn cluster(&self, idx: ::core::ffi::c_int) -> &syn_cluster_T {
+    pub(crate) fn cluster(&self, idx: ::core::ffi::c_int) -> &SynCluster {
         &self.b_syn_clusters[idx as usize]
     }
 
     /// The block's clusters, on [`SynBlock::patterns`]' terms.
     #[inline]
-    pub(crate) fn clusters(&self) -> &[syn_cluster_T] {
+    pub(crate) fn clusters(&self) -> &[SynCluster] {
         &self.b_syn_clusters
     }
 
     /// The block's clusters, to add to or edit.
     #[inline]
-    pub(crate) fn clusters_mut(&mut self) -> &mut Vec<syn_cluster_T> {
+    pub(crate) fn clusters_mut(&mut self) -> &mut Vec<SynCluster> {
         &mut self.b_syn_clusters
     }
 }
@@ -587,9 +586,9 @@ pub(crate) use syn_field;
 /// The stack is a `Vec`, so a push can move every item in it: reach for one
 /// through [`items::state_at`] each time rather than holding one across a
 /// call that can parse.
-pub(crate) type Item = Live<stateitem_T>;
+pub(crate) type Item = Live<StateItem>;
 
-/// `stateitem_T::si_idx` for a keyword, which has no pattern.
+/// `StateItem::si_idx` for a keyword, which has no pattern.
 pub(crate) const KEYWORD_IDX: ::core::ffi::c_int = -1;
 /// The `contains=` list of a transparent item that is not inside anything: it
 /// admits every not-`contained` group.
@@ -652,11 +651,11 @@ static current_finished: GlobalCell<bool> = GlobalCell::new(false);
 /// growarray's `ga_itemsize` — a flag about the value, so it belongs in the
 /// value's type. Reach it through [`items::state_len`]/[`items::state_at`]
 /// and the `*_current_state` family, never directly.
-static current_state: GlobalCell<Option<Vec<stateitem_T>>> = GlobalCell::new(None);
+static current_state: GlobalCell<Option<Vec<StateItem>>> = GlobalCell::new(None);
 
 /// A cleared state item: what upstream's `GA_APPEND_VIA_PTR` slot holds
 /// once `ga_grow` has zeroed it.
-const EMPTY_STATE_ITEM: stateitem_T = stateitem_T {
+const EMPTY_STATE_ITEM: StateItem = StateItem {
     si_idx: 0,
     si_id: 0,
     si_trans_id: 0,

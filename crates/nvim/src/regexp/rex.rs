@@ -1,6 +1,6 @@
 //! [`Rex`], the handle both engines match through.
 //!
-//! `regexec_T` is the state a running match keeps: the buffer and window it
+//! `RegExec` is the state a running match keeps: the buffer and window it
 //! runs against, the line it is on and the byte within it, the capture slots
 //! it fills, and the flags the compiler left for it. Upstream keeps it in a
 //! file-scope `rex` and reaches it from everywhere; the port keeps the same
@@ -32,7 +32,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::pos::{MatchPos, PosKind};
-use super::{regexec_T, rex};
+use super::{RegExec, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{Buffer, ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, Window, uint8_t};
@@ -43,7 +43,7 @@ use crate::types::{Buffer, ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, Wi
 /// Holding one is a claim that the context is set up and stays set up: see
 /// that constructor for the whole of it.
 #[derive(Clone, Copy)]
-pub(crate) struct Rex(*mut regexec_T);
+pub(crate) struct Rex(*mut RegExec);
 
 impl Rex {
     /// The context of the match that is about to run, or is running.

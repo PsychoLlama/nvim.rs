@@ -13,8 +13,7 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    LineOrigin, RegMMatch, RegMatch, Rex, can_f_submatch, reg_line, reg_line_len, regsubmatch_T,
-    rsm,
+    LineOrigin, RegMMatch, RegMatch, RegSubMatch, Rex, can_f_submatch, reg_line, reg_line_len, rsm,
 };
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
@@ -28,13 +27,13 @@ use ::libc::{strcpy, strncpy};
 /// The snapshot `submatch()` answers about.
 ///
 /// Obtained once with [`Rsm::acquire`] and passed around by value, for the
-/// same reason [`Rex`] is: `regsubmatch_T` holds two pointers into the
+/// same reason [`Rex`] is: `RegSubMatch` holds two pointers into the
 /// caller's match structures, and copying the whole thing out of the cell
 /// would leave a second holder of them. The handle names the cell instead —
 /// every accessor reads one field through it and nothing hands out a
 /// reference into it.
 #[derive(Clone, Copy)]
-pub(crate) struct Rsm(*mut regsubmatch_T);
+pub(crate) struct Rsm(*mut RegSubMatch);
 
 impl Rsm {
     /// The snapshot of the substitution being evaluated.

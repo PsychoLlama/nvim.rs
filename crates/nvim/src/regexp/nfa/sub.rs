@@ -1,6 +1,6 @@
 //! The capture sets a thread carries: clearing, copying and comparing them.
 //!
-//! A `regsub_T` is `NSUBEXP` [`Capture`]s plus how many of them are in use.
+//! A `RegSub` is `NSUBEXP` [`Capture`]s plus how many of them are in use.
 //! A capture is a pair of [`MatchPos`]es, so the two shapes a match records
 //! positions in — a line/column pair over buffer lines, a pointer over one
 //! string — are the same sixteen bytes and the same code; only the handful of
@@ -23,7 +23,7 @@ use super::list::{op, out_of, out1_of};
 use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
-use crate::regexp::{Capture, NSUBEXP, PimResult, Rex, nfa_pim_T, nfa_state_T, regsub_T};
+use crate::regexp::{Capture, NSUBEXP, NfaPim, NfaState, PimResult, RegSub, Rex};
 
 /// How far [`match_follows`] follows the machine before giving up.
 const MATCH_FOLLOWS_DEPTH: c_int = 10;
@@ -48,7 +48,7 @@ fn nsubexpr(rex: Rex) -> usize {
     slots(rex.nfa_nsubexpr())
 }
 
-/// How many capture slots a `regsub_T`'s `in_use` names. Clamped, so that the
+/// How many capture slots a `RegSub`'s `in_use` names. Clamped, so that the
 /// count can index the array: the compiler bounds a group number to nine, so
 /// the clamp never fires on a program this engine built.
 #[inline(always)]
@@ -57,7 +57,7 @@ pub(crate) fn slots(in_use: c_int) -> usize {
 }
 
 /// Forget every capture in `sub`.
-pub(crate) fn clear_sub(rex: Rex, sub: &mut regsub_T) {
+pub(crate) fn clear_sub(rex: Rex, sub: &mut RegSub) {
     let n = nsubexpr(rex);
     sub.list[..n].fill(Capture::unset(rex.pos_kind()));
     sub.in_use = 0;
@@ -65,7 +65,7 @@ pub(crate) fn clear_sub(rex: Rex, sub: &mut regsub_T) {
 
 /// Copy the captures `from` has in use over `to`'s.
 #[inline(always)]
-pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_sub(to: &mut RegSub, from: &RegSub) {
     to.in_use = from.in_use;
     // Where a `:substitute` resumes scanning, which travels with the
     // whole-match capture. Only a buffer match ever sets it, and then it is
@@ -81,7 +81,7 @@ pub(crate) fn copy_sub(to: &mut regsub_T, from: &regsub_T) {
 
 /// [`copy_sub`] without group 0: a lookaround may report what its own groups
 /// matched, but must not move the whole match's start or end.
-pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_sub_off(to: &mut RegSub, from: &RegSub) {
     if to.in_use < from.in_use {
         to.in_use = from.in_use;
     }
@@ -92,7 +92,7 @@ pub(crate) fn copy_sub_off(to: &mut regsub_T, from: &regsub_T) {
 
 /// Carry group 0's *end* over, which is the one thing a `\ze` inside a
 /// lookaround is allowed to move.
-pub(crate) fn copy_ze_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
+pub(crate) fn copy_ze_off(rex: Rex, to: &mut RegSub, from: &RegSub) {
     let kind = rex.pos_kind();
     if rex.nfa_has_zend() != 0 && from.list[0].end.is_set(kind) {
         to.list[0].end = from.list[0].end;
@@ -104,7 +104,7 @@ pub(crate) fn copy_ze_off(rex: Rex, to: &mut regsub_T, from: &regsub_T) {
 /// A capture past a set's `in_use` counts as unset, so the comparison runs to
 /// the longer of the two. Ends only count when the pattern has a
 /// back-reference, which is the only thing that reads them mid-match.
-pub(crate) fn sub_equal(rex: Rex, sub1: &regsub_T, sub2: &regsub_T) -> bool {
+pub(crate) fn sub_equal(rex: Rex, sub1: &RegSub, sub2: &RegSub) -> bool {
     let kind = rex.pos_kind();
     let ends_matter = has_backref(rex);
     let unset = Capture::unset(kind);
@@ -125,7 +125,7 @@ pub(crate) fn sub_equal(rex: Rex, sub1: &regsub_T, sub2: &regsub_T) -> bool {
 }
 
 /// Copy a postponed lookaround, captures and all.
-pub(crate) fn copy_pim(rex: Rex, to: &mut nfa_pim_T, from: &nfa_pim_T) {
+pub(crate) fn copy_pim(rex: Rex, to: &mut NfaPim, from: &NfaPim) {
     to.result = from.result;
     to.state = from.state;
     copy_sub(&mut to.subs.norm, &from.subs.norm);
@@ -137,8 +137,8 @@ pub(crate) fn copy_pim(rex: Rex, to: &mut nfa_pim_T, from: &nfa_pim_T) {
 
 /// Are two threads carrying the same postponed lookaround? A lookaround that
 /// has already been decided, or none at all, counts as "no lookaround".
-pub(crate) fn pim_equal(rex: Rex, one: Option<&nfa_pim_T>, two: Option<&nfa_pim_T>) -> bool {
-    let unused = |p: Option<&nfa_pim_T>| p.is_none_or(|p| p.result == PimResult::Unused);
+pub(crate) fn pim_equal(rex: Rex, one: Option<&NfaPim>, two: Option<&NfaPim>) -> bool {
+    let unused = |p: Option<&NfaPim>| p.is_none_or(|p| p.result == PimResult::Unused);
     let (Some(one), Some(two)) = (one, two) else {
         return unused(one) && unused(two);
     };
@@ -161,7 +161,7 @@ pub(crate) fn pim_equal(rex: Rex, one: Option<&nfa_pim_T>, two: Option<&nfa_pim_
 /// nothing but the match itself follows, there is nothing left to postpone
 /// past. Only the states that consume no input are followed, and only
 /// [`MATCH_FOLLOWS_DEPTH`] alternations deep.
-pub(crate) fn match_follows(startstate: *const nfa_state_T, depth: c_int) -> bool {
+pub(crate) fn match_follows(startstate: *const NfaState, depth: c_int) -> bool {
     if depth > MATCH_FOLLOWS_DEPTH {
         return false;
     }

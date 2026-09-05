@@ -14,7 +14,7 @@
 # Nothing anywhere drove `'regexpengine'`, so the whole NFA engine and
 # the whole backtracking engine were covered by whichever one the
 # default happened to pick, on whichever handful of patterns a `:s` case
-# needed.  `rex` -- the `regexec_T` both engines thread through
+# needed.  `rex` -- the `RegExec` both engines thread through
 # themselves -- is the single largest `cell_ptr` consumer in the tree,
 # and a bug in it shows on ONE engine and not the other.
 #

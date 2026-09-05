@@ -76,7 +76,7 @@ pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
 pub const kMarkBufLocal: MarkGet = 0;
 #[derive(Copy, Clone)]
-pub struct regexec_T {
+pub struct RegExec {
     pub reg_match: *mut RegMatch,
     pub reg_mmatch: *mut RegMMatch,
     pub reg_startp: *mut *mut uint8_t,
@@ -105,7 +105,7 @@ pub struct regexec_T {
     pub nfa_has_zsubexpr: c_int,
 }
 #[derive(Copy, Clone)]
-pub struct regsubmatch_T {
+pub struct RegSubMatch {
     pub sm_match: *mut RegMatch,
     pub sm_mmatch: *mut RegMMatch,
     pub sm_firstlnum: LineNr,
@@ -113,7 +113,7 @@ pub struct regsubmatch_T {
     pub sm_line_lbr: c_int,
 }
 #[repr(C)]
-pub struct bt_regprog_T {
+pub struct BtRegProg {
     pub engine: *mut RegEngine,
     pub regflags: c_uint,
     pub re_engine: c_uint,
@@ -127,13 +127,13 @@ pub struct bt_regprog_T {
     pub program: [uint8_t; 0],
 }
 #[repr(C)]
-pub struct nfa_regprog_T {
+pub struct NfaRegProg {
     pub engine: *mut RegEngine,
     pub regflags: c_uint,
     pub re_engine: c_uint,
     pub re_flags: c_uint,
     pub re_in_use: bool,
-    pub start: *mut nfa_state_T,
+    pub start: *mut NfaState,
     pub reganch: c_int,
     pub regstart: c_int,
     pub match_text: *mut uint8_t,
@@ -143,14 +143,13 @@ pub struct nfa_regprog_T {
     pub pattern: *mut c_char,
     pub nsubexp: c_int,
     pub nstate: c_int,
-    pub state: [nfa_state_T; 0],
+    pub state: [NfaState; 0],
 }
-pub type nfa_state_T = nfa_state;
 #[repr(C)]
-pub struct nfa_state {
+pub struct NfaState {
     pub c: c_int,
-    pub out: *mut nfa_state_T,
-    pub out1: *mut nfa_state_T,
+    pub out: *mut NfaState,
+    pub out1: *mut NfaState,
     pub id: c_int,
     pub lastlist: [c_int; 2],
     pub val: c_int,
@@ -158,30 +157,29 @@ pub struct nfa_state {
 /// The `\1`..`\9` captures one thread is carrying, and how many of them it
 /// has reached. Only the entries below `in_use` mean anything.
 #[derive(Copy, Clone)]
-pub(crate) struct regsub_T {
+pub(crate) struct RegSub {
     pub in_use: c_int,
     pub list: [Capture; NSUBEXP as usize],
     /// Where a `:substitute` resumes scanning, which travels with group 0.
     pub orig_start_col: ColNr,
 }
 #[derive(Copy, Clone)]
-pub(crate) struct regsubs_T {
-    pub norm: regsub_T,
-    pub synt: regsub_T,
+pub(crate) struct RegSubs {
+    pub norm: RegSub,
+    pub synt: RegSub,
 }
 #[derive(Copy, Clone)]
-pub(crate) struct nfa_thread_T {
-    pub state: *mut nfa_state_T,
+pub(crate) struct NfaThread {
+    pub state: *mut NfaState,
     pub count: c_int,
-    pub pim: nfa_pim_T,
-    pub subs: regsubs_T,
+    pub pim: NfaPim,
+    pub subs: RegSubs,
 }
-pub(crate) type nfa_pim_T = nfa_pim_S;
 #[derive(Copy, Clone)]
-pub(crate) struct nfa_pim_S {
+pub(crate) struct NfaPim {
     pub result: PimResult,
-    pub state: *mut nfa_state_T,
-    pub subs: regsubs_T,
+    pub state: *mut NfaState,
+    pub subs: RegSubs,
     /// Where the thread stood when the lookaround was postponed, which is
     /// where it has to run from once something settles it.
     pub end: MatchPos,
@@ -189,7 +187,7 @@ pub(crate) struct nfa_pim_S {
 pub const NFA_TOO_EXPENSIVE: c_int = -1;
 pub const NFA_MAX_STATES: c_int = 100000;
 pub const AUTOMATIC_ENGINE: c_uint = 0;
-pub struct parse_state_T {
+pub struct ParseState {
     pub regparse: *mut c_char,
     pub prevchr_len: c_int,
     pub curchr: c_int,
@@ -200,11 +198,10 @@ pub struct parse_state_T {
     pub prev_at_start: c_int,
     pub regnpar: c_int,
 }
-pub(crate) type regitem_T = regitem_S;
 /// One decision the forward walk made, and what undoing it needs.
-pub(crate) struct regitem_S {
+pub(crate) struct RegItem {
     /// Which decision, and so which of the fields below mean anything.
-    pub rs_state: regstate_T,
+    pub rs_state: RegState,
     /// The capture slot, the `\{n,m}` counter or the lookaround opcode the
     /// state is about, depending on the state.
     pub rs_no: int16_t,
@@ -216,32 +213,29 @@ pub(crate) struct regitem_S {
     /// fields. Upstream made those two a union; they differ by one `int`.
     pub rs_saved: SavedInput,
 }
-pub type regstate_T = regstate_E;
-pub type regstate_E = c_uint;
-pub const RS_STAR_SHORT: regstate_E = 13;
-pub const RS_STAR_LONG: regstate_E = 12;
-pub const RS_BEHIND2: regstate_E = 11;
-pub const RS_BEHIND1: regstate_E = 10;
-pub const RS_NOMATCH: regstate_E = 9;
-pub const RS_BRCPLX_SHORT: regstate_E = 8;
-pub const RS_BRCPLX_LONG: regstate_E = 7;
-pub const RS_BRCPLX_MORE: regstate_E = 6;
-pub const RS_BRANCH: regstate_E = 5;
-pub const RS_ZCLOSE: regstate_E = 4;
-pub const RS_ZOPEN: regstate_E = 3;
-pub const RS_MCLOSE: regstate_E = 2;
-pub const RS_MOPEN: regstate_E = 1;
-pub const RS_NOPEN: regstate_E = 0;
-pub type regstar_T = regstar_S;
-pub struct regstar_S {
+pub type RegState = c_uint;
+pub const RS_STAR_SHORT: RegState = 13;
+pub const RS_STAR_LONG: RegState = 12;
+pub const RS_BEHIND2: RegState = 11;
+pub const RS_BEHIND1: RegState = 10;
+pub const RS_NOMATCH: RegState = 9;
+pub const RS_BRCPLX_SHORT: RegState = 8;
+pub const RS_BRCPLX_LONG: RegState = 7;
+pub const RS_BRCPLX_MORE: RegState = 6;
+pub const RS_BRANCH: RegState = 5;
+pub const RS_ZCLOSE: RegState = 4;
+pub const RS_ZOPEN: RegState = 3;
+pub const RS_MCLOSE: RegState = 2;
+pub const RS_MOPEN: RegState = 1;
+pub const RS_NOPEN: RegState = 0;
+pub struct RegStar {
     pub nextb: c_int,
     pub nextb_ic: c_int,
     pub count: int64_t,
     pub minval: int64_t,
     pub maxval: int64_t,
 }
-pub(crate) type regbehind_T = regbehind_S;
-pub(crate) struct regbehind_S {
+pub(crate) struct RegBehind {
     pub save_after: SavedInput,
     pub save_behind: SavedInput,
     pub save_need_clear_subexpr: c_int,
@@ -321,7 +315,7 @@ static at_start: GlobalCell<c_int> = GlobalCell::new(0);
 static prev_at_start: GlobalCell<c_int> = GlobalCell::new(0);
 static reg_tofree: GlobalCell<*mut uint8_t> = GlobalCell::new(core::ptr::null_mut::<uint8_t>());
 static reg_tofreelen: GlobalCell<c_uint> = GlobalCell::new(0);
-static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
+static rex: GlobalCell<RegExec> = GlobalCell::new(RegExec {
     reg_match: core::ptr::null_mut::<RegMatch>(),
     reg_mmatch: core::ptr::null_mut::<RegMMatch>(),
     reg_startp: core::ptr::null_mut::<*mut uint8_t>(),
@@ -351,7 +345,7 @@ static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
 });
 static rex_in_use: GlobalCell<bool> = GlobalCell::new(false);
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
-static rsm: GlobalCell<regsubmatch_T> = GlobalCell::new(regsubmatch_T {
+static rsm: GlobalCell<RegSubMatch> = GlobalCell::new(RegSubMatch {
     sm_match: core::ptr::null_mut::<RegMatch>(),
     sm_mmatch: core::ptr::null_mut::<RegMMatch>(),
     sm_firstlnum: 0,
@@ -389,8 +383,7 @@ static nstate: GlobalCell<c_int> = GlobalCell::new(0);
 static istate: GlobalCell<c_int> = GlobalCell::new(0);
 static nfa_endp: GlobalCell<*mut MatchPos> = GlobalCell::new(core::ptr::null_mut::<MatchPos>());
 static nfa_ll_index: GlobalCell<c_int> = GlobalCell::new(0);
-static state_ptr: GlobalCell<*mut nfa_state_T> =
-    GlobalCell::new(core::ptr::null_mut::<nfa_state_T>());
+static state_ptr: GlobalCell<*mut NfaState> = GlobalCell::new(core::ptr::null_mut::<NfaState>());
 /// How far a postponed lookaround has got -- upstream's `NFA_PIM_*`, which
 /// share the `NFA_` prefix with the opcodes and are a different family.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

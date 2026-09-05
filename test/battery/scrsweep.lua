@@ -3534,7 +3534,7 @@ scenario('syntax-state-cache', function()
   n.command('syntax region scReg start=/BEGIN/ end=/END/')
   n.command('hi link scReg String')
   n.command('syntax sync minlines=3')
-  -- The synstate_T cache is only allocated for a buffer with enough lines
+  -- The SynState cache is only allocated for a buffer with enough lines
   -- (SST_MIN_ENTRIES), and only exercised by revisiting lines out of order
   -- and by invalidating it with an edit in the middle.
   for _, at in ipairs({ 400, 1, 200, 350, 200 }) do

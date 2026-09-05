@@ -28,7 +28,7 @@ use crate::types::NUL;
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
-pub(crate) unsafe fn syn_sync(wp: *mut Window, start_lnum: LineNr, last_valid: *mut synstate_T) {
+pub(crate) unsafe fn syn_sync(wp: *mut Window, start_lnum: LineNr, last_valid: *mut SynState) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
@@ -138,7 +138,7 @@ struct SyncPoint {
 }
 
 /// Search backwards, one line at a time, for a `:syntax sync match`.
-unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut synstate_T) {
+unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut SynState) {
     let maxlines = syn_block().b_syn_sync_maxlines;
     let break_lnum = if maxlines != 0 && start_lnum > maxlines {
         start_lnum - maxlines

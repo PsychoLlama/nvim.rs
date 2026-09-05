@@ -18,7 +18,7 @@
 # exactly one -- `opsweep` -- reaches the regexp engines at all, and only
 # through `:s` on a handful of patterns.  NOTHING anywhere set
 # `'regexpengine'`, so one of the two engines was covered by accident and
-# the other not at all.  `rex`, the `regexec_T` both engines thread
+# the other not at all.  `rex`, the `RegExec` both engines thread
 # through themselves, is the largest single `cell_ptr` consumer in the
 # tree; a bug in it shows on ONE engine and not the other, and before
 # this sweep nothing could tell them apart.

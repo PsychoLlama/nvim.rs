@@ -16,7 +16,7 @@ use core::ffi::c_int;
 use super::postfix;
 use crate::mbyte::{utf_char2bytes, utf_char2len};
 use crate::memory::xmalloc;
-use crate::regexp::{Rex, istate, nfa_state_T, nstate, regcomp_start, wants_nfa};
+use crate::regexp::{NfaState, Rex, istate, nstate, regcomp_start, wants_nfa};
 use crate::types::{NUL, uint8_t};
 
 /// Reset the compile-time state and reserve the postfix program.
@@ -49,7 +49,7 @@ fn is_bracket(c: NfaOp) -> bool {
 /// # Safety
 ///
 /// `start` must be null or a state of a live program.
-pub(crate) unsafe fn nfa_get_reganch(start: *mut nfa_state_T, depth: c_int) -> bool {
+pub(crate) unsafe fn nfa_get_reganch(start: *mut NfaState, depth: c_int) -> bool {
     if depth > MAX_DEPTH {
         return false;
     }
@@ -81,7 +81,7 @@ pub(crate) unsafe fn nfa_get_reganch(start: *mut nfa_state_T, depth: c_int) -> b
 /// # Safety
 ///
 /// `start` must be null or a state of a live program.
-pub(crate) unsafe fn nfa_get_regstart(start: *mut nfa_state_T, depth: c_int) -> c_int {
+pub(crate) unsafe fn nfa_get_regstart(start: *mut NfaState, depth: c_int) -> c_int {
     if depth > MAX_DEPTH {
         return 0;
     }
@@ -130,7 +130,7 @@ pub(crate) unsafe fn nfa_get_regstart(start: *mut nfa_state_T, depth: c_int) -> 
 /// # Safety
 ///
 /// `start` must be a state of a live program.
-pub(crate) unsafe fn nfa_get_match_text(start: *mut nfa_state_T) -> *mut uint8_t {
+pub(crate) unsafe fn nfa_get_match_text(start: *mut NfaState) -> *mut uint8_t {
     // SAFETY: the caller's program. The measuring walk proves the chain
     // ends in `NFA_MCLOSE` -> `NFA_MATCH` before the writing walk follows
     // it again.

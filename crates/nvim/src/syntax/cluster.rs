@@ -130,7 +130,7 @@ fn syn_add_cluster(name: CString) -> c_int {
     }
 
     let scl_name_u = upper(&name);
-    block.clusters_mut().push(syn_cluster_T {
+    block.clusters_mut().push(SynCluster {
         scl_name: name,
         scl_name_u,
         scl_list: IdList::NONE,

@@ -21,8 +21,8 @@ use crate::mbyte::utf_head_off;
 use crate::regexp::{
     MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, behind_pos, reg_breakcheck,
-    reg_getline, reg_getline_len, reg_restore, reg_save, regstate_T, restore_subexpr,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegState, Rex, SavedInput, behind_pos,
+    reg_breakcheck, reg_getline, reg_getline_len, reg_restore, reg_save, restore_subexpr,
 };
 use crate::types::{ColNr, NUL, int64_t, uint8_t};
 
@@ -167,7 +167,7 @@ pub(crate) fn resume(
 /// # Safety
 ///
 /// As [`super::state::capture_slot`].
-unsafe fn undo_capture(rex: Rex, state: regstate_T, no: usize, saved: MatchPos) {
+unsafe fn undo_capture(rex: Rex, state: RegState, no: usize, saved: MatchPos) {
     // SAFETY: the caller promises the group; this is the slot the matching
     // `push_capture` read the saved value out of.
     unsafe { capture_slot(rex, state, no).set(saved) };
@@ -180,7 +180,7 @@ unsafe fn undo_capture(rex: Rex, state: regstate_T, no: usize, saved: MatchPos) 
 ///
 /// The top frame must be an `RS_BEHIND1` one this match pushed, so that it
 /// names a look-behind node of the running program and carries a
-/// `regbehind_T`.
+/// `RegBehind`.
 unsafe fn behind_start(
     rex: Rex,
     stack: &mut RegStack,
@@ -354,7 +354,7 @@ unsafe fn step_back_string(
 /// # Safety
 ///
 /// The top frame must be an `RS_STAR_*` one this match pushed, so that it
-/// names a repeat node of the running program and carries a `regstar_T`.
+/// names a repeat node of the running program and carries a `RegStar`.
 unsafe fn star(
     rex: Rex,
     stack: &mut RegStack,

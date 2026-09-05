@@ -18,10 +18,10 @@
 //! ## Why the stack charges C sizes
 //!
 //! Upstream is one byte garray with three record shapes packed into it: a
-//! frame is a `regitem_T`, and the two states that need more than a frame
+//! frame is a `RegItem`, and the two states that need more than a frame
 //! carries — `\{n,m}` around a `SIMPLE` item, and a look-behind — reserve a
-//! `regstar_T` or a `regbehind_T` *in front of* their frame and reach it as
-//! `(rp as *mut regstar_T).sub(1)`. Here each shape has its own `Vec` and the
+//! `RegStar` or a `RegBehind` *in front of* their frame and reach it as
+//! `(rp as *mut RegStar).sub(1)`. Here each shape has its own `Vec` and the
 //! pairing is the frame's state, which is what says whether a prefix is
 //! there.
 //!
@@ -29,7 +29,7 @@
 //! the only bound on how far a pattern may backtrack — it is what makes a
 //! runaway match end in E363 rather than in a dead editor. So [`RegStack`]
 //! keeps `bytes`: the length upstream's `ga_len` would have, charged
-//! `size_of::<regitem_T>()` per frame and the prefix's own size per prefix,
+//! `size_of::<RegItem>()` per frame and the prefix's own size per prefix,
 //! so E363 fires at exactly the depth it used to.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -47,8 +47,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     BACKPOS_INITIAL, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP,
-    REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, Rex, SavedInput, reg_endzp, reg_endzpos,
-    reg_getline, reg_startzp, reg_startzpos, regbehind_T, regitem_T, regstar_T, regstate_T,
+    REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, RegBehind, RegItem, RegStar, RegState, Rex,
+    SavedInput, reg_endzp, reg_endzpos, reg_getline, reg_startzp, reg_startzpos,
 };
 use crate::types::{LPos, int64_t, uint8_t};
 
@@ -56,7 +56,7 @@ use crate::types::{LPos, int64_t, uint8_t};
 const NSUBEXP_SLOTS: usize = NSUBEXP as usize;
 
 /// A frame as it goes on the stack; the pusher fills in the rest.
-const BLANK_FRAME: regitem_T = regitem_T {
+const BLANK_FRAME: RegItem = RegItem {
     rs_state: 0,
     rs_no: 0,
     rs_scan: core::ptr::null_mut(),
@@ -64,7 +64,7 @@ const BLANK_FRAME: regitem_T = regitem_T {
 };
 
 /// A look-behind's capture snapshot as it goes on the stack.
-const BLANK_BEHIND: regbehind_T = regbehind_T {
+const BLANK_BEHIND: RegBehind = RegBehind {
     save_after: SavedInput::NOWHERE,
     save_behind: SavedInput::NOWHERE,
     save_need_clear_subexpr: 0,
@@ -75,7 +75,7 @@ const BLANK_BEHIND: regbehind_T = regbehind_T {
 /// How many frames the stack keeps between matches. Upstream pre-grew its
 /// byte stack to `REGSTACK_INITIAL` and freed it again whenever a match had
 /// made it larger; this is the same threshold counted in frames.
-const KEEP_FRAMES: usize = REGSTACK_INITIAL as usize / size_of::<regitem_T>();
+const KEEP_FRAMES: usize = REGSTACK_INITIAL as usize / size_of::<RegItem>();
 
 /// How many back-edge entries the record keeps between matches, for the same
 /// reason: upstream pre-grew its garray to this and freed it again whenever a
@@ -277,11 +277,11 @@ impl Braces {
 
 pub(crate) struct RegStack {
     /// One frame per decision, innermost last.
-    frames: Vec<regitem_T>,
+    frames: Vec<RegItem>,
     /// The `\{n,m}` counters, one per `RS_STAR_LONG`/`RS_STAR_SHORT` frame.
-    stars: Vec<regstar_T>,
+    stars: Vec<RegStar>,
     /// The look-behind snapshots, one per `RS_BEHIND1`/`RS_BEHIND2` frame.
-    behinds: Vec<regbehind_T>,
+    behinds: Vec<RegBehind>,
     /// What upstream's byte stack would be this long — see the module docs.
     bytes: usize,
 }
@@ -314,10 +314,10 @@ impl RegStack {
         }
         // A look-behind record is twenty times the size of a frame, so it is
         // only worth keeping while it is small.
-        if self.behinds.capacity() * size_of::<regbehind_T>() > REGSTACK_INITIAL as usize {
+        if self.behinds.capacity() * size_of::<RegBehind>() > REGSTACK_INITIAL as usize {
             self.behinds = Vec::new();
         }
-        if self.stars.capacity() * size_of::<regstar_T>() > REGSTACK_INITIAL as usize {
+        if self.stars.capacity() * size_of::<RegStar>() > REGSTACK_INITIAL as usize {
             self.stars = Vec::new();
         }
     }
@@ -344,11 +344,11 @@ impl RegStack {
     /// Push a frame for `state` and hand it back for the caller to fill in.
     ///
     /// `None` when 'maxmempattern' has been reached.
-    pub(crate) fn push(&mut self, state: regstate_T, scan: *mut uint8_t) -> Option<&mut regitem_T> {
-        if !self.charge(size_of::<regitem_T>()) {
+    pub(crate) fn push(&mut self, state: RegState, scan: *mut uint8_t) -> Option<&mut RegItem> {
+        if !self.charge(size_of::<RegItem>()) {
             return None;
         }
-        self.frames.push(regitem_T {
+        self.frames.push(RegItem {
             rs_state: state,
             rs_scan: scan,
             ..BLANK_FRAME
@@ -359,11 +359,11 @@ impl RegStack {
     /// Push a `\{n,m}` counter and the frame that reads it.
     pub(crate) fn push_star(
         &mut self,
-        state: regstate_T,
+        state: RegState,
         scan: *mut uint8_t,
-        counter: regstar_T,
+        counter: RegStar,
     ) -> bool {
-        if !self.charge(size_of::<regstar_T>()) {
+        if !self.charge(size_of::<RegStar>()) {
             return false;
         }
         self.stars.push(counter);
@@ -371,8 +371,8 @@ impl RegStack {
     }
 
     /// Push a look-behind snapshot and the frame that reads it.
-    pub(crate) fn push_behind(&mut self, state: regstate_T, scan: *mut uint8_t) -> bool {
-        if !self.charge(size_of::<regbehind_T>()) {
+    pub(crate) fn push_behind(&mut self, state: RegState, scan: *mut uint8_t) -> bool {
+        if !self.charge(size_of::<RegBehind>()) {
             return false;
         }
         self.behinds.push(BLANK_BEHIND);
@@ -380,17 +380,17 @@ impl RegStack {
     }
 
     /// The frame on top.
-    pub(crate) fn top(&self) -> &regitem_T {
+    pub(crate) fn top(&self) -> &RegItem {
         self.frames.last().expect("a frame to resume")
     }
 
     /// The frame on top, to write to.
-    pub(crate) fn top_mut(&mut self) -> &mut regitem_T {
+    pub(crate) fn top_mut(&mut self) -> &mut RegItem {
         self.frames.last_mut().expect("a frame to resume")
     }
 
     /// The top frame and the `\{n,m}` counter in front of it.
-    pub(crate) fn top_star(&mut self) -> (&mut regitem_T, &mut regstar_T) {
+    pub(crate) fn top_star(&mut self) -> (&mut RegItem, &mut RegStar) {
         (
             self.frames.last_mut().expect("a frame to resume"),
             self.stars.last_mut().expect("a counter for the frame"),
@@ -398,7 +398,7 @@ impl RegStack {
     }
 
     /// The top frame and the look-behind snapshot in front of it.
-    pub(crate) fn top_behind(&mut self) -> (&mut regitem_T, &mut regbehind_T) {
+    pub(crate) fn top_behind(&mut self) -> (&mut RegItem, &mut RegBehind) {
         (
             self.frames.last_mut().expect("a frame to resume"),
             self.behinds.last_mut().expect("a snapshot for the frame"),
@@ -409,21 +409,21 @@ impl RegStack {
     pub(crate) fn pop(&mut self, scan: &mut *mut uint8_t) {
         let frame = self.frames.pop().expect("a frame to pop");
         *scan = frame.rs_scan;
-        self.bytes -= size_of::<regitem_T>();
+        self.bytes -= size_of::<RegItem>();
     }
 
     /// Pop a `RS_STAR_*` frame and the counter in front of it.
     pub(crate) fn pop_star(&mut self, scan: &mut *mut uint8_t) {
         self.pop(scan);
         self.stars.pop().expect("a counter for the frame");
-        self.bytes -= size_of::<regstar_T>();
+        self.bytes -= size_of::<RegStar>();
     }
 
     /// Pop a `RS_BEHIND*` frame and the snapshot in front of it.
     pub(crate) fn pop_behind(&mut self, scan: &mut *mut uint8_t) {
         self.pop(scan);
         self.behinds.pop().expect("a snapshot for the frame");
-        self.bytes -= size_of::<regbehind_T>();
+        self.bytes -= size_of::<RegBehind>();
     }
 }
 
@@ -579,7 +579,7 @@ impl GroupSlot {
 /// `state` must be one of `RS_MOPEN`, `RS_MCLOSE`, `RS_ZOPEN`, `RS_ZCLOSE`,
 /// and `no` must name a capture group the running match holds slots for.
 #[inline(always)]
-pub(crate) unsafe fn capture_slot(rex: Rex, state: regstate_T, no: usize) -> GroupSlot {
+pub(crate) unsafe fn capture_slot(rex: Rex, state: RegState, no: usize) -> GroupSlot {
     if rex.multi() {
         let array = match state {
             RS_MOPEN => rex.reg_startpos(),
@@ -619,7 +619,7 @@ pub(crate) unsafe fn save_capture(rex: Rex, savep: &mut MatchPos, slot: GroupSlo
 ///
 /// `need_clear_subexpr` means the captures have not been touched yet this
 /// match, and then there is nothing to copy — the flag alone restores them.
-pub(crate) fn save_subexpr(rex: Rex, bp: &mut regbehind_T) {
+pub(crate) fn save_subexpr(rex: Rex, bp: &mut RegBehind) {
     bp.save_need_clear_subexpr = rex.need_clear_subexpr();
     if bp.save_need_clear_subexpr != 0 {
         return;
@@ -638,7 +638,7 @@ pub(crate) fn save_subexpr(rex: Rex, bp: &mut regbehind_T) {
 }
 
 /// Undo [`save_subexpr`].
-pub(crate) fn restore_subexpr(rex: Rex, bp: &regbehind_T) {
+pub(crate) fn restore_subexpr(rex: Rex, bp: &RegBehind) {
     rex.set_need_clear_subexpr(bp.save_need_clear_subexpr);
     if bp.save_need_clear_subexpr != 0 {
         return;

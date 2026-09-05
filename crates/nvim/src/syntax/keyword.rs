@@ -15,17 +15,17 @@ use core::ffi::{c_char, c_int, c_void};
 use super::*;
 use crate::types::NUL;
 
-/// Where a `keyentry_T`'s trailing `keyword` array starts.
+/// Where a `KeyEntry`'s trailing `keyword` array starts.
 ///
 /// The hash tables key on that array rather than on the entry, so every walk
 /// converts between the two by this offset. Upstream spells it as the `HI2KE`
 /// and `KE2HIKEY` macros.
-pub(crate) const KEYWORD_OFFSET: usize = ::core::mem::offset_of!(keyentry_T, keyword);
+pub(crate) const KEYWORD_OFFSET: usize = ::core::mem::offset_of!(KeyEntry, keyword);
 
 /// The entry a hash key points into.
 #[inline]
-pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut keyentry_T {
-    unsafe { key.byte_sub(KEYWORD_OFFSET) as *mut keyentry_T }
+pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut KeyEntry {
+    unsafe { key.byte_sub(KEYWORD_OFFSET) as *mut KeyEntry }
 }
 
 /// An entry's hash key: a pointer to its trailing `keyword` array.
@@ -34,15 +34,15 @@ pub(crate) unsafe fn key_to_entry(key: *mut c_char) -> *mut keyentry_T {
 /// array, so an autoref would cover no bytes and the pointer could not be
 /// walked.
 #[inline]
-pub(crate) unsafe fn entry_to_key(kp: *mut keyentry_T) -> *mut c_char {
+pub(crate) unsafe fn entry_to_key(kp: *mut KeyEntry) -> *mut c_char {
     unsafe { (&raw mut (*kp).keyword).cast::<c_char>() }
 }
 
 /// Free one entry and the two id lists it owns.
 ///
-/// The three `xfree`s of the carve-out (see [`keyentry`]): the entry is one
+/// The three `xfree`s of the carve-out (see [`KeyEntry`]): the entry is one
 /// block with its text inside it, so nothing here can be a `Box`.
-unsafe fn free_entry(kp: *mut keyentry_T) {
+unsafe fn free_entry(kp: *mut KeyEntry) {
     unsafe { xfree((*kp).next_list as *mut c_void) };
     unsafe { xfree((*kp).cont_in_list as *mut c_void) };
     unsafe { xfree(kp as *mut c_void) };
@@ -67,7 +67,7 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut HashTab) {
         // Walk the entry chain hanging off this slot, unlinking the
         // entries of `id`. The slot's key names the chain's head, so
         // removing the head has to rewrite it.
-        let mut kp_prev: *mut keyentry_T = ::core::ptr::null_mut();
+        let mut kp_prev: *mut KeyEntry = ::core::ptr::null_mut();
         let mut kp = unsafe { key_to_entry(hi.hi_key) };
         while !kp.is_null() {
             if unsafe { (*kp).k_syn.id } as c_int != id {
@@ -149,7 +149,7 @@ unsafe fn add_keyword(name: *mut c_char, namelen: size_t, def: &KeywordDef) {
 
     // The keyword text lives in the entry's trailing array, so the entry
     // is sized for it.
-    let kp = unsafe { xmalloc(KEYWORD_OFFSET + name_iclen + 1) } as *mut keyentry_T;
+    let kp = unsafe { xmalloc(KEYWORD_OFFSET + name_iclen + 1) } as *mut KeyEntry;
     let key = unsafe { entry_to_key(kp) };
     unsafe { strcpy(key, name_ic) };
     unsafe { (*kp).k_syn.id = def.id as int16_t };
@@ -249,7 +249,7 @@ pub(crate) fn syn_cmd_keyword(eap: &mut ExArg, _syncing: c_int) {
             // it, so it is handed on as a pointer.
             let mut buf = vec![0u8; unsafe { cstr::bytes_at(rest) }.len() + 1];
             let keyword_copy: *mut c_char = buf.as_mut_ptr().cast();
-            let mut opt = syn_opt_arg_T {
+            let mut opt = SynOptArg {
                 flags: SynFlags::NONE,
                 keyword: true,
                 takes_sync_idx: false,

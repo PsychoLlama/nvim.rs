@@ -29,8 +29,8 @@ use crate::profile::profile_passed_limit;
 use crate::regexp::{
     MAX_LIMIT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BRANCH,
     RS_BRCPLX_LONG, RS_BRCPLX_MORE, RS_BRCPLX_SHORT, RS_MCLOSE, RS_MOPEN, RS_NOMATCH, RS_NOPEN,
-    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, bl_maxval, bl_minval, cleanup_subexpr,
-    cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, regstar_T, regstate_T, save_capture,
+    RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, RegStar, RegState, Rex, bl_maxval, bl_minval,
+    cleanup_subexpr, cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, save_capture,
     save_subexpr,
 };
 use crate::types::{NUL, ProfTime, int16_t, int64_t, uint8_t};
@@ -368,7 +368,7 @@ fn push_frame(
 unsafe fn push_capture(
     rex: Rex,
     stack: &mut RegStack,
-    state: regstate_T,
+    state: RegState,
     scan: *mut uint8_t,
     no: c_int,
 ) -> c_int {
@@ -440,7 +440,7 @@ unsafe fn brace_complex(
 /// As `push_frame`.
 unsafe fn counted_repeat(rex: Rex, stack: &mut RegStack, op: BtOp, scan: *mut uint8_t) -> c_int {
     // SAFETY: as `push_frame`.
-    let mut rst = regstar_T {
+    let mut rst = RegStar {
         nextb: NUL,
         nextb_ic: NUL,
         count: 0,

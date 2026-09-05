@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int};
 
 use super::{
     MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, Magic, NOT_MULTI,
-    REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, nextchr, parse_state_T,
+    ParseState, REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, nextchr,
     prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic,
     regnpar, regparse, take_bracketed, take_char_class, toggle_magic, unmagic,
 };
@@ -255,7 +255,7 @@ pub(crate) unsafe fn initchr(pattern: *mut c_char) {
 
 /// Snapshot the cursor so a speculative parse can be rewound. The NFA
 /// compiler parses parts of a pattern twice.
-pub(crate) fn save_parse_state(ps: &mut parse_state_T) {
+pub(crate) fn save_parse_state(ps: &mut ParseState) {
     ps.regparse = regparse.get();
     ps.prevchr_len = prevchr_len.get();
     ps.curchr = curchr.get();
@@ -268,7 +268,7 @@ pub(crate) fn save_parse_state(ps: &mut parse_state_T) {
 }
 
 /// Rewind to a [`save_parse_state`] snapshot.
-pub(crate) fn restore_parse_state(ps: &parse_state_T) {
+pub(crate) fn restore_parse_state(ps: &ParseState) {
     regparse.set(ps.regparse);
     prevchr_len.set(ps.prevchr_len);
     curchr.set(ps.curchr);

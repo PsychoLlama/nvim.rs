@@ -2,7 +2,7 @@
 //!
 //! The three subcommands that add a pattern-based item, plus
 //! [`get_syn_pattern`], which parses one `/pat/` with its `ms=`/`me=`/... offset
-//! suffixes into a `synpat_T`. `:syntax include` is here too: it sources another
+//! suffixes into a `SynPat`. `:syntax include` is here too: it sources another
 //! syntax file under an inclusion tag so its toplevel items become contained
 //! ones.
 
@@ -117,8 +117,8 @@ pub(crate) fn syn_cmd_include(eap: &mut ExArg, _syncing: c_int) {
 ///
 /// `takes_sync_idx` is what `grouphere`/`groupthere` needs, and only
 /// `:syntax sync match` sets it.
-fn item_opt(takes_sync_idx: bool) -> syn_opt_arg_T {
-    syn_opt_arg_T {
+fn item_opt(takes_sync_idx: bool) -> SynOptArg {
+    SynOptArg {
         flags: SynFlags::NONE,
         keyword: false,
         takes_sync_idx,
@@ -205,7 +205,7 @@ pub(crate) fn syn_cmd_match(eap: &mut ExArg, syncing: c_int) {
 /// One start/skip/end pattern of a `:syntax region`, with the `matchgroup=`
 /// that was in force when it was read.
 struct RegionPat {
-    pat: synpat_T,
+    pat: SynPat,
     matchgroup_id: c_int,
 }
 
@@ -215,7 +215,7 @@ struct RegionArgs {
     /// **reverse** command order: upstream prepends to a linked list because
     /// "the list is used from end to start".
     pats: [Vec<RegionPat>; 3],
-    opt: syn_opt_arg_T,
+    opt: SynOptArg,
     conceal_char: c_int,
     /// Where parsing stopped, or NULL after an error.
     rest: *mut c_char,
@@ -429,7 +429,7 @@ fn store_region(args: RegionArgs, syn_id: c_int, syncing: bool) {
 /// Read one delimited pattern plus its offsets into `ci`.
 ///
 /// Answers what follows it, or NULL after reporting an error.
-pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mut c_char {
+pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut SynPat) -> *mut c_char {
     // Need at least three characters: two delimiters and something between.
     if arg.is_null()
         || unsafe { *arg } as c_int == NUL
@@ -495,7 +495,7 @@ unsafe fn offset_name(end: *const c_char) -> Option<c_int> {
 /// Answers the first character that is not part of them. An unrecognised name,
 /// an unrecognised `s`/`b`/`e` suffix or a missing comma ends the list; the
 /// caller diagnoses whatever is left.
-unsafe fn read_pattern_offsets(ci: &mut synpat_T, mut end: *mut c_char) -> *mut c_char {
+unsafe fn read_pattern_offsets(ci: &mut SynPat, mut end: *mut c_char) -> *mut c_char {
     loop {
         let Some(mut idx) = (unsafe { offset_name(end) }) else {
             return end;

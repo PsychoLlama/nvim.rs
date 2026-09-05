@@ -12,7 +12,7 @@
 use super::*;
 use crate::buffer::BufFlags;
 use crate::registry::{IdMap, IdSet};
-use crate::syntax::{syn_cluster_T, synpat_T};
+use crate::syntax::{SynCluster, SynPat};
 
 /// Namespace id to the highest extmark id handed out in it: `Buffer`'s
 /// `b_extmark_ns`, which upstream declared `Map(uint32_t, uint32_t)[1]` so
@@ -582,10 +582,10 @@ pub struct SynBlock {
     /// The block's `:syntax match`/`region` patterns, in definition order.
     /// A region is a run of consecutive entries: its START(s), an optional
     /// SKIP, then its END(s).
-    pub(crate) b_syn_patterns: Vec<synpat_T>,
+    pub(crate) b_syn_patterns: Vec<SynPat>,
     /// The block's `:syntax cluster`s. The index *is* the id, less
     /// `SYNID_CLUSTER`, so a cluster is emptied rather than removed.
-    pub(crate) b_syn_clusters: Vec<syn_cluster_T>,
+    pub(crate) b_syn_clusters: Vec<SynCluster>,
     pub b_spell_cluster_id: ::core::ffi::c_int,
     pub b_nospell_cluster_id: ::core::ffi::c_int,
     pub b_syn_containedin: ::core::ffi::c_int,
@@ -597,7 +597,7 @@ pub struct SynBlock {
     /// `:syntax sync linecont`'s pattern, owned; `b_syn_linecont_prog`
     /// is what it compiled to.
     pub(crate) b_syn_linecont_pat: Option<::std::ffi::CString>,
-    /// OWNERSHIP -- **carve-out**, the same one as `synpat_T::sp_prog`: a
+    /// OWNERSHIP -- **carve-out**, the same one as `SynPat::sp_prog`: a
     /// compiled program is a `regexp/` object with its own allocator
     /// discipline (`vim_regcomp` / `vim_regfree`), so it stays a raw pointer,
     /// released by `syntax_clear`.
@@ -608,22 +608,22 @@ pub struct SynBlock {
     pub b_syn_conceal: ::core::ffi::c_int,
     pub b_syn_folditems: ::core::ffi::c_int,
     /// OWNERSHIP -- **carve-out**. The parser's state cache is one slab of
-    /// `b_sst_len` `synstate_T`s, threaded into two intrusive singly-linked
+    /// `b_sst_len` `SynState`s, threaded into two intrusive singly-linked
     /// lists that point *into* it: the used entries (`b_sst_first`, sorted by
     /// line) and the recycled ones (`b_sst_firstfree`). A `Vec` cannot hold
     /// it -- growing one moves the entries, and every `sst_next` in both
-    /// lists, plus whatever `*mut synstate_T` a caller is holding across a
+    /// lists, plus whatever `*mut SynState` a caller is holding across a
     /// re-parse, would dangle. Resizing is a copy-and-rethread
     /// (`syn_stack_alloc`) and the slab is released by
     /// `syn_stack_free_block`, the only `xfree` of it. Retiring it means
     /// making the two lists indices into the slab -- a rewrite of the cache,
     /// not of its ownership.
-    pub b_sst_array: *mut synstate_T,
+    pub b_sst_array: *mut SynState,
     pub b_sst_len: ::core::ffi::c_int,
     /// The used entries, lowest line first. Points into [`Self::b_sst_array`].
-    pub b_sst_first: *mut synstate_T,
+    pub b_sst_first: *mut SynState,
     /// The recycled entries. Points into [`Self::b_sst_array`].
-    pub b_sst_firstfree: *mut synstate_T,
+    pub b_sst_firstfree: *mut SynState,
     pub b_sst_freecount: ::core::ffi::c_int,
     pub b_sst_check_lnum: LineNr,
     pub b_sst_lasttick: DispTick,

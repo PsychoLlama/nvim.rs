@@ -1,4 +1,4 @@
-//! The `synstate_T` cache.
+//! The `SynState` cache.
 //!
 //! Parsing a line means parsing every line before it, so the state at the start
 //! of a line is remembered for every `SST_DIST`th line and reused. This is that
@@ -28,7 +28,7 @@ use crate::winlayer::windows;
 ///
 /// `sst_union` is a C union discriminated by `sst_stacksize`, and this is the
 /// one place that discrimination is written down.
-unsafe fn entry_states(p: *mut synstate_T, stacksize: c_int) -> *mut BufState {
+unsafe fn entry_states(p: *mut SynState, stacksize: c_int) -> *mut BufState {
     if stacksize > SST_FIX_STATES {
         unsafe { (*p).sst_union.sst_heap }
     } else {
@@ -99,7 +99,7 @@ pub(crate) fn syn_stack_alloc() {
     debug_assert!(len >= 0);
 
     let sstp =
-        unsafe { xcalloc(len as size_t, ::core::mem::size_of::<synstate_T>()) } as *mut synstate_T;
+        unsafe { xcalloc(len as size_t, ::core::mem::size_of::<SynState>()) } as *mut SynState;
 
     // Move the states from the old array into the front of the new one.
     // Upstream walks a `to` pointer that starts at `sstp - 1`, which is an
@@ -165,7 +165,7 @@ pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut Buffer) {
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
 unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buf: *mut Buffer) {
-    let mut prev = ::core::ptr::null_mut::<synstate_T>();
+    let mut prev = ::core::ptr::null_mut::<SynState>();
     let mut p = block.b_sst_first;
     while !p.is_null() {
         if unsafe { (*p).sst_lnum } + block.b_syn_sync_linebreaks > unsafe { (*buf).b_mod_top } {
@@ -270,7 +270,7 @@ pub(crate) fn syn_stack_cleanup() -> bool {
 }
 
 /// Release an entry's memory and put it on the free list.
-pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlockRef, p: *mut synstate_T) {
+pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlockRef, p: *mut SynState) {
     unsafe { clear_syn_state(p) };
     unsafe { (*p).sst_next = block.b_sst_firstfree };
     block.b_sst_firstfree = p;
@@ -282,8 +282,8 @@ pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlockRef, p: *mut synsta
 /// Answers null when the list is empty or starts after `lnum` -- which is not
 /// the same as "no entry for this line", so callers that need an exact hit
 /// compare `sst_lnum` themselves.
-pub(crate) fn syn_stack_find_entry(lnum: LineNr) -> *mut synstate_T {
-    let mut prev = ::core::ptr::null_mut::<synstate_T>();
+pub(crate) fn syn_stack_find_entry(lnum: LineNr) -> *mut SynState {
+    let mut prev = ::core::ptr::null_mut::<SynState>();
     let mut p = syn_block().b_sst_first;
     while !p.is_null() {
         if unsafe { (*p).sst_lnum } == lnum {
@@ -302,7 +302,7 @@ pub(crate) fn syn_stack_find_entry(lnum: LineNr) -> *mut synstate_T {
 ///
 /// The current state must be valid for the *start* of that line. Answers the
 /// entry it went into, or null when there was nothing to store or no room.
-pub(crate) fn store_current_state() -> *mut synstate_T {
+pub(crate) fn store_current_state() -> *mut SynState {
     let block = syn_block();
     let mut sp = syn_stack_find_entry(current_lnum.get());
 
@@ -347,7 +347,7 @@ fn state_continues_from_previous_line() -> bool {
 }
 
 /// Take `sp` out of the used list.
-unsafe fn unlink_entry(mut block: SynBlockRef, sp: *mut synstate_T) {
+unsafe fn unlink_entry(mut block: SynBlockRef, sp: *mut SynState) {
     if block.b_sst_first == sp {
         unsafe { block.b_sst_first = (*sp).sst_next };
         return;
@@ -366,7 +366,7 @@ unsafe fn unlink_entry(mut block: SynBlockRef, sp: *mut synstate_T) {
 /// `after` (or at the front when that is null).
 ///
 /// Answers null when there is no room even after a cleanup.
-unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut synstate_T) -> *mut synstate_T {
+unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut SynState) -> *mut SynState {
     if block.b_sst_freecount == 0 {
         syn_stack_cleanup();
         // "after" may have been moved to the free list by the cleanup.
@@ -391,7 +391,7 @@ unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut synstate_T) -> *mut 
 }
 
 /// Copy the current state stack into `sp`, overwriting whatever was there.
-unsafe fn fill_entry(sp: *mut synstate_T) {
+unsafe fn fill_entry(sp: *mut SynState) {
     unsafe { clear_syn_state(sp) };
     let size = state_len();
     unsafe { (*sp).sst_stacksize = size };
@@ -423,7 +423,7 @@ unsafe fn fill_entry(sp: *mut synstate_T) {
 }
 
 /// Copy a cached state stack into the current state.
-pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
+pub(crate) unsafe fn load_current_state(from: *mut SynState) {
     clear_current_state();
     validate_current_state();
     keepend_level.set(-1);
@@ -472,7 +472,7 @@ pub(crate) unsafe fn load_current_state(from: *mut synstate_T) {
 ///
 /// Equality means the re-parse that produced the current state has arrived
 /// back at what was cached, so everything below can be trusted again.
-pub(crate) unsafe fn syn_stack_equal(sp: *mut synstate_T) -> bool {
+pub(crate) unsafe fn syn_stack_equal(sp: *mut SynState) -> bool {
     // A quick check first: same size and same nextlist.
     let size = state_len();
     if unsafe { (*sp).sst_stacksize } != size

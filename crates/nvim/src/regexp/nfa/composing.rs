@@ -19,7 +19,7 @@ use crate::regexp::NfaOp;
 use core::ffi::c_int;
 
 use crate::mbyte::{utf_char2len, utf_iscomposing_legacy, utf_ptr2char};
-use crate::regexp::{Rex, nfa_state_T};
+use crate::regexp::{NfaState, Rex};
 use crate::types::MAX_MCO;
 
 /// Does the grapheme at the input match the group whose first member state
@@ -31,7 +31,7 @@ use crate::types::MAX_MCO;
 /// match context must be live.
 pub(crate) unsafe fn matches_composing(
     rex: Rex,
-    mut sta: *mut nfa_state_T,
+    mut sta: *mut NfaState,
     curc: c_int,
     clen: c_int,
 ) -> bool {

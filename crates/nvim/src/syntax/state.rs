@@ -66,9 +66,9 @@ pub(crate) unsafe fn syntax_start(wp: *mut Window, lnum: LineNr) {
 
     // Try to synchronise from a saved state, but only if "lnum" is neither
     // before one nor too far beyond one.
-    let mut last_valid = ::core::ptr::null_mut::<synstate_T>();
+    let mut last_valid = ::core::ptr::null_mut::<SynState>();
     if !current_state_valid() {
-        let mut last_min_valid = ::core::ptr::null_mut::<synstate_T>();
+        let mut last_min_valid = ::core::ptr::null_mut::<SynState>();
         let mut p = syn_block().b_sst_first;
         while !p.is_null() && unsafe { (*p).sst_lnum } <= lnum {
             if unsafe { (*p).sst_change_lnum } == 0 {
@@ -101,7 +101,7 @@ pub(crate) unsafe fn syntax_start(wp: *mut Window, lnum: LineNr) {
     // Advance from the sync point or the saved state to the wanted line,
     // saving some entries along the way to sync with later on.
     let dist = store_distance();
-    let mut prev = ::core::ptr::null_mut::<synstate_T>();
+    let mut prev = ::core::ptr::null_mut::<SynState>();
     while current_lnum.get() < lnum {
         syn_start_line();
         syn_finish_line(false);
@@ -149,7 +149,7 @@ fn store_distance() -> LineNr {
 /// When the cached entry for this line matches what we parsed, every entry
 /// below it that was only waiting on a change *before* this line becomes valid
 /// again -- which is what turns one re-parse into a whole valid tail.
-unsafe fn record_line(mut prev: *mut synstate_T, lnum: LineNr, dist: LineNr) -> *mut synstate_T {
+unsafe fn record_line(mut prev: *mut SynState, lnum: LineNr, dist: LineNr) -> *mut SynState {
     if prev.is_null() {
         prev = syn_stack_find_entry(current_lnum.get() - 1);
     }
@@ -198,7 +198,7 @@ unsafe fn record_line(mut prev: *mut synstate_T, lnum: LineNr, dist: LineNr) -> 
 /// A stack of `BufState`s cannot simply be discarded -- each item may hold a
 /// reference to the submatches of the pattern that started it. Safe to call
 /// twice: the heap arm is nulled as it is released.
-pub(crate) unsafe fn clear_syn_state(p: *mut synstate_T) {
+pub(crate) unsafe fn clear_syn_state(p: *mut SynState) {
     let size = unsafe { (*p).sst_stacksize };
     if size > SST_FIX_STATES {
         // SAFETY: the heap arm is a `Box<[BufState]>` of `sst_stacksize`

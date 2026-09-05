@@ -23,9 +23,9 @@ use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows};
 use crate::main::got_int;
 use crate::mbyte::{utf_fold, utf_ptr2char};
 use crate::regexp::{
-    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, PimResult, Rex, nfa_endp, nfa_match,
-    nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_count, nfa_time_limit, recursive_regmatch,
-    reg_breakcheck, reg_nextline, regsubs_T, skip_to_start,
+    AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult,
+    RegSubs, Rex, nfa_endp, nfa_match, nfa_time_count, nfa_time_limit, recursive_regmatch,
+    reg_breakcheck, reg_nextline, skip_to_start,
 };
 use crate::types::NUL;
 
@@ -40,10 +40,10 @@ const TIME_CHECK_INTERVAL: c_int = 20;
 /// `NFA_TOO_EXPENSIVE` when the pattern outgrew the automatic engine.
 pub(crate) fn nfa_regmatch(
     rex: Rex,
-    prog: *mut nfa_regprog_T,
-    start: *mut nfa_state_T,
-    submatch: *mut regsubs_T,
-    m: *mut regsubs_T,
+    prog: *mut NfaRegProg,
+    start: *mut NfaState,
+    submatch: *mut RegSubs,
+    m: *mut RegSubs,
 ) -> c_int {
     reg_breakcheck(rex);
     if got_int.get() || nfa_did_time_out() {
@@ -62,7 +62,7 @@ pub(crate) fn nfa_regmatch(
     let mut listids: Vec<c_int> = Vec::new();
     // Scratch for the one call that may not hand `addstate` a capture set
     // that lives in the list it is adding to — see `deliver`.
-    let mut here: regsubs_T = unsafe { core::mem::zeroed() };
+    let mut here: RegSubs = unsafe { core::mem::zeroed() };
     let mut run = Run {
         prog,
         submatch,
@@ -103,7 +103,7 @@ pub(crate) fn nfa_regmatch(
 /// # Safety
 ///
 /// `m` must be a live capture set and the match context live.
-unsafe fn record_match_start(rex: Rex, m: *mut regsubs_T, off: c_int) {
+unsafe fn record_match_start(rex: Rex, m: *mut RegSubs, off: c_int) {
     // SAFETY: the caller promises a live capture set.
     unsafe { (*m).norm.list[0].start = rex.at_offset(off) };
     if rex.multi() {
@@ -120,8 +120,8 @@ unsafe fn record_match_start(rex: Rex, m: *mut regsubs_T, off: c_int) {
 unsafe fn scan(
     rex: Rex,
     list: &mut [ThreadList; 2],
-    prog: *mut nfa_regprog_T,
-    start: *mut nfa_state_T,
+    prog: *mut NfaRegProg,
+    start: *mut NfaState,
     toplevel: bool,
     run: &mut Run,
 ) {
@@ -328,7 +328,7 @@ unsafe fn deliver(
     // thread it came from may be overwritten as the list grows, so it
     // is copied out first.
     let pim_copy;
-    let pim: Option<&nfa_pim_T> = if carries_pim {
+    let pim: Option<&NfaPim> = if carries_pim {
         pim_copy = thislist.thread(idx).pim;
         Some(&pim_copy)
     } else {
@@ -373,8 +373,8 @@ unsafe fn deliver(
 /// Every pointer must belong to the running match.
 unsafe fn restart(
     rex: Rex,
-    prog: *mut nfa_regprog_T,
-    start: *mut nfa_state_T,
+    prog: *mut NfaRegProg,
+    start: *mut NfaState,
     toplevel: bool,
     nextlist: &mut ThreadList,
     run: &mut Run,
@@ -422,7 +422,7 @@ unsafe fn restart(
 /// Every pointer must belong to the running match.
 unsafe fn seed(
     nextlist: &mut ThreadList,
-    state: *mut nfa_state_T,
+    state: *mut NfaState,
     run: &mut Run,
     clen: c_int,
 ) -> bool {

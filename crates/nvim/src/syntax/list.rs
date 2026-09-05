@@ -324,8 +324,8 @@ fn syn_list_cluster(id: c_int) {
 /// The ids a bare id-list pointer names, without the terminator.
 ///
 /// [`IdList::ids`] for a list that is still raw -- which, since the pattern
-/// and cluster arrays took ownership, means only the two a `keyentry_T`
-/// holds (see [`keyentry`]). Listing keywords is the only reader.
+/// and cluster arrays took ownership, means only the two a `KeyEntry`
+/// holds (see [`KeyEntry`]). Listing keywords is the only reader.
 ///
 /// # Safety
 /// `list` must be non-null, 0-terminated, and outlive the answer.
@@ -381,7 +381,7 @@ const SEPCHARS: &[u8] = b"/+=-#@\"|'^&";
 ///
 /// `last_matchgroup` carries the `matchgroup=` in force across the patterns of
 /// one item, so a change is printed once rather than per pattern.
-fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &synpat_T) {
+fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &SynPat) {
     // May have to write "matchgroup=group".
     if *last_matchgroup != spp.sp_syn_match_id as c_int {
         *last_matchgroup = spp.sp_syn_match_id as c_int;
@@ -419,7 +419,7 @@ fn put_pattern(last_matchgroup: &mut c_int, s: &CStr, c: c_int, spp: &synpat_T) 
 }
 
 /// Print the `ms=s+1,he=e-2,lc=3` offsets of one pattern.
-fn put_pattern_offsets(spp: &synpat_T) {
+fn put_pattern_offsets(spp: &SynPat) {
     let mut first = true;
     for i in 0..SPO_COUNT {
         // A start offset and an end offset share one name; the flag word
@@ -476,7 +476,7 @@ impl KeywordOpts {
     }
 
     /// What one keyword needs printed before it.
-    unsafe fn of(kp: *const keyentry_T) -> Self {
+    unsafe fn of(kp: *const KeyEntry) -> Self {
         KeywordOpts {
             contained: unsafe { (*kp).flags }.masked(SynFlags::CONTAINED),
             skipnl: unsafe { (*kp).flags }.masked(SynFlags::SKIPNL),
@@ -520,7 +520,7 @@ unsafe fn syn_list_keywords(id: c_int, ht: *const HashTab, mut did_header: bool)
 /// what keeps a NULL `containedin=`/`nextgroup=` from ever reaching
 /// [`id_list_ids`], which may not be handed one.
 unsafe fn put_keyword(
-    kp: *mut keyentry_T,
+    kp: *mut KeyEntry,
     id: c_int,
     did_header: bool,
     prev: &mut KeywordOpts,
