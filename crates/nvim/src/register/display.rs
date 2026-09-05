@@ -159,10 +159,10 @@ unsafe fn dis_register(yb: *mut yankreg_T, name: c_int, type_0: c_int, hl_id: c_
 /// to.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`. Queries the clipboard provider, and so
+/// `eap` must be a live `ExArg`. Queries the clipboard provider, and so
 /// runs Lua.
-pub unsafe fn ex_display(eap: *mut exarg_T) {
-    // SAFETY: the caller promises a live `exarg_T`, whose `arg` is null or a
+pub unsafe fn ex_display(eap: *mut ExArg) {
+    // SAFETY: the caller promises a live `ExArg`, whose `arg` is null or a
     // NUL-terminated string.
     let mut arg = unsafe { (*eap).arg };
     // SAFETY: as above, and tested non-null.

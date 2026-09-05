@@ -614,7 +614,7 @@ impl PartialEq for CmdIdx {
 impl Eq for CmdIdx {}
 
 impl CmdIdx {
-    /// The `int` upstream stores in `exarg_T.cmdidx`.
+    /// The `int` upstream stores in `ExArg.cmdidx`.
     ///
     /// A `const fn` so that a bound reaches a `const` item rather than being
     /// recomputed per iteration: an enum-to-integer conversion is a call at

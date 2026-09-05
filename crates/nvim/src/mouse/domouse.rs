@@ -57,7 +57,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{NUL, OpType, PUT_CURSEND, PUT_FIXINDENT, oparg_T, yankreg_T};
+use crate::types::{NUL, OpArg, OpType, PUT_CURSEND, PUT_FIXINDENT, yankreg_T};
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
 
@@ -65,7 +65,7 @@ use crate::window::{goto_tabpage, tabpage_move};
 /// ignored rather than treated as a click in a window.
 static in_tab_line: GlobalCell<bool> = GlobalCell::new(false);
 /// Where the multi-click selection started, which a drag extends away from.
-static orig_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+static orig_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -73,19 +73,19 @@ static orig_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
 
 /// The operator the command was given, when it was given one.
 #[derive(Clone, Copy)]
-struct Oap(*mut oparg_T);
+struct Oap(*mut OpArg);
 
 impl Deref for Oap {
-    type Target = oparg_T;
+    type Target = OpArg;
 
-    fn deref(&self) -> &oparg_T {
+    fn deref(&self) -> &OpArg {
         // SAFETY: the constructor's promise -- a live operator argument.
         unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for Oap {
-    fn deref_mut(&mut self) -> &mut oparg_T {
+    fn deref_mut(&mut self) -> &mut OpArg {
         // SAFETY: the constructor's promise -- a live operator argument.
         unsafe { &mut *self.0 }
     }
@@ -110,7 +110,7 @@ impl Oap {
     }
 
     /// The match for the item under the cursor, as `%` would find it.
-    fn findmatch(self) -> Option<pos_T> {
+    fn findmatch(self) -> Option<Pos> {
         // SAFETY: the constructor's promise.
         unsafe { findmatch(self.0, NUL) }
     }
@@ -169,7 +169,7 @@ impl Oap {
 /// # Safety
 /// `oap` must be a live operator argument or null.
 pub(crate) unsafe fn do_mouse(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     c: c_int,
     dir: c_int,
     count: c_int,
@@ -216,7 +216,7 @@ pub(crate) unsafe fn do_mouse(
         return answer;
     }
 
-    let mut m_pos = pos_T {
+    let mut m_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -314,7 +314,7 @@ pub(crate) unsafe fn do_mouse(
         && which_button == MOUSE_LEFT
     {
         // Open or close a fold at this line.
-        let fold: unsafe extern "C" fn(pos_T, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
+        let fold: unsafe extern "C" fn(Pos, c_int) = if jump_flags & MOUSE_FOLD_OPEN != 0 {
             open_fold
         } else {
             close_fold
@@ -627,7 +627,7 @@ fn click_definition(
     jump_flags: c_int,
     which_button: c_int,
     m_pos_flag: c_int,
-    m_pos: pos_T,
+    m_pos: Pos,
 ) -> Option<bool> {
     let mut pos = MousePos::current();
     let Some(win) = find_win_inner(&mut pos) else {

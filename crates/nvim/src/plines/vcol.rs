@@ -2,7 +2,7 @@
 
 //! Virtual columns of a position.
 //!
-//! The `getvcol` family: where a `pos_T` lands on screen, once tabs, inline
+//! The `getvcol` family: where a `Pos` lands on screen, once tabs, inline
 //! virtual text, double-width characters and 'virtualedit' have had their
 //! say. All of it walks the line with the parent module's charsize
 //! functions.
@@ -26,7 +26,7 @@ use crate::types::NUL;
 /// `pos` must be live; the out-parameters may each be null.
 pub(crate) unsafe fn getvcol(
     wp: Win,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     start: *mut ColNr,
     cursor: *mut ColNr,
     end: *mut ColNr,
@@ -117,7 +117,7 @@ pub(crate) unsafe fn getvcol(
 ///
 /// # Safety
 /// `posp` must be live.
-pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> ColNr {
+pub(crate) unsafe fn getvcol_nolist(posp: *mut Pos) -> ColNr {
     let win = curwin.get();
     let list_save = unsafe { (*win).w_onebuf_opt.wo_list };
     let mut vcol: ColNr = 0;
@@ -140,7 +140,7 @@ pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> ColNr {
 /// As [`getvcol`].
 pub(crate) unsafe fn getvvcol(
     wp: Win,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     start: *mut ColNr,
     cursor: *mut ColNr,
     end: *mut ColNr,
@@ -192,8 +192,8 @@ pub(crate) unsafe fn getvvcol(
 /// All pointers must be live; `left` and `right` are always written.
 pub(crate) unsafe fn getvcols(
     wp: Win,
-    pos1: *mut pos_T,
-    pos2: *mut pos_T,
+    pos1: *mut Pos,
+    pos2: *mut Pos,
     left: *mut ColNr,
     right: *mut ColNr,
 ) {

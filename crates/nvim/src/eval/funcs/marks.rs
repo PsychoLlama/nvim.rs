@@ -19,8 +19,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    Buffer, Dict, EvalFuncData, List, NUL, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
-    pos_T,
+    Buffer, Dict, EvalFuncData, List, NUL, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -36,7 +35,7 @@ pub unsafe fn f_changenr(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// `l` is a live list.
-unsafe fn append_mark(l: *mut List, mark: pos_T) -> *mut Dict {
+unsafe fn append_mark(l: *mut List, mark: Pos) -> *mut Dict {
     // SAFETY: the caller's obligation; the dict is handed to the list
     // immediately, so it is not leaked.
     let d = unsafe { tv_dict_alloc() };

@@ -53,7 +53,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Buffer, Cleanup, CmdModFlags, CpoFlag, Failed, LineNr, NUL, Window, exarg_T, memfile_T, size_t,
+    Buffer, Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, NUL, Window, memfile_T, size_t,
     uint8_t,
 };
 use crate::ui::ui_has;
@@ -87,7 +87,7 @@ pub(crate) unsafe fn is_other_file(fnum: c_int, ffname: *mut c_char) -> bool {
 }
 
 /// `:buffer`.
-pub(crate) unsafe fn ex_buffer(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_buffer(eap: *mut ExArg) {
     do_exbuffer(unsafe { Ea::new(eap) });
 }
 
@@ -120,7 +120,7 @@ fn run_ecmd_cmd(eap: Ea) {
 }
 
 /// `:bmodified`.
-pub(crate) unsafe fn ex_bmodified(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bmodified(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     goto_buffer(
         eap.raw(),
@@ -132,7 +132,7 @@ pub(crate) unsafe fn ex_bmodified(eap: *mut exarg_T) {
 }
 
 /// `:bnext`.
-pub(crate) unsafe fn ex_bnext(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bnext(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     goto_buffer(
         eap.raw(),
@@ -144,7 +144,7 @@ pub(crate) unsafe fn ex_bnext(eap: *mut exarg_T) {
 }
 
 /// `:bprevious` and `:bNext`.
-pub(crate) unsafe fn ex_bprevious(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bprevious(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     goto_buffer(
         eap.raw(),
@@ -156,24 +156,24 @@ pub(crate) unsafe fn ex_bprevious(eap: *mut exarg_T) {
 }
 
 /// `:brewind` and `:bfirst`.
-pub(crate) unsafe fn ex_brewind(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_brewind(eap: *mut ExArg) {
     goto_buffer(eap, DOBUF_FIRST as c_int, FORWARD as c_int, 0);
     run_ecmd_cmd(unsafe { Ea::new(eap) });
 }
 
 /// `:blast`.
-pub(crate) unsafe fn ex_blast(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_blast(eap: *mut ExArg) {
     goto_buffer(eap, DOBUF_LAST as c_int, BACKWARD as c_int, 0);
     run_ecmd_cmd(unsafe { Ea::new(eap) });
 }
 
 /// `:preserve` — flush the swap file to disk now.
-pub(crate) unsafe fn ex_preserve(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_preserve(_eap: *mut ExArg) {
     unsafe { ml_preserve(curbuf.get(), true, true) };
 }
 
 /// `:recover` — read the buffer back out of a swap file.
-pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_recover(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     // The flag changes what the swap-file machinery does with what it
     // finds, and is read from several modules.
@@ -204,7 +204,7 @@ pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
 }
 
 /// `:find` — edit the first file of that name on 'path', or the `count`'th.
-pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_find(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     if !check_can_set_curbuf_forceit(eap.forceit) {
         return;
@@ -271,7 +271,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -
 }
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
-pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_edit(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let ffname = if eap.cmdidx == CmdIdx::enew {
         ptr::null_mut()
@@ -300,7 +300,7 @@ pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
 /// `:edit`. It is what tells the failure path that there is a new window
 /// to close again, and what makes the alternate file be set on the window
 /// left behind.
-pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut Window) {
+pub unsafe fn do_exedit(eap: *mut ExArg, old_curwin: *mut Window) {
     let mut ea = unsafe { Ea::new(eap) };
     // `:visual` and `:view` with no argument leave Ex mode.
     if exmode_active.get() && (ea.cmdidx == CmdIdx::visual || ea.cmdidx == CmdIdx::view) {
@@ -432,7 +432,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut Window) {
 }
 
 /// `:swapname`.
-pub(crate) unsafe fn ex_swapname(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_swapname(_eap: *mut ExArg) {
     let mfp = cur_buf().b_ml.ml_mfp;
     if mfp.is_null() || mf_fname(mfp).is_null() {
         msg(gettext(c"No swap file".as_ptr()), 0);
@@ -442,7 +442,7 @@ pub(crate) unsafe fn ex_swapname(_eap: *mut exarg_T) {
 }
 
 /// `:read` — insert a file, or the output of a command.
-pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_read(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     let was_empty = cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
     if eap.usefilter != 0 {
@@ -512,7 +512,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
 }
 
 /// `:!cmd`.
-pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bang(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     let (addr_count, forceit) = (eap.addr_count, eap.forceit != 0);
     do_bang(addr_count, &mut eap, forceit, true, true);
@@ -520,7 +520,7 @@ pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
 
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
 /// buffer text so that reading it back into a different buffer is refused.
-pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_wundo(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let mut hash: [uint8_t; 32] = [0; 32];
     unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
@@ -535,7 +535,7 @@ pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
 }
 
 /// `:rundo`.
-pub(crate) unsafe fn ex_rundo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_rundo(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let mut hash: [uint8_t; 32] = [0; 32];
     unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
@@ -543,7 +543,7 @@ pub(crate) unsafe fn ex_rundo(eap: *mut exarg_T) {
 }
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
-pub(crate) unsafe fn ex_checkpath(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_checkpath(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     unsafe {
         find_pattern_in_path(
@@ -568,7 +568,7 @@ pub(crate) unsafe fn ex_checkpath(eap: *mut exarg_T) {
 }
 
 /// `:rshada`, `:wshada` and their `viminfo` spellings.
-pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_shada(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     // An empty 'shada' would mean "save nothing", which is not what an
     // explicit command means.
@@ -585,7 +585,7 @@ pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
 }
 
 /// `:fclose` — close a floating window by its handle.
-pub(crate) unsafe fn ex_fclose(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_fclose(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     unsafe { win_float_remove(eap.forceit != 0, eap.line1 as c_int) };
 }
@@ -609,7 +609,7 @@ fn buf_hide(buf: *const Buffer) -> bool {
 }
 
 /// `do_bang()` as checked code.
-fn do_bang(addr_count: c_int, eap: &mut exarg_T, forceit: bool, do_in: bool, do_out: bool) {
+fn do_bang(addr_count: c_int, eap: &mut ExArg, forceit: bool, do_in: bool, do_out: bool) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_cmds::do_bang(addr_count, eap, forceit, do_in, do_out) }
 }
@@ -620,7 +620,7 @@ fn do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: *mut Window,
@@ -661,7 +661,7 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 }
 
 /// `goto_buffer()` as checked code.
-fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_int) {
+fn goto_buffer(eap: *mut ExArg, start: c_int, dir: c_int, count: c_int) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::goto_buffer(eap, start, dir, count) }
 }
@@ -686,7 +686,7 @@ fn readfile(
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {

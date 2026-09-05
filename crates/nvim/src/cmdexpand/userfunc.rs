@@ -247,7 +247,7 @@ pub(crate) unsafe fn expand_shellcmd(
 /// pattern, the whole command line and the cursor column.
 pub(crate) unsafe fn call_user_expand_func(
     user_expand_func: UserExpandFunc,
-    xp: *mut expand_T,
+    xp: *mut Expand,
 ) -> *mut c_void {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
@@ -289,7 +289,7 @@ pub(crate) unsafe fn call_user_expand_func(
 /// (`ExpandContext::UserDefined` and `ExpandContext::UserList`).
 pub(crate) unsafe fn expand_user_defined(
     pat: *const c_char,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     regmatch: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
@@ -403,7 +403,7 @@ pub(crate) unsafe fn process_user_list(
 
 /// Expand names with a list returned by a function defined by the user.
 pub(crate) unsafe fn expand_user_list(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) -> Result<(), Failed> {
@@ -423,7 +423,7 @@ pub(crate) unsafe fn expand_user_list(
 
 /// Expand names with a Lua completion function.
 pub(crate) unsafe fn expand_user_lua(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -458,7 +458,7 @@ pub unsafe fn globpath(
 ) {
     let buf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
 
-    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = if dirs {
         ExpandContext::Directories

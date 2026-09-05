@@ -593,9 +593,9 @@ pub unsafe fn add_map(lhs: *mut c_char, rhs: *mut c_char, mode: c_int, buffer: b
 /// name, then report whatever [`buf_do_map`] answers.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
-    // SAFETY: the caller's promise — `eap` is a live `exarg_T`.
+/// `eap` must be a live `ExArg`.
+unsafe fn do_exmap(eap: *mut ExArg, isabbrev: bool) {
+    // SAFETY: the caller's promise — `eap` is a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let mut cmdp = eap.cmd;
     // SAFETY: `cmd` is the command name the dispatcher matched, so it is live
@@ -643,17 +643,17 @@ unsafe fn do_exmap(eap: *mut exarg_T, isabbrev: bool) {
 /// `:abbreviate` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-pub unsafe fn ex_abbreviate(eap: *mut exarg_T) {
-    // SAFETY (this body): the caller's promise -- `eap` is a live `exarg_T`.
+/// `eap` must be a live `ExArg`.
+pub unsafe fn ex_abbreviate(eap: *mut ExArg) {
+    // SAFETY (this body): the caller's promise -- `eap` is a live `ExArg`.
     unsafe { do_exmap(eap, true) } // almost the same as mapping
 }
 
 /// `:map` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-pub unsafe fn ex_map(eap: *mut exarg_T) {
+/// `eap` must be a live `ExArg`.
+pub unsafe fn ex_map(eap: *mut ExArg) {
     // In a secure mode we print the mappings, for security reasons.
     if secure.get() != 0 {
         secure.set(2);
@@ -671,8 +671,8 @@ pub unsafe fn ex_map(eap: *mut exarg_T) {
 /// `:unmap` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-pub unsafe fn ex_unmap(eap: *mut exarg_T) {
+/// `eap` must be a live `ExArg`.
+pub unsafe fn ex_unmap(eap: *mut ExArg) {
     // SAFETY (this body): as [`ex_abbreviate`].
     unsafe { do_exmap(eap, false) }
 }
@@ -680,9 +680,9 @@ pub unsafe fn ex_unmap(eap: *mut exarg_T) {
 /// `:mapclear` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-pub unsafe fn ex_mapclear(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise — `eap` is a live `exarg_T`, so `cmd` and
+/// `eap` must be a live `ExArg`.
+pub unsafe fn ex_mapclear(eap: *mut ExArg) {
+    // SAFETY: the caller's promise — `eap` is a live `ExArg`, so `cmd` and
     // `arg` are its own NUL-terminated strings.
     unsafe { do_mapclear((*eap).cmd, (*eap).arg, (*eap).forceit != 0, false) }
 }
@@ -690,8 +690,8 @@ pub unsafe fn ex_mapclear(eap: *mut exarg_T) {
 /// `:abclear` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-pub unsafe fn ex_abclear(eap: *mut exarg_T) {
+/// `eap` must be a live `ExArg`.
+pub unsafe fn ex_abclear(eap: *mut ExArg) {
     // SAFETY: as [`ex_mapclear`].
     unsafe { do_mapclear((*eap).cmd, (*eap).arg, true, true) }
 }

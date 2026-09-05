@@ -57,9 +57,9 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    CmdModFlags, ExtmarkOp, LineNr, List, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType,
-    Vv, Window, bcount_t, bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues,
-    lpos_T, size_t, uint8_t,
+    CmdModFlags, ExArg, ExtmarkOp, LPos, LineNr, List, NUL, OptVal, OptionSetFlags, String_0,
+    UndoObjectType, Vv, Window, bcount_t, bfa_values, bln_values, dobuf_action_values,
+    getf_retvalues, size_t, uint8_t,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -121,8 +121,8 @@ pub const CCGD_MULTWIN: ::core::ffi::c_uint = 2;
 pub const CCGD_AW: ::core::ffi::c_uint = 1;
 #[derive(Copy, Clone)]
 pub struct SubResult {
-    pub start: lpos_T,
-    pub end: lpos_T,
+    pub start: LPos,
+    pub end: LPos,
     pub pre_match: LineNr,
 }
 /// The matches an `'inccommand'` preview has to show, and how many lines they
@@ -150,8 +150,8 @@ pub const kSubIgnoreCase: SubIgnoreType = 1;
 pub const kSubHonorOptions: SubIgnoreType = 0;
 pub struct LineData {
     pub start_col: ::core::ffi::c_int,
-    pub start: lpos_T,
-    pub end: lpos_T,
+    pub start: LPos,
+    pub end: LPos,
     pub matchcols: ::core::ffi::c_int,
     pub matchbytes: bcount_t,
     pub subcols: ::core::ffi::c_int,
@@ -317,7 +317,7 @@ pub unsafe fn skip_vimgrep_pat(
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_oldfiles(eap: *mut exarg_T) {
+pub unsafe fn ex_oldfiles(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     // SAFETY: `v:oldfiles` is the editor's own list, live or NULL.

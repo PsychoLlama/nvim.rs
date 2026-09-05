@@ -42,9 +42,9 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Buffer, Callback, CdCause, CdScope, CpoFlag, Failed, List, ListItem, MAXPATHL,
-    NUL, OK, OptInt, OptionSetFlags, ScriptCtx, TypVal, VAR_BOOL, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, VarLock, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
+    BoolVarValue, Buffer, Callback, CdCause, CdScope, CpoFlag, ExArg, Failed, List, ListItem,
+    MAXPATHL, NUL, OK, OptInt, OptionSetFlags, ScriptCtx, TypVal, VAR_BOOL, VAR_LIST, VAR_STRING,
+    VAR_UNKNOWN, VarLock, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
     kCdScopeWindow, optset_T, size_t,
 };
 
@@ -333,7 +333,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
-pub unsafe fn ex_cd(eap: *mut exarg_T) {
+pub unsafe fn ex_cd(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let new_dir = eap.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
@@ -358,7 +358,7 @@ pub unsafe fn ex_cd(eap: *mut exarg_T) {
 }
 
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
-pub(crate) unsafe fn ex_pwd(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pwd(_eap: *mut ExArg) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {
         emsg(gettext(c"E187: Unknown".as_ptr()));

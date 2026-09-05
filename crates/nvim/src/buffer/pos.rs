@@ -30,8 +30,8 @@ use crate::memory::{xcalloc, xrealloc};
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    AdditionalData, Buffer, ColNr, GArray, LineNr, OptInt, Timestamp, WinInfo, WinOpt, Window,
-    fmark_T, fmarkv_T, pos_T, size_t,
+    AdditionalData, Buffer, ColNr, GArray, LineNr, OptInt, Pos, Timestamp, WinInfo, WinOpt, Window,
+    fmark_T, fmarkv_T, size_t,
 };
 use crate::winfloat::win_set_minimal_style;
 use crate::winlayer::{Buf, Win, windows};
@@ -216,7 +216,7 @@ fn set_minimal_style(win: Win) {
 }
 
 /// The view (topline offset and skipcol) `win` would restore `pos` with.
-fn view_of(win: Win, pos: pos_T) -> fmarkv_T {
+fn view_of(win: Win, pos: Pos) -> fmarkv_T {
     // SAFETY: a live window.
     unsafe { mark_view_make(win.raw(), pos) }
 }
@@ -401,7 +401,7 @@ pub unsafe fn get_winopts(mut buf: Buf) {
 /// when there is none.
 pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut fmark_T {
     static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
-        mark: pos_T {
+        mark: Pos {
             lnum: 1 as LineNr,
             col: 0 as ColNr,
             coladd: 0 as ColNr,

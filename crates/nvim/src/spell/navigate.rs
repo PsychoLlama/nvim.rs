@@ -49,9 +49,7 @@ use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
-use crate::types::{
-    ColNr, Hlf, LineNr, NUL, ShmFlag, SpellMoveType, Window, pos_T, size_t, uint8_t,
-};
+use crate::types::{ColNr, Hlf, LineNr, NUL, Pos, ShmFlag, SpellMoveType, Window, size_t, uint8_t};
 use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
@@ -110,7 +108,7 @@ pub unsafe fn spell_move_to(
         return 0;
     }
 
-    let mut found_pos: pos_T = unsafe { mem::zeroed() };
+    let mut found_pos: Pos = unsafe { mem::zeroed() };
     let mut found_len: size_t = 0;
     let mut attr: Hlf = HLF_COUNT;
     let has_syntax = unsafe { syntax_present(wp) };
@@ -227,7 +225,7 @@ pub unsafe fn spell_move_to(
                         attr = HLF_COUNT;
                     } else {
                         found_one = true;
-                        found_pos = pos_T {
+                        found_pos = Pos {
                             lnum,
                             col,
                             coladd: 0,

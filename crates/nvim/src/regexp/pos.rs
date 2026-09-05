@@ -46,7 +46,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::{lpos_T, uint8_t};
+use crate::types::{LPos, uint8_t};
 
 /// Which shape a match records positions in. Fixed for the whole of one
 /// match; see [`super::rex::Rex::pos_kind`].
@@ -63,7 +63,7 @@ pub(crate) enum PosKind {
 #[derive(Clone, Copy)]
 union Arms {
     ptr: *mut uint8_t,
-    pos: lpos_T,
+    pos: LPos,
 }
 
 /// A position a match saved, in whichever shape [`PosKind`] the run uses.
@@ -81,7 +81,7 @@ impl MatchPos {
     }
 
     /// A buffer match's position.
-    pub(crate) const fn from_pos(pos: lpos_T) -> MatchPos {
+    pub(crate) const fn from_pos(pos: LPos) -> MatchPos {
         MatchPos(Arms { pos })
     }
 
@@ -95,7 +95,7 @@ impl MatchPos {
 
     /// The line and column a buffer match saved.
     #[inline(always)]
-    pub(crate) fn as_pos(self) -> lpos_T {
+    pub(crate) fn as_pos(self) -> LPos {
         // SAFETY: as `as_ptr`, for the buffer match's arm.
         unsafe { self.0.pos }
     }
@@ -103,8 +103,8 @@ impl MatchPos {
     /// The line and column a buffer match saved, to edit in place — the
     /// look-behind walks its start position backwards through it.
     #[inline(always)]
-    pub(crate) fn pos_mut(&mut self) -> &mut lpos_T {
-        // SAFETY: as `as_pos`. `lpos_T` is a pair of plain integers, so the
+    pub(crate) fn pos_mut(&mut self) -> &mut LPos {
+        // SAFETY: as `as_pos`. `LPos` is a pair of plain integers, so the
         // reference can neither observe nor create an invalid value.
         unsafe { &mut self.0.pos }
     }
@@ -135,7 +135,7 @@ impl MatchPos {
     pub(crate) fn unset(kind: PosKind) -> MatchPos {
         match kind {
             PosKind::Str => MatchPos::NOWHERE,
-            PosKind::Buf => MatchPos::from_pos(lpos_T { lnum: -1, col: -1 }),
+            PosKind::Buf => MatchPos::from_pos(LPos { lnum: -1, col: -1 }),
         }
     }
 
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn a_buffer_match_gets_its_line_and_column_back() {
-        let saved = MatchPos::from_pos(lpos_T { lnum: 7, col: 13 });
+        let saved = MatchPos::from_pos(LPos { lnum: 7, col: 13 });
         assert_eq!(saved.as_pos().lnum, 7);
         assert_eq!(saved.as_pos().col, 13);
     }
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn the_look_behind_walks_a_column_back_in_place() {
-        let mut saved = MatchPos::from_pos(lpos_T { lnum: 4, col: 9 });
+        let mut saved = MatchPos::from_pos(LPos { lnum: 4, col: 9 });
         saved.pos_mut().col -= 3;
         saved.pos_mut().lnum -= 1;
         assert_eq!(saved.as_pos().lnum, 3);
@@ -319,15 +319,15 @@ mod tests {
         assert!(MatchPos::from_ptr(one).same(MatchPos::from_ptr(one), PosKind::Str));
         assert!(!MatchPos::from_ptr(one).same(MatchPos::from_ptr(two), PosKind::Str));
 
-        let here = lpos_T { lnum: 2, col: 5 };
+        let here = LPos { lnum: 2, col: 5 };
         assert!(MatchPos::from_pos(here).same(MatchPos::from_pos(here), PosKind::Buf));
         assert!(
             !MatchPos::from_pos(here)
-                .same(MatchPos::from_pos(lpos_T { lnum: 2, col: 6 }), PosKind::Buf)
+                .same(MatchPos::from_pos(LPos { lnum: 2, col: 6 }), PosKind::Buf)
         );
         assert!(
             !MatchPos::from_pos(here)
-                .same(MatchPos::from_pos(lpos_T { lnum: 3, col: 5 }), PosKind::Buf)
+                .same(MatchPos::from_pos(LPos { lnum: 3, col: 5 }), PosKind::Buf)
         );
     }
 
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn a_capture_is_two_positions_and_no_tag() {
         assert_eq!(size_of::<Capture>(), 2 * size_of::<*mut uint8_t>());
-        assert_eq!(size_of::<Capture>(), 2 * size_of::<lpos_T>());
+        assert_eq!(size_of::<Capture>(), 2 * size_of::<LPos>());
         assert_eq!(align_of::<Capture>(), align_of::<*mut uint8_t>());
     }
 
@@ -359,7 +359,7 @@ mod tests {
         }
         let mut byte = 0u8;
         assert!(MatchPos::from_ptr(&raw mut byte).is_set(PosKind::Str));
-        assert!(MatchPos::from_pos(lpos_T { lnum: 0, col: 0 }).is_set(PosKind::Buf));
+        assert!(MatchPos::from_pos(LPos { lnum: 0, col: 0 }).is_set(PosKind::Buf));
     }
 
     /// The slots a walk steps over are marked unset by their line alone, and
@@ -367,8 +367,8 @@ mod tests {
     #[test]
     fn marking_a_buffer_position_unset_leaves_its_column() {
         let mut capture = Capture {
-            start: MatchPos::from_pos(lpos_T { lnum: 3, col: 11 }),
-            end: MatchPos::from_pos(lpos_T { lnum: 4, col: 12 }),
+            start: MatchPos::from_pos(LPos { lnum: 3, col: 11 }),
+            end: MatchPos::from_pos(LPos { lnum: 4, col: 12 }),
         };
         capture.mark_unset(PosKind::Buf);
         assert_eq!(capture.start.as_pos().lnum, -1);
@@ -390,14 +390,14 @@ mod tests {
     #[test]
     fn same_capture_ignores_an_unset_position_s_column() {
         let (a, b) = (
-            MatchPos::from_pos(lpos_T { lnum: -1, col: 5 }),
-            MatchPos::from_pos(lpos_T { lnum: -1, col: 9 }),
+            MatchPos::from_pos(LPos { lnum: -1, col: 5 }),
+            MatchPos::from_pos(LPos { lnum: -1, col: 9 }),
         );
         assert!(a.same_capture(b, PosKind::Buf));
         assert!(!a.same(b, PosKind::Buf));
 
-        let set = MatchPos::from_pos(lpos_T { lnum: 2, col: 5 });
-        assert!(!set.same_capture(MatchPos::from_pos(lpos_T { lnum: 2, col: 9 }), PosKind::Buf));
+        let set = MatchPos::from_pos(LPos { lnum: 2, col: 5 });
+        assert!(!set.same_capture(MatchPos::from_pos(LPos { lnum: 2, col: 9 }), PosKind::Buf));
         assert!(set.same_capture(set, PosKind::Buf));
     }
 }

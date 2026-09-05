@@ -127,7 +127,7 @@ fn clamp_cursor(wp: Win) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-unsafe fn stack_of(eap: *mut exarg_T, print_emsg: bool) -> Option<Qi> {
+unsafe fn stack_of(eap: *mut ExArg, print_emsg: bool) -> Option<Qi> {
     // SAFETY: forwarded from the caller.
     let qi = unsafe { qf_cmd_get_stack(eap, print_emsg) };
     (!qi.is_null()).then_some(unsafe { Qi::new(qi) })
@@ -336,7 +336,7 @@ pub(crate) fn qf_update_win_titlevar(qi: Qi) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_copen(eap: *mut exarg_T) {
+pub unsafe fn ex_copen(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let Some(qi) = (unsafe { stack_of(eap, true) }) else {
         return;
@@ -383,7 +383,7 @@ pub unsafe fn ex_copen(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cwindow(eap: *mut exarg_T) {
+pub unsafe fn ex_cwindow(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let Some(qi) = (unsafe { stack_of(eap, true) }) else {
         return;
@@ -406,7 +406,7 @@ pub unsafe fn ex_cwindow(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cclose(eap: *mut exarg_T) {
+pub unsafe fn ex_cclose(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let Some(qi) = (unsafe { stack_of(eap, false) }) else {
         return;
@@ -441,7 +441,7 @@ fn win_goto_line(mut win: Win, lnum: LineNr) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cbottom(eap: *mut exarg_T) {
+pub unsafe fn ex_cbottom(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let Some(qi) = (unsafe { stack_of(eap, true) }) else {
         return;

@@ -131,7 +131,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
 
 /// Where the prompt's editable part begins.
 #[inline(always)]
-fn start() -> pos_T {
+fn start() -> Pos {
     cur_buf().b_prompt_start.mark
 }
 

@@ -21,11 +21,11 @@ use crate::types::{Failed, NUL};
 ///
 /// # Safety
 /// `eap` is a live `:unlet` command.
-pub unsafe fn ex_unlet(eap: *mut exarg_T) {
+pub unsafe fn ex_unlet(eap: *mut ExArg) {
     // `:unlet!` means "do not complain", which reaches `get_lval` as
     // GLV_QUIET and `do_unlet` as `forceit`.
     // SAFETY: the caller's obligation -- a live command, which the
-    // `do_cmdline` frame that owns the `exarg_T` outlives.
+    // `do_cmdline` frame that owns the `ExArg` outlives.
     let ea = unsafe { Ea::new(eap) };
     let glv_flags = if ea.forceit != 0 { GLV_QUIET } else { 0 };
     let arg = ea.arg;
@@ -36,7 +36,7 @@ pub unsafe fn ex_unlet(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` is a live `:lockvar`/`:unlockvar` command.
-pub unsafe fn ex_lockvar(eap: *mut exarg_T) {
+pub unsafe fn ex_lockvar(eap: *mut ExArg) {
     // SAFETY: the caller's obligation -- a live command whose argument text
     // is NUL-terminated.
     let ea = unsafe { Ea::new(eap) };
@@ -62,7 +62,7 @@ pub unsafe fn ex_lockvar(eap: *mut exarg_T) {
 /// # Safety
 /// `eap` is a live command and `argstart` a NUL-terminated string.
 unsafe fn ex_unletlock(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     argstart: *mut c_char,
     deep: c_int,
     glv_flags: c_int,
@@ -142,7 +142,7 @@ unsafe fn ex_unletlock(
 unsafe fn do_unlet_var(
     lp: *mut LVal,
     name_end: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     _deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
@@ -334,7 +334,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
 unsafe fn do_lock_var(
     lp: *mut LVal,
     _name_end: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live

@@ -93,7 +93,7 @@ unsafe fn move_prompt_down(p_extra: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// The cursor must be on a valid line and `p_extra` NUL-terminated.
-unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<bool> {
+unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: Pos) -> Option<bool> {
     if State.get() & VREPLACE_FLAG == 0 || old_cursor.lnum >= orig_line_count.get() {
         if unsafe { ml_append(cur_win().w_cursor.lnum, p_extra, 0, false) }.is_err() {
             return None;

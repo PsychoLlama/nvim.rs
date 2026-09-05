@@ -44,8 +44,8 @@ use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
     Buffer, ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority,
-    DecorRangeKind, DecorSignHighlight, DecorVirtText, HlMode, LineNr, MTKey, MetaIndex, VirtLines,
-    VirtText, VirtTextChunk, VirtTextPos, lpos_T, uint8_t, uint16_t, uint32_t, virt_line,
+    DecorRangeKind, DecorSignHighlight, DecorVirtText, HlMode, LPos, LineNr, MTKey, MetaIndex,
+    VirtLines, VirtText, VirtTextChunk, VirtTextPos, uint8_t, uint16_t, uint32_t, virt_line,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
@@ -524,8 +524,8 @@ pub unsafe fn bufhl_add_hl_pos_offset(
     buf: *mut Buffer,
     src_id: c_int,
     hl_id: c_int,
-    pos_start: lpos_T,
-    pos_end: lpos_T,
+    pos_start: LPos,
+    pos_end: LPos,
     offset: ColNr,
 ) {
     let mut decor = DECOR_INLINE_INIT;

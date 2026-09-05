@@ -35,7 +35,7 @@ use crate::regexp::{
 };
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
-use crate::types::{ColNr, LineNr, NUL, exarg_T, regmmatch_T, size_t};
+use crate::types::{ColNr, ExArg, LineNr, NUL, regmmatch_T, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -111,7 +111,7 @@ struct GlobalPat {
 ///
 /// # Safety
 /// `eap.arg` must be a live, writable Ex-command argument.
-unsafe fn global_pattern(eap: &mut exarg_T) -> Option<GlobalPat> {
+unsafe fn global_pattern(eap: &mut ExArg) -> Option<GlobalPat> {
     let arg = eap.arg;
     // SAFETY: an Ex-command argument is NUL-terminated, and nothing below
     // rewrites it before the last read of this borrow.
@@ -184,7 +184,7 @@ unsafe fn global_pattern(eap: &mut exarg_T) -> Option<GlobalPat> {
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program, and the range must
 /// be lines of the current buffer.
-unsafe fn global_mark(eap: &exarg_T, regmatch: *mut regmmatch_T, kind: u8) -> c_int {
+unsafe fn global_mark(eap: &ExArg, regmatch: *mut regmmatch_T, kind: u8) -> c_int {
     let (mut lnum, line2) = (eap.line1, eap.line2);
     let mut ndone = 0 as c_int;
     while lnum <= line2 && !got_int.get() {
@@ -220,7 +220,7 @@ unsafe fn global_mark(eap: &exarg_T, regmatch: *mut regmmatch_T, kind: u8) -> c_
 ///
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
-pub unsafe fn ex_global(eap: *mut exarg_T) {
+pub unsafe fn ex_global(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     // When nesting, the command works on one line.  That allows for

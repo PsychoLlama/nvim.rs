@@ -28,13 +28,11 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{
-    LineNr, MarkMove, OpType, PUT_FIXINDENT, SpellMoveType, cmdarg_T, fmark_T, pos_T,
-};
+use crate::types::{CmdArg, LineNr, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType, fmark_T};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
-unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
+unsafe fn direction(cap: *mut CmdArg) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar == ']' as c_int {
@@ -46,7 +44,7 @@ unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
 
 /// The same choice spelled in `findmatchlimit`'s own flags, which are not the
 /// `Direction` constants.
-unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
+unsafe fn match_direction(cap: *mut CmdArg) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar == '[' as c_int {
@@ -64,22 +62,22 @@ unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
 /// cursor is inside; the second walks back in from there, counting the braces
 /// the count asked for. `prev_pos` carries the second-outermost block between
 /// the two, which is what makes `2[m` mean "the method one level out".
-unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
+unsafe fn nv_bracket_block(cap: *mut CmdArg, old_pos: *const Pos) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument and `old_pos` is the
     // cursor position its caller saved.
-    let mut new_pos = pos_T {
+    let mut new_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
-    let mut prev_pos = pos_T {
+    let mut prev_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
-    let mut pos: Option<pos_T> = None;
+    let mut pos: Option<Pos> = None;
 
     // `[*` and `]*` are spelled `[/` and `]/` to findmatchlimit.
     if ca.nchar == '*' as c_int {
@@ -194,7 +192,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
 /// jumps to it. `d`-family keys (`d`, `D`, CTRL-D) search for a `#define`
 /// rather than for any occurrence, which is what the low-nibble comparison
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
-unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
+unsafe fn nv_bracket_ident(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut found: *mut c_char = ptr::null_mut();
@@ -244,7 +242,7 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
 
 /// `['`, `` [` ``, `]'` and `` ]` ``: jump to the next or previous lower-case
 /// mark in this buffer.
-unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
+unsafe fn nv_bracket_mark(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // The walk starts from a mark standing for the cursor itself, in this
@@ -275,7 +273,7 @@ unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
 }
 
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
-unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
+unsafe fn nv_bracket_spell(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     setpcmark();
@@ -296,7 +294,7 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
 }
 
 /// `[` and `]`, whose second character says what kind of jump this is.
-pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_brackets(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;

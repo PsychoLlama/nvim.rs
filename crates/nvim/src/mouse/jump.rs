@@ -32,7 +32,7 @@ use crate::r#move::WinValid;
 use crate::normal::{
     end_visual_mode, may_start_select, set_visual_active, set_visual_anchor, visual_active,
 };
-use crate::types::pos_T;
+use crate::types::Pos;
 
 // What the last event that could move focus landed on.  A drag or a release
 // must act on the *same* status line or separator the press did, so these
@@ -483,7 +483,7 @@ fn move_cursor_there(
     flags: c_int,
     inclusive: Option<&mut bool>,
     old_curwin: Win,
-    old_cursor: pos_T,
+    old_cursor: Pos,
 ) -> c_int {
     let (col_from_screen, mouse_fold_flags) = mouse_check_grid();
 

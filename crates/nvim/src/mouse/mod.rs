@@ -42,8 +42,8 @@ use crate::state::virtual_active;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, Tabpage, TypVal, VarNumber,
-    Window, cmdarg_T, pos_T, size_t,
+    CmdArg, ColNr, EvalFuncData, LineNr, MotionType, NUL, Pos, StlClickDefinition, Tabpage, TypVal,
+    VarNumber, Window, size_t,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -104,7 +104,7 @@ pub(crate) const MOUSE_RIGHT: c_int = 2;
 pub(crate) const MOUSE_X1: c_int = 768;
 pub(crate) const MOUSE_X2: c_int = 1024;
 
-/// A wheel event's direction, as `cmdarg_T::arg` carries it.
+/// A wheel event's direction, as `CmdArg::arg` carries it.
 pub(crate) const MSCR_DOWN: c_int = 0;
 pub(crate) const MSCR_UP: c_int = 1;
 pub(crate) const MSCR_LEFT: c_int = -1;
@@ -181,7 +181,7 @@ fn global_stl_height() -> c_int {
 }
 
 /// The leftmost and rightmost virtual column two positions span.
-fn vcols_between(win: Win, mut first: pos_T, mut second: pos_T) -> (ColNr, ColNr) {
+fn vcols_between(win: Win, mut first: Pos, mut second: Pos) -> (ColNr, ColNr) {
     let (mut left, mut right) = (0, 0);
     let (a, b) = (&raw mut first, &raw mut second);
     // SAFETY: a live window and two local copies of positions in its buffer,
@@ -552,7 +552,7 @@ fn mouse_check_grid() -> (Option<ColNr>, c_int) {
 ///
 /// # Safety
 /// `cap` must be a live command argument.
-pub(crate) unsafe fn nv_mousescroll(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_mousescroll(cap: *mut CmdArg) {
     let old_curwin = curwin.get();
 
     if mouse_row.get() >= 0 && mouse_col.get() >= 0 {
@@ -578,7 +578,7 @@ pub(crate) unsafe fn nv_mousescroll(cap: *mut cmdarg_T) {
 ///
 /// # Safety
 /// `cap` must be a live command argument.
-pub(crate) unsafe fn nv_mouse(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_mouse(cap: *mut CmdArg) {
     // SAFETY: the caller's promise.
     let (oap, cmdchar, count1) = unsafe { ((*cap).oap, (*cap).cmdchar, (*cap).count1) };
     // SAFETY: `oap` is the live operator the command carries, or null.

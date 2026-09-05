@@ -30,7 +30,7 @@ use crate::option::cpo_has;
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, oparg_T, pos_T, size_t};
+use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, OpArg, Pos, size_t};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.
@@ -56,14 +56,14 @@ const NAMED_END_TAG: &::core::ffi::CStr = c"</%.*s>\\c";
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
 pub unsafe fn current_block(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     mut count: c_int,
     include: bool,
     what: c_int,
     other: c_int,
 ) -> Result<(), Failed> {
-    let mut pos: Option<pos_T>;
-    let mut start_pos = pos_T {
+    let mut pos: Option<Pos>;
+    let mut start_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -280,7 +280,7 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
         return false;
     }
 
-    let mut pos = pos_T {
+    let mut pos = Pos {
         lnum: cur_win().w_cursor.lnum,
         // SAFETY: `p` and `line` point into the same line.
         col: unsafe { p.offset_from(line) } as ColNr,
@@ -346,7 +346,7 @@ unsafe fn search_tag_pair(spat: *const c_char, epat: *const c_char, dir: c_int) 
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_tagblock(oap: *mut oparg_T, count_arg: c_int, include: bool) -> c_int {
+pub unsafe fn current_tagblock(oap: *mut OpArg, count_arg: c_int, include: bool) -> c_int {
     let mut count = count_arg;
     let mut do_include = include;
     let save_p_ws = p_ws.get() != 0;

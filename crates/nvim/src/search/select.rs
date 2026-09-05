@@ -22,9 +22,9 @@ use core::ptr;
 /// Where the two searches [`current_search`] runs left the match.
 struct Match {
     /// The start of the match; where `pos` ended up.
-    start: pos_T,
+    start: Pos,
     /// The end of the match.
-    end: pos_T,
+    end: Pos,
 }
 
 /// Find the match under or after the cursor, twice.
@@ -39,14 +39,14 @@ struct Match {
 /// # Safety
 /// The current window and buffer must be valid.
 unsafe fn search_around(
-    mut pos: pos_T,
+    mut pos: Pos,
     count: c_int,
     forward: bool,
     skip_first_backward: bool,
     zero_width: bool,
 ) -> Option<Match> {
     let old_p_ws = p_ws.get();
-    let mut end_pos = pos_T::default();
+    let mut end_pos = Pos::default();
     for i in 0..2 {
         if forward && i == 0 && skip_first_backward {
             continue;

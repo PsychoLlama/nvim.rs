@@ -20,7 +20,7 @@ use core::ptr;
 /// Create the completion popup menu with items from `matches`.
 pub(crate) unsafe fn cmdline_pum_create(
     ccline: Cc,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     matches: *mut *mut c_char,
     numMatches: c_int,
     showtail: bool,
@@ -135,7 +135,7 @@ pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
 ///
 /// These are backslashes used for escaping.  Backslashes *are* shown in help
 /// tags and in search pattern completion matches.
-pub(crate) unsafe fn skip_wildmenu_char(xp: *mut expand_T, s: *mut c_char) -> c_int {
+pub(crate) unsafe fn skip_wildmenu_char(xp: *mut Expand, s: *mut c_char) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
@@ -165,7 +165,7 @@ pub(crate) unsafe fn skip_wildmenu_char(xp: *mut expand_T, s: *mut c_char) -> c_
 }
 
 /// The length of an item as it will be shown in the status line.
-pub(crate) unsafe fn wildmenu_match_len(xp: *mut expand_T, s: *mut c_char) -> c_int {
+pub(crate) unsafe fn wildmenu_match_len(xp: *mut Expand, s: *mut c_char) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
@@ -194,7 +194,7 @@ pub(crate) unsafe fn wildmenu_match_len(xp: *mut expand_T, s: *mut c_char) -> c_
 /// the list and show all matches that fit; if inversion is possible we use it,
 /// else `=` characters are used.
 pub(crate) unsafe fn redraw_wildmenu(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     num_matches: c_int,
     matches: *mut *mut c_char,
     match_idx: c_int,

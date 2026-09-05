@@ -62,7 +62,7 @@ use crate::spellsuggest::{
 };
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::ui::kUIMessages;
-use crate::types::{ColNr, IOSIZE, NUL, int64_t, pos_T};
+use crate::types::{ColNr, IOSIZE, NUL, Pos, int64_t};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
@@ -107,7 +107,7 @@ pub(crate) unsafe fn spell_suggest(count: c_int) {
 /// # Safety
 ///
 /// As [`spell_suggest`], and `'spell'` must be on.
-unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save: c_int) {
+unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c_int) {
     // SAFETY: the caller guarantees the window and its spell state; `line`
     // is owned here and outlives every pointer taken into it.
     if unsafe { *(*cur_win().w_s).b_p_spl } as c_int == NUL {
@@ -175,7 +175,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: pos_T, msg_scroll_save:
 /// # Safety
 ///
 /// There must be a current window with a buffer and its spell state.
-unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
+unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     // SAFETY: the caller guarantees the window; the scan below stays
     // between the start of the cursor line and its terminator.
     if visual_active() {

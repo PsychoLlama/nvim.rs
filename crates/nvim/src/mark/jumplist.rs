@@ -366,7 +366,7 @@ pub unsafe fn free_jumplist(wp: *mut Window) {
 ///
 /// # Safety
 /// The editor's globals must be live.
-pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
+pub unsafe fn ex_jumps(_eap: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let win = unsafe { Win::current() };
@@ -436,7 +436,7 @@ pub unsafe fn ex_jumps(_eap: *mut exarg_T) {
 
 /// # Safety
 /// The editor's globals must be live.
-pub unsafe fn ex_clearjumps(_eap: *mut exarg_T) {
+pub unsafe fn ex_clearjumps(_eap: *mut ExArg) {
     // SAFETY: `curwin` is live from startup to exit.
     let mut win = unsafe { Win::current() };
     // SAFETY: as above.
@@ -449,7 +449,7 @@ pub unsafe fn ex_clearjumps(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// The editor's globals must be live.
-pub unsafe fn ex_changes(_eap: *mut exarg_T) {
+pub unsafe fn ex_changes(_eap: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin`/`curbuf` are live from startup to exit.
     let (buf, win) = unsafe { (Buf::current(), Win::current()) };

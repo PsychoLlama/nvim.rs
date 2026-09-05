@@ -408,9 +408,9 @@ unsafe fn scan_patterns(
         re_extmatch_out.set(::core::ptr::null_mut());
 
         let mut flags = SynFlags::NONE;
-        let mut eoe_pos = lpos_T { lnum: 0, col: 0 };
+        let mut eoe_pos = LPos { lnum: 0, col: 0 };
         let mut end_idx = 0;
-        let mut hl_endpos = lpos_T { lnum: 0, col: 0 };
+        let mut hl_endpos = LPos { lnum: 0, col: 0 };
 
         if scan.ty == SPTYPE_START && scan.flags.has(SynFlags::ONELINE) {
             // A "oneline" must end in this line too. Look for the end after

@@ -82,7 +82,7 @@ pub(crate) unsafe fn report_and_place(
 /// command or null.
 pub(crate) unsafe fn run_read_autocmds(
     sfname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     how: How,
     set_options: bool,
 ) -> bool {

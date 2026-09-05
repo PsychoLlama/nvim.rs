@@ -74,8 +74,8 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, Window, aentry_T,
-    exarg_T, size_t,
+    Buffer, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, Window,
+    aentry_T, size_t,
 };
 use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy};
@@ -392,7 +392,7 @@ pub(crate) unsafe fn ses_do_win(wp: *mut Window) -> bool {
 ///
 /// # Safety
 /// `eap` is the current Ex command.
-pub(crate) unsafe fn ex_loadview(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_loadview(eap: *mut ExArg) {
     // SAFETY: caller contract; `fname` is owned and NUL-terminated.
     let fname = unsafe { get_view_file(*(*eap).arg) };
     if fname.is_null() {
@@ -478,7 +478,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` is the current Ex command with a NUL-terminated argument.
-pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_mkrc(eap: *mut ExArg) {
     // SAFETY: caller contract.
     let cmdidx = unsafe { (*eap).cmdidx };
     // `:mkview` and `:mksession` write a *state*; the other two write only
@@ -559,7 +559,7 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut exarg_T) {
 /// under.
 unsafe fn write_rc(
     out: SessionFile,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     fname: *mut c_char,
     view_session: bool,
     using_vdir: bool,

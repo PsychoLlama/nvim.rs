@@ -35,8 +35,8 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, ColNr, ExpandContext, Failed, GArray, MAXPATHL, NUL, OptIndex, OptionSetFlags,
-    XpPrefix, expand_T, fuzmatch_str_T, optexpand_T, regmatch_T, size_t, uint32_t,
+    BackslashEscape, ColNr, Expand, ExpandContext, Failed, GArray, MAXPATHL, NUL, OptIndex,
+    OptionSetFlags, XpPrefix, fuzmatch_str_T, optexpand_T, regmatch_T, size_t, uint32_t,
 };
 use crate::winlayer::Live;
 
@@ -110,7 +110,7 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
 /// `xp` must be the command line's expansion state and `arg` a
 /// NUL-terminated cursor into `xp->xp_line`.
 pub(crate) unsafe fn set_context_in_set_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     arg: *mut c_char,
     opt_flags: OptionSetFlags,
 ) {
@@ -271,7 +271,7 @@ unsafe fn backslashes_before(start: *const c_char, at: *const c_char) -> isize {
 ///
 /// `xp` must be the expansion state and `arg` a NUL-terminated cursor.
 unsafe fn take_option_name(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     arg: *mut c_char,
     p: &mut *mut c_char,
 ) -> Option<(c_char, OptIndex, uint32_t, bool)> {
@@ -352,7 +352,7 @@ unsafe fn take_option_name(
 /// # Safety
 ///
 /// `xp` must be the expansion state.
-unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t) {
+unsafe fn set_file_context(xp: *mut Expand, opt_idx: OptIndex, flags: uint32_t) {
     // SAFETY: the caller's expansion state, and the option table.
     // 'path', 'cdpath' and 'tags' need three backslashes for a space,
     // because their own parsers unescape one layer first.
@@ -390,7 +390,7 @@ unsafe fn set_file_context(xp: *mut expand_T, opt_idx: OptIndex, flags: uint32_t
 /// # Safety
 ///
 /// `xp` must be the expansion state and `argend` the end of its argument.
-unsafe fn seek_item_start(xp: *mut expand_T, argend: *mut c_char, flags: uint32_t) {
+unsafe fn seek_item_start(xp: *mut Expand, argend: *mut c_char, flags: uint32_t) {
     let comma_list = flags & kOptFlagComma as uint32_t != 0;
     let colon_list = flags & kOptFlagColon as uint32_t != 0;
 
@@ -478,7 +478,7 @@ unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -
 ///
 /// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
 pub(crate) unsafe fn expand_settings(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     regmatch: *mut regmatch_T,
     fuzzystr: *mut c_char,
     numMatches: *mut c_int,
@@ -616,7 +616,7 @@ pub(crate) unsafe fn expand_old_setting(
 ///
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
 pub(crate) unsafe fn expand_string_setting(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -659,7 +659,7 @@ pub(crate) unsafe fn expand_string_setting(
 ///
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
 pub(crate) unsafe fn expand_setting_subtract(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     regmatch: *mut regmatch_T,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,

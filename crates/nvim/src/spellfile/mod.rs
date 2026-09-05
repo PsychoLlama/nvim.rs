@@ -20,8 +20,8 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, CONV_NONE, EStackType, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt, RepItem,
-    SPL_FNAME_TMPL, SpellAddType, XDGVarType, exarg_T, file_comparison, regprog_T, size_t,
+    Buffer, CONV_NONE, EStackType, ExArg, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt,
+    RepItem, SPL_FNAME_TMPL, SpellAddType, XDGVarType, file_comparison, regprog_T, size_t,
     spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
@@ -435,7 +435,7 @@ unsafe fn digits_then(
 /// # Safety
 ///
 /// `eap` must be a live excommand.
-pub unsafe fn ex_mkspell(eap: *mut exarg_T) {
+pub unsafe fn ex_mkspell(eap: *mut ExArg) {
     // SAFETY: the caller promises the excommand; `get_arglist_exp` fills in
     // the count and the vector, which `free_wild` then releases.
     let mut arg = unsafe { (*eap).arg };
@@ -773,7 +773,7 @@ pub(super) fn spell_message_fmt(spin: &spellinfo_T, args: core::fmt::Arguments<'
 /// # Safety
 ///
 /// `eap` must be a live excommand.
-pub unsafe fn ex_spell(eap: *mut exarg_T) {
+pub unsafe fn ex_spell(eap: *mut ExArg) {
     // SAFETY: the caller promises the excommand.
     let (cmdidx, forceit, line2, arg) =
         unsafe { ((*eap).cmdidx, (*eap).forceit, (*eap).line2, (*eap).arg) };

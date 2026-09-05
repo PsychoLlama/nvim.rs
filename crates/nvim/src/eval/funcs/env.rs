@@ -36,8 +36,8 @@ use crate::path::concat_fnames_realloc;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdAddr, EvalFuncData, ExArgt, ExpandContext, List, NUL, OK, OptInt, TypVal, VAR_DICT,
-    VAR_LIST, VAR_SPECIAL, VAR_STRING, VarNumber, XDGVarType, exarg_T, expand_T, kBoolVarFalse,
+    CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, ExpandContext, List, NUL, OK, OptInt, TypVal,
+    VAR_DICT, VAR_LIST, VAR_SPECIAL, VAR_STRING, VarNumber, XDGVarType, kBoolVarFalse,
     kListLenShouldKnow, kListLenUnknown, kSpecialVarNull,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -145,7 +145,7 @@ pub unsafe fn f_expand(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
         rettv.vval.v_string = ptr::null_mut();
         return;
     }
-    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Files;
     if p_wic.get() != 0 {
@@ -190,7 +190,7 @@ pub unsafe fn f_expandcmd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     };
     let quiet = !errmsg;
     let mut cmdstr = unsafe { xstrdup(arg_string(&mut numbuf, args.get(0))) };
-    let mut eap: exarg_T = unsafe { core::mem::zeroed() };
+    let mut eap: ExArg = unsafe { core::mem::zeroed() };
     eap.arg = cmdstr;
     eap.cmd = cmdstr;
     eap.cmdidx = CmdIdx::USER;

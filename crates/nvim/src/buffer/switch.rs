@@ -49,8 +49,7 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    Cleanup, CmdModFlags, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, Window, exarg_T,
-    int64_t,
+    Cleanup, CmdModFlags, ExArg, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, Window, int64_t,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -202,8 +201,8 @@ fn confirming() -> bool {
 /// Go to another buffer, handling the result of the ATTENTION dialog.
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T`.
-pub unsafe fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_int) {
+/// `eap` must be a live `ExArg`.
+pub unsafe fn goto_buffer(eap: *mut ExArg, start: c_int, dir: c_int, count: c_int) {
     let save_sea = swap_exists_action.get();
     // SAFETY: the caller's promise -- a live command, whose `cmd` is a
     // NUL-terminated pointer into the command line.

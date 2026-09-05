@@ -70,7 +70,7 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, Window, exarg_T, ptrdiff_t,
+    ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, Window, ptrdiff_t,
     time_t,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
@@ -194,7 +194,7 @@ struct EcmdArgs {
     /// Its short name.
     sfname: *mut c_char,
     /// The Ex command that asked, or NULL.
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     flags: EcmdFlags,
     /// The `+cmd` to run once the file is loaded, or NULL.
     command: *mut c_char,
@@ -233,7 +233,7 @@ pub unsafe fn do_ecmd(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: *mut Window,

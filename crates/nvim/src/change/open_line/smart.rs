@@ -88,7 +88,7 @@ fn line_at(lnum: LineNr) -> *mut c_char {
 }
 
 /// `findmatch` from the cursor, for `initc`.
-fn find_match(initc: c_int) -> Option<pos_T> {
+fn find_match(initc: c_int) -> Option<Pos> {
     // SAFETY: the cursor is on a valid line of the current buffer.
     unsafe { findmatch(::core::ptr::null_mut(), initc) }
 }

@@ -36,8 +36,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, Buffer, EvalFuncData, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, VarNumber, Window, exarg_T, int16_t,
+    BoolVarValue, Buffer, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL,
+    VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, Window, int16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -706,7 +706,7 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
 /// # Safety
 ///
 /// `eap` must be a valid command block (ex-command contract).
-pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
+pub unsafe fn ex_loadkeymap(eap: *mut ExArg) {
     // SAFETY: caller contract; the getter and its cookie are the sourcing
     // machinery's, and `getline_equal` only compares them.
     let sourced = unsafe {
@@ -750,7 +750,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
 ///
 /// `eap` must be a live command block whose line getter is the sourcing one,
 /// and `buf` a valid buffer.
-unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut Buffer) {
+unsafe fn read_keymap_entries(eap: *mut ExArg, buf: *mut Buffer) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
         // null at end of file.

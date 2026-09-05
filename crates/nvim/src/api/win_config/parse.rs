@@ -202,7 +202,7 @@ unsafe fn parse_config_split(split: String_0, out: &mut WinSplit) -> bool {
 ///
 /// # Safety
 /// `bufpos` must name its own `size` items.
-unsafe fn parse_float_bufpos(bufpos: Array, out: &mut lpos_T) -> bool {
+unsafe fn parse_float_bufpos(bufpos: Array, out: &mut LPos) -> bool {
     if bufpos.size != 2 {
         return false;
     }

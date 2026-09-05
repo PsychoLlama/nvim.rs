@@ -60,7 +60,7 @@ use crate::state::{
     state_enter, state_no_longer_safe,
 };
 use crate::terminal::terminal_check_refresh;
-use crate::types::{NUL, OpType, ShmFlag, VimState, cmdarg_T, int64_t, oparg_T};
+use crate::types::{CmdArg, NUL, OpArg, OpType, ShmFlag, VimState, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
 use ::libc::time;
@@ -113,13 +113,13 @@ impl DerefMut for NormalStateRef {
 /// Field access goes through `Deref`, so it costs no `unsafe` at the site;
 /// the operator it is pending on is [`crate::ops::Op`], the same shape.
 #[derive(Clone, Copy)]
-pub(crate) struct CmdArgRef(*mut cmdarg_T);
+pub(crate) struct CmdArgRef(*mut CmdArg);
 
 impl CmdArgRef {
     /// # Safety
     /// `cap` must stay a live command argument for as long as the value is
     /// used.
-    pub(crate) const unsafe fn new(cap: *mut cmdarg_T) -> Self {
+    pub(crate) const unsafe fn new(cap: *mut CmdArg) -> Self {
         Self(cap)
     }
     /// The operator this command is pending on.
@@ -130,15 +130,15 @@ impl CmdArgRef {
 }
 
 impl Deref for CmdArgRef {
-    type Target = cmdarg_T;
-    fn deref(&self) -> &cmdarg_T {
+    type Target = CmdArg;
+    fn deref(&self) -> &CmdArg {
         // SAFETY: the constructor's promise -- a live command argument.
         unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for CmdArgRef {
-    fn deref_mut(&mut self) -> &mut cmdarg_T {
+    fn deref_mut(&mut self) -> &mut CmdArg {
         // SAFETY: as `deref`; the borrow lasts only as long as the field
         // access that asked for it.
         unsafe { &mut *self.0 }
@@ -165,7 +165,7 @@ fn new_state() -> NormalState {
 /// Refuse a command that would change text while the text is locked.
 ///
 /// Beeps and clears the pending operator when there is one to clear.
-pub(crate) unsafe fn check_text_locked(oap: *mut oparg_T) -> bool {
+pub(crate) unsafe fn check_text_locked(oap: *mut OpArg) -> bool {
     // SAFETY (throughout): `oap` is null or the caller's operator.
     if !unsafe { text_locked() } {
         return false;
@@ -180,7 +180,7 @@ pub(crate) unsafe fn check_text_locked(oap: *mut oparg_T) -> bool {
 
 /// As [`check_text_locked`], and also refuse while the current buffer is
 /// locked. A locked buffer clears the operator without a beep.
-pub(crate) unsafe fn check_text_or_curbuf_locked(oap: *mut oparg_T) -> bool {
+pub(crate) unsafe fn check_text_or_curbuf_locked(oap: *mut OpArg) -> bool {
     // SAFETY (throughout): `oap` is null or the caller's operator.
     if unsafe { check_text_locked(oap) } {
         return true;
@@ -201,7 +201,7 @@ pub(crate) unsafe fn check_text_or_curbuf_locked(oap: *mut oparg_T) -> bool {
 /// Reads the operator the innermost `normal_enter`/`normal_cmd` installed.
 pub(crate) fn op_pending() -> bool {
     let oap = current_oap.get();
-    // SAFETY: `current_oap` is null or points at a live caller's `oparg_T`,
+    // SAFETY: `current_oap` is null or points at a live caller's `OpArg`,
     // and the `&&` chain only reaches the reads past the null check.
     !(!oap.is_null()
         && !finish_op.get()
@@ -602,7 +602,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 ///
 /// An operator's count and the motion's multiply; a zero count reports as 1
 /// in `v:count1` and as itself in `v:count`.
-pub(crate) unsafe fn set_vcount_ca(cap: *mut cmdarg_T, set_prevcount: &mut bool) {
+pub(crate) unsafe fn set_vcount_ca(cap: *mut CmdArg, set_prevcount: &mut bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut count = ca.count0 as int64_t;
@@ -616,7 +616,7 @@ pub(crate) unsafe fn set_vcount_ca(cap: *mut cmdarg_T, set_prevcount: &mut bool)
 /// Run exactly one normal-mode command, from an operator the caller owns.
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
-pub(crate) unsafe fn normal_cmd(oap: *mut oparg_T, toplevel: bool) {
+pub(crate) unsafe fn normal_cmd(oap: *mut OpArg, toplevel: bool) {
     let mut s = new_state();
     s.toplevel = toplevel;
     // SAFETY: `oap` is the caller's live operator, and `s` outlives the call.

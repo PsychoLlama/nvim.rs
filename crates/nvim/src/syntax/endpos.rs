@@ -22,13 +22,13 @@ use crate::types::NUL;
 /// next line. That spelling is upstream's, and callers test it directly.
 pub(crate) struct RegionEnd {
     /// End of the match: where the region stops.
-    pub(crate) m_endpos: lpos_T,
+    pub(crate) m_endpos: LPos,
     /// End of the highlighting, which a `me=`/`he=` offset can pull in front
     /// of the match end.
-    pub(crate) hl_endpos: lpos_T,
+    pub(crate) hl_endpos: LPos,
     /// End of the END pattern's own match, for the `matchgroup=` item that
     /// highlights it.
-    pub(crate) eoe_pos: lpos_T,
+    pub(crate) eoe_pos: LPos,
     /// Index of the END pattern when it has a `matchgroup=` of its own, else
     /// 0.
     pub(crate) end_idx: c_int,
@@ -40,7 +40,7 @@ pub(crate) struct RegionEnd {
 impl RegionEnd {
     /// The "no end in this line" answer.
     const fn none() -> Self {
-        let zero = lpos_T { lnum: 0, col: 0 };
+        let zero = LPos { lnum: 0, col: 0 };
         RegionEnd {
             m_endpos: zero,
             hl_endpos: zero,
@@ -88,7 +88,7 @@ pub(crate) fn syn_pattern_count() -> c_int {
 /// patterns may refer to with `\1`..`\9`.
 pub(crate) unsafe fn find_endpos(
     mut idx: c_int,
-    startpos: lpos_T,
+    startpos: LPos,
     start_ext: *mut reg_extmatch_T,
 ) -> RegionEnd {
     // Just in case we are invoked for a keyword.
@@ -141,7 +141,7 @@ pub(crate) unsafe fn find_endpos(
 unsafe fn find_endpos_scan(
     start_idx: c_int,
     skip_idx: Option<c_int>,
-    startpos: lpos_T,
+    startpos: LPos,
     matchcol: &mut ColNr,
 ) -> RegionEnd {
     loop {
@@ -170,7 +170,7 @@ unsafe fn find_endpos_scan(
 /// The END pattern that matches first at or after `matchcol`, with its match.
 unsafe fn best_end_match(
     start_idx: c_int,
-    startpos: lpos_T,
+    startpos: LPos,
     matchcol: ColNr,
 ) -> Option<(c_int, regmmatch_T)> {
     let mut best: Option<(c_int, regmmatch_T)> = None;
@@ -204,12 +204,7 @@ enum Skipped {
 }
 
 /// Does the SKIP pattern match before the best END pattern's match?
-unsafe fn skip_past(
-    skip_idx: c_int,
-    startpos: lpos_T,
-    best_start: lpos_T,
-    matchcol: ColNr,
-) -> Skipped {
+unsafe fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol: ColNr) -> Skipped {
     let offsets = syn_block().pattern(skip_idx).offsets();
     let lc_col = (matchcol as c_int - offsets.offsets[SPO_LC_OFF as usize]).max(0);
     let (matched, regmatch) = unsafe { run_pattern(skip_idx, startpos.lnum, lc_col as ColNr) };
@@ -248,7 +243,7 @@ unsafe fn skip_past(
 }
 
 /// Turn the winning END match into the four positions the caller wants.
-unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -> RegionEnd {
+unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: LPos) -> RegionEnd {
     let block = syn_block();
     let spp = block.pattern(best_idx);
     let offsets = spp.offsets();
@@ -277,7 +272,7 @@ unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -
             } else {
                 best.startpos[0]
             };
-            let mut hl_endpos = lpos_T {
+            let mut hl_endpos = LPos {
                 lnum: base.lnum,
                 col: base.col + offsets.offsets[SPO_RE_OFF as usize],
             };
@@ -303,8 +298,8 @@ unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: lpos_T) -
 pub(crate) const fn empty_regmmatch() -> regmmatch_T {
     regmmatch_T {
         regprog: ::core::ptr::null_mut(),
-        startpos: [lpos_T { lnum: 0, col: 0 }; 10],
-        endpos: [lpos_T { lnum: 0, col: 0 }; 10],
+        startpos: [LPos { lnum: 0, col: 0 }; 10],
+        endpos: [LPos { lnum: 0, col: 0 }; 10],
         rmm_matchcol: 0,
         rmm_ic: 0,
         rmm_maxcol: 0,
@@ -312,7 +307,7 @@ pub(crate) const fn empty_regmmatch() -> regmmatch_T {
 }
 
 /// Limit `pos` not to be after `limit`.
-pub(crate) fn limit_pos(pos: &mut lpos_T, limit: lpos_T) {
+pub(crate) fn limit_pos(pos: &mut LPos, limit: LPos) {
     if pos.lnum > limit.lnum {
         *pos = limit;
     } else if pos.lnum == limit.lnum && pos.col > limit.col {
@@ -321,7 +316,7 @@ pub(crate) fn limit_pos(pos: &mut lpos_T, limit: lpos_T) {
 }
 
 /// [`limit_pos`], but a `pos` of line 0 -- "not set" -- takes the limit.
-pub(crate) fn limit_pos_zero(pos: &mut lpos_T, limit: lpos_T) {
+pub(crate) fn limit_pos_zero(pos: &mut LPos, limit: LPos) {
     if pos.lnum == 0 {
         *pos = limit;
     } else {
@@ -338,7 +333,7 @@ pub(crate) unsafe fn syn_add_end_off(
     regmatch: &regmmatch_T,
     idx: c_int,
     extra: c_int,
-) -> lpos_T {
+) -> LPos {
     let flagged = spp.flags as c_int & (1 << idx) != 0;
     let base = if flagged {
         regmatch.startpos[0]
@@ -354,7 +349,7 @@ pub(crate) unsafe fn syn_add_end_off(
     } else {
         unsafe { walk_chars(base.lnum, base.col, off) }
     };
-    lpos_T {
+    LPos {
         lnum: base.lnum,
         col,
     }
@@ -372,7 +367,7 @@ pub(crate) unsafe fn syn_add_start_off(
     regmatch: &regmmatch_T,
     idx: c_int,
     extra: c_int,
-) -> lpos_T {
+) -> LPos {
     let flagged = spp.flags as c_int & (1 << (idx + SPO_COUNT)) != 0;
     let base = if flagged {
         regmatch.endpos[0]
@@ -388,7 +383,7 @@ pub(crate) unsafe fn syn_add_start_off(
     } else {
         (base.lnum, base.col)
     };
-    lpos_T {
+    LPos {
         lnum,
         col: unsafe { walk_chars(lnum, col, off) },
     }

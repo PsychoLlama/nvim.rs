@@ -32,8 +32,8 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Buffer, ColNr, Direction, EvalFuncData, List, NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VarNumber, Window, pos_T,
+    Buffer, ColNr, Direction, EvalFuncData, List, NUL, Pos, TypVal, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VarNumber, Window,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -44,7 +44,7 @@ use core::ptr;
 const END_OF_LINE: ColNr = MAXCOL as ColNr;
 
 /// The zeroed position both the getters and the setters start from.
-const NOWHERE: pos_T = pos_T {
+const NOWHERE: Pos = Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -153,7 +153,7 @@ fn get_col(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
 ///
 /// # Safety
 /// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
-unsafe fn virtualedit_tail(wp: *mut Window, bp: *mut Buffer, fp: *mut pos_T) -> ColNr {
+unsafe fn virtualedit_tail(wp: *mut Window, bp: *mut Buffer, fp: *mut Pos) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = unsafe { Win::new(wp) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line

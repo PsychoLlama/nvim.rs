@@ -48,7 +48,7 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, IOSIZE, LineNr, NUL, OK, OptVal, OptionSetFlags, exarg_T, langp_T, size_t, slang_T,
+    Direction, ExArg, IOSIZE, LineNr, NUL, OK, OptVal, OptionSetFlags, langp_T, size_t, slang_T,
     wordcount_T,
 };
 
@@ -70,7 +70,7 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
-pub unsafe fn ex_spellinfo(_eap: *mut exarg_T) {
+pub unsafe fn ex_spellinfo(_eap: *mut ExArg) {
     if unsafe { no_spell_checking(curwin.get()) } {
         return;
     }
@@ -102,7 +102,7 @@ pub unsafe fn ex_spellinfo(_eap: *mut exarg_T) {
 /// `:spelldump` — open a new window holding every word of the current
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
-pub unsafe fn ex_spelldump(eap: *mut exarg_T) {
+pub unsafe fn ex_spelldump(eap: *mut ExArg) {
     if unsafe { no_spell_checking(curwin.get()) } {
         return;
     }

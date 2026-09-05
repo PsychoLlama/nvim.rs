@@ -392,7 +392,7 @@ fn unwrap_loop_getter(fgetline: LineGetter, cookie: *mut c_void) -> (LineGetter,
 
 /// A translated message, copied into an owned Ex-command error message.
 ///
-/// Every producer of an `exarg_T::errmsg` — and of the `errormsg`
+/// Every producer of an `ExArg::errmsg` — and of the `errormsg`
 /// out-parameter the parser threads — answers a buffer of its own, so that
 /// raising a second error before the first is reported cannot overwrite it.
 /// Upstream shared two static buffers here (`IObuff` and `ex_error_buf`)

@@ -13,7 +13,7 @@ use super::*;
 
 crate::flag_set! {
     /// How the completion machinery must escape a backslash in what it
-    /// answers -- upstream's `XP_BS_*`, the bits [`expand_T::xp_backslash`]
+    /// answers -- upstream's `XP_BS_*`, the bits [`Expand::xp_backslash`]
     /// carries. `NONE` is upstream's `XP_BS_NONE`: the context takes its
     /// text literally and nothing is escaped.
     pub struct BackslashEscape;
@@ -28,7 +28,7 @@ crate::flag_set! {
 }
 
 /// What the command line wants completed -- upstream's `EXPAND_*`, the value
-/// [`expand_T::xp_context`] carries.
+/// [`Expand::xp_context`] carries.
 ///
 /// c2rust left this a bare `c_int` and re-emitted the sixty-five constants
 /// into twenty-eight modules, so nothing related a value to the field and
@@ -36,7 +36,7 @@ crate::flag_set! {
 /// the most name collisions in the tree: `ExpandContext::Nothing` existed eighteen
 /// times over.
 ///
-/// `#[repr(i32)]`, because [`expand_T`] is `repr(C)`; `EXPAND_OK` is *not* a
+/// `#[repr(i32)]`, because [`Expand`] is `repr(C)`; `EXPAND_OK` is *not* a
 /// member -- see [`crate::cmdexpand::Expanded`], which is what the two
 /// functions that answered with it return now.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -261,8 +261,8 @@ impl TryFrom<::core::ffi::c_int> for ExpandContext {
 }
 
 pub type CompleteListItemGetter =
-    Option<unsafe fn(*mut expand_T, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
-pub struct expand_T {
+    Option<unsafe fn(*mut Expand, ::core::ffi::c_int) -> *mut ::core::ffi::c_char>;
+pub struct Expand {
     pub xp_pattern: *mut ::core::ffi::c_char,
     pub xp_context: ExpandContext,
     pub xp_pattern_len: size_t,
@@ -280,6 +280,6 @@ pub struct expand_T {
     pub xp_line: *mut ::core::ffi::c_char,
     pub xp_buf: [::core::ffi::c_char; 1025],
     pub xp_search_dir: Direction,
-    pub xp_pre_incsearch_pos: pos_T,
+    pub xp_pre_incsearch_pos: Pos,
 }
 pub type XpPrefix = ::core::ffi::c_uint;

@@ -43,7 +43,7 @@ use crate::message::msg_ptr;
 use crate::os::cshim::snprintf;
 
 use crate::types::{
-    Buffer, CmdModFlags, FAIL, Failed, Integer, LineNr, NUL, OK, Tabpage, Vv, Window, exarg_T,
+    Buffer, CmdModFlags, ExArg, FAIL, Failed, Integer, LineNr, NUL, OK, Tabpage, Vv, Window,
     ptrdiff_t,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
@@ -63,7 +63,7 @@ const fn special_key(code: c_int) -> c_int {
 }
 
 /// `:bdelete`, `:bwipeout` and `:bunload`.
-pub(crate) unsafe fn ex_bunload(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_bunload(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     let idx = eap.cmdidx;
     let action = if idx == CmdIdx::bdelete {
@@ -152,7 +152,7 @@ fn quit_was_cancelled(wp: *mut Window, buf: impl FnOnce() -> *mut Buffer) -> boo
 }
 
 /// `:quit`.
-pub(crate) unsafe fn ex_quit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_quit(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         // In the command-line window, `:q` closes that instead.
@@ -242,7 +242,7 @@ fn first_win() -> Win {
 ///
 /// The signature still says `()` because the command table holds one fn
 /// pointer type and a `-> !` fn item does not coerce to it.
-pub(crate) unsafe fn ex_cquit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_cquit(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let status = if eap.addr_count > 0 {
         eap.line2 as c_int
@@ -256,7 +256,7 @@ pub(crate) unsafe fn ex_cquit(eap: *mut exarg_T) {
 
 /// The checks `:qall`, `:xall` and `:wqall` share before any of them
 /// starts writing.
-pub unsafe fn before_quit_all(eap: *mut exarg_T) -> Result<(), Failed> {
+pub unsafe fn before_quit_all(eap: *mut ExArg) -> Result<(), Failed> {
     let eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(special_key(if eap.forceit != 0 {
@@ -278,7 +278,7 @@ pub unsafe fn before_quit_all(eap: *mut exarg_T) -> Result<(), Failed> {
 }
 
 /// `:qall`.
-pub(crate) unsafe fn ex_quitall(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_quitall(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if unsafe { before_quit_all(eap.raw()) }.is_err() {
         return;
@@ -292,7 +292,7 @@ pub(crate) unsafe fn ex_quitall(eap: *mut exarg_T) {
 }
 
 /// `:close`.
-pub(crate) unsafe fn ex_close(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_close(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(Ctrl_C);
@@ -325,7 +325,7 @@ fn numbered_window(nr: LineNr) -> *mut Window {
 }
 
 /// `:pclose` — close the preview window, wherever it is.
-pub(crate) unsafe fn ex_pclose(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pclose(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     for win in windows() {
         if win.w_onebuf_opt.wo_pvw != 0 {
@@ -385,7 +385,7 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tp: *mut Tabpage) {
 }
 
 /// `:tabclose`.
-pub(crate) unsafe fn ex_tabclose(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabclose(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(special_key(KE_IGNORE as c_int));
@@ -415,7 +415,7 @@ pub(crate) unsafe fn ex_tabclose(eap: *mut exarg_T) {
 }
 
 /// `:tabonly`.
-pub(crate) unsafe fn ex_tabonly(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabonly(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(special_key(KE_IGNORE as c_int));
@@ -534,7 +534,7 @@ pub unsafe fn tabpage_close_other(tp: *mut Tabpage, forceit: c_int) {
 }
 
 /// `:only`.
-pub(crate) unsafe fn ex_only(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_only(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if window_layout_locked(CmdIdx::only) {
         return;
@@ -566,7 +566,7 @@ fn window_at_stepwise(nr: LineNr) -> *mut Window {
 }
 
 /// `:hide` used as a command rather than as a modifier.
-pub(crate) unsafe fn ex_hide(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_hide(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if eap.skip != 0 {
         return;
@@ -583,7 +583,7 @@ pub(crate) unsafe fn ex_hide(eap: *mut exarg_T) {
 }
 
 /// `:stop` and `:suspend`.
-pub(crate) unsafe fn ex_stop(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_stop(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if eap.forceit == 0 {
         unsafe { autowrite_all() };
@@ -594,7 +594,7 @@ pub(crate) unsafe fn ex_stop(eap: *mut exarg_T) {
 }
 
 /// `:xit` and `:wq` — write, then quit.
-pub(crate) unsafe fn ex_exit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_exit(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     if cmdwin_type.get() != 0 {
         cmdwin_result.set(Ctrl_C);

@@ -310,9 +310,9 @@ unsafe fn diff_write(
     let name = din.din_fname;
     let req = WriteRequest::filter();
     let noshort = ::core::ptr::null_mut::<c_char>();
-    let noeap = ::core::ptr::null_mut::<exarg_T>();
+    let noeap = ::core::ptr::null_mut::<ExArg>();
     // SAFETY: a live buffer and one of this module's temp file names; no
-    // short name and no `exarg_T` are wanted.
+    // short name and no `ExArg` are wanted.
     let r = unsafe { buf_write(buf.raw(), name, noshort, start, end, noeap, req) };
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // SAFETY: the option string the buffer itself holds.
@@ -332,7 +332,7 @@ unsafe fn diff_write(
 ///
 /// # Safety
 /// `dio` must be a live diff run, and `eap` null or a live command.
-unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T) {
+unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut ExArg) {
     // SAFETY: the caller's diff run.
     let mut dio = unsafe { Live::<diffio_T>::new(dio) };
     let orig_in: *mut diffin_T = dio.field_ptr(offset_of!(diffio_T, dio_orig));
@@ -511,7 +511,7 @@ pub unsafe fn diff_internal() -> c_int {
 ///
 /// # Safety
 /// `eap` must be null or a live command.
-pub unsafe fn ex_diffupdate(eap: *mut exarg_T) {
+pub unsafe fn ex_diffupdate(eap: *mut ExArg) {
     // A recompute asked for from inside `:diffget`/`:diffput` is deferred
     // to that command's tail, where `diff_need_update` is read.
     if diff_busy.get() {

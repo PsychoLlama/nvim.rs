@@ -29,8 +29,8 @@ use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    EvalArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, exarg_T, size_t, typval_vval_union,
+    EvalArg, ExArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -51,7 +51,7 @@ const UNSET_TV: TypVal = TypVal {
 pub unsafe fn eval_for_line(
     arg: *const c_char,
     errp: *mut bool,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     evalarg: *mut EvalArg,
 ) -> *mut c_void {
     // SAFETY: `xcalloc` never answers NULL and hands back one zeroed

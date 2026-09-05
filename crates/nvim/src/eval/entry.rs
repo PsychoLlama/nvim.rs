@@ -47,9 +47,9 @@ use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, Dict, EvalArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL, Object,
-    OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window, exarg_T,
+    Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL,
+    Object, OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window,
     ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
 };
 use crate::winlayer::{Ea, Live};
@@ -143,7 +143,7 @@ pub unsafe fn eval_init() {
 ///
 /// # Safety
 /// `evalarg` must be valid; `eap` null or valid.
-pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, eap: *mut exarg_T, skip: bool) {
+pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, eap: *mut ExArg, skip: bool) {
     // SAFETY: the caller's promise -- `evalarg` outlives the call.
     let mut evalarg = unsafe { Ev::new(evalarg) };
     *evalarg = UNSET_EVALARG;
@@ -169,7 +169,7 @@ pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, eap: *mut exarg_T, sk
 pub unsafe fn eval_to_bool(
     arg: *mut c_char,
     error: *mut bool,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     skip: bool,
     use_simple_function: bool,
 ) -> bool {
@@ -206,7 +206,7 @@ pub unsafe fn eval_to_bool(
 pub(crate) unsafe fn eval1_emsg(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
 ) -> Result<(), Failed> {
     let start: *const c_char = unsafe { *arg };
     let did_emsg_before = did_emsg.get();
@@ -374,7 +374,7 @@ pub unsafe fn eval_expr_to_bool(expr: *const TypVal, error: *mut bool) -> bool {
 ///
 /// # Safety
 /// As `eval_to_bool`.
-pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: bool) -> *mut c_char {
+pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut ExArg, skip: bool) -> *mut c_char {
     let mut numbuf = NumBuf::new();
     let mut tv = UNSET_TV;
     let mut evalarg = UNSET_EVALARG;
@@ -465,7 +465,7 @@ pub(crate) unsafe fn typval2string(tv: *mut TypVal, join_list: bool) -> *mut c_c
 pub unsafe fn eval_to_string_eap(
     arg: *mut c_char,
     join_list: bool,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     use_simple_function: bool,
 ) -> *mut c_char {
     let mut tv = UNSET_TV;
@@ -557,7 +557,7 @@ pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> Va
 ///
 /// # Safety
 /// `arg` must be a NUL-terminated expression; `eap` null or valid.
-pub unsafe fn eval_expr(arg: *mut c_char, eap: *mut exarg_T) -> *mut TypVal {
+pub unsafe fn eval_expr(arg: *mut c_char, eap: *mut ExArg) -> *mut TypVal {
     unsafe { eval_expr_ext(arg, eap, false) }
 }
 
@@ -568,7 +568,7 @@ pub unsafe fn eval_expr(arg: *mut c_char, eap: *mut exarg_T) -> *mut TypVal {
 /// As `eval_expr`.
 pub unsafe fn eval_expr_ext(
     arg: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     use_simple_function: bool,
 ) -> *mut TypVal {
     let mut tv = unsafe { xmalloc(size_of::<TypVal>()) } as *mut TypVal;

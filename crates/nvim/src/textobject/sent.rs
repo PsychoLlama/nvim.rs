@@ -23,10 +23,10 @@ use crate::option::cpo_has;
 use crate::pos::{equalpos, lt};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
-use crate::types::{CpoFlag, Direction, Failed, NUL, oparg_T, pos_T};
+use crate::types::{CpoFlag, Direction, Failed, NUL, OpArg, Pos};
 
 /// One step of a position walk: [`incl`] going forward, [`decl`] going back.
-type StepFn = unsafe fn(&mut pos_T) -> c_int;
+type StepFn = unsafe fn(&mut Pos) -> c_int;
 
 /// Move to the start of the `count`th next sentence in `dir`, leaving the
 /// cursor there. Answers `Ok` when one was found.
@@ -222,7 +222,7 @@ pub unsafe fn findsent(dir: Direction, mut count: c_int) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `posp` must name a valid position in the current buffer.
-pub(crate) unsafe fn find_first_blank(posp: *mut pos_T) {
+pub(crate) unsafe fn find_first_blank(posp: *mut Pos) {
     // SAFETY: the caller guarantees `posp` names a position of the current
     // buffer, and `decl`/`incl` leave it as one.
     while unsafe { decl(&mut *posp) } != -1 {
@@ -273,7 +273,7 @@ unsafe fn findsent_forward(mut count: c_int, mut at_start_sent: bool) {
 ///
 /// # Safety
 /// There must be a current line and Visual mode must be active.
-unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mut pos: pos_T) {
+unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut pos: Pos) {
     if lt(start_pos, visual_anchor()) {
         // The cursor is at the start of the Visual area. Work out where
         // that is: in the white space before a sentence, inside one or
@@ -357,7 +357,7 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: pos_T, mu
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_sent(oap: *mut oparg_T, count: c_int, include: bool) -> Result<(), Failed> {
+pub unsafe fn current_sent(oap: *mut OpArg, count: c_int, include: bool) -> Result<(), Failed> {
     let mut start_pos = cur_win().w_cursor;
     let mut pos = start_pos;
     // SAFETY, throughout: the caller guarantees a current window whose cursor

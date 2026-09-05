@@ -483,7 +483,7 @@ NORMAL MODE COMMANDS
 
 The Normal mode commands are handled by the `normal_cmd()` function.  It also
 handles the optional count and an extra character for some commands.  These
-are passed in a `cmdarg_T` to the function that handles the command.
+are passed in a `CmdArg` to the function that handles the command.
 
 There is a table `nv_cmds` in [normal.c](normal.c) which
 lists the first character of every

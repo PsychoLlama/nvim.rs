@@ -37,8 +37,8 @@ use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
-    AdditionalData, CmdModFlags, EvalFuncData, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
-    TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, exarg_T, expand_T, regmatch_T, size_t,
+    AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
+    Timestamp, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, regmatch_T, size_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -428,7 +428,7 @@ pub unsafe fn f_histnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
 
 /// ":history" command: list history entries, optionally filtered by
 /// history name ("cmd", ":", "all", ...) and a number range.
-pub unsafe fn ex_history(eap: *mut exarg_T) {
+pub unsafe fn ex_history(eap: *mut ExArg) {
     // SAFETY: caller contract; the message kind is a static string.
     let arg = unsafe {
         msg_ext_set_kind(c"list_cmd".as_ptr());
@@ -584,7 +584,7 @@ fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
 
 /// Completion source for `:history` arguments: the one-character names,
 /// the long names, then "all".
-pub unsafe fn get_history_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_history_arg(xp: *mut Expand, idx: c_int) -> *mut c_char {
     let short_count = SHORT_NAMES.len() as c_int;
     if (0..short_count).contains(&idx) {
         // SAFETY: caller contract; `xp_buf` is the completion scratch buffer,

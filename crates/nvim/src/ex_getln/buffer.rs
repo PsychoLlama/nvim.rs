@@ -54,7 +54,7 @@ impl Cc {
     }
 
     /// C's `xpc`: the completion in progress, NULL when there is none.
-    pub(crate) fn xpc(self) -> *mut expand_T {
+    pub(crate) fn xpc(self) -> *mut Expand {
         self.xpc
     }
 

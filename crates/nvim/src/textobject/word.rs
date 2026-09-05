@@ -25,7 +25,7 @@ use crate::normal::{
 };
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{Failed, NUL, oparg_T, pos_T};
+use crate::types::{Failed, NUL, OpArg, Pos};
 
 /// Whether [`cls`] should answer a WORD's classes rather than a word's.
 ///
@@ -360,12 +360,12 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
 pub unsafe fn current_word(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     mut count: c_int,
     include: bool,
     bigword: bool,
 ) -> Result<(), Failed> {
-    let mut start_pos = pos_T {
+    let mut start_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,

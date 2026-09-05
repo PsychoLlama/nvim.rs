@@ -23,7 +23,7 @@
 //!
 //! # Safety
 //!
-//! Every function here takes editor state by raw pointer -- the `exarg_T` of
+//! Every function here takes editor state by raw pointer -- the `ExArg` of
 //! the command being executed, or a `Buffer`/`Window`/`Tabpage` out of one
 //! of the editor's own lists -- and every one of them runs on the main
 //! thread with those lists live. That is the contract the `unsafe fn`s below
@@ -80,7 +80,7 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CmdModFlags, Failed, LineNr, MAXPATHL, NUL, Tabpage, VarNumber, Vv, Window, exarg_T,
+    Buffer, CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, Tabpage, VarNumber, Vv, Window,
     ptrdiff_t, size_t, ssize_t, uint64_t,
 };
 use crate::undo::buf_is_changed;
@@ -149,47 +149,47 @@ fn tab_windows() -> impl Iterator<Item = (*mut Tabpage, *mut Window)> {
 // and lets the remote plugin host do the work.
 
 /// `:ruby`
-pub(crate) unsafe fn ex_ruby(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_ruby(eap: *mut ExArg) {
     unsafe { script_host_execute(c"ruby", eap) }
 }
 
 /// `:rubyfile`
-pub(crate) unsafe fn ex_rubyfile(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_rubyfile(eap: *mut ExArg) {
     unsafe { script_host_execute_file(c"ruby", eap) }
 }
 
 /// `:rubydo`
-pub(crate) unsafe fn ex_rubydo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_rubydo(eap: *mut ExArg) {
     unsafe { script_host_do_range(c"ruby", eap) }
 }
 
 /// `:python3`
-pub(crate) unsafe fn ex_python3(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_python3(eap: *mut ExArg) {
     unsafe { script_host_execute(c"python3", eap) }
 }
 
 /// `:py3file`
-pub(crate) unsafe fn ex_py3file(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_py3file(eap: *mut ExArg) {
     unsafe { script_host_execute_file(c"python3", eap) }
 }
 
 /// `:pydo3`
-pub(crate) unsafe fn ex_pydo3(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pydo3(eap: *mut ExArg) {
     unsafe { script_host_do_range(c"python3", eap) }
 }
 
 /// `:perl`
-pub(crate) unsafe fn ex_perl(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_perl(eap: *mut ExArg) {
     unsafe { script_host_execute(c"perl", eap) }
 }
 
 /// `:perlfile`
-pub(crate) unsafe fn ex_perlfile(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_perlfile(eap: *mut ExArg) {
     unsafe { script_host_execute_file(c"perl", eap) }
 }
 
 /// `:perldo`
-pub(crate) unsafe fn ex_perldo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_perldo(eap: *mut ExArg) {
     unsafe { script_host_do_range(c"perl", eap) }
 }
 
@@ -197,7 +197,7 @@ pub(crate) unsafe fn ex_perldo(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn script_host_execute(name: &CStr, eap: *mut exarg_T) {
+unsafe fn script_host_execute(name: &CStr, eap: *mut ExArg) {
     // SAFETY: module contract; `script_get` returns an owned string that
     // `tv_list_append_allocated_string` takes over.
     let mut len: size_t = 0;
@@ -223,7 +223,7 @@ unsafe fn script_host_execute(name: &CStr, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
+unsafe fn script_host_execute_file(name: &CStr, eap: *mut ExArg) {
     // SAFETY: module contract; `buffer` is `MAXPATHL` bytes as promised.
     if unsafe { (*eap).skip } != 0 {
         return;
@@ -249,7 +249,7 @@ unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn script_host_do_range(name: &CStr, eap: *mut exarg_T) {
+unsafe fn script_host_do_range(name: &CStr, eap: *mut ExArg) {
     // SAFETY: module contract.
     if unsafe { (*eap).skip } != 0 {
         return;
@@ -381,8 +381,8 @@ pub(crate) unsafe fn check_changed(buf: *mut Buffer, flags: c_int) -> bool {
 /// Module contract.
 pub(crate) unsafe fn dialog_changed(buf: *mut Buffer, checkall: bool) {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
-    // `check_overwrite` needs an exarg_T; upstream hands it an all-zero one.
-    let mut ea = exarg_T::default();
+    // `check_overwrite` needs an ExArg; upstream hands it an all-zero one.
+    let mut ea = ExArg::default();
 
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes, as
     // `dialog_msg` requires.
@@ -436,7 +436,7 @@ pub(crate) unsafe fn dialog_changed(buf: *mut Buffer, checkall: bool) {
 /// # Safety
 /// Module contract.
 unsafe fn write_all_writable() {
-    let mut ea = exarg_T::default();
+    let mut ea = ExArg::default();
     // SAFETY: module contract. As in `autowrite_all`, a write's
     // autocommands can delete the buffer being walked.
     let mut cur = first_buffer();
@@ -705,7 +705,7 @@ pub(crate) unsafe fn buf_write_all(buf: *mut Buffer, forceit: bool) -> Result<()
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_compiler(eap: *mut ExArg) {
     let mut numbuf = NumBuf::new();
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
@@ -782,7 +782,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_checktime(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_checktime(eap: *mut ExArg) {
     let _checked = Allow::timestamp_checks();
     // SAFETY: module contract.
     if unsafe { (*eap).addr_count } == 0 {
@@ -801,7 +801,7 @@ pub(crate) unsafe fn ex_checktime(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_drop(eap: *mut ExArg) {
     // SAFETY: module contract.
     // Check whether the first argument is already being edited in a
     // window and jump there if so. Checking all of them would be

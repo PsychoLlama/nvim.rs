@@ -44,7 +44,7 @@ use crate::types::CmdModFlags;
 
 /// Where `clrallmarks` leaves `b_last_cursor`, and therefore what
 /// "`'"` has never really been set" looks like to the adjuster.
-const INIT_POS: pos_T = pos_T {
+const INIT_POS: Pos = Pos {
     lnum: 1,
     col: 0,
     coladd: 0,
@@ -92,7 +92,7 @@ impl LineShift {
 
     /// `ONE_ADJUST_CURSOR`: a cursor inside the deleted range moves to the
     /// start of the line before it.
-    fn cursor(self, posp: &mut pos_T) {
+    fn cursor(self, posp: &mut Pos) {
         if posp.lnum >= self.line1 && posp.lnum <= self.line2 {
             if self.amount == MAXLNUM.cast_signed() {
                 posp.lnum = (self.line1 - 1).max(1);
@@ -141,7 +141,7 @@ struct ColShift {
 }
 
 impl ColShift {
-    fn col(self, posp: &mut pos_T) {
+    fn col(self, posp: &mut Pos) {
         if posp.lnum != self.lnum || posp.col < self.mincol {
             return;
         }
@@ -532,8 +532,8 @@ mod tests {
         amount_after: 2,
     };
 
-    fn at(lnum: LineNr) -> pos_T {
-        pos_T {
+    fn at(lnum: LineNr) -> Pos {
+        Pos {
             lnum,
             col: 7,
             coladd: 0,
@@ -646,7 +646,7 @@ mod tests {
 
     #[test]
     fn a_column_before_mincol_is_untouched() {
-        let mut pos = pos_T {
+        let mut pos = Pos {
             lnum: 5,
             col: 3,
             coladd: 0,
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn a_column_on_another_line_is_untouched() {
-        let mut pos = pos_T {
+        let mut pos = Pos {
             lnum: 6,
             col: 40,
             coladd: 0,

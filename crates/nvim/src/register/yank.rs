@@ -174,7 +174,7 @@ unsafe fn append_to_register(curr: *mut yankreg_T, reg: *mut yankreg_T, yank_typ
 ///
 /// # Safety
 /// `oap` must be the operator that was just applied.
-unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_t) {
+unsafe fn report_yank(oap: *mut OpArg, yank_type: MotionType, yanklines: size_t) {
     let mut namebuf: [c_char; 100] = [0; 100];
     // SAFETY: the caller promises `oap` is the operator just applied.
     let regname = unsafe { (*oap).regname };
@@ -219,7 +219,7 @@ unsafe fn report_yank(oap: *mut oparg_T, yank_type: MotionType, yanklines: size_
 /// # Safety
 /// `oap` must describe a region of the current buffer and `reg` be a live
 /// register.
-pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankreg_T, append: bool) {
+pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut yankreg_T, append: bool) {
     let mut newreg = EMPTY_YANKREG;
     // Nothing this function reaches writes through `oap`, so the operator is
     // read once and worked from.
@@ -416,7 +416,7 @@ pub unsafe fn format_reg_type(
 /// # Safety
 /// `oap` and `reg` must describe the yank that just happened. Runs arbitrary
 /// autocommands, under `textlock`.
-pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
+pub unsafe fn do_autocmd_textyankpost(oap: *mut OpArg, reg: *mut yankreg_T) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: main thread, reading the autocommand table.
@@ -496,7 +496,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
 /// # Safety
 /// `oap` must describe a region of the current buffer. Runs the clipboard
 /// provider and TextYankPost, and so arbitrary Lua.
-pub unsafe fn op_yank(oap: *mut oparg_T, message: bool) -> bool {
+pub unsafe fn op_yank(oap: *mut OpArg, message: bool) -> bool {
     // SAFETY: the caller promises `oap` describes a region of the buffer.
     let regname = unsafe { (*oap).regname };
     // SAFETY: main thread, reading the register store.

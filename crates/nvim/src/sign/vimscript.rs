@@ -108,7 +108,7 @@ unsafe fn group_arg(tv: *mut TypVal, numbuf: &mut NumBuf) -> Option<*mut c_char>
 /// # Safety
 /// None beyond `get_highlight_name_ext`'s.
 unsafe fn hl_name(id: ::core::ffi::c_int) -> *const ::core::ffi::c_char {
-    // SAFETY: the null `expand_T` is the "no completion context" argument.
+    // SAFETY: the null `Expand` is the "no completion context" argument.
     let p = unsafe { get_highlight_name_ext(::core::ptr::null_mut(), id - 1, false) };
     if p.is_null() { c"NONE".as_ptr() } else { p }
 }

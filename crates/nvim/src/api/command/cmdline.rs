@@ -53,7 +53,7 @@ fn cmdline_concat_str(cmdline: &mut Vec<u8>, s: &CStr) {
 
 /// Write out the `:silent`/`:vertical`/... prefixes in the order upstream
 /// parses them back.
-fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &cmdmod_T) {
+fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &CmdMod) {
     if cmdmod.cmod_tab != 0 {
         let tab = cmdmod.cmod_tab - 1;
         cmdline.extend_from_slice(format!("{tab}tab ").as_bytes());
@@ -110,7 +110,7 @@ fn concat_cmdmods(cmdline: &mut Vec<u8>, cmdmod: &cmdmod_T) {
 
 pub(crate) unsafe fn build_cmdline_str(
     cmdlinep: *mut *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     cmdinfo: *mut CmdParseInfo,
     args: Array,
 ) {

@@ -30,7 +30,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Buffer, ColNr, FileDescriptor, IOSIZE, LineNr, TypVal, exarg_T, lua_Number, size_t,
+    Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, TypVal, lua_Number, size_t,
 };
 use crate::undo::u_save;
 
@@ -48,7 +48,7 @@ const STDIN_CHUNK: size_t = 64;
 ///
 /// # Safety
 /// `eap` must be a live command argument block.
-pub unsafe fn ex_lua(eap: *mut exarg_T) {
+pub unsafe fn ex_lua(eap: *mut ExArg) {
     unsafe {
         if *(*eap).arg == 0 {
             // `:{range}lua` with no body sources the range as Lua.
@@ -99,7 +99,7 @@ pub unsafe fn ex_lua(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be a live command argument block.
-pub unsafe fn ex_luado(eap: *mut exarg_T) {
+pub unsafe fn ex_luado(eap: *mut ExArg) {
     // Where the wrapped chunk is assembled when it fits; upstream shares
     // `IObuff` for it, which the loop body may overwrite.
     let mut chunk = [0 as c_char; IOSIZE as usize];
@@ -188,7 +188,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be a live command argument block.
-pub unsafe fn ex_luafile(eap: *mut exarg_T) {
+pub unsafe fn ex_luafile(eap: *mut ExArg) {
     unsafe {
         nlua_exec_file((*eap).arg);
     }

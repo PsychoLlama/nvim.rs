@@ -13,7 +13,7 @@ use crate::winlayer::Live;
 use crate::ex_docmd::cmd_has_expr_args;
 use crate::mbyte::utf_head_off;
 use crate::strings::vim_strchr;
-use crate::types::{ExpandContext, NUL, expand_T};
+use crate::types::{Expand, ExpandContext, NUL};
 use ::libc::strpbrk;
 
 /// The characters that end the plain-name part of an expression: whatever
@@ -26,7 +26,7 @@ const BREAKS: &core::ffi::CStr = c"\"'+-*/%.=!?~|&$([<>,#";
 /// `xp` must be valid and `arg` a NUL-terminated string that outlives it —
 /// `xp_pattern` is left pointing into it.
 pub(crate) unsafe fn set_context_for_expression(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *mut c_char,
     cmdidx: CmdIdx,
 ) {

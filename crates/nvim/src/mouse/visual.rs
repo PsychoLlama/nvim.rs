@@ -28,7 +28,7 @@ use crate::normal::{
 };
 use crate::pos::lt;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
-use crate::types::pos_T;
+use crate::types::Pos;
 use crate::winlayer::Win;
 
 /// The `jump_to_mouse()` flags the button and the mode ask for, and -- for a
@@ -40,7 +40,7 @@ pub(crate) fn visual_jump_flags(
     which_button: c_int,
     mouse_can_visual: bool,
     old_curwin: Win,
-) -> Option<(pos_T, pos_T)> {
+) -> Option<(Pos, Pos)> {
     if State.get() & (MODE_NORMAL | MODE_INSERT) == 0
         || mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL)
     {
@@ -85,7 +85,7 @@ pub(crate) fn visual_jump_flags(
 /// A right click inside a Visual selection moves the nearest corner to the
 /// pointer.  In Visual-block mode the area is divided in four and the corner
 /// in the quarter the cursor is in is the one that moves.
-pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: pos_T, mut end_visual: pos_T) {
+pub(crate) fn extend_visual_block(mut win: Win, mut start_visual: Pos, mut end_visual: Pos) {
     // When ALT is pressed make Visual mode blockwise.
     if mod_mask.get().has(ModMask::ALT) {
         set_visual_mode(VisualMode::BLOCK);

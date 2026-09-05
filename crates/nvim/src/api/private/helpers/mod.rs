@@ -36,8 +36,8 @@ use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
     ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr,
-    MsgList, NUL, ScriptId, String_0, Tabpage, TabpageHandle, TryState, Window, WindowHandle,
-    fmarkv_T, int64_t, kErrorTypeException, pos_T, uint64_t,
+    MsgList, NUL, Pos, ScriptId, String_0, Tabpage, TabpageHandle, TryState, Window, WindowHandle,
+    fmarkv_T, int64_t, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -371,7 +371,7 @@ pub(crate) unsafe fn set_mark(
     }
     debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
 
-    let mut pos = pos_T {
+    let mut pos = Pos {
         lnum: line as LineNr,
         col: col as ColNr,
         coladd: 0,

@@ -41,7 +41,7 @@ use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
-    ExpandContext, FuncCall, LineNr, ProfTime, UserFunc, VarNumber, Vv, exarg_T, expand_T, int64_t,
+    ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, UserFunc, VarNumber, Vv, int64_t,
     scriptitem_T, sn_prl_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -195,7 +195,7 @@ pub(crate) fn profile_msg(tm: ProfTime) -> [c_char; 50] {
 ///
 /// # Safety
 /// `eap` is the live ex command being executed.
-pub unsafe fn ex_profile(eap: *mut exarg_T) {
+pub unsafe fn ex_profile(eap: *mut ExArg) {
     /// Time at which `:profile pause` stopped the clock.
     static PAUSE_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 
@@ -315,7 +315,7 @@ const PEXPAND_CMDS: [&[u8]; 7] = [
 
 /// expand_generic callback for `:profile` subcommands (fn pointer in the
 /// cmdexpand context table).
-pub fn get_profile_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_profile_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     usize::try_from(idx)
         .ok()
         .and_then(|i| PEXPAND_CMDS.get(i))
@@ -327,7 +327,7 @@ pub fn get_profile_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// # Safety
 /// `xp` is the live expansion context; `arg` is NUL-terminated and outlives
 /// it (it is stored in `xp_pattern`).
-pub unsafe fn set_context_in_profile_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub unsafe fn set_context_in_profile_cmd(xp: *mut Expand, arg: *const c_char) {
     // SAFETY: the caller's context.
     let xp = unsafe { &mut *xp };
     // Default: expand subcommands.

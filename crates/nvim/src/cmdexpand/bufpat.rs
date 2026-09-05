@@ -39,10 +39,10 @@ fn exacttext() -> bool {
 /// The copied string is stored in `*match_out`, and the actual end position of
 /// the matched text is returned in `*match_end`.
 pub(crate) unsafe fn copy_substring_from_pos(
-    start: *mut pos_T,
-    end: *mut pos_T,
+    start: *mut Pos,
+    end: *mut Pos,
     match_out: *mut *mut c_char,
-    match_end: *mut pos_T,
+    match_end: *mut Pos,
 ) -> Result<(), Failed> {
     let exacttext = exacttext();
 
@@ -149,7 +149,7 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
 pub(crate) unsafe fn concat_pattern_with_buffer_match(
     pat: *mut c_char,
     pat_len: c_int,
-    end_match_pos: *mut pos_T,
+    end_match_pos: *mut Pos,
     lowercase: bool,
 ) -> *mut c_char {
     let line = ml_get(unsafe { (*end_match_pos).lnum });
@@ -205,8 +205,8 @@ pub(crate) unsafe fn expand_pattern_in_buf(
     }
 
     let pat_len = unsafe { cstr::bytes_at(pat) }.len() as c_int;
-    let mut cur_match_pos: pos_T = unsafe { core::mem::zeroed() };
-    let mut prev_match_pos: pos_T = unsafe { core::mem::zeroed() };
+    let mut cur_match_pos: Pos = unsafe { core::mem::zeroed() };
+    let mut prev_match_pos: Pos = unsafe { core::mem::zeroed() };
     if has_range {
         cur_match_pos.lnum = search_first_line.get();
     } else {
@@ -222,8 +222,8 @@ pub(crate) unsafe fn expand_pattern_in_buf(
     // The matches found so far, in the order they were found.
     let mut found = Vec::<CString>::new();
 
-    let mut end_match_pos: pos_T = unsafe { core::mem::zeroed() };
-    let mut word_end_pos: pos_T = unsafe { core::mem::zeroed() };
+    let mut end_match_pos: Pos = unsafe { core::mem::zeroed() };
+    let mut word_end_pos: Pos = unsafe { core::mem::zeroed() };
     let mut looped_around = false;
     let mut compl_started = false;
 

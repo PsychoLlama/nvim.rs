@@ -46,9 +46,8 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::types::{
-    ColNr, Dict, DictItem, EvalFuncData, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
-    VAR_LIST, VAR_NUMBER, VarNumber, Window, exarg_T, int64_t, ptrdiff_t, regprog_T, size_t,
-    uint8_t,
+    ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
+    VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, regprog_T, size_t, uint8_t,
 };
 use crate::winlayer::{Live, Win};
 
@@ -415,7 +414,7 @@ unsafe fn get_match(wp: *mut Window, id: c_int) -> *mut MatchItem {
 ///
 /// # Safety
 /// `eap` must be a live Ex-command argument block with a writable `arg`.
-pub(crate) unsafe fn ex_match(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_match(eap: *mut ExArg) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
     if unsafe { (*eap).line2 } > 3 {

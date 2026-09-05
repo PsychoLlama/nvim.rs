@@ -65,7 +65,7 @@ pub(crate) unsafe fn readfile(
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {

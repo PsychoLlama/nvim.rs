@@ -42,7 +42,7 @@ use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, TypVal, VarNumber, int64_t, lpos_T, oparg_T, pos_T, size_t,
+    ColNr, EvalFuncData, LPos, LineNr, OpArg, Pos, TypVal, VarNumber, int64_t, size_t,
 };
 use ::libc::{atoi, tolower};
 
@@ -85,7 +85,7 @@ pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 pub const FM_BACKWARD: ::core::ffi::c_int = 1;
 pub struct cpp_baseclass_cache_T {
     pub found: ::core::ffi::c_int,
-    pub lpos: lpos_T,
+    pub lpos: LPos,
 }
 pub const FM_BLOCKSTOP: ::core::ffi::c_int = 4;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

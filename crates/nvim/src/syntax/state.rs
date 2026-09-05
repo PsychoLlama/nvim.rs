@@ -272,7 +272,7 @@ pub(crate) fn syn_update_ends(startofline: bool) {
                 && cur_si.si_m_endpos.lnum < current_lnum.get()
             {
                 cur_si.si_flags |= SynFlags::MATCHCONT;
-                cur_si.si_m_endpos = lpos_T { lnum: 0, col: 0 };
+                cur_si.si_m_endpos = LPos { lnum: 0, col: 0 };
                 cur_si.si_h_endpos = cur_si.si_m_endpos;
                 cur_si.si_ends = 1;
             }

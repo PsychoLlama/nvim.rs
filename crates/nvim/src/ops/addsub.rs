@@ -97,10 +97,10 @@ enum Minus {
 /// to the second, and so on.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: LineNr, g_cmd: bool) {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // Everything below works on that region and on the cursor line, which is
     // what `u_save`, `do_addsub` and `changed_lines` each ask for.
     let oap = unsafe { Op::new(oap) };
@@ -128,7 +128,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: LineNr, g_cmd: bool) {
 
     let mut bd = block_def::ZERO;
     let mut change_cnt: ssize_t = 0;
-    let mut startpos = pos_T {
+    let mut startpos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -176,7 +176,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: LineNr, g_cmd: bool) {
 /// length in bytes.
 ///
 /// `pos.lnum` must be a line of the region.
-fn addsub_line_span(mut oap: Op, bd: &mut block_def, pos: &mut pos_T) -> c_int {
+fn addsub_line_span(mut oap: Op, bd: &mut block_def, pos: &mut Pos) -> c_int {
     // SAFETY: every line touched below is one of the region's, so it is a
     // line of the current buffer.
     if oap.motion_type == kMTBlockWise {
@@ -217,7 +217,7 @@ fn addsub_line_span(mut oap: Op, bd: &mut block_def, pos: &mut pos_T) -> c_int {
 /// `pos` must name a position in the current buffer.
 pub unsafe fn do_addsub(
     op_type: OpType,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     mut length: c_int,
     prenum1: LineNr,
 ) -> bool {
@@ -302,7 +302,7 @@ pub unsafe fn do_addsub(
 }
 
 /// Put the cursor back where the caller expects it, and answer `did_change`.
-fn finish_addsub(visual: bool, did_change: bool, save_cursor: pos_T, save_coladd: ColNr) -> bool {
+fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: ColNr) -> bool {
     if visual {
         cur_win().w_cursor = save_cursor;
     } else if did_change {
@@ -447,7 +447,7 @@ unsafe fn bump_alpha_char(
     op_type: OpType,
     prenum1: LineNr,
     col: ColNr,
-) -> (pos_T, pos_T) {
+) -> (Pos, Pos) {
     // The letter's ordinal within its own case.
     let ord = LineNr::from(if firstdigit < 'a' as c_int {
         firstdigit - 'A' as c_int
@@ -513,7 +513,7 @@ unsafe fn replace_number(
     prenum1: LineNr,
     fmt: &NrFormats,
     scan: Scan,
-) -> (pos_T, pos_T) {
+) -> (Pos, Pos) {
     let Scan {
         ptr,
         linelen,

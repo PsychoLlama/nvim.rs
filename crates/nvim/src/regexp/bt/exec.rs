@@ -32,7 +32,7 @@ use crate::regexp::{
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
-    Buffer, ColNr, LineNr, NUL, ProfTime, Window, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, Window, reg_extmatch_T, regmatch_T, regmmatch_T,
     uint8_t, uint32_t,
 };
 
@@ -104,7 +104,7 @@ fn settle_group_zero(rex: Rex, col: ColNr) {
 /// so that is line zero.
 fn match_start(rex: Rex, col: ColNr) -> MatchPos {
     if rex.multi() {
-        MatchPos::from_pos(lpos_T { lnum: 0, col })
+        MatchPos::from_pos(LPos { lnum: 0, col })
     } else {
         // SAFETY: `col` is a byte offset into the line being matched.
         MatchPos::from_ptr(unsafe { rex.line().offset(col as isize) })

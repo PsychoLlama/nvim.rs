@@ -27,7 +27,7 @@ use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{Cleanup, Exception, FAIL, Failed, LineNr, OptInt, Window, exarg_T};
+use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt, Window};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
@@ -188,7 +188,7 @@ fn with_clean_error_state(f: impl FnOnce()) {
 // :ball
 
 /// Open a window for every listed buffer, closing the superfluous ones.
-pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
+pub unsafe fn ex_buffer_all(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
     let eap = unsafe { &*eap };
     let mut split_ret = Ok(());

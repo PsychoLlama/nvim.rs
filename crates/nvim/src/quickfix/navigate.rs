@@ -29,8 +29,8 @@ struct At {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cc(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_cc(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let Some(qi) = qf_cmd_stack(eap, true) else {
         return;
@@ -76,8 +76,8 @@ pub unsafe fn ex_cc(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cnext(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_cnext(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let Some(qi) = qf_cmd_stack(eap, true) else {
         return;
@@ -186,7 +186,7 @@ unsafe fn last_entry_on_line(mut at: At) -> At {
 /// # Safety
 ///
 /// `qfp` and `pos` must be live.
-unsafe fn compare_to_pos(qfp: *const qfline_T, pos: *const pos_T, linewise: bool) -> Ordering {
+unsafe fn compare_to_pos(qfp: *const qfline_T, pos: *const Pos, linewise: bool) -> Ordering {
     // SAFETY: the caller's promise -- a live `qfline_T`.
     let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
     // SAFETY: forwarded from the caller.
@@ -204,7 +204,7 @@ unsafe fn compare_to_pos(qfp: *const qfline_T, pos: *const pos_T, linewise: bool
 /// # Safety
 ///
 /// `at.entry` must be a live entry and `pos` a live position.
-unsafe fn entry_after_pos(bnr: c_int, pos: *const pos_T, linewise: bool, mut at: At) -> Option<At> {
+unsafe fn entry_after_pos(bnr: c_int, pos: *const Pos, linewise: bool, mut at: At) -> Option<At> {
     // SAFETY: forwarded from the caller.
     if unsafe { compare_to_pos(at.entry, pos, linewise) } == Ordering::Greater {
         // The buffer's first entry is already after the position.
@@ -234,12 +234,7 @@ unsafe fn entry_after_pos(bnr: c_int, pos: *const pos_T, linewise: bool, mut at:
 /// # Safety
 ///
 /// `at.entry` must be a live entry and `pos` a live position.
-unsafe fn entry_before_pos(
-    bnr: c_int,
-    pos: *const pos_T,
-    linewise: bool,
-    mut at: At,
-) -> Option<At> {
+unsafe fn entry_before_pos(bnr: c_int, pos: *const Pos, linewise: bool, mut at: At) -> Option<At> {
     // SAFETY: forwarded from the caller.
     while !unsafe { (*at.entry).qf_next.is_null() } {
         let next = unsafe { (*at.entry).qf_next };
@@ -271,7 +266,7 @@ unsafe fn entry_before_pos(
 unsafe fn closest_entry(
     qfl: *mut qf_list_T,
     bnr: c_int,
-    pos: *const pos_T,
+    pos: *const Pos,
     dir: Direction,
     linewise: bool,
 ) -> Option<At> {
@@ -350,7 +345,7 @@ unsafe fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
 unsafe fn nth_adjacent_entry(
     qfl: *mut qf_list_T,
     bnr: c_int,
-    pos: *const pos_T,
+    pos: *const Pos,
     n: LineNr,
     dir: Direction,
     linewise: bool,
@@ -380,8 +375,8 @@ unsafe fn nth_adjacent_entry(
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cbelow(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_cbelow(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     if eap.addr_count > 0 && eap.line2 <= 0 {

@@ -86,10 +86,10 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Callback, CharsizeArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr, MotionType, OpType, OptInt,
-    StrCharInfo, TypVal, UVarNumber, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, bcount_t,
-    block_def, cmdarg_T, int32_t, int64_t, oparg_T, optset_T, pos_T, size_t, ssize_t,
-    typval_vval_union, yankreg_T,
+    Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr, MotionType, OpArg,
+    OpType, OptInt, Pos, StrCharInfo, TypVal, UVarNumber, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, bcount_t, block_def, int32_t, int64_t, optset_T, size_t, ssize_t, typval_vval_union,
+    yankreg_T,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
@@ -143,9 +143,9 @@ pub const kMTCharWise: MotionType = 0;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTBlockWise: MotionType = 2;
 
-/// `cmdarg_T::retval`: normal mode must not act on what the operator left.
+/// `CmdArg::retval`: normal mode must not act on what the operator left.
 pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;
-/// `cmdarg_T::retval`: leave `oap->end` where the motion put it.
+/// `CmdArg::retval`: leave `oap->end` where the motion put it.
 pub const CA_NO_ADJ_OP_END: ::core::ffi::c_int = 2;
 
 /// `r CTRL-V <CR>` and `r CTRL-V <NL>`: the literal byte, not a line split.
@@ -176,35 +176,35 @@ pub struct redo_VIsual_T {
     pub rv_arg: ::core::ffi::c_int,
 }
 
-/// An `oparg_T` the caller has promised is live: the region an operator is
+/// An `OpArg` the caller has promised is live: the region an operator is
 /// about to work on.
 ///
 /// [`Live`]'s shape, for the one struct every operator in this module is
 /// handed. Field access goes through `Deref`, so the borrow lasts no longer
 /// than the access that asked for it -- which matters here, because an
 /// operator may hand control to Insert mode, to 'operatorfunc' or to an
-/// external filter, and the editor reaches the same `oparg_T` again while it
+/// external filter, and the editor reaches the same `OpArg` again while it
 /// is away. [`Live::raw`] hands the pointer back to the callees that still
 /// take one.
-pub(crate) type Op = Live<oparg_T>;
+pub(crate) type Op = Live<OpArg>;
 
 impl Op {
-    /// The region's first position, which lives inside the `oparg_T`.
+    /// The region's first position, which lives inside the `OpArg`.
     ///
     /// [`Live::field_ptr`]'s trick: a field's address is the object's plus a
     /// constant, so saying where it is needs no dereference.
     #[inline(always)]
     pub(crate) fn start(self) -> PosRef {
-        // SAFETY: the constructor's promise -- a live `oparg_T`, so the
+        // SAFETY: the constructor's promise -- a live `OpArg`, so the
         // address of its `start` is a live position.
-        unsafe { PosRef::new(self.field_ptr(offset_of!(oparg_T, start))) }
+        unsafe { PosRef::new(self.field_ptr(offset_of!(OpArg, start))) }
     }
 
     /// The region's last position. [`Op::start`].
     #[inline(always)]
     pub(crate) fn end(self) -> PosRef {
         // SAFETY: as [`Op::start`].
-        unsafe { PosRef::new(self.field_ptr(offset_of!(oparg_T, end))) }
+        unsafe { PosRef::new(self.field_ptr(offset_of!(OpArg, end))) }
     }
 }
 

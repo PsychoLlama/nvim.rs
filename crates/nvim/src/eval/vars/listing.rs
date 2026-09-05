@@ -123,7 +123,7 @@ pub(crate) unsafe fn list_script_vars(first: *mut c_int) {
 /// # Safety
 /// `eap` is live, `arg` a NUL-terminated string and `first` writable.
 pub(crate) unsafe fn list_arg_vars(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     mut arg: *const c_char,
     first: *mut c_int,
 ) -> *const c_char {

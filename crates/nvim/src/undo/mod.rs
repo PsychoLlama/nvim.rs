@@ -655,7 +655,7 @@ pub fn u_sync(force: bool) {
 /// # Safety
 ///
 /// The ex-command contract: `_eap` is a live command block.
-pub unsafe fn ex_undojoin(_eap: *mut exarg_T) {
+pub unsafe fn ex_undojoin(_eap: *mut ExArg) {
     let mut b = cur_buf();
     if b.b_u_newhead.is_none() {
         return;

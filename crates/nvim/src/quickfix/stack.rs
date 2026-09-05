@@ -622,8 +622,8 @@ pub(crate) fn ll_get_or_alloc_list(mut wp: Win) -> *mut qf_info_T {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut exarg_T, print_emsg: bool) -> *mut qf_info_T {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut ExArg, print_emsg: bool) -> *mut qf_info_T {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     if !unsafe { is_loclist_cmd(eap.cmdidx) } {

@@ -210,7 +210,7 @@ const CONTEXT_ARG_BUFFER: usize = 0;
 /// `xp`, `cmd` and `arg` must be live.
 #[allow(clippy::too_many_arguments)] // upstream's `set_context_in_*` shape
 pub unsafe fn set_context_in_map_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut cmd: *mut c_char,
     arg: *mut c_char,
     forceit: bool,
@@ -218,7 +218,7 @@ pub unsafe fn set_context_in_map_cmd(
     isunmap: bool,
     cmdidx: CmdIdx,
 ) -> *mut c_char {
-    // SAFETY: the caller's promise — `xp` is a live `expand_T`.
+    // SAFETY: the caller's promise — `xp` is a live `Expand`.
     let mut xp = unsafe { Live::new(xp) };
     if forceit && cmdidx != CmdIdx::map && cmdidx != CmdIdx::unmap {
         xp.xp_context = ExpandContext::Nothing;

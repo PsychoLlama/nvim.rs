@@ -71,7 +71,7 @@ pub(crate) unsafe fn get_cmdline_str() -> *mut ::core::ffi::c_char {
 }
 
 /// The completion state of the current command line, computed on demand:
-/// the `expand_T` and the context it resolved to.
+/// the `Expand` and the context it resolved to.
 ///
 /// When nothing has asked yet the context is `ExpandContext::Nothing`, so
 /// `set_expand_context` runs and the field is then put *back* to
@@ -81,7 +81,7 @@ pub(crate) unsafe fn get_cmdline_str() -> *mut ::core::ffi::c_char {
 ///
 /// `None` means there is nothing to report: no command line, an obscured one
 /// (`inputsecret()`), or `ExpandContext::Unsuccessful`.
-unsafe fn cmdline_completion_state() -> Option<(*mut expand_T, ExpandContext)> {
+unsafe fn cmdline_completion_state() -> Option<(*mut Expand, ExpandContext)> {
     if cmdline_star.get() > 0 {
         return None;
     }

@@ -63,7 +63,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
 ///
 /// # Safety
 /// `eap` is a live `:function` command whose argument starts with `/`.
-pub(crate) unsafe fn list_functions_matching_pat(eap: *mut exarg_T) -> *mut c_char {
+pub(crate) unsafe fn list_functions_matching_pat(eap: *mut ExArg) -> *mut c_char {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let ea = unsafe { Ea::new(eap) };
     let mut p = unsafe { skip_regexp(ea.arg.add(1), b'/' as c_int, 1) };
@@ -93,7 +93,7 @@ pub(crate) unsafe fn list_functions_matching_pat(eap: *mut exarg_T) -> *mut c_ch
 /// `eap` is a live `:function` command, `name` the translated name and `p`
 /// the rest of the command line.
 pub(crate) unsafe fn list_one_function(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     name: *mut c_char,
     p: *mut c_char,
 ) -> *mut UserFunc {
@@ -213,7 +213,7 @@ pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
 /// # Safety
 /// Called with `idx` 0 first, then increasing, with no change to the
 /// function table in between.
-pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_func_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     static done: GlobalCell<size_t> = GlobalCell::new(0);
     static changed: GlobalCell<c_int> = GlobalCell::new(0);
     // The cursor is a slot *index*: it is parked in a `static` across calls
@@ -276,7 +276,7 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` is a live `:delfunction` command.
-pub unsafe fn ex_delfunction(eap: *mut exarg_T) {
+pub unsafe fn ex_delfunction(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     let mut fudi = FUNCDICT_INIT;

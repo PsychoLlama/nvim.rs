@@ -9,12 +9,12 @@
 
 //! Ordering and reset for a buffer position.
 //!
-//! `pos_T` orders lexicographically by line, then column, then `coladd` (the
+//! `Pos` orders lexicographically by line, then column, then `coladd` (the
 //! virtual columns past the end of a line that 'virtualedit' allows). The C
 //! had these as `static inline`s next to the struct, so the transpiler left a
 //! copy in every module that compared two positions.
 
-use crate::types::pos_T;
+use crate::types::Pos;
 
 /// One past the last addressable line: the line number `$` and an open-ended
 /// range resolve to, and the sentinel a "no line" mark carries.
@@ -25,12 +25,12 @@ pub const MAXLNUM: ::core::ffi::c_uint = 2147483647;
 pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
 
 /// Whether two positions name the same place, `coladd` included.
-pub fn equalpos(a: pos_T, b: pos_T) -> bool {
+pub fn equalpos(a: Pos, b: Pos) -> bool {
     a.lnum == b.lnum && a.col == b.col && a.coladd == b.coladd
 }
 
 /// Whether `a` comes strictly before `b`.
-pub fn lt(a: pos_T, b: pos_T) -> bool {
+pub fn lt(a: Pos, b: Pos) -> bool {
     if a.lnum != b.lnum {
         a.lnum < b.lnum
     } else if a.col != b.col {
@@ -41,12 +41,12 @@ pub fn lt(a: pos_T, b: pos_T) -> bool {
 }
 
 /// Whether `a` comes before `b`, or is the same place.
-pub fn ltoreq(a: pos_T, b: pos_T) -> bool {
+pub fn ltoreq(a: Pos, b: Pos) -> bool {
     lt(a, b) || equalpos(a, b)
 }
 
 /// Reset a position to line 0, column 0 — the "no position" the editor uses.
-pub fn clearpos(a: &mut pos_T) {
+pub fn clearpos(a: &mut Pos) {
     a.lnum = 0;
     a.col = 0;
     a.coladd = 0;
@@ -56,8 +56,8 @@ pub fn clearpos(a: &mut pos_T) {
 mod tests {
     use super::*;
 
-    const fn pos(lnum: i32, col: i32, coladd: i32) -> pos_T {
-        pos_T { lnum, col, coladd }
+    const fn pos(lnum: i32, col: i32, coladd: i32) -> Pos {
+        Pos { lnum, col, coladd }
     }
 
     #[test]

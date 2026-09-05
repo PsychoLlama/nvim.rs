@@ -596,7 +596,7 @@ pub(crate) unsafe fn is_zero_width(
     mut pattern: *mut c_char,
     mut patternlen: size_t,
     move_to_match: bool,
-    cur: *mut pos_T,
+    cur: *mut Pos,
     direction: Direction,
 ) -> c_int {
     let mut regmatch = regmmatch_T::default();
@@ -628,7 +628,7 @@ pub(crate) unsafe fn is_zero_width(
     // Searching from the top starts at the zeroed position; searching
     // from the cursor accepts a match at the cursor itself.
     let mut pos = if move_to_match {
-        pos_T::default()
+        Pos::default()
     } else {
         unsafe { *cur }
     };

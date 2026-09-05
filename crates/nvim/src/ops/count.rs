@@ -103,12 +103,12 @@ struct PosCounts {
 /// The Visual selection, as the counting walk needs to see it.
 struct Selection {
     /// Upper-left corner.
-    min: pos_T,
+    min: Pos,
     /// Lower-right corner.
-    max: pos_T,
+    max: Pos,
     /// Only the two vcols and the blockwise flags are filled in; it exists so
     /// that `block_prep` can be asked where the block sits in each line.
-    oparg: oparg_T,
+    oparg: OpArg,
     /// Lines the selection covers.
     line_count: c_int,
     /// `v`, `V` or CTRL-V, captured before the walk starts.
@@ -186,7 +186,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         max.col -= 1;
     }
 
-    let mut oparg = oparg_T::ZERO;
+    let mut oparg = OpArg::ZERO;
     if sel.mode.is_block() {
         // 'showbreak' would move the columns `getvcols` answers.
         let saved_sbr = p_sbr.get();

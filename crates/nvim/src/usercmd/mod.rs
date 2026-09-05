@@ -73,7 +73,7 @@ use crate::strings::xstrnsave;
 use crate::tr_c;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CmdAddr, ExArgt, ExpandContext, FAIL, Failed, LuaRef, OK, exarg_T, expand_T, int64_t,
+    Buffer, CmdAddr, ExArg, ExArgt, Expand, ExpandContext, FAIL, Failed, LuaRef, OK, int64_t,
     size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
@@ -211,10 +211,10 @@ pub(crate) unsafe fn ucmd_name(cmd: &ucmd_T) -> &[u8] {
 /// Module contract; `eap` must be the command being looked up, and `full`,
 /// `xp` and `complp` null or writable.
 pub(crate) unsafe fn find_ucmd(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     p: *mut c_char,
     full: *mut c_int,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     complp: *mut ExpandContext,
 ) -> *mut c_char {
     // SAFETY: caller contract.
@@ -523,7 +523,7 @@ unsafe fn free_new_command(
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
-pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_command(eap: *mut ExArg) {
     let mut argt = ExArgt::NONE;
     let mut def: c_int = -1;
     let mut flags: c_int = 0;
@@ -630,7 +630,7 @@ pub(crate) unsafe fn ex_command(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_comclear(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_comclear(_eap: *mut ExArg) {
     // SAFETY: module contract.
     unsafe { uc_clear(Table::Global) };
     if !curbuf.get().is_null() {
@@ -678,7 +678,7 @@ pub(crate) unsafe fn uc_clear(table: Table) {
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
-pub(crate) unsafe fn ex_delcommand(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_delcommand(eap: *mut ExArg) {
     // SAFETY: caller contract; `eap.arg` is NUL-terminated.
     let (mut arg, buffer_only) = unsafe {
         let arg = (*eap).arg.cast_const();

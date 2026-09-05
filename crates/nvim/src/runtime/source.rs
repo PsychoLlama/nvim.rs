@@ -30,7 +30,7 @@ use std::ffi::CString;
 ///
 /// # Safety
 /// `fname` is NUL-terminated; `eap` is null or the running command.
-unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
+unsafe fn cmd_source(fname: *mut c_char, eap: *mut ExArg) {
     // SAFETY: the caller's contract on both arguments.
     let (named, addr_count, forceit) = unsafe {
         (
@@ -69,7 +69,7 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` is the running command.
-pub unsafe fn ex_source(eap: *mut exarg_T) {
+pub unsafe fn ex_source(eap: *mut ExArg) {
     // SAFETY: the caller's contract.
     unsafe { cmd_source((*eap).arg, eap) };
 }
@@ -79,7 +79,7 @@ pub unsafe fn ex_source(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Called as an Ex command implementation; `eap` is unused.
-pub unsafe fn ex_options(_eap: *mut exarg_T) {
+pub unsafe fn ex_options(_eap: *mut ExArg) {
     let mut buf = [0 as c_char; 500];
     let mut multi_mods = false;
     cmdmod.with(|cmod| {
@@ -205,7 +205,7 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
 /// `sp` is a cookie under construction and `eap` carries the range.
 unsafe fn do_source_buffer_init(
     sp: &mut source_cookie_T,
-    eap: *const exarg_T,
+    eap: *const ExArg,
     ex_lua: bool,
 ) -> *mut c_char {
     let buf = curbuf.get();
@@ -267,7 +267,7 @@ unsafe fn do_source_str_init(sp: &mut source_cookie_T, mut str: *const c_char) {
 ///
 /// # Safety
 /// `eap` carries the range to run.
-pub unsafe fn cmd_source_buffer(eap: *const exarg_T, ex_lua: bool) {
+pub unsafe fn cmd_source_buffer(eap: *const ExArg, ex_lua: bool) {
     let req = SourceRequest::new(ptr::null_mut(), ptr::null(), eap, ex_lua);
     // SAFETY: the caller's contract.
     unsafe { do_source_ext(&req) };
@@ -334,7 +334,7 @@ struct SourceRequest {
     /// Where to report the script ID, if the caller wants it.
     ret_sid: *mut c_int,
     /// The command that asked, for [`Origin::Buffer`]'s range.
-    eap: *const exarg_T,
+    eap: *const ExArg,
     /// Source a buffer as Lua regardless of what it looks like.
     ex_lua: bool,
 }
@@ -342,7 +342,7 @@ struct SourceRequest {
 impl SourceRequest {
     /// The request `fname`/`str` describe, with the init-file fields at their
     /// defaults; [`do_source`] is the only caller that sets those.
-    fn new(fname: *mut c_char, str: *const c_char, eap: *const exarg_T, ex_lua: bool) -> Self {
+    fn new(fname: *mut c_char, str: *const c_char, eap: *const ExArg, ex_lua: bool) -> Self {
         let origin = if fname.is_null() {
             debug_assert!(str.is_null(), "str == NULL");
             Origin::Buffer
@@ -577,7 +577,7 @@ unsafe fn curbuf_is_lua() -> bool {
 ///
 /// # Safety
 /// `eap` is null or the running command.
-unsafe fn range_is_lua(eap: *const exarg_T) -> bool {
+unsafe fn range_is_lua(eap: *const ExArg) -> bool {
     if eap.is_null() {
         return false;
     }

@@ -25,7 +25,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
 use crate::os::env::{env_buf, os_getenv_into};
-use crate::types::{Failed, GArray, expand_T, size_t, uv_uid_t};
+use crate::types::{Expand, Failed, GArray, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -99,7 +99,7 @@ fn init_users() {
 }
 
 /// Given to `expand_generic()` to obtain user names. NULL past the end.
-pub fn get_users(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_users(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     init_users();
     COMPLETION_USERS.with(|users| {
         usize::try_from(idx)

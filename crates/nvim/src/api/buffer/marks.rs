@@ -94,7 +94,7 @@ pub unsafe fn nvim_buf_get_mark(
         error = err_bad_value(c"mark name (must be a single char)", name);
         return rv.reported(error);
     }
-    let mut pos: pos_T = pos_T {
+    let mut pos: Pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,

@@ -2,7 +2,7 @@
 //! `:keeppatterns`, the split direction, `:filter`, …): recognising them,
 //! putting them in force around the command, and taking them out again.
 //!
-//! `parse_command_modifiers` only *fills in* a `cmdmod_T`; `apply_cmdmod`
+//! `parse_command_modifiers` only *fills in* a `CmdMod`; `apply_cmdmod`
 //! is what puts it in force and `undo_cmdmod` what takes it back out, and
 //! the two must stay a matched pair — `do_one_cmd` runs the second on
 //! every exit path, including the ones an error takes.
@@ -48,7 +48,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CmdAddr, CmdModFlags, Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0, cmdmod_T, exarg_T,
+    CmdAddr, CmdMod, CmdModFlags, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, String_0,
     size_t,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
@@ -112,9 +112,9 @@ pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
 /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
 /// and evaluate nothing.
 pub(crate) unsafe fn parse_command_modifiers(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     errormsg: &mut Option<CString>,
-    cm: &mut cmdmod_T,
+    cm: &mut CmdMod,
     skip_only: bool,
 ) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
@@ -122,7 +122,7 @@ pub(crate) unsafe fn parse_command_modifiers(
     let mut cmd_start: *mut c_char = ptr::null_mut();
     let mut use_plus_cmd = false;
     let mut has_visual_range = false;
-    *cm = cmdmod_T::default();
+    *cm = CmdMod::default();
 
     // A `'<,'>` typed by the user (which is what a Visual-mode `:` puts
     // there) is stepped over so a modifier after it is still seen, and
@@ -572,7 +572,7 @@ fn eventignore_all() -> OptVal {
 }
 
 /// Take the modifiers back out of force.
-pub(crate) unsafe fn undo_cmdmod(cm: &mut cmdmod_T) {
+pub(crate) unsafe fn undo_cmdmod(cm: &mut CmdMod) {
     if cm.cmod_verbose_save > 0 {
         p_verbose.set(cm.cmod_verbose_save - 1);
         cm.cmod_verbose_save = 0;
@@ -623,7 +623,7 @@ pub(crate) unsafe fn undo_cmdmod(cm: &mut cmdmod_T) {
 /// do — and only then does the previous set go back.
 #[must_use = "the modifiers are taken back out as soon as the guard is dropped"]
 pub(crate) struct CmdModScope {
-    saved: cmdmod_T,
+    saved: CmdMod,
 }
 
 impl CmdModScope {
@@ -649,7 +649,7 @@ impl CmdModScope {
     ///
     /// # Safety
     /// Main-thread editor call: `apply_cmdmod` sets `'eventignore'`.
-    pub(crate) unsafe fn enter(mods: cmdmod_T) -> Self {
+    pub(crate) unsafe fn enter(mods: CmdMod) -> Self {
         let scope = CmdModScope {
             saved: cmdmod.take(),
         };
@@ -669,10 +669,10 @@ impl CmdModScope {
     /// As [`parse_command_modifiers`].
     pub(crate) unsafe fn parse(
         &self,
-        eap: *mut exarg_T,
+        eap: *mut ExArg,
         errormsg: &mut Option<CString>,
     ) -> Result<(), Failed> {
-        let mut parsed = cmdmod_T::default();
+        let mut parsed = CmdMod::default();
         // SAFETY: the caller's contract.
         let read = unsafe { parse_command_modifiers(eap, errormsg, &mut parsed, false) };
         cmdmod.set(parsed);

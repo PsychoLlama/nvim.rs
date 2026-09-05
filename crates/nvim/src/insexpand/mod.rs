@@ -108,10 +108,10 @@ use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData,
-    ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, SaveVEvent,
-    ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window, XpPrefix, expand_T,
-    extmark_undo_vec_t, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
-    typval_vval_union, uint8_t, uint64_t,
+    Expand, ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, Pos,
+    SaveVEvent, ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window, XpPrefix,
+    extmark_undo_vec_t, optset_T, ptrdiff_t, pumitem_T, regmatch_T, size_t, typval_vval_union,
+    uint8_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -221,11 +221,11 @@ pub struct ins_compl_next_state_T {
     /// [`crate::winlayer::Buf`] would be promising. Each use builds one where
     /// the buffer is known live and drops it again.
     pub ins_buf: *mut Buffer,
-    pub cur_match_pos: *mut pos_T,
-    pub prev_match_pos: pos_T,
+    pub cur_match_pos: *mut Pos,
+    pub prev_match_pos: Pos,
     pub set_match_pos: bool,
-    pub first_match_pos: pos_T,
-    pub last_match_pos: pos_T,
+    pub first_match_pos: Pos,
+    pub last_match_pos: Pos,
     pub found_all: bool,
     pub dict: *mut ::core::ffi::c_char,
     pub dict_f: ::core::ffi::c_int,
@@ -277,8 +277,8 @@ pub(crate) const TYPVAL_T_INIT: TypVal = TypVal {
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// A zeroed `pos_T`.
-pub(crate) const POS_T_INIT: pos_T = pos_T {
+/// A zeroed `Pos`.
+pub(crate) const POS_T_INIT: Pos = Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -560,7 +560,7 @@ static CPT_COMPL_PATTERN: GlobalCell<String_0> = GlobalCell::new(String_0::NULL)
 static compl_direction: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_shows_dir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_pending: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_startpos: GlobalCell<pos_T> = GlobalCell::new(POS_T_INIT);
+static compl_startpos: GlobalCell<Pos> = GlobalCell::new(POS_T_INIT);
 static compl_length: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 static compl_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
@@ -568,7 +568,7 @@ static compl_ins_end_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
 static COMPL_ORIG_TEXT: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static COMPL_ORIG_EXTMARKS: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
 static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
+static compl_xp: GlobalCell<Expand> = GlobalCell::new(Expand {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_context: ExpandContext::Nothing,
     xp_pattern_len: 0,
@@ -586,7 +586,7 @@ static compl_xp: GlobalCell<expand_T> = GlobalCell::new(expand_T {
     xp_line: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_buf: [0; 1025],
     xp_search_dir: kDirectionNotSet,
-    xp_pre_incsearch_pos: pos_T {
+    xp_pre_incsearch_pos: Pos {
         lnum: 0,
         col: 0,
         coladd: 0,

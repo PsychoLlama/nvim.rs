@@ -84,7 +84,7 @@ pub unsafe fn openscript(name: *mut c_char, directly: bool) {
     State.set(MODE_NORMAL);
     msg_scroll.set(0); // no message scrolling in Normal mode
     restart_edit.set(0); // don't go to Insert mode
-    let mut oa: oparg_T = unsafe { core::mem::zeroed() };
+    let mut oa: OpArg = unsafe { core::mem::zeroed() };
     unsafe { clear_oparg(&raw mut oa) };
     finish_op.set(false);
 

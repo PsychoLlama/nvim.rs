@@ -55,7 +55,7 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, CpoFlag, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag, exarg_T, int32_t,
+    CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag, int32_t,
     int64_t,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
@@ -137,7 +137,7 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_file(eap: *mut exarg_T) {
+pub unsafe fn ex_file(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     // SAFETY: `eap.arg` is the command's NUL-terminated argument.
@@ -169,7 +169,7 @@ pub unsafe fn ex_file(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_update(eap: *mut exarg_T) {
+pub unsafe fn ex_update(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     // SAFETY: `curbuf` is live.
@@ -186,7 +186,7 @@ pub unsafe fn ex_update(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_write(eap: *mut exarg_T) {
+pub unsafe fn ex_write(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     if eap.cmdidx == CmdIdx::saveas {
@@ -224,7 +224,7 @@ unsafe fn check_writable(fname: *const c_char) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `fname` must be live.
-unsafe fn handle_mkdir_p_arg(eap: &exarg_T, fname: *mut c_char) -> Result<(), Failed> {
+unsafe fn handle_mkdir_p_arg(eap: &ExArg, fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: caller's contract.
     if eap.mkdir_p != 0 && unsafe { os_file_mkdir(fname, 0o755 as int32_t) } < 0 {
         return Err(Failed);
@@ -239,7 +239,7 @@ unsafe fn handle_mkdir_p_arg(eap: &exarg_T, fname: *mut c_char) -> Result<(), Fa
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn do_write(eap: &mut exarg_T) -> Result<(), Failed> {
+pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
     // check 'write' option
     if unsafe { not_writing() } {
         return Err(Failed);
@@ -359,7 +359,7 @@ pub unsafe fn do_write(eap: &mut exarg_T) -> Result<(), Failed> {
 ///
 /// # Safety
 /// Main thread, message state; `eap.forceit` may be set by the dialog.
-unsafe fn cannot_write_curbuf(eap: &mut exarg_T) -> bool {
+unsafe fn cannot_write_curbuf(eap: &mut ExArg) -> bool {
     let forceit = &raw mut eap.forceit;
     // SAFETY: `curbuf` is the live current buffer, and `forceit` is the
     // borrowed command's own field. The whole chain is one region so the
@@ -377,7 +377,7 @@ unsafe fn cannot_write_curbuf(eap: &mut exarg_T) -> bool {
 ///
 /// # Safety
 /// Main thread, message state; `eap.forceit` may be set by the dialog.
-unsafe fn confirm_partial_write(eap: &mut exarg_T) -> bool {
+unsafe fn confirm_partial_write(eap: &mut ExArg) -> bool {
     if (eap.line1 == 1 && eap.line2 == cur_buf().b_ml.ml_line_count)
         || eap.forceit != 0
         || eap.append != 0
@@ -476,7 +476,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
 /// # Safety
 /// The two names must be live.
 pub unsafe fn check_overwrite(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     buf: Buf,
     fname: *mut c_char,
     ffname: *mut c_char,
@@ -585,7 +585,7 @@ fn swap_dir() -> Vec<u8> {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_wnext(eap: *mut exarg_T) {
+pub unsafe fn ex_wnext(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     let step = eap.line2 as c_int;
@@ -608,7 +608,7 @@ pub unsafe fn ex_wnext(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn do_wqall(eap: *mut exarg_T) {
+pub unsafe fn do_wqall(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     let mut error = 0;
@@ -667,7 +667,7 @@ enum WriteAll {
 /// # Safety
 /// Main thread; `buf` must be a live buffer.
 unsafe fn write_one_buffer(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     buf: Buf,
     save_forceit: c_int,
     error: &mut c_int,

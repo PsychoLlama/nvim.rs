@@ -140,7 +140,7 @@ fn count_parens(line: &[u8], parencount: &mut c_int) {
 ///
 /// # Safety
 /// There must be a current window.
-unsafe fn enclosing_open() -> Option<pos_T> {
+unsafe fn enclosing_open() -> Option<Pos> {
     // SAFETY: the caller's contract; `findmatch` answers a pointer into
     // static storage that stays valid until the next call.
     let __v = unsafe { findmatch(::core::ptr::null_mut(), '(' as c_int) };
@@ -161,7 +161,7 @@ unsafe fn enclosing_open() -> Option<pos_T> {
 ///
 /// # Safety
 /// There must be a current window and buffer.
-unsafe fn same_level_indent(open: &pos_T) -> Option<c_int> {
+unsafe fn same_level_indent(open: &Pos) -> Option<c_int> {
     // SAFETY: the caller's contract; the cursor stays on a real line because
     // the walk stops at `open`, which `findmatch` answered.
     let win = curwin.get();
@@ -211,7 +211,7 @@ unsafe fn skip_white_measuring(
 ///
 /// # Safety
 /// `open` must be a position in the current buffer.
-unsafe fn indent_after_open(open: &pos_T) -> c_int {
+unsafe fn indent_after_open(open: &Pos) -> c_int {
     // SAFETY: the caller's position; the cursor is moved onto it first, so
     // `get_cursor_line_ptr` is the line `open.col` indexes into.
     let win = curwin.get();

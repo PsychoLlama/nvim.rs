@@ -12,7 +12,7 @@ use crate::tr_plural;
 use crate::winlayer::{Buf, Ea, Live, Win};
 
 /// The completion context, whose caller has promised it outlives the value.
-type Xp = Live<expand_T>;
+type Xp = Live<Expand>;
 use core::ffi::{CStr, c_char, c_int, c_ulong};
 use core::ptr;
 
@@ -42,7 +42,7 @@ use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
 use crate::types::regexp::regmatch_T;
 use crate::types::{
-    CmdModFlags, CompleteListItemGetter, FAIL, FILE, Failed, NUL, OK, exarg_T, expand_T, int32_t,
+    CmdModFlags, CompleteListItemGetter, ExArg, Expand, FAIL, FILE, Failed, NUL, OK, int32_t,
     intmax_t, size_t,
 };
 use crate::window::{only_one_window, tabpage_index, valid_tabpage};
@@ -92,7 +92,7 @@ pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> Result<(), Fa
 /// The completion candidates for `++bad=`.
 ///
 /// Keeps the raw signature: installed as a `CompleteListItemGetter`.
-pub(crate) fn get_bad_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_bad_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     const VALUES: [&CStr; 3] = [c"?", c"keep", c"drop"];
     match VALUES.get(idx as usize) {
         Some(v) => v.as_ptr() as *mut c_char,
@@ -106,7 +106,7 @@ pub(crate) fn get_bad_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// rather than as pointers, because the command line is reallocated by the
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
-pub unsafe fn getargopt(eap: *mut exarg_T) -> Result<(), Failed> {
+pub unsafe fn getargopt(eap: *mut ExArg) -> Result<(), Failed> {
     let mut ea = unsafe { Ea::new(eap) };
     let mut arg = unsafe { ea.arg.add(2) };
     let mut bad_char_idx: c_int = 0;
@@ -186,7 +186,7 @@ pub unsafe fn getargopt(eap: *mut exarg_T) -> Result<(), Failed> {
 /// The completion candidates for `++`.
 ///
 /// Keeps the raw signature: installed as a `CompleteListItemGetter`.
-pub(crate) fn get_argopt_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_argopt_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     const VALUES: [&CStr; 7] = [
         c"fileformat=",
         c"encoding=",
@@ -206,7 +206,7 @@ pub(crate) fn get_argopt_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// already typed.
 pub unsafe fn expand_argopt(
     pat: *mut c_char,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     rmp: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
@@ -524,7 +524,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 #[allow(clippy::too_many_arguments)]
 fn expand_generic(
     pat: *const c_char,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     regmatch: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,

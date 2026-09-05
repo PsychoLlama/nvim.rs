@@ -21,7 +21,7 @@ use crate::normal::{
 };
 use crate::plines::plines_m_win_fill;
 use crate::strings::vim_strchr;
-use crate::types::{Buffer, ColNr, Direction, LineNr, Window, cmdarg_T};
+use crate::types::{Buffer, CmdArg, ColNr, Direction, LineNr, Window};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
 
@@ -153,7 +153,7 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
 
 /// `CTRL-F` and `CTRL-B`: a page forwards or backwards. With CTRL held they
 /// are a tab page instead.
-pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_page(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if check_clear_op(ca.op()) {
@@ -172,7 +172,7 @@ pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
 
 /// `CTRL-E` and `CTRL-Y`: scroll one line, leaving the cursor where it is on
 /// the screen for as long as it can.
-pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_scroll_line(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if !check_clear_op(ca.op()) {
@@ -181,7 +181,7 @@ pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-D` and `CTRL-U`: half a page.
-pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_halfpage(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if !check_clear_op(ca.op()) {
@@ -196,7 +196,7 @@ pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
 }
 
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
-pub(crate) unsafe fn nv_exit_command(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_exit_command(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if check_clear_op_quit(ca.op()) {

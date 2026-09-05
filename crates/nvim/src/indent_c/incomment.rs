@@ -58,7 +58,7 @@ pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
         let col = unsafe { check_linecomment(ml_get(cur_win().w_cursor.lnum - 1)) };
         if col != MAXCOL {
             let lnum = cur_win().w_cursor.lnum - 1;
-            trypos = Some(pos_T {
+            trypos = Some(Pos {
                 lnum,
                 col,
                 coladd: 0,
@@ -77,7 +77,7 @@ pub(crate) unsafe fn align_with_line_comment() -> Option<c_int> {
 /// Reads the cursor and the buffer; may unlock the current line.  `comment`
 /// is a copy the caller owns, and is moved onto the comment's *text* when
 /// 'cinoptions' `C` is off and there is text after the opener.
-pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut pos_T) -> c_int {
+pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut Pos) -> c_int {
     // Start from how indented the line that opens the comment is.
     // SAFETY: `comment` is the position of a `/*` found in this buffer.
     let mut amount = unsafe { line_vcol(comment.lnum, comment.col) };
@@ -142,7 +142,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut pos_T) -> c_int
 ///
 /// # Safety
 /// Reads the buffer; may unlock the current line.
-unsafe fn align_with_comment_leader(line: &Line, comment: &pos_T, amount: &mut c_int) -> bool {
+unsafe fn align_with_comment_leader(line: &Line, comment: &Pos, amount: &mut c_int) -> bool {
     // A closure, not a free function: two call sites in one body.
     // SAFETY: the leaders are `LEN`-byte buffers `copy_option_part` filled,
     // and it always NUL-terminates what it writes.

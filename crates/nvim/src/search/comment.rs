@@ -26,8 +26,8 @@ use core::ffi::{c_char, c_int, c_void};
 /// must be positions in the current buffer.
 pub(crate) unsafe fn find_rawstring_end(
     linep: *mut c_char,
-    startpos: *mut pos_T,
-    endpos: *mut pos_T,
+    startpos: *mut Pos,
+    endpos: *mut Pos,
 ) -> bool {
     let start_col = unsafe { (*startpos).col };
     // The delimiter runs from just after the quote to the '('.

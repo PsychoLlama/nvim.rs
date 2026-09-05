@@ -22,7 +22,7 @@ use core::ffi::c_int;
 ///
 /// # Safety
 /// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: pos_T) -> c_int {
+pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: Pos) -> c_int {
     let mut our_paren_pos = our_paren_pos;
     let mut cur_amount = MAXCOL;
 
@@ -70,7 +70,7 @@ pub(crate) unsafe fn indent_in_parens(line: &Line, our_paren_pos: pos_T) -> c_in
 /// Moves the cursor; may unlock the current line.
 unsafe fn previous_line_under_same_paren(
     line: &Line,
-    our_paren_pos: pos_T,
+    our_paren_pos: Pos,
     cur_amount: &mut c_int,
 ) -> c_int {
     let mut amount = -1;
@@ -129,7 +129,7 @@ unsafe fn previous_line_under_same_paren(
 /// Moves the cursor; may unlock the current line.
 unsafe fn align_with_unclosed_paren(
     line: &Line,
-    our_paren_pos: &mut pos_T,
+    our_paren_pos: &mut Pos,
     cur_amount: &mut c_int,
 ) -> c_int {
     let mut ignore_paren_col = 0;
@@ -177,7 +177,7 @@ unsafe fn align_with_unclosed_paren(
         // -- the two pointers are into the same allocation.
         let look_col = unsafe { look.offset_from(get_cursor_line_ptr()) } as ColNr;
         cur_win().w_cursor.col = look_col + 1;
-        let no_oparg = ::core::ptr::null_mut::<oparg_T>();
+        let no_oparg = ::core::ptr::null_mut::<OpArg>();
         let maxparen = int64_t::from(cur_buf().b_ind_maxparen);
         // SAFETY: the cursor is just past that `(`, which is where the match
         // search starts; `findmatchlimit` takes a null `oparg` for "no

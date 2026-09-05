@@ -29,7 +29,7 @@ const NUMBUFLEN: usize = 65;
 /// `lenp` receives the length without the trailing NUL (zero while skipping).
 /// Answers an allocated string, or NULL when skipping and on error; it shows
 /// no messages of its own.
-pub unsafe fn script_get(eap: *mut exarg_T, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
+pub unsafe fn script_get(eap: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
     let mut numbuf = NumBuf::new();
     let mut cmd = unsafe { (*eap).arg };
     if unsafe { *cmd.offset(0) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int

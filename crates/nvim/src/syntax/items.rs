@@ -293,8 +293,8 @@ pub(crate) fn check_keepend() {
         i -= 1;
     }
 
-    let mut maxpos = lpos_T { lnum: 0, col: 0 };
-    let mut maxpos_h = lpos_T { lnum: 0, col: 0 };
+    let mut maxpos = LPos { lnum: 0, col: 0 };
+    let mut maxpos_h = LPos { lnum: 0, col: 0 };
     while i < state_len() {
         let mut sip = unsafe { state_at(i) };
         if maxpos.lnum != 0 {
@@ -320,7 +320,7 @@ pub(crate) fn check_keepend() {
 
 /// Is `a` strictly after `b`?
 #[inline]
-fn pos_after(a: lpos_T, b: lpos_T) -> bool {
+fn pos_after(a: LPos, b: LPos) -> bool {
     a.lnum > b.lnum || (a.lnum == b.lnum && a.col > b.col)
 }
 
@@ -339,7 +339,7 @@ pub(crate) fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
         return;
     }
 
-    let startpos = lpos_T {
+    let startpos = LPos {
         lnum: current_lnum.get(),
         col: startcol as ColNr,
     };

@@ -182,7 +182,7 @@ pub unsafe fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
 ///
 /// # Safety
 /// `pos` must point at a live position and `buf` at a live buffer.
-unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut Buffer) {
+unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buf: *mut Buffer) {
     // SAFETY: the autocommand tables are the editor's own, live from startup.
     if !has_event(AutoEvent::MarkSet) {
         return;
@@ -234,7 +234,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut Buffer) {
 /// live `fmarkv_T`.
 pub unsafe fn setmark_pos(
     c: c_int,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     fnum: c_int,
     view_pt: *mut fmarkv_T,
 ) -> Result<(), Failed> {
@@ -338,7 +338,7 @@ pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
     }
 }
 
-/// Wrap a `pos_T` into an `fmark_T`, used to abstract marks handling.
+/// Wrap a `Pos` into an `fmark_T`, used to abstract marks handling.
 ///
 /// `fmp` is the caller's own record and is where the answer is written; the
 /// address handed back is `fmp` itself, so the mark lives exactly as long as
@@ -357,7 +357,7 @@ pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
 /// # Safety
 /// `buf` must be a live buffer and `fmp` must point at a live, writable
 /// `fmark_T` that outlives every use of the answer.
-pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut fmark_T, pos: pos_T) -> *mut fmark_T {
+pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut fmark_T, pos: Pos) -> *mut fmark_T {
     debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
     // SAFETY: the caller promised a live, writable record.
     let fm = unsafe { Fmark::new(fmp) };
@@ -411,14 +411,14 @@ pub unsafe fn mark_view_restore(fmp: *mut fmark_T) {
 
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn mark_view_make(wp: *const Window, pos: pos_T) -> fmarkv_T {
+pub unsafe fn mark_view_make(wp: *const Window, pos: Pos) -> fmarkv_T {
     // SAFETY: the caller promised a live window.
     mark_view_make_at(unsafe { Win::new(wp.cast_mut()) }, pos)
 }
 
 /// The view [`mark_view_make`] records: how far below the window's topline the
 /// position sits, and where the window was scrolled to sideways.
-fn mark_view_make_at(wp: Win, pos: pos_T) -> fmarkv_T {
+fn mark_view_make_at(wp: Win, pos: Pos) -> fmarkv_T {
     fmarkv_T {
         topline_offset: pos.lnum - wp.w_topline,
         skipcol: wp.w_skipcol,
@@ -627,7 +627,7 @@ pub unsafe fn set_last_cursor(win: *mut Window) {
 /// # Safety
 /// `buf` must be a live buffer and `lp` must point at a live, writable
 /// position naming a line of it.
-pub unsafe fn mark_mb_adjustpos(buf: *mut Buffer, lp: *mut pos_T) {
+pub unsafe fn mark_mb_adjustpos(buf: *mut Buffer, lp: *mut Pos) {
     // SAFETY: the caller promised a live position.
     let mut pos = unsafe { *lp };
     if pos.col <= 0 && pos.coladd <= 1 {

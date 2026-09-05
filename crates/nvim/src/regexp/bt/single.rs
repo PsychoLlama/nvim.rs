@@ -24,7 +24,7 @@ use crate::regexp::{
     cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,
     reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
-use crate::types::{GraphemeState, LineNr, NUL, fmark_T, pos_T, uint8_t, uint32_t, uint64_t};
+use crate::types::{GraphemeState, LineNr, NUL, Pos, fmark_T, uint8_t, uint32_t, uint64_t};
 
 use crate::winlayer::Win;
 
@@ -185,7 +185,7 @@ pub(crate) fn match_one(
 
 /// The cursor of the window the match runs in, if it runs in one. `\%#`
 /// needs a window and a string match has none.
-fn cursor_of(rex: Rex) -> Option<pos_T> {
+fn cursor_of(rex: Rex) -> Option<Pos> {
     let win = rex.reg_win();
     // SAFETY: a non-null `reg_win` is the live window the match runs in.
     (!win.is_null()).then(|| unsafe { (*win).w_cursor })

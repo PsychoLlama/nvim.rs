@@ -23,8 +23,8 @@ use crate::lua::ffi::{
 };
 use crate::main::g_min_log_level;
 use crate::types::{
-    Buffer, CmdModFlags, Error, Failed, SwitchWin, WinExecute, Window, aco_save_T, cmdmod_T,
-    lua_State, pos_T,
+    Buffer, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, Window, aco_save_T,
+    lua_State,
 };
 use crate::window::win_find_tabpage;
 
@@ -47,7 +47,7 @@ const FLAG_KEYS: [(&CStr, CmdModFlags); 11] = [
 /// An all-zero [`WinExecute`]; `win_execute_before` fills it.
 const WIN_EXECUTE_INIT: WinExecute = WinExecute {
     wp: ptr::null_mut(),
-    curpos: pos_T {
+    curpos: Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -117,9 +117,9 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
         if log_level >= 0 {
             g_min_log_level.set(log_level);
         }
-        let mods = CmdModScope::enter(cmdmod_T {
+        let mods = CmdModScope::enter(CmdMod {
             cmod_flags: flags,
-            ..cmdmod_T::default()
+            ..CmdMod::default()
         });
 
         let mut err = Error::none();

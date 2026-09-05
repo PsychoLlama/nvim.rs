@@ -48,7 +48,7 @@ fn filemess_note(fname: *mut c_char, note: &'static CStr) {
 unsafe fn read_autocmd(
     event: AutoEvent,
     sfname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     for_file: bool,
 ) -> bool {
     let (iofile, buf) = if for_file {
@@ -82,7 +82,7 @@ pub(crate) unsafe fn open_source(
     fname: *mut c_char,
     sfname: *mut c_char,
     from: LineNr,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     how: How,
     silent: bool,
     msg_save: c_int,

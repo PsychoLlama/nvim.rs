@@ -26,10 +26,10 @@ use super::*;
 /// `g~`, `gu`, `gU`, `g?` over the operator's region.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub(crate) unsafe fn op_tilde(oap: *mut OpArg) {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // `pos` walks that region, so it names a position of the buffer at every
     // step, which is what `swapchars`, `inc` and `ml_get_pos_len` ask for.
     let mut oap = unsafe { Op::new(oap) };
@@ -40,7 +40,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
         return;
     }
 
-    let mut pos: pos_T = oap.start;
+    let mut pos: Pos = oap.start;
     if oap.motion_type == kMTBlockWise {
         let mut bd = block_def::ZERO;
         while pos.lnum <= oap.end.lnum {
@@ -116,7 +116,7 @@ pub(crate) unsafe fn op_tilde(oap: *mut oparg_T) {
 ///
 /// # Safety
 /// `pos` must point to a valid position in the current buffer.
-unsafe fn swapchars(op_type: OpType, pos: *mut pos_T, length: c_int) -> c_int {
+unsafe fn swapchars(op_type: OpType, pos: *mut Pos, length: c_int) -> c_int {
     // SAFETY: the caller's promise -- `pos` names a position of the current
     // buffer, and `inc` keeps it one until it answers -1.
     let mut did_change: c_int = 0;
@@ -144,7 +144,7 @@ unsafe fn swapchars(op_type: OpType, pos: *mut pos_T, length: c_int) -> c_int {
 ///
 /// # Safety
 /// `pos` must point to a valid position in the current buffer.
-pub unsafe fn swapchar(op_type: OpType, pos: *mut pos_T) -> bool {
+pub unsafe fn swapchar(op_type: OpType, pos: *mut Pos) -> bool {
     // SAFETY: the caller's promise -- `pos` names a position of the current
     // buffer, so the cursor may be put on it and the character rebuilt there.
     let c = unsafe { gchar_pos(pos) };
@@ -176,7 +176,7 @@ pub unsafe fn swapchar(op_type: OpType, pos: *mut pos_T) -> bool {
         // The byte length can differ, so rebuild the character through the
         // change layer. Not `del_char()`: that would take the composing
         // characters with it.
-        let saved: pos_T = cur_win().w_cursor;
+        let saved: Pos = cur_win().w_cursor;
         cur_win().w_cursor = unsafe { *pos };
         let _ = unsafe { del_bytes(utf_ptr2len(get_cursor_pos_ptr()), false, false) };
         unsafe { ins_char(nc) };

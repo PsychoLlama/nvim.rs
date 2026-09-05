@@ -45,7 +45,7 @@ use crate::strings::vim_strchr;
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{ColNr, LineNr, NUL, OpType, cmdarg_T, pos_T, size_t};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Pos, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
@@ -119,7 +119,7 @@ impl VisualMode {
 #[derive(Clone, Copy)]
 pub(crate) struct VisualSelection {
     /// Upstream's `VIsual`: where the selection was started.
-    pub(crate) anchor: pos_T,
+    pub(crate) anchor: Pos,
     pub(crate) mode: VisualMode,
     /// Select mode rather than Visual mode: printable input replaces the
     /// selection instead of being read as a command.
@@ -147,7 +147,7 @@ struct VisualState {
 static VISUAL: GlobalCell<VisualState> = GlobalCell::new(VisualState {
     active: false,
     sel: VisualSelection {
-        anchor: pos_T {
+        anchor: Pos {
             lnum: 0,
             col: 0,
             coladd: 0,
@@ -210,11 +210,11 @@ pub(crate) fn set_visual_select(select: bool) {
 /// Upstream's bare `VIsual`. Prefer [`visual_selection`], which cannot hand
 /// back an anchor nothing is selecting; this is for the callers that reach
 /// the anchor with the flag tested somewhere further up the call stack.
-pub(crate) fn visual_anchor() -> pos_T {
+pub(crate) fn visual_anchor() -> Pos {
     VISUAL.get().sel.anchor
 }
 
-pub(crate) fn set_visual_anchor(anchor: pos_T) {
+pub(crate) fn set_visual_anchor(anchor: Pos) {
     let mut visual = VISUAL.get();
     visual.sel.anchor = anchor;
     VISUAL.set(visual);
@@ -236,7 +236,7 @@ pub(crate) fn visual_ever_started() -> bool {
 /// than borrowed out of the cell: the callers run buffer code and, through
 /// `has_folding`, 'foldexpr' -- user code that reads the same state -- so a
 /// borrow held across them would be reentrant.
-pub(crate) fn with_visual_anchor<R>(f: impl FnOnce(&mut pos_T) -> R) -> R {
+pub(crate) fn with_visual_anchor<R>(f: impl FnOnce(&mut Pos) -> R) -> R {
     let mut anchor = visual_anchor();
     let r = f(&mut anchor);
     set_visual_anchor(anchor);
@@ -303,7 +303,7 @@ pub(crate) fn restore_visual_mode() {
 /// selection spanning more than one line. Leaves Visual mode either way it
 /// succeeds.
 pub(crate) unsafe fn get_visual_text(
-    cap: *mut cmdarg_T,
+    cap: *mut CmdArg,
     pp: *mut *mut c_char,
     lenp: *mut size_t,
 ) -> bool {
@@ -426,7 +426,7 @@ const VISUAL_OPS: [(u8, u8); 8] = [
 ///
 /// An uppercase one forces the selection linewise -- except in blockwise
 /// mode, where `C` and `D` instead extend every line to its end.
-pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn v_visop(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar >= 'A' as c_int && ca.cmdchar <= 'Z' as c_int {
@@ -451,7 +451,7 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
 /// Only reached with a count: `3v` means "three times whatever was selected
 /// last". The line count and the column count multiply separately, which is
 /// why the charwise and blockwise cases are spelled out.
-unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
+unsafe fn reselect_scaled(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     set_visual_anchor(cur_win().w_cursor);
@@ -526,7 +526,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
 ///
 /// Keeps the raw signature: this is an `nv_cmds` row's handler, so `NvFunc`
 /// fixes it.
-pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_visual(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar == Ctrl_Q {
@@ -636,7 +636,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
 ///
 /// Doing it while a selection is up *swaps* the two, so `gv` twice comes back
 /// where it started.
-pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gv_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let vi = unsafe { &raw mut (*curbuf.get()).b_visual };
@@ -689,7 +689,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
 
 /// Make an exclusive selection cover the character the cursor is on, so the
 /// operator about to run sees what the highlight showed.
-pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn adjust_for_sel(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if visual_active()
@@ -721,7 +721,7 @@ pub(crate) fn unadjust_for_sel() -> bool {
 /// Move one position back, across a line break if there is nothing else left.
 ///
 /// Answers whether it crossed one.
-pub(crate) fn unadjust_for_sel_inner(pp: &mut pos_T) -> bool {
+pub(crate) fn unadjust_for_sel_inner(pp: &mut Pos) -> bool {
     VIsual_select_exclu_adj.set(false);
     if pp.coladd > 0 {
         pp.coladd -= 1;
@@ -757,7 +757,7 @@ pub(crate) fn unadjust_for_sel_inner(pp: &mut pos_T) -> bool {
 }
 
 /// `gh`, `gH`, `g CTRL-H`: Select mode, either fresh or from a reselection.
-pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_select(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     if visual_active() {
@@ -776,7 +776,7 @@ pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
 ///
 /// 'matchpairs' is forced to the four bracket pairs for the duration, because
 /// a text object's idea of a block is fixed and must not follow the option.
-pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_object(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let include = ca.cmdchar != 'i' as c_int;

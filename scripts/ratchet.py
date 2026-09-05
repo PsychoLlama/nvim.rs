@@ -604,7 +604,7 @@ CELL_PTR_KEEPERS = {
     "CELL": "`GlobalCell`'s own tests of `ptr`/`as_raw`; they must call them",
     "simple_diffline_change": "F-P22-37: the address goes into `diffline.changes` and is compared back",
     "highlight_attr": "the attribute table `hl_attr_active` holds; one site is its const initialiser",
-    "compl_xp": "the completion `expand_T`, taken by pointer by `expand_cmdline`/`nlua_expand_pat` (S5/S6)",
+    "compl_xp": "the completion `Expand`, taken by pointer by `expand_cmdline`/`nlua_expand_pat` (S5/S6)",
     "SCRATCH": "not one cell — two unrelated statics (mark F-P22-52, quickfix) with one site each",
     "BT_STATE": "the backtracking engine's state; phase 22's S10 ruled it taken raw per match",
 }
@@ -937,7 +937,7 @@ PLACE_WRITE = re.compile(
 DEREF_MUT = re.compile(
     r"\bimpl(?:<[^>]*>)?\s+(?:[A-Za-z0-9_]+::)*DerefMut\s+for\s+([A-Za-z_][A-Za-z0-9_]*)"
 )
-# `type Op = Live<oparg_T>;` — a family's name for a shared generic wrapper.
+# `type Op = Live<OpArg>;` — a family's name for a shared generic wrapper.
 # The scan is keyed on names, so an alias of a `DerefMut` type is one too.
 TYPE_ALIAS = re.compile(
     r"\btype\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=\s*"
@@ -2523,7 +2523,7 @@ SELF_TEST_VOCABULARY = [
         # carved-out subtrees are silent however they spell a parameter.
         {
             "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
-            "    _eap: *mut exarg_T,\n    old_buf: *mut Buffer,\n) {\n"
+            "    _eap: *mut ExArg,\n    old_buf: *mut Buffer,\n) {\n"
             "    let ptr: *mut c_char = q;\n}\n",
             "crates/nvim/src/lua/b.rs": "fn g(buf: *mut Buffer) {\n}\n",
             "crates/nvim/src/vterm/c.rs": "fn h(cp: *mut c_char) {\n}\n",

@@ -20,7 +20,7 @@ pub struct SwitchWin {
 }
 pub struct WinExecute {
     pub wp: *mut Window,
-    pub curpos: pos_T,
+    pub curpos: Pos,
     pub cwd: [::core::ffi::c_char; 4096],
     pub cwd_status: Result<(), Failed>,
     pub apply_acd: bool,
@@ -48,7 +48,7 @@ impl Default for WinExecute {
     fn default() -> Self {
         WinExecute {
             wp: ::core::ptr::null_mut(),
-            curpos: pos_T {
+            curpos: Pos {
                 lnum: 0,
                 col: 0,
                 coladd: 0,

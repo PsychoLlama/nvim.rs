@@ -37,7 +37,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{CmdModFlags, ExArgt, NUL, cmdmod_T, exarg_T, int64_t, size_t, ucmd_T};
+use crate::types::{CmdMod, CmdModFlags, ExArg, ExArgt, NUL, int64_t, size_t, ucmd_T};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int};
@@ -300,7 +300,7 @@ unsafe fn add_cmd_modifier(
 /// As [`add_cmd_modifier`]; `multi_mods` must be live.
 pub(crate) unsafe fn add_win_cmd_modifiers(
     buf: *mut c_char,
-    cmod: &cmdmod_T,
+    cmod: &CmdMod,
     multi_mods: *mut bool,
 ) -> size_t {
     // SAFETY: caller contract.
@@ -356,7 +356,7 @@ pub(crate) unsafe fn add_win_cmd_modifiers(
 ///
 /// # Safety
 /// As [`add_cmd_modifier`].
-pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: &cmdmod_T, quote: bool) -> size_t {
+pub(crate) unsafe fn uc_mods(buf: *mut c_char, cmod: &CmdMod, quote: bool) -> size_t {
     /// The modifiers that are nothing but a flag.
     static MOD_ENTRIES: [(CmdModFlags, &CStr); 12] = [
         (CmdModFlags::BROWSE, c"browse"),
@@ -534,7 +534,7 @@ unsafe fn uc_check_code(
     len: size_t,
     buf: *mut c_char,
     cmd: &ucmd_T,
-    eap: &exarg_T,
+    eap: &ExArg,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
 ) -> size_t {
@@ -601,7 +601,7 @@ unsafe fn uc_check_code(
 /// Module contract; `split_buf`/`split_len` are [`do_ucmd`]'s cache.
 unsafe fn expand_args(
     out: &mut Replacement,
-    eap: &exarg_T,
+    eap: &ExArg,
     quote: Quote,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
@@ -655,7 +655,7 @@ unsafe fn expand_args(
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being executed.
-pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
+pub(crate) unsafe fn do_ucmd(eap: *mut ExArg, preview: bool) -> c_int {
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     let (cmdidx, useridx) = unsafe { ((*eap).cmdidx, (*eap).useridx as usize) };
@@ -704,7 +704,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut exarg_T, preview: bool) -> c_int {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn expand_replacement(cmd: &ucmd_T, eap: &exarg_T) -> *mut c_char {
+unsafe fn expand_replacement(cmd: &ucmd_T, eap: &ExArg) -> *mut c_char {
     let mut split_len: size_t = 0;
     let mut split_buf: *mut c_char = ptr::null_mut();
     // First round: measure with a null destination. Second: fill it.
@@ -745,7 +745,7 @@ struct Pass {
 /// Module contract.
 unsafe fn expand_pass(
     cmd: &ucmd_T,
-    eap: &exarg_T,
+    eap: &ExArg,
     buf: *mut c_char,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,

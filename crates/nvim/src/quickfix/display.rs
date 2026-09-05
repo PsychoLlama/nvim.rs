@@ -184,8 +184,8 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn qf_list(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn qf_list(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let Some(qi) = qf_cmd_stack(eap, true) else {
         return;
@@ -374,8 +374,8 @@ unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn qf_age(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn qf_age(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let Some(mut qi) = qf_cmd_stack(eap, true) else {
         return;
@@ -411,8 +411,8 @@ pub unsafe fn qf_age(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn qf_history(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn qf_history(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     let stack = qf_cmd_stack(eap, false);

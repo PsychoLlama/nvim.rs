@@ -4,14 +4,14 @@
 //! [`Win`](crate::winlayer::Win), [`Buf`](crate::winlayer::Buf) and their
 //! siblings each wrap *one* named pointee and carry a family of projections
 //! with them. The same shape kept being reinvented for the plain structs the
-//! transpiled editor passes around by pointer — `oparg_T`, `cmdarg_T`,
-//! `exarg_T` — where all that is wanted is the half that pays: **construction
+//! transpiled editor passes around by pointer — `OpArg`, `CmdArg`,
+//! `ExArg` — where all that is wanted is the half that pays: **construction
 //! is the unsafe step, and every `(*p).field` after it is checked code**.
 //! Three phase-23 slices invented it independently before it was given a
 //! home; this is the home.
 //!
 //! ```ignore
-//! pub(crate) type Op = Live<oparg_T>;   // ops/mod.rs
+//! pub(crate) type Op = Live<OpArg>;   // ops/mod.rs
 //!
 //! let mut oap = unsafe { Op::new(raw) };   // the promise, once
 //! oap.motion_force = 0;                    // ordinary code, everywhere after
@@ -33,7 +33,7 @@
 //! [`WinId`](crate::winlayer::WinId)/[`BufId`](crate::winlayer::BufId) before
 //! a call that may fire an autocommand or enter Lua, and ask the registry
 //! afterwards. For the stack-allocated structs this type is mostly used for
-//! (`oparg_T` and friends), the promise is discharged by the frame that owns
+//! (`OpArg` and friends), the promise is discharged by the frame that owns
 //! them outliving the call.
 //!
 //! # Why [`Deref`], and why not `&mut *p`
@@ -42,7 +42,7 @@
 //! field access that asked for it, so a `Live<T>` never holds one across a
 //! call. Taking `&mut *p` once at the head of a body instead — the tempting
 //! shorter rewrite — is **unsound here**: a `&mut` parameter is `noalias` to
-//! LLVM, and the editor reads the same `oparg_T` through `current_oap` while
+//! LLVM, and the editor reads the same `OpArg` through `current_oap` while
 //! `run_operator` is away in `edit()`, in `'operatorfunc'` or in a filter.
 //! Phase 22's ruling 6 — nothing an autocommand re-enters holds a `&mut` —
 //! is a property of this API rather than of review.
@@ -78,13 +78,13 @@
 
 use core::ops::{Deref, DerefMut};
 
-use crate::types::{CmdlineInfo, exarg_T};
+use crate::types::{CmdlineInfo, ExArg};
 
 /// A `*mut T` the caller has promised is live, with checked field access.
 ///
 /// See the module docs: this is a record of that promise, not a proof of it.
 /// A family gives itself a name for its own pointee —
-/// `pub(crate) type Op = Live<oparg_T>;` — and hangs whatever extra
+/// `pub(crate) type Op = Live<OpArg>;` — and hangs whatever extra
 /// projections it needs off `impl Op`, which is an inherent impl on a local
 /// type and so is allowed in any module of this crate.
 #[repr(transparent)]
@@ -174,10 +174,10 @@ impl<T> DerefMut for Live<T> {
 /// The Ex command being run, whose caller has promised it outlives the value.
 ///
 /// The promise is discharged by the `do_cmdline` frame that owns the
-/// `exarg_T`: it outlives every command run out of it. Wrapping is the unsafe
+/// `ExArg`: it outlives every command run out of it. Wrapping is the unsafe
 /// step, once per entry point; every `(*eap).field` after it is ordinary
 /// checked code.
-pub(crate) type Ea = Live<exarg_T>;
+pub(crate) type Ea = Live<ExArg>;
 
 /// The command line being edited, whose caller has promised it outlives the
 /// value.

@@ -19,7 +19,7 @@ pub type MarkMoveRes = ::core::ffi::c_uint;
 /// and `free_fmark` takes a mark by value to release it.
 #[derive(Clone)]
 pub struct fmark_T {
-    pub mark: pos_T,
+    pub mark: Pos,
     pub fnum: ::core::ffi::c_int,
     pub timestamp: Timestamp,
     pub view: fmarkv_T,
@@ -48,7 +48,7 @@ impl fmark_T {
     /// slot starts that slot from: the lookups fill in `mark` and `fnum`, and
     /// leave the remaining fields as they found them.
     pub const UNSET: Self = Self {
-        mark: pos_T {
+        mark: Pos {
             lnum: 0,
             col: 0,
             coladd: 0,

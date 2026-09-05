@@ -31,7 +31,7 @@ use crate::types::{Failed, NUL};
 ///
 /// # Safety
 /// `lp` must name a line of the current buffer.
-pub(crate) unsafe fn pbyte(mut lp: pos_T, c: c_int) {
+pub(crate) unsafe fn pbyte(mut lp: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
     // SAFETY: the caller's promise -- `lp` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
@@ -73,10 +73,10 @@ unsafe fn replace_character(c: c_int) {
 /// than a line split.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub(crate) unsafe fn op_replace(oap: *mut OpArg, mut c: c_int) -> Result<(), Failed> {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     let oap = unsafe { Op::new(oap) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) || oap.empty {
         return Ok(());
@@ -152,7 +152,7 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     // so only this side effect on `startspaces` is carried over.)
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it.
     if op_virtual() && bd.is_short != 0 && unsafe { *bd.textstart } as c_int == NUL {
-        let mut vpos = pos_T {
+        let mut vpos = Pos {
             lnum: cur_win().w_cursor.lnum,
             col: 0,
             coladd: 0,

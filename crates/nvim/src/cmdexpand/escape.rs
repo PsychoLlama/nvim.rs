@@ -19,7 +19,7 @@ use core::ffi::{c_char, c_int, c_void};
 /// The listed contexts answer no whatever `'wildoptions'` says: each of them
 /// expands a path, an option value or a tag, where a fuzzy match would offer
 /// something the command being completed cannot use.
-pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
+pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const Expand) -> bool {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp.cast_mut()) };
@@ -84,11 +84,7 @@ pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const 
 /// `str` is the pattern that produced them, needed only for its leading
 /// `"\~"`.  Both callers expand only when there is at least one match, which
 /// is what makes the unconditional `matches[0]` at the end in bounds.
-pub(crate) unsafe fn wildescape(
-    xp: *mut expand_T,
-    str: *const c_char,
-    matches: &mut [*mut c_char],
-) {
+pub(crate) unsafe fn wildescape(xp: *mut Expand, str: *const c_char, matches: &mut [*mut c_char]) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -166,7 +162,7 @@ pub(crate) unsafe fn wildescape(
 
 /// Prepare a freshly expanded match array for use on the command line.
 pub(crate) unsafe fn escape_matches(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     str: *mut c_char,
     matches: &mut [*mut c_char],
     options: WildOpts,

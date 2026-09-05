@@ -30,7 +30,7 @@ use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};
 use crate::siemsg;
 use crate::state::MODE_NORMAL;
-use crate::types::{Direction, cmdarg_T, oparg_T};
+use crate::types::{CmdArg, Direction, OpArg};
 
 /// A mouse click in Insert mode: place the cursor, then get Insert mode's own
 /// bookkeeping back in order around the move.
@@ -92,7 +92,7 @@ pub(crate) unsafe fn ins_mouse(c: c_int) {
 ///
 /// # Safety
 /// `cap` must be a live command argument.
-pub(crate) unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn do_mousescroll(cap: *mut CmdArg) {
     let shift_or_ctrl = mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL);
     // SAFETY: `curwin` is live from startup to exit.
     let win = unsafe { Win::current() };
@@ -136,10 +136,10 @@ pub(crate) unsafe fn do_mousescroll(cap: *mut cmdarg_T) {
 /// Scrolling in Insert mode in direction `dir`, which is one of the `MSCR_`
 /// values.
 pub(crate) fn ins_mousescroll(dir: c_int) {
-    // SAFETY: `cmdarg_T` and `oparg_T` are C aggregates of scalars and
+    // SAFETY: `CmdArg` and `OpArg` are C aggregates of scalars and
     // pointers, which is what the C's `CLEAR_FIELD` zeroes; `clear_oparg`
     // then initialises the operator properly.
-    let (mut cap, mut oa): (cmdarg_T, oparg_T) = unsafe { core::mem::zeroed() };
+    let (mut cap, mut oa): (CmdArg, OpArg) = unsafe { core::mem::zeroed() };
     // SAFETY: a live local operator.
     unsafe { clear_oparg(&raw mut oa) };
     cap.oap = &raw mut oa;

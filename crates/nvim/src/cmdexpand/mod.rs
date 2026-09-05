@@ -102,9 +102,9 @@ use crate::tag::expand_tags;
 use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     Arena, Array, Buffer, CmdAddr, ColNr, CompleteListItemGetter, Dict, Direction, Error,
-    EvalFuncData, GArray, HashTab, Hlf, List, ListItem, LuaRetMode, Object, OptInt, TypVal,
-    VarNumber, XpPrefix, exarg_T, expand_T, fuzmatch_str_T, pos_T, ptrdiff_t, pumitem_T,
-    regmatch_T, size_t, ssize_t, typval_vval_union,
+    EvalFuncData, ExArg, Expand, GArray, HashTab, Hlf, List, ListItem, LuaRetMode, Object, OptInt,
+    Pos, TypVal, VarNumber, XpPrefix, fuzmatch_str_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
+    ssize_t, typval_vval_union,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::usercmd::{
@@ -145,7 +145,7 @@ pub(crate) use self::bufpat::*;
 /// The completion context an expansion is running in, whose caller has
 /// promised it outlives the value.
 ///
-/// The promise is discharged by the frame that owns the `expand_T`: the
+/// The promise is discharged by the frame that owns the `Expand`: the
 /// command line's own `xpc`, or a caller's local. Wrapping is the unsafe
 /// step, once per entry point, and every `(*xp).field` after it is ordinary
 /// checked code -- which also stops the 1 KiB struct being *copied* every
@@ -154,7 +154,7 @@ pub(crate) use self::bufpat::*;
 /// Two addresses may not be taken off one [`Deref`](core::ops::Deref) -- the
 /// second borrow pops the first -- so a caller wanting `&raw mut` on a field
 /// takes it off [`Live::field_ptr`] instead.
-pub(crate) type Xp = Live<expand_T>;
+pub(crate) type Xp = Live<Expand>;
 
 pub const XP_PREFIX_INV: XpPrefix = 2;
 pub const XP_PREFIX_NO: XpPrefix = 1;
@@ -277,7 +277,7 @@ pub const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 pub const PATHSEP: ::core::ffi::c_int = '/' as ::core::ffi::c_int;
 static cmd_showtail: GlobalCell<bool> = GlobalCell::new(false);
 static may_expand_pattern: GlobalCell<bool> = GlobalCell::new(false);
-static pre_incsearch_pos: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0,
     col: 0,
     coladd: 0,

@@ -8,7 +8,7 @@
 //! search start in the right place.  [`find_match`] is the other kind of
 //! matching: the `if` an `else` belongs to, or the `do` a `while` closes.
 //!
-//! Every answer here is a `pos_T` by value: the searches call `findmatch`
+//! Every answer here is a `Pos` by value: the searches call `findmatch`
 //! more than once and each one used to overwrite the last answer's storage.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -24,7 +24,7 @@ use core::ptr;
 ///
 /// # Safety
 /// Reads the buffer; may unlock the current line.
-pub(crate) unsafe fn cin_skip2pos(trypos: pos_T) -> c_int {
+pub(crate) unsafe fn cin_skip2pos(trypos: Pos) -> c_int {
     // SAFETY: on the main thread with a current buffer; `ml_get` hands back
     // a NUL-terminated line, which is all the two skippers ask for, and the
     // walk stops at its NUL.  Every step of it is a pointer operation, so one
@@ -54,7 +54,7 @@ pub(crate) unsafe fn cin_skip2pos(trypos: pos_T) -> c_int {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_start_brace() -> Option<pos_T> {
+pub(crate) unsafe fn find_start_brace() -> Option<Pos> {
     let cursor_save = cur_win().w_cursor;
     let mut trypos;
     loop {
@@ -91,7 +91,7 @@ pub(crate) unsafe fn find_start_brace() -> Option<pos_T> {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<pos_T> {
+pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<Pos> {
     unsafe { find_match_char(b'(', ind_maxparen) }
 }
 
@@ -105,7 +105,7 @@ pub(crate) unsafe fn find_match_paren(ind_maxparen: c_int) -> Option<pos_T> {
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<pos_T> {
+pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<Pos> {
     let cursor_save = cur_win().w_cursor;
     let mut ind_maxp_wk = ind_maxparen;
 
@@ -151,7 +151,7 @@ pub(crate) unsafe fn find_match_char(c: u8, ind_maxparen: c_int) -> Option<pos_T
 ///
 /// # Safety
 /// Reads and restores the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<pos_T> {
+pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option<Pos> {
     // SAFETY: searches the current buffer from the cursor, and restores it.
     let trypos = unsafe { find_match_paren(ind_maxparen) }?;
     // SAFETY: the same.
@@ -171,7 +171,7 @@ pub(crate) unsafe fn find_match_paren_after_brace(ind_maxparen: c_int) -> Option
 /// otherwise get a longer reach than the option allows, and could find a
 /// paren the option was meant to exclude.  Only a `startpos` below the cursor
 /// and within half the budget shortens it.
-pub(crate) fn corr_ind_maxparen(startpos: &pos_T) -> c_int {
+pub(crate) fn corr_ind_maxparen(startpos: &Pos) -> c_int {
     let maxparen = cur_buf().b_ind_maxparen;
     let n = startpos.lnum - cur_win().w_cursor.lnum;
     if n > 0 && n < maxparen / 2 {

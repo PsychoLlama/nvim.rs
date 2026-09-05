@@ -48,7 +48,7 @@ use crate::types::NUL;
 /// `oap` and `bdp` must point to live structs; `s` must be `slen` readable
 /// bytes.
 pub(crate) unsafe fn block_insert(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     s: *const c_char,
     slen: size_t,
     b_insert: bool,
@@ -248,7 +248,7 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// # Safety
 /// `oap` and `bdp` must point to live structs, and `lnum` must be a line of
 /// the current buffer.
-pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: LineNr, is_del: bool) {
+pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut block_def, lnum: LineNr, is_del: bool) {
     // SAFETY: the caller's promise -- both point to live structs.
     let (oap, bdp) = unsafe { (&mut *oap, &mut *bdp) };
     // Unwanted line breaks would move every column measured below.
@@ -391,8 +391,8 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: LineNr, i
 /// `bdp` must point to a live struct and `lnum` must be a line of the current
 /// buffer.
 pub unsafe fn charwise_block_prep(
-    mut start: pos_T,
-    mut end: pos_T,
+    mut start: Pos,
+    mut end: Pos,
     bdp: *mut block_def,
     lnum: LineNr,
     inclusive: bool,

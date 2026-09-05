@@ -62,10 +62,10 @@ use crate::types::{
     AdditionalData, AdditionalDataBuilder, ApiDict, Arena, Buffer, ColNr, DictItem, FileDescriptor,
     FileInfo, HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
     KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet,
-    MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
-    SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock, bln_values, fmark_T,
-    fmarkv_T, int64_t, pos_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t, uint8_t,
-    uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T, yankreg_T,
+    MotionType, OptionalKeys, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0,
+    StringArray, SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock,
+    bln_values, fmark_T, fmarkv_T, int64_t, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t,
+    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T, yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -338,7 +338,7 @@ pub struct buffer_list {
 }
 #[derive(Copy, Clone)]
 pub struct buffer_list_buffer {
-    pub pos: pos_T,
+    pub pos: Pos,
     pub fname: *mut ::core::ffi::c_char,
     pub additional_data: *mut AdditionalData,
 }
@@ -375,7 +375,7 @@ pub struct history_item {
 #[derive(Copy, Clone)]
 pub struct shada_filemark {
     pub name: ::core::ffi::c_char,
-    pub mark: pos_T,
+    pub mark: Pos,
     pub fname: *mut ::core::ffi::c_char,
 }
 pub type ShadaEntryType = ::core::ffi::c_int;
@@ -609,7 +609,7 @@ fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
     }
 }
 
-pub const DEFAULT_POS: pos_T = pos_T {
+pub const DEFAULT_POS: Pos = Pos {
     lnum: 1 as LineNr,
     col: 0 as ColNr,
     coladd: 0 as ColNr,

@@ -2,7 +2,7 @@
 //! wildcards, and the backtick form.
 //!
 //! Expansion rewrites the command line in place — every replacement is a
-//! fresh allocation the whole `exarg_T` is repointed into, which is what
+//! fresh allocation the whole `ExArg` is repointed into, which is what
 //! `repl_cmdline` does and why it is the only place allowed to free the
 //! old line.
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -53,7 +53,7 @@ use crate::runtime::estack_sfile;
 use crate::strings::strrep;
 
 use crate::types::{
-    ExArgt, ExpandContext, Failed, LineNr, MAXPATHL, NUL, Vv, exarg_T, expand_T, size_t, ssize_t,
+    ExArg, ExArgt, Expand, ExpandContext, Failed, LineNr, MAXPATHL, NUL, Vv, size_t, ssize_t,
     uint8_t,
 };
 use crate::winlayer::{Buf, Ea};
@@ -66,7 +66,7 @@ use ::libc::{strcat, strcpy, strpbrk, strrchr};
 /// Answers where the argument now starts, which is the whole new line for
 /// a program that had no `$*`.
 pub unsafe fn replace_makeprg(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     mut arg: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
@@ -115,7 +115,7 @@ pub unsafe fn replace_makeprg(
 /// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
 /// argument, then expand wildcards if the command takes exactly one name.
 pub(crate) unsafe fn expand_filename(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     cmdlinep: *mut *mut c_char,
     errormsgp: &mut Option<CString>,
 ) -> Result<(), Failed> {
@@ -240,7 +240,7 @@ pub(crate) unsafe fn expand_filename(
         return Ok(());
     }
 
-    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Files;
     let mut options = WildOpts::LIST_NOTFOUND | WildOpts::NOERROR | WildOpts::ADD_SLASH;
@@ -267,12 +267,12 @@ pub(crate) unsafe fn expand_filename(
 /// Replace `srclen` bytes at `src` with `repl`, in a freshly allocated copy
 /// of the whole command line.
 ///
-/// Everything in the `exarg_T` that points into the old line is repointed:
+/// Everything in the `ExArg` that points into the old line is repointed:
 /// `cmd`, `arg`, `nextcmd`, the API's argument vector and `do_ecmd_cmd`.
 /// Answers where the text after the replacement now lives, which is where
 /// the caller's scan resumes.
 pub(crate) fn repl_cmdline(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     src: *mut c_char,
     srclen: size_t,
     repl: *mut c_char,

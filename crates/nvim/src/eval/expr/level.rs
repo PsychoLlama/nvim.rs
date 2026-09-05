@@ -41,9 +41,9 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
-    DictItem, EvalArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, exarg_T,
-    kBoolVarFalse, kBoolVarTrue, size_t, typval_vval_union,
+    DictItem, EvalArg, ExArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, kBoolVarFalse,
+    kBoolVarTrue, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval, which is what every level starts a second
@@ -163,7 +163,7 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 ///
 /// # Safety
 /// `evalarg` may be null; `eap` may be null.
-pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, eap: *mut exarg_T) {
+pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, eap: *mut ExArg) {
     // SAFETY: the caller's promise -- `evalarg` is null or valid.
     if evalarg.is_null() || unsafe { (*evalarg).eval_tofree }.is_null() {
         return;
@@ -193,7 +193,7 @@ pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, eap: *mut exarg_T) {
 pub unsafe fn eval0(
     arg: *mut c_char,
     rettv: *mut TypVal,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     let did_emsg_before = did_emsg.get();
@@ -288,7 +288,7 @@ pub(crate) unsafe fn may_call_simple_func(
 pub(crate) unsafe fn eval0_simple_funccal(
     arg: *mut c_char,
     rettv: *mut TypVal,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, handed straight on to both.

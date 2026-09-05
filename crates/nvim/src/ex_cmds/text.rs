@@ -31,7 +31,7 @@ use crate::os::cshim::gettext;
 use crate::plines::linetabsize_str;
 use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
-use crate::types::{IOSIZE, NUL, exarg_T};
+use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
@@ -44,7 +44,7 @@ use core::ffi::{CStr, c_char, c_int};
 ///
 /// # Safety
 /// The cursor must be on a valid position of the current buffer.
-pub unsafe fn do_ascii(_eap: *mut exarg_T) {
+pub unsafe fn do_ascii(_eap: *mut ExArg) {
     // SAFETY: caller's contract; the cursor is on a live line.
     let data = get_cursor_pos_ptr();
     // SAFETY: `data` points into a NUL-terminated buffer line.
@@ -242,7 +242,7 @@ unsafe fn emit_line(line: &mut [c_char; IOSIZE as usize], need_clear: &mut bool)
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_align(eap: *mut exarg_T) {
+pub unsafe fn ex_align(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     let (mut cmdidx, arg, line1, line2) = (eap.cmdidx, eap.arg, eap.line1, eap.line2);

@@ -70,7 +70,7 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
 }
 
 /// `:runtime[!] [where] {name}`.
-pub unsafe fn ex_runtime(eap: *mut exarg_T) {
+pub unsafe fn ex_runtime(eap: *mut ExArg) {
     // SAFETY: `eap` is the live command being executed; `arg` is its
     // NUL-terminated argument text.
     let mut arg = unsafe { (*eap).arg };
@@ -91,7 +91,7 @@ pub unsafe fn ex_runtime(eap: *mut exarg_T) {
 /// The `[where]` qualifier is only offered for a single-argument command line;
 /// past the first argument [`runtime_expand_flags`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
-pub unsafe fn set_context_in_runtime_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub unsafe fn set_context_in_runtime_cmd(xp: *mut Expand, arg: *const c_char) {
     // SAFETY: `arg` is the NUL-terminated command line tail and `xp` is the
     // live expansion context.
     let mut arg = arg.cast_mut();

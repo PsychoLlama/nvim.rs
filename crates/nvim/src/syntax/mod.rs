@@ -85,9 +85,9 @@ use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    Buffer, ColNr, HashTab, LineNr, OptInt, ProfTime, SynBlock, SynTime, VarNumber, Window,
-    bufstate_T, exarg_T, expand_T, int16_t, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, size_t, synstate_T, uint8_t, uint64_t,
+    Buffer, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime,
+    VarNumber, Window, bufstate_T, int16_t, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
+    size_t, synstate_T, uint8_t, uint64_t,
 };
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
@@ -129,12 +129,12 @@ pub(crate) use self::syntime::*;
 
 /// How many `\(..\)` submatches a pattern can have.
 pub(crate) const NSUBEXP: ::core::ffi::c_uint = 10;
-/// Size of `expand_T::xp_buf`, the scratch buffer a completion callback may
+/// Size of `Expand::xp_buf`, the scratch buffer a completion callback may
 /// answer from. `IOSIZE`, because the callbacks that build a name out of
 /// one bound themselves by that; upstream answers the shared `IObuff` for
 /// those, which the completion machinery writes again.
 pub(crate) const EXPAND_BUF_LEN: ::core::ffi::c_uint = 1025;
-// The `expand_T::xp_context` values this module sets.
+// The `Expand::xp_context` values this module sets.
 /// Which syntax group an item belongs to, and at what `:syntax include`
 /// nesting it was declared. Both a pattern and a keyword carry one, and
 /// [`in_id_list`] tests against it.
@@ -246,10 +246,10 @@ pub(crate) struct stateitem_T {
     pub si_trans_id: ::core::ffi::c_int,
     pub si_m_lnum: ::core::ffi::c_int,
     pub si_m_startcol: ::core::ffi::c_int,
-    pub si_m_endpos: lpos_T,
-    pub si_h_startpos: lpos_T,
-    pub si_h_endpos: lpos_T,
-    pub si_eoe_pos: lpos_T,
+    pub si_m_endpos: LPos,
+    pub si_h_startpos: LPos,
+    pub si_h_endpos: LPos,
+    pub si_eoe_pos: LPos,
     pub si_end_idx: ::core::ffi::c_int,
     pub si_ends: ::core::ffi::c_int,
     pub si_attr: ::core::ffi::c_int,
@@ -603,13 +603,13 @@ static next_seqnr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1);
 
 /// Column the pending match starts at.
 static next_match_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_m_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
-static next_match_h_startpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
-static next_match_h_endpos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_m_endpos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
+static next_match_h_startpos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
+static next_match_h_endpos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
 static next_match_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static next_match_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
-static next_match_eos_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
-static next_match_eoe_pos: GlobalCell<lpos_T> = GlobalCell::new(lpos_T { lnum: 0, col: 0 });
+static next_match_eos_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
+static next_match_eoe_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
 static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static next_match_extmatch: GlobalCell<*mut reg_extmatch_T> =
     GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
@@ -662,10 +662,10 @@ const EMPTY_STATE_ITEM: stateitem_T = stateitem_T {
     si_trans_id: 0,
     si_m_lnum: 0,
     si_m_startcol: 0,
-    si_m_endpos: lpos_T { lnum: 0, col: 0 },
-    si_h_startpos: lpos_T { lnum: 0, col: 0 },
-    si_h_endpos: lpos_T { lnum: 0, col: 0 },
-    si_eoe_pos: lpos_T { lnum: 0, col: 0 },
+    si_m_endpos: LPos { lnum: 0, col: 0 },
+    si_h_startpos: LPos { lnum: 0, col: 0 },
+    si_h_endpos: LPos { lnum: 0, col: 0 },
+    si_eoe_pos: LPos { lnum: 0, col: 0 },
     si_end_idx: 0,
     si_ends: 0,
     si_attr: 0,

@@ -63,10 +63,11 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, BufferHandle, ColNr, Dict, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr,
-    MarkAdjustMode, Object, OptVal, OptionSetFlags, RefcountSize, RgbValue, SaveVEvent, Terminal,
-    TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState,
-    VTermValue, VarNumber, Window, aco_save_T, exarg_T, int16_t, pos_T, size_t, uint8_t,
+    Arena, Buffer, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle, HlAttrs,
+    LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
+    SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell,
+    VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, Window, aco_save_T, int16_t, size_t,
+    uint8_t,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -371,7 +372,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut Buffer)
     let mut win = unsafe { Win::current() };
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;
-    win.w_cursor = pos_T {
+    win.w_cursor = Pos {
         lnum: 1 as LineNr,
         col: 0 as ColNr,
         coladd: 0 as ColNr,
@@ -505,7 +506,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     let mut event = payload.object();
     // Pre-bound so that the eight-argument call still fits on one line.
     let (data, none) = (&mut event, ::core::ptr::null_mut());
-    let (exarg, exited) = (::core::ptr::null_mut::<exarg_T>(), status >= 0);
+    let (exarg, exited) = (::core::ptr::null_mut::<ExArg>(), status >= 0);
     let (group, buf) = (AUGROUP_ALL, buf.raw());
     // SAFETY: TermClose against a live buffer; nothing of the terminal is
     // borrowed across it.

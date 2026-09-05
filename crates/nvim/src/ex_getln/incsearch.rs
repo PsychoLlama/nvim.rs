@@ -76,7 +76,7 @@ pub(crate) unsafe fn init_incsearch_state(mut s: Is) {
 
 /// Move `t` to the end of the match the last search found, clamped to the
 /// last line of the buffer.
-pub(crate) fn set_search_match(t: &mut pos_T) {
+pub(crate) fn set_search_match(t: &mut Pos) {
     t.lnum += search_match_lines.get();
     t.col = search_match_endcol.get();
     if t.lnum > cur_buf().b_ml.ml_line_count {
@@ -93,7 +93,7 @@ pub(crate) fn set_search_match(t: &mut pos_T) {
 /// (bytes before the pattern), `patlen`, `search_delim`, `search_first_line`
 /// and `search_last_line`.
 pub unsafe fn parse_pattern_and_range(
-    incsearch_start: pos_T,
+    incsearch_start: Pos,
     search_delim: *mut ::core::ffi::c_int,
     skiplen: *mut ::core::ffi::c_int,
     patlen: *mut ::core::ffi::c_int,
@@ -123,7 +123,7 @@ pub unsafe fn parse_pattern_and_range(
     search_first_line.set(0);
     search_last_line.set(MAXLNUM as LineNr);
 
-    let mut ea = exarg_T {
+    let mut ea = ExArg {
         line1: 1,
         line2: 1,
         cmd: Cc::current().text(),
@@ -132,7 +132,7 @@ pub unsafe fn parse_pattern_and_range(
     };
 
     // Uninitialised in the C; `parse_command_modifiers` only writes it.
-    let mut dummy_cmdmod = cmdmod_T::default();
+    let mut dummy_cmdmod = CmdMod::default();
     let _ = unsafe { parse_command_modifiers(&raw mut ea, &mut dummy, &mut dummy_cmdmod, true) };
 
     // Skip over the range to find the command.
@@ -381,7 +381,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         set_cmd_byte(cc, skiplen + patlen, NUL as ::core::ffi::c_char);
         // So it doesn't beep on a bad expression.
         let no_emsg = Suppress::emsg();
-        let op = ::core::ptr::null_mut::<oparg_T>();
+        let op = ::core::ptr::null_mut::<OpArg>();
         let dir = if firstc == ':' as ::core::ffi::c_int {
             '/' as ::core::ffi::c_int
         } else {
@@ -652,7 +652,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         }
     }
 
-    let mut t: pos_T;
+    let mut t: Pos;
     if next_match {
         t = s.match_end;
         if lt(s.match_start, s.match_end) {
@@ -673,7 +673,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     unsafe { *pat.offset(patlen as isize) = NUL as ::core::ffi::c_char };
     // SAFETY: `curwin` and `curbuf` are the live window and buffer.
     let (w, b) = unsafe { (Some(Win::current()), Buf::current()) };
-    let (tp, e) = (&raw mut t, ::core::ptr::null_mut::<pos_T>());
+    let (tp, e) = (&raw mut t, ::core::ptr::null_mut::<Pos>());
     let dir = if next_match { FORWARD } else { BACKWARD } as Direction;
     let (plen, flags) = (patlen as size_t, search_flags);
     let re = RE_SEARCH as ::core::ffi::c_int;

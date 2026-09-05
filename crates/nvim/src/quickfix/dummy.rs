@@ -39,7 +39,7 @@ pub(crate) unsafe fn restore_start_dir(dirname_start: *const c_char) {
         return;
     }
     // Return to the original directory, ignoring any error.
-    let mut ea = exarg_T {
+    let mut ea = ExArg {
         arg: dirname_start.cast_mut(),
         cmdidx: if cur_win().w_localdir.is_null() {
             CmdIdx::cd

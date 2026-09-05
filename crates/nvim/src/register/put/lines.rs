@@ -46,7 +46,7 @@ impl Put {
                 // `col` is only right for the first line; the others have
                 // to be found by *screen* column, which matters as soon as
                 // a multi-byte character is involved.
-                let mut pos = pos_T {
+                let mut pos = Pos {
                     lnum,
                     col,
                     coladd: 0,
@@ -72,7 +72,7 @@ impl Put {
                 // text and `ml_get_len` its length.
                 let (oldp, oldlen) = (ml_get(lnum), ml_get_len(lnum));
                 if lnum > start_lnum {
-                    let mut pos = pos_T {
+                    let mut pos = Pos {
                         lnum,
                         col: 0,
                         coladd: 0,
@@ -250,7 +250,7 @@ impl Put {
         &self,
         lnum: LineNr,
         new_lnum: LineNr,
-        new_cursor: pos_T,
+        new_cursor: Pos,
         col: ColNr,
         lendiff: c_int,
     ) {
@@ -342,7 +342,7 @@ impl Put {
     ///
     /// # Safety
     /// `lnum`/`col` must be a valid position, and undo already saved.
-    pub(crate) unsafe fn multiline(&mut self, mut lnum: LineNr, col: ColNr, new_cursor: pos_T) {
+    pub(crate) unsafe fn multiline(&mut self, mut lnum: LineNr, col: ColNr, new_cursor: Pos) {
         let mut new_lnum = new_cursor.lnum;
         let mut lendiff = 0;
         let mut indent_state = FixIndent {

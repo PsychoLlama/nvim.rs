@@ -34,7 +34,7 @@ pub(crate) struct BlockScan<'a> {
     pub ourscope: LineNr,
     /// Where that `{` is, which `LOOKFOR_COMMA` and the paren test compare
     /// against.
-    pub brace: pos_T,
+    pub brace: Pos,
     /// Where the `{` sat on its line: [`BRACE_IN_COL0`], [`BRACE_AT_START`]
     /// or [`BRACE_AT_END`].
     pub start_brace: c_int,
@@ -75,7 +75,7 @@ pub(crate) struct BlockScan<'a> {
 ///
 /// # Safety
 /// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
+pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
     let ourscope = brace.lnum;
     // SAFETY: on the main thread with a current buffer; `ml_get` hands back a
     // NUL-terminated line and reports a bad line number itself.
@@ -233,7 +233,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
         raw_string_start: 0,
         cache: cpp_baseclass_cache_T {
             found: 0,
-            lpos: lpos_T {
+            lpos: LPos {
                 lnum: MAXLNUM as LineNr,
                 col: 0,
             },

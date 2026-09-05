@@ -23,7 +23,7 @@ use crate::lua::ffi::{
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::os::cshim::gettext;
-use crate::types::{Arena, Error, FAIL, Failed, OK, expand_T, ptrdiff_t, size_t};
+use crate::types::{Arena, Error, Expand, FAIL, Failed, OK, ptrdiff_t, size_t};
 
 /// The matches [`nlua_expand_pat`] produced, waiting for
 /// [`nlua_expand_get_matches`] to take ownership of them. Each entry is an
@@ -54,7 +54,7 @@ fn free_matches(matches: Vec<*mut c_char>) {
 /// # Safety
 /// `xp` must be a live expansion context whose `xp_pattern` points into
 /// `xp_line`.
-pub unsafe fn nlua_expand_pat(xp: *mut expand_T) {
+pub unsafe fn nlua_expand_pat(xp: *mut Expand) {
     unsafe {
         let lstate = get_global_lstate();
         let mut status = FAIL;

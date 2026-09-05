@@ -120,7 +120,7 @@ pub unsafe fn apply_autocmds(
     }
 }
 
-/// [`apply_autocmds`], passing an `exarg_T` on so `v:cmdarg` and
+/// [`apply_autocmds`], passing an `ExArg` on so `v:cmdarg` and
 /// `v:cmdbang` are set for the handlers.
 pub unsafe fn apply_autocmds_exarg(
     event: AutoEvent,
@@ -128,7 +128,7 @@ pub unsafe fn apply_autocmds_exarg(
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
     buf: *mut Buffer,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
 ) -> bool {
     // SAFETY: every pointer is the caller's, handed straight on;
     // `apply_autocmds_group` asks of them exactly what this does, `eap`
@@ -194,7 +194,7 @@ pub unsafe fn apply_autocmds_group(
     force: bool,
     group: ::core::ffi::c_int,
     buf: *mut Buffer,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     data: *mut Object,
 ) -> bool {
     static nesting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

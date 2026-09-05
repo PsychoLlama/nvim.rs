@@ -58,7 +58,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, CpoFlag, LineNr, NUL, OptInt, exarg_T};
+use crate::types::{CmdModFlags, CpoFlag, ExArg, LineNr, NUL, OptInt};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::buffers;
@@ -89,7 +89,7 @@ fn prevcmd_is_set() -> bool {
 /// `eap` must be the live Ex-command argument.
 pub unsafe fn do_bang(
     addr_count: c_int,
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     forceit: bool,
     do_in: bool,
     do_out: bool,
@@ -262,7 +262,7 @@ impl Drop for TempFile {
 unsafe fn do_filter(
     line1: LineNr,
     line2: LineNr,
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     cmd: *mut c_char,
     do_in: bool,
     do_out: bool,

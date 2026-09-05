@@ -140,9 +140,9 @@ unsafe fn eval_all_expr_in_str(str: *mut c_char) -> *mut c_char {
 /// # Safety
 /// `eap` is a live command and `cmd` points into its argument, writable in
 /// place.
-pub unsafe fn heredoc_get(eap: *mut exarg_T, mut cmd: *mut c_char, script_get: bool) -> *mut List {
+pub unsafe fn heredoc_get(eap: *mut ExArg, mut cmd: *mut c_char, script_get: bool) -> *mut List {
     // SAFETY: the caller's obligation -- a live command, which the
-    // `do_cmdline` frame that owns the `exarg_T` outlives.
+    // `do_cmdline` frame that owns the `ExArg` outlives.
     let mut ea = unsafe { Ea::new(eap) };
     let mut marker_indent_len: c_int = 0;
     let mut text_indent_len: c_int = 0;

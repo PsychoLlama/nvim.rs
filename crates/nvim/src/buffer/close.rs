@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, DictItem, GArray, Handle, HashTab, LineNr, Refcount, SynBlock, Tabpage,
-    Timestamp, WinInfo, Window, fmark_T, fmarkv_T, memfile_T, pos_T,
+    Callback, ColNr, DictItem, GArray, Handle, HashTab, LineNr, Pos, Refcount, SynBlock, Tabpage,
+    Timestamp, WinInfo, Window, fmark_T, fmarkv_T, memfile_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -58,7 +58,7 @@ use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_w
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
 /// which is *not* `INIT_FMARK` (that seeds `topline_offset` with `MAXLNUM`).
 const ZERO_FMARK: fmark_T = fmark_T {
-    mark: pos_T {
+    mark: Pos {
         lnum: 0 as LineNr,
         col: 0 as ColNr,
         coladd: 0 as ColNr,

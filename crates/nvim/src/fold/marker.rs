@@ -33,7 +33,7 @@ use crate::winlayer::Buf;
 ///
 /// # Safety
 /// `wp` must have a live buffer, and `start`/`end` must be lines inside it.
-pub(super) unsafe fn fold_create_markers(wp: Win, start: pos_T, end: pos_T) {
+pub(super) unsafe fn fold_create_markers(wp: Win, start: Pos, end: Pos) {
     let buf = wp.w_buffer;
     // SAFETY: a live buffer.
     if unsafe { (*buf).b_p_ma } == 0 {
@@ -56,7 +56,7 @@ pub(super) unsafe fn fold_create_markers(wp: Win, start: pos_T, end: pos_T) {
 /// `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_add_marker(
     buf: *mut Buffer,
-    pos: pos_T,
+    pos: Pos,
     marker: *const c_char,
     markerlen: size_t,
 ) {

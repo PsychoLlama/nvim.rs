@@ -40,7 +40,7 @@ use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::types::{LineNr, aco_save_T, exarg_T, size_t};
+use crate::types::{ExArg, LineNr, aco_save_T, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
@@ -89,7 +89,7 @@ impl ListDo {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_listdo(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_listdo(eap: *mut ExArg) {
     // SAFETY: module contract.
     let (cmdidx, forceit) = unsafe { ((*eap).cmdidx, (*eap).forceit != 0) };
     let Some(list) = ListDo::from_cmdidx(cmdidx) else {
@@ -175,7 +175,7 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
+unsafe fn listdo_walk(eap: *mut ExArg, list: ListDo) {
     // SAFETY: module contract. The command being run can do anything at all,
     // which is why every step re-validates what it is about to touch.
     let mut i: c_int = 0;

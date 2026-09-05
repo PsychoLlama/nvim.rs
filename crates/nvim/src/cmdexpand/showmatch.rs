@@ -20,7 +20,7 @@ use core::ptr;
 /// a line; `maxlen` is the column width and `showtail` asks for file names to
 /// be shown as their tail alone.
 pub(crate) unsafe fn showmatches_oneline(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     matches: *mut *mut c_char,
     numMatches: c_int,
     lines: c_int,
@@ -122,7 +122,7 @@ pub(crate) unsafe fn showmatches_oneline(
 /// Answers `Expanded::Nothing` when the character that triggered expansion should
 /// be inserted as a normal character.
 pub unsafe fn showmatches(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     display_wildmenu: bool,
     display_list: bool,
     noselect: bool,
@@ -306,7 +306,7 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
 ///
 /// When not completing file names, or when there is a wildcard in the path,
 /// false is returned.
-pub(crate) unsafe fn expand_showtail(xp: *mut expand_T) -> bool {
+pub(crate) unsafe fn expand_showtail(xp: *mut Expand) -> bool {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };

@@ -48,14 +48,14 @@ use core::ptr;
 
 use crate::main::namedfm;
 use crate::os::time::os_time;
-use crate::types::{ColNr, LineNr, Timestamp, fmark_T, fmarkv_T, pos_T, xfmark_T};
+use crate::types::{ColNr, LineNr, Pos, Timestamp, fmark_T, fmarkv_T, xfmark_T};
 use crate::winlayer::{Buf, Win};
 
 use super::{NGLOBALMARKS, NMARKS, free_fmark, free_xfmark};
 
 /// The position a mark that has never been set reports, and what
 /// [`Fmark::clear`] puts back.
-pub(super) const UNSET_POS: pos_T = pos_T {
+pub(super) const UNSET_POS: Pos = Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -133,7 +133,7 @@ impl Fmark {
     /// The address of the position inside the record, which `:marks` and
     /// `getmarklist()` pass around on its own.
     #[inline(always)]
-    pub(super) fn pos_raw(self) -> *mut pos_T {
+    pub(super) fn pos_raw(self) -> *mut Pos {
         // `wrapping_byte_add` would be the safe spelling, but the field
         // offset is only knowable through a projection, and a projection
         // through a raw pointer is the unsafe operation.
@@ -157,13 +157,13 @@ impl Fmark {
     }
 
     #[inline(always)]
-    pub(super) fn pos(self) -> pos_T {
+    pub(super) fn pos(self) -> Pos {
         // SAFETY: as `pos_raw`.
         unsafe { (*self.0).mark }
     }
 
     #[inline(always)]
-    pub(super) fn set_pos(self, pos: pos_T) {
+    pub(super) fn set_pos(self, pos: Pos) {
         // SAFETY: as `pos_raw`.
         unsafe { (*self.0).mark = pos };
     }
@@ -228,7 +228,7 @@ impl Fmark {
     /// dealt with; every other store wants [`Fmark::replace`]. The two are one
     /// `free_fmark` apart and upstream keeps them as two macros for the same
     /// reason.
-    pub(super) fn place(self, pos: pos_T, fnum: c_int, view: fmarkv_T) {
+    pub(super) fn place(self, pos: Pos, fnum: c_int, view: fmarkv_T) {
         self.write(fmark_T {
             mark: pos,
             fnum,
@@ -240,7 +240,7 @@ impl Fmark {
 
     /// [`Fmark::place`], releasing what was there first: upstream's
     /// `RESET_FMARK`.
-    pub(super) fn replace(self, pos: pos_T, fnum: c_int, view: fmarkv_T) {
+    pub(super) fn replace(self, pos: Pos, fnum: c_int, view: fmarkv_T) {
         // SAFETY: `new`'s caller promised a live record, so the old value is
         // readable and its `additional_data` is this store's to free.
         unsafe { free_fmark(self.read()) };
@@ -326,14 +326,14 @@ impl Xfmark {
     /// name, **abandoning** whatever was there: upstream's `SET_XFMARK`.
     ///
     /// As [`Fmark::place`], nothing is freed. `setpcmark` is the one caller.
-    pub(super) fn place(self, pos: pos_T, fnum: c_int, view: fmarkv_T) {
+    pub(super) fn place(self, pos: Pos, fnum: c_int, view: fmarkv_T) {
         self.set_fname(ptr::null_mut());
         self.fmark().place(pos, fnum, view);
     }
 
     /// [`Xfmark::place`], releasing both halves of what was there first:
     /// upstream's `RESET_XFMARK`.
-    pub(super) fn replace(self, pos: pos_T, fnum: c_int, view: fmarkv_T) {
+    pub(super) fn replace(self, pos: Pos, fnum: c_int, view: fmarkv_T) {
         // SAFETY: `new`'s caller promised a live record; the name and the
         // `additional_data` are this store's to free.
         unsafe { free_xfmark(self.read()) };
@@ -496,8 +496,8 @@ impl Win {
 mod tests {
     use super::*;
 
-    fn at(lnum: LineNr, col: ColNr) -> pos_T {
-        pos_T {
+    fn at(lnum: LineNr, col: ColNr) -> Pos {
+        Pos {
             lnum,
             col,
             coladd: 0,

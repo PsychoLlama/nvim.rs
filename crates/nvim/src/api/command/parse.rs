@@ -58,7 +58,7 @@ unsafe fn parse_map_cmd(arg_str: *const c_char, arena: *mut Arena) -> Array {
 ///
 /// # Safety
 /// As [`parse_map_cmd`]; `arena` must be the dispatcher's.
-unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
+unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
     // SAFETY: caller contract.
     let (length, empty) = unsafe { (cstr::bytes_at(ea.arg).len(), *ea.arg == NUL as c_char) };
 
@@ -114,7 +114,7 @@ unsafe fn parse_args(ea: &exarg_T, arena: *mut Arena) -> Array {
 ///
 /// # Safety
 /// `cmd` must be null or point at a live `ucmd_T`.
-unsafe fn command_name(ea: &exarg_T, cmd: *const ucmd_T) -> *const c_char {
+unsafe fn command_name(ea: &ExArg, cmd: *const ucmd_T) -> *const c_char {
     if ea.cmdidx == CmdIdx::SIZE {
         return c"".as_ptr();
     }
@@ -123,7 +123,7 @@ unsafe fn command_name(ea: &exarg_T, cmd: *const ucmd_T) -> *const c_char {
         return unsafe { (*cmd).uc_name };
     }
     // SAFETY: `cmdidx` is a built-in index, checked against `CmdIdx::SIZE` above.
-    unsafe { get_command_name(ptr::null_mut::<expand_T>(), ea.cmdidx.code()) }
+    unsafe { get_command_name(ptr::null_mut::<Expand>(), ea.cmdidx.code()) }
 }
 
 /// How the command's range is counted, as the `addr` field's string.
@@ -159,7 +159,7 @@ fn dict_of<const N: usize>(arena: *mut Arena, entries: [(&'static CStr, Object);
 }
 
 /// The `mods` sub-dictionary: every command modifier the line carried.
-unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> ApiDict {
+unsafe fn parse_mods(cmdmod: &CmdMod, arena: *mut Arena) -> ApiDict {
     // SAFETY: `cmod_filter_pat` is null or a NUL-terminated pattern, and the
     // arena copy outlives the Dict.
     let pattern = unsafe { arena_string(arena, cstr_as_string(cmdmod.cmod_filter_pat)) };
@@ -229,7 +229,7 @@ pub unsafe fn nvim_parse_cmd(
     // on.
     let mut result: KeyDict_cmd = unsafe { ::core::mem::zeroed() };
     // SAFETY: as above.
-    let mut ea: exarg_T = unsafe { ::core::mem::zeroed() };
+    let mut ea: ExArg = unsafe { ::core::mem::zeroed() };
     // SAFETY: as above.
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 

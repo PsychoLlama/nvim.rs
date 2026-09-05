@@ -19,7 +19,7 @@ use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
-use crate::types::{ExpandContext, expand_T};
+use crate::types::{Expand, ExpandContext};
 
 /// How much of a submenu name the generator can answer with, separator
 /// included. Upstream's `TBUFFER_LEN`.
@@ -67,7 +67,7 @@ impl Context {
 /// `xp` must be live, `cmd` a NUL-terminated string, and `arg` a position in
 /// the command line being completed.
 pub(crate) unsafe fn set_context_in_menu_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     cmd: *const c_char,
     arg: *mut c_char,
     forceit: bool,
@@ -238,7 +238,7 @@ impl Generator {
 }
 
 /// `expand_generic()`'s source for the list of (sub)menus, not entries.
-pub(crate) fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_menu_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -258,7 +258,7 @@ pub(crate) fn get_menu_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// As [`get_menu_name`].
-pub(crate) unsafe fn get_menu_names(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_menu_names(xp: *mut Expand, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 

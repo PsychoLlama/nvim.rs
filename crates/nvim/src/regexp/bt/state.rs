@@ -50,7 +50,7 @@ use crate::regexp::{
     REGSTACK_INITIAL, RS_MCLOSE, RS_MOPEN, RS_ZOPEN, Rex, SavedInput, reg_endzp, reg_endzpos,
     reg_getline, reg_startzp, reg_startzpos, regbehind_T, regitem_T, regstar_T, regstate_T,
 };
-use crate::types::{int64_t, lpos_T, uint8_t};
+use crate::types::{LPos, int64_t, uint8_t};
 
 /// How many `\1`..`\9` slots a match has.
 const NSUBEXP_SLOTS: usize = NSUBEXP as usize;
@@ -457,7 +457,7 @@ pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
 /// One end of one capture group, in whichever of the four slot arrays holds
 /// it.
 ///
-/// A buffer match records `lpos_T`s and a string match pointers, and *only the
+/// A buffer match records `LPos`s and a string match pointers, and *only the
 /// pair its own kind names exists*: the other pair is null for the whole run.
 /// So the kind has to be settled before a slot address is formed at all —
 /// `null.add(no)` is undefined even when the address is thrown away
@@ -466,7 +466,7 @@ pub(crate) fn reg_restore(rex: Rex, save: &SavedInput, backpos: &mut BackPos) {
 #[derive(Clone, Copy)]
 pub(crate) enum GroupSlot {
     /// A buffer match's slot, in the caller's match structure.
-    Pos(*mut lpos_T),
+    Pos(*mut LPos),
     /// A string match's slot, in the caller's match structure.
     Ptr(*mut *mut uint8_t),
     /// A `\z(` group's slot. Those arrays are the engine's own rather than

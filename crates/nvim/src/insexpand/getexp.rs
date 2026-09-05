@@ -155,7 +155,7 @@ pub(crate) unsafe fn may_advance_cpt_index(cpt: *const c_char) -> bool {
 pub(crate) unsafe fn process_next_cpt_value(
     st: *mut ins_compl_next_state_T,
     compl_type_arg: *mut c_int,
-    start_match_pos: *mut pos_T,
+    start_match_pos: *mut Pos,
     fuzzy_collect: bool,
     advance_cpt_idx: *mut bool,
 ) -> c_int {
@@ -577,7 +577,7 @@ pub(crate) unsafe fn get_next_spell_completion(lnum: LineNr) {
 pub(crate) unsafe fn get_next_completion_match(
     type_0: c_int,
     st: *mut ins_compl_next_state_T,
-    ini: *mut pos_T,
+    ini: *mut Pos,
 ) -> bool {
     let mut found_new_match = Err(Failed);
     match type_0 {
@@ -637,7 +637,7 @@ pub(crate) fn compl_source_start_timer(source_idx: c_int) {
 /// continues where the previous call stopped. May return before every match is
 /// found; the answer is the total number of matches, or −1 while that is still
 /// unknown. -- Acevedo
-pub(crate) unsafe fn ins_compl_get_exp(ini: pos_T) -> c_int {
+pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
     // Upstream's function-scope `static ins_compl_next_state_T st`: the
     // scan is collected over many calls, so the state outlives each one.
     // The pointer is taken once, here, because `st.cur_match_pos` points

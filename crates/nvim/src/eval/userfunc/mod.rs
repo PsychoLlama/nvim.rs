@@ -81,10 +81,10 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EvalArg, ExceptionState, FuncCall, FuncCallEntry, FuncDict, FuncExe,
-    GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, String_0, TypVal, UserFunc,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T, exarg_T, expand_T,
+    Callback, Dict, DictItem, EvalArg, ExArg, ExceptionState, Expand, FuncCall, FuncCallEntry,
+    FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, String_0,
+    TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T,
     funccall_S_fc_fixvar, regmatch_T, save_redo_T, size_t,
 };
 use crate::ui::ui_has;

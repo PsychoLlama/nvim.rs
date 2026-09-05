@@ -32,7 +32,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
-use crate::types::{Failed, LineNr, NUL, SubReplacementString, Timestamp, exarg_T, size_t};
+use crate::types::{ExArg, Failed, LineNr, NUL, SubReplacementString, Timestamp, size_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -106,7 +106,7 @@ pub unsafe fn sub_set_replacement(sub: SubReplacementString) {
 /// # Safety
 /// Main thread; `sub` and `cmd` must be live and `pat` live or null.
 pub(crate) unsafe fn sub_joining_lines(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     pat: *mut c_char,
     patlen: size_t,
     sub: *const c_char,

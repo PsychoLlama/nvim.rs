@@ -41,10 +41,10 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LineNr, OptInt, OptScope, OptVal,
-    OptionSetFlags, ScreenChar, String_0, Tabpage, VirtText, WinConfig, WinSplit, WinStyle, Window,
-    WindowHandle, kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor,
-    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, lpos_T, pos_T,
+    AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, OptInt, OptScope,
+    OptVal, OptionSetFlags, Pos, ScreenChar, String_0, Tabpage, VirtText, WinConfig, WinSplit,
+    WinStyle, Window, WindowHandle, kErrorTypeException, kFloatRelativeCursor,
+    kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -80,7 +80,7 @@ const NO_ERROR: Error = Error::none();
 /// same C macro, for the border it draws without a window.)
 pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
     window: 0,
-    bufpos: lpos_T { lnum: -1, col: 0 },
+    bufpos: LPos { lnum: -1, col: 0 },
     height: 0,
     width: 0,
     row: 0.0,
@@ -341,7 +341,7 @@ fn adjust_for_grid(win: &mut Win, row: &mut c_int, col: &mut c_int) {
     // SAFETY: a live window's own grid view, and two locals.
     unsafe { grid_adjust(win.w_grid, row, col) };
 }
-fn screen_pos_of(win: Win, pos: &mut pos_T) -> (c_int, c_int) {
+fn screen_pos_of(win: Win, pos: &mut Pos) -> (c_int, c_int) {
     let (mut row, mut scol, mut ccol, mut ecol) = (0, 0, 0, 0);
     let (r, s, c, e) = (&raw mut row, &raw mut scol, &raw mut ccol, &raw mut ecol);
     // SAFETY: a live window, a position in the buffer it shows, and four
@@ -672,7 +672,7 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
             // `lnum + 1` overflows before the clamp can catch it.
             let lnum =
                 (win.w_config.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
-            let mut pos = pos_T {
+            let mut pos = Pos {
                 lnum: lnum as LineNr,
                 col: win.w_config.bufpos.col,
                 coladd: 0 as ColNr,

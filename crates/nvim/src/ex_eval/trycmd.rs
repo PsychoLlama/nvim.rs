@@ -67,7 +67,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{Cleanup, CondStack, EsList, NUL, exarg_T, regmatch_T};
+use crate::types::{Cleanup, CondStack, EsList, ExArg, NUL, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -75,7 +75,7 @@ use core::ptr;
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_throw(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_throw(eap: *mut ExArg) {
     // SAFETY: module contract.
     let arg = unsafe { (*eap).arg };
     let value = if unsafe { *arg } != NUL as c_char
@@ -138,7 +138,7 @@ pub(crate) unsafe fn do_throw(cstack: *mut CondStack) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_try(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_try(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     if unsafe { (*cstack).cs_idx } == CSTACK_LEN - 1 {
@@ -180,7 +180,7 @@ pub(crate) unsafe fn ex_try(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_catch(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_catch(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     let mut idx: c_int = 0;
@@ -347,7 +347,7 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_finally(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     let mut pending: c_int = CSTP_NONE;
@@ -447,7 +447,7 @@ pub(crate) unsafe fn ex_finally(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_endtry(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endtry(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     let mut rethrow = false;

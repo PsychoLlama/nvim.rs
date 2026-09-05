@@ -67,7 +67,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
-use crate::types::{CmdAddr, CondStack, ExArgt, FAIL, IOSIZE, LineGetter, NUL, exarg_T, size_t};
+use crate::types::{CmdAddr, CondStack, ExArg, ExArgt, FAIL, IOSIZE, LineGetter, NUL, size_t};
 use crate::winlayer::{Buf, Ea, Live, Win};
 
 /// The conditional stack the command is running under, whose caller has
@@ -75,15 +75,15 @@ use crate::winlayer::{Buf, Ea, Live, Win};
 type Cs = Live<CondStack>;
 use ::libc::strcpy;
 
-/// A zeroed `exarg_T` with the empty range the parsers start from.
+/// A zeroed `ExArg` with the empty range the parsers start from.
 ///
 /// `CmdIdx::append` and `CmdAddr::Lines` are both zero, so the only fields the C's
-/// `(exarg_T){ .line1 = 1, .line2 = 1 }` sets to anything else are the two
+/// `(ExArg){ .line1 = 1, .line2 = 1 }` sets to anything else are the two
 /// line numbers.
-pub(crate) fn fresh_exarg() -> exarg_T {
-    // SAFETY: `exarg_T` is a `repr(C)` aggregate of scalars, pointers and
+pub(crate) fn fresh_exarg() -> ExArg {
+    // SAFETY: `ExArg` is a `repr(C)` aggregate of scalars, pointers and
     // `Option<fn>`; all-zero is a valid value of every one of them.
-    let mut ea: exarg_T = unsafe { core::mem::zeroed() };
+    let mut ea: ExArg = unsafe { core::mem::zeroed() };
     ea.line1 = 1;
     ea.line2 = 1;
     ea
@@ -94,7 +94,7 @@ pub(crate) fn fresh_exarg() -> exarg_T {
 /// Ex-command callbacks are identified by address, as the C code did; the
 /// comparison is spelled out so the intent survives the
 /// `unpredictable_function_pointer_comparisons` lint.
-pub(crate) fn ex_func_is(func: ExFunc, f: unsafe fn(*mut exarg_T)) -> bool {
+pub(crate) fn ex_func_is(func: ExFunc, f: unsafe fn(*mut ExArg)) -> bool {
     func.is_some_and(|g| ptr::fn_addr_eq(g, f))
 }
 
@@ -623,7 +623,7 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 /// `:finally` all execute even though the surrounding construct is
 /// inactive, and each is worth a profile sample.
 pub(crate) unsafe fn profile_cmd(
-    eap: *const exarg_T,
+    eap: *const ExArg,
     cstack: *mut CondStack,
     fgetline: LineGetter,
     cookie: *mut c_void,
@@ -669,7 +669,7 @@ pub(crate) unsafe fn profile_cmd(
 /// The three "this command is not allowed here" checks that share an exit.
 ///
 /// Answers the message to report, or `None` when the command may run.
-unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
+unsafe fn refuses_here(ea: &ExArg) -> Option<CString> {
     if sandbox.get() != 0 && !ea.argt.has(ExArgt::SBOXOK) {
         return Some(ex_msg(e_sandbox.as_ptr()));
     }
@@ -699,7 +699,7 @@ unsafe fn refuses_here(ea: &exarg_T) -> Option<CString> {
 /// range, or Ex mode, means print. `exmode_plus + 1` is the empty string Ex
 /// mode substitutes for a bare `+`; it is recognised by *address*, not by
 /// content.
-pub(crate) unsafe fn ex_range_without_command(eap: *mut exarg_T) -> Option<CString> {
+pub(crate) unsafe fn ex_range_without_command(eap: *mut ExArg) -> Option<CString> {
     let mut ea = unsafe { Ea::new(eap) };
     let mut errormsg: Option<CString> = None;
     if byte(ea.cmd) == '|' as c_int
@@ -773,7 +773,7 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 ///
 /// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
-pub unsafe fn ex_ni(eap: *mut exarg_T) {
+pub unsafe fn ex_ni(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     if eap.skip == 0 {
         eap.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
@@ -783,7 +783,7 @@ pub unsafe fn ex_ni(eap: *mut exarg_T) {
 /// The same, for a command whose argument may be a here-document
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
-pub(crate) unsafe fn ex_script_ni(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_script_ni(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if eap.skip == 0 {
         unsafe { ex_ni(eap.raw()) };
@@ -824,7 +824,7 @@ fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) ->
 }
 
 /// `invalid_range()` as checked code.
-fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
+fn invalid_range(eap: *mut ExArg) -> Option<CString> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_docmd::address::invalid_range(eap) }
 }

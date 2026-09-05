@@ -44,7 +44,7 @@ use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
 use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
 use crate::types::AutoEvent;
-use crate::types::{ColNr, LineNr, OptInt, VimState, WinOpt, pos_T, uint8_t};
+use crate::types::{ColNr, LineNr, OptInt, Pos, VimState, WinOpt, uint8_t};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
@@ -449,7 +449,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     }
 
     if term.suspended && State.get() & MODE_TERMINAL != 0 {
-        win.w_cursor = pos_T {
+        win.w_cursor = Pos {
             lnum: buf.line_count(),
             col: 0,
             coladd: 0,

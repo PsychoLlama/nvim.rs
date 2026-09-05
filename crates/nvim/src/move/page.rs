@@ -30,11 +30,11 @@ use crate::normal::{
 };
 use crate::pos::equalpos;
 use crate::search::FORWARD;
-use crate::types::{ColNr, Direction, FAIL, LineNr, OK, OptInt, Window, cmdarg_T, oparg_T, pos_T};
+use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Pos, Window};
 use crate::winlayer::{Buf, Win, first_window};
 
-/// A command with nothing set, as C's `cmdarg_T ca = { 0 }` leaves it.
-const CMDARG_ZERO: cmdarg_T = cmdarg_T {
+/// A command with nothing set, as C's `CmdArg ca = { 0 }` leaves it.
+const CMDARG_ZERO: CmdArg = CmdArg {
     oap: ptr::null_mut(),
     prechar: 0,
     cmdchar: 0,
@@ -55,7 +55,7 @@ const CMDARG_ZERO: cmdarg_T = cmdarg_T {
 #[derive(Clone, Copy)]
 struct Saved {
     buflen: LineNr,
-    cursor: pos_T,
+    cursor: Pos,
     curswant: ColNr,
 }
 
@@ -77,7 +77,7 @@ pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     // One operator and one command, shared by both arms as upstream shares
     // them: `nv_screengo()` fills in the operator that `nv_g_home_m_cmd()`
     // reads back through `ca`.
-    let mut oa = oparg_T::ZERO;
+    let mut oa = OpArg::ZERO;
     let mut ca = CMDARG_ZERO;
     ca.oap = &raw mut oa;
 
@@ -122,7 +122,7 @@ unsafe fn half_page(
     dir: Direction,
     count: c_int,
     saved: Saved,
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
 ) -> bool {
     // Scroll [count], 'scroll', or the window height in lines.
     let mut count = count;
@@ -210,7 +210,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
 /// The editor's window list must be valid.
 pub unsafe fn do_check_cursorbind() {
     static prev_curwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut::<Window>());
-    static prev_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+    static prev_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
         lnum: 0,
         col: 0,
         coladd: 0,

@@ -31,7 +31,7 @@ fn is_cmd_alnum(c: u8) -> bool {
 ///
 /// `xp->xp_context` ends up one of the `EXPAND_*` values, with `xp_pattern`
 /// pointing at the text to expand.
-pub unsafe fn set_expand_context(xp: *mut expand_T) {
+pub unsafe fn set_expand_context(xp: *mut Expand) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -75,8 +75,8 @@ pub unsafe fn set_expand_context(xp: *mut expand_T) {
 /// Returns a pointer to the text after the command, or NULL for failure.
 pub(crate) unsafe fn set_cmd_index(
     cmd: *const c_char,
-    eap: *mut exarg_T,
-    xp: *mut expand_T,
+    eap: *mut ExArg,
+    xp: *mut Expand,
     complp: *mut ExpandContext,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -186,10 +186,10 @@ pub(crate) unsafe fn set_cmd_index(
 /// Set the completion context for a command argument with wild card
 /// characters.
 pub(crate) unsafe fn set_context_for_wildcard_arg(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     arg: *const c_char,
     usefilter: bool,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     complp: *mut ExpandContext,
 ) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -296,7 +296,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
 }
 
 /// Set the completion context for the `++opt=arg` argument.  Always NULL.
-pub(crate) unsafe fn set_context_in_argopt(xp: *mut expand_T, arg: *const c_char) -> *const c_char {
+pub(crate) unsafe fn set_context_in_argopt(xp: *mut Expand, arg: *const c_char) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -314,7 +314,7 @@ pub(crate) unsafe fn set_context_in_argopt(xp: *mut expand_T, arg: *const c_char
 ///
 /// Returns a pointer to the next command after the `:filter` command.
 pub(crate) unsafe fn set_context_in_filter_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *const c_char,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -334,7 +334,7 @@ pub(crate) unsafe fn set_context_in_filter_cmd(
 ///
 /// Returns a pointer to the next command after the `:match` command.
 pub(crate) unsafe fn set_context_in_match_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *const c_char,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -420,7 +420,7 @@ pub(crate) unsafe fn find_cmd_after_substitute_cmd(mut arg: *const c_char) -> *c
 /// The next command after a `:isearch`/`:dsearch`/`:ilist`/`:dlist`/`:ijump`/
 /// `:psearch`/`:djump`/`:isplit`/`:dsplit` command, or NULL if there is none.
 pub(crate) unsafe fn find_cmd_after_isearch_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *const c_char,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -458,7 +458,7 @@ pub(crate) unsafe fn find_cmd_after_isearch_cmd(
 
 /// Set the completion context for the `:unlet` command.  Always NULL.
 pub(crate) unsafe fn set_context_in_unlet_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *const c_char,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -484,10 +484,7 @@ pub(crate) unsafe fn set_context_in_unlet_cmd(
 }
 
 /// Set the completion context for the `:language` command.  Always NULL.
-pub(crate) unsafe fn set_context_in_lang_cmd(
-    xp: *mut expand_T,
-    arg: *const c_char,
-) -> *const c_char {
+pub(crate) unsafe fn set_context_in_lang_cmd(xp: *mut Expand, arg: *const c_char) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -513,7 +510,7 @@ pub(crate) unsafe fn set_context_in_lang_cmd(
 
 /// Set the completion context for the `:breakadd` command.  Always NULL.
 pub(crate) unsafe fn set_context_in_breakadd_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     arg: *const c_char,
     cmdidx: CmdIdx,
 ) -> *const c_char {
@@ -568,7 +565,7 @@ pub(crate) unsafe fn set_context_in_breakadd_cmd(
 
 /// Set the completion context for the `:scriptnames` command.  Always NULL.
 pub(crate) unsafe fn set_context_in_scriptnames_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     arg: *const c_char,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -590,7 +587,7 @@ pub(crate) unsafe fn set_context_in_scriptnames_cmd(
 
 /// Set the completion context for the `:filetype` command.  Always NULL.
 pub(crate) unsafe fn set_context_in_filetype_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     arg: *const c_char,
 ) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -638,7 +635,7 @@ pub(crate) unsafe fn set_context_in_filetype_cmd(
 
 /// Set the completion context for commands that involve a search pattern and a
 /// line range (e.g. `:s`, `:g`, `:v`).
-pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
+pub(crate) unsafe fn set_context_with_pattern(xp: *mut Expand) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };

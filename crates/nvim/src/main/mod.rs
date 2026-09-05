@@ -13,18 +13,17 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, Array, BreakAt, Buffer, BufferRef, Callback, Channel, CmdModFlags, ColNr,
-    DecorState, DispTick, EStackType, EstackInfo, Exception, FILE, Frame, GArray, Handle, Hlf,
-    LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MatchState,
-    MsgList, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime, Refcount, RgbValue,
-    ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT,
-    WinExtmark, Window, XDGVarType, alist_T, aucmdwin_T, bln_values, caller_scope, cmdmod_T,
-    estack_T, file_comparison, fmark_T, fmarkv_T, int16_t, int32_t, int64_t, lpos_T,
-    nlua_ref_state_t, nvim_stats_s, pos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
-    size_t, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
-    uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
-    uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u,
-    uv_timer_t, vimmenu_T, xfmark_T,
+    AdditionalData, Array, BreakAt, Buffer, BufferRef, Callback, Channel, CmdMod, CmdModFlags,
+    ColNr, DecorState, DispTick, EStackType, EstackInfo, Exception, FILE, Frame, GArray, Handle,
+    Hlf, LPos, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s,
+    MatchState, MsgList, MultiQueue, NS, Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount,
+    RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage, UV_MUTEX_INIT,
+    UV_RWLOCK_INIT, WinExtmark, Window, XDGVarType, alist_T, aucmdwin_T, bln_values, caller_scope,
+    estack_T, file_comparison, fmark_T, fmarkv_T, int16_t, int32_t, int64_t, nlua_ref_state_t,
+    nvim_stats_s, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, uint8_t, uint32_t,
+    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -172,7 +171,7 @@ pub static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
 pub(crate) const PATHSEP: c_int = '/' as c_int;
 pub static last_cursormoved_win: GlobalCell<*mut Window> =
     GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+pub static last_cursormoved: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0 as LineNr,
     col: 0 as ColNr,
     coladd: 0 as ColNr,
@@ -254,8 +253,8 @@ pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
 pub static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(MatchState {
     rm: regmmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
-        startpos: [lpos_T { lnum: 0, col: 0 }; 10],
-        endpos: [lpos_T { lnum: 0, col: 0 }; 10],
+        startpos: [LPos { lnum: 0, col: 0 }; 10],
+        endpos: [LPos { lnum: 0, col: 0 }; 10],
         rmm_matchcol: 0,
         rmm_ic: 0,
         rmm_maxcol: 0,
@@ -674,7 +673,7 @@ pub static redo_VIsual_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static resel_VIsual_mode: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
 pub static resel_VIsual_line_count: GlobalCell<LineNr> = GlobalCell::new(0);
 pub static resel_VIsual_vcol: GlobalCell<ColNr> = GlobalCell::new(0);
-pub static where_paste_started: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+pub static where_paste_started: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -687,17 +686,17 @@ pub static did_si: GlobalCell<bool> = GlobalCell::new(false);
 pub static can_si: GlobalCell<bool> = GlobalCell::new(false);
 pub static can_si_back: GlobalCell<bool> = GlobalCell::new(false);
 pub static old_indent: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static saved_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+pub static saved_cursor: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0 as LineNr,
     col: 0 as ColNr,
     coladd: 0 as ColNr,
 });
-pub static Insstart: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+pub static Insstart: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
 });
-pub static Insstart_orig: GlobalCell<pos_T> = GlobalCell::new(pos_T {
+pub static Insstart_orig: GlobalCell<Pos> = GlobalCell::new(Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -732,7 +731,7 @@ pub static ins_at_eol: GlobalCell<bool> = GlobalCell::new(false);
 pub static no_abbr: GlobalCell<bool> = GlobalCell::new(true);
 pub static mapped_ctrl_c: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
-pub static cmdmod: GlobalCell<cmdmod_T> = GlobalCell::new(cmdmod_T {
+pub static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
     cmod_flags: CmdModFlags::NONE,
     cmod_split: 0,
     cmod_tab: 0,
@@ -1493,7 +1492,7 @@ pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
 /// An unset entry of [`namedfm`]; a `const` because `xfmark_T` is not `Copy`.
 const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
     fmark: fmark_T {
-        mark: pos_T {
+        mark: Pos {
             lnum: 0 as LineNr,
             col: 0,
             coladd: 0,

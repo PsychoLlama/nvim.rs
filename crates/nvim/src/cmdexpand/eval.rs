@@ -33,7 +33,7 @@ const NO_ORIG: *mut c_char = ptr::null_mut();
 pub unsafe fn f_getcompletion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut xpc: Expand = unsafe { core::mem::zeroed() };
     let mut filtered = false;
     let mut options = GETCOMPLETION;
 
@@ -186,7 +186,7 @@ pub unsafe fn f_getcompletiontype(argvars: *mut TypVal, rettv: *mut TypVal, _fpt
     }
 
     let pat = unsafe { numbuf.string(argvars) };
-    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
 
     let cmdline_len = unsafe { cstr::bytes_at(pat) }.len() as c_int;

@@ -38,7 +38,7 @@ use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg;
 use crate::types::{
-    ColNr, ExtmarkOp, Float, LineNr, NUL, VarNumber, bcount_t, exarg_T, regmatch_T, size_t,
+    ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, bcount_t, regmatch_T, size_t,
 };
 use crate::undo::u_save;
 use ::libc::{strcasecmp, strcoll, strtod};
@@ -284,7 +284,7 @@ fn shared_flag(byte: u8, order: &mut StringOrder, use_match: &mut bool) -> Flag 
 /// `arg` must be the command's NUL-terminated argument and `at` must index
 /// one of its bytes.
 unsafe fn flag_fallback(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     at: usize,
     byte: u8,
     regmatch: &mut regmatch_T,
@@ -313,7 +313,7 @@ unsafe fn flag_fallback(
 /// # Safety
 /// `eap.arg` must be the command's NUL-terminated argument.
 unsafe fn parse_sort_flags(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     spec: &mut SortSpec,
     regmatch: &mut regmatch_T,
 ) -> Option<StringOrder> {
@@ -373,7 +373,7 @@ unsafe fn parse_sort_flags(
 /// # Safety
 /// `eap.arg` must be the command's NUL-terminated argument.
 unsafe fn parse_uniq_flags(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
     regmatch: &mut regmatch_T,
@@ -641,8 +641,8 @@ unsafe fn append_sorted(
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_sort(eap: *mut exarg_T) {
-    // SAFETY: caller's contract.  The dispatcher's `exarg_T` outlives the
+pub unsafe fn ex_sort(eap: *mut ExArg) {
+    // SAFETY: caller's contract.  The dispatcher's `ExArg` outlives the
     // command and is reached through no other pointer while it runs.
     unsafe { sort_range(&mut *eap) };
 }
@@ -651,7 +651,7 @@ pub unsafe fn ex_sort(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap`'s range must be inside the current buffer.
-unsafe fn sort_range(eap: &mut exarg_T) {
+unsafe fn sort_range(eap: &mut ExArg) {
     let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
 
     // Sorting one line is really quick!
@@ -839,7 +839,7 @@ impl UniqScan {
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_uniq(eap: *mut exarg_T) {
+pub unsafe fn ex_uniq(eap: *mut ExArg) {
     // SAFETY: caller's contract, as [`ex_sort`].
     unsafe { uniq_range(&mut *eap) };
 }
@@ -848,7 +848,7 @@ pub unsafe fn ex_uniq(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap`'s range must be inside the current buffer.
-unsafe fn uniq_range(eap: &mut exarg_T) {
+unsafe fn uniq_range(eap: &mut ExArg) {
     let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
     let mut count = line2 - line1 + 1;
 

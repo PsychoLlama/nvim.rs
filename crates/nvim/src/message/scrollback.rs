@@ -146,10 +146,10 @@ pub unsafe fn clear_sb_text(all: bool) {
 /// The `g<` command.
 pub unsafe fn show_sb_text() {
     if ui_has(kUIMessages) {
-        let mut ea = exarg_T {
+        let mut ea = ExArg {
             arg: c"".as_ptr().cast_mut(),
             skip: 1,
-            ..exarg_T::default()
+            ..ExArg::default()
         };
         unsafe { ex_messages(&raw mut ea) };
         return;

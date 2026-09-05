@@ -32,9 +32,7 @@ use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::strings::vim_strchr;
-use crate::types::{
-    ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, cmdarg_T, int64_t, size_t,
-};
+use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t, size_t};
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
 
@@ -60,7 +58,7 @@ enum Place {
 /// `z<n><CR>` sets the window height and is finished here. `z<n>l` and its
 /// three friends multiply the command's own count by this one and hand the
 /// key back to the caller through `nchar_arg`; everything else is an error.
-pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -> bool {
+pub(crate) unsafe fn nv_z_get_count(cap: *mut CmdArg, nchar_arg: *mut c_int) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument and `nchar_arg`
@@ -109,7 +107,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
 ///
 /// Answers `Err` when there was no word to act on, which stops `nv_zet`
 /// running its tail.
-pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<(), Failed> {
+pub(crate) unsafe fn nv_zg_zw(cap: *mut CmdArg, mut nchar: c_int) -> Result<(), Failed> {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
@@ -175,7 +173,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<()
 }
 
 /// Scroll sideways by `count1` columns, which 'wrap' makes meaningless.
-unsafe fn scroll_sideways(cap: *mut cmdarg_T, right: bool) {
+unsafe fn scroll_sideways(cap: *mut CmdArg, right: bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let win = cur_win();
@@ -230,7 +228,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
 }
 
 /// The fold half of the `z` tree. Answers whether the key was one of them.
-unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> bool {
+unsafe fn nv_zet_fold(cap: *mut CmdArg, nchar: c_int, old_fdl: &mut c_int) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
@@ -388,7 +386,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
 
 /// `z`, whose second character says what part of the view or of the folding
 /// it is about.
-pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_zet(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();

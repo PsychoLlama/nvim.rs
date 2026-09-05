@@ -320,7 +320,7 @@ pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: LineNr) -> bool {
     // hands back a NUL-terminated line at the position `findmatchlimit`
     // found in it, so `add(1)` is at worst that line's NUL.
     let retval = unsafe {
-        findmatchlimit(::core::ptr::null_mut::<oparg_T>(), 0, 0, maxparen)
+        findmatchlimit(::core::ptr::null_mut::<OpArg>(), 0, 0, maxparen)
             .is_some_and(|pos| *cin_skipcomment(ml_get_pos(&raw const pos).add(1)) as u8 == b';')
     };
     cur_win().w_cursor = cursor_save;

@@ -47,8 +47,8 @@ use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Handle, IOSIZE, Integer, LineNr, List, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
-    exarg_T, kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
+    ExArg, Handle, IOSIZE, Integer, LineNr, List, MAXPATHL, OptInt, OptVal, OptionSetFlags,
+    VarLock, Vv, kListLenMayKnow, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -172,7 +172,7 @@ pub(crate) unsafe fn read_stdin() {
         let initial_buf_handle: Handle = cur_buf().handle;
         unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
         let last = MAXLNUM as c_int as LineNr;
-        let null_ea = ptr::null_mut::<exarg_T>();
+        let null_ea = ptr::null_mut::<ExArg>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
         let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
@@ -194,7 +194,7 @@ pub(crate) unsafe fn read_stdin() {
         }
     } else {
         unsafe { set_buflisted(1) };
-        let _ = unsafe { open_buffer(true, ptr::null_mut::<exarg_T>(), 0) };
+        let _ = unsafe { open_buffer(true, ptr::null_mut::<ExArg>(), 0) };
         if unsafe { buf_is_empty(curbuf.get()) } && unsafe { Buf::current() }.b_next.is_some() {
             let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
             let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
@@ -296,7 +296,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
             // Ask, rather than print, if the swap file is in the way.
             swap_exists_action.set(SEA_DIALOG);
             unsafe { set_buflisted(1) };
-            let _ = unsafe { open_buffer(false, ptr::null_mut::<exarg_T>(), 0) };
+            let _ = unsafe { open_buffer(false, ptr::null_mut::<ExArg>(), 0) };
 
             if swap_exists_action.get() == SEA_QUIT {
                 if got_int.get() || unsafe { only_one_window() } {
@@ -397,7 +397,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
                 ptr::null_mut()
             };
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
-            let null_ea = ptr::null_mut::<exarg_T>();
+            let null_ea = ptr::null_mut::<ExArg>();
             let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
             if swap_exists_did_quit.get() {
                 if got_int.get() || unsafe { only_one_window() } {

@@ -52,14 +52,14 @@ pub(crate) fn reset_expand_highlight() {
 
 /// Command-line completion for `:match` and `:echohl`: highlight group names,
 /// plus `None`.
-pub(crate) fn set_context_in_echohl_cmd(xp: &mut expand_T, arg: *const c_char) {
+pub(crate) fn set_context_in_echohl_cmd(xp: &mut Expand, arg: *const c_char) {
     xp.xp_context = ExpandContext::Highlight;
     xp.xp_pattern = arg.cast_mut();
     include_none.set(1);
 }
 
 /// Command-line completion for `:syntax`.
-pub(crate) unsafe fn set_context_in_syntax_cmd(xp: &mut expand_T, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_syntax_cmd(xp: &mut Expand, arg: *const c_char) {
     // Default: expand subcommands.
     xp.xp_context = ExpandContext::Syntax;
     EXPAND_WHAT.set(ExpandWhat::SubCmd);
@@ -124,7 +124,7 @@ const SYNC_ARGS: [&CStr; 10] = [
 
 /// `expand_generic`'s callback: the `idx`th completion candidate, or NULL past
 /// the end.
-pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_syntax_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     let nth = |names: &[&CStr]| {
         usize::try_from(idx)
             .ok()

@@ -30,7 +30,7 @@ use crate::types::ExArgt as Ex;
 /// a no-op that cost three `unsafe ` tokens a row.
 const fn cmd<const N: usize>(
     name: &'static [u8; N],
-    func: unsafe fn(*mut exarg_T),
+    func: unsafe fn(*mut ExArg),
     argt: ExArgt,
     addr: CmdAddr,
 ) -> CommandDefinition {
@@ -46,8 +46,8 @@ const fn cmd<const N: usize>(
 /// A row whose command also has a 'inccommand' preview implementation.
 const fn cmd_pv<const N: usize>(
     name: &'static [u8; N],
-    func: unsafe fn(*mut exarg_T),
-    preview: unsafe fn(*mut exarg_T, c_int, Handle) -> c_int,
+    func: unsafe fn(*mut ExArg),
+    preview: unsafe fn(*mut ExArg, c_int, Handle) -> c_int,
     argt: ExArgt,
     addr: CmdAddr,
 ) -> CommandDefinition {

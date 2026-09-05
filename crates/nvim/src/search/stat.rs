@@ -49,7 +49,7 @@ struct Stat {
 /// the numbers are stale and the count starts again.
 #[derive(Clone, Copy)]
 struct Counted {
-    at: pos_T,
+    at: Pos,
     cur: c_int,
     cnt: c_int,
     exact_match: bool,
@@ -66,7 +66,7 @@ struct Counted {
 
 impl Counted {
     const NONE: Counted = Counted {
-        at: pos_T {
+        at: Pos {
             lnum: 0,
             col: 0,
             coladd: 0,
@@ -86,7 +86,7 @@ impl Counted {
     ///
     /// # Safety
     /// Reads the current buffer and the remembered pattern.
-    unsafe fn still_holds(&self, cursor_pos: pos_T) -> bool {
+    unsafe fn still_holds(&self, cursor_pos: Pos) -> bool {
         let live = last_used_pattern();
         self.chgtick as VarNumber == buf_get_changedtick(cur_buf())
             // The null test suppresses clang's "NULL passed as
@@ -112,7 +112,7 @@ impl Counted {
     ///
     /// # Safety
     /// Takes an owned copy of the live pattern; frees the previous one.
-    unsafe fn remember(&mut self, at: pos_T) {
+    unsafe fn remember(&mut self, at: Pos) {
         let live = last_used_pattern();
         unsafe { xfree(self.pat as *mut c_void) };
         self.pat = unsafe { xstrnsave(live.pat, live.patlen) };
@@ -137,8 +137,8 @@ static last_maxcount: GlobalCell<c_int> = GlobalCell::new(0);
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn cmdline_search_stat(
     dirc: c_int,
-    pos: *mut pos_T,
-    cursor_pos: *mut pos_T,
+    pos: *mut Pos,
+    cursor_pos: *mut Pos,
     show_top_bot_msg: bool,
     msgbuf: *mut c_char,
     msgbuflen: size_t,
@@ -206,14 +206,14 @@ pub(crate) unsafe fn cmdline_search_stat(
 /// Runs a search over the current buffer.
 unsafe fn update_search_stat(
     dirc: c_int,
-    pos: pos_T,
-    cursor_pos: pos_T,
+    pos: Pos,
+    cursor_pos: Pos,
     recompute: bool,
     maxcount: c_int,
     timeout: c_int,
 ) -> Stat {
     let mut c = counted.get();
-    if dirc == 0 && !recompute && !equalpos(c.at, pos_T::default()) {
+    if dirc == 0 && !recompute && !equalpos(c.at, Pos::default()) {
         return Stat {
             cur: c.cur,
             cnt: c.cnt,
@@ -263,7 +263,7 @@ unsafe fn update_search_stat(
             0
         };
         let mut done_search = false;
-        let mut endpos = pos_T::default();
+        let mut endpos = Pos::default();
         // `searchit` walks `c.at` forward one match at a time; without
         // 'wrapscan' it fails once past the last one.
         while !got_int.get()

@@ -134,7 +134,7 @@ struct SyncPoint {
     lnum: LineNr,
     col: c_int,
     /// Where it ended.
-    m_endpos: lpos_T,
+    m_endpos: LPos,
 }
 
 /// Search backwards, one line at a time, for a `:syntax sync match`.
@@ -328,8 +328,8 @@ pub(crate) unsafe fn syn_match_linecont(lnum: LineNr) -> bool {
 
     let mut regmatch = regmmatch_T {
         regprog: syn_block().b_syn_linecont_prog,
-        startpos: [lpos_T { lnum: 0, col: 0 }; 10],
-        endpos: [lpos_T { lnum: 0, col: 0 }; 10],
+        startpos: [LPos { lnum: 0, col: 0 }; 10],
+        endpos: [LPos { lnum: 0, col: 0 }; 10],
         rmm_matchcol: 0,
         rmm_ic: syn_block().b_syn_linecont_ic,
         rmm_maxcol: 0,
@@ -397,7 +397,7 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 
 /// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
 /// argument the sync listing.
-pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
     let mut arg_start = eap.arg;
     if ends_excmd(unsafe { *arg_start } as c_int) != 0 {
         syn_cmd_list(eap, 1);
@@ -526,10 +526,7 @@ enum LineContError {
 /// means the next one continues it.
 ///
 /// Answers what follows the pattern.
-unsafe fn sync_linecont(
-    eap: &exarg_T,
-    next_arg: *mut c_char,
-) -> Result<*mut c_char, LineContError> {
+unsafe fn sync_linecont(eap: &ExArg, next_arg: *mut c_char) -> Result<*mut c_char, LineContError> {
     if unsafe { *next_arg } as c_int == NUL {
         return Err(LineContError::Illegal); // missing pattern
     }

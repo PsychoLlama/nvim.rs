@@ -63,9 +63,9 @@ unsafe fn ends_target(endchars: *const c_char, p: *const c_char) -> bool {
 ///
 /// # Safety
 /// `eap` is a live `:let`/`:const` command.
-pub unsafe fn ex_let(eap: *mut exarg_T) {
+pub unsafe fn ex_let(eap: *mut ExArg) {
     // SAFETY: the caller's obligation -- a live `:let`, which the
-    // `do_cmdline` frame that owns the `exarg_T` outlives.
+    // `do_cmdline` frame that owns the `ExArg` outlives.
     let mut ea = unsafe { Ea::new(eap) };
     let is_const = ea.cmdidx == CmdIdx::r#const;
     let mut arg = ea.arg;

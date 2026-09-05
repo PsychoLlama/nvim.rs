@@ -25,8 +25,8 @@ use crate::keycodes::{
 };
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
-    Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, SpellAddType,
-    SpellMoveType, VimState, cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, uint16_t,
+    Array, CmdArg, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, OpArg, Pos,
+    SpellAddType, SpellMoveType, VimState, getf_values, int16_t, size_t, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
@@ -103,7 +103,7 @@ pub(crate) struct nv_cmd {
 /// Nothing outside this crate reaches the table or its handlers -- neither the
 /// ABI ledger nor the unit-test cdefs name any of them -- so the handlers are
 /// ordinary Rust functions rather than `extern "C"` ones.
-pub(crate) type NvFunc = Option<unsafe fn(*mut cmdarg_T)>;
+pub(crate) type NvFunc = Option<unsafe fn(*mut CmdArg)>;
 pub(crate) const FM_FORWARD: c_uint = 2;
 pub(crate) const SPELL_ADD_BAD: SpellAddType = 1;
 pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
@@ -130,14 +130,14 @@ pub(crate) struct NormalState {
     pub cmdwin: bool,
     pub noexmode: bool,
     pub toplevel: bool,
-    pub oa: oparg_T,
-    pub ca: cmdarg_T,
+    pub oa: OpArg,
+    pub ca: CmdArg,
     pub mapped_len: c_int,
     pub old_mapped_len: c_int,
     pub idx: c_int,
     pub c: c_int,
     pub old_col: c_int,
-    pub old_pos: pos_T,
+    pub old_pos: Pos,
 }
 pub(crate) const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub(crate) const KV_INITIAL_VALUE: Array = Array {
@@ -623,7 +623,7 @@ pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
         (::core::mem::size_of::<[nv_cmd; 188]>().wrapping_rem(::core::mem::size_of::<nv_cmd>())
             == 0) as c_int as usize,
     );
-static current_oap: GlobalCell<*mut oparg_T> = GlobalCell::new(::core::ptr::null_mut::<oparg_T>());
+static current_oap: GlobalCell<*mut OpArg> = GlobalCell::new(::core::ptr::null_mut::<OpArg>());
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);
 static showcmd_visual: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const INT_MAX: c_int = __INT_MAX__;

@@ -37,7 +37,7 @@ use crate::types::{CpoFlag, Failed, FoFlag, NUL};
 ///
 /// # Safety
 /// `end_insert_pos`, if not null, must point to a valid position.
-pub(crate) unsafe fn start_arrow(end_insert_pos: *mut pos_T) {
+pub(crate) unsafe fn start_arrow(end_insert_pos: *mut Pos) {
     // SAFETY: the caller's promise about `end_insert_pos` is exactly what
     // `start_arrow_common` passes on to `stop_insert`.
     unsafe { start_arrow_common(end_insert_pos, true) }
@@ -48,7 +48,7 @@ pub(crate) unsafe fn start_arrow(end_insert_pos: *mut pos_T) {
 ///
 /// # Safety
 /// `end_insert_pos`, if not null, must point to a valid position.
-pub(crate) unsafe fn start_arrow_with_change(end_insert_pos: *mut pos_T, end_change: bool) {
+pub(crate) unsafe fn start_arrow_with_change(end_insert_pos: *mut Pos, end_change: bool) {
     // SAFETY: the caller's promise about `end_insert_pos` is exactly what
     // `start_arrow_common` passes on to `stop_insert`.
     unsafe { start_arrow_common(end_insert_pos, end_change) };
@@ -60,7 +60,7 @@ pub(crate) unsafe fn start_arrow_with_change(end_insert_pos: *mut pos_T, end_cha
 
 /// # Safety
 /// `end_insert_pos`, if not null, must point to a valid position.
-unsafe fn start_arrow_common(end_insert_pos: *mut pos_T, end_change: bool) {
+unsafe fn start_arrow_common(end_insert_pos: *mut Pos, end_change: bool) {
     // SAFETY: the caller's promise about `end_insert_pos` is exactly what
     // `stop_insert` asks of it; `ESC_STR` is a static string.
     if !arrow_used.get() && end_change {
@@ -140,7 +140,7 @@ pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
 ///
 /// # Safety
 /// `end_insert_pos`, if not null, must point to a valid position.
-pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove: c_int) {
+pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c_int) {
     stop_redo_ins();
 
     // Abandon the replace stack (this reinitialises it).

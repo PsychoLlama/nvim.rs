@@ -65,8 +65,8 @@ pub struct regmatch_T {
 #[derive(Clone)]
 pub struct regmmatch_T {
     pub regprog: *mut regprog_T,
-    pub startpos: [lpos_T; 10],
-    pub endpos: [lpos_T; 10],
+    pub startpos: [LPos; 10],
+    pub endpos: [LPos; 10],
     pub rmm_matchcol: ColNr,
     pub rmm_ic: ::core::ffi::c_int,
     pub rmm_maxcol: ColNr,
@@ -76,8 +76,8 @@ impl Default for regmmatch_T {
     fn default() -> Self {
         regmmatch_T {
             regprog: ::core::ptr::null_mut(),
-            startpos: [lpos_T::default(); 10],
-            endpos: [lpos_T::default(); 10],
+            startpos: [LPos::default(); 10],
+            endpos: [LPos::default(); 10],
             rmm_matchcol: 0,
             rmm_ic: 0,
             rmm_maxcol: 0,

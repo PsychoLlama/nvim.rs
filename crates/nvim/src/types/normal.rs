@@ -12,8 +12,8 @@
 use super::*;
 
 pub type MotionType = ::core::ffi::c_int;
-pub struct cmdarg_T {
-    pub oap: *mut oparg_T,
+pub struct CmdArg {
+    pub oap: *mut OpArg,
     pub prechar: ::core::ffi::c_int,
     pub cmdchar: ::core::ffi::c_int,
     pub nchar: ::core::ffi::c_int,
@@ -28,7 +28,7 @@ pub struct cmdarg_T {
     pub searchbuf: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-pub struct oparg_T {
+pub struct OpArg {
     pub op_type: OpType,
     pub regname: ::core::ffi::c_int,
     pub motion_type: MotionType,
@@ -36,9 +36,9 @@ pub struct oparg_T {
     pub use_reg_one: bool,
     pub inclusive: bool,
     pub end_adjusted: bool,
-    pub start: pos_T,
-    pub end: pos_T,
-    pub cursor_start: pos_T,
+    pub start: Pos,
+    pub end: Pos,
+    pub cursor_start: Pos,
     pub line_count: LineNr,
     pub empty: bool,
     pub is_VIsual: bool,
@@ -49,13 +49,13 @@ pub struct oparg_T {
     pub excl_tr_ws: bool,
 }
 
-impl oparg_T {
+impl OpArg {
     /// All zeros — no pending operator, an empty charwise region.
     ///
     /// This is what `clear_oparg` writes, and what a caller that only wants
     /// `block_prep`'s geometry (`cursor_pos_info`, the register API) starts
     /// from before filling in the two vcols.
-    pub const ZERO: Self = oparg_T {
+    pub const ZERO: Self = OpArg {
         op_type: OpType::Nop,
         regname: 0,
         motion_type: 0,
@@ -63,17 +63,17 @@ impl oparg_T {
         use_reg_one: false,
         inclusive: false,
         end_adjusted: false,
-        start: pos_T {
+        start: Pos {
             lnum: 0,
             col: 0,
             coladd: 0,
         },
-        end: pos_T {
+        end: Pos {
             lnum: 0,
             col: 0,
             coladd: 0,
         },
-        cursor_start: pos_T {
+        cursor_start: Pos {
             lnum: 0,
             col: 0,
             coladd: 0,
@@ -89,7 +89,7 @@ impl oparg_T {
     };
 }
 
-impl Default for oparg_T {
+impl Default for OpArg {
     fn default() -> Self {
         Self::ZERO
     }

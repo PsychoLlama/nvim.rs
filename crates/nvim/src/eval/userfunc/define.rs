@@ -113,7 +113,7 @@ pub(crate) unsafe fn list_func_head(
 ///
 /// # Safety
 /// `eap` is a live `:function` command.
-pub unsafe fn ex_function(eap: *mut exarg_T) {
+pub unsafe fn ex_function(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     let mut line_to_free: *mut c_char = ptr::null_mut();

@@ -103,7 +103,7 @@ pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
 // `:scriptnames`.
 
 /// `":scriptnames"`, and `":script {id}"` which edits the script instead.
-pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
+pub unsafe fn ex_scriptnames(eap: *mut ExArg) {
     // SAFETY: `eap` is the command's own argument block.
     let (by_number, has_arg) = unsafe { ((*eap).addr_count > 0, *(*eap).arg != NUL as c_char) };
     if by_number || has_arg {
@@ -157,7 +157,7 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// `eap` must be the live `:script` command block.
-unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
+unsafe fn edit_script(eap: *mut ExArg, by_number: bool) {
     let mut path = [0 as c_char; MAXPATHL as usize];
     if by_number {
         if !script_id_valid(unsafe { (*eap).line2 } as c_int) {
@@ -733,7 +733,7 @@ fn escaped_newline(line: &[u8]) -> bool {
 // Leaving a script.
 
 /// Are we sourcing a script, from a file or a buffer or a string?
-pub unsafe fn sourcing_a_script(eap: *mut exarg_T) -> c_int {
+pub unsafe fn sourcing_a_script(eap: *mut ExArg) -> c_int {
     // SAFETY: `eap` is the running command's block.
     let same = unsafe {
         getline_equal(
@@ -746,7 +746,7 @@ pub unsafe fn sourcing_a_script(eap: *mut exarg_T) -> c_int {
 }
 
 /// `":scriptencoding"`: set encoding conversion for a sourced script.
-pub unsafe fn ex_scriptencoding(eap: *mut exarg_T) {
+pub unsafe fn ex_scriptencoding(eap: *mut ExArg) {
     // SAFETY: `eap` is the running command's block.
     if unsafe { sourcing_a_script(eap) } == 0 {
         emsg(gettext(
@@ -768,7 +768,7 @@ pub unsafe fn ex_scriptencoding(eap: *mut exarg_T) {
 }
 
 /// `":finish"`: mark a sourced file as finished.
-pub unsafe fn ex_finish(eap: *mut exarg_T) {
+pub unsafe fn ex_finish(eap: *mut ExArg) {
     // SAFETY: `eap` is the running command's block.
     if unsafe { sourcing_a_script(eap) } != 0 {
         unsafe { do_finish(eap, false) };
@@ -781,7 +781,7 @@ pub unsafe fn ex_finish(eap: *mut exarg_T) {
 ///
 /// Also called for a pending finish at the `":endtry"` or after returning from
 /// an extra `do_cmdline()`; `reanimate` says which.
-pub unsafe fn do_finish(eap: *mut exarg_T, reanimate: bool) {
+pub unsafe fn do_finish(eap: *mut ExArg, reanimate: bool) {
     // SAFETY: `eap` is the running command's block, and its cookie is a
     // `source_cookie_T` because `ex_finish` checked before calling.
     if reanimate {
@@ -805,7 +805,7 @@ pub unsafe fn do_finish(eap: *mut exarg_T, reanimate: bool) {
 /// # Safety
 ///
 /// `eap`'s reader must be [`getsourceline`].
-unsafe fn source_cookie(eap: *mut exarg_T) -> *mut source_cookie_T {
+unsafe fn source_cookie(eap: *mut ExArg) -> *mut source_cookie_T {
     unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie).cast::<source_cookie_T>() }
 }
 

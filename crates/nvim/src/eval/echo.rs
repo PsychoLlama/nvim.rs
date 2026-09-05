@@ -36,8 +36,8 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalArg, FuncCallEntry, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT,
-    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock, exarg_T,
+    EvalArg, ExArg, FuncCallEntry, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT,
+    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock,
     ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::ui::ui_has;
@@ -66,8 +66,8 @@ fn ends_args(c: c_char) -> bool {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe fn ex_echo(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- the `exarg_T` outlives the command,
+pub unsafe fn ex_echo(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- the `ExArg` outlives the command,
     // which the `do_cmdline` frame that owns it discharges.
     let mut eap = unsafe { Ea::new(eap) };
     let mut arg: *mut c_char = eap.arg;
@@ -79,7 +79,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
 
     let mut evalarg = UNSET_EVALARG;
     let (ea, skip) = (eap.raw(), eap.skip != 0);
-    // SAFETY: `evalarg` is this frame's and `ea` the caller's `exarg_T`.
+    // SAFETY: `evalarg` is this frame's and `ea` the caller's `ExArg`.
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, ea, skip) };
     let _skipping = skip.then(Suppress::emsg_skip);
 
@@ -139,7 +139,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
 
     // SAFETY: `arg` is the tail of the command line.
     eap.nextcmd = unsafe { check_nextcmd(arg) };
-    // SAFETY: `evalarg` is this frame's and `ea` the caller's `exarg_T`.
+    // SAFETY: `evalarg` is this frame's and `ea` the caller's `ExArg`.
     unsafe { clear_evalarg(&raw mut evalarg, ea) };
     unsafe { msg_ext_set_append(false) };
 
@@ -163,7 +163,7 @@ pub unsafe fn ex_echo(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe fn ex_echohl(eap: *mut exarg_T) {
+pub unsafe fn ex_echohl(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- the argument is NUL-terminated.
     echo_hl_id.set(unsafe { syn_name2id((*eap).arg) });
 }
@@ -179,9 +179,9 @@ pub fn get_echo_hl_id() -> c_int {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe fn ex_execute(eap: *mut exarg_T) {
+pub unsafe fn ex_execute(eap: *mut ExArg) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise -- the `exarg_T` outlives the command.
+    // SAFETY: the caller's promise -- the `ExArg` outlives the command.
     let mut eap = unsafe { Ea::new(eap) };
     let mut arg: *mut c_char = eap.arg;
     let mut rettv = UNSET_TV;

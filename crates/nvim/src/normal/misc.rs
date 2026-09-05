@@ -33,7 +33,7 @@ use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::{LineGetter, LineNr, NUL, OpType, cmdarg_T};
+use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
@@ -41,7 +41,7 @@ use core::ffi::{c_int, c_uint};
 
 /// A key the command loop must swallow without doing anything: it marks the
 /// command busy so nothing else acts on it.
-pub(crate) unsafe fn nv_ignore(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ignore(cap: *mut CmdArg) {
     // SAFETY: `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     ca.retval |= CA_COMMAND_BUSY as c_int;
@@ -49,17 +49,17 @@ pub(crate) unsafe fn nv_ignore(cap: *mut cmdarg_T) {
 
 /// A key with no effect at all -- unlike [`nv_ignore`], the command still
 /// counts as having run.
-pub(crate) unsafe fn nv_nop(_cap: *mut cmdarg_T) {}
+pub(crate) unsafe fn nv_nop(_cap: *mut CmdArg) {}
 
 /// A key that is not a command: beep and drop whatever was pending.
-pub(crate) unsafe fn nv_error(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_error(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     clear_op_beep(ca.op());
 }
 
 /// `<Help>`: open the help window.
-pub(crate) unsafe fn nv_help(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_help(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if !check_clear_op_quit(ca.op()) {
@@ -69,7 +69,7 @@ pub(crate) unsafe fn nv_help(cap: *mut cmdarg_T) {
 
 /// `:`, and the two synthetic keys that carry a command or a Lua callback in
 /// from a mapping.
-pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_colon(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let is_cmdkey = ca.cmdchar == Key::Command.code();
@@ -129,7 +129,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
 
 /// `CTRL-G`: report the file's position -- or toggle between Visual and
 /// Select mode when a selection is up.
-pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ctrlg(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if visual_active() {
@@ -142,7 +142,7 @@ pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-H`: one character left -- or delete the selection in Select mode.
-pub(crate) unsafe fn nv_ctrlh(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ctrlh(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     if visual_active() && visual_select() {
@@ -155,7 +155,7 @@ pub(crate) unsafe fn nv_ctrlh(cap: *mut cmdarg_T) {
 
 /// `CTRL-L`: throw the screen away and redraw it, and let syntax highlighting
 /// that timed out try again.
-pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_clear(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if check_clear_op(ca.op()) {
@@ -174,7 +174,7 @@ pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
 
 /// `CTRL-O`: jump back in the jump list -- or leave Select mode for one
 /// command.
-pub(crate) unsafe fn nv_ctrlo(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ctrlo(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     if visual_active() && visual_select() {
@@ -192,7 +192,7 @@ pub(crate) unsafe fn nv_ctrlo(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-^`: edit the alternate file.
-pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_hat(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if !check_clear_op_quit(ca.op()) {
@@ -203,7 +203,7 @@ pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
 
 /// `CTRL-W`: a window command. `CTRL-W :` is `:` with the window prefix
 /// dropped.
-pub(crate) unsafe fn nv_window(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_window(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     if ca.nchar == ':' as c_int {
@@ -217,7 +217,7 @@ pub(crate) unsafe fn nv_window(cap: *mut cmdarg_T) {
 
 /// `CTRL-Z`: suspend, through `:stop` so that 'autowrite' and the autocommands
 /// happen.
-pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_suspend(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     clear_op(ca.op());
@@ -229,7 +229,7 @@ pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
 
 /// `CTRL-\`: only `CTRL-\ CTRL-N` and `CTRL-\ CTRL-G` exist, and both mean
 /// "back to Normal mode".
-pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_normal(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if ca.nchar != Ctrl_N && ca.nchar != Ctrl_G {
@@ -252,7 +252,7 @@ pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
 
 /// `<Esc>` and `CTRL-C`. The table's argument says which: `CTRL-C` is the one
 /// that offers the "how do I quit" hint.
-pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_esc(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // Nothing was pending, so the key had no work to do and is worth a
@@ -295,7 +295,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
 }
 
 /// The key the terminal sends to repeat a bracketed paste.
-pub(crate) unsafe fn nv_paste(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_paste(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     unsafe { paste_repeat(ca.count1) };
@@ -303,7 +303,7 @@ pub(crate) unsafe fn nv_paste(cap: *mut cmdarg_T) {
 
 /// The synthetic key that stands for "the event loop has work": run it, then
 /// tell the command loop whether a mode was waiting to be restarted.
-pub(crate) unsafe fn nv_event(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_event(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     // An event's callback is not a safe point for a collection: it may be

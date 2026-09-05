@@ -792,7 +792,7 @@ impl Pattern {
         let _sandboxed = Lock::sandbox();
 
         // Start the command in line 1.
-        cur_win().w_cursor = pos_T {
+        cur_win().w_cursor = Pos {
             lnum: 1,
             col: 0,
             coladd: 0,

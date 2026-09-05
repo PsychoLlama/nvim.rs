@@ -30,14 +30,14 @@ fn word_index(word: &[u8], names: &[&CStr]) -> Option<usize> {
 }
 
 /// Common prologue: record the next command, and answer whether to go on.
-fn mode_cmd_start(eap: &mut exarg_T) -> bool {
+fn mode_cmd_start(eap: &mut ExArg) -> bool {
     // SAFETY: `arg` is the caller's command line, a NUL-terminated string.
     eap.nextcmd = unsafe { find_nextcmd(eap.arg) };
     eap.skip == 0
 }
 
 /// `:syntax conceal [on|off]`.
-pub(crate) fn syn_cmd_conceal(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_conceal(eap: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(eap) {
         return;
     }
@@ -61,7 +61,7 @@ pub(crate) fn syn_cmd_conceal(eap: &mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax case [match|ignore]`.
-pub(crate) fn syn_cmd_case(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_case(eap: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(eap) {
         return;
     }
@@ -85,7 +85,7 @@ pub(crate) fn syn_cmd_case(eap: &mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax foldlevel [start|minimum]`.
-pub(crate) fn syn_cmd_foldlevel(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_foldlevel(eap: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(eap) {
         return;
     }
@@ -123,7 +123,7 @@ pub(crate) fn syn_cmd_foldlevel(eap: &mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax spell [toplevel|notoplevel|default]`.
-pub(crate) fn syn_cmd_spell(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_spell(eap: &mut ExArg, _syncing: c_int) {
     if !mode_cmd_start(eap) {
         return;
     }
@@ -159,7 +159,7 @@ pub(crate) fn syn_cmd_spell(eap: &mut exarg_T, _syncing: c_int) {
 /// The value is installed by running it through `'iskeyword'`'s own parser on
 /// the current buffer and keeping the character table that produces, so the
 /// buffer's own table has to be saved and put back around the call.
-pub(crate) fn syn_cmd_iskeyword(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_iskeyword(eap: &mut ExArg, _syncing: c_int) {
     if eap.skip != 0 {
         return;
     }
@@ -212,12 +212,12 @@ fn set_buf_chartab(table: [uint8_t; 32]) {
 }
 
 /// `:syntax on` / `:syntax enable`.
-pub(crate) fn syn_cmd_on(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_on(eap: &mut ExArg, _syncing: c_int) {
     syn_cmd_onoff(eap, c"syntax")
 }
 
 /// `:syntax reset`. It actually resets highlighting, not syntax.
-pub(crate) fn syn_cmd_reset(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_reset(eap: &mut ExArg, _syncing: c_int) {
     eap.nextcmd = unsafe { check_nextcmd(eap.arg) };
     if eap.skip == 0 {
         unsafe { init_highlight(true, true) };
@@ -225,18 +225,18 @@ pub(crate) fn syn_cmd_reset(eap: &mut exarg_T, _syncing: c_int) {
 }
 
 /// `:syntax manual`.
-pub(crate) fn syn_cmd_manual(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_manual(eap: &mut ExArg, _syncing: c_int) {
     syn_cmd_onoff(eap, c"manual")
 }
 
 /// `:syntax off`.
-pub(crate) fn syn_cmd_off(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_off(eap: &mut ExArg, _syncing: c_int) {
     syn_cmd_onoff(eap, c"nosyntax")
 }
 
 /// Source `$VIMRUNTIME/syntax/{name}.vim`, which is what all four of the
 /// on/off commands amount to.
-fn syn_cmd_onoff(eap: &mut exarg_T, name: &CStr) {
+fn syn_cmd_onoff(eap: &mut ExArg, name: &CStr) {
     eap.nextcmd = unsafe { check_nextcmd(eap.arg) };
     if eap.skip != 0 {
         return;
@@ -256,7 +256,7 @@ fn syn_cmd_onoff(eap: &mut exarg_T, name: &CStr) {
 /// or the other.
 pub(crate) unsafe fn syn_maybe_enable() {
     if !did_syntax_onoff.get() {
-        let mut ea = exarg_T {
+        let mut ea = ExArg {
             arg: c"".as_ptr().cast_mut(),
             skip: 0,
             ..Default::default()
@@ -281,11 +281,11 @@ fn empty_synblock() -> Box<SynBlock> {
 /// One `:syntax` subcommand.
 pub(crate) struct SubCommand {
     pub(crate) name: &'static CStr,
-    func: fn(&mut exarg_T, c_int),
+    func: fn(&mut ExArg, c_int),
 }
 
 /// A `const fn` constructor keeps each entry on one line under rustfmt.
-const fn sub(name: &'static CStr, func: fn(&mut exarg_T, c_int)) -> SubCommand {
+const fn sub(name: &'static CStr, func: fn(&mut ExArg, c_int)) -> SubCommand {
     SubCommand { name, func }
 }
 
@@ -314,7 +314,7 @@ pub(crate) static SUBCOMMANDS: [SubCommand; 19] = [
 ];
 
 /// `:syntax`. Finds the subcommand name in [`SUBCOMMANDS`] and calls it.
-pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_syntax(eap: *mut ExArg) {
     // SAFETY: the command table's promise -- the argument block of the
     // `:` command being run, which nothing else holds while it runs.
     let eap = unsafe { &mut *eap };
@@ -347,7 +347,7 @@ pub(crate) unsafe fn ex_syntax(eap: *mut exarg_T) {
 /// `:ownsyntax {name}` — give this window its own syntax block.
 ///
 /// Upstream marks this `@deprecated`.
-pub(crate) unsafe fn ex_ownsyntax(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_ownsyntax(eap: *mut ExArg) {
     // SAFETY: the command table's promise, as `ex_syntax`'s.
     let eap = unsafe { &mut *eap };
     let mut numbuf = NumBuf::new();

@@ -67,7 +67,7 @@ if a `cfg` ever hides code from both.
 ## What this still does not reach, and the pitfalls behind each flag
 
 * **Comments and doc links.** rust-analyzer renames code. A `///` mention or a
-  `[`exarg_T`]` intra-doc link is left alone, so follow a batch with a
+  `[`vimoption_T`]` intra-doc link is left alone, so follow a batch with a
   word-boundary sweep over comments only (`xform.masked` inverted) -- never an
   unmasked tree-wide `s///`, which is the mistake this tool exists to avoid.
 * **Non-Rust followers.** `tools/apigen/src` spells a few type names,

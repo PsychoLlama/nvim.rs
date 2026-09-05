@@ -29,7 +29,7 @@ const BACKWARD: c_int = super::BACKWARD as c_int;
 /// # Safety
 /// `oap` must be null or valid; the current window and buffer must be
 /// valid.
-pub unsafe fn findmatch(oap: *mut oparg_T, initc: c_int) -> Option<pos_T> {
+pub unsafe fn findmatch(oap: *mut OpArg, initc: c_int) -> Option<Pos> {
     unsafe { findmatchlimit(oap, initc, 0, 0) }
 }
 
@@ -54,11 +54,11 @@ pub unsafe fn findmatch(oap: *mut oparg_T, initc: c_int) -> Option<pos_T> {
 /// `oap` must be null or valid; the current window and buffer must be
 /// valid.
 pub unsafe fn findmatchlimit(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
-) -> Option<pos_T> {
+) -> Option<Pos> {
     unsafe { find_match(oap, initc, flags, maxtravel) }
 }
 
@@ -203,10 +203,10 @@ enum Plan {
 /// `pos` and `linep` must address the current buffer; `oap` must be null
 /// or valid.
 unsafe fn make_plan(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     initc: c_int,
     dir: c_int,
-    pos: &mut pos_T,
+    pos: &mut Pos,
     linep: *mut c_char,
     cpo_match: bool,
     cpo_bsl: bool,
@@ -344,7 +344,7 @@ unsafe fn make_plan(
 ///
 /// # Safety
 /// `pos` must address the current buffer.
-unsafe fn find_hash_match(mut pos: pos_T, hash_dir: c_int, initc: c_int) -> Option<pos_T> {
+unsafe fn find_hash_match(mut pos: Pos, hash_dir: c_int, initc: c_int) -> Option<Pos> {
     let mut count = 0;
     pos.col = 0;
     while !got_int.get() {
@@ -402,14 +402,14 @@ enum Step {
     /// Look at the next position.
     Next,
     /// The match is here.
-    Found(pos_T),
+    Found(Pos),
     /// Give up: there is no match at all.
     Nothing,
 }
 
 /// Everything the walk carries from one position to the next.
 struct Walk {
-    pos: pos_T,
+    pos: Pos,
     /// The line `pos` is on. `ml_get` keeps only one line, so this is
     /// re-derived at every line boundary and after anything that may
     /// have released it.
@@ -434,7 +434,7 @@ struct Walk {
     start_in_quotes: Option<bool>,
     /// Nesting depth, and where the innermost `/*` was found.
     count: c_int,
-    match_pos: pos_T,
+    match_pos: Pos,
 }
 
 impl Walk {
@@ -795,11 +795,11 @@ impl Walk {
 /// # Safety
 /// As [`findmatchlimit`].
 unsafe fn find_match(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
-) -> Option<pos_T> {
+) -> Option<Pos> {
     let mut pos = cur_win().w_cursor;
     pos.coladd = 0;
     let linep = ml_get(pos.lnum);
@@ -846,7 +846,7 @@ unsafe fn find_match(
         inquote: false,
         start_in_quotes: None,
         count: 0,
-        match_pos: pos_T::default(),
+        match_pos: Pos::default(),
     };
 
     // Backward search: does this line hold a single-line comment?

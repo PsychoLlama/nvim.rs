@@ -56,10 +56,10 @@ use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, BufferHandle, Dict, Error, Float, Handle, Hlf, Integer, LineNr, Object,
-    OptInt, OptVal, ScreenAttr, ScreenChar, String_0, Tabpage, VarNumber, VirtText, VirtTextChunk,
-    WinConfig, WinSplit, WinStyle, Window, WindowHandle, exarg_T, kBoolVarFalse, kBoolVarTrue,
-    lpos_T, pumitem_T, size_t, uint32_t, vimmenu_T,
+    AlignTextPos, Array, BufferHandle, Dict, Error, ExArg, Float, Handle, Hlf, Integer, LPos,
+    LineNr, Object, OptInt, OptVal, ScreenAttr, ScreenChar, String_0, Tabpage, VarNumber, VirtText,
+    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, WindowHandle, kBoolVarFalse,
+    kBoolVarTrue, pumitem_T, size_t, uint32_t, vimmenu_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,

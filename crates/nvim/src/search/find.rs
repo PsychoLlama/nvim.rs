@@ -33,15 +33,15 @@ use core::ptr;
 /// the first sub-pattern that took part.
 #[derive(Clone, Copy)]
 struct Found {
-    start: lpos_T,
-    end: lpos_T,
+    start: LPos,
+    end: LPos,
     submatch: c_int,
 }
 
 /// Where the search started from, and how close to it a match may sit.
 #[derive(Clone, Copy)]
 struct StartPos {
-    pos: pos_T,
+    pos: Pos,
     /// Zero when a match at the start position itself counts; otherwise
     /// the length of the character there, so that a match has to be at
     /// least one character away.
@@ -305,7 +305,7 @@ impl Searcher {
     ///
     /// # Safety
     /// `pos` must be writable and `end_pos` writable or null.
-    unsafe fn record(&self, lnum: LineNr, found: Found, pos: *mut pos_T, end_pos: *mut pos_T) {
+    unsafe fn record(&self, lnum: LineNr, found: Found, pos: *mut Pos, end_pos: *mut Pos) {
         let empty = found.start.lnum == found.end.lnum && found.start.col == found.end.col;
         if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
             unsafe { (*pos).lnum = lnum + found.end.lnum };
@@ -369,8 +369,8 @@ impl Searcher {
 pub unsafe fn searchit(
     win: Option<Win>,
     buf: Buf,
-    pos: *mut pos_T,
-    end_pos: *mut pos_T,
+    pos: *mut Pos,
+    end_pos: *mut Pos,
     dir: Direction,
     pat: *mut c_char,
     patlen: size_t,
@@ -696,7 +696,7 @@ unsafe fn first_submatch(rp: *mut regmmatch_T) -> c_int {
 /// @return  `Ok` for success, `Err` if no line was found.
 pub unsafe fn search_for_exact_line(
     buf: Buf,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     dir: Direction,
     pat: *mut c_char,
 ) -> Result<(), Failed> {

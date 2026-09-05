@@ -36,7 +36,7 @@ use super::{regexec_T, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{
-    Buffer, ColNr, LineNr, Window, lpos_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
+    Buffer, ColNr, LPos, LineNr, Window, regmatch_T, regmmatch_T, regprog_T, uint8_t,
 };
 
 /// A running match's context.
@@ -337,7 +337,7 @@ impl Rex {
     #[inline(always)]
     pub(crate) fn here(self) -> MatchPos {
         if self.multi() {
-            MatchPos::from_pos(lpos_T {
+            MatchPos::from_pos(LPos {
                 lnum: self.lnum(),
                 col: self.col(),
             })
@@ -357,12 +357,12 @@ impl Rex {
     pub(crate) fn at_offset(self, off: c_int) -> MatchPos {
         if self.multi() {
             MatchPos::from_pos(if off == -1 {
-                lpos_T {
+                LPos {
                     lnum: self.lnum() + 1,
                     col: 0,
                 }
             } else {
-                lpos_T {
+                LPos {
                     lnum: self.lnum(),
                     col: self.col() + off,
                 }
@@ -481,23 +481,23 @@ impl Rex {
 
     /// The `\1`..`\9` start slots of a buffer match.
     #[inline(always)]
-    pub(crate) fn reg_startpos(self) -> *mut lpos_T {
+    pub(crate) fn reg_startpos(self) -> *mut LPos {
         unsafe { (*self.0).reg_startpos }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_startpos(self, p: *mut lpos_T) {
+    pub(crate) fn set_reg_startpos(self, p: *mut LPos) {
         unsafe { (*self.0).reg_startpos = p }
     }
 
     /// The `\1`..`\9` end slots of a buffer match.
     #[inline(always)]
-    pub(crate) fn reg_endpos(self) -> *mut lpos_T {
+    pub(crate) fn reg_endpos(self) -> *mut LPos {
         unsafe { (*self.0).reg_endpos }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_endpos(self, p: *mut lpos_T) {
+    pub(crate) fn set_reg_endpos(self, p: *mut LPos) {
         unsafe { (*self.0).reg_endpos = p }
     }
 

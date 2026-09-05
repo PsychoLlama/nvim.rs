@@ -5,7 +5,7 @@
 //! # Boundary
 //!
 //! `ex_trust` is an ex-command handler, so it keeps the C ABI and the
-//! `exarg_T *` the command table hands it. Below it everything runs on
+//! `ExArg *` the command table hands it. Below it everything runs on
 //! the Lua stack, which stays raw.
 
 use crate::charset::{skiptowhite, skipwhite};
@@ -15,7 +15,7 @@ use crate::lua::ffi::{
     lua_settop, lua_toboolean, lua_tolstring,
 };
 use crate::os::cshim::gettext;
-use crate::types::exarg_T;
+use crate::types::ExArg;
 use core::ffi::{CStr, c_char};
 use core::{ptr, slice};
 
@@ -123,10 +123,10 @@ unsafe fn nlua_trust(action: TrustAction, path: Option<&CStr>) -> bool {
 /// current buffer.
 ///
 /// # Safety
-/// `eap` must point at a live `exarg_T` whose `arg` is NUL-terminated, and
+/// `eap` must point at a live `ExArg` whose `arg` is NUL-terminated, and
 /// the editor's Lua state must be up.
-pub unsafe fn ex_trust(eap: *mut exarg_T) {
-    // SAFETY: the caller's `exarg_T`; `arg` is the NUL-terminated command
+pub unsafe fn ex_trust(eap: *mut ExArg) {
+    // SAFETY: the caller's `ExArg`; `arg` is the NUL-terminated command
     // line, so the first word is inside it.
     let (arg, word) = unsafe {
         let arg = (*eap).arg;

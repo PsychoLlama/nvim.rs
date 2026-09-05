@@ -278,7 +278,7 @@ pub unsafe fn has_autocmd(
 /// Answers a pointer at the next command to expand instead, or null when
 /// it has set `xp` itself.
 pub unsafe fn set_context_in_autocmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *mut ::core::ffi::c_char,
     doautocmd: bool,
 ) -> *mut ::core::ffi::c_char {

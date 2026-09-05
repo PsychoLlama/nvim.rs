@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{LineNr, NUL, OptInt, exarg_T, int64_t, size_t};
+use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use ::libc::atol;
@@ -62,7 +62,7 @@ static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_append(eap: *mut exarg_T) {
+pub unsafe fn ex_append(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     let mut did_undo = false;
@@ -220,7 +220,7 @@ unsafe fn toggle_autoindent() {
 ///
 /// # Safety
 /// `eap.arg`, `eap.nextcmd` and `eap.cstack` must be live.
-unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<Line> {
+unsafe fn next_append_line(eap: &mut ExArg, indent: c_int) -> Option<Line> {
     let arg = eap.arg;
     // SAFETY: caller's contract.
     if unsafe { *arg } == '|' as c_char {
@@ -274,7 +274,7 @@ unsafe fn next_append_line(eap: &mut exarg_T, indent: c_int) -> Option<Line> {
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_change(eap: *mut exarg_T) {
+pub unsafe fn ex_change(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };
     let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
@@ -320,7 +320,7 @@ pub unsafe fn ex_change(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_z(eap: *mut exarg_T) {
+pub unsafe fn ex_z(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     let eap = unsafe { &*eap };
     let (arg, forceit, addr_count, flags, lnum) =

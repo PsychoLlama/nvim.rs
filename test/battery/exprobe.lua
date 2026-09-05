@@ -262,7 +262,7 @@ for _, l in ipairs({
   'folddoclosed print', 'normal! zj', 'normal! zk',
 }) do C('folds', l) end
 
--- 11. `nvim_cmd` builds an exarg_T from a Dict, so it reaches the range and
+-- 11. `nvim_cmd` builds an ExArg from a Dict, so it reaches the range and
 --     count plumbing with values no command line can spell. The count
 --     extremes here abort a pre-slice binary in `set_cmd_count`.
 local NVIM_CMD = {

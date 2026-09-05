@@ -32,7 +32,7 @@ use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{ColNr, LineNr, NUL, OpType, cmdarg_T, int64_t};
+use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, int64_t};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
@@ -58,7 +58,7 @@ const POUND_BYTE: u8 = 0xa3;
 /// line rather than of the buffer line.
 ///
 /// Also called from `move.rs` for a mouse click landing left of the text.
-pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
@@ -114,7 +114,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
 }
 
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
-pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
@@ -140,7 +140,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
 }
 
 /// `g$` and `g<End>`: the end of the *screen* line.
-pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
@@ -193,7 +193,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
 
 /// `gi`: insert where insert mode was left, even if the line has since got
 /// shorter.
-pub(crate) unsafe fn nv_gi_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gi_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
@@ -215,7 +215,7 @@ pub(crate) unsafe fn nv_gi_cmd(cap: *mut cmdarg_T) {
 
 /// `gh`, `gH` and `g CTRL-H`: start Select mode in the matching Visual kind.
 /// `v`, `V` and CTRL-V sit exactly `'v' - 'h'` above `h`, `H` and CTRL-H.
-unsafe fn nv_g_select(cap: *mut cmdarg_T) {
+unsafe fn nv_g_select(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     ca.cmdchar = ca.nchar + ('v' as c_int - 'h' as c_int);
@@ -225,7 +225,7 @@ unsafe fn nv_g_select(cap: *mut cmdarg_T) {
 
 /// `gj` and `gk`: down and up by *screen* line -- which is the plain line move
 /// when 'wrap' is off.
-unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
+unsafe fn nv_g_screen_line(cap: *mut CmdArg, dir: c_int) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut op = ca.op();
@@ -249,7 +249,7 @@ unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
 ///
 /// Answers `false` for anything else, which sends the caller on to the byte
 /// half of the tree.
-unsafe fn nv_g_key(cap: *mut cmdarg_T, nchar: c_int) -> bool {
+unsafe fn nv_g_key(cap: *mut CmdArg, nchar: c_int) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     match Key::try_from(nchar) {
@@ -291,7 +291,7 @@ unsafe fn nv_g_key(cap: *mut cmdarg_T, nchar: c_int) -> bool {
 }
 
 /// `g`, whose second character says what the command is.
-pub(crate) unsafe fn nv_g_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_g_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut op = ca.op();

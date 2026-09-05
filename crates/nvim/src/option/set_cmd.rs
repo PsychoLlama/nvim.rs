@@ -43,8 +43,8 @@ use crate::options::{
 use crate::os::cshim::gettext_ptr;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber, Window,
-    exarg_T, size_t, uint8_t, uint32_t,
+    ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,
+    Window, size_t, uint8_t, uint32_t,
 };
 
 use super::{
@@ -78,7 +78,7 @@ enum Prefix {
 /// # Safety
 ///
 /// `eap` must be the command's own argument block.
-pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_set(eap: *mut ExArg) {
     // SAFETY: the caller's argument block.
     let mut flags = match unsafe { (*eap).cmdidx } {
         CmdIdx::setlocal => OptionSetFlags::LOCAL,

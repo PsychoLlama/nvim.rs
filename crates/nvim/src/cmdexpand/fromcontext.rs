@@ -19,7 +19,7 @@ use core::ptr;
 
 /// The bare function type behind [`CompleteListItemGetter`], for the one
 /// place that compares a generator against a particular function.
-pub(crate) type ItemGetter = unsafe fn(*mut expand_T, c_int) -> *mut c_char;
+pub(crate) type ItemGetter = unsafe fn(*mut Expand, c_int) -> *mut c_char;
 
 /// The `WILD_*` options that name an `EW_*` flag one-for-one.
 const WILDOPT_TO_EW: [(WildOpts, ExpandFlags); 6] = [
@@ -52,7 +52,7 @@ const RTP_ONLY: RuntimeOpts = RuntimeOpts::NONE;
 /// and all of those run against a compiled regexp (or, under
 /// `'wildoptions'`=fuzzy, against `fuzzy_match_str`).
 pub(crate) unsafe fn expand_from_context(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
@@ -241,7 +241,7 @@ pub(crate) unsafe fn expand_from_context(
 /// each match.
 pub unsafe fn expand_generic(
     pat: *const c_char,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     regmatch: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,

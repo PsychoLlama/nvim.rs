@@ -747,7 +747,7 @@ pub(crate) unsafe fn unserialize_uep(
 /// # Safety
 ///
 /// `bi` is open for writing.
-pub(crate) unsafe fn serialize_pos(bi: *mut bufinfo_T, pos: pos_T) {
+pub(crate) unsafe fn serialize_pos(bi: *mut bufinfo_T, pos: Pos) {
     // SAFETY: an open file, by the contract above.
     unsafe { undo_write_bytes(bi, pos.lnum as uintmax_t, 4) };
     unsafe { undo_write_bytes(bi, pos.col as uintmax_t, 4) };
@@ -760,7 +760,7 @@ pub(crate) unsafe fn serialize_pos(bi: *mut bufinfo_T, pos: pos_T) {
 /// # Safety
 ///
 /// `bi` is open for reading and `pos` points at a writable position.
-pub(crate) unsafe fn unserialize_pos(bi: *mut bufinfo_T, pos: *mut pos_T) {
+pub(crate) unsafe fn unserialize_pos(bi: *mut bufinfo_T, pos: *mut Pos) {
     // SAFETY: an open file and a writable position, by the contract above.
     unsafe { (*pos).lnum = undo_read_4c(bi).max(0) };
     unsafe { (*pos).col = undo_read_4c(bi).max(0) };

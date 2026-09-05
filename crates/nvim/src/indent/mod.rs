@@ -76,14 +76,14 @@ const SIN_NOMARK: c_uint = 8;
 
 /// The screen column byte `col` of line `lnum` sits at.
 ///
-/// `getvcol` needs a `pos_T` and three out-parameters to answer one
+/// `getvcol` needs a `Pos` and three out-parameters to answer one
 /// position, which is all any indent amount wants of it. Promoted out of
 /// `indent_c.rs` at B15-17, where four functions ask it and two here do.
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
 pub(crate) unsafe fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
-    let mut fp = pos_T {
+    let mut fp = Pos {
         lnum,
         col,
         coladd: 0,
@@ -265,7 +265,7 @@ pub unsafe fn get_sw_value(buf: *mut Buffer) -> c_int {
 /// # Safety
 /// `buf` must be a live buffer and `pos` a position in the current one: the
 /// cursor is moved there and restored.
-unsafe fn get_sw_value_pos(buf: *mut Buffer, pos: *mut pos_T, left: bool) -> c_int {
+unsafe fn get_sw_value_pos(buf: *mut Buffer, pos: *mut Pos, left: bool) -> c_int {
     let save_cursor = unsafe { (*curwin.get()).w_cursor };
     unsafe { (*curwin.get()).w_cursor = *pos };
     let sw_value = unsafe { get_sw_value_col(buf, get_nolist_virtcol(), left) };
@@ -769,7 +769,7 @@ pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
     if lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
         return -1;
     }
-    let mut pos = pos_T {
+    let mut pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,

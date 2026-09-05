@@ -23,7 +23,7 @@ const CALLBACK_INIT: Callback = Callback::None;
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
 pub unsafe fn do_autocmd(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     arg_in: *mut ::core::ffi::c_char,
     forceit: ::core::ffi::c_int,
 ) {

@@ -36,9 +36,7 @@ use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{
-    AdditionalData, LineNr, NUL, SubReplacementString, exarg_T, regmmatch_T, size_t,
-};
+use crate::types::{AdditionalData, ExArg, LineNr, NUL, SubReplacementString, regmmatch_T, size_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -82,7 +80,7 @@ struct Parsed {
 /// # Safety
 /// Main thread; `eap.arg` and `eap.cmd` must be live.
 unsafe fn read_pattern(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     cmdpreview_ns: c_int,
     keeppatterns: bool,
 ) -> Option<Parsed> {
@@ -227,7 +225,7 @@ unsafe fn read_pattern(
 ///
 /// # Safety
 /// Main thread; `cmd` must point into the live argument.
-unsafe fn read_count(eap: &mut exarg_T, cmd: &mut *mut c_char) -> bool {
+unsafe fn read_count(eap: &mut ExArg, cmd: &mut *mut c_char) -> bool {
     // SAFETY: caller's contract.
     if !ascii_isdigit(unsafe { **cmd } as c_int) {
         return true;
@@ -260,7 +258,7 @@ unsafe fn read_count(eap: &mut exarg_T, cmd: &mut *mut c_char) -> bool {
 /// # Safety
 /// Main thread; `eap.arg` and `eap.cmd` must be live.
 pub(super) unsafe fn parse_sub(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     cmdpreview_ns: c_int,
     keeppatterns: bool,
 ) -> Option<SubSetup> {

@@ -31,7 +31,7 @@ leakoptions := "detect_leaks=1:exitcode=0:log_path=" + justfile_directory() / "t
 
 # Compile the nvim binary with AddressSanitizer. Stack-redzone checking is
 # on again: the 2023 nightly's C-ABI lowering over-read by-value aggregates
-# (12-byte pos_T read with a 16-byte load), which forced -asan-stack=0; the
+# (12-byte Pos read with a 16-byte load), which forced -asan-stack=0; the
 # current toolchain's cast-ABI fixes lower those loads exactly.
 build:
   RUSTFLAGS="-Zsanitizer=address" cargo build -Zbuild-std --target {{ triple }} --target-dir target/asan

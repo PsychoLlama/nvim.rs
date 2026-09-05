@@ -491,7 +491,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
 /// are set too. Answers `Ok` if a new match was found, otherwise `Err`.
 pub(crate) unsafe fn get_next_default_completion(
     st: *mut ins_compl_next_state_T,
-    start_pos: *mut pos_T,
+    start_pos: *mut Pos,
 ) -> Result<(), Failed> {
     // Where a joined `CTRL-X CTRL-L` line is assembled; upstream shares
     // `IObuff` for it, which the message machinery also writes.
@@ -828,7 +828,7 @@ pub(super) unsafe fn fuzzy_match_str_in_line(
     ptr: *mut *mut c_char,
     pat: *const c_char,
     len: *mut c_int,
-    current_pos: *mut pos_T,
+    current_pos: *mut Pos,
     score: *mut c_int,
 ) -> bool {
     let line = unsafe { *ptr };
@@ -885,10 +885,10 @@ pub(super) struct LineMatch {
 /// point at valid positions in `buf`.
 pub(super) unsafe fn search_for_fuzzy_match(
     buf: *mut Buffer,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     pattern: *const c_char,
     dir: c_int,
-    start_pos: *const pos_T,
+    start_pos: *const Pos,
 ) -> Option<LineMatch> {
     let whole_line = ctrl_x_mode_whole_line();
     let mut current_pos = unsafe { *pos };
@@ -898,7 +898,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
     let circly_end = if buf == curbuf.get() {
         unsafe { *start_pos }
     } else {
-        pos_T {
+        Pos {
             lnum: unsafe { (*buf).b_ml.ml_line_count },
             col: 0,
             coladd: 0,

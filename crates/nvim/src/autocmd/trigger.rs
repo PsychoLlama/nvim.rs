@@ -109,7 +109,7 @@ pub unsafe fn do_doautocmd(
 /// ([`aucmd_prepbuf`]), because commands expect `curwin->w_buffer ==
 /// curbuf`.  An autocommand that deletes the buffer under us stops the
 /// sweep, which is what the `bufref` is for.
-pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
+pub unsafe fn ex_doautoall(eap: *mut ExArg) {
     let mut aco = aco_save_T::default();
     // SAFETY: a live command block, by the contract above, and
     // `check_nomodeline` only advances `arg` inside its own argument.
@@ -173,7 +173,7 @@ pub unsafe fn aucmd_defer(
     fname_io: *mut ::core::ffi::c_char,
     group: ::core::ffi::c_int,
     buf: Buf,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     data: *mut Object,
 ) {
     // SAFETY: `fname`/`fname_io` are the caller's NUL-terminated names or

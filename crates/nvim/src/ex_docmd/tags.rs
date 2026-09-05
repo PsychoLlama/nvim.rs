@@ -28,7 +28,7 @@ use crate::option::magic_isset;
 use crate::regexp::skip_regexp;
 use crate::search::find_pattern_in_path;
 use crate::tag::do_tag;
-use crate::types::{NUL, exarg_T};
+use crate::types::{ExArg, NUL};
 use crate::winlayer::Ea;
 
 /// `:isearch`, `:ilist`, `:ijump`, `:isplit` and their `:d…` twins.
@@ -36,7 +36,7 @@ use crate::winlayer::Ea;
 /// The third letter of the name says what to do with what is found, and
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
-pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_findpat(eap: *mut ExArg) {
     let mut ea = unsafe { Ea::new(eap) };
     let name = cmdnames[ea.cmdidx.index()].cmd_name;
     let action = match ubyte_at(name, 2) {
@@ -104,14 +104,14 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
 }
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
-pub(crate) unsafe fn ex_ptag(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_ptag(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     g_do_tagpreview.set(p_pvh.get() as c_int);
     unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name.add(1)) };
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
-pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_stag(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     // `-1` means "split, and let the tag code choose the size".
     postponed_split.set(-1);
@@ -123,7 +123,7 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
-pub(crate) unsafe fn ex_tag(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tag(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name) };
 }

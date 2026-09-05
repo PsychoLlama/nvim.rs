@@ -194,8 +194,8 @@ unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut regmatch_T, la
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_helpgrep(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let mut qi = qf_global();
 

@@ -40,7 +40,7 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
         unsafe { vim_beep(kOptBoFlagOperator as c_int as c_uint) };
         return;
     }
-    let mut ea: exarg_T = exarg_T {
+    let mut ea: ExArg = ExArg {
         arg: ::core::ptr::null_mut::<c_char>(),
         args: ::core::ptr::null_mut::<*mut c_char>(),
         arglens: ::core::ptr::null_mut(),
@@ -104,9 +104,9 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
+pub unsafe fn ex_diffgetput(eap: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<exarg_T>::new(eap) };
+    let mut eap = unsafe { Live::<ExArg>::new(eap) };
     let tp = cur_tab();
     let idx_cur = diff_slot(cur_buf(), tp);
     if idx_cur == DB_COUNT {
@@ -251,7 +251,7 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
     }
     diff_busy.set(false);
     if diff_need_update.get() {
-        // SAFETY: no `exarg_T` is being passed on.
+        // SAFETY: no `ExArg` is being passed on.
         unsafe { ex_diffupdate(::core::ptr::null_mut()) };
     }
     // SAFETY: the current window is live, in both calls.

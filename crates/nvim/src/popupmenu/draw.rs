@@ -26,7 +26,7 @@ use crate::types::kFloatRelativeEditor;
 /// title and footer fields, so the whole thing has to start out empty.
 const WIN_CONFIG_INIT: WinConfig = WinConfig {
     window: 0,
-    bufpos: lpos_T { lnum: -1, col: 0 },
+    bufpos: LPos { lnum: -1, col: 0 },
     height: 0,
     width: 0,
     row: 0.0,

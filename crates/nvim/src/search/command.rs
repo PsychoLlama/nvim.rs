@@ -361,7 +361,7 @@ unsafe fn echo_search_cmd(
 ///
 /// # Safety
 /// The current buffer must be the one `pos` addresses.
-unsafe fn back_off_start(pos: &mut pos_T, off: i64) {
+unsafe fn back_off_start(pos: &mut Pos, off: i64) {
     let mut c = off;
     if off > 0 {
         while c != 0 {
@@ -397,7 +397,7 @@ unsafe fn back_off_start(pos: &mut pos_T, off: i64) {
 ///
 /// # Safety
 /// The current buffer must be the one `pos` addresses.
-unsafe fn add_offset(pos: &mut pos_T, off: SearchOffset) -> c_int {
+unsafe fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
     if off.line {
         // Add the offset to the line number.
         let lnum = pos.lnum as i64 + off.off;
@@ -453,7 +453,7 @@ unsafe fn add_offset(pos: &mut pos_T, off: SearchOffset) -> c_int {
 /// `pat` must be null or NUL-terminated and writable up to its
 /// terminator; `oap` and `sia` must be null or valid.
 pub unsafe fn do_search(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     dirc: c_int,
     search_delim: c_int,
     pat: *mut c_char,

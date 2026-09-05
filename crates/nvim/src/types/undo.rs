@@ -103,7 +103,7 @@ pub struct u_header {
     pub uh_walk: ::core::ffi::c_int,
     pub uh_entry: *mut u_entry_T,
     pub uh_getbot_entry: *mut u_entry_T,
-    pub uh_cursor: pos_T,
+    pub uh_cursor: Pos,
     pub uh_cursor_vcol: ColNr,
     pub uh_flags: ::core::ffi::c_int,
     pub uh_namedm: [fmark_T; 26],
@@ -122,7 +122,7 @@ impl Default for u_header {
         // A `const`, not a `let`: `fmark_T` is not `Copy`, and only a
         // constant may be repeated into an array without it.
         const UNSET_MARK: fmark_T = fmark_T {
-            mark: pos_T {
+            mark: Pos {
                 lnum: 0,
                 col: 0,
                 coladd: 0,
@@ -144,7 +144,7 @@ impl Default for u_header {
             uh_walk: 0,
             uh_entry: ::core::ptr::null_mut(),
             uh_getbot_entry: ::core::ptr::null_mut(),
-            uh_cursor: pos_T::default(),
+            uh_cursor: Pos::default(),
             uh_cursor_vcol: 0,
             uh_flags: 0,
             uh_namedm: [UNSET_MARK; 26],
@@ -154,8 +154,8 @@ impl Default for u_header {
                 items: ::core::ptr::null_mut(),
             },
             uh_visual: visualinfo_T {
-                vi_start: pos_T::default(),
-                vi_end: pos_T::default(),
+                vi_start: Pos::default(),
+                vi_end: Pos::default(),
                 vi_mode: 0,
                 vi_curswant: 0,
             },
@@ -166,8 +166,8 @@ impl Default for u_header {
 }
 #[derive(Copy, Clone)]
 pub struct visualinfo_T {
-    pub vi_start: pos_T,
-    pub vi_end: pos_T,
+    pub vi_start: Pos,
+    pub vi_end: Pos,
     pub vi_mode: ::core::ffi::c_int,
     pub vi_curswant: ColNr,
 }

@@ -54,7 +54,7 @@ use crate::state::{
     get_real_state, may_trigger_modechanged,
 };
 use crate::types::{
-    CpoFlag, GraphemeState, NUL, OpType, OptInt, VimState, cmdarg_T, int16_t, int64_t, oparg_T,
+    CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, VimState, int16_t, int64_t,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
 use crate::winlayer::{Buf, Win};
@@ -360,7 +360,7 @@ pub(crate) unsafe fn normal_get_additional_char(s: *mut NormalState) {
                 }
             }
             // SAFETY: `cp` is the slot this command's extra character was
-            // read into, a field of the live `cmdarg_T`. The borrow must be
+            // read into, a field of the live `CmdArg`. The borrow must be
             // of the *place*, not of a copy: `langmap_adjust` writes through
             // it.
             unsafe { langmap_adjust(&mut *cp, !lang) };
@@ -707,7 +707,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 }
 
 /// Record a command for `.`, taking its second character from `cap`.
-pub(crate) unsafe fn prep_redo_cmd(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn prep_redo_cmd(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     prep_redo(ca.op().regname, ca.count0, NUL, ca.cmdchar, NUL, NUL, NUL);
@@ -808,7 +808,7 @@ pub(crate) fn clear_op(mut op: Op) {
 ///
 /// # Safety
 /// `oap` must be a live operator.
-pub(crate) unsafe fn clearop(oap: *mut oparg_T) {
+pub(crate) unsafe fn clearop(oap: *mut OpArg) {
     // SAFETY: the caller promises a live operator.
     clear_op(unsafe { Op::new(oap) });
 }
@@ -827,7 +827,7 @@ pub(crate) fn clear_op_beep(op: Op) {
 ///
 /// # Safety
 /// `oap` must be a live operator.
-pub(crate) unsafe fn clearopbeep(oap: *mut oparg_T) {
+pub(crate) unsafe fn clearopbeep(oap: *mut OpArg) {
     // SAFETY: the caller promises a live operator.
     clear_op_beep(unsafe { Op::new(oap) });
 }
@@ -848,7 +848,7 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 /// Open a fold the cursor has landed in, if the 'foldopen' flag for this kind
 /// of movement is set, the key was typed rather than mapped, and no operator
 /// is waiting for the motion to finish.
-pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
+pub(crate) unsafe fn may_fold_open(cap: *mut CmdArg, fdo_flag: c_uint) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
@@ -857,7 +857,7 @@ pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
 }
 
 /// Turn a shifted special key into its unshifted self.
-pub(crate) unsafe fn unshift_special(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn unshift_special(cap: *mut CmdArg) {
     // SAFETY: `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument.

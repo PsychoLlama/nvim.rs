@@ -29,7 +29,7 @@ const fn dirs_only(flags: ExpandFlags) -> ExpandFlags {
 }
 
 pub(crate) unsafe fn expand_files_and_dirs(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
@@ -120,7 +120,7 @@ fn nth_option(list: &[&'static CStr], idx: c_int) -> *mut c_char {
 ///
 /// Which of them apply depends on how much of the command has been typed,
 /// which `set_context_in_filetype_cmd` recorded in `filetype_expand_what`.
-pub(crate) fn get_filetypecmd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_filetypecmd_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(
         match filetype_expand_what.get() {
             FiletypeWhat::All => &[c"indent", c"plugin", c"on", c"off"],
@@ -137,7 +137,7 @@ pub(crate) fn get_filetypecmd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char
 /// The three share the tail of one list: `:breakadd` takes all four,
 /// `:breakdel` everything but "expr", and `:profdel` only the two that name
 /// something already being profiled.
-pub(crate) fn get_breakadd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_breakadd_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     const OPTS: [&CStr; 4] = [c"expr", c"file", c"func", c"here"];
     nth_option(
         match breakpt_expand_what.get() {
@@ -154,7 +154,7 @@ pub(crate) fn get_breakadd_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// Answers a pointer into the expansion context's own scratch, so the
 /// caller must copy it before asking for the next one — which
 /// `expand_generic` does. Upstream answers the shared `NameBuff` instead.
-pub(crate) unsafe fn get_scriptnames_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_scriptnames_arg(xp: *mut Expand, idx: c_int) -> *mut c_char {
     let sid = idx + 1;
     if !script_id_valid(sid) {
         return ptr::null_mut();
@@ -172,17 +172,17 @@ pub(crate) unsafe fn get_scriptnames_arg(xp: *mut expand_T, idx: c_int) -> *mut 
 }
 
 /// The possible arguments of the `":retab {-indentonly}"` option.
-pub(crate) fn get_retab_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_retab_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(&[c"-indentonly"], idx)
 }
 
 /// The possible arguments of the `":messages {clear}"` command.
-pub(crate) fn get_messages_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_messages_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(&[c"clear"], idx)
 }
 
 /// The possible arguments of the `":mapclear"` command.
-pub(crate) fn get_mapclear_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_mapclear_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(&[c"<buffer>"], idx)
 }
 
@@ -229,7 +229,7 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
 ///
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
-pub(crate) unsafe fn get_healthcheck_names(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_healthcheck_names(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
@@ -243,7 +243,7 @@ pub(crate) unsafe fn get_healthcheck_names(_xp: *mut expand_T, idx: c_int) -> *m
 ///
 /// Unlike `:checkhealth` the answer depends on the whole command line, so the
 /// cache is keyed on that as well as on the prompt id.
-pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_lsp_arg(xp: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
@@ -333,7 +333,7 @@ const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
 /// [`super::fromcontext::expand_from_context`] reports "nothing to complete".
 pub(crate) unsafe fn expand_other(
     pat: *mut c_char,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     rmp: *mut regmatch_T,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,

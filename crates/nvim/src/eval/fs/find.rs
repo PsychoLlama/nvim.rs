@@ -41,8 +41,8 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    BackslashEscape, EvalFuncData, ExpandContext, GArray, ScriptCtx, TypVal, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, Vv, expand_T, kListLenUnknown, pos_T, ptrdiff_t, size_t,
+    BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -53,13 +53,13 @@ use core::{ptr, slice};
 // ---------------------------------------------------------------------
 
 /// The wildcard expander, over file names.
-struct Expander(expand_T);
+struct Expander(Expand);
 
 impl Expander {
     /// A fresh expander with 'wildignorecase' folded into the caller's
     /// options, as `glob()` wants it.
     fn new() -> Self {
-        let mut xpc = expand_T {
+        let mut xpc = Expand {
             xp_pattern: ptr::null_mut(),
             xp_context: ExpandContext::Nothing,
             xp_pattern_len: 0,
@@ -77,7 +77,7 @@ impl Expander {
             xp_line: ptr::null_mut(),
             xp_buf: [0; 1025],
             xp_search_dir: kDirectionNotSet,
-            xp_pre_incsearch_pos: pos_T {
+            xp_pre_incsearch_pos: Pos {
                 lnum: 0,
                 col: 0,
                 coladd: 0,

@@ -31,7 +31,7 @@ use crate::path::{path_tail, path_tail_with_sep};
 use crate::profile::time_msg;
 use crate::semsg;
 use crate::smsg;
-use crate::types::{MAXPATHL, Vv, exarg_T, expand_T};
+use crate::types::{ExArg, Expand, MAXPATHL, Vv};
 use ::libc::setlocale;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -180,8 +180,8 @@ fn selector_for(word: &[u8]) -> Option<(c_int, &'static CStr)> {
 /// locale.
 ///
 /// # Safety
-/// `eap` must point at a live [`exarg_T`] whose `arg` is NUL-terminated.
-pub unsafe fn ex_language(eap: *mut exarg_T) {
+/// `eap` must point at a live [`ExArg`] whose `arg` is NUL-terminated.
+pub unsafe fn ex_language(eap: *mut ExArg) {
     // SAFETY: the caller's contract. `skiptowhite` stays inside `arg`, so the
     // slice between them is in bounds and initialised.
     let (arg, word, name) = unsafe {
@@ -335,7 +335,7 @@ fn locale_name(idx: c_int) -> *mut c_char {
 
 /// `expand_generic` source for `:language`'s argument: the four sub-commands
 /// first, then every locale (because `:language {name}` takes one directly).
-pub fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_lang_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     match SELECTORS.get(idx as usize) {
         Some((name, ..)) => name.as_ptr().cast::<c_char>().cast_mut(),
         None => locale_name(idx - SELECTORS.len() as c_int),
@@ -343,7 +343,7 @@ pub fn get_lang_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 }
 
 /// `expand_generic` source for `:language`'s locale names alone.
-pub fn get_locales(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_locales(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     locale_name(idx)
 }
 

@@ -43,7 +43,7 @@ use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
-    NUL, OptionSetFlags, VarNumber, Vv, oparg_T, ptrdiff_t, size_t,
+    NUL, OpArg, OptionSetFlags, VarNumber, Vv, ptrdiff_t, size_t,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
@@ -55,7 +55,7 @@ use crate::undo::{u_save, u_save_cursor};
 ///
 /// # Safety
 /// `oap` must be a live operator argument over the current buffer.
-pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
+pub(crate) unsafe fn op_format(oap: *mut OpArg, keep_cursor: bool) {
     // SAFETY: the caller's promise -- a live operator argument.
     let oap = unsafe { Op::new(oap) };
     let mut old_line_count = cur_buf().b_ml.ml_line_count;
@@ -124,7 +124,7 @@ pub(crate) unsafe fn op_format(oap: *mut oparg_T, keep_cursor: bool) {
 ///
 /// # Safety
 /// `oap` must be a live operator argument over the current buffer.
-pub(crate) unsafe fn op_formatexpr(oap: *mut oparg_T) {
+pub(crate) unsafe fn op_formatexpr(oap: *mut OpArg) {
     // SAFETY: the caller's promise -- a live operator argument.
     let op = unsafe { Op::new(oap) };
     if op.is_VIsual {

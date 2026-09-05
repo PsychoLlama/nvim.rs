@@ -476,7 +476,7 @@ impl ScriptCtx {
     ///
     /// A `Copy` cell's field write is a read-modify-write, and spelling it
     /// as one expression keeps the "which field" out of the caller's
-    /// bookkeeping -- `pos_T::with_col`'s shape.
+    /// bookkeeping -- `Pos::with_col`'s shape.
     pub fn with_sid(self, sc_sid: ScriptId) -> Self {
         ScriptCtx { sc_sid, ..self }
     }

@@ -15,7 +15,7 @@
 /// operator's number, and [`OpType::ALL`] is what turns one back.
 ///
 /// The discriminants are written out because that correspondence is the
-/// whole design, and because `oparg_T::op_type` is a `repr(C)` field.
+/// whole design, and because `OpArg::op_type` is a `repr(C)` field.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(i32)]
 pub enum OpType {

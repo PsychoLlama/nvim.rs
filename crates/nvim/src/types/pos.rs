@@ -14,27 +14,27 @@ use super::*;
 pub type ColNr = ::core::ffi::c_int;
 pub type LineNr = int32_t;
 #[derive(Copy, Clone, Default)]
-pub struct lpos_T {
+pub struct LPos {
     pub lnum: LineNr,
     pub col: ColNr,
 }
 #[derive(Copy, Clone, Default, PartialEq, Eq)]
 #[repr(C)]
-pub struct pos_T {
+pub struct Pos {
     pub lnum: LineNr,
     pub col: ColNr,
     pub coladd: ColNr,
 }
 
-impl pos_T {
+impl Pos {
     /// The same position moved to `col`, for the read-modify-write of a
     /// position held in a [`crate::global_cell::GlobalCell`].
-    pub fn with_col(self, col: ColNr) -> pos_T {
-        pos_T { col, ..self }
+    pub fn with_col(self, col: ColNr) -> Pos {
+        Pos { col, ..self }
     }
 
     /// The same position moved to `lnum`.
-    pub fn with_lnum(self, lnum: LineNr) -> pos_T {
-        pos_T { lnum, ..self }
+    pub fn with_lnum(self, lnum: LineNr) -> Pos {
+        Pos { lnum, ..self }
     }
 }

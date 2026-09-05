@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{Arena, Array, Error, OptInt, ShmFlag, Tabpage, exarg_T};
+use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag, Tabpage};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::first_window;
@@ -175,8 +175,8 @@ pub(crate) fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
 /// silently ignored rather than printing anything.
 ///
 /// # Safety
-/// `eap` is a live `exarg_T`.
-pub(crate) unsafe fn ex_version(eap: *mut exarg_T) {
+/// `eap` is a live `ExArg`.
+pub(crate) unsafe fn ex_version(eap: *mut ExArg) {
     // SAFETY: the caller's obligation; `arg` is NUL-terminated.
     if unsafe { *(*eap).arg } != 0 {
         return;
@@ -589,7 +589,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 ///
 /// # Safety
 /// The editor's globals must be live.
-pub(crate) unsafe fn ex_intro(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_intro(_eap: *mut ExArg) {
     // SAFETY: the caller's obligation.
     unsafe { screenclear() };
     unsafe { intro_message(true) };

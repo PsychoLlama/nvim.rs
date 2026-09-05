@@ -48,8 +48,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Buffer, CmdAddr, ColNr, Direction, ExArgt, ExpandContext, FAIL, LineNr, MarkGet, MarkMove, NUL,
-    OK, exarg_T, fmark_T, pos_T, size_t,
+    Buffer, CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, LineNr, MarkGet,
+    MarkMove, NUL, OK, Pos, fmark_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 
@@ -134,7 +134,7 @@ pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut eap: Ea) {
 
 /// Take the address kind from the command table, with the three exceptions
 /// the table cannot express.
-pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
+pub unsafe fn set_cmd_addr_type(eap: *mut ExArg, p: *mut c_char) {
     let mut ea = unsafe { Ea::new(eap) };
     if is_user_cmd(ea.cmdidx) {
         return;
@@ -155,7 +155,7 @@ pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
 
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
 /// from.
-pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> LineNr {
+pub unsafe fn get_cmd_default_range(eap: *mut ExArg) -> LineNr {
     let eap = unsafe { Ea::new(eap) };
     match eap.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
@@ -182,7 +182,7 @@ pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> LineNr {
 }
 
 /// The range an `ExArgt::DFLALL` command means by "no range": everything.
-pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
+pub unsafe fn set_cmd_dflall_range(eap: *mut ExArg) {
     let mut ea = unsafe { Ea::new(eap) };
     ea.line1 = 1;
     match ea.addr_type {
@@ -265,7 +265,7 @@ pub(crate) fn find_excmd_after_range(mut ea: Ea) -> *mut c_char {
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
 pub unsafe fn parse_cmd_address(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     errormsg: &mut Option<CString>,
     silent: bool,
 ) -> c_int {
@@ -492,7 +492,7 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// report an error (the message goes to `errormsg`).
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn get_address(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     ptr: *mut *mut c_char,
     addr_type: CmdAddr,
     skip: bool,
@@ -506,7 +506,7 @@ pub unsafe fn get_address(
     let mut slot = fmark_T::UNSET;
     let mut cmd: *mut c_char = unsafe { skipwhite(*ptr) };
     let mut lnum: LineNr = MAXLNUM as LineNr;
-    let mut pos = pos_T {
+    let mut pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -828,7 +828,7 @@ fn offset_base(eap: Ea, addr_type: CmdAddr) -> Addr {
 
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
-pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
+pub(crate) unsafe fn invalid_range(eap: *mut ExArg) -> Option<CString> {
     let ea = unsafe { Ea::new(eap) };
     let invrange = || Some(ex_msg(e_invrange.as_ptr()));
     if ea.line1 < 0 || ea.line2 < 0 || ea.line1 > ea.line2 {
@@ -951,19 +951,19 @@ fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) -> *mut fma
 }
 
 /// `qf_get_cur_idx()` as checked code.
-fn qf_get_cur_idx(eap: *mut exarg_T) -> size_t {
+fn qf_get_cur_idx(eap: *mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::quickfix::qf_get_cur_idx(eap) }
 }
 
 /// `qf_get_cur_valid_idx()` as checked code.
-fn qf_get_cur_valid_idx(eap: *mut exarg_T) -> c_int {
+fn qf_get_cur_valid_idx(eap: *mut ExArg) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::quickfix::qf_get_cur_valid_idx(eap) }
 }
 
 /// `qf_get_valid_size()` as checked code.
-fn qf_get_valid_size(eap: *mut exarg_T) -> size_t {
+fn qf_get_valid_size(eap: *mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::quickfix::qf_get_valid_size(eap) }
 }

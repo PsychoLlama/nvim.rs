@@ -90,9 +90,9 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsav
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExtmarkOp,
-    FILE, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal, VarNumber,
-    Window, aco_save_T, exarg_T, mmfile_t, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xpparam_t,
+    CmdAddr, CmdModFlags, ColNr, DiffBlock, DiffLine, DiffLineChange, EvalFuncData, ExArg,
+    ExtmarkOp, FILE, FileInfo, Hlf, LineNr, OptInt, OptScope, OptVal, ScriptId, String_0, TypVal,
+    VarNumber, Window, aco_save_T, mmfile_t, size_t, uint64_t, xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_save, u_sync};

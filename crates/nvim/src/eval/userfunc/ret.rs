@@ -42,7 +42,7 @@ const EVALARG_INIT: EvalArg = EvalArg {
 ///
 /// # Safety
 /// `eap` is a live `:return` command.
-pub unsafe fn ex_return(eap: *mut exarg_T) {
+pub unsafe fn ex_return(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     let arg = ea.arg;
@@ -99,7 +99,7 @@ pub unsafe fn ex_return(eap: *mut exarg_T) {
 /// `eap` is a live `:call`, `name` the resolved function name, and
 /// `startarg` the `(` its arguments start at.
 unsafe fn ex_call_inner(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     name: *mut c_char,
     arg: *mut *mut c_char,
     startarg: *mut c_char,
@@ -335,7 +335,7 @@ pub unsafe fn invoke_all_defer() {
 ///
 /// # Safety
 /// `eap` is a live `:call`/`:defer` command.
-pub unsafe fn ex_call(eap: *mut exarg_T) {
+pub unsafe fn ex_call(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     let mut arg = ea.arg;
@@ -444,7 +444,7 @@ pub unsafe fn ex_call(eap: *mut exarg_T) {
 /// `eap` is a live command with a condition stack, and `rettv` is null or a
 /// `TypVal`.
 pub unsafe fn do_return(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     reanimate: bool,
     is_cmd: bool,
     rettv: *mut c_void,

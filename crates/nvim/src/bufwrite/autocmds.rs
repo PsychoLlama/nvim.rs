@@ -54,8 +54,8 @@ pub(crate) struct WriteNames {
 /// line range, so `:lockmarks` can put them back.
 #[derive(Copy, Clone)]
 pub(crate) struct OpMarks {
-    pub start: pos_T,
-    pub end: pos_T,
+    pub start: Pos,
+    pub end: Pos,
 }
 
 /// What the pre-write autocommands left for `buf_write` to do.
@@ -76,7 +76,7 @@ pub(crate) enum PreWrite {
 unsafe fn apply_pre(
     event: AutoEvent,
     sfname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     overwriting: bool,
 ) -> bool {
     if overwriting && buf_is_nofilename(current_buf()) {
@@ -97,7 +97,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     names: &mut WriteNames,
     start: LineNr,
     end: &mut LineNr,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     mode: WriteMode,
     orig: OpMarks,
 ) -> PreWrite {
@@ -272,7 +272,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 pub(crate) unsafe fn buf_write_do_post_autocmds(
     buf: *mut Buffer,
     fname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     mode: WriteMode,
 ) {
     // In case it was set by the previous read.

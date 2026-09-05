@@ -71,10 +71,9 @@ use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem,
     DictWatcher, Failed, HashItem, HashTab, HtStack, List, ListItem, ListStack, NUL, OptInt,
-    Partial, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
     VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
-    VarLock, Window, fmark_T, fmarkv_T, pos_T, size_t, typval_vval_union, vimconv_T, xfmark_T,
-    yankreg_T,
+    VarLock, Window, fmark_T, fmarkv_T, size_t, typval_vval_union, vimconv_T, xfmark_T, yankreg_T,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -346,7 +345,7 @@ unsafe fn walk_shada_iterators() {
     loop {
         let mut fm = xfmark_T {
             fmark: fmark_T {
-                mark: pos_T {
+                mark: Pos {
                     lnum: 0,
                     col: 0,
                     coladd: 0,

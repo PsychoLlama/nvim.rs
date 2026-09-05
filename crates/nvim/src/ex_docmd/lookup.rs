@@ -23,9 +23,7 @@ use crate::memory::xstrdup;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 
-use crate::types::{
-    CmdAddr, EvalFuncData, ExArgt, NUL, TypVal, VAR_STRING, exarg_T, expand_T, size_t,
-};
+use crate::types::{CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, VAR_STRING, size_t};
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};
 use crate::winlayer::Ea;
 
@@ -106,7 +104,7 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
 /// `eap->cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
 /// as a *negative* index for a user command. `full`, when given, is set
 /// when the name was spelled out in full rather than abbreviated.
-pub unsafe fn find_ex_command(eap: *mut exarg_T, full: *mut c_int) -> *mut c_char {
+pub unsafe fn find_ex_command(eap: *mut ExArg, full: *mut c_int) -> *mut c_char {
     let mut ea = unsafe { Ea::new(eap) };
     let mut p = ea.cmd;
     if one_letter_cmd(p, ea.cmdidx_ptr()) {
@@ -297,11 +295,11 @@ pub unsafe fn f_fullcommand(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     };
 }
 
-/// A zeroed `exarg_T` with the two fields a lookup needs set the way
+/// A zeroed `ExArg` with the two fields a lookup needs set the way
 /// `find_ex_command` expects: `CmdIdx::append` is index 0, the head of the
 /// table, and no flags have been collected yet.
-fn blank_exarg() -> exarg_T {
-    let mut ea: exarg_T = unsafe { core::mem::zeroed() };
+fn blank_exarg() -> ExArg {
+    let mut ea: ExArg = unsafe { core::mem::zeroed() };
     ea.cmdidx = CmdIdx::append;
     ea.addr_type = CmdAddr::Lines;
     ea.flags = 0;
@@ -340,7 +338,7 @@ pub unsafe fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
 ///
 /// Keeps the raw signature: cmdexpand's generator table holds it as an
 /// `ItemGetter`.
-pub unsafe fn get_command_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_command_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     if idx >= CmdIdx::SIZE.code() {
         return unsafe { expand_user_command_name(idx) };
     }

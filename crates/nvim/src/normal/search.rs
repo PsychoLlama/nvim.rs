@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{MarkMove, MarkMoveRes, OpType, cmdarg_T, fmark_T, searchit_arg_T, size_t};
+use crate::types::{CmdArg, MarkMove, MarkMoveRes, OpType, fmark_T, searchit_arg_T, size_t};
 use crate::window::goto_tabpage_lastused;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -50,7 +50,7 @@ fn current_match_is_distinct() -> bool {
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.
-pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_search(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let op = ca.op();
@@ -82,7 +82,7 @@ pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
 }
 
 /// `n` and `N`: search again for the last pattern.
-pub(crate) unsafe fn nv_next(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_next(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArgRef::new(cap) };
     let old = cur_win().w_cursor;
@@ -108,7 +108,7 @@ pub(crate) unsafe fn nv_next(cap: *mut cmdarg_T) {
 /// Answers `do_search`'s result: 0 for no match, 1 for a match, 2 for a match
 /// the offset made linewise.
 pub(crate) unsafe fn normal_search(
-    cap: *mut cmdarg_T,
+    cap: *mut CmdArg,
     dir: c_int,
     pat: *mut c_char,
     patlen: size_t,
@@ -159,7 +159,7 @@ pub(crate) unsafe fn normal_search(
 }
 
 /// `m`: set a mark.
-pub(crate) unsafe fn nv_mark(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_mark(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if check_clear_op(ca.op()) {
@@ -172,7 +172,7 @@ pub(crate) unsafe fn nv_mark(cap: *mut cmdarg_T) {
 
 /// Jump to a mark, and describe the jump to the operator that may be pending.
 pub(crate) unsafe fn nv_mark_move_to(
-    cap: *mut cmdarg_T,
+    cap: *mut CmdArg,
     flags: MarkMove,
     fm: *mut fmark_T,
 ) -> MarkMoveRes {
@@ -213,7 +213,7 @@ fn view_flag() -> MarkMove {
 ///
 /// `old_KeyTyped` rather than the current value: the jump itself may have
 /// consumed the "typed" flag.
-unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
+unsafe fn may_open_fold(cap: *mut CmdArg, moved: bool, old_key_typed: bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     if ca.op().op_type == OpType::Nop
@@ -226,7 +226,7 @@ unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
 }
 
 /// `'` and `` ` ``, and their `g` forms.
-pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gomark(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // A mark used as an operator's motion must not restore the view.
@@ -268,7 +268,7 @@ pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
 
 /// `CTRL-O`, `CTRL-I` and `g;`/`g,`: step along the jump list or the change
 /// list.
-pub(crate) unsafe fn nv_pcmark(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_pcmark(cap: *mut CmdArg) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     let mut flags = view_flag();

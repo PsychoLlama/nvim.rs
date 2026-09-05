@@ -28,8 +28,8 @@ use crate::msgpack_rpc::server::{server_start, server_stop};
 use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, KeyValuePair, ListItem,
-    NUL, Object, String_0, VarNumber, Vv, exarg_T, key_value_pair, ptrdiff_t, size_t, uint16_t,
+    ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, ExArg, KeyValuePair,
+    ListItem, NUL, Object, String_0, VarNumber, Vv, key_value_pair, ptrdiff_t, size_t, uint16_t,
     uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
@@ -82,7 +82,7 @@ fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
 /// UIs to. Only then does this server try to quit — and if it *cannot*
 /// (an unsaved buffer, a `+cmd` that did not quit), the new server is
 /// killed again and nothing has changed.
-pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_restart(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
@@ -339,7 +339,7 @@ fn blank_callback() -> Callback {
 ///
 /// Called with a null `eap` by `:connect`, which has already attached
 /// somewhere else.
-pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_detach(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if !eap.raw().is_null() && eap.forceit != 0 {
         emsg(c"bang (!) not supported yet".as_ptr());
@@ -387,7 +387,7 @@ pub(crate) unsafe fn ex_detach(eap: *mut exarg_T) {
 ///
 /// `:connect!` also *exits* when this was the only UI, so that the session
 /// really moves rather than being left running.
-pub(crate) unsafe fn ex_connect(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_connect(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let stop_server = eap.forceit != 0 && ui_active() == 1;
     let mut err = Error::none();

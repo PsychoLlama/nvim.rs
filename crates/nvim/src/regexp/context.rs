@@ -40,7 +40,7 @@ use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
 use crate::semsg;
 use crate::types::{
-    Buffer, ColNr, LineNr, Window, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
+    Buffer, ColNr, LPos, LineNr, Window, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
 };
 use ::libc::strcpy;
 
@@ -342,7 +342,7 @@ fn cleanup(rex: Rex, z: bool) {
 }
 
 /// What a buffer match's unset capture slot holds.
-const UNSET_POS: lpos_T = lpos_T { lnum: -1, col: -1 };
+const UNSET_POS: LPos = LPos { lnum: -1, col: -1 };
 
 fn blank<T: Copy>(slots: &mut [T], unset: T) {
     slots.fill(unset);

@@ -54,8 +54,8 @@ use crate::semsg;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, ColNr, Handle, LineNr, NUL, OptInt, OptionSetFlags, ProfTime, exarg_T, int64_t,
-    lpos_T, pos_T, regmmatch_T, size_t,
+    CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptionSetFlags, Pos, ProfTime,
+    int64_t, regmmatch_T, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
@@ -85,7 +85,7 @@ pub(super) struct SubArgs {
     /// Vi quirk: a repeated `:s` after `$` leaves the cursor in the last
     /// column.
     pub endcolumn: bool,
-    pub old_cursor: pos_T,
+    pub old_cursor: Pos,
     pub old_line_count: LineNr,
     /// `sub_nsubs` before this command, so that a `:global` can tell whether
     /// *this* `:s` did anything.
@@ -398,11 +398,11 @@ unsafe fn is_last_match(st: &Sub) -> bool {
 unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
     loop {
         let mut current_match = SubResult {
-            start: lpos_T {
+            start: LPos {
                 lnum: 0 as LineNr,
                 col: 0 as ColNr,
             },
-            end: lpos_T {
+            end: LPos {
                 lnum: 0 as LineNr,
                 col: 0 as ColNr,
             },
@@ -733,7 +733,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
 pub(crate) unsafe fn do_sub(
-    eap: &mut exarg_T,
+    eap: &mut ExArg,
     timeout: ProfTime,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,

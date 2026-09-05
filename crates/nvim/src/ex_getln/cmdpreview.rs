@@ -363,7 +363,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
 ///
 /// Answers true when a preview was shown.
 pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
-    let mut ea: exarg_T = EXARG_T_INIT;
+    let mut ea: ExArg = EXARG_T_INIT;
     let mut cmdinfo: CmdParseInfo = CMD_PARSE_INFO_INIT;
     let mut cmdpreview_type = 0;
     // A copy of the command line, so `parse_cmdline` can modify it --

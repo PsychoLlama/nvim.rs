@@ -52,8 +52,8 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
-    Buffer, CmdModFlags, CpoFlag, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL,
-    ShmFlag, VimAcl, aco_save_T, exarg_T, iconv_t, int64_t, pos_T, size_t, uint64_t, uv_gid_t,
+    Buffer, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
+    MAXPATHL, Pos, ShmFlag, VimAcl, aco_save_T, iconv_t, int64_t, size_t, uint64_t, uv_gid_t,
     uv_uid_t,
 };
 use crate::ui::ui_flush;
@@ -278,7 +278,7 @@ pub unsafe fn buf_write(
     sfname: *mut ::core::ffi::c_char,
     start: LineNr,
     end: LineNr,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     req: WriteRequest,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, taken once for the whole body.

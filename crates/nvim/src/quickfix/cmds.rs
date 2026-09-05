@@ -39,8 +39,8 @@ fn cfile_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cfile(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_cfile(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let mut qi = qf_global();
 
@@ -126,8 +126,8 @@ fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<Buf> {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+unsafe fn cbuffer_process_args(eap: *mut ExArg) -> Option<Buf> {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let mut eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     let buf = if unsafe { *eap.arg } as c_int == NUL {
@@ -169,8 +169,8 @@ unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<Buf> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_cbuffer(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller.
@@ -288,8 +288,8 @@ unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
 /// # Safety
 ///
 /// `eap` must be a live command and `tv` a live value.
-unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut TypVal) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+unsafe fn cexpr_core(eap: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap.cast_mut()) };
     // SAFETY: forwarded from the caller.
     // The stack is asked for first, and so allocated for the current
@@ -357,8 +357,8 @@ unsafe fn cexpr_core(eap: *const exarg_T, tv: *mut TypVal) -> Result<(), Failed>
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cexpr(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_cexpr(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
     if !unsafe { trigger_cexpr_autocmd(eap.cmdidx) } {

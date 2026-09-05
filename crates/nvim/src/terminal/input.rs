@@ -32,7 +32,7 @@ use crate::options::{
     kOptTpfFlagBS, kOptTpfFlagC0, kOptTpfFlagC1, kOptTpfFlagDEL, kOptTpfFlagESC, kOptTpfFlagFF,
     kOptTpfFlagHT,
 };
-use crate::types::{String_0, Terminal, VTermKey, VTermModifier, cmdarg_T, oparg_T, size_t};
+use crate::types::{CmdArg, OpArg, String_0, Terminal, VTermKey, VTermModifier, size_t};
 use crate::vterm::keyboard::{
     vterm_keyboard_end_paste, vterm_keyboard_key, vterm_keyboard_start_paste,
     vterm_keyboard_unichar,
@@ -396,7 +396,7 @@ fn scroll_window(mouse_win: Win, key: c_int, direction: c_int) {
 
     // SAFETY: all-zeroes is what `clear_oparg` and the command argument
     // start from; every field of both is a scalar or a pointer.
-    let (mut oa, mut cap): (oparg_T, cmdarg_T) = unsafe { ::core::mem::zeroed() };
+    let (mut oa, mut cap): (OpArg, CmdArg) = unsafe { ::core::mem::zeroed() };
     // SAFETY: an operator argument of this frame's own.
     unsafe { clear_oparg(&raw mut oa) };
     cap.oap = &raw mut oa;

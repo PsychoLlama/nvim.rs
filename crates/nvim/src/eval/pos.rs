@@ -19,8 +19,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    Buffer, ColNr, Failed, LineNr, List, ListItem, NUL, TypVal, VAR_LIST, VAR_STRING, Window,
-    fmark_T, pos_T, uint8_t,
+    Buffer, ColNr, Failed, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST, VAR_STRING, Window,
+    fmark_T, uint8_t,
 };
 use crate::winlayer::Win;
 
@@ -115,7 +115,7 @@ pub unsafe fn var2fpos(
     ret_fnum: *mut c_int,
     charcol: bool,
     wp: *mut Window,
-) -> Option<pos_T> {
+) -> Option<Pos> {
     let mut numbuf = NumBuf::new();
     // The record a `'m` lookup answers into: a motion mark has no store of
     // its own, so it is computed straight into this frame's slot.
@@ -125,7 +125,7 @@ pub unsafe fn var2fpos(
     // sound. Nothing below holds either across a call that could close the
     // window: `wp` is the caller's and outlives this frame.
     let (wp, tv) = unsafe { (Win::new(wp), Tv::new(tv.cast_mut())) };
-    let mut pos = pos_T::default();
+    let mut pos = Pos::default();
     let bp = wp.buffer();
 
     // `[lnum, col]`, `[lnum, col, off]`.
@@ -277,13 +277,13 @@ pub unsafe fn var2fpos(
 /// `arg` and `posp` must be valid; `fnump` and `curswantp` null or valid.
 pub unsafe fn list2fpos(
     arg: *mut TypVal,
-    posp: *mut pos_T,
+    posp: *mut Pos,
     fnump: *mut c_int,
     curswantp: *mut ColNr,
     charcol: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- both outlive the call.
-    let (arg, mut posp) = unsafe { (Tv::new(arg), Live::<pos_T>::new(posp)) };
+    let (arg, mut posp) = unsafe { (Tv::new(arg), Live::<Pos>::new(posp)) };
     if arg.v_type != VAR_LIST {
         return Err(Failed);
     }

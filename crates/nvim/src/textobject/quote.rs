@@ -24,7 +24,7 @@ use crate::normal::{
 };
 use crate::pos::{equalpos, lt};
 use crate::strings::vim_strchr;
-use crate::types::{ColNr, NUL, oparg_T};
+use crate::types::{ColNr, NUL, OpArg};
 
 /// The column of the next `quotechar` at or after `col`, or -1 when there is
 /// none before the end of the line.
@@ -230,7 +230,7 @@ fn swap_cursor_and_anchor() {
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
 pub unsafe fn current_quote(
-    oap: *mut oparg_T,
+    oap: *mut OpArg,
     count: c_int,
     include: bool,
     quotechar: c_int,

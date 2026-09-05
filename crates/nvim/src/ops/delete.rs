@@ -67,10 +67,10 @@ impl From<Failed> for NotDeleted {
 /// failure, and neither is a read-only register (which beeps instead).
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub unsafe fn op_delete(oap: *mut OpArg) -> Result<(), NotDeleted> {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // Every line and column touched below is one of that region's.
     let mut oap = unsafe { Op::new(oap) };
     let old_lcount = cur_buf().line_count();
@@ -175,7 +175,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
 /// autocommand, which is upstream's behaviour and the reason `reg` is carried
 /// rather than each branch handling its own.
 fn save_deleted_text(oap: Op) -> bool {
-    // SAFETY: a live `oparg_T` of the current buffer, and every register
+    // SAFETY: a live `OpArg` of the current buffer, and every register
     // written is one `get_yank_register`/`get_y_register` just handed back.
     let mut reg: *mut yankreg_T = ::core::ptr::null_mut();
     let mut did_yank = false;
@@ -487,9 +487,9 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
 /// that an inclusive delete takes the whole character.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` whose end names a position in the
+/// `oap` must point to a live `OpArg` whose end names a position in the
 /// current buffer.
-pub(crate) unsafe fn mb_adjust_opend(oap: *mut oparg_T) {
+pub(crate) unsafe fn mb_adjust_opend(oap: *mut OpArg) {
     // SAFETY: the caller's promise -- `oap.end` names a position of the
     // current buffer, so its line is live and `end.col` a column of it.
     let mut oap = unsafe { Op::new(oap) };

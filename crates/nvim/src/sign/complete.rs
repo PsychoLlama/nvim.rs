@@ -46,7 +46,7 @@ enum ExpandWhat {
 /// What the last [`set_context_in_sign_cmd`] decided.
 ///
 /// A static, because `expand_generic` calls [`get_sign_name`] with nothing but
-/// an index: the `expand_T` it also passes carries the *other* completions'
+/// an index: the `Expand` it also passes carries the *other* completions'
 /// context, not this one.
 static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::Subcmd);
 
@@ -72,7 +72,7 @@ fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// None; `xp` is unused.
-pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_sign_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     match EXPAND_WHAT.get() {
         ExpandWhat::Subcmd => nth(&CMDS, idx),
         ExpandWhat::Define => nth(
@@ -123,7 +123,7 @@ pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_cha
 /// # Safety
 /// `xp` must be live and `arg` a writable NUL-terminated string
 /// ([`sign_cmd_idx`] terminates the subcommand in place).
-pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char) {
+pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut Expand, arg: *mut c_char) {
     // SAFETY: the caller's completion context and command line.
     // Default: expand subcommand names.
     unsafe { (*xp).xp_context = ExpandContext::Sign };

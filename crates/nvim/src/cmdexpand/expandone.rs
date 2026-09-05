@@ -24,8 +24,8 @@ const NO_PATTERN: *mut c_char = ptr::null_mut();
 /// The original text `xp` saved, or the empty string when it saved none.
 ///
 /// # Safety
-/// `xp` must point at a live `expand_T`.
-unsafe fn orig_or_empty(xp: *const expand_T) -> *const c_char {
+/// `xp` must point at a live `Expand`.
+unsafe fn orig_or_empty(xp: *const Expand) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp.cast_mut()) };
@@ -50,7 +50,7 @@ const fn first_selected(options: WildOpts) -> c_int {
 
 /// The expanded matches, as a slice.  Only call this where `xp_numfiles` is
 /// known positive: it is -1 before anything has been expanded.
-unsafe fn matches_of(xp: *const expand_T) -> &'static [*mut c_char] {
+unsafe fn matches_of(xp: *const Expand) -> &'static [*mut c_char] {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp.cast_mut()) };
@@ -71,7 +71,7 @@ unsafe fn matches_of(xp: *const expand_T) -> &'static [*mut c_char] {
 /// `mode` is one of the `WILD_*` modes, passed on to [`expand_one`]; `escape`
 /// asks for the matches to be escaped for use on the command line.
 pub(crate) unsafe fn nextwild(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mode: WildMode,
     options: WildOpts,
     escape: bool,
@@ -250,7 +250,7 @@ pub(crate) unsafe fn nextwild(
 
 /// Move the selection within an already expanded match list, and answer a
 /// fresh copy of what is now selected (or of the original text, at index -1).
-unsafe fn next_match(mode: WildMode, xp: *mut expand_T) -> *mut c_char {
+unsafe fn next_match(mode: WildMode, xp: *mut Expand) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -354,7 +354,7 @@ unsafe fn next_match(mode: WildMode, xp: *mut expand_T) -> *mut c_char {
 /// caller assembles itself), and NULL otherwise.
 unsafe fn expand_one_start(
     mode: WildMode,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     str: *mut c_char,
     options: WildOpts,
 ) -> *mut c_char {
@@ -363,8 +363,8 @@ unsafe fn expand_one_start(
     let xp = unsafe { Xp::new(xp) };
     // `field_ptr`, not `&raw mut xp.xp_files`: two addresses off one
     // `Deref` would pop each other, and `expand_from_context` writes both.
-    let files = xp.field_ptr(core::mem::offset_of!(expand_T, xp_files));
-    let numfiles = xp.field_ptr(core::mem::offset_of!(expand_T, xp_numfiles));
+    let files = xp.field_ptr(core::mem::offset_of!(Expand, xp_files));
+    let numfiles = xp.field_ptr(core::mem::offset_of!(Expand, xp_numfiles));
     // SAFETY: `xp` is live and both out-parameters are its own fields.
     let expanded = unsafe { expand_from_context(xp.raw(), str, files, numfiles, options) };
     if expanded.is_err() {
@@ -431,7 +431,7 @@ unsafe fn expand_one_start(
 ///
 /// Beeps (unless `WildOpts::NO_BEEP`) at the byte where they first diverge, which
 /// is how the user learns the expansion stopped short of a whole name.
-unsafe fn longest_common_match(xp: *mut expand_T, options: WildOpts) -> *mut c_char {
+unsafe fn longest_common_match(xp: *mut Expand, options: WildOpts) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
@@ -504,7 +504,7 @@ unsafe fn longest_common_match(xp: *mut expand_T, options: WildOpts) -> *mut c_c
 ///
 /// `xp->xp_context` and `xp->xp_backslash` must have been set.
 pub unsafe fn expand_one(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     str: *mut c_char,
     orig: *mut c_char,
     options: WildOpts,
@@ -615,7 +615,7 @@ pub unsafe fn expand_one(
 }
 
 /// Prepare an expand structure for use.
-pub unsafe fn expand_init(xp: *mut expand_T) {
+pub unsafe fn expand_init(xp: *mut Expand) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -626,7 +626,7 @@ pub unsafe fn expand_init(xp: *mut expand_T) {
 }
 
 /// Clean up an expand structure after use.
-pub unsafe fn expand_cleanup(xp: *mut expand_T) {
+pub unsafe fn expand_cleanup(xp: *mut Expand) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };

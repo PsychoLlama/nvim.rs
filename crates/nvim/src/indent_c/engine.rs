@@ -36,7 +36,7 @@ pub(crate) struct Line {
     /// The same copy from column 0, which the `#` test reads.
     pub linecopy: *const c_char,
     /// Where the cursor was when the question was asked.
-    pub cur_curpos: pos_T,
+    pub cur_curpos: Pos,
     /// Whether that line is a jump label, decided before anything moved.
     pub original_line_islabel: bool,
 }

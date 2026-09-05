@@ -3,7 +3,7 @@
 //! The inverse of [`super::parse`]: every field is validated against the
 //! command's `argt` flags (which arguments it accepts, whether it takes a
 //! range, a count, a register or a bang), the `mods` sub-keyset is unpacked
-//! into an `cmdmod_T`, and the result is handed to `execute_cmd` -- with
+//! into an `CmdMod`, and the result is handed to `execute_cmd` -- with
 //! the output captured when `opts.output` is set.
 //!
 //! The Dict is consumed in stages, in the order the command line itself
@@ -99,10 +99,10 @@ pub unsafe fn nvim_cmd(
     // this function runs, so a shared borrow of each holds throughout.
     let (cmd, opts) = unsafe { (&*cmd, &*opts) };
 
-    // SAFETY: `exarg_T` and `CmdParseInfo` are plain C aggregates whose
+    // SAFETY: `ExArg` and `CmdParseInfo` are plain C aggregates whose
     // all-zero state is the valid "nothing parsed yet" one; the C original
     // clears both with CLEAR_FIELD.
-    let mut ea: exarg_T = unsafe { ::core::mem::zeroed() };
+    let mut ea: ExArg = unsafe { ::core::mem::zeroed() };
     let mut cmdinfo: CmdParseInfo = unsafe { ::core::mem::zeroed() };
 
     // Owned here rather than in `prepare_cmd` because `ea.cmdlinep` points at
@@ -127,14 +127,14 @@ pub unsafe fn nvim_cmd(
     retv.reported(slot)
 }
 
-/// Turn the Dict into a resolved, validated `exarg_T` plus its rendered
+/// Turn the Dict into a resolved, validated `ExArg` plus its rendered
 /// command line.
 ///
 /// False means stop: either a stage set `err`, or the Dict carried modifiers
 /// and nothing else, which upstream treats as a silent no-op.
 unsafe fn prepare_cmd(
     cmd: &KeyDict_cmd,
-    ea: &mut exarg_T,
+    ea: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     cmdline: &mut *mut c_char,
     arena: *mut Arena,
@@ -201,7 +201,7 @@ unsafe fn prepare_cmd(
 /// no name at all. `None` means stop, per [`prepare_cmd`].
 unsafe fn resolve_command(
     cmd: &KeyDict_cmd,
-    ea: &mut exarg_T,
+    ea: &mut ExArg,
     arena: *mut Arena,
     err: &mut Error,
 ) -> Option<bool> {
@@ -305,7 +305,7 @@ unsafe fn resolve_command(
 /// `Some(true)` means the one argument was consumed as the command's count.
 unsafe fn collect_args(
     cmd: &KeyDict_cmd,
-    ea: &mut exarg_T,
+    ea: &mut ExArg,
     args: &mut Array,
     arena: *mut Arena,
     err: &mut Error,
@@ -395,7 +395,7 @@ unsafe fn collect_args(
 }
 
 /// Apply `cmd.range`, then fall back to the command's default range.
-fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
+fn apply_range(cmd: &KeyDict_cmd, ea: &mut ExArg, err: &mut Error) -> bool {
     if has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__range) {
         if !ea.argt.has(ExArgt::RANGE) {
             err_cannot_accept(err, c"range", cmd);
@@ -458,7 +458,7 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
 /// Apply `cmd.count`.
 fn apply_count(
     cmd: &KeyDict_cmd,
-    ea: &mut exarg_T,
+    ea: &mut ExArg,
     count_from_first_arg: bool,
     err: &mut Error,
 ) -> bool {
@@ -484,7 +484,7 @@ fn apply_count(
 }
 
 /// Apply `cmd.reg`.
-fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
+fn apply_register(cmd: &KeyDict_cmd, ea: &mut ExArg, err: &mut Error) -> bool {
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__reg) {
         return true;
     }
@@ -518,7 +518,7 @@ fn apply_register(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool 
 }
 
 /// Apply `cmd.bang`.
-fn apply_bang(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
+fn apply_bang(cmd: &KeyDict_cmd, ea: &mut ExArg, err: &mut Error) -> bool {
     ea.forceit = cmd.bang as c_int;
     if ea.forceit != 0 && !ea.argt.has(ExArgt::BANG) {
         err_cannot_accept(err, c"bang", cmd);
@@ -539,7 +539,7 @@ fn err_cannot_accept(err: &mut Error, what: &CStr, cmd: &KeyDict_cmd) {
 /// Unpack the `magic` sub-keyset, defaulting each half to what `argt` says.
 fn apply_magic(
     cmd: &KeyDict_cmd,
-    ea: &mut exarg_T,
+    ea: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     err: &mut Error,
 ) -> bool {
@@ -578,12 +578,7 @@ fn apply_magic(
 }
 
 /// Unpack the `mods` sub-keyset into `cmdinfo.cmdmod`.
-fn apply_mods(
-    cmd: &KeyDict_cmd,
-    ea: &exarg_T,
-    cmdinfo: &mut CmdParseInfo,
-    err: &mut Error,
-) -> bool {
+fn apply_mods(cmd: &KeyDict_cmd, ea: &ExArg, cmdinfo: &mut CmdParseInfo, err: &mut Error) -> bool {
     if !has_key(cmd.is_set__cmd_, KEYSET_OPTIDX_cmd__mods) {
         return true;
     }
@@ -710,7 +705,7 @@ fn apply_filter_mod(mods: &KeyDict_cmd_mods, cmdinfo: &mut CmdParseInfo, err: &m
 ///
 /// # Safety
 /// `ea.arg` must point into a live NUL-terminated command line.
-unsafe fn apply_argopt(ea: &mut exarg_T, err: &mut Error) -> bool {
+unsafe fn apply_argopt(ea: &mut ExArg, err: &mut Error) -> bool {
     if !ea.argt.has(ExArgt::ARGOPT) {
         return true;
     }
@@ -734,7 +729,7 @@ unsafe fn apply_argopt(ea: &mut exarg_T, err: &mut Error) -> bool {
 /// Run the prepared command, capturing its messages when asked.
 unsafe fn run_cmd(
     channel_id: uint64_t,
-    ea: &mut exarg_T,
+    ea: &mut ExArg,
     cmdinfo: &mut CmdParseInfo,
     capture: bool,
     arena: *mut Arena,

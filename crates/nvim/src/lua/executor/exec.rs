@@ -29,9 +29,9 @@ use crate::memory::{xfree, xmalloc};
 use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
-    Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal,
-    VAR_NUMBER, VAR_UNKNOWN, VarNumber, expand_T, kErrorTypeException, kErrorTypeValidation,
-    lua_Integer, lua_State, size_t,
+    Arena, Array, Error, ErrorType, Expand, IOSIZE, LuaRef, LuaRetMode, Object, String_0, TypVal,
+    VAR_NUMBER, VAR_UNKNOWN, VarNumber, kErrorTypeException, kErrorTypeValidation, lua_Integer,
+    lua_State, size_t,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
@@ -133,7 +133,7 @@ pub unsafe fn nlua_typval_call(
 ///
 /// # Safety
 /// `xp` must carry a live `xp_luaref`, and `ret_tv` be writable.
-pub unsafe fn nlua_call_user_expand_func(xp: *mut expand_T, ret_tv: *mut TypVal) {
+pub unsafe fn nlua_call_user_expand_func(xp: *mut Expand, ret_tv: *mut TypVal) {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(lstate, (*xp).xp_luaref);

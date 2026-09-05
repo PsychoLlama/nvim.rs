@@ -81,8 +81,8 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Buffer, CheckItem, ColNr, Directory, FAIL, FILE, Failed, FileInfo, FileOffset, GArray, IOSIZE,
-    LineNr, OK, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag, aco_save_T, bln_values, exarg_T,
+    Buffer, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo, FileOffset, GArray,
+    IOSIZE, LineNr, OK, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag, aco_save_T, bln_values,
     iconv_t, int64_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t, time_t, uint64_t,
     uintmax_t, uv_gid_t, uv_uid_t,
 };
@@ -560,7 +560,7 @@ pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 /// Fill `eap` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
 /// forced to what buffer `buf` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
-pub unsafe fn prep_exarg(eap: *mut exarg_T, buf: Buf) {
+pub unsafe fn prep_exarg(eap: *mut ExArg, buf: Buf) {
     // SAFETY: the caller's command, live for the call.
     let mut ea = unsafe { Ea::new(eap) };
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
@@ -582,7 +582,7 @@ pub unsafe fn prep_exarg(eap: *mut exarg_T, buf: Buf) {
 }
 
 /// Set the default or forced `'fileformat'` and `'binary'`.
-pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
+pub unsafe fn set_file_options(set_options: bool, eap: *mut ExArg) {
     // Set the default 'fileformat'.
     if set_options {
         if !eap.is_null() && unsafe { (*eap).force_ff } != 0 {
@@ -605,7 +605,7 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut exarg_T) {
 }
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
-pub unsafe fn set_forced_fenc(eap: *mut exarg_T) {
+pub unsafe fn set_forced_fenc(eap: *mut ExArg) {
     // SAFETY: the caller's command, live for the call.
     let ea = unsafe { Ea::new(eap) };
     if ea.force_enc == 0 {

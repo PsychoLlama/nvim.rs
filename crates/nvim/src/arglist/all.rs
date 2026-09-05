@@ -548,8 +548,8 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
 /// # Safety
 ///
 /// `eap` must be a live command block.
-pub unsafe fn ex_all(eap: *mut exarg_T) {
-    // SAFETY: the caller's promise -- a live `exarg_T`.
+pub unsafe fn ex_all(eap: *mut ExArg) {
+    // SAFETY: the caller's promise -- a live `ExArg`.
     let mut eap = unsafe { Ea::new(eap) };
     // `:all` takes an optional count as its range.
     if eap.addr_count == 0 {

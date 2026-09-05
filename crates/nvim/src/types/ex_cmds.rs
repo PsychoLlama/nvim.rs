@@ -14,7 +14,7 @@ use crate::types::CmdIdx;
 
 #[derive(Clone)]
 pub struct CmdParseInfo {
-    pub cmdmod: cmdmod_T,
+    pub cmdmod: CmdMod,
     pub magic: CmdParseInfo_magic,
 }
 #[derive(Copy, Clone)]
@@ -41,7 +41,7 @@ pub struct SubReplacementString {
     pub additional_data: *mut AdditionalData,
 }
 /// What an Ex command's range counts -- upstream's `ADDR_*`, the value
-/// `exarg_T::addr_type`, `CommandDefinition::cmd_addr_type` and
+/// `ExArg::addr_type`, `CommandDefinition::cmd_addr_type` and
 /// `ucmd_T::uc_addr_type` carry.
 ///
 /// A range is `1,5` whatever it addresses; this is what those numbers *are*.
@@ -50,7 +50,7 @@ pub struct SubReplacementString {
 /// for each. c2rust gave the family a bare `c_uint`, so every one of the ~70
 /// `match` sites over it needed a catch-all arm for values that cannot exist.
 ///
-/// `#[repr(u32)]` with the upstream discriminants: `exarg_T` and `ucmd_T` are
+/// `#[repr(u32)]` with the upstream discriminants: `ExArg` and `ucmd_T` are
 /// `repr(C)`, and the discriminants are what `ex_cmds.lua` and the
 /// `nvim_parse_cmd` API answer with.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -84,7 +84,7 @@ pub enum CmdAddr {
 
 crate::flag_set! {
     /// What syntax an Ex command accepts -- upstream's `EX_*`, the bits
-    /// `exarg_T::argt` and the command table's `cmd_argt` carry. The whole
+    /// `ExArg::argt` and the command table's `cmd_argt` carry. The whole
     /// of `:` is described by this one word: which of a range, a `!`, an
     /// argument, a register and a count the command takes, and where it is
     /// allowed to run.
@@ -145,7 +145,7 @@ crate::flag_set! {
 }
 crate::flag_set! {
     /// The `:silent`, `:noautocmd`, `:keepmarks` … command modifiers, as the
-    /// bits [`cmdmod_T::cmod_flags`] carries.
+    /// bits [`CmdMod::cmod_flags`] carries.
     pub struct CmdModFlags;
 
     /// `:sandbox` -- the command runs with `sandbox` raised.
@@ -186,7 +186,7 @@ crate::flag_set! {
 /// fields are what `apply_cmdmod` put aside so `undo_cmdmod` can put it
 /// back — a duplicate of those would undo the same suppression twice.
 #[derive(Clone)]
-pub struct cmdmod_T {
+pub struct CmdMod {
     pub cmod_flags: CmdModFlags,
     pub cmod_split: ::core::ffi::c_int,
     pub cmod_tab: ::core::ffi::c_int,
@@ -202,11 +202,11 @@ pub struct cmdmod_T {
     pub cmod_did_esilent: ::core::ffi::c_int,
 }
 
-impl cmdmod_T {
+impl CmdMod {
     /// No modifiers at all: the all-zero set a command starts from, and
     /// what the C reaches with `CLEAR_FIELD(cmdmod)`. A `const` because
     /// two other all-zero initialisers embed it.
-    pub const NONE: cmdmod_T = cmdmod_T {
+    pub const NONE: CmdMod = CmdMod {
         cmod_flags: CmdModFlags::NONE,
         cmod_split: 0,
         cmod_tab: 0,
@@ -229,7 +229,7 @@ impl cmdmod_T {
     };
 }
 
-impl Default for cmdmod_T {
+impl Default for CmdMod {
     fn default() -> Self {
         Self::NONE
     }
@@ -239,7 +239,7 @@ impl Default for cmdmod_T {
 /// Not `Copy`: `args`/`arglens` and `cmdline_tofree` are allocations the
 /// command owns for as long as it runs.
 #[derive(Clone)]
-pub struct exarg {
+pub struct ExArg {
     pub arg: *mut ::core::ffi::c_char,
     pub args: *mut *mut ::core::ffi::c_char,
     pub arglens: *mut size_t,
@@ -281,12 +281,11 @@ pub struct exarg {
     pub cookie: *mut ::core::ffi::c_void,
     pub cstack: *mut CondStack,
 }
-pub type exarg_T = exarg;
 
-impl Default for exarg {
-    /// The all-zero `exarg_T` that `CLEAR_FIELD(ea)` produces upstream.
+impl Default for ExArg {
+    /// The all-zero `ExArg` that `CLEAR_FIELD(ea)` produces upstream.
     fn default() -> Self {
-        exarg {
+        ExArg {
             arg: ::core::ptr::null_mut(),
             args: ::core::ptr::null_mut(),
             arglens: ::core::ptr::null_mut(),

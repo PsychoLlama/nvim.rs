@@ -43,8 +43,8 @@ use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    ColNr, CpoFlag, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0,
-    StringBuilder, VarNumber, aco_save_T, exarg_T, int64_t, size_t,
+    ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag,
+    String_0, StringBuilder, VarNumber, aco_save_T, int64_t, size_t,
 };
 use crate::winlayer::buffers;
 
@@ -63,7 +63,7 @@ fn read_file(
     lnum: LineNr,
     from: LineNr,
     to: LineNr,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
@@ -128,7 +128,7 @@ fn bail_out(n: c_int) {
 
 /// Fill in `eap` with the file format and encoding of `buf`, as the reload
 /// paths need.
-fn prepare_exarg(eap: &mut exarg_T, buf: Buf) {
+fn prepare_exarg(eap: &mut ExArg, buf: Buf) {
     // SAFETY: a local to fill in.
     unsafe { prep_exarg(eap, buf) };
 }
@@ -203,7 +203,7 @@ pub fn get_highest_fnum() -> c_int {
 /// This is the retry `'fileformat'`/`'fileencoding'` guessed wrong needs: the
 /// bytes are already in the buffer, so re-reading them with the corrected
 /// options costs no file access.
-fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> Result<Loaded, Failed> {
+fn read_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> Result<Loaded, Failed> {
     let silent = shortmess(ShmFlag::FILEINFO);
 
     let line_count = cur_buf().line_count();
@@ -272,10 +272,10 @@ pub fn buf_ensure_loaded(buf: Buf) -> bool {
 /// `readfile()`.
 ///
 /// # Safety
-/// `curbuf` and `curwin` must be set, and `eap` be null or a live `exarg_T`.
+/// `curbuf` and `curwin` must be set, and `eap` be null or a live `ExArg`.
 pub unsafe fn open_buffer(
     read_stdin: bool,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     flags_arg: c_int,
 ) -> Result<Loaded, Failed> {
     open_buffer_inner(read_stdin, eap, flags_arg)
@@ -283,7 +283,7 @@ pub unsafe fn open_buffer(
 
 fn open_buffer_inner(
     read_stdin: bool,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     flags_arg: c_int,
 ) -> Result<Loaded, Failed> {
     let mut flags = flags_arg;
@@ -503,7 +503,7 @@ pub fn buf_contents_changed(buf: Buf) -> bool {
     // SAFETY: `buflist_new` has just answered a live buffer.
     let newbuf = unsafe { Buf::new(newbuf) };
 
-    let mut ea = exarg_T::default();
+    let mut ea = ExArg::default();
     prepare_exarg(&mut ea, buf);
     in_buffer(newbuf, || {
         block_autocmds_now();

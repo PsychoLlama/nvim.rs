@@ -50,7 +50,7 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    ColNr, LineNr, NUL, OpType, ShmFlag, cmdarg_T, int64_t, oparg_T, pos_T, size_t, uint8_t,
+    CmdArg, ColNr, LineNr, NUL, OpArg, OpType, Pos, ShmFlag, int64_t, size_t, uint8_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
@@ -273,7 +273,7 @@ pub(crate) unsafe fn find_ident_at_pos(
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
-pub(crate) unsafe fn nv_gd(oap: *mut oparg_T, nchar: c_int, thisblock: c_int) {
+pub(crate) unsafe fn nv_gd(oap: *mut OpArg, nchar: c_int, thisblock: c_int) {
     let mut word: *mut c_char = ptr::null_mut();
     let out = &raw mut word;
     // SAFETY: `out` points at this frame's own `word`.
@@ -399,7 +399,7 @@ pub(crate) unsafe fn find_decl(
 
     // The last match that was inside a comment or a string, kept as the
     // answer of last resort.
-    let mut found_pos = pos_T {
+    let mut found_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -498,8 +498,8 @@ pub(crate) unsafe fn find_decl(
 pub(crate) unsafe fn do_nv_ident(c1: c_int, c2: c_int) {
     // SAFETY: both structures are plain data, and both are filled in before
     // `nv_ident` reads them.
-    let mut oa: oparg_T = unsafe { core::mem::zeroed() };
-    let mut ca: cmdarg_T = unsafe { core::mem::zeroed() };
+    let mut oa: OpArg = unsafe { core::mem::zeroed() };
+    let mut ca: CmdArg = unsafe { core::mem::zeroed() };
     unsafe { clear_oparg(&raw mut oa) };
     ca.oap = &raw mut oa;
     ca.cmdchar = c1;
@@ -598,7 +598,7 @@ impl CmdBuf {
 /// in which case `out` has already been freed.
 #[allow(clippy::too_many_arguments)]
 unsafe fn build_keywordprg_cmd(
-    cap: *mut cmdarg_T,
+    cap: *mut CmdArg,
     kp: *mut c_char,
     kp_help: bool,
     kp_ex: bool,
@@ -747,7 +747,7 @@ unsafe fn append_escaped(
 
 /// `*`, `#`, `K`, `]`, `CTRL-]` and their `g` forms: look up the identifier
 /// under the cursor.
-pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_ident(cap: *mut CmdArg) {
     // SAFETY: `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument.
@@ -927,7 +927,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
 }
 
 /// `CTRL-T`: back up the tag stack.
-pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_tagpop(cap: *mut CmdArg) {
     // SAFETY: `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument.
@@ -940,7 +940,7 @@ pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
 }
 
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.
-pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
+pub(crate) unsafe fn nv_gotofile(cap: *mut CmdArg) {
     // SAFETY: `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument, and

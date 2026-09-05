@@ -37,7 +37,7 @@ pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
 }
 
 /// `:syntax include [@{cluster}] {file}`.
-pub(crate) fn syn_cmd_include(eap: &mut exarg_T, _syncing: c_int) {
+pub(crate) fn syn_cmd_include(eap: &mut ExArg, _syncing: c_int) {
     let mut arg = eap.arg;
     let mut sgl_id = 1;
 
@@ -132,7 +132,7 @@ fn item_opt(takes_sync_idx: bool) -> syn_opt_arg_T {
 
 /// `:syntax match {group} [{options}] {pattern} [{options}]`, and
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
-pub(crate) fn syn_cmd_match(eap: &mut exarg_T, syncing: c_int) {
+pub(crate) fn syn_cmd_match(eap: &mut ExArg, syncing: c_int) {
     let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
     let mut conceal_char: c_int = NUL;
@@ -237,7 +237,7 @@ fn region_item(key: &[u8]) -> Option<c_int> {
 }
 
 /// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
-fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
+fn parse_region_args(eap: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
     let mut out = RegionArgs {
         pats: [Vec::new(), Vec::new(), Vec::new()],
         opt: item_opt(false),
@@ -329,7 +329,7 @@ fn parse_region_args(eap: &mut exarg_T, mut rest: *mut c_char) -> RegionArgs {
 
 /// `:syntax region {group} [matchgroup={group}] start={pat} .. [skip={pat}]
 /// end={pat} .. [{options}]`.
-pub(crate) fn syn_cmd_region(eap: &mut exarg_T, syncing: c_int) {
+pub(crate) fn syn_cmd_region(eap: &mut ExArg, syncing: c_int) {
     let arg = eap.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
 

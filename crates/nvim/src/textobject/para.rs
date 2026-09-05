@@ -20,7 +20,7 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::search::{BACKWARD, FORWARD, linewhite};
-use crate::types::{FAIL, LineNr, NUL, OK, oparg_T};
+use crate::types::{FAIL, LineNr, NUL, OK, OpArg};
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.
@@ -252,7 +252,7 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
 ///
 /// # Safety
 /// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0: c_int) -> c_int {
+pub unsafe fn current_par(oap: *mut OpArg, count: c_int, include: bool, type_0: c_int) -> c_int {
     if type_0 == 'S' as c_int {
         return FAIL; // not implemented yet
     }

@@ -51,8 +51,8 @@ use crate::registry::id_map;
 use crate::semsg;
 use crate::syntax::init_synblock;
 use crate::types::{
-    AdditionalData, Buffer, Callback, ColNr, Failed, FileID, Handle, LineNr, OptInt, Timestamp,
-    VAR_SCOPE, fmark_T, fmarkv_T, int16_t, memline_T, pos_T, regprog_T, size_t, uint64_t,
+    AdditionalData, Buffer, Callback, ColNr, Failed, FileID, Handle, LineNr, OptInt, Pos,
+    Timestamp, VAR_SCOPE, fmark_T, fmarkv_T, int16_t, memline_T, regprog_T, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -63,7 +63,7 @@ use super::pos::{Entry, WinInfos};
 
 /// `INIT_FMARK`: a mark that has never been set.
 pub(crate) const INIT_FMARK: fmark_T = fmark_T {
-    mark: pos_T {
+    mark: Pos {
         lnum: 0 as LineNr,
         col: 0 as ColNr,
         coladd: 0 as ColNr,

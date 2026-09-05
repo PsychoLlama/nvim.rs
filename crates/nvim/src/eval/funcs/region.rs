@@ -28,15 +28,15 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, TypVal, VAR_DICT,
-    VarNumber, block_def, kListLenMayKnow, oparg_T, pos_T,
+    Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0, TypVal,
+    VAR_DICT, VarNumber, block_def, kListLenMayKnow,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use crate::winlayer::Win;
 /// The zeroed position every local in this module starts from.
-const NOWHERE: pos_T = pos_T {
+const NOWHERE: Pos = Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -62,7 +62,7 @@ const NO_BLOCK: block_def = block_def {
 };
 
 /// A cleared operator argument, which only the blockwise path fills in.
-const NO_OPARG: oparg_T = oparg_T {
+const NO_OPARG: OpArg = OpArg {
     op_type: OpType::Nop,
     regname: 0,
     motion_type: kMTCharWise,
@@ -87,15 +87,15 @@ const NO_OPARG: oparg_T = oparg_T {
 struct Region {
     /// The upper-left corner, zero-based, after the swap and the
     /// exclusivity adjustment.
-    p1: pos_T,
+    p1: Pos,
     /// The lower-right corner, zero-based, extended to the end of a
     /// multibyte character.
-    p2: pos_T,
+    p2: Pos,
     /// Whether `p2`'s character is part of the selection.
     inclusive: bool,
     region_type: MotionType,
     /// Only meaningful for a blockwise region.
-    oap: oparg_T,
+    oap: OpArg,
 }
 
 /// Restores `curbuf` and 'virtualedit' when the builtin returns.
@@ -266,7 +266,7 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
 ///
 /// # Safety
 /// `buf` is a loaded buffer.
-unsafe fn check_corner(buf: *mut Buffer, p: &mut pos_T) -> Option<()> {
+unsafe fn check_corner(buf: *mut Buffer, p: &mut Pos) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
     if p.lnum < 1 || p.lnum > unsafe { (*buf).b_ml.ml_line_count } {
@@ -286,20 +286,20 @@ unsafe fn check_corner(buf: *mut Buffer, p: &mut pos_T) -> Option<()> {
 /// The operator argument a blockwise region needs, which is what
 /// `block_prep` reads per line.
 /// `p1` and `p2` name positions in the current buffer.
-fn block_oparg(p1: pos_T, p2: pos_T, is_select_exclusive: bool, block_width: c_int) -> oparg_T {
+fn block_oparg(p1: Pos, p2: Pos, is_select_exclusive: bool, block_width: c_int) -> OpArg {
     // SAFETY throughout: 'linebreak' is turned off around
     // the virtual-column measurements so that a wrapped line does not
     // change where the block's edges are.
     let (mut sc1, mut ec1, mut sc2, mut ec2) = (0, 0, 0, 0);
     let lbr_saved = reset_lbr();
-    let (at1, at2) = (&raw const p1 as *mut pos_T, &raw const p2 as *mut pos_T);
+    let (at1, at2) = (&raw const p1 as *mut Pos, &raw const p2 as *mut Pos);
     let nul = ptr::null_mut();
     // SAFETY: the two positions and the four out-parameters are locals.
     unsafe { getvvcol(cur_win(), at1, &raw mut sc1, nul, &raw mut ec1) };
     unsafe { getvvcol(cur_win(), at2, &raw mut sc2, nul, &raw mut ec2) };
     restore_lbr(lbr_saved);
     let start_vcol = sc1.min(sc2);
-    oparg_T {
+    OpArg {
         motion_type: kMTBlockWise,
         inclusive: true,
         op_type: OpType::Nop,
@@ -360,7 +360,7 @@ pub unsafe fn f_getregion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     for lnum in r.p1.lnum..=r.p2.lnum {
         let text = if r.region_type == kMTBlockWise {
             let mut bd = NO_BLOCK;
-            unsafe { block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false) };
+            unsafe { block_prep(&raw const r.oap as *mut OpArg, &raw mut bd, lnum, false) };
             unsafe { block_def2str(&bd) }
         } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
             // A whole line: either the region is linewise, or this is
@@ -407,12 +407,12 @@ pub unsafe fn f_getregionpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
 /// # Safety
 /// `line` is line `lnum` of the current buffer and `r` describes a region
 /// covering it.
-unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (pos_T, pos_T) {
+unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (Pos, Pos) {
     if r.region_type == kMTLineWise {
         // A linewise region always covers the whole line.
         return (
-            pos_T { col: 1, ..NOWHERE },
-            pos_T {
+            Pos { col: 1, ..NOWHERE },
+            Pos {
                 col: MAXCOL as ColNr,
                 ..NOWHERE
             },
@@ -422,7 +422,7 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (pos_T, p
     // so `mb_prevptr` stays inside it.
     let mut bd = NO_BLOCK;
     if r.region_type == kMTBlockWise {
-        unsafe { block_prep(&raw const r.oap as *mut oparg_T, &raw mut bd, lnum, false) };
+        unsafe { block_prep(&raw const r.oap as *mut OpArg, &raw mut bd, lnum, false) };
     } else {
         unsafe { charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive) };
     }
@@ -464,7 +464,7 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (pos_T, p
 /// Pull both corners back onto the line. Without `eol` a corner past the
 /// last byte collapses to zero — "nothing here" — rather than to the line
 /// end.
-fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: ColNr, allow_eol: bool) {
+fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
     if !allow_eol && p1.col > line_len {
         p1.col = 0;
         p1.coladd = 0;
@@ -483,7 +483,7 @@ fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: ColNr, allow_eol: boo
 /// Append one line's `[[bufnr, lnum, col, off], [bufnr, lnum, col, off]]`.
 /// `rettv` holds the list being built, and `curbuf` is the region's own
 /// buffer -- the caller's `BufferSwap` has already put it there.
-fn add_regionpos_range(rettv: &mut TypVal, p1: pos_T, p2: pos_T) {
+fn add_regionpos_range(rettv: &mut TypVal, p1: Pos, p2: Pos) {
     // SAFETY: the caller's obligation; each list is handed to its parent
     // immediately, so none is leaked.
     let pair = unsafe { tv_list_alloc(2) };

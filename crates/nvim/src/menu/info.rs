@@ -24,7 +24,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::Ctrl_V;
 use crate::main::e_invarg;
-use crate::types::{Dict, EvalFuncData, TypVal, VAR_UNKNOWN, exarg_T};
+use crate::types::{Dict, EvalFuncData, ExArg, TypVal, VAR_UNKNOWN};
 
 /// One `:menutranslate from to` entry.
 struct Translation {
@@ -43,8 +43,8 @@ static TRANSLATIONS: GlobalCell<Vec<Translation>> = GlobalCell::new(Vec::new());
 /// `:menutranslate from to`, and `:menutranslate clear`.
 ///
 /// # Safety
-/// `eap` must name the live `exarg_T` of the command.
-pub(crate) unsafe fn ex_menutranslate(eap: *mut exarg_T) {
+/// `eap` must name the live `ExArg` of the command.
+pub(crate) unsafe fn ex_menutranslate(eap: *mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line, which
     // this takes apart in place.
     let arg = unsafe { CText::new((*eap).arg) };

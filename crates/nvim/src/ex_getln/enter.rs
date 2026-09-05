@@ -45,7 +45,7 @@ impl Cls {
     }
 
     /// `&s->xpc`, for the completion machinery that still takes a pointer.
-    pub(crate) fn xpc(self) -> *mut expand_T {
+    pub(crate) fn xpc(self) -> *mut Expand {
         self.field_ptr(core::mem::offset_of!(CommandLineState, xpc))
     }
 
@@ -433,7 +433,7 @@ pub(crate) unsafe fn command_line_enter(
         s.wim_index = 0;
 
         unsafe { expand_cleanup(s.xpc()) };
-        cc.xpc = ::core::ptr::null_mut::<expand_T>();
+        cc.xpc = ::core::ptr::null_mut::<Expand>();
         unsafe { clear_cmdline_orig() };
 
         unsafe { finish_incsearch_highlighting(s.gotesc, s.is_state(), false) };

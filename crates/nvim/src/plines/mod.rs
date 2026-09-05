@@ -33,8 +33,8 @@ use crate::option::get_showbreak_value;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, StrCharInfo,
-    VirtLines, Window, int32_t, int64_t, pos_T, uint32_t,
+    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrCharInfo,
+    VirtLines, Window, int32_t, int64_t, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
 

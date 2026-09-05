@@ -42,7 +42,7 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, FcsChars, LcsChars, NUL, OptionSetFlags, ScreenChar, Window, expand_T, int64_t,
+    CharsOption, Expand, FcsChars, LcsChars, NUL, OptionSetFlags, ScreenChar, Window, int64_t,
     optset_T, size_t,
 };
 use crate::winlayer;
@@ -757,12 +757,12 @@ pub unsafe fn did_set_chars_option(args: &mut optset_T) -> Option<&CStr> {
 }
 
 /// Enumerate the field names of 'fillchars', for completion.
-pub fn get_fillchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_fillchars_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     field_name(&FCS_TAB, idx)
 }
 
 /// Enumerate the field names of 'listchars', for completion.
-pub fn get_listchars_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub fn get_listchars_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     field_name(&LCS_TAB, idx)
 }
 

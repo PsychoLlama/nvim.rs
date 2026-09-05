@@ -54,48 +54,48 @@ static REDO_VISUAL: GlobalCell<redo_VIsual_T> = GlobalCell::new(redo_VIsual_T {
     rv_arg: 0,
 });
 
-/// A `cmdarg_T` the caller has promised is live: the normal-mode command that
+/// A `CmdArg` the caller has promised is live: the normal-mode command that
 /// carried the operator here.
 ///
 /// [`Op`]'s shape, for the other half of the pair `do_pending_operator` is
 /// handed.
 #[derive(Clone, Copy)]
-struct Cmd(*mut cmdarg_T);
+struct Cmd(*mut CmdArg);
 
 impl Cmd {
     /// # Safety
-    /// `cap` must stay a live `cmdarg_T` for as long as the value is used.
+    /// `cap` must stay a live `CmdArg` for as long as the value is used.
     #[inline(always)]
-    const unsafe fn new(cap: *mut cmdarg_T) -> Self {
+    const unsafe fn new(cap: *mut CmdArg) -> Self {
         Self(cap)
     }
 }
 
 impl Deref for Cmd {
-    type Target = cmdarg_T;
+    type Target = CmdArg;
 
     #[inline(always)]
-    fn deref(&self) -> &cmdarg_T {
-        // SAFETY: the constructor's promise -- a live `cmdarg_T`.
+    fn deref(&self) -> &CmdArg {
+        // SAFETY: the constructor's promise -- a live `CmdArg`.
         unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for Cmd {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut cmdarg_T {
-        // SAFETY: the constructor's promise -- a live `cmdarg_T`. The borrow
+    fn deref_mut(&mut self) -> &mut CmdArg {
+        // SAFETY: the constructor's promise -- a live `CmdArg`. The borrow
         // lasts only as long as the field access that asked for it.
         unsafe { &mut *self.0 }
     }
 }
 
-/// Zero an `oparg_T` between commands.
+/// Zero an `OpArg` between commands.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T`.
-pub unsafe fn clear_oparg(oap: *mut oparg_T) {
-    unsafe { *oap = oparg_T::ZERO };
+/// `oap` must point to a live `OpArg`.
+pub unsafe fn clear_oparg(oap: *mut OpArg) {
+    unsafe { *oap = OpArg::ZERO };
 }
 
 /// Was the operator reached through a command line rather than a key?
@@ -112,11 +112,11 @@ fn is_ex_cmdchar(cap: Cmd) -> bool {
 /// must not clear the selection, redraw, or leave a `.` behind.
 ///
 /// # Safety
-/// `cap` must point to a live `cmdarg_T` whose `oap` describes a region of the
+/// `cap` must point to a live `CmdArg` whose `oap` describes a region of the
 /// current buffer.
-pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: bool) {
-    // SAFETY: the caller's promise -- a live `cmdarg_T` whose `oap` is a live
-    // `oparg_T`. The two wrappers carry that promise on from here, so every
+pub unsafe fn do_pending_operator(cap: *mut CmdArg, old_col: c_int, gui_yank: bool) {
+    // SAFETY: the caller's promise -- a live `CmdArg` whose `oap` is a live
+    // `OpArg`. The two wrappers carry that promise on from here, so every
     // field access below is the compiler's business rather than a note.
     let cap = unsafe { Cmd::new(cap) };
     let mut oap = unsafe { Op::new(cap.oap) };
@@ -212,7 +212,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
         cur_win().w_curswant = old_col;
         cur_win().coladvance(cur_win().w_curswant);
     }
-    // SAFETY: a live `oparg_T`.
+    // SAFETY: a live `OpArg`.
     unsafe { clearop(oap.raw()) };
     motion_force.set(NUL);
 
@@ -643,7 +643,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
         unsafe { cancel_redo() };
     }
 
-    // SAFETY: every operator below is handed the same live `oparg_T` and the
+    // SAFETY: every operator below is handed the same live `OpArg` and the
     // current window, which is exactly what each of them asks for.
     match oap.op_type {
         OpType::Lshift | OpType::Rshift => {
@@ -815,7 +815,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
 /// With an empty 'equalprg' the indenting is done internally; otherwise the
 /// region is handed to a `:` command line.
 fn indent_or_colon(oap: Op) {
-    // SAFETY: a live `oparg_T` describing a region of the current buffer, and
+    // SAFETY: a live `OpArg` describing a region of the current buffer, and
     // 'equalprg'/'indentexpr' are NUL-terminated option strings.
     if oap.op_type != OpType::Indent || unsafe { *get_equalprg() } as c_int != NUL {
         unsafe { op_colon(oap.raw()) };
@@ -853,7 +853,7 @@ fn run_change(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
     // The user is about to edit: 'linebreak' has to look as it did.
     restore_lbr(lbr_saved != 0);
     // Trigger TextChangedI.
-    // SAFETY: a live buffer, and a live `oparg_T` whose region is set up.
+    // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
     if unsafe { op_change(oap.raw()) } != 0 {
@@ -871,7 +871,7 @@ fn run_block_insert(mut cap: Cmd, oap: Op, lbr_saved: c_int) {
     restart_edit.set(0);
 
     restore_lbr(lbr_saved != 0);
-    // SAFETY: a live buffer, and a live `oparg_T` whose region is set up.
+    // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
     unsafe { op_insert(oap.raw(), cap.count1) };

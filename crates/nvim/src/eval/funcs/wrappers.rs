@@ -37,9 +37,10 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Blob, Buffer, Error, EvalFuncData, EvalFuncDef, Failed, Float, LineNr, List,
-    MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, Window, expand_T, kBoolVarTrue, ptrdiff_t, typval_vval_union,
+    Arena, Array, Blob, Buffer, Error, EvalFuncData, EvalFuncDef, Expand, Failed, Float, LineNr,
+    List, MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Window, kBoolVarTrue, ptrdiff_t,
+    typval_vval_union,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -311,7 +312,7 @@ pub unsafe fn call_internal_method(
 ///
 /// # Safety
 /// `xp` is a live expansion context.
-pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_function_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     /// How far into the builtin table the walk has got. Negative while the
     /// user's own functions are still being offered.
     static BUILTIN_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
@@ -359,7 +360,7 @@ pub unsafe fn get_function_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// `xp` is a live expansion context.
-pub unsafe fn get_expr_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub unsafe fn get_expr_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     /// How far into the variable list the walk has got. Negative while the
     /// functions are still being offered.
     static VAR_IDX: GlobalCell<c_int> = GlobalCell::new(-1);

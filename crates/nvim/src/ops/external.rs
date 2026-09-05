@@ -29,9 +29,9 @@ use crate::types::NUL;
 /// repeated.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T`.
-pub(crate) unsafe fn op_colon(oap: *mut oparg_T) {
-    // SAFETY: the caller's promise -- a live `oparg_T`. Every string queued
+/// `oap` must point to a live `OpArg`.
+pub(crate) unsafe fn op_colon(oap: *mut OpArg) {
+    // SAFETY: the caller's promise -- a live `OpArg`. Every string queued
     // below is either a literal of this file's or a NUL-terminated option.
     let oap = unsafe { Op::new(oap) };
     stuff_readbuf_char(':' as c_int);
@@ -130,14 +130,14 @@ pub unsafe fn set_ref_in_opfunc(copy_id: c_int) -> bool {
 /// pending". `:lockmarks` restores the marks afterwards.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T`.
-pub(crate) unsafe fn op_function(oap: *const oparg_T) {
-    // SAFETY: the caller's promise -- a live `oparg_T`. 'operatorfunc' is a
+/// `oap` must point to a live `OpArg`.
+pub(crate) unsafe fn op_function(oap: *const OpArg) {
+    // SAFETY: the caller's promise -- a live `OpArg`. 'operatorfunc' is a
     // NUL-terminated option string, and `b_op_end` is a live position of the
     // current buffer.
     let oap = unsafe { Op::new(oap.cast_mut()) };
-    let orig_start: pos_T = cur_buf().b_op_start;
-    let orig_end: pos_T = cur_buf().b_op_end;
+    let orig_start: Pos = cur_buf().b_op_start;
+    let orig_end: Pos = cur_buf().b_op_end;
 
     if unsafe { *p_opfunc.get() } as c_int == NUL {
         emsg(gettext(c"E774: 'operatorfunc' is empty"));

@@ -31,7 +31,7 @@ use crate::os::env::{env_buf, os_getenv_into};
 use crate::runtime::RuntimeOpts;
 
 use crate::types::{
-    Array, Error, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, exarg_T, size_t,
+    Array, Error, ExArg, Failed, NUL, Object, OptVal, OptionSetFlags, String_0, size_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use crate::winlayer::{Buf, Ea};
@@ -40,7 +40,7 @@ use crate::winlayer::{Buf, Ea};
 ///
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
-pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_autocmd(eap: *mut ExArg) {
     let mut eap = unsafe { Ea::new(eap) };
     if secure.get() != 0 {
         // 2 means "an error was already reported for this".
@@ -55,7 +55,7 @@ pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
-pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_doautocmd(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let mut arg = eap.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
@@ -67,7 +67,7 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
 }
 
 /// `:filetype [plugin] [indent] on|off|detect`.
-pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_filetype(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) == NUL {
         unsafe { report_filetype_state() };
@@ -192,7 +192,7 @@ pub unsafe fn filetype_maybe_enable() {
 /// A `FALLBACK ` prefix means "only if nothing better is found later", and
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
-pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_setfiletype(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     if cur_buf().b_did_filetype {
         return;
@@ -213,7 +213,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
 
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
-pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_checkhealth(eap: *mut ExArg) {
     let eap = unsafe { Ea::new(eap) };
     let mut env = env_buf();
     let mut err = Error::none();

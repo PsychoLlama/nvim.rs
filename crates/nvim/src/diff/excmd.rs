@@ -58,9 +58,9 @@ fn emsg_gettext(msg: *const c_char) {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
+pub unsafe fn ex_diffpatch(eap: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<exarg_T>::new(eap) };
+    let mut eap = unsafe { Live::<ExArg>::new(eap) };
     let old_curwin: *mut Window = curwin.get();
     let mut newname: *mut c_char = ptr::null_mut();
     let mut esc_name: *mut c_char = ptr::null_mut();
@@ -188,7 +188,7 @@ fn write_orig(tmp_orig: *mut c_char) -> Result<(), Failed> {
     let end = cur_buf().b_ml.ml_line_count;
     let req = WriteRequest::filter();
     // SAFETY: the current buffer is live and the name is our own temp file;
-    // no shortname and no `exarg_T` are wanted.
+    // no shortname and no `ExArg` are wanted.
     unsafe { buf_write(cb, tmp_orig, ptr::null_mut(), 1, end, ptr::null_mut(), req) }
 }
 
@@ -223,9 +223,9 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
+pub unsafe fn ex_diffsplit(eap: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<exarg_T>::new(eap) };
+    let mut eap = unsafe { Live::<ExArg>::new(eap) };
     let old_curwin: *mut Window = curwin.get();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
@@ -265,7 +265,7 @@ pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// The editor must be running.
-pub unsafe fn ex_diffthis(_eap: *mut exarg_T) {
+pub unsafe fn ex_diffthis(_eap: *mut ExArg) {
     // SAFETY: the current window is live.
     diff_win_options(cur_win(), true);
 }
@@ -398,9 +398,9 @@ fn strdup_of(p: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
+pub unsafe fn ex_diffoff(eap: *mut ExArg) {
     // SAFETY: the caller's command.
-    let eap = unsafe { Live::<exarg_T>::new(eap) };
+    let eap = unsafe { Live::<ExArg>::new(eap) };
     let mut diffwin = false;
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
     for mut wp in windows() {

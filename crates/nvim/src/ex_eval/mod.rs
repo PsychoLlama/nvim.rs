@@ -35,7 +35,7 @@
 //!
 //! # Safety
 //!
-//! Every `unsafe fn` here takes editor state by raw pointer -- the `exarg_T`
+//! Every `unsafe fn` here takes editor state by raw pointer -- the `ExArg`
 //! of the command being executed, its `CondStack`, or an `Exception` from one
 //! of the two exception stacks -- and runs on the main thread with that
 //! state live. `eap->cstack` is `do_cmdline`'s own stack local and outlives
@@ -66,7 +66,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CondStack, EsList, EvalArg, FAIL, Failed, OK, TypVal, VAR_UNKNOWN, VarLock, exarg_T,
+    CondStack, EsList, EvalArg, ExArg, FAIL, Failed, OK, TypVal, VAR_UNKNOWN, VarLock,
     typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -252,7 +252,7 @@ pub(crate) fn aborted_in_try() -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_eval(eap: *mut ExArg) {
     let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
@@ -276,7 +276,7 @@ pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_if(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_if(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     if unsafe { (*cstack).cs_idx } == CSTACK_LEN - 1 {
@@ -306,7 +306,7 @@ pub(crate) unsafe fn ex_if(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_endif(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endif(eap: *mut ExArg) {
     did_endif.set(true);
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
@@ -335,7 +335,7 @@ pub(crate) unsafe fn ex_endif(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_else(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     let mut skip = unsafe { check_skip(cstack) };
@@ -424,7 +424,7 @@ pub(crate) unsafe fn ex_else(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_while(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     if unsafe { (*cstack).cs_idx } == CSTACK_LEN - 1 {
@@ -478,7 +478,7 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
 /// # Safety
 /// Module contract; `idx` is `cstack->cs_idx`.
 unsafe fn for_next_item(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     cstack: *mut CondStack,
     idx: usize,
     jumped_back: bool,
@@ -518,7 +518,7 @@ unsafe fn for_next_item(
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_continue(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_continue(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     if unsafe { (*cstack).cs_looplevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
@@ -546,7 +546,7 @@ pub(crate) unsafe fn ex_continue(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_break(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_break(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     if unsafe { (*cstack).cs_looplevel } <= 0 || unsafe { (*cstack).cs_idx } < 0 {
@@ -567,7 +567,7 @@ pub(crate) unsafe fn ex_break(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endwhile(eap: *mut ExArg) {
     // SAFETY: module contract.
     let cstack = unsafe { (*eap).cstack };
     let ending_while = unsafe { (*eap).cmdidx } == CmdIdx::endwhile;
@@ -822,7 +822,7 @@ pub(crate) unsafe fn rewind_conditionals(
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_endfunction(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_endfunction(_eap: *mut ExArg) {
     // SAFETY: module contract.
     semsg!("E193: {} not inside a function", ":endfunction");
 }

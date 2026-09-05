@@ -228,7 +228,7 @@ pub unsafe fn mark_get_motion(
     listcmd_busy.set(true);
     let mut mark: *mut fmark_T = ptr::null_mut();
     if name == '{' as c_int || name == '}' as c_int {
-        let mut oa = oparg_T {
+        let mut oa = OpArg {
             motion_type: kMTCharWise,
             ..OPARG_EMPTY
         };
@@ -259,9 +259,9 @@ pub unsafe fn mark_get_motion(
     mark
 }
 
-/// An `oparg_T` with every field zeroed, which is what the motion lookups need
+/// An `OpArg` with every field zeroed, which is what the motion lookups need
 /// (only `inclusive` is read back).
-const OPARG_EMPTY: oparg_T = oparg_T {
+const OPARG_EMPTY: OpArg = OpArg {
     op_type: OpType::Nop,
     regname: 0,
     motion_type: 0,
@@ -342,7 +342,7 @@ pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) 
 ///
 /// # Safety
 /// `startpos` must point at a live position, and `curbuf` must be live.
-pub unsafe fn getnextmark(startpos: *mut pos_T, dir: c_int, begin_line: c_int) -> *mut fmark_T {
+pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> *mut fmark_T {
     // SAFETY: the caller promised a live position.
     let mut pos = unsafe { *startpos };
     // `]'` and `['` are line motions: they land on a mark on another LINE, so

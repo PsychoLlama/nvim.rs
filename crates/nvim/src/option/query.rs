@@ -32,8 +32,8 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, CpoFlag, Dict, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
-    ShmFlag, TypVal, VAR_STRING, exarg_T, int64_t, size_t, uint8_t,
+    BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
+    ShmFlag, TypVal, VAR_STRING, int64_t, size_t, uint8_t,
 };
 
 use super::{
@@ -183,7 +183,7 @@ pub(crate) unsafe fn option_set_callback_func(
         || unsafe { cstr::starts_with(optval, b"function(") }
         || unsafe { cstr::starts_with(optval, b"funcref(") }
     {
-        let tv = unsafe { eval_expr(optval, ptr::null_mut::<exarg_T>()) };
+        let tv = unsafe { eval_expr(optval, ptr::null_mut::<ExArg>()) };
         if tv.is_null() {
             return Err(Failed);
         }
@@ -285,10 +285,10 @@ pub(crate) fn get_fileformat(buf: Buf) -> c_int {
 /// # Safety
 ///
 /// `eap`, when non-null, must be a live command.
-pub(crate) unsafe fn get_fileformat_force(buf: Buf, eap: *const exarg_T) -> c_int {
+pub(crate) unsafe fn get_fileformat_force(buf: Buf, eap: *const ExArg) -> c_int {
     // SAFETY: the caller's command, where they gave one. Reading both
     // fields together is the same answer: they are plain fields of a live
-    // `exarg_T`, and only their values decide anything below.
+    // `ExArg`, and only their values decide anything below.
     let (force_ff, force_bin) = if eap.is_null() {
         (0, 0)
     } else {

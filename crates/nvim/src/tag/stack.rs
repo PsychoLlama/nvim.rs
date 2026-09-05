@@ -60,7 +60,7 @@ pub(crate) struct Push {
     /// Which of the matches was taken, counted from zero.
     pub(crate) cur_match: c_int,
     /// Where the cursor was before the jump, and in which buffer.
-    pub(crate) mark: pos_T,
+    pub(crate) mark: Pos,
     pub(crate) fnum: c_int,
     /// Whatever `'tagfunc'` attached to the match. The entry takes
     /// ownership.
@@ -174,7 +174,7 @@ impl TagStack {
             let Some(from) = found else {
                 continue;
             };
-            let mut mark = pos_T::default();
+            let mut mark = Pos::default();
             let mut fnum = 0;
             if unsafe {
                 list2fpos(
@@ -226,7 +226,7 @@ pub unsafe fn tagstack_clear_entry(item: &mut Taggy) {
 ///
 /// # Safety
 /// Must be called with a live `curwin`.
-pub unsafe fn do_tags(_eap: *mut exarg_T) {
+pub unsafe fn do_tags(_eap: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin` is live and nothing else is holding its tag stack;
     // `fm_getname` answers an allocation we free again below.

@@ -299,7 +299,7 @@ pub(crate) unsafe fn expand_tag_fname(
         && unsafe { path_has_wildcard(fname) }
         && unsafe { vim_strchr(fname, '`' as c_int) }.is_null()
     {
-        let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+        let mut xpc: Expand = unsafe { core::mem::zeroed() };
         unsafe { expand_init(&raw mut xpc) };
         xpc.xp_context = ExpandContext::Files;
         let option2 = &raw mut xpc;

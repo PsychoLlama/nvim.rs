@@ -37,9 +37,7 @@ use crate::path::{ExpandFlags, add_pathsep, free_wild, gen_expand_wildcards, pat
 use crate::runtime::{RuntimeOpts, do_in_path};
 use crate::semsg;
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
-use crate::types::{
-    ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, exarg_T, expand_T, size_t, uint8_t,
-};
+use crate::types::{ExArg, Expand, ExpandContext, FILE, IOSIZE, MAXPATHL, NUL, size_t, uint8_t};
 use ::libc::{fclose, fprintf, fputs, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -51,7 +49,7 @@ use super::flag::kEqualFiles;
 ///
 /// # Safety
 /// `eap` is the current Ex command with a writable NUL-terminated argument.
-pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_helptags(eap: *mut ExArg) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
     if unsafe { cstr::starts_with((*eap).arg, b"++t") }
@@ -71,7 +69,7 @@ pub(crate) unsafe fn ex_helptags(eap: *mut exarg_T) {
         return;
     }
 
-    let mut xpc: expand_T = unsafe { core::mem::zeroed() };
+    let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Directories;
     let arg = unsafe { (*eap).arg };

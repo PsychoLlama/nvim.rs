@@ -44,8 +44,8 @@ use crate::highlight_group::HLF_D;
 /// print the marks
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T` and the editor's globals must be live.
-pub unsafe fn ex_marks(eap: *mut exarg_T) {
+/// `eap` must be a live `ExArg` and the editor's globals must be live.
+pub unsafe fn ex_marks(eap: *mut ExArg) {
     // SAFETY: the caller promised a live command.
     let mut arg = unsafe { (*eap).arg };
     // An empty argument is the same as none: `:marks` with a trailing space
@@ -156,7 +156,7 @@ static DID_TITLE: GlobalCell<bool> = GlobalCell::new(false);
 pub(super) unsafe fn show_one_mark(
     c: c_int,
     arg: *mut c_char,
-    pos: pos_T,
+    pos: Pos,
     name_arg: *mut c_char,
     current: c_int,
 ) {
@@ -207,8 +207,8 @@ pub(super) unsafe fn show_one_mark(
 /// ":delmarks[!] [marks]"
 ///
 /// # Safety
-/// `eap` must be a live `exarg_T` and the editor's globals must be live.
-pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
+/// `eap` must be a live `ExArg` and the editor's globals must be live.
+pub unsafe fn ex_delmarks(eap: *mut ExArg) {
     // SAFETY: the caller promised a live command whose `arg` is a
     // NUL-terminated string.
     let (arg, forceit) = unsafe { ((*eap).arg, (*eap).forceit != 0) };
@@ -366,12 +366,7 @@ unsafe fn delmarks_all(buf: Buf) {
 /// # Safety
 /// `buf` must be live, `gone` must point at a live position, and the editor's
 /// globals must be live.
-unsafe fn delmarks_one(
-    buf: &mut Buf,
-    name: c_char,
-    gone: &mut pos_T,
-    timestamp: Timestamp,
-) -> bool {
+unsafe fn delmarks_one(buf: &mut Buf, name: c_char, gone: &mut Pos, timestamp: Timestamp) -> bool {
     // `:` and a space are accepted and do nothing: the prompt mark is not the
     // user's to delete, and a space is how `:delmarks a b` separates names.
     let lnum = match c_int::from(name) {
@@ -411,7 +406,7 @@ unsafe fn delmarks_one(
 ///
 /// # Safety
 /// `curbuf` must be live, which it is from startup to exit.
-pub(super) unsafe fn mark_line(pos: pos_T, lead_len: c_int) -> *mut c_char {
+pub(super) unsafe fn mark_line(pos: Pos, lead_len: c_int) -> *mut c_char {
     // SAFETY: `curbuf` is live from startup to exit.
     let buf = unsafe { Buf::current() };
     if pos.lnum == 0 || pos.lnum > buf.b_ml.ml_line_count {

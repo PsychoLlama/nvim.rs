@@ -46,7 +46,7 @@ use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsiz
 use crate::pos::MAXCOL;
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, StrCharInfo, int64_t, pos_T,
+    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, Pos, StrCharInfo, int64_t,
 };
 use crate::winlayer::{Buf, Line, PosRef, Win};
 
@@ -224,7 +224,7 @@ pub unsafe fn getviscol() -> ColNr {
 /// The current window must be valid.
 pub unsafe fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
     let win = unsafe { Win::current() };
-    let mut pos = pos_T {
+    let mut pos = Pos {
         lnum: win.cursor().lnum(),
         col,
         coladd,
@@ -466,7 +466,7 @@ pub fn get_cursor_rel_lnum(win: Win, lnum: LineNr) -> LineNr {
 }
 
 /// Clamp `pos` to a line and column that exist in `buf`.
-pub fn check_pos(buf: Buf, pos: &mut pos_T) {
+pub fn check_pos(buf: Buf, pos: &mut Pos) {
     pos.lnum = pos.lnum.min(buf.line_count());
     if pos.col > 0 {
         // SAFETY: `lnum` was just clamped to a line the buffer has.
@@ -550,7 +550,7 @@ pub unsafe fn check_visual_pos() {
     let visual = visual_anchor();
     let last = unsafe { Buf::current() }.line_count();
     if visual.lnum > last {
-        set_visual_anchor(pos_T {
+        set_visual_anchor(Pos {
             lnum: last,
             col: 0,
             coladd: 0,
@@ -558,7 +558,7 @@ pub unsafe fn check_visual_pos() {
     } else {
         let len = ml_get_len(visual.lnum);
         if visual.col > len {
-            set_visual_anchor(pos_T {
+            set_visual_anchor(Pos {
                 col: len,
                 coladd: 0,
                 ..visual

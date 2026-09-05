@@ -1,7 +1,7 @@
 //! Splitting, resizing, moving between and listing windows and tab pages.
 //!
 //! Every function here is an Ex command handler reached through the command
-//! table, so the file is glue: it reads an `exarg_T`, works out what the
+//! table, so the file is glue: it reads an `ExArg`, works out what the
 //! command meant, and calls into the window family. [`Ex`] carries the
 //! command's own storage and `winlayer`'s [`Win`]/[`TabPage`] carry the
 //! editor's, which leaves only the calls into modules that are still
@@ -50,7 +50,7 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
-use crate::types::{CmdModFlags, IOSIZE, NUL, Tabpage, Window, exarg_T, intmax_t, size_t, uint8_t};
+use crate::types::{CmdModFlags, ExArg, IOSIZE, NUL, Tabpage, Window, intmax_t, size_t, uint8_t};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
@@ -62,7 +62,7 @@ use ::libc::atol;
 // ---------------------------------------------------------------------------
 // The command's own arguments.
 
-/// The `exarg_T` an Ex command handler is called with.
+/// The `ExArg` an Ex command handler is called with.
 ///
 /// Every handler in this file is reached from the command table through a raw
 /// pointer and then reads or writes the arguments a dozen times. Wrapping the
@@ -71,19 +71,19 @@ use ::libc::atol;
 /// two `Deref` impls hold the whole obligation, so the wrap itself is ordinary
 /// code — the shape `winlayer` uses for its own walks.
 #[derive(Clone, Copy)]
-struct Ex(*mut exarg_T);
+struct Ex(*mut ExArg);
 
 impl Deref for Ex {
-    type Target = exarg_T;
+    type Target = ExArg;
 
-    fn deref(&self) -> &exarg_T {
+    fn deref(&self) -> &ExArg {
         // SAFETY: the wrap's promise -- a live command.
         unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for Ex {
-    fn deref_mut(&mut self) -> &mut exarg_T {
+    fn deref_mut(&mut self) -> &mut ExArg {
         // SAFETY: the wrap's promise -- a live command.
         unsafe { &mut *self.0 }
     }
@@ -91,7 +91,7 @@ impl DerefMut for Ex {
 
 impl Ex {
     /// The pointer back, for the neighbours still taking one.
-    fn raw(self) -> *mut exarg_T {
+    fn raw(self) -> *mut ExArg {
         self.0
     }
 
@@ -209,7 +209,7 @@ pub(crate) fn current_tab_nr(tab: *mut Tabpage) -> c_int {
 
 /// The handler every command modifier carries in the table, for the case
 /// where it was typed as a command in its own right.
-pub(crate) unsafe fn ex_wrongmodifier(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_wrongmodifier(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(eap);
     ea.errmsg = err_msg(e_invcmd.as_ptr());
@@ -217,7 +217,7 @@ pub(crate) unsafe fn ex_wrongmodifier(eap: *mut exarg_T) {
 
 /// `:split`, `:vsplit`, `:new`, `:sfind`, `:tabedit`, `:tabnew`,
 /// `:tabfind` — open a window or a tab page, then edit into it.
-pub unsafe fn ex_splitview(eap: *mut exarg_T) {
+pub unsafe fn ex_splitview(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     splitview(Ex(eap));
 }
@@ -351,7 +351,7 @@ pub fn tabpage_new() {
 /// `:tabprevious`/`:tabNext` count *backwards*, which `goto_tab_number`
 /// spells as a negative argument; the rest go to an absolute number that
 /// `get_tabpage_arg` works out.
-pub(crate) unsafe fn ex_tabnext(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabnext(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     tabnext(Ex(eap));
 }
@@ -408,7 +408,7 @@ fn tabnext(mut ea: Ex) {
 }
 
 /// `:tabmove`.
-pub(crate) unsafe fn ex_tabmove(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabmove(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     tabmove(Ex(eap));
 }
@@ -421,7 +421,7 @@ fn tabmove(ea: Ex) {
 }
 
 /// `:tabs` — every tab page, with its windows.
-pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_tabs(_eap: *mut ExArg) {
     // SAFETY: writes the message area.
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     // SAFETY: starts a message.
@@ -519,7 +519,7 @@ fn is_changed(buf: Buf) -> bool {
 
 /// `:mode` — a redraw; the Vim spelling that took a terminal mode name is
 /// refused.
-pub(crate) unsafe fn ex_mode(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_mode(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let ea = Ex(eap);
     if byte(ea.arg) == NUL {
@@ -536,7 +536,7 @@ pub(crate) unsafe fn ex_mode(eap: *mut exarg_T) {
 /// A leading `-` or `+` makes the argument relative — `atol` already read
 /// the sign, so the current size is simply added. No argument at all means
 /// "as large as possible".
-pub(crate) unsafe fn ex_resize(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_resize(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     resize(Ex(eap));
 }
@@ -579,7 +579,7 @@ fn resize(ea: Ex) {
 }
 
 /// `:winsize` — two numbers, and nothing else.
-pub(crate) unsafe fn ex_winsize(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_winsize(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     winsize(Ex(eap));
 }
@@ -613,7 +613,7 @@ fn digits(pp: *mut *mut c_char) -> c_int {
 }
 
 /// `:wincmd` — one window command, spelled as a command line.
-pub(crate) unsafe fn ex_wincmd(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_wincmd(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     wincmd(Ex(eap));
 }
@@ -655,14 +655,14 @@ fn wincmd(mut ea: Ex) {
 // The commands with no window of their own.
 
 /// The Vim commands that only make sense with a built-in GUI.
-pub(crate) unsafe fn ex_nogui(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_nogui(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let mut ea = Ex(eap);
     ea.errmsg = err_msg(c"E25: Nvim does not have a built-in GUI".as_ptr());
 }
 
 /// `:popup`.
-pub(crate) unsafe fn ex_popup(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_popup(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let ea = Ex(eap);
     let (name, use_mouse_pos) = (ea.arg, ea.forceit);
@@ -674,7 +674,7 @@ pub(crate) unsafe fn ex_popup(eap: *mut exarg_T) {
 // The preview window.
 
 /// `:psearch` — `:isearch` with the result shown in the preview window.
-pub(crate) unsafe fn ex_psearch(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_psearch(eap: *mut ExArg) {
     g_do_tagpreview.set(p_pvh.get() as c_int);
     // SAFETY: the caller's promise -- a live command.
     unsafe { ex_findpat(eap) };
@@ -682,7 +682,7 @@ pub(crate) unsafe fn ex_psearch(eap: *mut exarg_T) {
 }
 
 /// `:pedit`.
-pub(crate) unsafe fn ex_pedit(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pedit(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let ea = Ex(eap);
     let curwin_save = curwin.get();
@@ -692,7 +692,7 @@ pub(crate) unsafe fn ex_pedit(eap: *mut exarg_T) {
 }
 
 /// `:pbuffer`.
-pub(crate) unsafe fn ex_pbuffer(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_pbuffer(eap: *mut ExArg) {
     let curwin_save = curwin.get();
     prepare_preview_window();
     // SAFETY: the caller's promise -- a live command.

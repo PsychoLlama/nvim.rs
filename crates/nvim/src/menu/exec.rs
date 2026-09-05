@@ -28,7 +28,7 @@ use crate::main::{
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
-use crate::types::{Buffer, ColNr, LineNr, Window, exarg_T, pos_T, save_state_T};
+use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState, Window};
 use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
@@ -42,8 +42,8 @@ type Range = Option<(LineNr, LineNr)>;
 ///
 /// # Safety
 /// `menu` must name a live node; `eap` must be null (the window toolbar) or
-/// name a live `exarg_T`.
-pub(crate) unsafe fn execute_menu(eap: *const exarg_T, menu: *mut vimmenu_T, mode_idx: c_int) {
+/// name a live `ExArg`.
+pub(crate) unsafe fn execute_menu(eap: *const ExArg, menu: *mut vimmenu_T, mode_idx: c_int) {
     // SAFETY: the caller's obligation. The range is copied out rather than
     // borrowed, because running the rhs re-enters the editor.
     let (menu, from_command, range) = unsafe {
@@ -133,7 +133,7 @@ fn select_range(line1: LineNr, line2: LineNr) {
             win.w_cursor.lnum = line1;
             win.w_cursor.col = 1;
         });
-        pos_T {
+        Pos {
             lnum: line2,
             col: MAXCOL as ColNr,
             coladd: 0,
@@ -156,7 +156,7 @@ fn select_range(line1: LineNr, line2: LineNr) {
 
 /// Run the rhs immediately, inside a saved editor state.
 fn run_now(menu: Menu, bit: usize) {
-    let mut state = save_state_T::default();
+    let mut state = SaveState::default();
     let _busy = Depth::of(&ex_normal_busy);
     // SAFETY: `state` is a live local for the whole call, and the rhs is a
     // NUL-terminated string owned by a node that outlives the run.
@@ -224,8 +224,8 @@ fn menu_getbyname(path_name: &CStr) -> Option<Menu> {
 /// `:emenu` -- find the menu a descriptor like `File.New` names and run it.
 ///
 /// # Safety
-/// `eap` must name the live `exarg_T` of the command.
-pub(crate) unsafe fn ex_emenu(eap: *mut exarg_T) {
+/// `eap` must name the live `ExArg` of the command.
+pub(crate) unsafe fn ex_emenu(eap: *mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line.
     let arg = unsafe { CText::new((*eap).arg) };
 
@@ -253,7 +253,7 @@ pub(crate) unsafe fn ex_emenu(eap: *mut exarg_T) {
     let Some(menu) = menu_getbyname(arg.as_cstr()) else {
         return;
     };
-    // SAFETY: a live node, and the command's own `exarg_T`.
+    // SAFETY: a live node, and the command's own `ExArg`.
     unsafe { execute_menu(eap, menu.raw(), mode_idx) };
 }
 

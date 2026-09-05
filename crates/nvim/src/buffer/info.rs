@@ -50,8 +50,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Buffer, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax,
-    exarg_T, int64_t, size_t, time_t,
+    Buffer, ExArg, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax,
+    int64_t, size_t, time_t,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
@@ -124,7 +124,7 @@ fn remembered_lnum(buf: Buf) -> LineNr {
 // :ls / :buffers
 
 /// List the buffers, one line each, as `:ls` and `:files` do.
-pub unsafe fn buflist_list(eap: *mut exarg_T) {
+pub unsafe fn buflist_list(eap: *mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
     let arg = unsafe { (*eap).arg };
     // SAFETY: as above.

@@ -137,7 +137,7 @@ fn to_len(len: ColNr) -> usize {
 ///
 /// # Safety
 /// `pos` must be a valid position in the current buffer.
-pub unsafe fn ml_get_pos(pos: *const pos_T) -> *mut ::core::ffi::c_char {
+pub unsafe fn ml_get_pos(pos: *const Pos) -> *mut ::core::ffi::c_char {
     unsafe { ml_get_buf(curbuf.get(), (*pos).lnum).offset((*pos).col as isize) }
 }
 
@@ -153,7 +153,7 @@ pub fn ml_get_len(lnum: LineNr) -> ColNr {
 ///
 /// # Safety
 /// `pos` must be a valid position in the current buffer.
-pub unsafe fn ml_get_pos_len(pos: *mut pos_T) -> ColNr {
+pub unsafe fn ml_get_pos_len(pos: *mut Pos) -> ColNr {
     unsafe { ml_get_buf_len(curbuf.get(), (*pos).lnum) - (*pos).col }
 }
 
@@ -177,7 +177,7 @@ pub unsafe fn ml_get_buf_len(buf: *mut Buffer, lnum: LineNr) -> ColNr {
 ///
 /// # Safety
 /// Must run on the main thread, with a current buffer.
-pub unsafe fn gchar_pos(pos: *mut pos_T) -> ::core::ffi::c_int {
+pub unsafe fn gchar_pos(pos: *mut Pos) -> ::core::ffi::c_int {
     // While searching, the column is sometimes put at the end of a line.
     if unsafe { (*pos).col } == MAXCOL as ::core::ffi::c_int
         || unsafe { (*pos).col } > ml_get_len(unsafe { (*pos).lnum })
@@ -578,7 +578,7 @@ pub unsafe fn ml_flush_deleted_bytes(
 /// # Safety
 /// Must run on the main thread; `lp` must be a position in the current
 /// buffer.
-pub unsafe fn inc(lp: &mut pos_T) -> ::core::ffi::c_int {
+pub unsafe fn inc(lp: &mut Pos) -> ::core::ffi::c_int {
     // While searching, the position may be set to the end of a line.
     if lp.col != MAXCOL as ::core::ffi::c_int {
         let p = unsafe { ml_get_pos(lp) };
@@ -608,7 +608,7 @@ pub unsafe fn inc(lp: &mut pos_T) -> ::core::ffi::c_int {
 ///
 /// # Safety
 /// As [`inc`].
-pub unsafe fn incl(lp: &mut pos_T) -> ::core::ffi::c_int {
+pub unsafe fn incl(lp: &mut Pos) -> ::core::ffi::c_int {
     let mut r = unsafe { inc(lp) };
     if r >= 1 && lp.col != 0 {
         r = unsafe { inc(lp) };
@@ -624,7 +624,7 @@ pub unsafe fn incl(lp: &mut pos_T) -> ::core::ffi::c_int {
 /// # Safety
 /// Must run on the main thread; `lp` must be a position in the current
 /// buffer.
-pub unsafe fn dec(lp: &mut pos_T) -> ::core::ffi::c_int {
+pub unsafe fn dec(lp: &mut Pos) -> ::core::ffi::c_int {
     lp.coladd = 0;
     if lp.col == MAXCOL as ::core::ffi::c_int {
         // Past the end of the line.
@@ -655,7 +655,7 @@ pub unsafe fn dec(lp: &mut pos_T) -> ::core::ffi::c_int {
 ///
 /// # Safety
 /// As [`dec`].
-pub unsafe fn decl(lp: &mut pos_T) -> ::core::ffi::c_int {
+pub unsafe fn decl(lp: &mut Pos) -> ::core::ffi::c_int {
     let mut r = unsafe { dec(lp) };
     if r == 1 && lp.col != 0 {
         r = unsafe { dec(lp) };

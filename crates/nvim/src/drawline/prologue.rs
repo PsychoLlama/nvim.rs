@@ -399,7 +399,7 @@ impl LineSetup {
             wlv.fromcol = 0;
         }
         if lnum == unsafe { (*curwin.get()).w_cursor.lnum } + search_match_lines.get() {
-            let mut pos = pos_T {
+            let mut pos = Pos {
                 lnum,
                 col: search_match_endcol.get(),
                 coladd: 0,

@@ -27,7 +27,7 @@ struct CursorPick {
     /// position, which no later entry may override.
     line: LineNr,
     /// The position itself.
-    pos: pos_T,
+    pos: Pos,
 }
 
 impl CursorPick {

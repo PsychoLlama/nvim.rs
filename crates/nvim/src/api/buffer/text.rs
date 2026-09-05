@@ -390,7 +390,7 @@ pub(crate) unsafe fn fix_cursor(win: *mut Window, lo: LineNr, hi: LineNr, extra:
 
 unsafe fn fix_pos_col(
     buf: *mut Buffer,
-    pos: *mut pos_T,
+    pos: *mut Pos,
     start_row: LineNr,
     start_col: ColNr,
     end_row: LineNr,

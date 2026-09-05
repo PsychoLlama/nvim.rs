@@ -47,7 +47,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, LineNr, SpellMoveType, Window, exarg_T, file_comparison, langp_T, oparg_T, pos_T,
+    ColNr, ExArg, LineNr, OpArg, Pos, SpellMoveType, Window, file_comparison, langp_T,
     searchit_arg_T, size_t, slang_T, spelltab_T, uint8_t,
 };
 use crate::undo::u_save_cursor;
@@ -283,8 +283,8 @@ pub static repl_to: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_
 
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
-pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
-    let pos: pos_T = unsafe { (*curwin.get()).w_cursor };
+pub unsafe fn ex_spellrepall(_eap: *mut ExArg) {
+    let pos: Pos = unsafe { (*curwin.get()).w_cursor };
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.
     let save_ws = p_ws.get() != 0;
@@ -310,7 +310,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
     unsafe { (*curwin.get()).w_cursor.lnum = 0 };
     while !got_int.get() {
         let slash = '/' as c_int;
-        let no_oap = ::core::ptr::null_mut::<oparg_T>();
+        let no_oap = ::core::ptr::null_mut::<OpArg>();
         let no_arg = ::core::ptr::null_mut::<searchit_arg_T>();
         let found = unsafe {
             do_search(

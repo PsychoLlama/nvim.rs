@@ -221,7 +221,7 @@ impl DoTag {
             save_pos: false,
             skip_msg: false,
             saved_fmark: fmark_T {
-                mark: pos_T::default(),
+                mark: Pos::default(),
                 fnum: 0,
                 timestamp: 0,
                 view: NO_VIEW,

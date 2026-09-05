@@ -1,7 +1,7 @@
 //! The window, buffer and position pointers the editor works through, wrapped
 //! so that dereferencing one is not an unsafe operation at every use.
 //!
-//! The transpiled editor passes `*mut Window` / `*mut Buffer` / `*mut pos_T`
+//! The transpiled editor passes `*mut Window` / `*mut Buffer` / `*mut Pos`
 //! everywhere, and the pointers have to stay raw: callers interleave these
 //! calls with reads of the `curwin`/`curbuf` globals — which alias the same
 //! objects — and many of them re-enter through autocommands, so a long-lived
@@ -127,7 +127,7 @@
 //! the field.** `win.w_cursor.lnum = 1` asks for `&mut Window` and projects;
 //! under Stacked and Tree Borrows that borrow pops every raw pointer
 //! previously derived from the same object off the tag stack, so a
-//! `*mut pos_T` taken earlier from `&raw mut (*wp).w_cursor` — or any other
+//! `*mut Pos` taken earlier from `&raw mut (*wp).w_cursor` — or any other
 //! interior pointer the transpiled code is still carrying — is **invalidated
 //! by the next write through the handle**, and using it afterwards is UB.
 //!
@@ -178,7 +178,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
-use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, StrCharInfo, Tabpage, Window, pos_T};
+use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -210,7 +210,7 @@ pub struct TabPage(*mut Tabpage);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct PosRef(*mut pos_T);
+pub struct PosRef(*mut Pos);
 
 /// A NUL-terminated buffer line, as `ml_get_buf` hands it back.
 #[derive(Clone, Copy)]
@@ -290,10 +290,10 @@ impl DerefMut for TabPage {
 }
 
 impl Deref for PosRef {
-    type Target = pos_T;
+    type Target = Pos;
 
     #[inline(always)]
-    fn deref(&self) -> &pos_T {
+    fn deref(&self) -> &Pos {
         // SAFETY: the constructor's promise — a live position.
         unsafe { &*self.0 }
     }
@@ -301,7 +301,7 @@ impl Deref for PosRef {
 
 impl DerefMut for PosRef {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut pos_T {
+    fn deref_mut(&mut self) -> &mut Pos {
         // SAFETY: the constructor's promise — a live position.
         unsafe { &mut *self.0 }
     }
@@ -792,12 +792,12 @@ impl PosRef {
     /// # Safety
     /// `pos` must stay a live position for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(pos: *mut pos_T) -> Self {
+    pub const unsafe fn new(pos: *mut Pos) -> Self {
         Self(pos)
     }
 
     #[inline(always)]
-    pub fn raw(self) -> *mut pos_T {
+    pub fn raw(self) -> *mut Pos {
         self.0
     }
 }

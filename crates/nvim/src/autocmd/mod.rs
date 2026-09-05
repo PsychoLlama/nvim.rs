@@ -61,9 +61,9 @@ use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
     AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, BufferHandle, Callback,
-    EStackType, Error, Event, FuncCallEntry, Integer, LuaRetMode, Object, OptVal, ProfTime,
-    SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, aco_save_T, aucmdwin_T,
-    exarg_T, expand_T, int64_t, save_redo_T, size_t, uint64_t,
+    EStackType, Error, Event, ExArg, Expand, FuncCallEntry, Integer, LuaRetMode, Object, OptVal,
+    ProfTime, SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, aco_save_T,
+    aucmdwin_T, int64_t, save_redo_T, size_t, uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -103,7 +103,7 @@ pub struct AutoCmdEvent {
     pub fname_io: *mut ::core::ffi::c_char,
     pub buf: BufferHandle,
     pub group: ::core::ffi::c_int,
-    pub eap: *mut exarg_T,
+    pub eap: *mut ExArg,
     pub data: *mut Object,
 }
 pub const AUGROUP_DELETED: ::core::ffi::c_int = -4;

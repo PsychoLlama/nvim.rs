@@ -33,7 +33,7 @@ const _: () = assert!(
 pub(crate) unsafe fn wildmenu_translate_key(
     cclp: Cc,
     key: c_int,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     did_wild_list: bool,
 ) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
@@ -85,7 +85,7 @@ fn recomplete() -> c_int {
 }
 
 /// A key pressed while the wildmenu for menu names (`ExpandContext::Menunames`) is up.
-unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
+unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut Expand) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
@@ -138,7 +138,7 @@ unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T
 /// `<Down>` descends into the directory under the cursor and `<Up>` leaves it,
 /// both by editing the path on the command line and asking for a fresh
 /// completion of the result.
-unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
+unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut Expand) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };
@@ -234,7 +234,7 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
 }
 
 /// Handle a key pressed while the wildmenu is displayed.
-pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
+pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, xp: *mut Expand) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let xp = unsafe { Xp::new(xp) };

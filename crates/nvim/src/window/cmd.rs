@@ -51,7 +51,7 @@ use crate::search::find_pattern_in_path;
 use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{Failed, LineNr, NUL, WinConfig, exarg_T, int64_t, oparg_T, size_t};
+use crate::types::{ExArg, Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 
@@ -721,7 +721,7 @@ fn buffer_locked() -> bool {
 /// [`buffer_locked`] with the text lock as well, saying why when it holds.
 fn text_or_buffer_locked() -> bool {
     // SAFETY: reads the editor's lock state; a null operator means "none".
-    unsafe { check_text_or_curbuf_locked(ptr::null_mut::<oparg_T>()) }
+    unsafe { check_text_or_curbuf_locked(ptr::null_mut::<OpArg>()) }
 }
 
 /// The file name under the cursor, `prenum1` names in from it, with the line
@@ -733,7 +733,7 @@ fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
 
 /// `do_ecmd()`: edit file `ptr` in the current window, keeping the alternate.
 fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
-    let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<exarg_T>(), ptr::null_mut());
+    let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<ExArg>(), ptr::null_mut());
     let lnum = newlnum::LASTL as LineNr;
     // SAFETY: a NUL-terminated file name; every other argument is optional.
     unsafe { do_ecmd(0, ptr, sfname, eap, lnum, EcmdFlags::HIDE, win) }

@@ -58,7 +58,7 @@ pub const kFloatRelativeLaststatus: FloatRelative = 5;
 #[derive(Clone)]
 pub struct WinConfig {
     pub window: WindowHandle,
-    pub bufpos: lpos_T,
+    pub bufpos: LPos,
     pub height: ::core::ffi::c_int,
     pub width: ::core::ffi::c_int,
     pub row: ::core::ffi::c_double,
@@ -241,9 +241,9 @@ pub struct Buffer {
     /// The buffer-local user commands, sorted by name. A `-buffer` command
     /// shadows a global one; `usercmd`'s `Table` is the walk over both.
     pub b_ucmds: Vec<ucmd_T>,
-    pub b_op_start: pos_T,
-    pub b_op_start_orig: pos_T,
-    pub b_op_end: pos_T,
+    pub b_op_start: Pos,
+    pub b_op_start_orig: Pos,
+    pub b_op_end: Pos,
     pub b_marks_read: bool,
     pub b_modified_was_set: bool,
     pub b_did_filetype: bool,
@@ -561,8 +561,8 @@ pub struct MatchItem {
 pub struct PosSave {
     pub w_topline_save: ::core::ffi::c_int,
     pub w_topline_corr: ::core::ffi::c_int,
-    pub w_cursor_save: pos_T,
-    pub w_cursor_corr: pos_T,
+    pub w_cursor_save: Pos,
+    pub w_cursor_corr: Pos,
 }
 #[derive(Copy, Clone)]
 pub struct SynTime {
@@ -716,7 +716,7 @@ pub struct Window {
     pub(crate) w_next: Option<WinId>,
     pub w_locked: bool,
     pub w_frame: *mut Frame,
-    pub w_cursor: pos_T,
+    pub w_cursor: Pos,
     pub w_curswant: ColNr,
     /// Whether the next cursor move should recompute `w_curswant` — the
     /// column a vertical move aims for — rather than keep the one the last
@@ -772,7 +772,7 @@ pub struct Window {
     pub w_height_outer: ::core::ffi::c_int,
     pub w_width_outer: ::core::ffi::c_int,
     pub w_valid: WinValid,
-    pub w_valid_cursor: pos_T,
+    pub w_valid_cursor: Pos,
     pub w_valid_leftcol: ColNr,
     pub w_valid_skipcol: ColNr,
     pub w_viewport_invalid: bool,
@@ -807,7 +807,7 @@ pub struct Window {
     pub w_redr_border: bool,
     pub w_redr_statuscol: bool,
     pub w_display_tick: DispTick,
-    pub w_stl_cursor: pos_T,
+    pub w_stl_cursor: Pos,
     pub w_stl_virtcol: ColNr,
     pub w_stl_topline: LineNr,
     pub w_stl_line_count: LineNr,
@@ -818,7 +818,7 @@ pub struct Window {
     pub w_stl_recording: ::core::ffi::c_int,
     pub w_stl_state: ::core::ffi::c_int,
     pub w_stl_visual_mode: ::core::ffi::c_int,
-    pub w_stl_visual_pos: pos_T,
+    pub w_stl_visual_pos: Pos,
     pub w_alt_fnum: ::core::ffi::c_int,
     pub w_alist: *mut alist_T,
     pub w_arg_idx: ::core::ffi::c_int,
@@ -838,8 +838,8 @@ pub struct Window {
     pub w_scbind_pos: ::core::ffi::c_int,
     pub w_winvar: ScopeDictDictItem,
     pub w_vars: *mut Dict,
-    pub w_pcmark: pos_T,
-    pub w_prev_pcmark: pos_T,
+    pub w_pcmark: Pos,
+    pub w_prev_pcmark: Pos,
     pub w_jumplist: [xfmark_T; 100],
     pub w_jumplistlen: ::core::ffi::c_int,
     pub w_jumplistidx: ::core::ffi::c_int,

@@ -45,8 +45,8 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, Buffer, ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, fmark_T,
-    fmarkv_T, optset_T, pos_T,
+    AdditionalData, Buffer, ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, String_0,
+    fmark_T, fmarkv_T, optset_T,
 };
 use crate::window::global_stl_height;
 
@@ -187,7 +187,7 @@ pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
         let prompt: *mut fmark_T = unsafe { &raw mut (*buf).b_prompt_start };
         unsafe { free_fmark((*prompt).clone()) };
         unsafe {
-            (*prompt).mark = pos_T {
+            (*prompt).mark = Pos {
                 lnum: (*buf).b_ml.ml_line_count,
                 col: (*buf).b_prompt_start.mark.col,
                 coladd: 0 as ColNr,

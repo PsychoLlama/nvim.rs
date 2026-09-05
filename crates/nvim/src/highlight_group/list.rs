@@ -20,7 +20,7 @@ use crate::message::{
 };
 use crate::os::time::os_delay;
 use crate::types::ui::kUIMessages;
-use crate::types::{ExpandContext, expand_T};
+use crate::types::{Expand, ExpandContext};
 use crate::ui::{ui_flush, ui_has};
 
 use super::{ATTR_NAMES, HLF_D, HexBuf, coloridx_to_name, group, highlight_num_groups};
@@ -311,7 +311,7 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 /// # Safety
 /// `arg` is the NUL-terminated rest of the command line, which `xp` is
 /// pointed into; main thread only.
-pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut Expand, arg: *const c_char) {
     // SAFETY: the caller's expansion state and command line.
     // Default: expand group names.
     unsafe { (*xp).xp_context = ExpandContext::Highlight };
@@ -371,7 +371,7 @@ pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut expand_T, arg: *const
 ///
 /// # Safety
 /// Main thread only.
-pub(crate) unsafe fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_highlight_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: as the callee.
     unsafe { get_highlight_name_ext(xp, idx, true).cast_mut() }
 }
@@ -385,7 +385,7 @@ pub(crate) unsafe fn get_highlight_name(xp: *mut expand_T, idx: c_int) -> *mut c
 /// # Safety
 /// Main thread only.
 pub(crate) unsafe fn get_highlight_name_ext(
-    _xp: *mut expand_T,
+    _xp: *mut Expand,
     idx: c_int,
     skip_cleared: bool,
 ) -> *const c_char {

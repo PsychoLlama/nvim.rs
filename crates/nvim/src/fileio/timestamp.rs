@@ -537,7 +537,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     // Unless reload_options is set we only want to read the text from the
     // file, not reset the syntax highlighting, clear marks, diff status
     // and so on. Force the fileformat and encoding to be the same.
-    let mut ea = exarg_T::default();
+    let mut ea = ExArg::default();
     if !reload_options {
         // SAFETY: `ea` is this frame's.
         unsafe { prep_exarg(&raw mut ea, buf) };

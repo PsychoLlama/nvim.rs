@@ -497,8 +497,8 @@ unsafe fn do_showbacktrace(cmd: *mut c_char) {
 /// `:debug {cmd}`: run one command with the debugger stopping at everything.
 ///
 /// # Safety
-/// `eap` must be the live `exarg_T`.
-pub unsafe fn ex_debug(eap: *mut exarg_T) {
+/// `eap` must be the live `ExArg`.
+pub unsafe fn ex_debug(eap: *mut ExArg) {
     let outer_level = debug_break_level.replace(9999);
     // SAFETY: caller contract; `eap.arg` is the NUL-terminated argument.
     let _ = unsafe { do_cmdline_cmd((*eap).arg) };
@@ -508,8 +508,8 @@ pub unsafe fn ex_debug(eap: *mut exarg_T) {
 /// `:debuggreedy`, whose `0` argument turns it back off.
 ///
 /// # Safety
-/// `eap` must be the live `exarg_T`.
-pub unsafe fn ex_debuggreedy(eap: *mut exarg_T) {
+/// `eap` must be the live `ExArg`.
+pub unsafe fn ex_debuggreedy(eap: *mut ExArg) {
     // SAFETY: caller contract.
     let (addr_count, line2) = unsafe { ((*eap).addr_count, (*eap).line2) };
     debug_greedy.set(addr_count == 0 || line2 != 0 as LineNr);

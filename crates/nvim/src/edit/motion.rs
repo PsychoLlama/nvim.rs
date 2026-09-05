@@ -303,7 +303,7 @@ fn hide_dollar() {
 /// End the undoable insert before an arrow key moves the cursor away from
 /// `pos`, the position the insert ended at.
 #[inline(always)]
-fn start_arrow_at(pos: &mut pos_T) {
+fn start_arrow_at(pos: &mut Pos) {
     // SAFETY: `pos` is a live position, and `curbuf` is live.
     unsafe { start_arrow(pos) }
 }
@@ -311,7 +311,7 @@ fn start_arrow_at(pos: &mut pos_T) {
 /// [`start_arrow_at`], with `i_CTRL-G_U`'s answer for whether the change
 /// ends here too.
 #[inline(always)]
-fn start_arrow_changing(pos: &mut pos_T, end_change: bool) {
+fn start_arrow_changing(pos: &mut Pos, end_change: bool) {
     // SAFETY: `pos` is a live position, and `curbuf` is live.
     unsafe { start_arrow_with_change(pos, end_change) }
 }

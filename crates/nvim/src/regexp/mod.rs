@@ -23,7 +23,7 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, ColNr, LineNr, Magic, MarkGet, ProfTime, Window, int16_t, int64_t, lpos_T, regengine,
+    Buffer, ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, Window, int16_t, int64_t, regengine,
     regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -81,8 +81,8 @@ pub struct regexec_T {
     pub reg_mmatch: *mut regmmatch_T,
     pub reg_startp: *mut *mut uint8_t,
     pub reg_endp: *mut *mut uint8_t,
-    pub reg_startpos: *mut lpos_T,
-    pub reg_endpos: *mut lpos_T,
+    pub reg_startpos: *mut LPos,
+    pub reg_endpos: *mut LPos,
     pub reg_win: *mut Window,
     pub reg_buf: *mut Buffer,
     pub reg_firstlnum: LineNr,
@@ -326,8 +326,8 @@ static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
     reg_mmatch: core::ptr::null_mut::<regmmatch_T>(),
     reg_startp: core::ptr::null_mut::<*mut uint8_t>(),
     reg_endp: core::ptr::null_mut::<*mut uint8_t>(),
-    reg_startpos: core::ptr::null_mut::<lpos_T>(),
-    reg_endpos: core::ptr::null_mut::<lpos_T>(),
+    reg_startpos: core::ptr::null_mut::<LPos>(),
+    reg_endpos: core::ptr::null_mut::<LPos>(),
     reg_win: core::ptr::null_mut::<Window>(),
     reg_buf: core::ptr::null_mut::<Buffer>(),
     reg_firstlnum: 0,
@@ -362,8 +362,8 @@ static reg_startzp: GlobalCell<[*mut uint8_t; 10]> =
     GlobalCell::new([core::ptr::null_mut::<uint8_t>(); 10]);
 static reg_endzp: GlobalCell<[*mut uint8_t; 10]> =
     GlobalCell::new([core::ptr::null_mut::<uint8_t>(); 10]);
-static reg_startzpos: GlobalCell<[lpos_T; 10]> = GlobalCell::new([lpos_T { lnum: 0, col: 0 }; 10]);
-static reg_endzpos: GlobalCell<[lpos_T; 10]> = GlobalCell::new([lpos_T { lnum: 0, col: 0 }; 10]);
+static reg_startzpos: GlobalCell<[LPos; 10]> = GlobalCell::new([LPos { lnum: 0, col: 0 }; 10]);
+static reg_endzpos: GlobalCell<[LPos; 10]> = GlobalCell::new([LPos { lnum: 0, col: 0 }; 10]);
 pub const HASWIDTH: c_int = 0x1 as c_int;
 pub const SIMPLE: c_int = 0x2 as c_int;
 pub const SPSTART: c_int = 0x4 as c_int;

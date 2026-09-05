@@ -693,7 +693,7 @@ pub unsafe fn load_start_packages() {
 }
 
 /// `:packloadall[!]`.
-pub unsafe fn ex_packloadall(eap: *mut exarg_T) {
+pub unsafe fn ex_packloadall(eap: *mut ExArg) {
     // SAFETY: `eap` is the live command.
     if did_source_packages.get() && unsafe { (*eap).forceit } == 0 {
         return;
@@ -760,7 +760,7 @@ unsafe fn time_msg_now(msg: &CStr) {
 const PACKADD_PATTERN: &CStr = c"pack/*/%s/%s";
 
 /// `:packadd[!] {name}`.
-pub unsafe fn ex_packadd(eap: *mut exarg_T) {
+pub unsafe fn ex_packadd(eap: *mut ExArg) {
     // SAFETY: `eap` is the live command; `pat` is owned and freed below.
     let arg = unsafe { (*eap).arg };
     let len = PACKADD_PATTERN.count_bytes() + 1 + unsafe { cstr::bytes_at(arg) }.len() + 5;

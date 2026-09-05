@@ -107,8 +107,8 @@ unsafe fn pum_execute_menu(menu: Menu, mode: c_int) {
         .filter(|mp| mp.modes & mp.enabled & mode != 0);
     for (idx, mp) in enabled.enumerate() {
         if idx as c_int == pum_selected.get() {
-            let mut ea = exarg_T::default();
-            // SAFETY: a live node and this frame's own `exarg_T`. The call
+            let mut ea = ExArg::default();
+            // SAFETY: a live node and this frame's own `ExArg`. The call
             // may redefine the tree, which is why the walk stops here.
             unsafe { execute_menu(&raw mut ea, mp.raw(), -1) };
             return;

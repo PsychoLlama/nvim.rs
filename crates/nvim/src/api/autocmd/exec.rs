@@ -156,7 +156,7 @@ pub unsafe fn nvim_exec_autocmds(
                         true,
                         au_group,
                         b,
-                        ::core::ptr::null_mut::<exarg_T>(),
+                        ::core::ptr::null_mut::<ExArg>(),
                         data,
                     )
                 } as ::core::ffi::c_int

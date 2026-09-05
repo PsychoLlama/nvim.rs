@@ -34,8 +34,8 @@ use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BreakAt, ColNr, Error, FAIL, FloatAnchor, LineNr, NUL, OptInt, OptionSetFlags, VirtText,
-    WinConfig, kFloatRelativeEditor, lpos_T, optset_T,
+    BreakAt, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, NUL, OptInt, OptionSetFlags, VirtText,
+    WinConfig, kFloatRelativeEditor, optset_T,
 };
 use crate::window::check_colorcolumn;
 
@@ -505,7 +505,7 @@ pub unsafe fn did_set_winbar(args: &mut optset_T) -> Option<&CStr> {
 pub(crate) unsafe fn parse_border_opt(border_opt: *mut c_char) -> bool {
     let mut fconfig = WinConfig {
         window: 0,
-        bufpos: lpos_T {
+        bufpos: LPos {
             lnum: -1 as LineNr,
             col: 0 as ColNr,
         },

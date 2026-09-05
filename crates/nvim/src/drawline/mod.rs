@@ -73,8 +73,8 @@ use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
     Buffer, CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, GridView, HlMode,
-    Hlf, LineNr, NS, NUL, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber, VirtLines,
-    VirtText, WinExtmark, Window, foldinfo_T, pos_T, ptrdiff_t, size_t, spellvars_T, ssize_t,
+    Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber,
+    VirtLines, VirtText, WinExtmark, Window, foldinfo_T, ptrdiff_t, size_t, spellvars_T, ssize_t,
     statuscol_T, uint8_t, uint32_t, uint64_t, virt_line,
 };
 use crate::ui::ui_rgb_attached;

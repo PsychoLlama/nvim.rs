@@ -31,8 +31,8 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, TypVal, VAR_UNKNOWN,
-    VarNumber, int64_t, pos_T, searchit_arg_T, size_t,
+    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, TypVal, VAR_UNKNOWN,
+    VarNumber, int64_t, searchit_arg_T, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -53,7 +53,7 @@ const NUMBUFLEN: usize = 65;
 /// `at` is a live position, `pat` a pattern of `patlen` bytes, and `sa` a
 /// live search-argument block.
 unsafe fn search_here(
-    at: *mut pos_T,
+    at: *mut Pos,
     dir: Direction,
     pat: *mut c_char,
     len: size_t,
@@ -170,7 +170,7 @@ unsafe fn search_direction(varp: *mut TypVal, flags: &mut c_int) -> c_int {
 ///
 /// # Safety
 /// `args` is a live call frame.
-unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_int) -> c_int {
+unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
@@ -231,7 +231,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
 
     let save_cursor = unsafe { (*curwin.get()).w_cursor };
     let mut pos = save_cursor;
-    let mut firstpos = pos_T {
+    let mut firstpos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -319,7 +319,7 @@ pub unsafe fn f_search(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
 /// sub-pattern number under the `p` flag.
 pub unsafe fn f_searchpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut match_pos = pos_T {
+    let mut match_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -375,7 +375,7 @@ pub unsafe fn f_searchdecl(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 ///
 /// # Safety
 /// `args` is a live call frame.
-unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
+unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -447,7 +447,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
         args.ptr(4) as *const TypVal
     };
 
-    let at = match_pos.map_or(ptr::null_mut(), |p| p as *mut pos_T);
+    let at = match_pos.map_or(ptr::null_mut(), |p| p as *mut Pos);
     let (stop, tm) = (lnum_stop, time_limit);
     // SAFETY: the three patterns are NUL-terminated, `skip` is null or
     // argument 4, and `at` is null or the caller's position.
@@ -465,7 +465,7 @@ pub unsafe fn f_searchpair(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
 pub unsafe fn f_searchpairpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut match_pos = pos_T {
+    let mut match_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
@@ -554,7 +554,7 @@ pub unsafe fn do_searchpair(
     dir: c_int,
     skip: *const TypVal,
     flags: c_int,
-    match_pos: *mut pos_T,
+    match_pos: *mut Pos,
     lnum_stop: LineNr,
     time_limit: int64_t,
 ) -> c_int {
@@ -591,7 +591,7 @@ pub unsafe fn do_searchpair(
 
     let save_cursor = unsafe { (*curwin.get()).w_cursor };
     let mut pos = save_cursor;
-    let mut firstpos = pos_T {
+    let mut firstpos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,

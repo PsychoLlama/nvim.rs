@@ -87,7 +87,7 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
 ///
 /// # Safety
 /// `oap` must be a live operator argument.
-pub unsafe fn op_reindent(oap: *mut oparg_T, how: Indenter) {
+pub unsafe fn op_reindent(oap: *mut OpArg, how: Indenter) {
     // SAFETY: the caller's operator argument, and the buffer it names is
     // the current one.
     let win = curwin.get();
@@ -229,7 +229,7 @@ pub unsafe fn may_do_si() -> bool {
 ///
 /// # Safety
 /// `pos` must be a position in the current buffer.
-unsafe fn si_indent_like_open_brace(pos: pos_T) {
+unsafe fn si_indent_like_open_brace(pos: Pos) {
     // SAFETY: the caller's position, and the cursor is put back before the
     // indent is applied.
     let win = curwin.get();
@@ -921,7 +921,7 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
 ///
 /// # Safety
 /// `eap` must be a live Ex-command argument.
-pub unsafe fn ex_retab(eap: *mut exarg_T) {
+pub unsafe fn ex_retab(eap: *mut ExArg) {
     // SAFETY: the caller's Ex-command argument; the line range it names is
     // the current buffer's.
     let win = curwin.get();

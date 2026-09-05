@@ -31,10 +31,10 @@ use crate::types::{IOSIZE, NUL};
 /// (`:>`); a blockwise shift ignores it and goes back to where it started.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub unsafe fn op_shift(oap: *mut OpArg, curs_top: bool, amount: c_int) {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // The loop walks the region, so every line it reaches is one of it, and
     // the cursor is on that line throughout.
     let oap = unsafe { Op::new(oap) };

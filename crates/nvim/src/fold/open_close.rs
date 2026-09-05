@@ -30,7 +30,7 @@ use super::*;
 ///
 /// # Safety
 /// The current window must be live.
-pub unsafe extern "C" fn close_fold(pos: pos_T, count: c_int) {
+pub unsafe extern "C" fn close_fold(pos: Pos, count: c_int) {
     // SAFETY: the caller's promise.
     set_fold_repeat(pos, count, 0);
 }
@@ -39,7 +39,7 @@ pub unsafe extern "C" fn close_fold(pos: pos_T, count: c_int) {
 ///
 /// # Safety
 /// The current window must be live.
-pub unsafe fn close_fold_recurse(pos: pos_T) {
+pub unsafe fn close_fold_recurse(pos: Pos) {
     // SAFETY: the caller's promise.
     set_manual_fold(pos, false, true, None);
 }
@@ -54,8 +54,8 @@ pub unsafe fn close_fold_recurse(pos: pos_T) {
 /// # Safety
 /// The current window must be live.
 pub unsafe fn op_fold_range(
-    firstpos: pos_T,
-    lastpos: pos_T,
+    firstpos: Pos,
+    lastpos: Pos,
     opening: c_int,
     recurse: c_int,
     had_visual: bool,
@@ -64,7 +64,7 @@ pub unsafe fn op_fold_range(
     let last = lastpos.lnum;
     let mut lnum = firstpos.lnum;
     while lnum <= last {
-        let at = pos_T {
+        let at = Pos {
             lnum,
             col: 0,
             coladd: 0,
@@ -98,7 +98,7 @@ pub unsafe fn op_fold_range(
 ///
 /// # Safety
 /// The current window must be live.
-pub unsafe extern "C" fn open_fold(pos: pos_T, count: c_int) {
+pub unsafe extern "C" fn open_fold(pos: Pos, count: c_int) {
     // SAFETY: the caller's promise.
     set_fold_repeat(pos, count, 1);
 }
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn open_fold(pos: pos_T, count: c_int) {
 ///
 /// # Safety
 /// The current window must be live.
-pub unsafe fn open_fold_recurse(pos: pos_T) {
+pub unsafe fn open_fold_recurse(pos: Pos) {
     // SAFETY: the caller's promise.
     set_manual_fold(pos, true, true, None);
 }
@@ -227,7 +227,7 @@ pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
 ///
 /// # Safety
 /// `wp` must be a live window with a live buffer.
-pub unsafe fn fold_create(wp: Win, start_pos: pos_T, end_pos: pos_T) {
+pub unsafe fn fold_create(wp: Win, start_pos: Pos, end_pos: Pos) {
     // SAFETY: the caller's promise -- a live window.
     let mut win = wp;
     let (start, end) = if start_pos.lnum > end_pos.lnum {
@@ -436,7 +436,7 @@ pub unsafe fn delete_fold(
 /// Open or close fold for current window at position `pos`.
 /// Repeat "count" times.
 ///
-pub(super) fn set_fold_repeat(pos: pos_T, count: c_int, do_open: c_int) {
+pub(super) fn set_fold_repeat(pos: Pos, count: c_int, do_open: c_int) {
     for n in 0..count {
         let mut done: c_int = DONE_NOTHING;
         set_manual_fold(pos, do_open != 0, false, Some(&mut done));
@@ -458,7 +458,7 @@ pub(super) fn set_fold_repeat(pos: pos_T, count: c_int, do_open: c_int) {
 /// `recurse` — true when closing/opening recursive
 ///
 pub(super) fn set_manual_fold(
-    pos: pos_T,
+    pos: Pos,
     opening: bool,
     recurse: bool,
     donep: Option<&mut c_int>,

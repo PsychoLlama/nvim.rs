@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_char, c_int};
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn ind_find_start_comment() -> Option<pos_T> {
+pub(crate) unsafe fn ind_find_start_comment() -> Option<Pos> {
     unsafe { find_start_comment(cur_buf().b_ind_maxcomment) }
 }
 
@@ -37,13 +37,13 @@ pub(crate) unsafe fn ind_find_start_comment() -> Option<pos_T> {
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<pos_T> {
+pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<Pos> {
     let mut cur_maxcomment = int64_t::from(ind_maxcomment);
     loop {
         // SAFETY: on the main thread, with a current window and buffer.
         let pos = unsafe {
             findmatchlimit(
-                ::core::ptr::null_mut::<oparg_T>(),
+                ::core::ptr::null_mut::<OpArg>(),
                 c_int::from(b'*'),
                 FM_BACKWARD,
                 cur_maxcomment,
@@ -65,13 +65,13 @@ pub unsafe fn find_start_comment(ind_maxcomment: c_int) -> Option<pos_T> {
 ///
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
-pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<pos_T> {
+pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<Pos> {
     let mut cur_maxcomment = ind_maxcomment;
     loop {
         // SAFETY: on the main thread, with a current window and buffer.
         let pos = unsafe {
             findmatchlimit(
-                ::core::ptr::null_mut::<oparg_T>(),
+                ::core::ptr::null_mut::<OpArg>(),
                 c_int::from(b'R'),
                 FM_BACKWARD,
                 int64_t::from(cur_maxcomment),
@@ -100,7 +100,7 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<pos_T
 /// Reads the current buffer and window; the current line may be unlocked.
 pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
     is_raw: Option<&mut LineNr>,
-) -> Option<pos_T> {
+) -> Option<Pos> {
     // SAFETY: on the main thread, with a current window and buffer.
     let comment_pos = unsafe { find_start_comment(cur_buf().b_ind_maxcomment) };
     // SAFETY: the same.
@@ -290,7 +290,7 @@ pub(crate) unsafe fn cin_nocode(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// Reads the current buffer and window.
-pub(crate) unsafe fn find_line_comment() -> Option<pos_T> {
+pub(crate) unsafe fn find_line_comment() -> Option<Pos> {
     let mut pos = cur_win().w_cursor;
     loop {
         pos.lnum -= 1;

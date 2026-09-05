@@ -31,7 +31,7 @@ use crate::memory::{xmalloc, xstrdup};
 use crate::menu::set_context_in_menu_cmd;
 use crate::os::cshim::snprintf;
 use crate::types::CmdIdx;
-use crate::types::{ExArgt, ExpandContext, NUL, expand_T};
+use crate::types::{ExArgt, Expand, ExpandContext, NUL};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -90,7 +90,7 @@ fn abbreviates(typed: &[u8], name: &str) -> bool {
 /// # Safety
 /// `arg_in` must be NUL-terminated and `xp` writable.
 pub(crate) unsafe fn set_context_in_user_cmd(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     arg_in: *const c_char,
 ) -> *const c_char {
     let mut arg = arg_in;
@@ -139,7 +139,7 @@ pub(crate) unsafe fn set_context_in_user_cmd(
 
 /// # Safety
 /// `xp` must be writable and `pattern` must outlive it.
-unsafe fn set_context(xp: *mut expand_T, context: ExpandContext, pattern: *const c_char) {
+unsafe fn set_context(xp: *mut Expand, context: ExpandContext, pattern: *const c_char) {
     // SAFETY: caller contract.
     unsafe { (*xp).xp_context = context };
     unsafe { (*xp).xp_pattern = pattern.cast_mut() };
@@ -155,7 +155,7 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
     arg: *const c_char,
     argt: ExArgt,
     context: ExpandContext,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     forceit: bool,
 ) -> *const c_char {
     if context == ExpandContext::Nothing {
@@ -211,7 +211,7 @@ pub(crate) unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn get_user_commands(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_user_commands(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: module contract.
     let (local, global) = unsafe { (Scope::Buffer.list(), Scope::Global.list()) };
     let idx = idx as usize;
@@ -247,14 +247,14 @@ pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: CmdIdx) -> *mut c
 }
 
 /// `expand_generic()` item getter: the `-addr=` values.
-pub(crate) fn get_user_cmd_addr_type(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_addr_type(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     ADDR_TYPES
         .get(idx as usize)
         .map_or(ptr::null_mut(), |row| row.name.as_ptr().cast_mut())
 }
 
 /// `expand_generic()` item getter: the attribute names.
-pub(crate) fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_flags(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     /// Must stay alphabetical bar the last, which upstream appended.
     static USER_CMD_FLAGS: [&CStr; 10] = [
         c"addr",
@@ -274,7 +274,7 @@ pub(crate) fn get_user_cmd_flags(_xp: *mut expand_T, idx: c_int) -> *mut c_char 
 }
 
 /// `expand_generic()` item getter: the `-nargs=` values.
-pub(crate) fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_nargs(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     static USER_CMD_NARGS: [&CStr; 5] = [c"0", c"1", c"*", c"?", c"+"];
     USER_CMD_NARGS
         .get(idx as usize)
@@ -286,7 +286,7 @@ pub(crate) fn get_user_cmd_nargs(_xp: *mut expand_T, idx: c_int) -> *mut c_char 
 /// The holes in [`COMMAND_COMPLETE`], and the Lua context that has a name
 /// only for display, are answered as the empty string: the getter's null is
 /// the end of the list, not a gap in it.
-pub(crate) fn get_user_cmd_complete(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_complete(_xp: *mut Expand, idx: c_int) -> *mut c_char {
     if idx >= COMMAND_COMPLETE.len() as c_int {
         return ptr::null_mut();
     }

@@ -30,8 +30,8 @@ use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
-    ColNr, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, exarg_T, int64_t, lpos_T,
-    pos_T, size_t,
+    ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, String_0,
+    int64_t, size_t,
 };
 use crate::winlayer::Buf;
 use ::libc::strcpy;
@@ -150,12 +150,12 @@ impl PreviewBuf {
     ///
     /// # Safety
     /// Main thread; `self.buf` must be a real buffer.
-    unsafe fn add_match(&mut self, orig_buf: Buf, m: SubResult) -> (lpos_T, lpos_T) {
-        let mut p_start = lpos_T {
+    unsafe fn add_match(&mut self, orig_buf: Buf, m: SubResult) -> (LPos, LPos) {
+        let mut p_start = LPos {
             lnum: 0 as LineNr,
             col: m.start.col,
         };
-        let mut p_end = lpos_T {
+        let mut p_end = LPos {
             lnum: 0 as LineNr,
             col: m.end.col,
         };
@@ -255,7 +255,7 @@ impl PreviewBuf {
 /// 'inccommand' is `split`.
 pub(crate) unsafe fn show_sub(
     range: (LineNr, LineNr),
-    old_cusr: pos_T,
+    old_cusr: Pos,
     preview_lines: &PreviewLines,
     hl_id: c_int,
     cmdpreview_ns: c_int,
@@ -373,7 +373,7 @@ pub(crate) unsafe fn show_sub(
 ///
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
-pub unsafe fn ex_substitute(eap: *mut exarg_T) {
+pub unsafe fn ex_substitute(eap: *mut ExArg) {
     // SAFETY: caller's contract.
     unsafe { do_sub(&mut *eap, profile_zero(), 0 as c_int, 0 as Handle) };
 }
@@ -383,7 +383,7 @@ pub unsafe fn ex_substitute(eap: *mut exarg_T) {
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
 pub unsafe fn ex_substitute_preview(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,
 ) -> c_int {

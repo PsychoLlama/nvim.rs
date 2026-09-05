@@ -388,7 +388,7 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` is NULL or a live command; `oldarg` is NULL or an owned string.
-pub unsafe fn set_cmdarg(eap: *mut exarg_T, oldarg: *mut c_char) -> *mut c_char {
+pub unsafe fn set_cmdarg(eap: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Cmdarg);
     // SAFETY: `v:cmdarg` is declared a String.
     let oldval = tv.string_or_null();

@@ -146,7 +146,7 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
     unsafe { free_fmark(old) };
     let handle = buf.handle;
     let now = os_time();
-    buf.b_last_change.mark = pos_T {
+    buf.b_last_change.mark = Pos {
         lnum,
         col,
         coladd: 0,

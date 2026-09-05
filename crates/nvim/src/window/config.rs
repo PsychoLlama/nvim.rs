@@ -35,10 +35,10 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, Buffer, ColNr, Error, FAIL, Float, Integer, LineNr, OK, ScreenGrid, SwitchWin,
+    Boolean, Buffer, ColNr, Error, FAIL, Float, Integer, LineNr, OK, Pos, ScreenGrid, SwitchWin,
     TryState, WinConfig, WinStyle, Window, WindowHandle, int64_t, kErrorTypeException,
     kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline,
-    kFloatRelativeWindow, pos_T, size_t,
+    kFloatRelativeWindow, size_t,
 };
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
@@ -354,7 +354,7 @@ fn anchor_to_window(
     // The line after the one `bufpos` names, clamped to the buffer. Widened:
     // `bufpos={INT_MAX, ...}` reaches here, and the C's `lnum + 1` wraps.
     let lnum = (c.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
-    let mut pos = pos_T {
+    let mut pos = Pos {
         lnum: lnum as LineNr,
         col: c.bufpos.col,
         coladd: 0 as ColNr,

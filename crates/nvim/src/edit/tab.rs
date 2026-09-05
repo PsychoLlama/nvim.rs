@@ -174,7 +174,7 @@ pub(crate) fn ins_tab() -> bool {
 fn tab_spaces_to_tabs() {
     let mut ptr: *mut c_char;
     let mut saved_line: *mut c_char = ::core::ptr::null_mut();
-    let mut pos = pos_T::default();
+    let mut pos = Pos::default();
     // In `MODE_VREPLACE` the cursor that moves is the copy in `pos`; the
     // real one must not move until the change is replayed.  Nothing holds a
     // long-lived reference to it: the editor writes `curwin`'s own cursor
@@ -224,7 +224,7 @@ fn tab_spaces_to_tabs() {
     let none = ::core::ptr::null_mut();
     // SAFETY: `fpos` and `cursor` are live positions in the current buffer.
     unsafe { getvcol(cur_win(), &raw mut fpos, &raw mut vcol, none, none) };
-    let cursor: *mut pos_T = if vreplace {
+    let cursor: *mut Pos = if vreplace {
         &raw mut pos
     } else {
         &raw mut cur_win().w_cursor
@@ -395,7 +395,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
 /// The column [`tab_spaces_to_tabs`] measures against: the real cursor's, or
 /// -- in `MODE_VREPLACE`, where nothing may move yet -- the copy's.
 #[inline(always)]
-fn walk_col(pos: &pos_T, vreplace: bool) -> ColNr {
+fn walk_col(pos: &Pos, vreplace: bool) -> ColNr {
     if vreplace {
         pos.col
     } else {

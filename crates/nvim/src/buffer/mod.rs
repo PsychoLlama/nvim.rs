@@ -67,10 +67,9 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, Buffer, BufferRef, CdCause, EStackType, ExtmarkOp, FAIL, Failed, LineNr,
+    AlignTextPos, Buffer, BufferRef, CdCause, EStackType, ExArg, ExtmarkOp, FAIL, Failed, LineNr,
     MarkAdjustMode, MarkTree, MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle,
-    bfa_values, bln_values, dobuf_action_values, dobuf_start_values, exarg_T, getf_values,
-    uint32_t,
+    bfa_values, bln_values, dobuf_action_values, dobuf_start_values, getf_values, uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -525,7 +524,7 @@ pub(crate) fn edit_file(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
     win: Win,

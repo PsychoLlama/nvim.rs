@@ -266,7 +266,7 @@ pub unsafe fn do_augroup(arg: *mut ::core::ffi::c_char, del_group: bool) {
 /// Completion source for a group name: [`augroup_name`] answers null once
 /// `idx` runs past the last id.
 pub unsafe fn expand_get_augroup_name(
-    _xp: *mut expand_T,
+    _xp: *mut Expand,
     idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     augroup_name(idx + 1)

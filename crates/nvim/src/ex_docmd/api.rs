@@ -2,7 +2,7 @@
 //!
 //! `nvim_parse_cmd` reaches `parse_cmdline`, which runs every stage of
 //! `do_one_cmd`'s parse and runs none of its effects; `nvim_cmd` reaches
-//! `execute_cmd`, which starts from an `exarg_T` a Dict was decoded into
+//! `execute_cmd`, which starts from an `ExArg` a Dict was decoded into
 //! rather than from text. Between them they are the only callers that can
 //! present the command machinery with values no command line could spell,
 //! which is why the checks here are spelled out again rather than shared
@@ -54,12 +54,12 @@ use crate::main::{
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
-    CmdAddr, CmdParseInfo, CondStack, ExArgt, FAIL, Failed, LineNr, NUL, exarg_T, pos_T,
+    CmdAddr, CmdParseInfo, CondStack, ExArg, ExArgt, FAIL, Failed, LineNr, NUL, Pos,
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Ea, Win};
 
-/// Parse one command line into an `exarg_T` and a `CmdParseInfo`, running
+/// Parse one command line into an `ExArg` and a `CmdParseInfo`, running
 /// nothing.
 ///
 /// Everything the parse touches that is observable — 'ex_pressedreturn',
@@ -71,12 +71,12 @@ use crate::winlayer::{Buf, Ea, Win};
 /// command through `execute_cmd`.
 pub unsafe fn parse_cmdline(
     cmdline: *mut *mut c_char,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     cmdinfo: *mut CmdParseInfo,
     errormsg: &mut Option<CString>,
 ) -> bool {
     let save_ex_pressedreturn = ex_pressedreturn.get();
-    let save_cursor: pos_T = cur_win().w_cursor;
+    let save_cursor: Pos = cur_win().w_cursor;
     save_last_search_pattern();
 
     let into = cmdinfo.cast::<u8>();
@@ -233,7 +233,7 @@ pub unsafe fn parse_cmdline(
 /// before it is validation, everything after it is error reporting.
 pub(crate) unsafe fn execute_cmd0(
     retv: *mut c_int,
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     errormsg: &mut Option<CString>,
     preview: bool,
 ) -> Result<(), Failed> {
@@ -327,14 +327,14 @@ pub(crate) unsafe fn execute_cmd0(
     Ok(())
 }
 
-/// Run an `exarg_T` the API built, without re-parsing anything.
+/// Run an `ExArg` the API built, without re-parsing anything.
 ///
 /// The argument checks `do_one_cmd` makes while parsing are *not* repeated
-/// here — the caller is trusted to have produced a sane `exarg_T` — but the
+/// here — the caller is trusted to have produced a sane `ExArg` — but the
 /// checks about where a command may run (a locked buffer, the command-line
 /// window, a non-'modifiable' buffer) are, because they are about the
 /// editor's state rather than about the text.
-pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
+pub unsafe fn execute_cmd(eap: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
     let mut ea = unsafe { Ea::new(eap) };
     let mut retv: c_int = 0;
     if do_cmdline_start().is_err() {

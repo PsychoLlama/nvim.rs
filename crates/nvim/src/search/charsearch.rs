@@ -80,7 +80,7 @@ pub fn set_csearch_until(t_cmd: c_int) {
 ///
 /// # Safety
 /// `cap` and `cap->oap` must be valid.
-pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> Result<(), Failed> {
+pub unsafe fn searchc(cap: *mut CmdArg, t_cmd: bool) -> Result<(), Failed> {
     let mut c = unsafe { (*cap).nchar }; // char to search for
     let mut dir = unsafe { (*cap).arg }; // true for searching forward
     let mut t_cmd = t_cmd;

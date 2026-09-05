@@ -28,7 +28,7 @@ use core::ptr;
 pub(crate) unsafe fn set_context_by_cmdname(
     cmd: *const c_char,
     cmdidx: CmdIdx,
-    xp: *mut expand_T,
+    xp: *mut Expand,
     mut arg: *const c_char,
     argt: ExArgt,
     context: ExpandContext,
@@ -460,11 +460,11 @@ pub(crate) unsafe fn set_context_by_cmdname(
 /// probably won't change that much -- webb.
 ///
 /// `buff` is the command string.
-pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char) -> *const c_char {
+pub(crate) unsafe fn set_one_cmd_context(xp: *mut Expand, buff: *const c_char) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
-    let mut ea = exarg_T {
+    let mut ea = ExArg {
         cmdidx: CmdIdx::append,
         addr_type: CmdAddr::Lines,
         ..unsafe { core::mem::zeroed() }
@@ -499,7 +499,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
     // `field_ptr`, not `&raw mut xp.xp_context`: an address taken off a
     // `Deref` dies at the next field write, and `skip_range` writes through
     // this one while the walk below keeps reading `xp`.
-    let context_field = xp.field_ptr(core::mem::offset_of!(expand_T, xp_context));
+    let context_field = xp.field_ptr(core::mem::offset_of!(Expand, xp_context));
     // SAFETY: `cmd` is inside the command line and `context` is the live
     // context's own field.
     cmd = unsafe { skip_range(cmd, context_field) };
@@ -672,7 +672,7 @@ pub(crate) unsafe fn set_one_cmd_context(xp: *mut expand_T, buff: *const c_char)
 /// `len` is the length of the command line excluding the NUL, `col` the cursor
 /// position, and `use_ccline` asks for the command line info to be consulted.
 pub unsafe fn set_cmd_context(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     str: *mut c_char,
     len: c_int,
     col: c_int,
@@ -752,7 +752,7 @@ pub enum Expanded {
 /// `xp->xp_pattern` points into `str`, to where the text that is to be
 /// expanded starts.  `matchcount` and `matches` return the answer.
 pub unsafe fn expand_cmdline(
-    xp: *mut expand_T,
+    xp: *mut Expand,
     str: *const c_char,
     col: c_int,
     matchcount: *mut c_int,

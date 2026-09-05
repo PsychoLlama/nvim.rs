@@ -134,17 +134,17 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdParseInfo,
-    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
-    CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArgt, Exception, ExpandContext,
-    ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
-    ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, List, ListItem,
-    Magic, MotionType, MsgList, Object, OptInt, OptMagic, OptVal, ParserHighlight,
-    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime, RemapValues,
-    SaveVEvent, ScriptCtx, String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink,
-    UndoObjectType, VarNumber, VimState, Window, XpPrefix, aco_save_T, cmdmod_T,
-    dobuf_action_values, dobuf_start_values, exarg_T, expand_T, oparg_T, optset_T, pos_T,
-    ptrdiff_t, searchit_arg_T, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
+    Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
+    CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr,
+    ColoredCmdline, CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt,
+    Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
+    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
+    HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
+    OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
+    ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, String_0, Tabpage, TryState,
+    TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix,
+    aco_save_T, dobuf_action_values, dobuf_start_values, optset_T, ptrdiff_t, searchit_arg_T,
+    size_t, time_t, typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -246,7 +246,7 @@ pub struct CommandLineState {
     pub some_key_typed: bool,
     pub ignore_drag_release: bool,
     pub break_ctrl_c: bool,
-    pub xpc: expand_T,
+    pub xpc: Expand,
     pub b_im_ptr: *mut OptInt,
     pub b_im_ptr_buf: *mut Buffer,
     pub cmdline_type: ::core::ffi::c_int,
@@ -254,13 +254,13 @@ pub struct CommandLineState {
     pub did_hist_navigate: bool,
 }
 pub struct incsearch_state_T {
-    pub search_start: pos_T,
-    pub save_cursor: pos_T,
+    pub search_start: Pos,
+    pub save_cursor: Pos,
     pub winid: Handle,
     pub init_viewstate: viewstate_T,
     pub old_viewstate: viewstate_T,
-    pub match_start: pos_T,
-    pub match_end: pos_T,
+    pub match_start: Pos,
+    pub match_end: Pos,
     pub did_incsearch: bool,
     pub incsearch_postponed: bool,
     pub magic_overruled_save: OptMagic,
@@ -336,7 +336,7 @@ pub struct CpInfo {
     pub win_info: CpWinInfoVec,
     pub buf_info: CpBufInfoVec,
     pub save_hls: bool,
-    pub save_cmdmod: cmdmod_T,
+    pub save_cmdmod: CmdMod,
     pub save_view: Vec<::core::ffi::c_int>,
 }
 #[derive(Copy, Clone)]
@@ -351,8 +351,8 @@ pub struct CpBufInfo {
     pub save_b_p_ul: OptInt,
     pub save_b_p_ma: ::core::ffi::c_int,
     pub save_b_changed: ::core::ffi::c_int,
-    pub save_b_op_start: pos_T,
-    pub save_b_op_end: pos_T,
+    pub save_b_op_start: Pos,
+    pub save_b_op_end: Pos,
     pub save_changedtick: VarNumber,
     pub undo_info: CpUndoInfo,
 }
@@ -381,7 +381,7 @@ pub struct CpWinInfoVec {
 #[derive(Copy, Clone)]
 pub struct CpWinInfo {
     pub win: *mut Window,
-    pub save_w_cursor: pos_T,
+    pub save_w_cursor: Pos,
     pub save_viewstate: viewstate_T,
     pub save_w_p_cul: ::core::ffi::c_int,
     pub save_w_p_cuc: ::core::ffi::c_int,
@@ -431,7 +431,7 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     cmdprompt: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     hl_id: 0,
     overstrike: 0,
-    xpc: ::core::ptr::null_mut::<expand_T>(),
+    xpc: ::core::ptr::null_mut::<Expand>(),
     xp_context: ExpandContext::Nothing,
     xp_arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     input_fn: 0,
@@ -447,8 +447,8 @@ pub(crate) const CMDLINE_INFO_INIT: CmdlineInfo = CmdlineInfo {
     mouse_used: ::core::ptr::null_mut::<bool>(),
 };
 
-/// An all-zero [`pos_T`].
-pub(crate) const POS_INIT: pos_T = pos_T {
+/// An all-zero [`Pos`].
+pub(crate) const POS_INIT: Pos = Pos {
     lnum: 0,
     col: 0,
     coladd: 0,
@@ -479,8 +479,8 @@ pub(crate) const INCSEARCH_STATE_INIT: incsearch_state_T = incsearch_state_T {
     magic_overruled_save: OPTION_MAGIC_NOT_SET,
 };
 
-/// An all-zero [`expand_T`]; `expand_init` fills the fields that matter.
-pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
+/// An all-zero [`Expand`]; `expand_init` fills the fields that matter.
+pub(crate) const EXPAND_T_INIT: Expand = Expand {
     xp_pattern: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     xp_context: ExpandContext::Nothing,
     xp_pattern_len: 0,
@@ -523,8 +523,8 @@ pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
     ))
 }
 
-/// An all-zero [`exarg_T`]; `parse_cmdline` fills it.
-pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
+/// An all-zero [`ExArg`]; `parse_cmdline` fills it.
+pub(crate) const EXARG_T_INIT: ExArg = ExArg {
     arg: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     args: ::core::ptr::null_mut::<*mut ::core::ffi::c_char>(),
     arglens: ::core::ptr::null_mut::<size_t>(),
@@ -563,7 +563,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
 
 /// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.
 pub(crate) const CMD_PARSE_INFO_INIT: CmdParseInfo = CmdParseInfo {
-    cmdmod: cmdmod_T::NONE,
+    cmdmod: CmdMod::NONE,
     magic: CmdParseInfo_magic {
         file: false,
         bar: false,
@@ -621,7 +621,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
         items: ::core::ptr::null_mut::<CpBufInfo>(),
     },
     save_hls: false,
-    save_cmdmod: cmdmod_T::NONE,
+    save_cmdmod: CmdMod::NONE,
     save_view: Vec::new(),
 };
 

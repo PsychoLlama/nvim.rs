@@ -23,7 +23,7 @@ use crate::charset::getdigits_int;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
 use crate::main::{p_cpo, sys_menu};
 use crate::memory::xcalloc;
-use crate::types::{exarg_T, vimmenu_T};
+use crate::types::{ExArg, vimmenu_T};
 use crate::ui::ui_call_update_menu;
 
 /// The default priority: what an unnumbered component gets, and what a
@@ -53,9 +53,9 @@ struct MenuArg {
 /// `:unmenu` and `:menu enable`/`disable`.
 ///
 /// # Safety
-/// `eap` must name the live `exarg_T` of a menu command, whose `arg` points
+/// `eap` must name the live `ExArg` of a menu command, whose `arg` points
 /// into the command line this rewrites in place.
-pub(crate) unsafe fn ex_menu(eap: *mut exarg_T) {
+pub(crate) unsafe fn ex_menu(eap: *mut ExArg) {
     // SAFETY: the caller's obligation. `cmd` and `arg` name the command line,
     // which `ex_docmd` lets a command edit.
     let (cmd, arg, forceit, ranged) = unsafe {

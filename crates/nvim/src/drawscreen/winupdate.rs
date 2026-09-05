@@ -845,7 +845,7 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
     let cursor_lnum = unsafe { (*curwin.get()).w_cursor.lnum };
     let anchor_lnum = sel.anchor.lnum;
     let cursor_above = cursor_lnum < anchor_lnum;
-    let mut pos = pos_T::default();
+    let mut pos = Pos::default();
     toc = 0;
     let mut lnum = cursor_lnum;
     while if cursor_above {

@@ -309,7 +309,7 @@ pub(crate) unsafe fn hms_dealloc(hms_p: *mut HistoryMergerState) {
 
 /// Whether two marks are at the same place.
 #[inline]
-pub(crate) fn marks_equal(a: pos_T, b: pos_T) -> bool {
+pub(crate) fn marks_equal(a: Pos, b: Pos) -> bool {
     a.lnum == b.lnum && a.col == b.col
 }
 

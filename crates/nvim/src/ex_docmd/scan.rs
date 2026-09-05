@@ -30,7 +30,7 @@ use crate::option::cpo_has;
 use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::del_trailing_spaces;
-use crate::types::ex_cmds::exarg_T;
+use crate::types::ex_cmds::ExArg;
 use crate::types::pos::LineNr;
 use crate::types::{CmdAddr, CpoFlag, ExArgt, Failed, NUL, size_t};
 use crate::winlayer::{Buf, Ea};
@@ -55,7 +55,7 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
 /// command accepts one, a user command (a negative `cmdidx`) does not take
 /// `=`, and a digit belongs to the *count* rather than to a register when
 /// the command takes both.
-pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
+pub(crate) unsafe fn parse_register(eap: *mut ExArg) {
     let mut ea = unsafe { Ea::new(eap) };
     let is_user_command = is_user_cmd(ea.cmdidx);
     if !ea.argt.has(ExArgt::REGSTR)
@@ -86,7 +86,7 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
 
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
-pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: LineNr, validate: bool) {
+pub unsafe fn set_cmd_count(eap: *mut ExArg, count: LineNr, validate: bool) {
     let mut ea = unsafe { Ea::new(eap) };
     if ea.addr_type != CmdAddr::Lines {
         ea.line2 = count;
@@ -115,7 +115,7 @@ pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: LineNr, validate: bool) {
 /// Take the count a command such as `:delete 3` may carry, and fold it into
 /// the range.
 pub(crate) unsafe fn parse_count(
-    eap: *mut exarg_T,
+    eap: *mut ExArg,
     errormsg: &mut Option<CString>,
     validate: bool,
 ) -> Result<(), Failed> {
@@ -214,7 +214,7 @@ pub(crate) fn skip_grep_pat(ea: Ea) -> *mut c_char {
 ///
 /// A backslash before one of them escapes it — but only while 'cpoptions'
 /// does not contain `b`, or the command does not take CTRL-V escapes.
-pub unsafe fn separate_nextcmd(eap: *mut exarg_T) {
+pub unsafe fn separate_nextcmd(eap: *mut ExArg) {
     let mut ea = unsafe { Ea::new(eap) };
     let mut p = skip_grep_pat(ea);
     while unsafe { *p } != 0 {

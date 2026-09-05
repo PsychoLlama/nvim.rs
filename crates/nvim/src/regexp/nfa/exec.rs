@@ -30,7 +30,7 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    Buffer, ColNr, LineNr, NUL, ProfTime, Window, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, Window, reg_extmatch_T, regmatch_T, regmmatch_T,
     regprog_T, uint8_t,
 };
 
@@ -111,10 +111,10 @@ fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
     // A `\zs` before the start, or a `\ze` before the end, can leave group 0
     // unset; it then covers what the machine actually walked.
     if starts[0].lnum < 0 {
-        starts[0] = lpos_T { lnum: 0, col };
+        starts[0] = LPos { lnum: 0, col };
     }
     if ends[0].lnum < 0 {
-        ends[0] = lpos_T {
+        ends[0] = LPos {
             lnum: rex.lnum(),
             col: rex.col(),
         };

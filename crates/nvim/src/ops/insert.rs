@@ -51,10 +51,10 @@ struct BlockInsertPre {
 /// Blockwise `I` and `A`.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_insert(oap: *mut oparg_T, count1: c_int) {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub(crate) unsafe fn op_insert(oap: *mut OpArg, count1: c_int) {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     let mut oap = unsafe { Op::new(oap) };
     let mut bd = block_def::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
@@ -191,7 +191,7 @@ fn move_cursor_for_append(oap: Op, bd: &mut block_def) -> bool {
 /// `$` the block has no right edge to measure against.
 ///
 /// `oap` must be blockwise, and its first line the cursor line.
-fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, start_insert: pos_T) {
+fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, start_insert: Pos) {
     // SAFETY: the cursor is on the region's first line, which is a line of
     // the current buffer, and every other line asked for below is one of the
     // region's.
@@ -308,10 +308,10 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
 /// Answers true when `edit()` returned because of a CTRL-O command.
 ///
 /// # Safety
-/// `oap` must point to a live `oparg_T` describing a region of the current
+/// `oap` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_change(oap: *mut oparg_T) -> c_int {
-    // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
+pub(crate) unsafe fn op_change(oap: *mut OpArg) -> c_int {
+    // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // Everything below works on that region and on the cursor line.
     let oap = unsafe { Op::new(oap) };
     let mut l = oap.start.col;
@@ -406,7 +406,7 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
         if bd.is_short == 0 || op_virtual() {
             // When the block starts in virtual space, that offset is
             // padding in front of the text.
-            let mut vpos = pos_T {
+            let mut vpos = Pos {
                 lnum: linenr,
                 col: 0,
                 coladd: 0,

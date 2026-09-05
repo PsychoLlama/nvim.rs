@@ -120,7 +120,7 @@ pub(crate) fn get_fpos_of_mouse(mut mpos: PosRef) -> c_int {
 
 /// Show the `'mousemodel'` popup menu, having first moved the cursor there if
 /// the model asks for it and the click landed outside the selection.
-pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: pos_T) -> c_int {
+pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: Pos) -> c_int {
     // First set the cursor position before showing the popup menu.
     let mut jump_flags = if mouse_model_popup_setpos() && leaves_selection(m_pos_flag, m_pos) {
         MOUSE_MAY_STOP_VIS
@@ -153,7 +153,7 @@ pub(crate) fn do_popup(which_button: c_int, m_pos_flag: c_int, m_pos: pos_T) -> 
 /// window, so that showing the popup menu should end Visual mode.
 ///
 /// Upstream notes that this "might have false negative here".
-fn leaves_selection(m_pos_flag: c_int, mut m_pos: pos_T) -> bool {
+fn leaves_selection(m_pos_flag: c_int, mut m_pos: Pos) -> bool {
     if !visual_active() {
         return true;
     }

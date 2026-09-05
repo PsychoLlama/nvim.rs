@@ -34,7 +34,7 @@ use crate::memory::xfree;
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
-use crate::types::{ColNr, LineNr, NUL, bcount_t, lpos_T, size_t};
+use crate::types::{ColNr, LPos, LineNr, NUL, bcount_t, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
@@ -259,8 +259,8 @@ pub(super) unsafe fn build_replacement(
     unsafe { st.adjust_sub_firstlnum() };
 
     // TODO(bfredl): this has some robustness issues, look into later.
-    let start: lpos_T = st.regmatch.startpos[0];
-    let end: lpos_T = st.regmatch.endpos[0];
+    let start: LPos = st.regmatch.startpos[0];
+    let end: LPos = st.regmatch.endpos[0];
     let mut replaced_bytes = 0 as bcount_t;
     let mut i = 0 as c_int;
     while i < st.nmatch - 1 as c_int {

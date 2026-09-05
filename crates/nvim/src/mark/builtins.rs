@@ -40,7 +40,7 @@ use crate::types::kListLenMayKnow;
 pub(super) unsafe fn add_mark(
     l: *mut List,
     mname: *const c_char,
-    pos: *const pos_T,
+    pos: *const Pos,
     bufnr: c_int,
     fname: *const c_char,
 ) -> Result<(), Failed> {
@@ -124,7 +124,7 @@ pub unsafe fn get_buf_local_marks(buf: *const Buffer, l: *mut List) {
             ptr::null(),
         )
     };
-    let positions: [(&core::ffi::CStr, *const pos_T); 7] = [
+    let positions: [(&core::ffi::CStr, *const Pos); 7] = [
         (c"'\"", buf.last_cursor().pos_raw()),
         (c"'[", &raw const buf.b_op_start),
         (c"']", &raw const buf.b_op_end),
