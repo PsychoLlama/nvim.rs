@@ -23,7 +23,7 @@ use neovim::window::arith::{
     frame_minheight, frame_minwidth, height_with_chrome, parent_target, sort_columns,
     width_with_chrome,
 };
-use neovim::winlayer::Frame;
+use neovim::winlayer::FrameRef;
 
 // The layouts below mirror the C's: `FR_LEAF` 0, `FR_ROW` 1, `FR_COL` 2.
 const FR_LEAF: i8 = 0;
@@ -154,9 +154,9 @@ impl Tree {
         unsafe { (*fr).fr_win }
     }
 
-    fn frame(&self, fr: *mut frame_T) -> Frame {
+    fn frame(&self, fr: *mut frame_T) -> FrameRef {
         // SAFETY: a node of this tree, which outlives the `Frame`.
-        unsafe { Frame::new(fr) }
+        unsafe { FrameRef::new(fr) }
     }
 }
 

@@ -24,7 +24,7 @@ use crate::winlayer::{Buf, Live};
 type Opts = Live<KeyDict_set_extmark>;
 
 pub unsafe fn nvim_buf_set_extmark(
-    buf: Buffer,
+    buf: BufferHandle,
     ns_id: Integer,
     mut line: Integer,
     mut col: Integer,

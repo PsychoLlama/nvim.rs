@@ -93,7 +93,7 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
-use crate::winlayer::{Live, Pos};
+use crate::winlayer::{Live, PosRef};
 use ::libc::{abort, strcpy};
 use core::mem::offset_of;
 
@@ -194,17 +194,17 @@ impl Op {
     /// [`Live::field_ptr`]'s trick: a field's address is the object's plus a
     /// constant, so saying where it is needs no dereference.
     #[inline(always)]
-    pub(crate) fn start(self) -> Pos {
+    pub(crate) fn start(self) -> PosRef {
         // SAFETY: the constructor's promise -- a live `oparg_T`, so the
         // address of its `start` is a live position.
-        unsafe { Pos::new(self.field_ptr(offset_of!(oparg_T, start))) }
+        unsafe { PosRef::new(self.field_ptr(offset_of!(oparg_T, start))) }
     }
 
     /// The region's last position. [`Op::start`].
     #[inline(always)]
-    pub(crate) fn end(self) -> Pos {
+    pub(crate) fn end(self) -> PosRef {
         // SAFETY: as [`Op::start`].
-        unsafe { Pos::new(self.field_ptr(offset_of!(oparg_T, end))) }
+        unsafe { PosRef::new(self.field_ptr(offset_of!(oparg_T, end))) }
     }
 }
 

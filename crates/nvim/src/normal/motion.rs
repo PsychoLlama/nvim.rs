@@ -28,7 +28,7 @@ use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, CAR, CmdArg, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise,
+    CA_NO_ADJ_OP_END, CAR, CmdArgRef, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise,
     may_fold_open, nv_page, unadjust_for_sel, visual_active, visual_mode,
 };
 use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
@@ -200,7 +200,7 @@ pub(crate) unsafe fn nv_screengo(
 /// `H`, `M` and `L`: to the top, middle or bottom line of the window.
 pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let (cmdchar, count1) = (ca.cmdchar, ca.count1);
     let mut op = ca.op();
     let mut win = cur_win();
@@ -290,7 +290,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
 /// `l`, `<Space>` and `<Right>`.
 pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     // A modifier turns this into a word move.
     if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
         if mod_mask.get().has(ModMask::CTRL) {
@@ -387,7 +387,7 @@ pub(crate) unsafe fn nv_right(cap: *mut cmdarg_T) {
 /// `h`, `<BS>`, CTRL-H and `<Left>`.
 pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
     // A modifier turns this into a word move.
     if mod_mask.get().has(ModMask::SHIFT | ModMask::CTRL) {
@@ -451,7 +451,7 @@ pub(crate) unsafe fn nv_left(cap: *mut cmdarg_T) {
 /// `k`, `CTRL-P`, `-` and `<Up>`. Shifted, it is a page up.
 pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if mod_mask.get().has(ModMask::SHIFT) {
         ca.arg = BACKWARD as c_int;
         unsafe { nv_page(cap) };
@@ -469,7 +469,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
 /// `j`, `CTRL-N`, `+`, `<CR>` and `<Down>`. Shifted, it is a page down.
 pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if mod_mask.get().has(ModMask::SHIFT) {
         ca.arg = FORWARD as c_int;
         unsafe { nv_page(cap) };
@@ -508,7 +508,7 @@ pub(crate) unsafe fn nv_down(cap: *mut cmdarg_T) {
 /// the argument says.
 pub(crate) unsafe fn nv_end(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if ca.arg != 0 || mod_mask.get().has(ModMask::CTRL) {
         ca.arg = 1;
         unsafe { nv_goto(cap) };
@@ -521,7 +521,7 @@ pub(crate) unsafe fn nv_end(cap: *mut cmdarg_T) {
 /// `$`: the end of the line, `count1 - 1` lines down.
 pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
     // Under 'virtualedit' an operator that starts past the end of the
@@ -539,7 +539,7 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
 /// `f`, `F`, `t`, `T`, `;` and `,`: search this line for a character.
 pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     // An exclusive Select-mode selection was widened by one when it was
     // made; the search has to run against the real cursor position.
     let mut cursor_dec = false;
@@ -583,7 +583,7 @@ pub(crate) unsafe fn nv_csearch(cap: *mut cmdarg_T) {
 /// file.
 pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let count0 = ca.count0;
     let mut op = ca.op();
     let mut win = cur_win();
@@ -634,7 +634,7 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
 /// `(` and `)`: back and forward a sentence.
 pub(crate) unsafe fn nv_brace(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().use_reg_one = true;
     ca.op().inclusive = false;
@@ -651,7 +651,7 @@ pub(crate) unsafe fn nv_brace(cap: *mut cmdarg_T) {
 /// `{` and `}`: back and forward a paragraph.
 pub(crate) unsafe fn nv_findpar(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     ca.op().use_reg_one = true;
@@ -667,7 +667,7 @@ pub(crate) unsafe fn nv_findpar(cap: *mut cmdarg_T) {
 /// `<Home>`: the first column -- the first line with CTRL.
 pub(crate) unsafe fn nv_home(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if mod_mask.get().has(ModMask::CTRL) {
         unsafe { nv_goto(cap) };
     } else {
@@ -681,7 +681,7 @@ pub(crate) unsafe fn nv_home(cap: *mut cmdarg_T) {
 /// `|`: to a screen column.
 pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     beginline(BeginlineOpts::NONE);
@@ -698,7 +698,7 @@ pub(crate) unsafe fn nv_pipe(cap: *mut cmdarg_T) {
 /// `b` and `B`: back a word.
 pub(crate) unsafe fn nv_bck_word(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     cur_win().w_set_curswant = true;
@@ -712,7 +712,7 @@ pub(crate) unsafe fn nv_bck_word(cap: *mut cmdarg_T) {
 /// `w`, `W`, `e` and `E`: forward a word, or to a word's end.
 pub(crate) unsafe fn nv_wordcmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let startpos = cur_win().w_cursor;
     let mut word_end = ca.cmdchar == 'e' as c_int || ca.cmdchar == 'E' as c_int;
     ca.op().inclusive = word_end;
@@ -770,7 +770,7 @@ pub(crate) unsafe fn adjust_cursor(oap: *mut oparg_T) {
 /// argument says.
 pub(crate) unsafe fn nv_beginline(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     beginline(BeginlineOpts::from_bits(ca.arg));
@@ -781,7 +781,7 @@ pub(crate) unsafe fn nv_beginline(cap: *mut cmdarg_T) {
 /// `gg` and `G`: to the first or last line, or to the count'th.
 pub(crate) unsafe fn nv_goto(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let last = cur_buf().b_ml.ml_line_count;
     let mut lnum = if ca.arg != 0 { last } else { 1 };
     ca.op().motion_type = kMTLineWise;

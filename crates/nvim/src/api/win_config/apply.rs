@@ -429,7 +429,7 @@ unsafe fn win_config_float_tp(
 /// `config` must be the caller's decoded keyset -- NUL-terminated strings and
 /// arrays that name their own items.
 pub unsafe fn nvim_win_set_config(
-    win: Window,
+    win: WindowHandle,
     config: *mut KeyDict_win_config,
 ) -> Result<(), Error> {
     let mut error = Error::none();

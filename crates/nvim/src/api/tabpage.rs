@@ -20,8 +20,8 @@ use crate::guard::Suppress;
 use crate::main::{cmdwin_buf, cmdwin_type, curwin, e_cmdwin};
 use crate::narrow::number_as_int;
 use crate::types::{
-    Arena, Array, Boolean, Buffer, Error, Integer, KeyDict_tabpage_config, Object, String_0,
-    Tabpage, Window, kErrorTypeException, size_t, tabpage_T, win_T,
+    Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
+    TabpageHandle, WindowHandle, kErrorTypeException, size_t, tabpage_T, win_T,
 };
 use crate::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
@@ -35,7 +35,10 @@ use core::ptr;
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_tabpage_list_wins(tabpage: Tabpage, arena: *mut Arena) -> Result<Array, Error> {
+pub unsafe fn nvim_tabpage_list_wins(
+    tabpage: TabpageHandle,
+    arena: *mut Arena,
+) -> Result<Array, Error> {
     let mut err = Error::none();
     let mut rv = Array::EMPTY;
     let Some(tab) = tabpage_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
@@ -58,7 +61,7 @@ pub unsafe fn nvim_tabpage_list_wins(tabpage: Tabpage, arena: *mut Arena) -> Res
 /// # Safety
 /// `name` must point at its own bytes, and `arena` must be the caller's.
 pub unsafe fn nvim_tabpage_get_var(
-    tabpage: Tabpage,
+    tabpage: TabpageHandle,
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
@@ -77,7 +80,7 @@ pub unsafe fn nvim_tabpage_get_var(
 /// # Safety
 /// `name` and `value` must own their bytes: the store takes them over.
 pub unsafe fn nvim_tabpage_set_var(
-    tabpage: Tabpage,
+    tabpage: TabpageHandle,
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
@@ -97,7 +100,7 @@ pub unsafe fn nvim_tabpage_set_var(
 ///
 /// # Safety
 /// `name` must point at its own bytes.
-pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(), Error> {
+pub unsafe fn nvim_tabpage_del_var(tabpage: TabpageHandle, name: String_0) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);
@@ -110,10 +113,10 @@ pub unsafe fn nvim_tabpage_del_var(tabpage: Tabpage, name: String_0) -> Result<(
 }
 
 /// The window `tp` is showing.
-pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
+pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Error> {
     let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err).filter(|t| valid_tabpage(t.raw())) else {
-        return (0 as Window).reported(err);
+        return (0 as WindowHandle).reported(err);
     };
     if tab.is_current() {
         // SAFETY: the current window is whatever `curwin` names.
@@ -121,7 +124,7 @@ pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
     }
     let curwin_of_tab: *mut win_T = tab.tp_curwin;
     match windows_in_tab(tab).find(|wp| wp.raw() == curwin_of_tab) {
-        Some(wp) => Ok(wp.handle as Window),
+        Some(wp) => Ok(wp.handle as WindowHandle),
         // A tab page that is not current always has a `tp_curwin` in its own
         // window list; upstream aborts here rather than answer a handle it
         // cannot justify.
@@ -132,7 +135,7 @@ pub fn nvim_tabpage_get_win(tabpage: Tabpage) -> Result<Window, Error> {
 }
 
 /// Make `win` the window `tp` shows.
-pub fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window) -> Result<(), Error> {
+pub fn nvim_tabpage_set_win(tabpage: TabpageHandle, win: WindowHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(tp) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);
@@ -160,7 +163,7 @@ pub fn nvim_tabpage_set_win(tabpage: Tabpage, win: Window) -> Result<(), Error> 
 }
 
 /// `tp`'s 1-based position in the tab line.
-pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
+pub fn nvim_tabpage_get_number(tabpage: TabpageHandle) -> Result<Integer, Error> {
     let mut err = Error::none();
     let Some(tab) = tabpage_by_handle(tabpage, &mut err) else {
         return (0 as Integer).reported(err);
@@ -169,7 +172,7 @@ pub fn nvim_tabpage_get_number(tabpage: Tabpage) -> Result<Integer, Error> {
 }
 
 /// Whether `tabpage` still names a tab page.
-pub fn nvim_tabpage_is_valid(tabpage: Tabpage) -> Boolean {
+pub fn nvim_tabpage_is_valid(tabpage: TabpageHandle) -> Boolean {
     let mut stub: Error = Error::none();
     let ret = tabpage_by_handle(tabpage, &mut stub).is_some();
     // The message the lookup may have left behind is dropped rather than
@@ -183,10 +186,10 @@ pub fn nvim_tabpage_is_valid(tabpage: Tabpage) -> Boolean {
 /// # Safety
 /// `config` must point at a filled-in `KeyDict_tabpage_config`.
 pub unsafe fn nvim_open_tabpage(
-    buf: Buffer,
+    buf: BufferHandle,
     enter: Boolean,
     config: *mut KeyDict_tabpage_config,
-) -> Result<Tabpage, Error> {
+) -> Result<TabpageHandle, Error> {
     // `after`'s index in `config`'s `is_set` mask. Function-local so that it
     // cannot collide in the flat namespace `tools/ffigen` renders
     // module-level constants into.
@@ -194,7 +197,7 @@ pub unsafe fn nvim_open_tabpage(
 
     let mut err = Error::none();
     let Some(b) = buffer_by_handle(buf, &mut err) else {
-        return (0 as Tabpage).reported(err);
+        return (0 as TabpageHandle).reported(err);
     };
     if cmdwin_type.get() != 0 && enter || b.raw() == cmdwin_buf.get() {
         return Err(Error::exception(e_cmdwin));
@@ -241,7 +244,7 @@ pub unsafe fn nvim_open_tabpage(
             return Err(tabpage_closed(err));
         }
     }
-    (tp.handle as Tabpage).reported(err)
+    (tp.handle as TabpageHandle).reported(err)
 }
 
 /// Replace whatever `err` was carrying with "the tab page went away", which

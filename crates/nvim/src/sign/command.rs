@@ -166,7 +166,7 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 ///
 /// # Safety
 /// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_list_defined(sp: Sign) {
+pub(crate) unsafe fn sign_list_defined(sp: SignRef) {
     // SAFETY: a definition's name, icon and cells are its own.
     let sn_name = unsafe { c_str(sp.sn_name) };
     smsg!(0, "sign {sn_name}");

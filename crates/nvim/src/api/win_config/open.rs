@@ -25,10 +25,10 @@ use crate::winlayer::{TabPage, Win};
 /// `config` must be the caller's decoded keyset -- NUL-terminated strings and
 /// arrays that name their own items.
 pub unsafe fn nvim_open_win(
-    buf: Buffer,
+    buf: BufferHandle,
     enter: Boolean,
     config: *mut KeyDict_win_config,
-) -> Result<Window, Error> {
+) -> Result<WindowHandle, Error> {
     let mut error = Error::none();
     // SAFETY: `error` is this frame's own slot, live for the whole call, and
     // `config` is the caller's keyset.
@@ -38,24 +38,24 @@ pub unsafe fn nvim_open_win(
     // a null.
     let b = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
-        return (0 as Window).reported(error);
+        return (0 as WindowHandle).reported(error);
     }
     if cmdwin_type.get() != 0 && enter || b == cmdwin_buf.get() {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
-        return (0 as Window).reported(error);
+        return (0 as WindowHandle).reported(error);
     }
     let mut fconfig = WIN_CONFIG_INIT;
     // SAFETY: `fconfig` is this frame's own and `keys` the caller's keyset.
     let parsed =
         unsafe { parse_win_config(None, keys, WinCfg::new(&raw mut fconfig), false, report) };
     if !parsed {
-        return (0 as Window).reported(error);
+        return (0 as WindowHandle).reported(error);
     }
     let keys_set = keys.is_set__win_config_;
     let is_split = has_key(keys_set, KEYSET_OPTIDX_win_config__split)
         || has_key(keys_set, KEYSET_OPTIDX_win_config__vertical);
-    let mut rv: Window = 0;
+    let mut rv: WindowHandle = 0;
     // Read before the config is handed to the window: whichever branch
     // below runs moves it, and all three are wanted afterwards.
     let noautocmd = fconfig.noautocmd;

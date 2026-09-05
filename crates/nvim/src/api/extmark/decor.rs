@@ -15,7 +15,7 @@ use crate::api::private::validate::{err_bad_number, err_expected, err_out_of_ran
 use crate::kvec::Kvec;
 
 pub unsafe fn nvim_buf_del_extmark(
-    buf: Buffer,
+    buf: BufferHandle,
     ns_id: Integer,
     id: Integer,
 ) -> Result<Boolean, Error> {
@@ -32,7 +32,7 @@ pub unsafe fn nvim_buf_del_extmark(
 }
 
 pub unsafe fn nvim_buf_clear_namespace(
-    buf: Buffer,
+    buf: BufferHandle,
     ns_id: Integer,
     line_start: Integer,
     mut line_end: Integer,

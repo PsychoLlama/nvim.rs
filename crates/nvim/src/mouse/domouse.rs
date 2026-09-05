@@ -228,7 +228,7 @@ pub(crate) unsafe fn do_mouse(
     // alt-left button   -> alt-right button
     if mouse_model_popup() {
         // SAFETY: a live local position.
-        m_pos_flag = get_fpos_of_mouse(unsafe { Pos::new(&raw mut m_pos) });
+        m_pos_flag = get_fpos_of_mouse(unsafe { PosRef::new(&raw mut m_pos) });
         let over_text = m_pos_flag & (IN_STATUS_LINE | MOUSE_WINBAR | MOUSE_STATUSCOL) == 0;
         if over_text
             && which_button == MOUSE_RIGHT
@@ -891,7 +891,7 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
 fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
     let mut end_visual = win.w_cursor;
     // SAFETY: a live local position in the current buffer.
-    let probe = unsafe { Pos::new(&raw mut end_visual) };
+    let probe = unsafe { PosRef::new(&raw mut end_visual) };
     while ascii_iswhite(char_at(probe)) {
         advance(probe);
     }
@@ -937,13 +937,13 @@ fn stuff_char(c: c_int) {
 }
 
 /// The character at `pos`, or NUL past the end of the line.
-fn char_at(pos: Pos) -> c_int {
+fn char_at(pos: PosRef) -> c_int {
     // SAFETY: a live position in the current buffer.
     unsafe { gchar_pos(pos.raw()) }
 }
 
 /// Step `pos` one character forward, over a line break if need be.
-fn advance(pos: Pos) {
+fn advance(pos: PosRef) {
     // SAFETY: a live position in the current buffer.
     unsafe { inc(&mut *pos.raw()) };
 }
@@ -957,9 +957,9 @@ fn has_clipboard_provider() -> bool {
 
 /// Run `f` over the Visual anchor through a copy: the word walk it is used for
 /// reads the buffer line, which must not happen with the cell borrowed.
-fn with_visual(f: unsafe fn(Pos)) {
+fn with_visual(f: unsafe fn(PosRef)) {
     let mut visual = visual_anchor();
     // SAFETY: a live local position in the current buffer.
-    unsafe { f(Pos::new(&raw mut visual)) };
+    unsafe { f(PosRef::new(&raw mut visual)) };
     set_visual_anchor(visual);
 }

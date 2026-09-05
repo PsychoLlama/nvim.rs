@@ -17,7 +17,7 @@ use crate::main::{Rows, curwin, p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{OptInt, OptVal, OptionSetFlags, frame_T};
-use crate::winlayer::{Frame, Win};
+use crate::winlayer::{FrameRef, Win};
 
 // ---------------------------------------------------------------------------
 // The minimum sizes
@@ -47,12 +47,12 @@ fn width_opts() -> MinSize {
 }
 
 /// The minimal height of frame `topfrp`, from `frame_minheight()`.
-pub(crate) fn minheight(topfrp: Frame, next_curwin: NextCurwin) -> ::core::ffi::c_int {
+pub(crate) fn minheight(topfrp: FrameRef, next_curwin: NextCurwin) -> ::core::ffi::c_int {
     arith::frame_minheight(topfrp, next_curwin, height_opts())
 }
 
 /// The minimal width of frame `topfrp`, from `frame_minwidth()`.
-pub(crate) fn minwidth(topfrp: Frame, next_curwin: NextCurwin) -> ::core::ffi::c_int {
+pub(crate) fn minwidth(topfrp: FrameRef, next_curwin: NextCurwin) -> ::core::ffi::c_int {
     arith::frame_minwidth(topfrp, next_curwin, width_opts())
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn minwidth(topfrp: Frame, next_curwin: NextCurwin) -> ::core::ffi::c
 /// `wfh` skips `'winfixheight'` windows, and `set_ch` lets the top frame trade
 /// rows with `'cmdheight'`.
 pub(crate) fn new_height(
-    topfrp: Frame,
+    topfrp: FrameRef,
     mut height: ::core::ffi::c_int,
     topfirst: bool,
     wfh: bool,
@@ -144,7 +144,7 @@ pub(crate) fn new_height(
 /// The child of a column [`new_height`] starts giving or taking rows at: the
 /// first when `topfirst`, the last otherwise, skipping `'winfixheight'`
 /// frames when `wfh`. `None` when every child is pinned.
-fn column_end(topfrp: Frame, topfirst: bool, wfh: bool) -> Option<Frame> {
+fn column_end(topfrp: FrameRef, topfirst: bool, wfh: bool) -> Option<FrameRef> {
     let mut frp = topfrp.child()?;
     if wfh {
         while frame_fixed_height(frp) {
@@ -165,7 +165,7 @@ fn column_end(topfrp: Frame, topfirst: bool, wfh: bool) -> Option<Frame> {
 }
 
 /// The next child to take rows from, `'winfixheight'` frames skipped.
-fn step_over_fixed(frp: Frame, topfirst: bool, wfh: bool) -> Option<Frame> {
+fn step_over_fixed(frp: FrameRef, topfirst: bool, wfh: bool) -> Option<FrameRef> {
     let mut next = if topfirst { frp.next() } else { frp.prev() };
     while wfh && next.is_some_and(frame_fixed_height) {
         next = if topfirst { next?.next() } else { next?.prev() };
@@ -181,12 +181,18 @@ pub unsafe fn frame_new_height(
     set_ch: bool,
 ) {
     // SAFETY: the caller's promise -- a live frame.
-    new_height(unsafe { Frame::new(topfrp) }, height, topfirst, wfh, set_ch);
+    new_height(
+        unsafe { FrameRef::new(topfrp) },
+        height,
+        topfirst,
+        wfh,
+        set_ch,
+    );
 }
 
 /// Whether `frp` may not be given a new height: a leaf whose window has
 /// `'winfixheight'`, a row with any such frame in it, or a column of them.
-pub(crate) fn frame_fixed_height(frp: Frame) -> bool {
+pub(crate) fn frame_fixed_height(frp: FrameRef) -> bool {
     if let Some(win) = frp.win() {
         return win.w_onebuf_opt.wo_wfh != 0;
     }
@@ -200,7 +206,7 @@ pub(crate) fn frame_fixed_height(frp: Frame) -> bool {
 
 /// [`frame_fixed_height`] with the axes exchanged: `'winfixwidth'`, and it is a
 /// *column* that is fixed as soon as one child is.
-pub(crate) fn frame_fixed_width(frp: Frame) -> bool {
+pub(crate) fn frame_fixed_width(frp: FrameRef) -> bool {
     if let Some(win) = frp.win() {
         return win.w_onebuf_opt.wo_wfw != 0;
     }
@@ -212,7 +218,7 @@ pub(crate) fn frame_fixed_width(frp: Frame) -> bool {
 
 /// Give the windows along the bottom of `frp` a status line, without changing
 /// any height: the caller has already made room.
-pub(crate) fn add_statusline(frp: Frame) {
+pub(crate) fn add_statusline(frp: FrameRef) {
     if let Some(mut win) = frp.win() {
         win.w_status_height = STATUS_HEIGHT as ::core::ffi::c_int;
     } else if frp.fr_layout as ::core::ffi::c_int == FR_ROW {
@@ -232,7 +238,12 @@ pub(crate) fn add_statusline(frp: Frame) {
 
 /// Give frame `topfrp` width `width`, from `frame_new_width()` -- [`new_height`]
 /// with the axes exchanged, minus the `'cmdheight'` arm a width can never have.
-pub(crate) fn new_width(topfrp: Frame, mut width: ::core::ffi::c_int, leftfirst: bool, wfw: bool) {
+pub(crate) fn new_width(
+    topfrp: FrameRef,
+    mut width: ::core::ffi::c_int,
+    leftfirst: bool,
+    wfw: bool,
+) {
     let mut topfrp = topfrp;
     if topfrp.fr_layout as ::core::ffi::c_int == FR_LEAF {
         let mut wp = topfrp.win().expect("a leaf frame holds a window");
@@ -291,7 +302,7 @@ pub(crate) fn new_width(topfrp: Frame, mut width: ::core::ffi::c_int, leftfirst:
 }
 
 /// [`column_end`] for a row of frames.
-fn row_end(topfrp: Frame, leftfirst: bool, wfw: bool) -> Option<Frame> {
+fn row_end(topfrp: FrameRef, leftfirst: bool, wfw: bool) -> Option<FrameRef> {
     let mut frp = topfrp.child()?;
     if wfw {
         while frame_fixed_width(frp) {
@@ -312,7 +323,7 @@ fn row_end(topfrp: Frame, leftfirst: bool, wfw: bool) -> Option<Frame> {
 }
 
 /// [`step_over_fixed`] for a row of frames.
-fn step_over_fixed_width(frp: Frame, leftfirst: bool, wfw: bool) -> Option<Frame> {
+fn step_over_fixed_width(frp: FrameRef, leftfirst: bool, wfw: bool) -> Option<FrameRef> {
     let mut next = if leftfirst { frp.next() } else { frp.prev() };
     while wfw && next.is_some_and(frame_fixed_width) {
         next = if leftfirst {
@@ -326,7 +337,7 @@ fn step_over_fixed_width(frp: Frame, leftfirst: bool, wfw: bool) -> Option<Frame
 
 /// Add or remove the separator column along the right edge of `frp`, taking
 /// the column it needs out of the windows' text.
-pub(crate) fn set_vsep(frp: Frame, add: bool) {
+pub(crate) fn set_vsep(frp: FrameRef, add: bool) {
     if let Some(mut win) = frp.win() {
         if add && win.w_vsep_width == 0 {
             if win.w_width > 0 {
@@ -354,7 +365,7 @@ pub(crate) fn set_vsep(frp: Frame, add: bool) {
 
 /// [`add_statusline`] for the horizontal separator `'laststatus'` = 3 draws in
 /// a status line's place.
-pub(crate) fn add_hsep(frp: Frame) {
+pub(crate) fn add_hsep(frp: FrameRef) {
     if let Some(mut win) = frp.win() {
         win.w_hsep_height = 1 as ::core::ffi::c_int;
     } else if frp.fr_layout as ::core::ffi::c_int == FR_ROW {

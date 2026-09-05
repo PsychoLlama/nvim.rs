@@ -16,7 +16,10 @@ use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Buf;
 
-pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
+pub unsafe fn nvim_open_term(
+    buf: BufferHandle,
+    opts: *mut KeyDict_open_term,
+) -> Result<Integer, Error> {
     let mut slot = Error::none();
     let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
     if b.is_null() {

@@ -13,11 +13,11 @@ use crate::api::private::validate::err_out_of_range;
 use crate::r#move::WinValid;
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor, visual_mode};
 use crate::types::NUL;
-use crate::winlayer::{Buf, Pos, Win, tab_windows};
+use crate::winlayer::{Buf, PosRef, Win, tab_windows};
 
 pub unsafe fn nvim_buf_set_text(
     channel_id: uint64_t,
-    buf: Buffer,
+    buf: BufferHandle,
     mut start_row: Integer,
     mut start_col: Integer,
     mut end_row: Integer,
@@ -401,7 +401,7 @@ unsafe fn fix_pos_col(
 ) {
     // SAFETY: the caller's promise -- `pos` is a live position, and nothing
     // below can move it.
-    let mut pos = unsafe { Pos::new(pos) };
+    let mut pos = unsafe { PosRef::new(pos) };
     if pos.lnum < start_row {
         return;
     }

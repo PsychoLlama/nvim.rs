@@ -902,7 +902,7 @@ unsafe fn send_win_extmarks(wp: Win) {
         for m in marks {
             ui_call_win_extmark(
                 wp.w_grid_alloc.handle as Integer,
-                wp.handle as Window,
+                wp.handle as WindowHandle,
                 m.ns_id as Integer,
                 m.mark_id as Integer,
                 m.win_row as Integer,

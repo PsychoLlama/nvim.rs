@@ -414,7 +414,7 @@ fn replay_change(oap: Op, bd: &mut block_def, mut pre_textlen: c_int, pre_indent
             if bd.is_short != 0 {
                 // SAFETY: a live current window, and a local position in its
                 // buffer's line `linenr`.
-                unsafe { getvpos(Win::current(), Pos::new(&raw mut vpos), oap.start_vcol) };
+                unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), oap.start_vcol) };
             }
 
             // SAFETY: `newp` is sized for the old line, the pad and the

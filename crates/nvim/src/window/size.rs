@@ -22,7 +22,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::main::{Columns, Rows, cmdline_row, e_noroom, p_ch, p_wmh, p_wmw, redraw_cmdline};
 use crate::types::{OptInt, kFloatRelativeWindow, optset_T, win_T};
 use crate::winfloat::win_config_float;
-use crate::winlayer::{Frame, Win, frames, frames_back, windows_back};
+use crate::winlayer::{FrameRef, Win, frames, frames_back, windows_back};
 
 pub fn win_comp_pos() -> c_int {
     comp_positions()
@@ -47,7 +47,7 @@ pub(crate) fn comp_positions() -> c_int {
 
 /// Give frame `topfrp` and everything in it its screen position, advancing
 /// `row` and `col` past it, from `frame_comp_pos()`.
-pub(crate) fn comp_pos(topfrp: Frame, row: &mut c_int, col: &mut c_int) {
+pub(crate) fn comp_pos(topfrp: FrameRef, row: &mut c_int, col: &mut c_int) {
     if let Some(mut wp) = topfrp.win() {
         // Avoid an extra redraw when the position has not changed.
         if wp.w_winrow != *row || wp.w_wincol != *col {
@@ -121,7 +121,7 @@ pub(crate) fn setheight_win(height: c_int, win: Win) {
 /// instead. A frame in a column takes the room from the frames above and below
 /// it, growing the containing frame — or borrowing from the command line — when
 /// they cannot pay.
-fn set_frame_height(curfrp: Frame, height: c_int) {
+fn set_frame_height(curfrp: FrameRef, height: c_int) {
     // If the height already is the desired value, nothing to do.
     if curfrp.fr_height == height {
         return;
@@ -216,7 +216,7 @@ fn set_frame_height(curfrp: Frame, height: c_int) {
         } else {
             curfrp.prev()
         };
-        let walk: Box<dyn Iterator<Item = Frame>> = if run == 0 {
+        let walk: Box<dyn Iterator<Item = FrameRef>> = if run == 0 {
             Box::new(frames(start))
         } else {
             Box::new(frames_back(start))
@@ -283,7 +283,7 @@ pub(crate) fn setwidth_win(width: c_int, wp: Win) {
 /// [`set_frame_height`] with the axes exchanged, from `frame_setwidth()` --
 /// with no command line to borrow from, and a top frame whose width is the
 /// screen's and so cannot change at all.
-pub(crate) fn set_frame_width(curfrp: Frame, width: c_int) {
+pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
     if curfrp.fr_width == width {
         return;
     }
@@ -347,7 +347,7 @@ pub(crate) fn set_frame_width(curfrp: Frame, width: c_int) {
         } else {
             curfrp.prev()
         };
-        let walk: Box<dyn Iterator<Item = Frame>> = if run == 0 {
+        let walk: Box<dyn Iterator<Item = FrameRef>> = if run == 0 {
             Box::new(frames(start))
         } else {
             Box::new(frames_back(start))

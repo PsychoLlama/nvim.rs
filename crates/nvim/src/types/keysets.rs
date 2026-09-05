@@ -101,8 +101,8 @@ pub struct KeyDict_buf_delete {
 #[repr(C)]
 pub struct KeyDict_clear_autocmds {
     pub is_set__clear_autocmds_: OptionalKeys,
-    pub buffer: Buffer,
-    pub buf: Buffer,
+    pub buffer: BufferHandle,
+    pub buf: BufferHandle,
     pub event: Object,
     pub group: Object,
     pub pattern: Object,
@@ -180,8 +180,8 @@ pub struct KeyDict_create_augroup {
 #[repr(C)]
 pub struct KeyDict_create_autocmd {
     pub is_set__create_autocmd_: OptionalKeys,
-    pub buffer: Buffer,
-    pub buf: Buffer,
+    pub buffer: BufferHandle,
+    pub buf: BufferHandle,
     pub callback: Object,
     pub command: String_0,
     pub desc: String_0,
@@ -211,7 +211,7 @@ pub struct KeyDict_empty {
 #[repr(C)]
 pub struct KeyDict_eval_statusline {
     pub is_set__eval_statusline_: OptionalKeys,
-    pub winid: Window,
+    pub winid: WindowHandle,
     pub maxwidth: Integer,
     pub fillchar: String_0,
     pub highlights: Boolean,
@@ -222,8 +222,8 @@ pub struct KeyDict_eval_statusline {
 #[repr(C)]
 pub struct KeyDict_exec_autocmds {
     pub is_set__exec_autocmds_: OptionalKeys,
-    pub buffer: Buffer,
-    pub buf: Buffer,
+    pub buffer: BufferHandle,
+    pub buf: BufferHandle,
     pub group: Object,
     pub modeline: Boolean,
     pub pattern: Object,
@@ -274,7 +274,7 @@ pub struct KeyDict_get_highlight {
 #[repr(C)]
 pub struct KeyDict_get_ns {
     pub is_set__get_ns_: OptionalKeys,
-    pub winid: Window,
+    pub winid: WindowHandle,
 }
 #[repr(C)]
 pub struct KeyDict_highlight {
@@ -453,8 +453,8 @@ pub struct KeyDict_open_term {
 pub struct KeyDict_option {
     pub is_set__option_: OptionalKeys,
     pub scope: String_0,
-    pub win: Window,
-    pub buf: Buffer,
+    pub win: WindowHandle,
+    pub buf: BufferHandle,
     pub filetype: String_0,
 }
 #[repr(C)]
@@ -468,8 +468,8 @@ pub struct KeyDict_redraw {
     pub tabline: Boolean,
     pub winbar: Boolean,
     pub range: Array,
-    pub win: Window,
-    pub buf: Buffer,
+    pub win: WindowHandle,
+    pub buf: BufferHandle,
 }
 #[repr(C)]
 pub struct KeyDict_runtime {
@@ -566,7 +566,7 @@ pub struct KeyDict_win_config {
     pub style: String_0,
     pub noautocmd: Boolean,
     pub vertical: Boolean,
-    pub win: Window,
+    pub win: WindowHandle,
     pub width: Integer,
     pub zindex: Integer,
     pub anchor: String_0,

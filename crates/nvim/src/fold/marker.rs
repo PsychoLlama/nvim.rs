@@ -136,7 +136,12 @@ pub(super) unsafe fn fold_add_marker(
 /// # Safety
 /// `fold` must be one of `wp`'s folds at `lnum_off`, and [`parse_marker`]
 /// must have run for `wp`.
-pub(super) unsafe fn delete_fold_markers(wp: Win, fold: Fold, recursive: bool, lnum_off: LineNr) {
+pub(super) unsafe fn delete_fold_markers(
+    wp: Win,
+    fold: FoldRef,
+    recursive: bool,
+    lnum_off: LineNr,
+) {
     if recursive {
         for child in fold.nested().folds() {
             // SAFETY: the caller's promise, one level down.

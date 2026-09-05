@@ -58,7 +58,7 @@ pub(crate) unsafe fn unpack_string_or_array(
 pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
     pattern: Object,
     has_buf: bool,
-    buf: Buffer,
+    buf: BufferHandle,
     fallback: *mut ::core::ffi::c_char,
     arena: *mut Arena,
     err: &mut Error,

@@ -32,7 +32,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get_len, ml_get_pos};
 use crate::mouse::setmouse;
 use crate::normal::{
-    CA_NO_ADJ_OP_END, CmdArg, TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down,
+    CA_NO_ADJ_OP_END, CmdArgRef, TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down,
     nv_g_cmd, nv_operator, nv_right,
 };
 use crate::ops::adjust_cursor_eol;
@@ -308,7 +308,7 @@ pub(crate) unsafe fn get_visual_text(
     lenp: *mut size_t,
 ) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if !visual_mode().is_line() {
         // SAFETY: adjusts the current window's cursor or `VIsual`.
         unadjust_for_sel();
@@ -428,7 +428,7 @@ const VISUAL_OPS: [(u8, u8); 8] = [
 /// mode, where `C` and `D` instead extend every line to its end.
 pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar >= 'A' as c_int && ca.cmdchar <= 'Z' as c_int {
         if !visual_mode().is_block() {
             VIsual_mode_orig.set(visual_mode());
@@ -453,7 +453,7 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
 /// why the charwise and blockwise cases are spelled out.
 unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     set_visual_anchor(cur_win().w_cursor);
     set_visual_active(true);
     VIsual_reselect.set(1);
@@ -528,7 +528,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
 /// fixes it.
 pub(crate) unsafe fn nv_visual(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar == Ctrl_Q {
         ca.cmdchar = Ctrl_V;
     }
@@ -638,7 +638,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
 /// where it started.
 pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let vi = unsafe { &raw mut (*curbuf.get()).b_visual };
     if unsafe { (*vi).vi_start.lnum } == 0
         || unsafe { (*vi).vi_start.lnum } > cur_buf().b_ml.ml_line_count
@@ -691,7 +691,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
 /// operator about to run sees what the highlight showed.
 pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if visual_active()
         && ca.op().inclusive
         && sel_exclusive()
@@ -759,7 +759,7 @@ pub(crate) fn unadjust_for_sel_inner(pp: &mut pos_T) -> bool {
 /// `gh`, `gH`, `g CTRL-H`: Select mode, either fresh or from a reselection.
 pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     if visual_active() {
         set_visual_select(true);
         VIsual_select_reg.set(0);
@@ -778,7 +778,7 @@ pub(crate) unsafe fn nv_select(cap: *mut cmdarg_T) {
 /// a text object's idea of a block is fixed and must not follow the option.
 pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     let include = ca.cmdchar != 'i' as c_int;
     let mps_save = cur_buf().b_p_mps;
     cur_buf().b_p_mps = c"(:),{:},[:],<:>".as_ptr().cast_mut();

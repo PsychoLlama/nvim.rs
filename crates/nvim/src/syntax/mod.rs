@@ -491,13 +491,13 @@ fn cur_win() -> Win {
 /// The syntax block being *configured* — `curwin`'s, which during a `:syntax`
 /// command is not necessarily [`syn_block`], the one being *parsed*.
 #[inline]
-pub(crate) fn cur_syn_block() -> SynBlock {
+pub(crate) fn cur_syn_block() -> SynBlockRef {
     // SAFETY: `w_s` names either the window's own block or its buffer's, and
     // both outlive the window that points at them.
-    unsafe { SynBlock::new(cur_win().w_s) }
+    unsafe { SynBlockRef::new(cur_win().w_s) }
 }
 
-impl SynBlock {
+impl SynBlockRef {
     /// The block's patterns.
     ///
     /// The borrow lasts as long as the *handle* it came from, which is what
@@ -563,7 +563,7 @@ pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
 /// The promise is discharged by the window or buffer that owns the block: a
 /// `w_s` is either the buffer's `b_s` or an `:ownsyntax` block the window
 /// frees with itself.
-pub(crate) type SynBlock = Live<synblock_T>;
+pub(crate) type SynBlockRef = Live<synblock_T>;
 
 /// The address of one field of a syntax block, **without borrowing the
 /// block**.
@@ -630,10 +630,10 @@ static parsed_block: GlobalCell<*mut synblock_T> = GlobalCell::new(::core::ptr::
 /// Null until [`syntax_start`] has run, which every caller of this checks for
 /// through `b_sst_array` the way upstream does.
 #[inline]
-pub(crate) fn syn_block() -> SynBlock {
+pub(crate) fn syn_block() -> SynBlockRef {
     // SAFETY: set from `syntax_start` to the window or buffer that owns it,
     // and cleared when that owner goes away.
-    unsafe { SynBlock::new(parsed_block.get()) }
+    unsafe { SynBlockRef::new(parsed_block.get()) }
 }
 /// When parsing must give up, or NULL for no limit.
 static syn_tm: GlobalCell<*mut ProfTime> = GlobalCell::new(::core::ptr::null_mut());

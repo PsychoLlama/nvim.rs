@@ -42,12 +42,12 @@ use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{
-    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, Window, size_t,
-    tabpage_T, win_T,
+    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, WindowHandle,
+    size_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::winfloat::{win_border_height, win_border_width, win_float_anchor_laststatus};
-use crate::winlayer::{Frame, TabPage, Win, tabs, windows};
+use crate::winlayer::{FrameRef, TabPage, Win, tabs, windows};
 
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches
@@ -417,7 +417,7 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
         {
             ui_call_win_viewport_margins(
                 wp.w_grid_alloc.handle as Integer,
-                wp.handle as Window,
+                wp.handle as WindowHandle,
                 wp.w_winrow_off as Integer,
                 wp.w_border_adj[2] as Integer,
                 wp.w_wincol_off as Integer,
@@ -532,7 +532,7 @@ pub unsafe fn command_height() {
 
 /// Add `n` rows to frame `frp` and to every frame above it, from
 /// `frame_add_height()`. Negative `n` takes them away.
-fn add_height(frp: Frame, n: c_int) {
+fn add_height(frp: FrameRef, n: c_int) {
     new_height(frp, frp.fr_height + n, false, false, false);
     let mut up = frp.parent();
     while let Some(mut fr) = up {
@@ -587,7 +587,7 @@ pub(crate) fn remove_status_line(wp: Win, add_hsep: bool) {
 
 /// The nearest frame at or above `fr` that has a row to spare, from
 /// `find_horizontally_resizable_frame()`. `None` when the layout is full.
-fn resizable_frame(fr: Frame) -> Option<Frame> {
+fn resizable_frame(fr: FrameRef) -> Option<FrameRef> {
     let mut fp = fr;
     let top = current_topframe();
     while fp.fr_height <= minheight(fp, NextCurwin::Unset) {
@@ -604,7 +604,7 @@ fn resizable_frame(fr: Frame) -> Option<Frame> {
 }
 
 /// Make room for the status line `fr`'s window has just been given.
-fn resize_frame_for_status(fr: Frame) -> bool {
+fn resize_frame_for_status(fr: FrameRef) -> bool {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr) else {
         err(e_noroom.as_ptr());
@@ -622,7 +622,7 @@ fn resize_frame_for_status(fr: Frame) -> bool {
 
 /// Make room for the window bar `fr`'s window has just been given, which --
 /// unlike a status line -- cannot come out of the window's own text.
-fn resize_frame_for_winbar(fr: Frame) -> bool {
+fn resize_frame_for_winbar(fr: FrameRef) -> bool {
     let wp = fr.win().expect("a leaf frame holds a window");
     let Some(fp) = resizable_frame(fr).filter(|fp| *fp != fr) else {
         err(e_noroom.as_ptr());
@@ -637,7 +637,7 @@ fn resize_frame_for_winbar(fr: Frame) -> bool {
 
 /// Add or remove the status lines `'laststatus'` asks for, over every window in
 /// frame `fr`.
-fn last_status_rec(fr: Frame, statusline: bool, is_stl_global: bool) {
+fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     let Some(mut wp) = fr.win() else {
         for fp in fr.children() {
             last_status_rec(fp, statusline, is_stl_global);

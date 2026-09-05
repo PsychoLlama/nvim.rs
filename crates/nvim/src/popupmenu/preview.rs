@@ -120,7 +120,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (LineNr, c
     let set = unsafe {
         nvim_buf_set_lines(
             0,
-            (*buf).handle as Buffer,
+            (*buf).handle as BufferHandle,
             0,
             -1,
             false,

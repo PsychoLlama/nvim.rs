@@ -12,7 +12,7 @@ use super::*;
 use crate::api::private::helpers::{Reported, dict_put, has_key};
 use crate::winlayer::{Buf, Live};
 
-pub unsafe fn api_buf_ensure_loaded(buf: Buffer, err: &mut Error) -> *mut buf_T {
+pub unsafe fn api_buf_ensure_loaded(buf: BufferHandle, err: &mut Error) -> *mut buf_T {
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
     if b.is_null() {
         return ::core::ptr::null_mut::<buf_T>();
@@ -26,7 +26,7 @@ pub unsafe fn api_buf_ensure_loaded(buf: Buffer, err: &mut Error) -> *mut buf_T 
 
 pub unsafe fn nvim_buf_attach(
     channel_id: uint64_t,
-    buf: Buffer,
+    buf: BufferHandle,
     send_buffer: Boolean,
     opts: *mut KeyDict_buf_attach,
 ) -> Result<Boolean, Error> {
@@ -74,7 +74,7 @@ pub unsafe fn nvim_buf_attach(
     unsafe { buf_updates_register(b, channel_id, cb, send_buffer) }.reported(error)
 }
 
-pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer) -> Result<Boolean, Error> {
+pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: BufferHandle) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
@@ -84,7 +84,7 @@ pub unsafe fn nvim_buf_detach(channel_id: uint64_t, buf: Buffer) -> Result<Boole
     true.reported(error)
 }
 
-pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
+pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Error> {
     let mut error = Error::none();
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
@@ -122,7 +122,7 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
     res.reported(error)
 }
 
-pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<ApiDict, Error> {
+pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {

@@ -6,7 +6,7 @@
 //! pointer arithmetic against `ga_len`, and before this module every one of
 //! the forty-odd walks in `fold/` did that arithmetic for itself.
 //!
-//! [`FoldList`] and [`Fold`] make the cast once. *Constructing* a handle is
+//! [`FoldList`] and [`FoldRef`] make the cast once. *Constructing* a handle is
 //! the unsafe step — the caller promises the growarray really is a live fold
 //! list — and every method on it is safe, because the handle already carries
 //! the promise the access needs. A walk over the tree therefore costs no
@@ -16,7 +16,7 @@
 //! purpose: the tree is walked recursively while entries are inserted,
 //! deleted, split and merged *under* the walk, so two live `&mut` into one
 //! array would be routine rather than exceptional. [`FoldList::at`] therefore
-//! hands back a `Fold`, whose accessors each raise a reference for the length
+//! hands back a `FoldRef`, whose accessors each raise a reference for the length
 //! of one field read or write. Miri watches this through
 //! `crates/nvim/tests/unit/fold.rs`.
 
@@ -38,14 +38,14 @@ pub(super) struct FoldList {
 
 /// One entry of a [`FoldList`].
 ///
-/// A `Fold` may legally address `list.len()` — one past the end — because
+/// A `FoldRef` may legally address `list.len()` — one past the end — because
 /// that is what a failed [`FoldList::find`] names and what several callers
 /// compare against before deciding whether to look. It may also address
 /// `-1`, which `fold_move_to` walks to deliberately. Reading a field through
 /// either is the caller's mistake, exactly as it was upstream; the handle
 /// promises the *array*, not the index.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct Fold {
+pub(super) struct FoldRef {
     fp: *mut fold_T,
 }
 
@@ -94,24 +94,24 @@ impl FoldList {
     /// The `i`th fold. `i == len()` yields the one-past-the-end handle the
     /// walks in this module compare against; no bounds check is made, because
     /// several callers rely on naming that entry.
-    pub(super) fn at(self, i: c_int) -> Fold {
+    pub(super) fn at(self, i: c_int) -> FoldRef {
         // `wrapping_offset` is a safe operation, so the arithmetic that used
         // to be spelled `folds(gap).offset(i)` inside an `unsafe` block costs
         // nothing here.
-        Fold {
+        FoldRef {
             fp: self.data().wrapping_offset(i as isize),
         }
     }
 
     /// Where `fold` sits in this list. May be negative or `>= len()`; see
-    /// [`Fold`].
-    pub(super) fn index_of(self, fold: Fold) -> c_int {
+    /// [`FoldRef`].
+    pub(super) fn index_of(self, fold: FoldRef) -> c_int {
         let bytes = fold.fp.addr() as isize - self.data().addr() as isize;
         (bytes / size_of::<fold_T>() as isize) as c_int
     }
 
     /// Whether `fold` names an entry that is really there.
-    pub(super) fn holds(self, fold: Fold) -> bool {
+    pub(super) fn holds(self, fold: FoldRef) -> bool {
         let i = self.index_of(fold);
         i >= 0 && i < self.len()
     }
@@ -147,7 +147,7 @@ impl FoldList {
     ///
     /// `ga_len` is re-read before each step, so a walk that deletes the entry
     /// it is standing on still terminates.
-    pub(super) fn folds(self) -> impl Iterator<Item = Fold> {
+    pub(super) fn folds(self) -> impl Iterator<Item = FoldRef> {
         (0..)
             .take_while(move |&i| i < self.len())
             .map(move |i| self.at(i))
@@ -159,14 +159,14 @@ impl FoldList {
     }
 }
 
-impl Fold {
+impl FoldRef {
     /// The entry's address, for the handful of callers that still pass a
     /// `*mut fold_T` across a module boundary.
     pub(super) fn entry(self) -> *mut fold_T {
         self.fp
     }
 
-    /// The fold `by` entries further along. See [`Fold`] for what is allowed
+    /// The fold `by` entries further along. See [`FoldRef`] for what is allowed
     /// to come out of this.
     pub(super) fn offset(self, by: c_int) -> Self {
         Self {

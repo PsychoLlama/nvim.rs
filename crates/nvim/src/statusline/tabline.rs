@@ -35,7 +35,8 @@ use crate::path::shorten_dir;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUITabline;
 use crate::types::{
-    Arena, Buffer, MAXPATHL, Object, StlClickDefinition_type_0, String_0, Tabpage, win_T,
+    Arena, BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
+    win_T,
 };
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
@@ -77,7 +78,7 @@ unsafe fn ui_ext_tabline_update() {
     let mut tab_infos = arena_array(arenap, tabs().count());
     for tp in tabs() {
         let mut info = arena_dict(arenap, 2);
-        let (handle, cwp) = (tp.handle as Tabpage, unsafe { current_window_of(tp) });
+        let (handle, cwp) = (tp.handle as TabpageHandle, unsafe { current_window_of(tp) });
         put(&mut info, c"tab", Object::tabpage(handle));
         unsafe { get_trans_bufname(cwp.buffer().raw(), &mut name) };
         put(
@@ -106,8 +107,8 @@ unsafe fn ui_ext_tabline_update() {
     // SAFETY: as above; the arena is released once the event has been sent.
     unsafe {
         let (tab, buf) = (
-            (*curtab.get()).handle as Tabpage,
-            (*curbuf.get()).handle as Buffer,
+            (*curtab.get()).handle as TabpageHandle,
+            (*curbuf.get()).handle as BufferHandle,
         );
         ui_call_tabline_update(tab, tab_infos, buf, bufs);
         arena_mem_free(arena_finish(arenap));

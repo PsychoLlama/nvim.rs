@@ -47,7 +47,7 @@ const EMPTY_BUFSTATE: bufstate_T = bufstate_T {
 };
 
 /// Free a synblock's whole cache.
-pub(crate) fn syn_stack_free_block(mut block: SynBlock) {
+pub(crate) fn syn_stack_free_block(mut block: SynBlockRef) {
     if block.b_sst_array.is_null() {
         return;
     }
@@ -66,7 +66,7 @@ pub(crate) fn syn_stack_free_block(mut block: SynBlock) {
 ///
 /// Used when the syntax items themselves changed, so nothing cached can be
 /// trusted any more.
-pub(crate) fn syn_stack_free_all(block: SynBlock) {
+pub(crate) fn syn_stack_free_all(block: SynBlockRef) {
     // SAFETY: the handle's promise -- a live syntax block.
     syn_stack_free_block(block);
 
@@ -150,11 +150,11 @@ fn clamp_entries(len: c_int) -> c_int {
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
 pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
-    unsafe { syn_stack_apply_changes_block(SynBlock::new(&raw mut (*buf).b_s), buf) };
+    unsafe { syn_stack_apply_changes_block(SynBlockRef::new(&raw mut (*buf).b_s), buf) };
 
     for wp in windows() {
         if wp.w_buffer == buf && wp.w_s != unsafe { &raw mut (*buf).b_s } {
-            unsafe { syn_stack_apply_changes_block(SynBlock::new(wp.w_s), buf) };
+            unsafe { syn_stack_apply_changes_block(SynBlockRef::new(wp.w_s), buf) };
         }
     }
 }
@@ -164,7 +164,7 @@ pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
 /// An entry below the change is not thrown away: it is moved by the number of
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
-unsafe fn syn_stack_apply_changes_block(mut block: SynBlock, buf: *mut buf_T) {
+unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buf: *mut buf_T) {
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
     let mut p = block.b_sst_first;
     while !p.is_null() {
@@ -270,7 +270,7 @@ pub(crate) fn syn_stack_cleanup() -> bool {
 }
 
 /// Release an entry's memory and put it on the free list.
-pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlock, p: *mut synstate_T) {
+pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlockRef, p: *mut synstate_T) {
     unsafe { clear_syn_state(p) };
     unsafe { (*p).sst_next = block.b_sst_firstfree };
     block.b_sst_firstfree = p;
@@ -347,7 +347,7 @@ fn state_continues_from_previous_line() -> bool {
 }
 
 /// Take `sp` out of the used list.
-unsafe fn unlink_entry(mut block: SynBlock, sp: *mut synstate_T) {
+unsafe fn unlink_entry(mut block: SynBlockRef, sp: *mut synstate_T) {
     if block.b_sst_first == sp {
         unsafe { block.b_sst_first = (*sp).sst_next };
         return;
@@ -366,7 +366,7 @@ unsafe fn unlink_entry(mut block: SynBlock, sp: *mut synstate_T) {
 /// `after` (or at the front when that is null).
 ///
 /// Answers null when there is no room even after a cleanup.
-unsafe fn new_entry(mut block: SynBlock, mut after: *mut synstate_T) -> *mut synstate_T {
+unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut synstate_T) -> *mut synstate_T {
     if block.b_sst_freecount == 0 {
         syn_stack_cleanup();
         // "after" may have been moved to the free list by the cleanup.

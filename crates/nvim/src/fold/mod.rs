@@ -3,7 +3,7 @@
 //! The toplevel folds of a window live in its `w_folds` growarray. Each of
 //! them can hold an array of second-level folds in `fd_nested`, and so on:
 //! every level is the same `GArray` of [`fold_T`], so the whole tree is
-//! reached through [`list`]'s [`FoldList`] and [`Fold`] handles.
+//! reached through [`list`]'s [`FoldList`] and [`FoldRef`] handles.
 //!
 //! A fold's `fd_top` is relative to its parent, which is what makes
 //! inserting and deleting lines cheap — only the folds on the changed line's
@@ -54,7 +54,7 @@ use crate::pos::MAXLNUM;
 use crate::state::MODE_INSERT;
 
 use level::fold_update_computed;
-use list::{FLine, Fold, FoldList};
+use list::{FLine, FoldList, FoldRef};
 use open_close::check_closed;
 
 pub const VIRTTEXT_EMPTY: VirtText = VirtText {
@@ -663,7 +663,7 @@ fn deepest_nesting_of(folds: FoldList) -> c_int {
 ///
 /// # Safety
 /// `fold` must be a fold of `wp`'s tree at `lnum_off`.
-unsafe fn check_small(wp: Win, fold: Fold, lnum_off: LineNr) {
+unsafe fn check_small(wp: Win, fold: FoldRef, lnum_off: LineNr) {
     if fold.small().is_some() {
         return;
     }

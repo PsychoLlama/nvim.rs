@@ -24,7 +24,7 @@ use crate::types::ExpandContext;
 
 /// What [`get_sign_name`] should enumerate.
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum Expand {
+enum ExpandWhat {
     /// `:sign {subcmd}`.
     Subcmd,
     /// `:sign define {name} {args}...`.
@@ -48,7 +48,7 @@ enum Expand {
 /// A static, because `expand_generic` calls [`get_sign_name`] with nothing but
 /// an index: the `expand_T` it also passes carries the *other* completions'
 /// context, not this one.
-static EXPAND_WHAT: GlobalCell<Expand> = GlobalCell::new(Expand::Subcmd);
+static EXPAND_WHAT: GlobalCell<ExpandWhat> = GlobalCell::new(ExpandWhat::Subcmd);
 
 /// `expand_generic`'s index as a list position; a negative one is 0, which
 /// is what `idx.max(0)` said before the completion lists were slices.
@@ -74,8 +74,8 @@ fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
 /// None; `xp` is unused.
 pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
     match EXPAND_WHAT.get() {
-        Expand::Subcmd => nth(&CMDS, idx),
-        Expand::Define => nth(
+        ExpandWhat::Subcmd => nth(&CMDS, idx),
+        ExpandWhat::Define => nth(
             &[
                 c"culhl=",
                 c"icon=",
@@ -87,7 +87,7 @@ pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_cha
             ],
             idx,
         ),
-        Expand::Place => nth(
+        ExpandWhat::Place => nth(
             &[
                 c"line=",
                 c"name=",
@@ -101,13 +101,13 @@ pub(crate) unsafe fn get_sign_name(_xp: *mut expand_T, idx: c_int) -> *mut c_cha
         // `:sign place` with no id lists rather than places, so it takes
         // neither `line=` nor `name=`; `:sign unplace` and `:sign jump` take
         // the same three.
-        Expand::List | Expand::Unplace => nth(&[c"group=", c"file=", c"buffer="], idx),
-        Expand::SignNames => sign_nth_name(at(idx)),
-        Expand::SignGroups => match sign_nth_group(at(idx)).map(number_as_int) {
+        ExpandWhat::List | ExpandWhat::Unplace => nth(&[c"group=", c"file=", c"buffer="], idx),
+        ExpandWhat::SignNames => sign_nth_name(at(idx)),
+        ExpandWhat::SignGroups => match sign_nth_group(at(idx)).map(number_as_int) {
             Some(ns) => describe_ns(ns, c"".as_ptr()).cast_mut(),
             None => ::core::ptr::null_mut(),
         },
-        Expand::Nothing => ::core::ptr::null_mut(),
+        ExpandWhat::Nothing => ::core::ptr::null_mut(),
     }
 }
 
@@ -127,7 +127,7 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char
     // SAFETY: the caller's completion context and command line.
     // Default: expand subcommand names.
     unsafe { (*xp).xp_context = ExpandContext::Sign };
-    EXPAND_WHAT.set(Expand::Subcmd);
+    EXPAND_WHAT.set(ExpandWhat::Subcmd);
     unsafe { (*xp).xp_pattern = arg };
 
     let end_subcmd = unsafe { skiptowhite(arg) };
@@ -157,18 +157,18 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char
         // takes instead of one.
         unsafe { (*xp).xp_pattern = last };
         EXPAND_WHAT.set(match cmd_idx {
-            SIGNCMD_DEFINE => Expand::Define,
+            SIGNCMD_DEFINE => ExpandWhat::Define,
             // `:sign place {id} ...` places and takes the full argument
             // list; `:sign place ...` lists and takes the short one.
             SIGNCMD_PLACE if ascii_isdigit(c_int::from(unsafe { *begin_subcmd_args })) => {
-                Expand::Place
+                ExpandWhat::Place
             }
-            SIGNCMD_PLACE => Expand::List,
-            SIGNCMD_LIST | SIGNCMD_UNDEFINE => Expand::SignNames,
-            SIGNCMD_JUMP | SIGNCMD_UNPLACE => Expand::Unplace,
+            SIGNCMD_PLACE => ExpandWhat::List,
+            SIGNCMD_LIST | SIGNCMD_UNDEFINE => ExpandWhat::SignNames,
+            SIGNCMD_JUMP | SIGNCMD_UNPLACE => ExpandWhat::Unplace,
             _ => {
                 unsafe { (*xp).xp_context = ExpandContext::Nothing };
-                Expand::Nothing
+                ExpandWhat::Nothing
             }
         });
         return;
@@ -189,9 +189,9 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char
         }
         SIGNCMD_PLACE => {
             if starts(c"name") {
-                EXPAND_WHAT.set(Expand::SignNames);
+                EXPAND_WHAT.set(ExpandWhat::SignNames);
             } else if starts(c"group") {
-                EXPAND_WHAT.set(Expand::SignGroups);
+                EXPAND_WHAT.set(ExpandWhat::SignGroups);
             } else if starts(c"file") {
                 unsafe { (*xp).xp_context = ExpandContext::Buffers };
             } else {
@@ -200,7 +200,7 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut expand_T, arg: *mut c_char
         }
         SIGNCMD_UNPLACE | SIGNCMD_JUMP => {
             if starts(c"group") {
-                EXPAND_WHAT.set(Expand::SignGroups);
+                EXPAND_WHAT.set(ExpandWhat::SignGroups);
             } else if starts(c"file") {
                 unsafe { (*xp).xp_context = ExpandContext::Buffers };
             } else {

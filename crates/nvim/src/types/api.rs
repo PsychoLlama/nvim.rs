@@ -44,7 +44,7 @@ pub struct ArrayBuilder {
     pub init_array: [Object; 16],
 }
 pub type Boolean = bool;
-pub type Buffer = Handle;
+pub type BufferHandle = Handle;
 #[repr(C)]
 pub struct ChangedtickDictItem {
     pub di_tv: TypVal,
@@ -117,8 +117,8 @@ pub struct OptKeySet {
     pub is_set_: OptionalKeys,
 }
 pub type OptionalKeys = uint64_t;
-pub type Tabpage = Handle;
-pub type Window = Handle;
+pub type TabpageHandle = Handle;
+pub type WindowHandle = Handle;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct key_value_pair {

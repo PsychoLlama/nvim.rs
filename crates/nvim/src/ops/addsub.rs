@@ -223,7 +223,7 @@ pub unsafe fn do_addsub(
 ) -> bool {
     // SAFETY: the caller's promise -- `pos` names a position of the current
     // buffer, so its line is a live NUL-terminated string.
-    let mut pos = unsafe { Pos::new(pos) };
+    let mut pos = unsafe { PosRef::new(pos) };
     let fmt = unsafe { NrFormats::current() };
     let visual = visual_active();
     let save_cursor = cur_win().w_cursor;

@@ -195,7 +195,7 @@ pub unsafe fn aucmd_defer(
     unsafe { (*evdata).group = group };
     // The *handle* is stored, not the pointer: the buffer may be gone by the
     // time the queued event runs, and `deferred_event` looks it up again.
-    unsafe { (*evdata).buf = buf.handle as Buffer };
+    unsafe { (*evdata).buf = buf.handle as BufferHandle };
     unsafe { (*evdata).eap = eap };
     // SAFETY: `data` is the caller's object or NULL; the copy is owned by
     // the event from here on.

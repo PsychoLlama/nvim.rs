@@ -14,7 +14,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::{Buf, Pos, Win};
+use crate::winlayer::{Buf, PosRef, Win};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::Put;
@@ -78,7 +78,7 @@ impl Put {
                         coladd: 0,
                     };
                     // SAFETY: a live window and a writable local position.
-                    let found = unsafe { getvpos(Win::current(), Pos::new(&raw mut pos), vcol) };
+                    let found = unsafe { getvpos(Win::current(), PosRef::new(&raw mut pos), vcol) };
                     col = if found { pos.col } else { MAXCOL };
                 }
                 // A Visual line too short to reach the column is skipped

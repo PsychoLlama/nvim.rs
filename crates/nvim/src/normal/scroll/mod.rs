@@ -16,7 +16,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
 use crate::main::{curbuf, curwin, did_syncbind, mod_mask, p_sbo};
 use crate::normal::{
-    CmdArg, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
+    CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
     set_visual_select, visual_active, visual_select,
 };
 use crate::plines::plines_m_win_fill;
@@ -155,7 +155,7 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int
 /// are a tab page instead.
 pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -174,7 +174,7 @@ pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
 /// the screen for as long as it can.
 pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if !check_clear_op(ca.op()) {
         unsafe { scroll_redraw(ca.arg, ca.count1 as LineNr) };
     }
@@ -183,7 +183,7 @@ pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
 /// `CTRL-D` and `CTRL-U`: half a page.
 pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if !check_clear_op(ca.op()) {
         let dir = if ca.cmdchar == Ctrl_D {
             FORWARD as c_int
@@ -198,7 +198,7 @@ pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
 pub(crate) unsafe fn nv_exit_command(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if check_clear_op_quit(ca.op()) {
         return;
     }

@@ -79,7 +79,7 @@ use crate::state::{
 };
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
-    ApiDict, Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer,
+    ApiDict, Arena, Array, ArrayBuilder, BufferHandle, Dict, Error, EvalFuncData, FILE, Integer,
     KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapCallback, MapRhs, MapStr, Object, RemapValues,
     ScriptId, String_0, TypVal, VarNumber, exarg_T, expand_T, fuzmatch_str_T, key_value_pair,
     mapblock_T, optset_T, ptrdiff_t, regmatch_T, size_t, typval_vval_union, uint64_t,

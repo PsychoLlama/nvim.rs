@@ -244,7 +244,7 @@ pub unsafe fn f_mapset(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFun
 #[allow(clippy::too_many_arguments)] // the API dispatcher's own signature
 pub unsafe fn modify_keymap(
     channel_id: uint64_t,
-    mut buffer: Buffer,
+    mut buffer: BufferHandle,
     is_unmap: bool,
     mode: String_0,
     lhs: String_0,

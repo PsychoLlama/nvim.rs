@@ -232,7 +232,9 @@ pub unsafe fn nvim_set_keymap(
 ) -> Result<(), Error> {
     let mut error = Error::none();
     let slot = &mut error;
-    unsafe { modify_keymap(channel_id, -1 as Buffer, false, mode, lhs, rhs, opts, slot) };
+    // `-1` is the API's "every buffer" spelling of the buffer argument.
+    let all_buffers: BufferHandle = -1;
+    unsafe { modify_keymap(channel_id, all_buffers, false, mode, lhs, rhs, opts, slot) };
     ().reported(error)
 }
 
@@ -241,7 +243,7 @@ pub unsafe fn nvim_del_keymap(
     mode: String_0,
     lhs: String_0,
 ) -> Result<(), Error> {
-    unsafe { nvim_buf_del_keymap(channel_id, -1 as Buffer, mode, lhs) }
+    unsafe { nvim_buf_del_keymap(channel_id, -1 as BufferHandle, mode, lhs) }
 }
 
 pub unsafe fn nvim_select_popupmenu_item(

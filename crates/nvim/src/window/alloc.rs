@@ -46,7 +46,7 @@ use crate::types::{
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::{
-    Buf, Frame, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
+    Buf, FrameRef, TabPage, Win, WinId, buffers, defer_free_window, forget_window, register_window,
     tabs,
 };
 use ::libc::abort;
@@ -161,10 +161,10 @@ fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
 }
 
 /// Give `wp` a fresh leaf frame of its own.
-pub(crate) fn attach_frame(wp: Win) -> Frame {
+pub(crate) fn attach_frame(wp: Win) -> FrameRef {
     let mut wp = wp;
     // SAFETY: a fresh zeroed `frame_T`, which is live from here on.
-    let mut frp = unsafe { Frame::new(zeroed::<frame_T>()) };
+    let mut frp = unsafe { FrameRef::new(zeroed::<frame_T>()) };
     wp.w_frame = frp.raw();
     frp.fr_layout = FR_LEAF as c_char;
     frp.fr_win = wp.raw();
@@ -513,7 +513,7 @@ fn sync_tab_last(tp: Option<TabPage>, wp: Option<WinId>) {
 }
 
 /// Link `frp` in after `after` in its row or column.
-pub(crate) fn frame_append(after: Frame, frp: Frame) {
+pub(crate) fn frame_append(after: FrameRef, frp: FrameRef) {
     let (mut after, mut frp) = (after, frp);
     frp.fr_next = after.fr_next;
     after.fr_next = frp.raw();
@@ -524,7 +524,7 @@ pub(crate) fn frame_append(after: Frame, frp: Frame) {
 }
 
 /// Link `frp` in before `before` in its row or column.
-pub(crate) fn frame_insert(before: Frame, frp: Frame) {
+pub(crate) fn frame_insert(before: FrameRef, frp: FrameRef) {
     let (mut before, mut frp) = (before, frp);
     frp.fr_next = before.raw();
     frp.fr_prev = before.fr_prev;
@@ -540,7 +540,7 @@ pub(crate) fn frame_insert(before: Frame, frp: Frame) {
 
 /// Take `frp` out of its row or column, leaving its own links alone so
 /// [`frame_append`]/[`frame_insert`] can put it back.
-pub(crate) fn frame_remove(frp: Frame) {
+pub(crate) fn frame_remove(frp: FrameRef) {
     match frp.prev() {
         Some(mut prev) => prev.fr_next = frp.fr_next,
         None => {

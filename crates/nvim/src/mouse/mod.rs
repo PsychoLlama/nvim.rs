@@ -50,7 +50,7 @@ use crate::window::{
     self, find_tabpage, tabpage_index, tabpage_move, win_drag_status_line, win_drag_vsep_line,
     win_enter, win_valid,
 };
-use crate::winlayer::{Buf, Pos, Win, first_tab};
+use crate::winlayer::{Buf, PosRef, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod click;
@@ -356,12 +356,12 @@ fn head_off(line: &[u8], idx: usize) -> c_int {
 ///
 /// # Safety
 /// `pos` must be a live position in the current buffer.
-unsafe fn find_start_of_word(pos: Pos) {
+unsafe fn find_start_of_word(pos: PosRef) {
     // SAFETY: the caller's promise.
     unsafe { with_line(pos.lnum, |line| start_of_word(pos, line)) };
 }
 
-fn start_of_word(mut pos: Pos, line: &[u8]) {
+fn start_of_word(mut pos: PosRef, line: &[u8]) {
     let cclass = mouse_class(line, pos.col as usize);
     while pos.col > 0 {
         let col = pos.col - 1 - head_off(line, pos.col as usize - 1);
@@ -377,12 +377,12 @@ fn start_of_word(mut pos: Pos, line: &[u8]) {
 ///
 /// # Safety
 /// `pos` must be a live position in the current buffer.
-unsafe fn find_end_of_word(pos: Pos) {
+unsafe fn find_end_of_word(pos: PosRef) {
     // SAFETY: the caller's promise.
     unsafe { with_line(pos.lnum, |line| end_of_word(pos, line)) };
 }
 
-fn end_of_word(mut pos: Pos, line: &[u8]) {
+fn end_of_word(mut pos: PosRef, line: &[u8]) {
     let exclusive = sel_exclusive();
     if exclusive && pos.col > 0 {
         pos.col = pos.col - 1 - head_off(line, pos.col as usize - 1);

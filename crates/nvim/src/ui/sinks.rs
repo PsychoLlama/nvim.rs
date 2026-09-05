@@ -47,8 +47,8 @@ use crate::log::logmsg_tagged;
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, Boolean, Buffer, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, ScreenAttr,
-    ScreenChar, String_0, Tabpage, Window,
+    Array, Boolean, BufferHandle, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, ScreenAttr,
+    ScreenChar, String_0, TabpageHandle, WindowHandle,
 };
 use crate::ui_compositor::{
     ui_comp_grid_cursor_goto, ui_comp_grid_resize, ui_comp_grid_scroll, ui_comp_msg_set_pos,
@@ -66,9 +66,9 @@ macro_rules! count {
 
 /// One argument of an [`event!`] sink, tagged for the wire.
 ///
-/// The declared type picks the constructor: a `Window` is not an `Integer`
-/// on the wire even though both are `i64` in the signature, so the mapping
-/// has to be by token and cannot be a trait.
+/// The declared type picks the constructor: a `WindowHandle` is not an
+/// `Integer` on the wire even though both are `i64` in the signature, so the
+/// mapping has to be by token and cannot be a trait.
 macro_rules! wire {
     (Integer, $v:expr) => {
         Object::integer($v)
@@ -85,13 +85,13 @@ macro_rules! wire {
     (Array, $v:expr) => {
         Object::array($v)
     };
-    (Window, $v:expr) => {
+    (WindowHandle, $v:expr) => {
         Object::window($v)
     };
-    (Buffer, $v:expr) => {
+    (BufferHandle, $v:expr) => {
         Object::buffer($v)
     };
-    (Tabpage, $v:expr) => {
+    (TabpageHandle, $v:expr) => {
         Object::tabpage($v)
     };
     (Object, $v:expr) => {
@@ -247,7 +247,7 @@ broadcast! {
     fn ui_call_grid_clear(grid: Integer) => remote_ui_grid_clear, All, c"grid_clear";
     fn ui_call_win_viewport(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         topline: Integer,
         botline: Integer,
         curline: Integer,
@@ -257,7 +257,7 @@ broadcast! {
     ) => remote_ui_win_viewport, All, c"win_viewport";
     fn ui_call_win_viewport_margins(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         top: Integer,
         bottom: Integer,
         left: Integer,
@@ -313,7 +313,7 @@ event! {
     fn ui_call_grid_destroy(grid: Integer) => c"grid_destroy";
     fn ui_call_win_pos(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         startrow: Integer,
         startcol: Integer,
         width: Integer,
@@ -321,7 +321,7 @@ event! {
     ) => c"win_pos";
     fn ui_call_win_float_pos(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         anchor: String_0,
         anchor_grid: Integer,
         anchor_row: Float,
@@ -332,12 +332,12 @@ event! {
         screen_row: Integer,
         screen_col: Integer,
     ) => c"win_float_pos";
-    fn ui_call_win_external_pos(grid: Integer, win: Window) => c"win_external_pos";
+    fn ui_call_win_external_pos(grid: Integer, win: WindowHandle) => c"win_external_pos";
     fn ui_call_win_hide(grid: Integer) => c"win_hide";
     fn ui_call_win_close(grid: Integer) => c"win_close";
     fn ui_call_win_extmark(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         ns_id: Integer,
         mark_id: Integer,
         row: Integer,
@@ -353,9 +353,9 @@ event! {
     fn ui_call_popupmenu_hide() => c"popupmenu_hide";
     fn ui_call_popupmenu_select(selected: Integer) => c"popupmenu_select";
     fn ui_call_tabline_update(
-        current: Tabpage,
+        current: TabpageHandle,
         tabs: Array,
-        current_buffer: Buffer,
+        current_buffer: BufferHandle,
         buffers: Array,
     ) => c"tabline_update";
     fn ui_call_cmdline_show(

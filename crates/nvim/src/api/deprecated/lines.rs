@@ -9,7 +9,7 @@
 use super::*;
 
 pub unsafe fn buffer_insert(
-    buffer: Buffer,
+    buffer: BufferHandle,
     lnum: Integer,
     lines: Array,
     arena: *mut Arena,
@@ -19,7 +19,7 @@ pub unsafe fn buffer_insert(
 }
 
 pub unsafe fn buffer_get_line(
-    buffer: Buffer,
+    buffer: BufferHandle,
     index: Integer,
     arena: *mut Arena,
 ) -> Result<String_0, Error> {
@@ -38,7 +38,7 @@ pub unsafe fn buffer_get_line(
 }
 
 pub unsafe fn buffer_set_line(
-    buffer: Buffer,
+    buffer: BufferHandle,
     index: Integer,
     line: String_0,
     arena: *mut Arena,
@@ -56,7 +56,7 @@ pub unsafe fn buffer_set_line(
 }
 
 pub unsafe fn buffer_del_line(
-    buffer: Buffer,
+    buffer: BufferHandle,
     index: Integer,
     arena: *mut Arena,
 ) -> Result<(), Error> {
@@ -66,7 +66,7 @@ pub unsafe fn buffer_del_line(
 }
 
 pub unsafe fn buffer_get_line_slice(
-    buffer: Buffer,
+    buffer: BufferHandle,
     start: Integer,
     end: Integer,
     include_start: Boolean,
@@ -81,7 +81,7 @@ pub unsafe fn buffer_get_line_slice(
 }
 
 pub unsafe fn buffer_set_line_slice(
-    buffer: Buffer,
+    buffer: BufferHandle,
     start: Integer,
     end: Integer,
     include_start: Boolean,

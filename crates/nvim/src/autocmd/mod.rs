@@ -60,10 +60,10 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, EStackType, Error,
-    Event, FuncCallEntry, Integer, LuaRetMode, Object, OptVal, ProfTime, SaveVEvent, ScriptCtx,
-    String_0, Timestamp, VarNumber, Vv, aco_save_T, aucmdwin_T, buf_T, exarg_T, expand_T, int64_t,
-    save_redo_T, size_t, uint64_t, win_T,
+    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, BufferHandle, Callback, EStackType,
+    Error, Event, FuncCallEntry, Integer, LuaRetMode, Object, OptVal, ProfTime, SaveVEvent,
+    ScriptCtx, String_0, Timestamp, VarNumber, Vv, aco_save_T, aucmdwin_T, buf_T, exarg_T,
+    expand_T, int64_t, save_redo_T, size_t, uint64_t, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -101,7 +101,7 @@ pub struct AutoCmdEvent {
     pub event: AutoEvent,
     pub fname: *mut ::core::ffi::c_char,
     pub fname_io: *mut ::core::ffi::c_char,
-    pub buf: Buffer,
+    pub buf: BufferHandle,
     pub group: ::core::ffi::c_int,
     pub eap: *mut exarg_T,
     pub data: *mut Object,

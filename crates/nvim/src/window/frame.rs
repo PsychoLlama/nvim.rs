@@ -21,7 +21,7 @@ use crate::main::{cmdline_win, first_tabpage, lastused_tabpage, p_sb, p_spr, tcl
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
 use crate::types::{frame_T, tabpage_T, win_T};
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::{Frame, TabPage, Win, tabs};
+use crate::winlayer::{FrameRef, TabPage, Win, tabs};
 
 /// Which neighbour inherits a closing window's room, and along which axis --
 /// the C's `wp`, `*altfr` and `*dirp` out-parameters as one value.
@@ -29,7 +29,7 @@ pub(crate) struct AltWin {
     /// The window the cursor goes to.
     pub win: Win,
     /// The frame that grows into the closing one's room.
-    pub frame: Frame,
+    pub frame: FrameRef,
     /// `'v'` when the room is given away vertically, `'h'` horizontally.
     pub dir: c_int,
 }
@@ -172,7 +172,7 @@ pub(crate) fn find_altwin(win: Win, tp: Option<TabPage>) -> Option<AltWin> {
         .parent()
         .is_some_and(|p| p.fr_layout as c_int == FR_COL);
     // A leaf frame whose window is pinned along the axis the room moves.
-    let pinned = |fr: Frame| {
+    let pinned = |fr: FrameRef| {
         fr.win().is_some_and(|w| {
             if vertical {
                 w.w_onebuf_opt.wo_wfh != 0
@@ -229,7 +229,7 @@ pub(crate) fn find_altwin(win: Win, tp: Option<TabPage>) -> Option<AltWin> {
 
 /// Collapse `frp` into its parent when it is the only child left, and then the
 /// parent into *its* parent when the two have the same layout.
-pub(crate) fn flatten(frp: Frame) {
+pub(crate) fn flatten(frp: FrameRef) {
     if frp.next().is_some() || frp.prev().is_some() {
         return;
     }
@@ -289,12 +289,12 @@ pub(crate) fn flatten(frp: Frame) {
 pub unsafe fn winframe_restore(wp: *mut win_T, dir: c_int, unflat_altfr: *mut frame_T) {
     // SAFETY: the caller's promise -- a live window and the live frame
     // `winframe_remove` handed back unflattened.
-    unsafe { restore(Win::new(wp), dir, Frame::new(unflat_altfr)) };
+    unsafe { restore(Win::new(wp), dir, FrameRef::new(unflat_altfr)) };
 }
 
 /// Undo a [`remove`] that was told to leave the tree unflattened: link `wp`'s
 /// frame back in and take its room off the frame that grew into it.
-fn restore(wp: Win, dir: c_int, unflat_altfr: Frame) {
+fn restore(wp: Win, dir: c_int, unflat_altfr: FrameRef) {
     let frp = wp.frame();
     // Restore the lists of frames the window was in.
     match frp.prev() {
@@ -340,7 +340,7 @@ fn restore(wp: Win, dir: c_int, unflat_altfr: Frame) {
 /// The neighbour after `win` unless `'splitbelow'`/`'splitright'` says the one
 /// before, and then the other one anyway if the chosen frame is fixed and the
 /// other is not.
-pub(crate) fn alt_frame(win: Win, tp: Option<TabPage>) -> Frame {
+pub(crate) fn alt_frame(win: Win, tp: Option<TabPage>) -> FrameRef {
     debug_assert!(
         tp.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
@@ -393,11 +393,11 @@ pub(crate) fn alt_tab_page() -> TabPage {
 
 pub unsafe fn frame2win(frp: *mut frame_T) -> *mut win_T {
     // SAFETY: the caller's promise -- a live frame.
-    frame2window(unsafe { Frame::new(frp) }).raw()
+    frame2window(unsafe { FrameRef::new(frp) }).raw()
 }
 
 /// The first window in frame `frp`, following `fr_child` down to a leaf.
-pub(crate) fn frame2window(frp: Frame) -> Win {
+pub(crate) fn frame2window(frp: FrameRef) -> Win {
     let mut frp = frp;
     loop {
         match frp.win() {
@@ -408,7 +408,7 @@ pub(crate) fn frame2window(frp: Frame) -> Win {
 }
 
 /// Whether `wp` is one of the windows in frame `frp`.
-pub(crate) fn frame_has_win(frp: Frame, wp: Option<Win>) -> bool {
+pub(crate) fn frame_has_win(frp: FrameRef, wp: Option<Win>) -> bool {
     if frp.fr_layout as c_int == FR_LEAF {
         return frp.win() == wp;
     }

@@ -35,9 +35,9 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    ApiDict, Buffer, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr, MsgList, NUL,
-    ScriptId, String_0, Tabpage, TryState, Window, buf_T, fmarkv_T, int64_t, kErrorTypeException,
-    pos_T, tabpage_T, uint64_t, win_T,
+    ApiDict, BufferHandle, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr, MsgList,
+    NUL, ScriptId, String_0, TabpageHandle, TryState, WindowHandle, buf_T, fmarkv_T, int64_t,
+    kErrorTypeException, pos_T, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -106,7 +106,7 @@ pub(crate) fn handle_get_window(handle: Handle) -> *mut win_T {
 
 /// The buffer `buffer` names, or the current one for 0. Null — with `err`
 /// set — when it names nothing.
-pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: &mut Error) -> *mut buf_T {
+pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> *mut buf_T {
     if buffer == 0 {
         return curbuf.get();
     }
@@ -120,7 +120,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: Buffer, err: &mut Error) -> *
 }
 
 /// [`find_buffer_by_handle`] for a window.
-pub unsafe fn find_window_by_handle(window: Window, err: &mut Error) -> *mut win_T {
+pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *mut win_T {
     if window == 0 {
         return curwin.get();
     }
@@ -134,7 +134,7 @@ pub unsafe fn find_window_by_handle(window: Window, err: &mut Error) -> *mut win
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
-pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: &mut Error) -> *mut tabpage_T {
+pub(crate) unsafe fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> *mut tabpage_T {
     if tabpage == 0 {
         return curtab.get();
     }
@@ -161,20 +161,20 @@ pub(crate) unsafe fn find_tab_by_handle(tabpage: Tabpage, err: &mut Error) -> *m
 
 /// The window `handle` names, or the current one for 0. `None` -- with `err`
 /// set, unless there is no current window -- when it names nothing.
-pub(crate) fn window_by_handle(handle: Window, err: &mut Error) -> Option<Win> {
+pub(crate) fn window_by_handle(handle: WindowHandle, err: &mut Error) -> Option<Win> {
     // SAFETY: `err` is the caller's own slot, and the lookup answers a live
     // window or null.
     unsafe { Win::from_raw(find_window_by_handle(handle, err)) }
 }
 
 /// [`window_by_handle`] for a buffer.
-pub(crate) fn buffer_by_handle(handle: Buffer, err: &mut Error) -> Option<Buf> {
+pub(crate) fn buffer_by_handle(handle: BufferHandle, err: &mut Error) -> Option<Buf> {
     // SAFETY: as [`window_by_handle`].
     unsafe { Buf::from_raw(find_buffer_by_handle(handle, err)) }
 }
 
 /// [`window_by_handle`] for a tab page.
-pub(crate) fn tabpage_by_handle(handle: Tabpage, err: &mut Error) -> Option<TabPage> {
+pub(crate) fn tabpage_by_handle(handle: TabpageHandle, err: &mut Error) -> Option<TabPage> {
     // SAFETY: as [`window_by_handle`].
     unsafe { TabPage::from_raw(find_tab_by_handle(handle, err)) }
 }

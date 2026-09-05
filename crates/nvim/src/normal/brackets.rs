@@ -16,8 +16,8 @@ use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::memory::{xfree, xmemdupz};
 use crate::mouse::do_mouse;
 use crate::normal::{
-    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, CmdArg, FIND_ANY, FIND_DEFINE,
-    FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep,
+    _ISlower, _ISupper, ACTION_GOTO, ACTION_SHOW, ACTION_SHOW_ALL, CmdArgRef, FIND_ANY,
+    FIND_DEFINE, FIND_IDENT, FM_BACKWARD, FM_FORWARD, SMT_BAD, SMT_RARE, clear_op, clear_op_beep,
     find_ident_under_cursor, kDirectionNotSet, kMTCharWise, kMarkBeginLine, kMarkContext,
     may_fold_open, nv_gotofile, nv_mark_move_to, nv_put_opt,
 };
@@ -36,7 +36,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 /// Which way a `[` or `]` command searches.
 unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar == ']' as c_int {
         FORWARD as c_int
     } else {
@@ -48,7 +48,7 @@ unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
 /// `Direction` constants.
 unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if ca.cmdchar == '[' as c_int {
         FM_BACKWARD as c_int
     } else {
@@ -66,7 +66,7 @@ unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
 /// the two, which is what makes `2[m` mean "the method one level out".
 unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument and `old_pos` is the
     // cursor position its caller saved.
     let mut new_pos = pos_T {
@@ -196,7 +196,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
 unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let mut found: *mut c_char = ptr::null_mut();
     let len =
         unsafe { find_ident_under_cursor(&raw mut found, FIND_IDENT as c_int, ptr::null_mut()) };
@@ -246,7 +246,7 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
 /// mark in this buffer.
 unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
     let mut here = fmark_T::UNSET;
@@ -277,7 +277,7 @@ unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
 unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     setpcmark();
     let what = match u8::try_from(ca.nchar) {
         Ok(b's') => SMT_ALL as SpellMoveType,
@@ -298,7 +298,7 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
 /// `[` and `]`, whose second character says what kind of jump this is.
 pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     let old_pos = cur_win().w_cursor;

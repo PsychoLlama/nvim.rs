@@ -23,7 +23,7 @@ use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
 use crate::main::p_bg;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{kUILinegrid, kUITermColors};
-use crate::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, Window};
+use crate::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, WindowHandle};
 use core::ffi::{c_char, c_int};
 
 /// Queues `name(args...)` on `ui`'s buffer, with the argument array built
@@ -44,8 +44,9 @@ macro_rules! count {
 
 /// The [`Object`] constructor for a declared argument type.
 ///
-/// A `Window` is not an `Integer` on the wire even though both are `i64` in
-/// the signature, so the mapping has to be by token and cannot be a trait.
+/// A `WindowHandle` is not an `Integer` on the wire even though both are
+/// `i64` in the signature, so the mapping has to be by token and cannot be a
+/// trait.
 macro_rules! wire {
     (Integer, $v:expr) => {
         Object::integer($v)
@@ -59,7 +60,7 @@ macro_rules! wire {
     (Array, $v:expr) => {
         Object::array($v)
     };
-    (Window, $v:expr) => {
+    (WindowHandle, $v:expr) => {
         Object::window($v)
     };
     (Object, $v:expr) => {
@@ -132,7 +133,7 @@ serialize! {
     #[expect(clippy::too_many_arguments, reason = "one parameter per wire field")]
     fn remote_ui_win_viewport(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         topline: Integer,
         botline: Integer,
         curline: Integer,
@@ -143,7 +144,7 @@ serialize! {
     /// The margins inside that viewport that are not buffer text.
     fn remote_ui_win_viewport_margins(
         grid: Integer,
-        win: Window,
+        win: WindowHandle,
         top: Integer,
         bottom: Integer,
         left: Integer,

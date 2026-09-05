@@ -24,7 +24,7 @@ use crate::main::{curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_VIsual_and_resel, visual_active};
 use crate::types::{FAIL, Failed, OptInt, frame_T, win_T};
-use crate::winlayer::{Frame, Win, frames};
+use crate::winlayer::{FrameRef, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
     let cur = cur_win();
@@ -135,7 +135,7 @@ pub(crate) fn exchange(prenum: c_int) {
                 let first = wp
                     .frame()
                     .parent()
-                    .and_then(Frame::child)
+                    .and_then(FrameRef::child)
                     .expect("a linked frame has a parent with children");
                 frame_insert(first, wp.frame());
             }
@@ -350,7 +350,7 @@ fn move_after(win1: Win, win2: Win) {
 /// How many windows would fit in `height` rows of frame `fr`: each costs
 /// `'winminheight'` plus a status line,
 /// plus its window bar where there is one.
-pub(crate) fn max_wincount(fr: Frame, height: c_int) -> c_int {
+pub(crate) fn max_wincount(fr: FrameRef, height: c_int) -> c_int {
     let per_win = p_wmh.get() as c_int + STATUS_HEIGHT as c_int;
     if fr.fr_layout as c_int != FR_COL {
         return height / (per_win + frame2window(fr).w_winbar_height);

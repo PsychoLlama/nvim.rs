@@ -65,7 +65,7 @@ use crate::types::{
     size_t, tabpage_T, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
-use crate::winlayer::{Buf, Frame, TabPage, Win, tab_windows, windows, windows_in_tab};
+use crate::winlayer::{Buf, FrameRef, TabPage, Win, tab_windows, windows, windows_in_tab};
 
 // The carve of the transpiled module; see each child's docs.
 mod alloc;
@@ -432,9 +432,9 @@ fn raw_win(win: Option<Win>) -> *mut win_T {
 }
 
 /// The root of the current tab page's layout tree.
-fn current_topframe() -> Frame {
+fn current_topframe() -> FrameRef {
     // SAFETY: `topframe` is set from startup to exit.
-    unsafe { Frame::new(topframe.get()) }
+    unsafe { FrameRef::new(topframe.get()) }
 }
 
 /// The window the editor is working in.

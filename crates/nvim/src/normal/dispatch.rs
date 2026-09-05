@@ -40,7 +40,7 @@ use crate::mbyte::{
 };
 use crate::memory::xfree;
 use crate::normal::{
-    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArg, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS,
+    B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArgRef, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS,
     NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, NormalStateRef,
     add_to_showcmd, check_text_or_curbuf_locked, clear_showcmd, del_from_showcmd,
     do_check_scrollbind, normal_handle_special_visual_command, normal_need_additional_char,
@@ -709,7 +709,7 @@ pub(crate) unsafe fn normal_execute(state: *mut VimState, key: c_int) -> c_int {
 /// Record a command for `.`, taking its second character from `cap`.
 pub(crate) unsafe fn prep_redo_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     prep_redo(ca.op().regname, ca.count0, NUL, ca.cmdchar, NUL, NUL, NUL);
     // A character with a combining tail is replayed as its whole encoding.
     if ca.nchar_len > 0 {
@@ -850,7 +850,7 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 /// is waiting for the motion to finish.
 pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
         unsafe { fold_open_cursor() };
     }
@@ -859,7 +859,7 @@ pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
 /// Turn a shifted special key into its unshifted self.
 pub(crate) unsafe fn unshift_special(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument.
     ca.cmdchar = match Key::try_from(ca.cmdchar) {
         Ok(Key::SRight) => Key::Right.code(),

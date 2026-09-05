@@ -176,7 +176,7 @@ unsafe fn each_dict_arg(args: Args<'_>, rettv: &mut TypVal, one: impl FnMut(*mut
 ///
 /// # Safety
 /// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut Dict {
+pub(crate) unsafe fn sign_get_info_dict(sp: SignRef) -> *mut Dict {
     // SAFETY: a definition's name, icon and cells are its own.
     let d = unsafe { tv_dict_alloc() };
     unsafe { put_str(d, "name", sp.sn_name) };

@@ -376,9 +376,9 @@ fn value_type(ty: &syn::Type) -> Option<ApiType> {
         "ApiDict" => ApiType::Dict,
         "Object" => ApiType::Object,
         "LuaRef" => ApiType::LuaRef,
-        "Buffer" => ApiType::Handle("Buffer"),
-        "Window" => ApiType::Handle("Window"),
-        "Tabpage" => ApiType::Handle("Tabpage"),
+        "BufferHandle" => ApiType::Handle("Buffer"),
+        "WindowHandle" => ApiType::Handle("Window"),
+        "TabpageHandle" => ApiType::Handle("Tabpage"),
         _ => return None,
     })
 }
@@ -438,9 +438,9 @@ fn value_ret(ty: &syn::Type) -> Option<RetType> {
         "Array" => RetType::Array,
         "ApiDict" => RetType::Dict,
         "Object" => RetType::Object,
-        "Buffer" => RetType::Handle("Buffer"),
-        "Window" => RetType::Handle("Window"),
-        "Tabpage" => RetType::Handle("Tabpage"),
+        "BufferHandle" => RetType::Handle("Buffer"),
+        "WindowHandle" => RetType::Handle("Window"),
+        "TabpageHandle" => RetType::Handle("Tabpage"),
         _ => return None,
     })
 }
@@ -614,9 +614,9 @@ fn key_tag(ty: &str) -> Option<(&'static str, bool)> {
         "Array" => ("TAG_ARRAY", false),
         "ApiDict" => ("TAG_DICT", false),
         "LuaRef" => ("TAG_LUAREF", false),
-        "Buffer" => ("TAG_BUFFER", false),
-        "Window" => ("TAG_WINDOW", false),
-        "Tabpage" => ("TAG_TABPAGE", false),
+        "BufferHandle" => ("TAG_BUFFER", false),
+        "WindowHandle" => ("TAG_WINDOW", false),
+        "TabpageHandle" => ("TAG_TABPAGE", false),
         // Anything goes.
         "Object" => ("TAG_NIL", false),
         // ShaDa's own unpacked-in-place array of strings.

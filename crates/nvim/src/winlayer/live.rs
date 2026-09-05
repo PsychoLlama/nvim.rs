@@ -137,7 +137,7 @@ impl<T> Live<T> {
     /// field's address is the object's plus a constant, so saying where one
     /// is needs no dereference. Feed it `offset_of!(T, field)`; the result is
     /// live exactly as long as the `Live<T>` it came from, which is why
-    /// wrapping it in a `Pos`/`Line` is still the caller's unsafe step.
+    /// wrapping it in a `PosRef`/`Line` is still the caller's unsafe step.
     #[inline(always)]
     pub(crate) fn field_ptr<F>(self, offset: usize) -> *mut F {
         self.0.wrapping_byte_add(offset).cast()

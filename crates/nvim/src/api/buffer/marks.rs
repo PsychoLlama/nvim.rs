@@ -10,7 +10,7 @@ use super::*;
 use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_bad_value;
 
-pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, Error> {
+pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
@@ -47,7 +47,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
 }
 
 pub unsafe fn nvim_buf_set_mark(
-    buf: Buffer,
+    buf: BufferHandle,
     name: String_0,
     line: Integer,
     col: Integer,
@@ -71,7 +71,7 @@ pub unsafe fn nvim_buf_set_mark(
 }
 
 pub unsafe fn nvim_buf_get_mark(
-    buf: Buffer,
+    buf: BufferHandle,
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Array, Error> {

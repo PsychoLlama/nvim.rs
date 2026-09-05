@@ -163,7 +163,7 @@ pub unsafe fn f_getwininfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 ///
 /// # Safety
 /// `l` must be a live list that outlives the call.
-unsafe fn get_framelayout(fr: Frame, l: *mut List, outer: bool) {
+unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
     // SAFETY: the caller's obligation; every list built here is appended to
     // its parent before anything else can fail, so none is leaked.
     // The outer call writes into the caller's list; every nested one gets a

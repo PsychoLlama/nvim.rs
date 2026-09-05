@@ -13,7 +13,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::path::ExpandFlags;
 use crate::types::{FAIL, Failed, IOSIZE, NUL, OK, ShmFlag};
-use crate::winlayer::{Buf, Pos, Win, first_buffer, first_window};
+use crate::winlayer::{Buf, PosRef, Win, first_buffer, first_window};
 
 /// Add every identifier matching `pat` in the `'dictionary'`-style list
 /// `dict_start` to the completions.
@@ -378,7 +378,7 @@ pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
 /// position.
 pub(crate) unsafe fn ins_compl_get_next_word_or_line(
     ins_buf: Buf,
-    cur_match_pos: Pos,
+    cur_match_pos: PosRef,
     match_len: *mut c_int,
     cont_s_ipos: *mut bool,
     out: &mut [c_char; IOSIZE as usize],
@@ -507,8 +507,8 @@ pub(crate) unsafe fn get_next_default_completion(
     let (ins_buf, match_pos, start) = unsafe {
         (
             Buf::new((*st).ins_buf),
-            Pos::new((*st).cur_match_pos),
-            Pos::new(start_pos),
+            PosRef::new((*st).cur_match_pos),
+            PosRef::new(start_pos),
         )
     };
     let in_curbuf = ins_buf.raw() == curbuf.get();

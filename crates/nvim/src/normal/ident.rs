@@ -34,9 +34,9 @@ use crate::memline::ml_get_buf;
 use crate::memory::{strequal, xfree, xmalloc, xrealloc};
 use crate::message::{emsg, messaging};
 use crate::normal::{
-    CmdArg, DT_POP, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH, POUND, VSE_NONE,
-    check_clear_op_quit, check_text_or_curbuf_locked, clear_op, clear_op_beep, get_visual_text,
-    normal_search, visual_active,
+    CmdArgRef, DT_POP, FIND_EVAL, FIND_IDENT, FIND_STRING, FM_FORWARD, HIST_SEARCH, POUND,
+    VSE_NONE, check_clear_op_quit, check_text_or_curbuf_locked, clear_op, clear_op_beep,
+    get_visual_text, normal_search, visual_active,
 };
 use crate::ops::clear_oparg;
 use crate::option::{magic_isset, shortmess};
@@ -749,7 +749,7 @@ unsafe fn append_escaped(
 /// under the cursor.
 pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let (typed, nchar) = unsafe { ((*cap).cmdchar, (*cap).nchar) };
     // The `g` forms carry the real command in `nchar`.
@@ -929,7 +929,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
 /// `CTRL-T`: back up the tag stack.
 pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument.
     if check_clear_op_quit(ca.op()) {
         return;
@@ -942,7 +942,7 @@ pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.
 pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument, and
     // the current window and buffer are live.
     if unsafe { check_text_or_curbuf_locked((*cap).oap) } || !check_can_set_curbuf_disabled() {

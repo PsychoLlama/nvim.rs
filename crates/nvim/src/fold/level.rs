@@ -278,7 +278,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
 ) -> LineNr {
     // The fold this call is building, once there is one. `None` means "not
     // started yet", which is what the whole first half of the loop is about.
-    let mut fold: Option<Fold> = None;
+    let mut fold: Option<FoldRef> = None;
     if getlevel_is(getlevel, foldlevel_marker)
         && line.start() <= line.lvl() - level
         && line.lvl() > 0

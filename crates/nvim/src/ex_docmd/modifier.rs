@@ -56,15 +56,15 @@ use ::libc::atoi;
 
 /// One recognised modifier name, for the two callers that only need to know
 /// *whether* a word is one: `modifier_len` and `cmd_exists`.
-pub(crate) struct CmdMod {
+pub(crate) struct CmdModSpec {
     pub(crate) name: &'static CStr,
     pub(crate) minlen: usize,
     /// Whether a count may precede this modifier (`:3tab`, `:5verbose`).
     pub(crate) has_count: bool,
 }
 
-const fn m(name: &'static CStr, minlen: usize, has_count: bool) -> CmdMod {
-    CmdMod {
+const fn m(name: &'static CStr, minlen: usize, has_count: bool) -> CmdModSpec {
+    CmdModSpec {
         name,
         minlen,
         has_count,
@@ -78,7 +78,7 @@ const fn m(name: &'static CStr, minlen: usize, has_count: bool) -> CmdMod {
 /// modifiers need more than a name match. This is the answer to "is this
 /// word a modifier at all".
 #[rustfmt::skip]
-pub(crate) static CMDMODS: [CmdMod; 24] = [
+pub(crate) static CMDMODS: [CmdModSpec; 24] = [
     m(c"aboveleft", 3, false),   m(c"belowright", 3, false),
     m(c"botright", 2, false),    m(c"browse", 3, false),
     m(c"confirm", 4, false),     m(c"filter", 4, false),

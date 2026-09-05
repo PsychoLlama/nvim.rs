@@ -41,7 +41,7 @@ pub unsafe fn nvim_get_option(name: String_0) -> Result<Object, Error> {
     unsafe { get_option_from(NULL, kOptScopeGlobal, name, &mut error) }.reported(error)
 }
 
-pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Object, Error> {
+pub unsafe fn nvim_buf_get_option(buffer: BufferHandle, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return Object::Nil.reported(error);
@@ -54,7 +54,7 @@ pub unsafe fn nvim_buf_get_option(buffer: Buffer, name: String_0) -> Result<Obje
 
 pub unsafe fn nvim_buf_set_option(
     channel_id: uint64_t,
-    buffer: Buffer,
+    buffer: BufferHandle,
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {
@@ -68,7 +68,7 @@ pub unsafe fn nvim_buf_set_option(
     ().reported(error)
 }
 
-pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Object, Error> {
+pub unsafe fn nvim_win_get_option(window: WindowHandle, name: String_0) -> Result<Object, Error> {
     let mut error = Error::none();
     let Some(win) = window_by_handle(window, &mut error) else {
         return Object::Nil.reported(error);
@@ -81,7 +81,7 @@ pub unsafe fn nvim_win_get_option(window: Window, name: String_0) -> Result<Obje
 
 pub unsafe fn nvim_win_set_option(
     channel_id: uint64_t,
-    window: Window,
+    window: WindowHandle,
     name: String_0,
     value: Object,
 ) -> Result<(), Error> {

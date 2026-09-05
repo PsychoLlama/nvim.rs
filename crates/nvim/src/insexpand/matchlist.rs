@@ -39,10 +39,10 @@ impl Cm {
     /// state cells or from a node's `cp_next`/`cp_prev`/`cp_match_next`
     /// names a node of the live list, and the one free path
     /// ([`ins_compl_item_free`]) is reached only with the node already
-    /// unlinked, or with the whole list going at once. This is [`Frame`]'s
+    /// unlinked, or with the whole list going at once. This is [`FrameRef`]'s
     /// bargain, for a list with no handle registry to ask instead.
     ///
-    /// [`Frame`]: crate::winlayer::Frame
+    /// [`FrameRef`]: crate::winlayer::FrameRef
     #[inline(always)]
     pub(crate) fn at(p: *mut compl_T) -> Option<Self> {
         // SAFETY: the list invariant above.

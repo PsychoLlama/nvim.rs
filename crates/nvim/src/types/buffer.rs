@@ -57,7 +57,7 @@ pub const kFloatRelativeLaststatus: FloatRelative = 5;
 /// copy that comparison expects; it duplicates no allocation.
 #[derive(Clone)]
 pub struct WinConfig {
-    pub window: Window,
+    pub window: WindowHandle,
     pub bufpos: lpos_T,
     pub height: ::core::ffi::c_int,
     pub width: ::core::ffi::c_int,

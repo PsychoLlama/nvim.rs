@@ -60,7 +60,7 @@ pub unsafe fn nvim_list_bufs(arena: *mut Arena) -> Array {
 /// # Safety
 /// The editor must be running: there is a current buffer from startup to
 /// exit.
-pub unsafe fn nvim_get_current_buf() -> Buffer {
+pub unsafe fn nvim_get_current_buf() -> BufferHandle {
     cur_buf().handle
 }
 
@@ -68,7 +68,7 @@ pub unsafe fn nvim_get_current_buf() -> Buffer {
 ///
 /// # Safety
 /// The editor must be running.
-pub unsafe fn nvim_set_current_buf(buf: Buffer) -> Result<(), Error> {
+pub unsafe fn nvim_set_current_buf(buf: BufferHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(b) = buffer_by_handle(buf, &mut err) else {
         return ().reported(err);
@@ -105,7 +105,7 @@ pub unsafe fn nvim_list_wins(arena: *mut Arena) -> Array {
 /// # Safety
 /// The editor must be running: there is a current window from startup to
 /// exit.
-pub unsafe fn nvim_get_current_win() -> Window {
+pub unsafe fn nvim_get_current_win() -> WindowHandle {
     cur_win().handle
 }
 
@@ -113,7 +113,7 @@ pub unsafe fn nvim_get_current_win() -> Window {
 ///
 /// # Safety
 /// The editor must be running.
-pub unsafe fn nvim_set_current_win(win: Window) -> Result<(), Error> {
+pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(w) = window_by_handle(win, &mut err) else {
         return ().reported(err);
@@ -133,7 +133,7 @@ pub unsafe fn nvim_set_current_win(win: Window) -> Result<(), Error> {
 ///
 /// # Safety
 /// The editor must be running.
-pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffer, Error> {
+pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<BufferHandle, Error> {
     let mut err = Error::none();
     let ret = api_try(&mut err, |_| create_buf(listed, scratch));
     if ret == 0 && !err.is_set() {
@@ -143,7 +143,7 @@ pub unsafe fn nvim_create_buf(listed: Boolean, scratch: Boolean) -> Result<Buffe
 }
 
 /// [`nvim_create_buf`]'s body, inside the try/catch bracket.
-fn create_buf(listed: Boolean, scratch: Boolean) -> Buffer {
+fn create_buf(listed: Boolean, scratch: Boolean) -> BufferHandle {
     // SAFETY: paired with the `unblock_autocmds` on both paths below.
     unsafe { block_autocmds() };
     let flags = BLN_NOOPT as ::core::ffi::c_int
@@ -237,7 +237,7 @@ pub unsafe fn nvim_list_tabpages(arena: *mut Arena) -> Array {
 /// # Safety
 /// The editor must be running: there is a current tab page from startup to
 /// exit.
-pub unsafe fn nvim_get_current_tabpage() -> Tabpage {
+pub unsafe fn nvim_get_current_tabpage() -> TabpageHandle {
     cur_tab().handle
 }
 
@@ -245,7 +245,7 @@ pub unsafe fn nvim_get_current_tabpage() -> Tabpage {
 ///
 /// # Safety
 /// The editor must be running.
-pub unsafe fn nvim_set_current_tabpage(tabpage: Tabpage) -> Result<(), Error> {
+pub unsafe fn nvim_set_current_tabpage(tabpage: TabpageHandle) -> Result<(), Error> {
     let mut err = Error::none();
     let Some(tp) = tabpage_by_handle(tabpage, &mut err) else {
         return ().reported(err);

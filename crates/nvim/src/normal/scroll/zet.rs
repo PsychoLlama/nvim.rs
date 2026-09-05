@@ -22,9 +22,9 @@ use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
 use crate::normal::{
-    CAR, CmdArg, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op, clear_op_beep,
-    find_ident_under_cursor, get_visual_text, nv_operator, nv_put, read_command_char,
-    visual_active,
+    CAR, CmdArgRef, FIND_IDENT, INT_MAX, SPELL_ADD_BAD, SPELL_ADD_GOOD, check_clear_op,
+    clear_op_beep, find_ident_under_cursor, get_visual_text, nv_operator, nv_put,
+    read_command_char, visual_active,
 };
 use crate::option::get_sidescrolloff_value;
 use crate::os::cshim::gettext;
@@ -62,7 +62,7 @@ enum Place {
 /// key back to the caller through `nchar_arg`; everything else is an error.
 pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument and `nchar_arg`
     // points at the caller's own second character.
     if check_clear_op(ca.op()) {
@@ -111,7 +111,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
 /// running its tail.
 pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<(), Failed> {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
     let mut undo = false;
     if nchar == 'u' as c_int {
@@ -177,7 +177,7 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<()
 /// Scroll sideways by `count1` columns, which 'wrap' makes meaningless.
 unsafe fn scroll_sideways(cap: *mut cmdarg_T, right: bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let win = cur_win();
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
@@ -232,7 +232,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
 /// The fold half of the `z` tree. Answers whether the key was one of them.
 unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
     // Whether the cursor is inside a fold, which is what decides between
     // opening and closing for the toggles.
@@ -390,7 +390,7 @@ unsafe fn nv_zet_fold(cap: *mut cmdarg_T, nchar: c_int, old_fdl: &mut c_int) -> 
 /// it is about.
 pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let mut ca = unsafe { CmdArgRef::new(cap) };
     let mut win = cur_win();
     let mut nchar = ca.nchar;
     let mut old_fdl = win.w_onebuf_opt.wo_fdl as c_int;

@@ -114,7 +114,7 @@ unsafe fn extmark_to_array(
 }
 
 pub unsafe fn nvim_buf_get_extmark_by_id(
-    buf: Buffer,
+    buf: BufferHandle,
     ns_id: Integer,
     id: Integer,
     opts: *mut KeyDict_get_extmark,
@@ -149,7 +149,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
 }
 
 pub unsafe fn nvim_buf_get_extmarks(
-    buf: Buffer,
+    buf: BufferHandle,
     ns_id: Integer,
     start: Object,
     end: Object,
@@ -348,7 +348,7 @@ unsafe fn extmark_get_index_from_obj(
 }
 
 pub unsafe fn nvim__buf_debug_extmarks(
-    buf: Buffer,
+    buf: BufferHandle,
     keys: Boolean,
     dot: Boolean,
 ) -> Result<String_0, Error> {

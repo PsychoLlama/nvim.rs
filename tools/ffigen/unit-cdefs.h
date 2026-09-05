@@ -283,7 +283,7 @@ typedef unsigned int BoolVarValue;
 typedef bool Boolean;
 typedef unsigned int BorderTextType;
 typedef int Handle;
-typedef Handle Buffer;
+typedef Handle BufferHandle;
 typedef int CdCause;
 typedef int CdScope;
 typedef unsigned int ChannelPart;
@@ -432,7 +432,7 @@ typedef uint8_t StlOpt;
 typedef int StlSyntax;
 typedef struct stream Stream;
 typedef int SynFlags;
-typedef Handle Tabpage;
+typedef Handle TabpageHandle;
 typedef unsigned int TermKeyEvent;
 typedef unsigned int TermKeyFormat;
 typedef unsigned int TermKeyMouseEvent;
@@ -475,7 +475,7 @@ typedef wbuffer WBuffer;
 typedef wininfo_S WinInfo;
 typedef unsigned int WinSplit;
 typedef unsigned int WinStyle;
-typedef Handle Window;
+typedef Handle WindowHandle;
 typedef int XDGVarType;
 typedef unsigned int XpPrefix;
 typedef void (*argv_callback)(void **);
@@ -1012,8 +1012,8 @@ struct Object {
 };
 struct KeyDict_clear_autocmds {
   OptionalKeys is_set__clear_autocmds_;
-  Buffer buffer;
-  Buffer buf;
+  BufferHandle buffer;
+  BufferHandle buf;
   Object event;
   Object group;
   Object pattern;
@@ -1082,8 +1082,8 @@ struct KeyDict_create_augroup {
 };
 struct KeyDict_create_autocmd {
   OptionalKeys is_set__create_autocmd_;
-  Buffer buffer;
-  Buffer buf;
+  BufferHandle buffer;
+  BufferHandle buf;
   Object callback;
   String command;
   String desc;
@@ -1110,7 +1110,7 @@ struct KeyDict_empty {
 };
 struct KeyDict_eval_statusline {
   OptionalKeys is_set__eval_statusline_;
-  Window winid;
+  WindowHandle winid;
   Integer maxwidth;
   String fillchar;
   Boolean highlights;
@@ -1120,8 +1120,8 @@ struct KeyDict_eval_statusline {
 };
 struct KeyDict_exec_autocmds {
   OptionalKeys is_set__exec_autocmds_;
-  Buffer buffer;
-  Buffer buf;
+  BufferHandle buffer;
+  BufferHandle buf;
   Object group;
   Boolean modeline;
   Object pattern;
@@ -1164,7 +1164,7 @@ struct KeyDict_get_highlight {
 };
 struct KeyDict_get_ns {
   OptionalKeys is_set__get_ns_;
-  Window winid;
+  WindowHandle winid;
 };
 struct KeyDict_highlight {
   OptionalKeys is_set__highlight_;
@@ -1246,8 +1246,8 @@ struct KeyDict_open_term {
 struct KeyDict_option {
   OptionalKeys is_set__option_;
   String scope;
-  Window win;
-  Buffer buf;
+  WindowHandle win;
+  BufferHandle buf;
   String filetype;
 };
 struct KeyDict_redraw {
@@ -1260,8 +1260,8 @@ struct KeyDict_redraw {
   Boolean tabline;
   Boolean winbar;
   Array range;
-  Window win;
-  Buffer buf;
+  WindowHandle win;
+  BufferHandle buf;
 };
 struct KeyDict_runtime {
   Boolean is_lua;
@@ -1351,7 +1351,7 @@ struct KeyDict_win_config {
   String style;
   Boolean noautocmd;
   Boolean vertical;
-  Window win;
+  WindowHandle win;
   Integer width;
   Integer zindex;
   String anchor;

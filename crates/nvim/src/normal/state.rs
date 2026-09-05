@@ -69,7 +69,7 @@ use core::ffi::{c_int, c_uint, c_void};
 use crate::r#move::{update_curswant, update_topline, validate_cursor};
 
 /// One pass of the normal-mode loop, which the caller has promised is live.
-/// [`CmdArg`]'s shape.
+/// [`CmdArgRef`]'s shape.
 ///
 /// The state has to be reached through a pointer rather than a `&mut`: the
 /// loop publishes the address of its own `oa` in `current_oap`, so a `&mut`
@@ -113,9 +113,9 @@ impl DerefMut for NormalStateRef {
 /// Field access goes through `Deref`, so it costs no `unsafe` at the site;
 /// the operator it is pending on is [`crate::ops::Op`], the same shape.
 #[derive(Clone, Copy)]
-pub(crate) struct CmdArg(*mut cmdarg_T);
+pub(crate) struct CmdArgRef(*mut cmdarg_T);
 
-impl CmdArg {
+impl CmdArgRef {
     /// # Safety
     /// `cap` must stay a live command argument for as long as the value is
     /// used.
@@ -129,7 +129,7 @@ impl CmdArg {
     }
 }
 
-impl Deref for CmdArg {
+impl Deref for CmdArgRef {
     type Target = cmdarg_T;
     fn deref(&self) -> &cmdarg_T {
         // SAFETY: the constructor's promise -- a live command argument.
@@ -137,7 +137,7 @@ impl Deref for CmdArg {
     }
 }
 
-impl DerefMut for CmdArg {
+impl DerefMut for CmdArgRef {
     fn deref_mut(&mut self) -> &mut cmdarg_T {
         // SAFETY: as `deref`; the borrow lasts only as long as the field
         // access that asked for it.
@@ -604,7 +604,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 /// in `v:count1` and as itself in `v:count`.
 pub(crate) unsafe fn set_vcount_ca(cap: *mut cmdarg_T, set_prevcount: &mut bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArgRef::new(cap) };
     let mut count = ca.count0 as int64_t;
     if ca.opcount != 0 {
         count = ca.opcount as int64_t * if count == 0 { 1 } else { count };

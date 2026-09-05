@@ -8,7 +8,7 @@
 //! `&mut` would invalidate a pointer the caller still holds.
 //!
 //! What does not have to stay raw is the *dereference*. [`Win`], [`Buf`],
-//! [`Frame`], [`TabPage`], [`Pos`] and [`Line`] each wrap one pointer and make
+//! [`FrameRef`], [`TabPage`], [`PosRef`] and [`Line`] each wrap one pointer and make
 //! its **construction** the unsafe step; from there [`Deref`]/[`DerefMut`] give
 //! ordinary field access and the handful of accessors below give the
 //! projections a bare `&`/`&mut` cannot express — the buffer behind a window, a
@@ -202,7 +202,7 @@ pub struct Buf(*mut buf_T);
 /// of child frames (`fr_child`, chained through `fr_next`); `fr_parent` walks
 /// back up. Which of the two a frame is, `fr_layout` says.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Frame(*mut frame_T);
+pub struct FrameRef(*mut frame_T);
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -210,7 +210,7 @@ pub struct TabPage(*mut tabpage_T);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Pos(*mut pos_T);
+pub struct PosRef(*mut pos_T);
 
 /// A NUL-terminated buffer line, as `ml_get_buf` hands it back.
 #[derive(Clone, Copy)]
@@ -253,7 +253,7 @@ impl DerefMut for Buf {
     }
 }
 
-impl Deref for Frame {
+impl Deref for FrameRef {
     type Target = frame_T;
 
     #[inline(always)]
@@ -263,7 +263,7 @@ impl Deref for Frame {
     }
 }
 
-impl DerefMut for Frame {
+impl DerefMut for FrameRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut frame_T {
         // SAFETY: the constructor's promise — a live frame.
@@ -289,7 +289,7 @@ impl DerefMut for TabPage {
     }
 }
 
-impl Deref for Pos {
+impl Deref for PosRef {
     type Target = pos_T;
 
     #[inline(always)]
@@ -299,7 +299,7 @@ impl Deref for Pos {
     }
 }
 
-impl DerefMut for Pos {
+impl DerefMut for PosRef {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut pos_T {
         // SAFETY: the constructor's promise — a live position.
@@ -384,20 +384,20 @@ impl Win {
     /// The leaf frame this window sits in. Every window has one, floats
     /// included — a float's frame is simply not linked into the layout tree.
     #[inline(always)]
-    pub fn frame(self) -> Frame {
+    pub fn frame(self) -> FrameRef {
         // A live window's `w_frame` is a live frame.
-        Frame(self.w_frame)
+        FrameRef(self.w_frame)
     }
 
     /// The window's cursor, which lives inside the window.
     #[inline(always)]
-    pub fn cursor(self) -> Pos {
+    pub fn cursor(self) -> PosRef {
         // A field's address is the object's plus a constant, and computing it
         // that way needs no dereference: `wrapping_byte_add` keeps the whole
         // `win_T`'s provenance, exactly as `&raw mut (*self.0).w_cursor`
         // would, without asking the window to be readable to say where its
         // cursor is.
-        Pos(self.0.wrapping_byte_add(offset_of!(win_T, w_cursor)).cast())
+        PosRef(self.0.wrapping_byte_add(offset_of!(win_T, w_cursor)).cast())
     }
 
     /// The buffer this window shows, `None` for the moment between losing one
@@ -465,7 +465,7 @@ impl Win {
 
     /// First and last virtual column of the character at `pos`.
     #[inline(always)]
-    pub fn vcol_span(self, pos: Pos) -> (ColNr, ColNr) {
+    pub fn vcol_span(self, pos: PosRef) -> (ColNr, ColNr) {
         let (mut start, mut end) = (0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
@@ -474,7 +474,7 @@ impl Win {
 
     /// Start, cursor and end virtual column of the character at `pos`.
     #[inline(always)]
-    pub fn vcol_triple(self, pos: Pos) -> (ColNr, ColNr, ColNr) {
+    pub fn vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {
         let (mut start, mut cursor, mut end) = (0, 0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
@@ -483,13 +483,13 @@ impl Win {
 
     /// The first virtual column of the character at `pos`.
     #[inline(always)]
-    pub fn vcol(self, pos: Pos) -> ColNr {
+    pub fn vcol(self, pos: PosRef) -> ColNr {
         self.vcol_span(pos).0
     }
 
     /// [`Win::vcol_span`] with 'virtualedit' taken into account.
     #[inline(always)]
-    pub fn virtual_vcol_span(self, pos: Pos) -> (ColNr, ColNr) {
+    pub fn virtual_vcol_span(self, pos: PosRef) -> (ColNr, ColNr) {
         let (mut start, mut end) = (0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
@@ -498,7 +498,7 @@ impl Win {
 
     /// [`Win::vcol_triple`] with 'virtualedit' taken into account.
     #[inline(always)]
-    pub fn virtual_vcol_triple(self, pos: Pos) -> (ColNr, ColNr, ColNr) {
+    pub fn virtual_vcol_triple(self, pos: PosRef) -> (ColNr, ColNr, ColNr) {
         let (mut start, mut cursor, mut end) = (0, 0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
@@ -508,14 +508,14 @@ impl Win {
     /// The first virtual column of the character at `pos`, 'virtualedit'
     /// included.
     #[inline(always)]
-    pub fn virtual_vcol(self, pos: Pos) -> ColNr {
+    pub fn virtual_vcol(self, pos: PosRef) -> ColNr {
         self.virtual_vcol_span(pos).0
     }
 
     /// The virtual column the *cursor* shows at within the character at
     /// `pos`, which is not its first column when the character is a tab.
     #[inline(always)]
-    pub fn virtual_cursor_vcol(self, pos: Pos) -> ColNr {
+    pub fn virtual_cursor_vcol(self, pos: PosRef) -> ColNr {
         let mut cursor = 0;
         let (none, c) = (ptr::null_mut(), &raw mut cursor);
         // SAFETY: a live window and a live position in its buffer.
@@ -610,7 +610,7 @@ impl Buf {
 
     /// Step `pos` back off a trail byte, so it names a whole character.
     #[inline(always)]
-    pub fn snap_to_char(self, pos: Pos) {
+    pub fn snap_to_char(self, pos: PosRef) {
         // SAFETY: a live buffer and a live position in it.
         unsafe { mark_mb_adjustpos(self.0, pos.0) };
     }
@@ -628,7 +628,7 @@ impl Buf {
     }
 }
 
-impl Frame {
+impl FrameRef {
     /// # Safety
     /// `fp` must stay a live frame for as long as the value is used.
     #[inline(always)]
@@ -778,13 +778,13 @@ impl TabPage {
     /// too (`min_rows`, `win_vert_neighbor`), so this does not switch to the
     /// `topframe` global the way [`windows_in_tab`] switches to `firstwin`.
     #[inline(always)]
-    pub fn topframe(self) -> Frame {
+    pub fn topframe(self) -> FrameRef {
         // A live tab page's top frame is live.
-        Frame(self.tp_topframe)
+        FrameRef(self.tp_topframe)
     }
 }
 
-impl Pos {
+impl PosRef {
     /// # Safety
     /// `pos` must stay a live position for as long as the value is used.
     #[inline(always)]
@@ -950,13 +950,13 @@ pub fn tab_windows() -> impl Iterator<Item = Win> {
 
 /// `first` and every frame after it in its row or column: the C's
 /// `FOR_ALL_FRAMES(frp, first)`, whose head is usually a `fr_child`.
-pub fn frames(first: Option<Frame>) -> impl Iterator<Item = Frame> {
+pub fn frames(first: Option<FrameRef>) -> impl Iterator<Item = FrameRef> {
     iter::successors(first, |fr| fr.next())
 }
 
 /// [`frames`] the other way, following `fr_prev`. The C spells this out as a
 /// `while` loop each time it needs it (`frame_setheight`'s second run, say).
-pub fn frames_back(first: Option<Frame>) -> impl Iterator<Item = Frame> {
+pub fn frames_back(first: Option<FrameRef>) -> impl Iterator<Item = FrameRef> {
     iter::successors(first, |fr| fr.prev())
 }
 

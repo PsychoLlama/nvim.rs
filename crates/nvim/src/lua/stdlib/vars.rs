@@ -27,7 +27,8 @@ use crate::lua::ffi::{
 };
 use crate::runtime::script_autoload;
 use crate::types::{
-    Buffer, Dict, DictItem, Error, Handle, String_0, Tabpage, Window, lua_State, ptrdiff_t, size_t,
+    BufferHandle, Dict, DictItem, Error, Handle, String_0, TabpageHandle, WindowHandle, lua_State,
+    ptrdiff_t, size_t,
 };
 
 /// The dictionary the `(scope, handle)` pair at stack slots 1 and 2 names.
@@ -47,7 +48,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
             b"g" => get_globvar_dict(),
             b"v" => get_vimvar_dict(),
             b"b" => {
-                let buf = find_buffer_by_handle(handle as Buffer, &mut err);
+                let buf = find_buffer_by_handle(handle as BufferHandle, &mut err);
                 if buf.is_null() {
                     ptr::null_mut()
                 } else {
@@ -55,7 +56,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
                 }
             }
             b"w" => {
-                let win = find_window_by_handle(handle as Window, &mut err);
+                let win = find_window_by_handle(handle as WindowHandle, &mut err);
                 if win.is_null() {
                     ptr::null_mut()
                 } else {
@@ -63,7 +64,7 @@ unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut Dict {
                 }
             }
             b"t" => {
-                let tabpage = find_tab_by_handle(handle as Tabpage, &mut err);
+                let tabpage = find_tab_by_handle(handle as TabpageHandle, &mut err);
                 if tabpage.is_null() {
                     ptr::null_mut()
                 } else {

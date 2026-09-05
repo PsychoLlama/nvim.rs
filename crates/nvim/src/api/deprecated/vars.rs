@@ -12,7 +12,7 @@ use crate::api::private::helpers::{
 };
 
 pub unsafe fn buffer_set_var(
-    buffer: Buffer,
+    buffer: BufferHandle,
     name: String_0,
     value: Object,
     arena: *mut Arena,
@@ -28,7 +28,7 @@ pub unsafe fn buffer_set_var(
 }
 
 pub unsafe fn buffer_del_var(
-    buffer: Buffer,
+    buffer: BufferHandle,
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
@@ -42,7 +42,7 @@ pub unsafe fn buffer_del_var(
 }
 
 pub unsafe fn window_set_var(
-    window: Window,
+    window: WindowHandle,
     name: String_0,
     value: Object,
     arena: *mut Arena,
@@ -57,7 +57,7 @@ pub unsafe fn window_set_var(
 }
 
 pub unsafe fn window_del_var(
-    window: Window,
+    window: WindowHandle,
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
@@ -71,7 +71,7 @@ pub unsafe fn window_del_var(
 }
 
 pub unsafe fn tabpage_set_var(
-    tabpage: Tabpage,
+    tabpage: TabpageHandle,
     name: String_0,
     value: Object,
     arena: *mut Arena,
@@ -86,7 +86,7 @@ pub unsafe fn tabpage_set_var(
 }
 
 pub unsafe fn tabpage_del_var(
-    tabpage: Tabpage,
+    tabpage: TabpageHandle,
     name: String_0,
     arena: *mut Arena,
 ) -> Result<Object, Error> {

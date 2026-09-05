@@ -34,7 +34,7 @@ use core::ffi::c_int;
 
 use super::{FR_COL, FR_ROW, FRACTION_MULT, NOWIN};
 use crate::types::win_T;
-use crate::winlayer::Frame;
+use crate::winlayer::FrameRef;
 
 /// The C's `next_curwin` argument to [`frame_minheight`]/[`frame_minwidth`],
 /// whose three states are three different rules — and which is why they are
@@ -100,7 +100,7 @@ pub struct MinSize {
 /// A leaf costs its window's minimum plus the rows that are not text (window
 /// bar, separator, status line); a row of frames costs the tallest of them and
 /// a column the sum.
-pub fn frame_minheight(topfrp: Frame, next_curwin: NextCurwin, opts: MinSize) -> c_int {
+pub fn frame_minheight(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize) -> c_int {
     if let Some(win) = topfrp.win() {
         // Combined height of window bar and separator column or status line.
         let extra_height = win.w_winbar_height + win.w_hsep_height + win.w_status_height;
@@ -131,7 +131,7 @@ pub fn frame_minheight(topfrp: Frame, next_curwin: NextCurwin, opts: MinSize) ->
 /// The minimal width of frame `topfrp`, from `frame_minwidth()`: the mirror of
 /// [`frame_minheight`], with a column taking the widest child and a row the
 /// sum, and the separator column standing in for the status line.
-pub fn frame_minwidth(topfrp: Frame, next_curwin: NextCurwin, opts: MinSize) -> c_int {
+pub fn frame_minwidth(topfrp: FrameRef, next_curwin: NextCurwin, opts: MinSize) -> c_int {
     if let Some(win) = topfrp.win() {
         if next_curwin.is(win.raw()) {
             // Saturating: `'winwidth'` is an unclamped option.
@@ -161,7 +161,7 @@ pub fn frame_minwidth(topfrp: Frame, next_curwin: NextCurwin, opts: MinSize) -> 
 ///
 /// Only a *row*'s children are checked, because only they share their parent's
 /// height; a column's are expected to differ, and so are not looked at.
-pub fn frame_check_height(topfrp: Frame, height: c_int) -> bool {
+pub fn frame_check_height(topfrp: FrameRef, height: c_int) -> bool {
     if topfrp.fr_height != height {
         return false;
     }
@@ -174,7 +174,7 @@ pub fn frame_check_height(topfrp: Frame, height: c_int) -> bool {
 /// Whether `topfrp` and its children are at width `width`, from
 /// `frame_check_width()` — [`frame_check_height`] with the axes exchanged, so
 /// it is a *column* whose children must match.
-pub fn frame_check_width(topfrp: Frame, width: c_int) -> bool {
+pub fn frame_check_width(topfrp: FrameRef, width: c_int) -> bool {
     if topfrp.fr_width != width {
         return false;
     }

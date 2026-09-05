@@ -41,8 +41,8 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Buffer, ColNr, Error, FAIL, FloatAnchor, LineNr, OptInt, OptScope, OptVal,
-    OptionSetFlags, ScreenChar, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window,
+    AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LineNr, OptInt, OptScope, OptVal,
+    OptionSetFlags, ScreenChar, String_0, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle,
     kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
     kFloatRelativeMouse, kFloatRelativeWindow, lpos_T, pos_T, tabpage_T, win_T,
 };
@@ -300,11 +300,11 @@ fn set_window_buf(win: Win, buf: Buf, err: &mut Error) {
     // SAFETY: a live window and buffer, and the caller's error slot.
     unsafe { win_set_buf(win.raw(), buf.raw(), err) };
 }
-fn find_window(handle: Window, err: &mut Error) -> Option<Win> {
+fn find_window(handle: WindowHandle, err: &mut Error) -> Option<Win> {
     // SAFETY: the caller's error slot; the answer is a live window or null.
     unsafe { NonNull::new(find_window_by_handle(handle, err)).map(|w| Win::new(w.as_ptr())) }
 }
-fn find_buffer(handle: Buffer, err: &mut Error) -> Option<Buf> {
+fn find_buffer(handle: BufferHandle, err: &mut Error) -> Option<Buf> {
     // SAFETY: the caller's error slot; the answer is a live buffer or null.
     unsafe { NonNull::new(find_buffer_by_handle(handle, err)).map(|b| Buf::new(b.as_ptr())) }
 }
@@ -349,7 +349,7 @@ fn screen_pos_of(win: Win, pos: &mut pos_T) -> (c_int, c_int) {
     unsafe { textpos2screenpos(win.raw(), pos, r, s, c, e, true) };
     (row, scol)
 }
-fn create_scratch_buffer(err: &mut Error) -> Buffer {
+fn create_scratch_buffer(err: &mut Error) -> BufferHandle {
     // SAFETY: nothing here outlives the call.
     match unsafe { nvim_create_buf(false, true) } {
         Ok(buf) => buf,
@@ -590,14 +590,14 @@ pub(crate) fn win_config_float(win: Win, mut fconfig: WinConfig) {
         fconfig.relative = kFloatRelativeWindow;
         fconfig.row += f64::from(cur.w_wrow);
         fconfig.col += f64::from(cur.w_wcol);
-        fconfig.window = cur.handle as Window;
+        fconfig.window = cur.handle as WindowHandle;
     } else if fconfig.relative == kFloatRelativeMouse {
         let mut pos = MousePos::current();
         if let Some(mouse_win) = find_win_inner(&mut pos) {
             fconfig.relative = kFloatRelativeWindow;
             fconfig.row += f64::from(pos.row);
             fconfig.col += f64::from(pos.col);
-            fconfig.window = mouse_win.handle as Window;
+            fconfig.window = mouse_win.handle as WindowHandle;
         }
     }
 

@@ -56,10 +56,10 @@ use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, Buffer, Dict, Error, Float, Handle, Hlf, Integer, LineNr, Object, OptInt,
-    OptVal, ScreenAttr, ScreenChar, String_0, VarNumber, VirtText, VirtTextChunk, WinConfig,
-    WinSplit, WinStyle, Window, exarg_T, kBoolVarFalse, kBoolVarTrue, lpos_T, pumitem_T, size_t,
-    tabpage_T, uint32_t, vimmenu_T, win_T,
+    AlignTextPos, Array, BufferHandle, Dict, Error, Float, Handle, Hlf, Integer, LineNr, Object,
+    OptInt, OptVal, ScreenAttr, ScreenChar, String_0, VarNumber, VirtText, VirtTextChunk,
+    WinConfig, WinSplit, WinStyle, WindowHandle, exarg_T, kBoolVarFalse, kBoolVarTrue, lpos_T,
+    pumitem_T, size_t, tabpage_T, uint32_t, vimmenu_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -605,7 +605,7 @@ unsafe fn pum_send_float_pos() {
     let anchor = unsafe { cstr_as_string(anchor.as_ptr()) };
     ui_call_win_float_pos(
         grid.handle as Integer,
-        -1 as Window,
+        -1 as WindowHandle,
         anchor,
         pum_anchor_grid.get() as Integer,
         (pum_row.get() - row_off - pum_win_row_offset.get()) as Float,

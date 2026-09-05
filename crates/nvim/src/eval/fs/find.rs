@@ -15,7 +15,7 @@
 //!
 //! # What holds the results
 //!
-//! [`Expand`] is the wildcard expander and [`StrArray`] the `GArray` of
+//! [`Expander`] is the wildcard expander and [`StrArray`] the `GArray` of
 //! owned strings `globpath()` and `readdir_core` fill; both hand out their
 //! names as a slice, and [`StrArray`] frees itself, which is upstream's
 //! `ga_clear_strings` on every path out.  **The order of those names is
@@ -53,9 +53,9 @@ use core::{ptr, slice};
 // ---------------------------------------------------------------------
 
 /// The wildcard expander, over file names.
-struct Expand(expand_T);
+struct Expander(expand_T);
 
-impl Expand {
+impl Expander {
     /// A fresh expander with 'wildignorecase' folded into the caller's
     /// options, as `glob()` wants it.
     fn new() -> Self {
@@ -357,7 +357,7 @@ pub unsafe fn f_glob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
         return;
     }
 
-    let mut xpc = Expand::new();
+    let mut xpc = Expander::new();
     if p_wic.get() != 0 {
         options |= WildOpts::ICASE;
     }

@@ -28,7 +28,7 @@ pub unsafe fn nvim_create_autocmd(
     let mut error = Error::none();
     let au_group: ::core::ffi::c_int;
     let has_buf: bool;
-    let buf: Buffer;
+    let buf: BufferHandle;
     let patterns: Array;
     let mut autocmd_id: int64_t = -1 as int64_t;
     let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -283,7 +283,7 @@ pub unsafe fn nvim_clear_autocmds(
         get_patterns_from_pattern_or_buf(
             opts.pattern,
             has_buf,
-            buf as Buffer,
+            buf as BufferHandle,
             c"".as_ptr() as *mut ::core::ffi::c_char,
             arena,
             &mut error,

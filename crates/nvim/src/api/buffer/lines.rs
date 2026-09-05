@@ -16,7 +16,7 @@ use crate::normal::{visual_active, visual_anchor, with_visual_anchor};
 use crate::types::NUL;
 use crate::winlayer::{Buf, tab_windows};
 
-pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
+pub unsafe fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
@@ -32,7 +32,7 @@ pub unsafe fn nvim_buf_line_count(buf: Buffer) -> Result<Integer, Error> {
 
 pub unsafe fn nvim_buf_get_lines(
     channel_id: uint64_t,
-    buf: Buffer,
+    buf: BufferHandle,
     mut start: Integer,
     mut end: Integer,
     strict_indexing: Boolean,
@@ -76,7 +76,7 @@ pub unsafe fn nvim_buf_get_lines(
 
 pub unsafe fn nvim_buf_set_lines(
     channel_id: uint64_t,
-    buf: Buffer,
+    buf: BufferHandle,
     mut start: Integer,
     mut end: Integer,
     strict_indexing: Boolean,
@@ -286,7 +286,7 @@ pub unsafe fn nvim_buf_set_lines(
 
 pub unsafe fn nvim_buf_get_text(
     channel_id: uint64_t,
-    buf: Buffer,
+    buf: BufferHandle,
     mut start_row: Integer,
     start_col: Integer,
     mut end_row: Integer,
@@ -371,7 +371,7 @@ pub unsafe fn nvim_buf_get_text(
     rv.reported(error)
 }
 
-pub unsafe fn nvim_buf_get_offset(buf: Buffer, index: Integer) -> Result<Integer, Error> {
+pub unsafe fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
     let mut error = Error::none();
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {

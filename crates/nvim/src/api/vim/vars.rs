@@ -14,7 +14,7 @@ use crate::message_fmt::c_str;
 
 /// The current buffer's handle and the cursor's line, as the deprecated
 /// `buffer_*_line` trio take them -- a zero-based index.
-fn cursor_line() -> (Buffer, Integer) {
+fn cursor_line() -> (BufferHandle, Integer) {
     // SAFETY: `curbuf` and `curwin` name live objects for the editor's whole
     // run.
     let (buf, lnum) = unsafe { ((*curbuf.get()).handle, (*curwin.get()).w_cursor.lnum) };

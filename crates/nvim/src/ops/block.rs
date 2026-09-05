@@ -29,7 +29,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::winlayer::{Buf, Pos, Win};
+use crate::winlayer::{Buf, PosRef, Win};
 use core::ffi::{c_char, c_int, c_void};
 
 use super::*;
@@ -415,7 +415,7 @@ pub unsafe fn charwise_block_prep(
     if lnum == start.lnum {
         startcol = start.col;
         if op_virtual() {
-            let at = unsafe { Pos::new(&raw mut start) };
+            let at = unsafe { PosRef::new(&raw mut start) };
             let (cs, ce) = cur_win().vcol_span(at);
             if ce != cs && start.coladd > 0 {
                 // Part of a TAB is selected -- but do not double-count it.
@@ -429,7 +429,7 @@ pub unsafe fn charwise_block_prep(
     if lnum == end.lnum {
         endcol = end.col;
         if op_virtual() {
-            let at = unsafe { Pos::new(&raw mut end) };
+            let at = unsafe { PosRef::new(&raw mut end) };
             let (cs, ce) = cur_win().vcol_span(at);
             // No padding for a double-width character: `endcol` is then on
             // the last byte of the character, not past it.

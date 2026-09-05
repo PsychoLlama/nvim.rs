@@ -74,7 +74,7 @@ pub unsafe fn nvim_exec_autocmds(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__buffer,
     );
-    let buf: Buffer = if has_key(
+    let buf: BufferHandle = if has_key(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__buf,
     ) {

@@ -159,7 +159,7 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
         };
         // SAFETY: a live current window, and a local position in the cursor's
         // own line.
-        unsafe { getvpos(Win::current(), Pos::new(&raw mut vpos), oap.start_vcol) };
+        unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), oap.start_vcol) };
         bd.startspaces += vpos.coladd;
     }
 

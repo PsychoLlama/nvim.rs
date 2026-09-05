@@ -500,7 +500,7 @@ pub(super) fn set_manual_fold_win(
     let mut level = 0;
     let mut use_level = false;
     let mut found_fold = false;
-    let mut found: Option<Fold> = None;
+    let mut found: Option<FoldRef> = None;
     let mut next = MAXLNUM as LineNr;
     let mut off: LineNr = 0;
     let mut done: c_int = 0;
@@ -576,7 +576,7 @@ pub(super) fn set_manual_fold_win(
 }
 
 /// Open all folds nested inside `fold`, recursively.
-pub(super) fn fold_open_nested(fold: Fold) {
+pub(super) fn fold_open_nested(fold: FoldRef) {
     for child in fold.nested().folds() {
         fold_open_nested(child);
         child.set_flags(FD_OPEN);
@@ -596,7 +596,7 @@ pub(super) fn fold_open_nested(fold: Fold) {
 /// `wp` must be a live window, and `fold` one of its folds at `lnum_off`.
 pub(super) unsafe fn check_closed(
     win: Win,
-    fold: Fold,
+    fold: FoldRef,
     use_levelp: &mut bool,
     level: c_int,
     maybe_smallp: &mut bool,

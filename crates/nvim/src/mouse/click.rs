@@ -69,7 +69,7 @@ pub(crate) fn call_click_def_func(click_defs: ClickDefs, col: c_int, which_butto
 ///
 /// Returns `IN_BUFFER` and sets `mpos.col` to the column when in buffer text.
 /// The column is one for the first column.
-pub(crate) fn get_fpos_of_mouse(mut mpos: Pos) -> c_int {
+pub(crate) fn get_fpos_of_mouse(mut mpos: PosRef) -> c_int {
     let mut pos = MousePos::current();
     if pos.row < 0 || pos.col < 0 {
         return IN_UNKNOWN; // check if it makes sense
@@ -181,7 +181,7 @@ fn leaves_selection(m_pos_flag: c_int, mut m_pos: pos_T) -> bool {
         let (leftcol, rightcol) = vcols_between(win, cursor, visual);
         // The click's own virtual column, as the cursor would show it.
         // SAFETY: a live local position in the current buffer.
-        m_pos.col = win.vcol_triple(unsafe { Pos::new(&raw mut m_pos) }).1;
+        m_pos.col = win.vcol_triple(unsafe { PosRef::new(&raw mut m_pos) }).1;
         return m_pos.col < leftcol || m_pos.col > rightcol;
     }
     false

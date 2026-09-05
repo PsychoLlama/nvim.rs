@@ -23,7 +23,8 @@
 )]
 
 use super::{
-    ApiDict, Array, Buffer, Float, Integer, KeyValuePair, LuaRef, Object, String_0, Tabpage, Window,
+    ApiDict, Array, BufferHandle, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
+    TabpageHandle, WindowHandle,
 };
 use core::ffi::{CStr, c_char};
 
@@ -86,17 +87,17 @@ impl Object {
 
     /// A window handle. Handles are `Handle`; the variant carries the
     /// widened [`Integer`] the wire and the union arm always did.
-    pub const fn window(value: Window) -> Self {
+    pub const fn window(value: WindowHandle) -> Self {
         Self::Window(value as Integer)
     }
 
     /// A buffer handle. See [`Object::window`].
-    pub const fn buffer(value: Buffer) -> Self {
+    pub const fn buffer(value: BufferHandle) -> Self {
         Self::Buffer(value as Integer)
     }
 
     /// A tabpage handle. See [`Object::window`].
-    pub const fn tabpage(value: Tabpage) -> Self {
+    pub const fn tabpage(value: TabpageHandle) -> Self {
         Self::Tabpage(value as Integer)
     }
 }

@@ -2,7 +2,7 @@
 //! between folds, and the arithmetic that repairs `fd_top`/`fd_len` after
 //! lines are inserted, deleted or moved.
 //!
-//! Every entry point here walks the tree through [`FoldList`] and [`Fold`],
+//! Every entry point here walks the tree through [`FoldList`] and [`FoldRef`],
 //! so the pointer arithmetic that used to be spelled out at each site now
 //! happens once, in [`super::list`].
 
@@ -474,7 +474,7 @@ pub(super) unsafe fn fold_reverse_order(folds: FoldList, start_arg: c_int, end_a
 
 /// Drop everything in `fold` below line `end`, nested folds included.
 ///
-pub(super) fn truncate_fold(fold: Fold, end: LineNr) {
+pub(super) fn truncate_fold(fold: FoldRef, end: LineNr) {
     let end = end + 1;
     fold_remove(fold.nested(), end - fold.top(), MAXLNUM as LineNr);
     fold.set_len(end - fold.top());
@@ -626,7 +626,7 @@ pub unsafe fn fold_move_range(gap: *mut GArray, line1: LineNr, line2: LineNr, de
 ///
 /// # Safety
 /// Both must be entries of `folds`.
-pub(super) unsafe fn fold_merge(fold1: Fold, folds: FoldList, fold2: Fold) {
+pub(super) unsafe fn fold_merge(fold1: FoldRef, folds: FoldList, fold2: FoldRef) {
     let (inner1, inner2) = (fold1.nested(), fold2.nested());
     // If the last fold nested in `fold1` touches the first one nested in
     // `fold2`, those two merge as well.

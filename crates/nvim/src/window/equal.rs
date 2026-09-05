@@ -18,7 +18,7 @@ use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::main::{Columns, cmdline_row, p_ead, p_ls, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{OptInt, win_T};
-use crate::winlayer::{Frame, Win};
+use crate::winlayer::{FrameRef, Win};
 
 pub unsafe fn win_equal(next_curwin: *mut win_T, current: bool, dir: c_int) {
     // SAFETY: the caller's promise -- a live window, or null for "the current
@@ -60,7 +60,7 @@ pub(crate) fn equal(next_curwin: Option<Win>, current: bool, dir: c_int) {
 fn equal_rec(
     next_curwin: Win,
     current: bool,
-    topfr: Frame,
+    topfr: FrameRef,
     dir: c_int,
     col: c_int,
     row: c_int,
@@ -77,7 +77,7 @@ fn equal_rec(
 }
 
 /// A leaf: move and resize the one window, and redraw if either changed.
-fn equal_leaf(topfr: Frame, col: c_int, row: c_int, width: c_int, height: c_int) {
+fn equal_leaf(topfr: FrameRef, col: c_int, row: c_int, width: c_int, height: c_int) {
     let mut win = topfr.win().expect("a leaf frame holds a window");
     if topfr.fr_height != height
         || win.w_winrow != row
@@ -123,7 +123,7 @@ impl Share {
 fn equal_row(
     next_curwin: Win,
     current: bool,
-    topfr: Frame,
+    topfr: FrameRef,
     dir: c_int,
     col: c_int,
     row: c_int,
@@ -193,7 +193,7 @@ fn equal_row(
 }
 
 /// The width `next_curwin` may have and the room left for everyone else.
-fn row_share(next_curwin: Win, topfr: Frame, col: c_int, width: c_int) -> Share {
+fn row_share(next_curwin: Win, topfr: FrameRef, col: c_int, width: c_int) -> Share {
     // The maximum number of windows horizontally in this frame; the rightmost
     // one has no separator, so it is worth one extra column.
     let mut n = minwidth(topfr, NextCurwin::NoWin);
@@ -270,7 +270,7 @@ fn row_share(next_curwin: Win, topfr: Frame, col: c_int, width: c_int) -> Share 
 fn equal_col(
     next_curwin: Win,
     current: bool,
-    topfr: Frame,
+    topfr: FrameRef,
     dir: c_int,
     col: c_int,
     row: c_int,
@@ -335,7 +335,7 @@ fn equal_col(
 }
 
 /// [`row_share`] with the axes exchanged.
-fn col_share(next_curwin: Win, topfr: Frame, row: c_int, height: c_int) -> Share {
+fn col_share(next_curwin: Win, topfr: FrameRef, row: c_int, height: c_int) -> Share {
     let mut n = minheight(topfr, NextCurwin::NoWin);
     // Add one for the bottom window if it has neither status line nor
     // separator.

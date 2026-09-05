@@ -163,7 +163,7 @@ pub unsafe fn current_block(
             // SAFETY: `start_pos` and the cursor are positions in the
             // current buffer, which is what `incl`/`decl` step through;
             // both report running off the first or last line themselves.
-            // `Pos` derefs to the cursor alone, not the whole window.
+            // `PosRef` derefs to the cursor alone, not the whole window.
             unsafe { incl(&mut start_pos) };
             sol = cur_win().w_cursor.col == 0;
             unsafe { decl(&mut cur_win().cursor()) };

@@ -75,7 +75,7 @@ use crate::normal::end_visual_mode;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::types::*;
 use crate::winlayer::{
-    Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
+    Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
 use ::libc::strtol;
 use core::ffi::{CStr, c_char, c_int};

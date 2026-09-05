@@ -129,7 +129,7 @@ pub(super) unsafe fn put_foldopen_recurse(
 /// `fd` must be an open stream.
 pub(super) unsafe fn put_fold_open_close(
     fd: *mut FILE,
-    fold: Fold,
+    fold: FoldRef,
     off: LineNr,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise; both formats match their arguments.

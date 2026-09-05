@@ -36,7 +36,7 @@ unsafe fn buf_set_sign(
     group: *const c_char,
     prio: c_int,
     lnum: LineNr,
-    def: Sign,
+    def: SignRef,
 ) {
     // SAFETY: the caller's buffer.
     let buf = unsafe { Buf::new(buf) };
@@ -113,7 +113,7 @@ unsafe fn buf_mod_sign(
     id: *mut uint32_t,
     group: *const c_char,
     prio: c_int,
-    def: Sign,
+    def: SignRef,
 ) -> LineNr {
     // SAFETY: the caller's group name.
     let Some(ns) = (unsafe { placed_ns(group) }) else {

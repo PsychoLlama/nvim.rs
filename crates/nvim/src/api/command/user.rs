@@ -46,7 +46,7 @@ pub unsafe fn nvim_del_user_command(name: String_0) -> Result<(), Error> {
 
 pub unsafe fn nvim_buf_create_user_command(
     channel_id: uint64_t,
-    buf: Buffer,
+    buf: BufferHandle,
     name: String_0,
     cmd: Object,
     opts: *mut KeyDict_user_command,
@@ -68,7 +68,7 @@ pub unsafe fn nvim_buf_create_user_command(
     ().reported(error)
 }
 
-pub unsafe fn nvim_buf_del_user_command(buf: Buffer, name: String_0) -> Result<(), Error> {
+pub unsafe fn nvim_buf_del_user_command(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let table = if buf == -1 {
         Table::Global
@@ -375,7 +375,7 @@ pub unsafe fn nvim_get_commands(
 }
 
 pub unsafe fn nvim_buf_get_commands(
-    buf: Buffer,
+    buf: BufferHandle,
     opts: *mut KeyDict_get_commands,
     arena: *mut Arena,
 ) -> Result<ApiDict, Error> {

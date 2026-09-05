@@ -1,6 +1,6 @@
 //! Moving and validating a window's cursor position.
 //!
-//! Everything here speaks in [`Win`], [`Buf`], [`Pos`] and [`Line`] rather
+//! Everything here speaks in [`Win`], [`Buf`], [`PosRef`] and [`Line`] rather
 //! than in references. Callers interleave these calls with reads of the
 //! `curwin`/`curbuf` globals — which alias the same windows — and several of
 //! them re-enter through `ml_replace` and the extmark bookkeeping, so a
@@ -48,14 +48,14 @@ use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, StrCharInfo, int64_t, pos_T,
 };
-use crate::winlayer::{Buf, Line, Pos, Win};
+use crate::winlayer::{Buf, Line, PosRef, Win};
 
 const TAB: c_int = 9;
 
 // ---------------------------------------------------------------------------
 // The window layer, as this module uses it
 //
-// [`Win`], [`Buf`], [`Pos`] and [`Line`] are the shared wrappers, whose
+// [`Win`], [`Buf`], [`PosRef`] and [`Line`] are the shared wrappers, whose
 // constructors carry the whole promise; what follows are the projections only
 // the cursor's own arithmetic asks for.
 
@@ -168,7 +168,7 @@ impl Measure {
     }
 }
 
-impl Pos {
+impl PosRef {
     #[inline(always)]
     fn lnum(self) -> LineNr {
         self.lnum
@@ -229,7 +229,7 @@ pub unsafe fn getviscol2(col: ColNr, coladd: ColNr) -> ColNr {
         col,
         coladd,
     };
-    win.virtual_vcol(unsafe { Pos::new(&raw mut pos) })
+    win.virtual_vcol(unsafe { PosRef::new(&raw mut pos) })
 }
 
 /// Move the cursor to virtual column `wcol`, inserting the spaces needed to
@@ -280,7 +280,7 @@ pub fn coladvance(win: Win, wcol: ColNr) -> bool {
 /// `pos` must name a line of `win`'s buffer.
 unsafe fn coladvance2(
     win: Win,
-    pos: Pos,
+    pos: PosRef,
     addspaces: bool,
     finetune: bool,
     wcol_arg: ColNr,
@@ -431,7 +431,7 @@ unsafe fn pad_line(
 ///
 /// # Safety
 /// `pos` must name a line of `win`'s buffer.
-pub unsafe fn getvpos(win: Win, pos: Pos, wcol: ColNr) -> bool {
+pub unsafe fn getvpos(win: Win, pos: PosRef, wcol: ColNr) -> bool {
     // SAFETY: the caller's promise, forwarded.
     unsafe { coladvance2(win, pos, false, win.virtual_active(), wcol) }
 }

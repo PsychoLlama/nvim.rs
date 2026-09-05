@@ -17,7 +17,7 @@ use super::*;
 /// Clear all syntax info for one block.
 pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
     // SAFETY: the caller's promise -- a live syntax block.
-    let mut block = unsafe { SynBlock::new(block) };
+    let mut block = unsafe { SynBlockRef::new(block) };
     block.b_syn_error = false; // clear previous error
     block.b_syn_slow = false; // clear previous timeout
     block.b_syn_ic = 0; // Use case, by default
@@ -113,7 +113,7 @@ fn syntax_sync_clear() {
 /// Dropping the entry releases its text, its compiled program and its id
 /// lists; the items that borrow those lists are the cached states, which
 /// every caller of this drops with `syn_stack_free_all`.
-pub(crate) fn syn_remove_pattern(mut block: SynBlock, idx: usize) {
+pub(crate) fn syn_remove_pattern(mut block: SynBlockRef, idx: usize) {
     if block.patterns()[idx].sp_flags.has(SynFlags::FOLD) {
         block.b_syn_folditems -= 1;
     }

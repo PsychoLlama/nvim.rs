@@ -6,7 +6,7 @@
 //! own copy (see [`super::place`]) -- which is why redefining a placed sign
 //! has to walk the decoration store and patch every copy.
 //!
-//! Every read of a definition goes through [`Sign`], whose construction is
+//! Every read of a definition goes through [`SignRef`], whose construction is
 //! the promise that the definition is live; the accessors are ordinary safe
 //! Rust.
 
@@ -36,9 +36,9 @@ struct SignEntry {
 /// A sign definition the caller has promised is live. Definitions are boxed
 /// (see [`SIGNS`]), so one stays put until its box is dropped.
 #[derive(Clone, Copy)]
-pub(crate) struct Sign(*mut sign_T);
+pub(crate) struct SignRef(*mut sign_T);
 
-impl Sign {
+impl SignRef {
     /// # Safety
     /// `def` must be a live definition -- one [`SIGNS`] still holds.
     unsafe fn new(def: *mut sign_T) -> Self {
@@ -57,7 +57,7 @@ impl Sign {
     }
 }
 
-impl Deref for Sign {
+impl Deref for SignRef {
     type Target = sign_T;
     fn deref(&self) -> &sign_T {
         // SAFETY: the constructor's promise — a live definition.
@@ -65,7 +65,7 @@ impl Deref for Sign {
     }
 }
 
-impl DerefMut for Sign {
+impl DerefMut for SignRef {
     fn deref_mut(&mut self) -> &mut sign_T {
         // SAFETY: as above.
         unsafe { &mut *self.0 }
@@ -103,10 +103,10 @@ unsafe fn with_sign<R>(name: *const c_char, f: impl FnOnce(&mut Box<SignEntry>) 
 ///
 /// # Safety
 /// `name` must be a NUL-terminated string.
-pub(crate) unsafe fn sign_find(name: *const c_char) -> Option<Sign> {
+pub(crate) unsafe fn sign_find(name: *const c_char) -> Option<SignRef> {
     // SAFETY: the caller's name. The answer stays valid because each entry
     // is boxed and only `sign_undefine_by_name` ever drops one.
-    unsafe { with_sign(name, |e| Sign::new(&raw mut e.def)) }
+    unsafe { with_sign(name, |e| SignRef::new(&raw mut e.def)) }
 }
 
 /// Whether a sign is still defined under `name`.
@@ -122,12 +122,12 @@ unsafe fn sign_is_defined(name: *const c_char) -> bool {
 ///
 /// A snapshot rather than an iterator: `:sign list` and `sign_getdefined()`
 /// format each entry as they walk, and formatting can re-enter.
-pub(crate) fn sign_defs() -> Vec<Sign> {
+pub(crate) fn sign_defs() -> Vec<SignRef> {
     // SAFETY: each entry is boxed and lives until its own `swap_remove`.
     SIGNS.with_mut(|signs| {
         signs
             .iter_mut()
-            .map(|e| unsafe { Sign::new(&raw mut e.def) })
+            .map(|e| unsafe { SignRef::new(&raw mut e.def) })
             .collect()
     })
 }
@@ -253,7 +253,7 @@ pub(crate) unsafe fn sign_define_by_name(
             let def = &raw mut entry.def;
             SIGNS.with_mut(|signs| signs.push(entry));
             // SAFETY: the entry was just pushed, and is boxed.
-            unsafe { Sign::new(def) }
+            unsafe { SignRef::new(def) }
         }
     };
 
@@ -311,7 +311,7 @@ pub(crate) unsafe fn sign_define_by_name(
 ///
 /// # Safety
 /// `name` must be NUL-terminated.
-unsafe fn update_placements(name: *const c_char, def: Sign) {
+unsafe fn update_placements(name: *const c_char, def: SignRef) {
     // The definition is copied out so the store below cannot move the entry
     // underneath the walk.
     let def = *def;

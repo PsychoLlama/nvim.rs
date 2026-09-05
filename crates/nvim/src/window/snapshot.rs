@@ -30,7 +30,7 @@ use crate::pos::equalpos;
 use crate::types::{Handle, Integer, LineNr, NUL, OptInt, frame_T, tabpage_T, win_T};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
-    Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
+    Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
 
 // ---------------------------------------------------------------------------
@@ -114,9 +114,9 @@ fn snapshot_slot(tp: TabPage, idx: c_int) -> *mut *mut frame_T {
 }
 
 /// The saved frame tree in slot `idx` of `tp`, if there is one.
-fn snapshot_of(tp: TabPage, idx: c_int) -> Option<Frame> {
+fn snapshot_of(tp: TabPage, idx: c_int) -> Option<FrameRef> {
     // SAFETY: a saved tree is live until `drop_snapshot` frees it.
-    unsafe { Frame::from_raw(tp.tp_snapshot[idx as usize]) }
+    unsafe { FrameRef::from_raw(tp.tp_snapshot[idx as usize]) }
 }
 
 pub fn make_snapshot(idx: c_int) {
@@ -132,13 +132,13 @@ pub(crate) fn take_snapshot(idx: c_int) {
 
 /// Copy `fr` and everything hanging off it into a freshly allocated tree at
 /// `slot`.
-fn make_snapshot_rec(fr: Frame, slot: *mut *mut frame_T) {
+fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut frame_T) {
     // SAFETY: `xcalloc` aborts rather than answering null; `slot` is a field of
     // a live tab page or of a frame this walk has just allocated.
     let mut copy = unsafe {
         let frp = xcalloc(1, size_of::<frame_T>()).cast::<frame_T>();
         *slot = frp;
-        Frame::new(frp)
+        FrameRef::new(frp)
     };
     copy.fr_layout = fr.fr_layout;
     copy.fr_width = fr.fr_width;
@@ -164,7 +164,7 @@ pub(crate) fn drop_snapshot(tp: TabPage, idx: c_int) {
 }
 
 /// Free `fr` and everything hanging off it.
-fn clear_snapshot_rec(fr: Frame) {
+fn clear_snapshot_rec(fr: FrameRef) {
     if let Some(next) = fr.next() {
         clear_snapshot_rec(next);
     }
@@ -176,7 +176,7 @@ fn clear_snapshot_rec(fr: Frame) {
 
 /// The window a saved tree remembers as the current one: the last leaf that
 /// named one, searching `fr_next` before `fr_child`.
-fn snapshot_curwin_rec(ft: Frame) -> Option<Win> {
+fn snapshot_curwin_rec(ft: FrameRef) -> Option<Win> {
     if let Some(next) = ft.next()
         && let Some(wp) = snapshot_curwin_rec(next)
     {
@@ -223,7 +223,7 @@ pub(crate) fn restore_layout(idx: c_int, close_curwin: bool) {
 
 /// Whether the saved tree `sn` still has the shape of the live tree `fr`, and
 /// every window it remembers is still there.
-fn snapshot_matches(sn: Frame, fr: Frame) -> bool {
+fn snapshot_matches(sn: FrameRef, fr: FrameRef) -> bool {
     if sn.fr_layout != fr.fr_layout
         || sn.next().is_none() != fr.next().is_none()
         || sn.child().is_none() != fr.child().is_none()
@@ -246,7 +246,7 @@ fn snapshot_matches(sn: Frame, fr: Frame) -> bool {
 
 /// Give the live tree `fr` the sizes saved in `sn`, and answer the window `sn`
 /// remembered as current.
-fn restore_snapshot_rec(sn: Frame, fr: Frame) -> Option<Win> {
+fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
     let mut fr = fr;
     let mut wp = None;
     fr.fr_height = sn.fr_height;

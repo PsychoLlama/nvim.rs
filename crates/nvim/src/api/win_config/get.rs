@@ -126,7 +126,7 @@ unsafe fn border_array(fconfig: WinCfg, arena: *mut Arena) -> Array {
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
 pub unsafe fn nvim_win_get_config(
-    win: Window,
+    win: WindowHandle,
     arena: *mut Arena,
 ) -> Result<KeyDict_win_config, Error> {
     let mut error = Error::none();

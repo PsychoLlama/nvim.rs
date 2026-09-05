@@ -25,12 +25,12 @@ use crate::options::kOptInvalid;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::types::NL;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, Buffer, ColNr, DecorExt, DecorHighlightInline, DecorInline,
-    DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data, Error, Integer,
+    ApiDict, Arena, Array, Boolean, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
+    DecorInline, DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data, Error, Integer,
     KeyDict_empty, KeyDict_exec_opts, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex,
-    OptScope, OptVal, ScreenChar, String_0, StringBuilder, Tabpage, VirtText, Window, buf_T,
-    int64_t, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, lua_State, size_t, uint8_t,
-    uint16_t, uint32_t, uint64_t,
+    OptScope, OptVal, ScreenChar, String_0, StringBuilder, TabpageHandle, VirtText, WindowHandle,
+    buf_T, int64_t, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, lua_State, size_t,
+    uint8_t, uint16_t, uint32_t, uint64_t,
 };
 
 // The carve of the transpiled module; see each child's docs.

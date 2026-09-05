@@ -14,7 +14,7 @@ use crate::api::private::validate::{Bad, err_invalid};
 use crate::cstr;
 use crate::marktree::key::MtFlags;
 
-pub unsafe fn nvim_buf_get_number(buffer: Buffer) -> Result<Integer, Error> {
+pub unsafe fn nvim_buf_get_number(buffer: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
     let Some(buf) = buffer_by_handle(buffer, &mut error) else {
         return (0 as Integer).reported(error);
@@ -74,7 +74,7 @@ unsafe fn set_decor(
 }
 
 pub unsafe fn nvim_buf_clear_highlight(
-    buffer: Buffer,
+    buffer: BufferHandle,
     ns_id: Integer,
     line_start: Integer,
     line_end: Integer,
@@ -84,7 +84,7 @@ pub unsafe fn nvim_buf_clear_highlight(
 }
 
 pub unsafe fn nvim_buf_add_highlight(
-    buffer: Buffer,
+    buffer: BufferHandle,
     mut ns_id: Integer,
     hl_group: String_0,
     line: Integer,
@@ -145,7 +145,7 @@ pub unsafe fn nvim_buf_add_highlight(
 }
 
 pub unsafe fn nvim_buf_set_virtual_text(
-    buffer: Buffer,
+    buffer: BufferHandle,
     mut src_id: Integer,
     line: Integer,
     chunks: Array,

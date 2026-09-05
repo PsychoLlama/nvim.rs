@@ -26,7 +26,7 @@ use crate::semsg;
 use crate::types::{
     ColNr, Dict, EvalFuncData, LineNr, TypVal, VarNumber, int64_t, pos_T, size_t, win_T,
 };
-use crate::winlayer::{Pos, Win};
+use crate::winlayer::{PosRef, Win};
 
 impl Win {
     /// Scroll the window's own grid by `lines`, so that a `w_skipcol` change
@@ -226,7 +226,7 @@ pub unsafe fn textpos2screenpos(
     local: bool,
 ) {
     // SAFETY: the caller's promise.
-    let (win, pos) = unsafe { (Win::new(wp), Pos::new(pos)) };
+    let (win, pos) = unsafe { (Win::new(wp), PosRef::new(pos)) };
     let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) = (0, 0, 0);
     let mut coloff: ColNr = 0;
     let mut visible_row = false;

@@ -63,10 +63,10 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, ColNr, Dict, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
-    Object, OptVal, OptionSetFlags, RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions,
-    VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue,
-    VarNumber, aco_save_T, buf_T, exarg_T, int16_t, pos_T, size_t, uint8_t, win_T,
+    Arena, BufferHandle, ColNr, Dict, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr,
+    MarkAdjustMode, Object, OptVal, OptionSetFlags, RefcountSize, RgbValue, SaveVEvent, Terminal,
+    TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState,
+    VTermValue, VarNumber, aco_save_T, buf_T, exarg_T, int16_t, pos_T, size_t, uint8_t, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -846,9 +846,9 @@ pub(crate) unsafe fn terminal_get_line_attributes(
     }
 }
 
-pub(crate) unsafe fn terminal_buf(term: *const Terminal) -> Buffer {
+pub(crate) unsafe fn terminal_buf(term: *const Terminal) -> BufferHandle {
     // SAFETY: the caller hands over a live terminal.
-    unsafe { (*term).buf_handle as Buffer }
+    unsafe { (*term).buf_handle as BufferHandle }
 }
 
 pub(crate) unsafe fn terminal_running(term: *const Terminal) -> bool {

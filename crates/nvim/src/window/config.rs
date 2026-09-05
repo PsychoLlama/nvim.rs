@@ -36,9 +36,9 @@ use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, ScreenGrid, TryState, WinConfig,
-    WinStyle, Window, buf_T, int64_t, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, pos_T, size_t,
-    switchwin_T, win_T,
+    WinStyle, WindowHandle, buf_T, int64_t, kErrorTypeException, kFloatAnchorEast,
+    kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
+    pos_T, size_t, switchwin_T, win_T,
 };
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
@@ -200,7 +200,7 @@ fn ext_win_position(wp: Win, validate: bool) {
         {
             ui_call_win_pos(
                 wp.w_grid_alloc.handle as Integer,
-                wp.handle as Window,
+                wp.handle as WindowHandle,
                 wp.w_winrow as Integer,
                 wp.w_wincol as Integer,
                 wp.w_width as Integer,
@@ -211,7 +211,7 @@ fn ext_win_position(wp: Win, validate: bool) {
     }
     let c = wp.w_config.clone();
     if c.external {
-        ui_call_win_external_pos(wp.w_grid_alloc.handle as Integer, wp.handle as Window);
+        ui_call_win_external_pos(wp.w_grid_alloc.handle as Integer, wp.handle as WindowHandle);
         return;
     }
 
@@ -295,7 +295,7 @@ fn ext_win_position(wp: Win, validate: bool) {
         };
         ui_call_win_float_pos(
             wp.w_grid_alloc.handle as Integer,
-            wp.handle as Window,
+            wp.handle as WindowHandle,
             anchor,
             anchor_grid as Integer,
             row,
@@ -316,7 +316,7 @@ fn ext_win_position(wp: Win, validate: bool) {
 }
 
 /// The window a `relative='win'` float is anchored to, if it is still there.
-fn parent_window(handle: Window) -> Option<Win> {
+fn parent_window(handle: WindowHandle) -> Option<Win> {
     let mut dummy = Error::none();
     // SAFETY: a live `Error` of ours; the answer is a live window or null.
     unsafe {
@@ -442,7 +442,7 @@ fn ext_win_viewport(wp: Win) {
     {
         ui_call_win_viewport(
             wp.w_grid_alloc.handle as Integer,
-            wp.handle as Window,
+            wp.handle as WindowHandle,
             (wp.w_topline - 1) as Integer,
             ev_botline as Integer,
             (wp.w_cursor.lnum - 1) as Integer,

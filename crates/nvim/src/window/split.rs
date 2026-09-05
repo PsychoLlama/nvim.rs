@@ -36,7 +36,7 @@ use crate::types::{FAIL, Failed, Integer, OptInt, frame_T, qf_info_T, win_T};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
-use crate::winlayer::{Frame, Win, WinId, frames, tabs};
+use crate::winlayer::{FrameRef, Win, WinId, frames, tabs};
 
 pub fn win_split(size: c_int, flags: c_int) -> Result<(), Failed> {
     split(size, flags)
@@ -88,7 +88,7 @@ pub unsafe fn win_split_ins(
 ) -> *mut win_T {
     // SAFETY: the caller's promise -- a live window or null, and a live frame
     // or null.
-    let (new_wp, to_flatten) = unsafe { (Win::from_raw(new_wp), Frame::from_raw(to_flatten)) };
+    let (new_wp, to_flatten) = unsafe { (Win::from_raw(new_wp), FrameRef::from_raw(to_flatten)) };
     raw_win(split_ins(size, flags, new_wp, dir, to_flatten))
 }
 
@@ -117,7 +117,7 @@ fn split_ins(
     flags: c_int,
     new_wp: Option<Win>,
     dir: c_int,
-    to_flatten: Option<Frame>,
+    to_flatten: Option<FrameRef>,
 ) -> Option<Win> {
     // `aucmd_win[]` should always remain floating.
     if new_wp.is_some() && is_autocmd_window(new_wp) {
@@ -405,13 +405,13 @@ fn wider_sibling(oldwin: Win, taller: impl Fn(Win) -> bool) -> bool {
     };
     parent
         .children()
-        .filter_map(Frame::win)
+        .filter_map(FrameRef::win)
         .any(|w| w != oldwin && taller(w))
 }
 
 /// The minimum width of every frame in every *row* above `frame`, its own
 /// ancestors excluded -- what a split with 'equalalways' has to leave alone.
-fn siblings_minwidth(frame: Frame) -> c_int {
+fn siblings_minwidth(frame: FrameRef) -> c_int {
     let mut total = 0;
     let mut prev = frame;
     let mut up = frame.parent();
@@ -428,7 +428,7 @@ fn siblings_minwidth(frame: Frame) -> c_int {
 }
 
 /// [`siblings_minwidth`] for the columns above `frame`.
-fn siblings_minheight(frame: Frame) -> c_int {
+fn siblings_minheight(frame: FrameRef) -> c_int {
     let mut total = 0;
     let mut prev = frame;
     let mut up = frame.parent();
@@ -516,7 +516,7 @@ fn split_frame(
     toplevel: bool,
     vertical: bool,
     layout: c_int,
-) -> (Frame, Frame, bool) {
+) -> (FrameRef, FrameRef, bool) {
     let top = current_topframe();
     let (mut curfrp, before) = if toplevel {
         let same_axis = (top.fr_layout as c_int == FR_COL && !vertical)
@@ -590,7 +590,7 @@ fn split_frame(
 /// one place in the editor that duplicates one. The links come across with
 /// the rest, exactly as the struct assignment copied them, and the caller
 /// rewires them straight afterwards.
-fn new_frame_like(frame: Frame) -> Frame {
+fn new_frame_like(frame: FrameRef) -> FrameRef {
     let mut copy = attach_frame_raw();
     copy.fr_layout = frame.fr_layout;
     copy.fr_width = frame.fr_width;
@@ -606,10 +606,10 @@ fn new_frame_like(frame: Frame) -> Frame {
 }
 
 /// A fresh zeroed frame with no window attached.
-fn attach_frame_raw() -> Frame {
+fn attach_frame_raw() -> FrameRef {
     // SAFETY: `xcalloc` aborts rather than answering null; the frame is live
     // from here on.
-    unsafe { Frame::new(xcalloc(1, size_of::<frame_T>()).cast::<frame_T>()) }
+    unsafe { FrameRef::new(xcalloc(1, size_of::<frame_T>()).cast::<frame_T>()) }
 }
 
 /// Hand out the columns for a `:vsplit`.
@@ -618,8 +618,8 @@ fn size_vertical(
     flags: c_int,
     wp: Win,
     oldwin: Win,
-    curfrp: Frame,
-    frp: Frame,
+    curfrp: FrameRef,
+    frp: FrameRef,
     room: &Room,
     before: bool,
     toplevel: bool,
@@ -686,8 +686,8 @@ fn size_horizontal(
     flags: c_int,
     wp: Win,
     oldwin: Win,
-    curfrp: Frame,
-    frp: Frame,
+    curfrp: FrameRef,
+    frp: FrameRef,
     room: &Room,
     before: bool,
     toplevel: bool,
