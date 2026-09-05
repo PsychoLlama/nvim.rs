@@ -10,7 +10,7 @@
 //! * an *empty* boxed slice is a dangling address, not a heap one, so an
 //!   empty answer stays the null pointer `xfree` accepts.
 //!
-//! They are the replacement for a `garray_T` local whose `ga_data` was the
+//! They are the replacement for a `GArray` local whose `ga_data` was the
 //! value being returned.
 
 #![forbid(unsafe_code)]
@@ -27,7 +27,7 @@ use std::ffi::CString;
 
 /// `text` as a NUL-terminated string the caller owns and `xfree`s.
 ///
-/// Interior NULs are kept, exactly as a byte `garray_T`'s were: the receiver
+/// Interior NULs are kept, exactly as a byte `GArray`'s were: the receiver
 /// stops at the first one, which is the behaviour it always had.
 pub(crate) fn owned_cstr(mut text: Vec<u8>) -> *mut c_char {
     text.push(0);

@@ -208,7 +208,7 @@ pub unsafe fn f_inputlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 
 /// The typeahead states `inputsave()` has stacked up.
 ///
-/// A `Vec`, not a `garray_T`: [`tasave_T`] owns its buffers now, so the stack
+/// A `Vec`, not a `GArray`: [`tasave_T`] owns its buffers now, so the stack
 /// has to move whole values rather than blit bytes into a grown tail.
 static SAVED_TYPEAHEAD: GlobalCell<Vec<tasave_T>> = GlobalCell::new(Vec::new());
 

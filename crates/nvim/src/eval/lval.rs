@@ -61,8 +61,8 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Dict, DictItem, FAIL, Failed, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT,
-    VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, hashtab_T, kListLenUnknown, ptrdiff_t, size_t,
+    Dict, DictItem, FAIL, Failed, HashTab, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE,
+    VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, kListLenUnknown, ptrdiff_t, size_t,
     typval_vval_union, uint8_t,
 };
 
@@ -377,7 +377,7 @@ pub(crate) unsafe fn get_lval_subscript(
     mut p: *mut c_char,
     name: *mut c_char,
     rettv: *mut TypVal,
-    _ht: *mut hashtab_T,
+    _ht: *mut HashTab,
     _v: *mut DictItem,
     unlet: bool,
     flags: c_int,
@@ -650,7 +650,7 @@ pub unsafe fn get_lval(
         return p;
     }
 
-    let mut ht: *mut hashtab_T = null_mut();
+    let mut ht: *mut HashTab = null_mut();
     let htp = if flags & GLV_READ_ONLY as c_int != 0 {
         null_mut()
     } else {

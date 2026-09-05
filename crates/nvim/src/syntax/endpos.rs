@@ -575,7 +575,7 @@ pub(crate) unsafe fn check_keyword_id(
 /// names it.
 unsafe fn match_keyword(
     keyword: *mut c_char,
-    ht: *mut hashtab_T,
+    ht: *mut HashTab,
     cur_si: Option<Item>,
 ) -> *mut keyentry_T {
     let hi = unsafe { hash_find(ht, keyword) };

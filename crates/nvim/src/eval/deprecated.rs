@@ -33,13 +33,13 @@ use crate::message::emsg_ptr;
 use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    Callback, CallbackReader, ChannelPart, EvalFuncData, List, ListItem, TypVal, VAR_DICT,
-    VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, garray_T, kBoolVarTrue, uint64_t,
+    Callback, CallbackReader, ChannelPart, EvalFuncData, GArray, List, ListItem, TypVal, VAR_DICT,
+    VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarTrue, uint64_t,
 };
 use crate::winlayer::buffers;
 
 pub const kChannelPartRpc: ChannelPart = 3;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+pub const GA_EMPTY_INIT_VALUE: GArray = GArray {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: 0,

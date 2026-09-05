@@ -427,7 +427,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
 
     let mut save_v_event = SaveVEvent {
         sve_did_save: false,
-        sve_hashtab: hashtab_T::new(),
+        sve_hashtab: HashTab::new(),
     };
     // SAFETY: `save_v_event` is a writable local that outlives the matching
     // `restore_v_event` below.

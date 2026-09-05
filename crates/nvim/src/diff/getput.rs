@@ -317,7 +317,7 @@ fn diffgetput(
         cursor = Some(dp);
         // The freed block's ranges, taken before it goes: the fold update at
         // the tail still needs its line numbers. Only the two arrays, never
-        // the block -- a `diff_T` also carries a `garray_T` and its list
+        // the block -- a `diff_T` also carries a `GArray` and its list
         // links, and `diff_free` releases all three.
         let mut freed: Option<([LineNr; DB_COUNT as usize], [LineNr; DB_COUNT as usize])> = None;
         let mut lnum = dp.df_lnum[idx_to];

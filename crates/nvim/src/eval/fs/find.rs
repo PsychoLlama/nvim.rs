@@ -15,7 +15,7 @@
 //!
 //! # What holds the results
 //!
-//! [`Expand`] is the wildcard expander and [`StrArray`] the `garray_T` of
+//! [`Expand`] is the wildcard expander and [`StrArray`] the `GArray` of
 //! owned strings `globpath()` and `readdir_core` fill; both hand out their
 //! names as a slice, and [`StrArray`] frees itself, which is upstream's
 //! `ga_clear_strings` on every path out.  **The order of those names is
@@ -41,8 +41,8 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    BackslashEscape, EvalFuncData, ExpandContext, ScriptCtx, TypVal, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, VarNumber, Vv, expand_T, garray_T, kListLenUnknown, pos_T, ptrdiff_t, size_t,
+    BackslashEscape, EvalFuncData, ExpandContext, GArray, ScriptCtx, TypVal, VAR_LIST, VAR_STRING,
+    VAR_UNKNOWN, VarNumber, Vv, expand_T, kListLenUnknown, pos_T, ptrdiff_t, size_t,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -121,9 +121,9 @@ impl Expand {
     }
 }
 
-/// A `garray_T` of owned strings -- what `globpath()` and `readdir_core`
+/// A `GArray` of owned strings -- what `globpath()` and `readdir_core`
 /// fill, and what frees them.
-struct StrArray(garray_T);
+struct StrArray(GArray);
 
 impl Drop for StrArray {
     fn drop(&mut self) {
@@ -134,7 +134,7 @@ impl Drop for StrArray {
 
 impl StrArray {
     fn new() -> Self {
-        let mut ga = garray_T {
+        let mut ga = GArray {
             ga_len: 0,
             ga_maxlen: 0,
             ga_itemsize: 0,
@@ -146,7 +146,7 @@ impl StrArray {
         Self(ga)
     }
 
-    fn raw(&mut self) -> *mut garray_T {
+    fn raw(&mut self) -> *mut GArray {
         &raw mut self.0
     }
 

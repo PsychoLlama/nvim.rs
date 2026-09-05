@@ -223,7 +223,7 @@ plus these whole-tree metrics, which are not per-file:
 
   cell_copy_owner   `.get()` reads of a global whose `T` derives `Copy` *and*
                     transitively owns a raw pointer — a `String_0`, a
-                    `garray_T`, a `regbehind_T`. `get` copies the struct out
+                    `GArray`, a `regbehind_T`. `get` copies the struct out
                     of the cell, so the copy and the global now hold the same
                     pointer: whoever frees or reallocates through one leaves
                     the other dangling (`getchar/redo.rs` used to write
@@ -379,7 +379,7 @@ plus these whole-tree metrics, which are not per-file:
                       manual_alloc    `xmalloc`/`xmallocz`/`xcalloc`/
                         `xrealloc`/`xfree`.
                       garray_sites    `ga_grow`/`ga_init`/`ga_clear`/
-                        `ga_concat`/`ga_append` — `garray_T`'s five load-
+                        `ga_concat`/`ga_append` — `GArray`'s five load-
                         bearing entry points, not its whole surface.
                       kvec_sites      `kv_*` calls plus `InitVec::new(`/
                         `Kvec::new(`. c2rust expanded klib's kvec macros, so
@@ -1875,7 +1875,7 @@ WHOLE_TREE_LABEL = {
     "repr_c_editor_state": "`#[repr(C)]` on the editor's own state",
     "derive_copy": "Copy derives on braced aggregates",
     "manual_alloc": "xmalloc/xfree-family calls",
-    "garray_sites": "garray_T call sites",
+    "garray_sites": "GArray call sites",
     "kvec_sites": "kvec call sites and borrowed views",
     "khash_sites": "khash monomorph type names",
     "ptr_arith": "pointer-arithmetic method calls",

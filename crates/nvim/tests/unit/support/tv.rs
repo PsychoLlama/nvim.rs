@@ -598,9 +598,9 @@ pub(crate) unsafe fn dict_watchers(d: *const Dict) -> Vec<Watcher> {
     out
 }
 
-/// The spec's `ga_alloc`: a `garray_T` on the caller's stack, initialised.
-pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::garray_T {
-    let mut ga = neovim::types::garray_T {
+/// The spec's `ga_alloc`: a `GArray` on the caller's stack, initialised.
+pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::GArray {
+    let mut ga = neovim::types::GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,

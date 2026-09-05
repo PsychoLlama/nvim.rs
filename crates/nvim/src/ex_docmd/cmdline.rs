@@ -59,7 +59,7 @@ use crate::runtime::{
 
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CondStack, EsList, Failed, LineGetter, LineNr, MsgList, OptInt, estack_T, garray_T, size_t,
+    CondStack, EsList, Failed, GArray, LineGetter, LineNr, MsgList, OptInt, estack_T, size_t,
 };
 use crate::ui::ui_has;
 
@@ -87,7 +87,7 @@ fn empty_cstack() -> CondStack {
 
 /// Free every line a `:while`/`:for` body stored, and the array holding
 /// them.
-unsafe fn clear_loop_lines(gap: *mut garray_T) {
+unsafe fn clear_loop_lines(gap: *mut GArray) {
     if !unsafe { (*gap).ga_data }.is_null() {
         for i in 0..unsafe { (*gap).ga_len } {
             let item = unsafe { ((*gap).ga_data as *mut wcmd_T).offset(i as isize) };
@@ -155,7 +155,7 @@ pub unsafe fn do_cmdline(
     let mut did_block = false;
     let mut retval = Ok(());
     let mut cstack = empty_cstack();
-    let mut lines_ga: garray_T = unsafe { core::mem::zeroed() };
+    let mut lines_ga: GArray = unsafe { core::mem::zeroed() };
     let mut current_line: c_int = 0;
     let mut fname: *mut c_char = ptr::null_mut();
     let mut breakpoint: *mut LineNr = ptr::null_mut();

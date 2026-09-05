@@ -19,8 +19,8 @@ use core::ffi::{c_char, c_int, c_void};
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::lua::ffi::LUA_REFNIL;
 use crate::types::{
-    Dict, FuncExe, LuaRef, LuaRetMode, Partial, TypVal, garray_T, lua_CFunction, lua_State,
-    uint64_t, uv_thread_t,
+    Dict, FuncExe, GArray, LuaRef, LuaRetMode, Partial, TypVal, lua_CFunction, lua_State, uint64_t,
+    uv_thread_t,
 };
 
 mod call;
@@ -122,7 +122,7 @@ pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
 /// An empty garray, growing one item at a time.
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+pub const GA_EMPTY_INIT_VALUE: GArray = GArray {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: 0,

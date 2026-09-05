@@ -42,8 +42,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, FuncDict, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC,
-    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, garray_T, uint8_t,
+    EvalFuncData, FuncDict, GArray, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT,
+    VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -251,7 +251,7 @@ pub unsafe fn execute_common(argvars: *mut TypVal, rettv: *mut TypVal, arg_off: 
     // and still resets what the commands below leave behind.
     let _silenced = Suppress::messages_saved_when(silence);
 
-    let mut capture_local = garray_T {
+    let mut capture_local = GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,

@@ -212,7 +212,7 @@ pub fn get_globvar_dict() -> *mut Dict {
 }
 
 /// The `g:` scope, as a hashtab.
-pub fn get_globvar_ht() -> *mut hashtab_T {
+pub fn get_globvar_ht() -> *mut HashTab {
     // SAFETY: a field of the dictionary above, never dereferenced here.
     unsafe { &raw mut (*get_globvar_dict()).dv_hashtab }
 }
@@ -223,7 +223,7 @@ pub fn get_vimvar_dict() -> *mut Dict {
 }
 
 /// The `v:` scope, as a hashtab.
-pub(crate) fn get_vimvar_ht() -> *mut hashtab_T {
+pub(crate) fn get_vimvar_ht() -> *mut HashTab {
     // SAFETY: a field of the dictionary above, never dereferenced here.
     unsafe { &raw mut (*get_vimvar_dict()).dv_hashtab }
 }
@@ -235,7 +235,7 @@ pub(crate) fn vimvar_table() -> *mut VimVar {
 
 /// The scope that has no prefix at all: the names that mean `v:version`
 /// wherever they are written. Upstream's `compat_hashtab`.
-pub(crate) fn get_compat_ht() -> *mut hashtab_T {
+pub(crate) fn get_compat_ht() -> *mut HashTab {
     compat_hashtab.ptr()
 }
 
@@ -313,7 +313,7 @@ pub unsafe fn unref_var_dict(dict: *mut Dict) {
 ///
 /// # Safety
 /// `ht` is a live variable hashtab.
-pub unsafe fn vars_clear(ht: *mut hashtab_T) {
+pub unsafe fn vars_clear(ht: *mut HashTab) {
     unsafe { vars_clear_ext(ht, true) }
 }
 
@@ -322,7 +322,7 @@ pub unsafe fn vars_clear(ht: *mut hashtab_T) {
 ///
 /// # Safety
 /// As [`vars_clear`].
-pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
+pub unsafe fn vars_clear_ext(ht: *mut HashTab, free_val: bool) {
     // SAFETY: the caller's obligation -- a live variable hashtab, whose items
     // are the `DictItem`s the walk frees.
     unsafe { hash_lock(ht) };
@@ -345,7 +345,7 @@ pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
 ///
 /// # Safety
 /// `hi` is a live item of `ht`.
-pub(crate) unsafe fn delete_var(ht: *mut hashtab_T, hi: Slot) {
+pub(crate) unsafe fn delete_var(ht: *mut HashTab, hi: Slot) {
     // SAFETY: the caller's obligation -- a live item of `ht`, which this
     // takes out of the table and then frees.
     let di = unsafe { Di::new(tv_dict_hi2di(hi)) };

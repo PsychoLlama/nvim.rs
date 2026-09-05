@@ -20,8 +20,8 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, EStackType, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, RepItem, SPL_FNAME_TMPL,
-    SpellAddType, XDGVarType, buf_T, exarg_T, file_comparison, hashtab_T, regprog_T, size_t,
+    CONV_NONE, EStackType, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt, RepItem,
+    SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, exarg_T, file_comparison, regprog_T, size_t,
     spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
@@ -138,7 +138,7 @@ pub struct spellinfo_T {
     pub si_nocompoundsugs: ::core::ffi::c_int,
     pub si_followup: ::core::ffi::c_int,
     pub si_collapse: ::core::ffi::c_int,
-    pub si_commonwords: hashtab_T,
+    pub si_commonwords: HashTab,
     pub si_sugtime: time_t,
     pub si_rem_accents: ::core::ffi::c_int,
     /// `MAP` groups, `/`-separated, as the section's payload.
@@ -182,9 +182,9 @@ pub struct afffile_T {
     pub af_nosuggest: ::core::ffi::c_uint,
     pub af_pfxpostpone: ::core::ffi::c_int,
     pub af_ignoreextra: bool,
-    pub af_pref: hashtab_T,
-    pub af_suff: hashtab_T,
-    pub af_comp: hashtab_T,
+    pub af_pref: HashTab,
+    pub af_suff: HashTab,
+    pub af_comp: HashTab,
 }
 pub type affentry_T = affentry_S;
 /// One `PFX`/`SFX` line: what to chop, what to add, and when.
@@ -342,7 +342,7 @@ impl spellinfo_T {
             si_nocompoundsugs: 0,
             si_followup: 0,
             si_collapse: 0,
-            si_commonwords: hashtab_T::new(),
+            si_commonwords: HashTab::new(),
             si_sugtime: 0,
             si_rem_accents: 0,
             si_map: Vec::new(),

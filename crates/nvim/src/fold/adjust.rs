@@ -512,7 +512,7 @@ pub(super) fn truncate_fold(fold: Fold, end: LineNr) {
 ///
 /// # Safety
 /// `gap` must be a live fold list.
-pub unsafe fn fold_move_range(gap: *mut garray_T, line1: LineNr, line2: LineNr, dest: LineNr) {
+pub unsafe fn fold_move_range(gap: *mut GArray, line1: LineNr, line2: LineNr, dest: LineNr) {
     // SAFETY: the caller's promise.
     let folds = unsafe { FoldList::new(gap) };
     let range_len = line2 - line1 + 1;
@@ -670,7 +670,7 @@ fn cur_win() -> Win {
 /// # Safety
 /// `gap` must be a live fold list -- see [`FoldList::new`].
 pub unsafe fn fold_mark_adjust_recurse(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,

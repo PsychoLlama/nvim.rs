@@ -493,7 +493,7 @@ impl KeywordOpts {
 ///
 /// The keywords come out in hash order, not alphabetically, which is why the
 /// options are re-printed whenever two neighbours disagree.
-unsafe fn syn_list_keywords(id: c_int, ht: *const hashtab_T, mut did_header: bool) -> bool {
+unsafe fn syn_list_keywords(id: c_int, ht: *const HashTab, mut did_header: bool) -> bool {
     let mut prev = KeywordOpts::none();
 
     // SAFETY: the caller's table, which nothing here mutates.

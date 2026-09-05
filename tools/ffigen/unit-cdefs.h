@@ -106,6 +106,7 @@ typedef struct DictItem DictItem;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
+typedef struct GArray GArray;
 typedef struct Intersection Intersection;
 typedef struct String String;
 typedef struct KeyDict__shada_buflist_item KeyDict__shada_buflist_item;
@@ -182,7 +183,6 @@ typedef union uv_timer_s_node uv_timer_s_node;
 typedef union uv_timer_s_u uv_timer_s_u;
 typedef struct uv_timer_s uv_timer_s;
 typedef struct time_watcher time_watcher;
-typedef struct garray_T garray_T;
 typedef struct UserFunc UserFunc;
 typedef struct VTerm_mode VTerm_mode;
 typedef struct VTerm_parser_v_csi VTerm_parser_v_csi;
@@ -937,6 +937,13 @@ struct ExtmarkSplice {
   bcount_t old_byte;
   bcount_t new_byte;
 };
+struct GArray {
+  int ga_len;
+  int ga_maxlen;
+  int ga_itemsize;
+  int ga_growsize;
+  void *ga_data;
+};
 struct Intersection {
   size_t size;
   size_t capacity;
@@ -1585,21 +1592,14 @@ struct time_watcher {
   MultiQueue *events;
   bool blockable;
 };
-struct garray_T {
-  int ga_len;
-  int ga_maxlen;
-  int ga_itemsize;
-  int ga_growsize;
-  void *ga_data;
-};
 struct UserFunc {
   int uf_varargs;
   FuncFlags uf_flags;
   int uf_calls;
   bool uf_cleared;
-  garray_T uf_args;
-  garray_T uf_def_args;
-  garray_T uf_lines;
+  GArray uf_args;
+  GArray uf_def_args;
+  GArray uf_lines;
   int uf_profiling;
   int uf_prof_initialized;
   LuaRef uf_luaref;

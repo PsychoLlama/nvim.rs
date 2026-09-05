@@ -51,7 +51,7 @@ use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{
-    ColNr, Failed, LineNr, MAXPATHL, NUL, SpellIdx, garray_T, int16_t, size_t, slang_T, uint16_t,
+    ColNr, Failed, GArray, LineNr, MAXPATHL, NUL, SpellIdx, int16_t, size_t, slang_T, uint16_t,
 };
 
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
@@ -228,7 +228,7 @@ unsafe fn sug_maketable(spin: &mut spellinfo_T) -> c_int {
     // SAFETY: the sound-fold tree is built and compressed by now.
     spin.si_spellbuf = unsafe { open_spellbuf() };
 
-    let mut ga: garray_T = unsafe { core::mem::zeroed() };
+    let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, 1, 100) };
     let root = unsafe { (*spin.si_foldroot).wn_sibling };
     let res = if unsafe { sug_filltable(spin, root, 0, &raw mut ga) } == -1 {
@@ -257,7 +257,7 @@ unsafe fn sug_filltable(
     spin: &mut spellinfo_T,
     node: *mut wordnode_T,
     startwordnr: c_int,
-    gap: *mut garray_T,
+    gap: *mut GArray,
 ) -> c_int {
     // SAFETY: the caller promises the chain and the garray; `ga_grow(10)`
     // covers the at-most-five bytes each iteration appends.

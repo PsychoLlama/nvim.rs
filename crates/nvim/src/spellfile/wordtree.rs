@@ -70,7 +70,7 @@ use crate::message::{msg_clr_eos, msg_puts, msg_start};
 use crate::os::cshim::gettext;
 use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
-use crate::types::{Failed, NUL, hashtab_T, int16_t, uint8_t, uint16_t};
+use crate::types::{Failed, HashTab, NUL, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
 
 use super::{MAXWLEN, spell_message_fmt, spellinfo_T};
@@ -645,7 +645,7 @@ pub(super) unsafe fn wordtree_compress(
         return;
     }
 
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     let mut tot: c_int = 0;
     let n = unsafe { node_compress(spin, (*root).wn_sibling, &raw mut ht, &mut tot) };
 
@@ -686,7 +686,7 @@ fn remaining_percentage(compressed: c_int, total: c_int) -> core::ffi::c_long {
 unsafe fn node_compress(
     spin: &mut spellinfo_T,
     node: *mut wordnode_T,
-    ht: *mut hashtab_T,
+    ht: *mut HashTab,
     tot: &mut c_int,
 ) -> c_int {
     // SAFETY: the caller promises a live chain and a live table; every key

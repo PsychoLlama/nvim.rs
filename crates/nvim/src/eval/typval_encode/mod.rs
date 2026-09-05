@@ -89,7 +89,7 @@ pub(crate) enum Frame {
         /// dictionary, `&pt->pt_dict`.
         dictp: *mut *mut Dict,
         /// The slot the walk stands on -- an *index*, because the small run
-        /// lives inside the `hashtab_T` and a body may take `&mut` to it.
+        /// lives inside the `HashTab` and a body may take `&mut` to it.
         idx: usize,
         todo: size_t,
     },

@@ -28,7 +28,7 @@ use crate::types::{IOSIZE, NUL};
 /// `ht` is a live variable hashtab, `prefix` a NUL-terminated string and
 /// `first` writable.
 pub unsafe fn list_hashtable_vars(
-    ht: *mut hashtab_T,
+    ht: *mut HashTab,
     prefix: *const c_char,
     empty: bool,
     first: *mut c_int,

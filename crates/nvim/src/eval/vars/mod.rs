@@ -79,15 +79,15 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
-    BoolVarValue, Dict, DictItem, EvalArg, EvalFuncData, Failed, GRegFlags, LVal, List, ListItem,
-    OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictDictItem, ScopeType, ScriptId,
-    SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC,
-    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING,
+    BoolVarValue, Dict, DictItem, EvalArg, EvalFuncData, Failed, GRegFlags, HashTab, LVal, List,
+    ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictDictItem, ScopeType,
+    ScriptId, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT,
+    VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING,
     VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
     VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv,
-    aco_save_T, buf_T, exarg_T, expand_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kListLenUnknown, kSpecialVarNull, ptrdiff_t, scriptvar_T, size_t, ssize_t, switchwin_T,
-    tabpage_T, typval_vval_union, uint8_t, uint32_t, win_T,
+    aco_save_T, buf_T, exarg_T, expand_T, int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
+    kSpecialVarNull, ptrdiff_t, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T,
+    typval_vval_union, uint8_t, uint32_t, win_T,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
@@ -261,9 +261,9 @@ pub(crate) unsafe fn script_sv(sid: c_int) -> *mut scriptvar_T {
     unsafe { (*script_item(sid)).sn_vars }
 }
 
-/// A `hashtab_T` before `hash_init`: no slots yet, which is what the three
+/// A `HashTab` before `hash_init`: no slots yet, which is what the three
 /// `static` ones below start as.
-const EMPTY_HASHTAB: hashtab_T = hashtab_T::new();
+const EMPTY_HASHTAB: HashTab = HashTab::new();
 
 /// A scope dictionary before `init_var_dict`.
 const EMPTY_SCOPE_DICT: Dict = Dict {
@@ -296,7 +296,7 @@ static globvardict: GlobalCell<Dict> = GlobalCell::new(EMPTY_SCOPE_DICT);
 
 /// The names that mean `v:version` in every scope: upstream's
 /// `compat_hashtab`, which `evalvars_init` fills from the `VimVarFlags::COMPAT` rows.
-static compat_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(EMPTY_HASHTAB);
+static compat_hashtab: GlobalCell<HashTab> = GlobalCell::new(EMPTY_HASHTAB);
 
 const fn vv(name: &'static CStr, v_type: VarType, vv_flags: VimVarFlags) -> VimVar {
     VimVar {

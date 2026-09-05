@@ -101,7 +101,7 @@ unsafe fn find_previous_pathsep(path: *mut c_char, sep: &mut *mut c_char) -> boo
 ///
 /// # Safety
 /// `gap` must hold `ga_len` NUL-terminated strings.
-pub(crate) unsafe fn is_unique(maybe_unique: *mut c_char, gap: *mut garray_T, i: c_int) -> bool {
+pub(crate) unsafe fn is_unique(maybe_unique: *mut c_char, gap: *mut GArray, i: c_int) -> bool {
     let candidate = unsafe { CStr::from_ptr(maybe_unique) }.to_bytes();
     for j in 0..unsafe { (*gap).ga_len } {
         if j == i {
@@ -130,7 +130,7 @@ pub(crate) unsafe fn is_unique(maybe_unique: *mut c_char, gap: *mut garray_T, i:
 /// # Safety
 /// `fname` must be a NUL-terminated string and `gap` must hold `ga_len`
 /// NUL-terminated strings.
-pub(crate) unsafe fn get_path_cutoff(fname: *mut c_char, gap: *mut garray_T) -> *mut c_char {
+pub(crate) unsafe fn get_path_cutoff(fname: *mut c_char, gap: *mut GArray) -> *mut c_char {
     // The longest prefix any `'path'` entry shares with the name.
     let mut maxlen = 0;
     let mut cutoff = core::ptr::null_mut();
@@ -169,7 +169,7 @@ pub(crate) unsafe fn get_path_cutoff(fname: *mut c_char, gap: *mut garray_T) -> 
 /// `gap` must hold `ga_len` allocated NUL-terminated strings, and `pattern`
 /// and `path_option` must be NUL-terminated strings.
 pub(crate) unsafe fn uniquefy_paths(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     pattern: *mut c_char,
     path_option: *mut c_char,
 ) {
@@ -202,7 +202,7 @@ pub(crate) unsafe fn uniquefy_paths(
 
     let mut curdir = vec![0 as c_char; MAXPATHL as usize];
     let _ = unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
-    let mut path_ga = garray_T::default();
+    let mut path_ga = GArray::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
     unsafe { expand_path_option(curdir.as_mut_ptr(), path_option, &raw mut path_ga) };
 

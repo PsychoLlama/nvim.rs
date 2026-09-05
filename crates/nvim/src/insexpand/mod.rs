@@ -108,9 +108,9 @@ use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData,
-    ExpandContext, ExtmarkOp, LineNr, List, MB_MAXCHAR, OptInt, SaveVEvent, ScriptCtx, String_0,
-    TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix, buf_T, expand_T, extmark_undo_vec_t,
-    garray_T, hashtab_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
+    ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, SaveVEvent,
+    ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix, buf_T, expand_T,
+    extmark_undo_vec_t, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
     typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::ui::{ui_flush, vim_beep};
@@ -247,8 +247,8 @@ pub const INS_COMPL_CPT_OK: ::core::ffi::c_int = 1;
 pub const INS_COMPL_CPT_END: ::core::ffi::c_int = 3;
 pub const CTRL_X_LOCAL_MSG: ::core::ffi::c_int = 15;
 pub const CTRL_X_FINISHED: ::core::ffi::c_int = 8;
-/// A zeroed `garray_T`, which `ga_init` then fills in.
-pub(crate) const GARRAY_T_INIT: garray_T = garray_T {
+/// A zeroed `GArray`, which `ga_init` then fills in.
+pub(crate) const GARRAY_T_INIT: GArray = GArray {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: 0,
@@ -286,7 +286,7 @@ pub(crate) const POS_T_INIT: pos_T = pos_T {
 /// A zeroed `SaveVEvent`, which `get_v_event` fills in.
 pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
-    sve_hashtab: hashtab_T::new(),
+    sve_hashtab: HashTab::new(),
 };
 /// A zeroed `extmark_undo_vec_t`, which is what C's `kv_destroy` leaves.
 pub(crate) const EXTMARK_UNDO_VEC_INIT: extmark_undo_vec_t = extmark_undo_vec_t {

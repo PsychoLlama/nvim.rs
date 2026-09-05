@@ -49,7 +49,7 @@ unsafe fn free_entry(kp: *mut keyentry_T) {
 }
 
 /// Drop every keyword of group `id` from `ht`.
-pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
+pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut HashTab) {
     unsafe { hash_lock(ht) };
     let mut todo = unsafe { (*ht).ht_used } as c_int;
     let mut idx = 0;
@@ -93,7 +93,7 @@ pub(crate) unsafe fn syn_clear_keyword(id: c_int, ht: *mut hashtab_T) {
 }
 
 /// Empty a whole keyword table.
-pub(crate) unsafe fn clear_keywtab(ht: *mut hashtab_T) {
+pub(crate) unsafe fn clear_keywtab(ht: *mut HashTab) {
     let mut todo = unsafe { (*ht).ht_used } as c_int;
     let mut idx = 0;
     while todo > 0 {

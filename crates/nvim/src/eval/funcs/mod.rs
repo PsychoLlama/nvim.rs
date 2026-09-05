@@ -3,8 +3,8 @@
 use crate::global_cell::GlobalCell;
 use crate::memory::ARENA_EMPTY;
 use crate::types::{
-    Array, ChannelPart, ChannelStreamType, Context, GRegFlags, LuaRetMode, MotionType, Object,
-    ProcType, String_0, XDGVarType, garray_T, size_t, uint64_t,
+    Array, ChannelPart, ChannelStreamType, Context, GArray, GRegFlags, LuaRetMode, MotionType,
+    Object, ProcType, String_0, XDGVarType, size_t, uint64_t,
 };
 
 /// The generated builtin table: one row per builtin, plus the perfect-hash
@@ -146,7 +146,7 @@ pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)
 pub const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 pub const VARNUMBER_MAX: ::core::ffi::c_long = INT64_MAX;
 pub const VARNUMBER_MIN: ::core::ffi::c_long = INT64_MIN;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+pub const GA_EMPTY_INIT_VALUE: GArray = GArray {
     ga_len: 0 as ::core::ffi::c_int,
     ga_maxlen: 0 as ::core::ffi::c_int,
     ga_itemsize: 0 as ::core::ffi::c_int,

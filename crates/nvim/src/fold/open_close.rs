@@ -291,7 +291,7 @@ pub unsafe fn fold_create(wp: Win, start_pos: pos_T, end_pos: pos_T) {
     // SAFETY: a live fold list.
     unsafe { ga_grow(folds.gap(), 1) };
     let fold = folds.at(i);
-    let mut nested = garray_T {
+    let mut nested = GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,

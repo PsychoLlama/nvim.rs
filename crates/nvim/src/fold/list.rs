@@ -1,7 +1,7 @@
 //! The fold tree's one untyped edge.
 //!
 //! Every fold list in a window — `w_folds`, and the `fd_nested` of every fold
-//! in it — is a `garray_T`: an untyped growable array whose items happen to
+//! in it — is a `GArray`: an untyped growable array whose items happen to
 //! be [`fold_T`]. Reaching a fold therefore means casting `ga_data` and doing
 //! pointer arithmetic against `ga_len`, and before this module every one of
 //! the forty-odd walks in `fold/` did that arithmetic for itself.
@@ -23,17 +23,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{fline_T, fold_T};
-use crate::types::{LineNr, garray_T};
+use crate::types::{GArray, LineNr};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
-/// One fold list: a `garray_T` whose items are [`fold_T`].
+/// One fold list: a `GArray` whose items are [`fold_T`].
 ///
 /// `Copy`, because it is a handle and not an owner — dropping one frees
 /// nothing.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub(super) struct FoldList {
-    gap: *mut garray_T,
+    gap: *mut GArray,
 }
 
 /// One entry of a [`FoldList`].
@@ -56,13 +56,13 @@ impl FoldList {
     /// `ga_itemsize == size_of::<fold_T>()` by `fold_init_win`,
     /// `clone_fold_list` or `fold_insert`, and neither the growarray nor its
     /// data may be freed while the returned handle is in use.
-    pub(super) const unsafe fn new(gap: *mut garray_T) -> Self {
+    pub(super) const unsafe fn new(gap: *mut GArray) -> Self {
         Self { gap }
     }
 
     /// The growarray itself, for `ga_grow`/`ga_clear` and for the recursive
-    /// entry points that still take a `*mut garray_T`.
-    pub(super) fn gap(self) -> *mut garray_T {
+    /// entry points that still take a `*mut GArray`.
+    pub(super) fn gap(self) -> *mut GArray {
         self.gap
     }
 
@@ -381,13 +381,13 @@ mod tests {
     /// Build a detached fold list from `(top, len)` pairs. The entries are
     /// leaked with the array; the tests are short and Miri only cares that
     /// nothing is read out of bounds.
-    fn list(spans: &[(LineNr, LineNr)]) -> (Box<garray_T>, Vec<fold_T>) {
+    fn list(spans: &[(LineNr, LineNr)]) -> (Box<GArray>, Vec<fold_T>) {
         let mut folds: Vec<fold_T> = spans
             .iter()
             .map(|&(top, len)| fold_T {
                 fd_top: top,
                 fd_len: len,
-                fd_nested: garray_T {
+                fd_nested: GArray {
                     ga_len: 0,
                     ga_maxlen: 0,
                     ga_itemsize: size_of::<fold_T>() as c_int,
@@ -398,7 +398,7 @@ mod tests {
                 fd_small: None,
             })
             .collect();
-        let gap = Box::new(garray_T {
+        let gap = Box::new(GArray {
             ga_len: folds.len() as c_int,
             ga_maxlen: folds.len() as c_int,
             ga_itemsize: size_of::<fold_T>() as c_int,
@@ -409,7 +409,7 @@ mod tests {
     }
 
     /// `FoldList::new` over a list built above.
-    fn handle(gap: &mut garray_T) -> FoldList {
+    fn handle(gap: &mut GArray) -> FoldList {
         // SAFETY: `list` built it with `ga_itemsize == size_of::<fold_T>()`
         // and the storage outlives the handle.
         unsafe { FoldList::new(&raw mut *gap) }

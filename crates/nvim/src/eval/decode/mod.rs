@@ -96,7 +96,7 @@ pub unsafe fn decode_create_map_special_dict(ret_tv: *mut TypVal, len: ptrdiff_t
 /// A Vimscript string is NUL-terminated, so a run containing an embedded NUL
 /// has to become a blob; `force_blob` asks for one either way.  `s_allocated`
 /// says the caller is handing over ownership of `s`: it is then stored as it
-/// stands — as the blob's `garray_T` buffer, or as the string itself — rather
+/// stands — as the blob's `GArray` buffer, or as the string itself — rather
 /// than copied.  A NULL `s`, which is only legal with `len == 0`, stays NULL.
 ///
 /// # Safety

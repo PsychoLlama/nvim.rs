@@ -73,7 +73,7 @@ use crate::spellsuggest::soundalike::{
     suggest_try_soundalike, suggest_try_soundalike_finish, suggest_try_soundalike_prep,
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{Hlf, MAXPATHL, NUL, garray_T, hashtab_T, langp_T, slang_T};
+use crate::types::{GArray, HashTab, Hlf, MAXPATHL, NUL, langp_T, slang_T};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -181,7 +181,7 @@ impl Sug {
     }
 
     /// [`Self::su_ga`], for the table of words already rejected.
-    pub(super) fn su_banned(self) -> *mut hashtab_T {
+    pub(super) fn su_banned(self) -> *mut HashTab {
         self.field_ptr(offset_of!(suginfo_T, su_banned))
     }
 
@@ -225,7 +225,7 @@ pub(crate) struct suginfo_T {
     /// `su_badword`, sound-folded.
     pub su_sal_badword: [c_char; MAXWLEN],
     /// Words that must never be suggested.
-    pub su_banned: hashtab_T,
+    pub su_banned: HashTab,
     /// The language sound folding defaults to.
     pub su_sallang: *mut slang_T,
 }
@@ -247,7 +247,7 @@ impl suginfo_T {
             su_badword: [0; MAXWLEN],
             su_fbadword: [0; MAXWLEN],
             su_sal_badword: [0; MAXWLEN],
-            su_banned: hashtab_T::new(),
+            su_banned: HashTab::new(),
             su_sallang: ptr::null_mut(),
         }
     }
@@ -371,7 +371,7 @@ pub(crate) unsafe fn badword_captype(word: *mut c_char, end: *mut c_char) -> Wor
 /// `gap` must be an uninitialised garray, `word` NUL-terminated, and the
 /// current window must have its languages loaded.
 pub(crate) unsafe fn spell_suggest_list(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     word: *mut c_char,
     maxcount: c_int,
     need_cap: bool,

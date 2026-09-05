@@ -1,4 +1,4 @@
-//! `hashtab_T` end to end: the probe sequence, the tombstone bookkeeping and
+//! `HashTab` end to end: the probe sequence, the tombstone bookkeeping and
 //! the rehash, driven through the same entry points the editor uses.
 //!
 //! The slot numbers here are hand-computed from the C's hash fold, so they
@@ -12,7 +12,7 @@ use neovim::hashtab::{
     HT_INIT_SIZE, hash_add, hash_clear_all, hash_find, hash_lock, hash_remove, hash_unlock,
 };
 use neovim::memory::{xcalloc, xfree};
-use neovim::types::hashtab_T;
+use neovim::types::HashTab;
 
 /// A key the table can own: `hash_clear_all` frees keys with `xfree`, and
 /// the crate's allocator is libc's.
@@ -20,7 +20,7 @@ fn owned_key(text: &str) -> *mut c_char {
     CString::new(text).unwrap().into_raw()
 }
 
-fn slot_of(ht: &hashtab_T, key: &CStr) -> usize {
+fn slot_of(ht: &HashTab, key: &CStr) -> usize {
     unsafe { hash_find(ht, key.as_ptr()) }.index()
 }
 
@@ -30,7 +30,7 @@ fn slot_of(ht: &hashtab_T, key: &CStr) -> usize {
 /// masked to 7.
 #[test]
 fn a_collision_lands_on_the_second_probe() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         assert_eq!(ht.size(), HT_INIT_SIZE);
         assert_eq!(hash_add(&raw mut ht, owned_key("a")), Ok(()));
@@ -48,7 +48,7 @@ fn a_collision_lands_on_the_second_probe() {
 /// two counters apart.
 #[test]
 fn a_removed_key_leaves_a_reusable_tombstone() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         let _ = hash_add(&raw mut ht, owned_key("a"));
         let _ = hash_add(&raw mut ht, owned_key("q"));
@@ -84,7 +84,7 @@ fn a_removed_key_leaves_a_reusable_tombstone() {
 /// rehash drops the tombstones.
 #[test]
 fn growing_off_the_small_array_keeps_every_key() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     let keys: Vec<CString> = (0..64)
         .map(|i| CString::new(format!("key{i}")).unwrap())
         .collect();
@@ -126,7 +126,7 @@ fn growing_off_the_small_array_keeps_every_key() {
 
 /// Every live key, in slot order: what `TV_DICT_ITER` -- and so `keys()`,
 /// `values()`, `items()` and every `:echo` of a Dictionary -- hands out.
-unsafe fn keys_in_slot_order(ht: &hashtab_T) -> Vec<String> {
+unsafe fn keys_in_slot_order(ht: &HashTab) -> Vec<String> {
     ht.items()
         .map(|hi| {
             unsafe { CStr::from_ptr(hi.hi_key) }
@@ -145,7 +145,7 @@ unsafe fn keys_in_slot_order(ht: &hashtab_T) -> Vec<String> {
 /// and `r` walks on to 13.
 #[test]
 fn iteration_visits_slots_in_index_order() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         for key in ["a", "q", "A", "Q", "b", "r"] {
             assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
@@ -160,7 +160,7 @@ fn iteration_visits_slots_in_index_order() {
 /// ended the walk.
 #[test]
 fn a_reused_tombstone_keeps_its_slot_in_the_order() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         for key in ["a", "q", "A"] {
             assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
@@ -180,7 +180,7 @@ fn a_reused_tombstone_keeps_its_slot_in_the_order() {
 /// the behaviour, so the new order is pinned too.
 #[test]
 fn growth_reorders_the_walk_by_the_bigger_mask() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         for i in 0..20 {
             assert_eq!(hash_add(&raw mut ht, owned_key(&format!("k{i}"))), Ok(()));
@@ -200,7 +200,7 @@ fn growth_reorders_the_walk_by_the_bigger_mask() {
 /// That is behaviour a caller can see, so it is pinned rather than described.
 #[test]
 fn shrinking_back_reprobes_in_the_grown_table_order() {
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         for key in ["a", "q", "A"] {
             assert_eq!(hash_add(&raw mut ht, owned_key(key)), Ok(()));
@@ -235,7 +235,7 @@ fn clear_all_frees_the_allocation_the_key_sits_in() {
         payload: u64,
         key: [c_char; 4],
     }
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     unsafe {
         for (i, text) in ["ab", "cd"].iter().enumerate() {
             let entry = xcalloc(1, size_of::<Entry>()) as *mut Entry;

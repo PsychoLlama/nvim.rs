@@ -52,8 +52,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    Failed, MAXPATHL, NUL, SPL_FNAME_TMPL, garray_T, langp_T, regprog_T, size_t, slang_T,
-    synblock_T, win_T,
+    Failed, GArray, MAXPATHL, NUL, SPL_FNAME_TMPL, langp_T, regprog_T, size_t, slang_T, synblock_T,
+    win_T,
 };
 use crate::window::win_valid_any_tab;
 
@@ -244,7 +244,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
 
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw((*wp).w_buffer) });
 
-    let mut ga: garray_T = unsafe { core::mem::zeroed() };
+    let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, size_of::<langp_T>() as c_int, 2) };
     clear_midword(wp);
 

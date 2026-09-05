@@ -43,7 +43,7 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     flags: ExpandFlags,
-    ht: *mut hashtab_T,
+    ht: *mut HashTab,
     found: &mut Vec<CString>,
 ) {
     let mut pathed_pattern = pathed_pattern;
@@ -144,7 +144,7 @@ pub(crate) unsafe fn expand_shellcmd(
     // and collect them in `found`.  When "." is not in $PATH also expand for
     // the current directory, to find "subdir/cmd".
     let mut found = Vec::<CString>::new();
-    let mut found_ht = hashtab_T::init();
+    let mut found_ht = HashTab::init();
     let mut s = path;
     loop {
         // Length of the path portion of buf, including trailing slash.
@@ -452,7 +452,7 @@ pub(crate) unsafe fn expand_user_lua(
 pub unsafe fn globpath(
     path: *mut c_char,
     file: *mut c_char,
-    ga: *mut garray_T,
+    ga: *mut GArray,
     expand_options: WildOpts,
     dirs: bool,
 ) {

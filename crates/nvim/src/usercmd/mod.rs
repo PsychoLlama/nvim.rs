@@ -148,7 +148,7 @@ impl Table {
 
 /// Which of the two command tables a walk is standing on.
 ///
-/// Upstream asks this by comparing the `garray_T *` it is walking against
+/// Upstream asks this by comparing the `GArray *` it is walking against
 /// `&ucmds`; the identity test is the only thing distinguishing "this entry
 /// is buffer-local" from "this entry is global", and it appears in four
 /// different walks.

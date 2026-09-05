@@ -20,9 +20,9 @@ use crate::runtime::do_source_str;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Dict, DictItem, Error, ExprAST, ExprASTNode, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    FuncExe, Integer, KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight,
+    FuncExe, GArray, Integer, KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial, String_0, TryState,
-    TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, exarg_T, garray_T, kErrorTypeException,
+    TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, exarg_T, kErrorTypeException,
     kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{

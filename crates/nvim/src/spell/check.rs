@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{ColNr, Hlf, LineNr, garray_T, langp_T, regmatch_T, size_t, uint8_t, win_T};
+use crate::types::{ColNr, GArray, Hlf, LineNr, langp_T, regmatch_T, size_t, uint8_t, win_T};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -501,7 +501,7 @@ pub unsafe fn expand_spelling(
     pat: *mut c_char,
     matchp: *mut *mut *mut c_char,
 ) -> c_int {
-    let mut ga: garray_T = unsafe { mem::zeroed() };
+    let mut ga: GArray = unsafe { mem::zeroed() };
     unsafe { spell_suggest_list(&raw mut ga, pat, 100, spell_expand_need_cap.get(), true) };
     unsafe { *matchp = ga.ga_data as *mut *mut c_char };
     ga.ga_len

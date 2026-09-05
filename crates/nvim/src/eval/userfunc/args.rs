@@ -27,7 +27,7 @@ use crate::types::{Failed, NUL};
 /// # Safety
 /// `arg` is a NUL-terminated, *writable* string -- the name is terminated in
 /// place while it is copied.  `newargs`, when non-null, is a `char *` garray.
-unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool) -> *mut c_char {
+unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut GArray, skip: bool) -> *mut c_char {
     // SAFETY: the caller's promise -- `arg` is NUL-terminated and writable,
     // and the walk stops at the first byte that is not an identifier one.
     let mut p = unsafe { Walk::new(arg) };
@@ -84,9 +84,9 @@ unsafe fn one_function_arg(arg: *mut c_char, newargs: *mut garray_T, skip: bool)
 pub(crate) unsafe fn get_function_args(
     argp: *mut *mut c_char,
     endchar: c_char,
-    newargs: *mut garray_T,
+    newargs: *mut GArray,
     varargs: *mut c_int,
-    default_args: *mut garray_T,
+    default_args: *mut GArray,
     skip: bool,
 ) -> Result<(), Failed> {
     let mut mustend = false;

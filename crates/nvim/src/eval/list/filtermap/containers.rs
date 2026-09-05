@@ -5,7 +5,7 @@
 //! rehash it; a List asks each item for its successor *after* the callback
 //! has run, because the callback may have removed the item; a Blob walks
 //! bytes and rewrites them in place, closing the gap when `filter()` drops
-//! one; a String walks characters and rebuilds the result in a `garray_T`.
+//! one; a String walks characters and rebuilds the result in a `GArray`.
 //! Each is entered from [`super::filter_map`] and calls back into
 //! [`super::filter_map_one`].
 //!

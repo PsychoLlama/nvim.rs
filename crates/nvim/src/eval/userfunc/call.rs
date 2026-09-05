@@ -107,7 +107,7 @@ pub unsafe fn call_user_func(
     };
     // A fixvar holding one of the two scope-level names, `l:self` and
     // `a:000`; the value is filled in by the caller.
-    let add_fix_var = |v: *mut DictItem, ht: *mut hashtab_T, key: &CStr| {
+    let add_fix_var = |v: *mut DictItem, ht: *mut HashTab, key: &CStr| {
         unsafe { strcpy(tv_dict_item_key(v), key.as_ptr()) };
         unsafe { (*v).di_flags = DI_FLAGS_RO | DI_FLAGS_FIX };
         let _ = unsafe { hash_add(ht, tv_dict_item_key(v)) };

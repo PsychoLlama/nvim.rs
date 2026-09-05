@@ -12,12 +12,12 @@
 use super::*;
 
 pub type HashValue = size_t;
-/// One slot of a [`hashtab_T`].
+/// One slot of a [`HashTab`].
 ///
 /// `Copy`: `hi_key` points into the `DictItem` (or equivalent) that the
 /// table indexes, which the table does not own.
 #[derive(Copy, Clone)]
-pub struct hashitem_T {
+pub struct HashItem {
     pub hi_hash: HashValue,
     pub hi_key: *mut ::core::ffi::c_char,
 }
@@ -27,7 +27,7 @@ pub struct hashitem_T {
 /// The C kept the first sixteen in an inline `ht_smallarray` and pointed
 /// `ht_array` at it, so the overwhelmingly common table -- a dictionary of a
 /// handful of keys -- cost no allocation at all. This is that small case as
-/// a *value*: it is stored in the `hashtab_T`, not pointed at from it, so
+/// a *value*: it is stored in the `HashTab`, not pointed at from it, so
 /// the table stays movable.
 ///
 /// Growth past the small run moves to [`Slots::Heap`], and a shrink back to
@@ -40,26 +40,26 @@ pub struct hashitem_T {
               pointed at, which is what costs a dictionary no allocation"
 )]
 enum Slots {
-    /// No array at all: a [`hashtab_T::new`], or a table
+    /// No array at all: a [`HashTab::new`], or a table
     /// [`crate::hashtab::hash_clear`] emptied.
     None,
     /// The small run, in the table itself.
-    Inline([hashitem_T; crate::hashtab::HT_INIT_SIZE]),
+    Inline([HashItem; crate::hashtab::HT_INIT_SIZE]),
     /// A grown table's array.
-    Heap(Vec<hashitem_T>),
+    Heap(Vec<HashItem>),
 }
 
 impl Slots {
     /// `size` empty slots, inline when that is the small run's size.
     fn with_size(size: usize) -> Self {
         if size == crate::hashtab::HT_INIT_SIZE {
-            Slots::Inline([hashitem_T::EMPTY; crate::hashtab::HT_INIT_SIZE])
+            Slots::Inline([HashItem::EMPTY; crate::hashtab::HT_INIT_SIZE])
         } else {
-            Slots::Heap(vec![hashitem_T::EMPTY; size])
+            Slots::Heap(vec![HashItem::EMPTY; size])
         }
     }
 
-    fn as_slice(&self) -> &[hashitem_T] {
+    fn as_slice(&self) -> &[HashItem] {
         match self {
             Slots::None => &[],
             Slots::Inline(run) => run,
@@ -67,7 +67,7 @@ impl Slots {
         }
     }
 
-    fn as_mut_slice(&mut self) -> &mut [hashitem_T] {
+    fn as_mut_slice(&mut self) -> &mut [HashItem] {
         match self {
             Slots::None => &mut [],
             Slots::Inline(run) => run,
@@ -82,7 +82,7 @@ impl Slots {
 /// zero, before [`crate::hashtab::hash_init`] gives it one). That is the one
 /// structural difference from the C, where `ht_array` pointed at the inline
 /// `ht_smallarray` while the table was small -- a self-reference that made a
-/// `hashtab_T` valid only at the address it was initialised at, and
+/// `HashTab` valid only at the address it was initialised at, and
 /// therefore unwrappable and unmovable. The small run is still inline (see
 /// [`Slots`]); nothing points at it.
 ///
@@ -97,13 +97,13 @@ impl Slots {
 /// # Slots are named by index, never by pointer
 ///
 /// Because the small run lives *in* the table, a raw pointer into it is
-/// derived from the `hashtab_T` itself and dies at the next
-/// `&mut hashtab_T` -- which every mutation of the table takes. So a lookup
+/// derived from the `HashTab` itself and dies at the next
+/// `&mut HashTab` -- which every mutation of the table takes. So a lookup
 /// answers a [`crate::hashtab::Slot`], an index plus a copy of what the slot
 /// held, and every write goes back through the table. An index survives a
 /// mutation; what it does not survive is a *resize*, which is what
 /// [`crate::hashtab::hash_lock`] exists to prevent.
-pub struct hashtab_T {
+pub struct HashTab {
     /// Live entries.
     pub ht_used: size_t,
     /// Entries plus tombstones: what the load factor is measured against.
@@ -118,13 +118,13 @@ pub struct hashtab_T {
     slots: Slots,
 }
 
-impl Default for hashitem_T {
+impl Default for HashItem {
     fn default() -> Self {
         Self::EMPTY
     }
 }
 
-impl hashitem_T {
+impl HashItem {
     /// A slot that never held a key.
     pub const EMPTY: Self = Self {
         hi_hash: 0,
@@ -132,14 +132,14 @@ impl hashitem_T {
     };
 }
 
-impl Default for hashtab_T {
+impl Default for HashTab {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl hashtab_T {
-    /// A table with no slots at all: the state a `hashtab_T` field has
+impl HashTab {
+    /// A table with no slots at all: the state a `HashTab` field has
     /// before [`crate::hashtab::hash_init`] gives it its first array, and
     /// the one it is left in by [`crate::hashtab::hash_clear`].
     ///
@@ -180,12 +180,12 @@ impl hashtab_T {
 
     /// Every slot, in index order -- empty ones and tombstones included.
     /// The live entries alone are [`crate::hashtab::hash_items`].
-    pub fn slots(&self) -> &[hashitem_T] {
+    pub fn slots(&self) -> &[HashItem] {
         self.slots.as_slice()
     }
 
     /// Every slot, writable.
-    pub fn slots_mut(&mut self) -> &mut [hashitem_T] {
+    pub fn slots_mut(&mut self) -> &mut [HashItem] {
         self.slots.as_mut_slice()
     }
 
@@ -194,7 +194,7 @@ impl hashtab_T {
     pub(crate) fn resize_slots(
         &mut self,
         size: usize,
-        rehash: impl FnOnce(&[hashitem_T], &mut [hashitem_T]),
+        rehash: impl FnOnce(&[HashItem], &mut [HashItem]),
     ) {
         let old = ::core::mem::replace(&mut self.slots, Slots::with_size(size));
         rehash(old.as_slice(), self.slots.as_mut_slice());

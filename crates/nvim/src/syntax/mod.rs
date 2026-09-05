@@ -85,7 +85,7 @@ use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    ColNr, LineNr, OptInt, ProfTime, VarNumber, buf_T, bufstate_T, exarg_T, expand_T, hashtab_T,
+    ColNr, HashTab, LineNr, OptInt, ProfTime, VarNumber, buf_T, bufstate_T, exarg_T, expand_T,
     int16_t, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
     synblock_T, synstate_T, uint8_t, uint64_t, win_T,
 };
@@ -153,7 +153,7 @@ pub(crate) struct sp_syn {
 /// cannot be a `Box<keyentry_T>` (the text would not be inside it) and its
 /// two id lists cannot be [`IdList`]s (nothing would run their destructor).
 /// Retiring it needs the keyword tables to stop keying on an interior
-/// address -- a `hashtab_T` that owns its keys, or an id-keyed table with
+/// address -- a `HashTab` that owns its keys, or an id-keyed table with
 /// the text beside the entry.
 #[repr(C)]
 pub(crate) struct keyentry {

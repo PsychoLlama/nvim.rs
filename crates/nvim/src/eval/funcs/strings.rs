@@ -39,8 +39,8 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    Blob, CONV_NONE, ColNr, EvalFuncData, Hlf, List, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING,
-    VarNumber, garray_T, kListLenMayKnow, regmatch_T, regprog_T, time_t, tm, vimconv_T,
+    Blob, CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, TypVal, VAR_BLOB, VAR_LIST,
+    VAR_STRING, VarNumber, kListLenMayKnow, regmatch_T, regprog_T, time_t, tm, vimconv_T,
 };
 use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
@@ -423,7 +423,7 @@ pub unsafe fn f_spellbadword(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
 pub unsafe fn f_spellsuggest(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    let mut ga: garray_T = GA_EMPTY_INIT_VALUE;
+    let mut ga: GArray = GA_EMPTY_INIT_VALUE;
     let mut reported = false;
     with_spell(|| {
         reported = true;

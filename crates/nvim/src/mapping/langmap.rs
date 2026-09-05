@@ -27,7 +27,7 @@ struct LangmapEntry {
 
 /// `'langmap'` pairs for characters >= 256, sorted ascending by `from`.
 ///
-/// Upstream is a `garray_T` of the same rows kept in the same order, because
+/// Upstream is a `GArray` of the same rows kept in the same order, because
 /// both readers binary-search it. Nothing outside this file names it.
 static LANGMAP_MULTIBYTE: GlobalCell<Vec<LangmapEntry>> = GlobalCell::new(Vec::new());
 

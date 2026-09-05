@@ -51,7 +51,7 @@ use crate::runtime::runtimepath_default;
 use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, String_0, garray_T, size_t, uint32_t,
+    GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, String_0, size_t, uint32_t,
 };
 use crate::window::{last_status, win_comp_scroll};
 use crate::winlayer::{self, Buf};
@@ -128,7 +128,7 @@ fn set_init_default_backupskip() {
     // An empty name stands for `/tmp`, which has no environment variable.
     const SOURCES: [&CStr; 4] = [c"", c"TMPDIR", c"TEMP", c"TMP"];
 
-    let mut ga = garray_T {
+    let mut ga = GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,

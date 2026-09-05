@@ -34,7 +34,7 @@ pub const MAX_FUNC_NESTING: c_int = 50;
 /// garray, and `line_to_free` owns whatever the last read handed back.
 pub(crate) unsafe fn get_function_body(
     eap: *mut exarg_T,
-    newlines: *mut garray_T,
+    newlines: *mut GArray,
     line_arg_in: *mut c_char,
     line_to_free: *mut *mut c_char,
     show_block: bool,

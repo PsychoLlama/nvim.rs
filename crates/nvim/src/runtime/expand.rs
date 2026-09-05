@@ -78,7 +78,7 @@ unsafe fn glob_rounds(
     buf_len: size_t,
     dir: *mut c_char,
     flags: RuntimeOpts,
-    gap: *mut garray_T,
+    gap: *mut GArray,
 ) {
     let mut glob_flags = WildOpts::NONE;
     let mut expand_dirs = false;
@@ -159,7 +159,7 @@ unsafe fn trim_match(matched: *mut c_char, keep_ext: bool, pat_pathsep_cnt: c_in
 ///
 /// # Safety
 /// `gap` must be an initialised array of `char *`.
-unsafe fn ga_strings<'a>(gap: *mut garray_T) -> &'a [*mut c_char] {
+unsafe fn ga_strings<'a>(gap: *mut GArray) -> &'a [*mut c_char] {
     // SAFETY: the caller's garray, `ga_len` entries long.
     if unsafe { (*gap).ga_len } <= 0 {
         return &[];
@@ -178,7 +178,7 @@ unsafe fn collect_runtime_matches(
     pat_len: size_t,
     flags: RuntimeOpts,
     keep_ext: bool,
-    gap: *mut garray_T,
+    gap: *mut GArray,
     dirnames: *mut *mut c_char,
 ) {
     // TODO(bfredl): this is bullshit, expandpath should not reinvent path
@@ -217,8 +217,8 @@ unsafe fn collect_runtime_matches(
 }
 
 /// A garray of `char *` with room for ten.
-fn new_string_garray() -> garray_T {
-    let mut ga = garray_T::default();
+fn new_string_garray() -> GArray {
+    let mut ga = GArray::default();
     // SAFETY: `ga` is a fresh local, and `ga_init` only writes its fields.
     unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 10) };
     ga
@@ -230,7 +230,7 @@ fn new_string_garray() -> garray_T {
 /// # Safety
 /// Both out-parameters must be writable, and `ga` must own its strings.
 unsafe fn take_matches(
-    ga: garray_T,
+    ga: GArray,
     num_file: *mut c_int,
     file: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {

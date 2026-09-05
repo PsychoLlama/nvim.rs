@@ -52,9 +52,7 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
-use crate::types::{
-    CONV_NONE, ColNr, Failed, HashValue, NUL, Timestamp, hashtab_T, size_t, uint8_t,
-};
+use crate::types::{CONV_NONE, ColNr, Failed, HashTab, HashValue, NUL, Timestamp, size_t, uint8_t};
 use crate::ui::ui_flush;
 use ::libc::fclose;
 
@@ -87,7 +85,7 @@ pub(super) unsafe fn spell_read_dic(
         return Err(Failed);
     }
 
-    let mut ht = hashtab_T::init();
+    let mut ht = HashTab::init();
     let name = unsafe { CStr::from_ptr(fname) }.to_string_lossy();
     spell_message_fmt(&*spin, format_args!("Reading dictionary file {name}..."));
 
@@ -405,8 +403,8 @@ pub(super) struct AffWord {
     /// The affix table to apply, and the *other* one -- suffixes when this
     /// pass is doing prefixes. `xht` being non-null is also what tells the
     /// body it is adding a prefix rather than a suffix.
-    pub ht: *mut hashtab_T,
-    pub xht: *mut hashtab_T,
+    pub ht: *mut HashTab,
+    pub xht: *mut HashTab,
     /// Which conditions the affix has to meet, and the word's `WF_*` flags.
     pub condit: c_int,
     pub flags: WordFlags,
@@ -646,7 +644,7 @@ pub(super) unsafe fn store_aff_word(spin: &mut spellinfo_T, call: AffWord) -> Re
 unsafe fn affix_applies(
     affile: &afffile_T,
     ae: *mut affentry_T,
-    xht: *mut hashtab_T,
+    xht: *mut HashTab,
     word: *mut c_char,
     wordlen: usize,
     condit: c_int,
@@ -691,7 +689,7 @@ unsafe fn build_affixed_word(
     newword: &mut [c_char; MAXWLEN],
     word: *mut c_char,
     ae: *mut affentry_T,
-    xht: *mut hashtab_T,
+    xht: *mut HashTab,
 ) {
     // SAFETY: every write is bounded by MAXWLEN, the array's size.
     let cap = MAXWLEN as size_t;

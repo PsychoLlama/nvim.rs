@@ -30,7 +30,7 @@ use crate::memory::{xcalloc, xrealloc};
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    AdditionalData, ColNr, LineNr, OptInt, Timestamp, WinInfo, buf_T, fmark_T, fmarkv_T, garray_T,
+    AdditionalData, ColNr, GArray, LineNr, OptInt, Timestamp, WinInfo, buf_T, fmark_T, fmarkv_T,
     pos_T, size_t, win_T, winopt_T,
 };
 use crate::winfloat::win_set_minimal_style;
@@ -83,7 +83,7 @@ impl Entry {
         &raw mut self.wi_opt
     }
 
-    pub(crate) fn folds(&mut self) -> *mut garray_T {
+    pub(crate) fn folds(&mut self) -> *mut GArray {
         &raw mut self.wi_folds
     }
 }
@@ -191,12 +191,12 @@ fn copy_options(from: *mut winopt_T, to: *mut winopt_T) {
     unsafe { copy_winopt(from, to) };
 }
 
-fn delete_folds(folds: *mut garray_T) {
+fn delete_folds(folds: *mut GArray) {
     // SAFETY: a fold array inside a live entry.
     unsafe { delete_fold_recurse(folds) };
 }
 
-fn clone_folds(from: *mut garray_T, to: *mut garray_T) {
+fn clone_folds(from: *mut GArray, to: *mut GArray) {
     // SAFETY: two fold arrays inside a live entry or window.
     unsafe { clone_fold_list(from, to) };
 }

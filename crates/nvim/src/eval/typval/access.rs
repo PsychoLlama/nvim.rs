@@ -42,8 +42,8 @@ pub(crate) type Dt = Live<Dict>;
 pub(crate) type Di = Live<DictItem>;
 /// A live `Blob`; see [`Tv`].
 pub(crate) type Bl = Live<Blob>;
-/// A live `garray_T`; see [`Tv`].
-pub(crate) type Ga = Live<garray_T>;
+/// A live `GArray`; see [`Tv`].
+pub(crate) type Ga = Live<GArray>;
 /// A live `Partial`; see [`Tv`].
 pub(crate) type Pt = Live<Partial>;
 /// A live `DictWatcher`; see [`Tv`].
@@ -83,7 +83,7 @@ pub(crate) fn li_tv(li: *mut ListItem) -> *mut TypVal {
 
 /// The address of a dictionary's hash table; see [`field_of`].
 #[inline(always)]
-pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut hashtab_T {
+pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut HashTab {
     field_of(d, ::core::mem::offset_of!(Dict, dv_hashtab))
 }
 
@@ -113,7 +113,7 @@ pub(crate) fn lv_watch(l: *mut List) -> *mut *mut ListWatch {
 
 /// The address of a blob's byte array; see [`field_of`].
 #[inline(always)]
-pub(crate) fn bv_ga(b: *mut Blob) -> *mut garray_T {
+pub(crate) fn bv_ga(b: *mut Blob) -> *mut GArray {
     field_of(b, ::core::mem::offset_of!(Blob, bv_ga))
 }
 
@@ -602,7 +602,7 @@ pub(crate) unsafe fn tv_dict_hi2di(hi: Slot) -> *mut DictItem {
 ///
 /// See [`tv_dict_iter`].
 pub(crate) struct DictIter {
-    ht: *const hashtab_T,
+    ht: *const HashTab,
     idx: usize,
     todo: size_t,
 }
@@ -655,13 +655,13 @@ pub(crate) unsafe fn tv_dict_iter(d: *const Dict) -> DictIter {
 /// [`tv_dict_iter`] over a bare hashtab: upstream's `HASHTAB_ITER`.
 ///
 /// The variable scopes are reached both ways -- as a `Dict` and as the
-/// `hashtab_T` inside it -- so both spellings exist. The contract is the
+/// `HashTab` inside it -- so both spellings exist. The contract is the
 /// same one.
 ///
 /// # Safety
 /// As [`tv_dict_iter`], for the table rather than the dictionary.
 #[inline]
-pub(crate) unsafe fn tv_ht_iter(ht: *const hashtab_T) -> DictIter {
+pub(crate) unsafe fn tv_ht_iter(ht: *const HashTab) -> DictIter {
     DictIter {
         ht,
         idx: 0,

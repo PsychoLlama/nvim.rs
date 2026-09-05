@@ -276,10 +276,10 @@ pub unsafe fn tv_list_slice_or_index(
 ///
 /// Splitting it in two is what lets `gap` be grown to its final size once.
 pub(crate) unsafe fn list_join_inner(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     l: *mut List,
     sep: *const ::core::ffi::c_char,
-    join_gap: *mut garray_T,
+    join_gap: *mut GArray,
 ) -> Result<(), Failed> {
     let mut sumlen: size_t = 0;
     let mut first = true;
@@ -337,7 +337,7 @@ pub(crate) unsafe fn list_join_inner(
 
 /// `join()`: append `l`'s items to `gap`, separated by `sep`.
 pub unsafe fn tv_list_join(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     l: *mut List,
     sep: *const ::core::ffi::c_char,
 ) -> Result<(), Failed> {

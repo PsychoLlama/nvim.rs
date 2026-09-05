@@ -9,12 +9,12 @@ use neovim::garray::{
     ga_remove_duplicate_strings,
 };
 use neovim::memory::xstrdup;
-use neovim::types::garray_T;
+use neovim::types::GArray;
 
 use crate::support::{cstr, internalize};
 
-fn new_garray() -> garray_T {
-    garray_T {
+fn new_garray() -> GArray {
+    GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,
@@ -23,14 +23,14 @@ fn new_garray() -> garray_T {
     }
 }
 
-unsafe fn string_at(garr: &garray_T, i: usize) -> String {
+unsafe fn string_at(garr: &GArray, i: usize) -> String {
     let ptr = *(garr.ga_data as *const *const c_char).add(i);
     String::from_utf8(CStr::from_ptr(ptr).to_bytes().to_vec()).unwrap()
 }
 
 /// The spec's `ga_append_string`: push an allocated copy of `s` onto a
 /// string garray. `ga_clear_strings` frees the copies.
-unsafe fn append_str(garr: &mut garray_T, s: &str) {
+unsafe fn append_str(garr: &mut GArray, s: &str) {
     assert_eq!(size_of::<*mut c_char>() as c_int, garr.ga_itemsize);
     let copy = xstrdup(cstr(s).as_ptr());
     ga_grow(garr, 1);
@@ -38,7 +38,7 @@ unsafe fn append_str(garr: &mut garray_T, s: &str) {
     garr.ga_len += 1;
 }
 
-unsafe fn append_strs(garr: &mut garray_T, strs: &[&str]) {
+unsafe fn append_strs(garr: &mut GArray, strs: &[&str]) {
     let prev = garr.ga_len;
     for s in strs {
         append_str(garr, s);
@@ -60,7 +60,7 @@ fn ga_init_initializes_the_values_of_the_garray() {
     }
 }
 
-unsafe fn new_and_grow(itemsize: c_int, growsize: c_int, req: c_int) -> garray_T {
+unsafe fn new_and_grow(itemsize: c_int, growsize: c_int, req: c_int) -> GArray {
     let mut garr = new_garray();
     ga_init(&mut garr, itemsize, growsize);
     assert_eq!(0, garr.ga_len * garr.ga_itemsize); // should be empty at first

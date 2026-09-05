@@ -90,7 +90,7 @@ unsafe extern "C" fn pstrcmp(a: *const c_void, b: *const c_void) -> c_int {
 /// `path` must be a NUL-terminated string and `gap` an initialised array of
 /// allocated strings.
 pub(crate) unsafe fn path_expand(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     path: *const c_char,
     flags: ExpandFlags,
 ) -> usize {
@@ -252,7 +252,7 @@ fn write_at(buf: &mut [u8], at: usize, parts: &[&[u8]]) -> usize {
 /// `path` must be a NUL-terminated string and `gap` an initialised array of
 /// allocated strings.
 pub(crate) unsafe fn do_path_expand(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     path: *const c_char,
     wildoff: usize,
     flags: ExpandFlags,
@@ -488,7 +488,7 @@ pub(crate) unsafe fn has_special_wildchar(p: *mut c_char, flags: ExpandFlags) ->
 /// # Safety
 /// `f` must be a NUL-terminated string and `gap` an initialised array of
 /// allocated strings.
-pub unsafe fn addfile(gap: *mut garray_T, f: *mut c_char, flags: ExpandFlags) {
+pub unsafe fn addfile(gap: *mut GArray, f: *mut c_char, flags: ExpandFlags) {
     let mut file_info = FileInfo::default();
     let exists = if flags.has(ExpandFlags::ALLLINKS) {
         unsafe { os_fileinfo_link(f, &raw mut file_info) }

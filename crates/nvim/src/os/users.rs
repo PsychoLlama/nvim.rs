@@ -25,7 +25,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::memory::{xstrdup, xstrlcpy};
 use crate::os::env::{env_buf, os_getenv_into};
-use crate::types::{Failed, expand_T, garray_T, size_t, uv_uid_t};
+use crate::types::{Failed, GArray, expand_T, size_t, uv_uid_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -86,7 +86,7 @@ fn all_usernames() -> Vec<CString> {
 
 /// The `~user` completion list. Filled on first use and never cleared:
 /// [`get_users`] hands out pointers borrowed from it, exactly as the C
-/// handed out pointers into a `static garray_T`.
+/// handed out pointers into a `static GArray`.
 static COMPLETION_USERS: GlobalCell<Vec<CString>> = GlobalCell::new(Vec::new());
 static COMPLETION_USERS_READY: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -141,9 +141,9 @@ fn best_match(users: &[CString], name: &[u8]) -> UserMatch {
 ///
 /// # Safety
 ///
-/// `users` is null or points to writable `garray_T` storage, which this call
+/// `users` is null or points to writable `GArray` storage, which this call
 /// initializes (anything it already held is leaked, as upstream's is).
-pub unsafe fn os_get_usernames(users: *mut garray_T) -> Result<(), Failed> {
+pub unsafe fn os_get_usernames(users: *mut GArray) -> Result<(), Failed> {
     if users.is_null() {
         return Err(Failed);
     }

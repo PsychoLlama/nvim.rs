@@ -1,4 +1,4 @@
-//! Growable array of items (`garray_T`): safe core + raw-pointer shims.
+//! Growable array of items (`GArray`): safe core + raw-pointer shims.
 //!
 //! The struct layout is frozen: call sites all over the crate (and the unit
 //! suite, via FFI) poke the fields directly and `xfree` the data pointer.
@@ -10,9 +10,9 @@
 //!
 //! # Boundary
 //!
-//! Every entry point takes `*mut garray_T` because its callers hold one --
+//! Every entry point takes `*mut GArray` because its callers hold one --
 //! a field of `buf_T`, a `static`, a local the transpile never borrowed.
-//! Each shim turns that pointer into a `&mut garray_T` once, at the top, and
+//! Each shim turns that pointer into a `&mut GArray` once, at the top, and
 //! the rest of the body is ordinary Rust. The *contract* the callers rely on
 //! is unchanged and load-bearing: many of them (`FoldList` and friends)
 //! re-read `ga_len` on every step of a loop that also grows the array, so
@@ -36,9 +36,9 @@ use crate::memory::{xfree, xmallocz, xrealloc, xstrdup};
 use crate::path::path_fnamecmp;
 use crate::strings::sort_strings;
 
-use crate::types::garray::garray_T;
+use crate::types::garray::GArray;
 
-/// A count of items as a byte count: `garray_T` keeps both its lengths and
+/// A count of items as a byte count: `GArray` keeps both its lengths and
 /// its item size in a `c_int`, and every one of the three is a size the
 /// array itself set.
 fn as_size(n: c_int) -> usize {
@@ -56,7 +56,7 @@ struct GrowPlan {
 /// The C growth policy, verbatim: nothing to do while `n` more items fit;
 /// otherwise grow by at least `ga_growsize` items and at least half the
 /// current length.
-fn grow_plan(ga: &garray_T, n: c_int) -> Option<GrowPlan> {
+fn grow_plan(ga: &GArray, n: c_int) -> Option<GrowPlan> {
     if ga.ga_maxlen - ga.ga_len >= n {
         return None;
     }
@@ -98,7 +98,7 @@ fn join_into(dst: &mut [u8], parts: &[&[u8]], sep: &[u8]) {
 /// The array's items really are `T`s, and `ga_data` really points at
 /// `ga_len` of them. An array that never grew has a null `ga_data` and must
 /// not reach here with a nonzero `ga_len`.
-unsafe fn items<T>(ga: &garray_T) -> &[T] {
+unsafe fn items<T>(ga: &GArray) -> &[T] {
     // SAFETY: the caller's promise. `ga_data` is null only for an untouched
     // array, whose `ga_len` is 0 -- and `from_raw_parts` rejects a null base
     // even then, which is why the callers test it first.
@@ -111,7 +111,7 @@ unsafe fn items<T>(ga: &garray_T) -> &[T] {
 /// # Safety
 ///
 /// The array has room for that item -- i.e. [`ga_grow`] has just run.
-unsafe fn tail(ga: &garray_T, item_size: usize) -> *mut u8 {
+unsafe fn tail(ga: &GArray, item_size: usize) -> *mut u8 {
     // SAFETY: the caller's promise puts the offset inside the allocation.
     unsafe {
         ga.ga_data
@@ -135,9 +135,9 @@ unsafe fn cbytes<'a>(s: *const c_char) -> &'a [u8] {
 ///
 /// # Safety
 ///
-/// `gap` points to a live `garray_T` whose `ga_data` is null or an
+/// `gap` points to a live `GArray` whose `ga_data` is null or an
 /// `xmalloc`-family allocation this call takes over.
-pub unsafe fn ga_clear(gap: *mut garray_T) {
+pub unsafe fn ga_clear(gap: *mut GArray) {
     // SAFETY: the caller's array, and its own data allocation.
     let ga = unsafe { &mut *gap };
     unsafe { xfree(ga.ga_data) };
@@ -150,8 +150,8 @@ pub unsafe fn ga_clear(gap: *mut garray_T) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live `garray_T` of `ga_len` owned C strings.
-pub unsafe fn ga_clear_strings(gap: *mut garray_T) {
+/// `gap` points to a live `GArray` of `ga_len` owned C strings.
+pub unsafe fn ga_clear_strings(gap: *mut GArray) {
     // SAFETY: the caller's array; `ga_data` holds `ga_len` owned pointers,
     // and is null only when the array never grew.
     let ga = unsafe { &*gap };
@@ -166,9 +166,9 @@ pub unsafe fn ga_clear_strings(gap: *mut garray_T) {
 ///
 /// # Safety
 ///
-/// `gap` points to writable, possibly uninitialized `garray_T` storage. Any
+/// `gap` points to writable, possibly uninitialized `GArray` storage. Any
 /// allocation it already held is leaked, as upstream's is.
-pub unsafe fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
+pub unsafe fn ga_init(gap: *mut GArray, itemsize: c_int, growsize: c_int) {
     // SAFETY: the caller's storage, written before anything reads it.
     let ga = unsafe { &mut *gap };
     ga.ga_data = ptr::null_mut();
@@ -180,7 +180,7 @@ pub unsafe fn ga_init(gap: *mut garray_T, itemsize: c_int, growsize: c_int) {
 
 /// How many items each growth step adds, at minimum. A non-positive value is
 /// a caller bug; it is logged and clamped, as upstream does.
-fn set_growsize(ga: &mut garray_T, growsize: c_int) {
+fn set_growsize(ga: &mut GArray, growsize: c_int) {
     if growsize < 1 {
         logmsg!(
             LOGLVL_WRN,
@@ -196,8 +196,8 @@ fn set_growsize(ga: &mut garray_T, growsize: c_int) {
 
 /// # Safety
 ///
-/// `gap` points to a live `garray_T`.
-pub unsafe fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
+/// `gap` points to a live `GArray`.
+pub unsafe fn ga_set_growsize(gap: *mut GArray, growsize: c_int) {
     // SAFETY: the caller's array.
     set_growsize(unsafe { &mut *gap }, growsize);
 }
@@ -208,9 +208,9 @@ pub unsafe fn ga_set_growsize(gap: *mut garray_T, growsize: c_int) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live `garray_T` whose `ga_data` is null or an
+/// `gap` points to a live `GArray` whose `ga_data` is null or an
 /// `xmalloc`-family allocation of `ga_maxlen * ga_itemsize` bytes.
-pub unsafe fn ga_grow(gap: *mut garray_T, n: c_int) {
+pub unsafe fn ga_grow(gap: *mut GArray, n: c_int) {
     // SAFETY: the caller's array.
     let ga = unsafe { &mut *gap };
     let Some(plan) = grow_plan(ga, n) else {
@@ -239,8 +239,8 @@ pub unsafe fn ga_grow(gap: *mut garray_T, n: c_int) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live `garray_T` of `ga_len` owned C strings.
-pub unsafe fn ga_remove_duplicate_strings(gap: *mut garray_T) {
+/// `gap` points to a live `GArray` of `ga_len` owned C strings.
+pub unsafe fn ga_remove_duplicate_strings(gap: *mut GArray) {
     // SAFETY: the caller's array of owned strings. The walk shrinks `ga_len`
     // as it frees, so the slice is rebuilt on every step -- and it walks
     // downwards, so the shrinking tail is always behind it.
@@ -264,9 +264,9 @@ pub unsafe fn ga_remove_duplicate_strings(gap: *mut garray_T) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live `garray_T` of `ga_len` C strings, and `sep` is a
+/// `gap` points to a live `GArray` of `ga_len` C strings, and `sep` is a
 /// NUL-terminated string.
-pub unsafe fn ga_concat_strings(gap: *const garray_T, sep: *const c_char) -> *mut c_char {
+pub unsafe fn ga_concat_strings(gap: *const GArray, sep: *const c_char) -> *mut c_char {
     // SAFETY: the caller's array and separator, both live for the call, and
     // every item is a NUL-terminated string the array does not own.
     let ga = unsafe { &*gap };
@@ -289,8 +289,8 @@ pub unsafe fn ga_concat_strings(gap: *const garray_T, sep: *const c_char) -> *mu
 ///
 /// # Safety
 ///
-/// `gap` points to a live byte `garray_T`; `s` is null or NUL-terminated.
-pub unsafe fn ga_concat(gap: *mut garray_T, s: *const c_char) {
+/// `gap` points to a live byte `GArray`; `s` is null or NUL-terminated.
+pub unsafe fn ga_concat(gap: *mut GArray, s: *const c_char) {
     if s.is_null() {
         return;
     }
@@ -302,9 +302,9 @@ pub unsafe fn ga_concat(gap: *mut garray_T, s: *const c_char) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live byte `garray_T`, and `s` is readable for `len`
+/// `gap` points to a live byte `GArray`, and `s` is readable for `len`
 /// bytes and does not point into the array's own storage.
-pub unsafe fn ga_concat_len(gap: *mut garray_T, s: *const c_char, len: usize) {
+pub unsafe fn ga_concat_len(gap: *mut GArray, s: *const c_char, len: usize) {
     if len == 0 {
         return;
     }
@@ -322,8 +322,8 @@ pub unsafe fn ga_concat_len(gap: *mut garray_T, s: *const c_char, len: usize) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live byte `garray_T`.
-pub unsafe fn ga_append(gap: *mut garray_T, c: u8) {
+/// `gap` points to a live byte `GArray`.
+pub unsafe fn ga_append(gap: *mut GArray, c: u8) {
     // SAFETY: the caller's array, grown to hold one more byte just above.
     unsafe { ga_grow(gap, 1) };
     let ga = unsafe { &mut *gap };
@@ -337,8 +337,8 @@ pub unsafe fn ga_append(gap: *mut garray_T, c: u8) {
 ///
 /// # Safety
 ///
-/// `gap` points to a live `garray_T`.
-pub unsafe fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_void {
+/// `gap` points to a live `GArray`.
+pub unsafe fn ga_append_via_ptr(gap: *mut GArray, item_size: usize) -> *mut c_void {
     // SAFETY: the caller's array, grown to hold one more item just above.
     let ga = unsafe { &mut *gap };
     if item_size != as_size(ga.ga_itemsize) {
@@ -361,8 +361,8 @@ pub unsafe fn ga_append_via_ptr(gap: *mut garray_T, item_size: usize) -> *mut c_
 mod tests {
     use super::*;
 
-    fn ga(len: c_int, maxlen: c_int, itemsize: c_int, growsize: c_int) -> garray_T {
-        garray_T {
+    fn ga(len: c_int, maxlen: c_int, itemsize: c_int, growsize: c_int) -> GArray {
+        GArray {
             ga_len: len,
             ga_maxlen: maxlen,
             ga_itemsize: itemsize,

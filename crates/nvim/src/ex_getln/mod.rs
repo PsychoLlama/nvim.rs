@@ -138,13 +138,13 @@ use crate::types::{
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArgt, Exception, ExpandContext,
     ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
-    ExprOptScope, ExprParserFlags, Handle, HistoryType, Integer, LineNr, List, ListItem, Magic,
-    MotionType, MsgList, Object, OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk,
-    ParserLine, ParserPosition, ParserState, ProfTime, RemapValues, SaveVEvent, ScriptCtx,
-    String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
-    XpPrefix, aco_save_T, buf_T, cmdmod_T, dobuf_action_values, dobuf_start_values, exarg_T,
-    expand_T, hashtab_T, oparg_T, optset_T, pos_T, ptrdiff_t, searchit_arg_T, size_t, tabpage_T,
-    time_t, typval_vval_union, uint8_t, uint32_t, win_T,
+    ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, List, ListItem,
+    Magic, MotionType, MsgList, Object, OptInt, OptMagic, OptVal, ParserHighlight,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime, RemapValues,
+    SaveVEvent, ScriptCtx, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
+    VarNumber, VimState, XpPrefix, aco_save_T, buf_T, cmdmod_T, dobuf_action_values,
+    dobuf_start_values, exarg_T, expand_T, oparg_T, optset_T, pos_T, ptrdiff_t, searchit_arg_T,
+    size_t, tabpage_T, time_t, typval_vval_union, uint8_t, uint32_t, win_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -627,7 +627,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
 
 pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
-    sve_hashtab: hashtab_T::new(),
+    sve_hashtab: HashTab::new(),
 };
 
 static ccline: GlobalCell<CmdlineInfo> = GlobalCell::new(CMDLINE_INFO_INIT);

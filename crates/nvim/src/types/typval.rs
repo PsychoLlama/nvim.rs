@@ -347,7 +347,7 @@ mod refcount_tests {
 }
 
 pub struct Blob {
-    pub bv_ga: garray_T,
+    pub bv_ga: GArray,
     pub bv_refcount: Refcount,
     pub bv_lock: VarLock,
 }
@@ -361,7 +361,7 @@ pub struct Dict {
     pub dv_scope: ScopeType,
     pub dv_refcount: Refcount,
     pub dv_copyID: ::core::ffi::c_int,
-    pub dv_hashtab: hashtab_T,
+    pub dv_hashtab: HashTab,
     pub dv_copydict: *mut Dict,
     pub dv_used_next: *mut Dict,
     pub dv_used_prev: *mut Dict,
@@ -385,12 +385,12 @@ pub struct FuncCall {
     pub fc_breakpoint: LineNr,
     pub fc_dbg_tick: ::core::ffi::c_int,
     pub fc_level: ::core::ffi::c_int,
-    pub fc_defer: garray_T,
+    pub fc_defer: GArray,
     pub fc_prof_child: ProfTime,
     pub fc_caller: *mut FuncCall,
     pub fc_refcount: Refcount,
     pub fc_copyID: ::core::ffi::c_int,
-    pub fc_ufuncs: garray_T,
+    pub fc_ufuncs: GArray,
 }
 #[repr(C)]
 pub struct funccall_S_fc_fixvar {
@@ -399,7 +399,7 @@ pub struct funccall_S_fc_fixvar {
     pub di_key: [::core::ffi::c_char; 21],
 }
 pub struct HtStack {
-    pub ht: *mut hashtab_T,
+    pub ht: *mut HashTab,
     pub prev: *mut HtStack,
 }
 pub struct ListStack {
@@ -528,9 +528,9 @@ pub struct UserFunc {
     pub uf_flags: crate::eval::userfunc::FuncFlags,
     pub uf_calls: ::core::ffi::c_int,
     pub uf_cleared: bool,
-    pub uf_args: garray_T,
-    pub uf_def_args: garray_T,
-    pub uf_lines: garray_T,
+    pub uf_args: GArray,
+    pub uf_def_args: GArray,
+    pub uf_lines: GArray,
     pub uf_profiling: ::core::ffi::c_int,
     pub uf_prof_initialized: ::core::ffi::c_int,
     pub uf_luaref: LuaRef,

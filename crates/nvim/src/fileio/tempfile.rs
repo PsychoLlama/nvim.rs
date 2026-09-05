@@ -211,7 +211,7 @@ unsafe fn vim_mktempdir() {
 ///
 /// @return  `Ok` for success, `Err` for failure.
 pub unsafe fn readdir_core(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     path: *const c_char,
     context: *mut c_void,
     checkitem: CheckItem,
@@ -283,7 +283,7 @@ unsafe fn delete_tree(name: &[u8]) -> c_int {
         };
     }
 
-    let mut ga = garray_T::default();
+    let mut ga = GArray::default();
     if unsafe { readdir_core(&raw mut ga, path.as_ptr(), ptr::null_mut(), None) }.is_err() {
         return -1;
     }

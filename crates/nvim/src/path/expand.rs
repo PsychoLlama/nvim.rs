@@ -40,7 +40,7 @@ static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) unsafe fn expand_path_option(
     curdir: *mut c_char,
     mut path_option: *mut c_char,
-    gap: *mut garray_T,
+    gap: *mut GArray,
 ) {
     let mut buf = vec![0 as c_char; MAXPATHL as usize];
     let buf = buf.as_mut_ptr();
@@ -127,14 +127,14 @@ pub(crate) unsafe fn expand_path_option(
 /// `pattern` must be a NUL-terminated string and `gap` an initialised array
 /// of allocated strings.
 pub(crate) unsafe fn expand_in_path(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     pattern: *mut c_char,
     flags: ExpandFlags,
 ) -> c_int {
     let mut curdir = vec![0 as c_char; MAXPATHL as usize];
     let _ = unsafe { os_dirname(curdir.as_mut_ptr(), MAXPATHL as size_t) };
 
-    let mut path_ga = garray_T::default();
+    let mut path_ga = GArray::default();
     unsafe { ga_init(&raw mut path_ga, size_of::<*mut c_char>() as c_int, 1) };
     let path_option = if flags.has(ExpandFlags::CDPATH) {
         p_cdpath.get()
@@ -269,7 +269,7 @@ pub unsafe fn gen_expand_wildcards(
 
     let path_option = unsafe { buffer_path() };
     RECURSIVE.set(true);
-    let mut ga = garray_T::default();
+    let mut ga = GArray::default();
     unsafe { ga_init(&raw mut ga, size_of::<*mut c_char>() as c_int, 30) };
 
     // Upstream never clears this: once one pattern has been looked for
@@ -405,7 +405,7 @@ pub(crate) unsafe fn vim_backtick(p: *mut c_char) -> bool {
 /// `pat` must be a NUL-terminated string of at least two characters, and
 /// `gap` an initialised array of allocated strings.
 pub(crate) unsafe fn expand_backtick(
-    gap: *mut garray_T,
+    gap: *mut GArray,
     pat: *mut c_char,
     flags: ExpandFlags,
 ) -> c_int {

@@ -63,7 +63,7 @@ pub struct slang_S {
     pub sl_info: *mut ::core::ffi::c_char,
     pub sl_regions: [::core::ffi::c_char; 17],
     pub sl_midword: *mut ::core::ffi::c_char,
-    pub sl_wordcount: hashtab_T,
+    pub sl_wordcount: HashTab,
     pub sl_compmax: ::core::ffi::c_int,
     pub sl_compminlen: ::core::ffi::c_int,
     pub sl_compsylmax: ::core::ffi::c_int,
@@ -104,9 +104,9 @@ pub struct slang_S {
     pub sl_sugbuf: *mut buf_T,
     pub sl_sugloaded: bool,
     pub sl_has_map: bool,
-    pub sl_map_hash: hashtab_T,
+    pub sl_map_hash: HashTab,
     pub sl_map_array: [::core::ffi::c_int; 256],
-    pub sl_sounddone: hashtab_T,
+    pub sl_sounddone: HashTab,
 }
 pub type slang_T = slang_S;
 

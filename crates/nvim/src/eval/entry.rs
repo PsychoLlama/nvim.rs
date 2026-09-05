@@ -47,10 +47,10 @@ use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, Dict, EvalArg, Failed, FuncCallEntry, FuncExe, List, NUL, Object, OptionSetFlags,
-    Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, exarg_T, garray_T, hashtab_T,
-    ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t, win_T,
+    Arena, Dict, EvalArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL, Object,
+    OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, exarg_T, ptrdiff_t,
+    size_t, ssize_t, typval_vval_union, uint8_t, win_T,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -77,7 +77,7 @@ const NUMBUFLEN: usize = 65;
 type Ev = Live<EvalArg>;
 
 /// An empty growable array.
-const UNSET_GA: garray_T = garray_T {
+const UNSET_GA: GArray = GArray {
     ga_len: 0,
     ga_maxlen: 0,
     ga_itemsize: 0,
@@ -103,7 +103,7 @@ pub unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
         // autocommand put in `v:event` travels to `sve` intact and
         // `v:event` starts the inner one empty. `restore_v_event` moves it
         // back.
-        *saved = core::mem::replace(live, hashtab_T::init());
+        *saved = core::mem::replace(live, HashTab::init());
     }
     v_event
 }

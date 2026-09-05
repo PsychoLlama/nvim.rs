@@ -5,7 +5,7 @@
 //! -- the two-step shape exists because the caller wants the matches after
 //! the Lua state has been unwound.
 //!
-//! The stash is a `Vec` of owned C strings, not a `garray_T` whose raw buffer
+//! The stash is a `Vec` of owned C strings, not a `GArray` whose raw buffer
 //! is handed over: only the *strings* have to be `xmalloc`ed for the caller's
 //! `free_wild`, and the array they travel in is built at handoff.
 

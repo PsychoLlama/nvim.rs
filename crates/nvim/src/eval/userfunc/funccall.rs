@@ -26,7 +26,7 @@ use crate::types::{Failed, NUL, Refcount};
 /// and remove from the table while a walk over it is in progress. That is
 /// what `ht_changed` is for, and a `&mut` could not survive it.
 #[derive(Clone, Copy)]
-pub(crate) struct FuncTable(*mut hashtab_T);
+pub(crate) struct FuncTable(*mut HashTab);
 
 /// The one place the function table's address is taken.
 pub(crate) fn func_table() -> FuncTable {
@@ -35,7 +35,7 @@ pub(crate) fn func_table() -> FuncTable {
 
 impl FuncTable {
     /// The address, for the callers outside this family that still take one.
-    pub(crate) fn raw(self) -> *mut hashtab_T {
+    pub(crate) fn raw(self) -> *mut HashTab {
         self.0
     }
 
@@ -113,7 +113,7 @@ pub fn func_init() {
 }
 
 /// The function table itself, for the callers outside this family.
-pub fn func_tbl_get() -> *mut hashtab_T {
+pub fn func_tbl_get() -> *mut HashTab {
     func_table().raw()
 }
 
@@ -643,7 +643,7 @@ pub unsafe fn get_funccal_local_dict() -> *mut Dict {
 }
 
 /// The `l:` scope hashtab, or null when there is no call.
-pub unsafe fn get_funccal_local_ht() -> *mut hashtab_T {
+pub unsafe fn get_funccal_local_ht() -> *mut HashTab {
     // SAFETY: `get_funccal_local_dict` answers null or a live dictionary.
     let d = unsafe { get_funccal_local_dict() };
     if d.is_null() {
@@ -672,7 +672,7 @@ pub unsafe fn get_funccal_args_dict() -> *mut Dict {
 }
 
 /// The `a:` scope hashtab, or null when there is no call.
-pub unsafe fn get_funccal_args_ht() -> *mut hashtab_T {
+pub unsafe fn get_funccal_args_ht() -> *mut HashTab {
     // SAFETY: `get_funccal_args_dict` answers null or a live dictionary.
     let d = unsafe { get_funccal_args_dict() };
     if d.is_null() {
@@ -713,7 +713,7 @@ pub unsafe fn list_func_vars(first: *mut c_int) {
 ///
 /// # Safety
 /// `ht` is a live hashtab.
-pub unsafe fn get_current_funccal_dict(ht: *mut hashtab_T) -> *mut Dict {
+pub unsafe fn get_current_funccal_dict(ht: *mut HashTab) -> *mut Dict {
     let fc = current_funccal.get();
     if fc.is_null() {
         return ptr::null_mut();
@@ -761,7 +761,7 @@ unsafe fn walk_scoped_funccals<T>(mut probe: impl FnMut() -> Option<T>) -> Optio
 ///
 /// # Safety
 /// `name` is NUL-terminated and `pht` is writable.
-pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, pht: *mut *mut hashtab_T) -> Option<Slot> {
+pub unsafe fn find_hi_in_scoped_ht(name: *const c_char, pht: *mut *mut HashTab) -> Option<Slot> {
     // SAFETY: `current_funccal` is null or the live call in progress, whose
     // `fc_func` is live too; `name` is the caller's NUL-terminated string.
     if current_funccal.get().is_null()
@@ -855,9 +855,7 @@ pub unsafe fn set_ref_in_previous_funccal(copyID: c_int) -> bool {
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn scopes_of(
-    fc: *mut FuncCall,
-) -> (*mut hashtab_T, *mut hashtab_T, *mut crate::types::List) {
+unsafe fn scopes_of(fc: *mut FuncCall) -> (*mut HashTab, *mut HashTab, *mut crate::types::List) {
     // SAFETY: the caller's promise; a field's address is the object's plus a
     // constant, so none of the three reads it.
     unsafe {

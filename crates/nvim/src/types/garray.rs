@@ -12,7 +12,7 @@
 
 #[derive(Copy, Clone, Default)]
 #[repr(C)]
-pub struct garray_T {
+pub struct GArray {
     pub ga_len: ::core::ffi::c_int,
     pub ga_maxlen: ::core::ffi::c_int,
     pub ga_itemsize: ::core::ffi::c_int,

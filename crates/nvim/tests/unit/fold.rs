@@ -2,7 +2,7 @@
 //!
 //! `fold_mark_adjust_recurse` is what every buffer change that inserts, deletes
 //! or moves lines eventually reaches, and it is the only part of the fold
-//! machinery that runs without a window: it walks a `garray_T` of `fold_T`
+//! machinery that runs without a window: it walks a `GArray` of `fold_T`
 //! and rewrites `fd_top`/`fd_len` in place, recursing into `fd_nested`. The
 //! cases below are the four shapes its `if` chain distinguishes, with the
 //! expected results derived from `v0.12.4`'s `src/nvim/fold.c` rather than
@@ -19,14 +19,14 @@ use neovim::fold::adjust::fold_mark_adjust_recurse;
 use neovim::fold::fold_T;
 use neovim::garray::{ga_clear, ga_grow, ga_init};
 use neovim::pos::MAXLNUM;
-use neovim::types::{LineNr, garray_T};
+use neovim::types::{GArray, LineNr};
 
 /// The sentinel `mark_adjust` passes as `amount` to mean "these lines are
 /// gone".
 const DELETED: LineNr = MAXLNUM as c_int;
 
-fn empty_list() -> garray_T {
-    let mut gap = garray_T {
+fn empty_list() -> GArray {
+    let mut gap = GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,
@@ -39,7 +39,7 @@ fn empty_list() -> garray_T {
 
 /// Append a fold covering `top..top + len - 1`, and hand back its nested list
 /// so a caller can build a second level under it.
-unsafe fn push(gap: &mut garray_T, top: LineNr, len: LineNr) -> *mut garray_T {
+unsafe fn push(gap: &mut GArray, top: LineNr, len: LineNr) -> *mut GArray {
     ga_grow(gap, 1);
     let fp = (gap.ga_data as *mut fold_T).add(gap.ga_len as usize);
     (*fp).fd_top = top;
@@ -52,7 +52,7 @@ unsafe fn push(gap: &mut garray_T, top: LineNr, len: LineNr) -> *mut garray_T {
 }
 
 /// Every fold in `gap` as `(fd_top, fd_len)`.
-unsafe fn spans(gap: &garray_T) -> Vec<(LineNr, LineNr)> {
+unsafe fn spans(gap: &GArray) -> Vec<(LineNr, LineNr)> {
     (0..gap.ga_len)
         .map(|i| {
             let fp = (gap.ga_data as *const fold_T).offset(i as isize);
@@ -61,7 +61,7 @@ unsafe fn spans(gap: &garray_T) -> Vec<(LineNr, LineNr)> {
         .collect()
 }
 
-unsafe fn free_list(gap: &mut garray_T) {
+unsafe fn free_list(gap: &mut GArray) {
     for i in 0..gap.ga_len {
         let fp = (gap.ga_data as *mut fold_T).offset(i as isize);
         free_list(&mut (*fp).fd_nested);

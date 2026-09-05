@@ -54,9 +54,9 @@ pub unsafe fn exec_impl(
     let save_redir_off = redir_off.get();
     let save_capture_ga = capture_ga.get();
     let save_msg_col = msg_col.get();
-    // SAFETY: a `garray_T` is two counts, an item size and a pointer, so
+    // SAFETY: a `GArray` is two counts, an item size and a pointer, so
     // all-zero is a valid value; `ga_init` fills it in before it is used.
-    let mut capture_local: garray_T = unsafe { ::core::mem::zeroed() };
+    let mut capture_local: GArray = unsafe { ::core::mem::zeroed() };
     if capture {
         // SAFETY: `capture_local` is this frame's, and outlives the source
         // below -- the global is put back before this returns.

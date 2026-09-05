@@ -31,7 +31,7 @@ use crate::memory::xstrlcpy;
 use crate::os::cshim::snprintf;
 use crate::spell::{onecap_copy, spelltab_upper};
 use crate::strings::{has_non_ascii, vim_strchr};
-use crate::types::{NUL, hashtab_T, size_t};
+use crate::types::{HashTab, NUL, size_t};
 use ::libc::{atoi, strcpy};
 
 use super::aff::AffState;
@@ -59,7 +59,7 @@ pub(super) unsafe fn handle_affix_header(
     // SAFETY: the caller promises the items; `key` is AH_KEY_LEN and
     // `xstrlcpy` is given that bound.
     let is_prefix = unsafe { *items[0] } as c_int == b'P' as c_int;
-    let tp: *mut hashtab_T = if is_prefix {
+    let tp: *mut HashTab = if is_prefix {
         &raw mut aff.af_pref
     } else {
         &raw mut aff.af_suff

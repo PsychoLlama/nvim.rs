@@ -7,7 +7,7 @@
 //! `:highlight link` chains (and namespace overrides) to the group that
 //! actually carries the attributes, which [`syn_id2attr`] then resolves.
 //!
-//! Upstream keeps the entries in a `garray_T` and their names in an arena
+//! Upstream keeps the entries in a `GArray` and their names in an arena
 //! that is never freed, with a `Map(cstr_t, int)` from the uppercased name to
 //! the id. Here that is a `Vec` plus a `HashMap`, and the two names of each
 //! group are leaked `CStr`s — which is what the arena amounted to, and what

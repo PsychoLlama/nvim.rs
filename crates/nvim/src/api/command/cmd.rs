@@ -740,7 +740,7 @@ unsafe fn run_cmd(
     arena: *mut Arena,
     err: &mut Error,
 ) -> String_0 {
-    let mut capture_local = garray_T {
+    let mut capture_local = GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,

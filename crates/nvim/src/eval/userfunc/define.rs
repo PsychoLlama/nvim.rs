@@ -343,7 +343,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
 
                     let mut namelen: size_t = 0;
                     if fudi.fd_dict.is_null() {
-                        let mut ht: *mut hashtab_T = ptr::null_mut();
+                        let mut ht: *mut HashTab = ptr::null_mut();
                         let name_len = unsafe { cstr::bytes_at(name) }.len();
                         let v = unsafe { find_var(name, name_len, &raw mut ht, false) };
                         if !v.is_null() && unsafe { (*v).di_tv.v_type } == VAR_FUNC {

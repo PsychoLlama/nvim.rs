@@ -2,7 +2,7 @@
 //!
 //! The toplevel folds of a window live in its `w_folds` growarray. Each of
 //! them can hold an array of second-level folds in `fd_nested`, and so on:
-//! every level is the same `garray_T` of [`fold_T`], so the whole tree is
+//! every level is the same `GArray` of [`fold_T`], so the whole tree is
 //! reached through [`list`]'s [`FoldList`] and [`Fold`] handles.
 //!
 //! A fold's `fd_top` is relative to its parent, which is what makes
@@ -94,7 +94,7 @@ pub struct fold_T {
     /// Number of lines in the fold.
     pub fd_len: LineNr,
     /// The folds nested inside this one.
-    pub fd_nested: garray_T,
+    pub fd_nested: GArray,
     /// `FD_OPEN`, `FD_CLOSED` or `FD_LEVEL`.
     pub fd_flags: c_char,
     /// Whether the fold is smaller than 'foldminlines'. `None` means "not
@@ -501,12 +501,12 @@ pub fn find_wl_entry(win: Win, lnum: LineNr) -> c_int {
     -1
 }
 
-/// Will "clone" (i.e deep copy) a garray_T of folds.
+/// Will "clone" (i.e deep copy) a GArray of folds.
 ///
 /// # Safety
 /// `from` must be a live fold list; `to` must be writable and is
 /// re-initialised, so anything it held is leaked.
-pub unsafe fn clone_fold_list(from: *mut garray_T, to: *mut garray_T) {
+pub unsafe fn clone_fold_list(from: *mut GArray, to: *mut GArray) {
     // SAFETY: the caller's promise; `ga_init` is what makes `to` a fold list.
     let (src, dst) = unsafe {
         ga_init(to, (*from).ga_itemsize, (*from).ga_growsize);
@@ -622,7 +622,7 @@ unsafe fn delete_fold_entry(folds: FoldList, idx: c_int, recursive: bool) {
 ///
 /// # Safety
 /// `gap` must be a live fold list. It is left empty, not freed.
-pub unsafe fn delete_fold_recurse(gap: *mut garray_T) {
+pub unsafe fn delete_fold_recurse(gap: *mut GArray) {
     // SAFETY: the caller's promise.
     let folds = unsafe { FoldList::new(gap) };
     if folds.has_data() {

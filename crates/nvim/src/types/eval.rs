@@ -420,7 +420,7 @@ pub struct LVal {
 #[derive(Default)]
 pub struct SaveVEvent {
     pub sve_did_save: bool,
-    pub sve_hashtab: hashtab_T,
+    pub sve_hashtab: HashTab,
 }
 #[derive(Clone)]
 pub struct Timer {

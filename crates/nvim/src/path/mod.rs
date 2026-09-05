@@ -45,8 +45,8 @@ use crate::os::shell::{get_cmd_output, os_expand_wildcards};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::{concat_str, vim_snprintf, vim_strchr};
 use crate::types::{
-    Directory, Failed, FileComparison, FileID, FileInfo, MAXPATHL, PATHSEPSTR, file_comparison,
-    garray_T, regmatch_T, size_t,
+    Directory, Failed, FileComparison, FileID, FileInfo, GArray, MAXPATHL, PATHSEPSTR,
+    file_comparison, regmatch_T, size_t,
 };
 use ::libc::{qsort, strcasecmp, strcpy};
 

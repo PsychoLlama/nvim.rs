@@ -71,8 +71,8 @@ use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArgt, Exception,
-    Handle, LineGetter, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues,
-    dobuf_action_values, dobuf_start_values, exarg_T, garray_T, uint8_t, uint16_t,
+    GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues,
+    dobuf_action_values, dobuf_start_values, exarg_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -224,7 +224,7 @@ pub struct dbg_stuff {
     pub current_exception: *mut Exception,
 }
 pub struct loop_cookie {
-    pub lines_gap: *mut garray_T,
+    pub lines_gap: *mut GArray,
     pub current_line: c_int,
     pub repeating: c_int,
     pub lc_getline: LineGetter,
@@ -261,7 +261,7 @@ pub const FIND_IDENT: c_uint = 1;
 pub const INT32_MAX: c_int = 2147483647 as c_int;
 pub const NULL_1: *mut c_void = ::core::ptr::null_mut::<c_void>();
 pub const EXIT_FAILURE: c_int = 1 as c_int;
-pub const GA_EMPTY_INIT_VALUE: garray_T = garray_T {
+pub const GA_EMPTY_INIT_VALUE: GArray = GArray {
     ga_len: 0 as c_int,
     ga_maxlen: 0 as c_int,
     ga_itemsize: 0 as c_int,

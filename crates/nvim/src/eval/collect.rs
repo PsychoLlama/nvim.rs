@@ -70,11 +70,10 @@ use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, DictWatcher,
-    Failed, HtStack, List, ListItem, ListStack, NUL, OptInt, Partial, QUEUE, String_0, Timer,
-    TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, fmark_T, fmarkv_T,
-    hashitem_T, hashtab_T, pos_T, size_t, tabpage_T, typval_vval_union, vimconv_T, win_T, xfmark_T,
-    yankreg_T,
+    Failed, HashItem, HashTab, HtStack, List, ListItem, ListStack, NUL, OptInt, Partial, QUEUE,
+    String_0, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, fmark_T,
+    fmarkv_T, pos_T, size_t, tabpage_T, typval_vval_union, vimconv_T, win_T, xfmark_T, yankreg_T,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -106,7 +105,7 @@ pub unsafe fn get_copy_id() -> c_int {
 ///
 /// # Safety
 /// `hi` must be a live entry of a dictionary's hashtab.
-unsafe fn hi2di(hi: &hashitem_T) -> *mut DictItem {
+unsafe fn hi2di(hi: &HashItem) -> *mut DictItem {
     unsafe { hi.hi_key.sub(offset_of!(DictItem, di_key)) as *mut DictItem }
 }
 
@@ -437,7 +436,7 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
 /// # Safety
 /// `ht` must be valid; `list_stack` null or valid.
 pub unsafe fn set_ref_in_ht(
-    ht: *mut hashtab_T,
+    ht: *mut HashTab,
     copy_id: c_int,
     list_stack: *mut *mut ListStack,
 ) -> bool {

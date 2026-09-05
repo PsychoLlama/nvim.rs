@@ -20,17 +20,17 @@ use std::ptr;
 
 use neovim::garray::ga_clear_strings;
 use neovim::os::users::{os_get_uname, os_get_userdir, os_get_username, os_get_usernames};
-use neovim::types::{Failed, garray_T};
+use neovim::types::{Failed, GArray};
 
 use crate::support::{cstr, editor_lock, take_bytes};
 
-/// A zeroed `garray_T` for a call that initializes it, released with its
+/// A zeroed `GArray` for a call that initializes it, released with its
 /// strings at the end of the case.
-struct Names(garray_T);
+struct Names(GArray);
 
 impl Names {
     fn new() -> Self {
-        // SAFETY: `garray_T` is plain data and `os_get_usernames` calls
+        // SAFETY: `GArray` is plain data and `os_get_usernames` calls
         // `ga_init` on it before the first write.
         Names(unsafe { std::mem::zeroed() })
     }

@@ -46,7 +46,7 @@ use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
 use crate::types::{
-    Exception, Failed, IOSIZE, LineGetter, LineNr, MsgList, OptInt, Vv, garray_T, ptrdiff_t, size_t,
+    Exception, Failed, GArray, IOSIZE, LineGetter, LineNr, MsgList, OptInt, Vv, ptrdiff_t, size_t,
 };
 
 use crate::winlayer::{Buf, Live, Win};
@@ -346,7 +346,7 @@ pub(crate) unsafe fn get_loop_line(
 }
 
 /// Remember a line, with the source line number it came from.
-pub(crate) unsafe fn store_loop_line(gap: *mut garray_T, line: *mut c_char) {
+pub(crate) unsafe fn store_loop_line(gap: *mut GArray, line: *mut c_char) {
     let p = unsafe { ga_append_via_ptr(gap, size_of::<wcmd_T>()) } as *mut wcmd_T;
     unsafe { (*p).line = xstrdup(line) };
     unsafe { (*p).lnum = sourcing_entry().es_lnum };

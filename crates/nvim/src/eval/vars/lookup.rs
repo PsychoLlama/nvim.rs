@@ -84,7 +84,7 @@ pub unsafe fn get_user_var_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // One step through `ht`: the first call starts at the array, every
     // later one advances past the slot the previous call answered and
     // then skips the empty and removed ones.
-    let step = |done: &GlobalCell<size_t>, ht: *const hashtab_T| -> Option<*mut c_char> {
+    let step = |done: &GlobalCell<size_t>, ht: *const HashTab| -> Option<*mut c_char> {
         let n = done.get();
         if n >= unsafe { (*ht).ht_used } {
             return None;
@@ -200,7 +200,7 @@ pub unsafe fn check_vars(name: *const c_char, len: size_t) {
 pub unsafe fn find_var(
     name: *const c_char,
     name_len: size_t,
-    htp: *mut *mut hashtab_T,
+    htp: *mut *mut HashTab,
     no_autoload: bool,
 ) -> *mut DictItem {
     let mut varname: *const c_char = ptr::null();
@@ -235,7 +235,7 @@ pub unsafe fn find_var(
 /// `ht` is a live hashtab and `varname` points at `varname_len` readable
 /// bytes.
 pub unsafe fn find_var_in_ht(
-    ht: *mut hashtab_T,
+    ht: *mut HashTab,
     htname: c_int,
     varname: *const c_char,
     varname_len: size_t,
@@ -293,7 +293,7 @@ pub(crate) unsafe fn find_var_ht_dict(
     name_len: size_t,
     varname: *mut *const c_char,
     d: *mut *mut Dict,
-) -> *mut hashtab_T {
+) -> *mut HashTab {
     // SAFETY: the caller's obligation -- `name_len` readable bytes, and two
     // writable out-parameters that are the caller's own locals.
     let (mut dict, mut vname) = unsafe { (Live::new(d), Live::new(varname)) };
@@ -378,7 +378,7 @@ pub unsafe fn find_var_ht(
     name: *const c_char,
     name_len: size_t,
     varname: *mut *const c_char,
-) -> *mut hashtab_T {
+) -> *mut HashTab {
     let mut d: *mut Dict = ptr::null_mut();
     unsafe { find_var_ht_dict(name, name_len, varname, &raw mut d) }
 }

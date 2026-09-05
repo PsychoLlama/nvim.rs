@@ -82,10 +82,10 @@ use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, EvalArg, ExceptionState, FuncCall, FuncCallEntry, FuncDict, FuncExe,
-    LVal, LineNr, ListItem, LuaRef, OptInt, Partial, String_0, TypVal, UserFunc, VAR_DEF_SCOPE,
-    VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T, exarg_T, expand_T, funccall_S_fc_fixvar,
-    garray_T, hashtab_T, regmatch_T, save_redo_T, size_t,
+    GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, String_0, TypVal, UserFunc,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T, exarg_T, expand_T,
+    funccall_S_fc_fixvar, regmatch_T, save_redo_T, size_t,
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
@@ -189,7 +189,7 @@ pub const E_NO_WHITE_SPACE_ALLOWED_BEFORE_STR_STR: &CStr =
 pub const E_MISSING_HEREDOC_END_MARKER_STR: &CStr = c"E1145: Missing heredoc end marker: %s";
 pub const E_CANNOT_USE_PARTIAL_WITH_DICTIONARY_FOR_DEFER: &CStr =
     c"E1300: Cannot use a partial with dictionary for :defer";
-static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T::new());
+static func_hashtab: GlobalCell<HashTab> = GlobalCell::new(HashTab::new());
 
 /// The arguments of the calls currently in progress, innermost last.
 ///
@@ -290,17 +290,17 @@ pub(crate) fn sourcing_lnum() -> LineNr {
 /// `gap` is a `char *` garray with at least one free slot (the caller has
 /// just called `ga_grow`), and `s` is an allocation `ga_clear_strings` may
 /// free.
-pub(crate) unsafe fn ga_push_string(gap: *mut garray_T, s: *mut c_char) {
+pub(crate) unsafe fn ga_push_string(gap: *mut GArray, s: *mut c_char) {
     unsafe { *((*gap).ga_data as *mut *mut c_char).offset((*gap).ga_len as isize) = s };
     unsafe { (*gap).ga_len += 1 };
 }
 
-/// The `char *` items a string `garray_T` holds, as a slice.
+/// The `char *` items a string `GArray` holds, as a slice.
 ///
 /// Every `uf_args`/`uf_def_args`/`uf_lines` walk in this family is a read of
 /// exactly this array, and c2rust spelled each one as a cast plus an index.
-/// Safe, because the array belongs to the `garray_T` the borrow names.
-pub(crate) fn ga_strings(gap: &garray_T) -> &[*mut c_char] {
+/// Safe, because the array belongs to the `GArray` the borrow names.
+pub(crate) fn ga_strings(gap: &GArray) -> &[*mut c_char] {
     if gap.ga_data.is_null() {
         return &[];
     }

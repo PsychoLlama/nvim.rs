@@ -22,7 +22,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
-use crate::types::{NUL, StringBuilder, buf_T, garray_T, size_t, ssize_t, uint8_t};
+use crate::types::{GArray, NUL, StringBuilder, buf_T, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
 
 use super::{
@@ -332,7 +332,7 @@ pub unsafe fn str_foldcase(
     buf: *mut c_char,
     buflen: c_int,
 ) -> *mut c_char {
-    let mut ga = garray_T::default();
+    let mut ga = GArray::default();
     let mut len = orglen;
     if buf.is_null() {
         // SAFETY: `ga` is a local, and `str` holds `orglen` readable bytes.
@@ -352,7 +352,7 @@ pub unsafe fn str_foldcase(
 
     // From here on `at(i)` is the one place that knows which buffer is in
     // play; `ga.ga_data` moves under us whenever the collection grows.
-    let at = |ga: &garray_T, i: c_int| -> *mut c_char {
+    let at = |ga: &GArray, i: c_int| -> *mut c_char {
         if buf.is_null() {
             (ga.ga_data as *mut c_char).wrapping_offset(i as isize)
         } else {

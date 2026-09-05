@@ -14,12 +14,12 @@ use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
-    EStackType, EstackInfo, Exception, FILE, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode, MTNode,
-    MTPos, MarkTreeIter, MarkTreeIter_s, MsgList, MultiQueue, NS, Object, OptInt, OptMagic, Proc,
-    ProfTime, Refcount, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
+    EStackType, EstackInfo, Exception, FILE, GArray, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode,
+    MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MsgList, MultiQueue, NS, Object, OptInt, OptMagic,
+    Proc, ProfTime, Refcount, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
     UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
     bufref_T, caller_scope, cmdmod_T, estack_T, file_comparison, fmark_T, fmarkv_T, frame_T,
-    garray_T, int16_t, int32_t, int64_t, lpos_T, match_T, nlua_ref_state_t, nvim_stats_s, pos_T,
+    int16_t, int32_t, int64_t, lpos_T, match_T, nlua_ref_state_t, nvim_stats_s, pos_T,
     reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T, uint8_t, uint32_t,
     uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
     uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
@@ -814,8 +814,7 @@ pub static redir_off: GlobalCell<bool> = GlobalCell::new(false);
 pub static redir_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 pub static redir_reg: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static redir_vname: GlobalCell<bool> = GlobalCell::new(false);
-pub static capture_ga: GlobalCell<*mut garray_T> =
-    GlobalCell::new(::core::ptr::null_mut::<garray_T>());
+pub static capture_ga: GlobalCell<*mut GArray> = GlobalCell::new(::core::ptr::null_mut::<GArray>());
 pub static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 pub static save_p_ls: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
 pub static save_p_wmh: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);

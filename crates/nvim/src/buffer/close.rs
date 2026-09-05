@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, DictItem, Handle, LineNr, Refcount, Timestamp, WinInfo, fmark_T, fmarkv_T,
-    garray_T, hashtab_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
+    Callback, ColNr, DictItem, GArray, Handle, HashTab, LineNr, Refcount, Timestamp, WinInfo,
+    fmark_T, fmarkv_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -145,7 +145,7 @@ fn free_user_commands(buf: Buf) {
     unsafe { uc_clear(Table::Buffer(buf.raw())) };
 }
 
-fn free_garray(ga: &mut garray_T) {
+fn free_garray(ga: &mut GArray) {
     // SAFETY: a growable array inside a live buffer.
     unsafe { ga_clear(ga) };
 }
@@ -217,7 +217,7 @@ fn free_entry(entry: *mut WinInfo) {
 }
 
 /// `buf->b_vars->dv_hashtab`.
-fn buf_vars(mut buf: Buf) -> *mut hashtab_T {
+fn buf_vars(mut buf: Buf) -> *mut HashTab {
     // SAFETY: a live buffer's variable dictionary is live.
     unsafe { &raw mut (*buf.b_vars).dv_hashtab }
 }

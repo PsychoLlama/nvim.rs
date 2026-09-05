@@ -256,7 +256,7 @@ pub unsafe fn expand_generic(
     unsafe { *matches = ptr::null_mut() };
     unsafe { *numMatches = 0 };
 
-    let mut ga = garray_T {
+    let mut ga = GArray {
         ga_len: 0,
         ga_maxlen: 0,
         ga_itemsize: 0,

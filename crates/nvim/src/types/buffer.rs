@@ -578,8 +578,8 @@ pub struct syn_time_T {
     pub match_0: ::core::ffi::c_int,
 }
 pub struct synblock_T {
-    pub b_keywtab: hashtab_T,
-    pub b_keywtab_ic: hashtab_T,
+    pub b_keywtab: HashTab,
+    pub b_keywtab_ic: HashTab,
     pub b_syn_error: bool,
     pub b_syn_slow: bool,
     pub b_syn_ic: ::core::ffi::c_int,
@@ -633,7 +633,7 @@ pub struct synblock_T {
     pub b_sst_freecount: ::core::ffi::c_int,
     pub b_sst_check_lnum: LineNr,
     pub b_sst_lasttick: DispTick,
-    pub b_langp: garray_T,
+    pub b_langp: GArray,
     pub b_spell_ismw: [bool; 256],
     pub b_spell_ismw_mb: *mut ::core::ffi::c_char,
     pub b_p_spc: *mut ::core::ffi::c_char,
@@ -799,7 +799,7 @@ pub struct window_S {
     pub w_lines_valid: ::core::ffi::c_int,
     pub w_lines: *mut wline_T,
     pub w_lines_size: ::core::ffi::c_int,
-    pub w_folds: garray_T,
+    pub w_folds: GArray,
     pub w_fold_manual: bool,
     pub w_foldinvalid: bool,
     pub w_nrwidth: ::core::ffi::c_int,
@@ -883,7 +883,7 @@ pub struct wininfo_S {
     pub wi_optset: bool,
     pub wi_opt: winopt_T,
     pub wi_fold_manual: bool,
-    pub wi_folds: garray_T,
+    pub wi_folds: GArray,
     pub wi_changelistidx: ::core::ffi::c_int,
 }
 /// Not `Copy`: the string options in here are owned, and `copy_options`
