@@ -710,21 +710,21 @@ impl FrameRef {
 
 impl TabPage {
     /// # Safety
-    /// `tp` must stay a live tab page for as long as the value is used.
+    /// `raw` must stay a live tab page for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(tp: *mut Tabpage) -> Self {
-        Self(tp)
+    pub const unsafe fn new(raw: *mut Tabpage) -> Self {
+        Self(raw)
     }
 
-    /// The tab page `tp` names, `None` for null — which is how the window
+    /// The tab page `raw` names, `None` for null — which is how the window
     /// family spells "the current one" throughout.
     ///
     /// # Safety
-    /// `tp` must be null, or stay a live tab page for as long as the value is
+    /// `raw` must be null, or stay a live tab page for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(tp: *mut Tabpage) -> Option<Self> {
-        if tp.is_null() { None } else { Some(Self(tp)) }
+    pub const unsafe fn from_raw(raw: *mut Tabpage) -> Option<Self> {
+        if raw.is_null() { None } else { Some(Self(raw)) }
     }
 
     /// The tab page the editor is working in.
@@ -923,16 +923,16 @@ pub fn windows() -> impl Iterator<Item = Win> {
     windows_from(first_window())
 }
 
-/// Every window of tab page `tp`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
+/// Every window of tab page `tabpage`, in list order: `FOR_ALL_WINDOWS_IN_TAB`.
 ///
 /// The current tab page's windows hang off the `firstwin` global rather than
 /// off its own `tp_firstwin`, which is stale while it is current — that is
 /// what the macro's first arm reads.
-pub fn windows_in_tab(tp: TabPage) -> impl Iterator<Item = Win> {
-    windows_from(if tp.is_current() {
+pub fn windows_in_tab(tabpage: TabPage) -> impl Iterator<Item = Win> {
+    windows_from(if tabpage.is_current() {
         first_window()
     } else {
-        tp.tp_firstwin.and_then(WinId::get)
+        tabpage.tp_firstwin.and_then(WinId::get)
     })
 }
 

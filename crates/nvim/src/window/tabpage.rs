@@ -52,33 +52,33 @@ use crate::winlayer::graph::{
 };
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
-pub unsafe fn unuse_tabpage(tp: *mut Tabpage) {
+pub unsafe fn unuse_tabpage(tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
-    stash_tabpage(unsafe { TabPage::new(tp) });
+    stash_tabpage(unsafe { TabPage::new(tabpage) });
 }
 
-/// Store the layout the globals currently describe in `tp`. To be used before
+/// Store the layout the globals currently describe in `tabpage`. To be used before
 /// [`adopt_tabpage`].
-pub(crate) fn stash_tabpage(tp: TabPage) {
-    let mut tp = tp;
+pub(crate) fn stash_tabpage(tabpage: TabPage) {
+    let mut tp = tabpage;
     tp.tp_topframe = topframe.get();
     tp.tp_firstwin = firstwin.get();
     tp.tp_lastwin = lastwin.get();
     tp.tp_curwin = curwin.get();
 }
 
-pub unsafe fn use_tabpage(tp: *mut Tabpage) {
+pub unsafe fn use_tabpage(tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
-    adopt_tabpage(unsafe { TabPage::new(tp) });
+    adopt_tabpage(unsafe { TabPage::new(tabpage) });
 }
 
-/// Point the layout globals at `tp`. May want to call [`stash_tabpage`] first.
-pub(crate) fn adopt_tabpage(tp: TabPage) {
-    curtab.set(tp.raw());
-    topframe.set(tp.tp_topframe);
-    firstwin.set(tp.tp_firstwin);
-    lastwin.set(tp.tp_lastwin);
-    curwin.set(tp.tp_curwin);
+/// Point the layout globals at `tabpage`. May want to call [`stash_tabpage`] first.
+pub(crate) fn adopt_tabpage(tabpage: TabPage) {
+    curtab.set(tabpage.raw());
+    topframe.set(tabpage.tp_topframe);
+    firstwin.set(tabpage.tp_firstwin);
+    lastwin.set(tabpage.tp_lastwin);
+    curwin.set(tabpage.tp_curwin);
 }
 
 /// Allocate a `Tabpage` and fill in its defaults.
@@ -106,33 +106,34 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     tp
 }
 
-pub unsafe fn free_tabpage(tp: *mut Tabpage) {
+pub unsafe fn free_tabpage(tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
-    free_tab(unsafe { TabPage::new(tp) });
+    free_tab(unsafe { TabPage::new(tabpage) });
 }
 
-/// Free `tp` and everything hanging off it.
-pub(crate) fn free_tab(tp: TabPage) {
-    // The allocation, out of the registry from here on. `tp` is still the
+/// Free `tabpage` and everything hanging off it.
+pub(crate) fn free_tab(tabpage: TabPage) {
+    // The allocation, out of the registry from here on. `tabpage` is still the
     // address to work through; `owned` is only who gives the memory back.
     // Every tab page reaching here was registered by `alloc_tabpage`.
-    let owned = forget_tabpage(tp.handle()).expect("a tab page being freed is a registered one");
-    diff_clear(tp);
+    let owned =
+        forget_tabpage(tabpage.handle()).expect("a tab page being freed is a registered one");
+    diff_clear(tabpage);
     for idx in 0..SNAP_COUNT {
-        drop_snapshot(tp, idx);
+        drop_snapshot(tabpage, idx);
     }
-    let vars = tp.tp_vars;
+    let vars = tabpage.tp_vars;
     // SAFETY: the tab page's own dictionary; `vars_clear` frees every t:
     // variable and `hash_init` puts an empty table back.
     unsafe {
         vars_clear(&raw mut (*vars).dv_hashtab);
         unref_var_dict(vars);
     }
-    if tp.raw() == lastused_tabpage.get() {
+    if tabpage.raw() == lastused_tabpage.get() {
         lastused_tabpage.set(ptr::null_mut::<Tabpage>());
     }
-    free(tp.tp_localdir);
-    free(tp.tp_prevdir);
+    free(tabpage.tp_localdir);
+    free(tabpage.tp_prevdir);
     // The free: `tabpage_S`'s destructor runs and the memory goes back.
     drop(owned);
 }
@@ -261,17 +262,17 @@ pub(crate) fn new_tabpage(
     Some((newtp, opened))
 }
 
-/// Run `body` with `tp`'s current window as the current one, and switch back
+/// Run `body` with `tabpage`'s current window as the current one, and switch back
 /// afterwards -- a scope rather than a guard, since the transpiled code has no
 /// unwinding path either.
-fn in_window(tp: TabPage, body: impl FnOnce()) {
+fn in_window(tabpage: TabPage, body: impl FnOnce()) {
     let mut switchwin = SwitchWin {
         sw_curwin: ptr::null_mut::<Window>(),
         sw_curtab: ptr::null_mut::<Tabpage>(),
         sw_same_win: false,
         sw_visual_active: false,
     };
-    let (slot, win, raw) = (&raw mut switchwin, tp.tp_curwin, tp.raw());
+    let (slot, win, raw) = (&raw mut switchwin, tabpage.tp_curwin, tabpage.raw());
     // SAFETY: a slot of our own, and a live window of the live tab page.
     let sw_result = unsafe { switch_win_noblock(slot, win, raw, true) };
     debug_assert!(sw_result.is_ok(), "the window was switched to");
@@ -401,10 +402,10 @@ pub fn tabpage_index(ftp: *mut Tabpage) -> c_int {
     index_of_tab(ftp)
 }
 
-/// The index of `tp`, the first being 1. The number of tab pages plus one when
+/// The index of `tabpage`, the first being 1. The number of tab pages plus one when
 /// it is not on the list.
-pub(crate) fn tab_index(tp: TabPage) -> c_int {
-    index_of_tab(tp.raw())
+pub(crate) fn tab_index(tabpage: TabPage) -> c_int {
+    index_of_tab(tabpage.raw())
 }
 
 /// [`tab_index`] over a pointer, which is how the C's callers ask it.
@@ -458,22 +459,22 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     Ok(())
 }
 
-/// Start using tab page `tp`. Only to be used after [`leave_tab`], or after
+/// Start using tab page `tabpage`. Only to be used after [`leave_tab`], or after
 /// freeing the current tab page.
 fn enter_tab(
-    tp: TabPage,
+    tabpage: TabPage,
     old_curbuf: Buf,
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
-    let old_off = tp
+    let old_off = tabpage
         .tp_firstwin
         .and_then(WinId::get)
         .expect("a live tab page has a first window")
         .w_winrow;
-    let next_prevwin = tp.tp_prevwin;
+    let next_prevwin = tabpage.tp_prevwin;
     let old_curtab = cur_tab();
-    adopt_tabpage(tp);
+    adopt_tabpage(tabpage);
 
     if old_curtab.raw() != curtab.get() {
         check_tabpage_windows(old_curtab);
@@ -491,7 +492,7 @@ fn enter_tab(
 
     // The TabEnter event would ideally come first, but there is no valid
     // current window yet, which would break some commands. This triggers
-    // autocommands, and so may make `tp` invalid.
+    // autocommands, and so may make `tabpage` invalid.
     let flags = WEE_CURWIN_INVALID as c_int
         | if trigger_enter_autocmds {
             WEE_TRIGGER_ENTER_AUTOCMDS as c_int
@@ -505,7 +506,7 @@ fn enter_tab(
         };
     // SAFETY: the tab page's own current window, which `adopt_tabpage` just
     // made the editor's.
-    enter_ext(unsafe { Win::new(tp.tp_curwin) }, flags);
+    enter_ext(unsafe { Win::new(tabpage.tp_curwin) }, flags);
     prevwin.set(next_prevwin);
 
     update_last_status(false); // a status line may appear or disappear
@@ -635,17 +636,21 @@ pub(crate) fn goto_tab_number(n: c_int) {
 }
 
 pub unsafe fn goto_tabpage_tp(
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
     // SAFETY: the caller's promise -- a live tab page.
-    let tp = unsafe { TabPage::new(tp) };
+    let tp = unsafe { TabPage::new(tabpage) };
     goto_tab(tp, trigger_enter_autocmds, trigger_leave_autocmds);
 }
 
-/// Go to tab page `tp`. Note: does not update the GUI tab.
-pub(crate) fn goto_tab(tp: TabPage, trigger_enter_autocmds: bool, trigger_leave_autocmds: bool) {
+/// Go to tab page `tabpage`. Note: does not update the GUI tab.
+pub(crate) fn goto_tab(
+    tabpage: TabPage,
+    trigger_enter_autocmds: bool,
+    trigger_leave_autocmds: bool,
+) {
     if (trigger_enter_autocmds || trigger_leave_autocmds) && cmdwin_type.get() != 0 {
         err(e_cmdwin.as_ptr());
         return;
@@ -656,9 +661,9 @@ pub(crate) fn goto_tab(tp: TabPage, trigger_enter_autocmds: bool, trigger_leave_
 
     skip_win_fix_scroll.set(true);
     // SAFETY: the tab page's own current window, which is live.
-    let new_curbuf = unsafe { Win::new(tp.tp_curwin) }.buffer_or_none();
-    if !tp.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
-        let target = valid_tab(tp.raw()).unwrap_or_else(cur_tab);
+    let new_curbuf = unsafe { Win::new(tabpage.tp_curwin) }.buffer_or_none();
+    if !tabpage.is_current() && leave_tab(new_curbuf, trigger_leave_autocmds).is_ok() {
+        let target = valid_tab(tabpage.raw()).unwrap_or_else(cur_tab);
         enter_tab(
             target,
             cur_buf(),
@@ -682,16 +687,16 @@ pub(crate) fn goto_last_used_tab() -> bool {
     true
 }
 
-pub unsafe fn goto_tabpage_win(tp: *mut Tabpage, wp: *mut Window) {
+pub unsafe fn goto_tabpage_win(tabpage: *mut Tabpage, wp: *mut Window) {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
+    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(wp)) };
     goto_tab_win(tp, wp);
 }
 
-/// Enter window `wp` in tab page `tp`, updating the GUI tab as well.
-pub(crate) fn goto_tab_win(tp: TabPage, wp: Win) {
-    goto_tab(tp, true, true);
-    if tp.is_current()
+/// Enter window `wp` in tab page `tabpage`, updating the GUI tab as well.
+pub(crate) fn goto_tab_win(tabpage: TabPage, wp: Win) {
+    goto_tab(tabpage, true, true);
+    if tabpage.is_current()
         && let Some(wp) = valid_win(wp.raw())
     {
         enter(wp, true);

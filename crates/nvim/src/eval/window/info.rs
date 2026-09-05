@@ -61,8 +61,8 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
 /// One `gettabinfo()` entry.
 ///
 /// # Safety
-/// `tp` must be a live tab page.
-unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut Dict {
+/// `tabpage` must be a live tab page.
+unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> *mut Dict {
     // SAFETY: the caller's obligation; both containers are handed on rather
     // than freed here, so both stay alive for the appends below.
     // The keys go in in upstream's order: a dictionary's iteration order is
@@ -76,13 +76,13 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut Dict {
         // SAFETY: a live list.
         unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
     };
-    for wp in windows_in_tab(tp) {
+    for wp in windows_in_tab(tabpage) {
         append(wp.handle);
     }
     // SAFETY: a live dictionary, and the tab page's own variable dictionary.
     let (wins, vars) = (c"windows", c"variables");
     let _ = unsafe { tv_dict_add_list(dict, wins.as_ptr(), wins.count_bytes(), windows) };
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tp.tp_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), tabpage.tp_vars) };
     dict
 }
 

@@ -41,10 +41,10 @@ pub fn time_push() -> (ProfTime, ProfTime) {
     (rel, now)
 }
 
-/// Subtract the nested duration `tp` (from [`time_push`]) from the
+/// Subtract the nested duration `time` (from [`time_push`]) from the
 /// previous-event time.
-pub fn time_pop(tp: ProfTime) {
-    G_PREV_TIME.set(G_PREV_TIME.get().wrapping_sub(tp));
+pub fn time_pop(time: ProfTime) {
+    G_PREV_TIME.set(G_PREV_TIME.get().wrapping_sub(time));
 }
 
 /// `"%07.3lf"` milliseconds between `then` and `now`.

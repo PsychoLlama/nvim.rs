@@ -37,22 +37,22 @@ pub(crate) struct AltWin {
 
 /// Free `win`'s frame and the window itself, and say which neighbour took its
 /// room and along which axis.
-pub(crate) fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
-    let mut win_tp = tp.unwrap_or_else(cur_tab);
+pub(crate) fn free_mem(win: Win, tabpage: Option<TabPage>) -> (Option<Win>, c_int) {
+    let mut win_tp = tabpage.unwrap_or_else(cur_tab);
     let (wp, dir) = if win.w_floating {
         // SAFETY: `win` is only compared, never read.
         (
-            unsafe { win_float_find_altwin(win.raw(), tp) },
+            unsafe { win_float_find_altwin(win.raw(), tabpage) },
             'h' as c_int,
         )
     } else {
         let frp = win.frame();
-        let (wp, dir) = remove(win, tp, None);
+        let (wp, dir) = remove(win, tabpage, None);
         free(frp.raw());
         (wp, dir)
     };
     // SAFETY: a live window and tab page.
-    unsafe { win_free(win.raw(), raw_tab(tp)) };
+    unsafe { win_free(win.raw(), raw_tab(tabpage)) };
     if win_tp.tp_curwin == win.raw() {
         win_tp.tp_curwin = wp.map_or(ptr::null_mut(), Win::raw);
     }
@@ -65,7 +65,7 @@ pub(crate) fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
 pub unsafe fn winframe_remove(
     win: *mut Window,
     dirp: *mut c_int,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     unflat_altfr: *mut *mut Frame,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
@@ -73,7 +73,7 @@ pub unsafe fn winframe_remove(
     unsafe {
         // `then_some` would form the reference before testing the pointer.
         let unflat = unflat_altfr.as_mut();
-        let (wp, dir) = remove(Win::new(win), TabPage::from_raw(tp), unflat);
+        let (wp, dir) = remove(Win::new(win), TabPage::from_raw(tabpage), unflat);
         *dirp = dir;
         wp.map_or(ptr::null_mut(), Win::raw)
     }
@@ -88,10 +88,10 @@ pub unsafe fn winframe_remove(
 /// the room moved.
 fn remove(
     win: Win,
-    tp: Option<TabPage>,
+    tabpage: Option<TabPage>,
     unflat_altfr: Option<&mut *mut Frame>,
 ) -> (Option<Win>, c_int) {
-    let Some(alt) = find_altwin(win, tp) else {
+    let Some(alt) = find_altwin(win, tabpage) else {
         return (None, 0);
     };
     let frp_close = win.frame();
@@ -134,13 +134,13 @@ fn remove(
 pub unsafe fn winframe_find_altwin(
     win: *mut Window,
     dirp: *mut c_int,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     altfr: *mut *mut Frame,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
     // and writable out-parameters (`altfr` may be null).
     unsafe {
-        let Some(alt) = find_altwin(Win::new(win), TabPage::from_raw(tp)) else {
+        let Some(alt) = find_altwin(Win::new(win), TabPage::from_raw(tabpage)) else {
             return ptr::null_mut();
         };
         *dirp = alt.dir;
@@ -158,16 +158,16 @@ pub unsafe fn winframe_find_altwin(
 /// The neighbour [`alt_frame`] picks is refused when its window is pinned by
 /// `'winfix{height,width}'`: the search then walks outwards from the closing
 /// frame, `fr_prev` and `fr_next` in step, taking the first frame that is not.
-pub(crate) fn find_altwin(win: Win, tp: Option<TabPage>) -> Option<AltWin> {
+pub(crate) fn find_altwin(win: Win, tabpage: Option<TabPage>) -> Option<AltWin> {
     debug_assert!(
-        tp.is_none_or(|tp| !tp.is_current()),
+        tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
     );
-    if is_only_window(win, tp) {
+    if is_only_window(win, tabpage) {
         return None;
     }
     let frp_close = win.frame();
-    let mut frame = alt_frame(win, tp);
+    let mut frame = alt_frame(win, tabpage);
     let mut wp = frame2window(frame);
     let vertical = frp_close
         .parent()
@@ -341,12 +341,12 @@ fn restore(wp: Win, dir: c_int, unflat_altfr: FrameRef) {
 /// The neighbour after `win` unless `'splitbelow'`/`'splitright'` says the one
 /// before, and then the other one anyway if the chosen frame is fixed and the
 /// other is not.
-pub(crate) fn alt_frame(win: Win, tp: Option<TabPage>) -> FrameRef {
+pub(crate) fn alt_frame(win: Win, tabpage: Option<TabPage>) -> FrameRef {
     debug_assert!(
-        tp.is_none_or(|tp| !tp.is_current()),
+        tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
     );
-    if is_only_window(win, tp) {
+    if is_only_window(win, tabpage) {
         // Last window in this tab page, will go to next tab page.
         // SAFETY: every tab page has a current window, which is live.
         return unsafe { Win::new(alt_tab_page().tp_curwin) }.frame();

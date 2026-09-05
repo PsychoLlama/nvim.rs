@@ -157,13 +157,13 @@ impl Axis {
 }
 
 pub unsafe fn win_vert_neighbor(
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     wp: *mut Window,
     up: bool,
     count: c_int,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
+    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(wp)) };
     raw_win(neighbor(tp, wp, Axis::Vertical, up, count))
 }
 
@@ -175,13 +175,13 @@ pub(crate) fn goto_ver(up: bool, count: c_int) {
 }
 
 pub unsafe fn win_horz_neighbor(
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     wp: *mut Window,
     left: bool,
     count: c_int,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
+    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(wp)) };
     raw_win(neighbor(tp, wp, Axis::Horizontal, left, count))
 }
 
@@ -196,7 +196,7 @@ pub(crate) fn goto_hor(left: bool, count: c_int) {
 ///
 /// Answers `wp` itself when there is no such neighbour, and the previous
 /// window (or the first) when `wp` floats, since a float is not in the tree.
-fn neighbor(tp: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> Option<Win> {
+fn neighbor(tabpage: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> Option<Win> {
     if wp.w_floating {
         let prev = valid_win(prevwin.get()).filter(|p| !p.w_floating);
         return Some(prev.or_else(first_window).expect("the editor has a window"));
@@ -214,7 +214,7 @@ fn neighbor(tp: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> 
         // along this axis.
         let mut fr = foundfr;
         let mut nfr = loop {
-            if fr == tp.topframe() {
+            if fr == tabpage.topframe() {
                 break 'end;
             }
             let next = if backwards { fr.prev() } else { fr.next() };

@@ -110,8 +110,8 @@ pub(crate) fn forget_buffer(handle: Handle) -> Option<Owned<Buffer>> {
 }
 
 /// [`register_buffer`] for a tab page.
-pub(crate) fn register_tabpage(handle: Handle, tp: Owned<Tabpage>) -> TabPage {
-    TabPage(TABPAGES.with_mut(|reg| reg.register(handle, tp)))
+pub(crate) fn register_tabpage(handle: Handle, tabpage: Owned<Tabpage>) -> TabPage {
+    TabPage(TABPAGES.with_mut(|reg| reg.register(handle, tabpage)))
 }
 
 /// [`forget_buffer`] for a tab page.

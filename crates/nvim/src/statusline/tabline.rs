@@ -44,20 +44,20 @@ use crate::window::tabline_height;
 use crate::winlayer::graph::{curbuf, curtab, curwin, topframe};
 use crate::winlayer::{TabPage, buffers, tabs, windows_in_tab};
 
-/// The window whose buffer names tab page `tp`.
+/// The window whose buffer names tab page `tabpage`.
 ///
 /// # Safety
 /// A live tab page's cursor window must be live, which it is.
-unsafe fn current_window_of(tp: TabPage) -> Win {
+unsafe fn current_window_of(tabpage: TabPage) -> Win {
     // As with [`windows_in_tab`], the current tab page's cursor window is the
     // `curwin` global rather than its own `tp_curwin`, which is only recorded
     // when the tab page is left.
     // SAFETY: the caller's promise.
     unsafe {
-        Win::new(if tp.is_current() {
+        Win::new(if tabpage.is_current() {
             curwin.get()
         } else {
-            tp.tp_curwin
+            tabpage.tp_curwin
         })
     }
 }

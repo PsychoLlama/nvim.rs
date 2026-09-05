@@ -96,10 +96,10 @@ pub(crate) fn diff_buf_clear() {
     }
 }
 
-/// `buf`'s slot in `tp`'s diff, or `DB_COUNT` if it has none.
-pub(crate) fn diff_buf_idx(buf: Buf, tp: TabPage) -> c_int {
+/// `buf`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
+pub(crate) fn diff_buf_idx(buf: Buf, tabpage: TabPage) -> c_int {
     (0..DB_COUNT)
-        .find(|&i| tp.tp_diffbuf[i as usize] == buf.raw())
+        .find(|&i| tabpage.tp_diffbuf[i as usize] == buf.raw())
         .unwrap_or(DB_COUNT)
 }
 
@@ -157,7 +157,7 @@ fn inserted_deleted(line2: LineNr, amount: LineNr, amount_after: LineNr) -> (Lin
 /// cases in a diagram; the numbers are kept in the comments below because the
 /// arms are otherwise indistinguishable.
 unsafe fn diff_mark_adjust_tp(
-    mut tp: TabPage,
+    mut tabpage: TabPage,
     idx: c_int,
     line1: LineNr,
     line2: LineNr,
@@ -168,8 +168,8 @@ unsafe fn diff_mark_adjust_tp(
         // The blocks will be recomputed before the next redraw, so
         // nothing below survives; `_update` also gets the folds redone.
         // The *marks* are still adjusted here, which `:%diffput` needs.
-        tp.tp_diff_invalid = 1;
-        tp.tp_diff_update = 1;
+        tabpage.tp_diff_invalid = 1;
+        tabpage.tp_diff_update = 1;
     }
     let idx = idx as usize;
     let (inserted, mut deleted) = inserted_deleted(line2, amount, amount_after);
@@ -183,7 +183,7 @@ unsafe fn diff_mark_adjust_tp(
     // which is how a deletion in one buffer becomes a change in the rest.
     let adjust_others = |dp: *mut DiffBlock, off: LineNr, n: LineNr| {
         for i in 0..DB_COUNT as usize {
-            if tp.tp_diffbuf[i].is_null() || i == idx {
+            if tabpage.tp_diffbuf[i].is_null() || i == idx {
                 continue;
             }
             unsafe { (*dp).df_lnum[i] = ((*dp).df_lnum[i] - off).max(1) };
@@ -200,18 +200,18 @@ unsafe fn diff_mark_adjust_tp(
                 == unsafe { (*dp).df_lnum[idx] }
         {
             for i in 0..DB_COUNT as usize {
-                if !tp.tp_diffbuf[i].is_null() {
+                if !tabpage.tp_diffbuf[i].is_null() {
                     unsafe { (*dprev).df_count[i] += (*dp).df_count[i] };
                 }
             }
-            (dprev, unsafe { diff_free(tp, dprev, dp) })
+            (dprev, unsafe { diff_free(tabpage, dprev, dp) })
         } else {
             (dp, unsafe { (*dp).df_next })
         }
     };
 
     let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
-    let mut dp = tp.tp_first_diff;
+    let mut dp = tabpage.tp_first_diff;
     let mut lnum_deleted = line1; // lnum of the remaining deletion
     loop {
         // The edit falls between two blocks, touching neither: it is a
@@ -224,11 +224,11 @@ unsafe fn diff_mark_adjust_tp(
                 || unsafe { (*dprev).df_lnum[idx] } + unsafe { (*dprev).df_count[idx] } < line1)
             && !diff_busy.get()
         {
-            let dnext = unsafe { diff_alloc_new(tp, dprev, dp) };
+            let dnext = unsafe { diff_alloc_new(tabpage, dprev, dp) };
             unsafe { (*dnext).df_lnum[idx] = line1 };
             unsafe { (*dnext).df_count[idx] = inserted };
             for i in 0..DB_COUNT as usize {
-                if tp.tp_diffbuf[i].is_null() || i == idx {
+                if tabpage.tp_diffbuf[i].is_null() || i == idx {
                     continue;
                 }
                 // The other buffers' line numbers carry the drift the
@@ -330,7 +330,7 @@ unsafe fn diff_mark_adjust_tp(
                 if check_unchanged {
                     // The inserted lines may equal what was there, which
                     // makes the block smaller.
-                    unsafe { diff_check_unchanged(tp, dp) };
+                    unsafe { diff_check_unchanged(tabpage, dp) };
                 }
             }
         }
@@ -339,19 +339,19 @@ unsafe fn diff_mark_adjust_tp(
 
     // A block every buffer now has nothing in is not a change any more.
     let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
-    let mut dp = tp.tp_first_diff;
+    let mut dp = tabpage.tp_first_diff;
     while !dp.is_null() {
         let empty = (0..DB_COUNT as usize)
-            .all(|i| tp.tp_diffbuf[i].is_null() || unsafe { (*dp).df_count[i] } == 0);
+            .all(|i| tabpage.tp_diffbuf[i].is_null() || unsafe { (*dp).df_count[i] } == 0);
         if empty {
-            dp = unsafe { diff_free(tp, dprev, dp) };
+            dp = unsafe { diff_free(tabpage, dprev, dp) };
         } else {
             dprev = dp;
             dp = unsafe { (*dp).df_next };
         }
     }
 
-    if tp.is_current() {
+    if tabpage.is_current() {
         // Not right away: this runs per edit, and redrawing is slow.
         need_diff_redraw.set(true);
         // The filler lines may have moved, so the scroll binding has to
@@ -362,13 +362,13 @@ unsafe fn diff_mark_adjust_tp(
 
 /// Insert a fresh, empty block between `dprev` and `dp`.
 pub(crate) unsafe fn diff_alloc_new(
-    mut tp: TabPage,
+    mut tabpage: TabPage,
     dprev: *mut DiffBlock,
     dp: *mut DiffBlock,
 ) -> *mut DiffBlock {
     let dnew = Box::into_raw(Box::new(DiffBlock::new(dp)));
     if dprev.is_null() {
-        tp.tp_first_diff = dnew;
+        tabpage.tp_first_diff = dnew;
     } else {
         unsafe { (*dprev).df_next = dnew };
     }
@@ -377,14 +377,14 @@ pub(crate) unsafe fn diff_alloc_new(
 
 /// Unlink and free `dp`, answering the block that follows it.
 pub(crate) unsafe fn diff_free(
-    mut tp: TabPage,
+    mut tabpage: TabPage,
     dprev: *mut DiffBlock,
     dp: *mut DiffBlock,
 ) -> *mut DiffBlock {
     let next = unsafe { (*dp).df_next };
     unsafe { clear_diffblock(dp) };
     if dprev.is_null() {
-        tp.tp_first_diff = next;
+        tabpage.tp_first_diff = next;
     } else {
         unsafe { (*dprev).df_next = next };
     }
@@ -396,11 +396,11 @@ pub(crate) unsafe fn diff_free(
 ///
 /// An edit can leave a block claiming lines that did not actually change; the
 /// diff is not recomputed for that, so the block is trimmed instead.
-unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut DiffBlock) {
-    let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tp.tp_diffbuf[i].is_null()) else {
+unsafe fn diff_check_unchanged(tabpage: TabPage, dp: *mut DiffBlock) {
+    let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tabpage.tp_diffbuf[i].is_null()) else {
         return;
     };
-    if unsafe { diff_check_sanity(tp, dp) }.is_err() {
+    if unsafe { diff_check_sanity(tabpage, dp) }.is_err() {
         return;
     }
     for dir in [FORWARD as c_int, BACKWARD as c_int] {
@@ -414,14 +414,14 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut DiffBlock) {
             // one answers with.
             let line_org = unsafe {
                 CStr::from_ptr(ml_get_buf(
-                    tp.tp_diffbuf[i_org],
+                    tabpage.tp_diffbuf[i_org],
                     (*dp).df_lnum[i_org] + off_org,
                 ))
             }
             .to_owned();
             let mut i_new = i_org + 1;
             while i_new < DB_COUNT as usize {
-                if !tp.tp_diffbuf[i_new].is_null() {
+                if !tabpage.tp_diffbuf[i_new].is_null() {
                     let off_new = if dir == BACKWARD as c_int {
                         unsafe { (*dp).df_count[i_new] - 1 }
                     } else {
@@ -432,7 +432,7 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut DiffBlock) {
                     }
                     let other = unsafe {
                         CStr::from_ptr(ml_get_buf(
-                            tp.tp_diffbuf[i_new],
+                            tabpage.tp_diffbuf[i_new],
                             (*dp).df_lnum[i_new] + off_new,
                         ))
                     };
@@ -446,7 +446,7 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut DiffBlock) {
                 break; // some buffer differs here; the block starts (or ends) for real
             }
             for i in i_org..DB_COUNT as usize {
-                if !tp.tp_diffbuf[i].is_null() {
+                if !tabpage.tp_diffbuf[i].is_null() {
                     if dir == FORWARD as c_int {
                         unsafe { (*dp).df_lnum[i] += 1 };
                     }
@@ -461,9 +461,9 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut DiffBlock) {
 ///
 /// An edit can leave a block naming lines that no longer exist, and every
 /// reader of a block has to check first.
-pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut DiffBlock) -> Result<(), Failed> {
+pub(crate) unsafe fn diff_check_sanity(tabpage: TabPage, dp: *mut DiffBlock) -> Result<(), Failed> {
     for i in 0..DB_COUNT as usize {
-        let buf = tp.tp_diffbuf[i];
+        let buf = tabpage.tp_diffbuf[i];
         if !buf.is_null()
             && unsafe { (*dp).df_lnum[i] } + unsafe { (*dp).df_count[i] } - 1
                 > unsafe { (*buf).b_ml.ml_line_count }
@@ -495,9 +495,9 @@ pub(crate) unsafe fn diff_copy_entry(
     unsafe { (*dp).df_count[idx_new] = (*dp).df_count[idx_orig] };
 }
 
-/// Free `tp`'s whole block list.
-pub fn diff_clear(mut tp: TabPage) {
-    let mut dp = tp.tp_first_diff;
+/// Free `tabpage`'s whole block list.
+pub fn diff_clear(mut tabpage: TabPage) {
+    let mut dp = tabpage.tp_first_diff;
     // SAFETY: the tab page's own block list, walked one node ahead of the
     // free, and nothing else points at these blocks.
     while !dp.is_null() {
@@ -505,7 +505,7 @@ pub fn diff_clear(mut tp: TabPage) {
         unsafe { clear_diffblock(dp) };
         dp = next;
     }
-    tp.tp_first_diff = ::core::ptr::null_mut();
+    tabpage.tp_first_diff = ::core::ptr::null_mut();
 }
 
 /// The longest of `dp`'s ranges, which is how many screen rows it occupies in

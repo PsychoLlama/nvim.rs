@@ -48,10 +48,10 @@ impl Df {
         (!dp.is_null()).then(|| unsafe { Self::new(dp) })
     }
 
-    /// The first block of `tp`'s list, if any.
-    pub(crate) fn first(tp: TabPage) -> Option<Self> {
+    /// The first block of `tabpage`'s list, if any.
+    pub(crate) fn first(tabpage: TabPage) -> Option<Self> {
         // SAFETY: a live tab page's block list is live.
-        unsafe { Self::from_raw(tp.tp_first_diff) }
+        unsafe { Self::from_raw(tabpage.tp_first_diff) }
     }
 
     /// The next block in the list, if any.
@@ -85,9 +85,9 @@ impl Df {
 
     /// Whether the block's line numbers still fit the buffers it names.
     /// [`diff_check_sanity`].
-    pub(crate) fn is_sane(self, tp: TabPage) -> bool {
+    pub(crate) fn is_sane(self, tabpage: TabPage) -> bool {
         // SAFETY: a live block and a live tab page.
-        unsafe { diff_check_sanity(tp, self.raw()).is_ok() }
+        unsafe { diff_check_sanity(tabpage, self.raw()).is_ok() }
     }
 }
 
@@ -96,19 +96,19 @@ impl Df {
 /// Nothing re-reads `tp_first_diff`, exactly as the C's own walks do not: a
 /// loop that can free or rebuild the list underneath itself keeps its own
 /// cursor instead.
-pub(crate) fn diff_blocks(tp: TabPage) -> impl Iterator<Item = Df> {
-    core::iter::successors(Df::first(tp), |dp| dp.next())
+pub(crate) fn diff_blocks(tabpage: TabPage) -> impl Iterator<Item = Df> {
+    core::iter::successors(Df::first(tabpage), |dp| dp.next())
 }
 
-/// `buf`'s slot in `tp`'s diff, or `DB_COUNT` if it has none.
+/// `buf`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
 ///
 /// [`diff_buf_idx`] with its promise discharged: it only compares `buf`
 /// against the tab page's eight `tp_diffbuf` slots and never dereferences it,
 /// so a live tab page is the whole precondition -- which is what a [`TabPage`]
 /// argument says. That matters because half the callers ask about a buffer
 /// they are not otherwise sure of.
-pub(crate) fn diff_slot(buf: Buf, tp: TabPage) -> c_int {
-    diff_buf_idx(buf, tp)
+pub(crate) fn diff_slot(buf: Buf, tabpage: TabPage) -> c_int {
+    diff_buf_idx(buf, tabpage)
 }
 
 /// Whether `dp` is still in the current tab page's block list.

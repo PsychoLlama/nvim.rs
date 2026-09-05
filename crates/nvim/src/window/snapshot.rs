@@ -109,15 +109,15 @@ pub fn reset_lnums() {
 // which leaf held `curwin`, and none of its frames is linked into the layout.
 
 /// `tp->tp_snapshot[idx]`, borrowed as one slot.
-fn snapshot_slot(tp: TabPage, idx: c_int) -> *mut *mut Frame {
-    let mut tp = tp;
+fn snapshot_slot(tabpage: TabPage, idx: c_int) -> *mut *mut Frame {
+    let mut tp = tabpage;
     &raw mut tp.tp_snapshot[idx as usize]
 }
 
-/// The saved frame tree in slot `idx` of `tp`, if there is one.
-fn snapshot_of(tp: TabPage, idx: c_int) -> Option<FrameRef> {
+/// The saved frame tree in slot `idx` of `tabpage`, if there is one.
+fn snapshot_of(tabpage: TabPage, idx: c_int) -> Option<FrameRef> {
     // SAFETY: a saved tree is live until `drop_snapshot` frees it.
-    unsafe { FrameRef::from_raw(tp.tp_snapshot[idx as usize]) }
+    unsafe { FrameRef::from_raw(tabpage.tp_snapshot[idx as usize]) }
 }
 
 pub fn make_snapshot(idx: c_int) {
@@ -155,9 +155,9 @@ fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut Frame) {
     }
 }
 
-/// Free the saved tree in slot `idx` of `tp`, if there is one.
-pub(crate) fn drop_snapshot(tp: TabPage, idx: c_int) {
-    let mut tp = tp;
+/// Free the saved tree in slot `idx` of `tabpage`, if there is one.
+pub(crate) fn drop_snapshot(tabpage: TabPage, idx: c_int) {
+    let mut tp = tabpage;
     if let Some(fr) = snapshot_of(tp, idx) {
         clear_snapshot_rec(fr);
     }
@@ -446,15 +446,18 @@ pub unsafe fn win_ui_flush(validate: bool) {
     }
 }
 
-pub unsafe fn lastwin_nofloating(tp: *mut Tabpage) -> *mut Window {
+pub unsafe fn lastwin_nofloating(tabpage: *mut Tabpage) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page or null.
-    last_nonfloating(unsafe { TabPage::from_raw(tp) }).raw()
+    last_nonfloating(unsafe { TabPage::from_raw(tabpage) }).raw()
 }
 
-/// The last non-floating window of `tp`, or of the current tab page.
-pub(crate) fn last_nonfloating(tp: Option<TabPage>) -> Win {
-    debug_assert!(tp.is_none_or(|tp| !tp.is_current()), "tp != curtab || !tp");
-    let mut res = match tp {
+/// The last non-floating window of `tabpage`, or of the current tab page.
+pub(crate) fn last_nonfloating(tabpage: Option<TabPage>) -> Win {
+    debug_assert!(
+        tabpage.is_none_or(|tp| !tp.is_current()),
+        "tp != curtab || !tp"
+    );
+    let mut res = match tabpage {
         Some(tp) => tp.tp_lastwin.and_then(WinId::get),
         None => last_window(),
     }

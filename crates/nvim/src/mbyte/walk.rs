@@ -266,17 +266,17 @@ pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
     }
 }
 
-/// Copy one whole character (composing marks included) from `*fp` to `*tp`,
+/// Copy one whole character (composing marks included) from `*fp` to `*to`,
 /// advancing both.
 ///
 /// # Safety
 ///
-/// `*fp` must point at a NUL-terminated string and `*tp` must have room for
+/// `*fp` must point at a NUL-terminated string and `*to` must have room for
 /// the character.
-pub unsafe fn mb_copy_char(fp: *mut *const c_char, tp: *mut *mut c_char) {
+pub unsafe fn mb_copy_char(fp: *mut *const c_char, to: *mut *mut c_char) {
     let l = unsafe { utfc_ptr2len(*fp) } as size_t;
-    unsafe { (*tp).cast::<u8>().copy_from((*fp).cast(), l) };
-    unsafe { *tp = (*tp).add(l) };
+    unsafe { (*to).cast::<u8>().copy_from((*fp).cast(), l) };
+    unsafe { *to = (*to).add(l) };
     unsafe { *fp = (*fp).add(l) };
 }
 

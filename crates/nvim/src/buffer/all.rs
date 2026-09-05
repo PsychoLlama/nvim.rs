@@ -77,9 +77,9 @@ fn set_pcmark() {
     setpcmark();
 }
 
-/// Make `tp` the current tab page, with autocommands.
-fn goto_tab(tp: TabPage) {
-    goto_tab_page(tp, true, true);
+/// Make `tabpage` the current tab page, with autocommands.
+fn goto_tab(tabpage: TabPage) {
+    goto_tab_page(tabpage, true, true);
 }
 
 /// The last non-floating window of the current tab page.

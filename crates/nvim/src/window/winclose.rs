@@ -418,13 +418,13 @@ fn fire_winclosed(win: Win) {
     RECURSIVE.set(false);
 }
 
-pub fn trigger_tabclosedpre(tp: *mut Tabpage) {
-    tabclosedpre(tp);
+pub fn trigger_tabclosedpre(tabpage: *mut Tabpage) {
+    tabclosedpre(tabpage);
 }
 
-/// `TabClosedPre` for `tp`, fired from inside that tab page and never
+/// `TabClosedPre` for `tabpage`, fired from inside that tab page and never
 /// re-entered. Comes back to the tab page it started in, or to the first.
-fn tabclosedpre(tp: *mut Tabpage) {
+fn tabclosedpre(tabpage: *mut Tabpage) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
     let ptp = curtab.get();
     // Return quickly when there is no TabClosedPre autocommand to run, or one
@@ -432,7 +432,7 @@ fn tabclosedpre(tp: *mut Tabpage) {
     if !event_wanted(AutoEvent::TabClosedPre) || RECURSIVE.get() {
         return;
     }
-    if let Some(tp) = valid_tab(tp) {
+    if let Some(tp) = valid_tab(tabpage) {
         goto_tab(tp, false, false);
     }
     RECURSIVE.set(true);
@@ -449,24 +449,24 @@ fn tabclosedpre(tp: *mut Tabpage) {
 pub unsafe fn win_close_othertab(
     win: *mut Window,
     free_buf: c_int,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     force: bool,
 ) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page.
-    let (win, tp) = unsafe { (Win::new(win), TabPage::new(tp)) };
+    let (win, tp) = unsafe { (Win::new(win), TabPage::new(tabpage)) };
     close_othertab(win, free_buf != 0, tp, force)
 }
 
-/// Close window `win` in tab page `tp`, which is not the current one.
+/// Close window `win` in tab page `tabpage`, which is not the current one.
 ///
 /// This may be the last window of that tab page and so close the tab page,
-/// which makes `tp` invalid. The caller must check whether the buffer is
+/// which makes `tabpage` invalid. The caller must check whether the buffer is
 /// hidden and whether the tabline needs updating.
 ///
 /// `false` when the window was not closed as a direct result of this call
 /// (through autocommands, say).
-pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool) -> bool {
-    debug_assert!(!tp.is_current(), "tp != curtab");
+pub(crate) fn close_othertab(win: Win, free_buf: bool, tabpage: TabPage, force: bool) -> bool {
+    debug_assert!(!tabpage.is_current(), "tp != curtab");
     let mut did_decrement = false;
     let mut bufref = BufRef::of_opt(None);
 
@@ -487,16 +487,16 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
 
     'leave_open: {
         // Would closing this window leave only floating windows?
-        if tab_last_win(tp).w_floating && only_window(win, Some(tp)) {
-            if !force && !can_close_floats(Some(tp)) {
+        if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
+            if !force && !can_close_floats(Some(tabpage)) {
                 err_raw(e_floatonly.as_ptr());
                 break 'leave_open;
             }
             // Close the last window until there are no floating windows left.
             // The `force` flag is not actually used for a floating window.
-            while tab_last_win(tp).w_floating {
-                let last = tab_last_win(tp);
-                if !close_othertab(last, !hides(last.buffer()), tp, true) {
+            while tab_last_win(tabpage).w_floating {
+                let last = tab_last_win(tabpage);
+                if !close_othertab(last, !hides(last.buffer()), tabpage, true) {
                     // Give up rather than loop forever.
                     break 'leave_open;
                 }
@@ -516,8 +516,8 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
                 return false;
             }
         }
-        if tp.tp_firstwin == tp.tp_lastwin && !tp.tp_did_tabclosedpre {
-            tabclosedpre(tp.raw());
+        if tabpage.tp_firstwin == tabpage.tp_lastwin && !tabpage.tp_did_tabclosedpre {
+            tabclosedpre(tabpage.raw());
             // The autocommand may have freed the window already.
             if !valid_win_any_tab(win.raw()) {
                 return false;
@@ -533,36 +533,36 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
 
         // Careful: autocommands may have closed the tab page, or made it the
         // current one.
-        if valid_tab(tp.raw()).is_none() || tp.is_current() {
+        if valid_tab(tabpage.raw()).is_none() || tabpage.is_current() {
             break 'leave_open;
         }
         // Autocommands may have closed the window already, or
         // `nvim_win_set_config` moved it to a different tab page.
-        if !valid_win_in_tab(tp, win.raw()) {
+        if !valid_win_in_tab(tabpage, win.raw()) {
             break 'leave_open;
         }
         // Autocommands may again leave only floats; check again, but this time
         // without bothering to close them.
-        if tab_last_win(tp).w_floating && only_window(win, Some(tp)) {
+        if tab_last_win(tabpage).w_floating && only_window(win, Some(tabpage)) {
             err_raw(e_floatonly.as_ptr());
             break 'leave_open;
         }
 
         // When closing the last window of a tab page, remove the tab page.
         let mut free_tp_idx = 0;
-        if tp.tp_firstwin == tp.tp_lastwin {
-            free_tp_idx = tab_index(tp);
+        if tabpage.tp_firstwin == tabpage.tp_lastwin {
+            free_tp_idx = tab_index(tabpage);
             let h = tabline_rows();
-            let id = tp.id();
+            let id = tabpage.id();
             if first_tabpage.get() == Some(id) {
-                first_tabpage.set(tp.tp_next);
+                first_tabpage.set(tabpage.tp_next);
             } else {
                 let Some(mut ptp) = tabs().find(|ptp| ptp.tp_next == Some(id)) else {
                     // SAFETY: a static message naming the caller.
                     unsafe { internal_error(c"win_close_othertab()".as_ptr()) };
                     return false;
                 };
-                ptp.tp_next = tp.tp_next;
+                ptp.tp_next = tabpage.tp_next;
             }
             redraw_tabline.set(true);
             if h != tabline_rows() {
@@ -574,12 +574,12 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
         // `terminal_check_size` and TabClosed, which may have changed since the
         // last `BufRef` (`close_buffer` autocommands, say).
         bufref = BufRef::of_opt(win.buffer_or_none());
-        free_mem(win, Some(tp));
+        free_mem(win, Some(tabpage));
         if let Some(buf) = bufref.get() {
             resize_terminal(buf);
         }
         if free_tp_idx > 0 {
-            free_tab(tp);
+            free_tab(tabpage);
             if event_wanted(AutoEvent::TabClosed) {
                 let mut prev_idx = [0 as c_char; NUMBUFLEN as usize];
                 number_into(&mut prev_idx, c"%i".as_ptr(), free_tp_idx);
@@ -596,10 +596,11 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
     false
 }
 
-/// The last window of `tp`, floats included. `tp` is never the current tab
+/// The last window of `tabpage`, floats included. `tabpage` is never the current tab
 /// page here, so `tp_lastwin` is the live answer.
-fn tab_last_win(tp: TabPage) -> Win {
-    tp.tp_lastwin
+fn tab_last_win(tabpage: TabPage) -> Win {
+    tabpage
+        .tp_lastwin
         .and_then(WinId::get)
         .expect("a window list has a tail")
 }

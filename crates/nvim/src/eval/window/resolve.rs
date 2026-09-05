@@ -79,15 +79,15 @@ pub fn win_and_tab_by_id(id: c_int) -> Option<(Win, TabPage)> {
     })
 }
 
-/// The window that the window *number* `vp` names within tab page `tp` —
+/// The window that the window *number* `vp` names within tab page `tabpage` —
 /// `None` for the current tab page.
 ///
 /// Number zero is the current window; a value at or above [`LOWEST_WIN_ID`] is
-/// taken as an id instead, but only within `tp`.
+/// taken as an id instead, but only within `tabpage`.
 ///
 /// # Safety
 /// `vp` must point at a live typval.
-pub unsafe fn find_win_by_nr(vp: *mut TypVal, tp: Option<TabPage>) -> Option<Win> {
+pub unsafe fn find_win_by_nr(vp: *mut TypVal, tabpage: Option<TabPage>) -> Option<Win> {
     // SAFETY: the caller's obligation. A value that is not a number reports
     // and answers zero, which reads here as "the current window"; the
     // narrowing is upstream's and is what makes 0x1_0000_0000 read as 0.
@@ -100,7 +100,7 @@ pub unsafe fn find_win_by_nr(vp: *mut TypVal, tp: Option<TabPage>) -> Option<Win
         return Some(cur_win());
     }
     // SAFETY: `curtab` is set from startup to exit.
-    let tp = tp.unwrap_or_else(cur_tab);
+    let tp = tabpage.unwrap_or_else(cur_tab);
     if nr >= LOWEST_WIN_ID {
         return windows_in_tab(tp).find(|wp| wp.handle == nr);
     }
@@ -159,17 +159,17 @@ fn tabpage_by_nr(nr: c_int) -> Option<TabPage> {
 }
 
 /// Common code for `tabpagewinnr()` and `winnr()`: the number of the window
-/// `argvar` names within `tp`, or 0 when it names none.
+/// `argvar` names within `tabpage`, or 0 when it names none.
 ///
 /// # Safety
 /// `argvar` must point at a live typval.
-unsafe fn get_winnr(tp: TabPage, argvar: *mut TypVal) -> c_int {
+unsafe fn get_winnr(tabpage: TabPage, argvar: *mut TypVal) -> c_int {
     let mut numbuf = NumBuf::new();
-    let mut twin = tp.curwin();
+    let mut twin = tabpage.curwin();
     if unsafe { (*argvar).v_type } == VAR_UNKNOWN {
         // Without an argument the answer is the current window's number,
         // which a float without one does not have.
-        if !twin.has_winnr(tp) {
+        if !twin.has_winnr(tabpage) {
             return 0;
         }
     } else {
@@ -178,7 +178,7 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut TypVal) -> c_int {
         let arg = unsafe { numbuf.string_chk(argvar) };
         let resolved = match arg.is_null() {
             true => None,
-            false => unsafe { relative_win(tp, twin, arg) },
+            false => unsafe { relative_win(tabpage, twin, arg) },
         };
         match resolved {
             Some(wp) => twin = wp,
@@ -188,8 +188,8 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut TypVal) -> c_int {
     // Count the numbered windows up to and including `twin`. A window that is
     // not in this tab page's list runs the walk off the end and answers 0.
     let mut nr = 0;
-    for wp in windows_in_tab(tp) {
-        nr += c_int::from(wp.has_winnr(tp));
+    for wp in windows_in_tab(tabpage) {
+        nr += c_int::from(wp.has_winnr(tabpage));
         if wp == twin {
             return nr;
         }
@@ -197,20 +197,20 @@ unsafe fn get_winnr(tp: TabPage, argvar: *mut TypVal) -> c_int {
     0
 }
 
-/// The window the `winnr()` argument `arg` names, relative to `twin` in `tp`:
+/// The window the `winnr()` argument `arg` names, relative to `twin` in `tabpage`:
 /// `"$"`, `"#"`, or a count followed by one of `hjkl`. `None` is the caller's
 /// 0, and the invalid-expression error has already been reported.
 ///
 /// # Safety
 /// `arg` must be a NUL-terminated string.
-unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win> {
+unsafe fn relative_win(tabpage: TabPage, twin: Win, arg: *const c_char) -> Option<Win> {
     // SAFETY: the caller's obligation; `endp` is a live local that `strtol`
     // leaves pointing into `arg`.
     if unsafe { cstr::eq_bytes(arg, b"$") } {
-        return Some(tp.lastwin());
+        return Some(tabpage.lastwin());
     }
     if unsafe { cstr::eq_bytes(arg, b"#") } {
-        return tp.prevwin();
+        return tabpage.prevwin();
     }
     let mut endp: *mut c_char = ptr::null_mut();
     let count = number_as_int(unsafe { strtol(arg, &raw mut endp, 10) }).max(1);
@@ -219,7 +219,7 @@ unsafe fn relative_win(tp: TabPage, twin: Win, arg: *const c_char) -> Option<Win
     // "j"/"k" walk the layout tree vertically, "h"/"l" horizontally; `count`
     // says how many neighbours to step. The comparison is `strequal`'s, which
     // is a whole-string one.
-    let (tpr, twr) = (tp.raw(), twin.raw());
+    let (tpr, twr) = (tabpage.raw(), twin.raw());
     let direction = match rest.map(CStr::to_bytes) {
         // SAFETY: a live tab page and window.
         Some(b"j") => Some(unsafe { win_vert_neighbor(tpr, twr, false, count) }),
@@ -276,11 +276,11 @@ pub unsafe fn f_win_getid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     };
 }
 
-/// The `winnr`th window of `tp` that [`Win::has_winnr`] gives a number to.
-fn nth_numbered_win(tp: TabPage, winnr: c_int) -> Option<Win> {
+/// The `winnr`th window of `tabpage` that [`Win::has_winnr`] gives a number to.
+fn nth_numbered_win(tabpage: TabPage, winnr: c_int) -> Option<Win> {
     let mut left = winnr;
-    windows_in_tab(tp).find(|wp| {
-        left -= c_int::from(wp.has_winnr(tp));
+    windows_in_tab(tabpage).find(|wp| {
+        left -= c_int::from(wp.has_winnr(tabpage));
         left == 0
     })
 }

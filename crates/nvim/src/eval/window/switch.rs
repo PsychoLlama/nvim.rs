@@ -23,13 +23,17 @@ use crate::types::VAR_STRING;
 /// is, because the saved state is written before the switch is attempted.
 ///
 /// # Safety
-/// `args` must point at a writable `WinExecute`, and `wp`/`tp` must be a
+/// `args` must point at a writable `WinExecute`, and `wp`/`tabpage` must be a
 /// live window and tab page.
-pub unsafe fn win_execute_before(args: *mut WinExecute, wp: *mut Window, tp: *mut Tabpage) -> bool {
+pub unsafe fn win_execute_before(
+    args: *mut WinExecute,
+    wp: *mut Window,
+    tabpage: *mut Tabpage,
+) -> bool {
     // SAFETY: the caller's obligation. `args` is the caller's own storage and
     // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
     // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
-    let (args, win, tab) = unsafe { (&mut *args, Win::new(wp), TabPage::new(tp)) };
+    let (args, win, tab) = unsafe { (&mut *args, Win::new(wp), TabPage::new(tabpage)) };
     args.wp = wp;
     args.curpos = win.w_cursor;
     args.cwd_status = Err(Failed);
@@ -64,7 +68,7 @@ pub unsafe fn win_execute_before(args: *mut WinExecute, wp: *mut Window, tp: *mu
             args.apply_acd = unsafe { cstr::eq(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) };
         }
     }
-    if unsafe { switch_win_noblock(&raw mut args.switchwin, wp, tp, true) }.is_ok() {
+    if unsafe { switch_win_noblock(&raw mut args.switchwin, wp, tabpage, true) }.is_ok() {
         check_cursor(cur_win());
         return true;
     }
@@ -123,7 +127,7 @@ pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     unsafe { win_execute_after(&raw mut saved) };
 }
 
-/// Make `win` the current window and `tp` the current tab page.
+/// Make `win` the current window and `tabpage` the current tab page.
 ///
 /// [`restore_win`] MUST be called to undo this, `Err` included. No
 /// autocommands run until it is.
@@ -132,17 +136,17 @@ pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 /// another tab page is only half entered.
 ///
 /// # Safety
-/// `switchwin` must be writable, `win` a live window and `tp` a live tab page
+/// `switchwin` must be writable, `win` a live window and `tabpage` a live tab page
 /// or NULL.
 pub unsafe fn switch_win(
     switchwin: *mut SwitchWin,
     win: *mut Window,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation.
     unsafe { block_autocmds() };
-    unsafe { switch_win_noblock(switchwin, win, tp, no_display) }
+    unsafe { switch_win_noblock(switchwin, win, tabpage, no_display) }
 }
 
 /// [`switch_win`] without blocking autocommands.
@@ -152,7 +156,7 @@ pub unsafe fn switch_win(
 pub unsafe fn switch_win_noblock(
     switchwin: *mut SwitchWin,
     win: *mut Window,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
@@ -171,13 +175,13 @@ pub unsafe fn switch_win_noblock(
     }
     // SAFETY: a live tab page or NULL, and `win_valid` re-checks the window
     // before it is entered -- entering the tab page can close it.
-    if !tp.is_null() {
+    if !tabpage.is_null() {
         switchwin.sw_curtab = curtab.get();
         if no_display {
             unsafe { unuse_tabpage(curtab.get()) };
-            unsafe { use_tabpage(tp) };
+            unsafe { use_tabpage(tabpage) };
         } else {
-            unsafe { goto_tabpage_tp(tp, false, false) };
+            unsafe { goto_tabpage_tp(tabpage, false, false) };
         }
     }
     if !win_valid(win) {

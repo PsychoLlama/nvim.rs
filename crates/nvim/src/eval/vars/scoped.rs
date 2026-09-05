@@ -37,13 +37,13 @@ const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
 ///
 /// # Safety
 /// `rettv` is writable and holds nothing; `deftv` is a live value;
-/// `tp`/`win`/`buf` are live or NULL.
+/// `tabpage`/`win`/`buf` are live or NULL.
 unsafe fn get_var_from(
     mut varname: *const c_char,
     rettv: *mut TypVal,
     deftv: *mut TypVal,
     htname: c_int,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     win: *mut Window,
     buf: *mut Buffer,
 ) {
@@ -57,7 +57,7 @@ unsafe fn get_var_from(
     ret.vval.v_string = ptr::null_mut();
 
     if !varname.is_null()
-        && !tp.is_null()
+        && !tabpage.is_null()
         && !win.is_null()
         && (htname != b'b' as c_int || !buf.is_null())
     {
@@ -65,11 +65,13 @@ unsafe fn get_var_from(
         // not valid. Only when needed, since it blocks autocommands --
         // and not at all with a buffer in hand, where `curbuf` is saved
         // and restored directly instead.
-        let need_switch_win = !(tp == curtab.get() && win == curwin.get()) && !do_change_curbuf;
+        let need_switch_win =
+            !(tabpage == curtab.get() && win == curwin.get()) && !do_change_curbuf;
         let mut switchwin = SWITCHWIN_INITIAL_VALUE;
         // SAFETY: `varname` is NUL-terminated and the handles are live.
         let lead = unsafe { *varname } as u8;
-        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) }.is_ok() {
+        if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tabpage, true) }.is_ok()
+        {
             if lead == b'&' && htname != b't' as c_int {
                 // An option: read it from the right buffer.
                 let save_curbuf = curbuf.get();
@@ -92,7 +94,7 @@ unsafe fn get_var_from(
                 let v: *const ScopeDictDictItem = match htname as u8 {
                     b'b' => unsafe { &raw mut (*buf).b_bufvar },
                     b'w' => unsafe { &raw mut (*win).w_winvar },
-                    _ => unsafe { &raw mut (*tp).tp_winvar },
+                    _ => unsafe { &raw mut (*tabpage).tp_winvar },
                 };
                 unsafe { tv_copy(&raw const (*v).di_tv, rettv) };
                 done = true;
@@ -100,7 +102,7 @@ unsafe fn get_var_from(
                 let ht = match htname as u8 {
                     b'b' => unsafe { &raw mut (*(*buf).b_vars).dv_hashtab },
                     b'w' => unsafe { &raw mut (*(*win).w_vars).dv_hashtab },
-                    _ => unsafe { &raw mut (*(*tp).tp_vars).dv_hashtab },
+                    _ => unsafe { &raw mut (*(*tabpage).tp_vars).dv_hashtab },
                 };
                 let varname_len = unsafe { cstr::bytes_at(varname) }.len();
                 let v = unsafe { find_var_in_ht(ht, htname, varname, varname_len, false) };

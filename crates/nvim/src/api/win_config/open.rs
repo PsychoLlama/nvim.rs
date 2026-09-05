@@ -333,19 +333,23 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
     flags
 }
 
-/// Whether `wp` may be moved to tab page `tp`, reporting why not through
+/// Whether `wp` may be moved to tab page `tabpage`, reporting why not through
 /// `err`.
 ///
 /// # Safety
-/// `wp` must be a live window, `tp` a live tab page and `err` the caller's
+/// `wp` must be a live window, `tabpage` a live tab page and `err` the caller's
 /// error slot.
-pub(crate) unsafe fn win_can_move_tp(wp: *mut Window, tp: *mut Tabpage, err: &mut Error) -> bool {
+pub(crate) unsafe fn win_can_move_tp(
+    wp: *mut Window,
+    tabpage: *mut Tabpage,
+    err: &mut Error,
+) -> bool {
     // SAFETY: the caller's error slot.
     let report = unsafe { ErrSlot::new(err) };
-    let other_tab = if tp == curtab.get() {
+    let other_tab = if tabpage == curtab.get() {
         ::core::ptr::null_mut::<Tabpage>()
     } else {
-        tp
+        tabpage
     };
     // SAFETY: the caller's window and tab page.
     if unsafe { one_window(wp, other_tab) } {
@@ -381,15 +385,15 @@ pub(crate) unsafe fn win_can_move_tp(wp: *mut Window, tp: *mut Tabpage, err: &mu
     true
 }
 
-/// The window that takes `win`'s place in tab page `tp` once it leaves: its
+/// The window that takes `win`'s place in tab page `tabpage` once it leaves: its
 /// neighbour in the layout, or the tab page's own choice for a float.
 ///
 /// # Safety
-/// `win` must be a live window and `tp` a live tab page.
-pub(crate) unsafe fn win_find_altwin(win: *mut Window, tp: *mut Tabpage) -> *mut Window {
-    let at = (tp != curtab.get()).then(|| {
+/// `win` must be a live window and `tabpage` a live tab page.
+pub(crate) unsafe fn win_find_altwin(win: *mut Window, tabpage: *mut Tabpage) -> *mut Window {
+    let at = (tabpage != curtab.get()).then(|| {
         // SAFETY: the caller's tab page.
-        unsafe { TabPage::new(tp) }
+        unsafe { TabPage::new(tabpage) }
     });
     let other_tab = at.map_or(::core::ptr::null_mut::<Tabpage>(), TabPage::raw);
     // SAFETY: the caller's window.

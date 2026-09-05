@@ -137,12 +137,12 @@ impl TabPage {
 }
 
 impl Win {
-    /// Whether `winnr()`'s numbering counts this window in tab page `tp`.
+    /// Whether `winnr()`'s numbering counts this window in tab page `tabpage`.
     ///
     /// Every window has a number except a hidden or unfocusable float — and
     /// even one of those keeps its number while it is the tab page's current
     /// window, which is the only way the cursor can be inside it.
-    pub fn has_winnr(self, tp: TabPage) -> bool {
-        self == tp.curwin() || !self.w_config.hide && self.w_config.focusable
+    pub fn has_winnr(self, tabpage: TabPage) -> bool {
+        self == tabpage.curwin() || !self.w_config.hide && self.w_config.focusable
     }
 }

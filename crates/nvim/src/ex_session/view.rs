@@ -51,12 +51,12 @@ use core::ffi::{c_char, c_int, c_void};
 /// The caller must have set 'scrolloff' to zero.
 ///
 /// # Safety
-/// `wp` and `tp` are live; `wp` belongs to `tp`. Main thread: this makes
+/// `wp` and `tabpage` are live; `wp` belongs to `tabpage`. Main thread: this makes
 /// `wp` current for the duration of the option writers.
 pub(crate) unsafe fn put_view(
     out: SessionFile,
     wp: *mut Window,
-    tp: *mut Tabpage,
+    tabpage: *mut Tabpage,
     add_edit: bool,
     opts: SessionOpts,
     current_arg_idx: c_int,
@@ -77,7 +77,7 @@ pub(crate) unsafe fn put_view(
         // and no directory below it overrides that.
         let fullname = !opts.is_session()
             || !opts.has(kOptSsopFlagCurdir)
-            || !unsafe { (*tp).tp_localdir }.is_null()
+            || !unsafe { (*tabpage).tp_localdir }.is_null()
             || !unsafe { (*wp).w_localdir }.is_null();
         if !unsafe { ses_arglist(out, c"arglocal", &(*(*wp).w_alist).al_ga, fullname) } {
             return false;

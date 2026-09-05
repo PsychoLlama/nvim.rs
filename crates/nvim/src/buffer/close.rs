@@ -97,10 +97,10 @@ fn is_only_window(win: *mut Window) -> bool {
     unsafe { one_window(win, ptr::null_mut::<Tabpage>()) }
 }
 
-/// Make `win` in `tp` current again, without firing autocommands.
-fn goto_win(tp: TabPage, win: Win) {
+/// Make `win` in `tabpage` current again, without firing autocommands.
+fn goto_win(tabpage: TabPage, win: Win) {
     // SAFETY: a live tab page and a live window.
-    unsafe { goto_tabpage_win(tp.raw(), win.raw()) };
+    unsafe { goto_tabpage_win(tabpage.raw(), win.raw()) };
 }
 
 /// Remember `win`'s cursor as the buffer's last position.

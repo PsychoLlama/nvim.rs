@@ -119,8 +119,8 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
 // The tab page
 
 /// `NULL` for "the current tab page", as window.rs spells it.
-fn raw_tab(tp: Option<TabPage>) -> *mut Tabpage {
-    tp.map_or(ptr::null_mut(), TabPage::raw)
+fn raw_tab(tabpage: Option<TabPage>) -> *mut Tabpage {
+    tabpage.map_or(ptr::null_mut(), TabPage::raw)
 }
 
 fn current_tab() -> TabPage {
@@ -208,9 +208,9 @@ fn concat(old: *const c_char, tail: &'static CStr) -> *mut c_char {
 // every call site in this file is ordinary code. They collapse to nothing when
 // window.rs is itself rewritten.
 
-fn last_nofloat(tp: Option<TabPage>) -> *mut Window {
+fn last_nofloat(tabpage: Option<TabPage>) -> *mut Window {
     // SAFETY: null, or a live tab page.
-    unsafe { lastwin_nofloating(raw_tab(tp)) }
+    unsafe { lastwin_nofloating(raw_tab(tabpage)) }
 }
 fn tabpage_of(win: Win) -> Option<TabPage> {
     // SAFETY: a live window; the answer is a live tab page or null.
@@ -228,12 +228,12 @@ fn init_window(win: Win) {
     unsafe { win_init(win.raw(), current_win().raw(), 0) };
 }
 
-/// Take `win` out of `tp`'s frame tree, handing its space to a neighbour. The
+/// Take `win` out of `tabpage`'s frame tree, handing its space to a neighbour. The
 /// direction it answers is unused here, as it is upstream.
-fn remove_from_frame(win: Win, tp: Option<TabPage>) {
+fn remove_from_frame(win: Win, tabpage: Option<TabPage>) {
     let mut dir: c_int = 0;
-    // SAFETY: a live, non-floating window of `tp`; `dir` is a local.
-    unsafe { winframe_remove(win.raw(), &raw mut dir, raw_tab(tp), ptr::null_mut()) };
+    // SAFETY: a live, non-floating window of `tabpage`; `dir` is a local.
+    unsafe { winframe_remove(win.raw(), &raw mut dir, raw_tab(tabpage), ptr::null_mut()) };
 }
 
 /// `XFREE_CLEAR(wp->w_frame)`.
@@ -242,17 +242,17 @@ fn free_frame(win: &mut Win) {
     unsafe { xfree(win.w_frame.cast::<c_void>()) };
     win.w_frame = ptr::null_mut();
 }
-fn remove_window(win: Win, tp: Option<TabPage>) {
-    // SAFETY: a live window of `tp`.
-    unsafe { win_remove(win.raw(), raw_tab(tp)) };
+fn remove_window(win: Win, tabpage: Option<TabPage>) {
+    // SAFETY: a live window of `tabpage`.
+    unsafe { win_remove(win.raw(), raw_tab(tabpage)) };
 }
-fn append_window(after: *mut Window, win: Win, tp: Option<TabPage>) {
-    // SAFETY: `after` is null or a live window of `tp`; `win` is in no list.
-    unsafe { win_append(after, win.raw(), raw_tab(tp)) };
+fn append_window(after: *mut Window, win: Win, tabpage: Option<TabPage>) {
+    // SAFETY: `after` is null or a live window of `tabpage`; `win` is in no list.
+    unsafe { win_append(after, win.raw(), raw_tab(tabpage)) };
 }
-fn free_window(win: Win, tp: Option<TabPage>) {
+fn free_window(win: Win, tabpage: Option<TabPage>) {
     // SAFETY: a live window, unlinked by `remove_window` just before.
-    unsafe { win_free(win.raw(), raw_tab(tp)) };
+    unsafe { win_free(win.raw(), raw_tab(tabpage)) };
 }
 fn update_last_status(morewin: bool) {
     last_status(morewin);
@@ -282,9 +282,9 @@ fn valid_window(win: *mut Window) -> Option<Win> {
     // SAFETY: `win` is compared, never read, and one found in the list is live.
     unsafe { win_valid(win).then(|| Win::new(win)) }
 }
-fn valid_in_tab(tp: TabPage, win: *mut Window) -> Option<Win> {
+fn valid_in_tab(tabpage: TabPage, win: *mut Window) -> Option<Win> {
     // SAFETY: a live tab page; `win` is compared, never read.
-    unsafe { tabpage_win_valid(tp.raw(), win).then(|| Win::new(win)) }
+    unsafe { tabpage_win_valid(tabpage.raw(), win).then(|| Win::new(win)) }
 }
 
 /// Close a float, keeping its buffer and without forcing.
@@ -770,7 +770,7 @@ pub(crate) fn win_float_find_preview() -> Option<Win> {
     floats().find(|wp| wp.w_float_is_info)
 }
 
-/// Select an alternative window to `win` (assumed floating) in tabpage `tp`,
+/// Select an alternative window to `win` (assumed floating) in tabpage `tabpage`,
 /// which is `win`'s original tabpage or `None` for the current one -- the
 /// window to switch to when `win` is current and is then closed or moved
 /// away. `None` when there is no window to fall back to.
@@ -778,8 +778,11 @@ pub(crate) fn win_float_find_preview() -> Option<Win> {
 /// # Safety
 /// `win` is only ever compared below, never read, so it stays raw -- but it
 /// must be null or an address that was once a window.
-pub(crate) unsafe fn win_float_find_altwin(win: *const Window, tp: Option<TabPage>) -> Option<Win> {
-    let Some(tp) = tp else {
+pub(crate) unsafe fn win_float_find_altwin(
+    win: *const Window,
+    tabpage: Option<TabPage>,
+) -> Option<Win> {
+    let Some(tp) = tabpage else {
         return valid_window(prevwin.get())
             .filter(|wp| wp.raw() != win.cast_mut())
             .filter(|wp| wp.w_config.focusable && !wp.w_config.hide)

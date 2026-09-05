@@ -766,39 +766,39 @@ pub(crate) fn can_get_old_char() -> bool {
 /// answered by the user.
 ///
 /// # Safety
-/// `tp` must point at writable storage that outlives the matching
+/// `save` must point at writable storage that outlives the matching
 /// [`restore_typeahead`].
-pub unsafe fn save_typeahead(tp: *mut TypeaheadSave) {
-    // SAFETY (this body): the caller's promise -- `tp` is writable storage
+pub unsafe fn save_typeahead(save: *mut TypeaheadSave) {
+    // SAFETY (this body): the caller's promise -- `save` is writable storage
     // that outlives the matching restore.
-    unsafe { (*tp).save_typebuf = typeahead().take() };
-    unsafe { alloc_typebuf((*tp).save_typebuf.change_cnt()) };
-    unsafe { (*tp).typebuf_valid = true };
-    unsafe { (*tp).old_char = old_char.get() };
-    unsafe { (*tp).old_mod_mask = old_mod_mask.get() };
+    unsafe { (*save).save_typebuf = typeahead().take() };
+    unsafe { alloc_typebuf((*save).save_typebuf.change_cnt()) };
+    unsafe { (*save).typebuf_valid = true };
+    unsafe { (*save).old_char = old_char.get() };
+    unsafe { (*save).old_mod_mask = old_mod_mask.get() };
     old_char.set(-1);
 
-    unsafe { (*tp).save_readbuf1 = readbuf1().take() };
-    unsafe { (*tp).save_readbuf2 = readbuf2().take() };
+    unsafe { (*save).save_readbuf1 = readbuf1().take() };
+    unsafe { (*save).save_readbuf2 = readbuf2().take() };
 }
 
 /// Put back what [`save_typeahead`] saved, freeing what was read in the
 /// meantime. Can only be called once per save.
 ///
 /// # Safety
-/// `tp` must be the one a matching [`save_typeahead`] filled.
-pub unsafe fn restore_typeahead(tp: *mut TypeaheadSave) {
-    // SAFETY (this body): as [`save_typeahead`] -- `tp` is the one a matching
+/// `save` must be the one a matching [`save_typeahead`] filled.
+pub unsafe fn restore_typeahead(save: *mut TypeaheadSave) {
+    // SAFETY (this body): as [`save_typeahead`] -- `save` is the one a matching
     // save filled.
-    if unsafe { (*tp).typebuf_valid } {
+    if unsafe { (*save).typebuf_valid } {
         unsafe { free_typebuf() };
-        typeahead().set(core::mem::take(unsafe { &mut (*tp).save_typebuf }));
+        typeahead().set(core::mem::take(unsafe { &mut (*save).save_typebuf }));
     }
-    old_char.set(unsafe { (*tp).old_char });
-    old_mod_mask.set(unsafe { (*tp).old_mod_mask });
+    old_char.set(unsafe { (*save).old_char });
+    old_mod_mask.set(unsafe { (*save).old_mod_mask });
 
     unsafe { readbuf1().free() };
-    readbuf1().set(core::mem::take(unsafe { &mut (*tp).save_readbuf1 }));
+    readbuf1().set(core::mem::take(unsafe { &mut (*save).save_readbuf1 }));
     unsafe { readbuf2().free() };
-    readbuf2().set(core::mem::take(unsafe { &mut (*tp).save_readbuf2 }));
+    readbuf2().set(core::mem::take(unsafe { &mut (*save).save_readbuf2 }));
 }

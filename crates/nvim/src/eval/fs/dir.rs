@@ -115,9 +115,9 @@ fn win_localdir(win: *mut Window) -> *mut c_char {
 }
 
 /// The tabpage's own directory, or NULL when it has none.
-fn tab_localdir(tp: *mut Tabpage) -> *mut c_char {
+fn tab_localdir(tabpage: *mut Tabpage) -> *mut c_char {
     // SAFETY: a live tabpage.
-    unsafe { (*tp).tp_localdir }
+    unsafe { (*tabpage).tp_localdir }
 }
 
 /// Tabpage number `n`, or NULL when there is none.
@@ -125,11 +125,12 @@ fn find_tab(n: c_int) -> *mut Tabpage {
     find_tabpage(n)
 }
 
-/// The window argument 0 names within `tp`, or NULL when there is none.
-fn find_win(args: Args<'_>, tp: *mut Tabpage) -> *mut Window {
+/// The window argument 0 names within `tabpage`, or NULL when there is none.
+fn find_win(args: Args<'_>, tabpage: *mut Tabpage) -> *mut Window {
     // SAFETY: a live typval, and a live tab page or NULL -- which the
     // resolver reads as the current one.
-    unsafe { find_win_by_nr(args.ptr(0), TabPage::from_raw(tp)) }.map_or(ptr::null_mut(), Win::raw)
+    unsafe { find_win_by_nr(args.ptr(0), TabPage::from_raw(tabpage)) }
+        .map_or(ptr::null_mut(), Win::raw)
 }
 
 /// Change to `dir` in `scope`; false -- having reported -- when it fails.

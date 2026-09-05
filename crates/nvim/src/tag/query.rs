@@ -195,22 +195,22 @@ unsafe fn describe_match(list: *mut List, entry: *mut c_char) -> bool {
 /// reported under their own keys.
 ///
 /// # Safety
-/// `dict` must be live and `tp` must describe a live match.
-unsafe fn add_extra_fields(dict: *mut Dict, tp: &TagParts) -> bool {
-    if tp.command_end.is_null() {
+/// `dict` must be live and `tabpage` must describe a live match.
+unsafe fn add_extra_fields(dict: *mut Dict, parts: &TagParts) -> bool {
+    if parts.command_end.is_null() {
         return true;
     }
     let mut ok = true;
     // SAFETY: the caller's promise -- `command_end` points into the match,
     // which is NUL-terminated, and every step below stops at that NUL.
     // Past the `;"` and the separator after it.
-    let mut p = unsafe { Scan::new(tp.command_end.wrapping_add(3)) };
+    let mut p = unsafe { Scan::new(parts.command_end.wrapping_add(3)) };
     while !matches!(p.byte() as u8, 0 | b'\n' | b'\r') {
-        if p.here() == tp.tagkind
-            || (p.here().wrapping_add(5) == tp.tagkind && p.starts_with(c"kind:"))
+        if p.here() == parts.tagkind
+            || (p.here().wrapping_add(5) == parts.tagkind && p.starts_with(c"kind:"))
         {
             // "kind:<kind>" or a bare "<kind>": already reported.
-            p = p.at(tp.tagkind_end.wrapping_sub(1));
+            p = p.at(parts.tagkind_end.wrapping_sub(1));
         } else if p.starts_with(c"file:") {
             // The static-tag marker, already reported.
             p.step(4);

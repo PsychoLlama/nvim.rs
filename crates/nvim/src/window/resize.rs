@@ -777,31 +777,31 @@ fn first_window() -> Win {
     windows().next().expect("a tab page has a window")
 }
 
-pub unsafe fn min_rows(tp: *mut Tabpage) -> c_int {
+pub unsafe fn min_rows(tabpage: *mut Tabpage) -> c_int {
     // SAFETY: the caller's promise -- a live tab page.
-    min_rows_of(unsafe { TabPage::new(tp) })
+    min_rows_of(unsafe { TabPage::new(tabpage) })
 }
 
-/// The fewest rows tab page `tp` can be drawn in.
-pub(crate) fn min_rows_of(tp: TabPage) -> c_int {
+/// The fewest rows tab page `tabpage` can be drawn in.
+pub(crate) fn min_rows_of(tabpage: TabPage) -> c_int {
     if windows().next().is_none() {
         return MIN_LINES as c_int;
     }
-    let mut total = minheight(tp.topframe(), NextCurwin::Unset);
+    let mut total = minheight(tabpage.topframe(), NextCurwin::Unset);
     total += tabline_rows() + global_stl_rows();
-    if cmdheight_of(tp) > 0 as OptInt {
+    if cmdheight_of(tabpage) > 0 as OptInt {
         total += 1; // Include the last statusline.
     }
     total
 }
 
-/// The `'cmdheight'` in force on tab page `tp`, which for the current one is
+/// The `'cmdheight'` in force on tab page `tabpage`, which for the current one is
 /// the global option rather than the saved copy.
-fn cmdheight_of(tp: TabPage) -> OptInt {
-    if tp.is_current() {
+fn cmdheight_of(tabpage: TabPage) -> OptInt {
+    if tabpage.is_current() {
         p_ch.get()
     } else {
-        tp.tp_ch_used
+        tabpage.tp_ch_used
     }
 }
 

@@ -453,9 +453,13 @@ pub(crate) unsafe fn ex_tabs(_eap: *mut ExArg) {
     }
 }
 
-/// The `:tabs` entry for each window of `tp`.
-fn list_tab_windows(tp: TabPage, lastused_win: *mut Window, line: &mut [c_char; IOSIZE as usize]) {
-    for wp in windows_in_tab(tp) {
+/// The `:tabs` entry for each window of `tabpage`.
+fn list_tab_windows(
+    tabpage: TabPage,
+    lastused_win: *mut Window,
+    line: &mut [c_char; IOSIZE as usize],
+) {
+    for wp in windows_in_tab(tabpage) {
         if got_int.get() {
             break;
         }

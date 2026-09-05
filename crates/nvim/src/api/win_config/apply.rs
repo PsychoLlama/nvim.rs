@@ -15,11 +15,11 @@ use crate::winlayer::{TabPage, Win};
 
 /// `NULL` for "the current tab page", which is how the window family spells
 /// it throughout.
-fn other_tab(tp: *mut Tabpage) -> *mut Tabpage {
-    if tp == curtab.get() {
+fn other_tab(tabpage: *mut Tabpage) -> *mut Tabpage {
+    if tabpage == curtab.get() {
         ::core::ptr::null_mut::<Tabpage>()
     } else {
-        tp
+        tabpage
     }
 }
 

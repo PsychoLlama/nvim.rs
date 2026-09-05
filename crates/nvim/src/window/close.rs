@@ -196,39 +196,39 @@ pub(crate) fn is_last_window(win: Win) -> bool {
     only_window(win, None) && first_tab().next().is_none()
 }
 
-pub unsafe fn one_window(win: *mut Window, tp: *mut Tabpage) -> bool {
+pub unsafe fn one_window(win: *mut Window, tabpage: *mut Tabpage) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
-    unsafe { only_window(Win::new(win), TabPage::from_raw(tp)) }
+    unsafe { only_window(Win::new(win), TabPage::from_raw(tabpage)) }
 }
 
-/// Whether `win` is the only non-floating window of `tp`, or of the current
-/// tab page when `tp` is `None`.
+/// Whether `win` is the only non-floating window of `tabpage`, or of the current
+/// tab page when `tabpage` is `None`.
 ///
 /// This is what to ask in place of `ONE_WINDOW`, with `firstwin` or the
 /// affected window as the argument depending on the situation.
-pub(crate) fn only_window(win: Win, tp: Option<TabPage>) -> bool {
-    let first = match tp {
+pub(crate) fn only_window(win: Win, tabpage: Option<TabPage>) -> bool {
+    let first = match tabpage {
         Some(tp) => tp.tp_firstwin.and_then(WinId::get),
         None => first_window(),
     }
     .expect("a window list has a head");
     debug_assert!(
-        tp.is_none_or(|tp| !tp.is_current()) && !first.w_floating,
+        tabpage.is_none_or(|tp| !tp.is_current()) && !first.w_floating,
         "(!tp || tp != curtab) && !first->w_floating"
     );
     first == win && win.next().is_none_or(|next| next.w_floating)
 }
 
-/// Whether the floating windows of `tp` -- `None` for the current tab page --
+/// Whether the floating windows of `tabpage` -- `None` for the current tab page --
 /// can all be closed. Do not ask while the autocommand window is in use.
-pub(crate) fn can_close_floats(tp: Option<TabPage>) -> bool {
+pub(crate) fn can_close_floats(tabpage: Option<TabPage>) -> bool {
     debug_assert!(
-        tp.is_none_or(|tp| !tp.is_current())
-            && (tp.is_some() || !is_autocmd_window(Some(last_win()))),
+        tabpage.is_none_or(|tp| !tp.is_current())
+            && (tabpage.is_some() || !is_autocmd_window(Some(last_win()))),
         "tp != curtab && (tp || !is_aucmd_win(lastwin))"
     );
-    let mut wp = match tp {
+    let mut wp = match tabpage {
         Some(tp) => tp.tp_lastwin.and_then(WinId::get),
         None => crate::winlayer::last_window(),
     }

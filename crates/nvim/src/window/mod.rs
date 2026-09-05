@@ -332,14 +332,14 @@ pub fn win_valid(win: *const Window) -> bool {
     unsafe { tabpage_win_valid(curtab.get(), win) }
 }
 
-pub unsafe fn tabpage_win_valid(tp: *const Tabpage, win: *const Window) -> bool {
+pub unsafe fn tabpage_win_valid(tabpage: *const Tabpage, win: *const Window) -> bool {
     // SAFETY: the caller's promise -- a live tab page. `win` is only compared.
-    valid_win_in_tab(unsafe { TabPage::new(tp as *mut Tabpage) }, win)
+    valid_win_in_tab(unsafe { TabPage::new(tabpage as *mut Tabpage) }, win)
 }
 
-/// Whether `win` is on `tp`'s window list. `win` is only compared.
-fn valid_win_in_tab(tp: TabPage, win: *const Window) -> bool {
-    !win.is_null() && windows_in_tab(tp).any(|wp| ptr::eq(wp.raw(), win))
+/// Whether `win` is on `tabpage`'s window list. `win` is only compared.
+fn valid_win_in_tab(tabpage: TabPage, win: *const Window) -> bool {
+    !win.is_null() && windows_in_tab(tabpage).any(|wp| ptr::eq(wp.raw(), win))
 }
 
 pub fn win_find_by_handle(handle: Handle) -> *mut Window {
@@ -392,8 +392,8 @@ fn redraw_all(redraw_type: ::core::ffi::c_int) {
 }
 
 /// Whether `win` is the only non-floating window of its tab page.
-fn is_only_window(win: Win, tp: Option<TabPage>) -> bool {
-    only_window(win, tp)
+fn is_only_window(win: Win, tabpage: Option<TabPage>) -> bool {
+    only_window(win, tabpage)
 }
 
 /// `emsg()` over a message the caller has already translated, or that upstream
@@ -423,8 +423,8 @@ fn free<T>(ptr: *mut T) {
 }
 
 /// A tab page as the family's entry points take it: null for "the current one".
-fn raw_tab(tp: Option<TabPage>) -> *mut Tabpage {
-    tp.map_or(ptr::null_mut(), TabPage::raw)
+fn raw_tab(tabpage: Option<TabPage>) -> *mut Tabpage {
+    tabpage.map_or(ptr::null_mut(), TabPage::raw)
 }
 
 /// A window argument that may be absent, as the entry points take it.

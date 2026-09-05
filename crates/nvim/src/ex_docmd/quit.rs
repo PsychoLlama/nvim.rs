@@ -339,10 +339,10 @@ pub(crate) unsafe fn ex_pclose(eap: *mut ExArg) {
 
 /// Close one window, asking about unsaved changes first.
 ///
-/// `tp` is the tab page the window belongs to, or null for this one; a
+/// `tabpage` is the tab page the window belongs to, or null for this one; a
 /// window in another tab page cannot simply be entered, so it takes the
 /// other close path.
-pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tp: *mut Tabpage) {
+pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tabpage: *mut Tabpage) {
     if is_aucmd_win(win) {
         emsg(gettext(e_autocmd_close.as_ptr()));
         return;
@@ -372,14 +372,14 @@ pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tp: *mut Tabpage) {
         }
     }
 
-    if tp.is_null() {
+    if tabpage.is_null() {
         win_close(win, !need_hide && !buf_hide(buf), forceit != 0);
     } else {
         unsafe {
             win_close_othertab(
                 win,
                 (!need_hide && !buf_hide(buf)) as c_int,
-                tp,
+                tabpage,
                 forceit != 0,
             )
         };
@@ -489,12 +489,12 @@ pub unsafe fn tabpage_close(forceit: c_int) {
 ///
 /// Its windows are closed from the last backwards; the loop stops as soon
 /// as one refuses, which is what `tp_lastwin` not changing means.
-pub unsafe fn tabpage_close_other(tp: *mut Tabpage, forceit: c_int) {
+pub unsafe fn tabpage_close_other(tabpage: *mut Tabpage, forceit: c_int) {
     if window_layout_locked(CmdIdx::SIZE) {
         return;
     }
-    trigger_tabclosedpre(tp);
-    unsafe { (*tp).tp_did_tabclosedpre = true };
+    trigger_tabclosedpre(tabpage);
+    unsafe { (*tabpage).tp_did_tabclosedpre = true };
 
     let mut done = 0;
     let mut prev_idx: [c_char; 65] = [0; 65];
@@ -510,28 +510,28 @@ pub unsafe fn tabpage_close_other(tp: *mut Tabpage, forceit: c_int) {
                 &raw mut prev_idx as *mut c_char,
                 size_of::<[c_char; 65]>(),
                 c"%i".as_ptr(),
-                tabpage_index(tp),
+                tabpage_index(tabpage),
             )
         };
-        let wp = unsafe { (*tp).tp_lastwin };
+        let wp = unsafe { (*tabpage).tp_lastwin };
         unsafe {
             ex_win_close(
                 forceit,
                 wp.and_then(WinId::get).map_or(ptr::null_mut(), Win::raw),
-                tp,
+                tabpage,
             )
         };
-        if !valid_tabpage(tp) {
+        if !valid_tabpage(tabpage) {
             break;
         }
-        if unsafe { (*tp).tp_lastwin } == wp {
+        if unsafe { (*tabpage).tp_lastwin } == wp {
             // Nothing closed: give up.
             done = 1000;
             break;
         }
     }
     if done >= 1000 {
-        unsafe { (*tp).tp_did_tabclosedpre = false };
+        unsafe { (*tabpage).tp_did_tabclosedpre = false };
     }
 }
 
