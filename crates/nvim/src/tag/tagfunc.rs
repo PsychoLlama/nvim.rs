@@ -44,7 +44,7 @@ const E_INVALID_RETURN: &CStr = c"E987: Invalid return value from tagfunc";
 ///
 /// # Safety
 /// `args` must describe the option being set.
-pub unsafe fn did_set_tagfunc(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's promise; the new value is a NUL-terminated
     // option string and `os_buf` is the buffer it applies to.
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };

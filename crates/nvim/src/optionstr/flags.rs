@@ -23,7 +23,7 @@ use crate::main::e_invarg;
 use crate::option::{get_option, kOptFlagComma, kOptFlagOneComma, option_var};
 use crate::options::{kOptFileformat, kOptFileformats, kOptSessionoptions, kOptViewoptions};
 use crate::strings::vim_strchr;
-use crate::types::{FAIL, Failed, OK, OptIndex, optset_T, size_t};
+use crate::types::{FAIL, Failed, OK, OptIndex, OptSet, size_t};
 
 use super::illegal_char;
 
@@ -130,7 +130,7 @@ pub(crate) unsafe fn did_set_opt_flags(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_str_generic(args: &mut optset_T) -> Option<&'static CStr> {
+pub unsafe fn did_set_str_generic(args: &mut OptSet) -> Option<&'static CStr> {
     let (idx, varp) = (args.os_idx, args.os_varp.string_var());
     if unsafe { check_str_opt(idx, varp) }.is_err() {
         Some(e_invarg)

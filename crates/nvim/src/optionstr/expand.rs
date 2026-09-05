@@ -1,7 +1,7 @@
 //! Command-line completion of a string option's value.
 //!
 //! Every entry point here has the same shape: the option table hands over an
-//! `optexpand_T` describing what the user has typed so far, and the
+//! `OptExpand` describing what the user has typed so far, and the
 //! completer fills an `xmalloc`ed `char *` array plus its length. The three
 //! ways to produce one:
 //!
@@ -36,7 +36,7 @@ use crate::os::cshim::snprintf;
 use crate::strings::vim_strchr;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
-    ColNr, CompleteListItemGetter, Expand, Failed, NUL, RegMatch, optexpand_T, size_t,
+    ColNr, CompleteListItemGetter, Expand, Failed, NUL, OptExpand, RegMatch, size_t,
 };
 
 use super::{
@@ -100,7 +100,7 @@ impl Matches {
 ///
 /// # Safety
 /// `args` points at the option table's completion frame.
-unsafe fn original_value(args: *mut optexpand_T) -> Option<*mut c_char> {
+unsafe fn original_value(args: *mut OptExpand) -> Option<*mut c_char> {
     // SAFETY: the caller's frame; `oe_opt_value` is a C string.
     let value = unsafe { (*args).oe_opt_value };
     (unsafe { (*args).oe_include_orig_val } && c_int::from(unsafe { *value }) != NUL)
@@ -112,7 +112,7 @@ unsafe fn original_value(args: *mut optexpand_T) -> Option<*mut c_char> {
 /// # Safety
 /// `args` points at the completion frame.
 pub(crate) unsafe fn expand_set_opt_string(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     values: &[&CStr],
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -158,7 +158,7 @@ pub(crate) unsafe fn expand_set_opt_string(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_str_generic(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -201,7 +201,7 @@ unsafe fn expand_set_opt_callback(xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// # Safety
 /// `args` points at the completion frame; `func` enumerates C strings.
 pub(crate) unsafe fn expand_set_opt_generic(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     func: CompleteListItemGetter,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -242,7 +242,7 @@ pub(crate) unsafe fn expand_set_opt_generic(
 /// # Safety
 /// `args` points at the completion frame; `flags` is a C string.
 pub(crate) unsafe fn expand_set_opt_listflag(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     flags: *const c_char,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -296,7 +296,7 @@ pub(crate) unsafe fn expand_set_opt_listflag(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_chars_option(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -314,7 +314,7 @@ pub unsafe fn expand_set_chars_option(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_concealcursor(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -324,7 +324,7 @@ pub unsafe fn expand_set_concealcursor(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_cpoptions(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -334,7 +334,7 @@ pub unsafe fn expand_set_cpoptions(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_formatoptions(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -344,7 +344,7 @@ pub unsafe fn expand_set_formatoptions(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_mouse(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -354,7 +354,7 @@ pub unsafe fn expand_set_mouse(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_shortmess(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -364,7 +364,7 @@ pub unsafe fn expand_set_shortmess(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_whichwrap(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -392,7 +392,7 @@ unsafe fn directly_after(at: *const c_char, start: *const c_char, prefix: &CStr)
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_diffopt(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -416,7 +416,7 @@ pub unsafe fn expand_set_diffopt(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_encoding(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -426,7 +426,7 @@ pub unsafe fn expand_set_encoding(
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_winhighlight(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -473,7 +473,7 @@ pub(crate) unsafe fn get_eventignore_name(xp: *mut Expand, idx: c_int) -> *mut c
 /// # Safety
 /// `args` points at the completion frame.
 pub unsafe fn expand_set_eventignore(
-    args: *mut optexpand_T,
+    args: *mut OptExpand,
     num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {

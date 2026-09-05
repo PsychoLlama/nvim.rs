@@ -140,10 +140,10 @@ use crate::types::{
     Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
     HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
-    OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-    ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, String_0, Tabpage, TryState,
-    TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix,
-    dobuf_action_values, dobuf_start_values, optset_T, ptrdiff_t, searchit_arg_T, size_t, time_t,
+    OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
+    ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, String_0,
+    Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window,
+    XpPrefix, dobuf_action_values, dobuf_start_values, ptrdiff_t, searchit_arg_T, size_t, time_t,
     typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::{

@@ -294,7 +294,7 @@ pub(crate) unsafe fn copy_global_to_buflocal_cb(globcb: *mut Callback, bufcb: *m
 /// may be a function name, `function(<name>)`, `funcref(<name>)` or a lambda.
 ///
 /// This is an `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_completefunc(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
     let value = args
         .os_newval
@@ -327,7 +327,7 @@ pub fn set_buflocal_cfu_callback(mut buf: Buf) {
 
 /// Parse the `'omnifunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_omnifunc(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
     let value = args
         .os_newval
@@ -417,7 +417,7 @@ pub fn set_buflocal_cpt_callbacks(buf: Buf) {
 
 /// Parse `'complete'` and (re)build the `F{func}` callbacks; entries other
 /// than `F{func}` are counted but leave their slot empty.
-pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> Result<(), Failed> {
+pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
     let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
     if curbuf.get().is_null() {
         return Err(Failed);
@@ -468,7 +468,7 @@ pub unsafe fn set_cpt_callbacks(args: *mut optset_T) -> Result<(), Failed> {
 
 /// Parse the `'thesaurusfunc'` value and set the callback function; an
 /// `opt_did_set_cb` row in the generated option table.
-pub unsafe fn did_set_thesaurusfunc(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
     let mut buf = unsafe { Buf::new(args.os_buf.cast()) };
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         // Buffer-local option set.

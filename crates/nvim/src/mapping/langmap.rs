@@ -79,7 +79,7 @@ pub(crate) fn langmap_init() {
 ///
 /// # Safety
 /// The frame's `os_errbuf` must have room for `os_errbuflen` bytes.
-pub unsafe fn did_set_langmap(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_langmap(args: &mut OptSet) -> Option<&CStr> {
     let opts = &*args;
     langmap_init(); // back to a one-to-one map
     let base = p_langmap.get();

@@ -131,15 +131,15 @@ pub type OptValType = ::core::ffi::c_int;
 /// The message borrows the frame, because a callback that formats one
 /// writes it into the caller's `os_errbuf`; a callback that only names a
 /// constant answers a `'static` one, which coerces.
-pub type OptDidSetCb = Option<for<'a> unsafe fn(&'a mut optset_T) -> Option<&'a ::core::ffi::CStr>>;
+pub type OptDidSetCb = Option<for<'a> unsafe fn(&'a mut OptSet) -> Option<&'a ::core::ffi::CStr>>;
 pub type OptExpandCb = Option<
     unsafe fn(
-        *mut optexpand_T,
+        *mut OptExpand,
         *mut ::core::ffi::c_int,
         *mut *mut *mut ::core::ffi::c_char,
     ) -> Result<(), Failed>,
 >;
-pub struct optexpand_T {
+pub struct OptExpand {
     // Upstream carries an `oe_varp` here, and its two readers -- the
     // 'listchars'/'fillchars' and 'eventignore'/'eventignorewin' expansions
     // -- used it to tell one of a callback's two options from the other by
@@ -154,7 +154,7 @@ pub struct optexpand_T {
     pub oe_xp: *mut Expand,
     pub oe_set_arg: *mut ::core::ffi::c_char,
 }
-pub struct optset_T {
+pub struct OptSet {
     /// The option's storage in the scope being set, with the type its row
     /// declares. `pub(crate)` because [`OptSlot`] is: every `did_set_*`
     /// callback that reads one lives in this crate, and the frame is opaque
@@ -227,7 +227,7 @@ impl OptVar {
 }
 
 #[derive(Copy, Clone)]
-pub struct vimoption_T {
+pub struct VimOption {
     pub fullname: *mut ::core::ffi::c_char,
     pub shortname: *mut ::core::ffi::c_char,
     pub flags: uint32_t,

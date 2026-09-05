@@ -42,8 +42,8 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, Expand, FcsChars, LcsChars, NUL, OptionSetFlags, ScreenChar, Window, int64_t,
-    optset_T, size_t,
+    CharsOption, Expand, FcsChars, LcsChars, NUL, OptSet, OptionSetFlags, ScreenChar, Window,
+    int64_t, size_t,
 };
 use crate::winlayer;
 
@@ -726,7 +726,7 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_chars_option(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_chars_option(args: &mut OptSet) -> Option<&CStr> {
     let (win, varp, idx, flags, errbuf, errbuflen) = (
         args.os_win.cast::<Window>(),
         args.os_varp.string_var(),

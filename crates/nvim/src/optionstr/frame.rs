@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use crate::main::e_invarg;
-use crate::types::{Window, optset_T};
+use crate::types::{OptSet, Window};
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
@@ -23,13 +23,13 @@ pub(crate) fn invalid() -> Option<&'static CStr> {
 
 /// The option's value variable — a `char **`, since every option here is a
 /// string.
-pub(crate) fn varp(args: &optset_T) -> *mut *mut c_char {
+pub(crate) fn varp(args: &OptSet) -> *mut *mut c_char {
     args.os_varp.string_var()
 }
 
 /// The window the set is happening in. Not necessarily the window whose
 /// value is being set — see [`local_window`].
-pub(crate) fn win(args: &optset_T) -> *mut Window {
+pub(crate) fn win(args: &OptSet) -> *mut Window {
     args.os_win.cast::<Window>()
 }
 
@@ -56,7 +56,7 @@ pub(crate) unsafe fn local_window(
 ///
 /// Every option in this module is a string one, so the frame's old value
 /// is a string too; the accessor says so.
-pub(crate) fn old_value(args: &optset_T) -> *const c_char {
+pub(crate) fn old_value(args: &OptSet) -> *const c_char {
     args.os_oldval
         .as_string()
         .expect("the table installs this callback on a string option only")
@@ -64,6 +64,6 @@ pub(crate) fn old_value(args: &optset_T) -> *const c_char {
 }
 
 /// The error buffer and its size, as the message helpers take them.
-pub(crate) fn errbuf(args: &optset_T) -> (*mut c_char, usize) {
+pub(crate) fn errbuf(args: &OptSet) -> (*mut c_char, usize) {
     (args.os_errbuf, args.os_errbuflen)
 }

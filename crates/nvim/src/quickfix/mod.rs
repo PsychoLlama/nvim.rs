@@ -114,9 +114,9 @@ use crate::types::TAB;
 use crate::types::builders::static_cstring;
 use crate::types::{
     AcoSave, Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData,
-    ExArg, ExtmarkOp, FILE, FileInfo, LineNr, List, ListItem, OptInt, OptVal, Pos, QFLT_INTERNAL,
-    QFLT_LOCATION, QFLT_QUICKFIX, QfListType, RegMMatch, RegMatch, RegProg, ScriptId, TypVal,
-    VarNumber, VarType, bln_values, dobuf_action_values, getf_values, optset_T, ptrdiff_t,
+    ExArg, ExtmarkOp, FILE, FileInfo, LineNr, List, ListItem, OptInt, OptSet, OptVal, Pos,
+    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfListType, RegMMatch, RegMatch, RegProg,
+    ScriptId, TypVal, VarNumber, VarType, bln_values, dobuf_action_values, getf_values, ptrdiff_t,
     qf_info_T, qf_list_T, qfline_T, size_t, time_t, typval_vval_union, vimconv_T,
 };
 use crate::ui::ui_flush;

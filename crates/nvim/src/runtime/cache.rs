@@ -572,7 +572,7 @@ unsafe fn runtime_search_path_build() -> RuntimeSearchPath {
 }
 
 /// `'runtimepath'`/`'packpath'` changed: the cache no longer describes them.
-pub unsafe fn did_set_runtimepackpath(_args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_runtimepackpath(_args: &mut OptSet) -> Option<&CStr> {
     runtime_search_path_valid.set(false);
     None
 }

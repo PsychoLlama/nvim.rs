@@ -6,7 +6,7 @@
 #
 # The baseline lives next to this script in optbase/ and was
 # produced at commit 5c829b911e -- phase 17's base, the last revision
-# before `vimoption_T`'s `var: *mut c_void` is typed and the five
+# before `VimOption`'s `var: *mut c_void` is typed and the five
 # generated `options/table_*.rs` files are regenerated.  It is the
 # *pre-rewrite* content of the option TABLE: every name, short name,
 # type, scope, default, flag and current value of all 374 options, the

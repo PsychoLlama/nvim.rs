@@ -52,8 +52,8 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned, snprintf};
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0, Vv, optset_T,
-    ptrdiff_t, size_t, uint32_t, vimoption_T,
+    IOSIZE, NUL, OptIndex, OptSet, OptVal, OptionSetFlags, ScriptCtx, ScriptId, String_0,
+    VimOption, Vv, ptrdiff_t, size_t, uint32_t,
 };
 use crate::ui::ui_call_option_set;
 use crate::window::set_winbar;
@@ -303,7 +303,7 @@ pub(crate) fn get_option_value(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> 
 
 /// The option table's row for an option: everything the option *is*, all
 /// of it immutable. What changes about it is `super::state`'s business.
-pub(crate) fn get_option(opt_idx: OptIndex) -> &'static vimoption_T {
+pub(crate) fn get_option(opt_idx: OptIndex) -> &'static VimOption {
     debug_assert!(opt_idx != kOptInvalid);
     &options[opt_idx as usize]
 }
@@ -384,7 +384,7 @@ pub(crate) unsafe fn did_set_option(
 
     // SAFETY: the caller's `varp` is this option's variable, `opt` a row of
     // the table, and `errbuf` writable for `errbuflen` bytes.
-    let mut args = optset_T {
+    let mut args = OptSet {
         os_varp: varp,
         os_idx: opt_idx,
         os_flags: opt_flags,
@@ -701,7 +701,7 @@ pub(crate) fn set_option_direct(
 /// # Safety
 ///
 /// The frame's `os_errbuf` must be writable for `os_errbuflen` bytes.
-pub(crate) unsafe fn answer_err(args: &optset_T, msg: Option<CString>) -> Option<&CStr> {
+pub(crate) unsafe fn answer_err(args: &OptSet, msg: Option<CString>) -> Option<&CStr> {
     let msg = msg?;
     // SAFETY: the frame names a buffer of `os_errbuflen` bytes, and `msg`
     // is NUL-terminated.

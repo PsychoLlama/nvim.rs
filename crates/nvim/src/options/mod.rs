@@ -120,9 +120,7 @@ use crate::quickfix::did_set_quickfixtextfunc;
 use crate::runtime::did_set_runtimepackpath;
 use crate::tag::did_set_tagfunc;
 use crate::types::option::MAX_MCO;
-use crate::types::{
-    OptIndex, OptInt, OptScopeFlags, OptVal, OptVar, String_0, ssize_t, vimoption_T,
-};
+use crate::types::{OptIndex, OptInt, OptScopeFlags, OptVal, OptVar, String_0, VimOption, ssize_t};
 use crate::window::{did_set_winminheight, did_set_winminwidth};
 
 /// `scope_flags` bits.
@@ -133,7 +131,7 @@ const BUF: OptScopeFlags = 1 << kOptScopeBuf;
 /// A row with every field at rest: a global-scoped, mutable, flagless
 /// boolean that defaults to false and belongs to no scope. Each row below
 /// fills in what it needs and takes the rest from here.
-const BLANK: vimoption_T = vimoption_T {
+const BLANK: VimOption = VimOption {
     fullname: ptr::null_mut(),
     shortname: ptr::null_mut(),
     flags: 0,
@@ -173,7 +171,7 @@ const fn string(value: &'static CStr) -> OptVal {
 }
 
 /// Copy one generated part into the table under construction.
-const fn fill(table: &mut [vimoption_T], base: usize, part: &[vimoption_T]) -> usize {
+const fn fill(table: &mut [VimOption], base: usize, part: &[VimOption]) -> usize {
     let mut i = 0;
     while i < part.len() {
         table[base + i] = part[i];
@@ -186,12 +184,12 @@ const fn fill(table: &mut [vimoption_T], base: usize, part: &[vimoption_T]) -> u
 ///
 /// Immutable, and in `.rodata`: what changes about an option while
 /// the editor runs lives in `crate::option::state` instead.
-pub static options: ConstTable<[vimoption_T; kOptCount as usize]> = ConstTable::new(table());
+pub static options: ConstTable<[VimOption; kOptCount as usize]> = ConstTable::new(table());
 
 /// The table, spliced together from the generated parts. Public to
 /// the crate because `crate::option::state` seeds each option's
 /// starting default from the row that declares it.
-pub(crate) const fn table() -> [vimoption_T; kOptCount as usize] {
+pub(crate) const fn table() -> [VimOption; kOptCount as usize] {
     let mut table = [BLANK; kOptCount as usize];
     let mut base = 0;
     base = fill(&mut table, base, &table_1::PART);

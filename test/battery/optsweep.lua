@@ -11,7 +11,7 @@
 -- Driven by optsweep.sh; see that file for the sandbox, the
 -- artifacts and the scrub.
 --
--- WHY IT IS A TABLE SWEEP.  `vimoption_T` holds its value behind a
+-- WHY IT IS A TABLE SWEEP.  `VimOption` holds its value behind a
 -- `var: *mut c_void`, and the five generated `table_*.rs` files are the
 -- only description of what that pointer means for each of the 374
 -- options.  A rewrite that gets ONE entry's type, scope or default wrong
@@ -279,7 +279,7 @@ end
 -- =====================================================================
 section("o1-table")
 -- ONE ROW PER OPTION: everything the table knows about it, plus its
--- value.  This is the section a `vimoption_T` rewrite breaks.
+-- value.  This is the section a `VimOption` rewrite breaks.
 for _, name in ipairs(NAMES) do
   local tag = "o1/" .. name
   if want(tag) then

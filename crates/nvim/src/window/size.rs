@@ -20,7 +20,7 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::main::{Columns, Rows, cmdline_row, e_noroom, p_ch, p_wmh, p_wmw, redraw_cmdline};
-use crate::types::{OptInt, Window, kFloatRelativeWindow, optset_T};
+use crate::types::{OptInt, OptSet, Window, kFloatRelativeWindow};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{FrameRef, Win, frames, frames_back, windows_back};
 
@@ -379,7 +379,7 @@ pub(crate) fn set_frame_width(curfrp: FrameRef, width: c_int) {
     }
 }
 
-pub unsafe fn did_set_winminheight(_args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_winminheight(_args: &mut OptSet) -> Option<&CStr> {
     let mut first = true;
     // Loop until there is a 'winminheight' that is possible.
     while p_wmh.get() > 0 as OptInt {
@@ -396,7 +396,7 @@ pub unsafe fn did_set_winminheight(_args: &mut optset_T) -> Option<&CStr> {
     None
 }
 
-pub unsafe fn did_set_winminwidth(_args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_winminwidth(_args: &mut OptSet) -> Option<&CStr> {
     let mut first = true;
     while p_wmw.get() > 0 as OptInt {
         if Columns.get() >= minwidth(current_topframe(), NextCurwin::Unset) {

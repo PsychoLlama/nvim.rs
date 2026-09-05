@@ -35,8 +35,8 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, ColNr, Expand, ExpandContext, Failed, GArray, MAXPATHL, NUL, OptIndex,
-    OptionSetFlags, RegMatch, XpPrefix, fuzmatch_str_T, optexpand_T, size_t, uint32_t,
+    BackslashEscape, ColNr, Expand, ExpandContext, Failed, GArray, MAXPATHL, NUL, OptExpand,
+    OptIndex, OptionSetFlags, RegMatch, XpPrefix, fuzmatch_str_T, size_t, uint32_t,
 };
 use crate::winlayer::Live;
 
@@ -636,7 +636,7 @@ pub(crate) unsafe fn expand_string_setting(
     let escaped = unsafe { escape_option_str_cmdline(rendered.as_mut_ptr()) };
 
     let set_arg = unsafe { (*xp).xp_line.offset(START_COL.get() as isize) };
-    let mut args = optexpand_T {
+    let mut args = OptExpand {
         oe_idx: opt_idx,
         oe_opt_value: escaped,
         oe_append: APPEND.get(),

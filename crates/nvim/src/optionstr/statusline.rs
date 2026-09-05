@@ -22,7 +22,7 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{LineNr, NUL, OptionSetFlags, StlSyntax, optset_T};
+use crate::types::{LineNr, NUL, OptSet, OptionSetFlags, StlSyntax};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
@@ -33,13 +33,13 @@ use super::{
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_iconstring(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_iconstring(args: &mut OptSet) -> Option<&CStr> {
     unsafe { did_set_titleiconstring(args, StlSyntax::ICON) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_titlestring(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_titlestring(args: &mut OptSet) -> Option<&CStr> {
     unsafe { did_set_titleiconstring(args, StlSyntax::TITLE) }
 }
 
@@ -50,7 +50,7 @@ pub unsafe fn did_set_titlestring(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub(crate) unsafe fn did_set_titleiconstring(
-    args: &optset_T,
+    args: &OptSet,
     flagval: StlSyntax,
 ) -> Option<&'static CStr> {
     // SAFETY: the frame's value is a C string.
@@ -87,25 +87,25 @@ fn check_ruf() -> Option<CString> {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_rulerformat(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_rulerformat(args: &mut OptSet) -> Option<&CStr> {
     unsafe { answer_err(args, did_set_statustabline_rulerformat(args, true, false)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_statuscolumn(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_statuscolumn(args: &mut OptSet) -> Option<&CStr> {
     unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, true)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_statusline(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_statusline(args: &mut OptSet) -> Option<&CStr> {
     unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
 }
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_tabline(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_tabline(args: &mut OptSet) -> Option<&CStr> {
     unsafe { answer_err(args, did_set_statustabline_rulerformat(args, false, false)) }
 }
 
@@ -124,7 +124,7 @@ pub unsafe fn did_set_tabline(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub(crate) unsafe fn did_set_statustabline_rulerformat(
-    args: &optset_T,
+    args: &OptSet,
     rulerformat: bool,
     statuscolumn: bool,
 ) -> Option<CString> {
@@ -198,7 +198,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_sessionoptions(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_sessionoptions(args: &mut OptSet) -> Option<&CStr> {
     let errmsg = unsafe { did_set_str_generic(args) };
     if errmsg.is_some() {
         return errmsg;
@@ -225,7 +225,7 @@ const SHADA_ITEMS: &[u8] = b"!\"%'/:<@cfhnrs";
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_shada(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_shada(args: &mut OptSet) -> Option<&CStr> {
     let (buf, buflen) = errbuf(args);
     // SAFETY: the option's own value, which is NUL-terminated.
     let value = unsafe { CStr::from_ptr(p_shada.get()) }.to_bytes();
@@ -297,7 +297,7 @@ pub unsafe fn did_set_shada(args: &mut optset_T) -> Option<&CStr> {
 ///
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_shellpipe_redir(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_shellpipe_redir(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's frame, and its new value is a C string.
     let new = args
         .os_newval
@@ -326,7 +326,7 @@ pub unsafe fn did_set_shellpipe_redir(args: &mut optset_T) -> Option<&CStr> {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_shortmess(args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_shortmess(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the frame, its value and its error buffer.
     let (buf, len) = errbuf(args);
     unsafe { did_set_option_listflag(*varp(args), SHM_ALL.as_ptr(), buf, len) }
@@ -334,7 +334,7 @@ pub unsafe fn did_set_shortmess(args: &mut optset_T) -> Option<&CStr> {
 
 /// # Safety
 /// `args` points at the option table's call frame.
-pub unsafe fn did_set_verbosefile(_args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_verbosefile(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: closes and reopens this process's own log file.
     unsafe { verbose_stop() };
     if c_int::from(unsafe { *p_vfile.get() }) != NUL && unsafe { verbose_open() }.is_err() {

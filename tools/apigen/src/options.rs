@@ -775,7 +775,7 @@ fn emit_values(out: &mut String, opts: &[Opt]) {
 /// from `BLANK`.
 fn emit_row(out: &mut String, o: &Opt) {
     writeln!(out, "    // '{}'", o.full_name).unwrap();
-    writeln!(out, "    vimoption_T {{").unwrap();
+    writeln!(out, "    VimOption {{").unwrap();
     writeln!(
         out,
         "        fullname: name(c\"{}\"),",
@@ -872,7 +872,7 @@ const BUF: OptScopeFlags = 1 << kOptScopeBuf;
 /// A row with every field at rest: a global-scoped, mutable, flagless
 /// boolean that defaults to false and belongs to no scope. Each row below
 /// fills in what it needs and takes the rest from here.
-const BLANK: vimoption_T = vimoption_T {
+const BLANK: VimOption = VimOption {
     fullname: ptr::null_mut(),
     shortname: ptr::null_mut(),
     flags: 0,
@@ -916,7 +916,7 @@ const fn string(value: &'static CStr) -> OptVal {
 }
 
 /// Copy one generated part into the table under construction.
-const fn fill(table: &mut [vimoption_T], base: usize, part: &[vimoption_T]) -> usize {
+const fn fill(table: &mut [VimOption], base: usize, part: &[VimOption]) -> usize {
     let mut i = 0;
     while i < part.len() {
         table[base + i] = part[i];
@@ -980,7 +980,7 @@ fn imports(out: &mut String, opts: &[Opt], symbols: &Symbols) -> Result<(), Stri
         "OptVar",
         "String_0",
         "ssize_t",
-        "vimoption_T",
+        "VimOption",
     ];
     writeln!(out, "use crate::types::{{{}}};", types.join(", ")).unwrap();
     Ok(())
@@ -1031,7 +1031,7 @@ pub fn generate(
 
     // The table itself is one array literal, so it is formatted whole and
     // then cut at row boundaries into `PART` constants the parent splices.
-    let mut text = format!("const ALL: [vimoption_T; {}] = [\n", opts.len());
+    let mut text = format!("const ALL: [VimOption; {}] = [\n", opts.len());
     for o in &opts {
         emit_row(&mut text, o);
     }
@@ -1083,7 +1083,7 @@ pub fn generate(
     for (n, rows) in parts.iter().enumerate() {
         let mut body = format!(
             "/// This file's run of the option table, spliced in by the parent.\n\
-             pub(super) const PART: [vimoption_T; {}] = [\n",
+             pub(super) const PART: [VimOption; {}] = [\n",
             rows.len()
         );
         for row in rows {
@@ -1119,13 +1119,13 @@ pub fn generate(
          ///\n\
          /// Immutable, and in `.rodata`: what changes about an option while\n\
          /// the editor runs lives in `crate::option::state` instead.\n\
-         pub static options: ConstTable<[vimoption_T; kOptCount as usize]> =\n\
+         pub static options: ConstTable<[VimOption; kOptCount as usize]> =\n\
          \x20   ConstTable::new(table());\n\
          \n\
          /// The table, spliced together from the generated parts. Public to\n\
          /// the crate because `crate::option::state` seeds each option's\n\
          /// starting default from the row that declares it.\n\
-         pub(crate) const fn table() -> [vimoption_T; kOptCount as usize] {\n\
+         pub(crate) const fn table() -> [VimOption; kOptCount as usize] {\n\
          \x20   let mut table = [BLANK; kOptCount as usize];\n\
          \x20   let mut base = 0;\n",
     );

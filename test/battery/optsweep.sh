@@ -12,7 +12,7 @@
 #
 # THE HOLE IT FILLS.  There was no option-behaviour differential at all.
 # Twenty-two oracles SET options -- every one of them does -- and not one
-# reads the table back.  `vimoption_T` holds its value behind a
+# reads the table back.  `VimOption` holds its value behind a
 # `var: *mut c_void`, and the five generated `table_*.rs` files are the
 # only description of what that pointer means for each of the 374
 # entries; a rewrite that gets ONE entry's type, scope or default wrong

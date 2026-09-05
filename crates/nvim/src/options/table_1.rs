@@ -10,9 +10,9 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [vimoption_T; 80] = [
+pub(super) const PART: [VimOption; 80] = [
     // 'aleph'
-    vimoption_T {
+    VimOption {
         fullname: name(c"aleph"),
         shortname: name(c"al"),
         type_0: kOptValTypeNumber,
@@ -24,7 +24,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'allowrevins'
-    vimoption_T {
+    VimOption {
         fullname: name(c"allowrevins"),
         shortname: name(c"ari"),
         scope_flags: GLOBAL,
@@ -33,7 +33,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'ambiwidth'
-    vimoption_T {
+    VimOption {
         fullname: name(c"ambiwidth"),
         shortname: name(c"ambw"),
         flags: kOptFlagRedrAll | kOptFlagUIOption,
@@ -48,7 +48,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'arabic'
-    vimoption_T {
+    VimOption {
         fullname: name(c"arabic"),
         shortname: name(c"arab"),
         flags: kOptFlagCurswant,
@@ -58,7 +58,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'arabicshape'
-    vimoption_T {
+    VimOption {
         fullname: name(c"arabicshape"),
         shortname: name(c"arshape"),
         flags: kOptFlagRedrAll | kOptFlagUIOption,
@@ -69,7 +69,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autochdir'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autochdir"),
         shortname: name(c"acd"),
         scope_flags: GLOBAL,
@@ -79,7 +79,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autocomplete'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autocomplete"),
         shortname: name(c"ac"),
         scope_flags: GLOBAL | BUF,
@@ -88,7 +88,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autocompletedelay'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autocompletedelay"),
         shortname: name(c"acl"),
         type_0: kOptValTypeNumber,
@@ -99,7 +99,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autocompletetimeout'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autocompletetimeout"),
         shortname: name(c"act"),
         type_0: kOptValTypeNumber,
@@ -114,7 +114,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autoindent'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autoindent"),
         shortname: name(c"ai"),
         scope_flags: BUF,
@@ -124,7 +124,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autoread'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autoread"),
         shortname: name(c"ar"),
         scope_flags: GLOBAL | BUF,
@@ -134,7 +134,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autowrite'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autowrite"),
         shortname: name(c"aw"),
         scope_flags: GLOBAL,
@@ -143,7 +143,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'autowriteall'
-    vimoption_T {
+    VimOption {
         fullname: name(c"autowriteall"),
         shortname: name(c"awa"),
         scope_flags: GLOBAL,
@@ -152,7 +152,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'background'
-    vimoption_T {
+    VimOption {
         fullname: name(c"background"),
         shortname: name(c"bg"),
         type_0: kOptValTypeString,
@@ -166,7 +166,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'backspace'
-    vimoption_T {
+    VimOption {
         fullname: name(c"backspace"),
         shortname: name(c"bs"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -181,7 +181,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'backup'
-    vimoption_T {
+    VimOption {
         fullname: name(c"backup"),
         shortname: name(c"bk"),
         scope_flags: GLOBAL,
@@ -190,7 +190,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'backupcopy'
-    vimoption_T {
+    VimOption {
         fullname: name(c"backupcopy"),
         shortname: name(c"bkc"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -206,7 +206,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'backupdir'
-    vimoption_T {
+    VimOption {
         fullname: name(c"backupdir"),
         shortname: name(c"bdir"),
         flags: kOptFlagOneComma
@@ -222,7 +222,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'backupext'
-    vimoption_T {
+    VimOption {
         fullname: name(c"backupext"),
         shortname: name(c"bex"),
         flags: kOptFlagNFname,
@@ -235,7 +235,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'backupskip'
-    vimoption_T {
+    VimOption {
         fullname: name(c"backupskip"),
         shortname: name(c"bsk"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -247,7 +247,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'belloff'
-    vimoption_T {
+    VimOption {
         fullname: name(c"belloff"),
         shortname: name(c"bo"),
         flags: kOptFlagComma | kOptFlagNoDup,
@@ -263,7 +263,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'binary'
-    vimoption_T {
+    VimOption {
         fullname: name(c"binary"),
         shortname: name(c"bin"),
         flags: kOptFlagRedrStat,
@@ -274,7 +274,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'bomb'
-    vimoption_T {
+    VimOption {
         fullname: name(c"bomb"),
         flags: kOptFlagRedrStat | kOptFlagNoMkrc,
         scope_flags: BUF,
@@ -284,7 +284,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'breakat'
-    vimoption_T {
+    VimOption {
         fullname: name(c"breakat"),
         shortname: name(c"brk"),
         flags: kOptFlagFlagList | kOptFlagRedrAll,
@@ -297,7 +297,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'breakindent'
-    vimoption_T {
+    VimOption {
         fullname: name(c"breakindent"),
         shortname: name(c"bri"),
         flags: kOptFlagRedrWin,
@@ -306,7 +306,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'breakindentopt'
-    vimoption_T {
+    VimOption {
         fullname: name(c"breakindentopt"),
         shortname: name(c"briopt"),
         flags: kOptFlagOneComma | kOptFlagRedrBuf | kOptFlagNoDup,
@@ -320,7 +320,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'browsedir'
-    vimoption_T {
+    VimOption {
         fullname: name(c"browsedir"),
         shortname: name(c"bsdir"),
         type_0: kOptValTypeString,
@@ -332,7 +332,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'bufhidden'
-    vimoption_T {
+    VimOption {
         fullname: name(c"bufhidden"),
         shortname: name(c"bh"),
         flags: kOptFlagNoGlob,
@@ -347,7 +347,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'buflisted'
-    vimoption_T {
+    VimOption {
         fullname: name(c"buflisted"),
         shortname: name(c"bl"),
         flags: kOptFlagNoGlob,
@@ -359,7 +359,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'buftype'
-    vimoption_T {
+    VimOption {
         fullname: name(c"buftype"),
         shortname: name(c"bt"),
         flags: kOptFlagNoGlob,
@@ -374,7 +374,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'busy'
-    vimoption_T {
+    VimOption {
         fullname: name(c"busy"),
         flags: kOptFlagRedrStat | kOptFlagNoGlob,
         type_0: kOptValTypeNumber,
@@ -385,7 +385,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'casemap'
-    vimoption_T {
+    VimOption {
         fullname: name(c"casemap"),
         shortname: name(c"cmp"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -401,7 +401,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cdhome'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cdhome"),
         shortname: name(c"cdh"),
         flags: kOptFlagSecure,
@@ -412,7 +412,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cdpath'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cdpath"),
         shortname: name(c"cd"),
         flags: kOptFlagComma | kOptFlagExpand | kOptFlagSecure | kOptFlagNoDup,
@@ -424,7 +424,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cedit'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cedit"),
         type_0: kOptValTypeString,
         scope_flags: GLOBAL,
@@ -435,7 +435,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'channel'
-    vimoption_T {
+    VimOption {
         fullname: name(c"channel"),
         flags: kOptFlagNoDefault | kOptFlagNoMkrc,
         type_0: kOptValTypeNumber,
@@ -446,7 +446,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'charconvert'
-    vimoption_T {
+    VimOption {
         fullname: name(c"charconvert"),
         shortname: name(c"ccv"),
         flags: kOptFlagSecure,
@@ -459,7 +459,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'chistory'
-    vimoption_T {
+    VimOption {
         fullname: name(c"chistory"),
         shortname: name(c"chi"),
         type_0: kOptValTypeNumber,
@@ -471,7 +471,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cindent'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cindent"),
         shortname: name(c"cin"),
         scope_flags: BUF,
@@ -480,7 +480,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cinkeys'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cinkeys"),
         shortname: name(c"cink"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -492,7 +492,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cinoptions'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cinoptions"),
         shortname: name(c"cino"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -505,7 +505,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cinscopedecls'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cinscopedecls"),
         shortname: name(c"cinsd"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -517,7 +517,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cinwords'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cinwords"),
         shortname: name(c"cinw"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -529,7 +529,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'clipboard'
-    vimoption_T {
+    VimOption {
         fullname: name(c"clipboard"),
         shortname: name(c"cb"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -545,7 +545,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cmdheight'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cmdheight"),
         shortname: name(c"ch"),
         flags: kOptFlagRedrAll,
@@ -558,7 +558,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cmdwinheight'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cmdwinheight"),
         shortname: name(c"cwh"),
         type_0: kOptValTypeNumber,
@@ -569,7 +569,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'colorcolumn'
-    vimoption_T {
+    VimOption {
         fullname: name(c"colorcolumn"),
         shortname: name(c"cc"),
         flags: kOptFlagOneComma | kOptFlagRedrWin | kOptFlagHLOnly | kOptFlagNoDup,
@@ -581,7 +581,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'columns'
-    vimoption_T {
+    VimOption {
         fullname: name(c"columns"),
         shortname: name(c"co"),
         flags: kOptFlagNoMkrc,
@@ -594,7 +594,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'comments'
-    vimoption_T {
+    VimOption {
         fullname: name(c"comments"),
         shortname: name(c"com"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -607,7 +607,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'commentstring'
-    vimoption_T {
+    VimOption {
         fullname: name(c"commentstring"),
         shortname: name(c"cms"),
         type_0: kOptValTypeString,
@@ -619,7 +619,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'compatible'
-    vimoption_T {
+    VimOption {
         fullname: name(c"compatible"),
         shortname: name(c"cp"),
         scope_flags: GLOBAL,
@@ -629,7 +629,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'complete'
-    vimoption_T {
+    VimOption {
         fullname: name(c"complete"),
         shortname: name(c"cpt"),
         flags: kOptFlagOneComma | kOptFlagNoDup | kOptFlagMLE,
@@ -644,7 +644,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'completefunc'
-    vimoption_T {
+    VimOption {
         fullname: name(c"completefunc"),
         shortname: name(c"cfu"),
         flags: kOptFlagSecure | kOptFlagFunc,
@@ -657,7 +657,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'completeitemalign'
-    vimoption_T {
+    VimOption {
         fullname: name(c"completeitemalign"),
         shortname: name(c"cia"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -670,7 +670,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'completeopt'
-    vimoption_T {
+    VimOption {
         fullname: name(c"completeopt"),
         shortname: name(c"cot"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -686,7 +686,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'completeslash'
-    vimoption_T {
+    VimOption {
         fullname: name(c"completeslash"),
         shortname: name(c"csl"),
         type_0: kOptValTypeString,
@@ -699,7 +699,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'completetimeout'
-    vimoption_T {
+    VimOption {
         fullname: name(c"completetimeout"),
         shortname: name(c"cto"),
         type_0: kOptValTypeNumber,
@@ -710,7 +710,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'concealcursor'
-    vimoption_T {
+    VimOption {
         fullname: name(c"concealcursor"),
         shortname: name(c"cocu"),
         flags: kOptFlagFlagList | kOptFlagRedrWin,
@@ -723,7 +723,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'conceallevel'
-    vimoption_T {
+    VimOption {
         fullname: name(c"conceallevel"),
         shortname: name(c"cole"),
         flags: kOptFlagRedrWin,
@@ -734,7 +734,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'confirm'
-    vimoption_T {
+    VimOption {
         fullname: name(c"confirm"),
         shortname: name(c"cf"),
         scope_flags: GLOBAL,
@@ -743,7 +743,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'copyindent'
-    vimoption_T {
+    VimOption {
         fullname: name(c"copyindent"),
         shortname: name(c"ci"),
         scope_flags: BUF,
@@ -752,7 +752,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cpoptions'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cpoptions"),
         shortname: name(c"cpo"),
         flags: kOptFlagFlagList | kOptFlagRedrAll,
@@ -766,7 +766,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cursorbind'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cursorbind"),
         shortname: name(c"crb"),
         scope_flags: WIN,
@@ -774,7 +774,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cursorcolumn'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cursorcolumn"),
         shortname: name(c"cuc"),
         flags: kOptFlagRedrWin | kOptFlagHLOnly,
@@ -783,7 +783,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cursorline'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cursorline"),
         shortname: name(c"cul"),
         flags: kOptFlagRedrWin | kOptFlagHLOnly,
@@ -792,7 +792,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'cursorlineopt'
-    vimoption_T {
+    VimOption {
         fullname: name(c"cursorlineopt"),
         shortname: name(c"culopt"),
         flags: kOptFlagOneComma | kOptFlagRedrWin | kOptFlagHLOnly | kOptFlagNoDup,
@@ -806,7 +806,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'debug'
-    vimoption_T {
+    VimOption {
         fullname: name(c"debug"),
         flags: kOptFlagComma,
         type_0: kOptValTypeString,
@@ -820,7 +820,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'define'
-    vimoption_T {
+    VimOption {
         fullname: name(c"define"),
         shortname: name(c"def"),
         type_0: kOptValTypeString,
@@ -831,7 +831,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'delcombine'
-    vimoption_T {
+    VimOption {
         fullname: name(c"delcombine"),
         shortname: name(c"deco"),
         scope_flags: GLOBAL,
@@ -840,7 +840,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'dictionary'
-    vimoption_T {
+    VimOption {
         fullname: name(c"dictionary"),
         shortname: name(c"dict"),
         flags: kOptFlagOneComma | kOptFlagExpand | kOptFlagNDname | kOptFlagNoDup,
@@ -852,7 +852,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'diff'
-    vimoption_T {
+    VimOption {
         fullname: name(c"diff"),
         flags: kOptFlagRedrWin | kOptFlagNoGlob,
         scope_flags: WIN,
@@ -861,7 +861,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'diffanchors'
-    vimoption_T {
+    VimOption {
         fullname: name(c"diffanchors"),
         shortname: name(c"dia"),
         flags: kOptFlagOneComma,
@@ -874,7 +874,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'diffexpr'
-    vimoption_T {
+    VimOption {
         fullname: name(c"diffexpr"),
         shortname: name(c"dex"),
         flags: kOptFlagCurswant | kOptFlagSecure,
@@ -887,7 +887,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'diffopt'
-    vimoption_T {
+    VimOption {
         fullname: name(c"diffopt"),
         shortname: name(c"dip"),
         flags: kOptFlagOneComma | kOptFlagColon | kOptFlagRedrWin | kOptFlagNoDup,
@@ -902,7 +902,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'digraph'
-    vimoption_T {
+    VimOption {
         fullname: name(c"digraph"),
         shortname: name(c"dg"),
         scope_flags: GLOBAL,
@@ -911,7 +911,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'directory'
-    vimoption_T {
+    VimOption {
         fullname: name(c"directory"),
         shortname: name(c"dir"),
         flags: kOptFlagOneComma
@@ -927,7 +927,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'display'
-    vimoption_T {
+    VimOption {
         fullname: name(c"display"),
         shortname: name(c"dy"),
         flags: kOptFlagOneComma | kOptFlagRedrAll | kOptFlagNoDup,
@@ -943,7 +943,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'eadirection'
-    vimoption_T {
+    VimOption {
         fullname: name(c"eadirection"),
         shortname: name(c"ead"),
         type_0: kOptValTypeString,
@@ -957,7 +957,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'edcompatible'
-    vimoption_T {
+    VimOption {
         fullname: name(c"edcompatible"),
         shortname: name(c"ed"),
         scope_flags: GLOBAL,
@@ -967,7 +967,7 @@ pub(super) const PART: [vimoption_T; 80] = [
         ..BLANK
     },
     // 'emoji'
-    vimoption_T {
+    VimOption {
         fullname: name(c"emoji"),
         shortname: name(c"emo"),
         flags: kOptFlagRedrAll | kOptFlagUIOption,

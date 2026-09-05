@@ -79,7 +79,7 @@ pub fn cmdline_init() {
 }
 
 /// `'cedit'` changed: re-derive the key that opens the command-line window.
-pub unsafe fn did_set_cedit(_args: &mut optset_T) -> Option<&'static CStr> {
+pub unsafe fn did_set_cedit(_args: &mut OptSet) -> Option<&'static CStr> {
     derive_cedit_key()
 }
 

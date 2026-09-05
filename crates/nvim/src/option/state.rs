@@ -41,7 +41,7 @@ use core::ptr;
 
 use crate::global_cell::GlobalCell;
 use crate::options::{kOptCount, kOptInvalid};
-use crate::types::{OptIndex, OptVal, ScriptCtx, uint32_t, vimoption_T};
+use crate::types::{OptIndex, OptVal, ScriptCtx, VimOption, uint32_t};
 
 use super::{kOptFlagInsecure, kOptFlagWasSet};
 
@@ -64,7 +64,7 @@ static STATE: GlobalCell<[OptionState; kOptCount as usize]> = GlobalCell::new(in
 /// The state every option starts in: no flags, no script context, and the
 /// default its generated row declares.
 const fn initial() -> [OptionState; kOptCount as usize] {
-    let table: [vimoption_T; kOptCount as usize] = crate::options::table();
+    let table: [VimOption; kOptCount as usize] = crate::options::table();
     let mut state = [OptionState {
         flags: 0,
         default: table[0].def_val,

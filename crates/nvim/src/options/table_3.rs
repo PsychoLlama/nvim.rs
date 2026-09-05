@@ -10,9 +10,9 @@
 use super::*;
 
 /// This file's run of the option table, spliced in by the parent.
-pub(super) const PART: [vimoption_T; 82] = [
+pub(super) const PART: [VimOption; 82] = [
     // 'keymodel'
-    vimoption_T {
+    VimOption {
         fullname: name(c"keymodel"),
         shortname: name(c"km"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -27,7 +27,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'keywordprg'
-    vimoption_T {
+    VimOption {
         fullname: name(c"keywordprg"),
         shortname: name(c"kp"),
         flags: kOptFlagExpand | kOptFlagSecure,
@@ -39,7 +39,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'langmap'
-    vimoption_T {
+    VimOption {
         fullname: name(c"langmap"),
         shortname: name(c"lmap"),
         flags: kOptFlagOneComma | kOptFlagSecure | kOptFlagNoDup,
@@ -52,7 +52,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'langmenu'
-    vimoption_T {
+    VimOption {
         fullname: name(c"langmenu"),
         shortname: name(c"lm"),
         flags: kOptFlagNFname,
@@ -64,7 +64,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'langnoremap'
-    vimoption_T {
+    VimOption {
         fullname: name(c"langnoremap"),
         shortname: name(c"lnr"),
         scope_flags: GLOBAL,
@@ -75,7 +75,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'langremap'
-    vimoption_T {
+    VimOption {
         fullname: name(c"langremap"),
         shortname: name(c"lrm"),
         scope_flags: GLOBAL,
@@ -85,7 +85,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'laststatus'
-    vimoption_T {
+    VimOption {
         fullname: name(c"laststatus"),
         shortname: name(c"ls"),
         flags: kOptFlagRedrAll,
@@ -98,7 +98,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'lazyredraw'
-    vimoption_T {
+    VimOption {
         fullname: name(c"lazyredraw"),
         shortname: name(c"lz"),
         scope_flags: GLOBAL,
@@ -107,7 +107,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'lhistory'
-    vimoption_T {
+    VimOption {
         fullname: name(c"lhistory"),
         shortname: name(c"lhi"),
         type_0: kOptValTypeNumber,
@@ -118,7 +118,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'linebreak'
-    vimoption_T {
+    VimOption {
         fullname: name(c"linebreak"),
         shortname: name(c"lbr"),
         flags: kOptFlagRedrWin,
@@ -127,7 +127,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'lines'
-    vimoption_T {
+    VimOption {
         fullname: name(c"lines"),
         flags: kOptFlagNoMkrc,
         type_0: kOptValTypeNumber,
@@ -139,7 +139,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'linespace'
-    vimoption_T {
+    VimOption {
         fullname: name(c"linespace"),
         shortname: name(c"lsp"),
         flags: kOptFlagUIOption,
@@ -151,7 +151,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'lisp'
-    vimoption_T {
+    VimOption {
         fullname: name(c"lisp"),
         scope_flags: BUF,
         scope_idx: scope_idx(kGlobalOptInvalid, kWinOptInvalid, kBufOptLisp),
@@ -160,7 +160,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'lispoptions'
-    vimoption_T {
+    VimOption {
         fullname: name(c"lispoptions"),
         shortname: name(c"lop"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -175,7 +175,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'lispwords'
-    vimoption_T {
+    VimOption {
         fullname: name(c"lispwords"),
         shortname: name(c"lw"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -187,7 +187,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'list'
-    vimoption_T {
+    VimOption {
         fullname: name(c"list"),
         flags: kOptFlagRedrWin,
         scope_flags: WIN,
@@ -195,7 +195,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'listchars'
-    vimoption_T {
+    VimOption {
         fullname: name(c"listchars"),
         shortname: name(c"lcs"),
         flags: kOptFlagOneComma | kOptFlagColon | kOptFlagRedrWin | kOptFlagNoDup,
@@ -209,7 +209,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'loadplugins'
-    vimoption_T {
+    VimOption {
         fullname: name(c"loadplugins"),
         shortname: name(c"lpl"),
         scope_flags: GLOBAL,
@@ -219,7 +219,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'magic'
-    vimoption_T {
+    VimOption {
         fullname: name(c"magic"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMagic, kWinOptInvalid, kBufOptInvalid),
@@ -228,7 +228,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'makeef'
-    vimoption_T {
+    VimOption {
         fullname: name(c"makeef"),
         shortname: name(c"mef"),
         flags: kOptFlagExpand | kOptFlagSecure,
@@ -240,7 +240,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'makeencoding'
-    vimoption_T {
+    VimOption {
         fullname: name(c"makeencoding"),
         shortname: name(c"menc"),
         type_0: kOptValTypeString,
@@ -253,7 +253,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'makeprg'
-    vimoption_T {
+    VimOption {
         fullname: name(c"makeprg"),
         shortname: name(c"mp"),
         flags: kOptFlagExpand | kOptFlagSecure,
@@ -265,7 +265,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'matchpairs'
-    vimoption_T {
+    VimOption {
         fullname: name(c"matchpairs"),
         shortname: name(c"mps"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -278,7 +278,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'matchtime'
-    vimoption_T {
+    VimOption {
         fullname: name(c"matchtime"),
         shortname: name(c"mat"),
         type_0: kOptValTypeNumber,
@@ -289,7 +289,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'maxcombine'
-    vimoption_T {
+    VimOption {
         fullname: name(c"maxcombine"),
         shortname: name(c"mco"),
         type_0: kOptValTypeNumber,
@@ -300,7 +300,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'maxfuncdepth'
-    vimoption_T {
+    VimOption {
         fullname: name(c"maxfuncdepth"),
         shortname: name(c"mfd"),
         type_0: kOptValTypeNumber,
@@ -311,7 +311,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'maxmapdepth'
-    vimoption_T {
+    VimOption {
         fullname: name(c"maxmapdepth"),
         shortname: name(c"mmd"),
         type_0: kOptValTypeNumber,
@@ -322,7 +322,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'maxmempattern'
-    vimoption_T {
+    VimOption {
         fullname: name(c"maxmempattern"),
         shortname: name(c"mmp"),
         type_0: kOptValTypeNumber,
@@ -333,7 +333,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'maxsearchcount'
-    vimoption_T {
+    VimOption {
         fullname: name(c"maxsearchcount"),
         shortname: name(c"msc"),
         type_0: kOptValTypeNumber,
@@ -344,7 +344,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'menuitems'
-    vimoption_T {
+    VimOption {
         fullname: name(c"menuitems"),
         shortname: name(c"mis"),
         type_0: kOptValTypeNumber,
@@ -355,7 +355,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'messagesopt'
-    vimoption_T {
+    VimOption {
         fullname: name(c"messagesopt"),
         shortname: name(c"mopt"),
         flags: kOptFlagOneComma | kOptFlagColon | kOptFlagNoDup,
@@ -370,7 +370,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mkspellmem'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mkspellmem"),
         shortname: name(c"msm"),
         flags: kOptFlagExpand | kOptFlagSecure,
@@ -383,7 +383,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'modeline'
-    vimoption_T {
+    VimOption {
         fullname: name(c"modeline"),
         shortname: name(c"ml"),
         scope_flags: BUF,
@@ -393,7 +393,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'modelineexpr'
-    vimoption_T {
+    VimOption {
         fullname: name(c"modelineexpr"),
         shortname: name(c"mle"),
         flags: kOptFlagSecure,
@@ -403,7 +403,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'modelines'
-    vimoption_T {
+    VimOption {
         fullname: name(c"modelines"),
         shortname: name(c"mls"),
         type_0: kOptValTypeNumber,
@@ -414,7 +414,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'modifiable'
-    vimoption_T {
+    VimOption {
         fullname: name(c"modifiable"),
         shortname: name(c"ma"),
         flags: kOptFlagNoGlob,
@@ -426,7 +426,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'modified'
-    vimoption_T {
+    VimOption {
         fullname: name(c"modified"),
         shortname: name(c"mod"),
         flags: kOptFlagRedrStat | kOptFlagNoMkrc,
@@ -437,7 +437,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'more'
-    vimoption_T {
+    VimOption {
         fullname: name(c"more"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptMore, kWinOptInvalid, kBufOptInvalid),
@@ -446,7 +446,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mouse'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mouse"),
         flags: kOptFlagFlagList,
         type_0: kOptValTypeString,
@@ -459,7 +459,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mousefocus'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mousefocus"),
         shortname: name(c"mousef"),
         flags: kOptFlagUIOption,
@@ -469,7 +469,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mousehide'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mousehide"),
         shortname: name(c"mh"),
         flags: kOptFlagUIOption,
@@ -480,7 +480,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mousemodel'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mousemodel"),
         shortname: name(c"mousem"),
         type_0: kOptValTypeString,
@@ -494,7 +494,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mousemoveevent'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mousemoveevent"),
         shortname: name(c"mousemev"),
         flags: kOptFlagUIOption,
@@ -504,7 +504,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mousescroll'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mousescroll"),
         flags: kOptFlagComma,
         type_0: kOptValTypeString,
@@ -518,7 +518,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mouseshape'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mouseshape"),
         shortname: name(c"mouses"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -531,7 +531,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'mousetime'
-    vimoption_T {
+    VimOption {
         fullname: name(c"mousetime"),
         shortname: name(c"mouset"),
         type_0: kOptValTypeNumber,
@@ -542,7 +542,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'nrformats'
-    vimoption_T {
+    VimOption {
         fullname: name(c"nrformats"),
         shortname: name(c"nf"),
         flags: kOptFlagOneComma | kOptFlagNoDup,
@@ -557,7 +557,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'number'
-    vimoption_T {
+    VimOption {
         fullname: name(c"number"),
         shortname: name(c"nu"),
         flags: kOptFlagRedrWin,
@@ -567,7 +567,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'numberwidth'
-    vimoption_T {
+    VimOption {
         fullname: name(c"numberwidth"),
         shortname: name(c"nuw"),
         flags: kOptFlagRedrWin,
@@ -579,7 +579,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'omnifunc'
-    vimoption_T {
+    VimOption {
         fullname: name(c"omnifunc"),
         shortname: name(c"ofu"),
         flags: kOptFlagSecure | kOptFlagFunc,
@@ -592,7 +592,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'opendevice'
-    vimoption_T {
+    VimOption {
         fullname: name(c"opendevice"),
         shortname: name(c"odev"),
         scope_flags: GLOBAL,
@@ -602,7 +602,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'operatorfunc'
-    vimoption_T {
+    VimOption {
         fullname: name(c"operatorfunc"),
         shortname: name(c"opfunc"),
         flags: kOptFlagSecure | kOptFlagFunc,
@@ -615,7 +615,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'packpath'
-    vimoption_T {
+    VimOption {
         fullname: name(c"packpath"),
         shortname: name(c"pp"),
         flags: kOptFlagOneComma | kOptFlagExpand | kOptFlagSecure | kOptFlagNoDup,
@@ -628,7 +628,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'paragraphs'
-    vimoption_T {
+    VimOption {
         fullname: name(c"paragraphs"),
         shortname: name(c"para"),
         type_0: kOptValTypeString,
@@ -639,7 +639,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'paste'
-    vimoption_T {
+    VimOption {
         fullname: name(c"paste"),
         flags: kOptFlagPriMkrc,
         scope_flags: GLOBAL,
@@ -649,7 +649,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pastetoggle'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pastetoggle"),
         shortname: name(c"pt"),
         type_0: kOptValTypeString,
@@ -661,7 +661,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'patchexpr'
-    vimoption_T {
+    VimOption {
         fullname: name(c"patchexpr"),
         shortname: name(c"pex"),
         flags: kOptFlagSecure,
@@ -674,7 +674,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'patchmode'
-    vimoption_T {
+    VimOption {
         fullname: name(c"patchmode"),
         shortname: name(c"pm"),
         flags: kOptFlagNFname,
@@ -687,7 +687,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'path'
-    vimoption_T {
+    VimOption {
         fullname: name(c"path"),
         shortname: name(c"pa"),
         flags: kOptFlagComma | kOptFlagExpand | kOptFlagNoDup,
@@ -699,7 +699,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'preserveindent'
-    vimoption_T {
+    VimOption {
         fullname: name(c"preserveindent"),
         shortname: name(c"pi"),
         scope_flags: BUF,
@@ -708,7 +708,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'previewheight'
-    vimoption_T {
+    VimOption {
         fullname: name(c"previewheight"),
         shortname: name(c"pvh"),
         type_0: kOptValTypeNumber,
@@ -719,7 +719,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'previewwindow'
-    vimoption_T {
+    VimOption {
         fullname: name(c"previewwindow"),
         shortname: name(c"pvw"),
         flags: kOptFlagRedrStat | kOptFlagNoGlob,
@@ -729,7 +729,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'prompt'
-    vimoption_T {
+    VimOption {
         fullname: name(c"prompt"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptPrompt, kWinOptInvalid, kBufOptInvalid),
@@ -739,7 +739,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pumblend'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pumblend"),
         shortname: name(c"pb"),
         flags: kOptFlagUIOption,
@@ -752,7 +752,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pumborder'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pumborder"),
         flags: kOptFlagOneComma,
         type_0: kOptValTypeString,
@@ -766,7 +766,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pumheight'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pumheight"),
         shortname: name(c"ph"),
         type_0: kOptValTypeNumber,
@@ -777,7 +777,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pummaxwidth'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pummaxwidth"),
         shortname: name(c"pmw"),
         type_0: kOptValTypeNumber,
@@ -788,7 +788,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pumwidth'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pumwidth"),
         shortname: name(c"pw"),
         type_0: kOptValTypeNumber,
@@ -799,7 +799,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'pyxversion'
-    vimoption_T {
+    VimOption {
         fullname: name(c"pyxversion"),
         shortname: name(c"pyx"),
         flags: kOptFlagSecure,
@@ -811,7 +811,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'quickfixtextfunc'
-    vimoption_T {
+    VimOption {
         fullname: name(c"quickfixtextfunc"),
         shortname: name(c"qftf"),
         flags: kOptFlagSecure | kOptFlagFunc,
@@ -824,7 +824,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'quoteescape'
-    vimoption_T {
+    VimOption {
         fullname: name(c"quoteescape"),
         shortname: name(c"qe"),
         type_0: kOptValTypeString,
@@ -835,7 +835,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'readonly'
-    vimoption_T {
+    VimOption {
         fullname: name(c"readonly"),
         shortname: name(c"ro"),
         flags: kOptFlagRedrStat | kOptFlagNoGlob,
@@ -846,7 +846,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'redrawdebug'
-    vimoption_T {
+    VimOption {
         fullname: name(c"redrawdebug"),
         shortname: name(c"rdb"),
         flags: kOptFlagOneComma,
@@ -862,7 +862,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'redrawtime'
-    vimoption_T {
+    VimOption {
         fullname: name(c"redrawtime"),
         shortname: name(c"rdt"),
         type_0: kOptValTypeNumber,
@@ -873,7 +873,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'regexpengine'
-    vimoption_T {
+    VimOption {
         fullname: name(c"regexpengine"),
         shortname: name(c"re"),
         type_0: kOptValTypeNumber,
@@ -884,7 +884,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'relativenumber'
-    vimoption_T {
+    VimOption {
         fullname: name(c"relativenumber"),
         shortname: name(c"rnu"),
         flags: kOptFlagRedrWin,
@@ -894,7 +894,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'remap'
-    vimoption_T {
+    VimOption {
         fullname: name(c"remap"),
         scope_flags: GLOBAL,
         scope_idx: scope_idx(kGlobalOptRemap, kWinOptInvalid, kBufOptInvalid),
@@ -904,7 +904,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'report'
-    vimoption_T {
+    VimOption {
         fullname: name(c"report"),
         type_0: kOptValTypeNumber,
         scope_flags: GLOBAL,
@@ -914,7 +914,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'revins'
-    vimoption_T {
+    VimOption {
         fullname: name(c"revins"),
         shortname: name(c"ri"),
         scope_flags: GLOBAL,
@@ -923,7 +923,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'rightleft'
-    vimoption_T {
+    VimOption {
         fullname: name(c"rightleft"),
         shortname: name(c"rl"),
         flags: kOptFlagRedrWin,
@@ -932,7 +932,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'rightleftcmd'
-    vimoption_T {
+    VimOption {
         fullname: name(c"rightleftcmd"),
         shortname: name(c"rlc"),
         flags: kOptFlagComma | kOptFlagRedrWin,
@@ -946,7 +946,7 @@ pub(super) const PART: [vimoption_T; 82] = [
         ..BLANK
     },
     // 'ruler'
-    vimoption_T {
+    VimOption {
         fullname: name(c"ruler"),
         shortname: name(c"ru"),
         flags: kOptFlagRedrStat,

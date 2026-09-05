@@ -89,9 +89,9 @@ use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn,
     EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, FuncCallEntry,
-    GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptVal, ProfTime,
-    RegMatch, ScriptCtx, ScriptId, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock,
-    VarNumber, XDGVarType, estack_T, int64_t, kBoolVarFalse, optset_T, ptrdiff_t, scriptitem_T,
+    GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptSet, OptVal,
+    ProfTime, RegMatch, ScriptCtx, ScriptId, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT,
+    VarLock, VarNumber, XDGVarType, estack_T, int64_t, kBoolVarFalse, ptrdiff_t, scriptitem_T,
     size_t, typval_vval_union, uv_mutex_t, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;

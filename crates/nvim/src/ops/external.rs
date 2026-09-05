@@ -103,7 +103,7 @@ fn global_opfunc() -> *mut Callback {
 ///
 /// # Safety
 /// The option's current value must be a valid C string.
-pub unsafe fn did_set_operatorfunc(_args: &mut optset_T) -> Option<&CStr> {
+pub unsafe fn did_set_operatorfunc(_args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the caller's promise -- 'operatorfunc' is a valid C string.
     if unsafe { option_set_callback_func(p_opfunc.get(), global_opfunc()) }.is_err() {
         return Some(e_invarg);

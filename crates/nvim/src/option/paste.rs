@@ -21,7 +21,7 @@ use crate::options::{
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
-use crate::types::{ColNr, OptIndex, OptInt, OptionSetFlags, optset_T};
+use crate::types::{ColNr, OptIndex, OptInt, OptSet, OptionSetFlags};
 
 use crate::types::Buffer;
 use crate::winlayer::buffers;
@@ -58,7 +58,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 /// Where a buffer keeps its parsed 'varsofttabstop' stops.
 const VSTS_ARRAY: usize = core::mem::offset_of!(Buffer, b_p_vsts_array);
 
-pub(crate) unsafe fn did_set_paste(_args: &mut optset_T) -> Option<&CStr> {
+pub(crate) unsafe fn did_set_paste(_args: &mut OptSet) -> Option<&CStr> {
     static old_p_paste: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sm: GlobalCell<c_int> = GlobalCell::new(0);
     static save_sta: GlobalCell<c_int> = GlobalCell::new(0);

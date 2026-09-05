@@ -108,7 +108,7 @@ local key_value_options = {
 --- @class vim._option.Info : vim.api.keyset.get_option_info
 --- @field metatype 'boolean'|'string'|'number'|'map'|'array'|'set'
 
---- Convert a vimoption_T style dictionary to the correct OptionType associated with it.
+--- Convert a VimOption style dictionary to the correct OptionType associated with it.
 ---@return string
 local function get_option_metatype(name, info)
   if info.type == 'string' then
@@ -377,7 +377,7 @@ local valid_types = {
   map = { 'string', 'table' },
 }
 
--- Map of functions to take a Lua style value and convert to vimoption_T style value.
+-- Map of functions to take a Lua style value and convert to VimOption style value.
 -- Each function takes (info, lua_value) -> vim_value
 local to_vim_value = {
   boolean = passthrough,
@@ -444,7 +444,7 @@ local to_vim_value = {
   end,
 }
 
---- Convert a Lua value to a vimoption_T value
+--- Convert a Lua value to a VimOption value
 local function convert_value_to_vim(name, info, value)
   if value == nil then
     return vim.NIL
@@ -455,7 +455,7 @@ local function convert_value_to_vim(name, info, value)
   return to_vim_value[info.metatype](info, value)
 end
 
--- Map of OptionType to functions that take vimoption_T values and convert to Lua values.
+-- Map of OptionType to functions that take VimOption values and convert to Lua values.
 -- Each function takes (info, vim_value) -> lua_value
 local to_lua_value = {
   boolean = passthrough,
@@ -560,7 +560,7 @@ local to_lua_value = {
   end,
 }
 
---- Converts a vimoption_T style value to a Lua value
+--- Converts a VimOption style value to a Lua value
 local function convert_value_to_lua(info, option_value)
   return to_lua_value[info.metatype](info, option_value)
 end
