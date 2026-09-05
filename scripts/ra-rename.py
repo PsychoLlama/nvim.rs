@@ -21,21 +21,55 @@ nothing.
 
 `--fold` is for an alias over a C tag struct -- `pub type win_T = window_S;`.
 Two renames are needed, because the LSP renames the *alias*, not the tag it
-points at: the tag is renamed to the new name first, then the alias onto the
-same name, and the `type X = X;` line that leaves behind is deleted. Give the
-table the *alias* name; the tag is read off its `type` line.
+points at: both the tag and the alias are renamed to the new name, and the
+`type X = X;` line that leaves behind is deleted. Give the table the *alias*
+name; the tag is read off its `type` line.
 
-## What this does not reach, and the pitfalls behind each flag
+## Every rename is computed against the pristine tree, then applied once
+
+A whole table's edits are collected before a byte is written. That is not an
+optimisation, it is what makes a multi-entry table correct: an applied edit
+that rust-analyzer has not been told about leaves its index stale, and the
+next rename in the same run answers from the stale index -- silently, with no
+error and no empty-edit warning. Nothing is applied mid-run, so nothing goes
+stale.
+
+It also makes a table's entries *simultaneous* rather than chained, which is
+what a collision batch wants: `List -> ListRef` and `list_T -> List` in one
+table rename the two distinct symbols they name, in either order, and the
+wrapper's new name is never itself renamed by the entry below it. Two entries
+that resolve to the same span are a conflict and abort; distinct identifiers
+never do.
+
+## `cfg` is the thing that actually under-renames, and it needs two passes
+
+rust-analyzer analyses *one* `cfg` configuration, and code excluded by it is
+not merely unindexed -- it is invisible to a rename, which returns a smaller
+edit with no diagnostic. rust-analyzer's default `cargo.cfgs` is
+`["debug_assertions", "miri"]`, i.e. **`miri` is on**, so every file this tree
+gates with `#![cfg(not(miri))]` (32 of the unit specs) is skipped; the `p27-4`
+batch that "under-renamed `tests/unit/{memline,indent}.rs`" was this, not
+staleness. Turning `miri` off only trades the loss the other way, for the
+`#[cfg(miri)]` shims in `os/cshim.rs` and `xdiff/ffi.rs`.
+
+So the run asks a fresh server per configuration in `CFG_PROFILES` -- one
+matching `cargo build`/`cargo test`, one matching `just miri` -- and unions the
+edits. The servers are sequential, so the peak is one server's ~1.4 GB, and a
+second pass costs a cache prime plus a request per name. Add a profile here
+if a `cfg` ever hides code from both.
+
+## What this still does not reach, and the pitfalls behind each flag
 
 * **Comments and doc links.** rust-analyzer renames code. A `///` mention or a
   `[`win_T`]` intra-doc link is left alone, so follow a batch with a
   word-boundary sweep over comments only (`xform.masked` inverted) -- never an
   unmasked tree-wide `s///`, which is the mistake this tool exists to avoid.
-* **Non-Rust followers.** `tools/apigen/src` spells three type names,
-  `test/unit/fixtures/{shim.h,vterm_test.c}` spell `ScreenChar`, and
+* **Non-Rust followers.** `tools/apigen/src` spells a few type names,
+  `test/unit/fixtures/*.{c,h}` spell the ones the FFI fixtures use, and
   `scripts/ratchet.py`'s `RAW_WIN_BUF` needle names `win_T`/`buf_T`/
   `tabpage_T`. Fix them in the same commit; `tools/ffigen` reads the Rust and
-  needs nothing.
+  needs nothing. `scripts/ratchet.py` must be *excluded* from any sweep: its
+  self-test fixtures spell `_T` names as data for the counts they assert.
 * **Build scripts must stay off.** With `cargo.buildScripts.enable` on, the
   first rename request hung for six minutes and never answered. A rename needs
   no `OUT_DIR`, so both that and `procMacro.enable` are disabled below.
@@ -62,12 +96,21 @@ SRC = ROOT / "crates" / "nvim" / "src"
 # expression or a doc comment is not mistaken for one.
 DECL = r"^(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|union|type)\s+{}\b"
 
+# The `cfg` configurations a rename has to be answered under, because no single
+# one sees the whole tree -- see the module docstring. `rust-analyzer.cargo.cfgs`
+# replaces the server's default list wholesale.
+CFG_PROFILES = (
+    ("build", ["debug_assertions"]),
+    ("miri", ["debug_assertions", "miri"]),
+)
+
 
 class Client:
     """A minimal LSP client over rust-analyzer's stdio."""
 
-    def __init__(self, root):
+    def __init__(self, root, cfgs):
         self.root = root
+        self.cfgs = cfgs
         self.proc = subprocess.Popen(
             ["rust-analyzer"],
             stdin=subprocess.PIPE,
@@ -158,8 +201,12 @@ class Client:
                     },
                 },
                 "initializationOptions": {
-                    # Both off deliberately -- see the module docstring.
-                    "cargo": {"buildScripts": {"enable": False}},
+                    # Build scripts and proc macros off deliberately, `cfgs`
+                    # pinned deliberately -- see the module docstring.
+                    "cargo": {
+                        "buildScripts": {"enable": False},
+                        "cfgs": self.cfgs,
+                    },
                     "procMacro": {"enable": False},
                 },
             },
@@ -178,6 +225,7 @@ class Client:
             self.notify("exit", {})
         finally:
             self.proc.terminate()
+            self.proc.wait(timeout=30)
 
     # -- the one request that matters --------------------------------------
 
@@ -231,9 +279,14 @@ def alias_target(path, line, name):
     return match.group(1)
 
 
-def collect(edit, out):
-    """Fold a `WorkspaceEdit` into path -> [(start, end, text)] byte edits."""
-    changes = edit.get("changes") or {}
+def collect(edit, out, where):
+    """Fold a `WorkspaceEdit` into path -> {range: newText}.
+
+    Keyed by range so the same edit seen under two `cfg` profiles counts once,
+    and so two profiles (or two table entries) that disagree about one span
+    abort instead of racing to be applied last.
+    """
+    changes = dict(edit.get("changes") or {})
     for document in edit.get("documentChanges") or []:
         if "textDocument" in document and "edits" in document:
             changes.setdefault(document["textDocument"]["uri"], []).extend(
@@ -241,9 +294,38 @@ def collect(edit, out):
             )
     for uri, edits in changes.items():
         path = Path(uri.removeprefix("file://"))
+        bucket = out.setdefault(path, {})
         for one in edits:
-            out.setdefault(path, []).append(one)
+            span = one["range"]
+            key = (
+                span["start"]["line"],
+                span["start"]["character"],
+                span["end"]["line"],
+                span["end"]["character"],
+            )
+            seen = bucket.get(key)
+            if seen is not None and seen != one["newText"]:
+                sys.exit(
+                    f"ra-rename: {where}: conflicting edits at "
+                    f"{path}:{key[0] + 1}: {seen!r} vs {one['newText']!r}"
+                )
+            bucket[key] = one["newText"]
     return out
+
+
+def merge(into, changes, where):
+    """Union one name's edits into the whole table's, rejecting conflicts."""
+    for path, bucket in changes.items():
+        target = into.setdefault(path, {})
+        for key, text in bucket.items():
+            seen = target.get(key)
+            if seen is not None and seen != text:
+                sys.exit(
+                    f"ra-rename: {where}: conflicting edits at "
+                    f"{path}:{key[0] + 1}: {seen!r} vs {text!r}"
+                )
+            target[key] = text
+    return into
 
 
 def offsets(text):
@@ -256,23 +338,26 @@ def offsets(text):
 
 def apply(changes):
     """Write the collected edits. Bottom-up per file, so offsets stay valid."""
-    for path, edits in changes.items():
+    for path, bucket in changes.items():
         text = path.read_text()
         starts = offsets(text)
 
-        def index(position):
+        def index(line, character):
             # UTF-16 code units in the protocol; this tree's identifiers are
             # ASCII, and an edit that is not would land in the wrong column
             # rather than silently corrupt -- assert instead of guessing.
-            return starts[position["line"]] + position["character"]
+            return starts[line] + character
 
         spans = sorted(
-            (index(e["range"]["start"]), index(e["range"]["end"]), e["newText"])
-            for e in edits
+            (index(key[0], key[1]), index(key[2], key[3]), new)
+            for key, new in bucket.items()
         )
+        previous_start = len(text) + 1
         for start, end, _ in spans:
             assert text[start:end].isascii(), f"{path}: non-ASCII edit at {start}"
         for start, end, new in reversed(spans):
+            assert end <= previous_start, f"{path}: overlapping edits at {start}"
+            previous_start = start
             text = text[:start] + new + text[end:]
         path.write_text(text)
 
@@ -292,10 +377,14 @@ def drop_self_alias(path, name):
 
 
 def report(changes, label):
-    total = sum(len(edits) for edits in changes.values())
+    total = sum(len(bucket) for bucket in changes.values())
     print(f"{label}: {total} edits in {len(changes)} files")
-    for path, edits in sorted(changes.items()):
-        print(f"    {len(edits):5}  {path.relative_to(ROOT)}")
+    for path, bucket in sorted(changes.items()):
+        try:
+            shown = path.relative_to(ROOT)
+        except ValueError:
+            shown = path
+        print(f"    {len(bucket):5}  {shown}")
 
 
 def read_table(path):
@@ -309,6 +398,27 @@ def read_table(path):
             sys.exit(f"ra-rename: not an `old new` pair: {raw!r}")
         pairs.append((parts[0], parts[1]))
     return pairs
+
+
+def plan(pairs, root, fold):
+    """Resolve every table entry to the positions a rename starts from.
+
+    Done once, against the pristine tree, for every `cfg` profile: a position
+    is a line and column, and applying an edit would move the ones below it.
+    """
+    entries = []
+    for old, new in pairs:
+        path, line, column = declaration(old, root)
+        positions = []
+        tag = None
+        if fold:
+            tag = alias_target(path, line, old)
+            positions.append(declaration(tag, root))
+        positions.append((path, line, column))
+        entries.append(
+            {"old": old, "new": new, "tag": tag, "alias": path, "positions": positions}
+        )
+    return entries
 
 
 def main():
@@ -326,38 +436,42 @@ def main():
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
-    pairs = read_table(args.table)
-    client = Client(root)
-    client.initialize()
-    try:
-        for old, new in pairs:
-            path, line, column = declaration(old, root)
-            changes = {}
-            if args.fold:
-                tag = alias_target(path, line, old)
-                tag_path, tag_line, tag_column = declaration(tag, root)
-                collect(
-                    client.rename(tag_path, tag_line, tag_column, new) or {}, changes
-                )
-                if not args.dry_run:
-                    apply(changes)
-                    changes = {}
-                    # The alias moved with the tag: re-find it before asking
-                    # for the second rename.
-                    path, line, column = declaration(old, root)
-            collect(client.rename(path, line, column, new) or {}, changes)
-            if args.dry_run:
-                report(
-                    changes,
-                    f"{old} -> {new}" + (f" (fold of {tag})" if args.fold else ""),
-                )
-                continue
-            apply(changes)
-            if args.fold and not drop_self_alias(path, new):
-                sys.exit(f"ra-rename: no `type {new} = {new};` left in {path}")
-            print(f"{old} -> {new}: applied")
-    finally:
-        client.shutdown()
+    entries = plan(read_table(args.table), root, args.fold)
+
+    for entry in entries:
+        entry["changes"] = {}
+    for profile, cfgs in CFG_PROFILES:
+        client = Client(root, cfgs)
+        try:
+            client.initialize()
+            for entry in entries:
+                where = f"{entry['old']} -> {entry['new']} (cfg {profile})"
+                for path, line, column in entry["positions"]:
+                    edit = client.rename(path, line, column, entry["new"]) or {}
+                    collect(edit, entry["changes"], where)
+        finally:
+            client.shutdown()
+
+    changes = {}
+    for entry in entries:
+        label = f"{entry['old']} -> {entry['new']}"
+        if entry["tag"]:
+            label += f" (fold of {entry['tag']})"
+        if args.dry_run:
+            report(entry["changes"], label)
+        merge(changes, entry["changes"], label)
+    if args.dry_run:
+        report(changes, f"total ({len(entries)} names)")
+        return
+
+    apply(changes)
+    for entry in entries:
+        if args.fold and not drop_self_alias(entry["alias"], entry["new"]):
+            sys.exit(
+                f"ra-rename: no `type {entry['new']} = {entry['new']};` left in "
+                f"{entry['alias']}"
+            )
+        print(f"{entry['old']} -> {entry['new']}: applied")
 
 
 if __name__ == "__main__":
