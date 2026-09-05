@@ -24,12 +24,13 @@ use crate::api::private::helpers::{
 use crate::eval::last_set_msg;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, nlua_funcref_str};
-use crate::main::{Columns, got_int, p_verbose};
+use crate::main::{Columns, got_int};
 use crate::memory::xfree;
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
     msg_puts, msg_puts_hl, msg_puts_title,
 };
+use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;

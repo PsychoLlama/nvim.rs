@@ -35,13 +35,14 @@ use crate::grid::{default_grid_ref, schar_from_ascii, schar_get};
 use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
 use crate::kvec::Kvec;
 use crate::main::{
-    Columns, Rows, State, edit_submode, highlight_stlnc, highlight_user, msg_col, msg_row, p_ch,
-    p_ru, p_ruf, p_stl, p_tal, p_wbr, ru_col, tab_page_click_defs, tab_page_click_defs_size,
+    Columns, Rows, State, edit_submode, highlight_stlnc, highlight_user, msg_col, msg_row, ru_col,
+    tab_page_click_defs, tab_page_click_defs_size,
 };
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::xmemdupz;
 use crate::message::{msg_clr_eos, msg_grid_view};
+use crate::option::vars::{p_ch, p_ru, p_ruf, p_stl, p_tal, p_wbr};
 use crate::options::{kOptRulerformat, kOptStatusline, kOptTabline, kOptWinbar};
 use crate::os::cshim::gettext;
 use crate::state::MODE_INSERT;

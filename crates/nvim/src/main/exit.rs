@@ -25,12 +25,12 @@ use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::entry::event_teardown;
 use crate::main::{
     curbuf, did_emsg, ex_exitval, exiting, exmode_active, garbage_collect_at_exit, no_wait_return,
-    p_shada, p_title, p_titleold, stderr_isatty, stdout_isatty, ui_client_channel_id,
-    ui_client_exit_status, used_stdin, v_dying,
+    stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
 use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::message::wait_return;
+use crate::option::vars::{p_shada, p_title, p_titleold};
 use crate::os::cshim::stderr;
 use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};

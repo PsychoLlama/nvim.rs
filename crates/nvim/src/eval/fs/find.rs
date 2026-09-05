@@ -38,8 +38,8 @@ use crate::eval::vars::{prepare_vimvar, restore_vimvar, set_vim_var_string};
 use crate::file_search::{FileNameOpts, find_file_in_path_option, vim_findfile_cleanup};
 use crate::fileio::readdir_core;
 use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
-use crate::main::{p_path, p_wic};
 use crate::memory::xfree;
+use crate::option::vars::{p_path, p_wic};
 use crate::types::{
     BackslashEscape, EvalFuncData, Expand, ExpandContext, GArray, Pos, ScriptCtx, TypVal, VAR_LIST,
     VAR_STRING, VAR_UNKNOWN, VarNumber, Vv, kListLenUnknown, ptrdiff_t, size_t,

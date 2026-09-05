@@ -20,11 +20,14 @@ use crate::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free}
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::main::{
-    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, bkc_flags, curbuf, magic_overruled, need_maketitle,
-    p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm, p_siso, p_so,
-    redraw_tabline, ve_flags,
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, curbuf, magic_overruled, need_maketitle,
+    redraw_tabline,
 };
 use crate::memory::{xcalloc, xfree, xstrdup};
+use crate::option::vars::{
+    bkc_flags, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm, p_siso, p_so,
+    ve_flags,
+};
 use crate::options::*;
 use crate::optionstr::empty_option;
 use crate::os::cshim::strstr;

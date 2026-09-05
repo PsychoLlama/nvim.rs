@@ -21,7 +21,8 @@ use crate::ex_docmd::{
     kRetNilBool,
 };
 use crate::lua::executor::nlua_exec;
-use crate::main::{cmdmod, e_curdir, p_rtp, secure};
+use crate::main::{cmdmod, e_curdir, secure};
+use crate::option::vars::p_rtp;
 
 use crate::option::set_option_value_give_err;
 use crate::options::kOptFiletype;

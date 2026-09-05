@@ -20,9 +20,10 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_getln::text_or_buf_locked;
 use crate::getchar::beep_flush;
-use crate::main::{curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw};
+use crate::main::{curbuf, e_floatexchange, lastwin};
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_VIsual_and_resel, visual_active};
+use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{FAIL, Failed, Frame, OptInt, Window};
 use crate::winlayer::{FrameRef, Win, frames};
 

@@ -20,7 +20,7 @@
 use super::packer::{push_call, ui_flush_buf};
 use crate::api::private::helpers::cstr_as_string;
 use crate::highlight::{HLATTRS_DICT_SIZE, hlattrs2dict, syn_attr2entry};
-use crate::main::p_bg;
+use crate::option::vars::p_bg;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{kUILinegrid, kUITermColors};
 use crate::types::{Array, Boolean, Integer, Object, RemoteUI, String_0, WindowHandle};

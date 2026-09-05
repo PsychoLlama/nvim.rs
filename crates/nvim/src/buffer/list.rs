@@ -32,13 +32,12 @@ use crate::fileio::file_pat_to_reg_pat;
 use crate::guard::Suppress;
 use crate::hashtab::hash_init;
 use crate::insexpand::clear_cpt_callbacks;
-use crate::main::{
-    curbuf, e_noalt, emsg_silent, firstbuf, in_assert_fails, jop_flags, lastbuf, p_sol, swb_flags,
-};
+use crate::main::{curbuf, e_noalt, emsg_silent, firstbuf, in_assert_fails, lastbuf};
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg_ptr, msg_delay};
 use crate::message_fmt::c_str;
+use crate::option::vars::{jop_flags, p_sol, swb_flags};
 use crate::option::{buf_copy_options, magic_isset};
 use crate::options::{kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagSplit, kOptSwbFlagVsplit};
 use crate::optionstr::clear_string_option;

@@ -22,12 +22,13 @@ use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
 use crate::main::{
     Columns, Rows, State, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
-    need_wait_return, p_window,
+    need_wait_return,
 };
 use crate::memline::MlFlags;
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::emsg;
+use crate::option::vars::p_window;
 use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;

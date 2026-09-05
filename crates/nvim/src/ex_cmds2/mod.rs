@@ -65,7 +65,7 @@ use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::main::{
     cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, msg_col, msg_didany, msg_didout, msg_row,
-    p_aw, p_awa, p_confirm, p_write, vgetc_busy,
+    vgetc_busy,
 };
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
@@ -74,6 +74,7 @@ use crate::message::{
     vim_dialog_yesnocancel, wait_return,
 };
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_aw, p_awa, p_confirm, p_write};
 use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};

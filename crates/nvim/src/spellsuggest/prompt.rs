@@ -40,7 +40,7 @@ use crate::getchar::{
 use crate::input::prompt_for_input;
 use crate::main::{
     Rows, cmdline_row, cmdmsg_rl, curwin, e_no_spell, lines_left, mouse_row, msg_col, msg_row,
-    msg_scroll, p_verbose,
+    msg_scroll,
 };
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
@@ -49,6 +49,7 @@ use crate::message::{
     emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start,
 };
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
+use crate::option::vars::p_verbose;
 use crate::options::kOptBoFlagSpell;
 use crate::os::cshim::gettext;
 use crate::search::FORWARD;

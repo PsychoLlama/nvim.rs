@@ -99,7 +99,7 @@ pub mod msgpack_rpc;
 pub(crate) mod narrow;
 pub(crate) mod normal;
 pub mod ops;
-pub(crate) mod option;
+pub mod option;
 pub mod options;
 pub mod optionstr;
 pub mod os;

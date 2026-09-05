@@ -24,8 +24,8 @@ use crate::file_search::grab_file_name;
 use crate::fold::fold_open_cursor;
 use crate::keycodes::Ctrl_RSB;
 use crate::main::{
-    KeyTyped, clear_cmdline, curbuf, curwin, e_noident, fdo_flags, g_tag_at_cursor, msg_silent,
-    no_smartcase, p_kp, p_scs, p_ws, restart_edit,
+    KeyTyped, clear_cmdline, curbuf, curwin, e_noident, g_tag_at_cursor, msg_silent, no_smartcase,
+    restart_edit,
 };
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
@@ -39,6 +39,7 @@ use crate::normal::{
     get_visual_text, normal_search, visual_active,
 };
 use crate::ops::clear_oparg;
+use crate::option::vars::{fdo_flags, p_kp, p_scs, p_ws};
 use crate::option::{magic_isset, shortmess};
 use crate::options::kOptFdoFlagSearch;
 use crate::os::cshim::{gettext, snprintf};

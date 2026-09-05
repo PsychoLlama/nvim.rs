@@ -41,9 +41,10 @@ use crate::main::{
     State, curwin, did_syncbind, e_argreq, e_empty_buffer, e_invrange, e_secure,
     e_undobang_cannot_redo_or_move_branch, ex_no_reprint, ex_normal_busy, exec_from_reg, finish_op,
     force_restart_edit, got_int, magic_overruled, main_loop, msg_didout, msg_scroll, opcount,
-    p_mmd, pending_end_reg_executing, reg_executing, restart_edit, stop_insert_mode, virtual_op,
+    pending_end_reg_executing, reg_executing, restart_edit, stop_insert_mode, virtual_op,
 };
 use crate::mark::{checkpcmark, setmark, setpcmark};
+use crate::option::vars::p_mmd;
 
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
 use crate::memory::{xfree, xmalloc};

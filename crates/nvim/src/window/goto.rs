@@ -25,14 +25,15 @@ use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
 use crate::main::{
-    curbuf, curwin, globaldir, last_chdir_reason, msg_scrolled, p_acd, p_spk, p_wh, p_wiw, prevwin,
-    redraw_tabline, restart_edit,
+    curbuf, curwin, globaldir, last_chdir_reason, msg_scrolled, prevwin, redraw_tabline,
+    restart_edit,
 };
 use crate::memory::xstrdup;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::{reset_VIsual_and_resel, visual_active};
 use crate::option::buf_copy_options;
+use crate::option::vars::{p_acd, p_spk, p_wh, p_wiw};
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::path::pathcmp;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};

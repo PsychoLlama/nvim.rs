@@ -22,11 +22,12 @@
 
 use crate::buffer::find_buf;
 use crate::ex_docmd::cmdmod_has;
-use crate::main::{global_busy, got_int, jop_flags, listcmd_busy};
+use crate::main::{global_busy, got_int, listcmd_busy};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
     message_filtered, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts, msg_puts_title,
 };
+use crate::option::vars::jop_flags;
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::os_breakcheck;
 use crate::pos::equalpos;

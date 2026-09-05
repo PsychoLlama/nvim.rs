@@ -13,11 +13,12 @@ use crate::charset::{skiptowhite, skipwhite, vim_strsize};
 use crate::eval::last_set_msg;
 use crate::highlight::HlAttrFlags;
 use crate::main::{
-    Columns, got_int, include_default, include_link, include_none, msg_col, msg_silent, p_verbose,
+    Columns, got_int, include_default, include_link, include_none, msg_col, msg_silent,
 };
 use crate::message::{
     message_filtered, msg_advance, msg_clr_eos, msg_outtrans, msg_putchar, msg_puts_hl,
 };
+use crate::option::vars::p_verbose;
 use crate::os::time::os_delay;
 use crate::types::ui::kUIMessages;
 use crate::types::{Expand, ExpandContext};

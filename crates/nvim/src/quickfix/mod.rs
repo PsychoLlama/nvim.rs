@@ -64,10 +64,8 @@ use crate::main::{
     Columns, KeyTyped, cmdline_row, cmdmod, curbuf, curtab, curwin, e_au_recursive,
     e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invrange, e_listreq, e_loclist,
     e_no_errors, e_nomatch, e_noprevre, e_notmp, e_readerrf, e_string_required,
-    e_winfixbuf_cannot_go_to_buffer, fdo_flags, firstwin, got_int, lastwin, msg_col, msg_didout,
-    msg_nowait, msg_scroll, msg_scrolled, must_redraw, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc,
-    p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc, p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, prevwin,
-    restart_edit, swb_flags,
+    e_winfixbuf_cannot_go_to_buffer, firstwin, got_int, lastwin, msg_col, msg_didout, msg_nowait,
+    msg_scroll, msg_scrolled, must_redraw, prevwin, restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
@@ -86,6 +84,10 @@ use crate::message::{
 use crate::r#move::update_topline;
 use crate::normal::reset_VIsual_and_resel;
 use crate::ops::get_region_bytecount;
+use crate::option::vars::{
+    fdo_flags, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc,
+    p_mls, p_qftf, p_rtp, p_shq, p_sp, p_swb, swb_flags,
+};
 use crate::option::{
     buf_copy_options, copy_option_part, option_set_callback_func, set_option_direct,
     set_option_value_give_err, shortmess, skip_to_option_part,

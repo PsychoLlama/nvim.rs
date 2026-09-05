@@ -39,7 +39,9 @@ use crate::ex_docmd::did_set_findfunc;
 use crate::ex_getln::did_set_cedit;
 use crate::global_cell::ConstTable;
 use crate::insexpand::{did_set_completefunc, did_set_omnifunc, did_set_thesaurusfunc};
-use crate::main::{
+use crate::mapping::did_set_langmap;
+use crate::ops::did_set_operatorfunc;
+use crate::option::vars::{
     bkc_flags, bo_flags, cb_flags, cmp_flags, cot_flags, dy_flags, fdo_flags, jop_flags, p_ac,
     p_acd, p_acl, p_act, p_ai, p_ambw, p_ar, p_ari, p_arshape, p_aw, p_awa, p_bdir, p_bex, p_bg,
     p_bh, p_bin, p_bk, p_bkc, p_bl, p_bo, p_bomb, p_breakat, p_bs, p_bsk, p_bt, p_busy, p_cb,
@@ -69,8 +71,6 @@ use crate::main::{
     rdb_flags, ssop_flags, swb_flags, tc_flags, tcl_flags, tpf_flags, ve_flags, vop_flags,
     wop_flags,
 };
-use crate::mapping::did_set_langmap;
-use crate::ops::did_set_operatorfunc;
 use crate::option::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, CPO_VIM, CTRL_F_STR, DFLT_COLS, DFLT_EFM, DFLT_ERRORFILE,
     DFLT_FO_VIM, DFLT_GFN, DFLT_GREPFORMAT, DFLT_HELPFILE, DFLT_ROWS, ENC_DFLT, HIGHLIGHT_INIT,

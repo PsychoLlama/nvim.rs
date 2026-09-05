@@ -40,7 +40,7 @@ use crate::getchar::{
 use crate::global_cell::GlobalCell;
 use crate::main::{
     Columns, KeyStuffed, State, VIsual_reselect, cmdwin_type, mod_mask, mode_displayed, mouse_col,
-    mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, p_smd,
+    mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent,
     redraw_cmdline, restart_edit, where_paste_started,
 };
 use crate::memline::{gchar_pos, inc};
@@ -50,6 +50,7 @@ use crate::normal::{
     set_visual_active, set_visual_anchor, set_visual_mode, visual_active, visual_anchor,
     visual_mode, visual_select, with_visual_anchor,
 };
+use crate::option::vars::p_smd;
 use crate::pos::{equalpos, lt};
 use crate::register::{do_put, insert_reg, yank_register_mline};
 use crate::search::{FORWARD, findmatch};

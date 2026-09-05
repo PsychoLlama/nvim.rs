@@ -17,7 +17,7 @@ use crate::types::NL;
 use crate::decoration::kMTMetaLines;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
-use crate::main::{State, curbuf, curwin, p_acd};
+use crate::main::{State, curbuf, curwin};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{
@@ -29,6 +29,7 @@ use crate::memory::{
 };
 use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topline};
 use crate::ops::get_region_bytecount;
+use crate::option::vars::p_acd;
 use crate::os::cshim::strchr;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;

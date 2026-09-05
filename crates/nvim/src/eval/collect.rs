@@ -54,14 +54,13 @@ use crate::eval::{
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
-use crate::main::{
-    channels, garbage_collect_at_exit, may_garbage_collect, p_verbose, want_garbage_collect,
-};
+use crate::main::{channels, garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
 use crate::mark::mark_global_iter;
 use crate::mbyte::string_convert;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{internal_error, verb_msg};
 use crate::ops::set_ref_in_opfunc;
+use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::quickfix::set_ref_in_quickfix;
 use crate::register::op_global_reg_iter;

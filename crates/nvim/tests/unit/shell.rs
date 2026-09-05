@@ -16,8 +16,8 @@
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::ptr;
 
-use neovim::main::{p_sh, p_shcf, p_sxe, p_sxq};
 use neovim::memory::xfree;
+use neovim::option::vars::{p_sh, p_shcf, p_sxe, p_sxq};
 use neovim::os::shell::system::os_system;
 use neovim::os::shell::{shell_argv_to_str, shell_build_argv};
 

@@ -47,9 +47,9 @@ use crate::keycodes::Ctrl_V;
 use crate::main::{
     Insstart, KeyTyped, State, VIsual_reselect, VIsual_select_reg, ai_col, bangredo, can_si,
     curbuf, curbuf_splice_pending, curwin, did_ai, e_invarg, e_modifiable, finish_op, got_int,
-    motion_force, mouse_dragging, msg_scroll, no_lines_msg, p_ch, p_fp, p_js, p_opfunc, p_report,
-    p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr, redo_VIsual_busy, repeat_cmdline, repeat_luaref,
-    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
+    motion_force, mouse_dragging, msg_scroll, no_lines_msg, redo_VIsual_busy, repeat_cmdline,
+    repeat_luaref, resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit,
+    virtual_op,
 };
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
@@ -68,6 +68,9 @@ use crate::r#move::validate_virtcol;
 use crate::normal::{
     clearop, clearopbeep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,
     unadjust_for_sel,
+};
+use crate::option::vars::{
+    p_ch, p_fp, p_js, p_opfunc, p_report, p_ri, p_sbr, p_sel, p_shm, p_sol, p_sr,
 };
 use crate::option::{get_equalprg, get_fileformat, get_ve_flags, option_set_callback_func};
 use crate::options::{kOptBoFlagOperator, kOptVeFlagAll, kOptVeFlagOnemore};

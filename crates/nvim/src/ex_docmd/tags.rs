@@ -21,10 +21,10 @@ use crate::ex_docmd::{
     cmdnames, kDirectionNotSet,
 };
 use crate::main::{
-    e_trailing_arg, g_do_tagpreview, p_pvh, postponed_split, postponed_split_flags,
-    postponed_split_tab,
+    e_trailing_arg, g_do_tagpreview, postponed_split, postponed_split_flags, postponed_split_tab,
 };
 use crate::option::magic_isset;
+use crate::option::vars::p_pvh;
 use crate::regexp::skip_regexp;
 use crate::search::find_pattern_in_path;
 use crate::tag::do_tag;

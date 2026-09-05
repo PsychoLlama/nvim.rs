@@ -26,10 +26,11 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::main::{
     curbuf, curtab, curwin, e_autocmd_close, e_floatonly, first_tabpage, firstwin, getout, lastwin,
-    p_ea, p_ead, p_ru, redraw_cmdline, redraw_tabline,
+    redraw_cmdline, redraw_tabline,
 };
 use crate::message::internal_error;
 use crate::normal::reset_VIsual_and_resel;
+use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, Frame, Integer, OK, size_t};

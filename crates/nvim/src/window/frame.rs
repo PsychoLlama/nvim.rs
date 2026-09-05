@@ -17,7 +17,8 @@ use core::ptr;
 
 use super::*;
 use crate::guard::Lock;
-use crate::main::{cmdline_win, first_tabpage, lastused_tabpage, p_sb, p_spr, tcl_flags};
+use crate::main::{cmdline_win, first_tabpage, lastused_tabpage};
+use crate::option::vars::{p_sb, p_spr, tcl_flags};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
 use crate::types::{Frame, Tabpage, Window};
 use crate::winfloat::win_float_find_altwin;

@@ -23,11 +23,10 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
-use crate::main::{
-    curbuf, curwin, need_maketitle, p_bin, p_et, p_ml, p_tw, p_wm, redraw_tabline, starting,
-};
+use crate::main::{curbuf, curwin, need_maketitle, redraw_tabline, starting};
 use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
+use crate::option::vars::{p_bin, p_et, p_ml, p_tw, p_wm};
 use crate::options::*;
 use crate::optionstr::{
     check_string_option, derive_breakat_flags, didset_string_options, empty_option,

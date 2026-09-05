@@ -61,7 +61,7 @@ use crate::linematch::linematch_nbuffers;
 use crate::main::{
     KeyTyped, curbuf, curtab, curwin, diff_context, diff_foldcolumn, diff_need_scrollbind,
     e_diff_anchors_with_hidden_windows, e_failed_to_find_all_diff_anchors, e_invrange, e_prev_dir,
-    e_problem_creating_internal_diff, need_diff_redraw, p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr,
+    e_problem_creating_internal_diff, need_diff_redraw,
 };
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
@@ -76,6 +76,7 @@ use crate::r#move::{
     invalidate_botline_win, validate_cursor,
 };
 use crate::normal::check_scrollbind;
+use crate::option::vars::{p_dex, p_dia, p_dip, p_pex, p_sbo, p_srr};
 use crate::option::{set_option_direct_for, set_option_value_give_err};
 use crate::options::{kOptBoFlagOperator, kOptDiff, kOptFoldmethod};
 use crate::optionstr::free_string_option;

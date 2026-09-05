@@ -25,12 +25,12 @@ use crate::global_cell::GlobalCell;
 use crate::main::{
     curbuf, curwin, e_cant_find_directory_str_in_cdpath, e_cant_find_file_str_in_path,
     e_no_more_directory_str_found_in_cdpath, e_no_more_file_str_found_in_path, got_int, line_msg,
-    p_cdpath, p_fic,
 };
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::message::emsg;
 use crate::normal::get_visual_text;
+use crate::option::vars::{p_cdpath, p_fic};
 use crate::option::{copy_option_part, was_set_insecurely};
 use crate::options::kOptIncludeexpr;
 use crate::os::cshim::gettext;

@@ -22,8 +22,7 @@ use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
 use crate::main::{
-    Rows, curwin, ex_normal_busy, hl_attr_active, msg_silent, p_ch, p_sbr, p_sc, p_sel, p_sloc,
-    redraw_tabline, sc_col,
+    Rows, curwin, ex_normal_busy, hl_attr_active, msg_silent, redraw_tabline, sc_col,
 };
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
@@ -32,6 +31,7 @@ use crate::normal::{
     ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear,
     showcmd_visual, visual_selection,
 };
+use crate::option::vars::{p_ch, p_sbr, p_sc, p_sel, p_sloc};
 use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;

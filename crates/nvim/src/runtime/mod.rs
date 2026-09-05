@@ -53,7 +53,7 @@ use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_d
 use crate::main::{
     cmdmod, curbuf, current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling,
     e_argreq, e_interr, e_invarg, e_norange, ex_nesting_level, global_busy, got_int, listcmd_busy,
-    msg_col, p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose, time_fd,
+    msg_col, time_fd,
 };
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
@@ -62,6 +62,7 @@ use crate::message::{
     emsg, message_filtered, msg_ext_set_kind, msg_ext_ui_flush, msg_outtrans, msg_putchar,
     verbose_enter, verbose_leave,
 };
+use crate::option::vars::{p_enc, p_ic, p_lpl, p_pp, p_rtp, p_verbose};
 use crate::option::{copy_option_part, set_option_value_give_err, vimrc_found};
 use crate::options::kOptRuntimepath;
 use crate::os::cshim::{gettext, snprintf, strncasecmp, strstr};

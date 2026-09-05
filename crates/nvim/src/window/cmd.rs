@@ -35,7 +35,7 @@ use crate::guard::Keys;
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, cmdmod, cmdwin_type, curtab, curwin,
     e_buffer_nr_not_found, e_cmdwin, e_noalt, firstwin, g_do_tagpreview, langmap_mapchar, lastwin,
-    p_langmap, p_lrm, p_pvh, postponed_split, prevwin, swb_flags, vgetc_busy,
+    postponed_split, prevwin, vgetc_busy,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
@@ -44,6 +44,7 @@ use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,
     reset_VIsual_and_resel,
 };
+use crate::option::vars::{p_langmap, p_lrm, p_pvh, swb_flags};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::pos::MAXLNUM;
 use crate::quickfix::qf_view_result;

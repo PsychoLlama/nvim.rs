@@ -55,13 +55,14 @@ use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
     exiting, exmode_active, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign,
-    p_awa, p_sol, p_ur, p_verbose, skip_redraw, swap_exists_action,
+    skip_redraw, swap_exists_action,
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};
 use crate::message::msg_check_for_delay;
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_VIsual;
+use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
 use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;

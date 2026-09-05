@@ -55,8 +55,7 @@ use crate::main::{
     msg_grid_scroll_discount, msg_hist_off, msg_no_more, msg_nowait, msg_row, msg_scroll,
     msg_scrolled, msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, need_check_timestamps,
     need_clr_eos, need_fileinfo, need_highlight_changed, need_wait_return, no_wait_return,
-    nvim_testing, on_print, p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose,
-    quit_more, rdb_flags, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
+    nvim_testing, on_print, quit_more, redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
     redrawing_cmdline, reg_recording, resize_events, sc_col, scriptout, silent_mode, skip_redraw,
     vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
@@ -70,6 +69,9 @@ use crate::memory::{
     xstrdup, xstrlcat, xstrlcpy,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
+use crate::option::vars::{
+    p_ch, p_debug, p_eb, p_lz, p_mopt, p_more, p_report, p_verbose, rdb_flags,
+};
 use crate::option::{p_vfile, shortmess};
 use crate::options::{
     kOptBoFlagMess, kOptBoFlagShell, kOptMoptFlagHistory, kOptMoptFlagHitEnter,

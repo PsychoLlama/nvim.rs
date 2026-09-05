@@ -25,8 +25,8 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
 use crate::main::{
-    Columns, Rows, cmdline_row, e_noroom, exiting, full_screen, msg_row, msg_scrolled, p_ch, p_ls,
-    p_spk, p_stal, p_wbr, redraw_cmdline, skip_update_topline, skip_win_fix_cursor,
+    Columns, Rows, cmdline_row, e_noroom, exiting, full_screen, msg_row, msg_scrolled,
+    redraw_cmdline, skip_update_topline, skip_win_fix_cursor,
 };
 use crate::mark::setmark;
 use crate::message::{msg_grid_validate, msg_grid_view};
@@ -35,6 +35,7 @@ use crate::r#move::{
     validate_botline_win, win_col_off, win_col_off2,
 };
 use crate::option::get_scrolloff_value;
+use crate::option::vars::{p_ch, p_ls, p_spk, p_stal, p_wbr};
 use crate::options::kWinOptScroll;
 use crate::plines::{plines_win, plines_win_col, plines_win_nofill};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state};

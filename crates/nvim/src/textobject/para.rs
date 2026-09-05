@@ -12,13 +12,13 @@ use core::ffi::{c_char, c_int};
 
 use super::*;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
-use crate::main::{p_para, p_sections};
 use crate::mark::setpcmark;
 use crate::mbyte::utf_head_off;
 use crate::memline::{ml_get, ml_get_len};
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
+use crate::option::vars::{p_para, p_sections};
 use crate::search::{BACKWARD, FORWARD, linewhite};
 use crate::types::{FAIL, LineNr, NUL, OK, OpArg};
 

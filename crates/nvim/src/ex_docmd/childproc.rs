@@ -9,8 +9,9 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::ex_docmd::{cmdmod_split, cmdmod_tab, kRetNilBool};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
-use crate::main::{cmdmod, e_shellempty, p_sh};
+use crate::main::{cmdmod, e_shellempty};
 use crate::memory::xstrlcat;
+use crate::option::vars::p_sh;
 
 use crate::message::{emsg, emsg_multiline};
 use crate::os::cshim::{gettext, snprintf};

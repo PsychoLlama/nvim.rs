@@ -23,7 +23,7 @@ use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
 use crate::main::{
     Insstart, State, ai_col, can_si, can_si_back, did_si, e_interr, e_modifiable,
-    e_resulting_text_too_long, got_int, old_indent, p_paste, p_report, trylevel,
+    e_resulting_text_too_long, got_int, old_indent, trylevel,
 };
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
@@ -32,6 +32,7 @@ use crate::message::{emsg, msg_progress};
 use crate::r#move::changed_cline_bef_curs;
 use crate::ops::shift_line;
 use crate::option::set_option_direct;
+use crate::option::vars::{p_paste, p_report};
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};

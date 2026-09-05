@@ -39,11 +39,12 @@ use crate::main::{
     State, VIsual_reselect, curbuf, curwin, e_job_still_running,
     e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override, last_chdir_reason, msg_silent,
-    need_fileinfo, p_acd, starting,
+    need_fileinfo, starting,
 };
 use crate::r#move::{WinValid, scroll_cursor_halfway};
 use crate::normal::visual_active;
 use crate::option::buf_copy_options;
+use crate::option::vars::p_acd;
 use crate::spell::parse_spelllang;
 use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;

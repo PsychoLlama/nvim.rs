@@ -53,7 +53,7 @@ use crate::lua::executor::{
 use crate::main::{
     Columns, arena_alloc_count, cmdpreview, cmdwin_buf, curbuf, curwin, did_emsg, e_cmdwin,
     e_invchan, ex_normal_busy, g_stats, lines_left, msg_didany, msg_no_more, msg_scroll,
-    must_redraw, need_wait_return, ns_hl_fast, ns_hl_global, p_cpo, p_lz, redraw_tabline,
+    must_redraw, need_wait_return, ns_hl_fast, ns_hl_global, redraw_tabline,
     tslua_query_parse_count, typebuf_was_filled, vgetc_busy,
 };
 use crate::mapping::{keymap_array, modify_keymap};
@@ -69,6 +69,7 @@ use crate::r#move::{changed_window_setting, update_topline, validate_cursor, win
 use crate::msgpack_rpc::channel::rpc_set_client_info;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::normal::reset_VIsual_and_resel;
+use crate::option::vars::{p_cpo, p_lz};
 use crate::option::{buf_copy_options, set_option_direct_for};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptCotFlagPopup, kOptInvalid};
 use crate::optionstr::check_stl_option;

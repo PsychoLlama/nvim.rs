@@ -33,7 +33,7 @@ use crate::input::prompt_for_input;
 use crate::main::{
     cmdline_row, curbuf, did_check_timestamps, getout, got_int, inhibit_delete_count,
     msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps, need_wait_return, no_lines_msg,
-    p_dir, p_shm, p_uc, p_verbose, recoverymode, swap_exists_action,
+    recoverymode, swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -49,6 +49,7 @@ use crate::message::{
     msg_reset_scroll, msg_start, set_keep_msg, verb_msg,
 };
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_dir, p_shm, p_uc, p_verbose};
 use crate::option::{copy_option_part, get_fileformat, set_fileformat, set_option_value_give_err};
 use crate::options::kOptFileencoding;
 use crate::os::cshim::{gettext, strncasecmp};

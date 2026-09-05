@@ -16,9 +16,10 @@ use crate::spell::WordFlags;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::fileio::vim_fgets;
-use crate::main::{got_int, p_enc};
+use crate::main::got_int;
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::xfree;
+use crate::option::vars::p_enc;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_strchr};

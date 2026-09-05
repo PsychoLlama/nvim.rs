@@ -23,12 +23,13 @@ use crate::ex_cmds::{
 use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
-use crate::main::{p_gd, sub_nlines, sub_nsubs};
+use crate::main::{sub_nlines, sub_nsubs};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xrealloc};
 use crate::message::emsg;
 use crate::ops::do_join;
 use crate::option::magic_isset;
+use crate::option::vars::p_gd;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;

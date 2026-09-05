@@ -34,13 +34,14 @@ use self::arith::{
 };
 use crate::change::inserted_bytes;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{State, curwin, p_sel, restart_edit};
+use crate::main::{State, curwin, restart_edit};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{dec, inc, ml_get_len, ml_replace};
 use crate::memory::xmallocz;
 use crate::r#move::{WinValid, changed_cline_bef_curs, set_valid_virtcol};
 use crate::normal::{set_visual_anchor, visual_active, visual_anchor};
 use crate::option::get_ve_flags;
+use crate::option::vars::p_sel;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
 use crate::pos::MAXCOL;

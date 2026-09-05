@@ -37,11 +37,11 @@ use crate::main::{
     SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, current_sctx, embedded_mode,
     err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
     exmode_active, headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile,
-    kOptVerbosefile, kOptWindow, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose,
-    p_write, readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty,
-    stdout_isatty, time_msg_at,
+    kOptVerbosefile, kOptWindow, nlua_disable_preload, readonlymode, recoverymode, silent_mode,
+    stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
+use crate::option::vars::{p_lpl, p_shadafile, p_uc, p_verbose, p_write};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
 use crate::os::cshim::{gettext, snprintf, stderr, strncasecmp};
 use crate::os::env::os_getenv;

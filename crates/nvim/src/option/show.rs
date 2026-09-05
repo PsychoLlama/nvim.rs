@@ -21,7 +21,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::keycodes::{get_special_key_name, has_key_name};
-use crate::main::{Columns, curbuf, curwin, got_int, info_message, p_mouse, silent_mode};
+use crate::main::{Columns, curbuf, curwin, got_int, info_message, silent_mode};
 use crate::mapping::{EscTarget, put_escstr};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{
@@ -29,6 +29,7 @@ use crate::message::{
     msg_puts_title,
 };
 use crate::mouse::setmouse;
+use crate::option::vars::p_mouse;
 use crate::options::{
     kOptAleph, kOptCount, kOptFiletype, kOptFoldenable, kOptFoldexpr, kOptFoldignore,
     kOptFoldlevel, kOptFoldmarker, kOptFoldmethod, kOptFoldminlines, kOptFoldnestmax, kOptPackpath,

@@ -18,7 +18,7 @@ use crate::ex_getln::getcmdline;
 use crate::fold::fold_open_cursor;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
-use crate::main::{KeyTyped, curbuf, curwin, fdo_flags, jop_flags, mod_mask, no_hlsearch, p_hls};
+use crate::main::{KeyTyped, curbuf, curwin, mod_mask, no_hlsearch};
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
@@ -27,6 +27,7 @@ use crate::normal::{
     kMarkChangedLine, kMarkContext, kMarkJumpList, kMarkMoveFailed, kMarkMoveSuccess, kMarkSetView,
     kMarkSwitchedBuf, nv_operator,
 };
+use crate::option::vars::{fdo_flags, jop_flags, p_hls};
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;

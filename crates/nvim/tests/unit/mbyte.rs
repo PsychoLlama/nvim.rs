@@ -16,11 +16,11 @@ use std::ffi::{c_char, c_int};
 
 use neovim::charset::{vim_iswordc, vim_iswordp};
 use neovim::grid::{MAX_SCHAR_SIZE, schar_get};
-use neovim::main::p_arshape;
 use neovim::mbyte::{
     char_at, char_len, cluster_len, encode_char, utf_char2bytes, utf_char2len, utf_cp_bounds_len,
     utf_fold, utf_head_off, utf_ptr2char, utf_ptr2len, utfc_ptr2len, utfc_ptr2schar,
 };
+use neovim::option::vars::p_arshape;
 
 use crate::support::editor_lock;
 

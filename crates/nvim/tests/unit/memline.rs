@@ -29,12 +29,12 @@ use std::ffi::{CString, c_char, c_int, c_long};
 use std::mem::offset_of;
 
 use neovim::buffer::{BLN_LISTED, DOBUF_WIPE, buflist_new, close_buffer};
-use neovim::main::p_dir;
 use neovim::memline::{
     B0_FNAME_SIZE_CRYPT, B0_FNAME_SIZE_NOCRYPT, B0_FNAME_SIZE_ORG, B0_HNAME_SIZE, B0_MAGIC_CHAR,
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
     ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
+use neovim::option::vars::p_dir;
 use neovim::types::{Buffer, ColNr, LineNr};
 use neovim::winlayer::Buf;
 

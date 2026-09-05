@@ -39,12 +39,13 @@ use crate::fileio::file_pat_to_reg_pat;
 use crate::global_cell::GlobalCell;
 use crate::main::{
     Columns, arg_had_last, cmdmod, cmdwin_type, curbuf, curtab, curwin, firstwin, global_alist,
-    got_int, lastused_tabpage, lastwin, max_alist_id, p_ea, p_fic, p_tpm,
+    got_int, lastused_tabpage, lastwin, max_alist_id,
 };
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::magic_isset;
+use crate::option::vars::{p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;
 use crate::path::{
     ExpandFlags, expand_wildcards, fix_fname, full_name_save, gen_expand_wildcards, path_fnamecmp,

@@ -38,8 +38,9 @@ use crate::event::rstream::{
     rstream_available, rstream_consume, rstream_init_fd, rstream_may_close, rstream_start,
     rstream_stop,
 };
-use crate::main::{main_loop, os_exit, p_ttimeout, p_ttm, ui_client_channel_id};
+use crate::main::{main_loop, os_exit, ui_client_channel_id};
 use crate::msgpack_rpc::channel::rpc_send_event;
+use crate::option::vars::{p_ttimeout, p_ttm};
 use crate::tui::keys::{KEYMOD_RECOGNIZED, modified_utf8, mouse_event, simple_utf8};
 use crate::tui::negotiate::{
     tui_enable_extended_underline, tui_handle_term_mode, tui_query_bg_color,

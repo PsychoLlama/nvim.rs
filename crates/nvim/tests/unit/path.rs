@@ -17,7 +17,7 @@ use std::ffi::{CStr, c_char, c_int};
 use std::path::Path;
 use std::ptr;
 
-use neovim::main::p_fic;
+use neovim::option::vars::p_fic;
 use neovim::path::{
     append_path, invocation_path_tail, kBothFilesMissing, kDifferentFiles, kEqualFileNames,
     kEqualFiles, kOneFileMissing, path_fix_case, path_full_compare, path_full_dir_name,

@@ -37,12 +37,12 @@ use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeah
 use crate::main::{
     KeyTyped, State, clear_cmdline, cmdwin_result, curbuf, curtab, curwin, did_check_timestamps,
     did_emsg, did_throw, did_wait_return, diff_need_scrollbind, do_redraw, emsg_on_display,
-    emsg_silent, ex_normal_busy, exmode_active, fdo_flags, finish_op, global_busy, got_int,
-    in_assert_fails, keep_msg, keep_msg_hl_id, km_startsel, km_stopsel, last_cursormoved,
-    last_cursormoved_win, may_garbage_collect, mod_mask, msg_didany, msg_didout, msg_hist_off,
-    msg_nowait, msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_fileinfo,
-    need_wait_return, opcount, p_smd, quit_more, redraw_cmdline, redraw_mode, reg_executing,
-    reg_recording, restart_edit, skip_redraw, time_fd,
+    emsg_silent, ex_normal_busy, exmode_active, finish_op, global_busy, got_int, in_assert_fails,
+    keep_msg, keep_msg_hl_id, km_startsel, km_stopsel, last_cursormoved, last_cursormoved_win,
+    may_garbage_collect, mod_mask, msg_didany, msg_didout, msg_hist_off, msg_nowait, msg_scroll,
+    msg_silent, must_redraw, need_check_timestamps, need_fileinfo, need_wait_return, opcount,
+    quit_more, redraw_cmdline, redraw_mode, reg_executing, reg_recording, restart_edit,
+    skip_redraw, time_fd,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
@@ -52,6 +52,7 @@ use crate::normal::{
     find_command, normal_execute, nv_cmds, unshift_special, visual_active,
 };
 use crate::option::shortmess;
+use crate::option::vars::{fdo_flags, p_smd};
 use crate::options::kOptFdoFlagAll;
 use crate::pos::equalpos;
 use crate::profile::{time_finish, time_msg};

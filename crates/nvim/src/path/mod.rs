@@ -27,12 +27,13 @@ use crate::garray::{
     ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, got_int, p_cdpath, p_fic, p_path, p_su, p_wig};
+use crate::main::{curbuf, got_int};
 use crate::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xrealloc, xstrdup, xstrlcat, xstrlcpy};
 use crate::option::copy_option_part;
+use crate::option::vars::{p_cdpath, p_fic, p_path, p_su, p_wig};
 use crate::os::cshim::strchr;
 use crate::os::env::{expand_env, expand_env_save_opt, os_getenv, vim_env_iter};
 use crate::os::fs::{

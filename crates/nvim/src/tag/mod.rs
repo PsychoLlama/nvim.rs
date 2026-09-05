@@ -27,11 +27,10 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::main::{
-    Columns, KeyTyped, State, curbuf, curtab, curwin, e_invarg, e_listreq, fdo_flags,
-    g_do_tagpreview, g_tag_at_cursor, got_int, jop_flags, keep_help_flag, magic_overruled, msg_col,
-    msg_didout, msg_scroll, msg_scrolled, msg_silent, no_hlsearch, p_enc, p_hf, p_hlg, p_ic, p_scs,
-    p_sft, p_tags, p_tbs, p_tgst, p_tl, p_tr, p_verbose, p_ws, postponed_split,
-    postponed_split_flags, secure, swb_flags, tc_flags, vim_ignored,
+    Columns, KeyTyped, State, curbuf, curtab, curwin, e_invarg, e_listreq, g_do_tagpreview,
+    g_tag_at_cursor, got_int, keep_help_flag, magic_overruled, msg_col, msg_didout, msg_scroll,
+    msg_scrolled, msg_silent, no_hlsearch, postponed_split, postponed_split_flags, secure,
+    vim_ignored,
 };
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
@@ -42,6 +41,10 @@ use crate::message::{
     msg_start, verbose_enter, verbose_leave, wait_return,
 };
 use crate::r#move::{set_topline, validate_cursor};
+use crate::option::vars::{
+    fdo_flags, jop_flags, p_enc, p_hf, p_hlg, p_ic, p_scs, p_sft, p_tags, p_tbs, p_tgst, p_tl,
+    p_tr, p_verbose, p_ws, swb_flags, tc_flags,
+};
 use crate::option::{copy_option_part, magic_isset, option_set_callback_func};
 use crate::options::{
     kOptFdoFlagTag, kOptJopFlagView, kOptSwbFlagNewtab, kOptSwbFlagUseopen, kOptSwbFlagUsetab,

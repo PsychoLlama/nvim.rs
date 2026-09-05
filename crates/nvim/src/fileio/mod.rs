@@ -30,8 +30,8 @@ use crate::main::{
     ex_no_reprint, exiting, exmode_active, global_busy, got_int, in_assert_fails, keep_msg,
     msg_col, msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
     need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
-    p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose, readonlymode, recoverymode,
-    redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action, vim_ignored,
+    readonlymode, recoverymode, redraw_cmdline, redraw_tabline, restart_edit, stdin_fd,
+    swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
@@ -51,6 +51,7 @@ use crate::message::{
     set_keep_msg,
 };
 use crate::r#move::update_topline;
+use crate::option::vars::{p_ar, p_ccv, p_enc, p_fencs, p_ffs, p_fic, p_ur, p_verbose};
 use crate::option::{
     copy_option_part, default_fileformat, get_fileformat, get_fileformat_force, set_fileformat,
     set_option_direct, set_options_bin, shortmess,

@@ -28,8 +28,8 @@ use crate::regexp::NotAnOpcode;
 use core::ffi::c_int;
 
 use super::sub::{copy_pim, copy_sub, has_backref, has_zsubexpr, pim_equal, slots, sub_equal};
-use crate::main::p_mmp;
 use crate::message::emsg;
+use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     ADDSTATE_HERE_OFFSET, Capture, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos,

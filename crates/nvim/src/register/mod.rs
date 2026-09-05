@@ -60,9 +60,8 @@ use crate::keycodes::{
 };
 use crate::main::{
     Columns, State, curbuf, e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long,
-    got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline, p_ch, p_report,
-    p_sel, pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording,
-    restart_edit,
+    got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline,
+    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -81,6 +80,7 @@ use crate::r#move::{changed_cline_bef_curs, invalidate_botline_win, update_topli
 use crate::normal::find_ident_under_cursor;
 use crate::ops::{adjust_cursor_eol, block_prep, charwise_block_prep, get_op_char};
 use crate::option::get_ve_flags;
+use crate::option::vars::{p_ch, p_report, p_sel};
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::os::input::os_breakcheck;

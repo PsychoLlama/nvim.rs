@@ -26,9 +26,10 @@ use super::*;
 use crate::autocmd::apply_autocmds;
 use crate::eval::typval::{tv_dict_find, tv_dict_is_watched, tv_dict_watcher_notify};
 use crate::ex_docmd::cmdmod_has;
-use crate::main::{cmdwin_buf, curbuf, msg_loclist, msg_qflist, p_hid};
+use crate::main::{cmdwin_buf, curbuf, msg_loclist, msg_qflist};
 use crate::memline::ml_get_buf;
 use crate::message::emsg_ptr;
+use crate::option::vars::p_hid;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{

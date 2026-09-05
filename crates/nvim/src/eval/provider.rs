@@ -30,10 +30,11 @@ use crate::ex_cmds::check_secure;
 use crate::lua::executor::nlua_is_deferred_safe;
 use crate::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_invarg,
-    e_invchan, e_invchanjob, got_int, p_lpl, provider_call_nesting, provider_caller_scope,
+    e_invchan, e_invchanjob, got_int, provider_call_nesting, provider_caller_scope,
 };
 use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
+use crate::option::vars::p_lpl;
 use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::strings::concat_str;

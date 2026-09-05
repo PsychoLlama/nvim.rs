@@ -18,13 +18,11 @@ use super::*;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
-use crate::main::{
-    State, curbuf, curwin, mod_mask, mouse_col, mouse_row, p_mousem, p_mousescroll_hor,
-    p_mousescroll_vert,
-};
+use crate::main::{State, curbuf, curwin, mod_mask, mouse_col, mouse_row};
 use crate::r#move::pagescroll;
 use crate::normal::nv_scroll_line;
 use crate::ops::clear_oparg;
+use crate::option::vars::{p_mousem, p_mousescroll_hor, p_mousescroll_vert};
 use crate::popupmenu::pum_visible;
 use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};

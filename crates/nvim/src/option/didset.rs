@@ -41,15 +41,17 @@ use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::main::{
     Columns, Rows, clear_cmdline, cmdline_row, curtab, e_invarg, firstwin, full_screen, lastwin,
-    need_maketitle, p_arshape, p_ch, p_columns, p_deco, p_ea, p_enc, p_hh, p_hls, p_lines, p_lnr,
-    p_lrm, p_sj, p_tbidi, p_titlelen, p_uc, p_udf, p_ul, p_wh, p_window, p_wiw, readonlymode,
-    starting, topframe, updating_screen,
+    need_maketitle, readonlymode, starting, topframe, updating_screen,
 };
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
 use crate::message::{msg, msg_source};
 use crate::r#move::changed_window_setting;
 use crate::normal::{do_check_scrollbind, get_vtopline};
+use crate::option::vars::{
+    p_arshape, p_ch, p_columns, p_deco, p_ea, p_enc, p_hh, p_hls, p_lines, p_lnr, p_lrm, p_sj,
+    p_tbidi, p_titlelen, p_uc, p_udf, p_ul, p_wh, p_window, p_wiw,
+};
 use crate::options::{kOptChistory, kOptKeymap, kOptUndolevels, kOptWindow};
 use crate::optionstr::check_signcolumn;
 use crate::os::cshim::gettext;

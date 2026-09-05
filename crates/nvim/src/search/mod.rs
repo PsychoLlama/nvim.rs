@@ -42,10 +42,9 @@ use crate::insexpand::{
 };
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, State, bot_top_msg, called_emsg, cmd_silent, curbuf,
-    curwin, dollar_vcol, e_interr, e_nopresub, e_noprevre, e_patnotf2, fdo_flags, g_do_tagpreview,
-    got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent,
-    no_hlsearch, no_smartcase, p_def, p_hls, p_ic, p_inc, p_js, p_mat, p_msc, p_ri, p_scs, p_sel,
-    p_verbose, p_ws, rc_did_emsg, sc_col, search_match_endcol, search_match_lines, searchcmdlen,
+    curwin, dollar_vcol, e_interr, e_nopresub, e_noprevre, e_patnotf2, g_do_tagpreview, got_int,
+    msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent, no_hlsearch,
+    no_smartcase, rc_did_emsg, sc_col, search_match_endcol, search_match_lines, searchcmdlen,
     top_bot_msg,
 };
 use crate::mark::setpcmark;
@@ -63,6 +62,9 @@ use crate::message::{
 use crate::mouse::setmouse;
 use crate::r#move::validate_cursor;
 use crate::normal::may_start_select;
+use crate::option::vars::{
+    fdo_flags, p_def, p_hls, p_ic, p_inc, p_js, p_mat, p_msc, p_ri, p_scs, p_sel, p_verbose, p_ws,
+};
 use crate::option::{magic_isset, shortmess};
 use crate::options::{kOptBoFlagShowmatch, kOptFdoFlagSearch};
 use crate::os::cshim::{gettext, snprintf, strstr};

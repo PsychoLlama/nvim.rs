@@ -13,8 +13,9 @@
 
 use super::arith::{MinSize, NextCurwin};
 use super::*;
-use crate::main::{Rows, curwin, p_ch, p_wh, p_wiw, p_wmh, p_wmw};
+use crate::main::{Rows, curwin};
 use crate::option::set_option_value;
+use crate::option::vars::{p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::kOptCmdheight;
 use crate::types::{Frame, OptInt, OptVal, OptionSetFlags};
 use crate::winlayer::{FrameRef, Win};

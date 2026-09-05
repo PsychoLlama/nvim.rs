@@ -21,8 +21,9 @@ use super::*;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::getdigits_int;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
-use crate::main::{p_cpo, sys_menu};
+use crate::main::sys_menu;
 use crate::memory::xcalloc;
+use crate::option::vars::p_cpo;
 use crate::types::{ExArg, VimMenu};
 use crate::ui::ui_call_update_menu;
 

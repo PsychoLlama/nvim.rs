@@ -51,16 +51,14 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::shorten_fnames;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    curbuf, curtab, curwin, e_noname, e_prev_dir, e_write, globaldir, no_hlsearch, p_acd, p_hls,
-    p_vdir, ssop_flags, vop_flags,
-};
+use crate::main::{curbuf, curtab, curwin, e_noname, e_prev_dir, e_write, globaldir, no_hlsearch};
 use crate::mapping::makemap;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
 use crate::option::makeset;
+use crate::option::vars::{p_acd, p_hls, p_vdir, ssop_flags, vop_flags};
 use crate::options::{
     OptSsopFlags, kOptSsopFlagBlank, kOptSsopFlagCurdir, kOptSsopFlagHelp, kOptSsopFlagOptions,
     kOptSsopFlagSesdir, kOptSsopFlagSkiprtp, kOptSsopFlagTerminal,

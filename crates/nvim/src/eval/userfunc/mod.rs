@@ -52,8 +52,7 @@ use crate::main::{
     KeyTyped, Rows, cmdline_row, current_sctx, debug_backtrace_level, debug_tick, did_emsg,
     did_throw, do_profiling, e_invarg2, e_invrange, e_toofewarg, e_toomanyarg,
     e_unknown_function_str, e_usingsid, emsg_severe, ex_nesting_level, got_int, lines_left,
-    msg_row, msg_scroll, need_wait_return, p_ic, p_mfd, p_verbose, sandbox, trylevel,
-    want_garbage_collect,
+    msg_row, msg_scroll, need_wait_return, sandbox, trylevel, want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
@@ -64,6 +63,7 @@ use crate::message::{
     msg_prt_line, msg_putchar, msg_puts, msg_start, trunc_string, verbose_enter_scroll,
     verbose_leave_scroll,
 };
+use crate::option::vars::{p_ic, p_mfd, p_verbose};
 use crate::os::cshim::{gettext, snprintf, strstr};
 use crate::os::input::line_breakcheck;
 use crate::path::path_fnamecmp;

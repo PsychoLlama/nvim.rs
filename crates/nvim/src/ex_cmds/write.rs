@@ -39,14 +39,15 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
 use crate::main::{
-    e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly, emsg_silent, exiting, getout, p_confirm,
-    p_dir, p_wa, p_write, redraw_tabline,
+    e_argreq, e_bufloaded, e_exists, e_invarg, e_readonly, emsg_silent, exiting, getout,
+    redraw_tabline,
 };
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
 use crate::memory::xfree;
 use crate::message::{emsg, vim_dialog_yesno};
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_confirm, p_dir, p_wa, p_write};
 use crate::option::{copy_option_part, cpo_has, shortmess};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};

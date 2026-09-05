@@ -60,7 +60,7 @@ use crate::highlight_group::{
 use crate::indent_c::find_start_comment;
 use crate::main::{
     Columns, Rows, curbuf, curwin, display_tick, got_int, include_default, include_link,
-    include_none, msg_col, p_cpo, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
+    include_none, msg_col, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
 };
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
@@ -69,6 +69,7 @@ use crate::message::{
     emsg, msg, msg_advance, msg_ext_set_kind, msg_outnum, msg_outtrans, msg_outtrans_len,
     msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
 };
+use crate::option::vars::p_cpo;
 use crate::optionstr::clear_string_option;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::input::line_breakcheck;

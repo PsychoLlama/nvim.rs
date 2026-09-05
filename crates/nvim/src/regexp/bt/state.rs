@@ -42,8 +42,8 @@
 )]
 
 use crate::global_cell::GlobalCell;
-use crate::main::p_mmp;
 use crate::message::emsg;
+use crate::option::vars::p_mmp;
 use crate::os::cshim::gettext;
 use crate::regexp::{
     BACKPOS_INITIAL, E_PATTERN_USES_MORE_MEMORY_THAN_MAXMEMPATTERN, MatchPos, NSUBEXP,

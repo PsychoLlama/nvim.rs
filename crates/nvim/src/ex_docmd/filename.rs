@@ -38,9 +38,10 @@ use crate::ex_docmd::{
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
 use crate::main::{
     autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx, e_usingsid,
-    escape_chars, p_gp, p_mp, p_wic,
+    escape_chars,
 };
 use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
+use crate::option::vars::{p_gp, p_mp, p_wic};
 
 use crate::message::{emsg_ptr, msg_make};
 use crate::normal::find_ident_under_cursor;

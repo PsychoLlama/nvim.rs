@@ -30,6 +30,7 @@
 //! | [`show`] | `:set` listing, `:mkvimrc`, the UI broadcast |
 //! | [`expand`] | command-line completion |
 //! | [`info`] | `nvim_get_option_info` |
+//! | [`vars`] | the global values themselves, one cell per option |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -58,6 +59,7 @@ mod state;
 mod stropt;
 mod validate;
 mod value;
+pub mod vars;
 
 pub(crate) use self::check::*;
 pub(crate) use self::context::*;

@@ -34,9 +34,10 @@ use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
     Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui,
     did_cursorhold, do_profiling, getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid,
-    mouse_row, p_mouset, p_ut, preserve_exit, silent_mode, typebuf_was_filled, used_stdin,
+    mouse_row, preserve_exit, silent_mode, typebuf_was_filled, used_stdin,
 };
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_mouset, p_ut};
 use crate::os::cshim::gettext;
 use crate::os::time::os_hrtime;
 use crate::profile::{prof_input_end, prof_input_start};

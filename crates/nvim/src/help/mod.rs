@@ -38,13 +38,12 @@ use crate::ex_cmds::newlnum;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
-use crate::main::{
-    Columns, KeyTyped, cmdmod, curbuf, curwin, e_noident, p_hf, p_hh, p_hlg, p_sb, restart_edit,
-};
+use crate::main::{Columns, KeyTyped, cmdmod, curbuf, curwin, e_noident, restart_edit};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::{emsg, emsg_multiline};
 use crate::message_fmt::c_str;
 use crate::option::set_option_direct;
+use crate::option::vars::{p_hf, p_hh, p_hlg, p_sb};
 use crate::options::{kOptBuftype, kOptFoldmethod, kOptIskeyword};
 use crate::optionstr::check_buf_options;
 use crate::os::cshim::gettext;

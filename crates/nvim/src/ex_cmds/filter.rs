@@ -37,7 +37,7 @@ use crate::highlight_group::HLF_N;
 use crate::main::{
     Rows, autocmd_busy, bangredo, cmdmod, did_check_timestamps, e_noprev, e_notmp, global_busy,
     got_int, info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent,
-    need_check_timestamps, p_report, p_sh, p_shq, p_srr, p_stmp, p_warn, silent_mode,
+    need_check_timestamps, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
@@ -49,6 +49,7 @@ use crate::message::{
 use crate::message_fmt::c_str;
 use crate::r#move::{changed_line_abv_curs, invalidate_botline_win};
 use crate::option::cpo_has;
+use crate::option::vars::{p_report, p_sh, p_shq, p_srr, p_stmp, p_warn};
 use crate::os::cshim::gettext;
 use crate::os::fs::os_remove;
 use crate::os::input::os_breakcheck;

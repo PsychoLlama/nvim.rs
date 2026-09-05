@@ -20,9 +20,7 @@ use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    curbuf, curwin, no_hlsearch, p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose,
-};
+use crate::main::{curbuf, curwin, no_hlsearch};
 use crate::mark::{
     cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,
     mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
@@ -37,6 +35,7 @@ use crate::msgpack_rpc::packer::{
 use crate::msgpack_rpc::unpacker::{
     push_additional_data, unpack_array, unpack_integer, unpack_keydict, unpack_skip, unpack_string,
 };
+use crate::option::vars::{p_enc, p_fs, p_hi, p_shada, p_shadafile, p_verbose};
 use crate::option::{copy_option_part, magic_isset};
 use crate::os::env::{expand_env, home_replace, home_replace_save, os_get_pid};
 use crate::os::fileio::{

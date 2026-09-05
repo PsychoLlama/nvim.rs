@@ -36,13 +36,13 @@ use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
     au_new_curbuf, cmdline_row, curbuf, e_cannot_switch_to_a_closing_buffer, e_trailing_arg,
-    got_int, jop_flags, msg_row, msg_scroll, need_fileinfo, p_confirm, p_report, p_write,
-    swap_exists_action, swap_exists_did_quit,
+    got_int, msg_row, msg_scroll, need_fileinfo, swap_exists_action, swap_exists_did_quit,
 };
 use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
 use crate::message::msg_puts;
 use crate::message_fmt::{c_str, report_msg};
+use crate::option::vars::{jop_flags, p_confirm, p_report, p_write};
 use crate::options::kOptJopFlagClean;
 use crate::os::cshim::ngettext;
 use crate::os::input::os_breakcheck;

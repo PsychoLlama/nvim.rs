@@ -27,12 +27,13 @@ use super::{
     reg_tofree, reg_tofreelen,
 };
 use crate::charset::vim_iswordc_buf;
-use crate::main::{curbuf, curwin, e_re_corr, got_int, p_sel, rc_did_emsg};
+use crate::main::{curbuf, curwin, e_re_corr, got_int, rc_did_emsg};
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xcalloc, xfree, xmalloc};
 use crate::message::emsg;
 use crate::normal::{VisualMode, visual_ever_started, visual_selection};
+use crate::option::vars::p_sel;
 use crate::os::cshim::gettext;
 use crate::os::input::fast_breakcheck;
 use crate::plines::{getvvcol, win_linetabsize};

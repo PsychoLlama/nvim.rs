@@ -37,11 +37,12 @@ use crate::decoration::{
     DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
-use crate::main::{bot_top_msg, curwin, decor_state, got_int, p_ws, top_bot_msg};
+use crate::main::{bot_top_msg, curwin, decor_state, got_int, top_bot_msg};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::give_warning;
 use crate::option::shortmess;
+use crate::option::vars::p_ws;
 use crate::options::kOptSpoFlagNoplainbuffer;
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;

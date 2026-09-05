@@ -51,11 +51,11 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
     curtab, curwin, e_not_allowed_to_change_window_layout_in_this_autocmd,
-    e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, lastwin, prevwin, swb_flags,
-    topframe,
+    e_winfixbuf_cannot_go_to_buffer, first_tabpage, firstwin, lastwin, prevwin, topframe,
 };
 use crate::memory::xfree;
 use crate::message::{emsg, emsg_ptr, msg};
+use crate::option::vars::swb_flags;
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;

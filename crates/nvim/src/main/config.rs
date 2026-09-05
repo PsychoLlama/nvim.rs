@@ -21,9 +21,10 @@ use crate::main::args::execute_env;
 use crate::main::{
     DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, MainParams, PATHSEP, SID_CARG,
     SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, exmode_active, kEqualFiles,
-    kXDGConfigDirs, msg_scroll, p_exrc, silent_mode, time_msg_at,
+    kXDGConfigDirs, msg_scroll, silent_mode, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
+use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, stderr};
 use crate::os::env::vim_env_iter;
 use crate::os::fs::os_path_exists;

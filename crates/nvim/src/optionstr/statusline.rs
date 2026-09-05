@@ -12,11 +12,10 @@ use std::ffi::CString;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int, transchar_byte};
 use crate::drawscreen::comp_col;
-use crate::main::{
-    e_invalid_format_string_single_percent_s, p_ruf, p_shada, ru_wid, ssop_flags, stl_syntax,
-};
+use crate::main::{e_invalid_format_string_single_percent_s, ru_wid, stl_syntax};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{verbose_open, verbose_stop};
+use crate::option::vars::{p_ruf, p_shada, ssop_flags};
 use crate::option::{answer_err, did_set_title, get_option_default, p_vfile};
 use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt_ssop_values};
 use crate::os::cshim::gettext;

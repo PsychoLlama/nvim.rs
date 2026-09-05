@@ -65,11 +65,10 @@ use crate::main::{
     e_positive, e_textlock, emsg_on_display, ex_normal_busy, exec_from_reg, exmode_active,
     global_busy, got_int, highlight_match, lines_left, magic_overruled, mod_mask, mouse_col,
     mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled,
-    need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, p_ari, p_arshape, p_cedit, p_ch,
-    p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl, p_tal, p_tbidi, p_wbr, p_wc,
-    p_wcm, p_wim, p_wmnu, pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline,
-    redrawing_cmdline, restart_edit, search_first_line, search_last_line, search_match_endcol,
-    search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, wild_menu_showing, wim_flags,
+    need_wait_return, new_last_cmdline, no_abbr, no_hlsearch, pum_want, quit_more, redir_off,
+    redraw_cmdline, redraw_tabline, redrawing_cmdline, restart_edit, search_first_line,
+    search_last_line, search_match_endcol, search_match_lines, skip_redraw, skip_win_fix_cursor,
+    textlock, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
@@ -94,6 +93,10 @@ use crate::r#move::{
     validate_cursor,
 };
 use crate::normal::{clear_showcmd, normal_enter};
+use crate::option::vars::{
+    p_ari, p_arshape, p_cedit, p_ch, p_cwh, p_hls, p_ic, p_icm, p_is, p_paste, p_ru, p_scs, p_stl,
+    p_tal, p_tbidi, p_wbr, p_wc, p_wcm, p_wim, p_wmnu, wim_flags,
+};
 use crate::option::{
     csh_like_shell, magic_isset, set_iminsert_global, set_imsearch_global, set_option_direct,
     set_option_value_give_err, string_to_key,

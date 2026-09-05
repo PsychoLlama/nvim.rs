@@ -26,9 +26,10 @@ use super::{
 use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
 use crate::fold::put_folds;
-use crate::main::{curbuf, curwin, ssop_flags};
+use crate::main::{curbuf, curwin};
 use crate::mapping::makemap;
 use crate::memory::xfree;
+use crate::option::vars::ssop_flags;
 use crate::option::{makefoldset, makeset};
 use crate::options::{
     kOptSsopFlagCurdir, kOptSsopFlagCursor, kOptSsopFlagFolds, kOptSsopFlagLocaloptions,

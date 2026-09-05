@@ -54,12 +54,11 @@ use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN,
-    argv0, cb_flags, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode,
-    err_arg_missing, exmode_active, full_screen, headless_mode, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, main_loop, msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl,
-    p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout, silent_mode,
-    starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
-    ui_client_forward_stdin,
+    argv0, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode, err_arg_missing,
+    exmode_active, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop,
+    msg_didout, msg_row, msg_scroll, no_wait_return, recoverymode, resize_events, restart_edit,
+    scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
+    ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -69,6 +68,7 @@ use crate::mouse::setmouse;
 use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};
 use crate::normal::{check_scrollbind, normal_enter};
+use crate::option::vars::{cb_flags, p_ch, p_lpl, p_shada, p_uc, p_ut};
 use crate::option::{set_init_1, set_init_2, set_init_3, set_init_tablocal};
 use crate::os::cshim::{gettext, stderr, stdout};
 use crate::os::env::{env_init, init_homedir, os_hint_priority};

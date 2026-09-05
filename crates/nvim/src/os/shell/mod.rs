@@ -38,8 +38,7 @@ use crate::fileio::vim_tempname;
 use crate::global_cell::GlobalCell;
 use crate::kvec::Kvec;
 use crate::main::{
-    State, curbuf, curwin, do_profiling, e_notmp, e_shellempty, emsg_silent, main_loop, p_sh,
-    p_shcf, p_sxe, p_sxq, p_verbose,
+    State, curbuf, curwin, do_profiling, e_notmp, e_shellempty, emsg_silent, main_loop,
 };
 use crate::memline::ml_append;
 use crate::memory::{xcalloc, xfree, xmalloc, xstrdup, xstrlcat};
@@ -47,6 +46,7 @@ use crate::message::{
     emsg, msg_ext_set_kind, msg_outnum, msg_putchar, msg_puts, verbose_enter, verbose_leave,
 };
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_sh, p_shcf, p_sxe, p_sxq, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_fopen, os_remove};
 use crate::os::signal::{signal_accept_deadly, signal_reject_deadly};

@@ -28,9 +28,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::main::{
-    State, cb_flags, curbuf, curwin, e_modifiable, got_int, p_sel, p_sta, p_to, p_ww, restart_edit,
-};
+use crate::main::{State, curbuf, curwin, e_modifiable, got_int, restart_edit};
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;
@@ -44,6 +42,7 @@ use crate::normal::{
 };
 use crate::ops::{do_join, do_pending_operator, op_addsub, swapchar};
 use crate::option::get_ve_flags;
+use crate::option::vars::{cb_flags, p_sel, p_sta, p_to, p_ww};
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptVeFlagAll};
 use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;

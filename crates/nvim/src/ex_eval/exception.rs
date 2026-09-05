@@ -50,12 +50,13 @@ use crate::guard::{Allow, Suppress};
 use crate::main::{
     caught_stack, cmdline_row, current_exception, debug_break_level, did_emsg, did_throw, e_interr,
     e_outofmem, emsg_silent, force_abort, got_int, msg_list, msg_row, msg_scroll, need_rethrow,
-    p_verbose, suppress_errthrow, trylevel,
+    suppress_errthrow, trylevel,
 };
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};
 use crate::message_fmt::{c_str, report_msg};
 use crate::option::p_vfile;
+use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext_ptr, snprintf};
 use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};

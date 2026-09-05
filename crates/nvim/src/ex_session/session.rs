@@ -35,10 +35,9 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
-use crate::main::{
-    Columns, Rows, curtab, curwin, firstwin, globaldir, p_shm, p_stal, p_wh, p_wiw, topframe,
-};
+use crate::main::{Columns, Rows, curtab, curwin, firstwin, globaldir, topframe};
 use crate::memory::xfree;
+use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
     kOptSsopFlagBuffers, kOptSsopFlagCurdir, kOptSsopFlagGlobals, kOptSsopFlagHelp,
     kOptSsopFlagOptions, kOptSsopFlagResize, kOptSsopFlagSesdir, kOptSsopFlagTabpages,

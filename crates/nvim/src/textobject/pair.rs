@@ -21,12 +21,12 @@ use crate::cursor::{
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later, showmode};
 use crate::eval::funcs::do_searchpair;
 use crate::indent::inindent;
-use crate::main::{p_cpo, p_sel, p_ws};
 use crate::mark::setpcmark;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::{decl, inc, incl, ml_get_pos};
 use crate::memory::{xfree, xmalloc};
 use crate::option::cpo_has;
+use crate::option::vars::{p_cpo, p_sel, p_ws};
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};

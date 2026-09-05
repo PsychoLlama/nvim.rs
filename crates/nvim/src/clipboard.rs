@@ -17,9 +17,9 @@ use crate::eval::typval::{
 };
 use crate::eval::{eval_call_provider, eval_has_provider};
 use crate::global_cell::GlobalCell;
-use crate::main::cb_flags;
 use crate::memory::{xcalloc, xfree};
 use crate::message::{emsg, msg, redirecting};
+use crate::option::vars::cb_flags;
 use crate::options::{kOptCbFlagUnnamed, kOptCbFlagUnnamedplus};
 use crate::register::{
     PLUS_REGISTER, STAR_REGISTER, free_register, get_y_previous, get_y_register, kMTBlockWise,

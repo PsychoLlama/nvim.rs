@@ -29,12 +29,13 @@ use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
 use crate::main::{
-    Columns, Rows, autocmd_busy, curbuf, curtab, curwin, firstwin, lastwin, p_ch, prevwin, topframe,
+    Columns, Rows, autocmd_busy, curbuf, curtab, curwin, firstwin, lastwin, prevwin, topframe,
 };
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::memory::xcalloc;
 use crate::option::clear_winopt;
+use crate::option::vars::p_ch;
 use crate::quickfix::qf_free_all;
 use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;

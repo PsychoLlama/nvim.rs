@@ -38,8 +38,8 @@ use crate::highlight_group::{
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
-    State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, did_emsg, dollar_vcol, dy_flags,
-    highlight_match, hl_attr_active, normal_bg, p_sel, search_match_endcol, search_match_lines,
+    State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, did_emsg, dollar_vcol,
+    highlight_match, hl_attr_active, normal_bg, search_match_endcol, search_match_lines,
     spell_redraw_lnum, win_extmark_arr,
 };
 use crate::r#match::{
@@ -52,6 +52,7 @@ use crate::mbyte::{
 use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
+use crate::option::vars::{dy_flags, p_sel};
 use crate::option::{get_showbreak_value, kOptFlagInsecure};
 use crate::options::{
     kOptCuloptFlagLine, kOptCuloptFlagNumber, kOptCuloptFlagScreenline, kOptDyFlagUhex,

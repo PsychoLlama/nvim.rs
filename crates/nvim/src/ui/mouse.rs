@@ -9,8 +9,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::main::{State, curbuf, p_mouse};
+use crate::main::{State, curbuf};
 use crate::normal::visual_active;
+use crate::option::vars::p_mouse;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };

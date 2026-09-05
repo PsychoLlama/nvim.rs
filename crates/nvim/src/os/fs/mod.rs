@@ -33,10 +33,11 @@ use crate::event::libuv::{
     uv_translate_sys_error,
 };
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::main::{g_stats, p_verbose, stdin_fd};
+use crate::main::{g_stats, stdin_fd};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
+use crate::option::vars::p_verbose;
 use crate::os::env::os_getenv;
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;

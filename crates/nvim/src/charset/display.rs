@@ -15,13 +15,14 @@ use core::ffi::{c_char, c_int, c_void};
 use core::{ptr, slice};
 
 use crate::garray::{ga_grow, ga_init};
-use crate::main::{curbuf, dy_flags};
+use crate::main::curbuf;
 use crate::mbyte::{
     mb_tolower, utf_char2bytes, utf_char2cells, utf_char2len, utf_ptr2cells, utf_ptr2char,
     utf_ptr2len, utfc_ptr2len,
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
+use crate::option::vars::dy_flags;
 use crate::types::{Buffer, GArray, NUL, StringBuilder, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
 

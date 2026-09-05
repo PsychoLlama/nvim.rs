@@ -8,7 +8,7 @@
 
 use core::ffi::c_int;
 
-use crate::main::{p_arshape, p_tbidi};
+use crate::option::vars::{p_arshape, p_tbidi};
 
 const A_HAMZA: c_int = 0x0621;
 const A_ALEF_MADDA: c_int = 0x0622;

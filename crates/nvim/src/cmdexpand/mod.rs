@@ -48,8 +48,8 @@ use crate::lua::executor::{
 use crate::main::{
     Columns, KeyTyped, Rows, cmd_silent, cmdline_row, cmdline_win, curbuf, current_sctx, curwin,
     e_invarg, e_toomany, got_int, hl_attr_active, msg_col, msg_didany, msg_row, msg_scrolled,
-    p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, pum_want, save_p_ls, save_p_wmh,
-    search_first_line, search_last_line, topframe, wild_menu_showing, wop_flags,
+    pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line, topframe,
+    wild_menu_showing,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -60,6 +60,7 @@ use crate::message::{
     emsg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_grid_view, msg_outtrans,
     msg_outtrans_long, msg_putchar, msg_puts, msg_puts_hl, msg_scroll_up, msg_start,
 };
+use crate::option::vars::{p_fic, p_ic, p_ls, p_scs, p_wc, p_wic, p_wmh, p_wmnu, wop_flags};
 use crate::option::{
     copy_option_part, csh_like_shell, expand_old_setting, expand_setting_subtract, expand_settings,
     expand_string_setting, get_findfunc, magic_isset, set_context_in_set_cmd,

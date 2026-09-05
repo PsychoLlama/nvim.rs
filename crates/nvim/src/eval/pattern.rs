@@ -11,9 +11,9 @@ use core::ptr::{copy_nonoverlapping, null_mut};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::eval::{REGSUB_COPY, REGSUB_MAGIC};
-use crate::main::{p_cpo, p_ic};
 use crate::mbyte::utfc_ptr2len;
 use crate::option::set_option_value_give_err;
+use crate::option::vars::{p_cpo, p_ic};
 use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};

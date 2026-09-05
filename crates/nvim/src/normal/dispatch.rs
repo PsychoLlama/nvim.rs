@@ -29,9 +29,9 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::main::{
     KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
-    fdo_flags, finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force,
-    msg_col, msg_didout, msg_nowait, opcount, p_langmap, p_lrm, p_tm, p_ttm, restart_VIsual_select,
-    restart_edit, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force, msg_col,
+    msg_didout, msg_nowait, opcount, restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char,
+    vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
@@ -48,6 +48,7 @@ use crate::normal::{
     set_visual_select, start_selection, visual_active, visual_select,
 };
 use crate::ops::{Op, do_pending_operator, get_op_type};
+use crate::option::vars::{fdo_flags, p_langmap, p_lrm, p_tm, p_ttm};
 use crate::register::get_default_register_name;
 use crate::state::{
     MODE_LANGMAP, MODE_LREPLACE, MODE_NORMAL, MODE_NORMAL_BUSY, MODE_REPLACE, MODE_SELECT,

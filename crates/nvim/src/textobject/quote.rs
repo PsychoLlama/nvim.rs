@@ -15,13 +15,14 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::cursor::{dec_cursor, get_cursor_line_ptr, inc_cursor};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
-use crate::main::{p_sel, redraw_cmdline};
+use crate::main::redraw_cmdline;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::dec;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
     with_visual_anchor,
 };
+use crate::option::vars::p_sel;
 use crate::pos::{equalpos, lt};
 use crate::strings::vim_strchr;
 use crate::types::{ColNr, NUL, OpArg};

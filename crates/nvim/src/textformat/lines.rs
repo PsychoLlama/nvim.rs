@@ -29,12 +29,13 @@ use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
 };
 use crate::indent_c::{cindent_on, get_c_indent};
-use crate::main::{State, curwin, got_int, p_smd, saved_cursor};
+use crate::main::{State, curwin, got_int, saved_cursor};
 use crate::mark::mark_col_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
 use crate::message::msgmore;
 use crate::ops::{Op, do_join};
+use crate::option::vars::p_smd;
 use crate::option::was_set_insecurely;
 use crate::options::kOptFormatexpr;
 use crate::os::input::line_breakcheck;

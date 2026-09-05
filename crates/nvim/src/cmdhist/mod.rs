@@ -26,12 +26,13 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, got_int, maptick, p_hi};
+use crate::main::{Columns, got_int, maptick};
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
     trunc_string,
 };
+use crate::option::vars::p_hi;
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::time::os_time;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};

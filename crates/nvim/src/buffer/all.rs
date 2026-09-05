@@ -19,12 +19,10 @@ use crate::ex_cmds2::autowrite;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::vgetc;
 use crate::guard::Suppress;
-use crate::main::{
-    Columns, Rows, cmdmod, got_int, jop_flags, p_ch, p_ea, p_tpm, swap_exists_action,
-    swap_exists_did_quit,
-};
+use crate::main::{Columns, Rows, cmdmod, got_int, swap_exists_action, swap_exists_did_quit};
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
+use crate::option::vars::{jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt, Window};

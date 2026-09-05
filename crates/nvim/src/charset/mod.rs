@@ -27,13 +27,14 @@ use core::ptr;
 
 use crate::cursor::get_cursor_line_ptr;
 use crate::global_cell::GlobalCell;
-use crate::main::{breakat_flags, curbuf, dy_flags, p_isf, p_isi, p_isp};
+use crate::main::curbuf;
 use crate::mbyte::{
     mb_islower, mb_isupper, mb_ptr2char_adv, utf_class_tab, utf_printable, utf_ptr2char,
     utf8len_tab,
 };
 use crate::memory::{xmalloc, xstrchrnul};
 use crate::option::skip_to_option_part;
+use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
@@ -975,8 +976,7 @@ pub unsafe fn backslash_halve_save(p: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `dst` must have room for everything from `src` to its NUL, inclusive.
-unsafe fn copy_unescaped(mut src: Bytes, dst: *mut c_char) {
-    let mut dst = dst;
+unsafe fn copy_unescaped(mut src: Bytes, mut dst: *mut c_char) {
     loop {
         let (byte, next) = src.pair();
         if byte == 0 {

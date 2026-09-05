@@ -17,14 +17,13 @@ use crate::buffer::{buf_ensure_loaded, find_buf};
 use crate::decoration::bufhl_add_hl_pos_offset;
 use crate::ex_cmds::{PreviewLines, SID_NONE, SubResult, do_sub};
 use crate::ex_cmds::{cur_buf, cur_win};
-use crate::main::{
-    KeyTyped, e_interr, got_int, p_icm, p_rdt, p_report, p_shm, sub_nlines, sub_nsubs,
-};
+use crate::main::{KeyTyped, e_interr, got_int, sub_nlines, sub_nsubs};
 use crate::memline::{ml_append_buf, ml_get_buf, ml_get_buf_len, ml_replace_buf};
 use crate::memory::{xfree, xrealloc};
 use crate::message::{MSG_BUF_LEN, emsg, messaging, msg_ptr, set_keep_msg};
 use crate::r#move::update_topline;
 use crate::option::set_option_direct;
+use crate::option::vars::{p_icm, p_rdt, p_report, p_shm};
 use crate::options::kOptShortmess;
 use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};

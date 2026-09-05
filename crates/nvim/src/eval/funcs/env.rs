@@ -19,12 +19,12 @@ use crate::eval::typval::{
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{eval_vars, expand_filename};
 use crate::guard::Suppress;
-use crate::main::{p_verbose, p_wic};
 use crate::memfile::mf_fname;
 use crate::memline::{recover_names, swapfile_dict};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::{emsg, emsg_ptr};
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_verbose, p_wic};
 use crate::os::cshim::strchr;
 use crate::os::env::{
     os_copy_fullenv, os_free_fullenv, os_get_fullenv_size, vim_env_iter, vim_getenv,

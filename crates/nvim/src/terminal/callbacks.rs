@@ -23,8 +23,8 @@ use crate::eval::typval::{
     tv_list_alloc, tv_list_append_allocated_string, tv_list_append_list, tv_list_append_string,
 };
 use crate::event::multiqueue::multiqueue_put_event;
-use crate::main::p_bg;
 use crate::memory::xmemdupz;
+use crate::option::vars::p_bg;
 use crate::options::kOptBoFlagTerm;
 use crate::types::builders::static_cstring;
 use crate::types::{

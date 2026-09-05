@@ -14,8 +14,10 @@ use core::ptr;
 use crate::drawscreen::status_redraw_all;
 use crate::global_cell::GlobalCell;
 use crate::indent::tabstop_set;
-use crate::main::{p_ai, p_et, p_paste, p_ri, p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm};
 use crate::memory::{xfree, xstrdup};
+use crate::option::vars::{
+    p_ai, p_et, p_paste, p_ri, p_ru, p_sm, p_sta, p_sts, p_tw, p_vsts, p_wm,
+};
 use crate::options::{
     kOptAutoindent, kOptExpandtab, kOptRevins, kOptRuler, kOptShowmatch, kOptSmarttab,
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,

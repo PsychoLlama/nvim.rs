@@ -21,14 +21,12 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, comp_col, status_redraw_all};
 use crate::fold::copy_folding_state;
-use crate::main::{
-    Columns, Rows, cmdmod, e_noroom, msg_col, msg_row, p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr,
-    p_wh, p_wiw, p_wmh, p_wmw, sc_col,
-};
+use crate::main::{Columns, Rows, cmdmod, e_noroom, msg_col, msg_row, sc_col};
 use crate::mark::copy_jumplist;
 use crate::memory::{xcalloc, xstrdup};
 use crate::message::msg_clr_eos_force;
 use crate::r#move::WinValid;
+use crate::option::vars::{p_ch, p_ea, p_ead, p_ls, p_sb, p_spk, p_spr, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;

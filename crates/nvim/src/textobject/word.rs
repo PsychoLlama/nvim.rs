@@ -15,7 +15,7 @@ use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, i
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
 use crate::global_cell::GlobalCell;
-use crate::main::{VIsual_select_exclu_adj, p_sel, redraw_cmdline};
+use crate::main::{VIsual_select_exclu_adj, redraw_cmdline};
 use crate::mbyte::utf_class;
 use crate::memline::{decl, incl, ml_get};
 use crate::r#move::adjust_skipcol;
@@ -23,6 +23,7 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, unadjust_for_sel, visual_active, visual_anchor,
     visual_mode,
 };
+use crate::option::vars::p_sel;
 use crate::pos::{MAXCOL, clearpos, equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{Failed, NUL, OpArg, Pos};

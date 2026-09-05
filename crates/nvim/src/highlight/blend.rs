@@ -25,7 +25,8 @@ use super::{get_attr_entry, kHlBlend, kHlBlendThrough, syn_attr2entry, update_wi
 use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::highlight_group::highlight_changed;
-use crate::main::{curwin, normal_bg, normal_fg, normal_sp, p_bg};
+use crate::main::{curwin, normal_bg, normal_fg, normal_sp};
+use crate::option::vars::p_bg;
 use crate::types::{HlAttrs, HlEntry, RgbValue, int16_t};
 use core::ffi::c_int;
 

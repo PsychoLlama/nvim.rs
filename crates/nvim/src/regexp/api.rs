@@ -18,9 +18,10 @@ use super::{
     AUTOMATIC_ENGINE, BACKTRACKING_ENGINE, E_RECURSIVE, NFA_ENGINE, NFA_TOO_EXPENSIVE, NfaRegProg,
     REX_ALL, Rex, bt_regengine, nfa_regengine, regexp_engine, rex_in_use,
 };
-use crate::main::{called_emsg, curbuf, p_re, p_verbose, reg_do_extmatch};
+use crate::main::{called_emsg, curbuf, reg_do_extmatch};
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
+use crate::option::vars::{p_re, p_verbose};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::types::{

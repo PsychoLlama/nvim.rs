@@ -28,8 +28,7 @@ use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::main::{
     Columns, curbuf, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle, need_wait_return,
-    no_lines_msg, p_icon, p_iconstring, p_ru, p_title, p_titlelen, p_titlestring, restart_edit,
-    stl_syntax,
+    no_lines_msg, restart_edit, stl_syntax,
 };
 use crate::mbyte::utf_cp_bounds;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
@@ -39,6 +38,7 @@ use crate::message::{
 };
 use crate::r#move::validate_virtcol;
 use crate::option::shortmess;
+use crate::option::vars::{p_icon, p_iconstring, p_ru, p_title, p_titlelen, p_titlestring};
 use crate::options::{kOptIconstring, kOptTitlestring};
 use crate::os::cshim::{gettext_ptr, ngettext};
 use crate::os::env::home_replace;

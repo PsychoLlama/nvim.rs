@@ -28,8 +28,9 @@ use crate::eval::typval::{
 use crate::eval::{get_v_event, restore_v_event};
 use crate::ex_getln::compute_cmdrow;
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, Rows, curbuf, p_ch, p_window, skip_win_fix_scroll};
+use crate::main::{Columns, Rows, curbuf, skip_win_fix_scroll};
 use crate::option::option_was_set;
+use crate::option::vars::{p_ch, p_window};
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{

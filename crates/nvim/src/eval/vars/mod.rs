@@ -51,7 +51,7 @@ use crate::main::{
     called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg,
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
     e_invarg, e_listreq, e_string_required, emsg_severe, got_int, lastused_tabpage, no_hlsearch,
-    p_ccv, p_dex, p_pex, p_verbose, sandbox, sc_col,
+    sandbox, sc_col,
 };
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
@@ -61,6 +61,7 @@ use crate::message::{
     emsg, internal_error, message_filtered, msg_advance, msg_clr_eos, msg_ext_set_kind,
     msg_outtrans, msg_putchar, msg_puts, msg_puts_len, msg_start,
 };
+use crate::option::vars::{p_ccv, p_dex, p_pex, p_verbose};
 use crate::option::{
     find_option, get_option, get_option_value, get_tty_option, get_winbuf_options,
     is_option_hidden, is_tty_option, kOptFlagFunc, option_has_type, option_last_set, optval_free,

@@ -35,8 +35,8 @@ use crate::main::{
     autocmd_match, autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin,
     deferred_events, did_cursorhold, did_emsg, do_profiling, e_argreq,
     e_cannot_define_autocommands_for_all_events, globaldir, got_int, last_cursormoved,
-    last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, p_acd, p_ei, p_verbose,
-    prevwin, reg_recording, secure, starting,
+    last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, prevwin, reg_recording,
+    secure, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{
@@ -45,6 +45,7 @@ use crate::message::{
     verbose_enter_scroll, verbose_leave, verbose_leave_scroll,
 };
 use crate::option::set_option_direct;
+use crate::option::vars::{p_acd, p_ei, p_verbose};
 use crate::options::kOptEventignore;
 use crate::os::cshim::{gettext, snprintf, strchr, strncasecmp};
 use crate::os::env::expand_env_save;

@@ -32,11 +32,10 @@ use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
-use crate::main::{
-    curwin, e_invarg, e_sandbox, e_trailing, info_message, p_mle, p_verbose, sandbox, silent_mode,
-};
+use crate::main::{curwin, e_invarg, e_sandbox, e_trailing, info_message, sandbox, silent_mode};
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
+use crate::option::vars::{p_mle, p_verbose};
 use crate::options::{
     kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
 };

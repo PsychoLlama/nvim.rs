@@ -21,8 +21,7 @@ use crate::eval::prompt_invoke_callback;
 use crate::fold::has_folding;
 use crate::getchar::beep_flush;
 use crate::main::{
-    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, ins_at_eol, mod_mask, p_sel, p_ww,
-    restart_edit,
+    VIsual_select_exclu_adj, cmdwin_result, cmdwin_type, ins_at_eol, mod_mask, restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
@@ -31,6 +30,7 @@ use crate::normal::{
     CA_NO_ADJ_OP_END, CAR, CmdArgRef, TAB, adjust_for_sel, clear_op_beep, kMTCharWise, kMTLineWise,
     may_fold_open, nv_page, unadjust_for_sel, visual_active, visual_mode,
 };
+use crate::option::vars::{p_sel, p_ww};
 use crate::option::{cpo_has, get_showbreak_value, get_ve_flags};
 use crate::options::{
     kOptFdoFlagBlock, kOptFdoFlagHor, kOptFdoFlagJump, kOptFdoFlagPercent, kOptVeFlagOnemore,

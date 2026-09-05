@@ -20,10 +20,11 @@ use crate::ex_docmd::ends_excmd;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, got_int, need_highlight_changed,
-    normal_bg, normal_fg, normal_sp, p_bg, starting, t_colors, updating_screen,
+    normal_bg, normal_fg, normal_sp, starting, t_colors, updating_screen,
 };
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{c_str, msg_bytes};
+use crate::option::vars::p_bg;
 use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_err};
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;

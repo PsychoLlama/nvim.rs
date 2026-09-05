@@ -19,9 +19,10 @@ use crate::eval::typval::{
     tv_check_for_number_arg, tv_dict_add_nr, tv_dict_alloc_ret, tv_get_number, tv_get_number_chk,
 };
 use crate::eval::window::find_win_by_nr_or_id;
-use crate::main::{dollar_vcol, p_ss};
+use crate::main::dollar_vcol;
 use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
+use crate::option::vars::p_ss;
 use crate::semsg;
 use crate::types::{
     ColNr, Dict, EvalFuncData, LineNr, Pos, TypVal, VarNumber, Window, int64_t, size_t,

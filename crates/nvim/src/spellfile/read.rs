@@ -40,12 +40,13 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::main::{curwin, got_int, p_verbose};
+use crate::main::{curwin, got_int};
 use crate::memline::ml_append_buf;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
+use crate::option::vars::p_verbose;
 use crate::os::cshim::{gettext, gettext_ptr, strstr};
 use crate::os::input::fast_breakcheck;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};

@@ -23,11 +23,11 @@ use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_s
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
 use crate::main::{
-    Columns, Rows, curbuf, curwin, got_int, hl_attr_active, msg_col, p_ls, p_shm, p_verbose,
-    starting, topframe,
+    Columns, Rows, curbuf, curwin, got_int, hl_attr_active, msg_col, starting, topframe,
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
+use crate::option::vars::{p_ls, p_shm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::types::builders::static_cstring;

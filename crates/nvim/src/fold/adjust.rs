@@ -9,10 +9,11 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::garray::{ga_grow, ga_init};
-use crate::main::{State, p_sel};
+use crate::main::State;
 use crate::mark::setpcmark;
 use crate::mbyte::mb_adjust_cursor;
 use crate::memline::ml_get_len;
+use crate::option::vars::p_sel;
 use crate::pos::{MAXLNUM, ltoreq};
 use crate::winlayer::Win;
 use core::ffi::c_int;

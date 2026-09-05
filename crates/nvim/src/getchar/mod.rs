@@ -29,8 +29,7 @@ use crate::main::{
     ex_normal_busy, exmode_active, finish_op, got_int, ignore_script, langmap_mapchar, main_loop,
     mapped_ctrl_c, maptick, may_garbage_collect, mod_mask, mode_displayed, mouse_col, mouse_grid,
     mouse_row, msg_col, msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_wait_return,
-    no_mapping, no_zero_mapping, p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd,
-    p_timeout, p_tm, p_ttimeout, p_ttm, p_uc, pending_end_reg_executing, pending_exmode_active,
+    no_mapping, no_zero_mapping, pending_end_reg_executing, pending_exmode_active,
     redo_VIsual_busy, redraw_cmdline, reg_executing, reg_recording, repeat_luaref, restart_edit,
     scriptout, test_disable_char_avail, typebuf_was_empty, typebuf_was_filled, vgetc_busy,
     vgetc_char, vgetc_mod_mask, want_garbage_collect,
@@ -51,6 +50,10 @@ use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::{validate_cursor, win_col_off};
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};
 use crate::ops::clear_oparg;
+use crate::option::vars::{
+    p_fs, p_langmap, p_lrm, p_lz, p_mmd, p_paste, p_sc, p_smd, p_timeout, p_tm, p_ttimeout, p_ttm,
+    p_uc,
+};
 use crate::options::kOptBoFlagError;
 use crate::os::cshim::{gettext, putc, stderr};
 use crate::os::env::expand_env;

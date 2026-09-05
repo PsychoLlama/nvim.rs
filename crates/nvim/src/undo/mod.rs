@@ -37,8 +37,8 @@ use crate::fold::fold_open_cursor;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    KeyTyped, curbuf, curwin, e_modifiable, e_sandbox, e_textlock, fdo_flags, global_busy, got_int,
-    no_u_sync, p_fs, p_udir, p_ul, p_verbose, sandbox, textlock,
+    KeyTyped, curbuf, curwin, e_modifiable, e_sandbox, e_textlock, global_busy, got_int, no_u_sync,
+    sandbox, textlock,
 };
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
@@ -50,6 +50,7 @@ use crate::message::{
     msg_putchar, msg_puts, msg_puts_hl, msg_start, verb_msg, verbose_enter, verbose_leave,
 };
 use crate::option::copy_option_part;
+use crate::option::vars::{fdo_flags, p_fs, p_udir, p_ul, p_verbose};
 use crate::options::kOptFdoFlagUndo;
 use crate::os::cshim::{getc, gettext, ngettext};
 use crate::os::fs::{

@@ -56,12 +56,11 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::main::{
-    KeyTyped, State, arrow_used, can_si, can_si_back, cmdwin_type, cot_flags, curbuf, curwin,
-    did_ai, did_emsg, did_si, dollar_vcol, e_invarg, e_listreq, e_patnotf, edit_submode,
+    KeyTyped, State, arrow_used, can_si, can_si_back, cmdwin_type, curbuf, curwin, did_ai,
+    did_emsg, did_si, dollar_vcol, e_invarg, e_listreq, e_patnotf, edit_submode,
     edit_submode_extra, edit_submode_highl, edit_submode_pre, emsg_silent, ex_normal_busy,
-    g_tag_at_cursor, global_busy, got_int, in_assert_fails, msg_hist_off, p_ac, p_acl, p_act,
-    p_cto, p_dict, p_fic, p_ic, p_inf, p_js, p_paste, p_scs, p_smd, p_tsr, p_tsrfu, p_wic, p_ws,
-    pum_want, redraw_cmdline, redraw_mode, sc_col, test_disable_char_avail,
+    g_tag_at_cursor, global_busy, got_int, in_assert_fails, msg_hist_off, pum_want, redraw_cmdline,
+    redraw_mode, sc_col, test_disable_char_avail,
 };
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
@@ -77,6 +76,10 @@ use crate::message::{
     emsg, internal_error, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,
 };
 use crate::r#move::{changed_cline_bef_curs, curs_columns, validate_cursor};
+use crate::option::vars::{
+    cot_flags, p_ac, p_acl, p_act, p_cto, p_dict, p_fic, p_ic, p_inf, p_js, p_paste, p_scs, p_smd,
+    p_tsr, p_tsrfu, p_wic, p_ws,
+};
 use crate::option::{can_bs, copy_option_part, magic_isset, option_set_callback_func, shortmess};
 use crate::options::{
     kOptBoFlagComplete, kOptCotFlagFuzzy, kOptCotFlagLongest, kOptCotFlagMenu, kOptCotFlagMenuone,

@@ -39,11 +39,12 @@ use crate::change::inserted_bytes;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::ex_cmds::do_sub_msg;
 use crate::global_cell::GlobalCell;
-use crate::main::{curwin, got_int, p_ws, sub_nlines, sub_nsubs};
+use crate::main::{curwin, got_int, sub_nlines, sub_nsubs};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::message_fmt::c_str;
+use crate::option::vars::p_ws;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{

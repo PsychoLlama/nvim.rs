@@ -27,14 +27,12 @@ use crate::drawscreen::comp_col;
 use crate::garray::{ga_grow, ga_init};
 use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::{
-    Rows, curbuf, current_sctx, curwin, fenc_default, p_ch, p_enc, p_hlg, p_icon, p_rtp, p_sh,
-    p_title, p_window,
-};
+use crate::main::{Rows, curbuf, current_sctx, curwin, fenc_default};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
 use crate::message_fmt::c_str;
+use crate::option::vars::{p_ch, p_enc, p_hlg, p_icon, p_rtp, p_sh, p_title, p_window};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
     kOptFileformats, kOptHelplang, kOptIcon, kOptInvalid, kOptModeline, kOptPackpath,

@@ -15,9 +15,10 @@ use crate::event::signal::{
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{curbuf, main_loop, p_awa, preserve_exit, v_dying};
+use crate::main::{curbuf, main_loop, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::message_fmt::c_str;
+use crate::option::vars::p_awa;
 use crate::os::cshim::snprintf;
 use crate::types::AutoEvent;
 use crate::types::{

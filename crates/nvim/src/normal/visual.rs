@@ -24,8 +24,8 @@ use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
 use crate::main::{
     VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, curbuf, curwin, finish_op,
-    motion_force, mouse_dragging, msg_silent, p_sel, p_slm, p_smd, redraw_cmdline,
-    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+    motion_force, mouse_dragging, msg_silent, redraw_cmdline, resel_VIsual_line_count,
+    resel_VIsual_mode, resel_VIsual_vcol,
 };
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::utfc_ptr2len;
@@ -37,6 +37,7 @@ use crate::normal::{
 };
 use crate::ops::adjust_cursor_eol;
 use crate::option::get_ve_flags;
+use crate::option::vars::{p_sel, p_slm, p_smd};
 use crate::options::kOptVeFlagBlock;
 use crate::plines::{getvcol, getvcols};
 use crate::pos::{MAXCOL, equalpos, lt};

@@ -21,12 +21,13 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_input;
 use crate::main::{
-    Rows, cmdline_row, e_invarg, got_int, lines_left, mouse_row, msg_row, msg_scroll, p_verbose,
+    Rows, cmdline_row, e_invarg, got_int, lines_left, mouse_row, msg_row, msg_scroll,
 };
 use crate::memory::xstrdup;
 use crate::message::{
     do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, verb_msg,
 };
+use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;

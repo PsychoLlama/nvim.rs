@@ -33,8 +33,9 @@ use crate::main::{
     KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, curbuf, current_exception,
     did_emsg, did_throw, e_empty_buffer, emsg_silent, ex_no_reprint, ex_normal_busy, exiting,
     exmode_active, force_abort, global_busy, got_int, lines_left, msg_col, msg_row, msg_scroll,
-    msg_silent, need_rethrow, need_wait_return, p_mfd, suppress_errthrow, trylevel,
+    msg_silent, need_rethrow, need_wait_return, suppress_errthrow, trylevel,
 };
+use crate::option::vars::p_mfd;
 
 use crate::message::{
     emsg_multiline, msg_clr_eos, msg_ptr, msg_puts, msg_scroll_flush, verbose_enter_scroll,

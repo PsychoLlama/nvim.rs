@@ -24,9 +24,9 @@ use core::{ptr, slice};
 use super::*;
 use crate::fold::{clear_folding, clone_fold_list, delete_fold_recurse};
 use crate::global_cell::GlobalCell;
-use crate::main::p_fdls;
 use crate::mark::mark_view_make;
 use crate::memory::{xcalloc, xrealloc};
+use crate::option::vars::p_fdls;
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
