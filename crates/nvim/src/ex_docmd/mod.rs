@@ -71,8 +71,8 @@ use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
     Callback, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter, LuaRetMode, MarkGet,
-    MotionType, RemapValues, dobuf_action_values, dobuf_start_values, estack_arg_T, etype_T,
-    exarg_T, except_T, garray_T, handle_T, linenr_T, optmagic_T, uint8_t, uint16_t,
+    MotionType, OptMagic, RemapValues, dobuf_action_values, dobuf_start_values, estack_arg_T,
+    etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -171,8 +171,8 @@ mod childproc;
 pub(crate) use self::childproc::*;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseManual: CdCause = 0;
-pub const OPTION_MAGIC_OFF: optmagic_T = 2;
-pub const OPTION_MAGIC_ON: optmagic_T = 1;
+pub const OPTION_MAGIC_OFF: OptMagic = 2;
+pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const kMarkAll: MarkGet = 1;
 pub const kMarkBufLocal: MarkGet = 0;
 pub const CSTP_THROW: c_uint = 4;

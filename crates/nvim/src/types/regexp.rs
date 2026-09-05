@@ -49,7 +49,7 @@ pub struct regengine {
 }
 
 pub type magic_T = ::core::ffi::c_uint;
-pub type optmagic_T = ::core::ffi::c_uint;
+pub type OptMagic = ::core::ffi::c_uint;
 pub struct reg_extmatch_T {
     pub refcnt: int16_t,
     pub matches: [*mut uint8_t; 10],

@@ -15,16 +15,16 @@ use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, DecorState, EstackInfo, FILE,
     Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object,
-    OptInt, Proc, Refcount, RgbValue, ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT,
-    UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
-    caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, etype_T, except_T, file_comparison,
-    fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t, int64_t, linenr_T,
-    lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, optmagic_T, pos_T, proftime_T,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
-    uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
-    xfmark_T,
+    OptInt, OptMagic, Proc, Refcount, RgbValue, ScreenGrid, StlClickDefinition, StlSyntax,
+    UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
+    bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, etype_T, except_T,
+    file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t,
+    int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
+    proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T,
+    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
+    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
+    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    vimmenu_T, win_T, xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -73,9 +73,9 @@ pub(crate) fn time_msg_at(what: &CStr) {
 }
 
 pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
-pub const OPTION_MAGIC_OFF: optmagic_T = 2;
-pub const OPTION_MAGIC_ON: optmagic_T = 1;
-pub(crate) const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
+pub const OPTION_MAGIC_OFF: OptMagic = 2;
+pub const OPTION_MAGIC_ON: OptMagic = 1;
+pub(crate) const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub struct AucmdWinVec {
     pub size: size_t,
     pub capacity: size_t,
@@ -851,7 +851,7 @@ pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
 /// The Windows release `windowsversion()` reports. Nothing here writes it,
 /// so it stays the empty string a non-Windows build always answered.
 pub static windowsVersion: [c_char; 20] = [0 as c_char; 20];
-pub static magic_overruled: GlobalCell<optmagic_T> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
+pub static magic_overruled: GlobalCell<OptMagic> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
 pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);

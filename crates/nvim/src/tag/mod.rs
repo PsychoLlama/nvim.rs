@@ -66,9 +66,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, FILE, OptInt, Timestamp, colnr_T, dict_T, dictitem_T, exarg_T,
-    expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t, linenr_T,
-    list_T, off_T, optmagic_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T,
+    AdditionalData, Callback, FILE, OptInt, OptMagic, Timestamp, colnr_T, dict_T, dictitem_T,
+    exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t,
+    linenr_T, list_T, off_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T,
     typval_vval_union, varnumber_T, vimconv_T,
 };
 use crate::ui::ui_has;
@@ -99,7 +99,7 @@ mod stack;
 pub use self::stack::*;
 mod command;
 pub use self::command::*;
-pub const OPTION_MAGIC_OFF: optmagic_T = 2;
+pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const GETF_SETMARK: getf_values = 1;
 pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
 pub const GETFILE_SAME_FILE: getf_retvalues = 0;

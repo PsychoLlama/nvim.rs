@@ -67,8 +67,8 @@ use crate::register::{do_execreg, do_put, op_yank};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
-    CpoFlag, Failed, NUL, OpType, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T, exarg_T,
-    handle_T, int64_t, linenr_T, oparg_T, optmagic_T, pos_T, save_state_T, size_t, ssize_t,
+    CpoFlag, Failed, NUL, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
+    exarg_T, handle_T, int64_t, linenr_T, oparg_T, pos_T, save_state_T, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -381,13 +381,13 @@ pub(crate) unsafe fn ex_submagic_preview(
 }
 
 /// Override 'magic' for this command, answering what it was.
-fn force_magic(eap: Ea) -> optmagic_T {
+fn force_magic(eap: Ea) -> OptMagic {
     let saved = magic_overruled.get();
     magic_overruled.set(if eap.cmdidx == CmdIdx::smagic {
         OPTION_MAGIC_ON
     } else {
         OPTION_MAGIC_OFF
-    } as optmagic_T);
+    } as OptMagic);
     saved
 }
 

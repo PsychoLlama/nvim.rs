@@ -138,13 +138,13 @@ use crate::types::{
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
     Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
-    Integer, MotionType, Object, OptInt, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, RemapValues, String_0, TryState, UndoLink, UndoObjectType,
-    VimState, aco_save_T, buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T,
+    Integer, MotionType, Object, OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk,
+    ParserLine, ParserPosition, ParserState, RemapValues, String_0, TryState, UndoLink,
+    UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T,
     dobuf_action_values, dobuf_start_values, exarg_T, except_T, expand_T, handle_T, hashtab_T,
-    linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optmagic_T, optset_T, pos_T,
-    proftime_T, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t,
-    typval_T, typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optset_T, pos_T, proftime_T,
+    ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
+    typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -196,9 +196,9 @@ pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kDirectionNotSet: Direction = 0;
 pub const XP_PREFIX_NONE: xp_prefix_T = 0;
-pub const OPTION_MAGIC_OFF: optmagic_T = 2;
-pub const OPTION_MAGIC_ON: optmagic_T = 1;
-pub const OPTION_MAGIC_NOT_SET: optmagic_T = 0;
+pub const OPTION_MAGIC_OFF: OptMagic = 2;
+pub const OPTION_MAGIC_ON: OptMagic = 1;
+pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub const MAGIC_ALL: magic_T = 4;
 pub const MAGIC_ON: magic_T = 3;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
@@ -263,7 +263,7 @@ pub struct incsearch_state_T {
     pub match_end: pos_T,
     pub did_incsearch: bool,
     pub incsearch_postponed: bool,
-    pub magic_overruled_save: optmagic_T,
+    pub magic_overruled_save: OptMagic,
 }
 #[derive(Copy, Clone)]
 pub struct viewstate_T {
