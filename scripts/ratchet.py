@@ -418,7 +418,12 @@ plus these whole-tree metrics, which are not per-file:
                         abbreviations (`wp`, `eap`, `rettv`, `ptr` …)
                         bound in a `fn` signature, over the same span, with
                         `lua/` and `vterm/` carved out — those two are ports
-                        whose parameter names are the upstream project's. A
+                        whose parameter names are the upstream project's — and
+                        with the API methods apigen dispatches
+                        (tools/apigen/functions.txt) carved out under `api/`:
+                        their parameter names are the msgpack-RPC surface,
+                        published by `nvim_get_api_info()` and printed by
+                        `Invalid '<name>'`, so upstream's spelling is frozen. A
                         leading `_` counts (an unused parameter is still that
                         parameter), a qualifier does not: `old_buf` already
                         says what `buf` does not. `buf`/`bp` count only when
@@ -561,6 +566,10 @@ ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "metrics" / "ratchet.json"
 LEDGER = ROOT / "metrics" / "abi-ledger.jsonl"
 VISIBILITY = ROOT / "metrics" / "visibility-ledger.jsonl"
+# apigen's attribute spec: one line per method the API exposes. It is the
+# list the generator dispatches, so it is also the list of signatures whose
+# parameter names are the RPC surface's -- see API_EXPORTED below.
+API_SPEC = ROOT / "tools" / "apigen" / "functions.txt"
 
 LINE_CAP = 1000
 # name -> needles counted in the masked source, summed.
@@ -932,6 +941,16 @@ ABBREV_PARAM_EXEMPT = {
     "crates/nvim/src/lua/": "the Lua bindings keep LuaJIT's own spellings",
     "crates/nvim/src/vterm/": "a port of libvterm, read against its C",
 }
+# The third carve-out, and the only one keyed by a function rather than a
+# directory: apigen turns an API function's *parameter names* into the RPC
+# surface. They are published by `nvim_get_api_info()` (the api-info blob in
+# api/private/metadata.rs) and printed by every `Invalid '<name>'` message
+# (`*err_param` in the generated Lua wrappers), so upstream's spelling is the
+# contract and renaming one is a breaking API change, not a cleanup. The set
+# is read from apigen's own spec rather than guessed from the directory: only
+# the methods the generator dispatches are frozen, and the helpers around them
+# under `api/` are ordinary code that renames like anything else.
+API_DIR = "crates/nvim/src/api/"
 
 FORBID = "#![forbid(unsafe_code)]"
 DENY_UNSAFE_OP = "#![deny(unsafe_op_in_unsafe_fn)]"
@@ -1739,14 +1758,18 @@ def vocabulary(tree):
     aliases = {}
     constants = []
     abbrevs = 0
+    exported = api_exported()
     for file, masked in tree.items():
         names.update(T_SUFFIX_DECL.findall(masked))
         for alias, target in INT_ALIAS_DECL.findall(masked):
             aliases.setdefault(alias, set()).add(target)
         constants.extend(type_ for _, type_ in PUB_CONST_DECL.findall(masked))
-        spans = [sig for _, sig, _ in fn_signatures(masked)]
+        declarations = list(fn_signatures(masked))
+        spans = [sig for _, sig, _ in declarations]
         signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
+            frozen = exported if file.startswith(API_DIR) else ()
+            spans = [sig for name, sig, _ in declarations if name not in frozen]
             abbrevs += sum(len(ABBREV_PARAM.findall(sig)) for sig in spans)
             abbrevs += sum(
                 bool(BUFFER_TYPE.search(type_))
@@ -1761,6 +1784,27 @@ def vocabulary(tree):
         "raw_win_buf_sigs": signatures,
         "abbrev_params": abbrevs,
     }
+
+
+def api_exported():
+    """The API function names apigen dispatches, from its attribute spec.
+
+    One method per non-comment line, name first. An entry carrying `alias=`
+    is a deprecated *spelling* that shares the target's wrapper and one
+    carrying `handler=` names a hand-written handler elsewhere in the crate;
+    neither has an `nvim_*` function of its own under `api/`, so neither
+    freezes a signature. Everything else does, `lua_only` included: the Lua
+    binding names its parameters too.
+    """
+    names = set()
+    for line in API_SPEC.read_text().splitlines():
+        line = line.split("#", 1)[0].split()
+        if not line or any(
+            field.startswith(("alias=", "handler=")) for field in line[1:]
+        ):
+            continue
+        names.add(line[0])
+    return names
 
 
 def int_aliases(aliases):
@@ -2598,7 +2642,10 @@ SELF_TEST_VOCABULARY = [
     (
         # `_eap` counts, `old_buf` and the local `ptr` do not, and the two
         # carved-out subtrees are silent however they spell a parameter.
-        # `buf` counts on a buffer object and not on a byte buffer.
+        # `buf` counts on a buffer object and not on a byte buffer. Under
+        # `api/` a method apigen dispatches is frozen and a helper beside it
+        # is not, so `nvim_buf_line_count` is silent and `unpack` is not; the
+        # same name outside `api/` is ordinary code and counts.
         {
             "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
             "    _eap: *mut ExArg,\n    old_buf: *mut Buffer,\n"
@@ -2607,8 +2654,11 @@ SELF_TEST_VOCABULARY = [
             "crates/nvim/src/b.rs": "fn e(buf: &mut NumBuf, bp: *mut Buffer) {\n}\n",
             "crates/nvim/src/lua/b.rs": "fn g(buf: *mut Buffer) {\n}\n",
             "crates/nvim/src/vterm/c.rs": "fn h(cp: *mut c_char) {\n}\n",
+            "crates/nvim/src/api/buffer.rs": "fn nvim_buf_line_count(buf: Buffer) {\n}\n"
+            "fn unpack(buf: *mut Buffer) {\n}\n",
+            "crates/nvim/src/eval/c.rs": "fn nvim_buf_line_count(buf: Buffer) {\n}\n",
         },
-        {"abbrev_params": 4},
+        {"abbrev_params": 6},
     ),
     (
         {
