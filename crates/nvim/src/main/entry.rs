@@ -54,11 +54,11 @@ use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN,
-    argv0, cmdline_row, debug_break_level, embedded_mode, err_arg_missing, exmode_active,
-    full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, msg_didout,
-    msg_row, msg_scroll, no_wait_return, recoverymode, resize_events, restart_edit, scriptout,
-    silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
-    ui_client_channel_id, ui_client_forward_stdin,
+    argv0, cmdline_row, debug_break_level, embedded_mode, err_arg_missing, full_screen,
+    headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, msg_didout, msg_row,
+    msg_scroll, no_wait_return, recoverymode, resize_events, scriptout, silent_mode, starting,
+    stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
+    ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -82,6 +82,7 @@ use crate::quickfix::{qf_init_stack, qf_jump};
 use crate::register::get_default_register_name;
 use crate::runtime::{estack_init, load_plugins, runtime_init};
 use crate::shada::shada_read_everything;
+use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{

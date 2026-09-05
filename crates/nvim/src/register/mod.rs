@@ -59,8 +59,8 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline,
-    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit,
+    Columns, got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline,
+    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -90,6 +90,7 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::regexp::RE_SEARCH;
 use crate::search::{BACKWARD, FORWARD, last_search_pat, set_last_search_pat};
 use crate::state::REPLACE_FLAG;
+use crate::state::mode::{State, restart_edit};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped_ext};
 use crate::terminal::terminal_paste;
 use crate::types::AutoEvent;

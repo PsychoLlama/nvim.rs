@@ -46,11 +46,10 @@ use crate::indent::{
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
 use crate::main::{
-    Insstart, Rows, State, ai_col, autocmd_busy, can_si, can_si_back, curbuf_splice_pending,
-    did_ai, did_si, emsg_silent, end_comment_pending, highlight_match, in_assert_fails,
+    Rows, autocmd_busy, curbuf_splice_pending, emsg_silent, highlight_match, in_assert_fails,
     last_cursormoved, last_cursormoved_win, msg_col, msg_row, msg_scroll, msg_silent,
-    need_maketitle, need_wait_return, orig_line_count, redraw_cmdline, redraw_not_allowed,
-    redraw_tabline, restart_edit, search_hl_has_cursor_lnum, silent_mode, vr_lines_changed,
+    need_maketitle, need_wait_return, redraw_cmdline, redraw_not_allowed, redraw_tabline,
+    search_hl_has_cursor_lnum, silent_mode,
 };
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
@@ -78,6 +77,10 @@ use crate::plines::{getvcol, linetabsize_eol, win_chartabsize};
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::{BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, showmatch};
 use crate::spell::spell_check_window;
+use crate::state::mode::{
+    Insstart, State, ai_col, can_si, can_si_back, did_ai, did_si, end_comment_pending,
+    orig_line_count, restart_edit, vr_lines_changed,
+};
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG, virtual_active};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::textformat::{comp_textwidth, has_format_option};

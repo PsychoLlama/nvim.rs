@@ -21,11 +21,12 @@ use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    State, cmdpreview, msg_col, msg_didout, need_maketitle, need_wait_return, no_hlsearch,
-    redir_fd, redir_off, redir_reg, redir_vname, redraw_cmdline,
+    cmdpreview, msg_col, msg_didout, need_maketitle, need_wait_return, no_hlsearch, redir_fd,
+    redir_off, redir_reg, redir_vname, redraw_cmdline,
 };
 use crate::memory::xstrdup;
 use crate::option::vars::{p_hls, p_lz};
+use crate::state::mode::State;
 
 use crate::message::msg_ext_set_kind;
 use crate::message_fmt::c_str;

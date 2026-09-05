@@ -15,7 +15,7 @@ use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
 use crate::main::{
-    State, cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled,
+    cmdline_row, keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled,
     need_wait_return,
 };
 use crate::mbyte::{utf_ptr2char, utf8len_tab};
@@ -24,6 +24,7 @@ use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::input::input_get;
+use crate::state::mode::State;
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ExpandContext, IOSIZE, MultiQueue, NUL};
 use crate::ui::{ui_flush, ui_has};

@@ -103,15 +103,11 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
 use crate::main::{
-    Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, ai_col, arrow_used,
-    can_si, can_si_back, clear_cmdline, did_ai, did_check_timestamps, did_cursorhold, did_si,
-    dollar_vcol, edit_submode_extra, emsg_on_display, end_comment_pending, ex_normal_busy,
-    force_restart_edit, got_int, ins_at_eol, km_startsel, langmap_mapchar, last_cursormoved,
+    KeyStuffed, KeyTyped, RedrawingDisabled, clear_cmdline, did_check_timestamps, did_cursorhold,
+    dollar_vcol, emsg_on_display, ex_normal_busy, got_int, langmap_mapchar, last_cursormoved,
     last_cursormoved_win, mod_mask, msg_scroll, msg_silent, must_redraw, need_check_timestamps,
-    need_highlight_changed, need_start_insertmode, no_abbr, old_indent, orig_line_count, pum_want,
-    redraw_cmdline, redraw_mode, reg_recording, replace_offset, restart_VIsual_select,
-    restart_edit, sandbox, spell_redraw_lnum, stop_insert_mode, test_disable_char_avail, textlock,
-    u_sync_once, vgetc_busy, vr_lines_changed, where_paste_started,
+    need_highlight_changed, pum_want, redraw_cmdline, redraw_mode, reg_recording, sandbox,
+    spell_redraw_lnum, test_disable_char_avail, textlock, u_sync_once, vgetc_busy,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};
@@ -157,6 +153,12 @@ use crate::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, valid_yank_reg,
 };
 use crate::search::{BACKWARD, FORWARD};
+use crate::state::mode::{
+    Insstart, Insstart_orig, State, ai_col, arrow_used, can_si, can_si_back, did_ai, did_si,
+    edit_submode_extra, end_comment_pending, force_restart_edit, ins_at_eol, km_startsel,
+    need_start_insertmode, no_abbr, old_indent, orig_line_count, replace_offset,
+    restart_VIsual_select, restart_edit, stop_insert_mode, vr_lines_changed, where_paste_started,
+};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL, MODE_REPLACE, MODE_VREPLACE,
     REPLACE_FLAG, VREPLACE_FLAG, may_trigger_modechanged, may_trigger_safestate, state_enter,

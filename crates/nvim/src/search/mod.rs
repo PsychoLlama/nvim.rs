@@ -41,7 +41,7 @@ use crate::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, State, bot_top_msg, called_emsg, cmd_silent, dollar_vcol,
+    Columns, KeyStuffed, KeyTyped, Rows, bot_top_msg, called_emsg, cmd_silent, dollar_vcol,
     g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled,
     msg_silent, no_hlsearch, no_smartcase, rc_did_emsg, sc_col, search_match_endcol,
     search_match_lines, searchcmdlen, top_bot_msg,
@@ -77,6 +77,7 @@ use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::state::MODE_SHOWMATCH;
+use crate::state::mode::State;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::AutoEvent;
 use crate::types::TAB;

@@ -36,9 +36,9 @@ use crate::main::{
     EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, MainParams,
     SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, current_sctx, embedded_mode,
     err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
-    exmode_active, headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile,
-    kOptVerbosefile, kOptWindow, nlua_disable_preload, readonlymode, recoverymode, silent_mode,
-    stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
+    headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile, kOptVerbosefile,
+    kOptWindow, nlua_disable_preload, readonlymode, recoverymode, silent_mode, stderr_isatty,
+    stdin_fd, stdin_isatty, stdout_isatty, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_lpl, p_shadafile, p_uc, p_verbose, p_write};
@@ -50,6 +50,7 @@ use crate::os::input::os_isatty;
 use crate::path::{concat_fnames, path_guess_exepath, path_tail};
 use crate::profile::{time_init, time_start};
 use crate::runtime::{estack_pop, estack_push};
+use crate::state::mode::exmode_active;
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{

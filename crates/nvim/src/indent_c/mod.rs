@@ -32,7 +32,6 @@ use crate::cursor::{get_cursor_line_ptr, get_cursor_pos_ptr};
 use crate::eval::typval::tv_get_lnum;
 use crate::indent::{fixthisline, get_expr_indent, get_indent, get_indent_lnum, get_sw_value};
 use crate::keycodes::get_special_key_code;
-use crate::main::State;
 use crate::mbyte::{mb_prevptr, mb_strnicmp, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_pos};
 use crate::memory::{xfree, xstrdup};
@@ -41,6 +40,7 @@ use crate::option::{copy_option_part, skip_to_option_part};
 use crate::pos::{MAXCOL, MAXLNUM, lt};
 use crate::search::{check_linecomment, findmatchlimit, linewhite};
 use crate::state::MODE_INSERT;
+use crate::state::mode::State;
 use crate::strings::vim_strchr;
 use crate::types::{
     ColNr, EvalFuncData, LPos, LineNr, OpArg, Pos, TypVal, VarNumber, int64_t, size_t,

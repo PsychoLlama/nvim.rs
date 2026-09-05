@@ -17,7 +17,6 @@ use crate::types::NL;
 use crate::decoration::kMTMetaLines;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
-use crate::main::State;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{
@@ -34,6 +33,7 @@ use crate::os::cshim::strchr;
 use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
+use crate::state::mode::State;
 use crate::types::{
     AcoSave, AlignTextPos, ApiDict, Arena, Array, BCount, Boolean, BufUpdateCallbacks, Buffer,
     BufferHandle, ColNr, DoBufAction, DoBufStart, Error, Exception, ExtmarkOp, FileMark, Integer,

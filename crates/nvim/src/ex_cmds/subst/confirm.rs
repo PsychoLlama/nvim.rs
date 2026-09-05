@@ -26,8 +26,8 @@ use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
 use crate::main::{
-    State, ex_normal_busy, exmode_active, highlight_match, msg_didout, need_wait_return,
-    search_match_endcol, search_match_lines,
+    ex_normal_busy, highlight_match, msg_didout, need_wait_return, search_match_endcol,
+    search_match_lines,
 };
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::xfree;
@@ -39,6 +39,7 @@ use crate::option::cpo_has;
 use crate::option::vars::p_lz;
 use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
+use crate::state::mode::{State, exmode_active};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};

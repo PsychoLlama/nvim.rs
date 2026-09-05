@@ -56,8 +56,8 @@ use crate::guard::Depth;
 use crate::input::ask_yesno;
 use crate::main::{
     check_cstack, did_emsg, did_emsg_syntax, did_throw, do_profiling, ex_nesting_level, exiting,
-    exmode_active, global_busy, got_int, msg_silent, need_rethrow, pending_end_reg_executing,
-    reg_executing, sandbox,
+    global_busy, got_int, msg_silent, need_rethrow, pending_end_reg_executing, reg_executing,
+    sandbox,
 };
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
@@ -65,6 +65,7 @@ use crate::message::{
     e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange, e_sandbox,
     e_trailing_arg,
 };
+use crate::state::mode::exmode_active;
 use crate::winlayer::graph::cmdwin_type;
 
 use crate::message::emsg;

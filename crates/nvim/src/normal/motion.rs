@@ -20,7 +20,7 @@ use crate::edit::{
 use crate::eval::prompt_invoke_callback;
 use crate::fold::has_folding;
 use crate::getchar::beep_flush;
-use crate::main::{VIsual_select_exclu_adj, ins_at_eol, mod_mask, restart_edit};
+use crate::main::mod_mask;
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;
@@ -37,6 +37,7 @@ use crate::plines::{linetabsize, plines_win, win_get_fill};
 use crate::pos::{MAXCOL, lt};
 use crate::quickfix::qf_view_result;
 use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
+use crate::state::mode::{VIsual_select_exclu_adj, ins_at_eol, restart_edit};
 use crate::state::virtual_active;
 use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};

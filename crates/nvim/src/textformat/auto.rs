@@ -18,10 +18,10 @@ use crate::cursor::{
     get_cursor_line_ptr, inc_cursor,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{State, saved_cursor};
 use crate::memline::ml_replace;
 use crate::pos::MAXCOL;
 use crate::state::MODE_INSERT;
+use crate::state::mode::{State, saved_cursor};
 use crate::strings::xstrnsave;
 use crate::types::{NUL, size_t};
 use crate::undo::u_save_cursor;

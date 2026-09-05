@@ -22,7 +22,6 @@ use crate::decoration::{decor_conceal_line, decor_virt_lines, mark_virt_chain, n
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::{has_folding, has_folding_win, line_folded};
 use crate::indent::{get_breakindent_win, tabstop_padding};
-use crate::main::State;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
@@ -32,6 +31,7 @@ use crate::r#move::{win_col_off, win_col_off2};
 use crate::option::get_showbreak_value;
 use crate::option::vars::p_sel;
 use crate::pos::{MAXCOL, lt, ltoreq};
+use crate::state::mode::State;
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrCharInfo,

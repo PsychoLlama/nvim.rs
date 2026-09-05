@@ -23,16 +23,14 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
-    KeyStuffed, KeyTyped, State, VIsual_reselect, allow_keys, arrow_used, called_emsg, cmd_silent,
-    cmdline_row, cmdline_star, ctrl_c_interrupts, debug_did_msg, did_ai, did_emsg,
-    did_outofmem_msg, did_swapwrite_msg, emsg_silent, ex_normal_busy, exmode_active, finish_op,
-    got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
+    KeyStuffed, KeyTyped, allow_keys, called_emsg, cmd_silent, cmdline_row, cmdline_star,
+    ctrl_c_interrupts, debug_did_msg, did_emsg, did_outofmem_msg, did_swapwrite_msg, emsg_silent,
+    ex_normal_busy, got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
     may_garbage_collect, mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col,
     msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping,
-    no_zero_mapping, pending_end_reg_executing, pending_exmode_active, redo_VIsual_busy,
-    redraw_cmdline, reg_executing, reg_recording, repeat_luaref, restart_edit, scriptout,
-    test_disable_char_avail, typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char,
-    vgetc_mod_mask, want_garbage_collect,
+    no_zero_mapping, pending_end_reg_executing, redraw_cmdline, reg_executing, reg_recording,
+    repeat_luaref, scriptout, test_disable_char_avail, typebuf_was_empty, typebuf_was_filled,
+    vgetc_busy, vgetc_char, vgetc_mod_mask, want_garbage_collect,
 };
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
@@ -61,6 +59,10 @@ use crate::os::env::expand_env;
 use crate::os::fileio::{FileOpenFlags, file_close, file_open, file_open_stdin, file_read};
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::plines::{init_charsize_arg, win_charsize};
+use crate::state::mode::{
+    State, VIsual_reselect, arrow_used, did_ai, exmode_active, finish_op, pending_exmode_active,
+    redo_VIsual_busy, restart_edit,
+};
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_SELECT, MODE_TERMINAL, MODE_VISUAL, get_real_state, state_handle_k_event,

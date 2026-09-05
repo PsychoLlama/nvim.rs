@@ -28,7 +28,7 @@ use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::main::{
     Columns, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle, need_wait_return,
-    no_lines_msg, restart_edit, stl_syntax,
+    no_lines_msg, stl_syntax,
 };
 use crate::mbyte::utf_cp_bounds;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
@@ -45,6 +45,7 @@ use crate::os::env::home_replace;
 use crate::os::input::line_breakcheck;
 use crate::path::path_tail;
 use crate::plines::win_get_fill;
+use crate::state::mode::restart_edit;
 use crate::statusline::{FmtSource, StlSinks, build_stl_str_hl};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;

@@ -21,9 +21,7 @@ use crate::cursor::{
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
 use crate::indent::{change_indent, get_number_indent, set_indent};
-use crate::main::{
-    Insstart, State, can_si, can_si_back, did_ai, did_si, got_int, old_indent, replace_offset,
-};
+use crate::main::got_int;
 use crate::mbyte::{utf_allow_break, utf_allow_break_before};
 use crate::memory::xfree;
 use crate::r#move::update_topline;
@@ -31,6 +29,9 @@ use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::search::{FORWARD, check_linecomment};
 use crate::state::VREPLACE_FLAG;
+use crate::state::mode::{
+    Insstart, State, can_si, can_si_back, did_ai, did_si, old_indent, replace_offset,
+};
 use crate::strings::xstrnsave;
 use crate::types::{ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL, size_t};
 

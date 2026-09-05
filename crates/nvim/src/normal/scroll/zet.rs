@@ -17,7 +17,6 @@ use crate::fold::{
     foldmethod_is_marker, has_folding, new_fold_level, open_fold, open_fold_recurse,
 };
 use crate::guard::Suppress;
-use crate::main::finish_op;
 use crate::mark::setpcmark;
 use crate::memline::ml_get_pos;
 use crate::message::emsg;
@@ -31,6 +30,7 @@ use crate::os::cshim::gettext;
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
+use crate::state::mode::finish_op;
 use crate::strings::vim_strchr;
 use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t, size_t};
 use crate::window::{set_fraction, win_setheight};

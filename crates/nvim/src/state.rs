@@ -9,6 +9,7 @@
 //! loop is what makes `K_EVENT` (an event-queue wakeup rather than a key)
 //! look like input to all of them.
 
+pub(crate) mod mode;
 use crate::keycodes::{Ctrl_V, Key, get_special_key_name};
 use crate::types::AutoEvent;
 use core::ffi::{c_char, c_int};
@@ -28,15 +29,16 @@ use crate::getchar::{
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::main::{
-    State, debug_mode, exmode_active, finish_op, global_busy, got_int, last_mode, mod_mask,
-    motion_force, must_redraw, need_wait_return, restart_VIsual_select, restart_edit, virtual_op,
-};
+use crate::main::{debug_mode, global_busy, got_int, mod_mask, must_redraw, need_wait_return};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
+use crate::state::mode::{
+    State, exmode_active, finish_op, last_mode, motion_force, restart_VIsual_select, restart_edit,
+    virtual_op,
+};
 use crate::types::{Direction, HashTab, NUL, ProcType, SaveVEvent, VimState, uint8_t};
 use crate::ui::ui_flush;
 use crate::winlayer::graph::curbuf;

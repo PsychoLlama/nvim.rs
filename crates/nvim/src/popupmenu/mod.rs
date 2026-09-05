@@ -34,7 +34,7 @@ use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
 use crate::main::{
-    Columns, PumWant, RedrawingDisabled, Rows, State, cmdline_row, g_do_tagpreview, hl_attr_active,
+    Columns, PumWant, RedrawingDisabled, Rows, cmdline_row, g_do_tagpreview, hl_attr_active,
     mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync, pum_grid, pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
@@ -53,6 +53,7 @@ use crate::options::{
 use crate::os::cshim::{gettext, strchr};
 use crate::plines::{plines_m_win, win_linetabsize};
 use crate::state::MODE_CMDLINE;
+use crate::state::mode::State;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{

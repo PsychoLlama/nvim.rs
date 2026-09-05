@@ -17,9 +17,7 @@ use crate::eval::vars::{set_reg_var, set_vim_var_string};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
-use crate::main::{
-    VIsual_select_reg, arrow_used, got_int, reg_executing, reg_recorded, restart_edit,
-};
+use crate::main::{got_int, reg_executing, reg_recorded};
 use crate::message::emsg;
 use crate::normal::{
     CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open,
@@ -29,6 +27,7 @@ use crate::ops::{get_extra_op_char, get_op_char, get_op_type, op_is_change};
 use crate::os::cshim::gettext;
 use crate::os::input::line_breakcheck;
 use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
+use crate::state::mode::{VIsual_select_reg, arrow_used, restart_edit};
 use crate::types::{CmdArg, NUL, OpType, Vv};
 use crate::undo::{u_redo, u_undo, u_undoline};
 use crate::winlayer::graph::cmdwin_type;

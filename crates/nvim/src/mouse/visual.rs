@@ -22,11 +22,12 @@ use core::ffi::c_int;
 use super::{
     MOUSE_FOCUS, MOUSE_LEFT, MOUSE_MAY_STOP_VIS, MOUSE_MAY_VIS, MOUSE_RIGHT, vcols_between,
 };
-use crate::main::{State, mod_mask};
+use crate::main::mod_mask;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::pos::lt;
+use crate::state::mode::State;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::Pos;
 use crate::winlayer::Win;

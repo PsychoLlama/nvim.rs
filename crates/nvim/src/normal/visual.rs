@@ -22,11 +22,7 @@ use crate::drawscreen::{
 use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, finish_op, motion_force,
-    mouse_dragging, msg_silent, redraw_cmdline, resel_VIsual_line_count, resel_VIsual_mode,
-    resel_VIsual_vcol,
-};
+use crate::main::{mouse_dragging, msg_silent, redraw_cmdline};
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get_len, ml_get_pos};
@@ -41,6 +37,10 @@ use crate::option::vars::{p_sel, p_slm, p_smd};
 use crate::options::kOptVeFlagBlock;
 use crate::plines::{getvcol, getvcols};
 use crate::pos::{MAXCOL, equalpos, lt};
+use crate::state::mode::{
+    VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, finish_op, motion_force,
+    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol,
+};
 use crate::state::{may_trigger_modechanged, virtual_active};
 use crate::strings::vim_strchr;
 use crate::textobject::{

@@ -22,7 +22,7 @@ use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    State, autocmd_busy, msg_scrolled, starting, stdin_isatty, stdout_isatty, vgetc_busy,
+    autocmd_busy, msg_scrolled, starting, stdin_isatty, stdout_isatty, vgetc_busy,
     wild_menu_showing, windowsVersion,
 };
 use crate::memline::ml_get;
@@ -34,6 +34,7 @@ use crate::ops::cursor_pos_info;
 use crate::os::cshim::strncasecmp;
 use crate::os::env::{os_get_hostname, os_get_pid};
 use crate::popupmenu::{pum_set_event_info, pum_visible};
+use crate::state::mode::State;
 use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;

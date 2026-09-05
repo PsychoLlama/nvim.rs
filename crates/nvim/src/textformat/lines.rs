@@ -29,7 +29,7 @@ use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
 };
 use crate::indent_c::{cindent_on, get_c_indent};
-use crate::main::{State, got_int, saved_cursor};
+use crate::main::got_int;
 use crate::mark::mark_col_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
@@ -41,6 +41,7 @@ use crate::options::kOptFormatexpr;
 use crate::os::input::line_breakcheck;
 use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
+use crate::state::mode::{State, saved_cursor};
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,

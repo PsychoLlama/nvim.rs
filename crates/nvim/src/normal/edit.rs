@@ -28,7 +28,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::main::{State, got_int, restart_edit};
+use crate::main::got_int;
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;
@@ -49,6 +49,7 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::register::{copy_register, do_put, free_register};
 use crate::search::{BACKWARD, FORWARD};
+use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::strings::vim_strchr;
 use crate::textformat::{auto_format, has_format_option};

@@ -35,13 +35,13 @@ use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repea
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
 use crate::main::{
-    State, clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline,
-    redraw_mode, restart_edit, stop_insert_mode,
+    clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline, redraw_mode,
 };
 use crate::memory::{strequal, xstrdup};
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
+use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
 use crate::types::AutoEvent;
 use crate::types::{ColNr, LineNr, OptInt, Pos, VimState, WinOpt, uint8_t};

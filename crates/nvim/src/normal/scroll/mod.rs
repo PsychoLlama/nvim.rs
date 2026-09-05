@@ -14,13 +14,14 @@ use crate::diff::diff_set_topline;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::global_cell::GlobalCell;
-use crate::main::{did_syncbind, mod_mask};
+use crate::main::mod_mask;
 use crate::normal::{
     CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
     set_visual_select, visual_active, visual_select,
 };
 use crate::option::vars::p_sbo;
 use crate::plines::plines_m_win_fill;
+use crate::state::mode::did_syncbind;
 use crate::strings::vim_strchr;
 use crate::types::{Buffer, CmdArg, ColNr, Direction, LineNr, Window};
 use crate::window::goto_tabpage;

@@ -15,7 +15,7 @@ use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::handle_did_throw;
 use crate::guard::Lock;
 use crate::indent_c::{cindent_on, do_c_expr_indent};
-use crate::main::{State, current_sctx, did_ai, did_throw, trylevel};
+use crate::main::{current_sctx, did_throw, trylevel};
 use crate::mbyte::{utf_ptr2char_info, utf_ptr2str_char_info, utfc_next};
 use crate::memory::{xfree, xstrdup};
 use crate::option::vars::{p_debug, p_lispwords, p_paste};
@@ -24,6 +24,7 @@ use crate::plines::{init_charsize_arg, win_charsize};
 use crate::pos::lt;
 use crate::search::{findmatch, linewhite};
 use crate::state::MODE_INSERT;
+use crate::state::mode::{State, did_ai};
 use crate::strings::vim_strchr;
 use crate::winlayer::Win;
 

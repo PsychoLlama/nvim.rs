@@ -24,7 +24,7 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
-use crate::main::{globaldir, last_chdir_reason, msg_scrolled, redraw_tabline, restart_edit};
+use crate::main::{globaldir, last_chdir_reason, msg_scrolled, redraw_tabline};
 use crate::memory::xstrdup;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
@@ -33,6 +33,7 @@ use crate::option::buf_copy_options;
 use crate::option::vars::{p_acd, p_spk, p_wh, p_wiw};
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::path::pathcmp;
+use crate::state::mode::restart_edit;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{
     Buffer, CdScope, MAXPATHL, NUL, OptInt, Tabpage, kCdScopeGlobal, kCdScopeTabpage,

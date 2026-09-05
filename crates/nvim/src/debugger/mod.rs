@@ -41,7 +41,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    Rows, State, cmd_silent, cmdline_row, debug_backtrace_level, debug_break_level, debug_did_msg,
+    Rows, cmd_silent, cmdline_row, debug_backtrace_level, debug_break_level, debug_did_msg,
     debug_mode, debug_tick, did_emsg, emsg_silent, ex_nesting_level, ex_normal_busy, got_int,
     ignore_script, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
@@ -56,6 +56,7 @@ use crate::runtime::{estack_sfile, sourcing_lnum};
 use crate::semsg;
 use crate::smsg;
 use crate::state::MODE_NORMAL;
+use crate::state::mode::State;
 use crate::types::CmdIdx;
 use crate::types::{
     Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,

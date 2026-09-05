@@ -29,9 +29,9 @@ use crate::charset::getdigits_int;
 use crate::ex_getln::{cmdline_at_end, cmdline_overstrike};
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{syn_check_group, syn_id2attr};
-use crate::main::{State, finish_op};
 use crate::normal::visual_active;
 use crate::option::vars::{p_guicursor, p_sel};
+use crate::state::mode::{State, finish_op};
 use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };

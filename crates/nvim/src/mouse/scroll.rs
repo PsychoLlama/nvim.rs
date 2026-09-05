@@ -18,7 +18,7 @@ use super::*;
 use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
-use crate::main::{State, mod_mask, mouse_col, mouse_row};
+use crate::main::{mod_mask, mouse_col, mouse_row};
 use crate::r#move::pagescroll;
 use crate::normal::nv_scroll_line;
 use crate::ops::clear_oparg;
@@ -28,6 +28,7 @@ use crate::pos::equalpos;
 use crate::search::{BACKWARD, FORWARD};
 use crate::siemsg;
 use crate::state::MODE_NORMAL;
+use crate::state::mode::State;
 use crate::types::{CmdArg, Direction, OpArg};
 use crate::winlayer::graph::{curbuf, curwin};
 

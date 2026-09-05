@@ -20,7 +20,7 @@ use crate::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free}
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::main::{
-    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, magic_overruled, need_maketitle, redraw_tabline,
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, magic_overruled, need_maketitle, redraw_tabline,
 };
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::option::vars::{
@@ -32,6 +32,7 @@ use crate::optionstr::empty_option;
 use crate::os::cshim::strstr;
 use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
+use crate::state::mode::State;
 use crate::strings::vim_strchr;
 use crate::types::{
     BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,

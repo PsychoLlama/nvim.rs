@@ -34,7 +34,6 @@ use self::arith::{
 };
 use crate::change::inserted_bytes;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{State, restart_edit};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{dec, inc, ml_get_len, ml_replace};
 use crate::memory::xmallocz;
@@ -45,6 +44,7 @@ use crate::option::vars::p_sel;
 use crate::options::{kOptVeFlagAll, kOptVeFlagOnemore};
 use crate::plines::{init_charsize_arg, linetabsize, linetabsize_eol, win_charsize};
 use crate::pos::MAXCOL;
+use crate::state::mode::{State, restart_edit};
 use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, Pos, StrCharInfo, int64_t,

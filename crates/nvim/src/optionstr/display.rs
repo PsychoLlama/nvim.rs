@@ -21,7 +21,7 @@ use crate::eval::vars::{do_unlet, get_var_value};
 use crate::ex_getln::check_opt_wim;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
-use crate::main::{cmdpreview, km_startsel, km_stopsel};
+use crate::main::cmdpreview;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
 use crate::message::e_unsupportedoption;
@@ -33,6 +33,7 @@ use crate::option::vars::{
 };
 use crate::option::{answer_err, fill_culopt_flags, parse_winhl_opt};
 use crate::options::{kOptAmbiwidth, opt_ve_values};
+use crate::state::mode::{km_startsel, km_stopsel};
 use crate::strings::vim_strchr;
 use crate::types::{
     BreakAt, ColNr, Error, FAIL, FloatAnchor, LPos, LineNr, NUL, OptInt, OptSet, OptionSetFlags,

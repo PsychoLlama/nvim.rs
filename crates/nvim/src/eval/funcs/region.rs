@@ -14,7 +14,6 @@ use crate::eval::typval::{
     tv_list_append_allocated_string, tv_list_append_list, tv_list_append_number,
 };
 use crate::keycodes::Ctrl_V;
-use crate::main::virtual_op;
 use crate::mbyte::{mb_prevptr, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf_len, ml_get_len, ml_get_pos};
 use crate::memory::xmalloc;
@@ -28,6 +27,7 @@ use crate::os::cshim::gettext;
 use crate::plines::getvvcol;
 use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
+use crate::state::mode::virtual_op;
 use crate::state::virtual_active;
 use crate::types::{
     BlockDef, Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0,

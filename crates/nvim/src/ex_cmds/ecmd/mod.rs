@@ -54,8 +54,8 @@ use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
-    exiting, exmode_active, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign,
-    skip_redraw, swap_exists_action,
+    exiting, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign, skip_redraw,
+    swap_exists_action,
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};
@@ -68,6 +68,7 @@ use crate::path::fix_fname;
 use crate::plines::plines_m_win_fill;
 use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
+use crate::state::mode::exmode_active;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{

@@ -50,7 +50,7 @@ use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    State, called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, emsg_silent, exiting,
+    called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, emsg_silent, exiting,
     expr_map_lock, full_screen, in_assert_fails, normal_bg, normal_fg, normal_sp, resize_events,
     starting, textlock, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
 };
@@ -62,6 +62,7 @@ use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlag
 use crate::os::cshim::gettext;
 use crate::os::time::{os_hrtime, os_sleep};
 use crate::state::MODE_CMDLINE;
+use crate::state::mode::State;
 use crate::strings::vim_strchr;
 use crate::types::builders::static_string;
 use crate::types::ui::{

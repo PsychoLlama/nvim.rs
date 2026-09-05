@@ -26,11 +26,11 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    State, allbuf_lock, autocmd_busy, did_check_timestamps, emsg_silent, ex_no_reprint, exiting,
-    exmode_active, global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite,
-    msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
+    allbuf_lock, autocmd_busy, did_check_timestamps, emsg_silent, ex_no_reprint, exiting,
+    global_busy, got_int, in_assert_fails, keep_msg, msg_col, msg_listdo_overwrite, msg_scroll,
+    msg_scrolled, msg_scrolled_ign, msg_silent, need_check_timestamps, need_fileinfo,
     need_wait_return, no_check_timestamps, no_wait_return, readonlymode, recoverymode,
-    redraw_cmdline, redraw_tabline, restart_edit, stdin_fd, swap_exists_action, vim_ignored,
+    redraw_cmdline, redraw_tabline, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
@@ -75,6 +75,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
+use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};
 use crate::types::AutoEvent;

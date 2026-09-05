@@ -39,7 +39,7 @@ use crate::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
 use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
-use crate::main::{default_grid, exmode_active, full_screen, hl_attr_active, resizing_screen};
+use crate::main::{default_grid, full_screen, hl_attr_active, resizing_screen};
 use crate::map::mh_clear;
 use crate::map_glyph_cache::mh_put_glyph;
 use crate::mbyte::{
@@ -50,6 +50,7 @@ use crate::memory::{xcalloc, xfree};
 use crate::option::vars::{p_arshape, p_tbidi, rdb_flags};
 use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
+use crate::state::mode::exmode_active;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Handle, Integer, MHPutStatus,

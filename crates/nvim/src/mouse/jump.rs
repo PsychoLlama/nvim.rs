@@ -25,14 +25,15 @@ use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    VIsual_reselect, mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row,
-    msg_silent, redraw_cmdline,
+    mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent,
+    redraw_cmdline,
 };
 use crate::r#move::WinValid;
 use crate::normal::{
     end_visual_mode, may_start_select, set_visual_active, set_visual_anchor, visual_active,
 };
 use crate::option::vars::p_smd;
+use crate::state::mode::VIsual_reselect;
 use crate::types::Pos;
 use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 

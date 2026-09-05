@@ -38,7 +38,7 @@ use crate::ex_cmds::newlnum;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
-use crate::main::{Columns, KeyTyped, cmdmod, restart_edit};
+use crate::main::{Columns, KeyTyped, cmdmod};
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
@@ -53,6 +53,7 @@ use crate::path::free_wild;
 use crate::pos::MAXCOL;
 use crate::semsg;
 use crate::smsg;
+use crate::state::mode::restart_edit;
 use crate::tag::{do_tag, find_tags};
 use crate::types::builders::static_cstring;
 use crate::types::{

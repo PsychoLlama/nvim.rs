@@ -16,7 +16,7 @@ use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, one
 use crate::ex_cmds::do_ascii;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::has_any_folding;
-use crate::main::{VIsual_reselect, mod_mask};
+use crate::main::mod_mask;
 use crate::mbyte::{show_utf8, utf_find_illegal, utf_ptr2cells};
 use crate::memline::goto_byte;
 use crate::message::show_sb_text;
@@ -30,6 +30,7 @@ use crate::normal::{
 use crate::ops::cursor_pos_info;
 use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
+use crate::state::mode::VIsual_reselect;
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, int64_t};

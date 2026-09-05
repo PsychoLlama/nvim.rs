@@ -26,13 +26,12 @@ use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::keycodes::Ctrl_C;
-use crate::main::{
-    State, autocmd_busy, clear_cmdline, mode_displayed, restart_edit, stop_insert_mode,
-};
+use crate::main::{autocmd_busy, clear_cmdline, mode_displayed};
 use crate::message::{e_cmdwin, e_floatonly};
 use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};
 use crate::state::MODE_INSERT;
+use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
     cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,

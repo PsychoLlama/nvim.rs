@@ -34,8 +34,7 @@ use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events,
     did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
-    last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, reg_recording, secure,
-    starting,
+    last_cursormoved_win, main_loop, msg_col, need_maketitle, reg_recording, secure, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
@@ -57,6 +56,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::registry::{IdMap, SlotTable, id_map};
 use crate::runtime::{estack_pop, estack_push};
 use crate::search::{restore_search_patterns, save_search_patterns};
+use crate::state::mode::last_mode;
 use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};

@@ -18,8 +18,8 @@ use crate::getchar::{
 };
 use crate::help::ex_help;
 use crate::main::{
-    KeyTyped, clear_cmdline, did_emsg, ex_normal_busy, finish_op, got_int, may_garbage_collect,
-    mode_displayed, redraw_mode, restart_VIsual_select, restart_edit, typebuf_was_empty,
+    KeyTyped, clear_cmdline, did_emsg, ex_normal_busy, got_int, may_garbage_collect,
+    mode_displayed, redraw_mode, typebuf_was_empty,
 };
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
@@ -30,6 +30,7 @@ use crate::normal::{
 };
 use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
+use crate::state::mode::{finish_op, restart_VIsual_select, restart_edit};
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
 use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType};

@@ -56,10 +56,9 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::main::{
-    KeyTyped, State, arrow_used, can_si, can_si_back, did_ai, did_emsg, did_si, dollar_vcol,
-    edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, emsg_silent,
-    ex_normal_busy, g_tag_at_cursor, global_busy, got_int, in_assert_fails, msg_hist_off, pum_want,
-    redraw_cmdline, redraw_mode, sc_col, test_disable_char_avail,
+    KeyTyped, did_emsg, dollar_vcol, emsg_silent, ex_normal_busy, g_tag_at_cursor, global_busy,
+    got_int, in_assert_fails, msg_hist_off, pum_want, redraw_cmdline, redraw_mode, sc_col,
+    test_disable_char_avail,
 };
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
@@ -104,6 +103,10 @@ use crate::search::{
 use crate::spell::{
     SMT_ALL, expand_spelling, spell_dump_compl, spell_expand_check_cap, spell_move_to,
     spell_word_start,
+};
+use crate::state::mode::{
+    State, arrow_used, can_si, can_si_back, did_ai, did_si, edit_submode, edit_submode_extra,
+    edit_submode_highl, edit_submode_pre,
 };
 use crate::state::{MODE_INSERT, REPLACE_FLAG, may_trigger_modechanged};
 use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};

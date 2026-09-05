@@ -21,9 +21,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_splice_cols;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
-use crate::main::{
-    Insstart, State, ai_col, can_si, can_si_back, did_si, got_int, old_indent, trylevel,
-};
+use crate::main::{got_int, trylevel};
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};
@@ -38,6 +36,7 @@ use crate::os::input::line_breakcheck;
 use crate::plines::{getvcol_nolist, init_charsize_arg, win_charsize, win_chartabsize};
 use crate::pos::MAXCOL;
 use crate::search::findmatch;
+use crate::state::mode::{Insstart, State, ai_col, can_si, can_si_back, did_si, old_indent};
 use crate::state::{MODE_INSERT, REPLACE_FLAG, VREPLACE_FLAG};
 use crate::strings::xstrnsave;
 use crate::types::CmdModFlags;

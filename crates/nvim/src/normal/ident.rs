@@ -23,9 +23,7 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::file_search::grab_file_name;
 use crate::fold::fold_open_cursor;
 use crate::keycodes::Ctrl_RSB;
-use crate::main::{
-    KeyTyped, clear_cmdline, g_tag_at_cursor, msg_silent, no_smartcase, restart_edit,
-};
+use crate::main::{KeyTyped, clear_cmdline, g_tag_at_cursor, msg_silent, no_smartcase};
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_get_class, mb_prevptr, utf_head_off, utfc_ptr2len};
@@ -47,6 +45,7 @@ use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::state::MODE_TERMINAL;
+use crate::state::mode::restart_edit;
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;

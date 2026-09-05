@@ -62,7 +62,7 @@ use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
 use crate::main::{
     Columns, KeyTyped, cmdline_row, cmdmod, got_int, msg_col, msg_didout, msg_nowait, msg_scroll,
-    msg_scrolled, must_redraw, restart_edit,
+    msg_scrolled, must_redraw,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
@@ -112,6 +112,7 @@ use crate::path::{
 use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
 use crate::search::{BACKWARD, BACKWARD_FILE, FORWARD, FORWARD_FILE, do_search, last_search_pat};
+use crate::state::mode::restart_edit;
 use crate::strings::{has_non_ascii, vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::TAB;

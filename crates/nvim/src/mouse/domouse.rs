@@ -39,9 +39,8 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    Columns, KeyStuffed, State, VIsual_reselect, mod_mask, mode_displayed, mouse_col,
-    mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent,
-    redraw_cmdline, restart_edit, where_paste_started,
+    Columns, KeyStuffed, mod_mask, mode_displayed, mouse_col, mouse_dragging, mouse_grid,
+    mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, redraw_cmdline,
 };
 use crate::memline::{gchar_pos, inc};
 use crate::r#move::scroll_redraw;
@@ -54,6 +53,7 @@ use crate::option::vars::p_smd;
 use crate::pos::{equalpos, lt};
 use crate::register::{do_put, insert_reg, yank_register_mline};
 use crate::search::{FORWARD, findmatch};
+use crate::state::mode::{State, VIsual_reselect, restart_edit, where_paste_started};
 use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,

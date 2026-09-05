@@ -27,9 +27,9 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::main::{
-    Columns, KeyTyped, State, g_do_tagpreview, g_tag_at_cursor, got_int, keep_help_flag,
-    magic_overruled, msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent, no_hlsearch,
-    postponed_split, postponed_split_flags, secure, vim_ignored,
+    Columns, KeyTyped, g_do_tagpreview, g_tag_at_cursor, got_int, keep_help_flag, magic_overruled,
+    msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent, no_hlsearch, postponed_split,
+    postponed_split_flags, secure, vim_ignored,
 };
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
@@ -64,6 +64,7 @@ use crate::regexp::{skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
 use crate::runtime::do_in_runtimepath;
 use crate::search::{do_search, ignorecase, ignorecase_opt};
 use crate::state::MODE_INSERT;
+use crate::state::mode::State;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::TAB;

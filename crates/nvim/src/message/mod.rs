@@ -44,13 +44,13 @@ use crate::input::{get_keystroke, prompt_for_input};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
-    Columns, KeyTyped, Rows, State, called_emsg, capture_ga, clear_cmdline, cmd_silent,
-    cmdline_row, cmdline_was_last_drawn, cmdmsg_rl, did_emsg, did_wait_return, do_redraw,
-    embedded_mode, emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg,
-    emsg_noredir, emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval,
-    exiting, exmode_active, full_screen, global_busy, got_int, headless_mode, hl_attr_active,
-    in_assert_fails, info_message, keep_msg, keep_msg_hl_id, lines_left, main_loop, mode_displayed,
-    msg_col, msg_did_scroll, msg_didany, msg_didout, msg_ext_overwrite, msg_ext_skip_flush,
+    Columns, KeyTyped, Rows, called_emsg, capture_ga, clear_cmdline, cmd_silent, cmdline_row,
+    cmdline_was_last_drawn, cmdmsg_rl, did_emsg, did_wait_return, do_redraw, embedded_mode,
+    emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
+    emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, ex_exitval, exiting,
+    full_screen, global_busy, got_int, headless_mode, hl_attr_active, in_assert_fails,
+    info_message, keep_msg, keep_msg_hl_id, lines_left, main_loop, mode_displayed, msg_col,
+    msg_did_scroll, msg_didany, msg_didout, msg_ext_overwrite, msg_ext_skip_flush,
     msg_ext_skip_verbose, msg_grid, msg_grid_pos, msg_grid_scroll_discount, msg_hist_off,
     msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
     msg_scrolled_ign, msg_silent, need_check_timestamps, need_clr_eos, need_fileinfo,
@@ -84,6 +84,7 @@ use crate::os::input::{input_available, os_breakcheck};
 use crate::os::time::os_delay;
 use crate::register::write_reg_contents;
 use crate::runtime::estack_sfile;
+use crate::state::mode::{State, exmode_active};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::types::AutoEvent;

@@ -20,8 +20,8 @@ use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
     DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, MainParams, PATHSEP, SID_CARG,
-    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, exmode_active, kEqualFiles,
-    kXDGConfigDirs, msg_scroll, silent_mode, time_msg_at,
+    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, kEqualFiles, kXDGConfigDirs, msg_scroll,
+    silent_mode, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::option::vars::p_exrc;
@@ -32,6 +32,7 @@ use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_
 use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
+use crate::state::mode::exmode_active;
 use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
 use ::libc::fprintf;
 

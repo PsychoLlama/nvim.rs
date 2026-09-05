@@ -38,8 +38,8 @@ use crate::highlight_group::{
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
-    State, cterm_normal_bg_color, did_emsg, dollar_vcol, highlight_match, hl_attr_active,
-    normal_bg, search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
+    cterm_normal_bg_color, did_emsg, dollar_vcol, highlight_match, hl_attr_active, normal_bg,
+    search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -63,6 +63,7 @@ use crate::pos::{MAXCOL, ltoreq};
 use crate::quickfix::{is_qf_buffer, qf_current_entry};
 use crate::search::FORWARD;
 use crate::spell::{check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end};
+use crate::state::mode::State;
 use crate::state::{MODE_INSERT, virtual_active};
 use crate::statusline::{SIGN_SHOW_MAX, build_statuscol_str};
 use crate::strings::vim_strchr;
