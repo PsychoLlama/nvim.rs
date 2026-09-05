@@ -19,11 +19,11 @@ use core::ffi::{c_char, c_int, c_void};
 /// The listed contexts answer no whatever `'wildoptions'` says: each of them
 /// expands a path, an option value or a tag, where a fuzzy match would offer
 /// something the command being completed cannot use.
-pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const Expand) -> bool {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+pub(crate) unsafe fn cmdline_fuzzy_completion_supported(expand: *const Expand) -> bool {
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp.cast_mut()) };
-    let context = xp.xp_context;
+    let expand = unsafe { Xp::new(expand.cast_mut()) };
+    let context = expand.xp_context;
     match context {
         ExpandContext::BoolSettings
         | ExpandContext::Colors
@@ -84,10 +84,14 @@ pub(crate) unsafe extern "C" fn sort_func_compare(s1: *const c_void, s2: *const 
 /// `str` is the pattern that produced them, needed only for its leading
 /// `"\~"`.  Both callers expand only when there is at least one match, which
 /// is what makes the unconditional `matches[0]` at the end in bounds.
-pub(crate) unsafe fn wildescape(xp: *mut Expand, str: *const c_char, matches: &mut [*mut c_char]) {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+pub(crate) unsafe fn wildescape(
+    expand: *mut Expand,
+    str: *const c_char,
+    matches: &mut [*mut c_char],
+) {
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let mut expand = unsafe { Xp::new(expand) };
     // Free the string in `slot` and put `escaped` in its place.  Every
     // escaping step builds the new string out of the old one, so the
     // replacement is always computed before the call.  A closure rather
@@ -96,7 +100,7 @@ pub(crate) unsafe fn wildescape(xp: *mut Expand, str: *const c_char, matches: &m
     let put = |slot: &mut *mut c_char, escaped: *mut c_char| unsafe {
         xfree(core::mem::replace(slot, escaped) as *mut c_void)
     };
-    let context = xp.xp_context;
+    let context = expand.xp_context;
     if matches!(
         context,
         ExpandContext::Files
@@ -115,22 +119,22 @@ pub(crate) unsafe fn wildescape(xp: *mut Expand, str: *const c_char, matches: &m
         // and wildmatch characters, except '~'.
         for slot in matches.iter_mut() {
             // For ":set path=" we need to escape spaces twice.
-            if xp.xp_backslash.has(BackslashEscape::THREE) {
-                let pat = if xp.xp_backslash.has(BackslashEscape::COMMA) {
+            if expand.xp_backslash.has(BackslashEscape::THREE) {
+                let pat = if expand.xp_backslash.has(BackslashEscape::COMMA) {
                     c" ,"
                 } else {
                     c" "
                 };
                 let escaped = unsafe { vim_strsave_escaped(*slot, pat.as_ptr()) };
                 put(slot, escaped);
-            } else if xp.xp_backslash.has(BackslashEscape::COMMA)
+            } else if expand.xp_backslash.has(BackslashEscape::COMMA)
                 && !unsafe { vim_strchr(*slot, ',' as c_int) }.is_null()
             {
                 let escaped = unsafe { vim_strsave_escaped(*slot, c",".as_ptr()) };
                 put(slot, escaped);
             }
             let escaped = unsafe {
-                vim_strsave_fnameescape(*slot, if xp.xp_shell { VSE_SHELL } else { vse_what })
+                vim_strsave_fnameescape(*slot, if expand.xp_shell { VSE_SHELL } else { vse_what })
             };
             put(slot, escaped);
 
@@ -143,7 +147,7 @@ pub(crate) unsafe fn wildescape(xp: *mut Expand, str: *const c_char, matches: &m
                 unsafe { escape_fname(slot) };
             }
         }
-        xp.xp_backslash = BackslashEscape::NONE;
+        expand.xp_backslash = BackslashEscape::NONE;
 
         // If the first match starts with a '+' escape it.  Otherwise it
         // could be read as "+cmd".
@@ -162,19 +166,19 @@ pub(crate) unsafe fn wildescape(xp: *mut Expand, str: *const c_char, matches: &m
 
 /// Prepare a freshly expanded match array for use on the command line.
 pub(crate) unsafe fn escape_matches(
-    xp: *mut Expand,
+    expand: *mut Expand,
     str: *mut c_char,
     matches: &mut [*mut c_char],
     options: WildOpts,
 ) {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     // May change home directory back to "~".
     if options.has(WildOpts::HOME_REPLACE) {
         unsafe { tilde_replace(str, matches.len() as c_int, matches.as_mut_ptr()) };
     }
     if options.has(WildOpts::ESCAPE) {
-        unsafe { wildescape(xp.raw(), str, matches) };
+        unsafe { wildescape(expand.raw(), str, matches) };
     }
 }

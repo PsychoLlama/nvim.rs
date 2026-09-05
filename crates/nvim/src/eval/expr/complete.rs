@@ -20,19 +20,19 @@ use ::libc::strpbrk;
 /// one of them introduces is what completion should look at instead.
 const BREAKS: &core::ffi::CStr = c"\"'+-*/%.=!?~|&$([<>,#";
 
-/// Decide what `xp` should complete for the expression `arg` belongs to.
+/// Decide what `expand` should complete for the expression `arg` belongs to.
 ///
 /// # Safety
-/// `xp` must be valid and `arg` a NUL-terminated string that outlives it —
+/// `expand` must be valid and `arg` a NUL-terminated string that outlives it —
 /// `xp_pattern` is left pointing into it.
 pub(crate) unsafe fn set_context_for_expression(
-    xp: *mut Expand,
+    expand: *mut Expand,
     mut arg: *mut c_char,
     cmdidx: CmdIdx,
 ) {
-    // SAFETY: the caller's promise -- `xp` is the live completion context
+    // SAFETY: the caller's promise -- `expand` is the live completion context
     // and `arg` outlives it.
-    let mut xpand = unsafe { Live::new(xp) };
+    let mut xpand = unsafe { Live::new(expand) };
     let mut got_eq = false;
 
     if cmdidx == CmdIdx::r#let || cmdidx == CmdIdx::r#const {

@@ -428,8 +428,8 @@ fn os_uv_homedir(buf: &mut EnvBuf) -> *mut c_char {
 /// `expand_generic` source for environment variable names.
 ///
 /// # Safety
-/// Called through the `ItemGetter` table; `xp` must be a live [`Expand`].
-pub unsafe fn get_env_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+/// Called through the `ItemGetter` table; `expand` must be a live [`Expand`].
+pub unsafe fn get_env_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     debug_assert!(idx >= 0);
     // SAFETY: the caller's contract; `xp_buf` is `EXPAND_BUF_LEN` bytes.
     unsafe {
@@ -437,9 +437,9 @@ pub unsafe fn get_env_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
         if envname.is_null() {
             return ptr::null_mut();
         }
-        xstrlcpy((*xp).xp_buf.as_mut_ptr(), envname, EXPAND_BUF_LEN);
+        xstrlcpy((*expand).xp_buf.as_mut_ptr(), envname, EXPAND_BUF_LEN);
         xfree(envname.cast());
-        (*xp).xp_buf.as_mut_ptr()
+        (*expand).xp_buf.as_mut_ptr()
     }
 }
 

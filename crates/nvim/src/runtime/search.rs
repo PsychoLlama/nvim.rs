@@ -91,8 +91,8 @@ pub unsafe fn ex_runtime(args: *mut ExArg) {
 /// The `[where]` qualifier is only offered for a single-argument command line;
 /// past the first argument [`runtime_expand_flags`] is forced non-zero so
 /// [`expand_runtime_cmd`] stops proposing the qualifiers.
-pub unsafe fn set_context_in_runtime_cmd(xp: *mut Expand, arg: *const c_char) {
-    // SAFETY: `arg` is the NUL-terminated command line tail and `xp` is the
+pub unsafe fn set_context_in_runtime_cmd(expand: *mut Expand, arg: *const c_char) {
+    // SAFETY: `arg` is the NUL-terminated command line tail and `expand` is the
     // live expansion context.
     let mut arg = arg.cast_mut();
     let mut p = unsafe { skiptowhite(arg) };
@@ -114,8 +114,8 @@ pub unsafe fn set_context_in_runtime_cmd(xp: *mut Expand, arg: *const c_char) {
         }
         arg = unsafe { skipwhite(p) };
     }
-    unsafe { (*xp).xp_context = ExpandContext::Runtime };
-    unsafe { (*xp).xp_pattern = arg };
+    unsafe { (*expand).xp_context = ExpandContext::Runtime };
+    unsafe { (*expand).xp_pattern = arg };
 }
 
 /// Source every name `accept` picks out, stopping after the first unless

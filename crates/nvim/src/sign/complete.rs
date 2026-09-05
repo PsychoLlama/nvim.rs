@@ -71,8 +71,8 @@ fn nth(list: &[&CStr], idx: c_int) -> *mut c_char {
 /// [`set_context_in_sign_cmd`] decided this `:sign` line wants.
 ///
 /// # Safety
-/// None; `xp` is unused.
-pub(crate) unsafe fn get_sign_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+/// None; `expand` is unused.
+pub(crate) unsafe fn get_sign_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     match EXPAND_WHAT.get() {
         ExpandWhat::Subcmd => nth(&CMDS, idx),
         ExpandWhat::Define => nth(
@@ -112,7 +112,7 @@ pub(crate) unsafe fn get_sign_name(_xp: *mut Expand, idx: c_int) -> *mut c_char 
 }
 
 /// Works out what the word at the end of a `:sign` command line is, and
-/// points `xp` at it.
+/// points `expand` at it.
 ///
 /// The line is scanned to its last whitespace-separated word; whether that
 /// word contains an `=` decides between completing an argument *name* and
@@ -121,14 +121,14 @@ pub(crate) unsafe fn get_sign_name(_xp: *mut Expand, idx: c_int) -> *mut c_char 
 /// files, buffers — are handed off through `xp_context` instead.
 ///
 /// # Safety
-/// `xp` must be live and `arg` a writable NUL-terminated string
+/// `expand` must be live and `arg` a writable NUL-terminated string
 /// ([`sign_cmd_idx`] terminates the subcommand in place).
-pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut Expand, arg: *mut c_char) {
+pub(crate) unsafe fn set_context_in_sign_cmd(expand: *mut Expand, arg: *mut c_char) {
     // SAFETY: the caller's completion context and command line.
     // Default: expand subcommand names.
-    unsafe { (*xp).xp_context = ExpandContext::Sign };
+    unsafe { (*expand).xp_context = ExpandContext::Sign };
     EXPAND_WHAT.set(ExpandWhat::Subcmd);
-    unsafe { (*xp).xp_pattern = arg };
+    unsafe { (*expand).xp_pattern = arg };
 
     let end_subcmd = unsafe { skiptowhite(arg) };
     if unsafe { *end_subcmd } == 0 {
@@ -155,7 +155,7 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut Expand, arg: *mut c_char) 
     if eq.is_null() {
         // Before the `=`: an argument name, or whatever the subcommand
         // takes instead of one.
-        unsafe { (*xp).xp_pattern = last };
+        unsafe { (*expand).xp_pattern = last };
         EXPAND_WHAT.set(match cmd_idx {
             SIGNCMD_DEFINE => ExpandWhat::Define,
             // `:sign place {id} ...` places and takes the full argument
@@ -167,7 +167,7 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut Expand, arg: *mut c_char) 
             SIGNCMD_LIST | SIGNCMD_UNDEFINE => ExpandWhat::SignNames,
             SIGNCMD_JUMP | SIGNCMD_UNPLACE => ExpandWhat::Unplace,
             _ => {
-                unsafe { (*xp).xp_context = ExpandContext::Nothing };
+                unsafe { (*expand).xp_context = ExpandContext::Nothing };
                 ExpandWhat::Nothing
             }
         });
@@ -175,16 +175,16 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut Expand, arg: *mut c_char) 
     }
 
     // After the `=`: the argument's value.
-    unsafe { (*xp).xp_pattern = eq.add(1) };
+    unsafe { (*expand).xp_pattern = eq.add(1) };
     let starts = |lit: &CStr| unsafe { cstr::prefix_eq(last, lit.as_ptr(), lit.count_bytes()) };
     match cmd_idx {
         SIGNCMD_DEFINE => {
             if starts(c"texthl") || starts(c"linehl") || starts(c"culhl") || starts(c"numhl") {
-                unsafe { (*xp).xp_context = ExpandContext::Highlight };
+                unsafe { (*expand).xp_context = ExpandContext::Highlight };
             } else if starts(c"icon") {
-                unsafe { (*xp).xp_context = ExpandContext::Files };
+                unsafe { (*expand).xp_context = ExpandContext::Files };
             } else {
-                unsafe { (*xp).xp_context = ExpandContext::Nothing };
+                unsafe { (*expand).xp_context = ExpandContext::Nothing };
             }
         }
         SIGNCMD_PLACE => {
@@ -193,20 +193,20 @@ pub(crate) unsafe fn set_context_in_sign_cmd(xp: *mut Expand, arg: *mut c_char) 
             } else if starts(c"group") {
                 EXPAND_WHAT.set(ExpandWhat::SignGroups);
             } else if starts(c"file") {
-                unsafe { (*xp).xp_context = ExpandContext::Buffers };
+                unsafe { (*expand).xp_context = ExpandContext::Buffers };
             } else {
-                unsafe { (*xp).xp_context = ExpandContext::Nothing };
+                unsafe { (*expand).xp_context = ExpandContext::Nothing };
             }
         }
         SIGNCMD_UNPLACE | SIGNCMD_JUMP => {
             if starts(c"group") {
                 EXPAND_WHAT.set(ExpandWhat::SignGroups);
             } else if starts(c"file") {
-                unsafe { (*xp).xp_context = ExpandContext::Buffers };
+                unsafe { (*expand).xp_context = ExpandContext::Buffers };
             } else {
-                unsafe { (*xp).xp_context = ExpandContext::Nothing };
+                unsafe { (*expand).xp_context = ExpandContext::Nothing };
             }
         }
-        _ => unsafe { (*xp).xp_context = ExpandContext::Nothing },
+        _ => unsafe { (*expand).xp_context = ExpandContext::Nothing },
     }
 }

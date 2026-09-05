@@ -181,7 +181,7 @@ static ENUMERATOR: GlobalCell<CompleteListItemGetter> = GlobalCell::new(None);
 /// # Safety
 /// Only reached from `expand_generic`, between the two assignments in
 /// [`expand_set_opt_generic`].
-unsafe fn expand_set_opt_callback(xp: *mut Expand, idx: c_int) -> *mut c_char {
+unsafe fn expand_set_opt_callback(expand: *mut Expand, idx: c_int) -> *mut c_char {
     if idx == 0 {
         let original = ORIGINAL_VALUE.get();
         return if original.is_null() {
@@ -192,7 +192,7 @@ unsafe fn expand_set_opt_callback(xp: *mut Expand, idx: c_int) -> *mut c_char {
     }
     let next = ENUMERATOR.get().expect("enumerator set for the whole call");
     // SAFETY: the enumerator this call installed, with its own index.
-    unsafe { next(xp, idx - 1) }
+    unsafe { next(expand, idx - 1) }
 }
 
 /// Complete an option from an editor-side enumerator rather than from a
@@ -397,8 +397,8 @@ pub unsafe fn expand_set_diffopt(
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's frame; `xp_pattern` points into `oe_set_arg`.
-    let (xp, start) = unsafe { ((*args).oe_xp, (*args).oe_set_arg) };
-    let at = unsafe { (*xp).xp_pattern };
+    let (expand, start) = unsafe { ((*args).oe_xp, (*args).oe_set_arg) };
+    let at = unsafe { (*expand).xp_pattern };
     if at <= start || unsafe { *at.sub(1) } != b':' as c_char {
         return unsafe { expand_set_str_generic(args, num_matches, matches) };
     }
@@ -443,20 +443,21 @@ static WINDOW_EVENTS: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// # Safety
 /// Called by `expand_generic` with its expansion context.
-pub(crate) unsafe fn get_eventignore_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_eventignore_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: the expansion context's pattern is a C string.
-    let subtract = unsafe { *(*xp).xp_pattern } == b'-' as c_char;
+    let subtract = unsafe { *(*expand).xp_pattern } == b'-' as c_char;
     if !subtract && idx == 0 {
         return c"all".as_ptr().cast_mut();
     }
-    let name = get_event_name_no_group(xp, idx - 1 + c_int::from(subtract), WINDOW_EVENTS.get());
+    let name =
+        get_event_name_no_group(expand, idx - 1 + c_int::from(subtract), WINDOW_EVENTS.get());
     if name.is_null() {
         return ptr::null_mut();
     }
     // SAFETY: `xp_buf` is the expansion context's own scratch, which
     // `expand_generic` reads back before it asks for the next name, and
     // `name` is a C string.
-    let buffer = unsafe { (*xp).xp_buf.as_mut_ptr() };
+    let buffer = unsafe { (*expand).xp_buf.as_mut_ptr() };
     let dash = if subtract { c"-" } else { c"" };
     unsafe {
         snprintf(
@@ -488,7 +489,7 @@ pub unsafe fn expand_set_eventignore(
 ///
 /// # Safety
 /// Called by `expand_generic`.
-pub unsafe fn get_fileformat_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub unsafe fn get_fileformat_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     // A null past the end is how `expand_generic` learns the list has ended.
     usize::try_from(idx)
         .ok()

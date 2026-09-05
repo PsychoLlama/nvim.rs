@@ -247,11 +247,11 @@ pub(crate) unsafe fn expand_shellcmd(
 /// pattern, the whole command line and the cursor column.
 pub(crate) unsafe fn call_user_expand_func(
     user_expand_func: UserExpandFunc,
-    xp: *mut Expand,
+    expand: *mut Expand,
 ) -> *mut c_void {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let mut args = [TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
@@ -259,7 +259,10 @@ pub(crate) unsafe fn call_user_expand_func(
     }; 4];
     let save_current_sctx = current_sctx.get();
 
-    if xp.xp_arg.is_null() || unsafe { *xp.xp_arg } as c_int == NUL || xp.xp_line.is_null() {
+    if expand.xp_arg.is_null()
+        || unsafe { *expand.xp_arg } as c_int == NUL
+        || expand.xp_line.is_null()
+    {
         return ptr::null_mut();
     }
 
@@ -267,18 +270,18 @@ pub(crate) unsafe fn call_user_expand_func(
     // for the duration of the callback. The command line's terminator is
     // `CmdBuff`'s invariant now, so the byte it saved is always the NUL it
     // wrote, and both halves are gone.
-    let pat = unsafe { xstrnsave(xp.xp_pattern, xp.xp_pattern_len) };
+    let pat = unsafe { xstrnsave(expand.xp_pattern, expand.xp_pattern_len) };
     args[0].v_type = VAR_STRING;
     args[1].v_type = VAR_STRING;
     args[2].v_type = VAR_NUMBER;
     args[3].v_type = VAR_UNKNOWN;
     args[0].vval.v_string = pat;
-    args[1].vval.v_string = xp.xp_line;
-    args[2].vval.v_number = xp.xp_col as VarNumber;
+    args[1].vval.v_string = expand.xp_line;
+    args[2].vval.v_number = expand.xp_col as VarNumber;
 
-    current_sctx.set(xp.xp_script_ctx);
+    current_sctx.set(expand.xp_script_ctx);
 
-    let ret = unsafe { user_expand_func(xp.xp_arg, 3, args.as_mut_ptr()) };
+    let ret = unsafe { user_expand_func(expand.xp_arg, 3, args.as_mut_ptr()) };
 
     current_sctx.set(save_current_sctx);
     unsafe { xfree(pat as *mut c_void) };
@@ -289,19 +292,19 @@ pub(crate) unsafe fn call_user_expand_func(
 /// (`ExpandContext::UserDefined` and `ExpandContext::UserList`).
 pub(crate) unsafe fn expand_user_defined(
     pat: *const c_char,
-    xp: *mut Expand,
+    expand: *mut Expand,
     regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
     unsafe { *matches = ptr::null_mut() };
     unsafe { *numMatches = 0 };
 
-    let retstr = unsafe { call_user_expand_func(call_func_retstr, xp.raw()) } as *mut c_char;
+    let retstr = unsafe { call_user_expand_func(call_func_retstr, expand.raw()) } as *mut c_char;
     if retstr.is_null() {
         return Err(Failed);
     }
@@ -321,7 +324,7 @@ pub(crate) unsafe fn expand_user_defined(
         unsafe { *e = NUL as c_char };
 
         let mut score = 0;
-        let matched = if unsafe { *xp.xp_pattern } as c_int == NUL {
+        let matched = if unsafe { *expand.xp_pattern } as c_int == NUL {
             true // match everything
         } else if fuzzy {
             // SAFETY: `s` was just NUL-terminated at `e`, and `pat` is the
@@ -403,16 +406,16 @@ pub(crate) unsafe fn process_user_list(
 
 /// Expand names with a list returned by a function defined by the user.
 pub(crate) unsafe fn expand_user_list(
-    xp: *mut Expand,
+    expand: *mut Expand,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     unsafe { *matches = ptr::null_mut() };
     unsafe { *numMatches = 0 };
-    let retlist = unsafe { call_user_expand_func(call_func_retlist, xp.raw()) } as *mut List;
+    let retlist = unsafe { call_user_expand_func(call_func_retlist, expand.raw()) } as *mut List;
     if retlist.is_null() {
         return Err(Failed);
     }
@@ -423,19 +426,19 @@ pub(crate) unsafe fn expand_user_list(
 
 /// Expand names with a Lua completion function.
 pub(crate) unsafe fn expand_user_lua(
-    xp: *mut Expand,
+    expand: *mut Expand,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let mut rettv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    unsafe { nlua_call_user_expand_func(xp.raw(), &raw mut rettv) };
+    unsafe { nlua_call_user_expand_func(expand.raw(), &raw mut rettv) };
     if rettv.v_type != VAR_LIST {
         unsafe { tv_clear(&raw mut rettv) };
         return Err(Failed);

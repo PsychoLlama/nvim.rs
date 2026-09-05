@@ -154,9 +154,9 @@ pub(crate) use self::bufpat::*;
 ///
 /// The promise is discharged by the frame that owns the `Expand`: the
 /// command line's own `xpc`, or a caller's local. Wrapping is the unsafe
-/// step, once per entry point, and every `(*xp).field` after it is ordinary
+/// step, once per entry point, and every `(*expand).field` after it is ordinary
 /// checked code -- which also stops the 1 KiB struct being *copied* every
-/// time a field is read, as `unsafe { (*xp).xp_context }` does.
+/// time a field is read, as `unsafe { (*expand).xp_context }` does.
 ///
 /// Two addresses may not be taken off one [`Deref`](core::ops::Deref) -- the
 /// second borrow pops the first -- so a caller wanting `&raw mut` on a field
@@ -174,7 +174,7 @@ pub const BUF_DIFF_FILTER: WildOpts = WildOpts::from_bits(8192);
 /// enumeration and not a flag set: exactly one is passed, and the value space
 /// (1..=13) collides with [`WildOpts`]'s bits one for one.
 ///
-/// c2rust gave both families the same `c_int`, so `expand_one(xp, s, o,
+/// c2rust gave both families the same `c_int`, so `expand_one(expand, s, o,
 /// WILD_ALL, WILD_SILENT)` — arguments swapped — compiled. As an enum the
 /// swap does not, and [`next_match`](expandone) can match exhaustively
 /// instead of leaning on a `_` arm.

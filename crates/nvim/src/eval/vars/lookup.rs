@@ -58,8 +58,8 @@ pub unsafe fn cat_prefix_varname(prefix: c_int, name: *const c_char) -> *mut c_c
 /// that is the scope an unprefixed one completes in.
 ///
 /// # Safety
-/// `xp` is a live expansion context.
-pub unsafe fn get_user_var_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+/// `expand` is a live expansion context.
+pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     static gdone: GlobalCell<size_t> = GlobalCell::new(0);
     static bdone: GlobalCell<size_t> = GlobalCell::new(0);
     static wdone: GlobalCell<size_t> = GlobalCell::new(0);
@@ -100,7 +100,7 @@ pub unsafe fn get_user_var_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     };
 
     if let Some(key) = step(&gdone, get_globvar_ht()) {
-        if unsafe { cstr::starts_with((*xp).xp_pattern, b"g:") } {
+        if unsafe { cstr::starts_with((*expand).xp_pattern, b"g:") } {
             return unsafe { cat_prefix_varname(b'g' as c_int, key) };
         }
         return key;

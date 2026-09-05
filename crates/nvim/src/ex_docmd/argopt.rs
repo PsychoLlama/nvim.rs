@@ -93,7 +93,7 @@ pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut args: Ea) -> Result<(), F
 /// The completion candidates for `++bad=`.
 ///
 /// Keeps the raw signature: installed as a `CompleteListItemGetter`.
-pub(crate) fn get_bad_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_bad_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     const VALUES: [&CStr; 3] = [c"?", c"keep", c"drop"];
     match VALUES.get(idx as usize) {
         Some(v) => v.as_ptr() as *mut c_char,
@@ -187,7 +187,7 @@ pub unsafe fn getargopt(args: *mut ExArg) -> Result<(), Failed> {
 /// The completion candidates for `++`.
 ///
 /// Keeps the raw signature: installed as a `CompleteListItemGetter`.
-pub(crate) fn get_argopt_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_argopt_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     const VALUES: [&CStr; 7] = [
         c"fileformat=",
         c"encoding=",
@@ -207,13 +207,13 @@ pub(crate) fn get_argopt_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// already typed.
 pub unsafe fn expand_argopt(
     pat: *mut c_char,
-    xp: *mut Expand,
+    expand: *mut Expand,
     rmp: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the completion context is the caller's, live for the call.
-    let x = unsafe { Xp::new(xp) };
+    let x = unsafe { Xp::new(expand) };
     // Past an `=`: complete the value, by whichever option name ends
     // right before it.
     if x.xp_pattern > x.xp_line && byte_at(x.xp_pattern, -1) == '=' as c_int {
@@ -237,7 +237,7 @@ pub unsafe fn expand_argopt(
         if cb.is_none() {
             return Err(Failed);
         }
-        expand_generic(pat, xp, rmp, matches, num_matches, cb, false);
+        expand_generic(pat, expand, rmp, matches, num_matches, cb, false);
         return Ok(());
     }
     // `++ff` is the only abbreviation worth finishing on its own.
@@ -249,7 +249,7 @@ pub unsafe fn expand_argopt(
     }
     expand_generic(
         pat,
-        xp,
+        expand,
         rmp,
         matches,
         num_matches,
@@ -525,7 +525,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 #[allow(clippy::too_many_arguments)]
 fn expand_generic(
     pat: *const c_char,
-    xp: *mut Expand,
+    expand: *mut Expand,
     regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
@@ -534,7 +534,7 @@ fn expand_generic(
 ) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe {
-        crate::cmdexpand::expand_generic(pat, xp, regmatch, matches, numMatches, func, escaped)
+        crate::cmdexpand::expand_generic(pat, expand, regmatch, matches, numMatches, func, escaped)
     }
 }
 

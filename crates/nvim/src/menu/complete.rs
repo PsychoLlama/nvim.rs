@@ -64,10 +64,10 @@ impl Context {
 /// Work out what to complete in a half-typed menu command.
 ///
 /// # Safety
-/// `xp` must be live, `cmd` a NUL-terminated string, and `arg` a position in
+/// `expand` must be live, `cmd` a NUL-terminated string, and `arg` a position in
 /// the command line being completed.
 pub(crate) unsafe fn set_context_in_menu_cmd(
-    xp: *mut Expand,
+    expand: *mut Expand,
     cmd: *const c_char,
     arg: *mut c_char,
     forceit: bool,
@@ -75,11 +75,11 @@ pub(crate) unsafe fn set_context_in_menu_cmd(
     // SAFETY: the caller's obligation.
     let context = unsafe { menu_context(CStr::from_ptr(cmd), CText::new(arg), forceit) };
     // SAFETY: the caller's obligation; the pattern is a position in the
-    // command line `xp` already describes.
-    unsafe { (*xp).xp_context = context.xp_context };
+    // command line `expand` already describes.
+    unsafe { (*expand).xp_context = context.xp_context };
     if let Some(pattern) = context.pattern {
         // SAFETY: as above.
-        unsafe { (*xp).xp_pattern = pattern.raw() };
+        unsafe { (*expand).xp_pattern = pattern.raw() };
     }
     ptr::null_mut()
 }
@@ -238,7 +238,7 @@ impl Generator {
 }
 
 /// `expand_generic()`'s source for the list of (sub)menus, not entries.
-pub(crate) fn get_menu_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_menu_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -258,7 +258,7 @@ pub(crate) fn get_menu_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// As [`get_menu_name`].
-pub(crate) unsafe fn get_menu_names(xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_menu_names(expand: *mut Expand, idx: c_int) -> *mut c_char {
     static MENU: GlobalCell<Option<Menu>> = GlobalCell::new(None);
     static ADVANCE: GlobalCell<bool> = GlobalCell::new(false);
 
@@ -283,7 +283,7 @@ pub(crate) unsafe fn get_menu_names(xp: *mut Expand, idx: c_int) -> *mut c_char 
         // from the expansion context's own scratch, which `expand_generic`
         // copies before it asks for the next name.
         // SAFETY: the caller's live expansion context.
-        let out = unsafe { &mut (*xp).xp_buf };
+        let out = unsafe { &mut (*expand).xp_buf };
         for (dst, src) in out.iter_mut().zip(&bytes[..kept]) {
             *dst = *src as c_char;
         }

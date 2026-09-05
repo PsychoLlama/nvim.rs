@@ -99,7 +99,7 @@ fn init_users() {
 }
 
 /// Given to `expand_generic()` to obtain user names. NULL past the end.
-pub fn get_users(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_users(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     init_users();
     COMPLETION_USERS.with(|users| {
         usize::try_from(idx)

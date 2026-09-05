@@ -104,23 +104,23 @@ pub(crate) unsafe fn option_expand(opt_idx: OptIndex, val: *const c_char) -> Opt
 }
 
 /// Work out what the cursor is sitting on in a `:set` command line, and
-/// leave `xp` describing what to complete.
+/// leave `expand` describing what to complete.
 ///
 /// # Safety
 ///
-/// `xp` must be the command line's expansion state and `arg` a
-/// NUL-terminated cursor into `xp->xp_line`.
+/// `expand` must be the command line's expansion state and `arg` a
+/// NUL-terminated cursor into `expand.xp_line`.
 pub(crate) unsafe fn set_context_in_set_cmd(
-    xp: *mut Expand,
+    expand: *mut Expand,
     arg: *mut c_char,
     opt_flags: OptionSetFlags,
 ) {
     FLAGS.set(opt_flags);
 
     // SAFETY: the caller's expansion state and command line.
-    unsafe { (*xp).xp_context = ExpandContext::Settings };
+    unsafe { (*expand).xp_context = ExpandContext::Settings };
     if unsafe { *arg } == NUL as c_char {
-        unsafe { (*xp).xp_pattern = arg };
+        unsafe { (*expand).xp_pattern = arg };
         return;
     }
 
@@ -130,7 +130,7 @@ pub(crate) unsafe fn set_context_in_set_cmd(
     if unsafe { *last } as c_int == ' ' as c_int
         && unsafe { *last.sub(1) } as c_int != '\\' as c_int
     {
-        unsafe { (*xp).xp_pattern = last.add(1) };
+        unsafe { (*expand).xp_pattern = last.add(1) };
         return;
     }
 
@@ -157,17 +157,17 @@ pub(crate) unsafe fn set_context_in_set_cmd(
     ] {
         let len = spelling.count_bytes();
         if unsafe { cstr::prefix_eq(p, spelling.as_ptr(), len) } {
-            unsafe { (*xp).xp_context = ExpandContext::BoolSettings };
-            unsafe { (*xp).xp_prefix = prefix };
+            unsafe { (*expand).xp_context = ExpandContext::BoolSettings };
+            unsafe { (*expand).xp_prefix = prefix };
             p = unsafe { p.add(len) };
             break;
         }
     }
-    unsafe { (*xp).xp_pattern = p };
+    unsafe { (*expand).xp_pattern = p };
     let arg = p;
 
     let Some((nextchar, opt_idx, flags, is_term_option)) =
-        (unsafe { take_option_name(xp, arg, &mut p) })
+        (unsafe { take_option_name(expand, arg, &mut p) })
     else {
         return;
     };
@@ -185,16 +185,16 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         nextchar = '=' as c_char;
     }
     if (nextchar as c_int != '=' as c_int && nextchar as c_int != ':' as c_int)
-        || unsafe { (*xp).xp_context } == ExpandContext::BoolSettings
+        || unsafe { (*expand).xp_context } == ExpandContext::BoolSettings
     {
-        unsafe { (*xp).xp_context = ExpandContext::Unsuccessful };
+        unsafe { (*expand).xp_context = ExpandContext::Unsuccessful };
         return;
     }
 
     // Everything below completes the *value*, after the `=` or `:`.
     IDX.set(if is_term_option { kOptInvalid } else { opt_idx });
-    unsafe { (*xp).xp_pattern = p.add(1) };
-    START_COL.set(unsafe { p.add(1).offset_from((*xp).xp_line) } as c_int);
+    unsafe { (*expand).xp_pattern = p.add(1) };
+    START_COL.set(unsafe { p.add(1).offset_from((*expand).xp_line) } as c_int);
 
     // Three options reuse another command's completion wholesale.
     let borrowed = match opt_idx {
@@ -204,20 +204,20 @@ pub(crate) unsafe fn set_context_in_set_cmd(
         _ => None,
     };
     if let Some(context) = borrowed {
-        unsafe { (*xp).xp_context = context };
+        unsafe { (*expand).xp_context = context };
         return;
     }
 
     if subtract {
-        unsafe { (*xp).xp_context = ExpandContext::SettingSubtract };
+        unsafe { (*expand).xp_context = ExpandContext::SettingSubtract };
         return;
     } else if IDX.get() != kOptInvalid && get_option(IDX.get()).opt_expand_cb.is_some() {
-        unsafe { (*xp).xp_context = ExpandContext::StringSetting };
-    } else if unsafe { *(*xp).xp_pattern } == NUL as c_char {
-        unsafe { (*xp).xp_context = ExpandContext::OldSetting };
+        unsafe { (*expand).xp_context = ExpandContext::StringSetting };
+    } else if unsafe { *(*expand).xp_pattern } == NUL as c_char {
+        unsafe { (*expand).xp_context = ExpandContext::OldSetting };
         return;
     } else {
-        unsafe { (*xp).xp_context = ExpandContext::Nothing };
+        unsafe { (*expand).xp_context = ExpandContext::Nothing };
     }
 
     if is_term_option || option_has_type(opt_idx, kOptValTypeNumber) {
@@ -226,22 +226,22 @@ pub(crate) unsafe fn set_context_in_set_cmd(
 
     // Only string options from here.
     if flags & kOptFlagExpand as uint32_t != 0 {
-        unsafe { set_file_context(xp, opt_idx, flags) };
+        unsafe { set_file_context(expand, opt_idx, flags) };
     }
     if flags & (kOptFlagExpand | kOptFlagComma | kOptFlagColon) as uint32_t != 0 {
-        unsafe { seek_item_start(xp, argend, flags) };
+        unsafe { seek_item_start(expand, argend, flags) };
     }
     // A set of one-letter flags has no words to complete, so the
     // pattern is always empty and the whole set is offered.
     if flags & kOptFlagFlagList as uint32_t != 0 {
-        unsafe { (*xp).xp_pattern = argend };
+        unsafe { (*expand).xp_pattern = argend };
     }
     // 'spellsuggest' takes `file:<name>`, whose tail is a file name.
     if opt_idx == kOptSpellsuggest {
-        if unsafe { cstr::starts_with((*xp).xp_pattern, b"file:") } {
-            unsafe { (*xp).xp_pattern = (*xp).xp_pattern.add(5) };
+        if unsafe { cstr::starts_with((*expand).xp_pattern, b"file:") } {
+            unsafe { (*expand).xp_pattern = (*expand).xp_pattern.add(5) };
         } else if get_option(IDX.get()).opt_expand_cb.is_some() {
-            unsafe { (*xp).xp_context = ExpandContext::StringSetting };
+            unsafe { (*expand).xp_context = ExpandContext::StringSetting };
         }
     }
 }
@@ -263,16 +263,16 @@ unsafe fn backslashes_before(start: *const c_char, at: *const c_char) -> isize {
 
 /// Consume the option name at `arg`, leaving `*p` on the character after
 /// it. `None` means the cursor is still inside the name, so the name itself
-/// is what to complete and `xp` has been left saying so.
+/// is what to complete and `expand` has been left saying so.
 ///
 /// Returns the character after the name, the option, its flags, and whether
 /// it was one of the `t_xx` terminal names — which have no table row.
 ///
 /// # Safety
 ///
-/// `xp` must be the expansion state and `arg` a NUL-terminated cursor.
+/// `expand` must be the expansion state and `arg` a NUL-terminated cursor.
 unsafe fn take_option_name(
-    xp: *mut Expand,
+    expand: *mut Expand,
     arg: *mut c_char,
     p: &mut *mut c_char,
 ) -> Option<(c_char, OptIndex, uint32_t, bool)> {
@@ -288,7 +288,7 @@ unsafe fn take_option_name(
         }
         let key = unsafe { get_special_key_code(arg.add(1)) };
         if key == 0 {
-            unsafe { (*xp).xp_context = ExpandContext::Nothing };
+            unsafe { (*expand).xp_context = ExpandContext::Nothing };
             return None;
         }
         *p = unsafe { p.add(1) };
@@ -336,12 +336,12 @@ unsafe fn take_option_name(
     let len = unsafe { p.offset_from(arg) } as usize;
     let opt_idx = find_option_len(unsafe { slice::from_raw_parts(arg.cast::<u8>(), len) });
     if opt_idx == kOptInvalid || is_option_hidden(opt_idx) {
-        unsafe { (*xp).xp_context = ExpandContext::Nothing };
+        unsafe { (*expand).xp_context = ExpandContext::Nothing };
         return None;
     }
     // A boolean takes no value, so there is nothing after the name.
     if option_has_type(opt_idx, kOptValTypeBoolean) {
-        unsafe { (*xp).xp_context = ExpandContext::Nothing };
+        unsafe { (*expand).xp_context = ExpandContext::Nothing };
         return None;
     }
     Some((nextchar, opt_idx, get_option(opt_idx).flags, false))
@@ -352,8 +352,8 @@ unsafe fn take_option_name(
 ///
 /// # Safety
 ///
-/// `xp` must be the expansion state.
-unsafe fn set_file_context(xp: *mut Expand, opt_idx: OptIndex, flags: uint32_t) {
+/// `expand` must be the expansion state.
+unsafe fn set_file_context(expand: *mut Expand, opt_idx: OptIndex, flags: uint32_t) {
     // SAFETY: the caller's expansion state, and the option table.
     // 'path', 'cdpath' and 'tags' need three backslashes for a space,
     // because their own parsers unescape one layer first.
@@ -378,40 +378,40 @@ unsafe fn set_file_context(xp: *mut Expand, opt_idx: OptIndex, flags: uint32_t) 
     } else {
         BackslashEscape::ONE
     };
-    unsafe { (*xp).xp_context = context };
-    unsafe { (*xp).xp_backslash = backslash };
+    unsafe { (*expand).xp_context = context };
+    unsafe { (*expand).xp_backslash = backslash };
     if flags & kOptFlagComma as uint32_t != 0 {
-        unsafe { (*xp).xp_backslash |= BackslashEscape::COMMA };
+        unsafe { (*expand).xp_backslash |= BackslashEscape::COMMA };
     }
 }
 
-/// Move `xp->xp_pattern` forward to the start of the item the cursor is in,
+/// Move `expand.xp_pattern` forward to the start of the item the cursor is in,
 /// for a value that is a list.
 ///
 /// # Safety
 ///
-/// `xp` must be the expansion state and `argend` the end of its argument.
-unsafe fn seek_item_start(xp: *mut Expand, argend: *mut c_char, flags: uint32_t) {
+/// `expand` must be the expansion state and `argend` the end of its argument.
+unsafe fn seek_item_start(expand: *mut Expand, argend: *mut c_char, flags: uint32_t) {
     let comma_list = flags & kOptFlagComma as uint32_t != 0;
     let colon_list = flags & kOptFlagColon as uint32_t != 0;
 
     // SAFETY: the caller's expansion state and argument.
     let mut p = unsafe { argend.sub(1) };
-    while p > unsafe { (*xp).xp_pattern } {
+    while p > unsafe { (*expand).xp_pattern } {
         let c = unsafe { *p } as c_int;
         let separator = c == ' ' as c_int || c == ',' as c_int || (c == ':' as c_int && colon_list);
         if separator {
-            let bs = unsafe { backslashes_before((*xp).xp_pattern, p) };
+            let bs = unsafe { backslashes_before((*expand).xp_pattern, p) };
             // A space only separates a triple-escaped value, a comma
             // needs fewer than two backslashes, and a colon in a
             // colon-list is never escaped.
             let splits = (c == ' ' as c_int
-                && unsafe { (*xp).xp_backslash }.has(BackslashEscape::THREE)
+                && unsafe { (*expand).xp_backslash }.has(BackslashEscape::THREE)
                 && bs < 3)
                 || (c == ',' as c_int && comma_list && bs < 2)
                 || (c == ':' as c_int && colon_list);
             if splits {
-                unsafe { (*xp).xp_pattern = p.add(1) };
+                unsafe { (*expand).xp_pattern = p.add(1) };
                 break;
             }
         }
@@ -479,7 +479,7 @@ unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -
 ///
 /// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
 pub(crate) unsafe fn expand_settings(
-    xp: *mut Expand,
+    expand: *mut Expand,
     regmatch: *mut RegMatch,
     fuzzystr: *mut c_char,
     numMatches: *mut c_int,
@@ -494,7 +494,7 @@ pub(crate) unsafe fn expand_settings(
     // option table.
     let ic = unsafe { (*regmatch).rm_ic };
     let fuzzy = can_fuzzy && unsafe { cmdline_fuzzy_complete(fuzzystr) };
-    let booleans_only = unsafe { (*xp).xp_context } == ExpandContext::BoolSettings;
+    let booleans_only = unsafe { (*expand).xp_context } == ExpandContext::BoolSettings;
 
     for pass in 0..2 {
         let counting = pass == 0;
@@ -615,9 +615,9 @@ pub(crate) unsafe fn expand_old_setting(
 ///
 /// # Safety
 ///
-/// The out-parameters must be writable and `xp`/`regmatch` valid.
+/// The out-parameters must be writable and `expand`/`regmatch` valid.
 pub(crate) unsafe fn expand_string_setting(
-    xp: *mut Expand,
+    expand: *mut Expand,
     regmatch: *mut RegMatch,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -636,7 +636,7 @@ pub(crate) unsafe fn expand_string_setting(
     unsafe { option_value2string(opt_idx, FLAGS.get(), &mut rendered) };
     let escaped = unsafe { escape_option_str_cmdline(rendered.as_mut_ptr()) };
 
-    let set_arg = unsafe { (*xp).xp_line.offset(START_COL.get() as isize) };
+    let set_arg = unsafe { (*expand).xp_line.offset(START_COL.get() as isize) };
     let mut args = OptExpand {
         oe_idx: opt_idx,
         oe_opt_value: escaped,
@@ -645,7 +645,7 @@ pub(crate) unsafe fn expand_string_setting(
         // has been typed yet and it is not being appended to.
         oe_include_orig_val: !APPEND.get() && unsafe { *set_arg } == NUL as c_char,
         oe_regmatch: regmatch,
-        oe_xp: xp,
+        oe_xp: expand,
         oe_set_arg: set_arg,
     };
     let num_ret = unsafe { expand_cb(&raw mut args, numMatches, matches) };
@@ -658,9 +658,9 @@ pub(crate) unsafe fn expand_string_setting(
 ///
 /// # Safety
 ///
-/// The out-parameters must be writable and `xp`/`regmatch` valid.
+/// The out-parameters must be writable and `expand`/`regmatch` valid.
 pub(crate) unsafe fn expand_setting_subtract(
-    xp: *mut Expand,
+    expand: *mut Expand,
     regmatch: *mut RegMatch,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -730,7 +730,7 @@ pub(crate) unsafe fn expand_setting_subtract(
         // A set of one-letter flags: offer the whole set first, then
         // each letter. Nothing may have been typed, since a flag set
         // has no word boundary to complete from.
-        if unsafe { *(*xp).xp_pattern } != NUL as c_char {
+        if unsafe { *(*expand).xp_pattern } != NUL as c_char {
             return Err(Failed);
         }
         let num_flags = unsafe { cstr::bytes_at(value) }.len();

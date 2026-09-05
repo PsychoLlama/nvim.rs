@@ -213,7 +213,7 @@ pub unsafe fn function_exists(name: *const c_char, no_deref: bool) -> bool {
 /// # Safety
 /// Called with `idx` 0 first, then increasing, with no change to the
 /// function table in between.
-pub unsafe fn get_user_func_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub unsafe fn get_user_func_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     static done: GlobalCell<size_t> = GlobalCell::new(0);
     static changed: GlobalCell<c_int> = GlobalCell::new(0);
     // The cursor is a slot *index*: it is parked in a `static` across calls
@@ -253,9 +253,9 @@ pub unsafe fn get_user_func_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
         return uf_name_ptr(fp);
     }
 
-    let buf = unsafe { (*xp).xp_buf.as_mut_ptr() };
+    let buf = unsafe { (*expand).xp_buf.as_mut_ptr() };
     let mut len = unsafe { cat_func_name(buf, IOSIZE as size_t, fp) };
-    if unsafe { (*xp).xp_context } != ExpandContext::UserFunc {
+    if unsafe { (*expand).xp_context } != ExpandContext::UserFunc {
         // SAFETY: `buf` is the completion buffer of `IOSIZE` bytes, of
         // which `len` are used, and `fp` is the live function.
         let at = unsafe { buf.offset(len as isize) };

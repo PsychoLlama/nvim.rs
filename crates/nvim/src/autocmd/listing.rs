@@ -276,9 +276,9 @@ pub unsafe fn has_autocmd(
 /// `:doautocmd`/`:doautoall` (true).
 ///
 /// Answers a pointer at the next command to expand instead, or null when
-/// it has set `xp` itself.
+/// it has set `expand` itself.
 pub unsafe fn set_context_in_autocmd(
-    xp: *mut Expand,
+    expand: *mut Expand,
     mut arg: *mut ::core::ffi::c_char,
     doautocmd: bool,
 ) -> *mut ::core::ffi::c_char {
@@ -317,10 +317,10 @@ pub unsafe fn set_context_in_autocmd(
         if group == AUGROUP_ALL {
             autocmd_include_groups.set(true);
         }
-        // SAFETY: `xp` is the caller's completion state, and `arg` points
+        // SAFETY: `expand` is the caller's completion state, and `arg` points
         // into the line it is completing.
-        unsafe { (*xp).xp_context = ExpandContext::Events };
-        unsafe { (*xp).xp_pattern = arg };
+        unsafe { (*expand).xp_context = ExpandContext::Events };
+        unsafe { (*expand).xp_pattern = arg };
         return ::core::ptr::null_mut();
     }
 
@@ -345,8 +345,8 @@ pub unsafe fn set_context_in_autocmd(
     } else {
         ExpandContext::Nothing
     };
-    // SAFETY: `xp` is the caller's completion state.
-    unsafe { (*xp).xp_context = context };
+    // SAFETY: `expand` is the caller's completion state.
+    unsafe { (*expand).xp_context = context };
     ::core::ptr::null_mut()
 }
 

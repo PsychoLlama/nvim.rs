@@ -335,7 +335,7 @@ fn locale_name(idx: c_int) -> *mut c_char {
 
 /// `expand_generic` source for `:language`'s argument: the four sub-commands
 /// first, then every locale (because `:language {name}` takes one directly).
-pub fn get_lang_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_lang_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     match SELECTORS.get(idx as usize) {
         Some((name, ..)) => name.as_ptr().cast::<c_char>().cast_mut(),
         None => locale_name(idx - SELECTORS.len() as c_int),
@@ -343,7 +343,7 @@ pub fn get_lang_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 }
 
 /// `expand_generic` source for `:language`'s locale names alone.
-pub fn get_locales(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_locales(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     locale_name(idx)
 }
 

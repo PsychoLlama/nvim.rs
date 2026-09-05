@@ -351,7 +351,7 @@ fn alnum_lowered(c: c_char) -> c_char {
 }
 
 /// `:set fileencoding=<Tab>` completion: the `idx`th canonical name.
-pub fn get_encoding_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_encoding_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     match usize::try_from(idx) {
         Ok(i) if i < IDX_COUNT => ENCODINGS[i].name.as_ptr() as *mut c_char,
         _ => core::ptr::null_mut(),

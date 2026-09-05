@@ -20,7 +20,7 @@ use core::ptr;
 /// a line; `maxlen` is the column width and `showtail` asks for file names to
 /// be shown as their tail alone.
 pub(crate) unsafe fn showmatches_oneline(
-    xp: *mut Expand,
+    expand: *mut Expand,
     matches: *mut *mut c_char,
     numMatches: c_int,
     lines: c_int,
@@ -28,9 +28,9 @@ pub(crate) unsafe fn showmatches_oneline(
     maxlen: c_int,
     showtail: bool,
 ) {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     // `msg_outtrans` runs the message machinery, which is why the shortened
     // name it is handed is this frame's and not the shared `NameBuff`.
     let mut shown = [0 as c_char; MAXPATHL as usize];
@@ -47,7 +47,7 @@ pub(crate) unsafe fn showmatches_oneline(
     let mut lastlen = 999;
     let mut j = linenr;
     while j < numMatches {
-        if xp.xp_context == ExpandContext::TagsListFiles {
+        if expand.xp_context == ExpandContext::TagsListFiles {
             unsafe { msg_outtrans(*matches.offset(j as isize), HLF_D, false) };
             let name = unsafe { *matches.offset(j as isize) };
             // SAFETY: the tag file name follows the tag's own NUL, which is
@@ -64,12 +64,12 @@ pub(crate) unsafe fn showmatches_oneline(
         }
         let isdir;
         let p;
-        if xp.xp_context == ExpandContext::Files
-            || xp.xp_context == ExpandContext::ShellCmd
-            || xp.xp_context == ExpandContext::Buffers
+        if expand.xp_context == ExpandContext::Files
+            || expand.xp_context == ExpandContext::ShellCmd
+            || expand.xp_context == ExpandContext::Buffers
         {
             // Highlight directories.
-            if xp.xp_numfiles != -1 {
+            if expand.xp_numfiles != -1 {
                 // Expansion was done before and special characters were
                 // escaped, need to halve backslashes.  Also $HOME has been
                 // replaced with ~/.
@@ -122,28 +122,28 @@ pub(crate) unsafe fn showmatches_oneline(
 /// Answers `Expanded::Nothing` when the character that triggered expansion should
 /// be inserted as a normal character.
 pub unsafe fn showmatches(
-    xp: *mut Expand,
+    expand: *mut Expand,
     display_wildmenu: bool,
     display_list: bool,
     noselect: bool,
 ) -> Expanded {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let mut shown = [0 as c_char; MAXPATHL as usize];
     let ccline = Cc::current();
     let mut numMatches = 0;
     let mut matches = ptr::null_mut();
     let showtail;
 
-    if xp.xp_numfiles == -1 {
-        unsafe { set_expand_context(xp.raw()) };
-        if xp.xp_context == ExpandContext::Lua {
-            unsafe { nlua_expand_pat(xp.raw()) };
+    if expand.xp_numfiles == -1 {
+        unsafe { set_expand_context(expand.raw()) };
+        if expand.xp_context == ExpandContext::Lua {
+            unsafe { nlua_expand_pat(expand.raw()) };
         }
         let retval = unsafe {
             expand_cmdline(
-                xp.raw(),
+                expand.raw(),
                 ccline.text(),
                 ccline.cmdpos,
                 &raw mut numMatches,
@@ -153,10 +153,10 @@ pub unsafe fn showmatches(
         if retval != Expanded::Ok {
             return retval;
         }
-        showtail = unsafe { expand_showtail(xp.raw()) };
+        showtail = unsafe { expand_showtail(expand.raw()) };
     } else {
-        numMatches = xp.xp_numfiles;
-        matches = xp.xp_files;
+        numMatches = expand.xp_numfiles;
+        matches = expand.xp_files;
         showtail = cmd_showtail.get();
     }
 
@@ -164,7 +164,7 @@ pub unsafe fn showmatches(
         unsafe {
             cmdline_pum_create(
                 Cc::current(),
-                xp.raw(),
+                expand.raw(),
                 matches,
                 numMatches,
                 showtail,
@@ -196,7 +196,7 @@ pub unsafe fn showmatches(
         // Display statusbar menu.
         unsafe {
             redraw_wildmenu(
-                xp.raw(),
+                expand.raw(),
                 numMatches,
                 matches,
                 if noselect { -1 } else { 0 },
@@ -218,9 +218,9 @@ pub unsafe fn showmatches(
         let mut maxlen = 0;
         for i in 0..numMatches {
             let len = if !showtail
-                && (xp.xp_context == ExpandContext::Files
-                    || xp.xp_context == ExpandContext::ShellCmd
-                    || xp.xp_context == ExpandContext::Buffers)
+                && (expand.xp_context == ExpandContext::Files
+                    || expand.xp_context == ExpandContext::ShellCmd
+                    || expand.xp_context == ExpandContext::Buffers)
             {
                 unsafe {
                     home_replace(
@@ -238,7 +238,7 @@ pub unsafe fn showmatches(
             maxlen = maxlen.max(len);
         }
 
-        let lines = if xp.xp_context == ExpandContext::TagsListFiles {
+        let lines = if expand.xp_context == ExpandContext::TagsListFiles {
             numMatches
         } else {
             // Compute the number of columns and lines for the listing.
@@ -247,7 +247,7 @@ pub unsafe fn showmatches(
             (numMatches + columns - 1) / columns
         };
 
-        if xp.xp_context == ExpandContext::TagsListFiles {
+        if expand.xp_context == ExpandContext::TagsListFiles {
             unsafe { msg_puts_hl(gettext(c"tagname").as_ptr(), HLF_T, false) };
             unsafe { msg_clr_eos() };
             unsafe { msg_advance(maxlen - 3) };
@@ -257,7 +257,15 @@ pub unsafe fn showmatches(
         // List the files line by line.
         for i in 0..lines {
             unsafe {
-                showmatches_oneline(xp.raw(), matches, numMatches, lines, i, maxlen, showtail)
+                showmatches_oneline(
+                    expand.raw(),
+                    matches,
+                    numMatches,
+                    lines,
+                    i,
+                    maxlen,
+                    showtail,
+                )
             };
             if got_int.get() {
                 got_int.set(false);
@@ -270,7 +278,7 @@ pub unsafe fn showmatches(
         cmdline_row.set(msg_row.get()); // will put it back later
     }
 
-    if xp.xp_numfiles == -1 {
+    if expand.xp_numfiles == -1 {
         unsafe { free_wild(numMatches, matches) };
     }
 
@@ -306,25 +314,25 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
 ///
 /// When not completing file names, or when there is a wildcard in the path,
 /// false is returned.
-pub(crate) unsafe fn expand_showtail(xp: *mut Expand) -> bool {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+pub(crate) unsafe fn expand_showtail(expand: *mut Expand) -> bool {
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     // When not completing file names a "/" may mean something different.
-    if xp.xp_context != ExpandContext::Files
-        && xp.xp_context != ExpandContext::ShellCmd
-        && xp.xp_context != ExpandContext::Directories
+    if expand.xp_context != ExpandContext::Files
+        && expand.xp_context != ExpandContext::ShellCmd
+        && expand.xp_context != ExpandContext::Directories
     {
         return false;
     }
 
-    let end = unsafe { path_tail(xp.xp_pattern) };
-    if end == xp.xp_pattern {
+    let end = unsafe { path_tail(expand.xp_pattern) };
+    if end == expand.xp_pattern {
         // There is no path separator.
         return false;
     }
 
-    let mut s = xp.xp_pattern;
+    let mut s = expand.xp_pattern;
     while s < end {
         // Skip escaped wildcards.  Only when the backslash is not a path
         // separator, on DOS the '*' "path\*\file" must not be skipped.

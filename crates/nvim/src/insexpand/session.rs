@@ -198,22 +198,22 @@ pub(crate) unsafe fn get_cmdline_compl_info(
 ) -> Result<(), Failed> {
     // The expansion context outlives no call here, but `set_cmd_context`
     // and `nlua_expand_pat` both want it by pointer, so it is taken once.
-    let xp = compl_xp.ptr();
+    let expand = compl_xp.ptr();
     compl_pattern().set(unsafe { cbuf_to_string(line, curs_col as size_t) });
     unsafe {
         set_cmd_context(
-            xp,
+            expand,
             compl_pattern().data(),
             compl_pattern().len() as c_int,
             curs_col,
             false,
         )
     };
-    if unsafe { (*xp).xp_context } == ExpandContext::Lua {
-        unsafe { nlua_expand_pat(xp) };
+    if unsafe { (*expand).xp_context } == ExpandContext::Lua {
+        unsafe { nlua_expand_pat(expand) };
     }
-    if unsafe { (*xp).xp_context } == ExpandContext::Unsuccessful
-        || unsafe { (*xp).xp_context } == ExpandContext::Nothing
+    if unsafe { (*expand).xp_context } == ExpandContext::Unsuccessful
+        || unsafe { (*expand).xp_context } == ExpandContext::Nothing
     {
         // No completion possible: use an empty pattern to get a
         // "pattern not found" message.
@@ -221,7 +221,7 @@ pub(crate) unsafe fn get_cmdline_compl_info(
     } else {
         // SAFETY: `xp_pattern` points into `compl_pattern`, which
         // `set_cmd_context` was given.
-        let off = unsafe { (*xp).xp_pattern.offset_from(compl_pattern().data()) };
+        let off = unsafe { (*expand).xp_pattern.offset_from(compl_pattern().data()) };
         compl_col.set(off as ColNr);
     }
     compl_length.set(curs_col - compl_col.get());

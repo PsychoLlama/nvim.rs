@@ -152,16 +152,16 @@ pub unsafe fn f_expand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
         options |= WildOpts::ICASE;
     }
     if result.v_type == VAR_STRING {
-        let (xp, pat) = (&raw mut xpc, s as *mut c_char);
+        let (expand, pat) = (&raw mut xpc, s as *mut c_char);
         let nul = ptr::null_mut();
         // SAFETY: `xpc` is a local the `expand_cleanup` below tidies, and
         // `s` is the NUL-terminated argument.
-        result.vval.v_string = unsafe { expand_one(xp, pat, nul, options, WildMode::All) };
+        result.vval.v_string = unsafe { expand_one(expand, pat, nul, options, WildMode::All) };
     } else {
-        let (xp, pat) = (&raw mut xpc, s as *mut c_char);
+        let (expand, pat) = (&raw mut xpc, s as *mut c_char);
         let nul = ptr::null_mut();
         // SAFETY: as above.
-        unsafe { expand_one(xp, pat, nul, options, WildMode::AllKeep) };
+        unsafe { expand_one(expand, pat, nul, options, WildMode::AllKeep) };
         list_alloc_ret(result, xpc.xp_numfiles as isize);
         for i in 0..xpc.xp_numfiles {
             let list = result.list_or_null();

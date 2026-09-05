@@ -330,7 +330,7 @@ const PEXPAND_CMDS: [&[u8]; 7] = [
 
 /// expand_generic callback for `:profile` subcommands (fn pointer in the
 /// cmdexpand context table).
-pub fn get_profile_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_profile_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     usize::try_from(idx)
         .ok()
         .and_then(|i| PEXPAND_CMDS.get(i))
@@ -340,14 +340,14 @@ pub fn get_profile_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// Command-line completion context for `:profile`.
 ///
 /// # Safety
-/// `xp` is the live expansion context; `arg` is NUL-terminated and outlives
+/// `expand` is the live expansion context; `arg` is NUL-terminated and outlives
 /// it (it is stored in `xp_pattern`).
-pub unsafe fn set_context_in_profile_cmd(xp: *mut Expand, arg: *const c_char) {
+pub unsafe fn set_context_in_profile_cmd(expand: *mut Expand, arg: *const c_char) {
     // SAFETY: the caller's context.
-    let xp = unsafe { &mut *xp };
+    let expand = unsafe { &mut *expand };
     // Default: expand subcommands.
-    xp.xp_context = ExpandContext::Profile;
-    xp.xp_pattern = arg as *mut c_char;
+    expand.xp_context = ExpandContext::Profile;
+    expand.xp_pattern = arg as *mut c_char;
 
     // SAFETY: `arg` is NUL-terminated, so the walk stays inside it and
     // `subcmd` borrows from it.
@@ -363,13 +363,13 @@ pub unsafe fn set_context_in_profile_cmd(xp: *mut Expand, arg: *const c_char) {
         )
     };
     if subcmd == b"start" || subcmd == b"file" {
-        xp.xp_context = ExpandContext::Files;
-        xp.xp_pattern = rest;
+        expand.xp_context = ExpandContext::Files;
+        expand.xp_pattern = rest;
     } else if subcmd == b"func" {
-        xp.xp_context = ExpandContext::UserFunc;
-        xp.xp_pattern = rest;
+        expand.xp_context = ExpandContext::UserFunc;
+        expand.xp_pattern = rest;
     } else {
-        xp.xp_context = ExpandContext::Nothing;
+        expand.xp_context = ExpandContext::Nothing;
     }
 }
 

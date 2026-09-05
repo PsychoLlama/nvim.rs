@@ -313,8 +313,8 @@ pub unsafe fn call_internal_method(
 /// when it takes no arguments -- in the expansion context's own scratch.
 ///
 /// # Safety
-/// `xp` is a live expansion context.
-pub unsafe fn get_function_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+/// `expand` is a live expansion context.
+pub unsafe fn get_function_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     /// How far into the builtin table the walk has got. Negative while the
     /// user's own functions are still being offered.
     static BUILTIN_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
@@ -325,13 +325,13 @@ pub unsafe fn get_function_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
         BUILTIN_IDX.set(-1);
     }
     if BUILTIN_IDX.get() < 0 {
-        let name = unsafe { get_user_func_name(xp, idx) };
+        let name = unsafe { get_user_func_name(expand, idx) };
         if !name.is_null() {
             // A plain global name completed after a `g:` prefix has to
             // come back with the prefix on it.
             if unsafe { *name } as c_int != NUL
                 && unsafe { *name } as u8 != b'<'
-                && unsafe { cstr::starts_with((*xp).xp_pattern, b"g:") }
+                && unsafe { cstr::starts_with((*expand).xp_pattern, b"g:") }
             {
                 return unsafe { cat_prefix_varname('g' as c_int, name) };
             }
@@ -345,7 +345,7 @@ pub unsafe fn get_function_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
         return ptr::null_mut();
     }
     let key_len = unsafe { cstr::bytes_at(key) }.len();
-    let buf = unsafe { &raw mut (*xp).xp_buf };
+    let buf = unsafe { &raw mut (*expand).xp_buf };
     unsafe { ptr::copy_nonoverlapping(key, buf as *mut c_char, key_len) };
     unsafe { (*buf)[key_len] = b'(' as c_char };
     if BUILTINS[BUILTIN_IDX.get() as usize].max_argc == 0 {
@@ -361,8 +361,8 @@ pub unsafe fn get_function_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// functions above, then the user's variables.
 ///
 /// # Safety
-/// `xp` is a live expansion context.
-pub unsafe fn get_expr_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+/// `expand` is a live expansion context.
+pub unsafe fn get_expr_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     /// How far into the variable list the walk has got. Negative while the
     /// functions are still being offered.
     static VAR_IDX: GlobalCell<c_int> = GlobalCell::new(-1);
@@ -372,13 +372,13 @@ pub unsafe fn get_expr_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
         VAR_IDX.set(-1);
     }
     if VAR_IDX.get() < 0 {
-        let name = unsafe { get_function_name(xp, idx) };
+        let name = unsafe { get_function_name(expand, idx) };
         if !name.is_null() {
             return name;
         }
     }
     VAR_IDX.set(VAR_IDX.get() + 1);
-    unsafe { get_user_var_name(xp, VAR_IDX.get()) }
+    unsafe { get_user_var_name(expand, VAR_IDX.get()) }
 }
 
 /// Whether a builtin's first argument is "true" in the loose sense the

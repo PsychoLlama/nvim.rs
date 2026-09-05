@@ -29,19 +29,19 @@ const fn dirs_only(flags: ExpandFlags) -> ExpandFlags {
 }
 
 pub(crate) unsafe fn expand_files_and_dirs(
-    xp: *mut Expand,
+    expand: *mut Expand,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     flags: ExpandFlags,
     options: WildOpts,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let mut pat = pat;
     let mut flags = flags;
-    let free_pat = xp.xp_backslash != BackslashEscape::NONE;
+    let free_pat = expand.xp_backslash != BackslashEscape::NONE;
     if free_pat {
         // Halve the backslashes of an escaped space (or comma).
         let pat_len = unsafe { cstr::bytes_at(pat) }.len();
@@ -54,17 +54,17 @@ pub(crate) unsafe fn expand_files_and_dirs(
                 // is a distinct `xp_backslash` mode; upstream's
                 // BACKSLASH_IN_FILENAME arm of the comma case is not
                 // compiled on any platform this port builds for.
-                let drop = if xp.xp_backslash.has(BackslashEscape::THREE)
+                let drop = if expand.xp_backslash.has(BackslashEscape::THREE)
                     && unsafe { *p.add(1) } == b'\\' as c_char
                     && unsafe { *p.add(2) } == b'\\' as c_char
                     && unsafe { *p.add(3) } == b' ' as c_char
                 {
                     3
-                } else if xp.xp_backslash.has(BackslashEscape::ONE)
+                } else if expand.xp_backslash.has(BackslashEscape::ONE)
                     && unsafe { *p.add(1) } == b' ' as c_char
                 {
                     1
-                } else if xp.xp_backslash.has(BackslashEscape::COMMA)
+                } else if expand.xp_backslash.has(BackslashEscape::COMMA)
                     && unsafe { *p.add(1) } == b'\\' as c_char
                     && unsafe { *p.add(2) } == b',' as c_char
                 {
@@ -83,10 +83,10 @@ pub(crate) unsafe fn expand_files_and_dirs(
         }
     }
 
-    let ret = if xp.xp_context == ExpandContext::Findfunc {
+    let ret = if expand.xp_context == ExpandContext::Findfunc {
         unsafe { expand_findfunc(pat, matches, numMatches) }
     } else {
-        flags = match xp.xp_context {
+        flags = match expand.xp_context {
             ExpandContext::Files => flags | ExpandFlags::FILE,
             ExpandContext::FilesInPath => flags | ExpandFlags::FILE | ExpandFlags::PATH,
             ExpandContext::DirsInCdpath => dirs_only(flags) | ExpandFlags::CDPATH,
@@ -120,7 +120,7 @@ fn nth_option(list: &[&'static CStr], idx: c_int) -> *mut c_char {
 ///
 /// Which of them apply depends on how much of the command has been typed,
 /// which `set_context_in_filetype_cmd` recorded in `filetype_expand_what`.
-pub(crate) fn get_filetypecmd_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_filetypecmd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(
         match filetype_expand_what.get() {
             FiletypeWhat::All => &[c"indent", c"plugin", c"on", c"off"],
@@ -137,7 +137,7 @@ pub(crate) fn get_filetypecmd_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// The three share the tail of one list: `:breakadd` takes all four,
 /// `:breakdel` everything but "expr", and `:profdel` only the two that name
 /// something already being profiled.
-pub(crate) fn get_breakadd_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_breakadd_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     const OPTS: [&CStr; 4] = [c"expr", c"file", c"func", c"here"];
     nth_option(
         match breakpt_expand_what.get() {
@@ -154,17 +154,17 @@ pub(crate) fn get_breakadd_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// Answers a pointer into the expansion context's own scratch, so the
 /// caller must copy it before asking for the next one — which
 /// `expand_generic` does. Upstream answers the shared `NameBuff` instead.
-pub(crate) unsafe fn get_scriptnames_arg(xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_scriptnames_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
     let sid = idx + 1;
     if !script_id_valid(sid) {
         return ptr::null_mut();
     }
     let si = script_item(sid);
-    // SAFETY: the caller's contract -- `xp` is the live expansion context,
+    // SAFETY: the caller's contract -- `expand` is the live expansion context,
     // whose `xp_buf` is `EXPAND_BUF_LEN` bytes of scratch. `&raw mut` takes
     // the field's address without reading the context, so the pointer is
     // into the context itself and not into a copy of it.
-    let out = unsafe { &raw mut (*xp).xp_buf }.cast::<c_char>();
+    let out = unsafe { &raw mut (*expand).xp_buf }.cast::<c_char>();
     let room = EXPAND_BUF_LEN as size_t;
     // SAFETY: `si` is a live script item and `out` has `room` bytes.
     unsafe { home_replace(ptr::null::<Buffer>(), (*si).sn_name, out, room, true) };
@@ -172,17 +172,17 @@ pub(crate) unsafe fn get_scriptnames_arg(xp: *mut Expand, idx: c_int) -> *mut c_
 }
 
 /// The possible arguments of the `":retab {-indentonly}"` option.
-pub(crate) fn get_retab_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_retab_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(&[c"-indentonly"], idx)
 }
 
 /// The possible arguments of the `":messages {clear}"` command.
-pub(crate) fn get_messages_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_messages_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(&[c"clear"], idx)
 }
 
 /// The possible arguments of the `":mapclear"` command.
-pub(crate) fn get_mapclear_arg(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_mapclear_arg(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     nth_option(&[c"<buffer>"], idx)
 }
 
@@ -229,7 +229,7 @@ unsafe fn cache_lua_answer(names: &GlobalCell<Object>, script: &'static CStr, ar
 ///
 /// Asked of Lua once per command line — `get_cmdline_last_prompt_id` changes
 /// when a new one is opened — and cached for the rest of it.
-pub(crate) unsafe fn get_healthcheck_names(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_healthcheck_names(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_gen.get() != get_cmdline_last_prompt_id() || last_gen.get() == 0 {
@@ -243,22 +243,22 @@ pub(crate) unsafe fn get_healthcheck_names(_xp: *mut Expand, idx: c_int) -> *mut
 ///
 /// Unlike `:checkhealth` the answer depends on the whole command line, so the
 /// cache is keyed on that as well as on the prompt id.
-pub(crate) unsafe fn get_lsp_arg(xp: *mut Expand, idx: c_int) -> *mut c_char {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+pub(crate) unsafe fn get_lsp_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
     if last_xp_line.get().is_null()
-        || !unsafe { cstr::eq(last_xp_line.get(), xp.xp_line) }
+        || !unsafe { cstr::eq(last_xp_line.get(), expand.xp_line) }
         || last_gen.get() != get_cmdline_last_prompt_id()
     {
         unsafe { xfree(last_xp_line.get() as *mut c_void) };
-        last_xp_line.set(unsafe { xstrdup(xp.xp_line) });
+        last_xp_line.set(unsafe { xstrdup(expand.xp_line) });
         // The current command line, as the Lua function's one argument.
         let mut args = ArrayBuf::<1>::new();
-        args.push(Object::string(unsafe { cstr_as_string(xp.xp_line) }));
+        args.push(Object::string(unsafe { cstr_as_string(expand.xp_line) }));
         unsafe {
             cache_lua_answer(
                 &names,
@@ -327,31 +327,41 @@ const GENERATORS: [(ExpandContext, ItemGetter, bool, bool); 33] = [
     (ExpandContext::Lsp, get_lsp_arg, true, false),
 ];
 
-/// Do the expansion based on `xp->xp_context` and `rmp`.
+/// Do the expansion based on `expand.xp_context` and `rmp`.
 ///
 /// Answers `Err` for a context that is not in the table, which is how
 /// [`super::fromcontext::expand_from_context`] reports "nothing to complete".
 pub(crate) unsafe fn expand_other(
     pat: *mut c_char,
-    xp: *mut Expand,
+    expand: *mut Expand,
     rmp: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     // Find the context in the table and call expand_generic() with the
     // right function to do the expansion.
     let Some(&(_, func, ic, escaped)) = GENERATORS
         .iter()
-        .find(|&&(context, ..)| context == xp.xp_context)
+        .find(|&&(context, ..)| context == expand.xp_context)
     else {
         return Err(Failed);
     };
     if ic {
         unsafe { (*rmp).rm_ic = true };
     }
-    unsafe { expand_generic(pat, xp.raw(), rmp, matches, numMatches, Some(func), escaped) };
+    unsafe {
+        expand_generic(
+            pat,
+            expand.raw(),
+            rmp,
+            matches,
+            numMatches,
+            Some(func),
+            escaped,
+        )
+    };
     Ok(())
 }

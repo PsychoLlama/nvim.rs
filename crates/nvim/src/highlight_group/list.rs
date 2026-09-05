@@ -311,13 +311,13 @@ fn is_prefix(word: &[u8], full: &[u8]) -> bool {
 /// could still be typed at this position.
 ///
 /// # Safety
-/// `arg` is the NUL-terminated rest of the command line, which `xp` is
+/// `arg` is the NUL-terminated rest of the command line, which `expand` is
 /// pointed into; main thread only.
-pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut Expand, arg: *const c_char) {
+pub(crate) unsafe fn set_context_in_highlight_cmd(expand: *mut Expand, arg: *const c_char) {
     // SAFETY: the caller's expansion state and command line.
     // Default: expand group names.
-    unsafe { (*xp).xp_context = ExpandContext::Highlight };
-    unsafe { (*xp).xp_pattern = arg.cast_mut() };
+    unsafe { (*expand).xp_context = ExpandContext::Highlight };
+    unsafe { (*expand).xp_pattern = arg.cast_mut() };
     include_link.set(2);
     include_default.set(1);
 
@@ -339,7 +339,7 @@ pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut Expand, arg: *const c
     };
     if is_prefix(word(arg, p), b"default") {
         arg = unsafe { skipwhite(p) };
-        unsafe { (*xp).xp_pattern = arg.cast_mut() };
+        unsafe { (*expand).xp_pattern = arg.cast_mut() };
         p = unsafe { skiptowhite(arg) };
     }
     if unsafe { *p } == 0 {
@@ -352,17 +352,17 @@ pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut Expand, arg: *const c
         unsafe { highlight_list() };
     }
     if is_prefix(word(arg, p), b"link") || is_prefix(word(arg, p), b"clear") {
-        unsafe { (*xp).xp_pattern = skipwhite(p) };
-        p = unsafe { skiptowhite((*xp).xp_pattern) };
+        unsafe { (*expand).xp_pattern = skipwhite(p) };
+        p = unsafe { skiptowhite((*expand).xp_pattern) };
         if unsafe { *p } != 0 {
             // Past the first group name.
-            unsafe { (*xp).xp_pattern = skipwhite(p) };
-            p = unsafe { skiptowhite((*xp).xp_pattern) };
+            unsafe { (*expand).xp_pattern = skipwhite(p) };
+            p = unsafe { skiptowhite((*expand).xp_pattern) };
         }
     }
     if unsafe { *p } != 0 {
         // Past the group name(s).
-        unsafe { (*xp).xp_context = ExpandContext::Nothing };
+        unsafe { (*expand).xp_context = ExpandContext::Nothing };
     }
 }
 
@@ -373,9 +373,9 @@ pub(crate) unsafe fn set_context_in_highlight_cmd(xp: *mut Expand, arg: *const c
 ///
 /// # Safety
 /// Main thread only.
-pub(crate) unsafe fn get_highlight_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_highlight_name(expand: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: as the callee.
-    unsafe { get_highlight_name_ext(xp, idx, true).cast_mut() }
+    unsafe { get_highlight_name_ext(expand, idx, true).cast_mut() }
 }
 
 /// The `idx`th completion candidate: the group names first, then whichever of
@@ -387,7 +387,7 @@ pub(crate) unsafe fn get_highlight_name(xp: *mut Expand, idx: c_int) -> *mut c_c
 /// # Safety
 /// Main thread only.
 pub(crate) unsafe fn get_highlight_name_ext(
-    _xp: *mut Expand,
+    _expand: *mut Expand,
     idx: c_int,
     skip_cleared: bool,
 ) -> *const c_char {

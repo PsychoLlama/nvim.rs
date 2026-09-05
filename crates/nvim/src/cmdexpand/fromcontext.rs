@@ -45,27 +45,27 @@ pub(crate) fn map_wildopts_to_ewflags(options: WildOpts) -> ExpandFlags {
 /// as it stands, no package trees and no `after/` filter. Upstream's bare `0`.
 const RTP_ONLY: RuntimeOpts = RuntimeOpts::NONE;
 
-/// Do the expansion based on `xp->xp_context` and `pat`.
+/// Do the expansion based on `expand.xp_context` and `pat`.
 ///
 /// `options` is a set of `WILD_*` flags.  Most contexts have a generator of
 /// their own; the ones that do not fall through to [`expand_other`]'s table,
 /// and all of those run against a compiled regexp (or, under
 /// `'wildoptions'`=fuzzy, against `fuzzy_match_str`).
 pub(crate) unsafe fn expand_from_context(
-    xp: *mut Expand,
+    expand: *mut Expand,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     options: WildOpts,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let mut pat = pat;
     let flags = map_wildopts_to_ewflags(options);
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) }
-        && unsafe { cmdline_fuzzy_completion_supported(xp.raw()) };
-    let context = xp.xp_context;
+        && unsafe { cmdline_fuzzy_completion_supported(expand.raw()) };
+    let context = expand.xp_context;
 
     if matches!(
         context,
@@ -76,7 +76,7 @@ pub(crate) unsafe fn expand_from_context(
             | ExpandContext::DirsInCdpath
     ) {
         return unsafe {
-            expand_files_and_dirs(xp.raw(), pat, matches, numMatches, flags, options)
+            expand_files_and_dirs(expand.raw(), pat, matches, numMatches, flags, options)
         };
     }
 
@@ -158,13 +158,17 @@ pub(crate) unsafe fn expand_from_context(
             };
         }
         ExpandContext::UserList => {
-            return unsafe { expand_user_list(xp.raw(), matches, numMatches) };
+            return unsafe { expand_user_list(expand.raw(), matches, numMatches) };
         }
-        ExpandContext::UserLua => return unsafe { expand_user_lua(xp.raw(), numMatches, matches) },
+        ExpandContext::UserLua => {
+            return unsafe { expand_user_lua(expand.raw(), numMatches, matches) };
+        }
         ExpandContext::Packadd => return unsafe { expand_packadd_dir(pat, numMatches, matches) },
         ExpandContext::Runtime => return unsafe { expand_runtime_cmd(pat, numMatches, matches) },
         ExpandContext::PatternInBuf => {
-            return unsafe { expand_pattern_in_buf(pat, xp.xp_search_dir, matches, numMatches) };
+            return unsafe {
+                expand_pattern_in_buf(pat, expand.xp_search_dir, matches, numMatches)
+            };
         }
         _ => {}
     }
@@ -203,24 +207,31 @@ pub(crate) unsafe fn expand_from_context(
 
     let ret = match context {
         ExpandContext::Settings | ExpandContext::BoolSettings => unsafe {
-            expand_settings(xp.raw(), &raw mut regmatch, pat, numMatches, matches, fuzzy)
+            expand_settings(
+                expand.raw(),
+                &raw mut regmatch,
+                pat,
+                numMatches,
+                matches,
+                fuzzy,
+            )
         },
         ExpandContext::StringSetting => unsafe {
-            expand_string_setting(xp.raw(), &raw mut regmatch, numMatches, matches)
+            expand_string_setting(expand.raw(), &raw mut regmatch, numMatches, matches)
         },
         ExpandContext::SettingSubtract => unsafe {
-            expand_setting_subtract(xp.raw(), &raw mut regmatch, numMatches, matches)
+            expand_setting_subtract(expand.raw(), &raw mut regmatch, numMatches, matches)
         },
         ExpandContext::Mappings => unsafe {
             expand_mappings(pat, &raw mut regmatch, numMatches, matches)
         },
         ExpandContext::Argopt => unsafe {
-            expand_argopt(pat, xp.raw(), &raw mut regmatch, matches, numMatches)
+            expand_argopt(pat, expand.raw(), &raw mut regmatch, matches, numMatches)
         },
         ExpandContext::UserDefined => unsafe {
-            expand_user_defined(pat, xp.raw(), &raw mut regmatch, matches, numMatches)
+            expand_user_defined(pat, expand.raw(), &raw mut regmatch, matches, numMatches)
         },
-        _ => unsafe { expand_other(pat, xp.raw(), &raw mut regmatch, matches, numMatches) },
+        _ => unsafe { expand_other(pat, expand.raw(), &raw mut regmatch, matches, numMatches) },
     };
 
     if !fuzzy {
@@ -241,16 +252,16 @@ pub(crate) unsafe fn expand_from_context(
 /// each match.
 pub unsafe fn expand_generic(
     pat: *const c_char,
-    xp: *mut Expand,
+    expand: *mut Expand,
     regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     func: CompleteListItemGetter,
     escaped: bool,
 ) {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     let get_item = func.expect("expand_generic needs a generator");
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
     unsafe { *matches = ptr::null_mut() };
@@ -271,7 +282,7 @@ pub unsafe fn expand_generic(
     unsafe { ga_init(&raw mut ga, itemsize as c_int, 30) };
 
     for i in 0.. {
-        let mut str = unsafe { get_item(xp.raw(), i) };
+        let mut str = unsafe { get_item(expand.raw(), i) };
         if str.is_null() {
             break; // end of list
         }
@@ -282,9 +293,9 @@ pub unsafe fn expand_generic(
         // An empty pattern matches everything; otherwise every
         // candidate is tested, and under 'wildoptions'=fuzzy also scored.
         // `xp_pattern` is re-read each pass, as upstream does: the
-        // generator is handed `xp` and a user-defined one can move it.
+        // generator is handed `expand` and a user-defined one can move it.
         let mut score = 0;
-        let matched = if unsafe { *xp.xp_pattern } == 0 {
+        let matched = if unsafe { *expand.xp_pattern } == 0 {
             true
         } else if fuzzy {
             // SAFETY: both are NUL-terminated: `str` is a generated
@@ -342,7 +353,7 @@ pub unsafe fn expand_generic(
     // kept in the order they were given in.
     let sort_matches = !fuzzy
         && !matches!(
-            xp.xp_context,
+            expand.xp_context,
             ExpandContext::Menunames
                 | ExpandContext::StringSetting
                 | ExpandContext::Menus
@@ -351,7 +362,7 @@ pub unsafe fn expand_generic(
         );
     // <SNR> functions should be sorted to the end.
     let funcsort = matches!(
-        xp.xp_context,
+        expand.xp_context,
         ExpandContext::Expression | ExpandContext::Functions | ExpandContext::UserFunc
     );
 

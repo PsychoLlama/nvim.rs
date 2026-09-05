@@ -206,17 +206,17 @@ pub(crate) unsafe fn ucmd_name(cmd: &UserCmd) -> &[u8] {
 /// *before* `p`, because the match may be followed immediately by a count
 /// that `p` has already skipped. Answers null when nothing matched.
 ///
-/// `full` is set when the match was exact, `xp` filled in for completion
+/// `full` is set when the match was exact, `expand` filled in for completion
 /// and `complp` given the command's completion type; each may be null.
 ///
 /// # Safety
 /// Module contract; `eap` must be the command being looked up, and `full`,
-/// `xp` and `complp` null or writable.
+/// `expand` and `complp` null or writable.
 pub(crate) unsafe fn find_ucmd(
     args: *mut ExArg,
     p: *mut c_char,
     full: *mut c_int,
-    xp: *mut Expand,
+    expand: *mut Expand,
     complp: *mut ExpandContext,
 ) -> *mut c_char {
     // SAFETY: caller contract.
@@ -270,12 +270,12 @@ pub(crate) unsafe fn find_ucmd(
                 // SAFETY: caller contract.
                 unsafe { *complp = uc.uc_compl };
             }
-            if !xp.is_null() {
+            if !expand.is_null() {
                 // SAFETY: caller contract.
-                unsafe { (*xp).xp_luaref = uc.uc_compl_luaref };
-                unsafe { (*xp).xp_arg = uc.uc_compl_arg };
-                unsafe { (*xp).xp_script_ctx = uc.uc_script_ctx };
-                unsafe { (*xp).xp_script_ctx.sc_lnum += sourcing_lnum() };
+                unsafe { (*expand).xp_luaref = uc.uc_compl_luaref };
+                unsafe { (*expand).xp_arg = uc.uc_compl_arg };
+                unsafe { (*expand).xp_script_ctx = uc.uc_script_ctx };
+                unsafe { (*expand).xp_script_ctx.sc_lnum += sourcing_lnum() };
             }
             // Do not look for further abbreviations of an exact match.
             matchlen = k;
@@ -296,9 +296,9 @@ pub(crate) unsafe fn find_ucmd(
     }
 
     if amb_local {
-        if !xp.is_null() {
+        if !expand.is_null() {
             // SAFETY: caller contract.
-            unsafe { (*xp).xp_context = ExpandContext::Unsuccessful };
+            unsafe { (*expand).xp_context = ExpandContext::Unsuccessful };
         }
         return ptr::null_mut();
     }

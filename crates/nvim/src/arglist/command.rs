@@ -442,7 +442,7 @@ unsafe fn delete_arg_range(args: *mut ExArg) {
 }
 
 /// Completion source for `:argedit` and `:argdelete`: the argument names.
-pub fn get_arglist_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub fn get_arglist_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     if idx >= argcount() {
         return ptr::null_mut();
     }

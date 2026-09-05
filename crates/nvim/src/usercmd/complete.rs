@@ -88,9 +88,9 @@ fn abbreviates(typed: &[u8], name: &str) -> bool {
 /// (the definition body), and null when the context has been decided.
 ///
 /// # Safety
-/// `arg_in` must be NUL-terminated and `xp` writable.
+/// `arg_in` must be NUL-terminated and `expand` writable.
 pub(crate) unsafe fn set_context_in_user_cmd(
-    xp: *mut Expand,
+    expand: *mut Expand,
     arg_in: *const c_char,
 ) -> *const c_char {
     let mut arg = arg_in;
@@ -110,7 +110,7 @@ pub(crate) unsafe fn set_context_in_user_cmd(
             .position(|&b| b == b'=')
         else {
             // No "=" yet, so complete attribute names.
-            unsafe { set_context(xp, ExpandContext::UserCmdFlags, arg) };
+            unsafe { set_context(expand, ExpandContext::UserCmdFlags, arg) };
             return ptr::null();
         };
         // `-complete=`, `-nargs=` and `-addr=` have values worth
@@ -118,11 +118,11 @@ pub(crate) unsafe fn set_context_in_user_cmd(
         let name = &unsafe { CStr::from_ptr(arg) }.to_bytes()[..eq];
         let value = unsafe { arg.add(eq + 1) };
         if abbreviates(name, "complete") {
-            unsafe { set_context(xp, ExpandContext::UserComplete, value) };
+            unsafe { set_context(expand, ExpandContext::UserComplete, value) };
         } else if abbreviates(name, "nargs") {
-            unsafe { set_context(xp, ExpandContext::UserNargs, value) };
+            unsafe { set_context(expand, ExpandContext::UserNargs, value) };
         } else if abbreviates(name, "addr") {
-            unsafe { set_context(xp, ExpandContext::UserAddrType, value) };
+            unsafe { set_context(expand, ExpandContext::UserAddrType, value) };
         }
         return ptr::null();
     }
@@ -130,7 +130,7 @@ pub(crate) unsafe fn set_context_in_user_cmd(
     // Then the name of the command being defined.
     let p = unsafe { skiptowhite(arg) };
     if unsafe { *p } == NUL as c_char {
-        unsafe { set_context(xp, ExpandContext::UserCommands, arg) };
+        unsafe { set_context(expand, ExpandContext::UserCommands, arg) };
         return ptr::null();
     }
     // And finally an ordinary command, which the caller parses.
@@ -138,24 +138,24 @@ pub(crate) unsafe fn set_context_in_user_cmd(
 }
 
 /// # Safety
-/// `xp` must be writable and `pattern` must outlive it.
-unsafe fn set_context(xp: *mut Expand, context: ExpandContext, pattern: *const c_char) {
+/// `expand` must be writable and `pattern` must outlive it.
+unsafe fn set_context(expand: *mut Expand, context: ExpandContext, pattern: *const c_char) {
     // SAFETY: caller contract.
-    unsafe { (*xp).xp_context = context };
-    unsafe { (*xp).xp_pattern = pattern.cast_mut() };
+    unsafe { (*expand).xp_context = context };
+    unsafe { (*expand).xp_pattern = pattern.cast_mut() };
 }
 
 /// Completion context for the *arguments* of a user command, whose
 /// `-complete=` chose `context`.
 ///
 /// # Safety
-/// `cmd` and `arg` must be NUL-terminated and `xp` writable.
+/// `cmd` and `arg` must be NUL-terminated and `expand` writable.
 pub(crate) unsafe fn set_context_in_user_cmdarg(
     cmd: *const c_char,
     arg: *const c_char,
     argt: ExArgt,
     context: ExpandContext,
-    xp: *mut Expand,
+    expand: *mut Expand,
     forceit: bool,
 ) -> *const c_char {
     if context == ExpandContext::Nothing {
@@ -167,15 +167,17 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
     }
     // SAFETY: caller contract.
     if context == ExpandContext::Menus {
-        return unsafe { set_context_in_menu_cmd(xp, cmd, arg.cast_mut(), forceit) };
+        return unsafe { set_context_in_menu_cmd(expand, cmd, arg.cast_mut(), forceit) };
     }
     if context == ExpandContext::Commands {
         return arg;
     }
     if context == ExpandContext::Mappings {
         let (cmd, pat) = (c"map".as_ptr().cast_mut(), arg.cast_mut());
-        // SAFETY: caller contract; `xp` is writable and `arg` outlives it.
-        return unsafe { set_context_in_map_cmd(xp, cmd, pat, forceit, false, false, CmdIdx::map) };
+        // SAFETY: caller contract; `expand` is writable and `arg` outlives it.
+        return unsafe {
+            set_context_in_map_cmd(expand, cmd, pat, forceit, false, false, CmdIdx::map)
+        };
     }
     // The pattern is the last argument: walk to it, honouring escapes
     // and multibyte characters.
@@ -189,7 +191,7 @@ pub(crate) unsafe fn set_context_in_user_cmdarg(
         }
         p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
-    unsafe { set_context(xp, context, last) };
+    unsafe { set_context(expand, context, last) };
     ptr::null()
 }
 
@@ -211,7 +213,7 @@ pub(crate) unsafe fn expand_user_command_name(idx: c_int) -> *mut c_char {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn get_user_commands(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) unsafe fn get_user_commands(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     // SAFETY: module contract.
     let (local, global) = unsafe { (Scope::Buffer.list(), Scope::Global.list()) };
     let idx = idx as usize;
@@ -247,14 +249,14 @@ pub(crate) unsafe fn get_user_command_name(idx: c_int, cmdidx: CmdIdx) -> *mut c
 }
 
 /// `expand_generic()` item getter: the `-addr=` values.
-pub(crate) fn get_user_cmd_addr_type(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_addr_type(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     ADDR_TYPES
         .get(idx as usize)
         .map_or(ptr::null_mut(), |row| row.name.as_ptr().cast_mut())
 }
 
 /// `expand_generic()` item getter: the attribute names.
-pub(crate) fn get_user_cmd_flags(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_flags(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     /// Must stay alphabetical bar the last, which upstream appended.
     static USER_CMD_FLAGS: [&CStr; 10] = [
         c"addr",
@@ -274,7 +276,7 @@ pub(crate) fn get_user_cmd_flags(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 }
 
 /// `expand_generic()` item getter: the `-nargs=` values.
-pub(crate) fn get_user_cmd_nargs(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_nargs(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     static USER_CMD_NARGS: [&CStr; 5] = [c"0", c"1", c"*", c"?", c"+"];
     USER_CMD_NARGS
         .get(idx as usize)
@@ -286,7 +288,7 @@ pub(crate) fn get_user_cmd_nargs(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// The holes in [`COMMAND_COMPLETE`], and the Lua context that has a name
 /// only for display, are answered as the empty string: the getter's null is
 /// the end of the list, not a gap in it.
-pub(crate) fn get_user_cmd_complete(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub(crate) fn get_user_cmd_complete(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     if idx >= COMMAND_COMPLETE.len() as c_int {
         return ptr::null_mut();
     }

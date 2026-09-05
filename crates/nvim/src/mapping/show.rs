@@ -207,10 +207,10 @@ const CONTEXT_ARG_BUFFER: usize = 0;
 /// Work out what to complete when completing a mapping or abbreviation name.
 ///
 /// # Safety
-/// `xp`, `cmd` and `arg` must be live.
+/// `expand`, `cmd` and `arg` must be live.
 #[allow(clippy::too_many_arguments)] // upstream's `set_context_in_*` shape
 pub unsafe fn set_context_in_map_cmd(
-    xp: *mut Expand,
+    expand: *mut Expand,
     mut cmd: *mut c_char,
     arg: *mut c_char,
     forceit: bool,
@@ -218,10 +218,10 @@ pub unsafe fn set_context_in_map_cmd(
     isunmap: bool,
     cmdidx: CmdIdx,
 ) -> *mut c_char {
-    // SAFETY: the caller's promise — `xp` is a live `Expand`.
-    let mut xp = unsafe { Live::new(xp) };
+    // SAFETY: the caller's promise — `expand` is a live `Expand`.
+    let mut expand = unsafe { Live::new(expand) };
     if forceit && cmdidx != CmdIdx::map && cmdidx != CmdIdx::unmap {
-        xp.xp_context = ExpandContext::Nothing;
+        expand.xp_context = ExpandContext::Nothing;
         return ptr::null_mut();
     }
 
@@ -237,7 +237,7 @@ pub unsafe fn set_context_in_map_cmd(
         EXPAND_MAPMODES.set(modes);
     }
     EXPAND_ISABBREV.set(isabbrev);
-    xp.xp_context = ExpandContext::Mappings;
+    expand.xp_context = ExpandContext::Mappings;
     EXPAND_BUFFER.set(false);
 
     // Skip the map arguments; only `<buffer>` changes what is offered.
@@ -256,7 +256,7 @@ pub unsafe fn set_context_in_map_cmd(
         break;
     }
     // SAFETY: `rest` is a tail of `arg`'s own bytes.
-    xp.xp_pattern = unsafe { arg.add(all.len() - rest.len()) };
+    expand.xp_pattern = unsafe { arg.add(all.len() - rest.len()) };
 
     ptr::null_mut()
 }

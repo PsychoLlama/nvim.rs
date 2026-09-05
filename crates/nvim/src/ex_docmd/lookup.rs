@@ -338,7 +338,7 @@ pub unsafe fn excmd_get_argt(idx: CmdIdx) -> ExArgt {
 ///
 /// Keeps the raw signature: cmdexpand's generator table holds it as an
 /// `ItemGetter`.
-pub unsafe fn get_command_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub unsafe fn get_command_name(_expand: *mut Expand, idx: c_int) -> *mut c_char {
     if idx >= CmdIdx::SIZE.code() {
         return unsafe { expand_user_command_name(idx) };
     }

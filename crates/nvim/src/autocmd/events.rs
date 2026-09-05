@@ -241,7 +241,7 @@ pub fn trigger_cursorhold() -> bool {
 /// Completion source for `:autocmd`'s event argument: the augroup names
 /// first (when [`autocmd_include_groups`] is set), then every event name.
 pub unsafe fn expand_get_event_name(
-    _xp: *mut Expand,
+    _expand: *mut Expand,
     idx: ::core::ffi::c_int,
 ) -> *mut ::core::ffi::c_char {
     // `augroup_name` answers null once `idx` walks past the last group.
@@ -263,7 +263,7 @@ pub unsafe fn expand_get_event_name(
 /// Completion source for an 'eventignore' item: every event name, or --
 /// for 'eventignorewin' (`win`) -- only the window-local ones.
 pub fn get_event_name_no_group(
-    _xp: *mut Expand,
+    _expand: *mut Expand,
     idx: ::core::ffi::c_int,
     win: bool,
 ) -> *mut ::core::ffi::c_char {

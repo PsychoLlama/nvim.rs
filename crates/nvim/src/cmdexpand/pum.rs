@@ -20,15 +20,15 @@ use core::ptr;
 /// Create the completion popup menu with items from `matches`.
 pub(crate) unsafe fn cmdline_pum_create(
     ccline: Cc,
-    xp: *mut Expand,
+    expand: *mut Expand,
     matches: *mut *mut c_char,
     numMatches: c_int,
     showtail: bool,
     noselect: bool,
 ) {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     debug_assert!(numMatches >= 0);
     // Add all the completion matches.
     compl_match_array
@@ -59,9 +59,9 @@ pub(crate) unsafe fn cmdline_pum_create(
 
     // Compute the popup menu starting column.
     let endpos = if showtail {
-        unsafe { showmatches_gettail(xp.xp_pattern, noselect) }
+        unsafe { showmatches_gettail(expand.xp_pattern, noselect) }
     } else {
-        xp.xp_pattern
+        expand.xp_pattern
     };
     let col = unsafe { endpos.offset_from(ccline.text()) } as c_int;
     compl_startcol.set(if ui_has(kUICmdline) && cmdline_win.get().is_null() {
@@ -104,20 +104,20 @@ pub(crate) unsafe fn cmdline_pum_cleanup(cclp: Cc) {
 
 /// The current cmdline completion pattern.
 pub unsafe fn cmdline_compl_pattern() -> *mut c_char {
-    let xp = Cc::current().xpc();
-    if xp.is_null() {
+    let expand = Cc::current().xpc();
+    if expand.is_null() {
         ptr::null_mut()
     } else {
         // SAFETY: just tested non-null; `xpc` is the command line's own
         // completion context, live for as long as the command line is.
-        unsafe { (*xp).xp_orig }
+        unsafe { (*expand).xp_orig }
     }
 }
 
 /// True if fuzzy cmdline completion is active.
 pub unsafe fn cmdline_compl_is_fuzzy() -> bool {
-    let xp = Cc::current().xpc();
-    !xp.is_null() && unsafe { cmdline_fuzzy_completion_supported(xp) }
+    let expand = Cc::current().xpc();
+    !expand.is_null() && unsafe { cmdline_fuzzy_completion_supported(expand) }
 }
 
 /// Whether the popup menu should be used for the cmdline completion wildmenu.
@@ -135,11 +135,11 @@ pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
 ///
 /// These are backslashes used for escaping.  Backslashes *are* shown in help
 /// tags and in search pattern completion matches.
-pub(crate) unsafe fn skip_wildmenu_char(xp: *mut Expand, s: *mut c_char) -> c_int {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+pub(crate) unsafe fn skip_wildmenu_char(expand: *mut Expand, s: *mut c_char) -> c_int {
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
-    let ctx = xp.xp_context;
+    let expand = unsafe { Xp::new(expand) };
+    let ctx = expand.xp_context;
     if (unsafe { rem_backslash(s) }
         && ctx != ExpandContext::Help
         && ctx != ExpandContext::PatternInBuf)
@@ -152,7 +152,7 @@ pub(crate) unsafe fn skip_wildmenu_char(xp: *mut Expand, s: *mut c_char) -> c_in
         // shell variety deep in the redraw logic?  Shell special
         // snowflakiness should already be eliminated multiple layers
         // before reaching the screen infrastructure.
-        if xp.xp_shell
+        if expand.xp_shell
             && csh_like_shell()
             && unsafe { *s.add(1) } as c_int == '\\' as c_int
             && unsafe { *s.add(2) } as c_int == '!' as c_int
@@ -165,11 +165,11 @@ pub(crate) unsafe fn skip_wildmenu_char(xp: *mut Expand, s: *mut c_char) -> c_in
 }
 
 /// The length of an item as it will be shown in the status line.
-pub(crate) unsafe fn wildmenu_match_len(xp: *mut Expand, s: *mut c_char) -> c_int {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+pub(crate) unsafe fn wildmenu_match_len(expand: *mut Expand, s: *mut c_char) -> c_int {
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
-    let ctx = xp.xp_context;
+    let expand = unsafe { Xp::new(expand) };
+    let ctx = expand.xp_context;
     let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
 
     // Check for menu separators - replace with '|'.
@@ -180,7 +180,7 @@ pub(crate) unsafe fn wildmenu_match_len(xp: *mut Expand, s: *mut c_char) -> c_in
     let mut len = 0;
     let mut s = s;
     while unsafe { *s } as c_int != NUL {
-        s = unsafe { s.add(skip_wildmenu_char(xp.raw(), s) as usize) };
+        s = unsafe { s.add(skip_wildmenu_char(expand.raw(), s) as usize) };
         len += unsafe { ptr2cells(s) };
         s = unsafe { s.add(utfc_ptr2len(s) as usize) };
     }
@@ -194,15 +194,15 @@ pub(crate) unsafe fn wildmenu_match_len(xp: *mut Expand, s: *mut c_char) -> c_in
 /// the list and show all matches that fit; if inversion is possible we use it,
 /// else `=` characters are used.
 pub(crate) unsafe fn redraw_wildmenu(
-    xp: *mut Expand,
+    expand: *mut Expand,
     num_matches: c_int,
     matches: *mut *mut c_char,
     match_idx: c_int,
     showtail: bool,
 ) {
-    // SAFETY: the caller's contract -- `xp` is the live expansion
+    // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
-    let xp = unsafe { Xp::new(xp) };
+    let expand = unsafe { Xp::new(expand) };
     // Where the listing starts, remembered across redraws so that paging
     // through the matches does not jump.
     static first_match: GlobalCell<c_int> = GlobalCell::new(0);
@@ -239,7 +239,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         highlight = false;
     }
     // Length in screen cells; count 1 for the ending ">".
-    let mut clen = unsafe { wildmenu_match_len(xp.raw(), show_match(match_idx)) } + 3;
+    let mut clen = unsafe { wildmenu_match_len(expand.raw(), show_match(match_idx)) } + 3;
     if match_idx == 0 {
         first_match.set(0);
     } else if match_idx < first_match.get() {
@@ -250,7 +250,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         // Check if match fits on the screen.
         i = first_match.get();
         while i < match_idx {
-            clen += unsafe { wildmenu_match_len(xp.raw(), show_match(i)) } + 2;
+            clen += unsafe { wildmenu_match_len(expand.raw(), show_match(i)) } + 2;
             i += 1;
         }
         if first_match.get() > 0 {
@@ -263,7 +263,7 @@ pub(crate) unsafe fn redraw_wildmenu(
             clen = 2;
             i = match_idx;
             while i < num_matches {
-                clen += unsafe { wildmenu_match_len(xp.raw(), show_match(i)) } + 2;
+                clen += unsafe { wildmenu_match_len(expand.raw(), show_match(i)) } + 2;
                 if clen >= Columns.get() {
                     break;
                 }
@@ -276,7 +276,8 @@ pub(crate) unsafe fn redraw_wildmenu(
     }
     if add_left {
         while first_match.get() > 0 {
-            clen += unsafe { wildmenu_match_len(xp.raw(), show_match(first_match.get() - 1)) } + 2;
+            clen +=
+                unsafe { wildmenu_match_len(expand.raw(), show_match(first_match.get() - 1)) } + 2;
             if clen >= Columns.get() {
                 break;
             }
@@ -299,7 +300,7 @@ pub(crate) unsafe fn redraw_wildmenu(
     clen = len;
 
     i = first_match.get();
-    while clen + unsafe { wildmenu_match_len(xp.raw(), show_match(i)) } + 2 < Columns.get() {
+    while clen + unsafe { wildmenu_match_len(expand.raw(), show_match(i)) } + 2 < Columns.get() {
         if i == match_idx {
             selstart = unsafe { buf.offset(len as isize) };
             selstart_col = clen;
@@ -307,7 +308,7 @@ pub(crate) unsafe fn redraw_wildmenu(
 
         let mut s = show_match(i);
         // Check for menu separators - replace with '|'.
-        let ctx = xp.xp_context;
+        let ctx = expand.xp_context;
         let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
         if emenu && unsafe { menu_is_separator(s) } {
             unsafe { strcpy(buf.offset(len as isize), transchar('|' as c_int).as_ptr()) };
@@ -316,7 +317,7 @@ pub(crate) unsafe fn redraw_wildmenu(
             clen += l;
         } else {
             while unsafe { *s } as c_int != NUL {
-                s = unsafe { s.add(skip_wildmenu_char(xp.raw(), s) as usize) };
+                s = unsafe { s.add(skip_wildmenu_char(expand.raw(), s) as usize) };
                 clen += unsafe { ptr2cells(s) };
                 l = unsafe { utfc_ptr2len(s) };
                 if l > 1 {

@@ -586,15 +586,15 @@ fn print_history_entry(entry: HistEntryRef, num: c_int, newest: bool) {
 
 /// Completion source for `:history` arguments: the one-character names,
 /// the long names, then "all".
-pub unsafe fn get_history_arg(xp: *mut Expand, idx: c_int) -> *mut c_char {
+pub unsafe fn get_history_arg(expand: *mut Expand, idx: c_int) -> *mut c_char {
     let short_count = SHORT_NAMES.len() as c_int;
     if (0..short_count).contains(&idx) {
         // SAFETY: caller contract; `xp_buf` is the completion scratch buffer,
         // far longer than the character and terminator written here.
         return unsafe {
-            (*xp).xp_buf[0] = SHORT_NAMES[idx as usize] as c_char;
-            (*xp).xp_buf[1] = 0;
-            (*xp).xp_buf.as_mut_ptr()
+            (*expand).xp_buf[0] = SHORT_NAMES[idx as usize] as c_char;
+            (*expand).xp_buf[1] = 0;
+            (*expand).xp_buf.as_mut_ptr()
         };
     }
     let i = (idx - short_count) as usize;
