@@ -309,8 +309,8 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
-pub unsafe fn f_search(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_search(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     let mut flags = 0;
     // SAFETY: the frame is live.
     result.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as VarNumber;
@@ -318,8 +318,8 @@ pub unsafe fn f_search(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
 /// sub-pattern number under the `p` flag.
-pub unsafe fn f_searchpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_searchpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     let mut match_pos = Pos {
         lnum: 0,
         col: 0,
@@ -343,9 +343,9 @@ pub unsafe fn f_searchpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 
 /// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
 /// declaration was found, 1 otherwise.
-pub unsafe fn f_searchdecl(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_searchdecl(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let mut locally = true;
     let mut thisblock = false;
     let mut error = false;
@@ -457,15 +457,15 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
-pub unsafe fn f_searchpair(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_searchpair(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame is live.
     result.vval.v_number = unsafe { searchpair_cmn(args, None) } as VarNumber;
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
-pub unsafe fn f_searchpairpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_searchpairpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     let mut match_pos = Pos {
         lnum: 0,
         col: 0,

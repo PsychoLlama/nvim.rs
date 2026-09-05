@@ -376,10 +376,10 @@ pub unsafe fn do_c_expr_indent() {
 ///
 /// # Safety
 /// Moves the cursor and restores it; `result` must be a valid number typval.
-pub unsafe fn f_cindent(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_cindent(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let pos = cur_win().w_cursor;
-    // SAFETY: the caller's promise -- `argvars` is the call's argument list.
-    let lnum = unsafe { tv_get_lnum(argvars) } as LineNr;
+    // SAFETY: the caller's promise -- `args` is the call's argument list.
+    let lnum = unsafe { tv_get_lnum(args) } as LineNr;
     let amount = if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         cur_win().w_cursor.lnum = lnum;
         // SAFETY: the cursor now sits on a line of the current buffer, and it

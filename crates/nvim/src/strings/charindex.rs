@@ -79,18 +79,18 @@ unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
 ///
 /// `comp` is the `byteidxcomp()` spelling, which counts a composing
 /// character as one of its own.
-unsafe fn byteidx_common(argvars: *mut TypVal, result: *mut TypVal, comp: bool) {
+unsafe fn byteidx_common(args: *mut TypVal, result: *mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
 
-    let str = unsafe { numbuf.string_chk(argvars) };
-    let mut idx = unsafe { tv_get_number_chk(argvars.add(1), ptr::null_mut()) };
+    let str = unsafe { numbuf.string_chk(args) };
+    let mut idx = unsafe { tv_get_number_chk(args.add(1), ptr::null_mut()) };
     if str.is_null() || idx < 0 {
         return;
     }
 
-    let utf16idx = if given(unsafe { &*argvars.add(2) }) {
-        match unsafe { strict_bool_arg(argvars.add(2)) } {
+    let utf16idx = if given(unsafe { &*args.add(2) }) {
+        match unsafe { strict_bool_arg(args.add(2)) } {
             Some(flag) => flag,
             None => return,
         }
@@ -123,41 +123,41 @@ unsafe fn byteidx_common(argvars: *mut TypVal, result: *mut TypVal, comp: bool) 
 }
 
 /// "byteidx()" function
-pub unsafe fn f_byteidx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { byteidx_common(argvars, result, false) }
+pub unsafe fn f_byteidx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { byteidx_common(args, result, false) }
 }
 
 /// "byteidxcomp()" function
-pub unsafe fn f_byteidxcomp(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { byteidx_common(argvars, result, true) }
+pub unsafe fn f_byteidxcomp(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { byteidx_common(args, result, true) }
 }
 
 /// "charidx()" function: the character index of a byte (or UTF-16) offset.
-pub unsafe fn f_charidx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_charidx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
-        || unsafe { tv_check_for_number_arg(argvars, 1) }.is_err()
-        || unsafe { tv_check_for_opt_bool_arg(argvars, 2) }.is_err()
-        || (given(unsafe { &*argvars.add(2) })
-            && unsafe { tv_check_for_opt_bool_arg(argvars, 3) }.is_err())
+    if unsafe { tv_check_for_string_arg(args, 0) }.is_err()
+        || unsafe { tv_check_for_number_arg(args, 1) }.is_err()
+        || unsafe { tv_check_for_opt_bool_arg(args, 2) }.is_err()
+        || (given(unsafe { &*args.add(2) })
+            && unsafe { tv_check_for_opt_bool_arg(args, 3) }.is_err())
     {
         return;
     }
 
-    let str = unsafe { numbuf.string_chk(argvars) };
-    let mut idx = unsafe { tv_get_number_chk(argvars.add(1), ptr::null_mut()) };
+    let str = unsafe { numbuf.string_chk(args) };
+    let mut idx = unsafe { tv_get_number_chk(args.add(1), ptr::null_mut()) };
     if str.is_null() || idx < 0 {
         return;
     }
 
     let mut countcc = false;
     let mut utf16idx = false;
-    if given(unsafe { &*argvars.add(2) }) {
-        countcc = unsafe { tv_get_bool(argvars.add(2)) } != 0;
-        if given(unsafe { &*argvars.add(3) }) {
-            utf16idx = unsafe { tv_get_bool(argvars.add(3)) } != 0;
+    if given(unsafe { &*args.add(2) }) {
+        countcc = unsafe { tv_get_bool(args.add(2)) } != 0;
+        if given(unsafe { &*args.add(3) }) {
+            utf16idx = unsafe { tv_get_bool(args.add(3)) } != 0;
         }
     }
 
@@ -195,16 +195,16 @@ pub unsafe fn f_charidx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
-pub unsafe fn f_strgetchar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strgetchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
 
-    let str = unsafe { numbuf.string_chk(argvars) };
+    let str = unsafe { numbuf.string_chk(args) };
     if str.is_null() {
         return;
     }
     let mut error = false;
-    let mut charidx = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
+    let mut charidx = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
     if error {
         return;
     }
@@ -222,16 +222,16 @@ pub unsafe fn f_strgetchar(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// "strutf16len()" function: the string's length in UTF-16 code units.
-pub unsafe fn f_strutf16len(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strutf16len(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
-        || unsafe { tv_check_for_opt_bool_arg(argvars, 1) }.is_err()
+    if unsafe { tv_check_for_string_arg(args, 0) }.is_err()
+        || unsafe { tv_check_for_opt_bool_arg(args, 1) }.is_err()
     {
         return;
     }
-    let countcc = given(unsafe { &*argvars.add(1) }) && unsafe { tv_get_bool(argvars.add(1)) } != 0;
+    let countcc = given(unsafe { &*args.add(1) }) && unsafe { tv_get_bool(args.add(1)) } != 0;
 
     let next_char: unsafe fn(*mut *const c_char) -> c_int = if countcc {
         mb_cptr2char_adv
@@ -239,7 +239,7 @@ pub unsafe fn f_strutf16len(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
         mb_ptr2char_adv
     };
 
-    let mut s = unsafe { numbuf.string(argvars) };
+    let mut s = unsafe { numbuf.string(args) };
     let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         // Anything over U+FFFF is a surrogate pair: two units.
@@ -249,18 +249,18 @@ pub unsafe fn f_strutf16len(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 }
 
 /// "strcharpart()" function: a substring measured in characters.
-pub unsafe fn f_strcharpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strcharpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let p = unsafe { numbuf.string(argvars) };
+    let p = unsafe { numbuf.string(args) };
     let slen = unsafe { cstr::bytes_at(p) }.len();
 
     let mut nbyte: c_int = 0;
     let mut skipcc = false;
     let mut error = false;
-    let mut nchar = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
+    let mut nchar = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
     if !error {
-        if given(unsafe { &*argvars.add(2) }) && given(unsafe { &*argvars.add(3) }) {
-            match unsafe { strict_bool_arg(argvars.add(3)) } {
+        if given(unsafe { &*args.add(2) }) && given(unsafe { &*args.add(3) }) {
+            match unsafe { strict_bool_arg(args.add(3)) } {
                 Some(flag) => skipcc = flag,
                 None => return,
             }
@@ -278,8 +278,8 @@ pub unsafe fn f_strcharpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
         }
     }
 
-    let mut len: c_int = if given(unsafe { &*argvars.add(2) }) {
-        let mut charlen = unsafe { tv_get_number(argvars.add(2)) as c_int };
+    let mut len: c_int = if given(unsafe { &*args.add(2) }) {
+        let mut charlen = unsafe { tv_get_number(args.add(2)) as c_int };
         let mut len = 0;
         while charlen > 0 && nbyte + len < slen as c_int {
             let off = nbyte + len;
@@ -318,17 +318,17 @@ pub unsafe fn f_strcharpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
 /// fourth argument -- in characters starting from a byte offset.
-pub unsafe fn f_strpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strpart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut error = false;
-    let p = unsafe { numbuf.string(argvars) };
+    let p = unsafe { numbuf.string(args) };
     let slen = unsafe { cstr::bytes_at(p).len() as VarNumber };
 
-    let mut n = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
+    let mut n = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
     let mut len = if error {
         0
-    } else if given(unsafe { &*argvars.add(2) }) {
-        unsafe { tv_get_number(argvars.add(2)) }
+    } else if given(unsafe { &*args.add(2) }) {
+        unsafe { tv_get_number(args.add(2)) }
     } else {
         slen - n // Default: everything from `n` on.
     };
@@ -346,7 +346,7 @@ pub unsafe fn f_strpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         len = slen - n;
     }
 
-    if given(unsafe { &*argvars.add(2) }) && given(unsafe { &*argvars.add(3) }) {
+    if given(unsafe { &*args.add(2) }) && given(unsafe { &*args.add(3) }) {
         // `len` was a character count after all: re-measure it.
         let mut off = n as int64_t;
         while off < slen as int64_t && len > 0 {
@@ -363,31 +363,31 @@ pub unsafe fn f_strpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
-pub unsafe fn f_utf16idx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_utf16idx(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).vval.v_number = -1 };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
-        || unsafe { tv_check_for_opt_number_arg(argvars, 1) }.is_err()
-        || unsafe { tv_check_for_opt_bool_arg(argvars, 2) }.is_err()
-        || (given(unsafe { &*argvars.add(2) })
-            && unsafe { tv_check_for_opt_bool_arg(argvars, 3) }.is_err())
+    if unsafe { tv_check_for_string_arg(args, 0) }.is_err()
+        || unsafe { tv_check_for_opt_number_arg(args, 1) }.is_err()
+        || unsafe { tv_check_for_opt_bool_arg(args, 2) }.is_err()
+        || (given(unsafe { &*args.add(2) })
+            && unsafe { tv_check_for_opt_bool_arg(args, 3) }.is_err())
     {
         return;
     }
 
-    let str = unsafe { numbuf.string_chk(argvars) };
-    let mut idx = unsafe { tv_get_number_chk(argvars.add(1), ptr::null_mut()) };
+    let str = unsafe { numbuf.string_chk(args) };
+    let mut idx = unsafe { tv_get_number_chk(args.add(1), ptr::null_mut()) };
     if str.is_null() || idx < 0 {
         return;
     }
 
     let mut countcc = false;
     let mut charidx = false;
-    if given(unsafe { &*argvars.add(2) }) {
-        countcc = unsafe { tv_get_bool(argvars.add(2)) } != 0;
-        if given(unsafe { &*argvars.add(3) }) {
-            charidx = unsafe { tv_get_bool(argvars.add(3)) } != 0;
+    if given(unsafe { &*args.add(2) }) {
+        countcc = unsafe { tv_get_bool(args.add(2)) } != 0;
+        if given(unsafe { &*args.add(3) }) {
+            charidx = unsafe { tv_get_bool(args.add(3)) } != 0;
         }
     }
 

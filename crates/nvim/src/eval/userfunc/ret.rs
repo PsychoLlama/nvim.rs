@@ -242,12 +242,12 @@ pub unsafe fn can_add_defer() -> bool {
 }
 
 /// Record a deferred call of `name` on the funccall that is running.  It
-/// takes over the values in `argvars`.
+/// takes over the values in `args`.
 ///
 /// # Safety
-/// A function is running, `name` is NUL-terminated and `argvars` holds
+/// A function is running, `name` is NUL-terminated and `args` holds
 /// `argcount_arg` values.
-pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, argvars: *mut TypVal) {
+pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, args: *mut TypVal) {
     let saved_name = unsafe { xstrdup(name) };
     let mut argcount = argcount_arg;
 
@@ -261,7 +261,7 @@ pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, argvars: *mut Ty
     unsafe { (*dr).dr_argcount = argcount };
     while argcount > 0 {
         argcount -= 1;
-        unsafe { (*dr).dr_argvars[argcount as usize] = *argvars.offset(argcount as isize) };
+        unsafe { (*dr).dr_argvars[argcount as usize] = *args.offset(argcount as isize) };
     }
 }
 

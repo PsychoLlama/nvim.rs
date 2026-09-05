@@ -97,8 +97,8 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
-pub unsafe fn f_getbufinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getbufinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk, and `tv_dict_find` hands back a live entry
     // of the dictionary the argument holds.

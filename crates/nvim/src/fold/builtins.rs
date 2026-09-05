@@ -30,10 +30,10 @@ use crate::types::{VAR_STRING, Vv};
 /// "foldclosed()" and "foldclosedend()" functions
 ///
 /// # Safety
-/// `argvars` and `result` must be live typvals.
-pub(super) unsafe fn foldclosed_both(argvars: *mut TypVal, result: *mut TypVal, end: bool) {
+/// `args` and `result` must be live typvals.
+pub(super) unsafe fn foldclosed_both(args: *mut TypVal, result: *mut TypVal, end: bool) {
     // SAFETY: the caller's promise -- live typvals.
-    let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(argvars)) };
+    let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(args)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         let mut first: LineNr = 0;
         let mut last: LineNr = 0;
@@ -51,28 +51,28 @@ pub(super) unsafe fn foldclosed_both(argvars: *mut TypVal, result: *mut TypVal, 
 /// "foldclosed()" function
 ///
 /// # Safety
-/// `argvars` and `result` must be live typvals.
-pub unsafe fn f_foldclosed(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+/// `args` and `result` must be live typvals.
+pub unsafe fn f_foldclosed(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
-    unsafe { foldclosed_both(argvars, result, false) };
+    unsafe { foldclosed_both(args, result, false) };
 }
 
 /// "foldclosedend()" function
 ///
 /// # Safety
-/// `argvars` and `result` must be live typvals.
-pub unsafe fn f_foldclosedend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+/// `args` and `result` must be live typvals.
+pub unsafe fn f_foldclosedend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
-    unsafe { foldclosed_both(argvars, result, true) };
+    unsafe { foldclosed_both(args, result, true) };
 }
 
 /// "foldlevel()" function
 ///
 /// # Safety
-/// `argvars` and `result` must be live typvals.
-pub unsafe fn f_foldlevel(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+/// `args` and `result` must be live typvals.
+pub unsafe fn f_foldlevel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- live typvals.
-    let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(argvars)) };
+    let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(args)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         // SAFETY: `lnum` is inside the current buffer.
         rv.vval.v_number = unsafe { fold_level(lnum) } as VarNumber;
@@ -83,7 +83,7 @@ pub unsafe fn f_foldlevel(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 ///
 /// # Safety
 /// `result` must be a live typval.
-pub unsafe fn f_foldtext(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_foldtext(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- a live typval.
     let mut rv = unsafe { Tv::new(result) };
     rv.v_type = VAR_STRING;
@@ -149,8 +149,8 @@ pub unsafe fn f_foldtext(_argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 /// "foldtextresult(lnum)" function
 ///
 /// # Safety
-/// `argvars` and `result` must be live typvals.
-pub unsafe fn f_foldtextresult(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+/// `args` and `result` must be live typvals.
+pub unsafe fn f_foldtextresult(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut buf: [c_char; FOLD_TEXT_LEN as usize] = [0; FOLD_TEXT_LEN as usize];
     // 'foldtext' can call `foldtextresult()` again; one level is enough.
     static entered: GlobalCell<bool> = GlobalCell::new(false);
@@ -163,7 +163,7 @@ pub unsafe fn f_foldtextresult(argvars: *mut TypVal, result: *mut TypVal, _fptr:
     }
     entered.set(true);
     // SAFETY: the caller's promise, plus a live current window.
-    let lnum = unsafe { tv_get_lnum(argvars) }.max(0);
+    let lnum = unsafe { tv_get_lnum(args) }.max(0);
     // SAFETY: `curwin` is set from startup to exit.
     let win = unsafe { Win::current() };
     let info = fold_info(win, lnum);

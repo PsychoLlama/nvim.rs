@@ -32,10 +32,10 @@ unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut ArgList> {
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argc(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_argc(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
-    let count = unsafe { selected_arglist(argvars) }.map_or(-1, alist_count);
+    let count = unsafe { selected_arglist(args) }.map_or(-1, alist_count);
     unsafe { (*result).vval.v_number = count as VarNumber };
 }
 
@@ -44,7 +44,7 @@ pub unsafe fn f_argc(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argidx(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_argidx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
     unsafe { (*result).vval.v_number = cur_win().w_arg_idx as VarNumber };
 }
@@ -54,10 +54,10 @@ pub unsafe fn f_argidx(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_arglistid(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_arglistid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract -- the caller's argument array, which
     // holds both slots.
-    let found = unsafe { find_tabwin(argvars.offset(0), argvars.offset(1)) };
+    let found = unsafe { find_tabwin(args.offset(0), args.offset(1)) };
     let id = match found {
         Some(wp) => {
             // SAFETY: a window the registry answered with, so it is live,
@@ -99,10 +99,10 @@ unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut Ty
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argv(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_argv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; both arguments are optional and are
     // only read once their type says they are present.
-    if unsafe { (*argvars.offset(0)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.offset(0)).v_type } == VAR_UNKNOWN {
         // No index: the whole current argument list.
         let (entries, count) = alist_entries(win_alist(cur_win()));
         unsafe { arglist_as_rettv(entries, count, result) };
@@ -111,10 +111,10 @@ pub unsafe fn f_argv(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     // A window that does not exist leaves no list and a count of -1, so
     // every index is out of range.
     let (entries, count) =
-        unsafe { selected_arglist(argvars.offset(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
+        unsafe { selected_arglist(args.offset(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ptr::null_mut() };
-    let idx = unsafe { tv_get_number_chk(argvars.offset(0), ptr::null_mut()) } as c_int;
+    let idx = unsafe { tv_get_number_chk(args.offset(0), ptr::null_mut()) } as c_int;
     if !entries.is_null() && idx >= 0 && idx < count {
         unsafe { (*result).vval.v_string = xstrdup(alist_name(entries.offset(idx as isize))) };
     } else if idx == -1 {

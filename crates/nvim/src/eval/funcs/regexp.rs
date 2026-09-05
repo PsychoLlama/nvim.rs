@@ -399,9 +399,9 @@ unsafe fn get_matches_in_str(
 }
 
 /// `matchbufline({buf}, {pat}, {lnum}, {end} [, {dict}])`.
-pub unsafe fn f_matchbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_matchbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the buffer comes from the buffer list and is checked for a
     // memfile before any line is read.
     result.vval.v_number = -1;
@@ -497,43 +497,43 @@ unsafe fn want_submatches(args: Args<'_>, i: usize) -> Option<bool> {
 }
 
 /// `match({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe fn f_match(argvars: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_match(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatch) }
 }
 
 /// `matchend({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe fn f_matchend(argvars: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_matchend(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchEnd) }
 }
 
 /// `matchlist({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe fn f_matchlist(argvars: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_matchlist(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchList) }
 }
 
 /// `matchstr({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe fn f_matchstr(argvars: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_matchstr(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchStr) }
 }
 
 /// `matchstrpos({expr}, {pat} [, {start} [, {count}]])`.
-pub unsafe fn f_matchstrpos(argvars: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_matchstrpos(args: *mut TypVal, result: *mut TypVal, _f: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame's.
     unsafe { find_some_match(args, result, kSomeMatchStrPos) }
 }
 
 /// `matchstrlist({list}, {pat} [, {dict}])`.
-pub unsafe fn f_matchstrlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_matchstrlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the List and its items outlive the call.
     result.vval.v_number = -1;
     list_alloc_ret(result, kListLenUnknown as isize);
@@ -759,12 +759,12 @@ unsafe fn fuzzy_match_in_list(list: *mut List, request: &Request, fmatchlist: *m
 }
 
 /// The body of `matchfuzzy()` and, with `retmatchpos`, `matchfuzzypos()`.
-unsafe fn do_fuzzymatch(argvars: *const TypVal, result: *mut TypVal, retmatchpos: bool) {
+unsafe fn do_fuzzymatch(args: *const TypVal, result: *mut TypVal, retmatchpos: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
-    let list = unsafe { &*argvars };
+    let list = unsafe { &*args };
     if list.v_type != VAR_LIST || unsafe { list.vval.v_list }.is_null() {
         let who = if retmatchpos {
             c"matchfuzzypos()".as_ptr()
@@ -776,7 +776,7 @@ unsafe fn do_fuzzymatch(argvars: *const TypVal, result: *mut TypVal, retmatchpos
         semsg!("E686: Argument of {who} must be a List");
         return;
     }
-    let pat = unsafe { &*argvars.add(1) };
+    let pat = unsafe { &*args.add(1) };
     if pat.v_type != VAR_STRING || unsafe { pat.vval.v_string }.is_null() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe { c_str(numbuf.string(pat)) };
@@ -790,11 +790,11 @@ unsafe fn do_fuzzymatch(argvars: *const TypVal, result: *mut TypVal, retmatchpos
     let mut key = ptr::null();
     let mut matchseq = false;
     let mut limit = 0;
-    if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
-        if unsafe { tv_check_for_nonnull_dict_arg(argvars, 2) }.is_err() {
+    if unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN {
+        if unsafe { tv_check_for_nonnull_dict_arg(args, 2) }.is_err() {
             return;
         }
-        let d: *mut Dict = unsafe { (*argvars.add(2)).vval.v_dict };
+        let d: *mut Dict = unsafe { (*args.add(2)).vval.v_dict };
         let di = unsafe { tv_dict_find(d, c"key".as_ptr(), -1) };
         if !di.is_null() {
             if unsafe { (*di).di_tv.v_type } != VAR_STRING
@@ -857,8 +857,8 @@ unsafe fn do_fuzzymatch(argvars: *const TypVal, result: *mut TypVal, retmatchpos
 ///
 /// # Safety
 /// Called with a Vimscript function's arguments and result slot.
-pub(crate) unsafe fn f_matchfuzzy(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_fuzzymatch(argvars, result, false) }
+pub(crate) unsafe fn f_matchfuzzy(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { do_fuzzymatch(args, result, false) }
 }
 
 /// `matchfuzzypos()`: as [`f_matchfuzzy`], plus where each match landed and
@@ -866,10 +866,6 @@ pub(crate) unsafe fn f_matchfuzzy(argvars: *mut TypVal, result: *mut TypVal, _fp
 ///
 /// # Safety
 /// Called with a Vimscript function's arguments and result slot.
-pub(crate) unsafe fn f_matchfuzzypos(
-    argvars: *mut TypVal,
-    result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
-    unsafe { do_fuzzymatch(argvars, result, true) }
+pub(crate) unsafe fn f_matchfuzzypos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { do_fuzzymatch(args, result, true) }
 }

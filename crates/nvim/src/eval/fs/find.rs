@@ -307,10 +307,10 @@ fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
 /// `finddir({name} [, {path} [, {count}]])`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..3, and `result`
+/// `args` is the evaluator's own argument vector, arity 1..3, and `result`
 /// a cleared result.
-pub unsafe fn f_finddir(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_finddir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     findfilendir(args, result, FINDFILE_DIR as c_int);
 }
 
@@ -318,8 +318,8 @@ pub unsafe fn f_finddir(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 ///
 /// # Safety
 /// As [`f_finddir`].
-pub unsafe fn f_findfile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_findfile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     findfilendir(args, result, FINDFILE_FILE as c_int);
 }
 
@@ -330,11 +330,11 @@ pub unsafe fn f_findfile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// for a List rather than newline-joined text.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..4, and `result`
+/// `args` is the evaluator's own argument vector, arity 1..4, and `result`
 /// a cleared result.
-pub unsafe fn f_glob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_glob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
 
@@ -378,11 +378,11 @@ pub unsafe fn f_glob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// pattern expanded once under every directory in `{path}`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..5, and `result`
+/// `args` is the evaluator's own argument vector, arity 2..5, and `result`
 /// a cleared result.
-pub unsafe fn f_globpath(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_globpath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
 
@@ -477,11 +477,11 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
 /// with `{expr}` deciding which of them to keep.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..2, and `result`
+/// `args` is the evaluator's own argument vector, arity 1..2, and `result`
 /// a cleared result.
-pub unsafe fn f_readdir(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_readdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (mut args, result) = frame!(argvars, result);
+    let (mut args, result) = frame!(args, result);
     let list = RetList::alloc(result, kListLenUnknown as c_int as ptrdiff_t);
     let path = str_arg(args, 0, &mut numbuf).as_ptr();
     let expr: *mut TypVal = args.get_mut(1);

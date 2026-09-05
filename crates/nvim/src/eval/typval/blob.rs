@@ -229,18 +229,18 @@ pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte:
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and
 /// store what was removed in `result`.
 pub unsafe fn tv_blob_remove(
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
-    let b = unsafe { (*argvars).blob_or_null() };
+    let b = unsafe { (*args).blob_or_null() };
     if !b.is_null() && unsafe { value_check_lock((*b).bv_lock, arg_errmsg, TV_TRANSLATE as size_t) }
     {
         return;
     }
 
     let mut error = false;
-    let mut idx = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
+    let mut idx = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
     if error {
         return;
     }
@@ -258,7 +258,7 @@ pub unsafe fn tv_blob_remove(
     // cannot be, so this is the caller's live blob.
     let mut blob = unsafe { Bl::new(b) };
 
-    if unsafe { (*argvars.add(2)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         let p = blob.bv_ga.ga_data.cast::<uint8_t>();
         unsafe { (*result).vval.v_number = VarNumber::from(*p.offset(idx as isize)) };
@@ -271,7 +271,7 @@ pub unsafe fn tv_blob_remove(
     }
 
     // Remove range of items, return blob with values.
-    let mut end = unsafe { tv_get_number_chk(argvars.add(2), &raw mut error) };
+    let mut end = unsafe { tv_get_number_chk(args.add(2), &raw mut error) };
     if error {
         return;
     }
@@ -308,12 +308,12 @@ pub unsafe fn tv_blob_remove(
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
-pub unsafe fn f_blob2list(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_blob2list(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
-    if unsafe { tv_check_for_blob_arg(argvars, 0) }.is_err() {
+    if unsafe { tv_check_for_blob_arg(args, 0) }.is_err() {
         return;
     }
-    let blob = unsafe { (*argvars).blob_or_null() };
+    let blob = unsafe { (*args).blob_or_null() };
     let l = unsafe { (*result).list_or_null() };
     for i in 0..unsafe { tv_blob_len(blob) } {
         unsafe { tv_list_append_number(l, VarNumber::from(tv_blob_get(blob, i))) };
@@ -323,12 +323,12 @@ pub unsafe fn f_blob2list(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 /// `list2blob()`: a list of byte numbers as a blob.
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
-pub unsafe fn f_list2blob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_list2blob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let blob = unsafe { tv_blob_alloc_ret(result) };
-    if unsafe { tv_check_for_list_arg(argvars, 0) }.is_err() {
+    if unsafe { tv_check_for_list_arg(args, 0) }.is_err() {
         return;
     }
-    let l = unsafe { (*argvars).list_or_null() };
+    let l = unsafe { (*args).list_or_null() };
     if l.is_null() {
         return;
     }

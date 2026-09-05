@@ -87,8 +87,8 @@ unsafe fn get_tabpage_info(tabpage: TabPage, tp_idx: c_int) -> *mut Dict {
 }
 
 /// `gettabinfo([{tabnr}])` — every tab page, or just the one named.
-pub unsafe fn f_gettabinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_gettabinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
     // The length hint is upstream's, and is the way round it looks: one entry
@@ -124,8 +124,8 @@ pub unsafe fn f_gettabinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// place this function knowingly differs: past 32,767 tab pages upstream's
 /// `tabnr` wraps negative while `tabpagenr()`, an `int`, stays right. Reaching
 /// that takes 33,000 `:tabnew`s, so no test can see either answer.
-pub unsafe fn f_getwininfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getwininfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
     let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
@@ -204,8 +204,8 @@ unsafe fn get_framelayout(fr: FrameRef, l: *mut List, outer: bool) {
 }
 
 /// `winlayout([{tabnr}])` — the tab page's window layout tree.
-pub unsafe fn f_winlayout(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_winlayout(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the list belongs to
     // `result` for the whole walk.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
@@ -222,8 +222,8 @@ pub unsafe fn f_winlayout(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `win_gettype([{nr}])` — the empty string for an ordinary window.
-pub unsafe fn f_win_gettype(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_win_gettype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
     result.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments are live typvals and `curwin` is set.
@@ -260,7 +260,7 @@ pub unsafe fn f_win_gettype(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// `getcmdwintype()` — the one-character type of the command-line window, or
 /// the empty string when it is not open.
-pub unsafe fn f_getcmdwintype(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getcmdwintype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value; `xmallocz(1)` hands back
     // two writable bytes, the second already NUL.
     unsafe { (*result).v_type = VAR_STRING };

@@ -377,11 +377,11 @@ fn size(info: &FileInfo) -> uint64_t {
 /// `executable({expr})`: whether the name can be run.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1, and `result` a
+/// `args` is the evaluator's own argument vector, arity 1, and `result` a
 /// cleared result.
-pub unsafe fn f_executable(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_executable(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     if !is_string_arg(args, 0) {
         return;
     }
@@ -392,9 +392,9 @@ pub unsafe fn f_executable(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_exepath(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_exepath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     if !is_nonempty_string_arg(args, 0) {
         return;
     }
@@ -405,9 +405,9 @@ pub unsafe fn f_exepath(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_filereadable(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_filereadable(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let p = str_arg(args, 0, &mut numbuf);
     let readable = !p.to_bytes().is_empty() && !is_dir(p) && is_readable(p);
     result.vval.v_number = readable as VarNumber;
@@ -418,9 +418,9 @@ pub unsafe fn f_filereadable(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_filewritable(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_filewritable(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.vval.v_number = writability(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
@@ -429,9 +429,9 @@ pub unsafe fn f_filewritable(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_getfperm(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getfperm(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let file_perm = getperm(str_arg(args, 0, &mut numbuf));
     let mut perm = ptr::null_mut();
     if file_perm >= 0 {
@@ -451,9 +451,9 @@ pub unsafe fn f_getfperm(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_getfsize(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getfsize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let fname = str_arg(args, 0, &mut numbuf);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = match stat(fname) {
@@ -477,9 +477,9 @@ pub unsafe fn f_getfsize(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_getftime(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getftime(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let mtime = stat(str_arg(args, 0, &mut numbuf)).map(|info| info.stat.st_mtim.tv_sec);
     result.vval.v_number = mtime.map_or(-1 as VarNumber, |t| t as VarNumber);
 }
@@ -489,9 +489,9 @@ pub unsafe fn f_getftime(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_getftype(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getftype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
     let named = lstat(str_arg(args, 0, &mut numbuf)).map(|info| {
         // The `S_IS*` family, spelled out.
@@ -514,9 +514,9 @@ pub unsafe fn f_getftype(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As [`f_executable`].
-pub unsafe fn f_isdirectory(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_isdirectory(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.vval.v_number = is_dir(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
@@ -525,8 +525,8 @@ pub unsafe fn f_isdirectory(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 ///
 /// # Safety
 /// As [`f_executable`], arity 4.
-pub unsafe fn f_browse(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (_, result) = frame!(argvars, result);
+pub unsafe fn f_browse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (_, result) = frame!(args, result);
     ret_string(result, ptr::null_mut());
 }
 
@@ -534,9 +534,9 @@ pub unsafe fn f_browse(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 ///
 /// # Safety
 /// As [`f_browse`], arity 2.
-pub unsafe fn f_browsedir(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn f_browsedir(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: forwarded unchanged to a function with the same contract.
-    unsafe { f_browse(argvars, result, fptr) };
+    unsafe { f_browse(args, result, fptr) };
 }
 
 pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;

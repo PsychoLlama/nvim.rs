@@ -51,12 +51,12 @@ unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
 /// Text appended while the prompt line is being edited joins onto the last
 /// line rather than starting a new one, unless the previous append ended in a
 /// newline.
-pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_prompt_appendbuf(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 1;
     // SAFETY: the arguments and `result` are live typvals; every list item
@@ -131,23 +131,15 @@ pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, result: *mut TypVal, _fpt
 }
 
 /// `prompt_setcallback({buf}, {callback})`.
-pub unsafe fn f_prompt_setcallback(
-    argvars: *mut TypVal,
-    _result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
-    let (args, _) = frame!(argvars, _result);
+pub unsafe fn f_prompt_setcallback(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, _) = frame!(args, _result);
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_callback) };
 }
 
 /// `prompt_setinterrupt({buf}, {callback})`.
-pub unsafe fn f_prompt_setinterrupt(
-    argvars: *mut TypVal,
-    _result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
-    let (args, _) = frame!(argvars, _result);
+pub unsafe fn f_prompt_setinterrupt(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, _) = frame!(args, _result);
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_interrupt) };
 }
@@ -184,9 +176,9 @@ unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut
 /// changing it has to rewrite the line the old prompt is sitting in — unless
 /// that line no longer starts with the old prompt, in which case the whole
 /// line is replaced.
-pub unsafe fn f_prompt_setprompt(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_prompt_setprompt(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _) = frame!(argvars, _result);
+    let (args, _) = frame!(args, _result);
     // SAFETY: the arguments are live typvals; every line index below is
     // clamped into the buffer first, and `concat_str` hands back an owned
     // string which `ml_replace_buf` takes over or which is freed here.

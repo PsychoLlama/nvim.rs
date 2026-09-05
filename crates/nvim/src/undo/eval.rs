@@ -132,12 +132,12 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
 /// # Safety
 ///
 /// The eval-function contract: one argument and a return value to fill in.
-pub unsafe fn f_undofile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_undofile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
     unsafe { (*result).v_type = VAR_STRING };
     // SAFETY: as above.
-    let fname: *const c_char = unsafe { numbuf.string(argvars) };
+    let fname: *const c_char = unsafe { numbuf.string(args) };
     // SAFETY: a NUL-terminated name.
     if unsafe { *fname } == NUL as c_char {
         // SAFETY: the return value to fill in.
@@ -159,10 +159,10 @@ pub unsafe fn f_undofile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 /// # Safety
 ///
 /// The eval-function contract, and a live current buffer.
-pub unsafe fn f_undotree(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
     unsafe { tv_dict_alloc_ret(result) };
-    let tv: *mut TypVal = argvars;
+    let tv: *mut TypVal = args;
     // SAFETY: as above.
     let raw = if unsafe { (*tv).v_type } == VAR_UNKNOWN {
         curbuf.get()

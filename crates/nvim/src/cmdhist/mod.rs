@@ -325,7 +325,7 @@ unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
 }
 
 /// "histadd()" function
-pub unsafe fn f_histadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
     unsafe { (*result).vval.v_number = 0 };
     // SAFETY: reads the 'secure'/sandbox globals.
@@ -333,7 +333,7 @@ pub unsafe fn f_histadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         return;
     }
     // SAFETY: eval-function contract.
-    let histype = unsafe { arg_histtype(argvars) };
+    let histype = unsafe { arg_histtype(args) };
     if histype == HIST_INVALID {
         return;
     }
@@ -341,7 +341,7 @@ pub unsafe fn f_histadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     // SAFETY: `histadd()` takes two arguments; the entry is NUL-terminated
     // and lives in the typval or in `buf`, both of which outlive the add.
     let added = unsafe {
-        let entry = tv_get_string_buf(argvars.offset(1), buf.as_mut_ptr());
+        let entry = tv_get_string_buf(args.offset(1), buf.as_mut_ptr());
         *entry != 0 && {
             init_history();
             add_to_history(histype, CStr::from_ptr(entry).to_bytes(), false, 0);
@@ -355,17 +355,17 @@ pub unsafe fn f_histadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// "histdel()" function
-pub unsafe fn f_histdel(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histdel(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
     let n = unsafe {
-        let name = numbuf.string_chk(argvars);
+        let name = numbuf.string_chk(args);
         if name.is_null() {
             0
         } else {
             let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-            let arg = argvars.offset(1);
+            let arg = args.offset(1);
             if (*arg).v_type == VAR_UNKNOWN {
                 // Only one argument: clear the whole history.
                 clr_history(histype).is_ok() as c_int
@@ -384,10 +384,10 @@ pub unsafe fn f_histdel(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// "histget()" function
-pub unsafe fn f_histget(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histget(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
-    let name = unsafe { numbuf.string_chk(argvars) };
+    let name = unsafe { numbuf.string_chk(args) };
     let text = if name.is_null() {
         core::ptr::null_mut()
     } else {
@@ -396,10 +396,10 @@ pub unsafe fn f_histget(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         // `xstrnsave` copies the entry text before returning.
         unsafe {
             let histype = get_histtype(CStr::from_ptr(name).to_bytes(), false);
-            let num = if (*argvars.offset(1)).v_type == VAR_UNKNOWN {
+            let num = if (*args.offset(1)).v_type == VAR_UNKNOWN {
                 get_history_idx(histype)
             } else {
-                tv_get_number_chk(argvars.offset(1), core::ptr::null_mut()) as c_int
+                tv_get_number_chk(args.offset(1), core::ptr::null_mut()) as c_int
             };
             let idx = calc_hist_idx(histype, num);
             match hist_entry_ref(histype, idx) {
@@ -416,9 +416,9 @@ pub unsafe fn f_histget(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// "histnr()" function
-pub unsafe fn f_histnr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
-    let histype = unsafe { arg_histtype(argvars) };
+    let histype = unsafe { arg_histtype(args) };
     let n = if histype == HIST_INVALID {
         HIST_INVALID
     } else {

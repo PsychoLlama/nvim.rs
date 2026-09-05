@@ -163,11 +163,11 @@ fn extend(mut args: Args<'_>, result: &mut TypVal, arg_errmsg: &CStr, is_new: bo
 /// first container in place and answer it.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..3, and `result`
+/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
 /// a cleared result.
-pub unsafe fn f_extend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_extend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     extend(args, result, c"extend() argument", false);
 }
 
@@ -176,9 +176,9 @@ pub unsafe fn f_extend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 ///
 /// # Safety
 /// As [`f_extend`].
-pub unsafe fn f_extendnew(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_extendnew(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     extend(args, result, c"extendnew() argument", true);
 }
 
@@ -186,11 +186,11 @@ pub unsafe fn f_extendnew(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 /// into a Blob, before `idx`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..3, and `result`
+/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
 /// a cleared result.
-pub unsafe fn f_insert(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_insert(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, result) = frame!(argvars, result);
+    let (mut args, result) = frame!(args, result);
     let mut error = false;
     match Container::of(args.get_mut(0)) {
         Container::Blob(b) => {

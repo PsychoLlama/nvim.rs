@@ -17,7 +17,7 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
 /// never has.
-pub unsafe fn f_getwinpos(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getwinpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value, and the list it is given
     // stays alive for the two appends.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
@@ -26,13 +26,13 @@ pub unsafe fn f_getwinpos(_argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `getwinposx()` — always -1; there is no GUI window.
-pub unsafe fn f_getwinposx(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getwinposx(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = -1 };
 }
 
 /// `getwinposy()` — always -1; there is no GUI window.
-pub unsafe fn f_getwinposy(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getwinposy(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = -1 };
 }
@@ -58,8 +58,8 @@ unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.
-pub unsafe fn f_win_move_separator(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_win_move_separator(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.vval.v_number = 0;
     // SAFETY: the arguments are live typvals and the window is live.
     let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
@@ -70,12 +70,8 @@ pub unsafe fn f_win_move_separator(argvars: *mut TypVal, result: *mut TypVal, _f
 }
 
 /// `win_move_statusline({nr}, {offset})` — drag a status line.
-pub unsafe fn f_win_move_statusline(
-    argvars: *mut TypVal,
-    result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_win_move_statusline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.vval.v_number = 0;
     // SAFETY: the arguments are live typvals and the window is live.
     let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
@@ -87,8 +83,8 @@ pub unsafe fn f_win_move_statusline(
 
 /// `win_screenpos({nr})` — the window's top-left cell, one-based; `[0, 0]` for
 /// a window that does not exist.
-pub unsafe fn f_win_screenpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_win_screenpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the list stays
     // alive for the two appends because `result` owns it.
     let list = unsafe { tv_list_alloc_ret(result, 2) };
@@ -178,7 +174,7 @@ pub unsafe fn f_win_splitmove(argvars: *mut TypVal, result: *mut TypVal, _fptr: 
 }
 
 /// `wincol()` — the cursor's screen column within the window, one-based.
-pub unsafe fn f_wincol(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_wincol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = cur_win();
     validate_cursor(win);
@@ -186,7 +182,7 @@ pub unsafe fn f_wincol(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
-pub unsafe fn f_winline(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_winline(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = cur_win();
     validate_cursor(win);
@@ -194,16 +190,16 @@ pub unsafe fn f_winline(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
-pub unsafe fn f_winheight(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_winheight(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
-pub unsafe fn f_winwidth(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_winwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
     result.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width));
@@ -214,7 +210,7 @@ pub unsafe fn f_winwidth(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// The whole thing is emitted twice: setting one window's height changes its
 /// neighbours', so a single pass cannot land on the sizes it names.
-pub unsafe fn f_winrestcmd(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_winrestcmd(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curtab` is set, and `result` takes the text over at the end.
     let mut cmds = Vec::<u8>::new();
     let tp = cur_tab();
@@ -239,12 +235,12 @@ pub unsafe fn f_winrestcmd(_argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 ///
 /// Every key is optional: what the dictionary does not mention keeps its
 /// current value.
-pub unsafe fn f_winrestview(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_winrestview(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and `curwin` is set.
-    if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) }.is_err() {
+    if unsafe { tv_check_for_nonnull_dict_arg(args, 0) }.is_err() {
         return;
     }
-    let dict = unsafe { (*argvars).dict_or_null() };
+    let dict = unsafe { (*args).dict_or_null() };
     let mut win = cur_win();
     let entry = |key: &CStr| {
         // SAFETY: a live dictionary, and `tv_dict_find` hands back a live
@@ -312,7 +308,7 @@ fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
 }
 
 /// `winsaveview()` — everything `winrestview()` puts back.
-pub unsafe fn f_winsaveview(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_winsaveview(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value and `curwin` is set; the
     // dictionary stays alive for the appends because `result` owns it.
     unsafe { tv_dict_alloc_ret(result) };

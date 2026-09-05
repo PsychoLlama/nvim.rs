@@ -200,17 +200,17 @@ pub(crate) unsafe fn get_function_args(
 /// Stops at `MAX_FUNC_ARGS` less whatever a partial has already bound.
 ///
 /// # Safety
-/// `*arg` points at the `(`; `argvars` has room for `MAX_FUNC_ARGS` values
+/// `*arg` points at the `(`; `args` has room for `MAX_FUNC_ARGS` values
 /// past `*argcount`.
 pub(crate) unsafe fn get_func_arguments(
     arg: *mut *mut c_char,
     evalarg: *mut EvalArg,
     partial_argc: c_int,
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     argcount: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `*arg` is on the `(` of a
-    // NUL-terminated argument list, and `argvars` has room past `*argcount`.
+    // NUL-terminated argument list, and `args` has room past `*argcount`.
     let mut argp = unsafe { Walk::new(*arg) };
     let mut ret = Ok(());
     while unsafe { *argcount } < MAX_FUNC_ARGS - partial_argc {
@@ -219,7 +219,7 @@ pub(crate) unsafe fn get_func_arguments(
         if matches!(argp.byte(), b')' | b',') || argp.byte() == NUL as u8 {
             break;
         }
-        let slot = unsafe { argvars.offset(*argcount as isize) };
+        let slot = unsafe { args.offset(*argcount as isize) };
         // SAFETY: `&raw mut argp` is this frame's own walk, which `eval1`
         // advances in place.
         if unsafe { eval1((&raw mut argp).cast(), slot, evalarg) }.is_err() {
@@ -339,7 +339,7 @@ pub(crate) unsafe fn check_user_func_argcount(fp: *mut UserFunc, argcount: c_int
 /// out-parameters are writable.
 pub(crate) unsafe fn argv_add_base(
     basetv: *mut TypVal,
-    argvars: *mut *mut TypVal,
+    args: *mut *mut TypVal,
     argcount: *mut c_int,
     new_argvars: *mut TypVal,
     argv_base: *mut c_int,
@@ -349,11 +349,11 @@ pub(crate) unsafe fn argv_add_base(
         // SAFETY: the caller's promise -- `new_argvars` has room for
         // `*argcount + 1` values and the out-parameters are writable.
         let bytes = unsafe { size_of::<TypVal>().wrapping_mul(*argcount as size_t) };
-        let (into, from) = unsafe { (new_argvars.add(1) as *mut c_void, *argvars) };
+        let (into, from) = unsafe { (new_argvars.add(1) as *mut c_void, *args) };
         unsafe { into.cast::<u8>().copy_from(from.cast(), bytes) };
         unsafe { *new_argvars = *basetv };
         unsafe { *argcount += 1 };
-        unsafe { *argvars = new_argvars };
+        unsafe { *args = new_argvars };
         unsafe { *argv_base = 1 };
     }
 }

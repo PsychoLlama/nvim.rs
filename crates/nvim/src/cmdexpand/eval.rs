@@ -30,20 +30,20 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
 /// `expand_one`'s `orig` argument, which this caller never has.
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
-pub unsafe fn f_getcompletion(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getcompletion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     let mut filtered = false;
     let mut options = GETCOMPLETION;
 
-    if unsafe { tv_check_for_string_arg(argvars, 1) }.is_err() {
+    if unsafe { tv_check_for_string_arg(args, 1) }.is_err() {
         return;
     }
-    let type_0 = unsafe { numbuf.string(argvars.add(1)) };
+    let type_0 = unsafe { numbuf.string(args.add(1)) };
 
-    if unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN {
-        filtered = unsafe { tv_get_number_chk(argvars.add(2), ptr::null_mut()) } != 0;
+    if unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN {
+        filtered = unsafe { tv_get_number_chk(args.add(2), ptr::null_mut()) } != 0;
     }
 
     if p_wic.get() != 0 {
@@ -55,11 +55,11 @@ pub unsafe fn f_getcompletion(argvars: *mut TypVal, result: *mut TypVal, _fptr: 
         options |= WildOpts::KEEP_ALL;
     }
 
-    if unsafe { (*argvars).v_type } != VAR_STRING {
+    if unsafe { (*args).v_type } != VAR_STRING {
         emsg(gettext(e_invarg));
         return;
     }
-    let pattern = unsafe { numbuf2.string(argvars) };
+    let pattern = unsafe { numbuf2.string(args) };
     let mut pattern_start = pattern;
 
     // C's `goto theend`: the "cmdline" type takes the whole classifier and
@@ -176,16 +176,16 @@ pub unsafe fn f_getcompletion(argvars: *mut TypVal, result: *mut TypVal, _fptr: 
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
-pub unsafe fn f_getcompletiontype(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getcompletiontype(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ptr::null_mut() };
 
-    if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err() {
+    if unsafe { tv_check_for_string_arg(args, 0) }.is_err() {
         return;
     }
 
-    let pat = unsafe { numbuf.string(argvars) };
+    let pat = unsafe { numbuf.string(args) };
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
 
@@ -205,7 +205,7 @@ pub unsafe fn f_getcompletiontype(argvars: *mut TypVal, result: *mut TypVal, _fp
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
-pub unsafe fn f_cmdcomplete_info(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_cmdcomplete_info(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let xpc = Cc::current().xpc();
 
     unsafe { tv_dict_alloc_ret(result) };

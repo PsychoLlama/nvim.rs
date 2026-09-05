@@ -24,11 +24,11 @@ use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, uint8_t};
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2, and `result` a
+/// `args` is the evaluator's own argument vector, arity 2, and `result` a
 /// cleared result.
-pub unsafe fn f_add(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_add(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, result) = frame!(argvars, result);
+    let (mut args, result) = frame!(args, result);
     // Default: failed.
     result.vval.v_number = 1;
     match Container::of(args.get_mut(0)) {
@@ -133,11 +133,11 @@ fn count_dict(d: DictRef, needle: &mut TypVal, ic: bool) -> VarNumber {
 /// and not as a pair.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..4, and `result`
+/// `args` is the evaluator's own argument vector, arity 2..4, and `result`
 /// a cleared result.
-pub unsafe fn f_count(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_count(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, result) = frame!(argvars, result);
+    let (mut args, result) = frame!(args, result);
     let mut error = false;
     let ic = args.has(2) && number_of(args.get_mut(2), &mut error) != 0;
 

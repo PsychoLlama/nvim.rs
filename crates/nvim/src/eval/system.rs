@@ -180,9 +180,9 @@ pub(crate) unsafe fn string_to_list(
 /// The shared body of `system()` and `systemlist()`.
 ///
 /// # Safety
-/// `argvars` must hold the builtin's arguments; `result` must be valid.
+/// `args` must hold the builtin's arguments; `result` must be valid.
 pub(crate) unsafe fn get_system_output_as_rettv(
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
     retlist: bool,
 ) {
@@ -199,16 +199,16 @@ pub(crate) unsafe fn get_system_output_as_rettv(
     let mut input_len: ptrdiff_t = 0;
     // SAFETY: the builtin's vector always has a second slot, which is
     // `VAR_UNKNOWN` when the caller passed one argument.
-    let input = unsafe { save_tv_as_string(argvars.add(1), &raw mut input_len, false, false) };
+    let input = unsafe { save_tv_as_string(args.add(1), &raw mut input_len, false, false) };
     if input_len < 0 {
         debug_assert!(input.is_null());
         return;
     }
 
     let mut executable = true;
-    // SAFETY: `argvars` is the builtin's own vector, and `cmdbuf` outlives
+    // SAFETY: `args` is the builtin's own vector, and `cmdbuf` outlives
     // the argv a Number command is spelled into.
-    let argv = unsafe { tv_to_argv(argvars, null_mut(), &raw mut executable, &mut cmdbuf) };
+    let argv = unsafe { tv_to_argv(args, null_mut(), &raw mut executable, &mut cmdbuf) };
     if argv.is_null() {
         // A command that does not exist reports -1 rather than a shell
         // exit status.
@@ -274,11 +274,11 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         let mut keepempty = 0;
         // SAFETY: the builtin declares three slots, and the third is only
         // reached once the second turned out to be given.
-        let given = unsafe { (*argvars.add(1)).v_type } != VAR_UNKNOWN
-            && unsafe { (*argvars.add(2)).v_type } != VAR_UNKNOWN;
+        let given = unsafe { (*args.add(1)).v_type } != VAR_UNKNOWN
+            && unsafe { (*args.add(2)).v_type } != VAR_UNKNOWN;
         if given {
             // SAFETY: as above.
-            keepempty = unsafe { tv_get_number(argvars.add(2)) } as c_int;
+            keepempty = unsafe { tv_get_number(args.add(2)) } as c_int;
         }
         // SAFETY: `res` holds `nread` readable bytes.
         let list = unsafe { string_to_list(res, nread, keepempty != 0) };
@@ -300,16 +300,16 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe fn f_system(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { get_system_output_as_rettv(argvars, result, false) }
+pub unsafe fn f_system(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { get_system_output_as_rettv(args, result, false) }
 }
 
 /// `systemlist()`
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe fn f_systemlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { get_system_output_as_rettv(argvars, result, true) }
+pub unsafe fn f_systemlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { get_system_output_as_rettv(args, result, true) }
 }
 
 /// Write `c` at `dest` and answer the byte after it.

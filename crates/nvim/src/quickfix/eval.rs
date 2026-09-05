@@ -178,9 +178,9 @@ unsafe fn get_qf_loc_list(
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_getloclist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getloclist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least two values.
-    unsafe { get_qf_loc_list(false, find_win_by_nr_or_id(argvars), argvars.add(1), result) };
+    unsafe { get_qf_loc_list(false, find_win_by_nr_or_id(args), args.add(1), result) };
 }
 
 /// `getqflist([{what}])`.
@@ -188,9 +188,9 @@ pub unsafe fn f_getloclist(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_getqflist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getqflist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least one value.
-    unsafe { get_qf_loc_list(true, None, argvars, result) }
+    unsafe { get_qf_loc_list(true, None, args, result) }
 }
 
 /// The body of `setqflist()` and `setloclist()`: a list of entries, an
@@ -279,11 +279,11 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut Ty
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_setloclist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setloclist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least four values.
     unsafe { (*result).vval.v_number = -1 };
-    if let Some(win) = unsafe { find_win_by_nr_or_id(argvars) } {
-        unsafe { set_qf_ll_list(Some(win), argvars.add(1), result) };
+    if let Some(win) = unsafe { find_win_by_nr_or_id(args) } {
+        unsafe { set_qf_ll_list(Some(win), args.add(1), result) };
     }
 }
 
@@ -292,7 +292,7 @@ pub unsafe fn f_setloclist(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_setqflist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setqflist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least three values.
-    unsafe { set_qf_ll_list(None, argvars, result) }
+    unsafe { set_qf_ll_list(None, args, result) }
 }

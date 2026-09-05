@@ -302,10 +302,10 @@ enum ScriptQuery {
 }
 
 /// `"getscriptinfo()"` function
-pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `result` is the caller's return slot, `argvars` its arguments.
+pub unsafe fn f_getscriptinfo(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the caller's return slot, `args` its arguments.
     unsafe { tv_list_alloc_ret(result, script_count() as ptrdiff_t) };
-    if unsafe { tv_check_for_opt_dict_arg(argvars, 0) }.is_err() {
+    if unsafe { tv_check_for_opt_dict_arg(args, 0) }.is_err() {
         return;
     }
     // The pattern's source string is freed on the way out, as upstream does,
@@ -316,7 +316,7 @@ pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: 
     // gives up and the backtracker recompiles the pattern.
     let mut regmatch = empty_regmatch();
     // SAFETY: as above.
-    let query = unsafe { script_query(argvars, &mut pat, &mut regmatch) };
+    let query = unsafe { script_query(args, &mut pat, &mut regmatch) };
 
     if !matches!(query, ScriptQuery::Rejected) {
         // SAFETY: `result` holds the list allocated above.
@@ -339,15 +339,15 @@ pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: 
 ///
 /// # Safety
 ///
-/// `argvars` must be the builtin's argument vector.
+/// `args` must be the builtin's argument vector.
 unsafe fn script_query(
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     pat: *mut *mut c_char,
     regmatch: &mut RegMatch,
 ) -> ScriptQuery {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's argument vector; argument 0 always exists.
-    let arg = unsafe { &*argvars };
+    let arg = unsafe { &*args };
     if arg.v_type != VAR_DICT {
         return ScriptQuery::All;
     }

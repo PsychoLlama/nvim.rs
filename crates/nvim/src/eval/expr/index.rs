@@ -188,14 +188,14 @@ pub(crate) unsafe fn check_can_index(
 ///
 /// # Safety
 /// Called through the builtin table with a terminated argument array.
-pub(crate) unsafe fn f_slice(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    if unsafe { check_can_index(argvars, true, false) }.is_err() {
+pub(crate) unsafe fn f_slice(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    if unsafe { check_can_index(args, true, false) }.is_err() {
         return;
     }
-    unsafe { tv_copy(argvars, result) };
+    unsafe { tv_copy(args, result) };
     // SAFETY: the builtin table hands in three argument slots, terminated by
     // a `VAR_UNKNOWN` when the third was not given.
-    let (first, last) = unsafe { (argvars.add(1), argvars.add(2)) };
+    let (first, last) = unsafe { (args.add(1), args.add(2)) };
     let end = if unsafe { (*last).v_type } == VAR_UNKNOWN {
         null_mut()
     } else {

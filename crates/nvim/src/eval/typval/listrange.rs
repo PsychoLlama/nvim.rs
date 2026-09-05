@@ -364,16 +364,16 @@ pub unsafe fn tv_list_join(
 }
 
 /// `join()` the builtin.
-pub unsafe fn f_join(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_join(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    if unsafe { (*argvars).v_type } != VAR_LIST {
+    if unsafe { (*args).v_type } != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
     }
-    let sep = if unsafe { (*argvars.add(1)).v_type } == VAR_UNKNOWN {
+    let sep = if unsafe { (*args.add(1)).v_type } == VAR_UNKNOWN {
         c" ".as_ptr()
     } else {
-        unsafe { numbuf.string_chk(argvars.add(1)) }
+        unsafe { numbuf.string_chk(args.add(1)) }
     };
 
     unsafe { (*result).v_type = VAR_STRING };
@@ -385,17 +385,17 @@ pub unsafe fn f_join(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let mut ga = GARRAY_EMPTY;
     let itemsize = ::core::mem::size_of::<::core::ffi::c_char>() as ::core::ffi::c_int;
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
-    let _ = unsafe { tv_list_join(&raw mut ga, (*argvars).list_or_null(), sep) };
+    let _ = unsafe { tv_list_join(&raw mut ga, (*args).list_or_null(), sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
     unsafe { (*result).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }
 
 /// `list2str()`: a list of codepoints as a string.
-pub unsafe fn f_list2str(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_list2str(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ::core::ptr::null_mut() };
     // SAFETY: the builtin's argument array.
-    let args = unsafe { Tv::new(argvars) };
+    let args = unsafe { Tv::new(args) };
     if args.v_type != VAR_LIST {
         emsg(gettext(e_invarg));
         return;

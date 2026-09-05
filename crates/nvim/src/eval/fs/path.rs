@@ -166,11 +166,11 @@ fn simplify(s: *mut c_char) {
 /// `glob2regpat({pattern})`: the wildcard pattern as a regular expression.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1, and `result` a
+/// `args` is the evaluator's own argument vector, arity 1, and `result` a
 /// cleared result.
-pub unsafe fn f_glob2regpat(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_glob2regpat(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let pat = str_arg_chk(args, 0, &mut numbuf);
     ret_string(
         result,
@@ -188,9 +188,9 @@ pub unsafe fn f_glob2regpat(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_isabsolutepath(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_isabsolutepath(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
@@ -202,9 +202,9 @@ pub unsafe fn f_isabsolutepath(argvars: *mut TypVal, result: *mut TypVal, _fptr:
 ///
 /// # Safety
 /// As [`f_glob2regpat`], arity 1..2.
-pub unsafe fn f_pathshorten(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_pathshorten(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let trim_len = if args.has(1) {
         // SAFETY: a live typval; `tv_get_number` reports its own error and
         // reads as 0 for a type that has no number form.
@@ -229,9 +229,9 @@ pub unsafe fn f_pathshorten(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_simplify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_simplify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
     simplify(simplified);
     ret_string(result, simplified);
@@ -241,9 +241,9 @@ pub unsafe fn f_simplify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_resolve(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_resolve(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     ret_string(result, ptr::null_mut());
     if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
         let raw = resolved.into_raw();

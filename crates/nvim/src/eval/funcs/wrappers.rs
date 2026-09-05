@@ -218,13 +218,13 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
 /// Call the builtin `fname` spells.
 ///
 /// # Safety
-/// `fname` is a NUL-terminated string; `argvars` points at an array of at
+/// `fname` is a NUL-terminated string; `args` points at an array of at
 /// least `MAX_FUNC_ARGS + 1` typvals of which the first `argcount` are
 /// filled; `result` is the cleared return value.
 pub unsafe fn call_internal_func(
     fname: *const c_char,
     argcount: c_int,
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
 ) -> c_int {
     // SAFETY: the caller's obligation. Writing the terminator at `argcount`
@@ -239,11 +239,11 @@ pub unsafe fn call_internal_func(
     if argcount > unsafe { (*fdef).max_argc } as c_int {
         return FCERR_TOOMANY as c_int;
     }
-    unsafe { (*argvars.add(argcount as usize)).v_type = VAR_UNKNOWN };
+    unsafe { (*args.add(argcount as usize)).v_type = VAR_UNKNOWN };
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
     let data = unsafe { (*fdef).data };
     // SAFETY: the row's body takes exactly the frame built above.
-    unsafe { func(argvars, result, data) };
+    unsafe { func(args, result, data) };
     FCERR_NONE as c_int
 }
 
@@ -258,7 +258,7 @@ pub unsafe fn call_internal_func(
 pub unsafe fn call_internal_method(
     fname: *const c_char,
     argcount: c_int,
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
     basetv: *mut TypVal,
 ) -> c_int {
@@ -291,9 +291,9 @@ pub unsafe fn call_internal_method(
 
     let mut argv = [EMPTY_TV; MAX_FUNC_ARGS as usize + 1];
     let out = argv.as_mut_ptr();
-    unsafe { ptr::copy_nonoverlapping(argvars, out, base_index as usize) };
+    unsafe { ptr::copy_nonoverlapping(args, out, base_index as usize) };
     unsafe { *out.add(base_index as usize) = *basetv };
-    let from = unsafe { argvars.add(base_index as usize) };
+    let from = unsafe { args.add(base_index as usize) };
     let to = unsafe { out.add(base_index as usize + 1) };
     let rest = (argcount - base_index) as usize;
     unsafe { ptr::copy_nonoverlapping(from, to, rest) };
@@ -389,11 +389,11 @@ pub unsafe fn get_expr_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// than an error.
 ///
 /// # Safety
-/// `argvars` is a live call frame's argument array.
-pub(crate) unsafe fn non_zero_arg(argvars: *mut TypVal) -> bool {
+/// `args` is a live call frame's argument array.
+pub(crate) unsafe fn non_zero_arg(args: *mut TypVal) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
-    let tv = unsafe { &*argvars };
+    let tv = unsafe { &*args };
     match tv.v_type {
         VAR_NUMBER => tv.number_or_zero() != 0,
         VAR_BOOL => tv.as_bool() == Some(kBoolVarTrue),
@@ -427,12 +427,12 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const TypVal, ret_f: *mut Float) -> b
 
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
-pub unsafe fn float_op_wrapper(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn float_op_wrapper(args: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
     let mut f: Float = 0.0;
     unsafe { (*result).v_type = VAR_FLOAT };
-    let value = if unsafe { tv_get_float_chk(argvars, &raw mut f) } {
+    let value = if unsafe { tv_get_float_chk(args, &raw mut f) } {
         let EvalFuncData::Float(op) = fptr else {
             unreachable!("a float builtin's row carries its operation")
         };
@@ -574,13 +574,13 @@ pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut Buffer {
 /// the current one. Null after reporting E957.
 ///
 /// # Safety
-/// `argvars` is a live call frame's argument array and `idx` is within it.
-pub unsafe fn get_optional_window(argvars: *mut TypVal, idx: c_int) -> *mut Window {
+/// `args` is a live call frame's argument array and `idx` is within it.
+pub unsafe fn get_optional_window(args: *mut TypVal, idx: c_int) -> *mut Window {
     // SAFETY: the caller's obligation.
-    if unsafe { (*argvars.add(idx as usize)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.add(idx as usize)).v_type } == VAR_UNKNOWN {
         return curwin.get();
     }
-    let win = unsafe { find_win_by_nr_or_id(argvars.add(idx as usize)) };
+    let win = unsafe { find_win_by_nr_or_id(args.add(idx as usize)) };
     if win.is_none() {
         emsg(gettext(e_invalwindow));
     }

@@ -936,16 +936,16 @@ pub unsafe fn f_remove(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// character by character, by `reverse_text`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1, and `result` a
+/// `args` is the evaluator's own argument vector, arity 1, and `result` a
 /// cleared result.
-pub unsafe fn f_reverse(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_reverse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract; the check reports E1252 for a type
     // that cannot be reversed.
-    if unsafe { tv_check_for_string_or_list_or_blob_arg(argvars, 0) }.is_err() {
+    if unsafe { tv_check_for_string_or_list_or_blob_arg(args, 0) }.is_err() {
         return;
     }
     // SAFETY: the caller's contract.
-    let (mut args, result) = frame!(argvars, result);
+    let (mut args, result) = frame!(args, result);
     match Container::of(args.get_mut(0)) {
         Container::Blob(b) => {
             let len = b.len();

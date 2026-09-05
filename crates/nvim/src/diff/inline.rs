@@ -319,7 +319,7 @@ pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLin
 /// column of a line -- but only under `inline:none`/`inline:simple`, where
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
-pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_diff_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
     static fnum: GlobalCell<c_int> = GlobalCell::new(0);
@@ -336,7 +336,7 @@ pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
     };
     let cache_results = diff_flags.get() & ALL_INLINE_DIFF == 0;
     // SAFETY: the caller's argument list.
-    let lnum = unsafe { tv_get_lnum(argvars) }.max(0);
+    let lnum = unsafe { tv_get_lnum(args) }.max(0);
 
     let stale = !cache_results
         || lnum != prev_lnum.get()
@@ -385,7 +385,7 @@ pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
     if hlID.get() == HLF_CHD || hlID.get() == HLF_TXD {
         // SAFETY: `diff_hlID()` is declared with two arguments.
-        let col = unsafe { tv_get_number(argvars.offset(1)) } as c_int - 1;
+        let col = unsafe { tv_get_number(args.offset(1)) } as c_int - 1;
         if cache_results {
             hlID.set(if col >= change_start.get() && col < change_end.get() {
                 HLF_TXD

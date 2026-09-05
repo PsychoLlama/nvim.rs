@@ -211,8 +211,8 @@ unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
 }
 
 /// `append({lnum}, {string/list})`.
-pub unsafe fn f_append(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_append(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
@@ -222,22 +222,22 @@ pub unsafe fn f_append(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `appendbufline({buf}, {lnum}, {string/list})`.
-pub unsafe fn f_appendbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_appendbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { buf_set_append_line(args, result, true) };
 }
 
 /// `setbufline({buf}, {lnum}, {string/list})`.
-pub unsafe fn f_setbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_setbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { buf_set_append_line(args, result, false) };
 }
 
 /// `setline({lnum}, {string/list})`.
-pub unsafe fn f_setline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_setline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
@@ -247,8 +247,8 @@ pub unsafe fn f_setline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `getline({lnum} [, {end}])` — one String, or a List for a range.
-pub unsafe fn f_getline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let lnum = arg_lnum(args, 0);
     // One argument answers a string, a range answers a list.
@@ -261,22 +261,22 @@ pub unsafe fn f_getline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
-pub unsafe fn f_getbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getbufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { getbufline(args, result, true) };
 }
 
 /// `getbufoneline({buf}, {lnum})`.
-pub unsafe fn f_getbufoneline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getbufoneline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals.
     unsafe { getbufline(args, result, false) };
 }
 
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
-pub unsafe fn f_deletebufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.vval.v_number = 1;
     // SAFETY: the arguments and `result` are live typvals; `cob` is a live
     // local, restored on every path out of the change.

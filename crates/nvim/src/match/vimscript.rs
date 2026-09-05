@@ -88,13 +88,9 @@ unsafe fn matchadd_dict_arg(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_clearmatches(
-    argvars: *mut TypVal,
-    _result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_clearmatches(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(argvars, 0) };
+    let win = unsafe { get_optional_window(args, 0) };
     if !win.is_null() {
         unsafe { clear_matches(win) };
     }
@@ -104,9 +100,9 @@ pub(crate) unsafe fn f_clearmatches(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_getmatches(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_getmatches(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(argvars, 0) };
+    let win = unsafe { get_optional_window(args, 0) };
     let l = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
     if win.is_null() {
         return;
@@ -160,22 +156,22 @@ pub(crate) unsafe fn f_getmatches(argvars: *mut TypVal, result: *mut TypVal, _fp
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_setmatches(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_setmatches(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut group_buf = NumBuf::new();
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(argvars, 1) };
+    let win = unsafe { get_optional_window(args, 1) };
 
     unsafe { (*result).vval.v_number = -1 };
-    if unsafe { (*argvars).v_type } != VAR_LIST {
+    if unsafe { (*args).v_type } != VAR_LIST {
         emsg(gettext(e_listreq));
         return;
     }
     if win.is_null() {
         return;
     }
-    let l = unsafe { (*argvars).vval.v_list };
+    let l = unsafe { (*args).vval.v_list };
 
     // To some extent make sure this really came from getmatches().
     let mut li_idx = 0;
@@ -278,7 +274,7 @@ pub(crate) unsafe fn f_setmatches(argvars: *mut TypVal, result: *mut TypVal, _fp
 /// # Safety
 /// The evaluator's argument slots.
 unsafe fn optional_args(
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     numbuf: &mut NumBuf,
 ) -> Option<(c_int, c_int, *const c_char, *mut Window)> {
     // SAFETY: the evaluator's slots.
@@ -290,18 +286,13 @@ unsafe fn optional_args(
 
     // Nested, not sequential: an `id` is only read when a `priority` was
     // given, and the dictionary only when an `id` was.
-    if unsafe { (*argvars.offset(2)).v_type } != VAR_UNKNOWN {
-        prio = unsafe { tv_get_number_chk(argvars.offset(2), &raw mut error) } as c_int;
-        if unsafe { (*argvars.offset(3)).v_type } != VAR_UNKNOWN {
-            id = unsafe { tv_get_number_chk(argvars.offset(3), &raw mut error) } as c_int;
-            if unsafe { (*argvars.offset(4)).v_type } != VAR_UNKNOWN
+    if unsafe { (*args.offset(2)).v_type } != VAR_UNKNOWN {
+        prio = unsafe { tv_get_number_chk(args.offset(2), &raw mut error) } as c_int;
+        if unsafe { (*args.offset(3)).v_type } != VAR_UNKNOWN {
+            id = unsafe { tv_get_number_chk(args.offset(3), &raw mut error) } as c_int;
+            if unsafe { (*args.offset(4)).v_type } != VAR_UNKNOWN
                 && unsafe {
-                    matchadd_dict_arg(
-                        argvars.offset(4),
-                        &raw mut conceal_char,
-                        &raw mut win,
-                        numbuf,
-                    )
+                    matchadd_dict_arg(args.offset(4), &raw mut conceal_char, &raw mut win, numbuf)
                 }
                 .is_err()
             {
@@ -320,21 +311,21 @@ unsafe fn optional_args(
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_matchadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_matchadd(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // The group, the pattern and the `conceal` option are all held at once,
     // so each is given a scratch of its own.
     let mut grpbuf = NumBuf::new();
     let mut patbuf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
-    let grp = unsafe { grpbuf.string_chk(argvars) };
-    let pat = unsafe { patbuf.string_chk(argvars.offset(1)) };
+    let grp = unsafe { grpbuf.string_chk(args) };
+    let pat = unsafe { patbuf.string_chk(args.offset(1)) };
 
     unsafe { (*result).vval.v_number = -1 };
     if grp.is_null() || pat.is_null() {
         return;
     }
-    let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(argvars, &mut concealbuf) })
+    let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(args, &mut concealbuf) })
     else {
         return;
     };
@@ -354,26 +345,26 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut TypVal, result: *mut TypVal, _fptr
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_matchaddpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_matchaddpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut buf = NumBuf::new();
     let mut concealbuf = NumBuf::new();
     // SAFETY: the evaluator's slots.
     unsafe { (*result).vval.v_number = -1 };
 
-    let group = unsafe { buf.string_chk(argvars) };
+    let group = unsafe { buf.string_chk(args) };
     if group.is_null() {
         return;
     }
-    if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
+    if unsafe { (*args.offset(1)).v_type } != VAR_LIST {
         semsg!("E686: Argument of {} must be a List", "matchaddpos()");
         return;
     }
-    let l = unsafe { (*argvars.offset(1)).vval.v_list };
+    let l = unsafe { (*args.offset(1)).vval.v_list };
     if unsafe { tv_list_len(l) } == 0 {
         return;
     }
 
-    let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(argvars, &mut concealbuf) })
+    let Some((prio, id, conceal_char, win)) = (unsafe { optional_args(args, &mut concealbuf) })
     else {
         return;
     };
@@ -394,9 +385,9 @@ pub(crate) unsafe fn f_matchaddpos(argvars: *mut TypVal, result: *mut TypVal, _f
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_matcharg(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_matcharg(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let id = unsafe { tv_get_number(argvars) } as c_int;
+    let id = unsafe { tv_get_number(args) } as c_int;
     let is_excmd = (1..=3).contains(&id);
     // Any other id answers an empty list, not an error.
     let l = unsafe { tv_list_alloc_ret(result, if is_excmd { 2 } else { 0 }) };
@@ -417,14 +408,14 @@ pub(crate) unsafe fn f_matcharg(argvars: *mut TypVal, result: *mut TypVal, _fptr
 ///
 /// # Safety
 /// The evaluator's argument and return slots.
-pub(crate) unsafe fn f_matchdelete(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_matchdelete(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's slots.
-    let win = unsafe { get_optional_window(argvars, 1) };
+    let win = unsafe { get_optional_window(args, 1) };
     unsafe {
         (*result).vval.v_number = if win.is_null() {
             -1
         } else {
-            match_delete(win, tv_get_number(argvars) as c_int, true) as VarNumber
+            match_delete(win, tv_get_number(args) as c_int, true) as VarNumber
         };
     }
 }

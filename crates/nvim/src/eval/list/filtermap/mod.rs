@@ -133,8 +133,8 @@ pub(crate) fn filter_map_one(
 
 /// The shared body of the four builtins: check the argument, save `v:key`
 /// and `v:val`, dispatch on the container, and put everything back.
-fn filter_map(argvars: *mut TypVal, result: &mut TypVal, filtermap: FilterMap) {
-    let (mut args, _) = frame!(argvars, result);
+fn filter_map(args: *mut TypVal, result: &mut TypVal, filtermap: FilterMap) {
+    let (mut args, _) = frame!(args, result);
     let arg = args.get_mut(0);
     let container = Container::of(arg);
 
@@ -183,20 +183,20 @@ fn filter_map(argvars: *mut TypVal, result: &mut TypVal, filtermap: FilterMap) {
 /// `filter(container, expr)`: drop every item the expression calls false.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2, and `result` a
+/// `args` is the evaluator's own argument vector, arity 2, and `result` a
 /// cleared result.
-pub unsafe fn f_filter(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_filter(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *result }, FilterMap::Filter);
+    filter_map(args, unsafe { &mut *result }, FilterMap::Filter);
 }
 
 /// `map(container, expr)`: replace every item with the expression's value.
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_map(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_map(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *result }, FilterMap::Map);
+    filter_map(args, unsafe { &mut *result }, FilterMap::Map);
 }
 
 /// `mapnew(container, expr)`: `map()` into a fresh container, leaving the
@@ -204,9 +204,9 @@ pub unsafe fn f_map(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_mapnew(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_mapnew(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *result }, FilterMap::MapNew);
+    filter_map(args, unsafe { &mut *result }, FilterMap::MapNew);
 }
 
 /// `foreach(container, expr)`: evaluate the expression -- or run the Ex
@@ -214,7 +214,7 @@ pub unsafe fn f_mapnew(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_foreach(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_foreach(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *result }, FilterMap::Foreach);
+    filter_map(args, unsafe { &mut *result }, FilterMap::Foreach);
 }

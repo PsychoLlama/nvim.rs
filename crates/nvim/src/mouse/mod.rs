@@ -603,11 +603,7 @@ pub(crate) fn setmouse() {
 ///
 /// # Safety
 /// `result` must be a live, unset return value.
-pub(crate) unsafe fn f_getmousepos(
-    _argvars: *mut TypVal,
-    result: *mut TypVal,
-    _fptr: EvalFuncData,
-) {
+pub(crate) unsafe fn f_getmousepos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
     let d = unsafe {
         tv_dict_alloc_ret(result);

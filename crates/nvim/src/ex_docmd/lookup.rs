@@ -267,9 +267,9 @@ pub unsafe fn cmd_exists(name: *const c_char) -> c_int {
 /// The generated builtin-function table holds it as a `VimLFunc` fn
 /// pointer, and apigen's line-based scan needs the declaration spelled out
 /// literally.
-pub unsafe fn f_fullcommand(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_fullcommand(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let mut name = unsafe { numbuf.string(argvars) } as *mut c_char;
+    let mut name = unsafe { numbuf.string(args) } as *mut c_char;
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ptr::null_mut() };
     while byte(name) == ':' as c_int {

@@ -143,14 +143,14 @@ pub unsafe fn func_call(
 /// failed.
 ///
 /// # Safety
-/// `callback` is live and `argvars` holds `argcount` values.
+/// `callback` is live and `args` holds `argcount` values.
 pub unsafe fn callback_call_retnr(
     callback: *mut Callback,
     argcount: c_int,
-    argvars: *mut TypVal,
+    args: *mut TypVal,
 ) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
-    if !unsafe { callback_call(callback, argcount, argvars, &raw mut rettv) } {
+    if !unsafe { callback_call(callback, argcount, args, &raw mut rettv) } {
         return -2;
     }
     let retval = unsafe { tv_get_number_chk(&raw mut rettv, ptr::null_mut()) };

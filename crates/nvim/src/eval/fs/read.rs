@@ -538,10 +538,10 @@ fn read_file_or_blob(args: Args<'_>, result: &mut TypVal, always_blob: bool) {
 /// `readblob({fname} [, {offset} [, {size}]])`: the file's bytes as a Blob.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..3, and `result`
+/// `args` is the evaluator's own argument vector, arity 1..3, and `result`
 /// a cleared result.
-pub unsafe fn f_readblob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_readblob(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     read_file_or_blob(args, result, true);
 }
 
@@ -549,7 +549,7 @@ pub unsafe fn f_readblob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 /// As [`f_readblob`].
-pub unsafe fn f_readfile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_readfile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     read_file_or_blob(args, result, false);
 }

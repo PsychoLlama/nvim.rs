@@ -262,9 +262,9 @@ fn has_wsl() -> bool {
 }
 
 /// `has({feature})`
-pub unsafe fn f_has(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_has(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and `name` is the string an argument owns.
     let name = arg_string(&mut numbuf, args.get(0));
     let known = unsafe { special_feature(name) }.or_else(|| {
@@ -296,7 +296,7 @@ pub unsafe fn f_has(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `api_info()` — the whole API metadata dict.
-pub unsafe fn f_api_info(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_api_info(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value; a null `Error` out-pointer
     // is what the converter's infallible path takes.
     unsafe { object_to_vim(api_metadata(), result) };
@@ -304,35 +304,35 @@ pub unsafe fn f_api_info(_argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 
 /// `did_filetype()` — whether a FileType autocommand has fired for this
 /// buffer since it was last loaded.
-pub unsafe fn f_did_filetype(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_did_filetype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `result` is the cleared return value.
     unsafe { (*result).vval.v_number = (*curbuf.get()).b_did_filetype as VarNumber };
 }
 
 /// `eventhandler()` — whether we are inside a `vgetc()` from an event.
-pub unsafe fn f_eventhandler(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_eventhandler(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = vgetc_busy.get() as VarNumber };
 }
 
 /// `foreground()` — a no-op; nvim has no window to raise.
-pub unsafe fn f_foreground(_argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {}
+pub unsafe fn f_foreground(_args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {}
 
 /// `getfontname()` — always empty; nvim has no font.
-pub unsafe fn f_getfontname(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getfontname(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = ptr::null_mut() };
 }
 
 /// `getpid()`
-pub unsafe fn f_getpid(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getpid(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = os_get_pid() as VarNumber };
 }
 
 /// `hostname()`
-pub unsafe fn f_hostname(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_hostname(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut hostname = [0 as c_char; 256];
     // SAFETY: `os_get_hostname` writes at most the length it is given,
     // NUL-terminated; `result` then owns the duplicate.
@@ -342,10 +342,10 @@ pub unsafe fn f_hostname(_argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `menu_get({path} [, {modes}])`
-pub unsafe fn f_menu_get(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_menu_get(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and `result` is the cleared return value.
     let list = list_alloc_ret(result, kListLenMayKnow as isize);
     // A non-String second argument is not an error: it just leaves the
@@ -367,8 +367,8 @@ pub unsafe fn f_menu_get(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 
 /// `mode([{expr}])` — one character, or the full mode string when `{expr}`
 /// is non-zero.
-pub unsafe fn f_mode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_mode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame is live; `get_mode` answers a NUL-padded name and
     // `result` then owns the duplicate.
     let mut buf = unsafe { get_mode() };
@@ -381,9 +381,9 @@ pub unsafe fn f_mode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 
 /// `state([{what}])` — the letters for whatever is currently in the way of
 /// a `:sleep`, filtered by `{what}` if it was given.
-pub unsafe fn f_state(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_state(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY (this body): the frame is live, and `result` adopts the buffer
     // at the end.
     let mut flags = Vec::<u8>::new();
@@ -433,8 +433,8 @@ pub unsafe fn f_state(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
 
 /// `nextnonblank({lnum})` — the first line at or after `{lnum}` that is not
 /// blank, or 0.
-pub unsafe fn f_nextnonblank(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_nextnonblank(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live and `curbuf` is live for the whole call; the
     // loop only reads lines it has range-checked.
     let mut lnum = arg_lnum(args.get(0));
@@ -453,8 +453,8 @@ pub unsafe fn f_nextnonblank(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 
 /// `prevnonblank({lnum})` — the last line at or before `{lnum}` that is not
 /// blank, or 0.
-pub unsafe fn f_prevnonblank(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_prevnonblank(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: as `f_nextnonblank`.
     let mut lnum = arg_lnum(args.get(0));
     if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
@@ -468,14 +468,14 @@ pub unsafe fn f_prevnonblank(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 }
 
 /// `pum_getpos()` — where the popup menu is, or an empty dict.
-pub unsafe fn f_pum_getpos(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_pum_getpos(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { tv_dict_alloc_ret(result) };
     unsafe { pum_set_event_info((*result).dict_or_null()) };
 }
 
 /// `pumvisible()`
-pub unsafe fn f_pumvisible(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_pumvisible(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `result` is the cleared return value.
     if pum_visible() {
         unsafe { (*result).vval.v_number = 1 };
@@ -485,8 +485,8 @@ pub unsafe fn f_pumvisible(_argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 /// `shiftwidth([{col}])` — the effective 'shiftwidth', which follows
 /// 'tabstop' when the option is zero and 'vartabstop' makes it depend on
 /// the column.
-pub unsafe fn f_shiftwidth(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_shiftwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live and `curbuf` is live for the call.
     if args.has(0) {
@@ -504,8 +504,8 @@ pub unsafe fn f_shiftwidth(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in
 /// window order.
-pub unsafe fn f_tabpagebuflist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_tabpagebuflist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; the window chain walked below belongs to a
     // tab page that is live for the whole call.
     let tab = if args.has(0) {
@@ -529,8 +529,8 @@ pub unsafe fn f_tabpagebuflist(argvars: *mut TypVal, result: *mut TypVal, _fptr:
 
 /// `visualmode([{expr}])` — the last Visual mode, cleared when `{expr}` is
 /// non-zero.
-pub unsafe fn f_visualmode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_visualmode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live, `curbuf` is live for the call, and `result`
     // owns the duplicate.
     let mode = [
@@ -545,7 +545,7 @@ pub unsafe fn f_visualmode(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `wildmenumode()`
-pub unsafe fn f_wildmenumode(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_wildmenumode(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY throughout: `result` is the cleared return value.
     if wild_menu_showing.get() != 0 || (State.get() & MODE_CMDLINE != 0 && cmdline_pum_active()) {
         unsafe { (*result).vval.v_number = 1 };
@@ -553,7 +553,7 @@ pub unsafe fn f_wildmenumode(_argvars: *mut TypVal, result: *mut TypVal, _fptr: 
 }
 
 /// `windowsversion()` — always empty here; kept for scripts that ask.
-pub unsafe fn f_windowsversion(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_windowsversion(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `windowsVersion` is a live NUL-terminated buffer and `result`
     // owns the duplicate.
     unsafe { (*result).v_type = VAR_STRING };
@@ -561,7 +561,7 @@ pub unsafe fn f_windowsversion(_argvars: *mut TypVal, result: *mut TypVal, _fptr
 }
 
 /// `wordcount()`
-pub unsafe fn f_wordcount(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_wordcount(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { tv_dict_alloc_ret(result) };
     unsafe { cursor_pos_info((*result).dict_or_null()) };

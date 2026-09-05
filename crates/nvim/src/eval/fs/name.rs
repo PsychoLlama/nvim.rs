@@ -631,11 +631,11 @@ pub unsafe fn modify_fname(
 /// `fnamemodify({fname}, {mods})`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2, and `result` a
+/// `args` is the evaluator's own argument vector, arity 2, and `result` a
 /// cleared result.
-pub unsafe fn f_fnamemodify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_fnamemodify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let mut buf = NumBuf::new();
     let (fname, mods) = (
         str_arg_chk(args, 0, &mut numbuf),

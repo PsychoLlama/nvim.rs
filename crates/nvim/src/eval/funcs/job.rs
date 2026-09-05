@@ -73,8 +73,8 @@ fn job_id(arg: &TypVal) -> Option<uint64_t> {
 }
 
 /// `jobpid({job})`
-pub unsafe fn f_jobpid(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_jobpid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
@@ -93,8 +93,8 @@ pub unsafe fn f_jobpid(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
-pub unsafe fn f_jobresize(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_jobresize(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
@@ -126,8 +126,8 @@ pub unsafe fn f_jobresize(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `jobstop({job})`
-pub unsafe fn f_jobstop(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_jobstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
@@ -156,8 +156,8 @@ pub unsafe fn f_jobstop(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
 }
 
 /// `jobwait({jobs} [, {timeout}])`
-pub unsafe fn f_jobwait(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_jobwait(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `jobs` is an allocation this body owns for
@@ -377,12 +377,12 @@ unsafe fn create_environment(
 }
 
 /// `jobstart({cmd} [, {opts}])`
-pub unsafe fn f_jobstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut cmdbuf = NumBuf::new();
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `argv` is released on every path that does

@@ -77,12 +77,12 @@ pub unsafe fn script_get(eap: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi
 
 /// Drive one `input()`-family prompt and leave its answer in `result`.
 ///
-/// Shared by `input()`, `inputsecret()` and `inputdialog()`.  `argvars` is
+/// Shared by `input()`, `inputsecret()` and `inputdialog()`.  `args` is
 /// either a single `{opts}` dict or up to three positional arguments, whose
 /// third means completion for `input()` and the cancel value for
 /// `inputdialog()`.
 pub unsafe fn get_user_input(
-    argvars: *const TypVal,
+    args: *const TypVal,
     result: *mut TypVal,
     inputdialog: bool,
     secret: bool,
@@ -112,12 +112,12 @@ pub unsafe fn get_user_input(
     // a distinct object from the `""` literal `defstr` starts as.
     let def: [::core::ffi::c_char; 1] = [0];
 
-    if unsafe { (*argvars.offset(0)).v_type } == VAR_DICT {
-        if unsafe { (*argvars.offset(1)).v_type } != VAR_UNKNOWN {
+    if unsafe { (*args.offset(0)).v_type } == VAR_DICT {
+        if unsafe { (*args.offset(1)).v_type } != VAR_UNKNOWN {
             emsg(gettext(c"E5050: {opts} must be the only argument"));
             return;
         }
-        let dict = unsafe { (*argvars.offset(0)).vval.v_dict };
+        let dict = unsafe { (*args.offset(0)).vval.v_dict };
         // C's `S_LEN(key)`: the key pointer and its length, spelled once.
         let dict_str = |key: &::core::ffi::CStr,
                         numbuf: *mut ::core::ffi::c_char,
@@ -175,19 +175,18 @@ pub unsafe fn get_user_input(
             return;
         }
     } else {
-        prompt = unsafe { tv_get_string_buf_chk(argvars.offset(0), prompt_buf.as_mut_ptr()) };
+        prompt = unsafe { tv_get_string_buf_chk(args.offset(0), prompt_buf.as_mut_ptr()) };
         if prompt.is_null() {
             return;
         }
-        if unsafe { (*argvars.offset(1)).v_type } != VAR_UNKNOWN {
-            defstr = unsafe { tv_get_string_buf_chk(argvars.offset(1), defstr_buf.as_mut_ptr()) };
+        if unsafe { (*args.offset(1)).v_type } != VAR_UNKNOWN {
+            defstr = unsafe { tv_get_string_buf_chk(args.offset(1), defstr_buf.as_mut_ptr()) };
             if defstr.is_null() {
                 return;
             }
-            if unsafe { (*argvars.offset(2)).v_type } != VAR_UNKNOWN {
-                let strarg2 = unsafe {
-                    tv_get_string_buf_chk(argvars.offset(2), cancelreturn_buf.as_mut_ptr())
-                };
+            if unsafe { (*args.offset(2)).v_type } != VAR_UNKNOWN {
+                let strarg2 =
+                    unsafe { tv_get_string_buf_chk(args.offset(2), cancelreturn_buf.as_mut_ptr()) };
                 if strarg2.is_null() {
                     return;
                 }

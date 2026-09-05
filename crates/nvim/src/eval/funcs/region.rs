@@ -352,8 +352,8 @@ unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
 /// per line.
-pub unsafe fn f_getregion(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
     let _swap = unsafe { BufferSwap::save() };
@@ -381,8 +381,8 @@ pub unsafe fn f_getregion(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 
 /// `getregionpos({pos1}, {pos2} [, {opts}])` — the selection as a pair of
 /// positions per line.
-pub unsafe fn f_getregionpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_getregionpos(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the arguments and `result` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
     let _swap = unsafe { BufferSwap::save() };

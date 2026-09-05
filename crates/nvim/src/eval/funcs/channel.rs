@@ -88,9 +88,9 @@ unsafe fn trailing_args(
 }
 
 /// `chanclose({id} [, {stream}])`
-pub unsafe fn f_chanclose(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_chanclose(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `error` is a borrowed static message.
@@ -133,8 +133,8 @@ pub unsafe fn f_chanclose(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eval
 }
 
 /// `chansend({id}, {data})`
-pub unsafe fn f_chansend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_chansend(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `input` is an allocation `channel_send`
@@ -179,9 +179,9 @@ pub unsafe fn f_chansend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalF
 }
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
-pub unsafe fn f_rpcnotify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcnotify(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
@@ -288,9 +288,9 @@ impl ProviderScope {
 }
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
-pub unsafe fn f_rpcrequest(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcrequest(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_NUMBER;
     result.vval.v_number = 0;
     // Read before `check_secure`, because that is when it still describes
@@ -371,8 +371,8 @@ pub unsafe fn f_rpcrequest(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
-pub unsafe fn f_serverlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_serverlist(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
     // and the strings in it are handed to the List one at a time.
     let mut n = 0usize;
@@ -437,9 +437,9 @@ pub unsafe fn f_serverlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `serverstart([{address}])`
-pub unsafe fn f_serverstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_serverstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
     result.vval.v_string = ptr::null_mut();
     // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
@@ -483,8 +483,8 @@ pub unsafe fn f_serverstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 }
 
 /// `serverstop({address})`
-pub unsafe fn f_serverstop(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_serverstop(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
     if check_secure() {
         return;
@@ -506,10 +506,10 @@ pub unsafe fn f_serverstop(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 }
 
 /// `sockconnect({mode}, {address} [, {opts}])`
-pub unsafe fn f_sockconnect(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_sockconnect(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
     if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
@@ -563,8 +563,8 @@ pub unsafe fn f_sockconnect(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
-pub unsafe fn f_stdioopen(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_stdioopen(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.
     if args.ty(0) != VAR_DICT {

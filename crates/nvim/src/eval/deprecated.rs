@@ -60,10 +60,10 @@ const CALLBACK_READER_INIT: CallbackReader = CallbackReader::none();
 /// — the second being `VAR_UNKNOWN` when the caller passed one argument.
 ///
 /// # Safety
-/// `argvars` must be a builtin's own argument vector.
+/// `args` must be a builtin's own argument vector.
 #[inline(always)]
-unsafe fn args<'a>(argvars: *mut TypVal) -> &'a mut [TypVal] {
-    unsafe { slice::from_raw_parts_mut(argvars, 2) }
+unsafe fn args<'a>(args: *mut TypVal) -> &'a mut [TypVal] {
+    unsafe { slice::from_raw_parts_mut(args, 2) }
 }
 
 /// The items of `list`, front to back.  A NULL list is an empty one.
@@ -233,7 +233,7 @@ pub unsafe fn f_rpcstop(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFun
 ///
 /// # Safety
 /// As the module doc; arity 0.
-pub unsafe fn f_last_buffer_nr(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_last_buffer_nr(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut n = 0;
     for buf in buffers() {
         n = n.max(buf.handle());

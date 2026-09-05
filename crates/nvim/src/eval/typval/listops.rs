@@ -290,22 +290,22 @@ pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> R
 /// `result`.
 ///
 /// # Safety
-/// `argvars` must point at at least three values, the first a `VAR_LIST`
+/// `args` must point at at least three values, the first a `VAR_LIST`
 /// and the third the `VAR_UNKNOWN` terminator when no range was given.
 /// `result` must be writable and hold no value yet, and `arg_errmsg` must be
 /// a NUL-terminated string.
 pub unsafe fn tv_list_remove(
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
-    let l = unsafe { (*argvars).list_or_null() };
+    let l = unsafe { (*args).list_or_null() };
     if unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
         return;
     }
 
     let mut error = false;
-    let idx = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
+    let idx = unsafe { tv_get_number_chk(args.add(1), &raw mut error) };
     if error {
         // Type error: do nothing, errmsg already given.
         return;
@@ -316,7 +316,7 @@ pub unsafe fn tv_list_remove(
         return;
     }
 
-    if unsafe { (*argvars.add(2)).v_type } == VAR_UNKNOWN {
+    if unsafe { (*args.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         unsafe { tv_list_drop_items(l, item, item) };
         unsafe { *result = (*item).li_tv };
@@ -325,7 +325,7 @@ pub unsafe fn tv_list_remove(
     }
 
     // Remove range of items, return list with values.
-    let end = unsafe { tv_get_number_chk(argvars.add(2), &raw mut error) };
+    let end = unsafe { tv_get_number_chk(args.add(2), &raw mut error) };
     if error {
         return;
     }

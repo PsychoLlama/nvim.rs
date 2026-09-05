@@ -38,8 +38,8 @@ const EMPTY_TV: TypVal = TypVal {
 
 /// `json_decode({expr})` — parse JSON from a String, or from a List of
 /// lines joined by NLs.
-pub unsafe fn f_json_decode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_json_decode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: `tofree` owns whatever the List conversion allocated and is
     // released on every path; `s` points into it or into `numbuf`, both of
     // which outlive the parse.
@@ -81,8 +81,8 @@ pub unsafe fn f_json_decode(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 }
 
 /// `json_encode({expr})`.
-pub unsafe fn f_json_encode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_json_encode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
     // SAFETY: the encoder reads the argument and returns an owned string,
     // which the return value takes over.
@@ -91,9 +91,9 @@ pub unsafe fn f_json_encode(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List
 /// of NL-joined lines, or as a Blob when `{type}` is "B".
-pub unsafe fn f_msgpackdump(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_msgpackdump(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the packer owns its buffer until `packer_take_string` hands
     // it over, and the string is then owned by the Blob or written into the
     // result List and freed.
@@ -240,8 +240,8 @@ unsafe fn msgpackparse_unpack_blob(blob: *const Blob, ret_list: *mut List) {
 }
 
 /// `msgpackparse({data})` — the objects in a List of strings or a Blob.
-pub unsafe fn f_msgpackparse(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_msgpackparse(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the argument and the freshly allocated result list are both
     // live for the call.
     if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {

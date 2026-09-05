@@ -99,8 +99,8 @@ impl Cell {
 
 /// `screenattr({row}, {col})` — the cell's highlight attribute, or -1 off
 /// the grid.
-pub unsafe fn f_screenattr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_screenattr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame is live; the attribute row is as long as the grid is
     // wide, which the bounds check has established.
     let cell = unsafe { Cell::at(args) };
@@ -114,8 +114,8 @@ pub unsafe fn f_screenattr(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
 /// the grid.
-pub unsafe fn f_screenchar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_screenchar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame is live.
     let cell = unsafe { Cell::at(args) };
     result.vval.v_number = if cell.on_grid() {
@@ -127,8 +127,8 @@ pub unsafe fn f_screenchar(argvars: *mut TypVal, result: *mut TypVal, _fptr: Eva
 
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
 /// combining ones `screenchar()` drops.
-pub unsafe fn f_screenchars(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_screenchars(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the frame is live and `result` is the cleared return value.
     let cell = unsafe { Cell::at(args) };
     let list = list_alloc_ret(result, kListLenMayKnow as isize);
@@ -149,20 +149,20 @@ pub unsafe fn f_screenchars(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 }
 
 /// `screencol()` — the cursor's screen column, one-based.
-pub unsafe fn f_screencol(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_screencol(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = (ui_current_col() + 1) as VarNumber };
 }
 
 /// `screenrow()` — the cursor's screen row, one-based.
-pub unsafe fn f_screenrow(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_screenrow(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `result` is the cleared return value.
     unsafe { (*result).vval.v_number = (ui_current_row() + 1) as VarNumber };
 }
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
-pub unsafe fn f_screenstring(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_screenstring(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.v_type = VAR_STRING;
     result.vval.v_string = ptr::null_mut();
     // SAFETY: the frame is live and `result` now owns the duplicated string.
@@ -173,18 +173,18 @@ pub unsafe fn f_screenstring(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 }
 
 /// `hlID({name})` — the highlight group's id, or 0.
-pub unsafe fn f_hl_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_hl_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
     result.vval.v_number =
         unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
 }
 
 /// `hlexists({name})` — whether the group is defined.
-pub unsafe fn f_hlexists(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_hlexists(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
     result.vval.v_number =
         unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
@@ -248,9 +248,9 @@ fn attr_selector(what: &[u8]) -> Option<Attr> {
 }
 
 /// `synIDattr({id}, {what} [, {mode}])`
-pub unsafe fn f_syn_id_attr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_syn_id_attr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     let mut color: HlColorText = [0; 20];
     // SAFETY throughout: the frame is live; `what` is the string an argument owns and
     // outlives the `highlight_color` call, and `modebuf` outlives the string
@@ -289,8 +289,8 @@ pub unsafe fn f_syn_id_attr(argvars: *mut TypVal, result: *mut TypVal, _fptr: Ev
 
 /// `synID({lnum}, {col}, {trans})` — the syntax id at a position, 0 off the
 /// buffer or when the `{trans}` argument does not coerce.
-pub unsafe fn f_syn_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_syn_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live, and `curbuf`/`curwin` are live for the
     // whole call.
     let lnum = arg_lnum(args.get(0));
@@ -312,8 +312,8 @@ pub unsafe fn f_syn_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
-pub unsafe fn f_syn_id_trans(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_syn_id_trans(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live.
     let id = arg_number(args.get(0)) as c_int;
     result.vval.v_number = if id > 0 {
@@ -324,8 +324,8 @@ pub unsafe fn f_syn_id_trans(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.
-pub unsafe fn f_synconcealed(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_synconcealed(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     let mut syntax_flags = SynFlags::NONE;
     let mut matchid = 0;
     let mut text = [0 as c_char; NUMBUFLEN];
@@ -377,8 +377,8 @@ pub unsafe fn f_synconcealed(argvars: *mut TypVal, result: *mut TypVal, _fptr: E
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,
 /// outermost first.
-pub unsafe fn f_synstack(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_synstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live; `curbuf`/`curwin` are live for the whole
     // call.
     // An out-of-range position answers an empty List, not a List of no

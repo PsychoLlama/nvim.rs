@@ -41,12 +41,12 @@ fn verbose_report(body: impl FnOnce()) {
 /// Call the user function `fp`.
 ///
 /// # Safety
-/// `fp` is a live function, `argvars` holds `argcount` values, and `result`
+/// `fp` is a live function, `args` holds `argcount` values, and `result`
 /// is an uninitialised return value.
 pub unsafe fn call_user_func(
     fp: *mut UserFunc,
     argcount: c_int,
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
     firstline: LineNr,
     lastline: LineNr,
@@ -230,7 +230,7 @@ pub unsafe fn call_user_func(
             def_rettv
         } else {
             // SAFETY: `i` is inside the caller's argument array.
-            unsafe { *argvars.offset(i as isize) }
+            unsafe { *args.offset(i as isize) }
         };
         unsafe { (*v).di_tv = value };
         unsafe { (*v).di_tv.v_lock = VarLock::Fixed };
@@ -253,7 +253,7 @@ pub unsafe fn call_user_func(
             // listitem storage.
             let li =
                 unsafe { (&raw mut (*fc).fc_l_listitems as *mut ListItem).offset(ai as isize) };
-            unsafe { (*li).li_tv = *argvars.offset(i as isize) };
+            unsafe { (*li).li_tv = *args.offset(i as isize) };
             unsafe { (*li).li_tv.v_lock = VarLock::Fixed };
             unsafe { tv_list_append(&raw mut (*fc).fc_l_varlist, li) };
         }
@@ -279,7 +279,7 @@ pub unsafe fn call_user_func(
                         unsafe { msg_puts(c", ".as_ptr()) };
                     }
                     // SAFETY: `i` is inside the caller's argument array.
-                    let tv = unsafe { Tv::new(argvars.offset(i as isize)) };
+                    let tv = unsafe { Tv::new(args.offset(i as isize)) };
                     if tv.v_type == VAR_NUMBER {
                         // SAFETY: the tag says the union holds a Number.
                         unsafe { msg_outnum(tv.number_or_zero() as c_int) };
@@ -471,7 +471,7 @@ pub unsafe fn call_user_func(
 pub(crate) unsafe fn call_user_func_check(
     fp: *mut UserFunc,
     argcount: c_int,
-    argvars: *mut TypVal,
+    args: *mut TypVal,
     result: *mut TypVal,
     funcexe: *mut FuncExe,
     selfdict: *mut Dict,
@@ -479,7 +479,7 @@ pub(crate) unsafe fn call_user_func_check(
     // SAFETY: the caller's promise -- `fp` is a live function.
     let f = unsafe { Uf::new(fp) };
     if f.uf_flags.has(FuncFlags::LUAREF) {
-        return unsafe { typval_exec_lua_callable(f.uf_luaref, argcount, argvars, result) };
+        return unsafe { typval_exec_lua_callable(f.uf_luaref, argcount, args, result) };
     }
 
     if f.uf_flags.has(FuncFlags::RANGE) && !unsafe { (*funcexe).fe_doesrange }.is_null() {
@@ -500,7 +500,7 @@ pub(crate) unsafe fn call_user_func_check(
     } else {
         ptr::null_mut()
     };
-    unsafe { call_user_func(fp, argcount, argvars, result, first, last, dict) };
+    unsafe { call_user_func(fp, argcount, args, result, first, last, dict) };
     FCERR_NONE
 }
 

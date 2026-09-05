@@ -404,10 +404,10 @@ impl Flags {
 /// written to the file, 0 on success and -1 on failure.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..3, and `result`
+/// `args` is the evaluator's own argument vector, arity 2..3, and `result`
 /// a cleared result.
-pub unsafe fn f_writefile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_writefile(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     result.vval.v_number = -1 as VarNumber;
     if secure() || !writable(args) {
         return;

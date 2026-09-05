@@ -123,15 +123,15 @@ unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
 }
 
 /// `max({expr})`.
-pub unsafe fn f_max(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_max(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the argument is the frame's.
     unsafe { max_min(args.ptr(0), result, true) }
 }
 
 /// `min({expr})`.
-pub unsafe fn f_min(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, result) = frame!(argvars, result);
+pub unsafe fn f_min(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(args, result);
     // SAFETY: the argument is the frame's.
     unsafe { max_min(args.ptr(0), result, false) }
 }
@@ -309,9 +309,9 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
 }
 
 /// `reduce({object}, {func} [, {initial}])`.
-pub unsafe fn f_reduce(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_reduce(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, result) = frame!(argvars, result);
+    let (args, result) = frame!(args, result);
     // SAFETY throughout: everything read below is the frame's.
     let ty = args.ty(0);
     if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {

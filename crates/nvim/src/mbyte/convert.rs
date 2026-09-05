@@ -196,22 +196,22 @@ unsafe fn iconv_string(
 }
 
 /// `iconv({string}, {from}, {to})`.
-pub unsafe fn f_iconv(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_iconv(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     unsafe { (*result).v_type = VAR_STRING };
     unsafe { (*result).vval.v_string = core::ptr::null_mut() };
 
-    let str = unsafe { numbuf.string(argvars) };
+    let str = unsafe { numbuf.string(args) };
     let mut buf1 = [0 as c_char; NUMBUFLEN];
     let from = unsafe {
         enc_canonize(enc_skip(
-            tv_get_string_buf(argvars.add(1), buf1.as_mut_ptr()).cast_mut(),
+            tv_get_string_buf(args.add(1), buf1.as_mut_ptr()).cast_mut(),
         ))
     };
     let mut buf2 = [0 as c_char; NUMBUFLEN];
     let to = unsafe {
         enc_canonize(enc_skip(
-            tv_get_string_buf(argvars.add(2), buf2.as_mut_ptr()).cast_mut(),
+            tv_get_string_buf(args.add(2), buf2.as_mut_ptr()).cast_mut(),
         ))
     };
 
