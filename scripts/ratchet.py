@@ -428,7 +428,10 @@ plus these whole-tree metrics, which are not per-file:
                         parameter), a qualifier does not: `old_buf` already
                         says what `buf` does not. `buf`/`bp` count only when
                         the parameter's *type* names a buffer object: `buf`
-                        for a byte buffer is idiomatic Rust and stays.
+                        for a byte buffer is idiomatic Rust and stays. `ptr`
+                        splits the same way and counts only when the type
+                        names something other than raw memory: `ptr` on a
+                        `*mut c_void` or a `*mut T` is what Rust calls it too.
                       curwin_raw      `curwin`/`curbuf`/`curtab` `.get()`
                         reads outside `winlayer`, which is the module whose
                         job it is to turn those globals into handles. The
@@ -919,8 +922,19 @@ RAW_WIN_BUF = re.compile(r"\*mut\s+(?:Window|Buffer|Tabpage)\b")
 # more than the bare abbreviation does. `:` is what makes it a *binding* and
 # not a mention, so `ptr.add` and `let buf = …` are not counted.
 ABBREV_PARAM = re.compile(
-    r"\b_?(?:wp|tp|eap|rettv|argvars|cap|oap|xp|fp|lp|sp|pp|cp|ptr)\s*:"
+    r"\b_?(?:wp|tp|eap|rettv|argvars|cap|oap|xp|fp|lp|sp|pp|cp)\s*:"
 )
+# `ptr` is the third spelling whose expansion depends on the type, and it
+# splits the way `buf` does: a pointer into a *thing* has a better name (the
+# line's `text`, the `name` being looked up, the `pattern` being matched),
+# and a pointer to raw memory does not -- `ptr` is what Rust itself calls the
+# argument of `dealloc`. So it counts only when the type names something
+# other than untyped memory.
+ABBREV_PTR_PARAM = re.compile(r"\b_?ptr\s*:([^,)]*)")
+# The raw-memory types, read the same way `BUFFER_TYPE` reads `buf`'s: the
+# void and byte pointers the allocator seams take, the address `alloc_log`
+# records, and a bare type parameter, which names nothing by construction.
+RAW_MEMORY_TYPE = re.compile(r"\b(?:c_void|u8|uint8_t|usize|T)\b")
 # `buf`/`bp` are the two abbreviations whose expansion depends on the type:
 # `buf` for a byte buffer is idiomatic Rust and stays, so only a parameter
 # whose type names a *buffer object* counts. The type is read up to the next
@@ -1775,6 +1789,11 @@ def vocabulary(tree):
                 bool(BUFFER_TYPE.search(type_))
                 for sig in spans
                 for type_ in ABBREV_BUF_PARAM.findall(sig)
+            )
+            abbrevs += sum(
+                not RAW_MEMORY_TYPE.search(type_)
+                for sig in spans
+                for type_ in ABBREV_PTR_PARAM.findall(sig)
             )
     integral = int_aliases(aliases)
     return {
@@ -2645,12 +2664,16 @@ SELF_TEST_VOCABULARY = [
         # `buf` counts on a buffer object and not on a byte buffer. Under
         # `api/` a method apigen dispatches is frozen and a helper beside it
         # is not, so `nvim_buf_line_count` is silent and `unpack` is not; the
-        # same name outside `api/` is ordinary code and counts.
+        # same name outside `api/` is ordinary code and counts. A `ptr` is
+        # counted on a `*mut c_char` and not on a `*mut c_void`, and the
+        # local `ptr` in `f` is still not a binding either way.
         {
             "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
             "    _eap: *mut ExArg,\n    old_buf: *mut Buffer,\n"
             "    buf: Option<Buf>,\n    _bp: &mut [u8],\n) {\n"
-            "    let ptr: *mut c_char = q;\n}\n",
+            "    let ptr: *mut c_char = q;\n}\n"
+            "fn d(ptr: *mut c_char, q: u8) {\n}\n"
+            "fn r(ptr: *mut c_void) {\n}\n",
             "crates/nvim/src/b.rs": "fn e(buf: &mut NumBuf, bp: *mut Buffer) {\n}\n",
             "crates/nvim/src/lua/b.rs": "fn g(buf: *mut Buffer) {\n}\n",
             "crates/nvim/src/vterm/c.rs": "fn h(cp: *mut c_char) {\n}\n",
@@ -2658,7 +2681,7 @@ SELF_TEST_VOCABULARY = [
             "fn unpack(buf: *mut Buffer) {\n}\n",
             "crates/nvim/src/eval/c.rs": "fn nvim_buf_line_count(buf: Buffer) {\n}\n",
         },
-        {"abbrev_params": 6},
+        {"abbrev_params": 7},
     ),
     (
         {
