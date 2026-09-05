@@ -23,8 +23,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, Window, int16_t, int64_t, regengine,
-    regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t,
+    Buffer, ColNr, LPos, LineNr, Magic, MarkGet, ProfTime, RegEngine, RegMMatch, RegMatch, Window,
+    int16_t, int64_t, size_t, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -77,8 +77,8 @@ pub const REGSUB_COPY: c_uint = 1;
 pub const kMarkBufLocal: MarkGet = 0;
 #[derive(Copy, Clone)]
 pub struct regexec_T {
-    pub reg_match: *mut regmatch_T,
-    pub reg_mmatch: *mut regmmatch_T,
+    pub reg_match: *mut RegMatch,
+    pub reg_mmatch: *mut RegMMatch,
     pub reg_startp: *mut *mut uint8_t,
     pub reg_endp: *mut *mut uint8_t,
     pub reg_startpos: *mut LPos,
@@ -106,15 +106,15 @@ pub struct regexec_T {
 }
 #[derive(Copy, Clone)]
 pub struct regsubmatch_T {
-    pub sm_match: *mut regmatch_T,
-    pub sm_mmatch: *mut regmmatch_T,
+    pub sm_match: *mut RegMatch,
+    pub sm_mmatch: *mut RegMMatch,
     pub sm_firstlnum: LineNr,
     pub sm_maxline: LineNr,
     pub sm_line_lbr: c_int,
 }
 #[repr(C)]
 pub struct bt_regprog_T {
-    pub engine: *mut regengine_T,
+    pub engine: *mut RegEngine,
     pub regflags: c_uint,
     pub re_engine: c_uint,
     pub re_flags: c_uint,
@@ -128,7 +128,7 @@ pub struct bt_regprog_T {
 }
 #[repr(C)]
 pub struct nfa_regprog_T {
-    pub engine: *mut regengine_T,
+    pub engine: *mut RegEngine,
     pub regflags: c_uint,
     pub re_engine: c_uint,
     pub re_flags: c_uint,
@@ -322,8 +322,8 @@ static prev_at_start: GlobalCell<c_int> = GlobalCell::new(0);
 static reg_tofree: GlobalCell<*mut uint8_t> = GlobalCell::new(core::ptr::null_mut::<uint8_t>());
 static reg_tofreelen: GlobalCell<c_uint> = GlobalCell::new(0);
 static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
-    reg_match: core::ptr::null_mut::<regmatch_T>(),
-    reg_mmatch: core::ptr::null_mut::<regmmatch_T>(),
+    reg_match: core::ptr::null_mut::<RegMatch>(),
+    reg_mmatch: core::ptr::null_mut::<RegMMatch>(),
     reg_startp: core::ptr::null_mut::<*mut uint8_t>(),
     reg_endp: core::ptr::null_mut::<*mut uint8_t>(),
     reg_startpos: core::ptr::null_mut::<LPos>(),
@@ -352,8 +352,8 @@ static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
 static rex_in_use: GlobalCell<bool> = GlobalCell::new(false);
 static can_f_submatch: GlobalCell<bool> = GlobalCell::new(false);
 static rsm: GlobalCell<regsubmatch_T> = GlobalCell::new(regsubmatch_T {
-    sm_match: core::ptr::null_mut::<regmatch_T>(),
-    sm_mmatch: core::ptr::null_mut::<regmmatch_T>(),
+    sm_match: core::ptr::null_mut::<RegMatch>(),
+    sm_mmatch: core::ptr::null_mut::<RegMMatch>(),
     sm_firstlnum: 0,
     sm_maxline: 0,
     sm_line_lbr: 0,
@@ -410,13 +410,13 @@ static nfa_time_limit: GlobalCell<*mut ProfTime> =
 static nfa_timed_out: GlobalCell<*mut c_int> = GlobalCell::new(core::ptr::null_mut::<c_int>());
 static nfa_time_count: GlobalCell<c_int> = GlobalCell::new(0);
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;
-static bt_regengine: regengine_T = regengine {
+static bt_regengine: RegEngine = RegEngine {
     regcomp: Some(bt_regcomp),
     regfree: Some(bt_regfree),
     regexec_nl: Some(bt_regexec_nl),
     regexec_multi: Some(bt_regexec_multi),
 };
-static nfa_regengine: regengine_T = regengine {
+static nfa_regengine: RegEngine = RegEngine {
     regcomp: Some(nfa_regcomp),
     regfree: Some(nfa_regfree),
     regexec_nl: Some(nfa_regexec_nl),

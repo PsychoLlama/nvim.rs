@@ -110,7 +110,7 @@ pub unsafe fn do_doautocmd(
 /// curbuf`.  An autocommand that deletes the buffer under us stops the
 /// sweep, which is what the `bufref` is for.
 pub unsafe fn ex_doautoall(eap: *mut ExArg) {
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     // SAFETY: a live command block, by the contract above, and
     // `check_nomodeline` only advances `arg` inside its own argument.
     let mut arg = unsafe { (*eap).arg };
@@ -270,7 +270,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
         // SAFETY: `v_event` is that dictionary.
         unsafe { tv_dict_set_keys_readonly(v_event) };
 
-        let mut aco = aco_save_T::default();
+        let mut aco = AcoSave::default();
         // SAFETY: `aco` is this frame's own, `buf` was just proved live, and
         // the `prepbuf`/`restbuf` pair brackets the firing.
         unsafe { aucmd_prepbuf(&raw mut aco, buf) };

@@ -216,7 +216,7 @@ pub unsafe fn ex_diffgetput(eap: *mut ExArg) {
 
     // `:diffput` writes into the *other* buffer, so the autocommand context
     // moves there for the copy.
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     let put = cmdidx != CmdIdx::diffget;
     if put {
         let other = tp.tp_diffbuf[idx_other as usize];

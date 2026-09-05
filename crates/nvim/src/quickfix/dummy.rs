@@ -84,7 +84,7 @@ pub(crate) unsafe fn load_dummy_buffer(
         // Make sure this buffer isn't wiped out by autocommands.
         unsafe { (*newbuf).b_locked += 1 };
         // Set curwin/curbuf to buf and save a few things.
-        let mut aco = aco_save_T::default();
+        let mut aco = AcoSave::default();
         unsafe { aucmd_prepbuf(&raw mut aco, newbuf) };
 
         // Need to set the filename for autocommands.

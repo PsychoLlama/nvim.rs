@@ -80,9 +80,9 @@ use crate::state::{
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     ApiDict, Arena, Array, ArrayBuilder, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand,
-    FILE, Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapCallback, MapRhs, MapStr, Object,
-    RemapValues, ScriptId, String_0, TypVal, VarNumber, fuzmatch_str_T, key_value_pair, mapblock_T,
-    optset_T, ptrdiff_t, regmatch_T, size_t, typval_vval_union, uint64_t,
+    FILE, Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs,
+    MapStr, Object, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber, fuzmatch_str_T,
+    key_value_pair, optset_T, ptrdiff_t, size_t, typval_vval_union, uint64_t,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};
@@ -123,7 +123,7 @@ pub const kRetObject: LuaRetMode = 0;
 /// is good until the walk unlinks something.  The two functions that *delete*
 /// while walking hold a [`Cursor`] instead — the address of an entry's own
 /// `m_next`, which [`Live`]'s `DerefMut` would invalidate.
-pub(crate) type Mb = Live<mapblock_T>;
+pub(crate) type Mb = Live<MapBlock>;
 
 /// The `:map` arguments being parsed, and the owner of everything a parse
 /// allocates.

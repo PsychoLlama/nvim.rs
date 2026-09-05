@@ -86,7 +86,7 @@ mod header {
     pub(super) const O_EXCL: c_int = 0o200;
     pub(super) const O_NOFOLLOW: c_int = 0o400000;
 
-    /// The `u_header_T::uh_flags` bits.
+    /// The `UndoHeader::uh_flags` bits.
     pub(super) const UH_CHANGED: c_int = 1;
     pub(super) const UH_EMPTYBUF: c_int = 2;
     pub(super) const UH_RELOAD: c_int = 4;
@@ -273,7 +273,7 @@ fn get_undolevel(buf: Buf) -> OptInt {
 ///
 /// `fmarks` points at [`NMARKS`] live marks.
 #[inline]
-unsafe fn zero_fmark_additional_data(fmarks: &mut [fmark_T; NMARKS as usize]) {
+unsafe fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
     for mark in fmarks {
         // SAFETY: this module's own allocation, dropped exactly once.
         unsafe { xfree(mark.additional_data.cast()) };
@@ -360,9 +360,9 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
         b.b_u_seq_last = b.b_u_seq_last.max(0) + 1;
         // SAFETY: a fresh allocation, written before anything reads it, and
         // handed straight to the store that owns it from here on.
-        let uhp: *mut u_header_T = unsafe { xmalloc(size_of::<u_header_T>()) }.cast();
+        let uhp: *mut UndoHeader = unsafe { xmalloc(size_of::<UndoHeader>()) }.cast();
         unsafe {
-            uhp.write(u_header_T {
+            uhp.write(UndoHeader {
                 uh_seq: b.b_u_seq_last,
                 ..Default::default()
             })
@@ -467,7 +467,7 @@ unsafe fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr
     let Some(mut newhead) = b.header(b.b_u_newhead) else {
         return false;
     };
-    let mut prev_uep: *mut u_entry_T = ptr::null_mut();
+    let mut prev_uep: *mut UndoEntry = ptr::null_mut();
     // SAFETY: every entry here belongs to the newest header's list, which
     // this walks one node at a time and does not free.
     for i in 0..10 {
@@ -521,7 +521,7 @@ unsafe fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr
 unsafe fn set_entry_bottom(
     b: Buf,
     newhead: &mut Header,
-    uep: *mut u_entry_T,
+    uep: *mut UndoEntry,
     bot: LineNr,
     newbot: LineNr,
 ) {
@@ -557,9 +557,9 @@ unsafe fn record_entry(
         .header(b.b_u_newhead)
         .expect("the newest header is the one this change is recorded against");
     // SAFETY: a fresh allocation, written before anything reads it.
-    let uep: *mut u_entry_T = unsafe {
-        let uep: *mut u_entry_T = xmalloc(size_of::<u_entry_T>()).cast();
-        uep.write(u_entry_T {
+    let uep: *mut UndoEntry = unsafe {
+        let uep: *mut UndoEntry = xmalloc(size_of::<UndoEntry>()).cast();
+        uep.write(UndoEntry {
             ue_size: size,
             ue_top: top,
             ..Default::default()
@@ -689,7 +689,7 @@ pub fn u_find_first_changed() {
     let Some(mut uhp) = b.header(b.b_u_newhead).filter(|_| b.b_u_curhead.is_none()) else {
         return;
     };
-    let uep: *mut u_entry_T = uhp.uh_entry;
+    let uep: *mut UndoEntry = uhp.uh_entry;
     // SAFETY: the newest header's own entry list, and its saved lines.
     if unsafe { (*uep).ue_top } != 0 || unsafe { (*uep).ue_bot } != 0 {
         // Not a whole-buffer entry: there is nothing to line up against.

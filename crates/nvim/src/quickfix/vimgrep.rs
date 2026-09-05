@@ -103,7 +103,7 @@ struct Search {
     flags: c_int,
     /// How many more matches to record before stopping.
     tomatch: c_int,
-    regmatch: regmmatch_T,
+    regmatch: RegMMatch,
     /// The title the list gets, which outlives the command line.
     qf_title: Name,
 }
@@ -134,7 +134,7 @@ impl Search {
             } else {
                 MAXLNUM as c_int
             },
-            regmatch: regmmatch_T::default(),
+            regmatch: RegMMatch::default(),
             qf_title: unsafe { Name::from_ptr(qf_cmdtitle(*eap.cmdlinep).as_ptr()) },
         };
 
@@ -168,7 +168,7 @@ impl Search {
 /// # Safety
 ///
 /// `spat` must be null or NUL-terminated.
-unsafe fn compile_pattern(spat: *mut c_char) -> *mut regprog_T {
+unsafe fn compile_pattern(spat: *mut c_char) -> *mut RegProg {
     // SAFETY: forwarded from the caller.
     if !spat.is_null() && unsafe { *spat } as c_int != NUL {
         return unsafe { vim_regcomp(spat, RE_MAGIC) };
@@ -563,7 +563,7 @@ unsafe fn keep_or_drop_dummy(
 
     // The Filetype autocommands and the modelines need to run now, in
     // that buffer — but not the window-local options.
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     let raw = buf.raw();
     // SAFETY: a live buffer, entered and left again around the events.
     unsafe { aucmd_prepbuf(&raw mut aco, raw) };

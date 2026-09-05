@@ -24,7 +24,7 @@ use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::types::{
-    Buffer, ColNr, LineNr, OptInt, ProfTime, Window, regmatch_T, regmmatch_T, regprog_T, uint8_t,
+    Buffer, ColNr, LineNr, OptInt, ProfTime, RegMMatch, RegMatch, RegProg, Window, uint8_t,
 };
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
@@ -51,7 +51,7 @@ pub(crate) fn with_rex<R>(run: impl FnOnce() -> R) -> R {
 ///
 /// # Safety
 /// `expr_arg` must be a NUL-terminated pattern, borrowed for the call only.
-pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regprog_T {
+pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut RegProg {
     // SAFETY: `expr_arg` is the caller's NUL-terminated pattern, and the
     // engine table's entries are set at compile time.
     let mut expr = expr_arg;
@@ -120,9 +120,9 @@ pub unsafe fn vim_regcomp(expr_arg: *const c_char, re_flags: c_int) -> *mut regp
 /// # Safety
 /// `prog` must be null, or a program from [`vim_regcomp`] that has not been
 /// freed and that nothing still points at — a match may have *replaced* the
-/// program in its [`regmatch_T`], so free what the match left behind rather
+/// program in its [`RegMatch`], so free what the match left behind rather
 /// than what was put in.
-pub unsafe fn vim_regfree(prog: *mut regprog_T) {
+pub unsafe fn vim_regfree(prog: *mut RegProg) {
     // SAFETY: `prog` is null or a program one of the engines produced.
     if !prog.is_null() {
         unsafe {
@@ -136,7 +136,7 @@ pub unsafe fn vim_regfree(prog: *mut regprog_T) {
 /// Recompile the NFA program `prog` for the backtracking engine, which is
 /// what a `NFA_TOO_EXPENSIVE` result asks for. The pattern text is copied
 /// out first because compiling frees the program that holds it.
-unsafe fn recompile_backtracking(prog: *mut regprog_T, extmatch: bool) -> *mut regprog_T {
+unsafe fn recompile_backtracking(prog: *mut RegProg, extmatch: bool) -> *mut RegProg {
     // SAFETY: `prog` is a live NFA program, so it carries a pattern.
     let re_flags = unsafe { (*prog).re_flags } as c_int;
     let pat = unsafe { xstrdup((*(prog as *mut nfa_regprog_T)).pattern) };
@@ -165,7 +165,7 @@ unsafe fn recompile_backtracking(prog: *mut regprog_T, extmatch: bool) -> *mut r
 /// Run `rmp`'s program over the single line `line`, starting at `col`.
 /// `nl` allows a `$` to match at the end of the string.
 unsafe fn vim_regexec_string(
-    rmp: *mut regmatch_T,
+    rmp: *mut RegMatch,
     line: *const c_char,
     col: ColNr,
     nl: bool,
@@ -186,7 +186,7 @@ unsafe fn vim_regexec_string(
         rex.set_reg_endp(core::ptr::null_mut());
         rex.set_reg_startpos(core::ptr::null_mut());
         rex.set_reg_endpos(core::ptr::null_mut());
-        let exec = |rmp: *mut regmatch_T| unsafe {
+        let exec = |rmp: *mut RegMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_nl
                 .expect("non-null function pointer")(rmp, line as *mut uint8_t, col, nl)
@@ -213,13 +213,13 @@ unsafe fn vim_regexec_string(
 /// [`vim_regexec`] against a program the caller owns by pointer, so that
 /// the fall back to the backtracking engine can replace it.
 pub unsafe fn vim_regexec_prog(
-    prog: *mut *mut regprog_T,
+    prog: *mut *mut RegProg,
     ignore_case: bool,
     line: *const c_char,
     col: ColNr,
 ) -> bool {
     // SAFETY: `prog` points at the caller's program handle.
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: unsafe { *prog },
         startp: [core::ptr::null_mut(); 10],
         endp: [core::ptr::null_mut(); 10],
@@ -241,13 +241,13 @@ pub unsafe fn vim_regexec_prog(
 /// NUL-terminated, and `col` must be within it. This re-enters the editor —
 /// a `\=` expression can start a match of its own — so nothing may be held
 /// across it.
-pub unsafe fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: ColNr) -> bool {
+pub unsafe fn vim_regexec(rmp: *mut RegMatch, line: *const c_char, col: ColNr) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, false) }
 }
 
 /// [`vim_regexec`] with `$` allowed to match at the end of the string.
-pub unsafe fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const c_char, col: ColNr) -> bool {
+pub unsafe fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: ColNr) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, true) }
 }
@@ -256,7 +256,7 @@ pub unsafe fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const c_char, col: Col
 /// Returns the number of lines the match spans plus one, or 0 for no
 /// match; `tm`/`timed_out` bound how long the NFA engine may spend.
 pub unsafe fn vim_regexec_multi(
-    rmp: *mut regmmatch_T,
+    rmp: *mut RegMMatch,
     win: *mut Window,
     buf: *mut Buffer,
     lnum: LineNr,
@@ -272,7 +272,7 @@ pub unsafe fn vim_regexec_multi(
     }
     let result = with_rex(|| {
         unsafe { (*(*rmp).regprog).re_in_use = true };
-        let exec = |rmp: *mut regmmatch_T| unsafe {
+        let exec = |rmp: *mut RegMMatch| unsafe {
             (*(*(*rmp).regprog).engine)
                 .regexec_multi
                 .expect("non-null function pointer")(

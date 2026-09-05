@@ -113,7 +113,7 @@ pub(crate) unsafe fn is_regex_match(pat: *mut c_char, str: *mut c_char) -> bool 
         return true;
     }
 
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],

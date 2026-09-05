@@ -87,7 +87,7 @@ const DT_LAST: c_uint = 6;
 
 /// The view the tag stack starts a jump from: no remembered scroll
 /// position.
-const NO_VIEW: fmarkv_T = fmarkv_T {
+const NO_VIEW: FileMarkView = FileMarkView {
     topline_offset: MAXLNUM as LineNr,
     skipcol: 0,
 };
@@ -168,7 +168,7 @@ struct DoTag {
     skip_msg: bool,
 
     /// Where the cursor was, put back when a `:tselect` is cancelled.
-    saved_fmark: fmark_T,
+    saved_fmark: FileMark,
     /// The buffer name matches are prioritised against.
     buf_ffname: *mut c_char,
     /// A copy of the stack entry's tag name: `'tagfunc'` may free the
@@ -220,7 +220,7 @@ impl DoTag {
             use_tagstack: false,
             save_pos: false,
             skip_msg: false,
-            saved_fmark: fmark_T {
+            saved_fmark: FileMark {
                 mark: Pos::default(),
                 fnum: 0,
                 timestamp: 0,

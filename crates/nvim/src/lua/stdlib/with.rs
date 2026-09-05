@@ -23,7 +23,7 @@ use crate::lua::ffi::{
 };
 use crate::main::g_min_log_level;
 use crate::types::{
-    Buffer, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, Window, aco_save_T,
+    AcoSave, Buffer, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, Window,
     lua_State,
 };
 use crate::window::win_find_tabpage;
@@ -126,7 +126,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_in
         let mut tstate = TRY_STATE_INIT;
         try_enter(&raw mut tstate);
         {
-            let mut aco = aco_save_T::default();
+            let mut aco = AcoSave::default();
             let mut win_execute_args = WIN_EXECUTE_INIT;
 
             // A window that cannot be entered leaves everything below

@@ -90,9 +90,9 @@ use crate::syntax::{
 use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    Buffer, ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Frame, Handle, Hlf,
-    Integer, LineNr, MatchState, OptInt, Pos, ProfTime, ScreenChar, VarNumber, VirtText,
-    VirtTextChunk, Window, WindowHandle, foldinfo_T, int64_t, regmmatch_T, regprog_T, size_t,
+    Buffer, ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, FoldInfo, Frame,
+    Handle, Hlf, Integer, LineNr, MatchState, OptInt, Pos, ProfTime, RegMMatch, RegProg,
+    ScreenChar, VarNumber, VirtText, VirtTextChunk, Window, WindowHandle, int64_t, size_t,
     spellvars_T, uint16_t,
 };
 use crate::ui::{
@@ -587,19 +587,19 @@ impl SearchHl {
     }
 
     /// The multi-line regmatch, for `last_pat_prog` to compile into.
-    pub(crate) fn regmatch(self) -> *mut regmmatch_T {
+    pub(crate) fn regmatch(self) -> *mut RegMMatch {
         // SAFETY: the only constructor names a `static`; no dereference here.
         unsafe { &raw mut (*self.0).rm }
     }
 
     /// The compiled `'hlsearch'` pattern, NULL when there is none.
-    pub(crate) fn regprog(self) -> *mut regprog_T {
+    pub(crate) fn regprog(self) -> *mut RegProg {
         // SAFETY: the only constructor names a `static`.
         unsafe { (*self.0).rm.regprog }
     }
 
     /// Install (or, with NULL, forget) the compiled pattern.
-    pub(crate) fn set_regprog(self, prog: *mut regprog_T) {
+    pub(crate) fn set_regprog(self, prog: *mut RegProg) {
         // SAFETY: as `regprog`.
         unsafe { (*self.0).rm.regprog = prog };
     }
@@ -794,7 +794,7 @@ pub unsafe fn win_cursorline_standout(wp: *const Window) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
-pub unsafe fn win_update_cursorline(wp: *mut Window, foldinfo: *mut foldinfo_T) {
+pub unsafe fn win_update_cursorline(wp: *mut Window, foldinfo: *mut FoldInfo) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
     let mut wp = unsafe { Win::new(wp) };
     unsafe {

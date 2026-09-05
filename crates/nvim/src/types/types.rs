@@ -63,7 +63,6 @@ pub type Terminal = terminal;
 pub type Float = ::core::ffi::c_double;
 pub type Handle = ::core::ffi::c_int;
 pub type ProfTime = uint64_t;
-pub type regprog_T = regprog;
 pub type ScreenAttr = int32_t;
 pub type ScreenChar = uint32_t;
 pub type synstate_T = syn_state;

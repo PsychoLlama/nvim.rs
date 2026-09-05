@@ -40,7 +40,7 @@ use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
 use crate::semsg;
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, Window, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
+    Buffer, ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,
 };
 use ::libc::strcpy;
 
@@ -140,9 +140,9 @@ pub(crate) fn reg_getline_len(rex: Rex, lnum: LineNr) -> ColNr {
 
 /// A fresh `\z1`..`\z9` capture set, refcounted because a syntax item
 /// hands it to a highlighter that outlives the match.
-pub(crate) fn make_extmatch() -> *mut reg_extmatch_T {
+pub(crate) fn make_extmatch() -> *mut RegExtMatch {
     // SAFETY: xcalloc returns a zeroed allocation of the requested size.
-    let em = unsafe { xcalloc(1, size_of::<reg_extmatch_T>()) } as *mut reg_extmatch_T;
+    let em = unsafe { xcalloc(1, size_of::<RegExtMatch>()) } as *mut RegExtMatch;
     unsafe { (*em).refcnt = 1 };
     em
 }
@@ -152,7 +152,7 @@ pub(crate) fn make_extmatch() -> *mut reg_extmatch_T {
 /// # Safety
 ///
 /// `em` must be null or a live [`make_extmatch`] allocation.
-pub unsafe fn ref_extmatch(em: *mut reg_extmatch_T) -> *mut reg_extmatch_T {
+pub unsafe fn ref_extmatch(em: *mut RegExtMatch) -> *mut RegExtMatch {
     if !em.is_null() {
         unsafe { (*em).refcnt += 1 };
     }
@@ -164,7 +164,7 @@ pub unsafe fn ref_extmatch(em: *mut reg_extmatch_T) -> *mut reg_extmatch_T {
 /// # Safety
 ///
 /// `em` must be null or a live [`make_extmatch`] allocation.
-pub unsafe fn unref_extmatch(em: *mut reg_extmatch_T) {
+pub unsafe fn unref_extmatch(em: *mut RegExtMatch) {
     if em.is_null() {
         return;
     }
@@ -469,9 +469,9 @@ pub(crate) fn re_mult_next(what: &str) -> bool {
 /// text holds newlines to be matched rather than ends of line.
 ///
 /// `rmp` must be live, with a compiled program, for the match's duration.
-pub(crate) fn init_regexec(rex: Rex, rmp: *mut regmatch_T, line_lbr: bool) {
+pub(crate) fn init_regexec(rex: Rex, rmp: *mut RegMatch, line_lbr: bool) {
     rex.set_reg_match(rmp);
-    rex.set_reg_mmatch(core::ptr::null_mut::<regmmatch_T>());
+    rex.set_reg_mmatch(core::ptr::null_mut::<RegMMatch>());
     rex.set_reg_maxline(0);
     rex.set_reg_line_lbr(line_lbr);
     // A string match has no buffer of its own, but `\k` and friends still
@@ -491,12 +491,12 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut regmatch_T, line_lbr: bool) {
 /// and `buf` must be the buffer it runs over.
 pub(crate) fn init_regexec_multi(
     rex: Rex,
-    rmp: *mut regmmatch_T,
+    rmp: *mut RegMMatch,
     win: *mut Window,
     buf: *mut Buffer,
     lnum: LineNr,
 ) {
-    rex.set_reg_match(core::ptr::null_mut::<regmatch_T>());
+    rex.set_reg_match(core::ptr::null_mut::<RegMatch>());
     rex.set_reg_mmatch(rmp);
     rex.set_reg_buf(buf);
     rex.set_reg_win(win);

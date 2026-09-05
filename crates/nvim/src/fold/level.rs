@@ -69,7 +69,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot
         bot += diff_context.get();
     }
     top = top.min(win.buffer().b_ml.ml_line_count);
-    let mut fline = fline_T {
+    let mut fline = FoldLine {
         wp: win.raw(),
         lnum: 0,
         off: 0,

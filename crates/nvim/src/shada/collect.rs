@@ -286,7 +286,7 @@ pub(crate) unsafe fn shada_init_jumps(
     setpcmark();
     unsafe { cleanup_jumplist(curwin.get(), false) };
     loop {
-        let mut fm: xfmark_T = unsafe { core::mem::zeroed() };
+        let mut fm: XFileMark = unsafe { core::mem::zeroed() };
         jump_iter = unsafe { mark_jumplist_iter(jump_iter, curwin.get(), &raw mut fm) };
 
         if let Some(fname) = unsafe { jump_target(&fm, jump_iter, removable_bufs) } {
@@ -313,7 +313,7 @@ pub(crate) unsafe fn shada_init_jumps(
 /// remembering: no line number, a buffer whose marks are ignored, a buffer
 /// number that names no buffer, or no file name at all.
 unsafe fn jump_target(
-    fm: &xfmark_T,
+    fm: &XFileMark,
     jump_iter: *const c_void,
     removable_bufs: &RemovableBufs,
 ) -> Option<*const c_char> {

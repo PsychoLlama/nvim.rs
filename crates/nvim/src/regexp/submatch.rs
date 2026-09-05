@@ -13,8 +13,8 @@
 use core::ffi::{c_char, c_int};
 
 use super::{
-    LineOrigin, Rex, can_f_submatch, reg_line, reg_line_len, regmatch_T, regmmatch_T,
-    regsubmatch_T, rsm,
+    LineOrigin, RegMMatch, RegMatch, Rex, can_f_submatch, reg_line, reg_line_len, regsubmatch_T,
+    rsm,
 };
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_string, tv_list_first, tv_list_init_static10, tv_list_ref,
@@ -52,7 +52,7 @@ impl Rsm {
 
     /// The string match the snapshot is about, or null for a buffer match.
     #[inline(always)]
-    pub(crate) fn match_(self) -> *mut regmatch_T {
+    pub(crate) fn match_(self) -> *mut RegMatch {
         // SAFETY: the handle is a claim that the snapshot is live.
         unsafe { (*self.0).sm_match }
     }
@@ -60,7 +60,7 @@ impl Rsm {
     /// The buffer match it is about — meaningful only when [`Rsm::match_`]
     /// is null.
     #[inline(always)]
-    pub(crate) fn mmatch(self) -> *mut regmmatch_T {
+    pub(crate) fn mmatch(self) -> *mut RegMMatch {
         // SAFETY: as `match_`.
         unsafe { (*self.0).sm_mmatch }
     }

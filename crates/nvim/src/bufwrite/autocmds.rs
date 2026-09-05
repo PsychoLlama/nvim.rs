@@ -114,7 +114,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     let buf_fname_s = names.fname == unsafe { (*buf).b_sfname };
 
     // Set curwin/curbuf to buf and save a few things.
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, buf) };
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
 
@@ -278,7 +278,7 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     // In case it was set by the previous read.
     cur_buf().b_no_eol_lnum = 0;
 
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, buf) };
 
     let event = if mode.req.append {

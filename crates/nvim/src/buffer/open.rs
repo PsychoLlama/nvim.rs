@@ -43,8 +43,8 @@ use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag,
-    String_0, StringBuilder, VarNumber, aco_save_T, int64_t, size_t,
+    AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags,
+    ShmFlag, String_0, StringBuilder, VarNumber, int64_t, size_t,
 };
 use crate::winlayer::buffers;
 
@@ -166,7 +166,7 @@ fn line_bytes<'a>(buf: Buf, lnum: LineNr) -> &'a [u8] {
 /// restore, and a panic already abandons the editor state upstream's `longjmp`
 /// would have unwound.
 fn in_buffer<R>(buf: Buf, f: impl FnOnce() -> R) -> R {
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     // SAFETY: a local to save into, and a live buffer.
     unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
     let answer = f();

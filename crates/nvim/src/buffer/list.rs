@@ -51,8 +51,8 @@ use crate::registry::id_map;
 use crate::semsg;
 use crate::syntax::init_synblock;
 use crate::types::{
-    AdditionalData, Buffer, Callback, ColNr, Failed, FileID, Handle, LineNr, OptInt, Pos,
-    Timestamp, VAR_SCOPE, fmark_T, fmarkv_T, int16_t, memline_T, regprog_T, size_t, uint64_t,
+    AdditionalData, Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle,
+    LineNr, OptInt, Pos, RegProg, Timestamp, VAR_SCOPE, int16_t, memline_T, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -62,7 +62,7 @@ use super::expand::{NO_REGMATCH, buflist_match, find_buf};
 use super::pos::{Entry, WinInfos};
 
 /// `INIT_FMARK`: a mark that has never been set.
-pub(crate) const INIT_FMARK: fmark_T = fmark_T {
+pub(crate) const INIT_FMARK: FileMark = FileMark {
     mark: Pos {
         lnum: 0 as LineNr,
         col: 0 as ColNr,
@@ -70,7 +70,7 @@ pub(crate) const INIT_FMARK: fmark_T = fmark_T {
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
-    view: fmarkv_T {
+    view: FileMarkView {
         topline_offset: MAXLNUM as LineNr,
         skipcol: 0 as ColNr,
     },
@@ -137,13 +137,13 @@ fn clear_cpt(callbacks: &mut *mut Callback, count: c_int) {
     unsafe { clear_cpt_callbacks(callbacks, count) };
 }
 
-fn free_regprog(prog: &mut *mut regprog_T) {
+fn free_regprog(prog: &mut *mut RegProg) {
     // SAFETY: a compiled program or null.
     unsafe { vim_regfree(*prog) };
     *prog = ptr::null_mut();
 }
 
-fn regcomp(pat: &[u8], flags: c_int) -> *mut regprog_T {
+fn regcomp(pat: &[u8], flags: c_int) -> *mut RegProg {
     // SAFETY: a NUL-terminated pattern; the answer is null on a bad one.
     unsafe { vim_regcomp(pat.as_ptr().cast::<c_char>(), flags) }
 }
@@ -623,7 +623,7 @@ pub unsafe fn buflist_getfile(
     }
 
     let mut col: ColNr = 0;
-    let mut fm: *mut fmark_T = ptr::null_mut();
+    let mut fm: *mut FileMark = ptr::null_mut();
     let mut restore_view = false;
     if lnum == 0 as LineNr {
         // Default line number: where the cursor was left last time.

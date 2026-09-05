@@ -272,7 +272,7 @@ unsafe fn statuscol_state(
 ) -> (c_int, c_int) {
     let lnum = lnum as LineNr;
     let (mut line_id, mut cul_id, mut num_id) = (0, 0, 0);
-    let mut cursorline_fi = foldinfo_T::default();
+    let mut cursorline_fi = FoldInfo::default();
     let (wp, buf, signs) = (win.raw(), win.buffer().raw(), sattrs.as_mut_ptr());
     let ids = (&raw mut line_id, &raw mut cul_id, &raw mut num_id);
     // SAFETY: the caller's promise; the three ids `ids` names and the sign

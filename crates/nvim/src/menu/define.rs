@@ -23,7 +23,7 @@ use crate::charset::getdigits_int;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_G, Ctrl_O, replace_termcodes};
 use crate::main::{p_cpo, sys_menu};
 use crate::memory::xcalloc;
-use crate::types::{ExArg, vimmenu_T};
+use crate::types::{ExArg, VimMenu};
 use crate::ui::ui_call_update_menu;
 
 /// The default priority: what an unnumbered component gets, and what a
@@ -315,12 +315,12 @@ fn take_digits(p: &mut CText) -> c_int {
     digits
 }
 
-/// A fresh zeroed node, as C's `xcalloc(1, sizeof(vimmenu_T))` gives it.
+/// A fresh zeroed node, as C's `xcalloc(1, sizeof(VimMenu))` gives it.
 /// The caller fills `name` and `dname` before the node is linked in, which
 /// is what completes [`Menu`]'s invariant.
 fn alloc_node() -> Menu {
     // SAFETY: `xcalloc` never answers null and zeroes the whole struct.
-    unsafe { Menu::new(xcalloc(1, size_of::<vimmenu_T>()) as *mut vimmenu_T) }
+    unsafe { Menu::new(xcalloc(1, size_of::<VimMenu>()) as *mut VimMenu) }
 }
 
 /// Store `rhs` for every mode in `modes`, freeing whatever was there.

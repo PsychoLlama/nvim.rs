@@ -367,7 +367,7 @@ impl Writing {
         let mut digit_mark_idx = 0;
         loop {
             let mut name: c_char = NUL as c_char;
-            let mut fm: xfmark_T = unsafe { core::mem::zeroed() };
+            let mut fm: XFileMark = unsafe { core::mem::zeroed() };
             mark_iter = unsafe { mark_global_iter(mark_iter, &raw mut name, &raw mut fm) };
             if name as c_int == NUL {
                 return;
@@ -402,7 +402,7 @@ impl Writing {
 
     /// The file name to record a global mark against, or `None` when the
     /// mark is not worth keeping.
-    unsafe fn mark_fname(&mut self, fm: &xfmark_T) -> Option<*const c_char> {
+    unsafe fn mark_fname(&mut self, fm: &XFileMark) -> Option<*const c_char> {
         if fm.fmark.fnum == 0 {
             debug_assert!(!fm.fname.is_null(), "shada: a mark with no buffer or file");
             return (!unsafe { shada_removable(fm.fname) }).then_some(fm.fname);
@@ -436,7 +436,7 @@ impl Writing {
 
         let mut mark_iter: *const c_void = core::ptr::null();
         loop {
-            let mut fm: fmark_T = unsafe { core::mem::zeroed() };
+            let mut fm: FileMark = unsafe { core::mem::zeroed() };
             let mut name: c_char = NUL as c_char;
             mark_iter = unsafe { mark_buffer_iter(mark_iter, buf, &raw mut name, &raw mut fm) };
             if name as c_int == NUL {

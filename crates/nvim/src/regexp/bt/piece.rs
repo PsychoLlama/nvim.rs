@@ -34,7 +34,7 @@ use crate::regexp::{
     skipchr_keepstart, unmagic,
 };
 use crate::semsg;
-use crate::types::{NUL, int64_t, regprog_T, uint8_t, uint32_t};
+use crate::types::{NUL, RegProg, int64_t, uint8_t, uint32_t};
 
 const M_AMP: c_int = magic(b'&');
 const M_AT: c_int = magic(b'@');
@@ -420,7 +420,7 @@ fn had_endbrace_seen(parno: c_int) {
 /// # Safety
 ///
 /// `expr` must be a NUL-terminated pattern.
-pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
+pub(crate) unsafe fn bt_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut RegProg {
     if expr.is_null() {
         iemsg(gettext(e_null));
         rc_did_emsg.set(true);
@@ -575,7 +575,7 @@ pub(crate) fn coll_get_char() -> c_int {
 /// # Safety
 ///
 /// `prog` must be a program this module compiled, or null.
-pub(crate) unsafe fn bt_regfree(prog: *mut regprog_T) {
+pub(crate) unsafe fn bt_regfree(prog: *mut RegProg) {
     // SAFETY: one `xmalloc` block, with nothing owned inside it.
     unsafe { xfree(prog.cast()) };
 }

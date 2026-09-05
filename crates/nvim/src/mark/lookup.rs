@@ -42,23 +42,23 @@ use crate::search::{BACKWARD, FORWARD};
 /// next edit will move. Either way the answer is `fmp` and outlives the call
 /// exactly as long as the caller's slot does.
 ///
-/// Start the slot at [`fmark_T::UNSET`]: the fields a motion mark does not
+/// Start the slot at [`FileMark::UNSET`]: the fields a motion mark does not
 /// compute (`view`, `timestamp`) are read back from it as-is.
 ///
 /// # Safety
 /// `buf` must be a live buffer and `win` a live window; `fmp` must point at a
-/// live, writable `fmark_T` that outlives every use of the answer.
+/// live, writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get(
     buf: *mut Buffer,
     win: *mut Window,
-    fmp: *mut fmark_T,
+    fmp: *mut FileMark,
     flag: MarkGet,
     name: c_int,
-) -> *mut fmark_T {
+) -> *mut FileMark {
     debug_assert!(!fmp.is_null(), "mark_get needs the caller's record");
     // SAFETY: the caller promised a live buffer.
     let handle = unsafe { Buf::new(buf) }.handle;
-    let mut fm: *mut fmark_T = ptr::null_mut();
+    let mut fm: *mut FileMark = ptr::null_mut();
     if ascii_isupper(name) || ascii_isdigit(name) {
         // SAFETY: `name` is a digit or an upper-case letter, which is what
         // `mark_get_global` needs; the editor's globals are live.
@@ -95,14 +95,14 @@ pub unsafe fn mark_get(
 ///
 /// `name` — the name of the mark.
 /// `resolve` — Whether to try resolving the mark fnum (i.e., load the buffer stored in
-///                 the mark fname and update the xfmark_T (expensive)).
+///                 the mark fname and update the XFileMark (expensive)).
 ///
 /// Returns mark
 ///
 /// # Safety
 /// `name` must be a digit or an upper-case letter; anything else panics rather
 /// than reading out of the global table. The editor's globals must be live.
-pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut xfmark_T {
+pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
     // Spelled out rather than handed to `mark_global_index` because that
     // takes a `c_char`, and narrowing `name` first would turn `'A' + 256`
     // into a valid index instead of the abort below. See p20-12's trap 9:
@@ -151,16 +151,16 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut xfmark_T {
 ///
 /// # Safety
 /// `buf` must be a live buffer, `win` a live window, and `fmp` a live,
-/// writable `fmark_T` that outlives every use of the answer.
+/// writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get_local(
     buf: *mut Buffer,
     win: *mut Window,
-    fmp: *mut fmark_T,
+    fmp: *mut FileMark,
     name: c_int,
-) -> *mut fmark_T {
+) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
     let (bufh, winh) = unsafe { (Buf::new(buf), Win::new(win)) };
-    let mark: *mut fmark_T = if ascii_islower(name) {
+    let mark: *mut FileMark = if ascii_islower(name) {
         bufh.named_mark(name - 'a' as c_int).raw()
     } else if name == '[' as c_int {
         // SAFETY: `buf` is live and `fmp` is the caller's record.
@@ -211,13 +211,13 @@ pub unsafe fn mark_get_local(
 ///
 /// # Safety
 /// `buf` must be a live buffer, `win` a live window, and `fmp` a live,
-/// writable `fmark_T` that outlives every use of the answer.
+/// writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get_motion(
     buf: *mut Buffer,
     win: *mut Window,
-    fmp: *mut fmark_T,
+    fmp: *mut FileMark,
     name: c_int,
-) -> *mut fmark_T {
+) -> *mut FileMark {
     // SAFETY: the caller promised a live window; `curwin` is live too.
     let (winh, mut cur) = unsafe { (Win::new(win), Win::current()) };
     // The motion is computed by *moving the cursor* and reading where it
@@ -226,7 +226,7 @@ pub unsafe fn mark_get_motion(
     let saved = cur.w_cursor;
     let was_busy = listcmd_busy.get();
     listcmd_busy.set(true);
-    let mut mark: *mut fmark_T = ptr::null_mut();
+    let mut mark: *mut FileMark = ptr::null_mut();
     if name == '{' as c_int || name == '}' as c_int {
         let mut oa = OpArg {
             motion_type: kMTCharWise,
@@ -297,9 +297,9 @@ const OPARG_EMPTY: OpArg = OpArg {
 /// Returns `fmp`, or NULL when `name` is neither `'<` nor `'>`.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `fmp` a live, writable `fmark_T` that
+/// `buf` must be a live buffer and `fmp` a live, writable `FileMark` that
 /// outlives every use of the answer.
-pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
+pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
     if name != '<' as c_int && name != '>' as c_int {
         return ptr::null_mut();
     }
@@ -342,7 +342,7 @@ pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) 
 ///
 /// # Safety
 /// `startpos` must point at a live position, and `curbuf` must be live.
-pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> *mut fmark_T {
+pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live position.
     let mut pos = unsafe { *startpos };
     // `]'` and `['` are line motions: they land on a mark on another LINE, so
@@ -390,9 +390,9 @@ pub unsafe fn getnextmark(startpos: *mut Pos, dir: c_int, begin_line: c_int) -> 
 /// Returns markMovekRes flags representing the outcome
 ///
 /// # Safety
-/// `fm` must be null or point at a live `fmark_T`, and the editor's globals
+/// `fm` must be null or point at a live `FileMark`, and the editor's globals
 /// must be live.
-pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes {
+pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRes {
     // The mark being jumped to, copied out before the buffer switch: loading
     // another file can free the store `fm` points into (a jumplist entry, a
     // global slot whose buffer is wiped), and the position is still needed
@@ -472,8 +472,8 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
 /// Returns whether the buffer was switched or not.
 ///
 /// # Safety
-/// `fm` must point at a live `fmark_T`, and the editor's globals must be live.
-pub(super) unsafe fn switch_to_mark_buf(fm: *mut fmark_T, pcmark_on_switch: bool) -> MarkMoveRes {
+/// `fm` must point at a live `FileMark`, and the editor's globals must be live.
+pub(super) unsafe fn switch_to_mark_buf(fm: *mut FileMark, pcmark_on_switch: bool) -> MarkMoveRes {
     // SAFETY: the caller promised a live record.
     let fm = unsafe { Fmark::new(fm) };
     // SAFETY: `curbuf` is live from startup to exit.

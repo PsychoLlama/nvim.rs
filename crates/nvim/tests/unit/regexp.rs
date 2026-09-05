@@ -37,7 +37,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use neovim::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
-use neovim::types::regmatch_T;
+use neovim::types::RegMatch;
 
 use crate::support::Sandbox;
 
@@ -66,7 +66,7 @@ fn run(engine: &str, pat: impl AsRef<[u8]>, line: impl AsRef<[u8]>, ic: bool) ->
     if prog.is_null() {
         return "compile-error".to_string();
     }
-    let mut rm = regmatch_T {
+    let mut rm = RegMatch {
         regprog: prog,
         rm_ic: ic,
         ..Default::default()

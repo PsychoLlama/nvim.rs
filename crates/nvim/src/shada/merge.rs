@@ -687,7 +687,7 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
         if !buf.b_ffname.is_null()
             && unsafe { path_fnamecmp(entry.data.filemark().fname, buf.b_ffname) } == 0
         {
-            let mut fm: fmark_T = fmark_T::UNSET;
+            let mut fm: FileMark = FileMark::UNSET;
             let name = entry.data.filemark().name as c_int;
             let win = curwin.get();
             unsafe { mark_get(buf.raw(), win, &raw mut fm, kMarkBufLocal, name) };

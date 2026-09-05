@@ -14,12 +14,12 @@ use crate::syntax::SynFlags;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct bufstate_T {
+pub struct BufState {
     pub bs_idx: ::core::ffi::c_int,
     pub bs_flags: SynFlags,
     pub bs_seqnr: ::core::ffi::c_int,
     pub bs_cchar: ::core::ffi::c_int,
-    pub bs_extmatch: *mut reg_extmatch_T,
+    pub bs_extmatch: *mut RegExtMatch,
 }
 #[derive(Copy, Clone)]
 pub struct syn_state {
@@ -42,9 +42,9 @@ pub struct syn_state {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union syn_state_sst_union {
-    pub sst_stack: [bufstate_T; 7],
-    /// A `Box<[bufstate_T]>` of `sst_stacksize` items taken apart: a union
+    pub sst_stack: [BufState; 7],
+    /// A `Box<[BufState]>` of `sst_stacksize` items taken apart: a union
     /// field may not have a destructor, so `clear_syn_state` puts it back
     /// together to release it.
-    pub sst_heap: *mut bufstate_T,
+    pub sst_heap: *mut BufState,
 }

@@ -25,13 +25,13 @@ use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Buffer, ColNr, Failed, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
+use crate::types::{Buffer, ColNr, Failed, RegMatch, RegProg, fuzmatch_str_T, size_t};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
-/// A `regmatch_T` holding no compiled program.
-pub(crate) const NO_REGMATCH: regmatch_T = regmatch_T {
-    regprog: ptr::null_mut::<regprog_T>(),
+/// A `RegMatch` holding no compiled program.
+pub(crate) const NO_REGMATCH: RegMatch = RegMatch {
+    regprog: ptr::null_mut::<RegProg>(),
     startp: [ptr::null_mut::<c_char>(); 10],
     endp: [ptr::null_mut::<c_char>(); 10],
     rm_matchcol: 0,
@@ -72,17 +72,17 @@ fn wants_fuzzy(pat: *const c_char) -> bool {
     unsafe { cmdline_fuzzy_complete(pat) }
 }
 
-fn regcomp(pat: *const c_char, flags: c_int) -> *mut regprog_T {
+fn regcomp(pat: *const c_char, flags: c_int) -> *mut RegProg {
     // SAFETY: a NUL-terminated pattern; the answer is null on a bad one.
     unsafe { vim_regcomp(pat, flags) }
 }
 
-fn regfree(prog: *mut regprog_T) {
+fn regfree(prog: *mut RegProg) {
     // SAFETY: a compiled program or null.
     unsafe { vim_regfree(prog) };
 }
 
-fn regexec(rmp: &mut regmatch_T, name: *mut c_char) -> bool {
+fn regexec(rmp: &mut RegMatch, name: *mut c_char) -> bool {
     // SAFETY: a live match state with a compiled program, and a
     // NUL-terminated string to match it against.
     unsafe { vim_regexec(rmp, name, 0 as ColNr) }
@@ -316,7 +316,7 @@ fn order_by_last_used(matches: *mut bufmatch_T, files: &mut [*mut c_char]) {
 
 /// Whether `buf`'s name matches `rmp`: the short file name first, then the
 /// long one. `rmp->regprog` may become null when the regexp engine switches.
-pub(crate) fn buflist_match(rmp: &mut regmatch_T, buf: Buf, ignore_case: bool) -> *mut c_char {
+pub(crate) fn buflist_match(rmp: &mut RegMatch, buf: Buf, ignore_case: bool) -> *mut c_char {
     let mut matched = fname_match(rmp, buf.b_sfname, ignore_case);
     if matched.is_null() && !rmp.regprog.is_null() {
         matched = fname_match(rmp, buf.b_ffname, ignore_case);
@@ -326,7 +326,7 @@ pub(crate) fn buflist_match(rmp: &mut regmatch_T, buf: Buf, ignore_case: bool) -
 
 /// `name` when it matches `rmp`, null when it does not. `$HOME` is tried
 /// both as itself and as `~`.
-fn fname_match(rmp: &mut regmatch_T, name: *mut c_char, ignore_case: bool) -> *mut c_char {
+fn fname_match(rmp: &mut RegMatch, name: *mut c_char, ignore_case: bool) -> *mut c_char {
     // An extra check for valid arguments.
     if name.is_null() || rmp.regprog.is_null() {
         return ptr::null_mut();

@@ -1,6 +1,6 @@
 //! Reporting mappings to Vimscript and to the API.
 //!
-//! [`mapblock_fill_dict`] renders one [`mapblock_T`] as the twenty-key dict
+//! [`mapblock_fill_dict`] renders one [`MapBlock`] as the twenty-key dict
 //! that `maparg()`, `maplist()` and `nvim_get_keymap` all answer with;
 //! [`get_maparg`] backs `maparg()`/`mapcheck()` and [`keymap_array`] backs
 //! `nvim_get_keymap`.

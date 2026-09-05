@@ -38,7 +38,7 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
-    Timestamp, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, regmatch_T, size_t,
+    RegMatch, Timestamp, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, size_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -267,7 +267,7 @@ unsafe fn del_history_entry(histype: c_int, pat: *const c_char) -> bool {
     if regprog.is_null() {
         return false;
     }
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog,
         startp: [core::ptr::null_mut(); 10],
         endp: [core::ptr::null_mut(); 10],

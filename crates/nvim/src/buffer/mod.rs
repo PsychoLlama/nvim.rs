@@ -286,7 +286,7 @@ impl BufRef {
     }
 
     /// The record itself, for the two places it has to live in a C struct:
-    /// `aco_save_T`'s `new_curbuf`.
+    /// `AcoSave`'s `new_curbuf`.
     pub(crate) const fn record(self) -> BufferRef {
         self.0
     }

@@ -207,7 +207,7 @@ impl Fields {
         linebuf: *mut c_char,
         linelen: usize,
         fmt: &Format,
-        regmatch: &regmatch_T,
+        regmatch: &RegMatch,
         multiline: bool,
         multiscan: bool,
         tail: &mut *mut c_char,
@@ -268,7 +268,7 @@ impl Fields {
     /// # Safety
     ///
     /// The submatch must delimit a range of a writable, NUL-terminated line.
-    unsafe fn take_file(&mut self, rmp: &regmatch_T, midx: usize, prefix: u8) -> Status {
+    unsafe fn take_file(&mut self, rmp: &RegMatch, midx: usize, prefix: u8) -> Status {
         let (start, end) = (rmp.startp[midx], rmp.endp[midx]);
         if start.is_null() || end.is_null() {
             return Status::Fail;
@@ -293,7 +293,7 @@ impl Fields {
     /// # Safety
     ///
     /// The submatch must delimit a range of a NUL-terminated line.
-    unsafe fn take_message(&mut self, rmp: &regmatch_T, midx: usize) -> Status {
+    unsafe fn take_message(&mut self, rmp: &RegMatch, midx: usize) -> Status {
         let (start, end) = (rmp.startp[midx], rmp.endp[midx]);
         if start.is_null() || end.is_null() {
             return Status::Fail;
@@ -311,7 +311,7 @@ impl Fields {
     /// # Safety
     ///
     /// The submatch must delimit a range of a NUL-terminated line.
-    unsafe fn take_conversion(&mut self, rmp: &regmatch_T, midx: usize, idx: usize) -> Status {
+    unsafe fn take_conversion(&mut self, rmp: &RegMatch, midx: usize, idx: usize) -> Status {
         let start = rmp.startp[midx];
         if start.is_null() {
             return Status::Fail;

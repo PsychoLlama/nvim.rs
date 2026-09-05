@@ -191,7 +191,7 @@ pub struct CmdMod {
     pub cmod_split: ::core::ffi::c_int,
     pub cmod_tab: ::core::ffi::c_int,
     pub cmod_filter_pat: *mut ::core::ffi::c_char,
-    pub cmod_filter_regmatch: regmatch_T,
+    pub cmod_filter_regmatch: RegMatch,
     pub cmod_filter_force: bool,
     pub cmod_verbose: ::core::ffi::c_int,
     pub cmod_save_ei: *mut ::core::ffi::c_char,
@@ -211,7 +211,7 @@ impl CmdMod {
         cmod_split: 0,
         cmod_tab: 0,
         cmod_filter_pat: ::core::ptr::null_mut(),
-        cmod_filter_regmatch: regmatch_T {
+        cmod_filter_regmatch: RegMatch {
             regprog: ::core::ptr::null_mut(),
             startp: [::core::ptr::null_mut(); 10],
             endp: [::core::ptr::null_mut(); 10],

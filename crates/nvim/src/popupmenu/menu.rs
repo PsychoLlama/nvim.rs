@@ -207,7 +207,7 @@ unsafe fn pum_menu_key(c: c_int, items: &[CString]) -> MenuStep {
 /// # Safety
 /// `menu` must be live. This pumps the event loop, so nothing may be held
 /// across it.
-pub unsafe fn pum_show_popupmenu(menu: *mut vimmenu_T) {
+pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
     // SAFETY: the caller's promise.
     let menu = unsafe { Menu::new(menu) };
     // SAFETY: takes the completion menu down, if one was up.

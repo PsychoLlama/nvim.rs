@@ -57,8 +57,8 @@ use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
     Buffer, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
-    ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType,
-    bcount_t, extmark_undo_vec_t, int32_t, size_t, u_header_T, uint16_t, uint32_t, uint64_t,
+    ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoHeader,
+    UndoObjectType, bcount_t, extmark_undo_vec_t, int32_t, size_t, uint16_t, uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -326,7 +326,7 @@ fn line_offset(buf: Buf, lnum: LineNr) -> c_int {
 /// the change is not undoable.
 fn undo_marks(buf: Buf) -> *mut extmark_undo_vec_t {
     // SAFETY: a live buffer.
-    let uhp: *mut u_header_T = unsafe { u_force_get_undo_header(buf.raw()) };
+    let uhp: *mut UndoHeader = unsafe { u_force_get_undo_header(buf.raw()) };
     if uhp.is_null() {
         return ptr::null_mut();
     }

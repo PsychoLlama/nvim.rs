@@ -45,7 +45,7 @@ pub unsafe fn get_foldtext(
     wp: Win,
     lnum: LineNr,
     lnume: LineNr,
-    foldinfo: foldinfo_T,
+    foldinfo: FoldInfo,
     buf: *mut c_char,
     vt: *mut VirtText,
 ) -> *mut c_char {

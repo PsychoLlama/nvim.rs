@@ -150,7 +150,7 @@ pub struct optexpand_T {
     pub oe_opt_value: *mut ::core::ffi::c_char,
     pub oe_append: bool,
     pub oe_include_orig_val: bool,
-    pub oe_regmatch: *mut regmatch_T,
+    pub oe_regmatch: *mut RegMatch,
     pub oe_xp: *mut Expand,
     pub oe_set_arg: *mut ::core::ffi::c_char,
 }

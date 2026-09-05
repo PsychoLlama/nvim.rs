@@ -544,7 +544,7 @@ unsafe fn remove_arg(idx: c_int) {
 /// # Safety
 ///
 /// `regmatch` must hold a compiled program.
-unsafe fn delete_matching_args(regmatch: *mut regmatch_T) -> bool {
+unsafe fn delete_matching_args(regmatch: *mut RegMatch) -> bool {
     let mut didone = false;
     let mut i = 0;
     while i < argcount() {
@@ -572,7 +572,7 @@ unsafe fn delete_matching_args(regmatch: *mut regmatch_T) -> bool {
 ///
 /// Every pattern must be NUL-terminated and stay alive for the call.
 unsafe fn arglist_del_files(patterns: &[*mut c_char]) {
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],

@@ -36,7 +36,7 @@ use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
     BackslashEscape, ColNr, Expand, ExpandContext, Failed, GArray, MAXPATHL, NUL, OptIndex,
-    OptionSetFlags, XpPrefix, fuzmatch_str_T, optexpand_T, regmatch_T, size_t, uint32_t,
+    OptionSetFlags, RegMatch, XpPrefix, fuzmatch_str_T, optexpand_T, size_t, uint32_t,
 };
 use crate::winlayer::Live;
 
@@ -425,7 +425,7 @@ unsafe fn seek_item_start(xp: *mut Expand, argend: *mut c_char, flags: uint32_t)
 /// one set of them throughout, so it builds the value once.
 #[derive(Clone, Copy)]
 struct Matcher {
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     /// The plain array of names.
     matches: *mut *mut c_char,
     /// The scored array, used instead when `fuzzy`.
@@ -479,7 +479,7 @@ unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -
 /// The out-parameters must be writable, and `regmatch`/`fuzzystr` valid.
 pub(crate) unsafe fn expand_settings(
     xp: *mut Expand,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     fuzzystr: *mut c_char,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
@@ -617,7 +617,7 @@ pub(crate) unsafe fn expand_old_setting(
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
 pub(crate) unsafe fn expand_string_setting(
     xp: *mut Expand,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
@@ -660,7 +660,7 @@ pub(crate) unsafe fn expand_string_setting(
 /// The out-parameters must be writable and `xp`/`regmatch` valid.
 pub(crate) unsafe fn expand_setting_subtract(
     xp: *mut Expand,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {

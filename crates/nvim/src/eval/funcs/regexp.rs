@@ -31,9 +31,9 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    Buffer, Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, TypVal, VAR_BOOL,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, kListLenMayKnow,
-    kListLenUnknown, regmatch_T, regprog_T, typval_vval_union,
+    Buffer, Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, RegMatch, RegProg, TypVal,
+    VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
+    kListLenMayKnow, kListLenUnknown, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -45,9 +45,9 @@ const TV_UNKNOWN: TypVal = TypVal {
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// A cleared `regmatch_T`, which `vim_regcomp`'s result is dropped into.
-const EMPTY_REGMATCH: regmatch_T = regmatch_T {
-    regprog: ptr::null_mut::<regprog_T>(),
+/// A cleared `RegMatch`, which `vim_regcomp`'s result is dropped into.
+const EMPTY_REGMATCH: RegMatch = RegMatch {
+    regprog: ptr::null_mut::<RegProg>(),
     startp: [ptr::null_mut(); 10],
     endp: [ptr::null_mut(); 10],
     rm_matchcol: 0,
@@ -75,7 +75,7 @@ impl Drop for EmptyCpo {
 }
 
 /// A compiled pattern, freed on drop.
-struct Regprog(regmatch_T);
+struct Regprog(RegMatch);
 
 impl Regprog {
     /// Compile `pat` the way the whole family does. `None` when it did not
@@ -343,7 +343,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut TypVal, kind: SomeMatchTyp
 /// live list.
 unsafe fn get_matches_in_str(
     str: *const c_char,
-    rmp: *mut regmatch_T,
+    rmp: *mut RegMatch,
     mlist: *mut List,
     idx: c_int,
     submatches: bool,

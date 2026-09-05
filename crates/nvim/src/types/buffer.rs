@@ -226,18 +226,18 @@ pub struct Buffer {
     pub b_orig_size: uint64_t,
     pub b_orig_mode: ::core::ffi::c_int,
     pub b_last_used: time_t,
-    pub b_namedm: [fmark_T; 26],
-    pub b_visual: visualinfo_T,
+    pub b_namedm: [FileMark; 26],
+    pub b_visual: VisualInfo,
     pub b_visual_mode_eval: ::core::ffi::c_int,
-    pub b_last_cursor: fmark_T,
-    pub b_last_insert: fmark_T,
-    pub b_last_change: fmark_T,
-    pub b_changelist: [fmark_T; 100],
+    pub b_last_cursor: FileMark,
+    pub b_last_insert: FileMark,
+    pub b_last_change: FileMark,
+    pub b_changelist: [FileMark; 100],
     pub b_changelistlen: ::core::ffi::c_int,
     pub b_new_change: bool,
     pub b_chartab: [uint64_t; 4],
-    pub b_maphash: [*mut mapblock_T; 256],
-    pub b_first_abbr: *mut mapblock_T,
+    pub b_maphash: [*mut MapBlock; 256],
+    pub b_first_abbr: *mut MapBlock,
     /// The buffer-local user commands, sorted by name. A `-buffer` command
     /// shadows a global one; `usercmd`'s `Table` is the walk over both.
     pub b_ucmds: Vec<ucmd_T>,
@@ -438,7 +438,7 @@ pub struct Buffer {
     pub b_prompt_interrupt: Callback,
     pub b_prompt_append_new_line: bool,
     pub b_prompt_insert: ::core::ffi::c_int,
-    pub b_prompt_start: fmark_T,
+    pub b_prompt_start: FileMark,
     pub b_s: SynBlock,
     pub b_signcols: file_buffer_b_signcols,
     pub terminal: *mut Terminal,
@@ -530,7 +530,7 @@ pub struct LLPos {
 }
 #[derive(Clone)]
 pub struct MatchState {
-    pub rm: regmmatch_T,
+    pub rm: RegMMatch,
     pub buf: *mut Buffer,
     pub lnum: LineNr,
     pub attr: ::core::ffi::c_int,
@@ -548,7 +548,7 @@ pub struct MatchItem {
     pub mit_id: ::core::ffi::c_int,
     pub mit_priority: ::core::ffi::c_int,
     pub mit_pattern: *mut ::core::ffi::c_char,
-    pub mit_match: regmmatch_T,
+    pub mit_match: RegMMatch,
     pub mit_pos_array: *mut LLPos,
     pub mit_pos_count: ::core::ffi::c_int,
     pub mit_pos_cur: ::core::ffi::c_int,
@@ -601,7 +601,7 @@ pub struct SynBlock {
     /// compiled program is a `regexp/` object with its own allocator
     /// discipline (`vim_regcomp` / `vim_regfree`), so it stays a raw pointer,
     /// released by `syntax_clear`.
-    pub b_syn_linecont_prog: *mut regprog_T,
+    pub b_syn_linecont_prog: *mut RegProg,
     pub b_syn_linecont_time: SynTime,
     pub b_syn_linecont_ic: ::core::ffi::c_int,
     pub b_syn_topgrp: ::core::ffi::c_int,
@@ -631,7 +631,7 @@ pub struct SynBlock {
     pub b_spell_ismw: [bool; 256],
     pub b_spell_ismw_mb: *mut ::core::ffi::c_char,
     pub b_p_spc: *mut ::core::ffi::c_char,
-    pub b_cap_prog: *mut regprog_T,
+    pub b_cap_prog: *mut RegProg,
     pub b_p_spf: *mut ::core::ffi::c_char,
     pub b_p_spl: *mut ::core::ffi::c_char,
     pub b_p_spo: *mut ::core::ffi::c_char,
@@ -678,7 +678,7 @@ pub struct Tabpage {
 #[derive(Clone)]
 pub struct Taggy {
     pub tagname: *mut ::core::ffi::c_char,
-    pub fmark: fmark_T,
+    pub fmark: FileMark,
     pub cur_match: ::core::ffi::c_int,
     pub cur_fnum: ::core::ffi::c_int,
     pub user_data: *mut ::core::ffi::c_char,
@@ -840,7 +840,7 @@ pub struct Window {
     pub w_vars: *mut Dict,
     pub w_pcmark: Pos,
     pub w_prev_pcmark: Pos,
-    pub w_jumplist: [xfmark_T; 100],
+    pub w_jumplist: [XFileMark; 100],
     pub w_jumplistlen: ::core::ffi::c_int,
     pub w_jumplistidx: ::core::ffi::c_int,
     pub w_changelistidx: ::core::ffi::c_int,
@@ -872,7 +872,7 @@ pub struct Window {
 #[derive(Clone)]
 pub struct WinInfo {
     pub wi_win: *mut Window,
-    pub wi_mark: fmark_T,
+    pub wi_mark: FileMark,
     pub wi_optset: bool,
     pub wi_opt: WinOpt,
     pub wi_fold_manual: bool,
@@ -964,7 +964,7 @@ pub struct WLine {
 impl BufferRef {
     /// The "names nothing" state. `BufRef::NONE` is how the editor spells
     /// it; the two remaining raw holders (`main::au_new_curbuf` and
-    /// `aco_save_T::new_curbuf`) start from this.
+    /// `AcoSave::new_curbuf`) start from this.
     ///
     /// A `const fn` as well as a [`Default`] because two of them are
     /// statics.

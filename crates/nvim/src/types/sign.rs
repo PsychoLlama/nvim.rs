@@ -21,7 +21,7 @@ pub struct SignTextAttrs {
     pub hl_id: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone, Default)]
-pub struct sign_T {
+pub struct Sign {
     pub sn_name: *mut ::core::ffi::c_char,
     pub sn_icon: *mut ::core::ffi::c_char,
     pub sn_text: [ScreenChar; 2],

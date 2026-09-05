@@ -394,7 +394,7 @@ pub unsafe fn apply_autocmds_group(
 
         // The walk's cursor.  This is a *stack local* whose address is
         // published on `active_apc_list` below; see the module docs.
-        let mut patcmd = AutoPatCmd_S {
+        let mut patcmd = AutoPatCmd {
             // `aucmd_next` sets `lastpat` back to null when there is
             // nothing left to run.
             lastpat: ::core::ptr::null_mut(),

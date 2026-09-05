@@ -72,7 +72,7 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     Buffer, DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight,
     DecorVirtText, Dict, DictItem, EvalFuncData, ExArg, Expand, FAIL, Integer, LineNr, List, MTKey,
-    MarkTreeIter, OK, ScreenChar, SignItem, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t, sign_T,
+    MarkTreeIter, OK, ScreenChar, Sign, SignItem, TypVal, VarNumber, int32_t, int64_t, ptrdiff_t,
     size_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;

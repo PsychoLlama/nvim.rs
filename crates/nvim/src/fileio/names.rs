@@ -310,13 +310,13 @@ pub unsafe fn vim_copyfile(from: *const c_char, to: *const c_char) -> c_int {
 /// @param allow_dirs the pattern may match a directory
 pub unsafe fn match_file_pat(
     pattern: *mut c_char,
-    prog: *mut *mut regprog_T,
+    prog: *mut *mut RegProg,
     fname: *mut c_char,
     sfname: *mut c_char,
     tail: *mut c_char,
     allow_dirs: c_int,
 ) -> bool {
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         rm_ic: p_fic.get() != 0, // ignore case if 'fileignorecase' is set
         regprog: if prog.is_null() {
             unsafe { vim_regcomp(pattern, RE_MAGIC) }

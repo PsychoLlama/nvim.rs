@@ -113,11 +113,11 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData, ExArg,
-    ExtmarkOp, FILE, FileInfo, LineNr, List, ListItem, OptInt, OptVal, Pos, QFLT_INTERNAL,
-    QFLT_LOCATION, QFLT_QUICKFIX, QfListType, ScriptId, TypVal, VarNumber, VarType, aco_save_T,
-    bln_values, dobuf_action_values, getf_values, optset_T, ptrdiff_t, qf_info_T, qf_list_T,
-    qfline_T, regmatch_T, regmmatch_T, regprog_T, size_t, time_t, typval_vval_union, vimconv_T,
+    AcoSave, Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData,
+    ExArg, ExtmarkOp, FILE, FileInfo, LineNr, List, ListItem, OptInt, OptVal, Pos, QFLT_INTERNAL,
+    QFLT_LOCATION, QFLT_QUICKFIX, QfListType, RegMMatch, RegMatch, RegProg, ScriptId, TypVal,
+    VarNumber, VarType, bln_values, dobuf_action_values, getf_values, optset_T, ptrdiff_t,
+    qf_info_T, qf_list_T, qfline_T, size_t, time_t, typval_vval_union, vimconv_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;

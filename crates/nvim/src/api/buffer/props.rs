@@ -148,7 +148,7 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
     if !is_curbuf {
         p_acd.set(0 as ::core::ffi::c_int);
     }
-    let mut aco: aco_save_T = aco_save_T::default();
+    let mut aco: AcoSave = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, b) };
     let ren_ret = unsafe { rename_buffer(name.data()) };
     unsafe { aucmd_restbuf(&raw mut aco) };

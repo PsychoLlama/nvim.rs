@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{ColNr, GArray, Hlf, LineNr, Window, langp_T, regmatch_T, size_t, uint8_t};
+use crate::types::{ColNr, GArray, Hlf, LineNr, RegMatch, Window, langp_T, size_t, uint8_t};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -225,7 +225,7 @@ pub unsafe fn spell_check(
             // it and look for a word after it.
             if !capcol.is_null() && !unsafe { (*(*wp).w_s).b_cap_prog }.is_null() {
                 // Did a sentence end here?
-                let mut regmatch: regmatch_T = unsafe { mem::zeroed() };
+                let mut regmatch: RegMatch = unsafe { mem::zeroed() };
                 regmatch.regprog = unsafe { (*(*wp).w_s).b_cap_prog };
                 regmatch.rm_ic = false;
                 let r = unsafe { vim_regexec(&raw mut regmatch, ptr, 0) };
@@ -414,7 +414,7 @@ pub unsafe fn check_need_cap(wp: *mut Window, lnum: LineNr, col: ColNr) -> bool 
 
     if endcol > 0 {
         // Does a sentence end before the word?
-        let mut regmatch: regmatch_T = unsafe { mem::zeroed() };
+        let mut regmatch: RegMatch = unsafe { mem::zeroed() };
         regmatch.regprog = unsafe { (*(*wp).w_s).b_cap_prog };
         regmatch.rm_ic = false;
         let end = unsafe { line.offset(endcol as isize) };

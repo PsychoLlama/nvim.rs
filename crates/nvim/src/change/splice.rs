@@ -128,7 +128,7 @@ pub fn changed_lines_invalidate_buf(
 fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
     // Only record the view if the changed line is on screen: a change can
     // be made outside the current window's view.
-    let mut view = fmarkv_T {
+    let mut view = FileMarkView {
         topline_offset: MAXLNUM as LineNr,
         skipcol: 0,
     };
@@ -187,7 +187,7 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
                     .raw()
                     .wrapping_byte_add(offset_of!(Buffer, b_changelist))
                     .cast::<c_void>();
-                let one = ::core::mem::size_of::<fmark_T>();
+                let one = ::core::mem::size_of::<FileMark>();
                 let bytes = one.wrapping_mul((JUMPLISTSIZE - 1) as size_t);
                 // SAFETY: `b_changelist` holds `JUMPLISTSIZE` marks, so its
                 // last `JUMPLISTSIZE - 1` fit at its head.

@@ -326,7 +326,7 @@ pub(crate) unsafe fn syn_match_linecont(lnum: LineNr) -> bool {
     let mut buf_chartab = [0u64; 4];
     save_chartab(&mut buf_chartab);
 
-    let mut regmatch = regmmatch_T {
+    let mut regmatch = RegMMatch {
         regprog: syn_block().b_syn_linecont_prog,
         startpos: [LPos { lnum: 0, col: 0 }; 10],
         endpos: [LPos { lnum: 0, col: 0 }; 10],

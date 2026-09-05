@@ -41,7 +41,7 @@ pub(crate) unsafe fn ins_compl_dictionaries(
 
     let mut buf = unsafe { xmalloc(LSIZE as size_t) }.cast::<c_char>();
     // So that we can leave through 'theend.
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],
@@ -200,7 +200,7 @@ pub(crate) unsafe fn ins_compl_files(
     files: *mut *mut c_char,
     thesaurus: bool,
     flags: c_int,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     buf: *mut c_char,
     dir: *mut Direction,
 ) {

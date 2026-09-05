@@ -44,7 +44,7 @@ impl AucmdWins {
     }
 
     /// Slot `idx`, which must be below [`len`](Self::len).
-    pub(crate) fn slot(self, idx: usize) -> *mut aucmdwin_T {
+    pub(crate) fn slot(self, idx: usize) -> *mut AucmdWin {
         // SAFETY: as `len`; the array holds `size` initialised slots.
         unsafe { (*self.0).items.add(idx) }
     }
@@ -59,13 +59,13 @@ impl AucmdWins {
         if unsafe { (*vec).size } == unsafe { (*vec).capacity } {
             let capacity = unsafe { (*vec).capacity };
             let grown = if capacity != 0 { capacity << 1 } else { 8 };
-            let bytes = ::core::mem::size_of::<aucmdwin_T>().wrapping_mul(grown);
+            let bytes = ::core::mem::size_of::<AucmdWin>().wrapping_mul(grown);
             unsafe {
                 (*vec).capacity = grown;
-                (*vec).items = xrealloc((*vec).items.cast(), bytes).cast::<aucmdwin_T>();
+                (*vec).items = xrealloc((*vec).items.cast(), bytes).cast::<AucmdWin>();
             };
         }
-        let empty = aucmdwin_T {
+        let empty = AucmdWin {
             auc_win: ::core::ptr::null_mut(),
             auc_win_used: false,
         };
@@ -92,7 +92,7 @@ pub fn is_aucmd_win(win: *mut Window) -> bool {
 
 /// Make `buf` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut Buffer) {
+pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buf: *mut Buffer) {
     let entry = |idx: usize| aucmd_wins().slot(idx);
 
     let same_buffer = buf == curbuf.get();
@@ -204,7 +204,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut Buffer) {
 
 /// Undo [`aucmd_prepbuf`], restoring the window layout as far as what the
 /// autocommand did to it allows.
-pub unsafe fn aucmd_restbuf(aco: *mut aco_save_T) {
+pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
     if unsafe { (*aco).use_aucmd_win_idx } >= 0 {
         let idx = unsafe { (*aco).use_aucmd_win_idx } as usize;
         let awp = unsafe { (*aucmd_wins().slot(idx)).auc_win };

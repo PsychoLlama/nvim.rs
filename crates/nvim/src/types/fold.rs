@@ -12,7 +12,7 @@
 use super::*;
 
 #[derive(Copy, Clone, Default)]
-pub struct foldinfo_T {
+pub struct FoldInfo {
     pub fi_lnum: LineNr,
     pub fi_level: ::core::ffi::c_int,
     pub fi_low_level: ::core::ffi::c_int,

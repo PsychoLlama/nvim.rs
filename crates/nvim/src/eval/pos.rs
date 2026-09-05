@@ -19,8 +19,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    Buffer, ColNr, Failed, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST, VAR_STRING, Window,
-    fmark_T, uint8_t,
+    Buffer, ColNr, Failed, FileMark, LineNr, List, ListItem, NUL, Pos, TypVal, VAR_LIST,
+    VAR_STRING, Window, uint8_t,
 };
 use crate::winlayer::Win;
 
@@ -119,7 +119,7 @@ pub unsafe fn var2fpos(
     let mut numbuf = NumBuf::new();
     // The record a `'m` lookup answers into: a motion mark has no store of
     // its own, so it is computed straight into this frame's slot.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     // SAFETY: the caller's promise -- a live window, and a typval that is
     // only read through here, which is what makes casting its `const` away
     // sound. Nothing below holds either across a call that could close the
@@ -205,7 +205,7 @@ pub unsafe fn var2fpos(
         let mname = unsafe { *name.add(1) } as uint8_t as c_int;
         // SAFETY: the buffer and the window are live, and `slot` is this
         // frame's record.
-        let fm: *const fmark_T =
+        let fm: *const FileMark =
             unsafe { mark_get(bp.raw(), wp.raw(), &raw mut slot, kMarkAll, mname) };
         // SAFETY: a non-null answer is a live record.
         if fm.is_null() || unsafe { (*fm).mark.lnum } <= 0 {

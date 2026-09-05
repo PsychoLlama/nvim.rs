@@ -184,7 +184,7 @@ pub(crate) unsafe fn expand_from_context(
         return unsafe { nlua_expand_get_matches(numMatches, matches) };
     }
 
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],
@@ -242,7 +242,7 @@ pub(crate) unsafe fn expand_from_context(
 pub unsafe fn expand_generic(
     pat: *const c_char,
     xp: *mut Expand,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     func: CompleteListItemGetter,

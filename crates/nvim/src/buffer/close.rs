@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, DictItem, GArray, Handle, HashTab, LineNr, Pos, Refcount, SynBlock, Tabpage,
-    Timestamp, WinInfo, Window, fmark_T, fmarkv_T, memfile_T,
+    Callback, ColNr, DictItem, FileMark, FileMarkView, GArray, Handle, HashTab, LineNr, Pos,
+    Refcount, SynBlock, Tabpage, Timestamp, WinInfo, Window, memfile_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -57,7 +57,7 @@ use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_w
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
 /// which is *not* `INIT_FMARK` (that seeds `topline_offset` with `MAXLNUM`).
-const ZERO_FMARK: fmark_T = fmark_T {
+const ZERO_FMARK: FileMark = FileMark {
     mark: Pos {
         lnum: 0 as LineNr,
         col: 0 as ColNr,
@@ -65,7 +65,7 @@ const ZERO_FMARK: fmark_T = fmark_T {
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
-    view: fmarkv_T {
+    view: FileMarkView {
         topline_offset: 0 as LineNr,
         skipcol: 0 as ColNr,
     },
@@ -161,12 +161,12 @@ fn free_callback(cb: &mut Callback) {
     unsafe { callback_free(cb) };
 }
 
-fn clear_mark(mark: &mut fmark_T) {
+fn clear_mark(mark: &mut FileMark) {
     // SAFETY: a mark inside a live buffer; `0` is upstream's timestamp.
     unsafe { clear_fmark(mark, 0 as Timestamp) };
 }
 
-fn drop_mark(mark: fmark_T) {
+fn drop_mark(mark: FileMark) {
     // SAFETY: a mark copied out of a live buffer.
     unsafe { free_fmark(mark) };
 }

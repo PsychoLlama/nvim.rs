@@ -21,7 +21,7 @@ use crate::winlayer::{Buf, Win};
 
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.
-const INIT_FMARKV: fmarkv_T = fmarkv_T {
+const INIT_FMARKV: FileMarkView = FileMarkView {
     topline_offset: MAXLNUM as LineNr,
     skipcol: 0,
 };
@@ -277,8 +277,8 @@ impl Reading {
             unsafe { xfree(entry.data.filemark().fname.cast()) };
             entry.data.filemark_mut().fname = core::ptr::null_mut();
         }
-        let fm = xfmark_T {
-            fmark: fmark_T {
+        let fm = XFileMark {
+            fmark: FileMark {
                 mark: entry.data.filemark().mark,
                 fnum: if buf.is_null() {
                     0
@@ -336,7 +336,7 @@ impl Reading {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
         }
-        let fm = fmark_T {
+        let fm = FileMark {
             mark: entry.data.filemark().mark,
             fnum: unsafe { (*buf).handle } as c_int,
             timestamp: entry.timestamp,
@@ -402,7 +402,7 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: buffer_list) {
             continue;
         }
         unsafe { free_fmark((*buf).b_last_cursor.clone()) };
-        let cursor = fmark_T {
+        let cursor = FileMark {
             mark: unsafe { (*item).pos },
             fnum: 0,
             timestamp: os_time(),
@@ -448,7 +448,7 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
 /// A jump the list already holds — same position, same file — is dropped
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
-unsafe fn insert_jump(fm: xfmark_T, buf: *mut Buffer, mut entry: ShadaEntry) {
+unsafe fn insert_jump(fm: XFileMark, buf: *mut Buffer, mut entry: ShadaEntry) {
     // SAFETY: `curwin` is set from startup to exit, and nothing below can
     // change which window that is.
     let mut win = unsafe { Win::current() };
@@ -494,7 +494,7 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut Buffer, mut entry: ShadaEntry) {
 
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
-unsafe fn insert_change(buf: *mut Buffer, fm: fmark_T) {
+unsafe fn insert_change(buf: *mut Buffer, fm: FileMark) {
     // SAFETY: the caller's promise — `buf` is a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     let mut i = buf.b_changelistlen;

@@ -2,7 +2,7 @@
 //! entries, and the single-line `u_undoline` shadow buffer.
 //!
 //! Every header here is named by a [`UndoLink`] and reached through the
-//! buffer's store (see [`super::store`]); the `*mut u_header_T` locals are
+//! buffer's store (see [`super::store`]); the `*mut UndoHeader` locals are
 //! the borrow that lookup hands back, never an owner.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -32,7 +32,7 @@ pub(crate) unsafe fn u_unch_branch(buf: Buf, start: UndoLink) {
 ///
 /// Safe: `b_u_newhead` is resolved through the store, so it names either a
 /// live header or nothing.
-pub(crate) fn u_get_headentry(buf: Buf) -> *mut u_entry_T {
+pub(crate) fn u_get_headentry(buf: Buf) -> *mut UndoEntry {
     let newhead = buf.header(buf.b_u_newhead);
     match newhead.filter(|uh| !uh.uh_entry.is_null()) {
         Some(uh) => uh.uh_entry,
@@ -79,7 +79,7 @@ pub(crate) fn u_getbot(mut buf: Buf) {
 ///
 /// `uhp` points at a header `buf` owns, and `uhpp` is NULL or points at a
 /// link the caller owns.
-pub(crate) unsafe fn u_freeheader(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
+pub(crate) unsafe fn u_freeheader(mut buf: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
     // SAFETY: a header the buffer owns; every link below is resolved through
     // the store, so a stale one reads as "nothing".
     let b = buf;
@@ -110,7 +110,7 @@ pub(crate) unsafe fn u_freeheader(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mut
 /// # Safety
 ///
 /// As [`u_freeheader`].
-pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
+pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
     // SAFETY: a header the buffer owns.
     // Freeing the oldest header takes the whole tree with it, so let
     // `u_freeheader` do the unlinking rather than walking here.
@@ -145,7 +145,7 @@ pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut u_header_T, uhpp: *mut Und
 /// # Safety
 ///
 /// As [`u_freeheader`].
-pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mut UndoLink) {
+pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
     // SAFETY: a header the buffer owns; the entry list is that header's and
     // is walked one node ahead of the free.
     let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
@@ -158,9 +158,9 @@ pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mu
     if !uhpp.is_null() && unsafe { *uhpp } == link {
         unsafe { *uhpp = UndoLink::NONE };
     }
-    let mut uep: *mut u_entry_T = unsafe { (*uhp).uh_entry };
+    let mut uep: *mut UndoEntry = unsafe { (*uhp).uh_entry };
     while !uep.is_null() {
-        let nuep: *mut u_entry_T = unsafe { (*uep).ue_next };
+        let nuep: *mut UndoEntry = unsafe { (*uep).ue_next };
         unsafe { u_freeentry(uep, (*uep).ue_size as c_int) };
         uep = nuep;
     }
@@ -177,7 +177,7 @@ pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut u_header_T, uhpp: *mu
 /// # Safety
 ///
 /// `uep` points at a live entry whose `ue_array` holds at least `n` strings.
-pub(crate) unsafe fn u_freeentry(uep: *mut u_entry_T, mut n: c_int) {
+pub(crate) unsafe fn u_freeentry(uep: *mut UndoEntry, mut n: c_int) {
     // SAFETY: a live entry with at least `n` lines, by the contract above.
     while n > 0 {
         n -= 1;

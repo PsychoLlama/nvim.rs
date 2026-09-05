@@ -82,10 +82,10 @@ use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
     Callback, Dict, DictItem, EvalArg, ExArg, ExceptionState, Expand, FuncCall, FuncCallEntry,
-    FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, String_0,
-    TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T,
-    funccall_S_fc_fixvar, regmatch_T, save_redo_T, size_t,
+    FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch,
+    String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
+    estack_T, funccall_S_fc_fixvar, save_redo_T, size_t,
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
@@ -241,8 +241,8 @@ pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_found_var: false,
 };
 
-/// A zeroed `regmatch_T`, for the two places that compile a pattern here.
-pub(crate) const REGMATCH_INIT: regmatch_T = regmatch_T {
+/// A zeroed `RegMatch`, for the two places that compile a pattern here.
+pub(crate) const REGMATCH_INIT: RegMatch = RegMatch {
     regprog: ptr::null_mut(),
     startp: [ptr::null_mut(); 10],
     endp: [ptr::null_mut(); 10],

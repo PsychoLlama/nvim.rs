@@ -28,17 +28,17 @@ use crate::winlayer::windows;
 ///
 /// `sst_union` is a C union discriminated by `sst_stacksize`, and this is the
 /// one place that discrimination is written down.
-unsafe fn entry_states(p: *mut synstate_T, stacksize: c_int) -> *mut bufstate_T {
+unsafe fn entry_states(p: *mut synstate_T, stacksize: c_int) -> *mut BufState {
     if stacksize > SST_FIX_STATES {
         unsafe { (*p).sst_union.sst_heap }
     } else {
-        unsafe { &raw mut (*p).sst_union.sst_stack as *mut bufstate_T }
+        unsafe { &raw mut (*p).sst_union.sst_stack as *mut BufState }
     }
 }
 
-/// A `bufstate_T` with nothing in it, which is what a fresh heap arm holds
+/// A `BufState` with nothing in it, which is what a fresh heap arm holds
 /// until [`fill_entry`] copies the state stack over it.
-const EMPTY_BUFSTATE: bufstate_T = bufstate_T {
+const EMPTY_BUFSTATE: BufState = BufState {
     bs_idx: 0,
     bs_flags: SynFlags::NONE,
     bs_seqnr: 0,
@@ -507,7 +507,7 @@ pub(crate) unsafe fn syn_stack_equal(sp: *mut synstate_T) -> bool {
 /// Do two extmatch references hold the same submatch strings?
 ///
 /// Case is ignored when the item's start pattern had `sp_ic` set.
-unsafe fn extmatch_equal(a: *mut reg_extmatch_T, b: *mut reg_extmatch_T, idx: c_int) -> bool {
+unsafe fn extmatch_equal(a: *mut RegExtMatch, b: *mut RegExtMatch, idx: c_int) -> bool {
     if a.is_null() || b.is_null() {
         return false;
     }

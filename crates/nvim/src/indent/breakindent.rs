@@ -257,7 +257,7 @@ impl BreakindentCache {
     /// must hold the current 'formatlistpat'.
     unsafe fn add_list_indent(&mut self, wp: *mut Window, line: *mut c_char) {
         // SAFETY: the caller's window and line, and the cache's own pattern.
-        let mut regmatch: regmatch_T = regmatch_T {
+        let mut regmatch: RegMatch = RegMatch {
             regprog: unsafe { vim_regcomp(self.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT) },
             startp: [::core::ptr::null_mut(); 10],
             endp: [::core::ptr::null_mut(); 10],

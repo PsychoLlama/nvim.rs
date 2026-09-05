@@ -290,7 +290,7 @@ pub(crate) unsafe fn call_user_expand_func(
 pub(crate) unsafe fn expand_user_defined(
     pat: *const c_char,
     xp: *mut Expand,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
 ) -> Result<(), Failed> {

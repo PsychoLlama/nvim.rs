@@ -57,7 +57,7 @@ struct Searcher {
     /// The compiled pattern. `vim_regexec_multi` may clear `regprog`,
     /// which is how a pattern that turned out to be too expensive stops
     /// the whole search.
-    regmatch: regmmatch_T,
+    regmatch: RegMMatch,
     /// Timeout limit, or null for none.
     tm: *mut ProfTime,
     /// Set when the limit was passed, or null.
@@ -379,7 +379,7 @@ pub unsafe fn searchit(
     pat_use: c_int,
     extra_arg: *mut searchit_arg_T,
 ) -> c_int {
-    let mut regmatch = regmmatch_T::default();
+    let mut regmatch = RegMMatch::default();
     if unsafe {
         search_regcomp(
             pat,
@@ -673,7 +673,7 @@ pub unsafe fn searchit(
 /// # Safety
 /// `rp` must point at the result of a successful match.
 #[inline(always)]
-unsafe fn first_submatch(rp: *mut regmmatch_T) -> c_int {
+unsafe fn first_submatch(rp: *mut RegMMatch) -> c_int {
     let mut submatch = 1;
     while unsafe { (*rp).startpos[submatch as usize].lnum } < 0 {
         if submatch == 9 {

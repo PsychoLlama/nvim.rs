@@ -34,7 +34,7 @@ use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
-    HashValue, NUL, RepItem, SalFirst, int16_t, regprog_T, salitem_T, slang_T, uint8_t,
+    HashValue, NUL, RegProg, RepItem, SalFirst, int16_t, salitem_T, slang_T, uint8_t,
 };
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
@@ -88,7 +88,7 @@ pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, lp: &mut slang_T) -> S
         return Err(SpellReadError::Format);
     }
     let cnt = cnt as usize;
-    let mut progs: Vec<*mut regprog_T> = vec![core::ptr::null_mut(); cnt];
+    let mut progs: Vec<*mut RegProg> = vec![core::ptr::null_mut(); cnt];
 
     for slot in &mut progs {
         let n = spl.getc().map_or(-1, c_int::from);
@@ -109,7 +109,7 @@ pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, lp: &mut slang_T) -> S
     }
 
     lp.sl_prefixcnt = cnt as c_int;
-    lp.sl_prefprog = Box::into_raw(progs.into_boxed_slice()).cast::<*mut regprog_T>();
+    lp.sl_prefprog = Box::into_raw(progs.into_boxed_slice()).cast::<*mut RegProg>();
     Ok(())
 }
 

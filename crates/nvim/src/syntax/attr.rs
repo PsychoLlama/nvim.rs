@@ -127,7 +127,7 @@ pub(crate) unsafe fn syn_current_attr(
     let mut buf_chartab = [0u64; 4];
     save_chartab(&mut buf_chartab);
 
-    let mut cur_extmatch: *mut reg_extmatch_T = ::core::ptr::null_mut();
+    let mut cur_extmatch: *mut RegExtMatch = ::core::ptr::null_mut();
     let mut zero_width_next_list = false;
     let mut cur_si: Option<Item>;
 
@@ -341,7 +341,7 @@ unsafe fn scan_patterns(
     displaying: bool,
     cur_si: Option<Item>,
     zero_width: &[c_int],
-    cur_extmatch: &mut *mut reg_extmatch_T,
+    cur_extmatch: &mut *mut RegExtMatch,
     try_next_column: &GlobalCell<bool>,
 ) {
     next_match_idx.set(0); // no match in this line yet

@@ -72,10 +72,10 @@ use crate::syntax::{
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
-    Buffer, CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, GridView, HlMode,
-    Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber,
-    VirtLines, VirtText, WinExtmark, Window, foldinfo_T, ptrdiff_t, size_t, spellvars_T, ssize_t,
-    statuscol_T, uint8_t, uint32_t, uint64_t, virt_line,
+    Buffer, CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, FoldInfo, GridView,
+    HlMode, Hlf, LineNr, NS, NUL, Pos, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber,
+    VirtLines, VirtText, WinExtmark, Window, ptrdiff_t, size_t, spellvars_T, ssize_t, statuscol_T,
+    uint8_t, uint32_t, uint64_t, virt_line,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
@@ -132,7 +132,7 @@ pub unsafe fn win_line(
     col_rows: ::core::ffi::c_int,
     concealed: bool,
     spv: *mut spellvars_T,
-    foldinfo: foldinfo_T,
+    foldinfo: FoldInfo,
     decor: DecorStateRef,
 ) -> ::core::ffi::c_int {
     debug_assert!(startrow < endrow);

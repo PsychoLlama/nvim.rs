@@ -43,7 +43,7 @@ type Range = Option<(LineNr, LineNr)>;
 /// # Safety
 /// `menu` must name a live node; `eap` must be null (the window toolbar) or
 /// name a live `ExArg`.
-pub(crate) unsafe fn execute_menu(eap: *const ExArg, menu: *mut vimmenu_T, mode_idx: c_int) {
+pub(crate) unsafe fn execute_menu(eap: *const ExArg, menu: *mut VimMenu, mode_idx: c_int) {
     // SAFETY: the caller's obligation. The range is copied out rather than
     // borrowed, because running the rhs re-enters the editor.
     let (menu, from_command, range) = unsafe {
@@ -262,7 +262,7 @@ pub(crate) unsafe fn ex_emenu(eap: *mut ExArg) {
 ///
 /// # Safety
 /// `path_name` must name a NUL-terminated string.
-pub(crate) unsafe fn menu_find(path_name: *const c_char) -> *mut vimmenu_T {
+pub(crate) unsafe fn menu_find(path_name: *const c_char) -> *mut VimMenu {
     // SAFETY: the caller's obligation.
     let path = unsafe { CStr::from_ptr(path_name) };
     let mut buf = scratch(path);

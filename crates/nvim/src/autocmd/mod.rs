@@ -60,10 +60,10 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, BufferHandle, Callback,
+    AcoSave, AucmdWin, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, Buffer, BufferHandle, Callback,
     EStackType, Error, Event, ExArg, Expand, FuncCallEntry, Integer, LuaRetMode, Object, OptVal,
-    ProfTime, SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, aco_save_T,
-    aucmdwin_T, int64_t, save_redo_T, size_t, uint64_t,
+    ProfTime, SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, int64_t,
+    save_redo_T, size_t, uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

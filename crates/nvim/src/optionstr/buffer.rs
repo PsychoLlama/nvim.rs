@@ -45,8 +45,8 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, Buffer, ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, Pos, String_0,
-    fmark_T, fmarkv_T, optset_T,
+    AdditionalData, Buffer, ColNr, FileMark, FileMarkView, LineNr, NUL, OptInt, OptVal,
+    OptionSetFlags, Pos, String_0, optset_T,
 };
 use crate::window::global_stl_height;
 
@@ -184,7 +184,7 @@ pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
             OptionSetFlags::LOCAL,
             SID_NONE,
         );
-        let prompt: *mut fmark_T = unsafe { &raw mut (*buf).b_prompt_start };
+        let prompt: *mut FileMark = unsafe { &raw mut (*buf).b_prompt_start };
         unsafe { free_fmark((*prompt).clone()) };
         unsafe {
             (*prompt).mark = Pos {
@@ -196,7 +196,7 @@ pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
         unsafe { (*prompt).fnum = 0 };
         unsafe { (*prompt).timestamp = os_time() };
         unsafe {
-            (*prompt).view = fmarkv_T {
+            (*prompt).view = FileMarkView {
                 topline_offset: MAXLNUM as c_int as LineNr,
                 skipcol: 0 as ColNr,
             }

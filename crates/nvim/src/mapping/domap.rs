@@ -148,7 +148,7 @@ unsafe fn reuse_mapblock(
     mp.m_script_ctx.sc_lnum += sourcing_lnum();
     // Off `raw()`, not off a `Deref`: the address has to outlive the borrow
     // that produced it.
-    let sctx = mp.field_ptr(offset_of!(mapblock_T, m_script_ctx));
+    let sctx = mp.field_ptr(offset_of!(MapBlock, m_script_ctx));
     // SAFETY: the entry's own field, and `mp` is live.
     unsafe { nlua_set_sctx(sctx) };
 }
@@ -184,9 +184,9 @@ pub(crate) unsafe fn buf_do_map(
     // global ones.
     // SAFETY: `Buf`'s promise — a live buffer.  `&raw` reads nothing, and both
     // addresses come off the one raw pointer rather than off a `&mut`.
-    let buf_table: *mut *mut mapblock_T = unsafe { &raw mut (*bufp).b_maphash }.cast();
+    let buf_table: *mut *mut MapBlock = unsafe { &raw mut (*bufp).b_maphash }.cast();
     // SAFETY: as above.
-    let buf_abbrs: *mut *mut mapblock_T = unsafe { &raw mut (*bufp).b_first_abbr };
+    let buf_abbrs: *mut *mut MapBlock = unsafe { &raw mut (*bufp).b_first_abbr };
     let map_table = if args.buffer {
         buf_table
     } else {
@@ -197,7 +197,7 @@ pub(crate) unsafe fn buf_do_map(
     } else {
         global_abbr_head()
     };
-    let mut mp_result: [*mut mapblock_T; 2] = [ptr::null_mut(); 2];
+    let mut mp_result: [*mut MapBlock; 2] = [ptr::null_mut(); 2];
 
     let unmap_lhs_only = maptype == MAPTYPE_UNMAP_LHS as c_int;
     if unmap_lhs_only {

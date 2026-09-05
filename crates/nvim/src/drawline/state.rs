@@ -43,7 +43,7 @@ pub struct WinLineVars {
     /// Buffer line being drawn.
     pub lnum: LineNr,
     /// Fold state of `lnum`, from `win_update`.
-    pub foldinfo: foldinfo_T,
+    pub foldinfo: FoldInfo,
 
     /// First window row this buffer line occupies.
     pub startrow: ::core::ffi::c_int,

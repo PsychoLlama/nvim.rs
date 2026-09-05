@@ -68,7 +68,7 @@ pub(crate) unsafe fn draw_window_lines(
     mut wp: Win,
     buf: *mut Buffer,
     rg: &mut Regions,
-    cursorline_fi: foldinfo_T,
+    cursorline_fi: FoldInfo,
     spv: &mut spellvars_T,
     decor: DecorStateRef,
 ) -> LineNr {
@@ -175,7 +175,7 @@ pub(crate) unsafe fn draw_window_lines(
                             0,
                             false,
                             &raw mut zero_spv,
-                            foldinfo_T::default(),
+                            FoldInfo::default(),
                             decor,
                         )
                     };
@@ -259,7 +259,7 @@ unsafe fn draw_one_line(
     buf: *mut Buffer,
     rg: &mut Regions,
     w: &mut Walk,
-    cursorline_fi: foldinfo_T,
+    cursorline_fi: FoldInfo,
     spv: &mut spellvars_T,
     decor: DecorStateRef,
 ) -> bool {
@@ -596,7 +596,7 @@ unsafe fn skip_one_line(
     buf: *mut Buffer,
     rg: &Regions,
     w: &mut Walk,
-    cursorline_fi: foldinfo_T,
+    cursorline_fi: FoldInfo,
     spv: &mut spellvars_T,
     decor: DecorStateRef,
 ) {

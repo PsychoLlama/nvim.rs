@@ -52,7 +52,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext_ptr;
 use crate::regexp::vim_regexec_prog;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, langp_T, regprog_T, slang_T, uint8_t};
+use crate::types::{NUL, RegProg, langp_T, slang_T, uint8_t};
 
 use super::Tree;
 use super::chartab::{
@@ -713,7 +713,7 @@ pub unsafe fn valid_word_prefix(
         }
 
         let prefprog_idx = ((pidx as c_uint >> 8) & 0xffff) as isize;
-        let rp: *mut *mut regprog_T = unsafe { (*slang).sl_prefprog.offset(prefprog_idx) };
+        let rp: *mut *mut RegProg = unsafe { (*slang).sl_prefprog.offset(prefprog_idx) };
         if !unsafe { *rp }.is_null() {
             if !unsafe { vim_regexec_prog(rp, false, word, 0) } {
                 continue;

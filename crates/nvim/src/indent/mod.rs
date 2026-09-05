@@ -38,7 +38,7 @@ use crate::textformat::has_format_option;
 use crate::types::*;
 use ::libc::abort;
 
-// `regexp.rs` keeps its own copy of `regprog_T`, so these stay declarations
+// `regexp.rs` keeps its own copy of `RegProg`, so these stay declarations
 // rather than imports. `breakindent.rs` reaches them through `use super::*`.
 use crate::undo::u_savesub;
 
@@ -787,7 +787,7 @@ pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
             )
         };
     }
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: unsafe { vim_regcomp((*curbuf.get()).b_p_flp, RE_MAGIC) },
         startp: [::core::ptr::null_mut::<c_char>(); 10],
         endp: [::core::ptr::null_mut::<c_char>(); 10],

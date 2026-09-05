@@ -2,7 +2,7 @@
 //!
 //! `fold_mark_adjust_recurse` is what every buffer change that inserts, deletes
 //! or moves lines eventually reaches, and it is the only part of the fold
-//! machinery that runs without a window: it walks a `GArray` of `fold_T`
+//! machinery that runs without a window: it walks a `GArray` of `Fold`
 //! and rewrites `fd_top`/`fd_len` in place, recursing into `fd_nested`. The
 //! cases below are the four shapes its `if` chain distinguishes, with the
 //! expected results derived from `v0.12.4`'s `src/nvim/fold.c` rather than
@@ -15,8 +15,8 @@ use std::ffi::c_int;
 use std::mem::size_of;
 use std::ptr;
 
+use neovim::fold::Fold;
 use neovim::fold::adjust::fold_mark_adjust_recurse;
-use neovim::fold::fold_T;
 use neovim::garray::{ga_clear, ga_grow, ga_init};
 use neovim::pos::MAXLNUM;
 use neovim::types::{GArray, LineNr};
@@ -33,7 +33,7 @@ fn empty_list() -> GArray {
         ga_growsize: 0,
         ga_data: ptr::null_mut(),
     };
-    unsafe { ga_init(&raw mut gap, size_of::<fold_T>() as c_int, 10) };
+    unsafe { ga_init(&raw mut gap, size_of::<Fold>() as c_int, 10) };
     gap
 }
 
@@ -41,12 +41,12 @@ fn empty_list() -> GArray {
 /// so a caller can build a second level under it.
 unsafe fn push(gap: &mut GArray, top: LineNr, len: LineNr) -> *mut GArray {
     ga_grow(gap, 1);
-    let fp = (gap.ga_data as *mut fold_T).add(gap.ga_len as usize);
+    let fp = (gap.ga_data as *mut Fold).add(gap.ga_len as usize);
     (*fp).fd_top = top;
     (*fp).fd_len = len;
     (*fp).fd_flags = 0;
     (*fp).fd_small = None;
-    ga_init(&raw mut (*fp).fd_nested, size_of::<fold_T>() as c_int, 10);
+    ga_init(&raw mut (*fp).fd_nested, size_of::<Fold>() as c_int, 10);
     gap.ga_len += 1;
     &raw mut (*fp).fd_nested
 }
@@ -55,7 +55,7 @@ unsafe fn push(gap: &mut GArray, top: LineNr, len: LineNr) -> *mut GArray {
 unsafe fn spans(gap: &GArray) -> Vec<(LineNr, LineNr)> {
     (0..gap.ga_len)
         .map(|i| {
-            let fp = (gap.ga_data as *const fold_T).offset(i as isize);
+            let fp = (gap.ga_data as *const Fold).offset(i as isize);
             ((*fp).fd_top, (*fp).fd_len)
         })
         .collect()
@@ -63,7 +63,7 @@ unsafe fn spans(gap: &GArray) -> Vec<(LineNr, LineNr)> {
 
 unsafe fn free_list(gap: &mut GArray) {
     for i in 0..gap.ga_len {
-        let fp = (gap.ga_data as *mut fold_T).offset(i as isize);
+        let fp = (gap.ga_data as *mut Fold).offset(i as isize);
         free_list(&mut (*fp).fd_nested);
     }
     ga_clear(gap);
@@ -116,7 +116,7 @@ fn a_deletion_reaches_nested_folds() {
         push(&mut *nested, 2, 3);
         fold_mark_adjust_recurse(&raw mut gap, 12, 13, DELETED, -2);
         assert_eq!(spans(&gap), [(10, 8)]);
-        let child = &*((gap.ga_data as *const fold_T).offset(0));
+        let child = &*((gap.ga_data as *const Fold).offset(0));
         assert_eq!(spans(&child.fd_nested), [(2, 1)]);
         free_list(&mut gap);
     }

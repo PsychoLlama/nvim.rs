@@ -38,7 +38,7 @@ use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg;
 use crate::types::{
-    ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, VarNumber, bcount_t, regmatch_T, size_t,
+    ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, RegMatch, VarNumber, bcount_t, size_t,
 };
 use crate::undo::u_save;
 use ::libc::{strcasecmp, strcoll, strtod};
@@ -148,9 +148,9 @@ fn compare_lines(order: StringOrder, l1: &SortLine, l2: &SortLine) -> Ordering {
     keys.then(l1.lnum.cmp(&l2.lnum))
 }
 
-/// A zeroed `regmatch_T`; only `regprog` is meaningful before a match.
-fn no_regmatch() -> regmatch_T {
-    regmatch_T {
+/// A zeroed `RegMatch`; only `regprog` is meaningful before a match.
+fn no_regmatch() -> RegMatch {
+    RegMatch {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],
@@ -171,7 +171,7 @@ fn no_regmatch() -> regmatch_T {
 unsafe fn compile_sort_pattern(
     arg: *mut c_char,
     at: usize,
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
 ) -> Option<usize> {
     // SAFETY: caller's contract.
     let delim = unsafe { arg.add(at) };
@@ -287,7 +287,7 @@ unsafe fn flag_fallback(
     eap: &mut ExArg,
     at: usize,
     byte: u8,
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
     keep_nextcmd: bool,
 ) -> Option<Fallback> {
     let arg = eap.arg;
@@ -315,7 +315,7 @@ unsafe fn flag_fallback(
 unsafe fn parse_sort_flags(
     eap: &mut ExArg,
     spec: &mut SortSpec,
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
     let arg = eap.arg;
     let mut order = StringOrder::BYTES;
@@ -376,7 +376,7 @@ unsafe fn parse_uniq_flags(
     eap: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
     let arg = eap.arg;
     let mut order = StringOrder::BYTES;
@@ -415,11 +415,7 @@ unsafe fn parse_uniq_flags(
 /// # Safety
 /// `line` must be a buffer line, so that the byte past its last is a NUL:
 /// `vim_regexec` reads a string, not a slice.
-unsafe fn match_range(
-    regmatch: &mut regmatch_T,
-    line: &mut [u8],
-    use_match: bool,
-) -> (ColNr, ColNr) {
+unsafe fn match_range(regmatch: &mut RegMatch, line: &mut [u8], use_match: bool) -> (ColNr, ColNr) {
     let len = line.len() as ColNr;
     if regmatch.regprog.is_null() {
         return (0, len);
@@ -523,7 +519,7 @@ unsafe fn collect_sort_keys(
     line1: LineNr,
     line2: LineNr,
     spec: &SortSpec,
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
 ) -> Option<Vec<SortLine>> {
     let mut sorted = Vec::with_capacity((line2 - line1 + 1) as usize);
     // SAFETY: caller's contract -- the scan reads one line at a time and

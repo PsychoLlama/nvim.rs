@@ -134,7 +134,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
+    AcoSave, Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
     CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr,
     ColoredCmdline, CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt,
     Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
@@ -143,8 +143,8 @@ use crate::types::{
     OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
     ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, String_0, Tabpage, TryState,
     TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window, XpPrefix,
-    aco_save_T, dobuf_action_values, dobuf_start_values, optset_T, ptrdiff_t, searchit_arg_T,
-    size_t, time_t, typval_vval_union, uint8_t, uint32_t,
+    dobuf_action_values, dobuf_start_values, optset_T, ptrdiff_t, searchit_arg_T, size_t, time_t,
+    typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,

@@ -18,12 +18,12 @@ use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, NUL, OptVal, OptionSetFlags, TypVal, regmatch_T, regprog_T, size_t};
+use crate::types::{ColNr, NUL, OptVal, OptionSetFlags, RegMatch, RegProg, TypVal, size_t};
 use core::slice;
 
-/// A `regmatch_T` with nothing in it.
-const EMPTY_REGMATCH: regmatch_T = regmatch_T {
-    regprog: null_mut::<regprog_T>(),
+/// A `RegMatch` with nothing in it.
+const EMPTY_REGMATCH: RegMatch = RegMatch {
+    regprog: null_mut::<RegProg>(),
     startp: [null_mut::<c_char>(); 10],
     endp: [null_mut::<c_char>(); 10],
     rm_matchcol: 0,

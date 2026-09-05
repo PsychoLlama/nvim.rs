@@ -36,7 +36,7 @@ pub(crate) fn tag_emsg(msg: &'static CStr) {
 const TAGSTACKSIZE: usize = super::TAGSTACKSIZE as usize;
 
 /// The view a stack entry's mark starts with: no remembered scroll position.
-const NO_VIEW: fmarkv_T = fmarkv_T {
+const NO_VIEW: FileMarkView = FileMarkView {
     topline_offset: MAXLNUM as LineNr,
     skipcol: 0,
 };

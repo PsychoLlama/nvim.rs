@@ -135,9 +135,9 @@ impl FileStack {
 /// The three patterns the walk compiles: what to look for, `'include'`
 /// and `'define'`. Any of them may be absent.
 pub(crate) struct Patterns {
-    pub(crate) pat: regmatch_T,
-    pub(crate) incl: regmatch_T,
-    pub(crate) def: regmatch_T,
+    pub(crate) pat: RegMatch,
+    pub(crate) incl: RegMatch,
+    pub(crate) def: RegMatch,
 }
 
 impl Drop for Patterns {
@@ -155,7 +155,7 @@ impl Drop for Patterns {
 ///
 /// # Safety
 /// `pat` must be NUL-terminated; `into` must be writable.
-unsafe fn compile(into: &mut regmatch_T, pat: *const c_char, ignore_case: bool) -> bool {
+unsafe fn compile(into: &mut RegMatch, pat: *const c_char, ignore_case: bool) -> bool {
     into.regprog = unsafe { vim_regcomp(pat, if magic_isset() { RE_MAGIC } else { 0 }) };
     into.rm_ic = ignore_case;
     !into.regprog.is_null()
@@ -174,9 +174,9 @@ unsafe fn compile_patterns(
     kind: c_int,
 ) -> Option<Patterns> {
     let mut pats = Patterns {
-        pat: regmatch_T::default(),
-        incl: regmatch_T::default(),
-        def: regmatch_T::default(),
+        pat: RegMatch::default(),
+        incl: RegMatch::default(),
+        def: RegMatch::default(),
     };
 
     if kind != CHECK_PATH && kind != FIND_DEFINE && !compl_status_sol() {

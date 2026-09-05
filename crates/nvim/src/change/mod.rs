@@ -85,8 +85,8 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Buffer, CmdModFlags, ColNr, ExtmarkOp, GraphemeState, LineNr, Pos, Vv, bcount_t, fmark_T,
-    fmarkv_T, int64_t, size_t, ssize_t,
+    Buffer, CmdModFlags, ColNr, ExtmarkOp, FileMark, FileMarkView, GraphemeState, LineNr, Pos, Vv,
+    bcount_t, int64_t, size_t, ssize_t,
 };
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};

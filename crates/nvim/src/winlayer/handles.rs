@@ -204,7 +204,7 @@ pub(crate) fn free_deferred() {
 /// Zero names no window, no buffer and no tab page: all three counters
 /// (`last_win_id`, `top_file_num`, `LAST_TP_HANDLE`) are incremented before
 /// they are read, and the editor already spells "no window" as handle `0`
-/// (`aco_save_T::save_prevwin_handle`). Excluding it buys the niche, so an
+/// (`AcoSave::save_prevwin_handle`). Excluding it buys the niche, so an
 /// `Option<WinId>` is four bytes and **all-zero bytes are `None`** — which
 /// is what makes these safe to use as the graph's own list links, since a
 /// `Window`/`Buffer`/`Tabpage` is born from `xcalloc` or `Box::new_zeroed`

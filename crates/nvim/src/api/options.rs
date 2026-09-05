@@ -37,8 +37,8 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    ApiDict, Arena, Buffer, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
-    OptionSetFlags, String_0, aco_save_T, kErrorTypeNone, kErrorTypeValidation, uint64_t,
+    AcoSave, ApiDict, Arena, Buffer, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope,
+    OptVal, OptionSetFlags, String_0, kErrorTypeNone, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -203,7 +203,7 @@ unsafe fn option_target(
 /// caller's.
 unsafe fn do_ft_buf(
     filetype: *const c_char,
-    aco: *mut aco_save_T,
+    aco: *mut AcoSave,
     aco_used: *mut bool,
     err: &mut Error,
 ) -> *mut Buffer {
@@ -314,7 +314,7 @@ pub unsafe fn nvim_get_option_value(
         return Object::Nil.reported(err);
     };
 
-    let mut aco: aco_save_T = aco_save_T::default();
+    let mut aco: AcoSave = AcoSave::default();
     let mut aco_used: bool = false;
     let (paco, pused) = (&raw mut aco, &raw mut aco_used);
     // SAFETY: `aco` and `aco_used` are this frame's own; `target.filetype`

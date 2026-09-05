@@ -35,7 +35,7 @@ use crate::regexp::{
 };
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
-use crate::types::{ColNr, ExArg, LineNr, NUL, regmmatch_T, size_t};
+use crate::types::{ColNr, ExArg, LineNr, NUL, RegMMatch, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -75,7 +75,7 @@ fn selects(kind: u8, matched: bool) -> bool {
 ///
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program.
-unsafe fn matches_line(regmatch: *mut regmmatch_T, lnum: LineNr) -> bool {
+unsafe fn matches_line(regmatch: *mut RegMMatch, lnum: LineNr) -> bool {
     // SAFETY: caller's contract; `curwin`/`curbuf` are the live pair.
     unsafe {
         vim_regexec_multi(
@@ -184,7 +184,7 @@ unsafe fn global_pattern(eap: &mut ExArg) -> Option<GlobalPat> {
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program, and the range must
 /// be lines of the current buffer.
-unsafe fn global_mark(eap: &ExArg, regmatch: *mut regmmatch_T, kind: u8) -> c_int {
+unsafe fn global_mark(eap: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int {
     let (mut lnum, line2) = (eap.line1, eap.line2);
     let mut ndone = 0 as c_int;
     while lnum <= line2 && !got_int.get() {
@@ -243,7 +243,7 @@ pub unsafe fn ex_global(eap: *mut ExArg) {
         return;
     };
 
-    let mut regmatch = regmmatch_T::default();
+    let mut regmatch = RegMMatch::default();
     let mut used_pat: *mut c_char = ptr::null_mut();
     // SAFETY: a pattern and its length, and out-parameters we own.
     let compiled = unsafe {

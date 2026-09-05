@@ -100,7 +100,7 @@ pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Er
         did_emsg: 0,
     };
     unsafe { try_enter(&raw mut tstate) };
-    let mut aco: aco_save_T = aco_save_T::default();
+    let mut aco: AcoSave = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, b) };
     let args: Array = Array {
         size: 0 as size_t,

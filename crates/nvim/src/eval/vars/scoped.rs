@@ -465,7 +465,7 @@ pub unsafe fn f_setbufvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: Eval
     if unsafe { *varname } == b'&' as c_char {
         // An option: the buffer has to be current for the autocommands
         // the change fires, which `aucmd_prepbuf` arranges.
-        let mut aco = aco_save_T::default();
+        let mut aco = AcoSave::default();
         unsafe { aucmd_prepbuf(&raw mut aco, buf) };
         unsafe { set_option_from_tv(varname.add(1), varp) };
         unsafe { aucmd_restbuf(&raw mut aco) };

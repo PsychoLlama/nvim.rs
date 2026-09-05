@@ -23,8 +23,7 @@ pub struct VimMenu {
     pub strings: [*mut ::core::ffi::c_char; 8],
     pub noremap: [::core::ffi::c_int; 8],
     pub silent: [bool; 8],
-    pub children: *mut vimmenu_T,
-    pub parent: *mut vimmenu_T,
-    pub next: *mut vimmenu_T,
+    pub children: *mut VimMenu,
+    pub parent: *mut VimMenu,
+    pub next: *mut VimMenu,
 }
-pub type vimmenu_T = VimMenu;

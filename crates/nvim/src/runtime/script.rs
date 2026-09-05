@@ -311,7 +311,7 @@ pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
     // The pattern's source string is freed on the way out, as upstream does,
     // even when it did not compile.
     let mut pat: *mut c_char = ptr::null_mut();
-    // One `regmatch_T` for the whole run, not one per script: `vim_regexec`
+    // One `RegMatch` for the whole run, not one per script: `vim_regexec`
     // may swap the compiled program out from under it when the NFA engine
     // gives up and the backtracker recompiles the pattern.
     let mut regmatch = empty_regmatch();
@@ -343,7 +343,7 @@ pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
 unsafe fn script_query(
     argvars: *mut TypVal,
     pat: *mut *mut c_char,
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
 ) -> ScriptQuery {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's argument vector; argument 0 always exists.
@@ -389,7 +389,7 @@ unsafe fn script_query(
 /// # Safety
 ///
 /// `l` must be a live list, and `query` must still own its compiled pattern.
-unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut regmatch_T) {
+unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMatch) {
     let total = VarNumber::from(script_count());
     // A `sid` query asks about exactly one script, and answers nothing at all
     // when that script does not exist.
@@ -433,9 +433,9 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut regma
     }
 }
 
-/// An unprogrammed `regmatch_T` carrying the current 'ignorecase'.
-fn empty_regmatch() -> regmatch_T {
-    regmatch_T {
+/// An unprogrammed `RegMatch` carrying the current 'ignorecase'.
+fn empty_regmatch() -> RegMatch {
+    RegMatch {
         regprog: ptr::null_mut(),
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],

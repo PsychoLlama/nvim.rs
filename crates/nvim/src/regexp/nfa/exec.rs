@@ -30,8 +30,8 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, Window, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, uint8_t,
+    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, RegProg, Window,
+    uint8_t,
 };
 
 /// Try to match at column `col` of the current line.
@@ -81,7 +81,7 @@ fn nfa_regtry(
     // The `\z(` captures go to the syntax highlighter as fresh copies,
     // because it keeps them past the end of this match.
     unsafe { unref_extmatch(re_extmatch_out.get()) };
-    re_extmatch_out.set(core::ptr::null_mut::<reg_extmatch_T>());
+    re_extmatch_out.set(core::ptr::null_mut::<RegExtMatch>());
     if unsafe { (*prog).reghasz } == REX_SET {
         cleanup_zsubexpr(rex);
         re_extmatch_out.set(make_extmatch());
@@ -316,7 +316,7 @@ fn try_match(
 /// # Safety
 ///
 /// `expr` must be null or a NUL-terminated pattern.
-pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut regprog_T {
+pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut RegProg {
     if expr.is_null() {
         return core::ptr::null_mut();
     }
@@ -367,7 +367,7 @@ pub(crate) unsafe fn nfa_regcomp(expr: *mut uint8_t, re_flags: c_int) -> *mut re
 /// # Safety
 ///
 /// `prog` must be null or such a program.
-pub(crate) unsafe fn nfa_regfree(prog: *mut regprog_T) {
+pub(crate) unsafe fn nfa_regfree(prog: *mut RegProg) {
     if prog.is_null() {
         return;
     }
@@ -385,7 +385,7 @@ pub(crate) unsafe fn nfa_regfree(prog: *mut regprog_T) {
 /// `rmp` must hold a program this engine compiled, and `line` be a
 /// NUL-terminated string.
 pub(crate) unsafe fn nfa_regexec_nl(
-    rmp: *mut regmatch_T,
+    rmp: *mut RegMatch,
     line: *mut uint8_t,
     col: ColNr,
     line_lbr: bool,
@@ -404,7 +404,7 @@ pub(crate) unsafe fn nfa_regexec_nl(
 /// `rmp` must hold a program this engine compiled, and `buf`/`win` be the
 /// buffer and window the match runs over.
 pub(crate) unsafe fn nfa_regexec_multi(
-    rmp: *mut regmmatch_T,
+    rmp: *mut RegMMatch,
     win: *mut Window,
     buf: *mut Buffer,
     lnum: LineNr,

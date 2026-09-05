@@ -289,7 +289,7 @@ pub(crate) unsafe fn do_path_expand(
     if pat.is_null() {
         return 0;
     }
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         // Ignore case if given 'wildignorecase', else respect
         // 'fileignorecase'.
         rm_ic: flags.has(ExpandFlags::ICASE) || p_fic.get() != 0,
@@ -422,7 +422,7 @@ fn name_is_wanted(name: &[u8], starts_with_dot: bool, flags: ExpandFlags) -> boo
 /// # Safety
 /// `comp` must hold at least `comp_len` bytes.
 unsafe fn name_matches(
-    regmatch: &mut regmatch_T,
+    regmatch: &mut RegMatch,
     name: &[u8],
     flags: ExpandFlags,
     comp: &[u8],

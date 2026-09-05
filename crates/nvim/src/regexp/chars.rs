@@ -11,7 +11,7 @@ use super::{ByteClass, MAGIC_ALL, RF_HASNL, reg_cpo_lit, reg_magic};
 use crate::global_cell::GlobalCell;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::option::cpo_has;
-use crate::types::{CpoFlag, regprog_T};
+use crate::types::{CpoFlag, RegProg};
 
 /// A magic metacharacter is held as its byte minus 256, so that the parser
 /// can tell `*` (a repeat) from `\*` (a literal star) by sign alone. These
@@ -189,7 +189,7 @@ pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> Option<CharClass> 
     Some(CHAR_CLASS_TAB[i].1)
 }
 
-pub unsafe fn re_multiline(prog: *const regprog_T) -> bool {
+pub unsafe fn re_multiline(prog: *const RegProg) -> bool {
     (unsafe { (*prog).regflags } & RF_HASNL as u32) != 0
 }
 

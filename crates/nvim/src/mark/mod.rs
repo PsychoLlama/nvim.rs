@@ -142,34 +142,34 @@ pub unsafe fn setmark(c: c_int) -> Result<(), Failed> {
     }
 }
 
-/// Free fmark_T item
+/// Free FileMark item
 ///
 /// # Safety
 /// `fm.additional_data` must be an owned allocation or null, and must not be
 /// reachable from anywhere else afterwards.
-pub unsafe fn free_fmark(fm: fmark_T) {
+pub unsafe fn free_fmark(fm: FileMark) {
     // SAFETY: forwarded from the caller.
     unsafe { xfree(fm.additional_data.cast()) };
 }
 
-/// Free xfmark_T item
+/// Free XFileMark item
 ///
 /// # Safety
 /// As [`free_fmark`], plus `fm.fname` must be an owned allocation or null.
-pub unsafe fn free_xfmark(fm: xfmark_T) {
+pub unsafe fn free_xfmark(fm: XFileMark) {
     // SAFETY: forwarded from the caller.
     unsafe { xfree(fm.fname.cast()) };
     unsafe { free_fmark(fm.fmark) };
 }
 
-/// Free and clear fmark_T item.
+/// Free and clear FileMark item.
 ///
 /// Does not trigger "MarkSet" event.
 ///
 /// # Safety
-/// `fm` must point at a live, writable `fmark_T` whose `additional_data` is
+/// `fm` must point at a live, writable `FileMark` whose `additional_data` is
 /// this store's to free.
-pub unsafe fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
+pub unsafe fn clear_fmark(fm: *mut FileMark, timestamp: Timestamp) {
     // SAFETY: forwarded from the caller.
     unsafe { Fmark::new(fm) }.clear(timestamp);
 }
@@ -231,12 +231,12 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buf: *mut Buffer) {
 ///
 /// # Safety
 /// `pos` must point at a live position; `view_pt` must be null or point at a
-/// live `fmarkv_T`.
+/// live `FileMarkView`.
 pub unsafe fn setmark_pos(
     c: c_int,
     pos: *mut Pos,
     fnum: c_int,
-    view_pt: *mut fmarkv_T,
+    view_pt: *mut FileMarkView,
 ) -> Result<(), Failed> {
     // SAFETY: the caller promised a live position, and a live view or null.
     let (at, view) = unsafe { (*pos, if view_pt.is_null() { NO_VIEW } else { *view_pt }) };
@@ -338,13 +338,13 @@ pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
     }
 }
 
-/// Wrap a `Pos` into an `fmark_T`, used to abstract marks handling.
+/// Wrap a `Pos` into an `FileMark`, used to abstract marks handling.
 ///
 /// `fmp` is the caller's own record and is where the answer is written; the
 /// address handed back is `fmp` itself, so the mark lives exactly as long as
 /// the caller's slot does. Only `fnum` and `mark` are touched — `view`,
 /// `timestamp` and `additional_data` are left as the caller found them, which
-/// is why a slot starts life as [`fmark_T::UNSET`].
+/// is why a slot starts life as [`FileMark::UNSET`].
 ///
 /// The C had a single `static` here that every `fmp`-less caller shared, so
 /// two motion-mark lookups invalidated each other; the slot is the caller's
@@ -356,8 +356,8 @@ pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
 ///
 /// # Safety
 /// `buf` must be a live buffer and `fmp` must point at a live, writable
-/// `fmark_T` that outlives every use of the answer.
-pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut fmark_T, pos: Pos) -> *mut fmark_T {
+/// `FileMark` that outlives every use of the answer.
+pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut FileMark, pos: Pos) -> *mut FileMark {
     debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
     // SAFETY: the caller promised a live, writable record.
     let fm = unsafe { Fmark::new(fmp) };
@@ -374,8 +374,8 @@ pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut fmark_T, pos: Pos) -> *mut
 /// `fm` — the named mark.
 ///
 /// # Safety
-/// `fm` must be null or point at a live `fmark_T`.
-pub unsafe fn mark_view_restore(fmp: *mut fmark_T) {
+/// `fm` must be null or point at a live `FileMark`.
+pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
     if fmp.is_null() {
         return;
     }
@@ -411,15 +411,15 @@ pub unsafe fn mark_view_restore(fmp: *mut fmark_T) {
 
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn mark_view_make(wp: *const Window, pos: Pos) -> fmarkv_T {
+pub unsafe fn mark_view_make(wp: *const Window, pos: Pos) -> FileMarkView {
     // SAFETY: the caller promised a live window.
     mark_view_make_at(unsafe { Win::new(wp.cast_mut()) }, pos)
 }
 
 /// The view [`mark_view_make`] records: how far below the window's topline the
 /// position sits, and where the window was scrolled to sideways.
-fn mark_view_make_at(wp: Win, pos: Pos) -> fmarkv_T {
-    fmarkv_T {
+fn mark_view_make_at(wp: Win, pos: Pos) -> FileMarkView {
+    FileMarkView {
         topline_offset: pos.lnum - wp.w_topline,
         skipcol: wp.w_skipcol,
     }
@@ -430,9 +430,9 @@ fn mark_view_make_at(wp: Win, pos: Pos) -> fmarkv_T {
 /// until the mark is used to avoid a long startup delay.
 ///
 /// # Safety
-/// `fm` must point at a live `xfmark_T` whose `fname`, if set, is a
+/// `fm` must point at a live `XFileMark` whose `fname`, if set, is a
 /// NUL-terminated string.
-pub(super) unsafe fn fname2fnum(fm: *mut xfmark_T) {
+pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
     // SAFETY: the caller promised a live record.
     let fm = unsafe { Xfmark::new(fm) };
     let fname = fm.fname();
@@ -520,8 +520,8 @@ unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buf: Buf) {
 /// Returns true if the mark passes all the above checks, else false.
 ///
 /// # Safety
-/// `fm` must be null or point at a live `fmark_T`.
-pub(crate) unsafe fn mark_check(fm: *mut fmark_T, errormsg: &mut Option<CString>) -> bool {
+/// `fm` must be null or point at a live `FileMark`.
+pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString>) -> bool {
     if fm.is_null() {
         // SAFETY: a NUL-terminated message static.
         *errormsg = Some(unsafe { ex_msg(e_umark.as_ptr()) });
@@ -554,10 +554,10 @@ pub(crate) unsafe fn mark_check(fm: *mut fmark_T, errormsg: &mut Option<CString>
 ///
 /// # Safety
 /// `buf` must be null or a live buffer, and `fm` must point at a live
-/// `fmark_T`.
+/// `FileMark`.
 pub(crate) unsafe fn mark_check_line_bounds(
     buf: *mut Buffer,
-    fm: *mut fmark_T,
+    fm: *mut FileMark,
     errormsg: &mut Option<CString>,
 ) -> bool {
     // SAFETY: the caller promised a live buffer or null.

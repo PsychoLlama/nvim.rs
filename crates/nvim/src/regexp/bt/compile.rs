@@ -29,7 +29,7 @@ use crate::regexp::{
     re_multi_type, refresh_cpo_flags, reg_magic, reg_strict, reg_string, reg_toolong, regcode,
     regflags, regnpar, regnzpar, regparse, regsize,
 };
-use crate::types::{NUL, int64_t, regengine_T, regprog_T, uint8_t, uint32_t};
+use crate::types::{NUL, RegEngine, RegProg, int64_t, uint8_t, uint32_t};
 
 /// The fixed part of a node: the opcode plus the offset to the next one.
 const NODE_HDR: usize = 3;
@@ -37,7 +37,7 @@ const NODE_HDR: usize = 3;
 /// A compiled backtracking program.
 ///
 /// One `xmalloc` block: a fixed head, then the `REGMAGIC` stamp, then the
-/// nodes. The head opens with the same five fields `regprog_T` and the NFA's
+/// nodes. The head opens with the same five fields `RegProg` and the NFA's
 /// `nfa_regprog_T` open with — C's single inheritance, and what lets
 /// `vim_regexec` hand any program to any engine and lets each engine cast the
 /// pointer back to its own shape. **That prefix is the layout and stays
@@ -83,7 +83,7 @@ impl BtProg {
 
     /// Hand the block back to the caller of `bt_regcomp`, as the engine's
     /// shared shape.
-    pub(crate) fn into_regprog(self) -> *mut regprog_T {
+    pub(crate) fn into_regprog(self) -> *mut RegProg {
         self.0.cast()
     }
 
@@ -174,7 +174,7 @@ impl BtProg {
     }
 
     #[inline(always)]
-    pub(crate) fn set_engine(self, engine: *mut regengine_T) {
+    pub(crate) fn set_engine(self, engine: *mut RegEngine) {
         unsafe { (*self.0).engine = engine };
     }
 

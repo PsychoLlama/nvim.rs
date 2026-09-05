@@ -445,9 +445,9 @@ pub(super) unsafe fn mark_line(pos: Pos, lead_len: c_int) -> *mut c_char {
 /// Returns an allocated string.
 ///
 /// # Safety
-/// `fmark` must point at a live `fmark_T` and the editor's globals must be
+/// `fmark` must point at a live `FileMark` and the editor's globals must be
 /// live.
-pub unsafe fn fm_getname(fmark: *mut fmark_T, lead_len: c_int) -> *mut c_char {
+pub unsafe fn fm_getname(fmark: *mut FileMark, lead_len: c_int) -> *mut c_char {
     // SAFETY: the caller promised a live record; `curbuf` is live.
     let (fm, buf) = unsafe { (Fmark::new(fmark), Buf::current()) };
     if fm.fnum() == buf.handle {

@@ -1,8 +1,8 @@
 //! The jump list and the change list.
 //!
 //! Both are fixed arrays with a length and an index: the jump list is a
-//! window's `[xfmark_T; JUMPLISTSIZE]` and the change list a buffer's
-//! `[fmark_T; JUMPLISTSIZE]`. The index is where `<C-o>`/`<C-i>` and `g;`/`g,`
+//! window's `[XFileMark; JUMPLISTSIZE]` and the change list a buffer's
+//! `[FileMark; JUMPLISTSIZE]`. The index is where `<C-o>`/`<C-i>` and `g;`/`g,`
 //! currently stand, and `idx == len` is a **legal** one-past-the-end state —
 //! it is what makes `:jumps` print its trailing bare `>` row and the first
 //! `<C-o>` reach the newest entry rather than the one before it.
@@ -72,15 +72,15 @@ pub fn setpcmark() {
         // SAFETY: the list is full, so entry 0 is live and its allocations
         // are the list's to free.
         unsafe { free_xfmark(win.jump(0).read()) };
-        // SAFETY: source and destination are inside `[xfmark_T; 100]` and the
+        // SAFETY: source and destination are inside `[XFileMark; 100]` and the
         // length is the constant `JUMPLISTSIZE - 1`, so the move ends exactly
         // at the array's last element. Raising it writes past the array.
-        let list = unsafe { &raw mut (*win.raw()).w_jumplist }.cast::<xfmark_T>();
+        let list = unsafe { &raw mut (*win.raw()).w_jumplist }.cast::<XFileMark>();
         let into = list.cast::<u8>();
         unsafe {
             into.copy_from(
                 list.offset(1).cast(),
-                ((JUMPLISTSIZE - 1) as size_t).wrapping_mul(size_of::<xfmark_T>()),
+                ((JUMPLISTSIZE - 1) as size_t).wrapping_mul(size_of::<XFileMark>()),
             )
         };
     }
@@ -127,7 +127,7 @@ pub unsafe fn checkpcmark() {
 ///
 /// # Safety
 /// `win` must be a live window and the editor's globals must be live.
-pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut fmark_T {
+pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live window.
     let mut win = unsafe { Win::new(win) };
     // SAFETY: as above.
@@ -176,7 +176,7 @@ pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut fmark_T {
 ///
 /// # Safety
 /// `buf` must be a live buffer and `win` a live window.
-pub unsafe fn get_changelist(buf: *mut Buffer, win: *mut Window, count: c_int) -> *mut fmark_T {
+pub unsafe fn get_changelist(buf: *mut Buffer, win: *mut Window, count: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
     let (buf, mut win) = unsafe { (Buf::new(buf), Win::new(win)) };
     if buf.b_changelistlen == 0 {
@@ -228,15 +228,15 @@ pub unsafe fn mark_jumplist_forget_file(wp: *mut Window, fnum: c_int) {
             wp.w_jumplistidx -= 1;
         }
         wp.w_jumplistlen -= 1;
-        // SAFETY: source and destination are inside `[xfmark_T; 100]` and the
+        // SAFETY: source and destination are inside `[XFileMark; 100]` and the
         // length is what is left above `i`, so the move stays in the array.
-        let list = unsafe { &raw mut (*wp.raw()).w_jumplist }.cast::<xfmark_T>();
+        let list = unsafe { &raw mut (*wp.raw()).w_jumplist }.cast::<XFileMark>();
         unsafe {
             (list.offset(i as isize)).cast::<u8>().copy_from(
                 (list.offset(i as isize + 1)).cast(),
                 size_t::try_from(wp.w_jumplistlen - i)
                     .unwrap_or(0)
-                    .wrapping_mul(size_of::<xfmark_T>()),
+                    .wrapping_mul(size_of::<XFileMark>()),
             )
         };
     }
@@ -510,12 +510,12 @@ pub unsafe fn ex_changes(_eap: *mut ExArg) {
 ///
 /// # Safety
 /// `win` must be a live window, `fm` must point at a live, writable
-/// `xfmark_T`, and `iter` must be null or a value a previous call answered for
+/// `XFileMark`, and `iter` must be null or a value a previous call answered for
 /// the same window.
 pub unsafe fn mark_jumplist_iter(
     iter: *const c_void,
     win: *const Window,
-    fm: *mut xfmark_T,
+    fm: *mut XFileMark,
 ) -> *const c_void {
     // SAFETY: the caller promised a live window and a live out-parameter.
     let (win, out) = unsafe { (Win::new(win.cast_mut()), Xfmark::new(fm)) };

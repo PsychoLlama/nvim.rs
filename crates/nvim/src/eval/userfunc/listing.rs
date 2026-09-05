@@ -22,7 +22,7 @@ use crate::types::{ExpandContext, IOSIZE, NUL};
 ///
 /// # Safety
 /// `regmatch` is null or a compiled pattern.
-pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
+pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
     let prev_ht_changed = func_table().changed();
     let mut todo = func_table().used();
     let mut idx = 0;

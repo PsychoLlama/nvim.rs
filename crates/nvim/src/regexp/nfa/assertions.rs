@@ -18,7 +18,7 @@ use crate::pos::MAXCOL;
 use crate::regexp::{
     Rex, kMarkBufLocal, nfa_state_T, reg_getline, reg_getline_len, reg_match_visual,
 };
-use crate::types::{ColNr, LineNr, MB_MAXBYTES, Window, fmark_T, uint8_t};
+use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, Window, uint8_t};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
@@ -110,10 +110,10 @@ pub(crate) fn at_vcol(rex: Rex, state: *mut nfa_state_T) -> bool {
 pub(crate) fn at_mark(rex: Rex, state: *mut nfa_state_T) -> bool {
     // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
     // store of its own, so it is computed straight into this frame's slot.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     // SAFETY: reads the match context and the buffer's marks.
     let col = if rex.multi() { col(rex) } else { 0 };
-    let fm: *mut fmark_T = unsafe {
+    let fm: *mut FileMark = unsafe {
         mark_get(
             rex.reg_buf(),
             curwin.get(),

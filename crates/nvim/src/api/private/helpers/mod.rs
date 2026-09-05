@@ -35,9 +35,9 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr,
-    MsgList, NUL, Pos, ScriptId, String_0, Tabpage, TabpageHandle, TryState, Window, WindowHandle,
-    fmarkv_T, int64_t, kErrorTypeException, uint64_t,
+    ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, FileMarkView, Handle, HlMessage,
+    Integer, LineNr, MsgList, NUL, Pos, ScriptId, String_0, Tabpage, TabpageHandle, TryState,
+    Window, WindowHandle, int64_t, kErrorTypeException, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -380,7 +380,7 @@ pub(crate) unsafe fn set_mark(
     let mark = unsafe { *name.data() } as c_int;
     // SAFETY: `buf` is live.
     let handle = unsafe { (*buf).handle };
-    let (at, no_view) = (&raw mut pos, ptr::null_mut::<fmarkv_T>());
+    let (at, no_view) = (&raw mut pos, ptr::null_mut::<FileMarkView>());
     // SAFETY: `pos` is this frame's, and the mark is set in `handle`.
     let res = unsafe { setmark_pos(mark, at, handle, no_view) }.is_ok();
     if !res {

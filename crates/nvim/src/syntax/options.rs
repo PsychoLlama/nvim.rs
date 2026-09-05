@@ -459,7 +459,7 @@ unsafe fn parse_id_name(
     name.pop();
     name.push(b'$');
     name.push(0);
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: unsafe { vim_regcomp(name.as_ptr() as *const c_char, RE_MAGIC) },
         startp: [::core::ptr::null_mut(); 10],
         endp: [::core::ptr::null_mut(); 10],

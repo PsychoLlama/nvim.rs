@@ -13,17 +13,17 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, Array, BreakAt, Buffer, BufferRef, Callback, Channel, CmdMod, CmdModFlags,
-    ColNr, DecorState, DispTick, EStackType, EstackInfo, Exception, FILE, Frame, GArray, Handle,
-    Hlf, LPos, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s,
-    MatchState, MsgList, MultiQueue, NS, Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount,
-    RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage, UV_MUTEX_INIT,
-    UV_RWLOCK_INIT, WinExtmark, Window, XDGVarType, alist_T, aucmdwin_T, bln_values, caller_scope,
-    estack_T, file_comparison, fmark_T, fmarkv_T, int16_t, int32_t, int64_t, nlua_ref_state_t,
-    nvim_stats_s, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, uint8_t, uint32_t,
-    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, xfmark_T,
+    AdditionalData, Array, AucmdWin, BreakAt, Buffer, BufferRef, Callback, Channel, CmdMod,
+    CmdModFlags, ColNr, DecorState, DispTick, EStackType, EstackInfo, Exception, FILE, FileMark,
+    FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop, LuaRef, LuaRetMode, MTNode,
+    MTPos, MarkTreeIter, MarkTreeIter_s, MatchState, MsgList, MultiQueue, NS, Object, OptInt,
+    OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, RegMMatch, RegMatch, RegProg, RgbValue,
+    ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT,
+    VimMenu, WinExtmark, Window, XDGVarType, XFileMark, alist_T, bln_values, caller_scope,
+    estack_T, file_comparison, int16_t, int32_t, int64_t, nlua_ref_state_t, nvim_stats_s, size_t,
+    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
+    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
+    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -78,7 +78,7 @@ pub(crate) const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub struct AucmdWinVec {
     pub size: size_t,
     pub capacity: size_t,
-    pub items: *mut aucmdwin_T,
+    pub items: *mut AucmdWin,
 }
 pub(crate) const BLN_LISTED: bln_values = 2;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
@@ -190,7 +190,7 @@ pub static did_cursorhold: GlobalCell<bool> = GlobalCell::new(true);
 pub static aucmd_win_vec: GlobalCell<AucmdWinVec> = GlobalCell::new(AucmdWinVec {
     size: 0 as size_t,
     capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<aucmdwin_T>(),
+    items: ::core::ptr::null_mut::<AucmdWin>(),
 });
 pub static deferred_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
@@ -251,8 +251,8 @@ pub static win_extmark_arr: GlobalCell<Vec<WinExtmark>> = GlobalCell::new(Vec::n
 pub static updating_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
 pub static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(MatchState {
-    rm: regmmatch_T {
-        regprog: ::core::ptr::null_mut::<regprog_T>(),
+    rm: RegMMatch {
+        regprog: ::core::ptr::null_mut::<RegProg>(),
         startpos: [LPos { lnum: 0, col: 0 }; 10],
         endpos: [LPos { lnum: 0, col: 0 }; 10],
         rmm_matchcol: 0,
@@ -624,8 +624,8 @@ pub static mouse_col: GlobalCell<c_int> = GlobalCell::new(0);
 pub static mouse_past_bottom: GlobalCell<bool> = GlobalCell::new(false);
 pub static mouse_past_eol: GlobalCell<bool> = GlobalCell::new(false);
 pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static root_menu: GlobalCell<*mut vimmenu_T> =
-    GlobalCell::new(::core::ptr::null_mut::<vimmenu_T>());
+pub static root_menu: GlobalCell<*mut VimMenu> =
+    GlobalCell::new(::core::ptr::null_mut::<VimMenu>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
@@ -736,8 +736,8 @@ pub static cmdmod: GlobalCell<CmdMod> = GlobalCell::new(CmdMod {
     cmod_split: 0,
     cmod_tab: 0,
     cmod_filter_pat: ::core::ptr::null_mut::<c_char>(),
-    cmod_filter_regmatch: regmatch_T {
-        regprog: ::core::ptr::null_mut::<regprog_T>(),
+    cmod_filter_regmatch: RegMatch {
+        regprog: ::core::ptr::null_mut::<RegProg>(),
         startp: [::core::ptr::null_mut::<c_char>(); 10],
         endp: [::core::ptr::null_mut::<c_char>(); 10],
         rm_matchcol: 0,
@@ -783,10 +783,10 @@ pub static got_int: GlobalCell<bool> = GlobalCell::new(false);
 pub static bangredo: GlobalCell<bool> = GlobalCell::new(false);
 pub static searchcmdlen: GlobalCell<c_int> = GlobalCell::new(0);
 pub static reg_do_extmatch: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static re_extmatch_in: GlobalCell<*mut reg_extmatch_T> =
-    GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
-pub static re_extmatch_out: GlobalCell<*mut reg_extmatch_T> =
-    GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
+pub static re_extmatch_in: GlobalCell<*mut RegExtMatch> =
+    GlobalCell::new(::core::ptr::null_mut::<RegExtMatch>());
+pub static re_extmatch_out: GlobalCell<*mut RegExtMatch> =
+    GlobalCell::new(::core::ptr::null_mut::<RegExtMatch>());
 pub static did_outofmem_msg: GlobalCell<bool> = GlobalCell::new(false);
 pub static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
 pub static global_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -1489,9 +1489,9 @@ static err_extra_cmd: GlobalCell<*const c_char> = GlobalCell::new(
 );
 pub static tslua_query_parse_count: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
-/// An unset entry of [`namedfm`]; a `const` because `xfmark_T` is not `Copy`.
-const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
-    fmark: fmark_T {
+/// An unset entry of [`namedfm`]; a `const` because `XFileMark` is not `Copy`.
+const UNSET_NAMED_MARK: XFileMark = XFileMark {
+    fmark: FileMark {
         mark: Pos {
             lnum: 0 as LineNr,
             col: 0,
@@ -1499,7 +1499,7 @@ const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
         },
         fnum: 0,
         timestamp: 0,
-        view: fmarkv_T {
+        view: FileMarkView {
             topline_offset: 0,
             skipcol: 0,
         },
@@ -1507,7 +1507,7 @@ const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
     },
     fname: ::core::ptr::null_mut::<c_char>(),
 };
-pub static namedfm: GlobalCell<[xfmark_T; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
+pub static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
 pub static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 pub static repeat_luaref: GlobalCell<LuaRef> = GlobalCell::new(-2 as LuaRef);

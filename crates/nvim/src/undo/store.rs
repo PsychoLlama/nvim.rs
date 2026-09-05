@@ -1,6 +1,6 @@
 //! Who owns an undo header, and how one header names another.
 //!
-//! Every `u_header_T` a buffer has lives in that buffer's [`UndoStore`],
+//! Every `UndoHeader` a buffer has lives in that buffer's [`UndoStore`],
 //! keyed by the header's `uh_seq`. A [`UndoLink`] — the type all four
 //! `uh_next`/`uh_prev`/`uh_alt_next`/`uh_alt_prev` fields and all three
 //! `b_u_*head` fields now have — is that same sequence number, so following
@@ -20,7 +20,7 @@
 //!   displaced.
 //!
 //! Headers are still individually `xmalloc`ed rather than held inline: the
-//! tree still walks a header through a `*mut u_header_T` in the places that
+//! tree still walks a header through a `*mut UndoHeader` in the places that
 //! free one, and a stable address is what lets the store change underneath
 //! them. [`Header`] is that view, and [`crate::winlayer::Buf::header`] is
 //! the only way to get one.
@@ -45,7 +45,7 @@ use core::ptr::NonNull;
 use std::collections::HashMap;
 
 use crate::memory::xfree;
-use crate::types::{UndoLink, u_header_T};
+use crate::types::{UndoHeader, UndoLink};
 use crate::winlayer::Buf;
 
 use super::lastmark;
@@ -58,7 +58,7 @@ use super::lastmark;
 /// until something asks for it to go.
 #[derive(Default)]
 pub struct UndoStore {
-    headers: HashMap<c_int, NonNull<u_header_T>>,
+    headers: HashMap<c_int, NonNull<UndoHeader>>,
 }
 
 impl UndoStore {
@@ -90,7 +90,7 @@ impl UndoStore {
     ///
     /// Safe because handing back an address is not reading through it; the
     /// caller's dereference is where the obligation starts.
-    pub fn at(&self, link: UndoLink) -> *mut u_header_T {
+    pub fn at(&self, link: UndoLink) -> *mut UndoHeader {
         if link.is_none() {
             // Not a lookup: "no link" is not a key, and refusing it here is
             // what keeps a store that somehow held key 0 from answering it.
@@ -109,13 +109,13 @@ impl UndoStore {
     /// read out of a file is corruption and for one the editor just built is
     /// a bug. The displaced header is *not* freed: the caller knows whether
     /// its entries have been freed yet and this does not.
-    pub fn insert(&mut self, seq: c_int, uhp: NonNull<u_header_T>) -> Option<NonNull<u_header_T>> {
+    pub fn insert(&mut self, seq: c_int, uhp: NonNull<UndoHeader>) -> Option<NonNull<UndoHeader>> {
         debug_assert!(seq > 0, "an undo header's sequence number is positive");
         self.headers.insert(seq, uhp)
     }
 
     /// Gives up ownership of the header `link` names, and hands it back.
-    pub fn take(&mut self, link: UndoLink) -> Option<NonNull<u_header_T>> {
+    pub fn take(&mut self, link: UndoLink) -> Option<NonNull<UndoHeader>> {
         self.headers.remove(&link.seq())
     }
 
@@ -140,13 +140,13 @@ impl UndoStore {
 /// has been freed is gone from the store, so [`Buf::header`] either hands back
 /// a live header or hands back nothing.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Header(*mut u_header_T);
+pub(crate) struct Header(*mut UndoHeader);
 
 impl core::ops::Deref for Header {
-    type Target = u_header_T;
+    type Target = UndoHeader;
 
     #[inline(always)]
-    fn deref(&self) -> &u_header_T {
+    fn deref(&self) -> &UndoHeader {
         // SAFETY: the constructor's promise — a live header.
         unsafe { &*self.0 }
     }
@@ -154,7 +154,7 @@ impl core::ops::Deref for Header {
 
 impl core::ops::DerefMut for Header {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut u_header_T {
+    fn deref_mut(&mut self) -> &mut UndoHeader {
         // SAFETY: the constructor's promise — a live header. The borrow lasts
         // only as long as the field access that asked for it.
         unsafe { &mut *self.0 }
@@ -169,13 +169,13 @@ impl Header {
     /// `uhp` is NULL, or points at a header that stays live for as long as
     /// the value is used.
     #[inline(always)]
-    pub(crate) const unsafe fn new(uhp: *mut u_header_T) -> Option<Self> {
+    pub(crate) const unsafe fn new(uhp: *mut UndoHeader) -> Option<Self> {
         if uhp.is_null() { None } else { Some(Self(uhp)) }
     }
 
     /// The address the store holds, for the callers that still want one.
     #[inline(always)]
-    pub(crate) fn raw(self) -> *mut u_header_T {
+    pub(crate) fn raw(self) -> *mut UndoHeader {
         self.0
     }
 
@@ -225,7 +225,7 @@ impl Buf {
 ///
 /// Safe: a [`Buf`] already carries the promise the lookup needs, and a link
 /// that names nothing — or a header that has been freed — resolves to NULL.
-fn header_at(buf: Buf, link: UndoLink) -> *mut u_header_T {
+fn header_at(buf: Buf, link: UndoLink) -> *mut UndoHeader {
     // SAFETY: a live buffer, by `Buf`'s own contract; `b_u_store` is NULL or
     // a store this module allocated and nothing else writes it, and the
     // borrow does not leave this statement.
@@ -424,7 +424,7 @@ unsafe fn store_for<'a>(mut buf: Buf) -> &'a mut UndoStore {
 /// # Safety
 ///
 /// `uhp` points at a live header the store does not already own.
-pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut u_header_T) -> UndoLink {
+pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut UndoHeader) -> UndoLink {
     // SAFETY: a live header by the contract above.
     let seq = unsafe { (*uhp).uh_seq };
     debug_assert!(seq > 0, "an undo header's sequence number is positive");
@@ -452,7 +452,7 @@ pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut u_header_T) -> UndoLink {
 ///
 /// `uhp` points at a live header allocated by `xmalloc`, and nothing else
 /// holds a pointer to that header.
-pub(crate) unsafe fn header_free(buf: Buf, uhp: *mut u_header_T) {
+pub(crate) unsafe fn header_free(buf: Buf, uhp: *mut UndoHeader) {
     // SAFETY: a live header by the contract above.
     let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
     // SAFETY: the borrow does not leave this statement.
@@ -483,7 +483,7 @@ pub(crate) unsafe fn header_free(buf: Buf, uhp: *mut u_header_T) {
 pub(crate) unsafe fn header_chain(
     buf: Buf,
     start: UndoLink,
-    step: fn(&u_header_T) -> UndoLink,
+    step: fn(&UndoHeader) -> UndoLink,
 ) -> HeaderChain {
     HeaderChain {
         buf,
@@ -496,7 +496,7 @@ pub(crate) unsafe fn header_chain(
 pub(crate) struct HeaderChain {
     buf: Buf,
     state: ChainState,
-    step: fn(&u_header_T) -> UndoLink,
+    step: fn(&UndoHeader) -> UndoLink,
 }
 
 enum ChainState {
@@ -551,15 +551,15 @@ mod tests {
     use super::*;
 
     /// A header carrying `seq` and nothing else, owned by the caller.
-    fn header(seq: c_int) -> NonNull<u_header_T> {
-        let uh = u_header_T {
+    fn header(seq: c_int) -> NonNull<UndoHeader> {
+        let uh = UndoHeader {
             uh_seq: seq,
             ..Default::default()
         };
         NonNull::from(Box::leak(Box::new(uh)))
     }
 
-    fn release(uhp: NonNull<u_header_T>) {
+    fn release(uhp: NonNull<UndoHeader>) {
         // SAFETY: `header` made this with `Box::leak` and the store only ever
         // hands the same pointer back.
         drop(unsafe { Box::from_raw(uhp.as_ptr()) });
@@ -649,7 +649,7 @@ mod tests {
     #[test]
     fn links_names_every_header_held() {
         let mut store = UndoStore::new();
-        let headers: Vec<NonNull<u_header_T>> = (1..=3).map(header).collect();
+        let headers: Vec<NonNull<UndoHeader>> = (1..=3).map(header).collect();
         for (i, uhp) in headers.iter().enumerate() {
             let seq = c_int::try_from(i).expect("three fits") + 1;
             store.insert(seq, *uhp);
@@ -664,7 +664,7 @@ mod tests {
 
     #[test]
     fn a_fresh_header_is_linked_to_nothing() {
-        let uh = u_header_T::default();
+        let uh = UndoHeader::default();
         assert!(uh.uh_next.is_none());
         assert!(uh.uh_prev.is_none());
         assert!(uh.uh_alt_next.is_none());

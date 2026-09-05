@@ -63,7 +63,7 @@
 --   * `Columns` gates `mark_line`'s truncation, so the text column of
 --     all three listings is a function of the terminal width.  Pinned
 --     at 80.
---   * TIMESTAMPS are written into every fmark_T but are printed by
+--   * TIMESTAMPS are written into every FileMark but are printed by
 --     nothing here.  They ARE a live comparison in `mark_set_global`
 --     and `mark_set_local` (`fm.timestamp <= tgt.timestamp`), which is
 --     why s10's round trip only ever merges a shada file this same run

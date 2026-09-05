@@ -13,25 +13,24 @@ use super::*;
 
 /// The head every compiled pattern starts with, whichever engine built it.
 #[repr(C)]
-pub struct regprog {
-    pub engine: *mut regengine_T,
+pub struct RegProg {
+    pub engine: *mut RegEngine,
     pub regflags: ::core::ffi::c_uint,
     pub re_engine: ::core::ffi::c_uint,
     pub re_flags: ::core::ffi::c_uint,
     pub re_in_use: bool,
 }
-pub type regengine_T = regengine;
 /// Compile a pattern, or null if it does not parse.
-pub type RegComp = Option<unsafe fn(*mut uint8_t, ::core::ffi::c_int) -> *mut regprog_T>;
+pub type RegComp = Option<unsafe fn(*mut uint8_t, ::core::ffi::c_int) -> *mut RegProg>;
 /// Release a compiled pattern.
-pub type RegFree = Option<unsafe fn(*mut regprog_T) -> ()>;
+pub type RegFree = Option<unsafe fn(*mut RegProg) -> ()>;
 /// Match within one line.
 pub type RegExecNl =
-    Option<unsafe fn(*mut regmatch_T, *mut uint8_t, ColNr, bool) -> ::core::ffi::c_int>;
+    Option<unsafe fn(*mut RegMatch, *mut uint8_t, ColNr, bool) -> ::core::ffi::c_int>;
 /// Match across lines of a buffer, with a timeout.
 pub type RegExecMulti = Option<
     unsafe fn(
-        *mut regmmatch_T,
+        *mut RegMMatch,
         *mut Window,
         *mut Buffer,
         LineNr,
@@ -41,7 +40,7 @@ pub type RegExecMulti = Option<
     ) -> ::core::ffi::c_int,
 >;
 /// The vtable of a regexp engine (backtracking or NFA).
-pub struct regengine {
+pub struct RegEngine {
     pub regcomp: RegComp,
     pub regfree: RegFree,
     pub regexec_nl: RegExecNl,
@@ -50,21 +49,21 @@ pub struct regengine {
 
 pub type Magic = ::core::ffi::c_uint;
 pub type OptMagic = ::core::ffi::c_uint;
-pub struct reg_extmatch_T {
+pub struct RegExtMatch {
     pub refcnt: int16_t,
     pub matches: [*mut uint8_t; 10],
 }
 #[derive(Clone)]
-pub struct regmatch_T {
-    pub regprog: *mut regprog_T,
+pub struct RegMatch {
+    pub regprog: *mut RegProg,
     pub startp: [*mut ::core::ffi::c_char; 10],
     pub endp: [*mut ::core::ffi::c_char; 10],
     pub rm_matchcol: ColNr,
     pub rm_ic: bool,
 }
 #[derive(Clone)]
-pub struct regmmatch_T {
-    pub regprog: *mut regprog_T,
+pub struct RegMMatch {
+    pub regprog: *mut RegProg,
     pub startpos: [LPos; 10],
     pub endpos: [LPos; 10],
     pub rmm_matchcol: ColNr,
@@ -72,9 +71,9 @@ pub struct regmmatch_T {
     pub rmm_maxcol: ColNr,
 }
 
-impl Default for regmmatch_T {
+impl Default for RegMMatch {
     fn default() -> Self {
-        regmmatch_T {
+        RegMMatch {
             regprog: ::core::ptr::null_mut(),
             startpos: [LPos::default(); 10],
             endpos: [LPos::default(); 10],
@@ -85,9 +84,9 @@ impl Default for regmmatch_T {
     }
 }
 
-impl Default for regmatch_T {
+impl Default for RegMatch {
     fn default() -> Self {
-        regmatch_T {
+        RegMatch {
             regprog: ::core::ptr::null_mut(),
             startp: [::core::ptr::null_mut(); 10],
             endp: [::core::ptr::null_mut(); 10],

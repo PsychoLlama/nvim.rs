@@ -30,8 +30,8 @@ use crate::memory::{xcalloc, xrealloc};
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    AdditionalData, Buffer, ColNr, GArray, LineNr, OptInt, Pos, Timestamp, WinInfo, WinOpt, Window,
-    fmark_T, fmarkv_T, size_t,
+    AdditionalData, Buffer, ColNr, FileMark, FileMarkView, GArray, LineNr, OptInt, Pos, Timestamp,
+    WinInfo, WinOpt, Window, size_t,
 };
 use crate::winfloat::win_set_minimal_style;
 use crate::winlayer::{Buf, Win, windows};
@@ -216,7 +216,7 @@ fn set_minimal_style(win: Win) {
 }
 
 /// The view (topline offset and skipcol) `win` would restore `pos` with.
-fn view_of(win: Win, pos: Pos) -> fmarkv_T {
+fn view_of(win: Win, pos: Pos) -> FileMarkView {
     // SAFETY: a live window.
     unsafe { mark_view_make(win.raw(), pos) }
 }
@@ -399,8 +399,8 @@ pub unsafe fn get_winopts(mut buf: Buf) {
 
 /// The mark for `buf` in the current window, or a pointer to `no_position`
 /// when there is none.
-pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut fmark_T {
-    static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
+pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut FileMark {
+    static no_position: GlobalCell<FileMark> = GlobalCell::new(FileMark {
         mark: Pos {
             lnum: 1 as LineNr,
             col: 0 as ColNr,
@@ -408,7 +408,7 @@ pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut fmark_T {
         },
         fnum: 0,
         timestamp: 0 as Timestamp,
-        view: fmarkv_T {
+        view: FileMarkView {
             topline_offset: MAXLNUM as LineNr,
             skipcol: 0 as ColNr,
         },

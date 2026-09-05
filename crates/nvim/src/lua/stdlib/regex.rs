@@ -22,9 +22,7 @@ use crate::luaL_reg_table;
 use crate::main::curbuf;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{
-    Buffer, ColNr, Error, Handle, LineNr, lua_State, luaL_Reg, regmatch_T, regprog_T,
-};
+use crate::types::{Buffer, ColNr, Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
@@ -40,8 +38,8 @@ const RE_STRICT: c_int = 4;
 ///
 /// # Safety
 /// `lstate` must be a live Lua state; this longjmps for a wrong argument.
-unsafe fn regex_check(lstate: *mut lua_State) -> *mut *mut regprog_T {
-    unsafe { luaL_checkudata(lstate, 1, REGEX_TYPE.as_ptr()).cast::<*mut regprog_T>() }
+unsafe fn regex_check(lstate: *mut lua_State) -> *mut *mut RegProg {
+    unsafe { luaL_checkudata(lstate, 1, REGEX_TYPE.as_ptr()).cast::<*mut RegProg>() }
 }
 
 /// Match `prog` against `str` and push the match's start and end byte offsets,
@@ -55,13 +53,9 @@ unsafe fn regex_check(lstate: *mut lua_State) -> *mut *mut regprog_T {
 /// # Safety
 /// `lstate` must be a live Lua state, `prog` a live compiled program and
 /// `str` a NUL-terminated subject.
-unsafe fn regex_match(
-    lstate: *mut lua_State,
-    prog: *mut *mut regprog_T,
-    str: *mut c_char,
-) -> c_int {
+unsafe fn regex_match(lstate: *mut lua_State, prog: *mut *mut RegProg, str: *mut c_char) -> c_int {
     unsafe {
-        let mut rm = regmatch_T {
+        let mut rm = RegMatch {
             regprog: *prog,
             startp: [ptr::null_mut(); 10],
             endp: [ptr::null_mut(); 10],
@@ -227,7 +221,7 @@ pub unsafe extern "C-unwind" fn nlua_regex(lstate: *mut lua_State) -> c_int {
             return lua_error(lstate);
         }
 
-        let p = lua_newuserdata(lstate, size_of::<*mut regprog_T>()).cast::<*mut regprog_T>();
+        let p = lua_newuserdata(lstate, size_of::<*mut RegProg>()).cast::<*mut RegProg>();
         *p = prog;
 
         lua_getfield(lstate, LUA_REGISTRYINDEX, REGEX_TYPE.as_ptr()); // [udata, meta]

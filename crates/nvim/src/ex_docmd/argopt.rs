@@ -40,7 +40,7 @@ use crate::os::cshim::ngettext;
 
 use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
-use crate::types::regexp::regmatch_T;
+use crate::types::regexp::RegMatch;
 use crate::types::{
     CmdModFlags, CompleteListItemGetter, ExArg, Expand, FAIL, FILE, Failed, NUL, OK, int32_t,
     intmax_t, size_t,
@@ -207,7 +207,7 @@ pub(crate) fn get_argopt_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 pub unsafe fn expand_argopt(
     pat: *mut c_char,
     xp: *mut Expand,
-    rmp: *mut regmatch_T,
+    rmp: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     num_matches: *mut c_int,
 ) -> Result<(), Failed> {
@@ -525,7 +525,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 fn expand_generic(
     pat: *const c_char,
     xp: *mut Expand,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
     numMatches: *mut c_int,
     func: CompleteListItemGetter,

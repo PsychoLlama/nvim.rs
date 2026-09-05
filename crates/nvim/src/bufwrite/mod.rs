@@ -52,9 +52,8 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
-    Buffer, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr,
-    MAXPATHL, Pos, ShmFlag, VimAcl, aco_save_T, iconv_t, int64_t, size_t, uint64_t, uv_gid_t,
-    uv_uid_t,
+    AcoSave, Buffer, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE,
+    LineNr, MAXPATHL, Pos, ShmFlag, VimAcl, iconv_t, int64_t, size_t, uint64_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};

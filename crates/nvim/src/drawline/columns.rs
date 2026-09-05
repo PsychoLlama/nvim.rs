@@ -186,7 +186,7 @@ unsafe fn foldcolumn_sep_char(
 /// `wp` must be live, and `fdc` may not exceed [`MAX_FOLDCOLUMN`].
 unsafe fn fold_column_cells(
     wp: Win,
-    foldinfo: foldinfo_T,
+    foldinfo: FoldInfo,
     lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,
@@ -246,7 +246,7 @@ unsafe fn fold_column_cells(
 /// must have `fdc` entries.
 pub unsafe fn fill_foldcolumn(
     wp: *mut Window,
-    foldinfo: foldinfo_T,
+    foldinfo: FoldInfo,
     lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,

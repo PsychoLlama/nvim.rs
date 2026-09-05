@@ -38,7 +38,7 @@ struct Aim {
 
 impl Aim {
     /// The header's value in the unit this aim measures in.
-    fn value_of(self, uh: &u_header_T) -> c_int {
+    fn value_of(self, uh: &UndoHeader) -> c_int {
         if self.sec {
             uh.uh_time as c_int
         } else if self.file {
@@ -550,7 +550,7 @@ unsafe fn furthest_marked(
     buf: Buf,
     uhp: Header,
     mark: c_int,
-    step: fn(&u_header_T) -> UndoLink,
+    step: fn(&UndoHeader) -> UndoLink,
 ) -> Header {
     // The chain always yields its start; every further hop has to be marked.
     // SAFETY: the buffer owns these headers, by the contract above.

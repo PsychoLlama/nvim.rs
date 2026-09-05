@@ -195,13 +195,13 @@ unsafe fn record_line(mut prev: *mut synstate_T, lnum: LineNr, dist: LineNr) -> 
 /// Release what a cached state holds: its heap arm, if it has one, and the
 /// extmatch reference of every item on it.
 ///
-/// A stack of `bufstate_T`s cannot simply be discarded -- each item may hold a
+/// A stack of `BufState`s cannot simply be discarded -- each item may hold a
 /// reference to the submatches of the pattern that started it. Safe to call
 /// twice: the heap arm is nulled as it is released.
 pub(crate) unsafe fn clear_syn_state(p: *mut synstate_T) {
     let size = unsafe { (*p).sst_stacksize };
     if size > SST_FIX_STATES {
-        // SAFETY: the heap arm is a `Box<[bufstate_T]>` of `sst_stacksize`
+        // SAFETY: the heap arm is a `Box<[BufState]>` of `sst_stacksize`
         // items (`fill_entry`), or null when the entry never got one.
         let states = unsafe { (*p).sst_union.sst_heap };
         if !states.is_null() {

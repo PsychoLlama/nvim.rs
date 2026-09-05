@@ -22,7 +22,7 @@ use std::ptr;
 use neovim::main::{cmdmod, curwin};
 use neovim::regexp::vim_regfree;
 use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
-use neovim::types::{CmdModFlags, regmmatch_T};
+use neovim::types::{CmdModFlags, RegMMatch};
 
 use crate::support::{Sandbox, cstr};
 
@@ -138,7 +138,7 @@ fn a_right_to_left_pattern_is_reversed_bytewise() {
     // sequence that is not there. Reversing it has to move bytes, not
     // characters, or the reversal reads past the end of the pattern.
     let _guard = RightLeft::claim(c"s");
-    let mut regmatch = regmmatch_T::default();
+    let mut regmatch = RegMMatch::default();
     let pat = cstr(*b"a\xc0");
     // SAFETY: the pattern outlives the call, `used_pat` is optional and
     // null here, and `regmatch` is this stack frame's.
@@ -172,7 +172,7 @@ fn only_a_rightleftcmd_of_s_reverses_the_pattern() {
     // value the reversal applies to. The Lua spec never asserted this side,
     // so dropping the `'rightleftcmd'` test entirely went unnoticed.
     let _guard = RightLeft::claim(c"");
-    let mut regmatch = regmmatch_T::default();
+    let mut regmatch = RegMMatch::default();
     let pat = cstr(*b"a\xc0");
     // SAFETY: as in the case above.
     let rc = unsafe {

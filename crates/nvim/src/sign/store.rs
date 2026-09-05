@@ -30,18 +30,18 @@ struct SignEntry {
     /// Owns the string `def.sn_name` points at. In the same box as `def`, so
     /// that pointer stays valid for the entry's whole life.
     name: CString,
-    def: sign_T,
+    def: Sign,
 }
 
 /// A sign definition the caller has promised is live. Definitions are boxed
 /// (see [`SIGNS`]), so one stays put until its box is dropped.
 #[derive(Clone, Copy)]
-pub(crate) struct SignRef(*mut sign_T);
+pub(crate) struct SignRef(*mut Sign);
 
 impl SignRef {
     /// # Safety
     /// `def` must be a live definition -- one [`SIGNS`] still holds.
-    unsafe fn new(def: *mut sign_T) -> Self {
+    unsafe fn new(def: *mut Sign) -> Self {
         Self(def)
     }
 
@@ -58,15 +58,15 @@ impl SignRef {
 }
 
 impl Deref for SignRef {
-    type Target = sign_T;
-    fn deref(&self) -> &sign_T {
+    type Target = Sign;
+    fn deref(&self) -> &Sign {
         // SAFETY: the constructor's promise — a live definition.
         unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for SignRef {
-    fn deref_mut(&mut self) -> &mut sign_T {
+    fn deref_mut(&mut self) -> &mut Sign {
         // SAFETY: as above.
         unsafe { &mut *self.0 }
     }
@@ -244,7 +244,7 @@ pub(crate) unsafe fn sign_define_by_name(
             // SAFETY: as above.
             let owned = unsafe { CStr::from_ptr(name) }.to_owned();
             let mut entry = Box::new(SignEntry {
-                def: sign_T {
+                def: Sign {
                     sn_name: owned.as_ptr().cast_mut(),
                     ..Default::default()
                 },

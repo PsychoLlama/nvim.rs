@@ -531,7 +531,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     let mut flags = READ_NEW as c_int;
 
     // Set curwin/curbuf for "buf" and save some things.
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
 
     // Unless reload_options is set we only want to read the text from the

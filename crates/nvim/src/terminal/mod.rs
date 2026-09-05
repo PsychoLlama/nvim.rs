@@ -63,11 +63,10 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle, HlAttrs,
-    LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
+    AcoSave, Arena, Buffer, BufferHandle, ColNr, Dict, Error, Event, ExArg, ExtmarkOp, Handle,
+    HlAttrs, LineNr, MarkAdjustMode, Object, OptVal, OptionSetFlags, Pos, RefcountSize, RgbValue,
     SaveVEvent, Terminal, TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell,
-    VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, Window, aco_save_T, int16_t, size_t,
-    uint8_t,
+    VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, Window, int16_t, size_t, uint8_t,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -338,7 +337,7 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut Buffer)
     let mut buf = unsafe { Buf::new(buf) };
 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
-    let mut aco: aco_save_T = unsafe { ::core::mem::zeroed() };
+    let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
     // SAFETY: paired with the `aucmd_restbuf` below.
     unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
     if term.sb.is_sized() {

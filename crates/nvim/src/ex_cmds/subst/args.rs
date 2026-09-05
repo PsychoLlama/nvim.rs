@@ -36,7 +36,7 @@ use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{AdditionalData, ExArg, LineNr, NUL, SubReplacementString, regmmatch_T, size_t};
+use crate::types::{AdditionalData, ExArg, LineNr, NUL, RegMMatch, SubReplacementString, size_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -45,7 +45,7 @@ pub(super) struct SubSetup {
     /// The replacement text.  Owned by the caller from here on.
     pub sub: *mut c_char,
     /// The compiled pattern.
-    pub regmatch: regmmatch_T,
+    pub regmatch: RegMMatch,
     /// Was there a closing delimiter, and so a replacement at all?  A
     /// preview without one only highlights what matched.
     pub has_second_delim: bool,
@@ -334,7 +334,7 @@ pub(super) unsafe fn parse_sub(
         return None;
     }
 
-    let mut regmatch = regmmatch_T::default();
+    let mut regmatch = RegMMatch::default();
     // SAFETY: `pat` is `patlen` bytes or null, and `regmatch` is ours.
     let compiled = unsafe {
         search_regcomp(

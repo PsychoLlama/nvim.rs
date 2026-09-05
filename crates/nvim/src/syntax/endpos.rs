@@ -58,7 +58,7 @@ impl RegionEnd {
 /// The engine may hand back a *different* program (`vim_regexec_multi` can
 /// recompile), so the answer is written back into the pattern, and each
 /// pattern is timed into its own `sp_time`.
-pub(crate) unsafe fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool, regmmatch_T) {
+pub(crate) unsafe fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool, RegMMatch) {
     let mut regmatch = empty_regmmatch();
     let mut block = syn_block();
     let spp = block.pattern_mut(idx);
@@ -89,7 +89,7 @@ pub(crate) fn syn_pattern_count() -> c_int {
 pub(crate) unsafe fn find_endpos(
     mut idx: c_int,
     startpos: LPos,
-    start_ext: *mut reg_extmatch_T,
+    start_ext: *mut RegExtMatch,
 ) -> RegionEnd {
     // Just in case we are invoked for a keyword.
     if idx < 0 {
@@ -172,8 +172,8 @@ unsafe fn best_end_match(
     start_idx: c_int,
     startpos: LPos,
     matchcol: ColNr,
-) -> Option<(c_int, regmmatch_T)> {
-    let mut best: Option<(c_int, regmmatch_T)> = None;
+) -> Option<(c_int, RegMMatch)> {
+    let mut best: Option<(c_int, RegMMatch)> = None;
     let mut idx = start_idx;
     while idx < syn_pattern_count() {
         let spp = syn_block();
@@ -243,7 +243,7 @@ unsafe fn skip_past(skip_idx: c_int, startpos: LPos, best_start: LPos, matchcol:
 }
 
 /// Turn the winning END match into the four positions the caller wants.
-unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: LPos) -> RegionEnd {
+unsafe fn end_positions(best_idx: c_int, best: &RegMMatch, startpos: LPos) -> RegionEnd {
     let block = syn_block();
     let spp = block.pattern(best_idx);
     let offsets = spp.offsets();
@@ -294,9 +294,9 @@ unsafe fn end_positions(best_idx: c_int, best: &regmmatch_T, startpos: LPos) -> 
     }
 }
 
-/// A zeroed `regmmatch_T`, which `vim_regexec_multi` fills in.
-pub(crate) const fn empty_regmmatch() -> regmmatch_T {
-    regmmatch_T {
+/// A zeroed `RegMMatch`, which `vim_regexec_multi` fills in.
+pub(crate) const fn empty_regmmatch() -> RegMMatch {
+    RegMMatch {
         regprog: ::core::ptr::null_mut(),
         startpos: [LPos { lnum: 0, col: 0 }; 10],
         endpos: [LPos { lnum: 0, col: 0 }; 10],
@@ -330,7 +330,7 @@ pub(crate) fn limit_pos_zero(pos: &mut LPos, limit: LPos) {
 /// (`me=s+1`), which is how "one past" is spelled for a region's end.
 pub(crate) unsafe fn syn_add_end_off(
     spp: PatOffsets,
-    regmatch: &regmmatch_T,
+    regmatch: &RegMMatch,
     idx: c_int,
     extra: c_int,
 ) -> LPos {
@@ -364,7 +364,7 @@ pub(crate) unsafe fn syn_add_end_off(
 /// of to column 0.
 pub(crate) unsafe fn syn_add_start_off(
     spp: PatOffsets,
-    regmatch: &regmmatch_T,
+    regmatch: &RegMMatch,
     idx: c_int,
     extra: c_int,
 ) -> LPos {
@@ -451,7 +451,7 @@ pub(crate) fn syn_buf_line_count() -> LineNr {
 /// Answers whether there was a match, and on a match shifts `rmp`'s positions
 /// from pattern-relative to buffer-absolute line numbers.
 pub(crate) unsafe fn syn_regexec(
-    rmp: *mut regmmatch_T,
+    rmp: *mut RegMMatch,
     lnum: LineNr,
     col: ColNr,
     st: *mut SynTime,

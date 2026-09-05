@@ -1,6 +1,6 @@
 //! The mapping table itself: the hash buckets and the abbrlist.
 //!
-//! Every mapping is a [`mapblock_T`] on one of [`MAX_MAPHASH`] singly linked
+//! Every mapping is a [`MapBlock`] on one of [`MAX_MAPHASH`] singly linked
 //! lists, hashed by [`map_hash`] on the first byte of its LHS and on whether
 //! the mode is a Normal-side or an Insert-side one; abbreviations live on one
 //! unhashed list instead.  Both tables exist twice: once globally, in
@@ -86,24 +86,24 @@ impl Drop for MapCallback {
 }
 
 /// The global abbreviation list; `b_first_abbr` is its per-buffer twin.
-pub(crate) static FIRST_ABBR: GlobalCell<*mut mapblock_T> = GlobalCell::new(ptr::null_mut());
+pub(crate) static FIRST_ABBR: GlobalCell<*mut MapBlock> = GlobalCell::new(ptr::null_mut());
 
 /// The global mapping table; `b_maphash` is its per-buffer twin.
-pub(crate) static MAPHASH: GlobalCell<[*mut mapblock_T; MAX_MAPHASH]> =
+pub(crate) static MAPHASH: GlobalCell<[*mut MapBlock; MAX_MAPHASH]> =
     GlobalCell::new([ptr::null_mut(); MAX_MAPHASH]);
 
 /// The global mapping table as a row of list *heads*, one per hash bucket.
 ///
-/// A `*mut *mut mapblock_T` rather than a borrow: the whole family walks and
+/// A `*mut *mut MapBlock` rather than a borrow: the whole family walks and
 /// unlinks through the link itself, and a `&mut` to the array would
 /// invalidate a cursor that points into it — which is what
 /// [`map_clear_mode`] does when a re-hash moves an entry.
-pub(crate) fn global_map_heads() -> *mut *mut mapblock_T {
+pub(crate) fn global_map_heads() -> *mut *mut MapBlock {
     MAPHASH.ptr().cast()
 }
 
 /// The head of the global abbreviation list. See [`global_map_heads`].
-pub(crate) fn global_abbr_head() -> *mut *mut mapblock_T {
+pub(crate) fn global_abbr_head() -> *mut *mut MapBlock {
     FIRST_ABBR.ptr()
 }
 
@@ -126,7 +126,7 @@ pub(crate) fn map_hash(mode: c_int, c1: c_int) -> usize {
 }
 
 /// Get the start of the hashed map list for `state` and first character `c`.
-pub fn get_maphash_list(state: c_int, c: c_int) -> *mut mapblock_T {
+pub fn get_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
     MAPHASH.with(|table| table[map_hash(state, c)])
 }
 
@@ -134,7 +134,7 @@ pub fn get_maphash_list(state: c_int, c: c_int) -> *mut mapblock_T {
 ///
 /// # Safety
 /// `curbuf` must be a live buffer.
-pub unsafe fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut mapblock_T {
+pub unsafe fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
     // SAFETY (this body): the caller's promise -- `curbuf` is a live buffer.
     unsafe { (*curbuf.get()).b_maphash[map_hash(state, c)] }
 }
@@ -152,7 +152,7 @@ impl MapTable {
     ///
     /// Safe: the global tables are statics, and a `Buffer` names a live
     /// buffer by [`Buf`]'s promise.
-    fn head(self, hash: usize, abbr: bool) -> *mut mapblock_T {
+    fn head(self, hash: usize, abbr: bool) -> *mut MapBlock {
         match (self, abbr) {
             (MapTable::Global, true) => FIRST_ABBR.get(),
             (MapTable::Global, false) => MAPHASH.with(|table| table[hash]),
@@ -203,7 +203,7 @@ pub(crate) unsafe fn map_walk<T>(
 ///
 /// # Safety
 /// `mpp` must point at a non-null entry of a live list.
-pub(crate) unsafe fn mapblock_free(mpp: *mut *mut mapblock_T) {
+pub(crate) unsafe fn mapblock_free(mpp: *mut *mut MapBlock) {
     // SAFETY: the caller's promise -- `mpp` names a live link holding a live
     // entry, which this unlinks and then takes back into its `Box`.  `mpp` is
     // the *previous* entry's field, so the write cannot disturb it.
@@ -234,13 +234,13 @@ pub(crate) unsafe fn mapblock_free(mpp: *mut *mut mapblock_T) {
 ///
 /// Construction is the unsafe step, once; every method after it is ordinary
 /// checked code.
-pub(crate) struct Cursor(*mut *mut mapblock_T);
+pub(crate) struct Cursor(*mut *mut MapBlock);
 
 impl Cursor {
     /// # Safety
     /// `link` must be the address of a live list head or of a live entry's
     /// `m_next`, and must stay live for as long as the cursor is used.
-    pub(crate) unsafe fn at(link: *mut *mut mapblock_T) -> Self {
+    pub(crate) unsafe fn at(link: *mut *mut MapBlock) -> Self {
         Self(link)
     }
 
@@ -258,7 +258,7 @@ impl Cursor {
         let mp = self
             .entry()
             .expect("advance past the end of a mapping list");
-        self.0 = mp.field_ptr(offset_of!(mapblock_T, m_next));
+        self.0 = mp.field_ptr(offset_of!(MapBlock, m_next));
     }
 
     /// Unlink and free the current entry; the cursor stays put, now holding
@@ -278,7 +278,7 @@ impl Cursor {
     ///
     /// # Safety
     /// `head` must be the address of a live list head.
-    pub(crate) unsafe fn relink_to(&mut self, head: *mut *mut mapblock_T) {
+    pub(crate) unsafe fn relink_to(&mut self, head: *mut *mut MapBlock) {
         let mut mp = self.entry().expect("re-hash at the end of a mapping list");
         // SAFETY: the two promises -- this cursor's link and the caller's
         // head are both live, and `mp` is the entry both will hold.
@@ -301,8 +301,8 @@ impl Cursor {
 #[allow(clippy::too_many_arguments)] // upstream's; the caller has no struct to pass
 pub(crate) unsafe fn map_add(
     buf: Buf,
-    map_table: *mut *mut mapblock_T,
-    abbr_table: *mut *mut mapblock_T,
+    map_table: *mut *mut MapBlock,
+    abbr_table: *mut *mut MapBlock,
     keys: &[u8],
     args: &MapArguments,
     noremap: c_int,
@@ -311,7 +311,7 @@ pub(crate) unsafe fn map_add(
     sid: ScriptId,
     lnum: LineNr,
     simplified: bool,
-) -> *mut mapblock_T {
+) -> *mut MapBlock {
     // The buffer's tables are reached through the one raw pointer, not
     // through `Buf`'s `DerefMut`: `map_table` already points into
     // `b_maphash`, and a fresh `&mut Buffer` would invalidate it.
@@ -332,7 +332,7 @@ pub(crate) unsafe fn map_add(
         unsafe { nlua_set_sctx(&raw mut ctx) };
         ctx
     };
-    let mut mp = Box::new(mapblock_T {
+    let mut mp = Box::new(MapBlock {
         m_next: ptr::null_mut(),
         m_alt: ptr::null_mut(),
         m_keys: MapStr::new(keys),
@@ -393,7 +393,7 @@ pub unsafe fn map_clear_mode(buf: Buf, mode: c_int, local: bool, abbr: bool) {
     // addresses come off the one raw pointer rather than off a `&mut`.
     let local_abbr = unsafe { &raw mut (*buf).b_first_abbr };
     // SAFETY: as above.
-    let local_maps = unsafe { &raw mut (*buf).b_maphash }.cast::<*mut mapblock_T>();
+    let local_maps = unsafe { &raw mut (*buf).b_maphash }.cast::<*mut MapBlock>();
     // Through raw pointers, not `with_mut`: `mpp` may itself point into one of
     // these two tables, and a `&mut` to the whole array would invalidate it.
     let (abbr_head, map_heads) = if local {
@@ -513,7 +513,7 @@ pub unsafe fn map_to_exists_mode(rhs: *const c_char, mode: c_int, abbr: bool) ->
 /// What [`check_map`] found.
 pub(crate) struct MapMatch {
     /// The matching mapblock.
-    pub mp: *mut mapblock_T,
+    pub mp: *mut MapBlock,
     /// Whether it came from the buffer-local table.
     pub local: bool,
 }

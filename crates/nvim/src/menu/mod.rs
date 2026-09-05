@@ -5,7 +5,7 @@
 //! | child | what |
 //! | --- | --- |
 //! | [`define`] | `:menu` and `add_menu_path()` |
-//! | [`tree`] | the `vimmenu_T` tree -- find, list, dump, remove, free |
+//! | [`tree`] | the `VimMenu` tree -- find, list, dump, remove, free |
 //! | [`complete`] | command-line completion of a menu path |
 //! | [`name`] | names as text: path components, mode letters, accelerators |
 //! | [`exec`] | `:emenu`, `:popup` and running a right-hand side |
@@ -17,7 +17,7 @@
 //! mode is the editor in?" for the executing side -- and the two newtypes
 //! everything else is written in terms of.
 //!
-//! [`Menu`] wraps a `*mut vimmenu_T` and [`Link`] wraps the `next`,
+//! [`Menu`] wraps a `*mut VimMenu` and [`Link`] wraps the `next`,
 //! `children` or root slot that points at one. Each has a single unsafe
 //! constructor carrying the invariant; every other method, and so almost
 //! all of the six children, is safe code. [`CText`] does the same for the
@@ -54,7 +54,7 @@ use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL,
 };
-use crate::types::{Dict, List, VarNumber, kListLenMayKnow, ptrdiff_t, vimmenu_T};
+use crate::types::{Dict, List, VarNumber, VimMenu, kListLenMayKnow, ptrdiff_t};
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -119,7 +119,7 @@ pub(crate) const MENU_PLAIN_MODES: c_int =
 pub(crate) const MODE_CHARS: [&CStr; MENU_MODES] =
     [c"n", c"v", c"s", c"o", c"i", c"c", c"tl", c"t"];
 
-/// `noremap` values stored per mode in a `vimmenu_T`.
+/// `noremap` values stored per mode in a `VimMenu`.
 pub(crate) const REMAP_SCRIPT: c_int = -2;
 pub(crate) const REMAP_NONE: c_int = -1;
 pub(crate) const REMAP_YES: c_int = 0;
@@ -189,18 +189,18 @@ pub(crate) fn with_menus_locked<R>(f: impl FnOnce() -> R) -> R {
 /// One node of the menu tree.
 ///
 /// # Invariant
-/// The pointer names a live `vimmenu_T` -- one `add_menu_path` allocated and
+/// The pointer names a live `VimMenu` -- one `add_menu_path` allocated and
 /// `free_menu` has not yet released -- whose `name` and `dname` are
 /// NUL-terminated strings, whose `en_name`/`en_dname`/`actext` are null or
 /// NUL-terminated strings, and whose `next`, `children` and `parent` are
 /// null or name another such node.
 #[derive(Copy, Clone)]
-pub(crate) struct Menu(*mut vimmenu_T);
+pub(crate) struct Menu(*mut VimMenu);
 
 impl Menu {
     /// # Safety
     /// `ptr` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(ptr: *mut vimmenu_T) -> Self {
+    pub(crate) const unsafe fn new(ptr: *mut VimMenu) -> Self {
         Menu(ptr)
     }
 
@@ -208,14 +208,14 @@ impl Menu {
     ///
     /// # Safety
     /// A non-null `ptr` must satisfy the invariant above.
-    pub(crate) unsafe fn opt(ptr: *const vimmenu_T) -> Option<Self> {
+    pub(crate) unsafe fn opt(ptr: *const VimMenu) -> Option<Self> {
         (!ptr.is_null()).then(|| {
             // SAFETY: the caller's obligation, minus the null case.
             unsafe { Menu::new(ptr.cast_mut()) }
         })
     }
 
-    pub(crate) fn raw(self) -> *mut vimmenu_T {
+    pub(crate) fn raw(self) -> *mut VimMenu {
         self.0
     }
 
@@ -299,22 +299,22 @@ impl Menu {
 }
 
 impl Deref for Menu {
-    type Target = vimmenu_T;
+    type Target = VimMenu;
 
-    fn deref(&self) -> &vimmenu_T {
+    fn deref(&self) -> &VimMenu {
         // SAFETY: the invariant; the reference never spans a free.
         unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for Menu {
-    fn deref_mut(&mut self) -> &mut vimmenu_T {
+    fn deref_mut(&mut self) -> &mut VimMenu {
         // SAFETY: as [`Menu::deref`]; each write finishes in its statement.
         unsafe { &mut *self.0 }
     }
 }
 
-/// The slot a node is reached through: C's `vimmenu_T **`.
+/// The slot a node is reached through: C's `VimMenu **`.
 ///
 /// Unlinking a node means writing its successor into the slot that named it,
 /// which is either the root list head or another node's `next`/`children`.
@@ -323,12 +323,12 @@ impl DerefMut for Menu {
 /// The pointer names a live slot -- the root cell, or a field of a node
 /// satisfying [`Menu`]'s invariant.
 #[derive(Copy, Clone)]
-pub(crate) struct Link(*mut *mut vimmenu_T);
+pub(crate) struct Link(*mut *mut VimMenu);
 
 impl Link {
     /// # Safety
     /// `slot` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(slot: *mut *mut vimmenu_T) -> Self {
+    pub(crate) const unsafe fn new(slot: *mut *mut VimMenu) -> Self {
         Link(slot)
     }
 

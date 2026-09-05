@@ -167,7 +167,7 @@ pub unsafe fn f_mapset(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFun
     let (buf_maps, buf_abbrs) = unsafe {
         let cur = curbuf.get();
         (
-            (&raw mut (*cur).b_maphash).cast::<*mut mapblock_T>(),
+            (&raw mut (*cur).b_maphash).cast::<*mut MapBlock>(),
             &raw mut (*cur).b_first_abbr,
         )
     };
@@ -201,7 +201,7 @@ pub unsafe fn f_mapset(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFun
     unsafe { buf_do_map(unmap_lhs, &unmap_args, mode, is_abbr, cur) };
     drop(unmap_args);
 
-    let mut mp_result: [*mut mapblock_T; 2] = [ptr::null_mut(); 2];
+    let mut mp_result: [*mut MapBlock; 2] = [ptr::null_mut(); 2];
     let add = |keys: &[u8], simplified| {
         // SAFETY: both tables name live storage.
         unsafe {

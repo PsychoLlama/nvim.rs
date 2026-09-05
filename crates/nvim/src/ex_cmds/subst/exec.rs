@@ -55,7 +55,7 @@ use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CmdModFlags, ColNr, ExArg, Handle, LPos, LineNr, NUL, OptInt, OptionSetFlags, Pos, ProfTime,
-    int64_t, regmmatch_T, size_t,
+    RegMMatch, int64_t, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
@@ -98,7 +98,7 @@ pub(super) struct SubArgs {
 /// Everything the substitute's stages hand one another.
 pub(super) struct Sub {
     /// The compiled pattern and its last match.
-    pub regmatch: regmmatch_T,
+    pub regmatch: RegMMatch,
     /// The replacement text, owned.
     pub sub: *mut c_char,
 
@@ -226,7 +226,7 @@ pub(super) unsafe fn is_expr_sub(sub: *const c_char) -> bool {
 ///
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program.
-pub(super) unsafe fn regexec_at(regmatch: *mut regmmatch_T, lnum: LineNr, col: ColNr) -> c_int {
+pub(super) unsafe fn regexec_at(regmatch: *mut RegMMatch, lnum: LineNr, col: ColNr) -> c_int {
     // SAFETY: caller's contract; the current window and buffer are live.
     unsafe {
         vim_regexec_multi(

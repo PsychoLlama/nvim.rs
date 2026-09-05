@@ -36,7 +36,7 @@ use crate::os::cshim::snprintf;
 use crate::strings::vim_strchr;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
-    ColNr, CompleteListItemGetter, Expand, Failed, NUL, optexpand_T, regmatch_T, size_t,
+    ColNr, CompleteListItemGetter, Expand, Failed, NUL, RegMatch, optexpand_T, size_t,
 };
 
 use super::{
@@ -118,7 +118,7 @@ pub(crate) unsafe fn expand_set_opt_string(
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's frame.
-    let regmatch: *mut regmatch_T = unsafe { (*args).oe_regmatch };
+    let regmatch: *mut RegMatch = unsafe { (*args).oe_regmatch };
     let original = unsafe { original_value(args) };
 
     // SAFETY: at most one push per word, plus the original value.

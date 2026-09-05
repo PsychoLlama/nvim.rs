@@ -201,7 +201,7 @@ pub struct statuscol_T {
     pub sign_cul_id: ::core::ffi::c_int,
     pub draw: bool,
     pub hlrec: *mut stl_hlrec_t,
-    pub foldinfo: foldinfo_T,
+    pub foldinfo: FoldInfo,
     pub fold_vcol: [ColNr; 9],
     pub sattrs: *mut SignTextAttrs,
 }

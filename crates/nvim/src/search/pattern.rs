@@ -150,7 +150,7 @@ pub unsafe fn search_regcomp(
     pat_save: c_int,
     pat_use: c_int,
     options: c_int,
-    regmatch: *mut regmmatch_T,
+    regmatch: *mut RegMMatch,
 ) -> Result<(), Failed> {
     rc_did_emsg.set(false);
     let mut magic = magic_isset();
@@ -555,7 +555,7 @@ pub unsafe fn set_last_search_pat(s: *const c_char, idx: c_int, magic: bool, set
 ///
 /// # Safety
 /// `regmatch` must be writable.
-pub unsafe fn last_pat_prog(regmatch: *mut regmmatch_T) {
+pub unsafe fn last_pat_prog(regmatch: *mut RegMMatch) {
     if spat(last_idx.get()).pat.is_null() {
         unsafe { (*regmatch).regprog = ptr::null_mut() };
         return;
@@ -599,7 +599,7 @@ pub(crate) unsafe fn is_zero_width(
     cur: *mut Pos,
     direction: Direction,
 ) -> c_int {
-    let mut regmatch = regmmatch_T::default();
+    let mut regmatch = RegMMatch::default();
     let called_emsg_before = called_emsg.get();
     if pattern.is_null() {
         pattern = spat(last_idx.get()).pat;

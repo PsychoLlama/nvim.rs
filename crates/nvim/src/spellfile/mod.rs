@@ -21,7 +21,7 @@ use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
     Buffer, CONV_NONE, EStackType, ExArg, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt,
-    RepItem, SPL_FNAME_TMPL, SpellAddType, XDGVarType, file_comparison, regprog_T, size_t,
+    RegProg, RepItem, SPL_FNAME_TMPL, SpellAddType, XDGVarType, file_comparison, size_t,
     spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
@@ -194,7 +194,7 @@ pub struct affentry_S {
     pub ae_add: *mut ::core::ffi::c_char,
     pub ae_flags: *mut ::core::ffi::c_char,
     pub ae_cond: *mut ::core::ffi::c_char,
-    pub ae_prog: *mut regprog_T,
+    pub ae_prog: *mut RegProg,
     pub ae_compforbid: ::core::ffi::c_char,
     pub ae_comppermit: ::core::ffi::c_char,
 }

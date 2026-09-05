@@ -40,7 +40,7 @@ use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::types::{ExArg, LineNr, aco_save_T, size_t};
+use crate::types::{AcoSave, ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
@@ -384,7 +384,7 @@ unsafe fn listdo_walk(eap: *mut ExArg, list: ListDo) {
 unsafe fn restore_syntax_events(save_ei: *mut c_char) {
     // SAFETY: caller contract. `apply_autocmds` can do anything to the
     // buffer list, so the walk starts over whenever it has run.
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     unsafe { au_event_restore(save_ei) };
 
     let mut cur = first_buffer();

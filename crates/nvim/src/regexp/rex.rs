@@ -35,9 +35,7 @@ use super::pos::{MatchPos, PosKind};
 use super::{regexec_T, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
-use crate::types::{
-    Buffer, ColNr, LPos, LineNr, Window, regmatch_T, regmmatch_T, regprog_T, uint8_t,
-};
+use crate::types::{Buffer, ColNr, LPos, LineNr, RegMMatch, RegMatch, RegProg, Window, uint8_t};
 
 /// A running match's context.
 ///
@@ -411,29 +409,29 @@ impl Rex {
 
     /// The string match's structure, null for a buffer match.
     #[inline(always)]
-    pub(crate) fn reg_match(self) -> *mut regmatch_T {
+    pub(crate) fn reg_match(self) -> *mut RegMatch {
         unsafe { (*self.0).reg_match }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_match(self, rm: *mut regmatch_T) {
+    pub(crate) fn set_reg_match(self, rm: *mut RegMatch) {
         unsafe { (*self.0).reg_match = rm }
     }
 
     /// The buffer match's structure, null for a string match.
     #[inline(always)]
-    pub(crate) fn reg_mmatch(self) -> *mut regmmatch_T {
+    pub(crate) fn reg_mmatch(self) -> *mut RegMMatch {
         unsafe { (*self.0).reg_mmatch }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_mmatch(self, rmm: *mut regmmatch_T) {
+    pub(crate) fn set_reg_mmatch(self, rmm: *mut RegMMatch) {
         unsafe { (*self.0).reg_mmatch = rmm }
     }
 
     /// The program being run, from whichever match structure is live.
     #[inline(always)]
-    pub(crate) fn regprog(self) -> *mut regprog_T {
+    pub(crate) fn regprog(self) -> *mut RegProg {
         if self.multi() {
             // SAFETY: a buffer match's `reg_mmatch` is the caller's match
             // structure, which outlives the match.

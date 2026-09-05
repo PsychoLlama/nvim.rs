@@ -140,16 +140,16 @@ impl MapRhs {
 
 /// One mapping or abbreviation.
 ///
-/// The two `*mut mapblock_T` are the intrusive list links, not ownership: an
+/// The two `*mut MapBlock` are the intrusive list links, not ownership: an
 /// entry is a `Box` its list holds by raw pointer, because both the
 /// delete-walk and `getchar`'s match loop keep the address of a link across
 /// calls.  Everything else the entry owns is typed — see [`MapStr`] and
 /// [`MapRhs`].
-pub struct mapblock {
+pub struct MapBlock {
     /// The next entry on the same hash bucket or abbreviation list.
-    pub(crate) m_next: *mut mapblock_T,
+    pub(crate) m_next: *mut MapBlock,
     /// The unsimplified twin of a simplified mapping, or null.
-    pub(crate) m_alt: *mut mapblock_T,
+    pub(crate) m_alt: *mut MapBlock,
     /// The LHS, in typeahead form.
     pub(crate) m_keys: MapStr,
     /// The RHS: three strings and, when there is one, a shared callback.
@@ -167,7 +167,7 @@ pub struct mapblock {
     pub(crate) m_replace_keycodes: bool,
 }
 
-impl mapblock {
+impl MapBlock {
     /// The LHS, without its NUL.
     pub(crate) fn keys(&self) -> &[u8] {
         self.m_keys.as_bytes()
@@ -183,5 +183,3 @@ impl mapblock {
         self.m_rhs.luaref()
     }
 }
-
-pub type mapblock_T = mapblock;

@@ -28,7 +28,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{CmdArg, LineNr, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType, fmark_T};
+use crate::types::{CmdArg, FileMark, LineNr, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -247,7 +247,7 @@ unsafe fn nv_bracket_mark(cap: *mut CmdArg) {
     let ca = unsafe { CmdArgRef::new(cap) };
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
-    let mut here = fmark_T::UNSET;
+    let mut here = FileMark::UNSET;
     let mut fm = unsafe { pos_to_mark(curbuf.get(), &raw mut here, cur_win().w_cursor) };
     debug_assert!(!fm.is_null());
     let linewise = ca.nchar == '\'' as c_int;

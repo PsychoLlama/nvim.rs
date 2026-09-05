@@ -2,7 +2,7 @@
 //!
 //! Every fold list in a window — `w_folds`, and the `fd_nested` of every fold
 //! in it — is a `GArray`: an untyped growable array whose items happen to
-//! be [`fold_T`]. Reaching a fold therefore means casting `ga_data` and doing
+//! be [`Fold`]. Reaching a fold therefore means casting `ga_data` and doing
 //! pointer arithmetic against `ga_len`, and before this module every one of
 //! the forty-odd walks in `fold/` did that arithmetic for itself.
 //!
@@ -12,7 +12,7 @@
 //! the promise the access needs. A walk over the tree therefore costs no
 //! unchecked lines at all.
 //!
-//! The handles are raw-pointer-shaped rather than `&mut [fold_T]` slices on
+//! The handles are raw-pointer-shaped rather than `&mut [Fold]` slices on
 //! purpose: the tree is walked recursively while entries are inserted,
 //! deleted, split and merged *under* the walk, so two live `&mut` into one
 //! array would be routine rather than exceptional. [`FoldList::at`] therefore
@@ -22,12 +22,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use super::{fline_T, fold_T};
+use super::{Fold, FoldLine};
 use crate::types::{GArray, LineNr};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
-/// One fold list: a `GArray` whose items are [`fold_T`].
+/// One fold list: a `GArray` whose items are [`Fold`].
 ///
 /// `Copy`, because it is a handle and not an owner — dropping one frees
 /// nothing.
@@ -46,14 +46,14 @@ pub(super) struct FoldList {
 /// promises the *array*, not the index.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct FoldRef {
-    fp: *mut fold_T,
+    fp: *mut Fold,
 }
 
 impl FoldList {
     /// # Safety
     /// `gap` must point at a live fold list — a window's `w_folds`, or the
     /// `fd_nested` of a fold in one. Both are initialised with
-    /// `ga_itemsize == size_of::<fold_T>()` by `fold_init_win`,
+    /// `ga_itemsize == size_of::<Fold>()` by `fold_init_win`,
     /// `clone_fold_list` or `fold_insert`, and neither the growarray nor its
     /// data may be freed while the returned handle is in use.
     pub(super) const unsafe fn new(gap: *mut GArray) -> Self {
@@ -107,7 +107,7 @@ impl FoldList {
     /// [`FoldRef`].
     pub(super) fn index_of(self, fold: FoldRef) -> c_int {
         let bytes = fold.fp.addr() as isize - self.data().addr() as isize;
-        (bytes / size_of::<fold_T>() as isize) as c_int
+        (bytes / size_of::<Fold>() as isize) as c_int
     }
 
     /// Whether `fold` names an entry that is really there.
@@ -153,7 +153,7 @@ impl FoldList {
             .map(move |i| self.at(i))
     }
 
-    fn data(self) -> *mut fold_T {
+    fn data(self) -> *mut Fold {
         // SAFETY: as `len`.
         unsafe { (*self.gap).ga_data }.cast()
     }
@@ -161,8 +161,8 @@ impl FoldList {
 
 impl FoldRef {
     /// The entry's address, for the handful of callers that still pass a
-    /// `*mut fold_T` across a module boundary.
-    pub(super) fn entry(self) -> *mut fold_T {
+    /// `*mut Fold` across a module boundary.
+    pub(super) fn entry(self) -> *mut Fold {
         self.fp
     }
 
@@ -238,12 +238,12 @@ impl FoldRef {
 
     /// A copy of the whole entry, for the array moves in `fold_split` and
     /// `fold_merge`.
-    pub(super) fn read(self) -> fold_T {
+    pub(super) fn read(self) -> Fold {
         // SAFETY: as `top`.
         unsafe { *self.fp }
     }
 
-    pub(super) fn write(self, fold: fold_T) {
+    pub(super) fn write(self, fold: Fold) {
         // SAFETY: as `top`.
         unsafe { *self.fp = fold };
     }
@@ -251,33 +251,33 @@ impl FoldRef {
 
 /// The per-line state the computed fold methods are handed, and answer in.
 ///
-/// One `fline_T` travels the whole of `fold_update_computed_recurse`: each
+/// One `FoldLine` travels the whole of `fold_update_computed_recurse`: each
 /// level of the recursion reads what the level above left and writes what the
 /// level below will read, which is why it is passed by pointer rather than by
 /// `&mut`. The same trick as [`FoldList`] applies — the promise is made once,
 /// at construction, and the field accessors are safe.
 #[derive(Copy, Clone)]
 pub(super) struct FLine {
-    flp: *mut fline_T,
+    flp: *mut FoldLine,
 }
 
 impl FLine {
     /// # Safety
-    /// `flp` must point at a live, writable `fline_T` naming a live window,
+    /// `flp` must point at a live, writable `FoldLine` naming a live window,
     /// and must stay so for as long as the handle is used.
-    pub(super) const unsafe fn new(flp: *mut fline_T) -> Self {
+    pub(super) const unsafe fn new(flp: *mut FoldLine) -> Self {
         Self { flp }
     }
 
-    /// The `fline_T` behind the handle, for the two calls that still speak
+    /// The `FoldLine` behind the handle, for the two calls that still speak
     /// in pointers: the recursion's own re-entry and the C struct field.
-    pub(super) fn raw(self) -> *mut fline_T {
+    pub(super) fn raw(self) -> *mut FoldLine {
         self.flp
     }
 
     /// The window whose folds are being computed.
     pub(super) fn win(self) -> Win {
-        // SAFETY: `new`'s caller promised a live `fline_T` naming a live
+        // SAFETY: `new`'s caller promised a live `FoldLine` naming a live
         // window.
         unsafe { Win::new((*self.flp).wp) }
     }
@@ -381,16 +381,16 @@ mod tests {
     /// Build a detached fold list from `(top, len)` pairs. The entries are
     /// leaked with the array; the tests are short and Miri only cares that
     /// nothing is read out of bounds.
-    fn list(spans: &[(LineNr, LineNr)]) -> (Box<GArray>, Vec<fold_T>) {
-        let mut folds: Vec<fold_T> = spans
+    fn list(spans: &[(LineNr, LineNr)]) -> (Box<GArray>, Vec<Fold>) {
+        let mut folds: Vec<Fold> = spans
             .iter()
-            .map(|&(top, len)| fold_T {
+            .map(|&(top, len)| Fold {
                 fd_top: top,
                 fd_len: len,
                 fd_nested: GArray {
                     ga_len: 0,
                     ga_maxlen: 0,
-                    ga_itemsize: size_of::<fold_T>() as c_int,
+                    ga_itemsize: size_of::<Fold>() as c_int,
                     ga_growsize: 10,
                     ga_data: ptr::null_mut(),
                 },
@@ -401,7 +401,7 @@ mod tests {
         let gap = Box::new(GArray {
             ga_len: folds.len() as c_int,
             ga_maxlen: folds.len() as c_int,
-            ga_itemsize: size_of::<fold_T>() as c_int,
+            ga_itemsize: size_of::<Fold>() as c_int,
             ga_growsize: 10,
             ga_data: folds.as_mut_ptr().cast(),
         });
@@ -410,7 +410,7 @@ mod tests {
 
     /// `FoldList::new` over a list built above.
     fn handle(gap: &mut GArray) -> FoldList {
-        // SAFETY: `list` built it with `ga_itemsize == size_of::<fold_T>()`
+        // SAFETY: `list` built it with `ga_itemsize == size_of::<Fold>()`
         // and the storage outlives the handle.
         unsafe { FoldList::new(&raw mut *gap) }
     }

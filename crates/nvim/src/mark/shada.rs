@@ -46,7 +46,7 @@ use crate::ascii::ascii_islower;
 pub unsafe fn mark_global_iter(
     iter: *const c_void,
     name: *mut c_char,
-    fm: *mut xfmark_T,
+    fm: *mut XFileMark,
 ) -> *const c_void {
     // SAFETY: the caller promised writable out-parameters.
     unsafe { *name = NUL_BYTE };
@@ -95,7 +95,7 @@ fn set_global_at_or_after(from: c_int) -> Option<c_int> {
 pub(super) unsafe fn next_buffer_mark(
     buf: *const Buffer,
     mark_name: *mut c_char,
-) -> *const fmark_T {
+) -> *const FileMark {
     // SAFETY: the caller promised a live buffer and a live cursor.
     let buf = unsafe { Buf::new(buf.cast_mut()) };
     // SAFETY: as above.
@@ -137,7 +137,7 @@ pub unsafe fn mark_buffer_iter(
     iter: *const c_void,
     buf: *const Buffer,
     name: *mut c_char,
-    fm: *mut fmark_T,
+    fm: *mut FileMark,
 ) -> *const c_void {
     // SAFETY: the caller promised a live buffer and writable out-parameters.
     let bufh = unsafe { Buf::new(buf.cast_mut()) };
@@ -156,8 +156,8 @@ pub unsafe fn mark_buffer_iter(
         '.' as c_char
     } else {
         let base = bufh.named_mark(0).raw().addr();
-        let bytes = iter.cast::<fmark_T>().addr().wrapping_sub(base);
-        let idx = bytes.wrapping_div(size_of::<fmark_T>());
+        let bytes = iter.cast::<FileMark>().addr().wrapping_sub(base);
+        let idx = bytes.wrapping_div(size_of::<FileMark>());
         mark_name(c_int::try_from(idx).unwrap_or(0) + 'a' as c_int)
     };
     // SAFETY: `buf` is live and `mark_name` is on this stack.
@@ -191,7 +191,7 @@ pub unsafe fn mark_buffer_iter(
 /// # Safety
 /// The editor's globals must be live, and `fm`'s allocations must be handed
 /// over to the table.
-pub unsafe fn mark_set_global(name: c_char, fm: xfmark_T, update: bool) -> bool {
+pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool {
     let idx = mark_global_index(name);
     if idx == -1 {
         return false;
@@ -224,7 +224,7 @@ pub unsafe fn mark_set_global(name: c_char, fm: xfmark_T, update: bool) -> bool 
 /// # Safety
 /// `buf` must be a live buffer, and `fm`'s allocations must be handed over to
 /// the store.
-pub unsafe fn mark_set_local(name: c_char, buf: *mut Buffer, fm: fmark_T, update: bool) -> bool {
+pub unsafe fn mark_set_local(name: c_char, buf: *mut Buffer, fm: FileMark, update: bool) -> bool {
     // SAFETY: the caller promised a live buffer.
     let bufh = unsafe { Buf::new(buf) };
     let name = c_int::from(name);

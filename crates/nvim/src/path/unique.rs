@@ -190,7 +190,7 @@ pub(crate) unsafe fn uniquefy_paths(
     if pat.is_null() {
         return;
     }
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         rm_ic: true, // always ignore case
         ..Default::default()
     };

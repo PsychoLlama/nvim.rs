@@ -79,7 +79,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_
     // Autocommands may cause trouble.
     incr_quickfix_busy();
 
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     if old_last.is_null() {
         // Set curwin/curbuf to buf and save a few things.
         // SAFETY: a live buffer, and `aco` outlives the restore below.

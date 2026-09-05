@@ -52,7 +52,7 @@ pub(crate) static FMT_PAT: [(u8, &[u8]); FMT_PATTERNS] = [
 pub(crate) struct Format {
     /// The compiled pattern. Owned: freed when the `Format` is dropped, and
     /// replaced in place by [`Format::exec`] when the engine rewrites it.
-    prog: *mut regprog_T,
+    prog: *mut RegProg,
     /// Which submatch each `%` conversion captured, 1-based; 0 when the
     /// conversion does not appear in this format.
     addr: [u8; FMT_PATTERNS],
@@ -109,15 +109,15 @@ impl Format {
     /// Run this format's pattern over `line`, answering the match.
     ///
     /// Case is always ignored when looking for an error. The engine may
-    /// hand back a different `regprog_T` than it was given (a pattern is
+    /// hand back a different `RegProg` than it was given (a pattern is
     /// recompiled the first time it is used with different settings), so
     /// the answer is stored back.
     ///
     /// # Safety
     ///
     /// `line` must be NUL-terminated.
-    pub(crate) unsafe fn exec(&mut self, line: *mut c_char) -> Option<regmatch_T> {
-        let mut regmatch = regmatch_T {
+    pub(crate) unsafe fn exec(&mut self, line: *mut c_char) -> Option<RegMatch> {
+        let mut regmatch = RegMatch {
             regprog: self.prog,
             rm_ic: true,
             ..Default::default()

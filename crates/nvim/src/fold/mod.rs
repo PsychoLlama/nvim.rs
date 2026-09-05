@@ -2,7 +2,7 @@
 //!
 //! The toplevel folds of a window live in its `w_folds` growarray. Each of
 //! them can hold an array of second-level folds in `fd_nested`, and so on:
-//! every level is the same `GArray` of [`fold_T`], so the whole tree is
+//! every level is the same `GArray` of [`Fold`], so the whole tree is
 //! reached through [`list`]'s [`FoldList`] and [`FoldRef`] handles.
 //!
 //! A fold's `fd_top` is relative to its parent, which is what makes
@@ -69,7 +69,7 @@ pub const MAX_LEVEL: c_int = 20;
 /// Size of the buffer `get_foldtext` renders the default fold text into.
 pub const FOLD_TEXT_LEN: c_uint = 51;
 
-/// `fold_T::fd_flags` — whether a fold is drawn open, closed, or takes its
+/// `Fold::fd_flags` — whether a fold is drawn open, closed, or takes its
 /// state from 'foldlevel'.
 pub const FD_OPEN: c_int = 0;
 pub const FD_CLOSED: c_int = 1;
@@ -88,7 +88,7 @@ const LINES_DELETED: LineNr = MAXLNUM as LineNr;
 pub(in crate::fold) type LevelGetter = Option<unsafe fn(FLine) -> ()>;
 
 #[derive(Copy, Clone)]
-pub struct fold_T {
+pub struct Fold {
     /// First line of the fold; relative to the parent for a nested fold.
     pub fd_top: LineNr,
     /// Number of lines in the fold.
@@ -104,7 +104,7 @@ pub struct fold_T {
 
 /// What the per-'foldmethod' level computations are handed, and what they
 /// answer in.
-pub struct fline_T {
+pub struct FoldLine {
     pub wp: *mut Window,
     /// Current line number.
     pub lnum: LineNr,
@@ -205,7 +205,7 @@ pub fn has_folding_win(
     firstp: Option<&mut LineNr>,
     lastp: Option<&mut LineNr>,
     cache: bool,
-    mut infop: Option<&mut foldinfo_T>,
+    mut infop: Option<&mut FoldInfo>,
 ) -> bool {
     checkupdate(win);
     if has_any_folding(win) == 0 {
@@ -326,8 +326,8 @@ pub fn line_folded(win: Win, lnum: LineNr) -> bool {
 ///         fi_lines = number of folded lines from "lnum",
 ///                    or 0 if line is not folded.
 ///
-pub fn fold_info(win: Win, lnum: LineNr) -> foldinfo_T {
-    let mut info = foldinfo_T {
+pub fn fold_info(win: Win, lnum: LineNr) -> FoldInfo {
+    let mut info = FoldInfo {
         fi_lnum: 0,
         fi_level: 0,
         fi_low_level: 0,
@@ -468,7 +468,7 @@ pub fn fold_update_all(mut win: Win) {
 pub unsafe fn fold_init_win(mut new_win: Win) {
     // SAFETY: the caller's promise. This is the call that makes `w_folds` a
     // fold list, i.e. the one every `FoldList::new` leans on.
-    unsafe { ga_init(&raw mut new_win.w_folds, size_of::<fold_T>() as c_int, 10) };
+    unsafe { ga_init(&raw mut new_win.w_folds, size_of::<Fold>() as c_int, 10) };
 }
 
 /// Find an entry in the win->w_lines[] array for buffer line "lnum".

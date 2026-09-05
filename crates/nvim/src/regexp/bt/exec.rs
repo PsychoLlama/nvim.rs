@@ -32,8 +32,8 @@ use crate::regexp::{
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
-    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, Window, reg_extmatch_T, regmatch_T, regmmatch_T,
-    uint8_t, uint32_t,
+    Buffer, ColNr, LPos, LineNr, NUL, ProfTime, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,
+    uint32_t,
 };
 
 /// How many start columns may be tried between two reads of the caller's
@@ -63,7 +63,7 @@ fn regtry(rex: Rex, prog: BtProg, col: ColNr, tm: *const ProfTime, timed_out: *m
     // because it keeps them past the end of this match.
     // SAFETY: `re_extmatch_out` holds the previous match's set, or null.
     unsafe { unref_extmatch(re_extmatch_out.get()) };
-    re_extmatch_out.set(core::ptr::null_mut::<reg_extmatch_T>());
+    re_extmatch_out.set(core::ptr::null_mut::<RegExtMatch>());
     if prog.has_z() {
         cleanup_zsubexpr(rex);
         re_extmatch_out.set(make_extmatch());
@@ -374,7 +374,7 @@ fn scan_columns(
 /// `rmp` must hold a program this engine compiled, and `line` be a
 /// NUL-terminated string.
 pub(crate) unsafe fn bt_regexec_nl(
-    rmp: *mut regmatch_T,
+    rmp: *mut RegMatch,
     line: *mut uint8_t,
     col: ColNr,
     line_lbr: bool,
@@ -393,7 +393,7 @@ pub(crate) unsafe fn bt_regexec_nl(
 /// `rmp` must hold a program this engine compiled, and `buf`/`win` be the
 /// buffer and window the match runs over.
 pub(crate) unsafe fn bt_regexec_multi(
-    rmp: *mut regmmatch_T,
+    rmp: *mut RegMMatch,
     win: *mut Window,
     buf: *mut Buffer,
     lnum: LineNr,

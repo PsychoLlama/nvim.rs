@@ -60,12 +60,12 @@ use crate::search::{
 use crate::strings::vim_strchr;
 use crate::types::{
     AdditionalData, AdditionalDataBuilder, ApiDict, Arena, Buffer, ColNr, DictItem, FileDescriptor,
-    FileInfo, HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
-    KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet,
-    MotionType, OptionalKeys, PackerBuffer, Pos, SearchOffset, SearchPattern, String_0,
-    StringArray, SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock,
-    bln_values, fmark_T, fmarkv_T, int64_t, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t,
-    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T, yankreg_T,
+    FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
+    KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr,
+    List, MarkGet, MotionType, OptionalKeys, PackerBuffer, Pos, SearchOffset, SearchPattern,
+    String_0, StringArray, SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour,
+    VarLock, XFileMark, bln_values, int64_t, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t,
+    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};

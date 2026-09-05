@@ -48,8 +48,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Buffer, CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, LineNr, MarkGet,
-    MarkMove, NUL, OK, Pos, fmark_T, size_t,
+    Buffer, CmdAddr, ColNr, Direction, ExArg, ExArgt, ExpandContext, FAIL, FileMark, LineNr,
+    MarkGet, MarkMove, NUL, OK, Pos, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 
@@ -271,7 +271,7 @@ pub unsafe fn parse_cmd_address(
 ) -> c_int {
     // The records `:*` reads the Visual marks into: they are never adjusted
     // and have no store, so each is computed into a record of its own.
-    let (mut first, mut last) = (fmark_T::UNSET, fmark_T::UNSET);
+    let (mut first, mut last) = (FileMark::UNSET, FileMark::UNSET);
     let mut ea = unsafe { Ea::new(eap) };
     let mut address_count = 1;
     let mut lnum: LineNr;
@@ -503,7 +503,7 @@ pub unsafe fn get_address(
 ) -> LineNr {
     let ea = unsafe { Ea::new(eap) };
     // The record a `'m` address answers into; see `mark_get`.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     let mut cmd: *mut c_char = unsafe { skipwhite(*ptr) };
     let mut lnum: LineNr = MAXLNUM as LineNr;
     let mut pos = Pos {
@@ -945,7 +945,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 }
 
 /// `mark_get_visual()` as checked code.
-fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
+fn mark_get_visual(buf: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mark::mark_get_visual(buf, fmp, name) }
 }

@@ -49,7 +49,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     }
 
     // Rename the preview buffer.
-    let mut aco = aco_save_T::default();
+    let mut aco = AcoSave::default();
     unsafe { aucmd_prepbuf(&raw mut aco, cmdpreview_buf) };
     let retv = unsafe { rename_buffer(c"[Preview]".as_ptr().cast_mut()) };
     unsafe { aucmd_restbuf(&raw mut aco) };
@@ -294,7 +294,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
             let chain = unsafe { header_chain(buf, start, |uh| uh.uh_next) };
             let count = chain.count() as ::core::ffi::c_int;
 
-            let mut aco = aco_save_T::default();
+            let mut aco = AcoSave::default();
             // SAFETY: `aco` is this frame's, and every `prepbuf` below is
             // paired with the `restbuf` that follows it.
             unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };

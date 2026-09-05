@@ -25,14 +25,13 @@ pub struct AutoCmd {
 pub struct AutoPat {
     pub refcount: RefcountSize,
     pub pat: *mut ::core::ffi::c_char,
-    pub reg_prog: *mut regprog_T,
+    pub reg_prog: *mut RegProg,
     pub group: ::core::ffi::c_int,
     pub patlen: ::core::ffi::c_int,
     pub buflocal_nr: ::core::ffi::c_int,
     pub allow_dirs: ::core::ffi::c_char,
 }
-pub type AutoPatCmd = AutoPatCmd_S;
-pub struct AutoPatCmd_S {
+pub struct AutoPatCmd {
     pub lastpat: *mut AutoPat,
     pub auidx: size_t,
     pub ausize: size_t,
@@ -47,7 +46,7 @@ pub struct AutoPatCmd_S {
     pub data: *mut Object,
     pub next: *mut AutoPatCmd,
 }
-pub struct aco_save_T {
+pub struct AcoSave {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
     pub save_curwin_handle: Handle,
     pub new_curwin_handle: Handle,
@@ -59,11 +58,11 @@ pub struct aco_save_T {
     pub save_prompt_insert: ::core::ffi::c_int,
 }
 
-impl Default for aco_save_T {
+impl Default for AcoSave {
     /// The zeroed state `aucmd_prepbuf` expects to be handed. Every caller
     /// declares one of these as a local and immediately fills it in.
     fn default() -> Self {
-        aco_save_T {
+        AcoSave {
             use_aucmd_win_idx: 0,
             save_curwin_handle: 0,
             new_curwin_handle: 0,
@@ -81,7 +80,7 @@ impl Default for aco_save_T {
     }
 }
 
-pub struct aucmdwin_T {
+pub struct AucmdWin {
     pub auc_win: *mut Window,
     pub auc_win_used: bool,
 }

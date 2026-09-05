@@ -13,7 +13,7 @@ use crate::api::private::validate::err_bad_value;
 pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     let mut res: bool = false;
     let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
@@ -26,7 +26,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    let fm: *mut fmark_T = unsafe {
+    let fm: *mut FileMark = unsafe {
         mark_get(
             b,
             curwin.get(),
@@ -77,7 +77,7 @@ pub unsafe fn nvim_buf_get_mark(
 ) -> Result<Array, Error> {
     let mut error = Error::none();
     // The record `mark_get` answers into; see `mark_get`.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     let mut rv: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,
@@ -100,7 +100,7 @@ pub unsafe fn nvim_buf_get_mark(
         coladd: 0,
     };
     let mark: ::core::ffi::c_char = unsafe { *name.data() };
-    let fm: *mut fmark_T = unsafe {
+    let fm: *mut FileMark = unsafe {
         mark_get(
             b,
             curwin.get(),

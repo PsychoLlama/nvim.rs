@@ -67,7 +67,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{Cleanup, CondStack, EsList, ExArg, NUL, regmatch_T};
+use crate::types::{Cleanup, CondStack, EsList, ExArg, NUL, RegMatch};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -318,9 +318,9 @@ unsafe fn pattern_catches(pat: *mut c_char, end: *mut c_char) -> bool {
     // Errors here would invalidate the current exception.
     // Disable error messages: one here would invalidate the exception.
     let no_emsg = Suppress::emsg();
-    let mut regmatch = regmatch_T {
+    let mut regmatch = RegMatch {
         regprog: unsafe { vim_regcomp(pat, RE_MAGIC + RE_STRING) },
-        ..regmatch_T::default()
+        ..RegMatch::default()
     };
     drop(no_emsg);
     if !end.is_null() {

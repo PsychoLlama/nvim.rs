@@ -41,7 +41,7 @@ impl CursorPick {
     unsafe fn consider(
         &mut self,
         curhead: Header,
-        uep: *mut u_entry_T,
+        uep: *mut UndoEntry,
         top: LineNr,
         oldsize: LineNr,
         newsize: LineNr,
@@ -134,7 +134,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
     };
     // The entries come back in the reverse of the order they are applied,
     // which is the order the next move wants them in.
-    let mut newlist: *mut u_entry_T = ptr::null_mut();
+    let mut newlist: *mut UndoEntry = ptr::null_mut();
     let mut uep = curhead.uh_entry;
     while !uep.is_null() {
         // SAFETY: an entry of a live header, and a live current buffer.
@@ -244,7 +244,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 unsafe fn apply_entry(
     mut buf: Buf,
     curhead: Header,
-    uep: *mut u_entry_T,
+    uep: *mut UndoEntry,
     pick: &mut CursorPick,
     do_buf_event: bool,
 ) -> bool {
@@ -360,7 +360,7 @@ unsafe fn apply_entry(
 /// # Safety
 ///
 /// A live buffer and a live header.
-unsafe fn swap_marks(mut buf: Buf, mut curhead: Header, saved: &[fmark_T; NMARKS as usize]) {
+unsafe fn swap_marks(mut buf: Buf, mut curhead: Header, saved: &[FileMark; NMARKS as usize]) {
     for (i, saved) in saved.iter().enumerate() {
         if curhead.uh_namedm[i].mark.lnum != 0 {
             // SAFETY: a mark the buffer owns and is about to drop.

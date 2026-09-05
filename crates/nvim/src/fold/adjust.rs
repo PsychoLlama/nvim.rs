@@ -338,7 +338,7 @@ pub(super) unsafe fn fold_insert(folds: FoldList, i: c_int) {
     folds.set_len(folds.len() + 1);
     // SAFETY: the entry is the zeroed storage `ga_grow` handed out; this is
     // the call that makes its `fd_nested` a fold list.
-    unsafe { ga_init(fold.nested().gap(), size_of::<fold_T>() as c_int, 10) };
+    unsafe { ga_init(fold.nested().gap(), size_of::<Fold>() as c_int, 10) };
 }
 
 /// Split the "i"th fold in `folds`, which starts before "top" and ends below

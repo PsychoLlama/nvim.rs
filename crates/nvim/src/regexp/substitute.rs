@@ -44,8 +44,8 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    FuncExe, LineNr, NUL, Partial, StaticList10, TypVal, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
-    VAR_STRING, VAR_UNKNOWN, VarLock, regmatch_T, regmmatch_T,
+    FuncExe, LineNr, NUL, Partial, RegMMatch, RegMatch, StaticList10, TypVal, VAR_FUNC, VAR_LIST,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -326,7 +326,7 @@ pub(crate) unsafe fn regtilde(source: *mut c_char, magic: c_int, preview: bool) 
 /// The match must not have changed since [`vim_regexec`](super::vim_regexec)
 /// ran: the captures point straight into the matched text.
 pub(crate) unsafe fn vim_regsub(
-    rmp: *mut regmatch_T,
+    rmp: *mut RegMatch,
     source: *mut c_char,
     expr: *mut TypVal,
     dest: *mut c_char,
@@ -351,7 +351,7 @@ pub(crate) unsafe fn vim_regsub(
 /// [`vim_regsub`] for a buffer match, whose captures can span lines from
 /// `lnum` on.
 pub(crate) unsafe fn vim_regsub_multi(
-    rmp: *mut regmmatch_T,
+    rmp: *mut RegMMatch,
     lnum: LineNr,
     source: *mut c_char,
     dest: *mut c_char,

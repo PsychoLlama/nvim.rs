@@ -16,8 +16,8 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin, Window,
-    aco_save_T, kErrorTypeNone,
+    AcoSave, Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin,
+    Window, kErrorTypeNone,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::Win;
@@ -72,7 +72,7 @@ pub(crate) enum OptionContext {
     /// Nothing to switch: a global option is the same everywhere.
     Global,
     Win(SwitchWin),
-    Buf(aco_save_T),
+    Buf(AcoSave),
 }
 
 impl OptionContext {
@@ -85,7 +85,7 @@ impl OptionContext {
                 sw_same_win: false,
                 sw_visual_active: false,
             }),
-            kOptScopeBuf => OptionContext::Buf(aco_save_T::default()),
+            kOptScopeBuf => OptionContext::Buf(AcoSave::default()),
             _ => OptionContext::Global,
         }
     }

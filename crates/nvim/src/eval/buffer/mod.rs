@@ -133,12 +133,12 @@ pub(super) fn cur_buf() -> Buf {
 /// [`SavedBufferState::restore`] can put it back.
 struct SavedBufferState {
     curwin_save: *mut Window,
-    aco: aco_save_T,
+    aco: AcoSave,
     using_aco: bool,
     save_visual_active: bool,
 }
 impl SavedBufferState {
-    /// The all-zero state the two halves below start from — `aco_save_T`'s
+    /// The all-zero state the two halves below start from — `AcoSave`'s
     /// own initial value, which `aucmd_prepbuf` overwrites in full.
     fn new() -> Self {
         // SAFETY: every field is a raw pointer, an integer or a `bool`, for

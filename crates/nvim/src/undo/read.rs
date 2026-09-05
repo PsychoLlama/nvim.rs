@@ -251,8 +251,8 @@ unsafe fn read_headers(
     bi: *mut bufinfo_T,
     file_name: *const c_char,
     num_head: c_int,
-) -> Option<Vec<*mut u_header_T>> {
-    let mut headers: Vec<*mut u_header_T> = Vec::new();
+) -> Option<Vec<*mut UndoHeader>> {
+    let mut headers: Vec<*mut UndoHeader> = Vec::new();
     // SAFETY: an open undo file, by the contract above.
     loop {
         let c = unsafe { undo_read_2c(bi) };
@@ -288,7 +288,7 @@ unsafe fn read_headers(
 /// # Safety
 ///
 /// Every pointer is a live header nothing else owns.
-unsafe fn free_headers(headers: &[*mut u_header_T]) {
+unsafe fn free_headers(headers: &[*mut UndoHeader]) {
     for &uhp in headers {
         // SAFETY: a live header nobody else owns, by the contract above.
         unsafe { u_free_uhp(uhp) };
@@ -304,7 +304,7 @@ unsafe fn free_headers(headers: &[*mut u_header_T]) {
 ///
 /// A live current buffer, and every header is live and owned by nobody else.
 unsafe fn graft(
-    headers: &[*mut u_header_T],
+    headers: &[*mut UndoHeader],
     header: &FileHeader,
     file_name: *const c_char,
 ) -> bool {

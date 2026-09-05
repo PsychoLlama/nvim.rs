@@ -16,17 +16,16 @@ use super::*;
 /// Not `Copy`: `ue_array` and every string in it are owned, and
 /// `u_freeentry` releases them.
 #[derive(Clone)]
-pub struct u_entry {
-    pub ue_next: *mut u_entry_T,
+pub struct UndoEntry {
+    pub ue_next: *mut UndoEntry,
     pub ue_top: LineNr,
     pub ue_bot: LineNr,
     pub ue_lcount: LineNr,
     pub ue_array: *mut *mut ::core::ffi::c_char,
     pub ue_size: LineNr,
 }
-pub type u_entry_T = u_entry;
 
-impl Default for u_entry {
+impl Default for UndoEntry {
     /// An entry holding no lines and linked to nothing — what `xmalloc` plus
     /// a `memset` left behind, spelled out so that getting one does not mean
     /// writing zeroes through a pointer.
@@ -94,34 +93,33 @@ impl UndoLink {
 }
 
 #[derive(Clone)]
-pub struct u_header {
+pub struct UndoHeader {
     pub uh_next: UndoLink,
     pub uh_prev: UndoLink,
     pub uh_alt_next: UndoLink,
     pub uh_alt_prev: UndoLink,
     pub uh_seq: ::core::ffi::c_int,
     pub uh_walk: ::core::ffi::c_int,
-    pub uh_entry: *mut u_entry_T,
-    pub uh_getbot_entry: *mut u_entry_T,
+    pub uh_entry: *mut UndoEntry,
+    pub uh_getbot_entry: *mut UndoEntry,
     pub uh_cursor: Pos,
     pub uh_cursor_vcol: ColNr,
     pub uh_flags: ::core::ffi::c_int,
-    pub uh_namedm: [fmark_T; 26],
+    pub uh_namedm: [FileMark; 26],
     pub uh_extmark: extmark_undo_vec_t,
-    pub uh_visual: visualinfo_T,
+    pub uh_visual: VisualInfo,
     pub uh_time: time_t,
     pub uh_save_nr: ::core::ffi::c_int,
 }
-pub type u_header_T = u_header;
 
-impl Default for u_header {
+impl Default for UndoHeader {
     /// A header linked to nothing, with every other field zero — what
     /// `xmalloc` plus a `memset` left behind, spelled out so that getting
     /// one does not mean writing zeroes through a pointer.
     fn default() -> Self {
-        // A `const`, not a `let`: `fmark_T` is not `Copy`, and only a
+        // A `const`, not a `let`: `FileMark` is not `Copy`, and only a
         // constant may be repeated into an array without it.
-        const UNSET_MARK: fmark_T = fmark_T {
+        const UNSET_MARK: FileMark = FileMark {
             mark: Pos {
                 lnum: 0,
                 col: 0,
@@ -129,7 +127,7 @@ impl Default for u_header {
             },
             fnum: 0,
             timestamp: 0,
-            view: fmarkv_T {
+            view: FileMarkView {
                 topline_offset: 0,
                 skipcol: 0,
             },
@@ -153,7 +151,7 @@ impl Default for u_header {
                 capacity: 0,
                 items: ::core::ptr::null_mut(),
             },
-            uh_visual: visualinfo_T {
+            uh_visual: VisualInfo {
                 vi_start: Pos::default(),
                 vi_end: Pos::default(),
                 vi_mode: 0,
@@ -165,7 +163,7 @@ impl Default for u_header {
     }
 }
 #[derive(Copy, Clone)]
-pub struct visualinfo_T {
+pub struct VisualInfo {
     pub vi_start: Pos,
     pub vi_end: Pos,
     pub vi_mode: ::core::ffi::c_int,

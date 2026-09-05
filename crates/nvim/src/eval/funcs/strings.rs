@@ -39,8 +39,8 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    Blob, CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, TypVal, VAR_BLOB, VAR_LIST,
-    VAR_STRING, VarNumber, kListLenMayKnow, regmatch_T, regprog_T, time_t, tm, vimconv_T,
+    Blob, CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal,
+    VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow, time_t, tm, vimconv_T,
 };
 use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
@@ -513,16 +513,11 @@ pub unsafe fn f_split(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
 /// # Safety
 /// `list` is a live list, `str` is NUL-terminated, and `prog` is a compiled
 /// program the caller frees.
-unsafe fn split_into(
-    list: *mut List,
-    mut str: *const c_char,
-    prog: *mut regprog_T,
-    keepempty: bool,
-) {
+unsafe fn split_into(list: *mut List, mut str: *const c_char, prog: *mut RegProg, keepempty: bool) {
     // SAFETY throughout: the caller's obligation. The match positions come back
     // pointing into `str`, so every pointer difference below is within one
     // allocation.
-    let mut regmatch: regmatch_T = regmatch_T {
+    let mut regmatch: RegMatch = RegMatch {
         regprog: prog,
         startp: [ptr::null_mut(); 10],
         endp: [ptr::null_mut(); 10],

@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{CmdArg, MarkMove, MarkMoveRes, OpType, fmark_T, searchit_arg_T, size_t};
+use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, searchit_arg_T, size_t};
 use crate::window::goto_tabpage_lastused;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -174,7 +174,7 @@ pub(crate) unsafe fn nv_mark(cap: *mut CmdArg) {
 pub(crate) unsafe fn nv_mark_move_to(
     cap: *mut CmdArg,
     flags: MarkMove,
-    fm: *mut fmark_T,
+    fm: *mut FileMark,
 ) -> MarkMoveRes {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cap) };
@@ -254,7 +254,7 @@ pub(crate) unsafe fn nv_gomark(cap: *mut CmdArg) {
     }
 
     // The record the lookup answers into; it outlives the jump below.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     let fm = unsafe { mark_get(curbuf.get(), curwin.get(), &raw mut slot, kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cap, flags, fm) };
     if !virtual_active(cur_win()) {

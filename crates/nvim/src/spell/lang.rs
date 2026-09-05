@@ -52,7 +52,7 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    Failed, GArray, MAXPATHL, NUL, SPL_FNAME_TMPL, SynBlock, Window, langp_T, regprog_T, size_t,
+    Failed, GArray, MAXPATHL, NUL, RegProg, SPL_FNAME_TMPL, SynBlock, Window, langp_T, size_t,
     slang_T,
 };
 use crate::window::win_valid_any_tab;
@@ -673,7 +673,7 @@ pub unsafe fn did_set_spell_option() -> Option<&'static CStr> {
 /// Returns an error message when the pattern does not compile, leaving the
 /// previous program in place.
 pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr> {
-    let rp: *mut regprog_T = unsafe { (*synblock).b_cap_prog };
+    let rp: *mut RegProg = unsafe { (*synblock).b_cap_prog };
 
     if unsafe { (*synblock).b_p_spc }.is_null() || unsafe { *(*synblock).b_p_spc } == 0 {
         unsafe { (*synblock).b_cap_prog = core::ptr::null_mut() };

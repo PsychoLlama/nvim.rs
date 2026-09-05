@@ -299,7 +299,7 @@ pub unsafe fn fold_create(wp: Win, start_pos: Pos, end_pos: Pos) {
         ga_data: ptr::null_mut(),
     };
     // SAFETY: `nested` is a local; this is what makes it a fold list.
-    unsafe { ga_init(&raw mut nested, size_of::<fold_T>() as c_int, 10) };
+    unsafe { ga_init(&raw mut nested, size_of::<Fold>() as c_int, 10) };
 
     // The folds the new one swallows whole become its children.
     let mut cont = 0;

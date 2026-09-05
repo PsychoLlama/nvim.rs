@@ -223,7 +223,7 @@ pub(crate) unsafe fn win_update(wp: Win) {
     unsafe { plan_visual_area(win, buf, &mut rg) };
     unsafe { remember_visual_area(wp, buf) };
 
-    let mut cursorline_fi = foldinfo_T::default();
+    let mut cursorline_fi = FoldInfo::default();
     unsafe { win_update_cursorline(wp.raw(), &raw mut cursorline_fi) };
     if wp.raw() == curwin.get() {
         conceal_cursor_used.set(unsafe { conceal_cursor_line(curwin.get()) });

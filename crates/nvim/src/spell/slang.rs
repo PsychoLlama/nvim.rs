@@ -34,7 +34,7 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Buffer, HashValue, NUL, OK, regprog_T, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
+    Buffer, HashValue, NUL, OK, RegProg, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
 };
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
@@ -123,7 +123,7 @@ pub unsafe fn slang_clear(lp: *mut slang_T) {
     unsafe { xfree_clear(&raw mut (*lp).sl_midword) };
 
     unsafe { vim_regfree((*lp).sl_compprog) };
-    unsafe { (*lp).sl_compprog = core::ptr::null_mut::<regprog_T>() };
+    unsafe { (*lp).sl_compprog = core::ptr::null_mut::<RegProg>() };
     unsafe { xfree_clear(&raw mut (*lp).sl_comprules) };
     unsafe { xfree_clear(&raw mut (*lp).sl_compstartflags) };
     unsafe { xfree_clear(&raw mut (*lp).sl_compallflags) };

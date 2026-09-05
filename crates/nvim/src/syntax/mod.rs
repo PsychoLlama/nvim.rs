@@ -85,9 +85,9 @@ use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    Buffer, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, SynBlock, SynTime,
-    VarNumber, Window, bufstate_T, int16_t, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
-    size_t, synstate_T, uint8_t, uint64_t,
+    BufState, Buffer, ColNr, ExArg, Expand, HashTab, LPos, LineNr, OptInt, ProfTime, RegExtMatch,
+    RegMMatch, RegMatch, RegProg, SynBlock, SynTime, VarNumber, Window, int16_t, size_t,
+    synstate_T, uint8_t, uint64_t,
 };
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
@@ -258,7 +258,7 @@ pub(crate) struct stateitem_T {
     pub si_cchar: ::core::ffi::c_int,
     pub si_cont_list: *mut int16_t,
     pub si_next_list: *mut int16_t,
-    pub si_extmatch: *mut reg_extmatch_T,
+    pub si_extmatch: *mut RegExtMatch,
 }
 /// One `:syntax match` pattern, or one start/skip/end pattern of a
 /// `:syntax region`. Lives in its block's `b_syn_patterns`.
@@ -286,10 +286,10 @@ pub(crate) struct synpat_T {
     pub sp_pattern: Option<::std::ffi::CString>,
     /// OWNERSHIP -- **carve-out**. The compiled program is a `regexp/`
     /// object with its own allocator discipline (`vim_regcomp` /
-    /// `vim_regfree`, and two engines behind one `regprog_T`), so it stays
+    /// `vim_regfree`, and two engines behind one `RegProg`), so it stays
     /// a raw pointer released by [`Drop`] rather than becoming a `Box`.
     /// Retiring it is `regexp/`'s job, not this module's.
-    pub sp_prog: *mut regprog_T,
+    pub sp_prog: *mut RegProg,
     pub sp_time: SynTime,
 }
 
@@ -611,8 +611,8 @@ static next_match_flags: GlobalCell<SynFlags> = GlobalCell::new(SynFlags::NONE);
 static next_match_eos_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
 static next_match_eoe_pos: GlobalCell<LPos> = GlobalCell::new(LPos { lnum: 0, col: 0 });
 static next_match_end_idx: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-static next_match_extmatch: GlobalCell<*mut reg_extmatch_T> =
-    GlobalCell::new(::core::ptr::null_mut::<reg_extmatch_T>());
+static next_match_extmatch: GlobalCell<*mut RegExtMatch> =
+    GlobalCell::new(::core::ptr::null_mut::<RegExtMatch>());
 // Where the parser currently is. `syntax_start` sets the first four together
 // and everything else is relative to them.
 

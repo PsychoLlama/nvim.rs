@@ -24,7 +24,7 @@ use crate::regexp::{
     cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,
     reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
-use crate::types::{GraphemeState, LineNr, NUL, Pos, fmark_T, uint8_t, uint32_t, uint64_t};
+use crate::types::{FileMark, GraphemeState, LineNr, NUL, Pos, uint8_t, uint32_t, uint64_t};
 
 use crate::winlayer::Win;
 
@@ -245,7 +245,7 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     let col = if rex.multi() { rex.col() } else { 0 };
     // The record `mark_get` answers into: a motion mark (`'{`, `'(`) has no
     // store of its own, so it is computed straight into this frame's slot.
-    let mut slot = fmark_T::UNSET;
+    let mut slot = FileMark::UNSET;
     // SAFETY: `reg_buf` is the buffer being matched and `curwin` the current
     // window; `slot` is this frame's and outlives every use of `fm`.
     let buf = rex.reg_buf();

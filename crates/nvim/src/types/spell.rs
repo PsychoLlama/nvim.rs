@@ -70,7 +70,7 @@ pub struct slang_S {
     pub sl_compoptions: ::core::ffi::c_int,
     /// `CHECKCOMPOUNDPATTERN`'s pairs, in order.
     pub sl_comppat: Vec<Box<[u8]>>,
-    pub sl_compprog: *mut regprog_T,
+    pub sl_compprog: *mut RegProg,
     pub sl_comprules: *mut uint8_t,
     pub sl_compstartflags: *mut uint8_t,
     pub sl_compallflags: *mut uint8_t,
@@ -78,7 +78,7 @@ pub struct slang_S {
     pub sl_syllable: *mut ::core::ffi::c_char,
     pub sl_syl_items: Vec<syl_item_T>,
     pub sl_prefixcnt: ::core::ffi::c_int,
-    pub sl_prefprog: *mut *mut regprog_T,
+    pub sl_prefprog: *mut *mut RegProg,
     pub sl_rep: Vec<RepItem>,
     pub sl_rep_first: [int16_t; 256],
     /// The `SAL` rules, grouped by the low byte of their first character.

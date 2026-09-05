@@ -46,8 +46,8 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::types::{
-    ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
-    VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, regprog_T, size_t, uint8_t,
+    ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
+    RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, size_t, uint8_t,
 };
 use crate::winlayer::{Live, Win};
 
@@ -131,7 +131,7 @@ unsafe fn match_add(
     if hlg_id == 0 {
         return -1;
     }
-    let mut regprog: *mut regprog_T = ::core::ptr::null_mut();
+    let mut regprog: *mut RegProg = ::core::ptr::null_mut();
     if !pat.is_null() {
         regprog = unsafe { vim_regcomp(pat, RE_MAGIC) };
         if regprog.is_null() {

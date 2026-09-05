@@ -58,8 +58,8 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, TypVal, int32_t,
-    int64_t, regprog_T, size_t, tasave_T, uint8_t,
+    Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
+    int32_t, int64_t, size_t, tasave_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -84,7 +84,7 @@ pub struct debuggy {
     /// Function name, file name, or the watched expression.
     pub dbg_name: *mut c_char,
     /// `dbg_name` compiled, for the two name kinds.
-    pub dbg_prog: *mut regprog_T,
+    pub dbg_prog: *mut RegProg,
     /// Line within the function or file.
     pub dbg_lnum: LineNr,
     /// `!` was used.

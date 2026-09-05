@@ -66,9 +66,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Dict, DictItem, ExArg, Expand, FILE, FileOffset, LineNr, List,
-    OptInt, OptMagic, Pos, Taggy, Timestamp, TypVal, VarNumber, file_comparison, fmark_T, fmarkv_T,
-    getf_retvalues, getf_values, int64_t, optset_T, ptrdiff_t, regmatch_T, size_t,
+    AdditionalData, Callback, ColNr, Dict, DictItem, ExArg, Expand, FILE, FileMark, FileMarkView,
+    FileOffset, LineNr, List, OptInt, OptMagic, Pos, RegMatch, Taggy, Timestamp, TypVal, VarNumber,
+    file_comparison, getf_retvalues, getf_values, int64_t, optset_T, ptrdiff_t, size_t,
     typval_vval_union, vimconv_T,
 };
 use crate::ui::ui_has;
@@ -179,7 +179,7 @@ static tagmatchname: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
     tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
-    fmark: fmark_T {
+    fmark: FileMark {
         mark: Pos {
             lnum: 0 as LineNr,
             col: 0 as ColNr,
@@ -187,7 +187,7 @@ static ptag_entry: GlobalCell<Taggy> = GlobalCell::new(Taggy {
         },
         fnum: 0 as ::core::ffi::c_int,
         timestamp: 0 as Timestamp,
-        view: fmarkv_T {
+        view: FileMarkView {
             topline_offset: MAXLNUM as ::core::ffi::c_int as LineNr,
             skipcol: 0 as ColNr,
         },

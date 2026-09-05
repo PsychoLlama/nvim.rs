@@ -35,7 +35,7 @@ fn dict_add_list(dict: *mut Dict, key: &CStr, val: *mut List) {
 /// One `:undolist` row: the header's sequence number, how many changes deep
 /// in the tree it sits, when it was made, and — if it was ever written out —
 /// which file write it belongs to.
-fn undolist_row(uh: &u_header_T, changes: c_int) -> CString {
+fn undolist_row(uh: &UndoHeader, changes: c_int) -> CString {
     let mut row = format!("{:>6} {:>7}  ", uh.uh_seq, changes).into_bytes();
     let mut when = [0 as c_char; 64];
     // SAFETY: a buffer of exactly the length passed; `undo_fmt_time` leaves a
@@ -195,7 +195,7 @@ pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 /// # Safety
 ///
 /// `buf` points at a live buffer, and a live current window.
-pub unsafe fn u_force_get_undo_header(buf: *mut Buffer) -> *mut u_header_T {
+pub unsafe fn u_force_get_undo_header(buf: *mut Buffer) -> *mut UndoHeader {
     // SAFETY: a live buffer, by the contract above.
     let mut b = unsafe { Buf::new(buf) };
     if let Some(uh) = b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {

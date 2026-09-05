@@ -103,7 +103,7 @@ use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     Arena, Array, Buffer, CmdAddr, ColNr, CompleteListItemGetter, Dict, Direction, Error,
     EvalFuncData, ExArg, Expand, GArray, HashTab, Hlf, List, ListItem, LuaRetMode, Object, OptInt,
-    Pos, TypVal, VarNumber, XpPrefix, fuzmatch_str_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
+    Pos, RegMatch, TypVal, VarNumber, XpPrefix, fuzmatch_str_T, ptrdiff_t, pumitem_T, size_t,
     ssize_t, typval_vval_union,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};

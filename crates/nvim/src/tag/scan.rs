@@ -76,7 +76,7 @@ pub(crate) struct Pattern {
     /// which case the file has to be read line by line.
     pub(crate) headlen: c_int,
     /// The compiled pattern, when the caller asked for a regexp.
-    pub(crate) regmatch: regmatch_T,
+    pub(crate) regmatch: RegMatch,
 }
 
 impl Drop for Pattern {
@@ -326,7 +326,7 @@ impl FindTags {
                 len: unsafe { CStr::from_ptr(pat) }.count_bytes() as c_int,
                 head: ptr::null_mut(),
                 headlen: 0,
-                regmatch: regmatch_T::default(),
+                regmatch: RegMatch::default(),
             },
             lbuf: vec![0; LSIZE],
             tag_fname: Name::default(),

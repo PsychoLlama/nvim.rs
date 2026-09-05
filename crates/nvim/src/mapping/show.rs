@@ -286,7 +286,7 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// written unconditionally.
 pub unsafe fn expand_mappings(
     pat: *mut c_char,
-    regmatch: *mut regmatch_T,
+    regmatch: *mut RegMatch,
     numMatches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
