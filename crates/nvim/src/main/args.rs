@@ -157,7 +157,7 @@ impl Scan {
     ///
     /// # Safety
     ///
-    /// `parmp` must point at an `MainParams` that outlives the scan, and `argv`
+    /// `parmp` must point at a `MainParams` that outlives the scan, and `argv`
     /// at `argc` NUL-terminated words. That promise is what makes every
     /// method below ordinary safe code: the struct is private to this file
     /// and `argv_idx` only ever moves within the word `argv` points at, so

@@ -3,7 +3,7 @@
 //! The inverse of [`super::parse`]: every field is validated against the
 //! command's `argt` flags (which arguments it accepts, whether it takes a
 //! range, a count, a register or a bang), the `mods` sub-keyset is unpacked
-//! into an `CmdMod`, and the result is handed to `execute_cmd` -- with
+//! into a `CmdMod`, and the result is handed to `execute_cmd` -- with
 //! the output captured when `opts.output` is set.
 //!
 //! The Dict is consumed in stages, in the order the command line itself

@@ -338,7 +338,7 @@ pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
     }
 }
 
-/// Wrap a `Pos` into an `FileMark`, used to abstract marks handling.
+/// Wrap a `Pos` into a `FileMark`, used to abstract marks handling.
 ///
 /// `fmp` is the caller's own record and is where the answer is written; the
 /// address handed back is `fmp` itself, so the mark lives exactly as long as
