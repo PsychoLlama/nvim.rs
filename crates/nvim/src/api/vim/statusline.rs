@@ -35,7 +35,7 @@ use crate::winlayer::Win;
 /// leaves behind for the `highlights` answer.
 struct Context {
     win: Win,
-    fillchar: schar_T,
+    fillchar: ScreenChar,
     maxwidth: c_int,
     /// The line `use_statuscol_lnum` named, or zero for "not a status
     /// column".
@@ -152,7 +152,7 @@ impl Context {
         statuscol: &mut statuscol_T,
         sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
     ) -> Option<Context> {
-        let mut fillchar = 0 as schar_T;
+        let mut fillchar = 0 as ScreenChar;
         if has_key(
             opts.is_set__eval_statusline_,
             KEYSET_OPTIDX_eval_statusline__fillchar,

@@ -28,7 +28,9 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{LineNr, MarkMove, OpType, PUT_FIXINDENT, cmdarg_T, fmark_T, pos_T, smt_T};
+use crate::types::{
+    LineNr, MarkMove, OpType, PUT_FIXINDENT, SpellMoveType, cmdarg_T, fmark_T, pos_T,
+};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -278,9 +280,9 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
     let ca = unsafe { CmdArg::new(cap) };
     setpcmark();
     let what = match u8::try_from(ca.nchar) {
-        Ok(b's') => SMT_ALL as smt_T,
-        Ok(b'r') => SMT_RARE as smt_T,
-        _ => SMT_BAD as smt_T,
+        Ok(b's') => SMT_ALL as SpellMoveType,
+        Ok(b'r') => SMT_RARE as SpellMoveType,
+        _ => SMT_BAD as SpellMoveType,
     };
     for _ in 0..ca.count1 {
         if unsafe { spell_move_to(curwin.get(), direction(cap), what, false, ptr::null_mut()) } == 0

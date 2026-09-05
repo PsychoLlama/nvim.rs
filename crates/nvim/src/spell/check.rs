@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{ColNr, LineNr, garray_T, hlf_T, langp_T, regmatch_T, size_t, uint8_t, win_T};
+use crate::types::{ColNr, Hlf, LineNr, garray_T, langp_T, regmatch_T, size_t, uint8_t, win_T};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -77,7 +77,7 @@ fn is_upper(c: c_int) -> bool {
 pub unsafe fn spell_check(
     wp: *mut win_T,
     ptr: *mut c_char,
-    attrp: *mut hlf_T,
+    attrp: *mut Hlf,
     capcol: *mut c_int,
     docount: bool,
 ) -> size_t {

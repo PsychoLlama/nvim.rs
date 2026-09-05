@@ -33,10 +33,10 @@ use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::mbyte::{utf_char2bytes, utf_iscomposing, utf_ptr2cells_len};
 use crate::types::{
-    GraphemeState, VTerm, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp, VTermRect,
-    VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermState_tmp_selection,
+    GraphemeState, ScreenChar, VTerm, VTermGlyphInfo, VTermLineInfo, VTermPos, VTermProp,
+    VTermRect, VTermSelectionCallbacks, VTermSelectionMask, VTermState, VTermState_tmp_selection,
     VTermStateCallbacks, VTermStateFallbacks, VTermStateFields, VTermStringFragment, VTermValue,
-    schar_T, uint8_t,
+    uint8_t,
 };
 use crate::vterm::encoding::{ENC_SINGLE_94, ENC_UTF8, vterm_lookup_encoding};
 use crate::vterm::output::EscapeSeq;
@@ -198,7 +198,7 @@ impl VTermState {
     // -------------------------------------------------------- screen effects
 
     /// Stamps one grapheme onto the screen at `pos`.
-    pub(super) fn put_glyph(&mut self, schar: schar_T, width: c_int, pos: VTermPos) {
+    pub(super) fn put_glyph(&mut self, schar: ScreenChar, width: c_int, pos: VTermPos) {
         let line = self.lineinfo()[pos.row as usize];
         let mut info = VTermGlyphInfo {
             schar,
@@ -431,7 +431,7 @@ impl VTermState {
 
     /// How many columns the first `len` bytes of the pending grapheme occupy,
     /// and the handle the screen stores that grapheme under.
-    pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, schar_T) {
+    pub(super) fn grapheme_metrics(&self, len: usize) -> (c_int, ScreenChar) {
         let buf = self.grapheme_buf.as_ptr();
         // SAFETY: `len` bytes of the pending grapheme, which is this array.
         let cells = unsafe { utf_ptr2cells_len(buf, len as c_int) };

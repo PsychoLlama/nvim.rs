@@ -71,8 +71,8 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     DecorExt, DecorInline, DecorInlineData, DecorPriority, DecorSignHighlight, DecorVirtText,
-    EvalFuncData, FAIL, Integer, LineNr, MTKey, MarkTreeIter, OK, SignItem, VarNumber, buf_T,
-    dict_T, dictitem_T, exarg_T, expand_T, int32_t, int64_t, list_T, ptrdiff_t, schar_T, sign_T,
+    EvalFuncData, FAIL, Integer, LineNr, MTKey, MarkTreeIter, OK, ScreenChar, SignItem, VarNumber,
+    buf_T, dict_T, dictitem_T, exarg_T, expand_T, int32_t, int64_t, list_T, ptrdiff_t, sign_T,
     size_t, typval_T, uint32_t,
 };
 use crate::window::buf_jump_open_win;

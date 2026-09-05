@@ -35,8 +35,8 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, ColNr, Dict, Error, ExceptType, HlMessage, Integer, LineNr, NUL, ScriptId, String_0,
-    Tabpage, TryState, Window, buf_T, fmarkv_T, handle_T, int64_t, kErrorTypeException, msglist_T,
+    Buffer, ColNr, Dict, Error, ExceptType, Handle, HlMessage, Integer, LineNr, NUL, ScriptId,
+    String_0, Tabpage, TryState, Window, buf_T, fmarkv_T, int64_t, kErrorTypeException, msglist_T,
     pos_T, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
@@ -95,12 +95,12 @@ use crate::message_fmt::{c_str, msg_bytes};
 /// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
 /// no "0 means current" rule and reports nothing: it is upstream's
 /// `handle_get_buffer()`, the registry lookup.
-pub(crate) fn handle_get_buffer(handle: handle_T) -> *mut buf_T {
+pub(crate) fn handle_get_buffer(handle: Handle) -> *mut buf_T {
     winlayer::buffer(handle).map_or(ptr::null_mut(), Buf::raw)
 }
 
 /// [`handle_get_buffer`] for a window.
-pub(crate) fn handle_get_window(handle: handle_T) -> *mut win_T {
+pub(crate) fn handle_get_window(handle: Handle) -> *mut win_T {
     winlayer::window(handle).map_or(ptr::null_mut(), Win::raw)
 }
 

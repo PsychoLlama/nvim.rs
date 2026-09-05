@@ -34,7 +34,7 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    NUL, OK, buf_T, hash_T, regprog_T, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
+    HashValue, NUL, OK, buf_T, regprog_T, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
 };
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
@@ -175,7 +175,7 @@ pub unsafe fn count_common_word(lp: *mut slang_T, word: *mut c_char, len: c_int,
         buf.as_mut_ptr()
     };
 
-    let hash: hash_T = unsafe { hash_hash(p) };
+    let hash: HashValue = unsafe { hash_hash(p) };
     let p_len = unsafe { cstr::bytes_at(p) }.len();
     let hi = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
     if !hi.is_kept() {

@@ -52,7 +52,9 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
-use crate::types::{CONV_NONE, ColNr, Failed, NUL, Timestamp, hash_T, hashtab_T, size_t, uint8_t};
+use crate::types::{
+    CONV_NONE, ColNr, Failed, HashValue, NUL, Timestamp, hashtab_T, size_t, uint8_t,
+};
 use crate::ui::ui_flush;
 use ::libc::fclose;
 
@@ -198,7 +200,7 @@ pub(super) unsafe fn spell_read_dic(
             break;
         }
 
-        let hash: hash_T = unsafe { hash_hash(dw) };
+        let hash: HashValue = unsafe { hash_hash(dw) };
         let hi = unsafe { hash_lookup(&raw mut ht, dw, cstr::bytes_at(dw).len(), hash) };
         if !hi.is_kept() {
             unsafe { hash_add_item(&raw mut ht, hi, dw, hash) };

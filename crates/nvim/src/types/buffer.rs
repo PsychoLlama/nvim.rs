@@ -154,27 +154,27 @@ pub type DispTick = uint64_t;
 pub type dobuf_action_values = ::core::ffi::c_uint;
 pub type dobuf_start_values = ::core::ffi::c_uint;
 pub struct fcs_chars_T {
-    pub stl: schar_T,
-    pub stlnc: schar_T,
-    pub wbr: schar_T,
-    pub horiz: schar_T,
-    pub horizup: schar_T,
-    pub horizdown: schar_T,
-    pub vert: schar_T,
-    pub vertleft: schar_T,
-    pub vertright: schar_T,
-    pub verthoriz: schar_T,
-    pub fold: schar_T,
-    pub foldopen: schar_T,
-    pub foldclosed: schar_T,
-    pub foldsep: schar_T,
-    pub foldinner: schar_T,
-    pub diff: schar_T,
-    pub msgsep: schar_T,
-    pub eob: schar_T,
-    pub lastline: schar_T,
-    pub trunc: schar_T,
-    pub truncrl: schar_T,
+    pub stl: ScreenChar,
+    pub stlnc: ScreenChar,
+    pub wbr: ScreenChar,
+    pub horiz: ScreenChar,
+    pub horizup: ScreenChar,
+    pub horizdown: ScreenChar,
+    pub vert: ScreenChar,
+    pub vertleft: ScreenChar,
+    pub vertright: ScreenChar,
+    pub verthoriz: ScreenChar,
+    pub fold: ScreenChar,
+    pub foldopen: ScreenChar,
+    pub foldclosed: ScreenChar,
+    pub foldsep: ScreenChar,
+    pub foldinner: ScreenChar,
+    pub diff: ScreenChar,
+    pub msgsep: ScreenChar,
+    pub eob: ScreenChar,
+    pub lastline: ScreenChar,
+    pub trunc: ScreenChar,
+    pub truncrl: ScreenChar,
 }
 /// One `:loadkeymap` entry: the two sides of a buffer-local language
 /// mapping, each without its terminator. Owned by the buffer's `b_kmap_ga`.
@@ -191,7 +191,7 @@ pub(crate) struct KeymapEntry {
 /// an allocation this buffer releases in `free_buffer`, and duplicating one
 /// would make a second owner of all of them.
 pub struct file_buffer {
-    pub handle: handle_T,
+    pub handle: Handle,
     pub b_ml: memline_T,
     /// The buffer list, `firstbuf`..`lastbuf`. A handle rather than an
     /// address: the registry resolves it, so a link can never outlive what
@@ -511,22 +511,22 @@ pub type getf_values = ::core::ffi::c_uint;
 /// by 'listchars' and freed when the window's value is replaced.
 #[derive(Clone)]
 pub struct lcs_chars_T {
-    pub eol: schar_T,
-    pub ext: schar_T,
-    pub prec: schar_T,
-    pub nbsp: schar_T,
-    pub space: schar_T,
-    pub tab1: schar_T,
-    pub tab2: schar_T,
-    pub tab3: schar_T,
-    pub leadtab1: schar_T,
-    pub leadtab2: schar_T,
-    pub leadtab3: schar_T,
-    pub lead: schar_T,
-    pub trail: schar_T,
-    pub multispace: *mut schar_T,
-    pub leadmultispace: *mut schar_T,
-    pub conceal: schar_T,
+    pub eol: ScreenChar,
+    pub ext: ScreenChar,
+    pub prec: ScreenChar,
+    pub nbsp: ScreenChar,
+    pub space: ScreenChar,
+    pub tab1: ScreenChar,
+    pub tab2: ScreenChar,
+    pub tab3: ScreenChar,
+    pub leadtab1: ScreenChar,
+    pub leadtab2: ScreenChar,
+    pub leadtab3: ScreenChar,
+    pub lead: ScreenChar,
+    pub trail: ScreenChar,
+    pub multispace: *mut ScreenChar,
+    pub leadmultispace: *mut ScreenChar,
+    pub conceal: ScreenChar,
 }
 pub struct llpos_T {
     pub lnum: LineNr,
@@ -652,7 +652,7 @@ pub struct synblock_T {
 /// Tab pages are reached through `winlayer::TabPage`, which is the `Copy`
 /// handle naming this one.
 pub struct tabpage_S {
-    pub handle: handle_T,
+    pub handle: Handle,
     /// The tab page list off `first_tabpage`. A handle, as the buffer
     /// list's links are — `winlayer::TabPage::next` and `winlayer::tabs`
     /// are how it is walked.
@@ -695,7 +695,7 @@ pub struct taggy_T {
 /// the tree may duplicate one, and the absence of the derives is what says
 /// so.
 pub struct window_S {
-    pub handle: handle_T,
+    pub handle: Handle,
     pub w_buffer: *mut buf_T,
     pub w_s: *mut synblock_T,
     pub w_ns_hl: ::core::ffi::c_int,

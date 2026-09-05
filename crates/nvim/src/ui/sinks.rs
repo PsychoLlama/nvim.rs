@@ -47,8 +47,8 @@ use crate::log::logmsg_tagged;
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, Boolean, Buffer, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, String_0,
-    Tabpage, Window, sattr_T, schar_T,
+    Array, Boolean, Buffer, Float, HlAttrs, Integer, LineFlags, Object, RemoteUI, ScreenAttr,
+    ScreenChar, String_0, Tabpage, Window,
 };
 use crate::ui_compositor::{
     ui_comp_grid_cursor_goto, ui_comp_grid_resize, ui_comp_grid_scroll, ui_comp_msg_set_pos,
@@ -409,8 +409,8 @@ pub unsafe fn ui_call_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     unsafe {
         ui_comp_raw_line(
@@ -441,8 +441,8 @@ pub unsafe fn ui_composed_call_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     let to = Reach::Composed;
     // SAFETY: the caller's promise -- `chunk` and `attrs` hold
@@ -467,8 +467,8 @@ unsafe fn raw_line_to(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     broadcast_to(reach, c"raw_line", |ui| unsafe {
         remote_ui_raw_line(

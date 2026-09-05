@@ -19,8 +19,8 @@ use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf, ml_delete_buf};
 use crate::types::{
-    ColNr, LineNr, NUL, OptInt, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs, buf_T,
-    schar_T,
+    ColNr, LineNr, NUL, OptInt, ScreenChar, VTermColor, VTermPos, VTermScreenCell,
+    VTermScreenCellAttrs, buf_T,
 };
 use crate::vterm::screen::vterm_screen_get_cell;
 use crate::winlayer::Buf;
@@ -34,7 +34,7 @@ use crate::pos::MAXLNUM;
 /// the width still has to be 1 or the row scan below would not advance.
 fn blank_cell() -> VTermScreenCell {
     VTermScreenCell {
-        schar: 0 as schar_T,
+        schar: 0 as ScreenChar,
         width: 1,
         attrs: VTermScreenCellAttrs {
             bold_underline_italic_blink_reverse_conceal_strike_font_dwl_dhl_small_baseline_dim_overline: [0; 3],

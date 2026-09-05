@@ -69,10 +69,9 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Arena, Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, Integer, LuaRef,
-    LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, VarNumber, Vv,
-    flush_buffers_T, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t,
-    uint64_t,
+    Arena, Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, FlushBuffers, Integer,
+    LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OptInt, RemapValues, String_0, VarNumber,
+    Vv, oparg_T, ptrdiff_t, save_redo_T, size_t, tasave_T, typval_T, uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -106,8 +105,8 @@ pub const REMAP_SKIP: RemapValues = -3;
 pub const REMAP_SCRIPT: RemapValues = -2;
 pub const REMAP_NONE: RemapValues = -1;
 pub const REMAP_YES: RemapValues = 0;
-pub const FLUSH_INPUT: flush_buffers_T = 2;
-pub const FLUSH_MINIMAL: flush_buffers_T = 0;
+pub const FLUSH_INPUT: FlushBuffers = 2;
+pub const FLUSH_MINIMAL: FlushBuffers = 0;
 pub const NSCRIPT: ::core::ffi::c_uint = 15;
 pub const RM_SCRIPT: ::core::ffi::c_uint = 2;
 pub const RM_NONE: ::core::ffi::c_uint = 1;
@@ -123,11 +122,11 @@ pub struct gotchars_state_T {
 }
 pub const KEYLEN_PART_KEY: ::core::ffi::c_int = -1;
 pub const SHOWCMD_COLS: ::core::ffi::c_uint = 10;
-pub const map_result_get: map_result_T = 1;
-pub type map_result_T = ::core::ffi::c_uint;
-pub const map_result_nomatch: map_result_T = 3;
-pub const map_result_retry: map_result_T = 2;
-pub const map_result_fail: map_result_T = 0;
+pub const map_result_get: MapResult = 1;
+pub type MapResult = ::core::ffi::c_uint;
+pub const map_result_nomatch: MapResult = 3;
+pub const map_result_retry: MapResult = 2;
+pub const map_result_fail: MapResult = 0;
 pub const KEYLEN_PART_MAP: ::core::ffi::c_int = -2;
 pub const kMTCharWise: MotionType = 0;
 pub const kFileReadOnly: FileOpenFlags = 1;

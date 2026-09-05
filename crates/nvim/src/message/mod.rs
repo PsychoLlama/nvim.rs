@@ -92,10 +92,10 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, ColNr, Dict, EStackArg, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE,
-    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ShmFlag, String_0, Vv, estack_T,
-    exarg_T, flush_buffers_T, int64_t, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T,
-    typval_vval_union, uint64_t,
+    Arena, Array, ColNr, Dict, EStackArg, Event, FILE, FlushBuffers, GridView, HlMessage,
+    HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
+    ScreenChar, ShmFlag, String_0, Vv, estack_T, exarg_T, int64_t, ptrdiff_t, size_t, ssize_t,
+    typval_T, typval_vval_union, uint64_t,
 };
 use crate::ui::{
     ui_active, ui_call_grid_destroy, ui_call_grid_resize, ui_call_grid_scroll,
@@ -164,13 +164,13 @@ pub struct msgchunk_S {
     pub sb_text: [::core::ffi::c_char; 0],
 }
 /// How much of the scrollback the next message should drop.
-pub type sb_clear_T = ::core::ffi::c_uint;
-pub const SB_CLEAR_CMDLINE_DONE: sb_clear_T = 3;
-pub const SB_CLEAR_CMDLINE_BUSY: sb_clear_T = 2;
-pub const SB_CLEAR_ALL: sb_clear_T = 1;
-pub const SB_CLEAR_NONE: sb_clear_T = 0;
+pub type ScrollbackClear = ::core::ffi::c_uint;
+pub const SB_CLEAR_CMDLINE_DONE: ScrollbackClear = 3;
+pub const SB_CLEAR_CMDLINE_BUSY: ScrollbackClear = 2;
+pub const SB_CLEAR_ALL: ScrollbackClear = 1;
+pub const SB_CLEAR_NONE: ScrollbackClear = 0;
 pub const ESTACK_NONE: EStackArg = 0;
-pub const FLUSH_MINIMAL: flush_buffers_T = 0;
+pub const FLUSH_MINIMAL: FlushBuffers = 0;
 /// A dialog's button list: `&` marks the next character as its hotkey, and
 /// a newline separates buttons.
 pub const DLG_HOTKEY_CHAR: c_uint = 38;
@@ -187,7 +187,7 @@ static msg_ext_chunks: GlobalCell<*mut Array> = GlobalCell::new(::core::ptr::nul
 /// The text written under the current highlight, waiting to be closed off
 /// into a `msg_show` chunk by [`ext::msg_ext_emit_chunk`].
 static msg_ext_last_chunk: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
-static msg_ext_last_attr: GlobalCell<sattr_T> = GlobalCell::new(-1 as sattr_T);
+static msg_ext_last_attr: GlobalCell<ScreenAttr> = GlobalCell::new(-1 as ScreenAttr);
 static msg_ext_last_hl_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static msg_ext_history: GlobalCell<bool> = GlobalCell::new(false);
 static msg_ext_append: GlobalCell<bool> = GlobalCell::new(false);

@@ -22,7 +22,7 @@ use crate::registry::interned_key;
 use crate::winlayer::{Win, tab_windows};
 
 /// The id `name` is registered under, if any.
-pub(crate) fn namespace_id_for(name: &[u8]) -> Option<handle_T> {
+pub(crate) fn namespace_id_for(name: &[u8]) -> Option<Handle> {
     namespace_ids.with(|ids| ids.get(&interned_key(name)))
 }
 

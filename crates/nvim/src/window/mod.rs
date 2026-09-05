@@ -60,8 +60,8 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, CdCause, Direction, Error, MotionType, OptInt, WinSplit, WinStyle, bln_values,
-    buf_T, dobuf_action_values, dobuf_start_values, getf_values, handle_T, kErrorTypeException,
+    AlignTextPos, CdCause, Direction, Error, Handle, MotionType, OptInt, WinSplit, WinStyle,
+    bln_values, buf_T, dobuf_action_values, dobuf_start_values, getf_values, kErrorTypeException,
     size_t, tabpage_T, win_T,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -341,7 +341,7 @@ fn valid_win_in_tab(tp: TabPage, win: *const win_T) -> bool {
     !win.is_null() && windows_in_tab(tp).any(|wp| ptr::eq(wp.raw(), win))
 }
 
-pub fn win_find_by_handle(handle: handle_T) -> *mut win_T {
+pub fn win_find_by_handle(handle: Handle) -> *mut win_T {
     windows()
         .find(|wp| wp.handle == handle)
         .map_or(ptr::null_mut(), Win::raw)

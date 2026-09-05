@@ -20,14 +20,14 @@
 )]
 
 use crate::grid::{schar_from_ascii, schar_from_char};
-use crate::types::{sattr_T, schar_T};
+use crate::types::{ScreenAttr, ScreenChar};
 
 /// An empty cell: never drawn into, or the right half of a double-width
 /// character whose left half carries the whole thing.
-pub(super) const EMPTY_CELL: schar_T = 0;
+pub(super) const EMPTY_CELL: ScreenChar = 0;
 
 /// The default grid's own text and attributes for the row being composed.
-pub(super) type Backdrop<'a> = (&'a [schar_T], &'a [sattr_T]);
+pub(super) type Backdrop<'a> = (&'a [ScreenChar], &'a [ScreenAttr]);
 
 /// A half-open run of columns within the scratch line.
 pub(super) type Cells = core::ops::Range<usize>;
@@ -35,8 +35,8 @@ pub(super) type Cells = core::ops::Range<usize>;
 /// The scratch line, kept at the width of the default grid by
 /// `ui_comp_grid_resize`.
 pub(super) struct Bufs {
-    pub(super) chars: Vec<schar_T>,
-    pub(super) attrs: Vec<sattr_T>,
+    pub(super) chars: Vec<ScreenChar>,
+    pub(super) attrs: Vec<ScreenAttr>,
 }
 
 impl Bufs {
@@ -56,12 +56,12 @@ impl Bufs {
 /// which reaches one cell past the range. `blend_attrs` is C's
 /// `hl_blend_attrs`, which this module may not call for itself.
 pub(super) fn blend(
-    line: &mut [schar_T],
-    attrbuf: &mut [sattr_T],
+    line: &mut [ScreenChar],
+    attrbuf: &mut [ScreenAttr],
     bg: Backdrop<'_>,
     cells: Cells,
     end: usize,
-    mut blend_attrs: impl FnMut(sattr_T, sattr_T, &mut bool) -> sattr_T,
+    mut blend_attrs: impl FnMut(ScreenAttr, ScreenAttr, &mut bool) -> ScreenAttr,
 ) {
     let (bg_line, bg_attrs) = bg;
     let blank = schar_from_ascii(b' ');
@@ -88,7 +88,7 @@ pub(super) fn blend(
 /// Replaces the never-drawn attributes in `cells` with the default: they are
 /// negative, which the downstream UIs cannot express. `fatal` is
 /// `'redrawdebug'`'s `invalid` flag, which makes one an abort instead.
-pub(super) fn clear_invalid_attrs(attrbuf: &mut [sattr_T], cells: Cells, fatal: bool) {
+pub(super) fn clear_invalid_attrs(attrbuf: &mut [ScreenAttr], cells: Cells, fatal: bool) {
     for attr in &mut attrbuf[cells] {
         if *attr < 0 {
             if fatal {

@@ -11,14 +11,14 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type hash_T = size_t;
+pub type HashValue = size_t;
 /// One slot of a [`hashtab_T`].
 ///
 /// `Copy`: `hi_key` points into the `dictitem_T` (or equivalent) that the
 /// table indexes, which the table does not own.
 #[derive(Copy, Clone)]
 pub struct hashitem_T {
-    pub hi_hash: hash_T,
+    pub hi_hash: HashValue,
     pub hi_key: *mut ::core::ffi::c_char,
 }
 
@@ -174,7 +174,7 @@ impl hashtab_T {
     /// Panics on a table that has no slots yet, which is the right answer:
     /// the only thing that asks for a mask is a probe, and probing a table
     /// [`crate::hashtab::hash_init`] has not reached is a bug.
-    pub fn mask(&self) -> hash_T {
+    pub fn mask(&self) -> HashValue {
         self.slots.as_slice().len() - 1
     }
 

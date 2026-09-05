@@ -37,7 +37,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::HlAttrFlags;
 use crate::optionstr::set_chars_option;
 use crate::types::{
-    CharsOption, HlAttrs, OptScope, OptValType, RgbValue, int16_t, int32_t, xp_prefix_T,
+    CharsOption, HlAttrs, OptScope, OptValType, RgbValue, XpPrefix, int16_t, int32_t,
 };
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -77,8 +77,8 @@ pub(crate) use self::stropt::*;
 pub(crate) use self::validate::*;
 pub(crate) use self::value::*;
 pub(crate) const NUMBUFLEN: c_uint = 65;
-pub(crate) const XP_PREFIX_INV: xp_prefix_T = 2;
-pub(crate) const XP_PREFIX_NO: xp_prefix_T = 1;
+pub(crate) const XP_PREFIX_INV: XpPrefix = 2;
+pub(crate) const XP_PREFIX_NO: XpPrefix = 1;
 /// What the generated table's `flags` column can say about an option.
 pub(crate) type OptFlags = c_uint;
 pub(crate) const kOptFlagColon: OptFlags = 33554432;
@@ -116,11 +116,11 @@ pub(crate) const kOptScopeBuf: OptScope = 2;
 pub(crate) const kOptScopeWin: OptScope = 1;
 pub(crate) const kOptScopeGlobal: OptScope = 0;
 /// Which of `=`, `+=`, `^=` and `-=` a `:set` argument used.
-pub(crate) type set_op_T = c_uint;
-pub(crate) const OP_REMOVING: set_op_T = 3;
-pub(crate) const OP_PREPENDING: set_op_T = 2;
-pub(crate) const OP_ADDING: set_op_T = 1;
-pub(crate) const OP_NONE: set_op_T = 0;
+pub(crate) type SetOp = c_uint;
+pub(crate) const OP_REMOVING: SetOp = 3;
+pub(crate) const OP_PREPENDING: SetOp = 2;
+pub(crate) const OP_ADDING: SetOp = 1;
+pub(crate) const OP_NONE: SetOp = 0;
 pub(crate) const FUZZY_SCORE_NONE: c_int = -2147483648;
 pub(crate) const FSK_SIMPLIFY: c_uint = 8;
 pub(crate) const FSK_KEEP_X_KEY: c_uint = 2;

@@ -39,9 +39,8 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, ColNr, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, blob_T,
-    garray_T, hlf_T, kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T,
-    vimconv_T,
+    CONV_NONE, ColNr, EvalFuncData, Hlf, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, blob_T,
+    garray_T, kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, vimconv_T,
 };
 use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
@@ -367,7 +366,7 @@ pub unsafe fn f_spellbadword(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mut word: *const c_char = c"".as_ptr();
-    let mut attr: hlf_T = HLF_COUNT;
+    let mut attr: Hlf = HLF_COUNT;
     let mut len: usize = 0;
     let mut reported = false;
     // SAFETY throughout the closure: `curwin`/`curbuf` are live, and

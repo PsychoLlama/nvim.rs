@@ -27,7 +27,7 @@ use crate::lua::ffi::{
 };
 use crate::runtime::script_autoload;
 use crate::types::{
-    Buffer, Error, String_0, Tabpage, Window, dict_T, dictitem_T, handle_T, lua_State, ptrdiff_t,
+    Buffer, Error, Handle, String_0, Tabpage, Window, dict_T, dictitem_T, lua_State, ptrdiff_t,
     size_t,
 };
 
@@ -42,7 +42,7 @@ use crate::types::{
 unsafe fn nlua_get_var_scope(lstate: *mut lua_State) -> *mut dict_T {
     unsafe {
         let scope = CStr::from_ptr(luaL_checklstring(lstate, 1, ptr::null_mut()));
-        let handle = luaL_checkinteger(lstate, 2) as handle_T;
+        let handle = luaL_checkinteger(lstate, 2) as Handle;
         let mut err = Error::none();
         let dict = match scope.to_bytes() {
             b"g" => get_globvar_dict(),

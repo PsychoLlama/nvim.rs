@@ -36,7 +36,7 @@ use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
     BackslashEscape, ColNr, ExpandContext, Failed, MAXPATHL, NUL, OptIndex, OptionSetFlags,
-    expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
+    XpPrefix, expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t,
 };
 use crate::winlayer::Live;
 
@@ -151,8 +151,8 @@ pub(crate) unsafe fn set_context_in_set_cmd(
     }
 
     for (spelling, prefix) in [
-        (c"no", XP_PREFIX_NO as xp_prefix_T),
-        (c"inv", XP_PREFIX_INV as xp_prefix_T),
+        (c"no", XP_PREFIX_NO as XpPrefix),
+        (c"inv", XP_PREFIX_INV as XpPrefix),
     ] {
         let len = spelling.count_bytes();
         if unsafe { cstr::prefix_eq(p, spelling.as_ptr(), len) } {

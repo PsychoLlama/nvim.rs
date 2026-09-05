@@ -53,8 +53,8 @@ use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
     CmdModFlags, CpoFlag, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL, ShmFlag,
-    aco_save_T, buf_T, exarg_T, iconv_t, int64_t, pos_T, size_t, uint64_t, uv_gid_t, uv_uid_t,
-    vim_acl_T,
+    VimAcl, aco_save_T, buf_T, exarg_T, iconv_t, int64_t, pos_T, size_t, uint64_t, uv_gid_t,
+    uv_uid_t,
 };
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
@@ -409,7 +409,7 @@ pub unsafe fn buf_write(
     let mut fenc_tofree: *mut ::core::ffi::c_char = core::ptr::null_mut();
     let mut file_info_old = FileInfo::default();
     // ACL copied from the original file to the backup or the new file.
-    let mut acl: vim_acl_T = NULL;
+    let mut acl: VimAcl = NULL;
     let mut target;
     let mut dobackup;
     let mut wfname: *mut ::core::ffi::c_char = core::ptr::null_mut();

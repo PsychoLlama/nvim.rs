@@ -27,7 +27,7 @@ use crate::main::nlua_global_refs;
 use crate::memory::arena_memdupz;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, Float, Integer, LuaRef, ObjectType, String_0, handle_T,
+    Arena, Array, Boolean, Dict, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
     key_value_pair, lua_Number, lua_State, size_t,
 };
@@ -457,13 +457,13 @@ pub unsafe fn nlua_pop_handle(
     lstate: *mut lua_State,
     _arena: *mut Arena,
     err: &mut Error,
-) -> handle_T {
+) -> Handle {
     unsafe {
         let ret = if lua_type(lstate, -1) != LUA_TNUMBER {
             *err = Error::validation(c"Expected Lua number");
             -1
         } else {
-            lua_tonumber(lstate, -1) as handle_T
+            lua_tonumber(lstate, -1) as Handle
         };
         lua_pop(lstate, 1);
         ret

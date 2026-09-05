@@ -126,9 +126,9 @@ pub(crate) struct Cells {
     /// Byte index one past the leading whitespace, or 0.
     pub(super) leadcol: ColNr,
     /// `'listchars'` "eol".
-    pub(super) lcs_eol: schar_T,
+    pub(super) lcs_eol: ScreenChar,
     /// `'listchars'` "precedes", cleared once it has been drawn on a row.
-    pub(super) lcs_prec_todo: schar_T,
+    pub(super) lcs_prec_todo: ScreenChar,
     /// The skipped-over text ended inside a run of consecutive spaces.
     pub(super) in_multispace: bool,
     /// How far into the `'listchars'` "multispace" pattern that run is.
@@ -222,7 +222,7 @@ pub(crate) struct Cells {
     pub(super) fold_attr: ::core::ffi::c_int,
 
     /// The character being placed, as a screen cell.
-    pub(super) cell_char: schar_T,
+    pub(super) cell_char: ScreenChar,
     /// Its first codepoint, or the character the cell came from.
     pub(super) char_code: ::core::ffi::c_int,
     /// Bytes it took in the buffer.
@@ -514,7 +514,7 @@ impl Cells {
                 unsafe { self.draw_precedes(wlv, wp) };
                 unsafe { self.highlight_at_eol(wlv, wp) };
 
-                if self.cell_char == NUL as schar_T {
+                if self.cell_char == NUL as ScreenChar {
                     unsafe { self.finish_line(wlv, wp, buf, f) };
                     break 'row;
                 }
@@ -588,7 +588,7 @@ impl Cells {
             || wlv.filler_todo > 0
             || !self.in_curline
             || !unsafe { conceal_cursor_line(wp.raw()) }
-            || !(wlv.vcol + wlv.skip_cells >= wp.w_virtcol || self.cell_char == NUL as schar_T)
+            || !(wlv.vcol + wlv.skip_cells >= wp.w_virtcol || self.cell_char == NUL as ScreenChar)
         {
             return;
         }

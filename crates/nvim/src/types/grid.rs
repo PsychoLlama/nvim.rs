@@ -33,13 +33,13 @@ pub struct GridView {
 /// Not `Copy` and not `Clone`: a grid owns its cells outright. Resizing one
 /// is [`ScreenGrid::alloc`], which replaces the buffers in place.
 pub struct ScreenGrid {
-    pub handle: handle_T,
+    pub handle: Handle,
     /// One glyph per cell, `rows * cols` of them. Empty until
     /// [`alloc`](ScreenGrid::alloc).
-    chars: Vec<schar_T>,
+    chars: Vec<ScreenChar>,
     /// The highlight-attribute id of each cell, parallel to `chars`. A
     /// negative one means the UI has not been told what is there.
-    attrs: Vec<sattr_T>,
+    attrs: Vec<ScreenAttr>,
     /// Which virtual column of the buffer line each cell came from, for the
     /// mouse. Parallel to `chars`.
     vcols: Vec<ColNr>,
@@ -69,13 +69,13 @@ pub struct ScreenGrid {
 /// by [`ScreenGrid::cells_mut`] so that a per-cell loop indexes slices
 /// instead of walking three raw pointers.
 pub(crate) struct GridCells<'a> {
-    pub chars: &'a mut [schar_T],
-    pub attrs: &'a mut [sattr_T],
+    pub chars: &'a mut [ScreenChar],
+    pub attrs: &'a mut [ScreenAttr],
     pub vcols: &'a mut [ColNr],
 }
 
 /// The blank a cleared cell holds.
-const BLANK: schar_T = b' ' as schar_T;
+const BLANK: ScreenChar = b' ' as ScreenChar;
 
 /// A row number as an index. Panics rather than wrapping: every caller has
 /// already bounded the row against `rows`.
@@ -134,12 +134,12 @@ impl ScreenGrid {
 
     /// The glyph at `off`, which is a [`row_start`](ScreenGrid::row_start)
     /// plus a column.
-    pub(crate) fn char_at(&self, off: size_t) -> schar_T {
+    pub(crate) fn char_at(&self, off: size_t) -> ScreenChar {
         self.chars[off]
     }
 
     /// The highlight attribute at `off`.
-    pub(crate) fn attr_at(&self, off: size_t) -> sattr_T {
+    pub(crate) fn attr_at(&self, off: size_t) -> ScreenAttr {
         self.attrs[off]
     }
 
@@ -166,12 +166,12 @@ impl ScreenGrid {
     }
 
     /// Overwrite the highlight attribute at `off`.
-    pub(crate) fn set_attr(&mut self, off: size_t, attr: sattr_T) {
+    pub(crate) fn set_attr(&mut self, off: size_t, attr: ScreenAttr) {
         self.attrs[off] = attr;
     }
 
     /// `n` cells from `off`: what the compositor and the UI layer read.
-    pub(crate) fn cells(&self, off: size_t, n: size_t) -> (&[schar_T], &[sattr_T]) {
+    pub(crate) fn cells(&self, off: size_t, n: size_t) -> (&[ScreenChar], &[ScreenAttr]) {
         (&self.chars[off..off + n], &self.attrs[off..off + n])
     }
 
@@ -317,11 +317,11 @@ impl ScreenGrid {
 ///
 /// All six stay as wide as the widest grid: see `grid_alloc`.
 pub(crate) struct LineBuf {
-    chars: Vec<schar_T>,
-    attrs: Vec<sattr_T>,
+    chars: Vec<ScreenChar>,
+    attrs: Vec<ScreenAttr>,
     vcols: Vec<ColNr>,
-    mirror_chars: Vec<schar_T>,
-    mirror_attrs: Vec<sattr_T>,
+    mirror_chars: Vec<ScreenChar>,
+    mirror_attrs: Vec<ScreenAttr>,
     mirror_vcols: Vec<ColNr>,
 }
 
@@ -361,17 +361,17 @@ impl LineBuf {
     }
 
     /// The glyphs, for the readers that only look.
-    pub(crate) fn chars(&self) -> &[schar_T] {
+    pub(crate) fn chars(&self) -> &[ScreenChar] {
         &self.chars
     }
 
     /// The glyphs, writable.
-    pub(crate) fn chars_mut(&mut self) -> &mut [schar_T] {
+    pub(crate) fn chars_mut(&mut self) -> &mut [ScreenChar] {
         &mut self.chars
     }
 
     /// The attributes, for the readers that only look.
-    pub(crate) fn attrs(&self) -> &[sattr_T] {
+    pub(crate) fn attrs(&self) -> &[ScreenAttr] {
         &self.attrs
     }
 
@@ -381,7 +381,7 @@ impl LineBuf {
     }
 
     /// The attributes, writable.
-    pub(crate) fn attrs_mut(&mut self) -> &mut [sattr_T] {
+    pub(crate) fn attrs_mut(&mut self) -> &mut [ScreenAttr] {
         &mut self.attrs
     }
 
@@ -392,12 +392,12 @@ impl LineBuf {
 
     /// All three at once, which is what a loop over columns wants: one
     /// bounds-checked slicing, then plain indexing inside the loop.
-    pub(crate) fn parts_mut(&mut self) -> (&mut [schar_T], &mut [sattr_T], &mut [ColNr]) {
+    pub(crate) fn parts_mut(&mut self) -> (&mut [ScreenChar], &mut [ScreenAttr], &mut [ColNr]) {
         (&mut self.chars, &mut self.attrs, &mut self.vcols)
     }
 
     /// Write one whole cell.
-    pub(crate) fn put(&mut self, col: size_t, ch: schar_T, attr: sattr_T, vcol: ColNr) {
+    pub(crate) fn put(&mut self, col: size_t, ch: ScreenChar, attr: ScreenAttr, vcol: ColNr) {
         self.chars[col] = ch;
         self.attrs[col] = attr;
         self.vcols[col] = vcol;
@@ -408,7 +408,7 @@ impl LineBuf {
     /// assertion rather than drawing something plausible. `'redrawdebug'`
     /// asks for this.
     pub(crate) fn poison(&mut self) {
-        self.chars.fill(schar_T::MAX);
+        self.chars.fill(ScreenChar::MAX);
         self.attrs.fill(-1);
     }
 
@@ -456,8 +456,8 @@ impl LineBuf {
 /// whole run to the TUI. Kept as wide as the widest grid the server has
 /// announced -- see `Unpacker::widen_grid_line_buf`.
 pub(crate) struct RawLine {
-    chars: Vec<schar_T>,
-    attrs: Vec<sattr_T>,
+    chars: Vec<ScreenChar>,
+    attrs: Vec<ScreenAttr>,
 }
 
 impl RawLine {
@@ -486,14 +486,14 @@ impl RawLine {
     }
 
     /// Write one decoded cell.
-    pub(crate) fn put(&mut self, col: size_t, ch: schar_T, attr: sattr_T) {
+    pub(crate) fn put(&mut self, col: size_t, ch: ScreenChar, attr: ScreenAttr) {
         self.chars[col] = ch;
         self.attrs[col] = attr;
     }
 
     /// The two arrays, for the `tui_raw_line` call that takes them by
     /// pointer.
-    pub(crate) fn as_ptrs(&self) -> (*const schar_T, *const sattr_T) {
+    pub(crate) fn as_ptrs(&self) -> (*const ScreenChar, *const ScreenAttr) {
         (self.chars.as_ptr(), self.attrs.as_ptr())
     }
 }

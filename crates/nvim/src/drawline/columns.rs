@@ -96,7 +96,7 @@ impl WinLineVars {
                 } else {
                     -1
                 };
-                line.attrs_mut()[self.off as usize] = myattr as sattr_T;
+                line.attrs_mut()[self.off as usize] = myattr as ScreenAttr;
                 line.vcols_mut()[self.off as usize] = vcol;
                 self.off += 1;
             }
@@ -114,7 +114,7 @@ impl WinLineVars {
     #[inline]
     pub(crate) unsafe fn draw_col_fill(
         &mut self,
-        fillchar: schar_T,
+        fillchar: ScreenChar,
         width: ::core::ffi::c_int,
         attr: ::core::ffi::c_int,
     ) {
@@ -122,7 +122,7 @@ impl WinLineVars {
         for _ in 0..width {
             let at = self.off as usize;
             line.chars_mut()[at] = fillchar;
-            line.attrs_mut()[at] = attr as sattr_T;
+            line.attrs_mut()[at] = attr as ScreenAttr;
             self.off += 1;
         }
     }
@@ -161,11 +161,11 @@ unsafe fn foldcolumn_sep_char(
     first_level: ::core::ffi::c_int,
     i: ::core::ffi::c_int,
     wp: Win,
-) -> schar_T {
+) -> ScreenChar {
     // SAFETY: the caller's window.
     if first_level == 1 {
         wp.w_p_fcs_chars.foldsep
-    } else if wp.w_p_fcs_chars.foldinner != NUL as schar_T {
+    } else if wp.w_p_fcs_chars.foldinner != NUL as ScreenChar {
         wp.w_p_fcs_chars.foldinner
     } else if first_level + i <= 9 {
         schar_from_ascii(b'0' + (first_level + i) as u8)
@@ -190,7 +190,7 @@ unsafe fn fold_column_cells(
     lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,
-) -> [(schar_T, ColNr); MAX_FOLDCOLUMN] {
+) -> [(ScreenChar, ColNr); MAX_FOLDCOLUMN] {
     // SAFETY: the caller's window.
     let closed = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
     let level = foldinfo.fi_level;
@@ -208,7 +208,7 @@ unsafe fn fold_column_cells(
         None
     };
 
-    let mut cells = [(0 as schar_T, 0 as ColNr); MAX_FOLDCOLUMN];
+    let mut cells = [(0 as ScreenChar, 0 as ColNr); MAX_FOLDCOLUMN];
     for (i, cell) in cells.iter_mut().enumerate().take(fdc as usize) {
         let i = i as ::core::ffi::c_int;
         let mut symbol = if i >= level {
@@ -251,7 +251,7 @@ pub unsafe fn fill_foldcolumn(
     fdc: ::core::ffi::c_int,
     is_virt: bool,
     out_vcol: *mut ColNr,
-    out_buffer: *mut schar_T,
+    out_buffer: *mut ScreenChar,
 ) {
     // SAFETY: the caller's window and arrays.
     let wp = unsafe { Win::new(wp) };

@@ -84,7 +84,7 @@ impl Object {
         Self::LuaRef(value)
     }
 
-    /// A window handle. Handles are `handle_T`; the variant carries the
+    /// A window handle. Handles are `Handle`; the variant carries the
     /// widened [`Integer`] the wire and the union arm always did.
     pub const fn window(value: Window) -> Self {
         Self::Window(value as Integer)

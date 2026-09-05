@@ -27,7 +27,7 @@ use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CmdModFlags, ExArgt, LineNr, OptInt, ScriptId, exarg_T, handle_T, lua_Integer, sctx_T, size_t,
+    CmdModFlags, ExArgt, Handle, LineNr, OptInt, ScriptId, exarg_T, lua_Integer, sctx_T, size_t,
     ucmd_T,
 };
 use crate::usercmd::{uc_mods, uc_split_args_iter};
@@ -245,7 +245,7 @@ pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut exarg_T, preview: bool) -
 
         if preview {
             lua_pushinteger(lstate, cmdpreview_get_ns() as lua_Integer);
-            let cmdpreview_bufnr: handle_T = cmdpreview_get_bufnr();
+            let cmdpreview_bufnr: Handle = cmdpreview_get_bufnr();
             if cmdpreview_bufnr != 0 {
                 lua_pushinteger(lstate, cmdpreview_bufnr as lua_Integer);
             } else {

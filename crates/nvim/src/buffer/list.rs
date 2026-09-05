@@ -51,8 +51,8 @@ use crate::registry::id_map;
 use crate::semsg;
 use crate::syntax::init_synblock;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Failed, FileID, LineNr, OptInt, Timestamp, VAR_SCOPE, buf_T,
-    fmark_T, fmarkv_T, handle_T, int16_t, memline_T, pos_T, regprog_T, size_t, uint64_t,
+    AdditionalData, Callback, ColNr, Failed, FileID, Handle, LineNr, OptInt, Timestamp, VAR_SCOPE,
+    buf_T, fmark_T, fmarkv_T, int16_t, memline_T, pos_T, regprog_T, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -425,7 +425,7 @@ fn append_to_list(mut buf: Buf, owned: Owned<buf_T>) {
     // The number and the registry entry come first, ahead of upstream's
     // order: from here on `buf.id()` names the buffer, and the list links
     // are made of exactly that. Nothing between the two reads either.
-    buf.handle = top_file_num.get() as handle_T;
+    buf.handle = top_file_num.get() as Handle;
     top_file_num.set(top_file_num.get() + 1);
     register_buffer(buf.handle, owned);
 

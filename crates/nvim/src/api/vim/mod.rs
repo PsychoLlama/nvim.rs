@@ -92,16 +92,16 @@ use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
     AdditionalData, Arena, Array, ArrayBuilder, Boolean, Buffer, Channel, ChannelStreamType,
-    Context, Dict, Error, Float, HlAttrs, HlMessage, Integer, KeyDict_complete_set,
+    Context, Dict, Error, Float, Handle, HlAttrs, HlMessage, Integer, KeyDict_complete_set,
     KeyDict_context, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
     KeyDict_redraw, KeyDict_runtime, KeyValuePair, LineNr, LuaRef, LuaRetMode, MessageData,
-    MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScriptId, SignTextAttrs,
-    String_0, StringBuilder, Tabpage, TerminalOptions, VarNumber, Vv, Window, bln_values, buf_T,
-    dictitem_T, dobuf_action_values, dobuf_start_values, foldinfo_T, handle_T, int64_t,
+    MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, ScreenChar, ScriptId,
+    SignTextAttrs, String_0, StringBuilder, Tabpage, TerminalOptions, VarNumber, Vv, Window,
+    bln_values, buf_T, dictitem_T, dobuf_action_values, dobuf_start_values, foldinfo_T, int64_t,
     kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
-    mpack_token_type_t, ptrdiff_t, schar_T, size_t, statuscol_T, uint8_t, uint16_t, uint64_t,
-    win_T, yankreg_T,
+    mpack_token_type_t, ptrdiff_t, size_t, statuscol_T, uint8_t, uint16_t, uint64_t, win_T,
+    yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

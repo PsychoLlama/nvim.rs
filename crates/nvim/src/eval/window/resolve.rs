@@ -290,7 +290,7 @@ pub unsafe fn f_win_id2tabwin(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments and `rettv` are live typvals; the two counters are
     // live locals the callee writes only when it finds the window.
-    let id: handle_T = number_as_int(arg_number(args, 0));
+    let id: Handle = number_as_int(arg_number(args, 0));
     let (mut winnr, mut tabnr) = (1, 1);
     unsafe { win_get_tabwin(id, &raw mut tabnr, &raw mut winnr) };
     let list = unsafe { tv_list_alloc_ret(rettv, 2) };

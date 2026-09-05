@@ -40,9 +40,8 @@ use crate::types::{NUL, OptIndex, size_t, uint32_t};
 use ::libc::strcpy;
 
 use super::{
-    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OptSlot, find_dup_item, kOptFlagColon,
+    OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING, OptSlot, SetOp, find_dup_item, kOptFlagColon,
     kOptFlagComma, kOptFlagFlagList, kOptFlagNoDup, kOptFlagOneComma, option_expand, option_var,
-    set_op_T,
 };
 
 /// `memmove` between two points of the same value buffer, without the two
@@ -61,7 +60,7 @@ unsafe fn shift(dst: *mut c_char, src: *const c_char, n: size_t) {
 ///
 /// # Safety
 /// Both are C strings.
-unsafe fn room_for(arg: *const c_char, origval: *const c_char, op: set_op_T) -> size_t {
+unsafe fn room_for(arg: *const c_char, origval: *const c_char, op: SetOp) -> size_t {
     // SAFETY: the caller guarantees C strings.
     let mut room = unsafe { cstr::bytes_at(arg) }.len() + 1;
     if op != OP_NONE {
@@ -84,7 +83,7 @@ unsafe fn room_for(arg: *const c_char, origval: *const c_char, op: set_op_T) -> 
 pub(crate) unsafe fn stropt_copy_value(
     origval: *const c_char,
     argp: *mut *mut c_char,
-    op: set_op_T,
+    op: SetOp,
     _flags: uint32_t,
 ) -> *mut c_char {
     // SAFETY: the caller's cursor and value.
@@ -117,7 +116,7 @@ pub(crate) unsafe fn stropt_expand_envvar(
     opt_idx: OptIndex,
     origval: *const c_char,
     newval: *mut c_char,
-    op: set_op_T,
+    op: SetOp,
 ) -> *mut c_char {
     // SAFETY: `option_expand` reads the value and answers an owned copy,
     // or `None` when nothing expanded.
@@ -144,7 +143,7 @@ pub(crate) unsafe fn stropt_expand_envvar(
 pub(crate) unsafe fn stropt_concat_with_comma(
     origval: *const c_char,
     newval: *mut c_char,
-    op: set_op_T,
+    op: SetOp,
     flags: uint32_t,
 ) {
     // SAFETY: the caller's buffer and value, as documented above.
@@ -348,7 +347,7 @@ pub(crate) unsafe fn prepend_item(str: *mut c_char, item: *mut c_char, item_len:
 pub(crate) unsafe fn stropt_handle_keymatch(
     origval: *const c_char,
     newval: *mut c_char,
-    op: set_op_T,
+    op: SetOp,
     _flags: uint32_t,
 ) -> bool {
     // SAFETY: the caller's buffer and value, as documented above.
@@ -432,7 +431,7 @@ pub(crate) unsafe fn stropt_handle_keymatch(
 ///
 /// # Safety
 /// As [`append_item`].
-unsafe fn place(str: *mut c_char, item: *mut c_char, item_len: isize, op: set_op_T) {
+unsafe fn place(str: *mut c_char, item: *mut c_char, item_len: isize, op: SetOp) {
     // SAFETY: the caller's buffer.
     if op == OP_PREPENDING {
         unsafe { prepend_item(str, item, item_len) };
@@ -493,7 +492,7 @@ pub(crate) unsafe fn stropt_get_newval(
     argp: *mut *mut c_char,
     varp: OptSlot,
     origval: *const c_char,
-    op_arg: *mut set_op_T,
+    op_arg: *mut SetOp,
     flags: uint32_t,
 ) -> *mut c_char {
     // A bare `:set keywordprg=` means ":help", not the empty string — but

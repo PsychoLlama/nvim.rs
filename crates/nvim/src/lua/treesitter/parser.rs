@@ -156,7 +156,7 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
         let new_tree: *mut TSTree;
         let mut len: size_t = 0;
         let str: *const ::core::ffi::c_char;
-        let bufnr: handle_T;
+        let bufnr: Handle;
         let buf: *mut buf_T;
         let input: TSInput;
         match lua_type(L, 3 as ::core::ffi::c_int) {
@@ -165,7 +165,7 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
                 new_tree = ts_parser_parse_string(p, old_tree, str, len as uint32_t);
             }
             LUA_TNUMBER => {
-                bufnr = lua_tointeger(L, 3 as ::core::ffi::c_int) as handle_T;
+                bufnr = lua_tointeger(L, 3 as ::core::ffi::c_int) as Handle;
                 buf = winlayer::buffer(bufnr as ::core::ffi::c_int)
                     .map_or(::core::ptr::null_mut(), Buf::raw);
                 if buf.is_null() {

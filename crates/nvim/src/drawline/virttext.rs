@@ -38,7 +38,7 @@ use crate::types::NUL;
 pub(crate) unsafe fn line_putchar(
     buf: *mut buf_T,
     pp: &mut *const ::core::ffi::c_char,
-    dest: &mut [schar_T],
+    dest: &mut [ScreenChar],
     maxcells: ::core::ffi::c_int,
     vcol: ::core::ffi::c_int,
 ) -> ::core::ffi::c_int {
@@ -322,8 +322,8 @@ pub(crate) unsafe fn draw_virt_text_item(
             line.chars_mut()[col as usize] = schar_from_ascii(b' ');
         }
 
-        let mut dummy: [schar_T; 2] = [schar_from_ascii(b' '); 2];
-        let dest: &mut [schar_T] = if through {
+        let mut dummy: [ScreenChar; 2] = [schar_from_ascii(b' '); 2];
+        let dest: &mut [ScreenChar] = if through {
             &mut dummy
         } else {
             &mut line.chars_mut()[col as usize..]
@@ -331,7 +331,7 @@ pub(crate) unsafe fn draw_virt_text_item(
         let cells = unsafe { line_putchar(buf, &mut draw_str, dest, max_col - col, vcol) };
         let attrs = line.attrs_mut();
         for _ in 0..cells {
-            attrs[col as usize] = attr as sattr_T;
+            attrs[col as usize] = attr as ScreenAttr;
             col += 1;
         }
 
@@ -459,8 +459,8 @@ impl WinLineVars {
             if self.extra_todo == 0 {
                 continue;
             }
-            self.extra_fill = NUL as schar_T;
-            self.extra_last = NUL as schar_T;
+            self.extra_fill = NUL as ScreenChar;
+            self.extra_last = NUL as ScreenChar;
             self.extra_attr = attr;
             self.n_attr = unsafe { mb_charlen(text) };
 

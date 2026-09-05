@@ -51,7 +51,7 @@ use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{
-    ColNr, Failed, LineNr, MAXPATHL, NUL, garray_T, idx_T, int16_t, size_t, slang_T, uint16_t,
+    ColNr, Failed, LineNr, MAXPATHL, NUL, SpellIdx, garray_T, int16_t, size_t, slang_T, uint16_t,
 };
 
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
@@ -147,7 +147,7 @@ unsafe fn sug_filltree(spin: &mut spellinfo_T, slang: *mut slang_T) -> Result<()
     let mut curi = [0usize; MAXWLEN];
     let mut tword: [c_char; MAXWLEN] = [0; MAXWLEN];
     let mut tsalword: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut wordcount: [idx_T; MAXWLEN] = [0; MAXWLEN];
+    let mut wordcount: [SpellIdx; MAXWLEN] = [0; MAXWLEN];
     let mut words_done: c_uint = 0;
 
     spin.si_foldroot = wordtree_alloc(spin);

@@ -57,7 +57,7 @@ pub unsafe fn default_grid_alloc() -> bool {
 
     grid.comp_height = Rows.get();
     grid.comp_width = Columns.get();
-    grid.handle = DEFAULT_GRID_HANDLE as handle_T;
+    grid.handle = DEFAULT_GRID_HANDLE as Handle;
 
     RESIZING.set(false);
     true

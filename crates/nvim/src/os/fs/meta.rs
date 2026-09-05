@@ -25,8 +25,8 @@ use crate::event::libuv::{
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
-    FileID, FileInfo, int32_t, size_t, ssize_t, uint64_t, uv_file, uv_gid_t, uv_stat_t, uv_uid_t,
-    vim_acl_T,
+    FileID, FileInfo, VimAcl, int32_t, size_t, ssize_t, uint64_t, uv_file, uv_gid_t, uv_stat_t,
+    uv_uid_t,
 };
 use ::libc::{__errno_location, E2BIG, getuid, getxattr, listxattr, setxattr};
 
@@ -194,13 +194,13 @@ pub unsafe fn os_copy_xattr(from_file: *const c_char, to_file: *const c_char) {
 /// upstream's `os_get_acl` answers NULL and the other two are `if (aclent
 /// == NULL) return;` followed by nothing. Kept because `fileio.c` calls all
 /// three around every write.
-pub fn os_get_acl(_fname: *const c_char) -> vim_acl_T {
+pub fn os_get_acl(_fname: *const c_char) -> VimAcl {
     ptr::null_mut()
 }
 
-pub fn os_set_acl(_fname: *const c_char, _aclent: vim_acl_T) {}
+pub fn os_set_acl(_fname: *const c_char, _aclent: VimAcl) {}
 
-pub fn os_free_acl(_aclent: vim_acl_T) {}
+pub fn os_free_acl(_aclent: VimAcl) {}
 
 /// Whether the current user owns `fname`.
 ///

@@ -54,7 +54,7 @@ use crate::semsg;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, ColNr, LineNr, NUL, OptInt, OptionSetFlags, ProfTime, exarg_T, handle_T, int64_t,
+    CmdModFlags, ColNr, Handle, LineNr, NUL, OptInt, OptionSetFlags, ProfTime, exarg_T, int64_t,
     lpos_T, pos_T, regmmatch_T, size_t,
 };
 use crate::ui::ui_has;
@@ -76,7 +76,7 @@ pub(super) struct SubArgs {
     /// The namespace to draw `'inccommand'` highlights in; `<= 0` means this
     /// is a real substitute, not a preview.
     pub cmdpreview_ns: c_int,
-    pub cmdpreview_bufnr: handle_T,
+    pub cmdpreview_bufnr: Handle,
     /// Was a replacement given at all?  Without a closing delimiter a preview
     /// only highlights.
     pub has_second_delim: bool,
@@ -736,7 +736,7 @@ pub(crate) unsafe fn do_sub(
     eap: &mut exarg_T,
     timeout: ProfTime,
     cmdpreview_ns: c_int,
-    cmdpreview_bufnr: handle_T,
+    cmdpreview_bufnr: Handle,
 ) -> c_int {
     if global_busy.get() == 0 {
         sub_nsubs.set(0 as c_int);

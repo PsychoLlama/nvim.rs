@@ -72,9 +72,9 @@ use crate::syntax::{
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
-    CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, GridView, HlMode, LineNr, NS, NUL,
-    RgbValue, SignTextAttrs, VarNumber, VirtLines, VirtText, WinExtmark, buf_T, diffline_T,
-    foldinfo_T, hlf_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t,
+    CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, GridView, HlMode, Hlf, LineNr, NS,
+    NUL, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber, VirtLines, VirtText,
+    WinExtmark, buf_T, diffline_T, foldinfo_T, pos_T, ptrdiff_t, size_t, spellvars_T, ssize_t,
     statuscol_T, uint8_t, uint32_t, uint64_t, virt_line, win_T,
 };
 use crate::ui::ui_rgb_attached;
@@ -304,12 +304,12 @@ unsafe fn wlv_put_linebuf(
                 off += 1;
             }
         }
-        let at_attr = unsafe { *hl_attr_active.get().add(HLF_AT as usize) } as sattr_T;
+        let at_attr = unsafe { *hl_attr_active.get().add(HLF_AT as usize) } as ScreenAttr;
         for _ in 0..3 {
             if off >= wp.w_view_width {
                 break;
             }
-            if off + 1 < wp.w_view_width && line.chars()[off as usize + 1] == NUL as schar_T {
+            if off + 1 < wp.w_view_width && line.chars()[off as usize + 1] == NUL as ScreenChar {
                 // The first half of a double-width character is being
                 // overwritten; blank its second half.
                 line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');

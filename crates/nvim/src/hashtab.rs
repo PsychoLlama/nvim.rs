@@ -48,7 +48,7 @@ use core::slice;
 
 use crate::memory::xfree;
 
-use crate::types::{Failed, hash_T, hashitem_T, hashtab_T};
+use crate::types::{Failed, HashValue, hashitem_T, hashtab_T};
 
 /// The number of slots a table starts with, and the size it shrinks back to.
 pub const HT_INIT_SIZE: usize = 16;
@@ -148,14 +148,14 @@ impl hashtab_T {
 /// unmasked-after) index. Never terminates — every walk ends by finding an
 /// empty slot, which is guaranteed because the table is never full.
 struct Probe {
-    idx: hash_T,
-    perturb: hash_T,
-    mask: hash_T,
+    idx: HashValue,
+    perturb: HashValue,
+    mask: HashValue,
     first: bool,
 }
 
 impl Probe {
-    fn new(hash: hash_T, mask: hash_T) -> Self {
+    fn new(hash: HashValue, mask: HashValue) -> Self {
         Probe {
             idx: hash & mask,
             perturb: hash,
@@ -186,7 +186,7 @@ impl Iterator for Probe {
 /// The `hash_hash` fold: seed with the first byte, then `hash * 101 + byte`.
 /// An empty key hashes to 0 (the C code returns early when the first byte is
 /// NUL, which for a C string means empty).
-fn hash_bytes(key: &[u8]) -> hash_T {
+fn hash_bytes(key: &[u8]) -> HashValue {
     let (&first, rest) = match key.split_first() {
         Some(split) => split,
         None => return 0,
@@ -198,16 +198,16 @@ fn hash_bytes(key: &[u8]) -> hash_T {
 }
 
 /// The fold itself: `hash * 101 + byte`, seeded with `first`.
-fn fold(first: u8, rest: &[u8]) -> hash_T {
-    rest.iter().fold(hash_T::from(first), |hash, &b| {
-        hash.wrapping_mul(101).wrapping_add(hash_T::from(b))
+fn fold(first: u8, rest: &[u8]) -> HashValue {
+    rest.iter().fold(HashValue::from(first), |hash, &b| {
+        hash.wrapping_mul(101).wrapping_add(HashValue::from(b))
     })
 }
 
 /// The `hash_hash_len` fold differs deliberately: it consumes exactly `len`
 /// bytes without stopping at NUL, and a leading NUL byte seeds the fold with
 /// 0 instead of ending it.
-fn hash_bytes_len(key: &[u8]) -> hash_T {
+fn hash_bytes_len(key: &[u8]) -> HashValue {
     match key.split_first() {
         Some((&first, rest)) => fold(first, rest),
         None => 0,
@@ -355,7 +355,7 @@ pub unsafe fn hash_find_len(ht: *const hashtab_T, key: *const c_char, len: usize
 /// # Safety
 ///
 /// Every live key in `ht` is NUL-terminated.
-unsafe fn lookup_slot(ht: &hashtab_T, wanted: &[u8], hash: hash_T) -> usize {
+unsafe fn lookup_slot(ht: &hashtab_T, wanted: &[u8], hash: HashValue) -> usize {
     let slots = ht.slots();
     let mut freeitem: Option<usize> = None;
     // The probe never runs off the array: it is masked to `mask()`, and the
@@ -390,7 +390,7 @@ pub(crate) unsafe fn hash_lookup(
     ht: *const hashtab_T,
     key: *const c_char,
     key_len: usize,
-    hash: hash_T,
+    hash: HashValue,
 ) -> Slot {
     // SAFETY: the caller's key and table.
     let wanted = unsafe { slice::from_raw_parts(key.cast::<u8>(), key_len) };
@@ -427,7 +427,7 @@ pub unsafe fn hash_add(ht: *mut hashtab_T, key: *mut c_char) -> Result<(), Faile
 ///
 /// `hi` names a slot of `ht`'s current array holding no live key, `hash` is
 /// `key`'s hash, and `key` outlives its stay in the table.
-pub unsafe fn hash_add_item(ht: *mut hashtab_T, hi: Slot, key: *mut c_char, hash: hash_T) {
+pub unsafe fn hash_add_item(ht: *mut hashtab_T, hi: Slot, key: *mut c_char, hash: HashValue) {
     // SAFETY: the caller's table.
     let table = unsafe { &mut *ht };
     let item = &mut table.slots_mut()[hi.index()];
@@ -520,7 +520,7 @@ fn hash_may_resize(ht: &mut hashtab_T, minitems: usize) {
 /// # Safety
 ///
 /// `key` is NUL-terminated.
-pub unsafe fn hash_hash(key: *const c_char) -> hash_T {
+pub unsafe fn hash_hash(key: *const c_char) -> HashValue {
     // SAFETY: the caller's NUL-terminated key.
     hash_bytes(unsafe { CStr::from_ptr(key) }.to_bytes())
 }
@@ -530,7 +530,7 @@ pub unsafe fn hash_hash(key: *const c_char) -> hash_T {
 /// # Safety
 ///
 /// `key` is readable for `len` bytes.
-pub unsafe fn hash_hash_len(key: *const c_char, len: usize) -> hash_T {
+pub unsafe fn hash_hash_len(key: *const c_char, len: usize) -> HashValue {
     // SAFETY: the caller's `len` readable bytes.
     hash_bytes_len(unsafe { slice::from_raw_parts(key.cast::<u8>(), len) })
 }
@@ -544,7 +544,7 @@ mod tests {
 
     /// The transpiled C probe loop, kept as the reference the iterator must
     /// match step for step.
-    fn c_probe_reference(hash: hash_T, mask: hash_T, steps: usize) -> Vec<usize> {
+    fn c_probe_reference(hash: HashValue, mask: HashValue, steps: usize) -> Vec<usize> {
         let mut out = vec![hash & mask];
         let mut idx = hash & mask;
         let mut perturb = hash;

@@ -38,7 +38,7 @@ use crate::msgpack_rpc::packer::{
 };
 use crate::types::builders::ArrayBuf;
 use crate::types::ui::kLineFlagWrap;
-use crate::types::{Integer, LineFlags, RemoteUI, sattr_T, schar_T};
+use crate::types::{Integer, LineFlags, RemoteUI, ScreenAttr, ScreenChar};
 use core::ffi::{c_char, c_int};
 
 /// The largest a single cell can pack to: a fixarray header, the text with
@@ -70,8 +70,8 @@ pub unsafe fn remote_ui_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     // SAFETY: the caller's promise, passed on unchanged.
     if unsafe { linegrid(ui) } {
@@ -102,8 +102,8 @@ unsafe fn raw_line_linegrid(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     // SAFETY: the caller's promise -- `ui` is live.
     let mut live = unsafe { Ui::new(ui) };
@@ -175,7 +175,7 @@ unsafe fn raw_line_linegrid(
 
         let fields: u32 = if repeat > 1 {
             3
-        } else if hl != last_hl as sattr_T {
+        } else if hl != last_hl as ScreenAttr {
             2
         } else {
             1
@@ -205,7 +205,7 @@ unsafe fn raw_line_linegrid(
         live.ncells_pending += repeat.min(2) as usize;
         last_hl = hl as c_int;
         repeat = 0;
-        was_space = text == b' ' as schar_T;
+        was_space = text == b' ' as ScreenChar;
     }
 
     if endcol < clearcol || was_space {
@@ -271,8 +271,8 @@ unsafe fn raw_line_legacy(
     endcol: Integer,
     clearcol: Integer,
     clearattr: Integer,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     // SAFETY: the caller's promise -- `ui` is live.
     let mut live = unsafe { Ui::new(ui) };

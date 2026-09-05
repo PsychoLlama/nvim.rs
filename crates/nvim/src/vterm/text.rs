@@ -8,7 +8,7 @@
 
 use core::ffi::c_int;
 
-use crate::types::{VTermRect, VTermState, schar_T};
+use crate::types::{ScreenChar, VTermRect, VTermState};
 use crate::vterm::geometry::{DHL_BOTTOM, DHL_OFF, DHL_TOP, DWL_OFF, DWL_ON};
 use crate::vterm::mode;
 use crate::vterm::pen::save_pen;
@@ -260,7 +260,7 @@ pub(super) fn escape(state: &mut VTermState, seq: &[u8]) -> c_int {
 
 /// DECALN: fill the screen with `E`, the alignment pattern.
 fn screen_alignment_test(state: &mut VTermState) {
-    let e = schar_T::from(b'E');
+    let e = ScreenChar::from(b'E');
     for row in 0..state.rows {
         for col in 0..state.row_width(row) {
             let pos = crate::types::VTermPos { row, col };

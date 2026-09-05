@@ -26,7 +26,7 @@ use neovim::buffer::setfname;
 use neovim::grid::schar_from_str;
 use neovim::main::curwin;
 use neovim::statusline::{FmtSource, StlSinks, build_stl_str_hl};
-use neovim::types::schar_T;
+use neovim::types::ScreenChar;
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
@@ -121,7 +121,7 @@ impl Statusline {
         let fmt = cstr(format);
         let fill_str = cstr(fill);
         // SAFETY: `fill_str` is NUL-terminated.
-        let fillchar: schar_T = if fill.is_empty() {
+        let fillchar: ScreenChar = if fill.is_empty() {
             0
         } else {
             unsafe { schar_from_str(fill_str.as_ptr()) }

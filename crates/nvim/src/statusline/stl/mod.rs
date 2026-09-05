@@ -81,8 +81,8 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    ColNr, LineNr, MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VarLock, VarNumber, Vv, int64_t,
-    schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, win_T,
+    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StlClickRecord, VAR_NUMBER, VarLock, VarNumber,
+    Vv, int64_t, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
@@ -342,7 +342,7 @@ impl Env {
     /// Draw the fold column's `fdc` glyphs into `text`, answering the
     /// highlight id they draw in.
     pub(super) fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
-        let mut glyphs = [0 as schar_T; 9];
+        let mut glyphs = [0 as ScreenChar; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
         let lnum = vim_var(Vv::Lnum) as LineNr;
         // SAFETY: `stcp` is non-null on every path that reaches a fold item,
@@ -395,7 +395,7 @@ impl Env {
         let len = unsafe {
             describe_sign_text(
                 buf.as_mut_ptr().cast::<c_char>(),
-                &raw mut sattr.text as *mut schar_T,
+                &raw mut sattr.text as *mut ScreenChar,
             )
         };
         text.extend_from_slice(&buf[..(len as usize).min(buf.len())]);
@@ -538,15 +538,19 @@ pub(super) fn char_len_at(out: &[u8], at: usize) -> usize {
 /// padding into a short `copy_from_slice`.
 pub(super) struct Fill {
     /// The glyph itself, for the two arms that compare it to `-`.
-    schar: schar_T,
+    schar: ScreenChar,
     bytes: [u8; MAX_SCHAR_SIZE as usize],
     len: usize,
 }
 
 impl Fill {
     /// Resolve `schar`, defaulting a zero to the blank upstream uses.
-    fn of(schar: schar_T) -> Self {
-        let schar = if schar == 0 { b' ' as schar_T } else { schar };
+    fn of(schar: ScreenChar) -> Self {
+        let schar = if schar == 0 {
+            b' ' as ScreenChar
+        } else {
+            schar
+        };
         let mut bytes = [0u8; MAX_SCHAR_SIZE as usize];
         let mut p = bytes.as_mut_ptr().cast::<c_char>();
         // SAFETY: `bytes` has room for `MAX_SCHAR_SIZE`, which is what
@@ -563,7 +567,7 @@ impl Fill {
 
     /// Whether it is the `-` that must not be put in front of a digit.
     pub(super) fn is_dash(&self) -> bool {
-        self.schar == b'-' as schar_T
+        self.schar == b'-' as ScreenChar
     }
 
     /// Write one at `at`, answering where the next byte goes.
@@ -578,7 +582,7 @@ impl Fill {
 }
 
 /// Write the glyph `sc` into `buf` at `at`, answering its byte length.
-fn put_schar(buf: &mut [u8], at: usize, sc: schar_T) -> usize {
+fn put_schar(buf: &mut [u8], at: usize, sc: ScreenChar) -> usize {
     // SAFETY: `schar_get_adv` writes at most `MAX_SCHAR_SIZE` bytes and `sc`
     // is a glyph this process produced; the slice bounds the write.
     let dst = &mut buf[at..];
@@ -676,7 +680,7 @@ pub unsafe fn build_stl_str_hl(
     out: &mut [c_char],
     fmt: *mut c_char,
     from: FmtSource,
-    fillchar: schar_T,
+    fillchar: ScreenChar,
     maxwidth: c_int,
     sinks: StlSinks,
 ) -> c_int {

@@ -88,7 +88,7 @@ use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spell::Tree;
 use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
-use crate::types::{ProfTime, idx_T, int64_t, langp_T, slang_T};
+use crate::types::{ProfTime, SpellIdx, int64_t, langp_T, slang_T};
 use core::ffi::{c_char, c_int};
 
 /// One level per byte of the bad word is all the walk can ever need.
@@ -187,7 +187,7 @@ pub(crate) struct Frame {
     /// What the changes made to reach this level have cost.
     pub score: c_int,
     /// Index into the tree array of the start of this node.
-    pub node: idx_T,
+    pub node: SpellIdx,
     /// Which child of the node is being tried, counted from the node's
     /// length byte. `REP` reuses it as an index into the `REP` list, which
     /// is why it is wider than a byte.
@@ -491,14 +491,14 @@ impl Walk<'_> {
     /// The first byte of a node is how many children follow it, so every
     /// index the walk forms is bounded by a count the tree itself stores.
     #[inline]
-    fn byte_at(&self, at: idx_T) -> u8 {
+    fn byte_at(&self, at: SpellIdx) -> u8 {
         self.tree.byte(at as usize)
     }
 
     /// The tree entry beside a byte: for a child byte, where its node
     /// starts; for a NUL byte, the word's flags.
     #[inline]
-    fn idx_at(&self, at: idx_T) -> idx_T {
+    fn idx_at(&self, at: SpellIdx) -> SpellIdx {
         self.tree.idx(at as usize)
     }
 

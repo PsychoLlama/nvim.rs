@@ -271,7 +271,7 @@ pub unsafe fn ex_helpgrep(eap: *mut exarg_T) {
         // may have made that stack invalid, in which case there is
         // nothing left to jump to.
         if !new_qi
-            && qi.qfl_type == QFLT_LOCATION as qfltype_T
+            && qi.qfl_type == QFLT_LOCATION as QfListType
             && qf_find_win_with_loclist(qi.raw().cast_const()).is_none()
         {
             qf_busy_end();

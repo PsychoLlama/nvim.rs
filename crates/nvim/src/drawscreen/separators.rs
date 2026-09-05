@@ -238,7 +238,7 @@ pub(crate) unsafe fn draw_hsep_win(wp: Win) {
 /// Two windows can be connected neither vertically nor horizontally, so if the
 /// vertical separator does not continue through the corner the horizontal one
 /// must — which is why the second half needs no test of its own.
-unsafe fn get_corner_sep_connector(wp: Win, corner: WindowCorner) -> schar_T {
+unsafe fn get_corner_sep_connector(wp: Win, corner: WindowCorner) -> ScreenChar {
     // SAFETY: a live window of the current layout.
     let fcs = &wp.w_p_fcs_chars;
     if unsafe { vsep_connected(wp, corner) } {

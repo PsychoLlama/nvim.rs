@@ -42,9 +42,9 @@ use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, Buffer, ColNr, Error, FAIL, FloatAnchor, LineNr, OptInt, OptScope, OptVal,
-    OptionSetFlags, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, kErrorTypeException,
-    kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeWindow, lpos_T, pos_T, schar_T, tabpage_T, win_T,
+    OptionSetFlags, ScreenChar, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window,
+    kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
+    kFloatRelativeMouse, kFloatRelativeWindow, lpos_T, pos_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -508,7 +508,7 @@ pub(crate) fn win_set_minimal_style(win: Win) {
     win.w_onebuf_opt.wo_list = 0;
 
     // Hide EOB region: use " " fillchar and cleared highlighting
-    if win.w_p_fcs_chars.eob != ' ' as schar_T {
+    if win.w_p_fcs_chars.eob != ' ' as ScreenChar {
         let old = win.w_onebuf_opt.wo_fcs;
         let new = if opt_is_set(old) {
             concat(old, c",eob: ")

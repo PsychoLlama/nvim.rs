@@ -18,8 +18,8 @@ use crate::semsg;
 use core::ffi::{c_char, c_int};
 
 use super::{
-    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, NOT_MULTI,
-    REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, magic_T, nextchr, parse_state_T,
+    MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, MULTI_MULT, MULTI_ONE, Magic, NOT_MULTI,
+    REGEXP_ABBR, REGEXP_INRANGE, at_start, backslash_abbr, curchr, nextchr, parse_state_T,
     prev_at_start, prevchr, prevchr_len, prevprevchr, refresh_cpo_flags, reg_cpo_lit, reg_magic,
     regnpar, regparse, take_bracketed, take_char_class, toggle_magic, unmagic,
 };
@@ -154,7 +154,7 @@ pub unsafe fn skip_regexp_ex(
     magic: c_int,
     newp: *mut *mut c_char,
     dropped: *mut c_int,
-    magic_val: *mut magic_T,
+    magic_val: *mut Magic,
 ) -> *mut c_char {
     let mut mymagic = if magic != 0 { MAGIC_ON } else { MAGIC_OFF };
     let mut p = startp;

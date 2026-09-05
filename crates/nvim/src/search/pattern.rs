@@ -447,7 +447,7 @@ pub unsafe fn ignorecase_opt(pat: *mut c_char, ic_in: c_int, scs: c_int) -> c_in
 pub unsafe fn pat_has_uppercase(pat: *mut c_char) -> bool {
     // Which of `\`, `%` and `_` introduce an escape depends on the
     // pattern's own magicness, which only a parse can tell us.
-    let mut magic_val: magic_T = MAGIC_ON;
+    let mut magic_val: Magic = MAGIC_ON;
     let is_magic = magic_isset() as c_int;
     let (no_str, no_int) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: `pat` is a live NUL-terminated pattern.

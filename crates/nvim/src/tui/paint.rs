@@ -32,13 +32,15 @@ use crate::tui::terminfo::caps::{
     kTerm_parm_insert_line, kTerm_parm_left_cursor, kTerm_parm_right_cursor, kTerm_parm_up_cursor,
     kTerm_set_lr_margin,
 };
-use crate::types::{FILE, Integer, LineFlags, Rect, String_0, TUIData, UCell, sattr_T, schar_T};
+use crate::types::{
+    FILE, Integer, LineFlags, Rect, ScreenAttr, ScreenChar, String_0, TUIData, UCell,
+};
 use ::libc::{fclose, fopen, fprintf};
 use core::ffi::{c_char, c_int};
 
-/// The `schar_T` value of a cell nothing has been drawn into, and of the
+/// The `ScreenChar` value of a cell nothing has been drawn into, and of the
 /// second half of a double-width character.
-const NOTHING: schar_T = 0;
+const NOTHING: ScreenChar = 0;
 
 /// The line flag saying this row is the continuation of the one above.
 const WRAPPED: c_int = 1;
@@ -212,7 +214,7 @@ fn emit(tui: &mut TUIData, what: TerminfoDef, params: &[c_int]) {
 // ------------------------------------------------------------------- cells
 
 /// Print one cell's bytes in `attr`, advancing the shadow cursor.
-fn print_cell(tui: &mut TUIData, text: &[u8], attr: sattr_T) {
+fn print_cell(tui: &mut TUIData, text: &[u8], attr: ScreenAttr) {
     if !tui.immediate_wrap_after_last_column {
         final_column_wrap(tui);
     }
@@ -492,8 +494,8 @@ pub unsafe fn tui_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
     let len = (endcol - startcol) as usize;
     // SAFETY: the caller guarantees the two arrays' length. An empty range
@@ -527,7 +529,7 @@ pub unsafe fn tui_raw_line(
             row,
             endcol as c_int,
             clearcol as c_int,
-            clearattr as sattr_T,
+            clearattr as ScreenAttr,
         );
         clear_region(
             tui,
@@ -608,7 +610,7 @@ fn repaint_row(tui: &mut TUIData, row: c_int, left: c_int, right: c_int) {
     let mut clear_col = right;
     while clear_col > 0 {
         let cell = tui.grid.cell(row, clear_col - 1);
-        if cell.data != b' ' as schar_T || cell.attr != clear_attr {
+        if cell.data != b' ' as ScreenChar || cell.attr != clear_attr {
             break;
         }
         clear_col -= 1;

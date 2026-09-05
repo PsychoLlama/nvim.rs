@@ -12,7 +12,7 @@
 use crate::getchar::{KeyBuffer, TypeAhead};
 
 pub type RemapValues = ::core::ffi::c_int;
-pub type flush_buffers_T = ::core::ffi::c_uint;
+pub type FlushBuffers = ::core::ffi::c_uint;
 /// The redo pair a user function or autocommand set aside. Not `Copy`: each
 /// field owns a block chain, and `save_redobuff` *moves* them here.
 /// [`Default`] is the "nothing saved yet" state its callers declare it in --

@@ -101,10 +101,10 @@ use crate::syntax::{
 use crate::tag::expand_tags;
 use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    Arena, Array, CmdAddr, ColNr, CompleteListItemGetter, Direction, Error, EvalFuncData,
-    LuaRetMode, Object, OptInt, VarNumber, buf_T, dict_T, exarg_T, expand_T, fuzmatch_str_T,
-    garray_T, hashtab_T, hlf_T, list_T, listitem_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T,
-    size_t, ssize_t, typval_T, typval_vval_union, xp_prefix_T,
+    Arena, Array, CmdAddr, ColNr, CompleteListItemGetter, Direction, Error, EvalFuncData, Hlf,
+    LuaRetMode, Object, OptInt, VarNumber, XpPrefix, buf_T, dict_T, exarg_T, expand_T,
+    fuzmatch_str_T, garray_T, hashtab_T, list_T, listitem_T, pos_T, ptrdiff_t, pumitem_T,
+    regmatch_T, size_t, ssize_t, typval_T, typval_vval_union,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::usercmd::{
@@ -156,9 +156,9 @@ pub(crate) use self::bufpat::*;
 /// takes it off [`Live::field_ptr`] instead.
 pub(crate) type Xp = Live<expand_T>;
 
-pub const XP_PREFIX_INV: xp_prefix_T = 2;
-pub const XP_PREFIX_NO: xp_prefix_T = 1;
-pub const XP_PREFIX_NONE: xp_prefix_T = 0;
+pub const XP_PREFIX_INV: XpPrefix = 2;
+pub const XP_PREFIX_NO: XpPrefix = 1;
+pub const XP_PREFIX_NONE: XpPrefix = 0;
 /// Not a `WILD_*` at all — `buffer.h`'s, and `expand_buf_names` reads it out
 /// of the same `options` word, so it is spelled as one of them.
 pub const BUF_DIFF_FILTER: WildOpts = WildOpts::from_bits(8192);

@@ -24,7 +24,7 @@ use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{
-    ColNr, EvalFuncData, NUL, VAR_STRING, VarNumber, kListLenMayKnow, schar_T, typval_T,
+    ColNr, EvalFuncData, NUL, ScreenChar, VAR_STRING, VarNumber, kListLenMayKnow, typval_T,
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
@@ -79,7 +79,7 @@ impl Cell {
     ///
     /// # Safety
     /// `self` is on the grid.
-    unsafe fn schar(&self) -> schar_T {
+    unsafe fn schar(&self) -> ScreenChar {
         grid_getchar(self.grid, self.row, self.col, None)
     }
 
@@ -355,13 +355,13 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
             let mut cchar = schar_from_char(syn_get_sub_char());
             // At 'conceallevel' 1 a group with no `cchar` falls back to
             // 'listchars' "conceal", and to a space if that is unset.
-            if cchar == NUL as schar_T && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } == 1 {
+            if cchar == NUL as ScreenChar && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } == 1 {
                 cchar = match unsafe { (*curwin.get()).w_p_lcs_chars.conceal } {
-                    c if c == NUL as schar_T => ' ' as schar_T,
+                    c if c == NUL as ScreenChar => ' ' as ScreenChar,
                     c => c,
                 };
             }
-            if cchar != NUL as schar_T {
+            if cchar != NUL as ScreenChar {
                 unsafe { schar_get(text.as_mut_ptr(), cchar) };
             }
         }

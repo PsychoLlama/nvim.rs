@@ -67,8 +67,8 @@ use crate::register::{do_execreg, do_put, op_yank};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
-    ColNr, CpoFlag, Failed, LineNr, NUL, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
-    exarg_T, handle_T, int64_t, oparg_T, pos_T, save_state_T, size_t, ssize_t,
+    ColNr, CpoFlag, Failed, Handle, LineNr, NUL, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT,
+    PUT_LINE, exarg_T, int64_t, oparg_T, pos_T, save_state_T, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -372,7 +372,7 @@ pub(crate) unsafe fn ex_submagic(eap: *mut exarg_T) {
 pub(crate) unsafe fn ex_submagic_preview(
     eap: *mut exarg_T,
     cmdpreview_ns: c_int,
-    cmdpreview_bufnr: handle_T,
+    cmdpreview_bufnr: Handle,
 ) -> c_int {
     let saved = force_magic(unsafe { Ea::new(eap) });
     let retv = unsafe { ex_substitute_preview(eap, cmdpreview_ns, cmdpreview_bufnr) };

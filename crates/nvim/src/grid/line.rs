@@ -209,7 +209,7 @@ pub unsafe fn screengrid_line_start(grid: GridRef, row: c_int, col: c_int) {
 ///
 /// # Safety
 /// A batch must be in progress.
-pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
+pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> ScreenChar {
     let b = *batch();
     if col >= b.maxcol {
         // NUL is a very special value (right half of a double-width
@@ -226,7 +226,7 @@ pub unsafe fn grid_line_getchar(mut col: c_int, attr: *mut c_int) -> schar_T {
 }
 
 /// Put one glyph at `col`. A no-op when no batch is open.
-pub fn grid_line_put_schar(col: c_int, schar: schar_T, attr: c_int) {
+pub fn grid_line_put_schar(col: c_int, schar: ScreenChar, attr: c_int) {
     let mut b = batch();
     debug_assert!(b.grid.is_some(), "grid_line_grid");
     if col >= b.maxcol {
@@ -324,7 +324,7 @@ pub unsafe fn grid_line_puts(
 ///
 /// # Safety
 /// A batch must be in progress.
-pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: schar_T, attr: c_int) -> c_int {
+pub fn grid_line_fill(start_col: c_int, mut end_col: c_int, sc: ScreenChar, attr: c_int) -> c_int {
     let mut b = batch();
     end_col = end_col.min(b.maxcol);
     if start_col >= end_col {

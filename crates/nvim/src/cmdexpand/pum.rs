@@ -284,7 +284,7 @@ pub(crate) unsafe fn redraw_wildmenu(
         }
     }
 
-    let mut group: hlf_T = HLF_NONE;
+    let mut group: Hlf = HLF_NONE;
     let fillchar = unsafe { fillchar_status(&raw mut group, curwin.get()) };
     let attr = unsafe { win_hl_attr(curwin.get(), group as c_int) };
 

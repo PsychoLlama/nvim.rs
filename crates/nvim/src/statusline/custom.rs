@@ -48,8 +48,8 @@ use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Array, ColNr, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags, StlOpt,
-    String_0, hlf_T, int64_t, schar_T, ssize_t, tabpage_T, win_T,
+    Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
+    ScreenChar, StlOpt, String_0, int64_t, ssize_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
@@ -72,8 +72,8 @@ struct Target {
     col: c_int,
     maxwidth: c_int,
     /// The pad character and the highlight the untouched cells carry.
-    fillchar: schar_T,
-    group: hlf_T,
+    fillchar: ScreenChar,
+    group: Hlf,
     attr: c_int,
 }
 
@@ -647,7 +647,7 @@ pub unsafe fn redraw_ruler() {
     // In list mode the virtual column has to be recomputed, because the
     // cursor is drawn where the tab is shown rather than where it ends.
     let mut virtcol = win.w_virtcol;
-    if win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as schar_T {
+    if win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar {
         win.w_onebuf_opt.wo_list = 0;
         virtcol = win.virtual_cursor_vcol(win.cursor());
         win.w_onebuf_opt.wo_list = 1;

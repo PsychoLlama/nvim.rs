@@ -105,7 +105,7 @@ local ffi = require('ffi')
 local bit = require('bit')
 
 ffi.cdef([[
-typedef uint32_t schar_T;
+typedef uint32_t ScreenChar;
 typedef unsigned int VTermProp;
 typedef unsigned int VTermAttr;
 typedef unsigned int VTermKey;
@@ -146,7 +146,7 @@ typedef union VTermValue {
 } VTermValue;
 
 typedef struct VTermGlyphInfo {
-  schar_T schar;
+  ScreenChar schar;
   int width;
   unsigned int protected_cell : 1;
   unsigned int dwl : 1;
@@ -177,7 +177,7 @@ typedef struct VTermScreenCellAttrs {
 } VTermScreenCellAttrs;
 
 typedef struct VTermScreenCell {
-  schar_T schar;
+  ScreenChar schar;
   char width;
   VTermScreenCellAttrs attrs;
   VTermColor fg;
@@ -224,7 +224,7 @@ typedef struct ScreenPen {
   unsigned int dhl : 2;
 } ScreenPen;
 
-typedef struct ScreenCell { schar_T schar; ScreenPen pen; } ScreenCell;
+typedef struct ScreenCell { ScreenChar schar; ScreenPen pen; } ScreenCell;
 
 typedef struct VTermEncodingInstance { VTermEncoding *enc; char data[16]; } VTermEncodingInstance;
 
@@ -481,7 +481,7 @@ void vterm_keyboard_end_paste(VTerm *vt);
 void vterm_mouse_move(VTerm *vt, int row, int col, VTermModifier mod);
 void vterm_mouse_button(VTerm *vt, int button, bool pressed, VTermModifier mod);
 VTermEncoding *vterm_lookup_encoding(VTermEncodingType type, char designation);
-size_t schar_get(char *buf_out, schar_T sc);
+size_t schar_get(char *buf_out, ScreenChar sc);
 ]])
 
 local C = ffi.C

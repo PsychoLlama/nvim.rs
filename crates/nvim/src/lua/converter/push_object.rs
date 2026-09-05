@@ -17,7 +17,7 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    Array, Boolean, Dict, Float, Integer, LuaRef, Object, ObjectType, String_0, handle_T,
+    Array, Boolean, Dict, Float, Handle, Integer, LuaRef, Object, ObjectType, String_0,
     kObjectTypeFloat, lua_Number, lua_State, size_t,
 };
 
@@ -142,7 +142,7 @@ pub unsafe fn nlua_push_array(lstate: *mut lua_State, array: Array, flags: c_int
 
 /// # Safety
 /// `lstate` must be a live Lua state.
-pub unsafe fn nlua_push_handle(lstate: *mut lua_State, item: handle_T, _flags: c_int) {
+pub unsafe fn nlua_push_handle(lstate: *mut lua_State, item: Handle, _flags: c_int) {
     unsafe { lua_pushnumber(lstate, item as lua_Number) };
 }
 
@@ -178,7 +178,7 @@ pub unsafe fn nlua_push_object(lstate: *mut lua_State, obj: *mut Object, flags: 
             Object::Array(a) => nlua_push_array(lstate, a, flags),
             Object::Dict(d) => nlua_push_dict(lstate, d, flags),
             Object::Buffer(h) | Object::Window(h) | Object::Tabpage(h) => {
-                nlua_push_handle(lstate, h as handle_T, flags);
+                nlua_push_handle(lstate, h as Handle, flags);
             }
         }
     }

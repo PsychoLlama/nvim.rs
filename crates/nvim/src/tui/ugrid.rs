@@ -7,13 +7,13 @@
 
 #![forbid(unsafe_code)]
 
-use crate::types::{UCell, UGrid, UGridCells, sattr_T, schar_T};
+use crate::types::{ScreenAttr, ScreenChar, UCell, UGrid, UGridCells};
 use core::ffi::c_int;
 
 /// A cleared cell: an ASCII space carrying `attr`.
-fn blank(attr: sattr_T) -> UCell {
+fn blank(attr: ScreenAttr) -> UCell {
     UCell {
-        data: b' ' as schar_T,
+        data: b' ' as ScreenChar,
         attr,
     }
 }
@@ -50,12 +50,19 @@ impl UGrid {
     }
 
     /// Blank `[col, endcol)` of one row.
-    pub fn clear_chunk(&mut self, row: c_int, col: c_int, endcol: c_int, attr: sattr_T) {
+    pub fn clear_chunk(&mut self, row: c_int, col: c_int, endcol: c_int, attr: ScreenAttr) {
         self.clear_region(row, row, col, endcol - 1, attr);
     }
 
     /// Blank the inclusive rectangle `[top, bot] x [left, right]`.
-    fn clear_region(&mut self, top: c_int, bot: c_int, left: c_int, right: c_int, attr: sattr_T) {
+    fn clear_region(
+        &mut self,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+        attr: ScreenAttr,
+    ) {
         let cells = self.cells();
         for row in top..=bot {
             cells.row_mut(row)[left as usize..=right as usize].fill(blank(attr));
@@ -140,8 +147,8 @@ mod tests {
                     row,
                     col,
                     UCell {
-                        data: (row * width + col) as schar_T,
-                        attr: row as sattr_T,
+                        data: (row * width + col) as ScreenChar,
+                        attr: row as ScreenAttr,
                     },
                 );
             }
@@ -149,7 +156,7 @@ mod tests {
         grid
     }
 
-    fn data(grid: &UGrid, row: c_int) -> Vec<schar_T> {
+    fn data(grid: &UGrid, row: c_int) -> Vec<ScreenChar> {
         grid.row(row).iter().map(|c| c.data).collect()
     }
 

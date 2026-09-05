@@ -1292,7 +1292,7 @@ const READERS: &[(&str, &str)] = &[
 fn as_boolean(o: Object) -> Option<Boolean> {
     match o {
         Object::Boolean(b) => Some(b),
-        Object::Integer(n) if n >= 0 => Some(n as handle_T != 0),
+        Object::Integer(n) if n >= 0 => Some(n as Handle != 0),
         _ => None,
     }
 }
@@ -1363,7 +1363,7 @@ fn as_luaref(o: Object) -> Option<LuaRef> {
 /// Buffer, Window and Tabpage each have a variant of their own, and a bare
 /// nonnegative integer is accepted as any of them. `tag` names the one the
 /// parameter declares: a window handle is not a buffer.
-fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
+fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
     let n = match o {
         Object::Integer(n) => n,
         Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) => {
@@ -1374,7 +1374,7 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
         }
         _ => return None,
     };
-    (n >= 0).then_some(n as handle_T)
+    (n >= 0).then_some(n as Handle)
 }
 "#,
     ),
@@ -1496,7 +1496,7 @@ const TYPE_NAMES: &[&str] = &[
     "Object",
     "ObjectType",
     "String_0",
-    "handle_T",
+    "Handle",
     "size_t",
     "uint64_t",
 ];

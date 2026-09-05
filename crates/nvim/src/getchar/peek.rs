@@ -311,7 +311,7 @@ unsafe fn read_from_typeahead(
             return unsafe { interrupted(advance) };
         } else if !typeahead().is_empty() {
             // Check for a mapping in the typeahead.
-            match unsafe { handle_mapping(&raw mut keylen, timedout, mapdepth) } as map_result_T {
+            match unsafe { handle_mapping(&raw mut keylen, timedout, mapdepth) } as MapResult {
                 map_result_retry => continue, // try mapping again
                 map_result_fail => return -1, // failed; use the outer loop
                 map_result_get => {

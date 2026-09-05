@@ -28,8 +28,8 @@ use crate::types::{
     Arena, Array, Boolean, Buffer, ColNr, DecorExt, DecorHighlightInline, DecorInline,
     DecorInlineData, DecorPriority, DecorVirtText, DecorVirtText_data, Dict, Error, Integer,
     KeyDict_empty, KeyDict_exec_opts, LuaRetMode, MsgpackRpcRequestHandler, Object, OptIndex,
-    OptScope, OptVal, String_0, StringBuilder, Tabpage, VirtText, Window, buf_T, int64_t,
-    kErrorTypeNone, kObjectTypeArray, kObjectTypeString, lua_State, schar_T, size_t, uint8_t,
+    OptScope, OptVal, ScreenChar, String_0, StringBuilder, Tabpage, VirtText, Window, buf_T,
+    int64_t, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, lua_State, size_t, uint8_t,
     uint16_t, uint32_t, uint64_t,
 };
 
@@ -62,7 +62,7 @@ pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInli
     flags: 0 as uint16_t,
     priority: DECOR_PRIORITY_BASE as DecorPriority,
     hl_id: 0 as ::core::ffi::c_int,
-    conceal_char: 0 as schar_T,
+    conceal_char: 0 as ScreenChar,
 };
 pub const DECOR_INLINE_INIT: DecorInline = DecorInline {
     ext: false,

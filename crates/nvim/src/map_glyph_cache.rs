@@ -11,7 +11,7 @@
 //! dense keys array is a *packed run of NUL-terminated byte strings* rather
 //! than fixed-size entries. A "dense index" here is therefore a byte offset
 //! into that run, which is what [`crate::grid`] stores in the high bits of a
-//! `schar_T`.
+//! `ScreenChar`.
 //!
 //! Upstream generates this from the same `map.c` macro as every other set,
 //! with `MH_KEY_DECL`/`MH_KEY_SET` overridden for the packed layout. Only the

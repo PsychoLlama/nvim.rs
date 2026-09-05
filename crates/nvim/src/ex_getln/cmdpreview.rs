@@ -14,7 +14,7 @@ use crate::types::{CmdModFlags, ExArgt, OptionSetFlags};
 use crate::winlayer::{Buf, Live, TabPage, Win, windows_in_tab};
 
 /// The buffer `'inccommand'` previews into, or 0 when there is none yet.
-pub fn cmdpreview_get_bufnr() -> handle_T {
+pub fn cmdpreview_get_bufnr() -> Handle {
     cmdpreview_bufnr.get()
 }
 

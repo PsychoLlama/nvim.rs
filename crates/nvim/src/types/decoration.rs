@@ -23,7 +23,7 @@ pub struct DecorHighlightInline {
     pub flags: uint16_t,
     pub priority: DecorPriority,
     pub hl_id: ::core::ffi::c_int,
-    pub conceal_char: schar_T,
+    pub conceal_char: ScreenChar,
 }
 /// A mark's decoration: either a whole highlight held inline, or -- when
 /// `ext` -- a pair of indices into the process-wide decoration store.
@@ -144,7 +144,7 @@ pub struct DecorSignHighlight {
     pub flags: uint16_t,
     pub priority: DecorPriority,
     pub hl_id: ::core::ffi::c_int,
-    pub text: [schar_T; 2],
+    pub text: [ScreenChar; 2],
     pub sign_name: *mut ::core::ffi::c_char,
     pub sign_add_id: ::core::ffi::c_int,
     pub number_hl_id: ::core::ffi::c_int,
@@ -174,7 +174,7 @@ pub struct DecorState {
     pub current: ::core::ffi::c_int,
     pub eol_col: ::core::ffi::c_int,
     pub conceal: ::core::ffi::c_int,
-    pub conceal_char: schar_T,
+    pub conceal_char: ScreenChar,
     pub conceal_attr: ::core::ffi::c_int,
     pub spell: Option<bool>,
     pub itr_valid: bool,

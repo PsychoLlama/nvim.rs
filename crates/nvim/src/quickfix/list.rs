@@ -55,7 +55,7 @@ pub(crate) unsafe fn qf_list_changed(qfl: *mut qf_list_T) {
 
 /// Report that the list moved under a command that was in the middle of
 /// using it: E925 for a quickfix list, E926 for a location list.
-pub(crate) unsafe fn emsg_list_changed(qfl_type: qfltype_T) {
+pub(crate) unsafe fn emsg_list_changed(qfl_type: QfListType) {
     if qfl_type == QFLT_QUICKFIX {
         emsg(gettext(E_QUICKFIX_LIST_CHANGED));
     } else {

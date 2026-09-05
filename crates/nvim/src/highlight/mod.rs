@@ -3,7 +3,7 @@
 //! The attribute set: every distinct combination of colours and attributes
 //! the screen is currently using, numbered.
 //!
-//! A screen cell carries an *attribute id*, not colours — one `sattr_T` per
+//! A screen cell carries an *attribute id*, not colours — one `ScreenAttr` per
 //! cell instead of nine fields, and the UI is told each definition once. Ids
 //! are indices into [`ATTRS`], handed out by [`get_attr_entry`] and never
 //! reused; id 0 is "no attributes at all" and is the table's first entry.
@@ -141,7 +141,7 @@ pub const HLATTRS_INIT: HlAttrs = HlAttrs {
 };
 
 /// How many entries the table may hold before it is thrown away and rebuilt:
-/// an id has to fit a `sattr_T`.
+/// an id has to fit a `ScreenAttr`.
 const MAX_TYPENR: usize = 65535;
 
 /// Does any UI want to know where an attribute came from (`ext_hlstate`)?

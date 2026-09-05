@@ -72,7 +72,7 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
     let dict = unsafe { tv_dict_alloc() };
     let _ = unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
     let windows = unsafe { tv_list_alloc(hint) };
-    let append = |handle: handle_T| {
+    let append = |handle: Handle| {
         // SAFETY: a live list.
         unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
     };

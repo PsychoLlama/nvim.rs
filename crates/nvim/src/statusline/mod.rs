@@ -55,9 +55,9 @@ use crate::main::hl_attr_active;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
-    StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv, WinSplit,
-    WinStyle, hlf_T, schar_T, size_t, statuscol_T, stl_hlrec_t, win_T,
+    AlignTextPos, Array, Dict, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
+    ScreenChar, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv,
+    WinSplit, WinStyle, size_t, statuscol_T, stl_hlrec_t, win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -243,7 +243,7 @@ pub(crate) struct StlJob<'a> {
     /// `nvim_eval_statusline()` can therefore never reach it.
     pub opt: (OptIndex, OptionSetFlags),
     /// What to pad with, and how many cells there are to fill.
-    pub fillchar: schar_T,
+    pub fillchar: ScreenChar,
     pub maxwidth: c_int,
     /// Where the highlight runs go, and whether to record click records.
     pub hl: HlDest,
@@ -487,7 +487,7 @@ pub(crate) unsafe fn view_line_start(view: GridView, row: c_int) {
 }
 
 /// Put one glyph in the open batch.
-pub(crate) fn paint_schar(col: c_int, sc: schar_T, attr: c_int) {
+pub(crate) fn paint_schar(col: c_int, sc: ScreenChar, attr: c_int) {
     grid_line_put_schar(col, sc, attr);
 }
 
@@ -508,7 +508,7 @@ pub(crate) fn paint_cstr(col: c_int, text: &CStr, attr: c_int) -> c_int {
 }
 
 /// Fill `col..end_col` with one glyph, answering where it stopped.
-pub(crate) fn paint_fill(col: c_int, end_col: c_int, sc: schar_T, attr: c_int) -> c_int {
+pub(crate) fn paint_fill(col: c_int, end_col: c_int, sc: ScreenChar, attr: c_int) -> c_int {
     grid_line_fill(col, end_col, sc, attr)
 }
 
@@ -597,7 +597,7 @@ pub(crate) fn push(array: &mut Array, value: Object) {
 // ---------------------------------------------------------------------------
 
 /// The fill character and highlight group of `win`'s status line.
-pub(crate) fn fillchar_status_of(win: Win) -> (hlf_T, schar_T) {
+pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
     if win.is_current() {
         (HLF_S, win.w_p_fcs_chars.stl)
     } else {
@@ -608,8 +608,8 @@ pub(crate) fn fillchar_status_of(win: Win) -> (hlf_T, schar_T) {
 /// C's `fillchar_status()`, for the three callers outside this module.
 ///
 /// # Safety
-/// `wp` must be a live window and `group` a writable `hlf_T`.
-pub unsafe fn fillchar_status(group: *mut hlf_T, wp: *mut win_T) -> schar_T {
+/// `wp` must be a live window and `group` a writable `Hlf`.
+pub unsafe fn fillchar_status(group: *mut Hlf, wp: *mut win_T) -> ScreenChar {
     // SAFETY: the caller's promise.
     let (g, fillchar) = fillchar_status_of(unsafe { Win::new(wp) });
     // SAFETY: the caller's out-parameter.

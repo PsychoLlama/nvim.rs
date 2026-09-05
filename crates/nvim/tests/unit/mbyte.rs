@@ -41,7 +41,7 @@ fn cbuf(s: &[u8]) -> Vec<c_char> {
 /// changes no answer below, because no fixture is anywhere near
 /// `MAX_SCHAR_SIZE` long.
 ///
-/// The `schar_T` it answers is an index into the glyph cache for anything too
+/// The `ScreenChar` it answers is an index into the glyph cache for anything too
 /// long to sit inline, so reading it back goes through `schar_get`. That
 /// makes this a statement about the pair, which is how the editor uses them.
 fn cluster(seq: &[u8]) -> (Vec<u8>, c_int) {
@@ -469,7 +469,7 @@ fn every_byte_points_back_at_the_start_of_its_grapheme_cluster() {
         ],
     );
     // Six composing marks on each of five bases, which is more than a
-    // `schar_T` holds inline.
+    // `ScreenChar` holds inline.
     check(
         b"L\xcc\x93\xcc\x89\xcc\x91\xcc\x92\xcc\x8c\xcc\x9ao\xcc\x8c\xcc\x92\xcc\x97\xcc\x84\xcc\x9b\xcc\x80r\xcc\x81\xcc\x88\xcc\x95\xcc\x88\xcc\x8e\xcc\x90e\xcc\x80\xcc\x87\xcc\x85\xcc\x84\xcc\x84\xcc\x90m\xcc\x85\xcc\x96\xcc\x9f\xcc\x84\xcc\x9f\xcc\x9a",
         &[

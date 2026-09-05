@@ -73,7 +73,7 @@ use crate::spellsuggest::soundalike::{
     suggest_try_soundalike, suggest_try_soundalike_finish, suggest_try_soundalike_prep,
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
-use crate::types::{MAXPATHL, NUL, garray_T, hashtab_T, hlf_T, langp_T, slang_T};
+use crate::types::{Hlf, MAXPATHL, NUL, garray_T, hashtab_T, langp_T, slang_T};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -433,7 +433,7 @@ unsafe fn spell_find_suggest(
     // again.
     static EXPR_BUSY: GlobalCell<bool> = GlobalCell::new(false);
 
-    let mut attr: hlf_T = HLF_COUNT;
+    let mut attr: Hlf = HLF_COUNT;
     let mut buf = [0 as c_char; MAXPATHL as usize];
     let bufp = buf.as_mut_ptr();
 

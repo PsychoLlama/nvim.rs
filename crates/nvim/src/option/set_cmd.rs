@@ -24,7 +24,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::slice;
 
-use super::{OptSlot, boolean_optval, option_last_set, set_op_T, ui_refresh_options};
+use super::{OptSlot, SetOp, boolean_optval, option_last_set, ui_refresh_options};
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{skiptowhite_esc, skipwhite, trans_characters, vim_str2nr};
@@ -97,7 +97,7 @@ pub(crate) unsafe fn ex_set(eap: *mut exarg_T) {
 /// # Safety
 ///
 /// `arg` must be NUL-terminated.
-unsafe fn get_op(arg: *const c_char) -> set_op_T {
+unsafe fn get_op(arg: *const c_char) -> SetOp {
     // SAFETY: the caller's string; the second read only happens once the
     // first byte is known not to be the terminator.
     if unsafe { *arg } == NUL as c_char || unsafe { *arg.add(1) } as c_int != '=' as c_int {
@@ -265,7 +265,7 @@ unsafe fn get_option_newval(
     prefix: Prefix,
     argp: &mut *mut c_char,
     nextchar: c_int,
-    op: set_op_T,
+    op: SetOp,
     flags: uint32_t,
     varp: OptSlot,
     errmsg: &mut *const c_char,

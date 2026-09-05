@@ -27,7 +27,7 @@ use crate::lua::ffi::{
 use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
-use crate::types::{LineNr, handle_T, lua_State};
+use crate::types::{Handle, LineNr, lua_State};
 use crate::winlayer::Win;
 
 unsafe extern "C-unwind" {
@@ -43,7 +43,7 @@ unsafe extern "C-unwind" {
 /// `lstate` must be a live Lua state holding this function's arguments.
 unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
     unsafe {
-        let window = luaL_checkinteger(lstate, 1) as handle_T;
+        let window = luaL_checkinteger(lstate, 1) as Handle;
         let win = handle_get_window(window);
         if win.is_null() {
             return luaL_error(lstate, c"invalid window".as_ptr());

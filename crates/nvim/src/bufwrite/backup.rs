@@ -329,7 +329,7 @@ pub(crate) unsafe fn buf_write_make_backup(
     fname: *mut c_char,
     file_info_old: *mut FileInfo,
     target: &TargetFile,
-    acl: vim_acl_T,
+    acl: VimAcl,
     bkc: c_uint,
     append: bool,
     forceit: bool,
@@ -366,7 +366,7 @@ pub(crate) unsafe fn buf_write_make_backup(
 unsafe fn backup_by_copy(
     fname: *mut c_char,
     file_info_old: *mut FileInfo,
-    acl: vim_acl_T,
+    acl: VimAcl,
     perm: c_int,
     backup_ext: *mut c_char,
     forceit: bool,
@@ -678,7 +678,7 @@ pub(crate) unsafe fn finish_write(
     wfname: *mut c_char,
     target: &TargetFile,
     backup: &Backup,
-    acl: vim_acl_T,
+    acl: VimAcl,
     file_info_old: *mut FileInfo,
 ) -> Option<WriteError> {
     let mut err = None;

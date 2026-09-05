@@ -40,8 +40,8 @@ use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, Failed, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T,
-    handle_T, tabpage_T, win_T, winopt_T,
+    Error, Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo,
+    frame_T, tabpage_T, win_T, winopt_T,
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -210,7 +210,7 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     // SAFETY: a fresh window, which is live from here on.
     let mut new_wp = unsafe { Win::new(zeroed_window()) };
     last_win_id.set(last_win_id.get() + 1);
-    new_wp.handle = last_win_id.get() as handle_T;
+    new_wp.handle = last_win_id.get() as Handle;
     register_window(new_wp);
     new_wp.w_grid_alloc.mouse_enabled = true;
     grid_assign_handle(&mut new_wp.w_grid_alloc);

@@ -23,7 +23,7 @@ pub struct qf_info_S {
     pub qf_curlist: ::core::ffi::c_int,
     /// Room for `'chistory'` (or `'lhistory'`) lists, oldest first.
     pub qf_lists: Vec<qf_list_T>,
-    pub qfl_type: qfltype_T,
+    pub qfl_type: QfListType,
     /// The buffer the quickfix window shows this stack in, or
     /// `INVALID_QFBUFNR`.
     pub qf_bufnr: ::core::ffi::c_int,
@@ -36,7 +36,7 @@ impl qf_info_S {
     /// `qf_init_stack` during startup.
     ///
     /// [`qf_alloc_stack`]: ../quickfix/stack/fn.qf_alloc_stack.html
-    pub const fn new(qfl_type: qfltype_T) -> Self {
+    pub const fn new(qfl_type: QfListType) -> Self {
         qf_info_S {
             qf_refcount: Refcount::ZERO,
             qf_listcount: 0,
@@ -55,15 +55,15 @@ impl qf_info_S {
         ::core::ffi::c_int::try_from(self.qf_lists.len()).unwrap_or(::core::ffi::c_int::MAX)
     }
 }
-pub type qfltype_T = ::core::ffi::c_uint;
-pub const QFLT_INTERNAL: qfltype_T = 2;
-pub const QFLT_LOCATION: qfltype_T = 1;
-pub const QFLT_QUICKFIX: qfltype_T = 0;
+pub type QfListType = ::core::ffi::c_uint;
+pub const QFLT_INTERNAL: QfListType = 2;
+pub const QFLT_LOCATION: QfListType = 1;
+pub const QFLT_QUICKFIX: QfListType = 0;
 /// One quickfix list within a stack.
 #[derive(Clone)]
 pub struct qf_list_T {
     pub qf_id: ::core::ffi::c_uint,
-    pub qfl_type: qfltype_T,
+    pub qfl_type: QfListType,
     pub qf_start: *mut qfline_T,
     pub qf_last: *mut qfline_T,
     pub qf_ptr: *mut qfline_T,

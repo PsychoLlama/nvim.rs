@@ -26,8 +26,8 @@ use crate::highlight::hl_add_url;
 use crate::types::AutoEvent;
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    Event, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
-    VTermTerminator, VTermValue, Vv, exarg_T, handle_T, ptrdiff_t, size_t,
+    Event, Handle, Object, RefcountSize, String_0, VTermStateFallbacks, VTermStringFragment,
+    VTermTerminator, VTermValue, Vv, exarg_T, ptrdiff_t, size_t,
 };
 use crate::vterm::pen::set_pen_attr;
 use crate::winlayer::Buf;
@@ -58,7 +58,7 @@ pub(crate) static FALLBACKS: VTermStateFallbacks = VTermStateFallbacks {
 pub(crate) struct TermRequest {
     /// The buffer rather than the terminal: by the time this runs the
     /// terminal may have been destroyed, and a handle can be checked.
-    buf_handle: handle_T,
+    buf_handle: Handle,
     /// The sequence as the child sent it, terminator excluded.
     sequence: Vec<u8>,
     /// Cursor position when the sequence arrived, in buffer coordinates.

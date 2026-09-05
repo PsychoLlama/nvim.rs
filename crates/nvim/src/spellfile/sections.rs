@@ -34,7 +34,7 @@ use crate::os::cshim::gettext;
 use crate::spell::{ascii_spell_chartab, count_common_word};
 use crate::strings::vim_strchr;
 use crate::types::{
-    NUL, RepItem, hash_T, int16_t, regprog_T, salfirst_T, salitem_T, slang_T, uint8_t,
+    HashValue, NUL, RepItem, SalFirst, int16_t, regprog_T, salitem_T, slang_T, uint8_t,
 };
 
 use super::spl::{SpellReadError, Spl, SplResult, trim_nul};
@@ -512,7 +512,7 @@ fn set_sofo(lp: &mut slang_T, from: &[u8], to: &[u8]) -> SplResult<()> {
             map[low][at + 2] = NUL;
             filled[low] += 2;
         } else {
-            first[c as usize] = to_c as salfirst_T;
+            first[c as usize] = to_c as SalFirst;
         }
     }
     lp.sl_sofo_map = map;
@@ -531,7 +531,7 @@ fn set_sal_first(lp: &mut slang_T) {
     while i < rules.len() {
         let c = (rules[i].sm_lead_w[0] & 0xff) as usize;
         if sfirst[c] == -1 {
-            sfirst[c] = i as salfirst_T;
+            sfirst[c] = i as SalFirst;
             // Skip the run that is already together.
             while i + 1 < rules.len() && (rules[i + 1].sm_lead_w[0] & 0xff) as usize == c {
                 i += 1;
@@ -610,7 +610,7 @@ pub(super) unsafe fn set_map_str(lp: &mut slang_T, map: &[u8]) {
         // SAFETY: `b` is a NUL-terminated allocation the table takes over
         // when it is kept, and this frame frees when it is not.
         unsafe {
-            let hash: hash_T = hash_hash(b);
+            let hash: HashValue = hash_hash(b);
             let hi = hash_lookup(&raw mut lp.sl_map_hash, b, cstr::bytes_at(b).len(), hash);
             if hi.is_kept() {
                 emsg(gettext(e_duplicate_char_in_map_entry));

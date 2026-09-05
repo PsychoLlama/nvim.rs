@@ -39,7 +39,7 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    Failed, OptInt, OptVal, OptionSetFlags, VAR_SCOPE, buf_T, handle_T, int64_t, switchwin_T,
+    Failed, Handle, OptInt, OptVal, OptionSetFlags, VAR_SCOPE, buf_T, int64_t, switchwin_T,
     tabpage_T,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
@@ -85,7 +85,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     // registry takes it over two lines below.
     let mut tp = unsafe { TabPage::new(owned.address()) };
     LAST_TP_HANDLE.set(LAST_TP_HANDLE.get() + 1);
-    tp.handle = LAST_TP_HANDLE.get() as handle_T;
+    tp.handle = LAST_TP_HANDLE.get() as Handle;
     let mut tp = register_tabpage(tp.handle, owned);
 
     // Init t: variables.

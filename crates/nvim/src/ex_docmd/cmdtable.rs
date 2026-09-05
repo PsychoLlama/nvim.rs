@@ -47,7 +47,7 @@ const fn cmd<const N: usize>(
 const fn cmd_pv<const N: usize>(
     name: &'static [u8; N],
     func: unsafe fn(*mut exarg_T),
-    preview: unsafe fn(*mut exarg_T, c_int, handle_T) -> c_int,
+    preview: unsafe fn(*mut exarg_T, c_int, Handle) -> c_int,
     argt: ExArgt,
     addr: CmdAddr,
 ) -> CommandDefinition {

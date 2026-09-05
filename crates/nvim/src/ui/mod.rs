@@ -70,8 +70,8 @@ use crate::types::ui::{
     kUIMessages, kUIMultigrid, kUITermColors,
 };
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, Integer, KeyValuePair, LineFlags, Object, OptVal,
-    OptionSetFlags, RemoteUI, String_0, UIExtension, handle_T,
+    Arena, Array, Boolean, Dict, Error, Handle, Integer, KeyValuePair, LineFlags, Object, OptVal,
+    OptionSetFlags, RemoteUI, String_0, UIExtension,
 };
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
@@ -83,7 +83,7 @@ use core::ffi::c_int;
 use crate::api::private::validate::err_bad_number;
 use crate::winlayer::{Win, tabs};
 /// The screen the editor draws into when nothing else claims a grid.
-const DEFAULT_GRID_HANDLE: handle_T = 1;
+const DEFAULT_GRID_HANDLE: Handle = 1;
 
 /// How many UIs may be attached at once.
 ///
@@ -105,7 +105,7 @@ static ui_ext: GlobalCell<[bool; kUIExtCount as usize]> =
 static ui_mode_idx: GlobalCell<c_int> = GlobalCell::new(SHAPE_IDX_N);
 static cursor_row: GlobalCell<c_int> = GlobalCell::new(0);
 static cursor_col: GlobalCell<c_int> = GlobalCell::new(0);
-static cursor_grid_handle: GlobalCell<handle_T> = GlobalCell::new(DEFAULT_GRID_HANDLE);
+static cursor_grid_handle: GlobalCell<Handle> = GlobalCell::new(DEFAULT_GRID_HANDLE);
 static pending_cursor_update: GlobalCell<bool> = GlobalCell::new(false);
 static pending_mode_info_update: GlobalCell<bool> = GlobalCell::new(false);
 static pending_mode_update: GlobalCell<bool> = GlobalCell::new(false);
@@ -587,7 +587,7 @@ pub fn ui_cursor_goto(new_row: c_int, new_col: c_int) {
 ///
 /// Not sent here: a redraw moves the cursor many times and only the last
 /// position matters, so [`ui_flush`] sends it once.
-pub fn ui_grid_cursor_goto(grid_handle: handle_T, new_row: c_int, new_col: c_int) {
+pub fn ui_grid_cursor_goto(grid_handle: Handle, new_row: c_int, new_col: c_int) {
     if new_row == cursor_row.get()
         && new_col == cursor_col.get()
         && grid_handle == cursor_grid_handle.get()
@@ -602,7 +602,7 @@ pub fn ui_grid_cursor_goto(grid_handle: handle_T, new_row: c_int, new_col: c_int
 
 /// Re-sends the cursor if it is on `grid_handle`, which has been redrawn
 /// underneath it.
-pub fn ui_check_cursor_grid(grid_handle: handle_T) {
+pub fn ui_check_cursor_grid(grid_handle: Handle) {
     if cursor_grid_handle.get() == grid_handle {
         pending_cursor_update.set(true);
     }
@@ -846,7 +846,7 @@ fn ext_name(widget: usize) -> *const core::ffi::c_char {
 ///
 /// Safe: the grid handle is looked up here, and every `unsafe` below rests on
 /// that lookup rather than on anything the caller promised.
-pub fn ui_grid_resize(grid_handle: handle_T, width: c_int, height: c_int, err: &mut Error) {
+pub fn ui_grid_resize(grid_handle: Handle, width: c_int, height: c_int, err: &mut Error) {
     if grid_handle == DEFAULT_GRID_HANDLE {
         unsafe { screen_resize(width, height) };
         return;

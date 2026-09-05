@@ -34,7 +34,7 @@ use crate::memory::{xmemdupz, xstrlcpy};
 use crate::spell::{spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, suggest_T, suginfo_T, window_langs};
-use crate::types::{__compar_fn_t, hlf_T, size_t, slang_T};
+use crate::types::{__compar_fn_t, Hlf, size_t, slang_T};
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -246,7 +246,7 @@ pub(super) unsafe fn check_suggestions(su: *mut suginfo_T, gap: *mut Vec<suggest
         let rest = unsafe { (*su).su_badptr.offset(orglen as isize) };
         unsafe { xstrlcpy(tail, rest, MAXWLEN + 1 - len as usize) };
 
-        let mut attr: hlf_T = HLF_COUNT;
+        let mut attr: Hlf = HLF_COUNT;
         let win = curwin.get();
         let longwordp = longword.as_mut_ptr();
         let attrp = &raw mut attr;

@@ -48,7 +48,7 @@ pub struct regengine {
     pub regexec_multi: RegExecMulti,
 }
 
-pub type magic_T = ::core::ffi::c_uint;
+pub type Magic = ::core::ffi::c_uint;
 pub type OptMagic = ::core::ffi::c_uint;
 pub struct reg_extmatch_T {
     pub refcnt: int16_t,

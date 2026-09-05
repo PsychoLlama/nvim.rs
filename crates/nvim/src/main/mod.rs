@@ -14,11 +14,11 @@ use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
-    EStackType, EstackInfo, FILE, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter,
-    MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime, Refcount, RgbValue,
-    ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark,
-    XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, estack_T,
-    except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t,
+    EStackType, EstackInfo, FILE, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos,
+    MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime,
+    Refcount, RgbValue, ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT,
+    WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope,
+    cmdmod_T, estack_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, int16_t,
     int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
     reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
     uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
@@ -151,12 +151,12 @@ pub(crate) const SESSION_FILE: &CStr = c"Session.vim";
 /// khash, which this was, is insertion-ordered with a swap-remove; nothing
 /// ever removes a namespace, so the order `nvim_get_namespaces` renders and
 /// `describe_ns` searches is creation order. [`SlotTable`] keeps it.
-pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, handle_T>> =
+pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, Handle>> =
     GlobalCell::new(SlotTable::new());
 /// The namespaces that are window-local rather than visible everywhere.
 /// Membership only; never walked.
 pub(crate) static namespace_localscope: GlobalCell<IdSet<uint32_t>> = GlobalCell::new(id_set());
-pub static next_namespace_id: GlobalCell<handle_T> = GlobalCell::new(1 as handle_T);
+pub static next_namespace_id: GlobalCell<Handle> = GlobalCell::new(1 as Handle);
 pub static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
     c"ext_cmdline".as_ptr(),
     c"ext_popupmenu".as_ptr(),
@@ -521,7 +521,7 @@ pub static edit_submode_pre: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static edit_submode_extra: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static edit_submode_highl: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
+pub static edit_submode_highl: GlobalCell<Hlf> = GlobalCell::new(HLF_NONE);
 pub static cmdmsg_rl: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_col: GlobalCell<c_int> = GlobalCell::new(0);
 pub static msg_row: GlobalCell<c_int> = GlobalCell::new(0);

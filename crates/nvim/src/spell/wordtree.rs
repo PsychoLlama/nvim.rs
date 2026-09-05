@@ -37,7 +37,7 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::types::idx_T;
+use crate::types::SpellIdx;
 
 /// One language tree: the child bytes and the indices beside them.
 ///
@@ -46,13 +46,13 @@ use crate::types::idx_T;
 #[derive(Default)]
 pub struct WordTree {
     byts: Box<[u8]>,
-    idxs: Box<[idx_T]>,
+    idxs: Box<[SpellIdx]>,
 }
 
 impl WordTree {
     /// Adopt the two arrays a reader filled in. They must be the same
     /// length, which is what `spell_read_tree` allocates them as.
-    pub(crate) fn from_parts(byts: Box<[u8]>, idxs: Box<[idx_T]>) -> WordTree {
+    pub(crate) fn from_parts(byts: Box<[u8]>, idxs: Box<[SpellIdx]>) -> WordTree {
         debug_assert_eq!(byts.len(), idxs.len());
         WordTree { byts, idxs }
     }
@@ -83,7 +83,7 @@ impl WordTree {
     /// The unit suite reads a loaded tree back this way, deliberately
     /// without going through the lookup.
     #[inline]
-    pub fn as_slices(&self) -> (&[u8], &[idx_T]) {
+    pub fn as_slices(&self) -> (&[u8], &[SpellIdx]) {
         (&self.byts, &self.idxs)
     }
 
@@ -119,7 +119,7 @@ impl WordTree {
     /// The index array, mutable: `tree_count_words` rewrites every word
     /// end's entry with the number of words below it.
     #[inline]
-    pub(crate) fn idxs_mut(&mut self) -> &mut [idx_T] {
+    pub(crate) fn idxs_mut(&mut self) -> &mut [SpellIdx] {
         &mut self.idxs
     }
 }
@@ -131,7 +131,7 @@ impl WordTree {
 #[derive(Clone, Copy)]
 pub(crate) struct Tree<'a> {
     byts: &'a [u8],
-    idxs: &'a [idx_T],
+    idxs: &'a [SpellIdx],
 }
 
 impl<'a> Tree<'a> {
@@ -157,7 +157,7 @@ impl<'a> Tree<'a> {
     /// The index beside the byte at `i`: where that child continues, or —
     /// when the byte is zero — the word's flags.
     #[inline]
-    pub(crate) fn idx(&self, i: usize) -> idx_T {
+    pub(crate) fn idx(&self, i: usize) -> SpellIdx {
         self.idxs[i]
     }
 
@@ -213,7 +213,7 @@ impl<'a> Tree<'a> {
     /// runs once means the whole node is bounds-checked once rather than
     /// each read separately.
     #[inline]
-    pub(crate) fn node(&self, at: usize) -> (&'a [u8], &'a [idx_T]) {
+    pub(crate) fn node(&self, at: usize) -> (&'a [u8], &'a [SpellIdx]) {
         let len = usize::from(self.byts[at]);
         (
             &self.byts[at + 1..at + 1 + len],

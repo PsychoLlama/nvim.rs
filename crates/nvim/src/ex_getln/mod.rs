@@ -138,13 +138,13 @@ use crate::types::{
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     Direction, DispTick, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    HistoryType, Integer, LineNr, MotionType, Object, OptInt, OptMagic, OptVal, ParserHighlight,
-    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime, RemapValues, String_0,
-    TryState, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, aco_save_T, buf_T,
-    cmdmod_T, cstack_T, dict_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T,
-    expand_T, handle_T, hashtab_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optset_T,
-    pos_T, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, win_T, xp_prefix_T,
+    Handle, HistoryType, Integer, LineNr, Magic, MotionType, Object, OptInt, OptMagic, OptVal,
+    ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime,
+    RemapValues, String_0, TryState, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
+    XpPrefix, aco_save_T, buf_T, cmdmod_T, cstack_T, dict_T, dobuf_action_values,
+    dobuf_start_values, exarg_T, except_T, expand_T, hashtab_T, list_T, listitem_T, msglist_T,
+    oparg_T, optset_T, pos_T, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T,
+    time_t, typval_T, typval_vval_union, uint8_t, uint32_t, win_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -195,12 +195,12 @@ pub use self::prompt::*;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;
 pub const kDirectionNotSet: Direction = 0;
-pub const XP_PREFIX_NONE: xp_prefix_T = 0;
+pub const XP_PREFIX_NONE: XpPrefix = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
-pub const MAGIC_ALL: magic_T = 4;
-pub const MAGIC_ON: magic_T = 3;
+pub const MAGIC_ALL: Magic = 4;
+pub const MAGIC_ON: Magic = 3;
 pub const DOBUF_WIPE: dobuf_action_values = 4;
 pub const DOBUF_DEL: dobuf_action_values = 3;
 pub const DOBUF_UNLOAD: dobuf_action_values = 2;
@@ -256,7 +256,7 @@ pub struct CommandLineState {
 pub struct incsearch_state_T {
     pub search_start: pos_T,
     pub save_cursor: pos_T,
-    pub winid: handle_T,
+    pub winid: Handle,
     pub init_viewstate: viewstate_T,
     pub old_viewstate: viewstate_T,
     pub match_start: pos_T,
@@ -648,7 +648,7 @@ static new_cmdpos: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static cmdline_block: GlobalCell<CmdlineBlock> = GlobalCell::new(CmdlineBlock::EMPTY);
 static getln_interrupted_highlight: GlobalCell<bool> = GlobalCell::new(false);
 static cedit_key: GlobalCell<::core::ffi::c_int> = GlobalCell::new(-1 as ::core::ffi::c_int);
-static cmdpreview_bufnr: GlobalCell<handle_T> = GlobalCell::new(0 as handle_T);
+static cmdpreview_bufnr: GlobalCell<Handle> = GlobalCell::new(0 as Handle);
 static cmdpreview_ns: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static e_active_window_or_buffer_changed_or_deleted: &::core::ffi::CStr =
     c"E199: Active window or buffer changed or deleted";

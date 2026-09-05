@@ -192,10 +192,10 @@ impl Cells {
                 || unsafe { *self.ptr } as ::core::ffi::c_int != NUL
                 || wlv.filler_todo > 0
                 || (wp.w_onebuf_opt.wo_list != 0
-                    && wp.w_p_lcs_chars.eol != NUL as schar_T
+                    && wp.w_p_lcs_chars.eol != NUL as ScreenChar
                     && self.lcs_eol_todo)
                 || (wlv.extra_todo != 0
-                    && (wlv.extra_fill != NUL as schar_T
+                    && (wlv.extra_fill != NUL as ScreenChar
                         || unsafe { *wlv.extra_text } as ::core::ffi::c_int != NUL))
                 || (self.may_have_inline_virt
                     && unsafe { wlv.has_more_inline_virt(self.ptr.offset_from(self.line)) }))
@@ -234,7 +234,7 @@ impl Cells {
             while draw_col < self.view_width {
                 let at = wlv.off as usize;
                 line.chars_mut()[at] = schar_from_ascii(b' ');
-                line.attrs_mut()[at] = attr as sattr_T;
+                line.attrs_mut()[at] = attr as ScreenAttr;
                 // The vcols were filled by the loop above.
                 wlv.off += 1;
                 draw_col += 1;
@@ -285,7 +285,7 @@ impl Cells {
             let mut current_grid = unsafe { grid_adjust(grid, &mut current_row, &mut dummy_col) };
             // Force a redraw of the first column of the next line.
             let off = current_grid.row_start(current_row + 1);
-            current_grid.set_attr(off, -1 as sattr_T);
+            current_grid.set_attr(off, -1 as ScreenAttr);
         }
 
         wlv.boguscols = 0;
@@ -489,7 +489,7 @@ impl Cells {
             }
             col_attr = unsafe { hl_combine_attr(col_attr, wlv.line_attr) };
 
-            line.attrs_mut()[wlv.off as usize] = col_attr as sattr_T;
+            line.attrs_mut()[wlv.off as usize] = col_attr as ScreenAttr;
             // The vcols were filled by the loop in the caller.
             wlv.off += 1;
             wlv.col += 1;

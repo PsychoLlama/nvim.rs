@@ -18,7 +18,7 @@ use crate::main::{curwin, e_no_spell};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
-use crate::types::{hlf_T, lua_Integer, lua_State, luaL_Reg, size_t};
+use crate::types::{Hlf, lua_Integer, lua_State, luaL_Reg, size_t};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -72,7 +72,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     // SAFETY: `text` is NUL-terminated and `spell_check` never steps past
     // the terminator, so `word` stays inside it.
     while unsafe { *word } != 0 {
-        let mut attr: hlf_T = HLF_COUNT;
+        let mut attr: Hlf = HLF_COUNT;
         // SAFETY: as above, with a live window.
         let len =
             unsafe { spell_check(win, word.cast_mut(), &raw mut attr, &raw mut capcol, false) };

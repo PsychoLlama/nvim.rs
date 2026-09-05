@@ -63,10 +63,10 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, ColNr, Error, Event, ExtmarkOp, HlAttrs, LineNr, MarkAdjustMode, Object, OptVal,
-    OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, aco_save_T, buf_T,
-    dict_T, exarg_T, handle_T, int16_t, pos_T, save_v_event_T, size_t, uint8_t, win_T,
+    Arena, Buffer, ColNr, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode, Object,
+    OptVal, OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor,
+    VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, VarNumber,
+    aco_save_T, buf_T, dict_T, exarg_T, int16_t, pos_T, save_v_event_T, size_t, uint8_t, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -229,7 +229,7 @@ impl Term {
 }
 
 /// The buffer a handle names, `None` once it has been wiped.
-fn buf_for_handle(handle: handle_T) -> Option<Buf> {
+fn buf_for_handle(handle: Handle) -> Option<Buf> {
     winlayer::buffer(handle)
 }
 
@@ -461,7 +461,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     let mut pos = buf.map_or(0, |buf| buf.line_count() as c_int - 1);
     if status == -1 || exiting.get() {
         // Nothing to report on: detach from the buffer straight away.
-        term.buf_handle = 0 as handle_T;
+        term.buf_handle = 0 as Handle;
         if let Some(mut buf) = buf {
             buf.terminal = ::core::ptr::null_mut();
         }
@@ -520,7 +520,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
 unsafe extern "C" fn terminal_state_change_event(argv: *mut *mut c_void) {
     // SAFETY: the event carries the buffer handle `terminal_set_state` put
     // in it.
-    let handle = unsafe { (*argv).expose_provenance() as handle_T };
+    let handle = unsafe { (*argv).expose_provenance() as Handle };
     let buf = buf_for_handle(handle);
     if let Some(buf) = buf
         && !buf.terminal.is_null()
@@ -603,7 +603,7 @@ pub(crate) unsafe fn terminal_destroy(termpp: *mut *mut Terminal) {
     // SAFETY: the caller hands over a slot holding a live terminal.
     let mut term = unsafe { Term::new(*termpp) };
     if let Some(mut buf) = term.buf() {
-        term.buf_handle = 0 as handle_T;
+        term.buf_handle = 0 as Handle;
         buf.terminal = ::core::ptr::null_mut();
     }
     if term.refcount != RefcountSize::ZERO {
@@ -657,7 +657,7 @@ unsafe extern "C" fn on_sync_flush(argv: *mut *mut c_void) {
     }
     // SAFETY: the event carries the buffer handle `terminal_receive` put in
     // it.
-    let handle = unsafe { (*argv).expose_provenance() as handle_T };
+    let handle = unsafe { (*argv).expose_provenance() as Handle };
     let buf = buf_for_handle(handle);
     let Some(buf) = buf.filter(|buf| !buf.terminal.is_null()) else {
         return;

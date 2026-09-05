@@ -36,7 +36,7 @@ use crate::spellsuggest::{
     SCORE_DEL, SCORE_DELCOMP, SCORE_DELDUP, SCORE_INS, SCORE_INSCOMP, SCORE_INSDUP, SCORE_SIMILAR,
     SCORE_SUBCOMP, SCORE_SUBST,
 };
-use crate::types::{NUL, idx_T};
+use crate::types::{NUL, SpellIdx};
 use core::ffi::{c_char, c_int};
 
 /// The sound-fold marker for a word starting with a vowel. Adding or
@@ -111,7 +111,7 @@ impl Walk<'_> {
             return;
         }
 
-        let at = node + self.stack[level].child as idx_T;
+        let at = node + self.stack[level].child as SpellIdx;
         self.stack[level].child += 1;
         let byte = c_int::from(self.byte_at(at));
 
@@ -352,7 +352,7 @@ impl Walk<'_> {
                 self.stack[level].state = State::Swap;
                 return;
             }
-            if self.byte_at(node + self.stack[level].child as idx_T) != NUL as u8 {
+            if self.byte_at(node + self.stack[level].child as SpellIdx) != NUL as u8 {
                 // Found a byte to insert.
                 self.stack[level].state = State::Ins;
                 return;
@@ -382,7 +382,7 @@ impl Walk<'_> {
             return;
         }
 
-        let at = node + self.stack[level].child as idx_T;
+        let at = node + self.stack[level].child as SpellIdx;
         self.stack[level].child += 1;
 
         // A bounds check the tree itself should have made unnecessary;

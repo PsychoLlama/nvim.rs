@@ -346,7 +346,7 @@ unsafe fn attention_message(
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
 /// `v:swapchoice`.
-unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
+unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> SwapExistsChoice {
     unsafe { set_vim_var_string(Vv::Swapname, fname, -1) };
     unsafe { set_vim_var_string(Vv::Swapchoice, core::ptr::null(), -1) };
 
@@ -447,7 +447,7 @@ unsafe fn resolve_swapfile_clash(
 
 /// Show the ATTENTION message, as a dialog if the caller can act on an
 /// answer and as a warning otherwise.
-unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_T {
+unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> SwapExistsChoice {
     let mut choice = SEA_CHOICE_NONE;
     let no_prompt = Suppress::wait_return();
 
@@ -481,9 +481,9 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> sea_choice_
         // leave there.
         msg.push(NUL as u8);
         let text = msg.as_mut_ptr().cast::<c_char>();
-        choice = unsafe { do_dialog(warn, title, text, buttons, 1, none, 0) } as sea_choice_T;
+        choice = unsafe { do_dialog(warn, title, text, buttons, 1, none, 0) } as SwapExistsChoice;
         // Compensate for the missing "Delete it" button.
-        choice = choice.wrapping_add((running && choice >= 4) as sea_choice_T);
+        choice = choice.wrapping_add((running && choice >= 4) as SwapExistsChoice);
         // Pretend the screen did not scroll; it needs a redraw anyway.
         unsafe { msg_reset_scroll() };
     } else {

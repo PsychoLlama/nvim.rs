@@ -42,8 +42,8 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, NUL, OptionSetFlags, expand_T, fcs_chars_T, int64_t, lcs_chars_T, optset_T,
-    schar_T, size_t, win_T,
+    CharsOption, NUL, OptionSetFlags, ScreenChar, expand_T, fcs_chars_T, int64_t, lcs_chars_T,
+    optset_T, size_t, win_T,
 };
 use crate::winlayer;
 
@@ -94,8 +94,8 @@ const NO_LIST_CHARS: lcs_chars_T = lcs_chars_T {
     leadtab3: 0,
     lead: 0,
     trail: 0,
-    multispace: ::core::ptr::null_mut::<schar_T>(),
-    leadmultispace: ::core::ptr::null_mut::<schar_T>(),
+    multispace: ::core::ptr::null_mut::<ScreenChar>(),
+    leadmultispace: ::core::ptr::null_mut::<ScreenChar>(),
     conceal: 0,
 };
 
@@ -122,7 +122,7 @@ enum Shape {
 /// One field of 'fillchars' or 'listchars'.
 struct Field {
     name: &'static CStr,
-    /// Byte offset of the `schar_T` this field's character fills, within
+    /// Byte offset of the `ScreenChar` this field's character fills, within
     /// the option's character struct. The two run-valued fields have none.
     slot: Option<usize>,
     /// The preferred default, used only when it fits in one screen cell.
@@ -294,7 +294,7 @@ fn is_listchars(what: CharsOption) -> bool {
 /// anything else is one (possibly composed) character. Answers 0 — which
 /// every caller treats as a rejection — for invalid hex, for an invalid
 /// UTF-8 byte, and for a character too wide to sit in one screen cell.
-fn take_encoded_char(value: &CStr, at: &mut usize) -> schar_T {
+fn take_encoded_char(value: &CStr, at: &mut usize) -> ScreenChar {
     let bytes = value.to_bytes();
     debug_assert!(*at <= bytes.len());
     // SAFETY: `value` is NUL-terminated, so every read below stops at the
@@ -372,9 +372,9 @@ fn chars_bytes<T>(chars: &mut T) -> &mut [u8] {
     unsafe { slice::from_raw_parts_mut(ptr::from_mut(chars).cast::<u8>(), size_of::<T>()) }
 }
 
-/// Write `value` into the `schar_T` field at byte offset `slot`.
-fn store_field(chars: &mut [u8], slot: usize, value: schar_T) {
-    chars[slot..slot + size_of::<schar_T>()].copy_from_slice(&value.to_ne_bytes());
+/// Write `value` into the `ScreenChar` field at byte offset `slot`.
+fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
+    chars[slot..slot + size_of::<ScreenChar>()].copy_from_slice(&value.to_ne_bytes());
 }
 
 /// Set 'fillchars' or 'listchars' for one window.
@@ -437,10 +437,10 @@ pub unsafe fn set_chars_option<'a>(
         if round > 0 {
             if listchars {
                 install_defaults(chars_bytes(&mut lcs), tab);
-                lcs.tab1 = NUL as schar_T;
-                lcs.tab3 = NUL as schar_T;
-                lcs.leadtab1 = NUL as schar_T;
-                lcs.leadtab3 = NUL as schar_T;
+                lcs.tab1 = NUL as ScreenChar;
+                lcs.tab3 = NUL as ScreenChar;
+                lcs.leadtab1 = NUL as ScreenChar;
+                lcs.leadtab3 = NUL as ScreenChar;
                 // SAFETY: both runs are handed to the window with the struct.
                 lcs.multispace = unsafe { alloc_run(multispace_len) };
                 lcs.leadmultispace = unsafe { alloc_run(lead_multispace_len) };
@@ -530,8 +530,8 @@ pub unsafe fn set_chars_option<'a>(
                     if c1 == 0 {
                         return Some(width_err(field.name));
                     }
-                    let mut c2: schar_T = 0;
-                    let mut c3: schar_T = 0;
+                    let mut c2: ScreenChar = 0;
+                    let mut c3: ScreenChar = 0;
                     if matches!(field.shape, Shape::Tab | Shape::LeadTab) {
                         if at_end(bytes, s) {
                             return Some(count_err(field.name));
@@ -653,15 +653,15 @@ fn install_defaults(chars: &mut [u8], tab: &[Field]) {
 /// # Safety
 /// The result is handed to the window along with the rest of the character
 /// struct, and freed there.
-unsafe fn alloc_run(len: c_int) -> *mut schar_T {
+unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
     if len <= 0 {
         return ptr::null_mut();
     }
     let count = len as size_t + 1;
     // SAFETY: `xmalloc` returns an allocation of that size or aborts.
-    let run = unsafe { xmalloc(count * size_of::<schar_T>()) }.cast::<schar_T>();
+    let run = unsafe { xmalloc(count * size_of::<ScreenChar>()) }.cast::<ScreenChar>();
     // SAFETY: the last element of the allocation just made.
-    unsafe { *run.add(len as usize) = NUL as schar_T };
+    unsafe { *run.add(len as usize) = NUL as ScreenChar };
     run
 }
 

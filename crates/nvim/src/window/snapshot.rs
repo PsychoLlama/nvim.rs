@@ -27,7 +27,7 @@ use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Integer, LineNr, NUL, OptInt, frame_T, handle_T, tabpage_T, win_T};
+use crate::types::{Handle, Integer, LineNr, NUL, OptInt, frame_T, tabpage_T, win_T};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -390,7 +390,7 @@ pub unsafe fn win_locked(wp: *mut win_T) -> c_int {
     unsafe { Win::new(wp) }.w_locked as c_int
 }
 
-pub unsafe fn win_get_tabwin(id: handle_T, tabnr: *mut c_int, winnr: *mut c_int) {
+pub unsafe fn win_get_tabwin(id: Handle, tabnr: *mut c_int, winnr: *mut c_int) {
     let found = tab_and_win_number(id);
     // SAFETY: the caller's promise -- two writable `int`s.
     unsafe {
@@ -403,7 +403,7 @@ pub unsafe fn win_get_tabwin(id: handle_T, tabnr: *mut c_int, winnr: *mut c_int)
 /// The tab page and window number of the window with handle `id`, both 1-based
 /// -- `None` when there is no such window, and `Some((0, 0))` when it is one
 /// the `winnr` numbering skips.
-fn tab_and_win_number(id: handle_T) -> Option<(c_int, c_int)> {
+fn tab_and_win_number(id: Handle) -> Option<(c_int, c_int)> {
     for (tnum, tp) in (1..).zip(tabs()) {
         let mut wnum = 1;
         for wp in windows_in_tab(tp) {

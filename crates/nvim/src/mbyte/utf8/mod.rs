@@ -307,7 +307,7 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
     category == UTF8PROC_CATEGORY_MN as c_int || category == UTF8PROC_CATEGORY_ME as c_int
 }
 
-/// The whole grapheme cluster at `p` packed into a `schar_T`, with its base
+/// The whole grapheme cluster at `p` packed into a `ScreenChar`, with its base
 /// codepoint written to `firstc`.
 ///
 /// Answers 0 for a byte that is not a character (the caller displays it) and
@@ -316,7 +316,7 @@ pub fn utf_iscomposing_legacy(c: c_int) -> bool {
 /// # Safety
 ///
 /// `p` must point at a NUL-terminated string and `firstc` must be writable.
-pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> schar_T {
+pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScreenChar {
     let c = unsafe { utf_ptr2char(p) };
     unsafe { *firstc = c };
     let first_compose = utf_iscomposing_first(c);
@@ -333,7 +333,11 @@ pub unsafe fn utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> schar_T {
 /// # Safety
 ///
 /// `p` must point at `len` readable bytes and `firstc` must be writable.
-pub unsafe fn utfc_ptrlen2schar(p: *const c_char, mut len: c_int, firstc: *mut c_int) -> schar_T {
+pub unsafe fn utfc_ptrlen2schar(
+    p: *const c_char,
+    mut len: c_int,
+    firstc: *mut c_int,
+) -> ScreenChar {
     if len == 0 || (len == 1 && unsafe { *p } as u8 >= 0x80) {
         unsafe { *firstc = *p as u8 as c_int };
         return 0;
@@ -348,7 +352,7 @@ pub unsafe fn utfc_ptrlen2schar(p: *const c_char, mut len: c_int, firstc: *mut c
     unsafe { schar_from_buf_first(p, len as size_t, first_compose) }
 }
 
-/// Pack `len` bytes into a `schar_T`, prefixing a space when the cluster
+/// Pack `len` bytes into a `ScreenChar`, prefixing a space when the cluster
 /// starts with a composing character.
 ///
 /// A cell has to have something to compose *onto*, so a leading combining
@@ -359,7 +363,7 @@ pub unsafe fn utfc_ptrlen2schar(p: *const c_char, mut len: c_int, firstc: *mut c
 ///
 /// `buf` must point at `len` readable bytes, and `len` must leave room for
 /// the space when `first_compose` is set.
-unsafe fn schar_from_buf_first(buf: *const c_char, len: size_t, first_compose: bool) -> schar_T {
+unsafe fn schar_from_buf_first(buf: *const c_char, len: size_t, first_compose: bool) -> ScreenChar {
     if !first_compose {
         return unsafe { schar_from_buf(buf, len) };
     }

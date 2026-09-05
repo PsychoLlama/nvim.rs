@@ -1,8 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-//! `schar_T`: the glyph in a screen cell.
+//! `ScreenChar`: the glyph in a screen cell.
 //!
-//! A cell holds one grapheme cluster, which is usually short. A `schar_T` is
+//! A cell holds one grapheme cluster, which is usually short. A `ScreenChar` is
 //! a `u32` that stores the UTF-8 bytes inline when there are at most four of
 //! them, and otherwise an index into a global intern table (`glyph_cache`)
 //! tagged by a low byte of `0xFF` -- which no UTF-8 lead byte can be, so the
@@ -79,25 +79,25 @@ const SET_INIT: Set_glyph = Set_glyph {
 
 /// Whether `sc` is an index into the glyph cache rather than inline bytes.
 #[inline(always)]
-pub fn schar_high(sc: schar_T) -> bool {
+pub fn schar_high(sc: ScreenChar) -> bool {
     sc & 0xff == 0xff
 }
 
-/// The glyph-cache index of a high `schar_T`.
+/// The glyph-cache index of a high `ScreenChar`.
 #[inline(always)]
-fn schar_idx(sc: schar_T) -> uint32_t {
+fn schar_idx(sc: ScreenChar) -> uint32_t {
     sc >> 8
 }
 
 /// A one-byte ASCII glyph.
 #[inline(always)]
-pub const fn schar_from_ascii(c: u8) -> schar_T {
-    c as schar_T
+pub const fn schar_from_ascii(c: u8) -> ScreenChar {
+    c as ScreenChar
 }
 
 /// # Safety
 /// `str` must be NUL-terminated or null.
-pub unsafe fn schar_from_str(str: *const c_char) -> schar_T {
+pub unsafe fn schar_from_str(str: *const c_char) -> ScreenChar {
     if str.is_null() {
         return 0;
     }
@@ -111,10 +111,10 @@ pub unsafe fn schar_from_str(str: *const c_char) -> schar_T {
 /// `len` must be below [`MAX_SCHAR_SIZE`] -- below, not at, because the cache
 /// needs room for a terminator. That bound is checked in a debug build only,
 /// as upstream's `assert()` is (`v0.12.4:src/nvim/grid.c:85`).
-pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> schar_T {
+pub unsafe fn schar_from_buf(buf: *const c_char, len: size_t) -> ScreenChar {
     debug_assert!(len < MAX_SCHAR_SIZE as size_t, "len < MAX_SCHAR_SIZE");
     if len <= 4 {
-        let mut sc: schar_T = 0;
+        let mut sc: ScreenChar = 0;
         let into = (&raw mut sc).cast::<u8>();
         unsafe { into.copy_from_nonoverlapping(buf.cast(), len) };
         return sc;
@@ -145,13 +145,13 @@ pub unsafe fn schar_cache_clear_if_full() -> bool {
 }
 
 /// # Safety
-/// Every live `schar_T` becomes meaningless; see [`schar_cache_clear_if_full`].
+/// Every live `ScreenChar` becomes meaningless; see [`schar_cache_clear_if_full`].
 pub unsafe fn schar_cache_clear() {
     unsafe { decor_check_invalid_glyphs() };
     unsafe { mh_clear(glyph_cache().hash()) };
 
     // The char options kept their original strings, so their parsed
-    // schar_T values can be regenerated against the clean cache. Cell
+    // ScreenChar values can be regenerated against the clean cache. Cell
     // widths have not changed, so this cannot fail.
     if unsafe { check_chars_options() }.is_some() {
         unsafe { abort() };
@@ -163,7 +163,7 @@ pub unsafe fn schar_cache_clear() {
 /// # Safety
 /// `buf_out` must have room for [`MAX_SCHAR_SIZE`] bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn schar_get(mut buf_out: *mut c_char, sc: schar_T) -> size_t {
+pub unsafe extern "C" fn schar_get(mut buf_out: *mut c_char, sc: ScreenChar) -> size_t {
     let len = unsafe { schar_get_adv(&raw mut buf_out, sc) };
     unsafe { *buf_out = NUL as c_char };
     len
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn schar_get(mut buf_out: *mut c_char, sc: schar_T) -> siz
 ///
 /// # Safety
 /// `*buf_out` must have room for [`MAX_SCHAR_SIZE`] bytes.
-pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: schar_T) -> size_t {
+pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: ScreenChar) -> size_t {
     let (src, len) = if schar_high(sc) {
         let idx = schar_idx(sc);
         debug_assert!(idx < glyph_cache().keys_len(), "idx < n_keys");
@@ -194,7 +194,7 @@ pub unsafe fn schar_get_adv(buf_out: *mut *mut c_char, sc: schar_T) -> size_t {
 ///
 /// # Safety
 /// `sc` must be a glyph this process produced.
-pub unsafe fn schar_len(sc: schar_T) -> size_t {
+pub unsafe fn schar_len(sc: ScreenChar) -> size_t {
     if schar_high(sc) {
         let idx = schar_idx(sc);
         debug_assert!(idx < glyph_cache().keys_len(), "idx < n_keys");
@@ -208,7 +208,7 @@ pub unsafe fn schar_len(sc: schar_T) -> size_t {
 ///
 /// # Safety
 /// `sc` must be a glyph this process produced.
-pub unsafe fn schar_cells(sc: schar_T) -> c_int {
+pub unsafe fn schar_cells(sc: ScreenChar) -> c_int {
     // Hot path: anything below 0x80 is one inline ASCII byte.
     if sc < 0x80 {
         return 1;
@@ -222,7 +222,7 @@ pub unsafe fn schar_cells(sc: schar_T) -> c_int {
 ///
 /// # Safety
 /// `sc` must be a glyph this process produced.
-unsafe fn schar_get_first_byte(sc: schar_T) -> c_char {
+unsafe fn schar_get_first_byte(sc: ScreenChar) -> c_char {
     debug_assert!(
         !(schar_high(sc) && schar_idx(sc) >= glyph_cache().keys_len()),
         "!(schar_high(sc) && schar_idx(sc) >= glyph_cache.h.n_keys)"
@@ -236,7 +236,7 @@ unsafe fn schar_get_first_byte(sc: schar_T) -> c_char {
 
 /// # Safety
 /// `sc` must be a glyph this process produced.
-pub unsafe fn schar_get_first_codepoint(sc: schar_T) -> c_int {
+pub unsafe fn schar_get_first_codepoint(sc: ScreenChar) -> c_int {
     let mut sc_buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
     // SAFETY: the caller's promise.
     unsafe { schar_get(sc_buf.as_mut_ptr(), sc) };
@@ -244,7 +244,7 @@ pub unsafe fn schar_get_first_codepoint(sc: schar_T) -> c_int {
 }
 
 /// The ASCII character `sc` is, or NUL when it is not ASCII.
-pub fn schar_get_ascii(sc: schar_T) -> c_char {
+pub fn schar_get_ascii(sc: ScreenChar) -> c_char {
     if sc < 0x80 {
         sc as c_char
     } else {
@@ -258,7 +258,7 @@ pub fn schar_get_ascii(sc: schar_T) -> c_char {
 ///
 /// # Safety
 /// `sc` must be a glyph this process produced.
-unsafe fn schar_in_arabic_block(sc: schar_T) -> bool {
+unsafe fn schar_in_arabic_block(sc: ScreenChar) -> bool {
     unsafe { (schar_get_first_byte(sc) as u8) & 0xfe == 0xd8 }
 }
 
@@ -268,7 +268,7 @@ unsafe fn schar_in_arabic_block(sc: schar_T) -> bool {
 ///
 /// # Safety
 /// `sc` must be a glyph this process produced.
-unsafe fn schar_get_first_two_codepoints(sc: schar_T) -> (c_int, c_int) {
+unsafe fn schar_get_first_two_codepoints(sc: ScreenChar) -> (c_int, c_int) {
     let mut sc_buf = [0 as c_char; MAX_SCHAR_SIZE as usize];
     // SAFETY: the caller's promise.
     unsafe { schar_get(sc_buf.as_mut_ptr(), sc) };
@@ -293,7 +293,7 @@ fn is_arabic_char(c: c_int) -> bool {
 ///
 /// # Safety
 /// Every glyph in `buf` must be one this process produced.
-pub unsafe fn line_do_arabic_shape(buf: &mut [schar_T]) {
+pub unsafe fn line_do_arabic_shape(buf: &mut [ScreenChar]) {
     // SAFETY: the caller's promise, for every call below.
     // Quickly skip over non-Arabic text.
     let Some(start) = buf
@@ -330,7 +330,7 @@ pub unsafe fn line_do_arabic_shape(buf: &mut [schar_T]) {
 /// # Safety
 /// `sc` must be a glyph this process produced whose first two codepoints are
 /// `c0` and `c1`.
-unsafe fn reshape(sc: schar_T, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> schar_T {
+unsafe fn reshape(sc: ScreenChar, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int) -> ScreenChar {
     let mut old = [0 as c_char; MAX_SCHAR_SIZE as usize];
     let mut new = [0 as c_char; MAX_SCHAR_SIZE as usize];
     // SAFETY: the caller's promise.
@@ -361,8 +361,8 @@ unsafe fn reshape(sc: schar_T, c0: c_int, c1: c_int, c0new: c_int, c1new: c_int)
 }
 
 /// Put a Unicode codepoint in a screen cell.
-pub fn schar_from_char(mut c: c_int) -> schar_T {
-    let mut sc: schar_T = 0;
+pub fn schar_from_char(mut c: c_int) -> ScreenChar {
+    let mut sc: ScreenChar = 0;
     if c >= 0x200000 {
         // This must NEVER happen, even for a file holding overlong sequences.
         c = 0xfffd;

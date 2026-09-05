@@ -23,7 +23,7 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    ColNr, LineNr, MarkGet, ProfTime, buf_T, int16_t, int64_t, lpos_T, magic_T, regengine,
+    ColNr, LineNr, Magic, MarkGet, ProfTime, buf_T, int16_t, int64_t, lpos_T, regengine,
     regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -67,10 +67,10 @@ pub const _IScntrl: c_uint = 2;
 pub const _ISgraph: c_uint = 32768;
 pub const _ISalpha: c_uint = 1024;
 pub const NSUBEXP: c_uint = 10;
-pub const MAGIC_ALL: magic_T = 4;
-pub const MAGIC_ON: magic_T = 3;
-pub const MAGIC_OFF: magic_T = 2;
-pub const MAGIC_NONE: magic_T = 1;
+pub const MAGIC_ALL: Magic = 4;
+pub const MAGIC_ON: Magic = 3;
+pub const MAGIC_OFF: Magic = 2;
+pub const MAGIC_NONE: Magic = 1;
 pub const REGSUB_BACKSLASH: c_uint = 4;
 pub const REGSUB_MAGIC: c_uint = 2;
 pub const REGSUB_COPY: c_uint = 1;
@@ -305,7 +305,7 @@ static regnzpar: GlobalCell<c_int> = GlobalCell::new(0);
 static re_has_z: GlobalCell<c_int> = GlobalCell::new(0);
 static regflags: GlobalCell<c_uint> = GlobalCell::new(0);
 static had_eol: GlobalCell<c_int> = GlobalCell::new(0);
-static reg_magic: GlobalCell<magic_T> = GlobalCell::new(0);
+static reg_magic: GlobalCell<Magic> = GlobalCell::new(0);
 static reg_string: GlobalCell<c_int> = GlobalCell::new(0);
 static reg_strict: GlobalCell<c_int> = GlobalCell::new(0);
 static curchr: GlobalCell<c_int> = GlobalCell::new(0);

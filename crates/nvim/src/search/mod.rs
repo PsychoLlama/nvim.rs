@@ -80,9 +80,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    ColNr, Direction, EvalFuncData, FILE, LineNr, MotionType, ProfTime, SearchOffset,
-    SearchPattern, VarNumber, cmdarg_T, dict_T, file_comparison, int64_t, list_T, lpos_T, magic_T,
-    oparg_T, pos_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t, typval_T, win_T,
+    ColNr, Direction, EvalFuncData, FILE, LineNr, Magic, MotionType, ProfTime, SearchOffset,
+    SearchPattern, VarNumber, cmdarg_T, dict_T, file_comparison, int64_t, list_T, lpos_T, oparg_T,
+    pos_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t, typval_T, win_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};
@@ -116,8 +116,8 @@ pub const BACKWARD_FILE: Direction = -3;
 pub const FORWARD_FILE: Direction = 3;
 pub const BACKWARD: Direction = -1;
 pub const FORWARD: Direction = 1;
-pub const MAGIC_ALL: magic_T = 4;
-pub const MAGIC_ON: magic_T = 3;
+pub const MAGIC_ALL: Magic = 4;
+pub const MAGIC_ON: Magic = 3;
 pub const HIST_SEARCH: ::core::ffi::c_int = 1;
 pub const kMTLineWise: MotionType = 1;
 pub const kEqualFiles: file_comparison = 1;

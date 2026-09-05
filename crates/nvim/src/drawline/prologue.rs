@@ -829,7 +829,7 @@ impl LineSetup {
     unsafe fn spell_at_start_vcol(&mut self, mut wp: Win, lnum: LineNr) {
         // SAFETY: the caller's window and line.
         let linecol = unsafe { self.ptr.offset_from(self.line) } as ColNr;
-        let mut spell_hlf: hlf_T = HLF_COUNT;
+        let mut spell_hlf: Hlf = HLF_COUNT;
 
         let saved_cursor = wp.w_cursor;
         wp.w_cursor.lnum = lnum;

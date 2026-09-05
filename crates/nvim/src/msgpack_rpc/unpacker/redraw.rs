@@ -18,8 +18,8 @@ use crate::memory::ARENA_EMPTY;
 use crate::mpack::conv::mpack_unpack_boolean;
 use crate::mpack::mpack_core::mpack_rtoken;
 use crate::types::{
-    Array, Error, GridLineEvent, RawLine, Unpacker, mpack_token_t, mpack_token_type_t, sattr_T,
-    schar_T, size_t,
+    Array, Error, GridLineEvent, RawLine, ScreenAttr, ScreenChar, Unpacker, mpack_token_t,
+    mpack_token_type_t, size_t,
 };
 use crate::ui_client::{ui_client_event_grid_line, ui_client_get_redraw_handler};
 use ::libc::abort;
@@ -76,7 +76,7 @@ impl Unpacker {
 
     /// The decoded cells, for the `tui_raw_line` call that takes them by
     /// pointer. Nothing between here and that call can widen the buffer.
-    pub(crate) fn grid_line_cells() -> (*const schar_T, *const sattr_T) {
+    pub(crate) fn grid_line_cells() -> (*const ScreenChar, *const ScreenAttr) {
         grid_line_buf().as_ptrs()
     }
 }
@@ -299,7 +299,7 @@ fn parse_grid_line_cell(g: &mut GridLineEvent, cursor: &mut Cursor) -> Result<()
     g.clear_width = 0;
     // SAFETY: `cell` is `cell_len` bytes the cursor just handed over, and
     // `schar_from_buf` reads within that length.
-    let (cell_bytes, sc): (&[u8], schar_T) = unsafe {
+    let (cell_bytes, sc): (&[u8], ScreenChar) = unsafe {
         (
             core::slice::from_raw_parts(cell.cast::<u8>(), cell_len),
             schar_from_buf(cell, cell_len),

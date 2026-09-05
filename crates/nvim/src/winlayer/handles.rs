@@ -1,7 +1,7 @@
 //! The three handle registries, and the allocations an autocommand deferred.
 //!
 //! The editor hands every window, buffer and tab page a monotone id — a
-//! [`handle_T`] — and keeps a table from that id to the object, so that an API
+//! [`Handle`] — and keeps a table from that id to the object, so that an API
 //! call, an RPC message or a Lua callback can name one without holding a
 //! pointer across the call that might free it. Upstream spells the three
 //! tables as khash maps reached through a raw pointer
@@ -40,7 +40,7 @@ use crate::allocator::Owned;
 use crate::buffer::free;
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
-use crate::types::{buf_T, handle_T, tabpage_T, win_T};
+use crate::types::{Handle, buf_T, tabpage_T, win_T};
 use crate::winlayer::{Buf, TabPage, Win};
 
 /// Every live window, by handle.
@@ -54,21 +54,21 @@ static TABPAGES: GlobalCell<OwnedRegistry<tabpage_T>> = GlobalCell::new(OwnedReg
 
 /// The window `handle` names, `None` once it has been closed.
 #[inline]
-pub(crate) fn window(handle: handle_T) -> Option<Win> {
+pub(crate) fn window(handle: Handle) -> Option<Win> {
     // The borrow ends with the lookup, which cannot re-enter.
     WINDOWS.with(|reg| reg.get(handle)).map(Win)
 }
 
 /// The buffer numbered `handle`, `None` once it has been wiped.
 #[inline]
-pub(crate) fn buffer(handle: handle_T) -> Option<Buf> {
+pub(crate) fn buffer(handle: Handle) -> Option<Buf> {
     // As [`window`].
     BUFFERS.with(|reg| reg.get(handle)).map(Buf)
 }
 
 /// The tab page `handle` names, `None` once it has been closed.
 #[inline]
-pub(crate) fn tabpage(handle: handle_T) -> Option<TabPage> {
+pub(crate) fn tabpage(handle: Handle) -> Option<TabPage> {
     // As [`window`].
     TABPAGES.with(|reg| reg.get(handle)).map(TabPage)
 }
@@ -84,7 +84,7 @@ pub(crate) fn register_window(win: Win) {
 
 /// Forget the window `handle` names, before its memory goes back — or, for
 /// the autocommand window, while it is idle and must not be findable.
-pub(crate) fn forget_window(handle: handle_T) {
+pub(crate) fn forget_window(handle: Handle) {
     WINDOWS.with_mut(|reg| reg.forget(handle));
 }
 
@@ -93,7 +93,7 @@ pub(crate) fn forget_window(handle: handle_T) {
 ///
 /// Called by the allocator once the buffer's number is assigned — `handle`
 /// is that number, which the caller has already written into the buffer.
-pub(crate) fn register_buffer(handle: handle_T, buf: Owned<buf_T>) -> Buf {
+pub(crate) fn register_buffer(handle: Handle, buf: Owned<buf_T>) -> Buf {
     Buf(BUFFERS.with_mut(|reg| reg.register(handle, buf)))
 }
 
@@ -105,18 +105,18 @@ pub(crate) fn register_buffer(handle: handle_T, buf: Owned<buf_T>) -> Buf {
 /// itself; `free_buffer` holds it until the point the `xfree` used to be,
 /// and hands it to [`defer_free_buffer`] when an autocommand is running.
 #[must_use = "dropping the answer is the free; ignoring it leaks the buffer"]
-pub(crate) fn forget_buffer(handle: handle_T) -> Option<Owned<buf_T>> {
+pub(crate) fn forget_buffer(handle: Handle) -> Option<Owned<buf_T>> {
     BUFFERS.with_mut(|reg| reg.forget(handle))
 }
 
 /// [`register_buffer`] for a tab page.
-pub(crate) fn register_tabpage(handle: handle_T, tp: Owned<tabpage_T>) -> TabPage {
+pub(crate) fn register_tabpage(handle: Handle, tp: Owned<tabpage_T>) -> TabPage {
     TabPage(TABPAGES.with_mut(|reg| reg.register(handle, tp)))
 }
 
 /// [`forget_buffer`] for a tab page.
 #[must_use = "dropping the answer is the free; ignoring it leaks the tab page"]
-pub(crate) fn forget_tabpage(handle: handle_T) -> Option<Owned<tabpage_T>> {
+pub(crate) fn forget_tabpage(handle: Handle) -> Option<Owned<tabpage_T>> {
     TABPAGES.with_mut(|reg| reg.forget(handle))
 }
 
@@ -192,7 +192,7 @@ pub(crate) fn free_deferred() {
 // re-entry rule in the type system: you cannot ask "is it still there?" of
 // something whose identity you did not take while it was.
 
-/// A window's identity, taken from a live window: the `handle_T` that names
+/// A window's identity, taken from a live window: the `Handle` that names
 /// it, with the address dropped.
 ///
 /// Answering [`WinId::get`] costs a registry lookup and reads nothing that
@@ -211,15 +211,15 @@ pub(crate) fn free_deferred() {
 /// and its links have to read as "no neighbour" before anyone writes them.
 /// The test at the bottom of this file pins that.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct WinId(pub(super) NonZero<handle_T>);
+pub(crate) struct WinId(pub(super) NonZero<Handle>);
 
 /// A buffer's identity, taken from a live buffer: its number. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct BufId(pub(super) NonZero<handle_T>);
+pub(crate) struct BufId(pub(super) NonZero<Handle>);
 
 /// A tab page's identity, taken from a live tab page. [`WinId`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct TabId(pub(super) NonZero<handle_T>);
+pub(crate) struct TabId(pub(super) NonZero<Handle>);
 
 impl WinId {
     /// The window again, `None` once it has been freed.
@@ -252,7 +252,7 @@ impl WinId {
 
     /// The bare handle, for the API and RPC edges that speak in numbers.
     #[inline(always)]
-    pub(crate) fn handle(self) -> handle_T {
+    pub(crate) fn handle(self) -> Handle {
         self.0.get()
     }
 }
@@ -296,8 +296,8 @@ mod tests {
     /// would say so, but this fails first and says why.
     #[test]
     fn an_absent_id_is_the_zero_word() {
-        assert_eq!(size_of::<Option<WinId>>(), size_of::<handle_T>());
-        assert_eq!(size_of::<Option<BufId>>(), size_of::<handle_T>());
-        assert_eq!(size_of::<Option<TabId>>(), size_of::<handle_T>());
+        assert_eq!(size_of::<Option<WinId>>(), size_of::<Handle>());
+        assert_eq!(size_of::<Option<BufId>>(), size_of::<Handle>());
+        assert_eq!(size_of::<Option<TabId>>(), size_of::<Handle>());
     }
 }

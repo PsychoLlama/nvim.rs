@@ -13,7 +13,7 @@
 
 use crate::types::{
     DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, MTKey, MTPair, MTPos,
-    schar_T, uint16_t, uint32_t, uint64_t,
+    ScreenChar, uint16_t, uint32_t, uint64_t,
 };
 
 /// Minimum fill of a node. The maximum branch is twice this.
@@ -99,7 +99,7 @@ pub const DECOR_HIGHLIGHT_INLINE_INIT: DecorHighlightInline = DecorHighlightInli
     flags: 0,
     priority: DECOR_PRIORITY_BASE as DecorPriority,
     hl_id: 0,
-    conceal_char: 0 as schar_T,
+    conceal_char: 0 as ScreenChar,
 };
 
 /// What `marktree_itr_current` answers for an exhausted iterator, and what a

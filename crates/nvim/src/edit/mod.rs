@@ -171,8 +171,8 @@ use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
-    MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VarNumber, VimState,
-    Vv, aco_save_T, int32_t, int64_t, pos_T, ptrdiff_t, schar_T, size_t, uint8_t,
+    MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, ScreenChar, StrCharInfo, String_0, VarNumber,
+    VimState, Vv, aco_save_T, int32_t, int64_t, pos_T, ptrdiff_t, size_t, uint8_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -311,7 +311,7 @@ pub(crate) enum PutChar {
     Set,
 }
 static pc_status: GlobalCell<PutChar> = GlobalCell::new(PutChar::Unset);
-static pc_schar: GlobalCell<schar_T> = GlobalCell::new(0);
+static pc_schar: GlobalCell<ScreenChar> = GlobalCell::new(0);
 static pc_attr: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static pc_row: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static pc_col: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

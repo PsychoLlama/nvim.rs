@@ -12,7 +12,7 @@ use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-/// The longest a `schar_T` renders to, matching upstream's `MAX_SCHAR_SIZE`.
+/// The longest a `ScreenChar` renders to, matching upstream's `MAX_SCHAR_SIZE`.
 const MAX_SCHAR_SIZE: usize = 32;
 
 /// Show one line of buffer text, as `:print` and `:list` do.
@@ -71,14 +71,14 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
     // all but the last, `extra_last` for the last one, or, when neither is
     // set, one byte at a time out of `extra_text`.
     let mut extra_left = 0;
-    let mut extra_fill: schar_T = 0;
-    let mut extra_last: schar_T = 0;
+    let mut extra_fill: ScreenChar = 0;
+    let mut extra_last: ScreenChar = 0;
     let mut extra_text: *const c_char = ptr::null();
     // The `<xx>` rendering `extra_text` points into while it is drawn.
     let mut escaped;
 
     while !got_int.get() {
-        let sc: schar_T;
+        let sc: ScreenChar;
         if extra_left > 0 {
             extra_left -= 1;
             sc = if extra_left == 0 && extra_last != 0 {
@@ -89,7 +89,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                 debug_assert!(!extra_text.is_null());
                 let byte = unsafe { *extra_text as u8 };
                 extra_text = unsafe { extra_text.add(1) };
-                byte as schar_T
+                byte as ScreenChar
             };
         } else {
             let len = unsafe { utfc_ptr2len(s) };
@@ -157,8 +157,8 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                     extra_last = tab3;
                     hl_id = HLF_0;
                 } else {
-                    sc = b' ' as schar_T;
-                    extra_fill = b' ' as schar_T;
+                    sc = b' ' as ScreenChar;
+                    extra_fill = b' ' as ScreenChar;
                 }
             } else if c == NUL && list && lcs.eol != 0 {
                 // One more turn of the loop, which reads the NUL out of
@@ -172,7 +172,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                 // An unprintable byte, shown as `<xx>`.
                 extra_left = unsafe { byte2cells(c) } - 1;
                 escaped = unsafe { transchar_byte_buf(ptr::null(), c) };
-                sc = escaped[0] as schar_T;
+                sc = escaped[0] as ScreenChar;
                 extra_text = unsafe { escaped.as_ptr().add(1) };
                 // Its own highlight, so `<ff>` can be told apart from the
                 // same four characters typed literally.
@@ -195,10 +195,10 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                     lcs.space
                 } else {
                     hl_id = 0;
-                    b' ' as schar_T
+                    b' ' as ScreenChar
                 };
             } else {
-                sc = c as schar_T;
+                sc = c as ScreenChar;
             }
         }
 
@@ -211,7 +211,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
 }
 
 /// Put one cell on the message area.
-unsafe fn emit(sc: schar_T, hl_id: c_int, col: &mut c_int) {
+unsafe fn emit(sc: ScreenChar, hl_id: c_int, col: &mut c_int) {
     // TODO(bfredl): this is such baloney. need msg_put_schar
     let mut buf = [0 as c_char; MAX_SCHAR_SIZE];
     unsafe { schar_get(buf.as_mut_ptr(), sc) };
@@ -220,7 +220,7 @@ unsafe fn emit(sc: schar_T, hl_id: c_int, col: &mut c_int) {
 }
 
 /// One character of a cycling `'listchars'` sequence, wrapping at its end.
-unsafe fn cycle(seq: *const schar_T, at: &mut c_int) -> schar_T {
+unsafe fn cycle(seq: *const ScreenChar, at: &mut c_int) -> ScreenChar {
     let sc = unsafe { *seq.offset(*at as isize) };
     *at += 1;
     if unsafe { *seq.offset(*at as isize) } == 0 {

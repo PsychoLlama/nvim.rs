@@ -202,7 +202,7 @@ int selection_query(VTermSelectionMask mask, void *user)
   return 1;
 }
 
-static void print_schar(FILE *f, schar_T schar)
+static void print_schar(FILE *f, ScreenChar schar)
 {
   char buf[MAX_SCHAR_SIZE];
   schar_get(buf, schar);

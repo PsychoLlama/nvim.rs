@@ -166,14 +166,16 @@ pub(crate) unsafe fn edit_putchar(c: c_int, highlight: bool) {
     unsafe { grid_line_start(win.w_grid, pc_row.get()) };
     if win.w_onebuf_opt.wo_rl != 0 {
         pc_col.set(win.w_view_width - 1 - win.w_wcol);
-        if unsafe { grid_line_getchar(pc_col.get(), ::core::ptr::null_mut()) } == NUL as schar_T {
-            grid_line_put_schar(pc_col.get() - 1, ' ' as schar_T, attr);
+        if unsafe { grid_line_getchar(pc_col.get(), ::core::ptr::null_mut()) } == NUL as ScreenChar
+        {
+            grid_line_put_schar(pc_col.get() - 1, ' ' as ScreenChar, attr);
             win.w_wcol -= 1;
             pc_status.set(PutChar::Right);
         }
     } else {
         pc_col.set(win.w_wcol);
-        if unsafe { grid_line_getchar(pc_col.get() + 1, ::core::ptr::null_mut()) } == NUL as schar_T
+        if unsafe { grid_line_getchar(pc_col.get() + 1, ::core::ptr::null_mut()) }
+            == NUL as ScreenChar
         {
             // pc_col is the left half of a double-width character.
             pc_status.set(PutChar::Left);

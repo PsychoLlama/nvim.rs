@@ -73,10 +73,10 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BlockNr, CmdModFlags, ColNr, Failed, FileInfo, FileOffset, LineNr, NUL, OptVal, String_0,
-    Timestamp, VarNumber, bhdr_T, buf_T, dict_T, file_comparison, flush_buffers_T, infoptr_T,
-    int16_t, int64_t, list_T, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t,
-    uint64_t, uv_uid_t,
+    BlockNr, CmdModFlags, ColNr, Failed, FileInfo, FileOffset, FlushBuffers, LineNr, NUL, OptVal,
+    String_0, Timestamp, VarNumber, bhdr_T, buf_T, dict_T, file_comparison, infoptr_T, int16_t,
+    int64_t, list_T, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
+    uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -101,7 +101,7 @@ mod lines;
 pub use self::lines::*;
 pub const VIM_WARNING: ::core::ffi::c_uint = 2;
 pub const READ_NEW: ::core::ffi::c_uint = 1;
-pub const FLUSH_TYPEAHEAD: flush_buffers_T = 1;
+pub const FLUSH_TYPEAHEAD: FlushBuffers = 1;
 pub const MFS_ZERO: ::core::ffi::c_uint = 8;
 pub const MFS_FLUSH: ::core::ffi::c_uint = 4;
 pub const MFS_STOP: ::core::ffi::c_uint = 2;
@@ -160,17 +160,17 @@ pub const B0_MAGIC_INT: ::core::ffi::c_uint = 539042339;
 pub const B0_MAGIC_LONG: ::core::ffi::c_uint = 808530483;
 pub const BLOCK0_ID1: ::core::ffi::c_uint = 48;
 pub const BLOCK0_ID0: ::core::ffi::c_uint = 98;
-pub const SEA_CHOICE_NONE: sea_choice_T = 0;
-pub type sea_choice_T = ::core::ffi::c_uint;
-pub const SEA_CHOICE_ABORT: sea_choice_T = 6;
-pub const SEA_CHOICE_QUIT: sea_choice_T = 5;
-pub const SEA_CHOICE_DELETE: sea_choice_T = 4;
-pub const SEA_CHOICE_RECOVER: sea_choice_T = 3;
-pub const SEA_CHOICE_EDIT: sea_choice_T = 2;
-pub const SEA_CHOICE_READONLY: sea_choice_T = 1;
-pub type upd_block0_T = ::core::ffi::c_uint;
-pub const UB_SAME_DIR: upd_block0_T = 1;
-pub const UB_FNAME: upd_block0_T = 0;
+pub const SEA_CHOICE_NONE: SwapExistsChoice = 0;
+pub type SwapExistsChoice = ::core::ffi::c_uint;
+pub const SEA_CHOICE_ABORT: SwapExistsChoice = 6;
+pub const SEA_CHOICE_QUIT: SwapExistsChoice = 5;
+pub const SEA_CHOICE_DELETE: SwapExistsChoice = 4;
+pub const SEA_CHOICE_RECOVER: SwapExistsChoice = 3;
+pub const SEA_CHOICE_EDIT: SwapExistsChoice = 2;
+pub const SEA_CHOICE_READONLY: SwapExistsChoice = 1;
+pub type UpdBlock0 = ::core::ffi::c_uint;
+pub const UB_SAME_DIR: UpdBlock0 = 1;
+pub const UB_FNAME: UpdBlock0 = 0;
 /// `action` for [`ml_find_line`]: only release the locked block.
 pub const ML_FLUSH: ::core::ffi::c_int = 2;
 /// `action` for [`ml_find_line`]: a line is about to be deleted here.

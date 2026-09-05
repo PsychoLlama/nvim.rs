@@ -47,8 +47,8 @@ use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv, exarg_T,
-    handle_T, kListLenMayKnow, list_T, ptrdiff_t, size_t, ssize_t,
+    Handle, IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv,
+    exarg_T, kListLenMayKnow, list_T, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -169,14 +169,14 @@ pub(crate) unsafe fn read_stdin() {
             semsg!("Failed to create buffer for stdin");
             return;
         }
-        let initial_buf_handle: handle_T = cur_buf().handle;
+        let initial_buf_handle: Handle = cur_buf().handle;
         unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
         let last = MAXLNUM as c_int as LineNr;
         let null_ea = ptr::null_mut::<exarg_T>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
         let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
-        let stdin_buf_handle: handle_T = unsafe { (*stdin_buf).handle };
+        let stdin_buf_handle: Handle = unsafe { (*stdin_buf).handle };
         let stdin_buf_empty = unsafe { buf_is_empty(curbuf.get()) };
 
         // Done as commands rather than calls so the autocommands and the

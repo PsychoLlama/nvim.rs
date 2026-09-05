@@ -64,7 +64,7 @@ use core::hash::{BuildHasherDefault, Hash, Hasher};
 use std::collections::{HashMap, HashSet};
 
 use crate::allocator::Owned;
-use crate::types::handle_T;
+use crate::types::Handle;
 
 /// A `HashMap` on [`IdHasher`]: `const`-constructible, so one can be a
 /// `static` or a field with a `const` initializer, which
@@ -225,16 +225,16 @@ struct HandleMap<V> {
     /// `slots[h - base]` is what handle `h` names, `None` for a hole.
     slots: Vec<Option<V>>,
     /// The handle `slots[0]` stands for. Meaningless while `slots` is empty.
-    base: handle_T,
+    base: Handle,
 }
 
 /// An index into a [`HandleMap`]'s slots as the handle difference it is.
 ///
-/// The vector is indexed by `handle - base`, both of which are `handle_T`,
+/// The vector is indexed by `handle - base`, both of which are `Handle`,
 /// so its length can never exceed the handle range and the conversion back
 /// is total.
-fn offset(index: usize) -> handle_T {
-    handle_T::try_from(index).expect("a handle-indexed vector is handle-sized")
+fn offset(index: usize) -> Handle {
+    Handle::try_from(index).expect("a handle-indexed vector is handle-sized")
 }
 
 impl<V> HandleMap<V> {
@@ -251,7 +251,7 @@ impl<V> HandleMap<V> {
     /// both ends and a lookup is one subtract and one load — which is the
     /// whole point of this type.
     #[inline]
-    fn at(&self, handle: handle_T) -> usize {
+    fn at(&self, handle: Handle) -> usize {
         handle.wrapping_sub(self.base).cast_unsigned() as usize
     }
 
@@ -260,12 +260,12 @@ impl<V> HandleMap<V> {
     /// Every step of every window, buffer and tab page walk lands here, so
     /// it is `inline` for the profile that is not `codegen-units = 1`.
     #[inline]
-    fn get(&self, handle: handle_T) -> Option<&V> {
+    fn get(&self, handle: Handle) -> Option<&V> {
         self.slots.get(self.at(handle))?.as_ref()
     }
 
     /// File `value` under `handle`, replacing whatever was there.
-    fn insert(&mut self, handle: handle_T, value: V) {
+    fn insert(&mut self, handle: Handle, value: V) {
         if self.slots.is_empty() {
             self.base = handle;
         } else if handle < self.base {
@@ -292,7 +292,7 @@ impl<V> HandleMap<V> {
     }
 
     /// Take `handle` out, if it was in.
-    fn remove(&mut self, handle: handle_T) -> Option<V> {
+    fn remove(&mut self, handle: Handle) -> Option<V> {
         let i = self.at(handle);
         let value = self.slots.get_mut(i)?.take();
         // Give the front back once it is all holes, so a session that churns
@@ -355,19 +355,19 @@ impl<T> HandleRegistry<T> {
     /// The object `handle` names, or `None` when nothing is registered
     /// under it — which is what the khash miss answered with a null.
     #[inline]
-    pub(crate) fn get(&self, handle: handle_T) -> Option<*mut T> {
+    pub(crate) fn get(&self, handle: Handle) -> Option<*mut T> {
         self.live.get(handle).copied()
     }
 
     /// Record `object` as the live object named by `handle`.
-    pub(crate) fn register(&mut self, handle: handle_T, object: *mut T) {
+    pub(crate) fn register(&mut self, handle: Handle, object: *mut T) {
         self.live.insert(handle, object);
     }
 
     /// Drop `handle`, whether or not it was registered — `map_del` on an
     /// absent key is a no-op upstream too, and the reused autocommand
     /// window relies on that.
-    pub(crate) fn forget(&mut self, handle: handle_T) {
+    pub(crate) fn forget(&mut self, handle: Handle) {
         self.live.remove(handle);
     }
 }
@@ -410,13 +410,13 @@ impl<T> OwnedRegistry<T> {
     /// The address of the object `handle` names, or `None` when nothing is
     /// registered under it — the khash miss, which answered a null.
     #[inline]
-    pub(crate) fn get(&self, handle: handle_T) -> Option<*mut T> {
+    pub(crate) fn get(&self, handle: Handle) -> Option<*mut T> {
         Some(self.live.get(handle)?.address())
     }
 
     /// Take ownership of `object` and file it under `handle`, answering its
     /// address for the caller to work from.
-    pub(crate) fn register(&mut self, handle: handle_T, object: Owned<T>) -> *mut T {
+    pub(crate) fn register(&mut self, handle: Handle, object: Owned<T>) -> *mut T {
         let address = object.address();
         self.live.insert(handle, object);
         address
@@ -428,7 +428,7 @@ impl<T> OwnedRegistry<T> {
     /// no-op upstream too. The object is unfindable from here on, but it is
     /// not yet freed: the caller decides when to drop what it was given, and
     /// the free paths do it where the `xfree` used to be.
-    pub(crate) fn forget(&mut self, handle: handle_T) -> Option<Owned<T>> {
+    pub(crate) fn forget(&mut self, handle: Handle) -> Option<Owned<T>> {
         self.live.remove(handle)
     }
 }

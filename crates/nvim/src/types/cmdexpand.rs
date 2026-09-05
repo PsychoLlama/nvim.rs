@@ -266,7 +266,7 @@ pub struct expand_T {
     pub xp_pattern: *mut ::core::ffi::c_char,
     pub xp_context: ExpandContext,
     pub xp_pattern_len: size_t,
-    pub xp_prefix: xp_prefix_T,
+    pub xp_prefix: XpPrefix,
     pub xp_arg: *mut ::core::ffi::c_char,
     pub xp_luaref: LuaRef,
     pub xp_script_ctx: sctx_T,
@@ -282,4 +282,4 @@ pub struct expand_T {
     pub xp_search_dir: Direction,
     pub xp_pre_incsearch_pos: pos_T,
 }
-pub type xp_prefix_T = ::core::ffi::c_uint;
+pub type XpPrefix = ::core::ffi::c_uint;

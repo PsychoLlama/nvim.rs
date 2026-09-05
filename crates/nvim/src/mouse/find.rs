@@ -24,7 +24,7 @@ use crate::grid::get_win_by_grid_handle;
 use crate::main::{msg_grid, msg_grid_pos, topframe};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::popupmenu::pum_grid_ref;
-use crate::types::{CharsizeArg, LineNr, handle_T};
+use crate::types::{CharsizeArg, Handle, LineNr};
 use crate::ui_compositor::ui_comp_mouse_focus;
 use crate::winlayer::{Frame, first_window, windows};
 
@@ -99,7 +99,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
         pos.grid = DEFAULT_GRID_HANDLE;
     } else if pos.grid > 1 {
         // SAFETY: the handle table answers a live window or null.
-        let wp = unsafe { get_win_by_grid_handle(pos.grid as handle_T) };
+        let wp = unsafe { get_win_by_grid_handle(pos.grid as Handle) };
         if wp.is_null() {
             return None;
         }

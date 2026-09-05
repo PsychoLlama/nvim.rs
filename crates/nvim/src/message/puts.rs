@@ -214,10 +214,10 @@ pub(crate) unsafe fn msg_puts_display(
     did_wait_return.set(false);
 
     if ui_has(kUIMessages) {
-        if attr as sattr_T != msg_ext_last_attr.get() {
+        if attr as ScreenAttr != msg_ext_last_attr.get() {
             // Colour changed: end the chunk and start another.
             unsafe { msg_ext_emit_chunk() };
-            msg_ext_last_attr.set(attr as sattr_T);
+            msg_ext_last_attr.set(attr as ScreenAttr);
             msg_ext_last_hl_id.set(hl_id);
         }
         let len = if maxlen < 0 {

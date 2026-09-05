@@ -26,7 +26,7 @@ use crate::keycodes::{
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
     Array, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, SpellAddType,
-    VimState, cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, smt_T, uint16_t,
+    SpellMoveType, VimState, cmdarg_T, getf_values, int16_t, oparg_T, pos_T, size_t, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
@@ -107,8 +107,8 @@ pub(crate) type nv_func_T = Option<unsafe fn(*mut cmdarg_T)>;
 pub(crate) const FM_FORWARD: c_uint = 2;
 pub(crate) const SPELL_ADD_BAD: SpellAddType = 1;
 pub(crate) const SPELL_ADD_GOOD: SpellAddType = 0;
-pub(crate) const SMT_RARE: smt_T = 2;
-pub(crate) const SMT_BAD: smt_T = 1;
+pub(crate) const SMT_RARE: SpellMoveType = 2;
+pub(crate) const SMT_BAD: SpellMoveType = 1;
 pub(crate) const FM_BACKWARD: c_uint = 1;
 pub(crate) const ACTION_GOTO: c_uint = 2;
 pub(crate) const ACTION_SHOW: c_uint = 1;

@@ -142,7 +142,7 @@ typedef enum {
 
 // nvim/grid.h (little-endian arm of the upstream macro; the port only
 // targets little-endian).
-#define schar_from_ascii(x) ((schar_T)(x))
+#define schar_from_ascii(x) ((ScreenChar)(x))
 
 // The `#[inline]` twins from crate::mbyte, which the crate does not export
 // (their exported dependencies -- utf8len_tab, utf_ptr2char_info_impl -- are

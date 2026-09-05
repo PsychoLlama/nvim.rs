@@ -61,8 +61,8 @@ use crate::strings::vim_strchr;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, GraphemeState, IOSIZE, MB_MAXCHAR,
-    NUL, StrCharInfo, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, expand_T, iconv_t, int8_t,
-    int32_t, list_T, ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint64_t, uintptr_t,
+    NUL, ScreenChar, StrCharInfo, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, expand_T, iconv_t,
+    int8_t, int32_t, list_T, ptrdiff_t, size_t, ssize_t, typval_T, uint8_t, uint64_t, uintptr_t,
     utf8proc_int32_t, vimconv_T, win_T,
 };
 use crate::utf8proc::{
@@ -103,7 +103,7 @@ pub const LC_CTYPE: c_int = 0;
 pub const SIZE_MAX: ::core::ffi::c_ulong = usize::MAX as ::core::ffi::c_ulong;
 /// `INT_MAX`, the "no limit" length `utf_cp_bounds` passes.
 pub const INT_MAX: c_int = c_int::MAX;
-/// How many bytes a `schar_T` can hold, NUL included.
+/// How many bytes a `ScreenChar` can hold, NUL included.
 pub const MAX_SCHAR_SIZE: c_int = 32;
 /// The second byte of an escaped literal `K_SPECIAL`; see [`mb_unescape`].
 pub const KS_SPECIAL: c_int = 254;

@@ -54,7 +54,7 @@ use crate::spell::{
     e_format, first_lang, init_syl_tab, open_spellbuf, parse_spelllang, slang_alloc, slang_clear,
     slang_clear_sug, slang_free,
 };
-use crate::types::{ColNr, LineNr, NUL, OptInt, idx_T, langp_T, slang_T, time_t, uint8_t};
+use crate::types::{ColNr, LineNr, NUL, OptInt, SpellIdx, langp_T, slang_T, time_t, uint8_t};
 use ::libc::{strcpy, strrchr};
 
 use super::sections::{
@@ -530,7 +530,7 @@ fn tree_count_words(tree: &mut WordTree) {
     }
     let mut arridx = [0usize; MAXWLEN + 1];
     let mut curi = [0usize; MAXWLEN + 1];
-    let mut wordcount = [0 as idx_T; MAXWLEN + 1];
+    let mut wordcount = [0 as SpellIdx; MAXWLEN + 1];
 
     let mut depth: usize = 0;
     curi[0] = 1;
@@ -604,7 +604,7 @@ fn spell_read_tree(
     // the tree is read, so every index a corrupt file names is checked by
     // Rust rather than by review.
     let mut byts = vec![0u8; len_usize].into_boxed_slice();
-    let mut idxs = vec![0 as idx_T; len_usize].into_boxed_slice();
+    let mut idxs = vec![0 as SpellIdx; len_usize].into_boxed_slice();
     let idx = read_tree_node(spl, &mut byts, &mut idxs, 0, prefixtree, prefixcnt, 0)?;
     // Every byte of the array has to be accounted for; anything else
     // means the node lengths and the tree length disagree.
@@ -631,12 +631,12 @@ fn spell_read_tree(
 fn read_tree_node(
     spl: &mut Spl,
     byts: &mut [uint8_t],
-    idxs: &mut [idx_T],
-    startidx: idx_T,
+    idxs: &mut [SpellIdx],
+    startidx: SpellIdx,
     prefixtree: bool,
     maxprefcondnr: c_int,
     depth: c_int,
-) -> SplResult<idx_T> {
+) -> SplResult<SpellIdx> {
     let maxidx = byts.len() as c_int;
     let mut idx = startidx;
     if depth > MAXWLEN as c_int {
@@ -690,7 +690,7 @@ fn read_tree_node(
                         c += spl.getc().map_or(-1, c_int::from) << 24;
                     }
                 }
-                idxs[idx as usize] = c as idx_T;
+                idxs[idx as usize] = c as SpellIdx;
                 c = 0;
             } else {
                 // A reference to a sub-tree written earlier.
@@ -698,7 +698,7 @@ fn read_tree_node(
                 if n < 0 || n >= maxidx {
                     return Err(SpellReadError::Format);
                 }
-                idxs[idx as usize] = n.wrapping_add(SHARED_MASK) as idx_T;
+                idxs[idx as usize] = n.wrapping_add(SHARED_MASK) as SpellIdx;
                 c = spl.getc().map_or(-1, c_int::from);
             }
         }

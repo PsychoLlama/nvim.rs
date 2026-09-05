@@ -30,8 +30,8 @@ use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
-    ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, exarg_T, handle_T, int64_t,
-    lpos_T, pos_T, size_t,
+    ColNr, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, exarg_T, int64_t, lpos_T,
+    pos_T, size_t,
 };
 use crate::winlayer::Buf;
 use ::libc::strcpy;
@@ -259,7 +259,7 @@ pub(crate) unsafe fn show_sub(
     preview_lines: &PreviewLines,
     hl_id: c_int,
     cmdpreview_ns: c_int,
-    cmdpreview_bufnr: handle_T,
+    cmdpreview_bufnr: Handle,
 ) -> c_int {
     // SAFETY: 'shortmess' is a live string option value.
     let save_shm: CString = unsafe { CStr::from_ptr(p_shm.get()) }.into();
@@ -375,7 +375,7 @@ pub(crate) unsafe fn show_sub(
 /// Main thread; `eap` must be the live Ex-command argument.
 pub unsafe fn ex_substitute(eap: *mut exarg_T) {
     // SAFETY: caller's contract.
-    unsafe { do_sub(&mut *eap, profile_zero(), 0 as c_int, 0 as handle_T) };
+    unsafe { do_sub(&mut *eap, profile_zero(), 0 as c_int, 0 as Handle) };
 }
 
 /// The `:substitute` command's `'inccommand'` preview callback.
@@ -385,7 +385,7 @@ pub unsafe fn ex_substitute(eap: *mut exarg_T) {
 pub unsafe fn ex_substitute_preview(
     eap: *mut exarg_T,
     cmdpreview_ns: c_int,
-    cmdpreview_bufnr: handle_T,
+    cmdpreview_bufnr: Handle,
 ) -> c_int {
     // SAFETY: caller's contract.
     let eap = unsafe { &mut *eap };

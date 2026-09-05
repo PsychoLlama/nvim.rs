@@ -49,7 +49,9 @@ use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
-use crate::types::{ColNr, LineNr, NUL, ShmFlag, hlf_T, pos_T, size_t, smt_T, uint8_t, win_T};
+use crate::types::{
+    ColNr, Hlf, LineNr, NUL, ShmFlag, SpellMoveType, pos_T, size_t, uint8_t, win_T,
+};
 use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
@@ -100,9 +102,9 @@ unsafe fn can_syn_spell(wp: *mut win_T, lnum: LineNr, col: c_int) -> bool {
 pub unsafe fn spell_move_to(
     wp: *mut win_T,
     dir: c_int,
-    behaviour: smt_T,
+    behaviour: SpellMoveType,
     curline: bool,
-    attrp: *mut hlf_T,
+    attrp: *mut Hlf,
 ) -> size_t {
     if unsafe { no_spell_checking(wp) } {
         return 0;
@@ -110,7 +112,7 @@ pub unsafe fn spell_move_to(
 
     let mut found_pos: pos_T = unsafe { mem::zeroed() };
     let mut found_len: size_t = 0;
-    let mut attr: hlf_T = HLF_COUNT;
+    let mut attr: Hlf = HLF_COUNT;
     let has_syntax = unsafe { syntax_present(wp) };
     let mut buf: *mut c_char = core::ptr::null_mut();
     let mut buflen: size_t = 0;

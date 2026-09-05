@@ -23,7 +23,7 @@ use crate::main::curbuf;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{
-    ColNr, Error, LineNr, buf_T, handle_T, lua_State, luaL_Reg, regmatch_T, regprog_T,
+    ColNr, Error, Handle, LineNr, buf_T, lua_State, luaL_Reg, regmatch_T, regprog_T,
 };
 
 /// The registry key the metatable is stored under, and the type name
@@ -114,7 +114,7 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
             return luaL_error(lstate, c"not enough args".as_ptr());
         }
 
-        let bufnr = luaL_checkinteger(lstate, 2) as handle_T;
+        let bufnr = luaL_checkinteger(lstate, 2) as Handle;
         let rownr = luaL_checkinteger(lstate, 3) as LineNr;
         let mut start: c_int = 0;
         let mut end: c_int = -1;

@@ -47,8 +47,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, LineNr, exarg_T, file_comparison, langp_T, oparg_T, pos_T, searchit_arg_T, size_t,
-    slang_T, smt_T, spelltab_T, uint8_t, win_T,
+    ColNr, LineNr, SpellMoveType, exarg_T, file_comparison, langp_T, oparg_T, pos_T,
+    searchit_arg_T, size_t, slang_T, spelltab_T, uint8_t, win_T,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy};
@@ -155,9 +155,9 @@ pub const REGION_ALL: c_int = 255;
 /// The saturation point of a `COMMON` word count.
 pub const MAXWORDCOUNT: c_uint = 65535;
 
-pub const SMT_RARE: smt_T = 2;
-pub const SMT_BAD: smt_T = 1;
-pub const SMT_ALL: smt_T = 0;
+pub const SMT_RARE: SpellMoveType = 2;
+pub const SMT_BAD: SpellMoveType = 1;
+pub const SMT_ALL: SpellMoveType = 0;
 
 /// How badly, or not, a word is spelled. Lower is worse, so that a lookup
 /// can keep the best answer by comparison.

@@ -70,9 +70,9 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArgt, LineGetter,
-    LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues, dobuf_action_values,
-    dobuf_start_values, exarg_T, except_T, garray_T, handle_T, uint8_t, uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArgt, Handle,
+    LineGetter, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues,
+    dobuf_action_values, dobuf_start_values, exarg_T, except_T, garray_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -182,7 +182,7 @@ pub const CSTP_ERROR: c_uint = 1;
 /// outside this crate calls the table.
 pub type ex_func_T = Option<unsafe fn(*mut exarg_T)>;
 /// An 'inccommand' preview callback, likewise.
-pub type ex_preview_func_T = Option<unsafe fn(*mut exarg_T, c_int, handle_T) -> c_int>;
+pub type ex_preview_func_T = Option<unsafe fn(*mut exarg_T, c_int, Handle) -> c_int>;
 pub struct CommandDefinition {
     pub cmd_name: *mut c_char,
     pub cmd_func: ex_func_T,

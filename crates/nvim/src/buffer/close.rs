@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, LineNr, Refcount, Timestamp, WinInfo, dictitem_T, fmark_T, fmarkv_T, garray_T,
-    handle_T, hashtab_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
+    Callback, ColNr, Handle, LineNr, Refcount, Timestamp, WinInfo, dictitem_T, fmark_T, fmarkv_T,
+    garray_T, hashtab_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -264,7 +264,7 @@ fn forget_autocmds(buf: Buf) {
 /// promise that everything in it is live. Dropping what this answers is the
 /// free; [`free_buffer`] holds it until the point the `xfree` used to be.
 #[must_use = "dropping the answer is the free"]
-fn forget_handle(fnum: handle_T) -> Owned<buf_T> {
+fn forget_handle(fnum: Handle) -> Owned<buf_T> {
     // Every buffer reaching a free path was registered when it was given its
     // number, and a number is given exactly once.
     forget_buffer(fnum).expect("a buffer being freed is a registered buffer")

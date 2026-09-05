@@ -57,16 +57,16 @@ pub struct MsgpackRpcRequestHandler {
     pub fast: bool,
     pub ret_alloc: bool,
 }
-pub type NS = handle_T;
+pub type NS = Handle;
 pub type OptInt = int64_t;
 pub type Terminal = terminal;
 pub type buf_T = file_buffer;
 pub type Float = ::core::ffi::c_double;
-pub type handle_T = ::core::ffi::c_int;
+pub type Handle = ::core::ffi::c_int;
 pub type ProfTime = uint64_t;
 pub type regprog_T = regprog;
-pub type sattr_T = int32_t;
-pub type schar_T = uint32_t;
+pub type ScreenAttr = int32_t;
+pub type ScreenChar = uint32_t;
 pub type synstate_T = syn_state;
-pub type vim_acl_T = *mut ::core::ffi::c_void;
+pub type VimAcl = *mut ::core::ffi::c_void;
 pub type win_T = window_S;

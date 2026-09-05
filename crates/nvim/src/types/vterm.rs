@@ -26,7 +26,7 @@ use super::*;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ScreenCell {
-    pub schar: schar_T,
+    pub schar: ScreenChar,
     pub pen: ScreenPen,
 }
 #[derive(Copy, Clone)]
@@ -100,7 +100,7 @@ pub struct VTermColor_rgb {
 pub type VTermDamageSize = ::core::ffi::c_uint;
 #[repr(C)]
 pub struct VTermGlyphInfo {
-    pub schar: schar_T,
+    pub schar: ScreenChar,
     pub width: ::core::ffi::c_int,
     pub protected_cell_dwl_dhl: [u8; 1],
     pub _pad: [u8; 3],
@@ -279,7 +279,7 @@ pub struct VTermScreenCallbacks {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct VTermScreenCell {
-    pub schar: schar_T,
+    pub schar: ScreenChar,
     pub width: ::core::ffi::c_char,
     pub attrs: VTermScreenCellAttrs,
     pub fg: VTermColor,

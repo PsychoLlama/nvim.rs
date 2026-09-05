@@ -481,7 +481,7 @@ pub unsafe fn clear_virtlines(lines: *mut VirtLines) {
 }
 
 /// Replaces any sign or conceal character that the glyph cache no longer
-/// holds — called when the cache is rebuilt, since a `schar_T` is an index
+/// holds — called when the cache is rebuilt, since a `ScreenChar` is an index
 /// into it once the character is longer than four bytes.
 ///
 /// # Safety

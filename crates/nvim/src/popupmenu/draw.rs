@@ -133,14 +133,14 @@ unsafe fn pum_user_attr_combine(idx: c_int, item_type: c_int, attr: c_int) -> c_
 /// `text` must be NUL-terminated.
 unsafe fn pum_compute_text_attrs(
     text: *mut c_char,
-    hlf: hlf_T,
+    hlf: Hlf,
     user_hlattr: c_int,
 ) -> Option<Vec<c_int>> {
     // SAFETY: `text` is the caller's NUL-terminated string; `ins_compl_leader`
     // and `cmdline_compl_pattern` answer editor-owned strings.
     let win = curwin.get();
     if unsafe { *text } == 0
-        || (hlf != HLF_PSI as hlf_T && hlf != HLF_PNI as hlf_T)
+        || (hlf != HLF_PSI as Hlf && hlf != HLF_PNI as Hlf)
         || (unsafe { win_hl_attr(win, HLF_PMSI) } == unsafe { win_hl_attr(win, HLF_PSI) }
             && unsafe { win_hl_attr(win, HLF_PMNI) } == unsafe { win_hl_attr(win, HLF_PNI) })
     {
@@ -175,7 +175,7 @@ unsafe fn pum_compute_text_attrs(
     // The attribute a matched cell gets. Upstream rebuilds it from three
     // lookups per matched *character*; it cannot change during the walk,
     // so it is built at most once, and not at all when nothing matches.
-    let is_select = hlf == HLF_PSI as hlf_T;
+    let is_select = hlf == HLF_PSI as Hlf;
     let mut matched: Option<c_int> = None;
     let mut matched_attr = |win| {
         *matched.get_or_insert_with(|| {
@@ -269,7 +269,7 @@ struct PumBorder {
     width: c_int,
     /// Glyph and attribute the scrollbar trough borrows from the border's
     /// right edge. Only set when there is a scrollbar to draw.
-    scrollbar: Option<(schar_T, c_int)>,
+    scrollbar: Option<(ScreenChar, c_int)>,
 }
 
 /// Read `'pumborder'` into `config`.
@@ -338,12 +338,12 @@ struct RowStyle {
     /// `'rightleft'`).
     extra_space: bool,
     /// The `'fillchars'` `trunc`/`truncrl` glyph, 0 when unset.
-    fcs_trunc: schar_T,
+    fcs_trunc: ScreenChar,
     /// Scrollbar trough and thumb attributes.
     attr_scroll: c_int,
     attr_thumb: c_int,
     /// Trough glyph and attribute borrowed from a box border, if there is one.
-    border_scroll: Option<(schar_T, c_int)>,
+    border_scroll: Option<(ScreenChar, c_int)>,
     /// The thumb's rows, as a start and a length.
     thumb_pos: c_int,
     thumb_height: c_int,
@@ -354,7 +354,7 @@ struct PumRow {
     /// The item this row shows.
     idx: c_int,
     /// Highlight groups for this row's three columns, selected or not.
-    hlfs: [hlf_T; 3],
+    hlfs: [Hlf; 3],
     /// Grid column the next glyph goes at.
     grid_col: c_int,
     /// Cells of `pum_width` used so far — what the width limit is against.
@@ -559,9 +559,9 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
     let mut row = PumRow {
         idx,
         hlfs: if selected {
-            [HLF_PSI as hlf_T, HLF_PSK as hlf_T, HLF_PSX as hlf_T]
+            [HLF_PSI as Hlf, HLF_PSK as Hlf, HLF_PSX as Hlf]
         } else {
-            [HLF_PNI as hlf_T, HLF_PNK as hlf_T, HLF_PNX as hlf_T]
+            [HLF_PNI as Hlf, HLF_PNK as Hlf, HLF_PNX as Hlf]
         },
         grid_col: style.col_off,
         totwidth: 0,
@@ -660,7 +660,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
             } else {
                 schar_from_ascii(b'<')
             };
-            line.attrs_mut()[lcol as usize] = trunc_attr as sattr_T;
+            line.attrs_mut()[lcol as usize] = trunc_attr as ScreenAttr;
             // The marker may have replaced the left half of a wide
             // character; give the orphaned right half a space.
             if pum_width.get() > 1 && line.chars()[lcol as usize + 1] == 0 {
@@ -679,7 +679,7 @@ unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
             } else {
                 schar_from_ascii(b'>')
             };
-            line.attrs_mut()[(rcol - 1) as usize] = trunc_attr as sattr_T;
+            line.attrs_mut()[(rcol - 1) as usize] = trunc_attr as ScreenAttr;
         }
     }
 

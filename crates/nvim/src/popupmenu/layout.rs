@@ -256,7 +256,7 @@ pub(crate) unsafe fn pum_position_at_mouse(min_width: c_int) {
     }
     let (grid, mut row, mut col) = (pos.grid, pos.row, pos.col);
     if grid > 1 {
-        let wp = unsafe { get_win_by_grid_handle(grid as handle_T) };
+        let wp = unsafe { get_win_by_grid_handle(grid as Handle) };
         if !wp.is_null() {
             row += unsafe { (*wp).w_winrow };
             col += unsafe { (*wp).w_wincol };

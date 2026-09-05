@@ -15,8 +15,8 @@ use super::*;
 /// last drawn with.
 #[derive(Copy, Clone, Default, PartialEq, Eq, Debug)]
 pub struct UCell {
-    pub data: schar_T,
-    pub attr: sattr_T,
+    pub data: ScreenChar,
+    pub attr: ScreenAttr,
 }
 
 /// A [`UGrid`]'s cells, row-major. Carries its own width so a row slice stays

@@ -50,7 +50,7 @@ impl Sign {
     ///
     /// Derived from the wrapped pointer rather than from `deref_mut`, which
     /// is what keeps the answer valid past the end of this call.
-    pub(crate) fn cells(self) -> *mut schar_T {
+    pub(crate) fn cells(self) -> *mut ScreenChar {
         // SAFETY: the constructor's promise — a live definition, whose
         // `sn_text` is one of its own fields. No read happens here.
         unsafe { (&raw mut (*self.0).sn_text).cast() }

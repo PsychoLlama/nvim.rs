@@ -24,8 +24,8 @@ use crate::lua::ffi::{
 };
 use crate::message_fmt::c_str_len;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
-    OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeValidation, kObjectTypeArray,
+    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
+    Object, OptKeySet, OptionalKeys, String_0, kErrorTypeValidation, kObjectTypeArray,
     kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger,
     kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow,
     lua_Integer, lua_Number, lua_State, size_t,
@@ -140,7 +140,7 @@ pub unsafe fn nlua_pop_keydict(
                 T_STRING => *mem.cast::<String_0>() = nlua_pop_string(lstate, arena, err),
                 T_FLOAT => *mem.cast::<Float>() = nlua_pop_float(lstate, arena, err),
                 T_BUFFER | T_WINDOW | T_TABPAGE => {
-                    *mem.cast::<handle_T>() = nlua_pop_handle(lstate, arena, err);
+                    *mem.cast::<Handle>() = nlua_pop_handle(lstate, arena, err);
                 }
                 T_ARRAY => *mem.cast::<Array>() = nlua_pop_array(lstate, arena, err),
                 T_DICT => *mem.cast::<Dict>() = nlua_pop_dict(lstate, false, arena, err),
@@ -189,7 +189,7 @@ pub unsafe fn nlua_push_keydict(
                 T_ANY => nlua_push_object(lstate, mem.cast::<Object>(), 0),
                 T_INTEGER => lua_pushinteger(lstate, *mem.cast::<Integer>() as lua_Integer),
                 T_BUFFER | T_WINDOW | T_TABPAGE => {
-                    lua_pushinteger(lstate, *mem.cast::<handle_T>() as lua_Integer);
+                    lua_pushinteger(lstate, *mem.cast::<Handle>() as lua_Integer);
                 }
                 T_FLOAT => lua_pushnumber(lstate, *mem.cast::<Float>()),
                 T_BOOLEAN => lua_pushboolean(lstate, *mem.cast::<Boolean>() as c_int),

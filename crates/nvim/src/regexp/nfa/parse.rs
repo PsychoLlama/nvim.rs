@@ -288,7 +288,7 @@ pub(crate) fn nfa_regconcat(rex: Rex) -> Parsed {
     }
 }
 
-fn set_magic(level: crate::types::magic_T) {
+fn set_magic(level: crate::types::Magic) {
     reg_magic.set(level);
     skipchr_keepstart();
     curchr.set(-1);

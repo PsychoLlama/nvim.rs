@@ -34,7 +34,7 @@ pub struct terminal {
     /// The window title being reassembled from the fragments vterm hands
     /// over. Empty between titles.
     pub title: Vec<u8>,
-    pub buf_handle: handle_T,
+    pub buf_handle: Handle,
     pub in_altscreen: bool,
     pub suspended: bool,
     pub closed: bool,
@@ -67,7 +67,7 @@ impl terminal {
     /// This stands in for the `xcalloc` the transpiled code used: every
     /// field starts as the all-zeroes value C would have produced, so the
     /// initialisation that follows is the same one the C did.
-    pub fn new(opts: TerminalOptions, buf_handle: handle_T) -> Self {
+    pub fn new(opts: TerminalOptions, buf_handle: Handle) -> Self {
         Self {
             opts,
             buf_handle,

@@ -326,7 +326,7 @@ pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);
     static change_start: GlobalCell<c_int> = GlobalCell::new(0);
     static change_end: GlobalCell<c_int> = GlobalCell::new(0);
-    static hlID: GlobalCell<hlf_T> = GlobalCell::new(HLF_NONE);
+    static hlID: GlobalCell<Hlf> = GlobalCell::new(HLF_NONE);
 
     let mut diffline = diffline_S {
         changes: ::core::ptr::null_mut::<diffline_change_T>(),

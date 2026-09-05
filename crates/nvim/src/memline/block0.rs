@@ -111,7 +111,7 @@ pub(crate) fn ml_check_b0_strings(b0: &ZeroBlock) -> bool {
 /// Bring block zero up to date with the buffer: either the file name and
 /// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
 /// ([`UB_SAME_DIR`]).
-pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: upd_block0_T) {
+pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: UpdBlock0) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };

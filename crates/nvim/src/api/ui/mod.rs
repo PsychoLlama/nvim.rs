@@ -49,8 +49,8 @@ use crate::types::ui::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
 };
 use crate::types::{
-    Boolean, Dict, Error, Float, Integer, Object, ObjectType, PackerBuffer, RemoteUI, String_0,
-    UIExtension, handle_T, kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger,
+    Boolean, Dict, Error, Float, Handle, Integer, Object, ObjectType, PackerBuffer, RemoteUI,
+    String_0, UIExtension, kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger,
     kObjectTypeString,
 };
 use crate::ui::{
@@ -636,7 +636,7 @@ pub unsafe fn nvim_ui_try_resize_grid(
         // SAFETY: `error` is this frame's slot.
         return unsafe { nvim_ui_try_resize(channel_id, width, height) };
     }
-    let (grid, width, height) = (grid as handle_T, width as c_int, height as c_int);
+    let (grid, width, height) = (grid as Handle, width as c_int, height as c_int);
     ui_grid_resize(grid, width, height, &mut error);
     ().reported(error)
 }

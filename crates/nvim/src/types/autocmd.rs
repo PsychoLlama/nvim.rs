@@ -49,9 +49,9 @@ pub struct AutoPatCmd_S {
 }
 pub struct aco_save_T {
     pub use_aucmd_win_idx: ::core::ffi::c_int,
-    pub save_curwin_handle: handle_T,
-    pub new_curwin_handle: handle_T,
-    pub save_prevwin_handle: handle_T,
+    pub save_curwin_handle: Handle,
+    pub new_curwin_handle: Handle,
+    pub save_prevwin_handle: Handle,
     pub new_curbuf: bufref_T,
     pub tp_localdir: *mut ::core::ffi::c_char,
     pub globaldir: *mut ::core::ffi::c_char,

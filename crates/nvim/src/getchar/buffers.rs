@@ -605,7 +605,7 @@ pub fn typeahead_noflush(c: c_int) {
 ///
 /// # Safety
 /// Callable at any time; may block briefly reading input.
-pub unsafe fn flush_buffers(flush_typeahead: flush_buffers_T) {
+pub unsafe fn flush_buffers(flush_typeahead: FlushBuffers) {
     init_typebuf();
 
     start_stuff();

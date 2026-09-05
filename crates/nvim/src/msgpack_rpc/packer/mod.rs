@@ -23,7 +23,7 @@ use core::ffi::{c_char, c_double, c_int, c_void};
 use crate::lua::executor::api_free_luaref;
 use crate::memory::{xmalloc, xrealloc};
 use crate::types::{
-    Array, Integer, KeyValuePair, LuaRef, Object, PackerBuffer, String_0, handle_T, int8_t,
+    Array, Handle, Integer, KeyValuePair, LuaRef, Object, PackerBuffer, String_0, int8_t,
     packer_buffer_t, size_t, uint32_t, uint64_t,
 };
 
@@ -203,7 +203,7 @@ pub unsafe fn mpack_ext(
 /// A buffer, window or tabpage handle. `ext_type` is the msgpack extension
 /// type the wire gives that kind of handle: the variant's distance from
 /// [`Object::Buffer`], so the three are 0, 1 and 2.
-pub fn mpack_handle(ext_type: int8_t, handle: handle_T, packer: &mut PackerBuffer) {
+pub fn mpack_handle(ext_type: int8_t, handle: Handle, packer: &mut PackerBuffer) {
     emit(&mut packer.ptr, format::handle(ext_type, handle).bytes());
 }
 

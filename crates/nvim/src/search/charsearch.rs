@@ -27,7 +27,7 @@ static last_t_cmd: GlobalCell<bool> = GlobalCell::new(true);
 static lastc_bytes: GlobalCell<[c_char; SCHAR_BYTES]> = GlobalCell::new([0; SCHAR_BYTES]);
 static lastc_bytelen: GlobalCell<c_int> = GlobalCell::new(1);
 
-/// One `schar_T`'s bytes plus its NUL — what `lastc_bytes` holds.
+/// One `ScreenChar`'s bytes plus its NUL — what `lastc_bytes` holds.
 const SCHAR_BYTES: usize = MAX_SCHAR_SIZE as usize + 1;
 
 /// The bytes `;` and `,` look for, NUL-terminated, by value: `getcharsearch()`

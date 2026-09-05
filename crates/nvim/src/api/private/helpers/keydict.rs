@@ -19,8 +19,8 @@ use crate::cstr;
 use crate::lua::executor::api_free_luaref;
 use crate::message_fmt::c_str_len;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeySetLink, LuaRef, Object,
-    ObjectType, OptKeySet, OptionalKeys, String_0, handle_T, kErrorTypeNone, kErrorTypeValidation,
+    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
+    Object, ObjectType, OptKeySet, OptionalKeys, String_0, kErrorTypeNone, kErrorTypeValidation,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
     kObjectTypeWindow, key_value_pair, size_t,
@@ -225,7 +225,7 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     }
                 };
                 // SAFETY: the row says a handle lives at `mem`.
-                unsafe { *mem.cast::<handle_T>() = handle as handle_T };
+                unsafe { *mem.cast::<Handle>() = handle as Handle };
             }
             kObjectTypeLuaRef => {
                 // SAFETY: `key` names its own bytes.
@@ -278,9 +278,9 @@ pub(crate) unsafe fn api_keydict_to_dict(
                 kObjectTypeString => Object::string(*mem.cast::<String_0>()),
                 kObjectTypeArray => Object::array(*mem.cast::<Array>()),
                 kObjectTypeDict => Object::dict(*mem.cast::<Dict>()),
-                kObjectTypeBuffer => Object::buffer(*mem.cast::<handle_T>()),
-                kObjectTypeWindow => Object::window(*mem.cast::<handle_T>()),
-                kObjectTypeTabpage => Object::tabpage(*mem.cast::<handle_T>()),
+                kObjectTypeBuffer => Object::buffer(*mem.cast::<Handle>()),
+                kObjectTypeWindow => Object::window(*mem.cast::<Handle>()),
+                kObjectTypeTabpage => Object::tabpage(*mem.cast::<Handle>()),
                 kObjectTypeLuaRef => Object::Nil,
                 _ => abort(),
             }

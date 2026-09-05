@@ -141,7 +141,7 @@ unsafe fn write_undo_file(
         semsg!("E829: Write error in undo file: {file_name}");
     }
     if !buf.b_ffname.is_null() {
-        let acl: vim_acl_T = os_get_acl(buf.b_ffname);
+        let acl: VimAcl = os_get_acl(buf.b_ffname);
         os_set_acl(file_name, acl);
         os_free_acl(acl);
     }

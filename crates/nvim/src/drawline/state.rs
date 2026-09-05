@@ -103,9 +103,9 @@ pub struct WinLineVars {
     /// Attribute for `extra_text`.
     pub extra_attr: ::core::ffi::c_int,
     /// One character repeated `extra_todo` times.
-    pub extra_fill: schar_T,
+    pub extra_fill: ScreenChar,
     /// Mandatory last character of a repeated run, when set.
-    pub extra_last: schar_T,
+    pub extra_last: ScreenChar,
 
     /// The run came from inline virtual text rather than from a form of the
     /// buffer's own text, which is what decides whether the diff and Visual
@@ -117,7 +117,7 @@ pub struct WinLineVars {
     pub escape_buf: [::core::ffi::c_char; 11],
 
     /// Kind of diff highlighting, `HLF_NONE` for none.
-    pub diff_hlf: hlf_T,
+    pub diff_hlf: Hlf,
 
     /// Virtual lines to draw for this buffer line.
     pub n_virt_lines: ::core::ffi::c_int,
@@ -222,9 +222,9 @@ pub(crate) struct LineSetup {
     /// apply.
     pub(crate) leadcol: ColNr,
     /// `'listchars'` "eol".
-    pub(crate) lcs_eol: schar_T,
+    pub(crate) lcs_eol: ScreenChar,
     /// `'listchars'` "prec", cleared by the loop once it has been drawn.
-    pub(crate) lcs_prec_todo: schar_T,
+    pub(crate) lcs_prec_todo: ScreenChar,
     /// The skipped-over text ended inside a run of consecutive spaces.
     pub(crate) in_multispace: bool,
     /// How far into the `'listchars'` "multispace" pattern that run is.
@@ -320,11 +320,11 @@ pub(crate) struct LineSetup {
 #[inline(always)]
 pub(crate) fn put_cell(
     off: ::core::ffi::c_int,
-    ch: schar_T,
+    ch: ScreenChar,
     attr: ::core::ffi::c_int,
     vcol: ColNr,
 ) {
-    linebuf().put(off as usize, ch, attr as sattr_T, vcol);
+    linebuf().put(off as usize, ch, attr as ScreenAttr, vcol);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,11 +360,11 @@ pub(crate) unsafe fn get_extra_buf(size: size_t) -> *mut ::core::ffi::c_char {
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub(crate) unsafe fn get_lcs_ext(wp: Win) -> schar_T {
+pub(crate) unsafe fn get_lcs_ext(wp: Win) -> ScreenChar {
     // SAFETY: the caller's window.
     if wp.w_onebuf_opt.wo_wrap != 0 {
         // With 'wrap' a line never continues past the right of the screen.
-        return NUL as schar_T;
+        return NUL as ScreenChar;
     }
     if wp.w_onebuf_opt.wo_wrap_flags & kOptFlagInsecure as uint32_t != 0 {
         // 'nowrap' set from a modeline: forcibly use '>'.
@@ -373,7 +373,7 @@ pub(crate) unsafe fn get_lcs_ext(wp: Win) -> schar_T {
     if wp.w_onebuf_opt.wo_list != 0 {
         wp.w_p_lcs_chars.ext
     } else {
-        NUL as schar_T
+        NUL as ScreenChar
     }
 }
 

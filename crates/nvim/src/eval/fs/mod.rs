@@ -50,8 +50,8 @@ use crate::os::fs::{
 use crate::path::vim_ispathsep;
 use crate::strings::concat_str;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, FileInfo, VAR_NUMBER, VAR_STRING, VarNumber, int32_t, list_T,
-    ptrdiff_t, size_t, ssize_t, typval_T, uint64_t, uv_stat_t, uv_timespec_t, xp_prefix_T,
+    Direction, EvalFuncData, FAIL, FileInfo, VAR_NUMBER, VAR_STRING, VarNumber, XpPrefix, int32_t,
+    list_T, ptrdiff_t, size_t, ssize_t, typval_T, uint64_t, uv_stat_t, uv_timespec_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
@@ -73,7 +73,7 @@ pub use self::read::*;
 pub use self::write::*;
 
 pub const kDirectionNotSet: Direction = 0;
-pub const XP_PREFIX_NONE: xp_prefix_T = 0;
+pub const XP_PREFIX_NONE: XpPrefix = 0;
 pub const VALID_PATH: ::core::ffi::c_uint = 1;
 pub const VALID_HEAD: ::core::ffi::c_uint = 2;
 pub const FINDFILE_DIR: ::core::ffi::c_uint = 1;

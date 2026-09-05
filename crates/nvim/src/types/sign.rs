@@ -17,14 +17,14 @@ pub struct SignItem {
 }
 #[derive(Copy, Clone)]
 pub struct SignTextAttrs {
-    pub text: [schar_T; 2],
+    pub text: [ScreenChar; 2],
     pub hl_id: ::core::ffi::c_int,
 }
 #[derive(Copy, Clone, Default)]
 pub struct sign_T {
     pub sn_name: *mut ::core::ffi::c_char,
     pub sn_icon: *mut ::core::ffi::c_char,
-    pub sn_text: [schar_T; 2],
+    pub sn_text: [ScreenChar; 2],
     pub sn_line_hl: ::core::ffi::c_int,
     pub sn_text_hl: ::core::ffi::c_int,
     pub sn_cul_hl: ::core::ffi::c_int,

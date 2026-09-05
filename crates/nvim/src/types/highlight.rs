@@ -46,4 +46,4 @@ pub struct HlEntry {
 }
 pub type HlKind = ::core::ffi::c_uint;
 pub type RgbValue = int32_t;
-pub type hlf_T = ::core::ffi::c_int;
+pub type Hlf = ::core::ffi::c_int;

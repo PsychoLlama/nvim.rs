@@ -404,11 +404,11 @@ pub unsafe fn nvim_buf_set_extmark(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__sign_text,
                 ) {
-                    sign.text[0 as ::core::ffi::c_int as usize] = 0 as schar_T;
+                    sign.text[0 as ::core::ffi::c_int as usize] = 0 as ScreenChar;
                     if unsafe {
                         init_sign_text(
                             opts.sign_text.data(),
-                            &raw mut sign.text as *mut schar_T,
+                            &raw mut sign.text as *mut ScreenChar,
                             false,
                         )
                     }

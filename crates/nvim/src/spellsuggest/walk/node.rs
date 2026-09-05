@@ -48,7 +48,7 @@ use crate::spellsuggest::walk::{
 use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, badword_captype, suginfo_T,
 };
-use crate::types::{NUL, idx_T, size_t};
+use crate::types::{NUL, SpellIdx, size_t};
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -69,7 +69,7 @@ impl Walk<'_> {
         // the node's own length byte bounds, and the tree is valid by the
         // contract above.
         let node_len = self.byte_at(node) as c_int; // bytes in this node
-        let at = node + self.stack[level].child as idx_T; // the current byte
+        let at = node + self.stack[level].child as SpellIdx; // the current byte
 
         if self.stack[level].prefix_depth == PFD_PREFIXTREE {
             // SAFETY: the trees and the bad word are valid by the contract
@@ -106,7 +106,7 @@ impl Walk<'_> {
     /// # Safety
     ///
     /// The walk's trees and bad word must be valid.
-    unsafe fn prefix_tree_node(&mut self, entry_state: State, node_len: c_int, at: idx_T) {
+    unsafe fn prefix_tree_node(&mut self, entry_state: State, node_len: c_int, at: SpellIdx) {
         let level = self.depth as usize;
 
         // Skip over the NUL bytes; they are used just below.
@@ -206,7 +206,7 @@ impl Walk<'_> {
     /// # Safety
     ///
     /// The walk's trees and bad word must be valid.
-    unsafe fn word_end(&mut self, at: idx_T) {
+    unsafe fn word_end(&mut self, at: SpellIdx) {
         let level = self.depth as usize;
         self.stack[level].child += 1; // eat one NUL byte
 

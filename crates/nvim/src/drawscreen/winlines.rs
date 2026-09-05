@@ -810,11 +810,11 @@ pub unsafe fn win_scroll_lines(wp: *mut win_T, row: c_int, line_count: c_int) {
 /// first, so the marker starts where the text would.
 pub unsafe fn win_draw_end(
     wp: Win,
-    c1: schar_T,
+    c1: ScreenChar,
     draw_margin: bool,
     startrow: c_int,
     endrow: c_int,
-    hl: hlf_T,
+    hl: Hlf,
 ) {
     debug_assert!((0..HLF_COUNT).contains(&hl), "hl >= 0 && hl < HLF_COUNT");
     // SAFETY: a live window; each grid batch is opened and flushed per row.

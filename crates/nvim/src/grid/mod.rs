@@ -2,7 +2,7 @@
 
 //! The screen grid: allocating it, scrolling it, reading cells out of it.
 //!
-//! A `ScreenGrid` is three parallel flat arrays -- `chars` (one [`schar_T`]
+//! A `ScreenGrid` is three parallel flat arrays -- `chars` (one [`ScreenChar`]
 //! per cell), `attrs` (a highlight-attribute id) and `vcols` (which virtual
 //! column of the buffer line the cell came from, for the mouse) -- plus a
 //! `line_offset` table giving each row's start. The offsets are indirection
@@ -54,8 +54,8 @@ use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Integer, MHPutStatus, MapHash,
-    ScreenGrid, Set_glyph, String_0, VirtText, WinConfig, handle_T, schar_T, size_t, uint32_t,
+    AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Handle, Integer, MHPutStatus,
+    MapHash, ScreenChar, ScreenGrid, Set_glyph, String_0, VirtText, WinConfig, size_t, uint32_t,
     win_T, wline_T,
 };
 use crate::ui::{
@@ -211,7 +211,12 @@ pub unsafe fn grid_adjust(view: GridView, row_off: &mut c_int, col_off: &mut c_i
 
 /// Read one cell straight out of the grid, optionally with its attribute.
 /// Answers NUL when the position is out of bounds.
-pub fn grid_getchar(grid: GridRef, row: c_int, col: c_int, attrp: Option<&mut c_int>) -> schar_T {
+pub fn grid_getchar(
+    grid: GridRef,
+    row: c_int,
+    col: c_int,
+    attrp: Option<&mut c_int>,
+) -> ScreenChar {
     // Safety check.
     if !grid.is_allocated() || row >= grid.rows || col >= grid.cols {
         return 0;
@@ -319,7 +324,7 @@ pub fn grid_assign_handle(grid: &mut ScreenGrid) {
     static LAST_GRID_HANDLE: GlobalCell<c_int> = GlobalCell::new(DEFAULT_GRID_HANDLE);
     if grid.handle == 0 {
         LAST_GRID_HANDLE.set(LAST_GRID_HANDLE.get() + 1);
-        grid.handle = LAST_GRID_HANDLE.get() as handle_T;
+        grid.handle = LAST_GRID_HANDLE.get() as Handle;
     }
 }
 
@@ -455,7 +460,7 @@ pub fn grid_del_lines(
 ///
 /// The walk keeps that promise itself now; the signature stays `unsafe`
 /// because every caller still spells the call out that way.
-pub unsafe fn get_win_by_grid_handle(handle: handle_T) -> *mut win_T {
+pub unsafe fn get_win_by_grid_handle(handle: Handle) -> *mut win_T {
     windows()
         .find(|wp| wp.w_grid_alloc.handle == handle)
         .map_or(::core::ptr::null_mut(), Win::raw)

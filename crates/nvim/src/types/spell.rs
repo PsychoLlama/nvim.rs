@@ -23,14 +23,14 @@ pub struct RepItem {
     pub from: Box<[u8]>,
     pub to: Box<[u8]>,
 }
-pub type idx_T = ::core::ffi::c_int;
+pub type SpellIdx = ::core::ffi::c_int;
 pub struct langp_T {
     pub lp_slang: *mut slang_T,
     pub lp_sallang: *mut slang_T,
     pub lp_replang: *mut slang_T,
     pub lp_region: ::core::ffi::c_int,
 }
-pub type salfirst_T = ::core::ffi::c_int;
+pub type SalFirst = ::core::ffi::c_int;
 /// One `SAL` sound-folding rule.
 ///
 /// Only the wide forms are kept: the narrow `sm_lead`/`sm_oneof`/`sm_to`
@@ -89,7 +89,7 @@ pub struct slang_S {
     pub sl_sofo_map: Vec<Box<[::core::ffi::c_int]>>,
     /// For `SAL`, the first rule for each low byte, or -1. For `SOFO`, the
     /// direct mapping of every character below 256.
-    pub sl_sal_first: [salfirst_T; 256],
+    pub sl_sal_first: [SalFirst; 256],
     pub sl_followup: bool,
     pub sl_collapse: bool,
     pub sl_rem_accents: bool,
@@ -120,7 +120,7 @@ impl slang_S {
         }
     }
 }
-pub type smt_T = ::core::ffi::c_uint;
+pub type SpellMoveType = ::core::ffi::c_uint;
 #[derive(Copy, Clone)]
 pub struct spelltab_T {
     pub st_isw: [bool; 256],

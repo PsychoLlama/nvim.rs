@@ -41,8 +41,8 @@ use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
 use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::types::{
-    Boolean, Integer, LineFlags, NUL, RemoteUI, ScreenGrid, String_0, handle_T, sattr_T, schar_T,
-    win_T,
+    Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, ScreenGrid,
+    String_0, win_T,
 };
 use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
@@ -107,7 +107,7 @@ static msg_was_scrolled: GlobalCell<bool> = GlobalCell::new(false);
 /// The `'msgsep'` row drawn just above the message grid, and its fill
 /// character. `-1` means there is none.
 static msg_sep_row: GlobalCell<c_int> = GlobalCell::new(-1);
-static msg_sep_char: GlobalCell<schar_T> = GlobalCell::new(schar_from_ascii(b' '));
+static msg_sep_char: GlobalCell<ScreenChar> = GlobalCell::new(schar_from_ascii(b' '));
 
 /// Highlight ids for the `'redrawdebug'` overlays: a forwarded line, the
 /// cleared tail, a composed line, and a recomposed area.
@@ -318,7 +318,7 @@ pub unsafe fn ui_comp_remove_grid(grid: *mut ScreenGrid) {
 }
 
 /// Selects the layer `handle` names as the one coordinates are relative to.
-pub fn ui_comp_set_grid(handle: handle_T) -> bool {
+pub fn ui_comp_set_grid(handle: Handle) -> bool {
     if curgrid.get().is_some_and(|cur| cur.handle == handle) {
         return true;
     }
@@ -349,7 +349,7 @@ fn raise_grid(mut grid: GridRef, new_index: usize) {
 }
 
 pub fn ui_comp_grid_cursor_goto(grid_handle: Integer, r: Integer, c: Integer) {
-    if !ui_comp_set_grid(grid_handle as handle_T) {
+    if !ui_comp_set_grid(grid_handle as Handle) {
         return;
     }
     let cursor_row = cur_layer().comp_row + r as c_int;
@@ -579,9 +579,9 @@ fn compose_into(
 }
 
 /// C's `hl_blend_attrs`, as [`blend`] wants it.
-fn blend_attrs(back: sattr_T, front: sattr_T, thru: &mut bool) -> sattr_T {
+fn blend_attrs(back: ScreenAttr, front: ScreenAttr, thru: &mut bool) -> ScreenAttr {
     // SAFETY: the attribute tables are the editor's own.
-    unsafe { hl_blend_attrs(back, front, thru) as sattr_T }
+    unsafe { hl_blend_attrs(back, front, thru) as ScreenAttr }
 }
 
 /// Paints an area in one of the `'redrawdebug'` colours, so the work the
@@ -683,10 +683,10 @@ pub unsafe fn ui_comp_raw_line(
     clearcol: Integer,
     clearattr: Integer,
     mut flags: LineFlags,
-    chunk: *const schar_T,
-    attrs: *const sattr_T,
+    chunk: *const ScreenChar,
+    attrs: *const ScreenAttr,
 ) {
-    if !ui_comp_should_draw() || !ui_comp_set_grid(grid as handle_T) {
+    if !ui_comp_should_draw() || !ui_comp_set_grid(grid as Handle) {
         return;
     }
     let cur = cur_layer();
@@ -829,7 +829,7 @@ pub fn ui_comp_grid_scroll(
     rows: Integer,
     cols: Integer,
 ) {
-    if !ui_comp_should_draw() || !ui_comp_set_grid(grid as handle_T) {
+    if !ui_comp_should_draw() || !ui_comp_set_grid(grid as Handle) {
         return;
     }
     let cur = cur_layer();

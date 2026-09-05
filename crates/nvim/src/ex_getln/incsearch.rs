@@ -100,7 +100,7 @@ pub unsafe fn parse_pattern_and_range(
 ) -> bool {
     let mut delim_optional = false;
     let mut dummy = None;
-    let mut magic: magic_T = 0;
+    let mut magic: Magic = 0;
 
     // The three out-parameters, taken once. Both callers own three plain
     // `c_int` locals apiece that nothing else in the editor can reach, so
@@ -740,7 +740,7 @@ pub(crate) unsafe fn empty_pattern(
     len: size_t,
     delim: ::core::ffi::c_int,
 ) -> bool {
-    let mut magic_val: magic_T = MAGIC_ON;
+    let mut magic_val: Magic = MAGIC_ON;
 
     if len > 0 {
         skip_pattern(p, delim, &mut magic_val);
@@ -755,7 +755,7 @@ pub(crate) unsafe fn empty_pattern(
 pub(crate) unsafe fn empty_pattern_magic(
     p: *mut ::core::ffi::c_char,
     mut len: size_t,
-    magic_val: magic_T,
+    magic_val: Magic,
 ) -> bool {
     // `p[..len]` is the pattern, inside the command line's own allocation;
     // every index below is `len - 1` or `len - 2` with `len >= 2`.
@@ -786,7 +786,7 @@ pub(crate) unsafe fn empty_pattern_magic(
 fn skip_pattern(
     p: *mut ::core::ffi::c_char,
     delim: ::core::ffi::c_int,
-    magic: &mut magic_T,
+    magic: &mut Magic,
 ) -> *mut ::core::ffi::c_char {
     let no_str = ::core::ptr::null_mut::<*mut ::core::ffi::c_char>();
     let no_int = ::core::ptr::null_mut::<::core::ffi::c_int>();

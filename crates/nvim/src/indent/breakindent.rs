@@ -304,7 +304,7 @@ pub unsafe fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
         vts: buf.b_p_vts_array,
         tick: buf_get_changedtick(buf),
         listopt: win.w_briopt_list,
-        no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as schar_T,
+        no_ts: win.w_onebuf_opt.wo_list != 0 && win.w_p_lcs_chars.tab1 == NUL as ScreenChar,
         dy_uhex: dy_flags.get() & kOptDyFlagUhex as c_uint,
     };
     let opt = Briopt {

@@ -32,7 +32,7 @@ table the *alias* name; the tag is read off its `type` line.
   word-boundary sweep over comments only (`xform.masked` inverted) -- never an
   unmasked tree-wide `s///`, which is the mistake this tool exists to avoid.
 * **Non-Rust followers.** `tools/apigen/src` spells three type names,
-  `test/unit/fixtures/{shim.h,vterm_test.c}` spell `schar_T`, and
+  `test/unit/fixtures/{shim.h,vterm_test.c}` spell `ScreenChar`, and
   `scripts/ratchet.py`'s `RAW_WIN_BUF` needle names `win_T`/`buf_T`/
   `tabpage_T`. Fix them in the same commit; `tools/ffigen` reads the Rust and
   needs nothing.

@@ -20,10 +20,10 @@
 
 use core::ffi::c_uint;
 
-use crate::types::{ScreenCell, ScreenPen, VTermColor, VTermScreenCell, schar_T};
+use crate::types::{ScreenCell, ScreenChar, ScreenPen, VTermColor, VTermScreenCell};
 
 /// The `schar` of the cell hidden behind a double-width glyph.
-pub const SCHAR_CONTINUATION: schar_T = schar_T::MAX;
+pub const SCHAR_CONTINUATION: ScreenChar = ScreenChar::MAX;
 
 /// The pen an erased cell is left with: the current colours, everything else
 /// back to its reset state. The caller stamps the line's double-width and
@@ -220,48 +220,48 @@ mod tests {
     #[test]
     fn an_imported_row_keeps_a_gap_behind_a_wide_glyph() {
         let mut src = vec![blank_cell(); 4];
-        src[0].schar = 'a' as schar_T;
+        src[0].schar = 'a' as ScreenChar;
         src[1].schar = 0x4e00;
         src[1].width = 2;
-        src[3].schar = 'b' as schar_T;
+        src[3].schar = 'b' as ScreenChar;
 
         let mut dst = blank_row(4);
         import_row(&src, &mut dst, false, &erased_pen(black(), black()));
-        assert_eq!(dst[0].schar, 'a' as schar_T);
+        assert_eq!(dst[0].schar, 'a' as ScreenChar);
         assert_eq!(dst[1].schar, 0x4e00);
         assert_eq!(dst[2].schar, SCHAR_CONTINUATION);
-        assert_eq!(dst[3].schar, 'b' as schar_T);
+        assert_eq!(dst[3].schar, 'b' as ScreenChar);
     }
 
     #[test]
     fn an_imported_row_is_blanked_past_the_shorter_of_the_two() {
         let mut src = vec![blank_cell(); 2];
-        src[0].schar = 'a' as schar_T;
-        src[1].schar = 'b' as schar_T;
+        src[0].schar = 'a' as ScreenChar;
+        src[1].schar = 'b' as ScreenChar;
 
         let mut dst = blank_row(4);
         for cell in &mut dst {
-            cell.schar = 'z' as schar_T;
+            cell.schar = 'z' as ScreenChar;
         }
         import_row(&src, &mut dst, false, &erased_pen(black(), black()));
-        assert_eq!(dst[1].schar, 'b' as schar_T);
+        assert_eq!(dst[1].schar, 'b' as ScreenChar);
         assert_eq!(dst[2].schar, 0);
         assert_eq!(dst[3].schar, 0);
 
         // Narrower destination: the extra source cells are dropped.
         let mut dst = blank_row(1);
         import_row(&src, &mut dst, false, &erased_pen(black(), black()));
-        assert_eq!(dst[0].schar, 'a' as schar_T);
+        assert_eq!(dst[0].schar, 'a' as ScreenChar);
     }
 
     #[test]
     fn a_zero_width_cell_does_not_stall_the_import() {
         let mut src = vec![blank_cell(); 2];
         src[0].width = 0;
-        src[1].schar = 'b' as schar_T;
+        src[1].schar = 'b' as ScreenChar;
         let mut dst = blank_row(2);
         import_row(&src, &mut dst, false, &erased_pen(black(), black()));
-        assert_eq!(dst[1].schar, 'b' as schar_T);
+        assert_eq!(dst[1].schar, 'b' as ScreenChar);
     }
 
     #[test]

@@ -77,7 +77,7 @@
 //! allocator, and the next field access is a use-after-free.
 //!
 //! So the shape of every such caller is: **take the identity before, ask the
-//! registry after.** [`WinId`] and [`BufId`] are that identity — a `handle_T`
+//! registry after.** [`WinId`] and [`BufId`] are that identity — a `Handle`
 //! with the address dropped. (A `TabPageId` lands with its first caller;
 //! `dead_code` is `-D` here.)
 //!
@@ -104,7 +104,7 @@
 //! * `BufRef` (`buffer::BufRef`, upstream's `bufref_T`) — `BufRef::of`/`of_opt`
 //!   before, `BufRef::valid`/`get` after. `buffer::enter` uses it twice around
 //!   `BufLeave`.
-//! * A saved `handle_T` plus a registry lookup — `autocmd::aucmdwin`'s
+//! * A saved `Handle` plus a registry lookup — `autocmd::aucmdwin`'s
 //!   `save_curwin_handle`/`save_prevwin_handle`.
 //! * [`WinId`] held in a struct that outlives arbitrary re-entry —
 //!   `terminal::mode`'s `save_curwin`, restored with `.get()`.
@@ -178,7 +178,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
-use crate::types::{ColNr, LineNr, StrCharInfo, buf_T, frame_T, handle_T, pos_T, tabpage_T, win_T};
+use crate::types::{ColNr, Handle, LineNr, StrCharInfo, buf_T, frame_T, pos_T, tabpage_T, win_T};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -344,7 +344,7 @@ impl Win {
     /// live — which is what the re-entry rule asks anyway: before the call
     /// that might close it. [`Win::id`] wraps the answer in a type.
     #[inline(always)]
-    pub(crate) fn handle(self) -> handle_T {
+    pub(crate) fn handle(self) -> Handle {
         self.handle
     }
 
@@ -566,7 +566,7 @@ impl Buf {
     /// registry finds it by. [`Win::handle`] for a buffer — it reads the
     /// buffer, so ask it while the buffer is live.
     #[inline(always)]
-    pub(crate) fn handle(self) -> handle_T {
+    pub(crate) fn handle(self) -> Handle {
         self.handle
     }
 
@@ -736,7 +736,7 @@ impl TabPage {
 
     /// This tab page's id. [`Win::handle`] for a tab page.
     #[inline(always)]
-    pub(crate) fn handle(self) -> handle_T {
+    pub(crate) fn handle(self) -> Handle {
         self.handle
     }
 

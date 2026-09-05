@@ -114,7 +114,7 @@ pub unsafe fn grid_draw_border(
     };
     let side = |i: isize| unsafe { *adj.offset(i) } != 0;
 
-    let mut chars: [schar_T; 8] = [0; 8];
+    let mut chars: [ScreenChar; 8] = [0; 8];
     for (i, ch) in chars.iter_mut().enumerate() {
         *ch = unsafe {
             schar_from_str(

@@ -74,7 +74,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     // The windows displaying this buffer.
     // SAFETY: the list is handed to the dictionary below, so it is not leaked.
     let windows = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
-    let append = |handle: handle_T| {
+    let append = |handle: Handle| {
         // SAFETY: a live list.
         unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
     };

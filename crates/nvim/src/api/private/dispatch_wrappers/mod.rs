@@ -152,7 +152,7 @@ use crate::log::logmsg_line;
 use crate::main::{e_textlock, textlock};
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Integer, KeyDict_buf_attach,
+    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Handle, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
     KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
@@ -160,7 +160,7 @@ use crate::types::{
     KeyDict_get_extmarks, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap,
     KeyDict_ns_opts, KeyDict_open_term, KeyDict_option, KeyDict_redraw, KeyDict_runtime,
     KeyDict_set_extmark, KeyDict_tabpage_config, KeyDict_user_command, KeyDict_win_config,
-    KeyDict_win_text_height, Object, ObjectType, String_0, handle_T, size_t, uint64_t,
+    KeyDict_win_text_height, Object, ObjectType, String_0, size_t, uint64_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -226,7 +226,7 @@ fn wrong_type(error: &mut Error, slot: usize, func: &CStr, expected: &CStr) {
 fn as_boolean(o: Object) -> Option<Boolean> {
     match o {
         Object::Boolean(b) => Some(b),
-        Object::Integer(n) if n >= 0 => Some(n as handle_T != 0),
+        Object::Integer(n) if n >= 0 => Some(n as Handle != 0),
         _ => None,
     }
 }
@@ -265,7 +265,7 @@ fn as_dict(o: Object) -> Option<Dict> {
 /// Buffer, Window and Tabpage each have a variant of their own, and a bare
 /// nonnegative integer is accepted as any of them. `tag` names the one the
 /// parameter declares: a window handle is not a buffer.
-fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
+fn as_handle(o: Object, tag: ObjectType) -> Option<Handle> {
     let n = match o {
         Object::Integer(n) => n,
         Object::Buffer(n) | Object::Window(n) | Object::Tabpage(n) => {
@@ -276,7 +276,7 @@ fn as_handle(o: Object, tag: ObjectType) -> Option<handle_T> {
         }
         _ => return None,
     };
-    (n >= 0).then_some(n as handle_T)
+    (n >= 0).then_some(n as Handle)
 }
 
 /// What reading a keyset argument produced.

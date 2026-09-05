@@ -515,7 +515,7 @@ fn qf_alloc_list_stack(n: c_int) -> Vec<qf_list_T> {
 /// Never the quickfix stack: that one is [`QfStack::Global`], a static that
 /// exists before this module is first entered and that [`qf_init_stack`]
 /// only gives its slots to.
-pub(crate) fn qf_alloc_stack(qfltype: qfltype_T, n: c_int) -> *mut qf_info_T {
+pub(crate) fn qf_alloc_stack(qfltype: QfListType, n: c_int) -> *mut qf_info_T {
     debug_assert_ne!(qfltype, QFLT_QUICKFIX);
     let mut stack = Box::new(qf_info_T::new(qfltype));
     stack.qf_refcount = Refcount::ONE;

@@ -43,8 +43,8 @@ use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    ColNr, CpoFlag, Failed, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0,
-    StringBuilder, VarNumber, aco_save_T, exarg_T, handle_T, int64_t, size_t,
+    ColNr, CpoFlag, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0,
+    StringBuilder, VarNumber, aco_save_T, exarg_T, int64_t, size_t,
 };
 use crate::winlayer::buffers;
 
@@ -534,7 +534,7 @@ pub fn buf_contents_changed(buf: Buf) -> bool {
 ///
 /// # Safety
 /// `bufname` must be null or NUL-terminated, and `curwin` be set.
-pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> Result<(), Failed> {
+pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<(), Failed> {
     let none = ptr::null_mut::<c_char>();
     let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
