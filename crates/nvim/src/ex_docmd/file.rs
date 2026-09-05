@@ -53,7 +53,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Buffer, Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, NUL, Window, memfile_T, size_t,
+    Buffer, Cleanup, CmdModFlags, CpoFlag, ExArg, Failed, LineNr, MemFile, NUL, Window, size_t,
     uint8_t,
 };
 use crate::ui::ui_has;
@@ -667,7 +667,7 @@ fn goto_buffer(eap: *mut ExArg, start: c_int, dir: c_int, count: c_int) {
 }
 
 /// `mf_fname()` as checked code.
-fn mf_fname(mfp: *const memfile_T) -> *const c_char {
+fn mf_fname(mfp: *const MemFile) -> *const c_char {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::memfile::mf_fname(mfp) }
 }

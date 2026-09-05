@@ -188,7 +188,7 @@ pub(crate) struct KeymapEntry {
 /// would make a second owner of all of them.
 pub struct Buffer {
     pub handle: Handle,
-    pub b_ml: memline_T,
+    pub b_ml: MemLine,
     /// The buffer list, `firstbuf`..`lastbuf`. A handle rather than an
     /// address: the registry resolves it, so a link can never outlive what
     /// it names, and the buffer stays movable. `winlayer::Buf::next`/`prev`
@@ -860,8 +860,8 @@ pub struct Window {
     pub w_nrwidth_line_count: LineNr,
     pub w_statuscol_line_count: LineNr,
     pub w_nrwidth_width: ::core::ffi::c_int,
-    pub w_llist: *mut qf_info_T,
-    pub w_llist_ref: *mut qf_info_T,
+    pub w_llist: *mut QfInfo,
+    pub w_llist_ref: *mut QfInfo,
     pub w_status_click_defs: *mut StlClickDefinition,
     pub w_status_click_defs_size: size_t,
     pub w_winbar_click_defs: *mut StlClickDefinition,

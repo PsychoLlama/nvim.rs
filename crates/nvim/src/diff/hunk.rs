@@ -41,8 +41,8 @@ struct Walk {
 
 /// Take the next hunk the internal engine produced.  Answers end of input.
 unsafe fn extract_hunk_internal(
-    dout: *mut diffout_T,
-    hunk: *mut diffhunk_T,
+    dout: *mut DiffOut,
+    hunk: *mut DiffHunk,
     line_idx: &mut c_int,
 ) -> bool {
     // SAFETY: the caller's output side; the index is checked against it.
@@ -57,7 +57,7 @@ unsafe fn extract_hunk_internal(
 
 /// Read lines from `fd` until one parses as a hunk header.  Answers end of
 /// input.
-unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut DiffStyle) -> bool {
+unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut DiffHunk, diffstyle: &mut DiffStyle) -> bool {
     loop {
         let mut line = [0 as c_char; LBUFLEN as usize];
         if unsafe { vim_fgets(line.as_mut_ptr(), LBUFLEN, fd) } {
@@ -103,7 +103,7 @@ unsafe fn extract_hunk(fd: *mut FILE, hunk: *mut diffhunk_T, diffstyle: &mut Dif
 /// walk has reached (they are copied forward and skipped), it overlaps one or
 /// more existing blocks (they are widened to cover it and the extra ones
 /// freed), or it touches none (a new block).
-unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *mut diffhunk_T) {
+unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *mut DiffHunk) {
     // SAFETY: `curtab` is set from startup to exit.
     let tp = unsafe { TabPage::current() };
     let end_orig = unsafe { (*hunk).lnum_orig } + unsafe { (*hunk).count_orig };
@@ -214,7 +214,7 @@ unsafe fn process_hunk(walk: &mut Walk, idx_orig: usize, idx_new: usize, hunk: *
 }
 
 /// Read a whole diff's worth of hunks into the current tabpage's block list.
-pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio_T) {
+pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo) {
     let (idx_orig, idx_new) = (idx_orig as usize, idx_new as usize);
     let dout = unsafe { &raw mut (*dio).dio_diff };
     let internal = unsafe { (*dio).dio_internal } != 0;
@@ -235,7 +235,7 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio
     let mut line_hunk_idx = 0;
     let mut diffstyle = DiffStyle::Unknown;
     loop {
-        let mut hunk = diffhunk_T {
+        let mut hunk = DiffHunk {
             lnum_orig: 0,
             count_orig: 0,
             lnum_new: 0,
@@ -270,7 +270,7 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut diffio
 ///
 /// An `a` hunk adds after `f1`, so its original range is empty and starts on
 /// the *next* line; a `d` hunk is the mirror image.
-unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> Result<(), Failed> {
+unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut DiffHunk) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
     let f1 = unsafe { getdigits_int32(&raw mut p, true, 0) };
     let l1 = if unsafe { *p } == b',' as c_char {
@@ -295,7 +295,7 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> Result<()
         return Err(Failed);
     }
     unsafe {
-        *hunk = diffhunk_T {
+        *hunk = DiffHunk {
             lnum_orig: if difftype == b'a' { f1 + 1 } else { f1 },
             count_orig: if difftype == b'a' { 0 } else { l1 - f1 + 1 },
             lnum_new: if difftype == b'd' { f2 + 1 } else { f2 },
@@ -310,7 +310,7 @@ unsafe fn parse_diff_ed(line: *const c_char, hunk: *mut diffhunk_T) -> Result<()
 /// An omitted count is 1, and a count of *zero* means the hunk adds or
 /// deletes at that point rather than covering it, which shifts the line
 /// number by one.
-unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> Result<(), Failed> {
+unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut DiffHunk) -> Result<(), Failed> {
     let mut p = line as *mut c_char;
     if !unsafe { cstr::starts_with(p, b"@@ -") } {
         return Err(Failed);
@@ -341,7 +341,7 @@ unsafe fn parse_diff_unified(line: *const c_char, hunk: *mut diffhunk_T) -> Resu
         newline += 1;
     }
     unsafe {
-        *hunk = diffhunk_T {
+        *hunk = DiffHunk {
             lnum_orig: oldline,
             count_orig: oldcount,
             // `@@ -1,2 +0,0 @@` deletes the whole file; line 0 is not a line.

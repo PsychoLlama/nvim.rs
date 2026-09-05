@@ -73,9 +73,10 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileInfo, FileOffset, FlushBuffers, LineNr,
-    List, NUL, OptVal, Pos, String_0, Timestamp, VarNumber, bhdr_T, file_comparison, infoptr_T,
-    int16_t, int64_t, memfile_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t,
+    BlockHdr, BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileInfo, FileOffset,
+    FlushBuffers, InfoPtr, LineNr, List, MemFile, NUL, OptVal, Pos, String_0, Timestamp, VarNumber,
+    file_comparison, int16_t, int64_t, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
+    uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -201,7 +202,7 @@ pub const ML_CHNK_DELLINE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const ML_CHNK_UPDLINE: ::core::ffi::c_int = 3 as ::core::ffi::c_int;
 crate::flag_set! {
     /// What a buffer's memline is holding right now -- upstream's `ML_*`,
-    /// the bits [`memline_T::ml_flags`] carries.
+    /// the bits [`MemLine::ml_flags`] carries.
     ///
     /// c2rust emitted these as a bare `int` and re-emitted the `#define`s
     /// once per translation unit: seventeen copies of `ML_EMPTY` alone, in
@@ -305,7 +306,7 @@ pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
     };
 
     let mfp = unsafe { mf_open(::core::ptr::null_mut(), 0) };
-    let mut hp: *mut bhdr_T = ::core::ptr::null_mut();
+    let mut hp: *mut BlockHdr = ::core::ptr::null_mut();
     if !mfp.is_null() {
         b.b_ml.ml_mfp = mfp;
         b.b_ml.ml_flags = MlFlags::EMPTY;
@@ -327,7 +328,7 @@ pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `mfp` must be a memfile with no blocks in it yet.
-unsafe fn ml_open_blocks(buf: *mut Buffer, mfp: *mut memfile_T, hp: &mut *mut bhdr_T) -> bool {
+unsafe fn ml_open_blocks(buf: *mut Buffer, mfp: *mut MemFile, hp: &mut *mut BlockHdr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };

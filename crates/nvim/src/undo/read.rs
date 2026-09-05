@@ -112,7 +112,7 @@ unsafe fn read_undo_file(
     hash: *const uint8_t,
 ) {
     // SAFETY: an open file and a live current buffer, by the contract above.
-    let mut bi = bufinfo_T {
+    let mut bi = BufInfo {
         bi_buf: unsafe { Buf::current() },
         bi_fp: fp,
     };
@@ -197,7 +197,7 @@ struct FileHeader {
 /// # Safety
 ///
 /// `bi` is open for reading and positioned at the shadow-line length.
-unsafe fn read_file_header(bi: *mut bufinfo_T, file_name: *const c_char) -> Option<FileHeader> {
+unsafe fn read_file_header(bi: *mut BufInfo, file_name: *const c_char) -> Option<FileHeader> {
     // SAFETY: an open undo file, by the contract above.
     let str_len = unsafe { undo_read_4c(bi) };
     if str_len < 0 {
@@ -248,7 +248,7 @@ unsafe fn read_file_header(bi: *mut bufinfo_T, file_name: *const c_char) -> Opti
 ///
 /// `bi` is open for reading and positioned at the first header record.
 unsafe fn read_headers(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     file_name: *const c_char,
     num_head: c_int,
 ) -> Option<Vec<*mut UndoHeader>> {

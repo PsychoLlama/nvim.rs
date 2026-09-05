@@ -27,7 +27,7 @@ use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
 /// One entry per token written into the fake file, per buffer.
-type LineMap = [Vec<linemap_entry_T>; DB_COUNT as usize];
+type LineMap = [Vec<LinemapEntry>; DB_COUNT as usize];
 
 /// The character class `mb_get_class_tab` gives an alphanumeric character.
 ///
@@ -59,7 +59,7 @@ unsafe fn merge_gaps(
     linemap: &LineMap,
     idx1: usize,
     entry_back: LineNr,
-    mut decide: impl FnMut(*mut DiffBlock, &linemap_entry_T, &linemap_entry_T) -> Gap,
+    mut decide: impl FnMut(*mut DiffBlock, &LinemapEntry, &LinemapEntry) -> Gap,
 ) -> (bool, bool) {
     let (mut merged, mut unmerged) = (false, false);
     let map = &linemap[idx1];
@@ -226,7 +226,7 @@ unsafe fn tokenize_line(
     chartab: *const uint64_t,
     word: bool,
     out: &mut Vec<u8>,
-    map: &mut Vec<linemap_entry_T>,
+    map: &mut Vec<LinemapEntry>,
 ) {
     let flags = diff_flags.get();
     let trim_eol = flags & (DIFF_IWHITEEOL | DIFF_IWHITE) != 0;
@@ -293,7 +293,7 @@ unsafe fn tokenize_line(
             out.push(NL as u8);
         }
         if !new_in_keyword || !in_keyword {
-            map.push(linemap_entry_T {
+            map.push(LinemapEntry {
                 byte_start: i as ColNr,
                 num_bytes: tok_len,
                 lineoff: off,
@@ -319,7 +319,7 @@ unsafe fn tokenize_line(
         // newlines is visible -- with `'list'` the eol listchar takes the
         // highlight.
         out.push(NL as u8);
-        map.push(linemap_entry_T {
+        map.push(LinemapEntry {
             byte_start: bytes.len() as ColNr,
             // Upstream writes `sizeof(NL)`, and `NL` is a *character
             // constant*, so this is 4 rather than 1.  Reproduced: the
@@ -390,10 +390,10 @@ fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
 /// buffer table are saved and put back at the end.
 pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     let save_diff_algorithm = diff_algorithm.get();
-    let mut dio = diffio_T {
+    let mut dio = DiffIo {
         dio_orig: DIFFIN_INIT,
         dio_new: DIFFIN_INIT,
-        dio_diff: diffout_T {
+        dio_diff: DiffOut {
             dout_fname: ::core::ptr::null_mut(),
             dout_ga: Vec::new(),
         },

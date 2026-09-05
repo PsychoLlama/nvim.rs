@@ -1,7 +1,7 @@
 //! One list, and the entries in it.
 //!
 //! [`qf_new_list`] pushes a list onto a stack and [`qf_add_entry`] appends
-//! an entry to it. The entries are a doubly linked list of `qfline_T`
+//! an entry to it. The entries are a doubly linked list of `QfLine`
 //! hanging off `qf_start`/`qf_last`, with `qf_ptr`/`qf_index` marking the
 //! one `:cc` would jump to.
 //!
@@ -21,7 +21,7 @@ use core::ptr;
 static last_qf_id: GlobalCell<c_uint> = GlobalCell::new(0);
 
 /// A list slot that has never been used.
-pub(crate) fn empty_list() -> qf_list_T {
+pub(crate) fn empty_list() -> QfList {
     // SAFETY: every field is an integer, a bool, a raw pointer, or the
     // `Callback` whose zero discriminant is `Callback::None` and whose payload
     // is a pointer either way.
@@ -30,14 +30,14 @@ pub(crate) fn empty_list() -> qf_list_T {
 
 /// Whether the list holds no entries. A null list counts as empty.
 #[inline]
-pub(crate) unsafe fn qf_list_empty(qfl: *const qf_list_T) -> bool {
+pub(crate) unsafe fn qf_list_empty(qfl: *const QfList) -> bool {
     // SAFETY: the caller's list, which may be null.
     unsafe { qfl.is_null() || (*qfl).qf_count <= 0 }
 }
 
 /// Whether the list holds at least one entry naming a real position.
 #[inline]
-pub(crate) unsafe fn qf_list_has_valid_entries(qfl: *const qf_list_T) -> bool {
+pub(crate) unsafe fn qf_list_has_valid_entries(qfl: *const QfList) -> bool {
     // SAFETY: forwarded from the caller.
     unsafe { !qf_list_empty(qfl) && !(*qfl).qf_nonevalid }
 }
@@ -48,7 +48,7 @@ pub(crate) unsafe fn qf_list_has_valid_entries(qfl: *const qf_list_T) -> bool {
 /// # Safety
 ///
 /// `qfl` must be a live list.
-pub(crate) unsafe fn qf_list_changed(qfl: *mut qf_list_T) {
+pub(crate) unsafe fn qf_list_changed(qfl: *mut QfList) {
     // SAFETY: forwarded from the caller.
     unsafe { (*qfl).qf_changedtick += 1 };
 }
@@ -72,7 +72,7 @@ pub(crate) unsafe fn emsg_list_changed(qfl_type: QfListType) {
 /// # Safety
 ///
 /// `qi` must be a live stack, and `qf_title` null or NUL-terminated.
-pub(crate) unsafe fn qf_new_list(qi: *mut qf_info_T, qf_title: *const c_char) {
+pub(crate) unsafe fn qf_new_list(qi: *mut QfInfo, qf_title: *const c_char) {
     // SAFETY: forwarded from the caller.
     while unsafe { (*qi).qf_listcount } > unsafe { (*qi).qf_curlist } + 1 {
         unsafe { (*qi).qf_listcount -= 1 };
@@ -166,9 +166,9 @@ impl NewEntry {
 ///
 /// `qfl` must be a live list, and every string in `new` null or
 /// NUL-terminated.
-pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
+pub(crate) unsafe fn qf_add_entry(qfl: *mut QfList, new: &NewEntry) {
     // SAFETY: forwarded from the caller.
-    let qfp: *mut qfline_T = unsafe { xmalloc(size_of::<qfline_T>()) }.cast();
+    let qfp: *mut QfLine = unsafe { xmalloc(size_of::<QfLine>()) }.cast();
     let buf = if new.bufnum != 0 {
         unsafe { (*qfp).qf_fnum = new.bufnum };
         let buf = find_buf(new.bufnum);
@@ -255,7 +255,7 @@ pub(crate) unsafe fn qf_add_entry(qfl: *mut qf_list_T, new: &NewEntry) {
 ///
 /// `qfl` must be a live list.
 #[inline]
-pub(crate) unsafe fn has_entry_flag(qfl: *const qf_list_T) -> c_int {
+pub(crate) unsafe fn has_entry_flag(qfl: *const QfList) -> c_int {
     // SAFETY: forwarded from the caller.
     if unsafe { (*qfl).qfl_type } == QFLT_QUICKFIX {
         BUF_HAS_QF_ENTRY
@@ -287,7 +287,7 @@ unsafe fn dup_unless_empty(s: *const c_char) -> *mut c_char {
 /// # Safety
 ///
 /// Both lists must be live, and `to_qfl` empty.
-unsafe fn copy_loclist_entries(from_qfl: *const qf_list_T, to_qfl: *mut qf_list_T) {
+unsafe fn copy_loclist_entries(from_qfl: *const QfList, to_qfl: *mut QfList) {
     // SAFETY: forwarded from the caller.
     let mut i = 1;
     let mut from = unsafe { (*from_qfl).qf_start };
@@ -326,7 +326,7 @@ unsafe fn copy_loclist_entries(from_qfl: *const qf_list_T, to_qfl: *mut qf_list_
 /// # Safety
 ///
 /// Both lists must be live, and `to_qfl` an unused slot.
-pub(crate) unsafe fn copy_loclist(from_qfl: *mut qf_list_T, to_qfl: *mut qf_list_T) {
+pub(crate) unsafe fn copy_loclist(from_qfl: *mut QfList, to_qfl: *mut QfList) {
     // SAFETY: forwarded from the caller.
     // The entry fields are filled in by `qf_add_entry`.
     unsafe { (*to_qfl).qfl_type = (*from_qfl).qfl_type };
@@ -380,7 +380,7 @@ pub(crate) unsafe fn copy_loclist(from_qfl: *mut qf_list_T, to_qfl: *mut qf_list
 /// # Safety
 ///
 /// `qfl` must be a live list.
-pub(crate) unsafe fn qf_free_items(qfl: *mut qf_list_T) {
+pub(crate) unsafe fn qf_free_items(qfl: *mut QfList) {
     // SAFETY: forwarded from the caller.
     let mut stop = false;
     while unsafe { (*qfl).qf_count } != 0 && !unsafe { (*qfl).qf_start }.is_null() {
@@ -425,7 +425,7 @@ pub(crate) unsafe fn qf_free_items(qfl: *mut qf_list_T) {
 /// # Safety
 ///
 /// `qfl` must be a live list.
-pub(crate) unsafe fn qf_free(qfl: *mut qf_list_T) {
+pub(crate) unsafe fn qf_free(qfl: *mut QfList) {
     // SAFETY: forwarded from the caller.
     unsafe { qf_free_items(qfl) };
     unsafe { xfree((*qfl).qf_title.cast()) };

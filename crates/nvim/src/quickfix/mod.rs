@@ -1,7 +1,7 @@
 //! The quickfix and location list stacks.
 //!
-//! A `qf_info_T` is a stack of up to ten `qf_list_T`s; a list is a chain of
-//! `qfline_T` entries. There is one quickfix stack for the editor and one
+//! A `QfInfo` is a stack of up to ten `QfList`s; a list is a chain of
+//! `QfLine` entries. There is one quickfix stack for the editor and one
 //! location list stack per window. This file holds the glue — the constant
 //! families and the shared statics — and the children hold the work:
 //!
@@ -115,9 +115,9 @@ use crate::types::builders::static_cstring;
 use crate::types::{
     AcoSave, Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData,
     ExArg, ExtmarkOp, FILE, FileInfo, LineNr, List, ListItem, OptInt, OptSet, OptVal, Pos,
-    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfListType, RegMMatch, RegMatch, RegProg,
-    ScriptId, TypVal, VarNumber, VarType, bln_values, dobuf_action_values, getf_values, ptrdiff_t,
-    qf_info_T, qf_list_T, qfline_T, size_t, time_t, typval_vval_union, vimconv_T,
+    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfInfo, QfLine, QfList, QfListType, RegMMatch,
+    RegMatch, RegProg, ScriptId, TypVal, VarNumber, VarType, bln_values, dobuf_action_values,
+    getf_values, ptrdiff_t, size_t, time_t, typval_vval_union, vimconv_T,
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;

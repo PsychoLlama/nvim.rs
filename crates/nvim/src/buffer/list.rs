@@ -52,7 +52,7 @@ use crate::semsg;
 use crate::syntax::init_synblock;
 use crate::types::{
     AdditionalData, Buffer, Callback, ColNr, Failed, FileID, FileMark, FileMarkView, Handle,
-    LineNr, OptInt, Pos, RegProg, Timestamp, VAR_SCOPE, int16_t, memline_T, size_t, uint64_t,
+    LineNr, MemLine, OptInt, Pos, RegProg, Timestamp, VAR_SCOPE, int16_t, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -411,7 +411,7 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
     unsafe { (&raw mut (*at).b_ucmds).write(Vec::new()) };
     unsafe { (&raw mut (*at).b_kmap_ga).write(Vec::new()) };
     unsafe { init_synblock(&raw mut (*at).b_s) };
-    unsafe { (&raw mut (*at).b_ml).write(memline_T::closed()) };
+    unsafe { (&raw mut (*at).b_ml).write(MemLine::closed()) };
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
     // SAFETY: all-zero bytes are otherwise what upstream's

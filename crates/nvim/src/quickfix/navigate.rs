@@ -18,7 +18,7 @@ use core::ffi::c_int;
 /// One entry of a list together with its number, which the adjacency search
 /// tracks in step with the entry it walks to.
 struct At {
-    entry: *mut qfline_T,
+    entry: *mut QfLine,
     /// The entry's position in the list, counted from 1.
     nr: c_int,
 }
@@ -113,8 +113,8 @@ pub unsafe fn ex_cnext(eap: *mut ExArg) {
 /// # Safety
 ///
 /// `qfl` must be a live list.
-unsafe fn first_entry_in_buf(qfl: *mut qf_list_T, bnr: c_int) -> Option<At> {
-    // SAFETY: the caller's promise -- a live `qf_list_T`.
+unsafe fn first_entry_in_buf(qfl: *mut QfList, bnr: c_int) -> Option<At> {
+    // SAFETY: the caller's promise -- a live `QfList`.
     let qfl = unsafe { Qfl::new(qfl) };
     // SAFETY: forwarded from the caller.
     let mut at = At {
@@ -186,8 +186,8 @@ unsafe fn last_entry_on_line(mut at: At) -> At {
 /// # Safety
 ///
 /// `qfp` and `pos` must be live.
-unsafe fn compare_to_pos(qfp: *const qfline_T, pos: *const Pos, linewise: bool) -> Ordering {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+unsafe fn compare_to_pos(qfp: *const QfLine, pos: *const Pos, linewise: bool) -> Ordering {
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
     // SAFETY: forwarded from the caller.
     let cols = if linewise {
@@ -264,7 +264,7 @@ unsafe fn entry_before_pos(bnr: c_int, pos: *const Pos, linewise: bool, mut at: 
 ///
 /// `qfl` must be a live list and `pos` a live position.
 unsafe fn closest_entry(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     bnr: c_int,
     pos: *const Pos,
     dir: Direction,
@@ -343,7 +343,7 @@ unsafe fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
 ///
 /// `qfl` must be a live list and `pos` a live position.
 unsafe fn nth_adjacent_entry(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     bnr: c_int,
     pos: *const Pos,
     n: LineNr,

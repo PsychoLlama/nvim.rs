@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, DictItem, FileMark, FileMarkView, GArray, Handle, HashTab, LineNr, Pos,
-    Refcount, SynBlock, Tabpage, Timestamp, WinInfo, Window, memfile_T,
+    Callback, ColNr, DictItem, FileMark, FileMarkView, GArray, Handle, HashTab, LineNr, MemFile,
+    Pos, Refcount, SynBlock, Tabpage, Timestamp, WinInfo, Window,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -649,7 +649,7 @@ pub fn buf_clear_file(mut buf: Buf) {
     buf.b_start_eol = 1;
     buf.b_p_bomb = 0;
     buf.b_start_bomb = 0;
-    buf.b_ml.ml_mfp = ptr::null_mut::<memfile_T>();
+    buf.b_ml.ml_mfp = ptr::null_mut::<MemFile>();
     // Upstream's `ml_flags = ML_EMPTY` also dropped the ownership of the
     // cached line, without freeing it; the memfile it pointed into is gone
     // either way.

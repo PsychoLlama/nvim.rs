@@ -126,9 +126,9 @@ pub(crate) fn diff_still_listed(dp: *mut DiffBlock) -> bool {
 ///
 /// # Safety
 /// `din` must be a live input side of a diff run.
-unsafe fn clear_diffin(din: *mut diffin_T) {
+unsafe fn clear_diffin(din: *mut DiffIn) {
     // SAFETY: the caller's input side.
-    let mut din = unsafe { Live::<diffin_T>::new(din) };
+    let mut din = unsafe { Live::<DiffIn>::new(din) };
     if din.din_fname.is_null() {
         // SAFETY: the memory image is this module's own allocation.
         unsafe { xfree(din.din_mmfile.ptr.cast()) };
@@ -144,9 +144,9 @@ unsafe fn clear_diffin(din: *mut diffin_T) {
 ///
 /// # Safety
 /// `dout` must be a live output side of a diff run.
-pub(crate) unsafe fn clear_diffout(dout: *mut diffout_T) {
+pub(crate) unsafe fn clear_diffout(dout: *mut DiffOut) {
     // SAFETY: the caller's output side.
-    let mut dout = unsafe { Live::<diffout_T>::new(dout) };
+    let mut dout = unsafe { Live::<DiffOut>::new(dout) };
     if dout.dout_fname.is_null() {
         dout.dout_ga = Vec::new();
     } else {
@@ -268,14 +268,14 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
 /// `din` must be a live input side.
 unsafe fn diff_write(
     mut buf: Buf,
-    din: *mut diffin_T,
+    din: *mut DiffIn,
     start: LineNr,
     mut end: LineNr,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's input side.
-    let din = unsafe { Live::<diffin_T>::new(din) };
+    let din = unsafe { Live::<DiffIn>::new(din) };
     if din.din_fname.is_null() {
-        let image = din.field_ptr(offset_of!(diffin_T, din_mmfile));
+        let image = din.field_ptr(offset_of!(DiffIn, din_mmfile));
         // SAFETY: the caller's buffer, and `din`'s own image field.
         return unsafe { diff_write_buffer(buf, image, start, end) };
     }
@@ -332,12 +332,12 @@ unsafe fn diff_write(
 ///
 /// # Safety
 /// `dio` must be a live diff run, and `eap` null or a live command.
-unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut ExArg) {
+unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, eap: *mut ExArg) {
     // SAFETY: the caller's diff run.
-    let mut dio = unsafe { Live::<diffio_T>::new(dio) };
-    let orig_in: *mut diffin_T = dio.field_ptr(offset_of!(diffio_T, dio_orig));
-    let new_in: *mut diffin_T = dio.field_ptr(offset_of!(diffio_T, dio_new));
-    let diff_out: *mut diffout_T = dio.field_ptr(offset_of!(diffio_T, dio_diff));
+    let mut dio = unsafe { Live::<DiffIo>::new(dio) };
+    let orig_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_orig));
+    let new_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_new));
+    let diff_out: *mut DiffOut = dio.field_ptr(offset_of!(DiffIo, dio_diff));
     let mut tp = cur_tab();
     let idx_orig = idx_orig as usize;
     let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
@@ -532,10 +532,10 @@ pub unsafe fn ex_diffupdate(eap: *mut ExArg) {
     if let Some(idx_orig) = first_two {
         // SAFETY: the editor exists.
         let internal = unsafe { diff_internal() };
-        let mut diffio = diffio_T {
+        let mut diffio = DiffIo {
             dio_orig: DIFFIN_INIT,
             dio_new: DIFFIN_INIT,
-            dio_diff: diffout_T {
+            dio_diff: DiffOut {
                 dout_fname: ::core::ptr::null_mut(),
                 dout_ga: Vec::new(),
             },

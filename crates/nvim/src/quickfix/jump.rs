@@ -46,15 +46,15 @@ enum Jumped {
 ///
 /// `qi` must be a live stack and `qfl`/`qf_ptr` what it held.
 unsafe fn list_still_current(
-    qi: *mut qf_info_T,
-    qfl: *mut qf_list_T,
-    qf_ptr: *mut qfline_T,
+    qi: *mut QfInfo,
+    qfl: *mut QfList,
+    qf_ptr: *mut QfLine,
     old_curlist: c_int,
     old_changedtick: c_int,
 ) -> bool {
-    // SAFETY: the caller's promise -- a live `qf_list_T`.
+    // SAFETY: the caller's promise -- a live `QfList`.
     let qfl = unsafe { Qfl::new(qfl) };
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     if old_curlist == qi.qf_curlist
@@ -74,15 +74,15 @@ unsafe fn list_still_current(
 ///
 /// `qi` must be a live stack and `qf_ptr` an entry in its current list.
 unsafe fn qf_jump_edit_buffer(
-    qi: *mut qf_info_T,
-    qf_ptr: *mut qfline_T,
+    qi: *mut QfInfo,
+    qf_ptr: *mut QfLine,
     forceit: c_int,
     prev_winid: c_int,
     opened_window: &mut bool,
 ) -> Jumped {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     let qfl = unsafe { qf_get_curlist(qi.raw()) };
@@ -166,12 +166,12 @@ unsafe fn qf_jump_edit_buffer(
 ///
 /// `qi` must be a live stack and `opened_window` writable.
 unsafe fn escape_winfixbuf(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     fnum: c_int,
     forceit: c_int,
     opened_window: &mut bool,
 ) -> Option<bool> {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     if forceit != 0 || cur_win().w_onebuf_opt.wo_wfb == 0 || cur_buf().handle == fnum {
@@ -272,9 +272,9 @@ unsafe fn qf_jump_goto_line(
 ///
 /// `qi` must be a live stack and `qf_ptr` an entry in its current list.
 unsafe fn qf_jump_print_msg(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     qf_index: c_int,
-    qf_ptr: *mut qfline_T,
+    qf_ptr: *mut QfLine,
     old_curbuf: *mut Buffer,
     old_lnum: LineNr,
 ) {
@@ -343,14 +343,14 @@ unsafe fn qf_jump_print_msg(
 ///
 /// `qi` must be a live stack and `qf_ptr` an entry in its current list.
 unsafe fn qf_jump_open_window(
-    qi: *mut qf_info_T,
-    qf_ptr: *mut qfline_T,
+    qi: *mut QfInfo,
+    qf_ptr: *mut QfLine,
     newwin: bool,
     opened_window: &mut bool,
 ) -> Jumped {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     let qfl = unsafe { qf_get_curlist(qi.raw()) };
@@ -389,16 +389,16 @@ unsafe fn qf_jump_open_window(
 /// `qi` must be a live stack and `qf_ptr` an entry in its current list.
 #[allow(clippy::too_many_arguments)]
 unsafe fn qf_jump_to_buffer(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     qf_index: c_int,
-    qf_ptr: *mut qfline_T,
+    qf_ptr: *mut QfLine,
     forceit: c_int,
     prev_winid: c_int,
     opened_window: &mut bool,
     openfold: bool,
     print_message: bool,
 ) -> Jumped {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
     // SAFETY: forwarded from the caller.
     let old_curbuf = curbuf.get();
@@ -434,7 +434,7 @@ unsafe fn qf_jump_to_buffer(
 /// # Safety
 ///
 /// `qi` must be null (meaning the quickfix stack) or a live stack.
-pub unsafe fn qf_jump(qi: *mut qf_info_T, dir: c_int, errornr: c_int, forceit: c_int) {
+pub unsafe fn qf_jump(qi: *mut QfInfo, dir: c_int, errornr: c_int, forceit: c_int) {
     // SAFETY: forwarded from the caller.
     unsafe { qf_jump_newwin(qi, dir, errornr, forceit, false) };
 }
@@ -451,7 +451,7 @@ pub unsafe fn qf_jump(qi: *mut qf_info_T, dir: c_int, errornr: c_int, forceit: c
 ///
 /// `qi` must be null (meaning the quickfix stack) or a live stack.
 pub(crate) unsafe fn qf_jump_newwin(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     dir: c_int,
     errornr: c_int,
     forceit: c_int,
@@ -548,7 +548,7 @@ pub(crate) unsafe fn qf_jump_newwin(
 /// # Safety
 ///
 /// `qi` must be a live stack.
-pub(crate) unsafe fn qf_jump_first(qi: *mut qf_info_T, save_qfid: c_uint, forceit: c_int) {
+pub(crate) unsafe fn qf_jump_first(qi: *mut QfInfo, save_qfid: c_uint, forceit: c_int) {
     // SAFETY: the caller's promise -- a live stack.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: as above.

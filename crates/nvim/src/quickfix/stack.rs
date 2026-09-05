@@ -7,7 +7,7 @@
 //! closed first.
 //!
 //! The two are the same struct and the same code works on both, so most of
-//! this module still takes a `*mut qf_info_T`. [`QfStack`] is for the places
+//! this module still takes a `*mut QfInfo`. [`QfStack`] is for the places
 //! where the difference matters: [`qf_alloc_stack`] makes a location list
 //! stack and only a location list stack, and [`qf_free_lists`] frees one and
 //! only one. [`qf_resize_stack_base`] changes how many lists a stack holds
@@ -29,30 +29,30 @@ use core::ptr;
 
 /// A stack the caller has promised outlives the value.
 ///
-/// The quickfix code hands `*mut qf_info_T` around because an autocommand
+/// The quickfix code hands `*mut QfInfo` around because an autocommand
 /// can reach the same stack while a command is walking it, so no borrow may
 /// outlive one field access — which is exactly what [`Live`]'s `Deref`
 /// gives. Wrapping is the unsafe step, once per entry point; every
 /// `(*qi).field` after it is ordinary checked code.
-pub(crate) type Qi = Live<qf_info_T>;
+pub(crate) type Qi = Live<QfInfo>;
 
 /// One list on a stack — the same promise as [`Qi`].
-pub(crate) type Qfl = Live<qf_list_T>;
+pub(crate) type Qfl = Live<QfList>;
 
 /// One entry on a list — the same promise as [`Qi`].
-pub(crate) type Qfe = Live<qfline_T>;
+pub(crate) type Qfe = Live<QfLine>;
 
 /// The one quickfix stack. It is a static rather than an allocation
 /// because it outlives every window and is never freed. Reached through
 /// [`QfStack::Global`], which is the only thing in the tree that knows the
 /// storage is a static at all.
-static ql_info_actual: GlobalCell<qf_info_T> = GlobalCell::new(qf_info_T::new(QFLT_QUICKFIX));
+static ql_info_actual: GlobalCell<QfInfo> = GlobalCell::new(QfInfo::new(QFLT_QUICKFIX));
 
-/// Which of the two kinds of stack a `*mut qf_info_T` names.
+/// Which of the two kinds of stack a `*mut QfInfo` names.
 ///
 /// They are the same struct, but they are not owned the same way. The
 /// quickfix stack is a static: one per editor, live before `main` reads its
-/// first command, never freed, and its [`qf_refcount`](qf_info_T) means
+/// first command, never freed, and its [`qf_refcount`](QfInfo) means
 /// nothing. A location list stack is an allocation shared by the window that
 /// owns the list and the location list window showing it, freed at the last
 /// reference. So the global variant names a *slot* and carries no address,
@@ -64,12 +64,12 @@ pub(crate) enum QfStack {
     Global,
     /// A location list stack, or the throwaway `QFLT_INTERNAL` one
     /// `getqflist({'lines': …})` parses into. Never null.
-    Local(*mut qf_info_T),
+    Local(*mut QfInfo),
 }
 
 impl QfStack {
     /// Which stack `qi` is. `qi` must name a live stack.
-    pub(crate) fn of(qi: *mut qf_info_T) -> QfStack {
+    pub(crate) fn of(qi: *mut QfInfo) -> QfStack {
         debug_assert!(!qi.is_null());
         if ptr::eq(qi, QfStack::Global.raw()) {
             QfStack::Global
@@ -79,14 +79,14 @@ impl QfStack {
     }
 
     /// The address, for the rest of the quickfix code — which passes a
-    /// `*mut qf_info_T` around because an autocommand can reach the same
+    /// `*mut QfInfo` around because an autocommand can reach the same
     /// stack while a command is walking it, so no borrow may outlive one
     /// field access.
     ///
     /// This is the module's single `ql_info_actual.ptr()`: the quickfix
     /// stack's address is what every `qf_*` function takes, and this is
     /// where it comes from.
-    pub(crate) fn raw(self) -> *mut qf_info_T {
+    pub(crate) fn raw(self) -> *mut QfInfo {
         match self {
             QfStack::Global => ql_info_actual.ptr(),
             QfStack::Local(qi) => qi,
@@ -148,7 +148,7 @@ pub(crate) fn qf_global() -> Qi {
 
 /// A stack that may be absent — what a location list command finds in a
 /// window that has no location list. `qi` must be null or a live stack.
-pub(crate) fn qf_opt(qi: *mut qf_info_T) -> Option<Qi> {
+pub(crate) fn qf_opt(qi: *mut QfInfo) -> Option<Qi> {
     // SAFETY: the caller's stack, tested for null first.
     (!qi.is_null()).then(|| unsafe { Qi::new(qi) })
 }
@@ -221,7 +221,7 @@ pub(crate) fn qfl_changed(qfl: Qfl) {
 ///
 /// `old_last` is the entry the buffer was filled to last time, or null for a
 /// full rewrite.
-pub(crate) fn qf_redraw(qi: Qi, old_last: *mut qfline_T) {
+pub(crate) fn qf_redraw(qi: Qi, old_last: *mut QfLine) {
     // SAFETY: `qi`'s promise, and the caller's entry.
     unsafe { qf_update_buffer(qi.raw(), old_last) };
 }
@@ -245,12 +245,12 @@ pub(crate) fn qf_busy_end() {
 static quickfix_busy: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Location list stacks whose free was deferred, newest last.
-static PENDING_FREE: GlobalCell<Vec<*mut qf_info_T>> = GlobalCell::new(Vec::new());
+static PENDING_FREE: GlobalCell<Vec<*mut QfInfo>> = GlobalCell::new(Vec::new());
 
 /// Whether the stack holds no lists at all. A null stack counts as empty,
 /// which is how the location list commands report "no location list".
 #[inline]
-pub(crate) unsafe fn qf_stack_empty(qi: *const qf_info_T) -> bool {
+pub(crate) unsafe fn qf_stack_empty(qi: *const QfInfo) -> bool {
     // SAFETY: the caller's stack, which may be null.
     unsafe { qi.is_null() || (*qi).qf_listcount <= 0 }
 }
@@ -293,7 +293,7 @@ pub(crate) fn is_qf_window(wp: Win) -> bool {
 /// The location list stack `wp` works on: the one it references when it is
 /// a location list window, otherwise its own. May be null.
 #[inline]
-pub(crate) fn win_loclist(wp: Win) -> *mut qf_info_T {
+pub(crate) fn win_loclist(wp: Win) -> *mut QfInfo {
     if is_ll_window(wp) {
         wp.w_llist_ref
     } else {
@@ -306,10 +306,10 @@ pub(crate) fn win_loclist(wp: Win) -> *mut qf_info_T {
 /// # Safety
 ///
 /// `qi` must be a live stack and `idx` below its
-/// [`max_count`](qf_info_T::max_count).
+/// [`max_count`](QfInfo::max_count).
 #[inline]
-pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list_T {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+pub(crate) unsafe fn qf_get_list(qi: *mut QfInfo, idx: c_int) -> *mut QfList {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: the caller's stack and a slot it has room for. The pointer
     // is into the `Vec`'s heap buffer, which outlives every borrow of the
@@ -323,8 +323,8 @@ pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list
 ///
 /// `qi` must be a live stack with at least one list.
 #[inline]
-pub(crate) unsafe fn qf_get_curlist(qi: *mut qf_info_T) -> *mut qf_list_T {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+pub(crate) unsafe fn qf_get_curlist(qi: *mut QfInfo) -> *mut QfList {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     unsafe { qf_get_list(qi.raw(), qi.qf_curlist) }
@@ -339,7 +339,7 @@ pub(crate) unsafe fn qf_get_curlist(qi: *mut qf_info_T) -> *mut qf_list_T {
 /// # Safety
 ///
 /// `qi` must be a live stack holding at least one list.
-pub(crate) unsafe fn qf_pop_stack(raw: *mut qf_info_T, adjust: bool) {
+pub(crate) unsafe fn qf_pop_stack(raw: *mut QfInfo, adjust: bool) {
     // SAFETY: forwarded from the caller -- a live stack.
     let mut qi = unsafe { Qi::new(raw) };
     // SAFETY: as above; slot 0 exists because the stack holds a list.
@@ -363,7 +363,7 @@ pub(crate) unsafe fn qf_pop_stack(raw: *mut qf_info_T, adjust: bool) {
 /// upwards leaves each source intact until it has been read, and the slot
 /// the shift vacates is overwritten before anything can see it -- which is
 /// exactly what the `memmove` it replaces did.
-fn drop_oldest_list(lists: &mut [qf_list_T], count: usize) {
+fn drop_oldest_list(lists: &mut [QfList], count: usize) {
     for at in 1..count {
         lists[at - 1] = lists[at].clone();
     }
@@ -382,8 +382,8 @@ pub fn qf_stack_get_bufnr() -> c_int {
 /// # Safety
 ///
 /// `qi` must be a live stack.
-unsafe fn wipe_qf_buffer(qi: *mut qf_info_T) {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+unsafe fn wipe_qf_buffer(qi: *mut QfInfo) {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     if qi.qf_bufnr == INVALID_QFBUFNR {
@@ -411,8 +411,8 @@ unsafe fn wipe_qf_buffer(qi: *mut qf_info_T) {
 /// # Safety
 ///
 /// `qi` must be a live stack.
-unsafe fn qf_free_list_stack_items(qi: *mut qf_info_T) {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+unsafe fn qf_free_list_stack_items(qi: *mut QfInfo) {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     for i in 0..qi.qf_listcount {
@@ -426,7 +426,7 @@ unsafe fn qf_free_list_stack_items(qi: *mut qf_info_T) {
 ///
 /// `qi` must be a boxed stack with no references left — never the quickfix
 /// stack, which is a static.
-pub(crate) unsafe fn qf_free_lists(qi: *mut qf_info_T) {
+pub(crate) unsafe fn qf_free_lists(qi: *mut QfInfo) {
     // SAFETY: forwarded from the caller.
     debug_assert!(matches!(QfStack::of(qi), QfStack::Local(_)));
     unsafe { qf_free_list_stack_items(qi) };
@@ -438,7 +438,7 @@ pub(crate) unsafe fn qf_free_lists(qi: *mut qf_info_T) {
 /// # Safety
 ///
 /// `*pqi` must be null or a live location list stack.
-pub(crate) unsafe fn ll_free_all(pqi: *mut *mut qf_info_T) {
+pub(crate) unsafe fn ll_free_all(pqi: *mut *mut QfInfo) {
     // SAFETY: forwarded from the caller.
     let qi = unsafe { *pqi };
     if qi.is_null() {
@@ -457,8 +457,8 @@ pub(crate) unsafe fn ll_free_all(pqi: *mut *mut qf_info_T) {
 /// # Safety
 ///
 /// `qi` must be a live location list stack.
-unsafe fn ll_release(qi: *mut qf_info_T) {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+unsafe fn ll_release(qi: *mut QfInfo) {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     if qi.qf_refcount.release() < 1 {
@@ -504,7 +504,7 @@ pub(crate) unsafe fn decr_quickfix_busy() {
 }
 
 /// Room for `n` lists, all unused.
-fn qf_alloc_list_stack(n: c_int) -> Vec<qf_list_T> {
+fn qf_alloc_list_stack(n: c_int) -> Vec<QfList> {
     debug_assert!(n >= 0);
     vec![empty_list(); n.max(0) as usize]
 }
@@ -515,9 +515,9 @@ fn qf_alloc_list_stack(n: c_int) -> Vec<qf_list_T> {
 /// Never the quickfix stack: that one is [`QfStack::Global`], a static that
 /// exists before this module is first entered and that [`qf_init_stack`]
 /// only gives its slots to.
-pub(crate) fn qf_alloc_stack(qfltype: QfListType, n: c_int) -> *mut qf_info_T {
+pub(crate) fn qf_alloc_stack(qfltype: QfListType, n: c_int) -> *mut QfInfo {
     debug_assert_ne!(qfltype, QFLT_QUICKFIX);
-    let mut stack = Box::new(qf_info_T::new(qfltype));
+    let mut stack = Box::new(QfInfo::new(qfltype));
     stack.qf_refcount = Refcount::ONE;
     stack.qf_bufnr = INVALID_QFBUFNR;
     stack.qf_lists = qf_alloc_list_stack(n);
@@ -561,8 +561,8 @@ pub fn ll_resize_stack(wp: Win, n: c_int) {
 /// # Safety
 ///
 /// `qi` must be a live stack.
-unsafe fn qf_resize_stack_base(qi: *mut qf_info_T, n: c_int) {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+unsafe fn qf_resize_stack_base(qi: *mut QfInfo, n: c_int) {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     let max = (*qi).max_count();
@@ -600,7 +600,7 @@ fn qf_sync_win_to_llw(pwp: Win) {
 }
 
 /// The location list stack for a window, allocating one if it has none.
-pub(crate) fn ll_get_or_alloc_list(mut wp: Win) -> *mut qf_info_T {
+pub(crate) fn ll_get_or_alloc_list(mut wp: Win) -> *mut QfInfo {
     if is_ll_window(wp) {
         return wp.w_llist_ref;
     }
@@ -622,7 +622,7 @@ pub(crate) fn ll_get_or_alloc_list(mut wp: Win) -> *mut qf_info_T {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut ExArg, print_emsg: bool) -> *mut qf_info_T {
+pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut ExArg, print_emsg: bool) -> *mut QfInfo {
     // SAFETY: the caller's promise -- a live `ExArg`.
     let eap = unsafe { Ea::new(eap) };
     // SAFETY: forwarded from the caller.
@@ -641,8 +641,8 @@ pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut ExArg, print_emsg: bool) -> *mut
 /// # Safety
 ///
 /// `qi` must be a live stack.
-pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -> c_int {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+pub(crate) unsafe fn qf_id2nr(qi: *const QfInfo, qfid: ::core::ffi::c_uint) -> c_int {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi.cast_mut()) };
     // SAFETY: forwarded from the caller.
     let count = qi.qf_listcount as usize;
@@ -664,10 +664,10 @@ pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -
 ///
 /// `qi` must be a live stack.
 pub(crate) unsafe fn qf_restore_list(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     save_qfid: ::core::ffi::c_uint,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let mut qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     if unsafe { (*qf_get_curlist(qi.raw())).qf_id } == save_qfid {
@@ -775,7 +775,7 @@ mod tests {
     fn the_static_is_the_only_global_stack() {
         assert_eq!(QfStack::of(QfStack::Global.raw()), QfStack::Global);
 
-        let mut elsewhere = qf_info_T::new(QFLT_LOCATION);
+        let mut elsewhere = QfInfo::new(QFLT_LOCATION);
         let other = &raw mut elsewhere;
         assert_eq!(QfStack::of(other), QfStack::Local(other));
     }

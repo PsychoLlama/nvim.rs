@@ -126,7 +126,7 @@ unsafe fn write_undo_file(
         return;
     }
     u_sync(true);
-    let mut bi = bufinfo_T {
+    let mut bi = BufInfo {
         bi_buf: buf,
         bi_fp: fp,
     };
@@ -223,7 +223,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buf: Buf) 
 /// at [`UNDO_HASH_SIZE`] readable bytes, and `fd`/`fp` are the same open
 /// file as `bi`.
 unsafe fn write_tree(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     buf: Buf,
     hash: *mut uint8_t,
     fd: c_int,

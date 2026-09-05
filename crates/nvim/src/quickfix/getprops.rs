@@ -91,7 +91,7 @@ unsafe fn asked_for(what: *const Dict, key: &str) -> bool {
 /// # Safety
 ///
 /// `qfp` must be a live entry and `list` a live list.
-unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut List) {
+unsafe fn get_qfline_items(qfp: *mut QfLine, list: *mut List) {
     // SAFETY: forwarded from the caller.
     // Handle entries with a non-existing buffer number.
     let mut bufnum = unsafe { (*qfp).qf_fnum };
@@ -132,7 +132,7 @@ unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut List) {
 ///
 /// `qi` must be null or a live stack and `list` a live list.
 pub(crate) unsafe fn get_errorlist(
-    qi_arg: *mut qf_info_T,
+    qi_arg: *mut QfInfo,
     wp: Option<Win>,
     mut qf_idx: c_int,
     eidx: c_int,
@@ -245,7 +245,7 @@ unsafe fn qf_get_list_from_lines(
 /// # Safety
 ///
 /// `qi` must be null or a live stack.
-unsafe fn qf_winid(qi: *mut qf_info_T) -> c_int {
+unsafe fn qf_winid(qi: *mut QfInfo) -> c_int {
     // SAFETY: forwarded from the caller.
     if qi.is_null() {
         return 0;
@@ -263,7 +263,7 @@ unsafe fn qf_winid(qi: *mut qf_info_T) -> c_int {
 /// # Safety
 ///
 /// `qi` must be null or a live stack, and `retdict` live.
-unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut Dict) -> Result<(), KeyTaken> {
+unsafe fn qf_getprop_qfbufnr(qi: *const QfInfo, retdict: *mut Dict) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     let mut bufnum = 0;
     if !qi.is_null() && find_buf(unsafe { (*qi).qf_bufnr }).is_some() {
@@ -324,7 +324,7 @@ unsafe fn qf_getprop_keys2flags(what: *const Dict, loclist: bool) -> GetListProp
 /// # Safety
 ///
 /// `qi` must be a live stack and `what` null or a live dictionary.
-unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut Dict) -> Option<c_int> {
+unsafe fn qf_getprop_qfidx(qi: *mut QfInfo, what: *mut Dict) -> Option<c_int> {
     // SAFETY: forwarded from the caller.
     let mut qf_idx = unsafe { (*qi).qf_curlist };
 
@@ -372,7 +372,7 @@ unsafe fn qf_getprop_qfidx(qi: *mut qf_info_T, what: *mut Dict) -> Option<c_int>
 ///
 /// `qi` must be null or a live stack, and `retdict` live.
 unsafe fn qf_getprop_defaults(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     flags: GetListProps,
     locstack: bool,
     retdict: *mut Dict,
@@ -430,7 +430,7 @@ unsafe fn qf_getprop_defaults(
 /// `qi` must be a live stack and `retdict` live.
 unsafe fn qf_getprop_filewinid(
     wp: Option<Win>,
-    qi: *const qf_info_T,
+    qi: *const QfInfo,
     retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
     let winid = wp
@@ -449,7 +449,7 @@ unsafe fn qf_getprop_filewinid(
 /// # Safety
 ///
 /// `qi` must be a live stack and `retdict` live.
-unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdict: *mut Dict) {
+unsafe fn qf_getprop_items(qi: *mut QfInfo, qf_idx: c_int, eidx: c_int, retdict: *mut Dict) {
     // SAFETY: forwarded from the caller.
     let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     let _ = unsafe { get_errorlist(qi, None, qf_idx, eidx, l) };
@@ -462,7 +462,7 @@ unsafe fn qf_getprop_items(qi: *mut qf_info_T, qf_idx: c_int, eidx: c_int, retdi
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut Dict) -> Result<(), KeyTaken> {
+unsafe fn qf_getprop_ctx(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     if unsafe { (*qfl).qf_ctx }.is_null() {
         return unsafe { add_str(retdict, "context", ptr::null()) };
@@ -483,7 +483,7 @@ unsafe fn qf_getprop_ctx(qfl: *mut qf_list_T, retdict: *mut Dict) -> Result<(), 
 ///
 /// `qfl` must be a live list and `retdict` live.
 unsafe fn qf_getprop_idx(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     mut eidx: c_int,
     retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
@@ -502,7 +502,7 @@ unsafe fn qf_getprop_idx(
 /// # Safety
 ///
 /// `qfl` must be a live list and `retdict` live.
-unsafe fn qf_getprop_qftf(qfl: *mut qf_list_T, retdict: *mut Dict) -> Result<(), KeyTaken> {
+unsafe fn qf_getprop_qftf(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), KeyTaken> {
     // SAFETY: forwarded from the caller.
     if !unsafe { &(*qfl).qf_qftf_cb }.is_set() {
         return unsafe { add_str(retdict, "quickfixtextfunc", ptr::null()) };

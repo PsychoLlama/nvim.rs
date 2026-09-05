@@ -72,8 +72,8 @@ pub(crate) unsafe fn push_cstr(out: &mut Vec<u8>, text: *const c_char) {
 /// # Safety
 ///
 /// `qfp` must be a live entry.
-unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+unsafe fn qf_list_entry(qfp: *mut QfLine, qf_idx: c_int, cursel: bool) {
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qfp = unsafe { Qfe::new(qfp) };
     // The heading. Upstream assembles it in `IObuff` and then calls
     // `message_filtered` and `msg_outtrans`, both of which re-enter the
@@ -293,8 +293,8 @@ pub(crate) unsafe fn qf_fmt_text(out: &mut Vec<u8>, text: *const c_char) {
 /// # Safety
 ///
 /// `qfp` must be a live entry.
-pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const qfline_T) {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const QfLine) {
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
     let mut range = [0 as c_char; IOSIZE as usize];
     // SAFETY: forwarded from the caller. Each `vim_snprintf_safelen`
@@ -334,8 +334,8 @@ pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const qfline_T) {
 ///
 /// `qi` must be a live stack holding a list at `which`, and `lead` a live
 /// string.
-unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+unsafe fn qf_msg(qi: *mut QfInfo, which: c_int, lead: *const c_char) {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     let qfl = qf_nth_list(qi, which);

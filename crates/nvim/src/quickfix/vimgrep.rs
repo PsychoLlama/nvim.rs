@@ -234,7 +234,7 @@ unsafe fn load_quietly(
 /// `qi` must be a live stack and `title` NUL-terminated.
 unsafe fn list_still_usable(
     wp: Option<Win>,
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     qfid: c_uint,
     title: *const c_char,
 ) -> bool {
@@ -261,7 +261,7 @@ unsafe fn list_still_usable(
 /// `qfl` must be a live list, `buf` a loaded buffer and `fname`
 /// NUL-terminated.
 unsafe fn match_buflines(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     fname: *mut c_char,
     buf: Buf,
     search: &mut Search,
@@ -421,7 +421,7 @@ unsafe fn existing_swapfile(buf: Buf) -> bool {
 /// `qi` must be a live stack.
 unsafe fn process_files(
     wp: Option<Win>,
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     search: &mut Search,
     files: &Files,
     out: &mut Outcome,
@@ -578,7 +578,7 @@ unsafe fn keep_or_drop_dummy(
 /// # Safety
 ///
 /// `qi` must be a live stack.
-unsafe fn jump_to_match(qi: *mut qf_info_T, forceit: c_int, out: &mut Outcome) {
+unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
     // SAFETY: forwarded from the caller.
     let buf = curbuf.get();
     unsafe { qf_jump(qi, 0, 0, forceit) };

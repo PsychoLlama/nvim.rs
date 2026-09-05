@@ -31,7 +31,7 @@ use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_
 use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
-use crate::types::{FAIL, OK, ScriptId, lua_State, qf_info_T, size_t};
+use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
 use ::libc::fprintf;
 
 /// The parameter block `main` filled in, which outlives every call here.
@@ -102,7 +102,7 @@ pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
     }
     if parm.edit_type == EDIT_QF as c_int {
         // `-q`: the commands may have changed the quickfix list.
-        unsafe { qf_jump(ptr::null_mut::<qf_info_T>(), 0, 0, 0) };
+        unsafe { qf_jump(ptr::null_mut::<QfInfo>(), 0, 0, 0) };
     }
 
     time_msg_at(c"executing command arguments");

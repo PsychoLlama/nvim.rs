@@ -32,7 +32,7 @@ use crate::r#move::WinValid;
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Failed, Frame, Integer, OptInt, Window, qf_info_T};
+use crate::types::{FAIL, Failed, Frame, Integer, OptInt, QfInfo, Window};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
@@ -799,8 +799,8 @@ fn init(newp: Win, oldp: Win, flags: c_int) {
     unsafe { copy_jumplist(oldp.raw(), newp.raw()) };
     if flags & WSP_NEWLOC as c_int != 0 {
         // Don't copy the location list.
-        newp.w_llist = ptr::null_mut::<qf_info_T>();
-        newp.w_llist_ref = ptr::null_mut::<qf_info_T>();
+        newp.w_llist = ptr::null_mut::<QfInfo>();
+        newp.w_llist_ref = ptr::null_mut::<QfInfo>();
     } else {
         copy_loclist_stack(oldp, newp);
     }

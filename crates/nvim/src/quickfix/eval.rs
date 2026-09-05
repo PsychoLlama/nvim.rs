@@ -21,7 +21,7 @@ use core::ffi::{c_char, c_int};
 use core::ptr;
 
 /// The parsed global `'quickfixtextfunc'`. A list-local one lives in
-/// `qf_info_T::qf_qftf_cb`.
+/// `QfInfo::qf_qftf_cb`.
 ///
 /// The address, because every operation the tree has on a callback —
 /// parsing an option into it, marking it for the collector, copying it,
@@ -48,7 +48,7 @@ unsafe fn holds_references(tv: *const TypVal) -> bool {
 /// # Safety
 ///
 /// `qi` must be a live stack.
-unsafe fn mark_quickfix_user_data(qi: *mut qf_info_T, copy_id: c_int) -> bool {
+unsafe fn mark_quickfix_user_data(qi: *mut QfInfo, copy_id: c_int) -> bool {
     // SAFETY: forwarded from the caller.
     let mut aborted = false;
     let mut i = 0;
@@ -82,7 +82,7 @@ unsafe fn mark_quickfix_user_data(qi: *mut qf_info_T, copy_id: c_int) -> bool {
 /// # Safety
 ///
 /// `qi` must be a live stack.
-unsafe fn mark_quickfix_ctx(qi: *mut qf_info_T, copy_id: c_int) -> bool {
+unsafe fn mark_quickfix_ctx(qi: *mut QfInfo, copy_id: c_int) -> bool {
     // SAFETY: forwarded from the caller.
     let mut aborted = false;
     let mut i = 0;

@@ -60,8 +60,8 @@ pub unsafe fn ml_recover(checkext: bool) {
     // registry, so this frame is its owner; `buf` is only the address the
     // memline code below works through.
     let mut owned_buf: Option<Owned<Buffer>> = None;
-    let mut mfp: *mut memfile_T = core::ptr::null_mut();
-    let mut hp: *mut bhdr_T = core::ptr::null_mut();
+    let mut mfp: *mut MemFile = core::ptr::null_mut();
+    let mut hp: *mut BlockHdr = core::ptr::null_mut();
     let mut fname_used: *mut c_char = core::ptr::null_mut();
     // Nothing was recovered yet, so a failure now leaves the buffer with
     // no memline at all.
@@ -434,8 +434,8 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
 /// unusable, which leaves nothing to recover.
 unsafe fn recover_lines(
     buf: *mut Buffer,
-    mfp: *mut memfile_T,
-    hp: &mut *mut bhdr_T,
+    mfp: *mut MemFile,
+    hp: &mut *mut BlockHdr,
 ) -> Result<(LineNr, c_int), ()> {
     let mut bnum: BlockNr = 1; // start with block 1
     let mut page_count: c_uint = 1; // which is one page
@@ -536,7 +536,7 @@ unsafe fn recover_lines(
 
                     // One block deeper in the tree.
                     let top = unsafe { ml_add_stack(buf) };
-                    let frame = infoptr_T {
+                    let frame = InfoPtr {
                         ip_bnum: bnum,
                         ip_low: 0,
                         ip_high: 0,

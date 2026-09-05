@@ -34,7 +34,7 @@ pub(crate) fn qf_find_help_win() -> Option<Win> {
 }
 
 /// A window that is not a quickfix window and uses this location list.
-pub(crate) fn qf_find_win_with_loclist(ll: *const qf_info_T) -> Option<Win> {
+pub(crate) fn qf_find_win_with_loclist(ll: *const QfInfo) -> Option<Win> {
     find_win(|wp| wp.w_llist == ll.cast_mut() && !is_qf_buffer(wp))
 }
 
@@ -56,11 +56,11 @@ pub(crate) fn win_set_loclist(mut wp: Win, mut qi: Qi) {
 ///
 /// `qi` must be a live stack and `opened_window` writable.
 pub(crate) unsafe fn jump_to_help_window(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     newwin: bool,
     opened_window: *mut bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     let wp = if cmdmod_tab() != 0 || newwin {
@@ -122,7 +122,7 @@ pub(crate) fn qf_goto_tabwin_with_file(fnum: c_int) -> bool {
 /// # Safety
 ///
 /// `ll_ref` must be null or a live location list stack.
-unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> Result<(), Failed> {
+unsafe fn qf_open_new_file_win(ll_ref: *mut QfInfo) -> Result<(), Failed> {
     // SAFETY: forwarded from the caller.
     let mut flags = WSP_ABOVE as c_int;
     if !ll_ref.is_null() {
@@ -154,7 +154,7 @@ unsafe fn qf_open_new_file_win(ll_ref: *mut qf_info_T) -> Result<(), Failed> {
 /// # Safety
 ///
 /// `ll_ref` must be null or a live location list stack.
-unsafe fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref: *mut qf_info_T) {
+unsafe fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref: *mut QfInfo) {
     let win = use_win
         .or_else(|| find_win(|wp| wp.buffer().handle == qf_fnum))
         .unwrap_or_else(|| {

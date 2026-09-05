@@ -467,7 +467,7 @@ static EFM_CACHE: GlobalCell<Option<(Vec<u8>, Efm)>> = GlobalCell::new(None);
 /// the strings NUL-terminated.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn qf_init_ext(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     mut qf_idx: c_int,
     efile: *const c_char,
     buf: Option<Buf>,
@@ -483,7 +483,7 @@ pub(crate) unsafe fn qf_init_ext(
     // Do not use the cached buffer, it may have been wiped out.
     forget_last_buffer();
 
-    let mut old_last: *mut qfline_T = ptr::null_mut();
+    let mut old_last: *mut QfLine = ptr::null_mut();
     let mut retval = -1;
     let reader = unsafe { Reader::open(enc, efile, tv, buf, lnumfirst, lnumlast) };
 
@@ -558,7 +558,7 @@ pub(crate) unsafe fn qf_init_ext(
 /// # Safety
 ///
 /// `qfl` must be a live list and `reader` open on a live source.
-unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) -> bool {
+unsafe fn read_lines(qfl: *mut QfList, reader: &mut Reader, efm: &mut Efm) -> bool {
     let mut fields = Fields::new();
     // `got_int` is reset here because it was probably set when killing the
     // ":make" command, and the error file should still be read.
@@ -603,7 +603,7 @@ unsafe fn read_lines(qfl: *mut qf_list_T, reader: &mut Reader, efm: &mut Efm) ->
 /// # Safety
 ///
 /// `qfl` must be a live list and `title` null or NUL-terminated.
-pub(crate) unsafe fn qf_store_title(qfl: *mut qf_list_T, title: *const c_char) {
+pub(crate) unsafe fn qf_store_title(qfl: *mut QfList, title: *const c_char) {
     // SAFETY: forwarded from the caller.
     unsafe { xfree((*qfl).qf_title.cast()) };
     unsafe { (*qfl).qf_title = ptr::null_mut() };

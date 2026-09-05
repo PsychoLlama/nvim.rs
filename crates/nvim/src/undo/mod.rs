@@ -145,7 +145,7 @@ pub(crate) fn verbosely(automatic: bool, say: impl FnOnce()) {
     }
 }
 
-pub struct bufinfo_T {
+pub struct BufInfo {
     pub bi_buf: Buf,
     pub bi_fp: *mut FILE,
 }

@@ -54,7 +54,7 @@ unsafe fn hgr_get_ll(new_ll: &mut bool) -> Qi {
 ///
 /// `qfl` must be a live list, `fname` NUL-terminated and `p_regmatch` a
 /// compiled pattern.
-unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *mut RegMatch) {
+unsafe fn hgr_search_file(qfl: *mut QfList, fname: *mut c_char, p_regmatch: *mut RegMatch) {
     // Where each line is read. Upstream shares `IObuff`, which the entry
     // it builds and the messages it may raise both write.
     let mut read = [0 as c_char; IOSIZE as usize];
@@ -100,7 +100,7 @@ unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *
 /// `qfl` must be a live list, `p_regmatch` a compiled pattern and `lang`
 /// null or NUL-terminated.
 unsafe fn hgr_search_files_in_dir(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     dir: &[u8],
     p_regmatch: *mut RegMatch,
     lang: *const c_char,
@@ -175,7 +175,7 @@ unsafe fn wanted_language(lang: *const c_char, fname: *const c_char) -> bool {
 /// # Safety
 ///
 /// `qfl` must be a live list and `p_regmatch` a compiled pattern.
-unsafe fn hgr_search_in_rtp(qfl: *mut qf_list_T, p_regmatch: *mut RegMatch, lang: *const c_char) {
+unsafe fn hgr_search_in_rtp(qfl: *mut QfList, p_regmatch: *mut RegMatch, lang: *const c_char) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     // SAFETY: forwarded from the caller; `dir` holds MAXPATHL bytes.
     let mut p = p_rtp.get();

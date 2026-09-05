@@ -402,7 +402,7 @@ impl Fields {
 /// `qfl` must be a live list; `linebuf` must be a writable, NUL-terminated
 /// buffer of `linelen` bytes.
 pub(crate) unsafe fn parse_line(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     linebuf: *mut c_char,
     linelen: usize,
     efm: &mut Efm,
@@ -541,7 +541,7 @@ unsafe fn no_match(linebuf: *const c_char, linelen: usize, fields: &mut Fields) 
 /// # Safety
 ///
 /// `qfl` must be a live list.
-unsafe fn push_pop_dir(prefix: u8, fields: &mut Fields, qfl: *mut qf_list_T) -> Status {
+unsafe fn push_pop_dir(prefix: u8, fields: &mut Fields, qfl: *mut QfList) -> Status {
     // SAFETY: the caller's list is live; the name buffer is NUL-terminated.
     if prefix == b'D' {
         if !fields.has_name() {
@@ -569,7 +569,7 @@ unsafe fn push_pop_dir(prefix: u8, fields: &mut Fields, qfl: *mut qf_list_T) -> 
 unsafe fn claim_file(
     prefix: u8,
     fields: &mut Fields,
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     tail: *const c_char,
 ) -> Status {
     fields.valid = false;
@@ -598,7 +598,7 @@ unsafe fn claim_file(
 /// # Safety
 ///
 /// `qfl` must be a live list.
-unsafe fn continue_multiline(prefix: u8, qfl: *mut qf_list_T, fields: &mut Fields) -> Status {
+unsafe fn continue_multiline(prefix: u8, qfl: *mut QfList, fields: &mut Fields) -> Status {
     // SAFETY: the caller's list is live, and `qf_last` is its last entry.
     if !unsafe { (*qfl).qf_multiignore } {
         let prev = unsafe { (*qfl).qf_last };
@@ -661,7 +661,7 @@ unsafe fn continue_multiline(prefix: u8, qfl: *mut qf_list_T, fields: &mut Field
 /// # Safety
 ///
 /// `qfl` must be a live list.
-pub(crate) unsafe fn entry_file_name(fields: &mut Fields, qfl: *mut qf_list_T) -> *mut c_char {
+pub(crate) unsafe fn entry_file_name(fields: &mut Fields, qfl: *mut QfList) -> *mut c_char {
     // SAFETY: the caller's list is live.
     if fields.has_name() || !unsafe { (*qfl).qf_directory }.is_null() {
         fields.namebuf()
@@ -680,7 +680,7 @@ impl Fields {
     ///
     /// `qfl` must be the live list the line was parsed against.
     #[inline]
-    pub(crate) unsafe fn entry(&mut self, qfl: *mut qf_list_T) -> NewEntry {
+    pub(crate) unsafe fn entry(&mut self, qfl: *mut QfList) -> NewEntry {
         // SAFETY: forwarded from the caller.
         NewEntry {
             dir: unsafe { (*qfl).qf_directory },

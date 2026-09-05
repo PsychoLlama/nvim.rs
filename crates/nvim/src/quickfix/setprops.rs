@@ -55,7 +55,7 @@ unsafe fn qf_setprop_qftf(mut qfl: Qfl, di: *mut DictItem) -> Result<(), QfError
 ///
 /// `qfl` must be a live list and `d` a live dictionary.
 unsafe fn qf_add_entry_from_dict(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     d: *mut Dict,
     first_entry: bool,
     valid_entry: &mut bool,
@@ -217,7 +217,7 @@ fn entry_is_closer_to_target(
 /// `qi` must be a live stack, `list` null or a live list, and `title`
 /// NUL-terminated.
 unsafe fn qf_add_entries(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     mut qf_idx: c_int,
     list: *mut List,
     title: *mut c_char,
@@ -225,7 +225,7 @@ unsafe fn qf_add_entries(
 ) {
     // SAFETY: forwarded from the caller.
     let mut qfl = unsafe { qf_get_list(qi, qf_idx) };
-    let mut old_last: *mut qfline_T = ptr::null_mut();
+    let mut old_last: *mut QfLine = ptr::null_mut();
 
     // Where the list was, so that 'u' can find the nearest entry again.
     let (mut prev_fnum, mut prev_lnum, mut prev_col) = (0, 0, 0);
@@ -314,7 +314,7 @@ unsafe fn qf_add_entries(
 ///
 /// `qi` must be a live stack and `what` null or a live dictionary.
 unsafe fn qf_setprop_get_qfidx(
-    qi: *const qf_info_T,
+    qi: *const QfInfo,
     what: *const Dict,
     action: c_int,
     newlist: &mut bool,
@@ -380,7 +380,7 @@ unsafe fn qf_setprop_get_qfidx(
 ///
 /// `qi` must be a live stack, `what` and `di` live.
 unsafe fn qf_setprop_title(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     qf_idx: c_int,
     what: *const Dict,
     di: *const DictItem,
@@ -404,7 +404,7 @@ unsafe fn qf_setprop_title(
 ///
 /// `qi` must be a live stack and `di` a live entry.
 unsafe fn qf_setprop_items(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     qf_idx: c_int,
     di: *mut DictItem,
     action: c_int,
@@ -433,7 +433,7 @@ unsafe fn qf_setprop_items(
 ///
 /// `qi` must be a live stack, and `what` and `di` live.
 unsafe fn qf_setprop_items_from_lines(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     qf_idx: c_int,
     what: *const Dict,
     di: *mut DictItem,
@@ -548,7 +548,7 @@ unsafe fn qf_setprop_curidx(qi: Qi, mut qfl: Qfl, di: *const DictItem) -> Result
 ///
 /// `qi` must be a live stack, `what` live and `title` NUL-terminated.
 unsafe fn qf_set_properties(
-    qi: *mut qf_info_T,
+    qi: *mut QfInfo,
     what: *const Dict,
     action: c_int,
     title: *mut c_char,

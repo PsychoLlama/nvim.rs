@@ -246,7 +246,7 @@ pub(crate) unsafe fn u_free_uhp(uhp: *mut UndoHeader) {
 ///
 /// `bi` is open for writing on a live buffer and `hash` points at
 /// [`UNDO_HASH_SIZE`] readable bytes.
-pub(crate) unsafe fn serialize_header(bi: *mut bufinfo_T, hash: *mut uint8_t) -> bool {
+pub(crate) unsafe fn serialize_header(bi: *mut BufInfo, hash: *mut uint8_t) -> bool {
     // SAFETY: an open file on a live buffer, by the contract above.
     let buf: Buf = unsafe { (*bi).bi_buf };
     // SAFETY: as above.
@@ -297,7 +297,7 @@ pub(crate) unsafe fn serialize_header(bi: *mut bufinfo_T, hash: *mut uint8_t) ->
 /// # Safety
 ///
 /// `bi` is open for writing and `uhp` points at a live header.
-pub(crate) unsafe fn serialize_uhp(bi: *mut bufinfo_T, uhp: *mut UndoHeader) -> bool {
+pub(crate) unsafe fn serialize_uhp(bi: *mut BufInfo, uhp: *mut UndoHeader) -> bool {
     // SAFETY: an open file, by the contract above.
     if !unsafe { undo_write_bytes(bi, UF_HEADER_MAGIC as uintmax_t, 2) } {
         return false;
@@ -359,7 +359,7 @@ pub(crate) unsafe fn serialize_uhp(bi: *mut bufinfo_T, uhp: *mut UndoHeader) -> 
 /// `bi` is open for reading and positioned just after the header magic;
 /// `file_name` is NUL-terminated.
 pub(crate) unsafe fn unserialize_uhp(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     file_name: *const c_char,
 ) -> *mut UndoHeader {
     // SAFETY: a fresh allocation the size of a header, written before it is
@@ -438,7 +438,7 @@ pub(crate) unsafe fn unserialize_uhp(
 /// # Safety
 ///
 /// `bi` is open for reading and positioned at the first length byte.
-pub(crate) unsafe fn optional_fields(bi: *mut bufinfo_T) -> Option<Vec<(c_int, c_int)>> {
+pub(crate) unsafe fn optional_fields(bi: *mut BufInfo) -> Option<Vec<(c_int, c_int)>> {
     let mut fields = Vec::new();
     loop {
         // SAFETY (each region below): an open undo file, by the contract
@@ -468,7 +468,7 @@ pub(crate) unsafe fn optional_fields(bi: *mut bufinfo_T) -> Option<Vec<(c_int, c
 ///
 /// As [`unserialize_uhp`], with `uhp` the header being read.
 unsafe fn unserialize_entries(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     uhp: *mut UndoHeader,
     file_name: *const c_char,
 ) -> bool {
@@ -512,7 +512,7 @@ unsafe fn unserialize_entries(
 ///
 /// As [`unserialize_entries`].
 unsafe fn unserialize_extmarks(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     uhp: *mut UndoHeader,
     file_name: *const c_char,
 ) -> bool {
@@ -574,7 +574,7 @@ unsafe fn push_extmark(list: *mut extmark_undo_vec_t, extup: ExtmarkUndoObject) 
 /// # Safety
 ///
 /// `bi` is open for writing.
-pub(crate) unsafe fn serialize_extmark(bi: *mut bufinfo_T, extup: ExtmarkUndoObject) -> bool {
+pub(crate) unsafe fn serialize_extmark(bi: *mut BufInfo, extup: ExtmarkUndoObject) -> bool {
     let mut image = match &extup {
         ExtmarkUndoObject::Splice(splice) => encode_splice(splice),
         ExtmarkUndoObject::Move(move_0) => encode_move(move_0),
@@ -602,7 +602,7 @@ pub(crate) unsafe fn serialize_extmark(bi: *mut bufinfo_T, extup: ExtmarkUndoObj
 /// `bi` is open for reading and positioned just after the entry magic;
 /// `file_name` is NUL-terminated.
 pub(crate) unsafe fn unserialize_extmark(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     file_name: *const c_char,
 ) -> Option<ExtmarkUndoObject> {
     // SAFETY: an open file, by the contract above.
@@ -649,7 +649,7 @@ unsafe fn refuse_extmark(mesg: &CStr, file_name: *const c_char) -> Option<Extmar
 ///
 /// `bi` is open for writing and `uep` points at a live entry holding
 /// `ue_size` lines.
-pub(crate) unsafe fn serialize_uep(bi: *mut bufinfo_T, uep: *mut UndoEntry) -> bool {
+pub(crate) unsafe fn serialize_uep(bi: *mut BufInfo, uep: *mut UndoEntry) -> bool {
     // SAFETY: an open file and a live entry, by the contract above.
     unsafe { undo_write_bytes(bi, (*uep).ue_top as uintmax_t, 4) };
     unsafe { undo_write_bytes(bi, (*uep).ue_bot as uintmax_t, 4) };
@@ -683,7 +683,7 @@ pub(crate) unsafe fn serialize_uep(bi: *mut bufinfo_T, uep: *mut UndoEntry) -> b
 /// `bi` is open for reading, `error` points at a writable `bool`, and
 /// `file_name` is NUL-terminated.
 pub(crate) unsafe fn unserialize_uep(
-    bi: *mut bufinfo_T,
+    bi: *mut BufInfo,
     error: *mut bool,
     file_name: *const c_char,
 ) -> *mut UndoEntry {
@@ -747,7 +747,7 @@ pub(crate) unsafe fn unserialize_uep(
 /// # Safety
 ///
 /// `bi` is open for writing.
-pub(crate) unsafe fn serialize_pos(bi: *mut bufinfo_T, pos: Pos) {
+pub(crate) unsafe fn serialize_pos(bi: *mut BufInfo, pos: Pos) {
     // SAFETY: an open file, by the contract above.
     unsafe { undo_write_bytes(bi, pos.lnum as uintmax_t, 4) };
     unsafe { undo_write_bytes(bi, pos.col as uintmax_t, 4) };
@@ -760,7 +760,7 @@ pub(crate) unsafe fn serialize_pos(bi: *mut bufinfo_T, pos: Pos) {
 /// # Safety
 ///
 /// `bi` is open for reading and `pos` points at a writable position.
-pub(crate) unsafe fn unserialize_pos(bi: *mut bufinfo_T, pos: *mut Pos) {
+pub(crate) unsafe fn unserialize_pos(bi: *mut BufInfo, pos: *mut Pos) {
     // SAFETY: an open file and a writable position, by the contract above.
     unsafe { (*pos).lnum = undo_read_4c(bi).max(0) };
     unsafe { (*pos).col = undo_read_4c(bi).max(0) };
@@ -772,7 +772,7 @@ pub(crate) unsafe fn unserialize_pos(bi: *mut bufinfo_T, pos: *mut Pos) {
 /// # Safety
 ///
 /// `bi` is open for writing and `info` points at a readable record.
-pub(crate) unsafe fn serialize_visualinfo(bi: *mut bufinfo_T, info: *const VisualInfo) {
+pub(crate) unsafe fn serialize_visualinfo(bi: *mut BufInfo, info: *const VisualInfo) {
     // SAFETY: an open file and a readable record, by the contract above.
     unsafe { serialize_pos(bi, (*info).vi_start) };
     unsafe { serialize_pos(bi, (*info).vi_end) };
@@ -785,7 +785,7 @@ pub(crate) unsafe fn serialize_visualinfo(bi: *mut bufinfo_T, info: *const Visua
 /// # Safety
 ///
 /// `bi` is open for reading and `info` points at a writable record.
-pub(crate) unsafe fn unserialize_visualinfo(bi: *mut bufinfo_T, info: *mut VisualInfo) {
+pub(crate) unsafe fn unserialize_visualinfo(bi: *mut BufInfo, info: *mut VisualInfo) {
     // SAFETY: an open file and a writable record, by the contract above.
     unsafe { unserialize_pos(bi, &raw mut (*info).vi_start) };
     unsafe { unserialize_pos(bi, &raw mut (*info).vi_end) };
@@ -799,7 +799,7 @@ pub(crate) unsafe fn unserialize_visualinfo(bi: *mut bufinfo_T, info: *mut Visua
 /// # Safety
 ///
 /// `bi` is open for writing.
-unsafe fn put_time(bi: *mut bufinfo_T, when: time_t) {
+unsafe fn put_time(bi: *mut BufInfo, when: time_t) {
     let mut buf: [uint8_t; 8] = [0; 8];
     // SAFETY: an eight-byte buffer, and an open file.
     unsafe { time_to_bytes(when, buf.as_mut_ptr()) };
@@ -815,7 +815,7 @@ unsafe fn put_time(bi: *mut bufinfo_T, when: time_t) {
 /// # Safety
 ///
 /// `bi` is open for writing.
-unsafe fn put_optional_field(bi: *mut bufinfo_T, what: c_int, value: c_int) {
+unsafe fn put_optional_field(bi: *mut BufInfo, what: c_int, value: c_int) {
     // SAFETY: an open file, by the contract above.
     unsafe { undo_write_bytes(bi, 4, 1) };
     unsafe { undo_write_bytes(bi, what as uintmax_t, 1) };
@@ -828,7 +828,7 @@ unsafe fn put_optional_field(bi: *mut bufinfo_T, what: c_int, value: c_int) {
 /// # Safety
 ///
 /// `bi` is open for writing and `ptr` points at `len` readable bytes.
-pub(crate) unsafe fn undo_write(bi: *mut bufinfo_T, ptr: *mut uint8_t, len: size_t) -> bool {
+pub(crate) unsafe fn undo_write(bi: *mut BufInfo, ptr: *mut uint8_t, len: size_t) -> bool {
     // SAFETY: an open file and `len` readable bytes, by the contract above.
     unsafe { fwrite(ptr.cast(), len, 1, (*bi).bi_fp) == 1 }
 }
@@ -838,7 +838,7 @@ pub(crate) unsafe fn undo_write(bi: *mut bufinfo_T, ptr: *mut uint8_t, len: size
 /// # Safety
 ///
 /// `bi` is open for writing.
-pub(crate) unsafe fn undo_write_bytes(bi: *mut bufinfo_T, nr: uintmax_t, len: size_t) -> bool {
+pub(crate) unsafe fn undo_write_bytes(bi: *mut BufInfo, nr: uintmax_t, len: size_t) -> bool {
     let mut buf = encode_be(nr, len);
     // SAFETY: an open file, and `len` bytes of `buf`.
     unsafe { undo_write(bi, buf.as_mut_ptr(), len) }
@@ -851,7 +851,7 @@ pub(crate) unsafe fn undo_write_bytes(bi: *mut bufinfo_T, nr: uintmax_t, len: si
 /// # Safety
 ///
 /// `bi` is open for writing.
-pub(crate) unsafe fn put_header_link(bi: *mut bufinfo_T, link: UndoLink) {
+pub(crate) unsafe fn put_header_link(bi: *mut BufInfo, link: UndoLink) {
     debug_assert!(link.seq() >= 0, "an undo link is 0 or a sequence number");
     // SAFETY: an open file, by the contract above.
     unsafe { undo_write_bytes(bi, link.seq() as uintmax_t, 4) };
@@ -862,7 +862,7 @@ pub(crate) unsafe fn put_header_link(bi: *mut bufinfo_T, link: UndoLink) {
 /// # Safety
 ///
 /// `bi` is open for reading.
-pub(crate) unsafe fn undo_read_4c(bi: *mut bufinfo_T) -> c_int {
+pub(crate) unsafe fn undo_read_4c(bi: *mut BufInfo) -> c_int {
     // SAFETY: an open file, by the contract above.
     unsafe { get4c((*bi).bi_fp) }
 }
@@ -872,7 +872,7 @@ pub(crate) unsafe fn undo_read_4c(bi: *mut bufinfo_T) -> c_int {
 /// # Safety
 ///
 /// `bi` is open for reading.
-pub(crate) unsafe fn undo_read_2c(bi: *mut bufinfo_T) -> c_int {
+pub(crate) unsafe fn undo_read_2c(bi: *mut BufInfo) -> c_int {
     // SAFETY: an open file, by the contract above.
     unsafe { get2c((*bi).bi_fp) }
 }
@@ -882,7 +882,7 @@ pub(crate) unsafe fn undo_read_2c(bi: *mut bufinfo_T) -> c_int {
 /// # Safety
 ///
 /// `bi` is open for reading.
-pub(crate) unsafe fn undo_read_byte(bi: *mut bufinfo_T) -> c_int {
+pub(crate) unsafe fn undo_read_byte(bi: *mut BufInfo) -> c_int {
     // SAFETY: an open file, by the contract above.
     unsafe { getc((*bi).bi_fp) }
 }
@@ -892,7 +892,7 @@ pub(crate) unsafe fn undo_read_byte(bi: *mut bufinfo_T) -> c_int {
 /// # Safety
 ///
 /// `bi` is open for reading.
-pub(crate) unsafe fn undo_read_time(bi: *mut bufinfo_T) -> time_t {
+pub(crate) unsafe fn undo_read_time(bi: *mut BufInfo) -> time_t {
     // SAFETY: an open file, by the contract above.
     unsafe { get8ctime((*bi).bi_fp) }
 }
@@ -902,7 +902,7 @@ pub(crate) unsafe fn undo_read_time(bi: *mut bufinfo_T) -> time_t {
 /// # Safety
 ///
 /// `bi` is open for reading and `buffer` points at `size` writable bytes.
-pub(crate) unsafe fn undo_read(bi: *mut bufinfo_T, buffer: *mut uint8_t, size: size_t) -> bool {
+pub(crate) unsafe fn undo_read(bi: *mut BufInfo, buffer: *mut uint8_t, size: size_t) -> bool {
     // SAFETY: an open file and `size` writable bytes, by the contract above.
     if unsafe { fread(buffer.cast(), size, 1, (*bi).bi_fp) } == 1 {
         return true;
@@ -917,7 +917,7 @@ pub(crate) unsafe fn undo_read(bi: *mut bufinfo_T, buffer: *mut uint8_t, size: s
 /// # Safety
 ///
 /// `bi` is open for reading.
-pub(crate) unsafe fn undo_read_string(bi: *mut bufinfo_T, len: size_t) -> *mut c_char {
+pub(crate) unsafe fn undo_read_string(bi: *mut BufInfo, len: size_t) -> *mut c_char {
     // SAFETY: an allocation of `len + 1` bytes, zeroed.
     let ptr: *mut c_char = unsafe { xmallocz(len).cast() };
     // SAFETY: an open file, and `len` writable bytes of that allocation.

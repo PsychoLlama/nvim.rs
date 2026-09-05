@@ -245,7 +245,7 @@ unsafe fn ml_insert_in_block(
 /// bytes.
 unsafe fn ml_split_data_block(
     buf: *mut Buffer,
-    hp: *mut bhdr_T,
+    hp: *mut BlockHdr,
     at: &InsertAt,
     lnum: LineNr,
     new: &NewLine,
@@ -430,11 +430,7 @@ unsafe fn ml_split_data_block(
 /// # Safety
 /// `buf`'s stack must be the path ml_find_line left, and `split` must
 /// describe two blocks that exist.
-unsafe fn ml_insert_pointer(
-    buf: *mut Buffer,
-    mfp: *mut memfile_T,
-    split: &mut SplitBlocks,
-) -> bool {
+unsafe fn ml_insert_pointer(buf: *mut Buffer, mfp: *mut MemFile, split: &mut SplitBlocks) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -549,7 +545,7 @@ unsafe fn pb_line_total(pp: Pb) -> c_int {
 /// entry.
 unsafe fn ml_pointer_add_entry(
     buf: *mut Buffer,
-    hp: *mut bhdr_T,
+    hp: *mut BlockHdr,
     pb_idx: c_int,
     split: &SplitBlocks,
     stack_idx: c_int,
@@ -616,11 +612,11 @@ unsafe fn ml_pointer_add_entry(
 /// its stack entry.
 unsafe fn ml_split_pointer_block(
     buf: *mut Buffer,
-    mfp: *mut memfile_T,
-    hp: &mut *mut bhdr_T,
+    mfp: *mut MemFile,
+    hp: &mut *mut BlockHdr,
     pp: &mut Pb,
     stack_idx: &mut c_int,
-) -> Option<*mut bhdr_T> {
+) -> Option<*mut BlockHdr> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -779,7 +775,7 @@ pub(crate) unsafe fn ml_delete_int(
 ///
 /// # Safety
 /// `hp` must be the locked data block, and `buf`'s stack the path to it.
-unsafe fn ml_free_data_block(buf: *mut Buffer, mfp: *mut memfile_T, hp: *mut bhdr_T) -> bool {
+unsafe fn ml_free_data_block(buf: *mut Buffer, mfp: *mut MemFile, hp: *mut BlockHdr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };

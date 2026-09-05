@@ -2,7 +2,7 @@
 //! the drawer reads off it.
 //!
 //! The thirteen children hold the code; this file holds the surface they
-//! share -- the `diffin_T`/`diffout_T`/`diffio_T` triple a diff run is
+//! share -- the `DiffIn`/`DiffOut`/`DiffIo` triple a diff run is
 //! carried in, the `DIFF_*` bits of `'diffopt'`, and the module's
 //! **process-wide state**, which is seven cells and nothing else:
 //!
@@ -147,36 +147,36 @@ pub(crate) const MMFILE_INIT: mmfile_t = mmfile_t {
 
 /// One side of a diff before either the file name or the memory image is
 /// filled in; which one is used depends on `dio_internal`.
-pub(crate) const DIFFIN_INIT: diffin_T = diffin_T {
+pub(crate) const DIFFIN_INIT: DiffIn = DiffIn {
     din_fname: ::core::ptr::null_mut(),
     din_mmfile: MMFILE_INIT,
 };
 
-pub struct diffio_T {
-    pub dio_orig: diffin_T,
-    pub dio_new: diffin_T,
-    pub dio_diff: diffout_T,
+pub struct DiffIo {
+    pub dio_orig: DiffIn,
+    pub dio_new: DiffIn,
+    pub dio_diff: DiffOut,
     pub dio_internal: ::core::ffi::c_int,
 }
-pub struct diffout_T {
+pub struct DiffOut {
     pub dout_fname: *mut ::core::ffi::c_char,
     /// The hunks the internal engine produced; empty when the run went
     /// through a temp file named by `dout_fname` instead.
-    pub dout_ga: Vec<diffhunk_T>,
+    pub dout_ga: Vec<DiffHunk>,
 }
-pub struct diffin_T {
+pub struct DiffIn {
     pub din_fname: *mut ::core::ffi::c_char,
     pub din_mmfile: mmfile_t,
 }
 #[derive(Copy, Clone)]
-pub struct diffhunk_T {
+pub struct DiffHunk {
     pub lnum_orig: LineNr,
     pub count_orig: ::core::ffi::c_int,
     pub lnum_new: LineNr,
     pub count_new: ::core::ffi::c_int,
 }
 pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
-pub struct linemap_entry_T {
+pub struct LinemapEntry {
     pub byte_start: ColNr,
     pub num_bytes: ColNr,
     pub lineoff: ::core::ffi::c_int,

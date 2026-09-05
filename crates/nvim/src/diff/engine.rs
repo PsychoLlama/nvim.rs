@@ -20,7 +20,7 @@ use std::ffi::CStr;
 /// saying whether it accepts `-a`.  The probe runs at most twice: the first
 /// attempt passes `-a`, and if that produces nothing recognisable the flag is
 /// remembered as unsupported and the whole thing is tried again without it.
-pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> Result<(), Failed> {
+pub(crate) unsafe fn check_external_diff(diffio: *mut DiffIo) -> Result<(), Failed> {
     let orig = unsafe { (*diffio).dio_orig.din_fname };
     let new = unsafe { (*diffio).dio_new.din_fname };
     let out = unsafe { (*diffio).dio_diff.dout_fname };
@@ -91,7 +91,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> Result<(), Fa
 
 /// Diff the two memory images with `xdl_diff`, collecting hunks into
 /// `dio_diff.dout_ga`.
-pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> Result<(), Failed> {
+pub(crate) unsafe fn diff_file_internal(diffio: *mut DiffIo) -> Result<(), Failed> {
     let flags = diff_flags.get();
     let mut param = xpparam_t {
         // `'diffopt'`'s ignore flags map onto xdiff's own; `icase` does
@@ -156,7 +156,7 @@ pub(crate) unsafe fn diff_file_internal(diffio: *mut diffio_T) -> Result<(), Fai
 }
 
 /// Diff whichever way `'diffopt'` and `'diffexpr'` say.
-pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> Result<(), Failed> {
+pub(crate) unsafe fn diff_file(dio: *mut DiffIo) -> Result<(), Failed> {
     let tmp_orig = unsafe { (*dio).dio_orig.din_fname };
     let tmp_new = unsafe { (*dio).dio_new.din_fname };
     let tmp_diff = unsafe { (*dio).dio_diff.dout_fname };
@@ -213,7 +213,7 @@ pub(crate) unsafe fn diff_file(dio: *mut diffio_T) -> Result<(), Failed> {
     Ok(())
 }
 
-/// `xdl_diff`'s hunk callback: append one hunk to the `diffout_T` behind
+/// `xdl_diff`'s hunk callback: append one hunk to the `DiffOut` behind
 /// `priv_0`, converting xdiff's zero-based starts to line numbers.
 unsafe extern "C" fn xdiff_out(
     start_a: c_int,
@@ -222,10 +222,10 @@ unsafe extern "C" fn xdiff_out(
     count_b: c_int,
     priv_0: *mut ::core::ffi::c_void,
 ) -> c_int {
-    let dout = priv_0 as *mut diffout_T;
+    let dout = priv_0 as *mut DiffOut;
     // SAFETY: `priv_0` is the output side `xdl_diff` was started with.
     unsafe {
-        (*dout).dout_ga.push(diffhunk_T {
+        (*dout).dout_ga.push(DiffHunk {
             lnum_orig: start_a + 1,
             count_orig: count_a,
             lnum_new: start_b + 1,

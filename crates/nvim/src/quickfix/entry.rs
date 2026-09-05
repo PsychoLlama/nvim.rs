@@ -63,7 +63,7 @@ unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
 /// `qfl` must be a live list; `directory` and `fname` null or
 /// NUL-terminated.
 pub(crate) unsafe fn qf_get_fnum(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     directory: *mut c_char,
     fname: *mut c_char,
 ) -> c_int {
@@ -268,7 +268,7 @@ pub(crate) fn is_qf_entry_present(qfl: Qfl, qf_ptr: Qfe) -> bool {
 
 /// An entry link as a handle: the list's `qf_start`/`qf_next`/`qf_prev`
 /// chain ends at a null, which is the `None`.
-fn entry_opt(qfp: *mut qfline_T) -> Option<Qfe> {
+fn entry_opt(qfp: *mut QfLine) -> Option<Qfe> {
     // SAFETY: a link of a live list's own chain, tested for null.
     (!qfp.is_null()).then(|| unsafe { Qfe::new(qfp) })
 }

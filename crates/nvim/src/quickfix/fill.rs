@@ -47,8 +47,8 @@ impl CurrentDir {
 /// # Safety
 ///
 /// `qi` must be a live stack, `old_last` null or one of its entries.
-pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_T) {
-    // SAFETY: the caller's promise -- a live `qf_info_T`.
+pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
+    // SAFETY: the caller's promise -- a live `QfInfo`.
     let qi = unsafe { Qi::new(qi) };
     let Some(mut buf) = qf_find_buf(qi) else {
         return;
@@ -150,12 +150,12 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_
 unsafe fn qf_buf_add_line(
     buf: Buf,
     lnum: LineNr,
-    qfp: *const qfline_T,
+    qfp: *const QfLine,
     dir: &mut CurrentDir,
     qftf_str: *const c_char,
     first_bufline: bool,
 ) -> bool {
-    // SAFETY: the caller's promise -- a live `qfline_T`.
+    // SAFETY: the caller's promise -- a live `QfLine`.
     let qfp = unsafe { Qfe::new(qfp.cast_mut()) };
     // SAFETY: forwarded from the caller. Nothing in the line building
     // prints or runs an autocommand, which is `build_line`'s contract.
@@ -243,12 +243,12 @@ unsafe fn qf_buf_add_line(
 ///
 /// `qfl` must be a live list.
 unsafe fn call_qftf_func(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     qf_winid: c_int,
     start_idx: c_int,
     end_idx: c_int,
 ) -> *mut List {
-    // SAFETY: the caller's promise -- a live `qf_list_T`.
+    // SAFETY: the caller's promise -- a live `QfList`.
     let mut qfl = unsafe { Qfl::new(qfl) };
     /// This does not work properly recursively.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
@@ -405,9 +405,9 @@ fn splice(buf: Buf, at: &Splice) {
 ///
 /// `qfl` must be null or a live list.
 pub(crate) unsafe fn qf_fill_buffer(
-    qfl: *mut qf_list_T,
+    qfl: *mut QfList,
     buf: Buf,
-    old_last: *mut qfline_T,
+    old_last: *mut QfLine,
     qf_winid: c_int,
 ) {
     let mut numbuf = NumBuf::new();

@@ -275,7 +275,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut Buffer, noalloc: bool) {
 /// # Safety
 /// `hp` must be the block `ml_find_line(buf, lnum, ML_FIND)` returned, still
 /// locked, and `new_line` must hold `ml_line_textlen` readable bytes.
-unsafe fn ml_store_line(buf: *mut Buffer, hp: *mut bhdr_T, lnum: LineNr, new_line: *mut c_char) {
+unsafe fn ml_store_line(buf: *mut Buffer, hp: *mut BlockHdr, lnum: LineNr, new_line: *mut c_char) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -352,10 +352,10 @@ unsafe fn ml_store_line(buf: *mut Buffer, hp: *mut bhdr_T, lnum: LineNr, new_lin
 /// # Safety
 /// `mfp` must point at a memfile.
 pub(crate) unsafe fn ml_new_data(
-    mfp: *mut memfile_T,
+    mfp: *mut MemFile,
     negative: bool,
     page_count: int64_t,
-) -> *mut bhdr_T {
+) -> *mut BlockHdr {
     debug_assert!(page_count >= 0);
     let hp = unsafe { mf_new(mfp, negative, page_count as c_uint) };
     let mut dp = unsafe { Db::new((*hp).bh_data.cast()) };
@@ -373,7 +373,7 @@ pub(crate) unsafe fn ml_new_data(
 ///
 /// # Safety
 /// `mfp` must point at a memfile.
-pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
+pub(crate) unsafe fn ml_new_ptr(mfp: *mut MemFile) -> *mut BlockHdr {
     let hp = unsafe { mf_new(mfp, false, 1) };
     let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
     // SAFETY: `mfp` is the caller's memfile.
@@ -398,7 +398,7 @@ pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
 ///
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
-pub(crate) unsafe fn ml_find_line(buf: *mut Buffer, lnum: LineNr, action: c_int) -> *mut bhdr_T {
+pub(crate) unsafe fn ml_find_line(buf: *mut Buffer, lnum: LineNr, action: c_int) -> *mut BlockHdr {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -493,7 +493,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut Buffer, lnum: LineNr, action: c_int)
         }
 
         let top = unsafe { ml_add_stack(buf) };
-        let frame = infoptr_T {
+        let frame = InfoPtr {
             ip_bnum: bnum,
             ip_low: low,
             ip_high: high,

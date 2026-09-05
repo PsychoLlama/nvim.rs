@@ -125,7 +125,7 @@ pub unsafe fn expand_buf_names(
     file: *mut *mut *mut c_char,
     options: WildOpts,
 ) -> Result<(), Failed> {
-    let mut matches: *mut bufmatch_T = ptr::null_mut();
+    let mut matches: *mut BufMatch = ptr::null_mut();
     let mut to_free = false;
 
     // SAFETY: the caller's promise -- two out-parameters to fill in.
@@ -228,7 +228,7 @@ pub unsafe fn expand_buf_names(
                 };
                 set_at(fuzmatch, count, entry);
             } else if !matches.is_null() {
-                let entry = bufmatch_T {
+                let entry = BufMatch {
                     buf: buf.raw(),
                     match_0: p,
                 };
@@ -248,7 +248,7 @@ pub unsafe fn expand_buf_names(
             } else {
                 *file = alloc_array::<*mut c_char>(count);
                 if options.has(WildOpts::BUFLASTUSED) {
-                    matches = alloc_array::<bufmatch_T>(count);
+                    matches = alloc_array::<BufMatch>(count);
                 }
             }
         }
@@ -282,10 +282,10 @@ pub unsafe fn expand_buf_names(
 /// `qsort` and the comparison stay upstream's: `buf_time_compare` answers 0
 /// for two buffers entered in the same second, and a stable Rust sort would
 /// order those ties differently.
-fn order_by_last_used(matches: *mut bufmatch_T, files: &mut [*mut c_char]) {
+fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
     let count = files.len();
     if count > 1 {
-        let (base, width) = (matches.cast::<c_void>(), size_of::<bufmatch_T>());
+        let (base, width) = (matches.cast::<c_void>(), size_of::<BufMatch>());
         // SAFETY: `count` initialised elements of this function's own array,
         // and a comparison function over two of them.
         unsafe { qsort(base, count, width, Some(buf_time_compare)) };

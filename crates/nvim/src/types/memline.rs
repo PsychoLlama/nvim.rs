@@ -13,7 +13,7 @@ use super::*;
 use crate::memline::MlFlags;
 
 #[derive(Copy, Clone)]
-pub struct chunksize_T {
+pub struct ChunkSize {
     pub mlcs_numlines: ::core::ffi::c_int,
     pub mlcs_totalsize: ::core::ffi::c_int,
 }
@@ -33,7 +33,7 @@ pub struct chunksize_T {
 /// All of the arithmetic lives here, in a file that forbids `unsafe`.
 #[derive(Default)]
 pub(crate) struct MlChunks {
-    entries: Vec<chunksize_T>,
+    entries: Vec<ChunkSize>,
     /// `ml_chunksize != NULL`.
     built: bool,
     /// `ml_usedchunks == -1`.
@@ -62,7 +62,7 @@ impl MlChunks {
     pub(crate) fn build(&mut self) {
         self.entries.clear();
         self.entries.reserve(100);
-        self.entries.push(chunksize_T {
+        self.entries.push(ChunkSize {
             mlcs_numlines: 1,
             mlcs_totalsize: 1,
         });
@@ -73,7 +73,7 @@ impl MlChunks {
     /// written into an empty buffer.
     pub(crate) fn reset_to_one(&mut self, size: ::core::ffi::c_int) {
         self.entries.truncate(1);
-        self.entries[0] = chunksize_T {
+        self.entries[0] = ChunkSize {
             mlcs_numlines: 1,
             mlcs_totalsize: size,
         };
@@ -111,7 +111,7 @@ impl MlChunks {
 
     /// Overwrite chunk `at`.
     pub(crate) fn set(&mut self, at: usize, lines: ::core::ffi::c_int, size: ::core::ffi::c_int) {
-        self.entries[at] = chunksize_T {
+        self.entries[at] = ChunkSize {
             mlcs_numlines: lines,
             mlcs_totalsize: size,
         };
@@ -119,7 +119,7 @@ impl MlChunks {
 
     /// Start an empty chunk after the last one.
     pub(crate) fn push_empty(&mut self) {
-        self.entries.push(chunksize_T {
+        self.entries.push(ChunkSize {
             mlcs_numlines: 0,
             mlcs_totalsize: 0,
         });
@@ -169,22 +169,22 @@ impl MlChunks {
 /// The memfile hands a block out (`mf_get`) and takes it back (`mf_put`), and
 /// the two answers `mf_put` wants -- whether the block changed, and whether
 /// the line *positions* in it changed -- are decided over the whole time it
-/// is held. Upstream kept the six facts in four `memline_T` fields plus two
+/// is held. Upstream kept the six facts in four `MemLine` fields plus two
 /// bits of `ml_flags`; they are one value now, and `ml_locked` is `Some`
 /// exactly while a block is out.
 ///
 /// It is deliberately **not** a `Drop` guard. The block is held *across*
 /// calls -- a run of reads keeps the same one locked, which is the whole
 /// point of it -- and by the time a `Buffer` is dropped `ml_close` has run
-/// `mf_close`, which freed every `bhdr_T` in the memfile; a `Drop` that put
+/// `mf_close`, which freed every `BlockHdr` in the memfile; a `Drop` that put
 /// the block back would be a use-after-free. What makes it a guard is that
 /// there is exactly one acquire (`ml_find_line`'s walk, through
-/// [`memline_T::lock`]) and exactly one release ([`memline_T::unlock`]),
+/// [`MemLine::lock`]) and exactly one release ([`MemLine::unlock`]),
 /// and that the release arguments travel with the block instead of in flag
 /// bits that outlive it.
 pub(crate) struct LockedBlock {
     /// What `mf_get` handed out.
-    pub hp: *mut bhdr_T,
+    pub hp: *mut BlockHdr,
     /// The first line the block holds.
     pub low: LineNr,
     /// The last line it holds, *after* the insert or delete the walk that
@@ -245,17 +245,17 @@ pub(crate) struct LineCache {
 }
 
 #[derive(Copy, Clone)]
-pub struct infoptr_T {
+pub struct InfoPtr {
     pub ip_bnum: BlockNr,
     pub ip_low: LineNr,
     pub ip_high: LineNr,
     pub ip_index: ::core::ffi::c_int,
 }
-pub struct memline_T {
+pub struct MemLine {
     pub ml_line_count: LineNr,
-    pub ml_mfp: *mut memfile_T,
+    pub ml_mfp: *mut MemFile,
     /// The path from the root of the block tree down to the block
-    /// [`memline_T::ml_locked`] names, one entry per pointer block, the
+    /// [`MemLine::ml_locked`] names, one entry per pointer block, the
     /// root first. Upstream grew this by hand (`ml_stack` plus
     /// `ml_stack_top` and `ml_stack_size`); the length *is* the top, and
     /// the capacity is nobody's business.
@@ -263,7 +263,7 @@ pub struct memline_T {
     /// Truncating it to zero is how every failure path says "the tree
     /// moved under me"; the entries are plain data and cost nothing to
     /// drop.
-    pub ml_stack: Vec<infoptr_T>,
+    pub ml_stack: Vec<InfoPtr>,
     pub ml_flags: MlFlags,
     /// The line `ml_get` last handed out.
     pub(crate) ml_line: LineCache,
@@ -274,7 +274,7 @@ pub struct memline_T {
     pub(crate) ml_chunks: MlChunks,
 }
 
-impl memline_T {
+impl MemLine {
     /// A closed memline, which is what a fresh `Buffer` holds.
     ///
     /// A zeroed `Buffer` is a valid one everywhere *except* the owned
@@ -282,7 +282,7 @@ impl memline_T {
     /// pointer, not a zero one -- so `alloc_unregistered_buffer` writes this
     /// over the zeroes.
     pub fn closed() -> Self {
-        memline_T {
+        MemLine {
             ml_line_count: 0,
             ml_mfp: ::core::ptr::null_mut(),
             ml_stack: Vec::new(),
@@ -302,12 +302,12 @@ impl memline_T {
     ///
     /// Every entry is [`Copy`] and no method hands out a reference into the
     /// stack, so no caller can be holding one when a push moves it.
-    pub fn stack_at(&self, idx: usize) -> infoptr_T {
+    pub fn stack_at(&self, idx: usize) -> InfoPtr {
         self.ml_stack[idx]
     }
 
     /// Overwrite entry `idx`.
-    pub fn stack_set(&mut self, idx: usize, entry: infoptr_T) {
+    pub fn stack_set(&mut self, idx: usize, entry: InfoPtr) {
         self.ml_stack[idx] = entry;
     }
 
@@ -324,7 +324,7 @@ impl memline_T {
 
     /// Push a blank entry and answer its index. Every caller fills it in.
     pub fn stack_push(&mut self) -> usize {
-        self.ml_stack.push(infoptr_T {
+        self.ml_stack.push(InfoPtr {
             ip_bnum: 0,
             ip_low: 0,
             ip_high: 0,
@@ -334,7 +334,7 @@ impl memline_T {
     }
 
     /// Drop the deepest entry, if there is one.
-    pub fn stack_pop(&mut self) -> Option<infoptr_T> {
+    pub fn stack_pop(&mut self) -> Option<InfoPtr> {
         self.ml_stack.pop()
     }
 
@@ -490,7 +490,7 @@ impl memline_T {
     /// Take a data block: `mf_get` handed `hp` out, and it holds lines `low`
     /// through `high`. Nothing has changed in it yet, so neither it nor the
     /// index above it needs writing back.
-    pub fn lock(&mut self, hp: *mut bhdr_T, low: LineNr, high: LineNr) {
+    pub fn lock(&mut self, hp: *mut BlockHdr, low: LineNr, high: LineNr) {
         self.ml_locked = Some(LockedBlock {
             hp,
             low,
@@ -525,7 +525,7 @@ impl memline_T {
     /// The held block itself, for the one caller that hands the same one
     /// back out again (`ml_find_line`'s already-locked answer). Null when
     /// nothing is held, which upstream's `ml_locked` was too.
-    pub fn locked_hp(&self) -> *mut bhdr_T {
+    pub fn locked_hp(&self) -> *mut BlockHdr {
         self.ml_locked
             .as_ref()
             .map_or(::core::ptr::null_mut(), |locked| locked.hp)
@@ -589,9 +589,9 @@ impl memline_T {
 mod tests {
     use super::*;
 
-    /// `infoptr_T` is plain data; only the four numbers matter.
-    fn entry(bnum: BlockNr, low: LineNr, high: LineNr) -> infoptr_T {
-        infoptr_T {
+    /// `InfoPtr` is plain data; only the four numbers matter.
+    fn entry(bnum: BlockNr, low: LineNr, high: LineNr) -> InfoPtr {
+        InfoPtr {
             ip_bnum: bnum,
             ip_low: low,
             ip_high: high,
@@ -599,8 +599,8 @@ mod tests {
         }
     }
 
-    fn with_stack(entries: &[infoptr_T]) -> memline_T {
-        let mut ml = memline_T::closed();
+    fn with_stack(entries: &[InfoPtr]) -> MemLine {
+        let mut ml = MemLine::closed();
         for &e in entries {
             let at = ml.stack_push();
             ml.stack_set(at, e);
@@ -610,7 +610,7 @@ mod tests {
 
     #[test]
     fn stack_push_answers_the_new_top() {
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
         assert_eq!(ml.stack_len(), 0);
         assert_eq!(ml.stack_push(), 0);
         assert_eq!(ml.stack_push(), 1);
@@ -623,7 +623,7 @@ mod tests {
         // push must still be readable after it. Taking entries by value is
         // what makes that true, and Miri is what proves the old pointer is
         // not being kept.
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
         for i in 0..64i32 {
             let at = ml.stack_push();
             ml.stack_set(at, entry(BlockNr::from(i), i, i + 1));
@@ -661,11 +661,11 @@ mod tests {
 
     #[test]
     fn locking_a_block_starts_it_clean() {
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
         assert!(!ml.is_locked());
         assert!(ml.locked_hp().is_null());
 
-        let hp = core::ptr::dangling_mut::<bhdr_T>();
+        let hp = core::ptr::dangling_mut::<BlockHdr>();
         ml.lock(hp, 10, 20);
         assert!(ml.is_locked());
         assert_eq!(ml.locked_hp(), hp);
@@ -680,8 +680,8 @@ mod tests {
 
     #[test]
     fn shifting_a_locked_block_moves_its_end_and_its_debt() {
-        let mut ml = memline_T::closed();
-        ml.lock(core::ptr::dangling_mut::<bhdr_T>(), 1, 5);
+        let mut ml = MemLine::closed();
+        ml.lock(core::ptr::dangling_mut::<BlockHdr>(), 1, 5);
         ml.shift_locked(1);
         ml.shift_locked(1);
         ml.shift_locked(-1);
@@ -695,7 +695,7 @@ mod tests {
     fn marking_a_block_with_nothing_locked_does_nothing() {
         // `ml_get(will_change)` can reach this with the cached line dirty
         // and no block held; upstream set bits that the next lock cleared.
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
         ml.locked_has_moved();
         ml.locked_is_dirty();
         ml.shift_locked(3);
@@ -705,8 +705,8 @@ mod tests {
 
     #[test]
     fn forgetting_a_locked_block_still_answers_its_debt() {
-        let mut ml = memline_T::closed();
-        ml.lock(core::ptr::dangling_mut::<bhdr_T>(), 1, 5);
+        let mut ml = MemLine::closed();
+        ml.lock(core::ptr::dangling_mut::<BlockHdr>(), 1, 5);
         ml.shift_locked(-1);
         ml.locked_has_moved();
         assert_eq!(ml.forget_locked(), -1);
@@ -790,7 +790,7 @@ mod tests {
     fn a_block_line_is_not_owned_and_a_replacement_is() {
         let mut text = *b"hello\0";
         let ptr = (&raw mut text[0]).cast::<::core::ffi::c_char>();
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
 
         ml.cache_block_line(ptr, 6, 3);
         assert_eq!(ml.cached_lnum(), 3);
@@ -813,7 +813,7 @@ mod tests {
         let mut second = *b"two\0";
         let one = (&raw mut first[0]).cast::<::core::ffi::c_char>();
         let two = (&raw mut second[0]).cast::<::core::ffi::c_char>();
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
 
         // A line read out of a block: swapping it frees nothing.
         ml.cache_block_line(one, 4, 1);
@@ -830,7 +830,7 @@ mod tests {
     fn clearing_the_cache_forgets_the_line_and_its_offset() {
         let mut text = *b"x\0";
         let ptr = (&raw mut text[0]).cast::<::core::ffi::c_char>();
-        let mut ml = memline_T::closed();
+        let mut ml = MemLine::closed();
         ml.cache_replacement(ptr, 2, 9);
         ml.set_cached_offset(64);
         assert_eq!(ml.cached_offset(), 64);
