@@ -317,7 +317,7 @@ pub(crate) unsafe fn do_more_prompt(typed_char: c_int) -> bool {
     let old_state = State.get();
     let mut retval = false;
     let mut to_redraw = false;
-    let mut mp_last: *mut msgchunk_T = ptr::null_mut();
+    let mut mp_last: *mut MsgChunk = ptr::null_mut();
 
     // We get called recursively when a timer callback outputs a message.
     // In that case don't show another prompt. Also don't take over a

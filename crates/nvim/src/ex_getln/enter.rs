@@ -35,7 +35,7 @@ pub(crate) type Cls = Live<CommandLineState>;
 
 /// [`Live`]'s shape for the `'incsearch'` preview state, which lives inside
 /// a [`Cls`] as its `is_state` field.
-pub(crate) type Is = Live<incsearch_state_T>;
+pub(crate) type Is = Live<IncsearchState>;
 
 impl Cls {
     /// `&s->is_state`, computed without reading the state.

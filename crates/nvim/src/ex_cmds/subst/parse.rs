@@ -4,7 +4,7 @@
 //! line without interpreting them (`:s` is its own little language, and the
 //! delimiter may be almost any character -- [`check_regexp_delim`] rejects the
 //! ones that would be ambiguous), [`sub_parse_flags`] turns the trailing
-//! letters into `subflags_T`, and [`old_sub`] is the `~` replacement text
+//! letters into `SubFlags`, and [`old_sub`] is the `~` replacement text
 //! carried from the last `:s`.  [`sub_joining_lines`] is the `\n`-in-the-
 //! pattern case, which joins rather than substitutes, and [`sub_grow_buf`] is
 //! the output buffer's growth policy.
@@ -17,8 +17,8 @@ use super::do_sub_msg;
 use crate::cmdhist::add_to_history;
 use crate::cstr;
 use crate::ex_cmds::{
-    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, kSubHonorOptions, kSubIgnoreCase,
-    kSubMatchCase, subflags_T,
+    _ISalpha, EXFLAG_LIST, EXFLAG_NR, EXFLAG_PRINT, HIST_SEARCH, SubFlags, kSubHonorOptions,
+    kSubIgnoreCase, kSubMatchCase,
 };
 use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_docmd::ex_may_print;
@@ -51,7 +51,7 @@ pub(crate) static old_sub: GlobalCell<SubReplacementString> =
 /// reuse the previous command's flags, and because a `\=` replacement can
 /// run another `:s` that must not leave its own flags behind (`do_sub` saves
 /// and restores this around the expression).
-pub(crate) static subflags: GlobalCell<subflags_T> = GlobalCell::new(subflags_T {
+pub(crate) static subflags: GlobalCell<SubFlags> = GlobalCell::new(SubFlags {
     do_all: false,
     do_ask: false,
     do_count: false,
@@ -231,7 +231,7 @@ pub(crate) unsafe fn sub_grow_buf(
 /// Main thread; `cmd` must be a live NUL-terminated string.
 pub(crate) unsafe fn sub_parse_flags(
     cmd: *mut c_char,
-    flags: &mut subflags_T,
+    flags: &mut SubFlags,
     which_pat: &mut c_int,
 ) -> *mut c_char {
     // SAFETY: caller's contract.

@@ -7,7 +7,7 @@
 //! and `ops/block.rs` the geometry three of the operators share.
 //!
 //! This file holds no code -- only the constants c2rust copied in from the
-//! headers, and the `redo_VIsual_T` that `pending.rs` keeps one of.
+//! headers, and the `RedoVisual` that `pending.rs` keeps one of.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -88,8 +88,7 @@ use crate::types::TAB;
 use crate::types::{
     Callback, CharsizeArg, CmdArg, CmdModFlags, ColNr, Dict, ExtmarkOp, LineNr, MotionType, OpArg,
     OpType, OptInt, OptSet, Pos, StrCharInfo, TypVal, UVarNumber, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, bcount_t, block_def, int32_t, int64_t, size_t, ssize_t, typval_vval_union,
-    yankreg_T,
+    VarNumber, YankReg, bcount_t, block_def, int32_t, int64_t, size_t, ssize_t, typval_vval_union,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
@@ -163,7 +162,7 @@ pub const SIN_CHANGED: ::core::ffi::c_int = 1;
 
 /// The Visual area a `.` replays -- see `pending::REDO_VISUAL`.
 #[derive(Copy, Clone)]
-pub struct redo_VIsual_T {
+pub struct RedoVisual {
     /// `v`, `V` or CTRL-V.
     pub rv_mode: ::core::ffi::c_int,
     /// Number of lines.

@@ -59,7 +59,7 @@ impl Default for block_def {
     }
 }
 #[derive(Copy, Clone)]
-pub struct yankreg_T {
+pub struct YankReg {
     pub y_array: *mut String_0,
     pub y_size: size_t,
     pub y_type: MotionType,

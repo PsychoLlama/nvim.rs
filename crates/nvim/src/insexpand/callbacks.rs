@@ -134,7 +134,7 @@ impl CptCallbacks {
 /// The per-`'complete'`-entry state: one row for every comma-separated
 /// segment of the option, plus the index of the segment being collected.
 ///
-/// Upstream keeps this as a `cpt_source_T *` with a hand-rolled
+/// Upstream keeps this as a `CptSource *` with a hand-rolled
 /// `cpt_sources_count` beside it and `cpt_sources_index` as a third global,
 /// `xcalloc`'d by `setup_cpt_sources` and `xfree`'d by `cpt_sources_clear`;
 /// eleven sites reached a row by writing `(*cpt_sources_array.ptr()).offset(i)`
@@ -173,7 +173,7 @@ impl CptSources {
     }
 
     /// The rows, empty while [`is_unset`](Self::is_unset).
-    pub(crate) fn rows(self) -> &'static [cpt_source_T] {
+    pub(crate) fn rows(self) -> &'static [CptSource] {
         let rows = CPT_SOURCES.get();
         if rows.is_null() {
             return &[];
@@ -184,7 +184,7 @@ impl CptSources {
     }
 
     /// Row `idx` by value, or the zeroed row when `idx` is out of range.
-    pub(crate) fn row(self, idx: c_int) -> cpt_source_T {
+    pub(crate) fn row(self, idx: c_int) -> CptSource {
         usize::try_from(idx)
             .ok()
             .and_then(|idx| self.rows().get(idx).copied())
@@ -192,12 +192,12 @@ impl CptSources {
     }
 
     /// The row the scan is collecting from, by value.
-    pub(crate) fn current(self) -> cpt_source_T {
+    pub(crate) fn current(self) -> CptSource {
         self.row(self.index())
     }
 
     /// Change row `idx` in place; out of range does nothing.
-    pub(crate) fn update(self, idx: c_int, f: impl FnOnce(&mut cpt_source_T)) {
+    pub(crate) fn update(self, idx: c_int, f: impl FnOnce(&mut CptSource)) {
         let rows = CPT_SOURCES.get();
         let Ok(idx) = usize::try_from(idx) else {
             return;
@@ -215,13 +215,13 @@ impl CptSources {
     /// leave the state unset -- a zero-length boxed slice is a *dangling*
     /// pointer, not a null one, and `is_unset` is the null check upstream's
     /// callers do.
-    pub(crate) fn set_rows(self, rows: Vec<cpt_source_T>) {
+    pub(crate) fn set_rows(self, rows: Vec<CptSource>) {
         self.free_rows();
         if rows.is_empty() {
             return;
         }
         let count = rows.len() as c_int;
-        CPT_SOURCES.set(Box::into_raw(rows.into_boxed_slice()).cast::<cpt_source_T>());
+        CPT_SOURCES.set(Box::into_raw(rows.into_boxed_slice()).cast::<CptSource>());
         CPT_SOURCES_COUNT.set(count);
     }
 
@@ -251,7 +251,7 @@ impl CptSources {
             return;
         }
         // SAFETY: the allocation is this owner's own boxed slice, of exactly
-        // `count` rows, and `cpt_source_T` owns nothing.
+        // `count` rows, and `CptSource` owns nothing.
         drop(unsafe { Box::from_raw(ptr::slice_from_raw_parts_mut(rows, count)) });
     }
 }
@@ -727,7 +727,7 @@ pub(crate) unsafe fn setup_cpt_sources() {
         p = unsafe { skip_cpt_delims(p) };
         if unsafe { *p } != 0 {
             // If not end of string, count this segment.
-            let mut source = cpt_source_T {
+            let mut source = CptSource {
                 cs_flag: unsafe { *p },
                 ..CPT_SOURCE_INIT
             };

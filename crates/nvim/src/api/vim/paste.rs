@@ -122,7 +122,7 @@ pub unsafe fn nvim_put(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut reg = yankreg_T {
+    let mut reg = YankReg {
         y_array: ::core::ptr::null_mut::<String_0>(),
         y_size: 0,
         y_type: kMTCharWise,

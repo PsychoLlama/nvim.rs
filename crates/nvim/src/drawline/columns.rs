@@ -556,14 +556,14 @@ impl WinLineVars {
     /// altogether, and the number column goes back to `number_width`.
     ///
     /// # Safety
-    /// `wp` must be live and `stcp` must point at the caller's `statuscol_T`,
+    /// `wp` must be live and `stcp` must point at the caller's `StatusCol`,
     /// which `build_statuscol_str` fills in.
     pub(crate) unsafe fn draw_statuscol(
         &mut self,
         mut wp: Win,
         virtnum: ::core::ffi::c_int,
         col_rows: ::core::ffi::c_int,
-        stcp: *mut statuscol_T,
+        stcp: *mut StatusCol,
     ) {
         // SAFETY: the caller's window and status-column state.
         // Filler lines belonging to the line above report that line's

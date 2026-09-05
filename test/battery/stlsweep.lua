@@ -1435,7 +1435,7 @@ end)
 
 -- ==================================================================== s7
 -- 'statuscolumn'.  `use_statuscol_lnum` reaches the same item loop with
--- a `statuscol_T` attached, which is what `%s`, `%C`, `%l` and `%r`
+-- a `StatusCol` attached, which is what `%s`, `%C`, `%l` and `%r`
 -- read; signs, folds and virtual lines are the three shapes of it.
 -- ====================================================================
 

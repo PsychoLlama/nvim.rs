@@ -768,7 +768,7 @@ pub(crate) fn can_get_old_char() -> bool {
 /// # Safety
 /// `tp` must point at writable storage that outlives the matching
 /// [`restore_typeahead`].
-pub unsafe fn save_typeahead(tp: *mut tasave_T) {
+pub unsafe fn save_typeahead(tp: *mut TypeaheadSave) {
     // SAFETY (this body): the caller's promise -- `tp` is writable storage
     // that outlives the matching restore.
     unsafe { (*tp).save_typebuf = typeahead().take() };
@@ -787,7 +787,7 @@ pub unsafe fn save_typeahead(tp: *mut tasave_T) {
 ///
 /// # Safety
 /// `tp` must be the one a matching [`save_typeahead`] filled.
-pub unsafe fn restore_typeahead(tp: *mut tasave_T) {
+pub unsafe fn restore_typeahead(tp: *mut TypeaheadSave) {
     // SAFETY (this body): as [`save_typeahead`] -- `tp` is the one a matching
     // save filled.
     if unsafe { (*tp).typebuf_valid } {

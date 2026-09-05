@@ -81,11 +81,11 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, EvalArg, ExArg, ExceptionState, Expand, FuncCall, FuncCallEntry,
-    FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt, Partial, RegMatch,
-    String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv,
-    estack_T, funccall_S_fc_fixvar, save_redo_T, size_t,
+    Callback, Dict, DictItem, EStack, EvalArg, ExArg, ExceptionState, Expand, FuncCall,
+    FuncCallEntry, FuncDict, FuncExe, GArray, HashTab, LVal, LineNr, ListItem, LuaRef, OptInt,
+    Partial, RegMatch, SaveRedo, String_0, TypVal, UserFunc, VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, Vv, funccall_S_fc_fixvar, size_t,
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
@@ -272,7 +272,7 @@ pub(crate) fn uf_name_ptr(fp: *mut UserFunc) -> *mut c_char {
 ///
 /// # Safety
 /// The exec stack is non-empty, which it is whenever anything is running.
-pub(crate) fn sourcing_entry() -> estack_T {
+pub(crate) fn sourcing_entry() -> EStack {
     crate::runtime::innermost_frame()
 }
 

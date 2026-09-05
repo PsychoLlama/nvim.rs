@@ -34,7 +34,7 @@
 //!
 //! `hltab` and `tabtab` answer *raw pointers into two of the arenas*, and the
 //! caller reads through them after the call returns -- `'statuscolumn'`
-//! stores its `hlrec` in the `statuscol_T` and reads it again while drawing.
+//! stores its `hlrec` in the `StatusCol` and reads it again while drawing.
 //! The arenas may therefore not be reallocated while such a pointer is live.
 //! They only ever grow, and only when an item is recorded (see
 //! [`arena::StlScratch::grow`]), which is exactly upstream's `xrealloc`
@@ -81,8 +81,8 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StlClickRecord, TypVal, VAR_NUMBER, VarLock,
-    VarNumber, Vv, Window, int64_t, size_t, statuscol_T, stl_hlrec_t, typval_vval_union,
+    ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StatusCol, StlClickRecord, TypVal, VAR_NUMBER,
+    VarLock, VarNumber, Vv, Window, int64_t, size_t, stl_hlrec_t, typval_vval_union,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
@@ -119,7 +119,7 @@ pub(super) struct Env {
     /// Its buffer, which every item that names a file asks about.
     pub buf: Buf,
     /// The `'statuscolumn'` state, or null when this is not one.
-    pub stcp: *mut statuscol_T,
+    pub stcp: *mut StatusCol,
     /// The option the format came from, or `kOptInvalid`.
     pub opt_idx: OptIndex,
     /// Whether `%{}` and `%!` evaluate in the sandbox.
@@ -651,7 +651,7 @@ pub struct StlSinks {
     /// The `%@Func@` click records.
     pub tabtab: *mut *mut StlClickRecord,
     /// The `'statuscolumn'` state, in and out.
-    pub stcp: *mut statuscol_T,
+    pub stcp: *mut StatusCol,
 }
 
 impl StlSinks {

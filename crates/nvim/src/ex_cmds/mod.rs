@@ -15,7 +15,7 @@
 //! | [`subst`] | `:substitute`, split again around its 1,220-line engine |
 //!
 //! What stays here is what the children share -- the flag constants, the
-//! `sorti_T`/`SubResult`/`LineData` layouts, and `check_secure`,
+//! `SortLine`/`SubResult`/`LineData` layouts, and `check_secure`,
 //! `prepare_tagpreview`, `skip_vimgrep_pat` and `ex_oldfiles`, four helpers
 //! that belong to no one command and that other modules import by name.
 //!
@@ -134,7 +134,7 @@ pub struct PreviewLines {
     pub lines_needed: LineNr,
 }
 #[derive(Copy, Clone)]
-pub struct subflags_T {
+pub struct SubFlags {
     pub do_all: bool,
     pub do_ask: bool,
     pub do_count: bool,

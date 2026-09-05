@@ -11,7 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 
 #[derive(Default)]
-pub struct pumitem_T {
+pub struct PumItem {
     pub pum_text: *mut ::core::ffi::c_char,
     pub pum_kind: *mut ::core::ffi::c_char,
     pub pum_extra: *mut ::core::ffi::c_char,

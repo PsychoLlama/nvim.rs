@@ -47,8 +47,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, ExArg, LangP, LineNr, OpArg, Pos, SpellLang, SpellMoveType, SpellTab, Window,
-    file_comparison, searchit_arg_T, size_t, uint8_t,
+    ColNr, ExArg, LangP, LineNr, OpArg, Pos, SearchItArg, SpellLang, SpellMoveType, SpellTab,
+    Window, file_comparison, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy};
@@ -311,7 +311,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut ExArg) {
     while !got_int.get() {
         let slash = '/' as c_int;
         let no_oap = ::core::ptr::null_mut::<OpArg>();
-        let no_arg = ::core::ptr::null_mut::<searchit_arg_T>();
+        let no_arg = ::core::ptr::null_mut::<SearchItArg>();
         let found = unsafe {
             do_search(
                 no_oap,

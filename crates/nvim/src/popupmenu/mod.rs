@@ -57,9 +57,9 @@ use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     AlignTextPos, Array, BufferHandle, Dict, Error, ExArg, Float, Handle, Hlf, Integer, LPos,
-    LineNr, Object, OptInt, OptVal, ScreenAttr, ScreenChar, String_0, Tabpage, VarNumber, VimMenu,
-    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, WindowHandle, kBoolVarFalse,
-    kBoolVarTrue, pumitem_T, size_t, uint32_t,
+    LineNr, Object, OptInt, OptVal, PumItem, ScreenAttr, ScreenChar, String_0, Tabpage, VarNumber,
+    VimMenu, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, WindowHandle,
+    kBoolVarFalse, kBoolVarTrue, size_t, uint32_t,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -106,8 +106,7 @@ pub const DEFAULT_GRID_HANDLE: c_int = 1;
 
 /// The items being shown. Borrowed from the caller of [`pum_display`], or
 /// owned by `pum_show_popupmenu`; null while the menu is down.
-static pum_array: GlobalCell<*mut pumitem_T> =
-    GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
+static pum_array: GlobalCell<*mut PumItem> = GlobalCell::new(::core::ptr::null_mut::<PumItem>());
 /// Number of items in `pum_array`.
 static pum_size: GlobalCell<c_int> = GlobalCell::new(0);
 /// Index of the selected item, or -1.
@@ -165,7 +164,7 @@ static pum_invalid: GlobalCell<bool> = GlobalCell::new(false);
 /// The result must not be held across `pum_undisplay`, which drops the
 /// caller's array.
 #[inline]
-unsafe fn pum_items() -> &'static [pumitem_T] {
+unsafe fn pum_items() -> &'static [PumItem] {
     let array = pum_array.get();
     if array.is_null() {
         return &[];
@@ -312,7 +311,7 @@ unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
 /// # Safety
 /// `array` must hold `size` items whose strings are NUL-terminated.
 unsafe fn pum_publish_external(
-    array: *mut pumitem_T,
+    array: *mut PumItem,
     size: c_int,
     selected: c_int,
     anchor: &PumAnchor,
@@ -353,7 +352,7 @@ unsafe fn pum_publish_external(
 /// `array` must hold `size` items with NUL-terminated strings and outlive the
 /// menu. Autocommands run from here.
 pub unsafe fn pum_display(
-    array: *mut pumitem_T,
+    array: *mut PumItem,
     size: c_int,
     selected: c_int,
     array_changed: bool,

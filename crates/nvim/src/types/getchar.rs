@@ -18,15 +18,15 @@ pub type FlushBuffers = ::core::ffi::c_uint;
 /// [`Default`] is the "nothing saved yet" state its callers declare it in --
 /// `mem::zeroed` is not usable on a struct holding an enum with a niche.
 #[derive(Default)]
-pub struct save_redo_T {
+pub struct SaveRedo {
     pub(crate) sr_redobuff: KeyBuffer,
     pub(crate) sr_old_redobuff: KeyBuffer,
 }
 /// All three kinds of typeahead, set aside so that a prompt has to be
 /// answered by the user. Not `Copy`, and `Default` rather than zeroed, for
-/// the same reasons as [`save_redo_T`].
+/// the same reasons as [`SaveRedo`].
 #[derive(Default)]
-pub struct tasave_T {
+pub struct TypeaheadSave {
     pub(crate) save_typebuf: TypeAhead,
     pub(crate) typebuf_valid: bool,
     pub(crate) old_char: ::core::ffi::c_int,

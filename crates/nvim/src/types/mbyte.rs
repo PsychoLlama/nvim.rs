@@ -33,7 +33,7 @@ pub struct StrCharInfo {
 }
 /// Not `Copy`: `vc_fd` is an iconv descriptor that has to be closed once.
 #[derive(Clone)]
-pub struct vimconv_T {
+pub struct VimConv {
     pub vc_type: ::core::ffi::c_int,
     pub vc_factor: ::core::ffi::c_int,
     pub vc_fd: iconv_t,
@@ -56,7 +56,7 @@ pub const MB_MAXBYTES: usize = 21;
 /// modules had grown a private copy.
 pub const MB_MAXCHAR: usize = 6;
 
-/// `vimconv_T::vc_type` — upstream's `ConvFlags`.
+/// `VimConv::vc_type` — upstream's `ConvFlags`.
 ///
 /// `c_int`, which is what the `vc_type` field is: c2rust typed the anonymous
 /// enum `c_uint` from what the C compiler picked, and every one of the 55 use
@@ -70,9 +70,9 @@ pub const CONV_TO_LATIN1: ConvFlags = 3;
 pub const CONV_TO_LATIN9: ConvFlags = 4;
 pub const CONV_ICONV: ConvFlags = 5;
 
-/// A `vimconv_T` that converts nothing — what `convert_setup` starts from and
+/// A `VimConv` that converts nothing — what `convert_setup` starts from and
 /// what a caller with no conversion to do passes around.
-pub const CONV_NONE_INIT: vimconv_T = vimconv_T {
+pub const CONV_NONE_INIT: VimConv = VimConv {
     vc_type: CONV_NONE,
     vc_factor: 1,
     vc_fd: ::core::ptr::null_mut(),

@@ -102,8 +102,8 @@ use crate::types::{
     AdditionalData, CharsizeArg, CmdModFlags, ColNr, ExArg, ExtmarkOp, GRegFlags, HashTab, LineNr,
     MotionType, NUL, OpArg, PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
     PUT_LINE_FORWARD, PUT_LINE_SPLIT, Pos, RemapValues, SaveVEvent, String_0, UndoObjectType,
-    VarLock, bcount_t, block_def, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t, ssize_t,
-    yankreg_T,
+    VarLock, YankReg, bcount_t, block_def, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t, size_t,
+    ssize_t,
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
@@ -178,8 +178,8 @@ static expr_line: GlobalCell<*mut ::core::ffi::c_char> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_char>());
 static execreg_lastc: GlobalCell<::core::ffi::c_int> = GlobalCell::new(NUL);
 /// The empty register every slot of `y_regs` starts as: upstream's
-/// `static yankreg_T y_regs[NUM_REGISTERS] = { 0 }`.
-const EMPTY_YANKREG: yankreg_T = yankreg_T {
+/// `static YankReg y_regs[NUM_REGISTERS] = { 0 }`.
+const EMPTY_YANKREG: YankReg = YankReg {
     y_array: ::core::ptr::null_mut::<String_0>(),
     y_size: 0,
     y_type: kMTCharWise,
@@ -187,9 +187,8 @@ const EMPTY_YANKREG: yankreg_T = yankreg_T {
     timestamp: 0,
     additional_data: ::core::ptr::null_mut::<AdditionalData>(),
 };
-static y_regs: GlobalCell<[yankreg_T; 39]> = GlobalCell::new([EMPTY_YANKREG; 39]);
-static y_previous: GlobalCell<*mut yankreg_T> =
-    GlobalCell::new(::core::ptr::null_mut::<yankreg_T>());
+static y_regs: GlobalCell<[YankReg; 39]> = GlobalCell::new([EMPTY_YANKREG; 39]);
+static y_previous: GlobalCell<*mut YankReg> = GlobalCell::new(::core::ptr::null_mut::<YankReg>());
 static e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines:
     &::core::ffi::CStr =
     c"E883: Search pattern and expression register may not contain two or more lines";

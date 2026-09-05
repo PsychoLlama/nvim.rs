@@ -25,7 +25,7 @@ use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Buffer, ColNr, Failed, RegMatch, RegProg, fuzmatch_str_T, size_t};
+use crate::types::{Buffer, ColNr, Failed, FuzMatchStr, RegMatch, RegProg, size_t};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -140,7 +140,7 @@ pub unsafe fn expand_buf_names(
 
     let fuzzy = wants_fuzzy(pat);
     let mut patc: *mut c_char = ptr::null_mut();
-    let mut fuzmatch: *mut fuzmatch_str_T = ptr::null_mut();
+    let mut fuzmatch: *mut FuzMatchStr = ptr::null_mut();
     let mut regmatch = NO_REGMATCH;
 
     // Make a copy of "pat" and change "^" to "\(^\|[\/]\)" (when matching
@@ -221,7 +221,7 @@ pub unsafe fn expand_buf_names(
             };
 
             if fuzzy {
-                let entry = fuzmatch_str_T {
+                let entry = FuzMatchStr {
                     idx: count,
                     str: p,
                     score,
@@ -244,7 +244,7 @@ pub unsafe fn expand_buf_names(
         }
         if round == 1 {
             if fuzzy {
-                fuzmatch = alloc_array::<fuzmatch_str_T>(count);
+                fuzmatch = alloc_array::<FuzMatchStr>(count);
             } else {
                 *file = alloc_array::<*mut c_char>(count);
                 if options.has(WildOpts::BUFLASTUSED) {

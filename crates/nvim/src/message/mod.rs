@@ -92,9 +92,9 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    ApiDict, Arena, Array, ColNr, EStackArg, Event, ExArg, FILE, FlushBuffers, GridView, HlMessage,
-    HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
-    ScreenChar, ShmFlag, String_0, TypVal, Vv, estack_T, int64_t, ptrdiff_t, size_t, ssize_t,
+    ApiDict, Arena, Array, ColNr, EStack, EStackArg, Event, ExArg, FILE, FlushBuffers, GridView,
+    HlMessage, HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt,
+    ScreenAttr, ScreenChar, ShmFlag, String_0, TypVal, Vv, int64_t, ptrdiff_t, size_t, ssize_t,
     typval_vval_union, uint64_t,
 };
 use crate::ui::{
@@ -153,11 +153,10 @@ pub const VIM_NO: c_uint = 3;
 pub const VIM_YES: c_uint = 2;
 /// One run of displayed message text, for scrolling back over. See
 /// [`self::scrollback`].
-pub type msgchunk_T = msgchunk_S;
 #[repr(C)]
-pub struct msgchunk_S {
-    pub sb_next: *mut msgchunk_T,
-    pub sb_prev: *mut msgchunk_T,
+pub struct MsgChunk {
+    pub sb_next: *mut MsgChunk,
+    pub sb_prev: *mut MsgChunk,
     pub sb_eol: ::core::ffi::c_char,
     pub sb_msg_col: ::core::ffi::c_int,
     pub sb_hl_id: ::core::ffi::c_int,
@@ -229,7 +228,7 @@ fn clear_msg_area(top: c_int, bot: c_int, left: c_int, right: c_int) {
 
 /// The innermost entry of the `:source`/function call stack, which is what
 /// C's `SOURCING_NAME` and `SOURCING_LNUM` read.
-fn sourcing_top() -> estack_T {
+fn sourcing_top() -> EStack {
     crate::runtime::innermost_frame()
 }
 

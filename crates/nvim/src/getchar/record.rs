@@ -20,10 +20,10 @@ use crate::types::MB_MAXCHAR;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int, c_uint};
 
-impl gotchars_state_T {
+impl GotcharsState {
     /// A state machine with nothing pending.
     pub(crate) const fn new() -> Self {
-        gotchars_state_T {
+        GotcharsState {
             buf: [0; MB_MAXBYTES * 3 + 4],
             prev_c: 0,
             buflen: 0,
@@ -37,7 +37,7 @@ impl gotchars_state_T {
 ///
 /// When it answers true, `state.buf[..state.buflen]` is the key's bytes and
 /// the caller is expected to reset `buflen`.
-pub(crate) fn gotchars_add_byte(state: &mut gotchars_state_T, byte: u8) -> bool {
+pub(crate) fn gotchars_add_byte(state: &mut GotcharsState, byte: u8) -> bool {
     state.buf[state.buflen] = byte;
     state.buflen += 1;
     let mut c = c_int::from(byte);
@@ -89,7 +89,7 @@ pub(crate) fn gotchars_add_byte(state: &mut gotchars_state_T, byte: u8) -> bool 
 /// reads, and neither is provably unable to reach the buffer it points into.
 pub(crate) unsafe fn gotchars(chars: *const u8, len: usize) {
     /// What `gotchars` has half a key of, between calls.
-    static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
+    static state: GlobalCell<GotcharsState> = GlobalCell::new(GotcharsState::new());
 
     for i in 0..len {
         // SAFETY (this body): the caller's promise -- `chars` is `len`
@@ -161,7 +161,7 @@ pub unsafe fn gotchars_ignore() {
 pub(crate) unsafe fn add_byte_to_showcmd(byte: u8) {
     let mut ch = [0 as c_char; MB_MAXCHAR];
     /// What `add_byte_to_showcmd` has half a key of, between calls.
-    static state: GlobalCell<gotchars_state_T> = GlobalCell::new(gotchars_state_T::new());
+    static state: GlobalCell<GotcharsState> = GlobalCell::new(GotcharsState::new());
 
     if p_sc.get() == 0 || msg_silent.get() != 0 {
         return;

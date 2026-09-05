@@ -32,10 +32,10 @@ use crate::fileio::readfile;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
-    BLN_LISTED, EDIT_QF, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT, SID_CARG, WIN_HOR,
-    WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg, got_int, kOptErrorfile,
-    kOptShortmess, mparm_T, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls, p_menc,
-    p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
+    BLN_LISTED, EDIT_QF, MainParams, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT,
+    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg, got_int,
+    kOptErrorfile, kOptShortmess, msg_didany, msg_scroll, no_wait_return, p_ef, p_efm, p_fdls,
+    p_menc, p_shm, recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -96,7 +96,7 @@ pub(crate) unsafe fn set_argf_var() {
 
 /// The first file argument, which is what decides whether `-r` lists the swap
 /// files or recovers one.
-pub(crate) unsafe fn get_fname(_parmp: *mut mparm_T) -> *mut c_char {
+pub(crate) unsafe fn get_fname(_parmp: *mut MainParams) -> *mut c_char {
     // SAFETY: only reached when the argument list is non-empty.
     unsafe { alist_name((*global_arglist()).al_ga.as_mut_ptr()) }
 }
@@ -104,7 +104,7 @@ pub(crate) unsafe fn get_fname(_parmp: *mut mparm_T) -> *mut c_char {
 /// `-q`: read the errorfile and set up the quickfix list.
 ///
 /// A quickfix list that cannot be built is fatal, with status 3.
-pub(crate) unsafe fn handle_quickfix(paramp: *mut mparm_T) {
+pub(crate) unsafe fn handle_quickfix(paramp: *mut MainParams) {
     let mut title = [0 as c_char; IOSIZE as usize];
     // SAFETY: `paramp` is the caller's live parameter block, and `title`
     // outlives the `qf_init` that reads it.
@@ -213,11 +213,11 @@ pub(crate) unsafe fn read_stdin() {
 const MAX_WINDOW_PASSES: c_int = 1000;
 
 /// The parameter block `main` filled in, which outlives every call here.
-type Mp = Live<mparm_T>;
+type Mp = Live<MainParams>;
 
 /// Make the windows and tab pages the command line asked for, and give every
 /// one of them a buffer.
-pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
+pub(crate) unsafe fn create_windows(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block; the window and
     // buffer lists are global and may be rearranged by the autocommands the
     // buffer loading fires.
@@ -335,7 +335,7 @@ pub(crate) unsafe fn create_windows(parmp: *mut mparm_T) {
 
 /// Load the remaining file arguments into the windows [`create_windows`]
 /// made, and leave the cursor in the first non-preview one.
-pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
+pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block; the window list
     // is global and `do_ecmd` may close windows through autocommands.
     let parm = unsafe { Mp::new(parmp) };

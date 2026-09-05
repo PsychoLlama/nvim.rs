@@ -89,7 +89,7 @@ pub struct VirtText {
 #[derive(Copy, Clone)]
 pub struct caller_scope {
     pub script_ctx: ScriptCtx,
-    pub es_entry: estack_T,
+    pub es_entry: EStack,
     pub autocmd_fname: *mut ::core::ffi::c_char,
     pub autocmd_match: *mut ::core::ffi::c_char,
     pub autocmd_fname_full: bool,
@@ -103,7 +103,7 @@ pub struct DictItem {
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 0],
 }
-pub struct mod_entry_T {
+pub struct ModEntry {
     pub flag: ::core::ffi::c_int,
     pub name: *mut ::core::ffi::c_char,
 }

@@ -53,7 +53,7 @@
 //! [`DerefMut`] hands out a `&mut` to the *whole* struct, and under Stacked
 //! and Tree Borrows that pops every raw pointer previously derived from the
 //! same object — so the interior pointer dies at the next field write, and
-//! only Miri will ever say so. `insexpand`'s `ins_compl_next_state_T` is the
+//! only Miri will ever say so. `insexpand`'s `InsComplNextState` is the
 //! live example: `cur_match_pos` points at its own `first_match_pos` or
 //! `last_match_pos`, so a single `st.found_all = true` through a `Live` would
 //! poison the pointer the next `searchit` reads. Wrap the *fields* instead —

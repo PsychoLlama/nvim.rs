@@ -72,7 +72,7 @@ pub(crate) struct LineFrame {
     pub(crate) spv: *mut SpellVars,
     /// `'statuscolumn'` request. Its `sattrs` points into
     /// [`WinLineVars::sign_attrs`].
-    pub(crate) statuscol: *mut statuscol_T,
+    pub(crate) statuscol: *mut StatusCol,
     /// Per-column attributes of a `:terminal` buffer's line,
     /// [`TERM_ATTRS_MAX`] of them, all zero for any other buffer.
     pub(crate) term_attrs: *const ::core::ffi::c_int,

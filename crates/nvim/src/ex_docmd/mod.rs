@@ -230,7 +230,7 @@ pub struct loop_cookie {
     pub lc_getline: LineGetter,
     pub cookie: *mut c_void,
 }
-pub struct wcmd_T {
+pub struct WhileCmd {
     pub line: *mut c_char,
     pub lnum: LineNr,
 }

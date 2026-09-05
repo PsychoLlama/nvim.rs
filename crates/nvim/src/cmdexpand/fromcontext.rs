@@ -264,7 +264,7 @@ pub unsafe fn expand_generic(
         ga_data: ptr::null_mut(),
     };
     let itemsize = if fuzzy {
-        size_of::<fuzmatch_str_T>()
+        size_of::<FuzMatchStr>()
     } else {
         size_of::<*mut c_char>()
     };
@@ -306,12 +306,12 @@ pub unsafe fn expand_generic(
 
         unsafe { ga_grow(&raw mut ga, 1) };
         if fuzzy {
-            let scored = fuzmatch_str_T {
+            let scored = FuzMatchStr {
                 idx: ga.ga_len,
                 str,
                 score,
             };
-            let slot = (ga.ga_data as *mut fuzmatch_str_T).wrapping_offset(ga.ga_len as isize);
+            let slot = (ga.ga_data as *mut FuzMatchStr).wrapping_offset(ga.ga_len as isize);
             // SAFETY: `ga_grow` above made room for one more entry.
             unsafe { slot.write(scored) };
         } else {
@@ -372,12 +372,7 @@ pub unsafe fn expand_generic(
 
     if fuzzy {
         unsafe {
-            fuzzymatches_to_strmatches(
-                ga.ga_data as *mut fuzmatch_str_T,
-                matches,
-                ga.ga_len,
-                funcsort,
-            )
+            fuzzymatches_to_strmatches(ga.ga_data as *mut FuzMatchStr, matches, ga.ga_len, funcsort)
         };
     } else {
         unsafe { *matches = ga.ga_data as *mut *mut c_char };

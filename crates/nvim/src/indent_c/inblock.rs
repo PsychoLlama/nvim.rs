@@ -65,7 +65,7 @@ pub(crate) struct BlockScan<'a> {
     /// *is* one must not become `LOOKFOR_UNTERM`.
     pub raw_string_start: LineNr,
     /// `cin_is_cpp_baseclass`'s answer, cached across the walk.
-    pub cache: cpp_baseclass_cache_T,
+    pub cache: CppBaseclassCache,
     /// The line being indented is a Javascript `key:` -- checked once, on the
     /// first line the scan reaches.
     pub js_cur_has_key: bool,
@@ -231,7 +231,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: Pos) -> c_int {
         lookfor_break,
         lookfor_cpp_namespace,
         raw_string_start: 0,
-        cache: cpp_baseclass_cache_T {
+        cache: CppBaseclassCache {
             found: 0,
             lpos: LPos {
                 lnum: MAXLNUM as LineNr,

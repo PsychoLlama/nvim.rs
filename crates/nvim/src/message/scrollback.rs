@@ -1,7 +1,7 @@
 //! The message scrollback, which `g<` and the pager page through.
 //!
 //! Every line [`crate::message::msg_puts_display`] emits is also
-//! copied into a linked list of [`msgchunk_T`] chunks ([`store_sb_text`]), so
+//! copied into a linked list of [`MsgChunk`] chunks ([`store_sb_text`]), so
 //! that the pager can scroll backwards past what the screen still holds.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -11,7 +11,7 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::{mem, ptr};
 
 /// The most recently displayed chunk of message text.
-pub(crate) static last_msgchunk: GlobalCell<*mut msgchunk_T> = GlobalCell::new(ptr::null_mut());
+pub(crate) static last_msgchunk: GlobalCell<*mut MsgChunk> = GlobalCell::new(ptr::null_mut());
 
 /// Whether, and how much of, the scrollback to drop before the next message.
 static do_clear_sb_text: GlobalCell<ScrollbackClear> = GlobalCell::new(SB_CLEAR_NONE);
@@ -20,7 +20,7 @@ static do_clear_sb_text: GlobalCell<ScrollbackClear> = GlobalCell::new(SB_CLEAR_
 ///
 /// # Safety
 /// `mp` must point at a chunk allocated by [`store_sb_text`].
-unsafe fn sb_text(mp: *mut msgchunk_T) -> *mut c_char {
+unsafe fn sb_text(mp: *mut MsgChunk) -> *mut c_char {
     // Not `(*mp).sb_text.as_mut_ptr()`: the field is a zero-length array, so
     // the autoref covers no bytes and the pointer carries no provenance for
     // the text that follows it.
@@ -56,8 +56,8 @@ pub(crate) unsafe fn store_sb_text(
 
     if s > unsafe { *sb_str } {
         let len = unsafe { s.offset_from(*sb_str) as size_t };
-        let mp: *mut msgchunk_T =
-            unsafe { xmalloc(mem::offset_of!(msgchunk_T, sb_text) + len + 1) }.cast();
+        let mp: *mut MsgChunk =
+            unsafe { xmalloc(mem::offset_of!(MsgChunk, sb_text) + len + 1) }.cast();
         unsafe { (*mp).sb_eol = finish as c_char };
         unsafe { (*mp).sb_msg_col = *sb_col };
         unsafe { (*mp).sb_hl_id = hl_id };
@@ -166,7 +166,7 @@ pub unsafe fn show_sb_text() {
 }
 
 /// Walk back to the chunk that starts the screen line `mps` is part of.
-pub(crate) unsafe fn msg_sb_start(mps: *mut msgchunk_T) -> *mut msgchunk_T {
+pub(crate) unsafe fn msg_sb_start(mps: *mut MsgChunk) -> *mut MsgChunk {
     let mut mp = mps;
     while !mp.is_null()
         && !unsafe { (*mp).sb_prev }.is_null()
@@ -186,7 +186,7 @@ pub unsafe fn msg_sb_eol() {
 
 /// Redisplay one remembered screen line at `row`, answering the chunk the
 /// next line starts at (null at the end of the list).
-pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut msgchunk_T) -> *mut msgchunk_T {
+pub(crate) unsafe fn disp_sb_line(row: c_int, smp: *mut MsgChunk) -> *mut MsgChunk {
     let mut mp = smp;
     loop {
         msg_row.set(row);

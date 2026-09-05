@@ -16,7 +16,7 @@ use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
 use crate::os::fs::os_fopen;
 use crate::runtime::{get_scriptname, script_count, script_item};
-use crate::types::{IOSIZE, ProfTime, UserFunc, scriptitem_T};
+use crate::types::{IOSIZE, ProfTime, ScriptItem, UserFunc};
 use ::libc::fclose;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::OsStr;
@@ -202,7 +202,7 @@ unsafe fn func_dump_profile(fd: &mut dyn Write) -> io::Result<()> {
 ///
 /// # Safety
 /// `si` is a live script item whose `sn_name` names the script's source.
-unsafe fn script_dump_source(fd: &mut dyn Write, si: &scriptitem_T) -> io::Result<()> {
+unsafe fn script_dump_source(fd: &mut dyn Write, si: &ScriptItem) -> io::Result<()> {
     // SAFETY: `sn_name` is the NUL-terminated source path.
     let sfd = unsafe { os_fopen(si.sn_name, c"r".as_ptr()) };
     if sfd.is_null() {

@@ -59,7 +59,7 @@ use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
     Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
-    int32_t, int64_t, size_t, tasave_T, uint8_t,
+    TypeaheadSave, int32_t, int64_t, size_t, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};

@@ -3,7 +3,7 @@
 //! `do_source_ext` is the whole of it, and it reads its lines from one of
 //! three places (see [`Origin`]): a file, the current buffer, or a string the
 //! API handed over.  Whichever it is, the shape is the same -- resolve a name,
-//! find or create the `scriptitem_T`, push it on the execution stack, run it,
+//! find or create the `ScriptItem`, push it on the execution stack, run it,
 //! and unwind all of that whatever happens -- so [`source_bracket`] reads as
 //! that sequence of named stages.  Everything else here is an entry point into
 //! it, or an accessor `do_cmdline` calls back through to ask about the source
@@ -94,28 +94,28 @@ pub unsafe fn ex_options(_eap: *mut ExArg) {
 /// The breakpoint line of the script `cookie` is reading, for the debugger.
 ///
 /// # Safety
-/// `cookie` is a live [`source_cookie_T`].
+/// `cookie` is a live [`SourceCookie`].
 pub unsafe fn source_breakpoint(cookie: *mut c_void) -> *mut LineNr {
     // SAFETY: the caller's contract.
-    unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).breakpoint }
+    unsafe { &raw mut (*cookie.cast::<SourceCookie>()).breakpoint }
 }
 
 /// The `debug_tick` the script `cookie` is reading last saw.
 ///
 /// # Safety
-/// `cookie` is a live [`source_cookie_T`].
+/// `cookie` is a live [`SourceCookie`].
 pub unsafe fn source_dbg_tick(cookie: *mut c_void) -> *mut c_int {
     // SAFETY: the caller's contract.
-    unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).dbg_tick }
+    unsafe { &raw mut (*cookie.cast::<SourceCookie>()).dbg_tick }
 }
 
 /// The `:if`/`:while` nesting level the script `cookie` is reading started at.
 ///
 /// # Safety
-/// `cookie` is a live [`source_cookie_T`].
+/// `cookie` is a live [`SourceCookie`].
 pub unsafe fn source_level(cookie: *mut c_void) -> c_int {
     // SAFETY: the caller's contract.
-    unsafe { (*cookie.cast::<source_cookie_T>()).level }
+    unsafe { (*cookie.cast::<SourceCookie>()).level }
 }
 
 /// `fopen` for reading, with the descriptor kept out of child processes.
@@ -162,13 +162,13 @@ pub(crate) unsafe fn concat_continued_line(
     true
 }
 
-/// Allocate the next script ID and its `scriptitem_T`, taking ownership of
+/// Allocate the next script ID and its `ScriptItem`, taking ownership of
 /// `name`.  IDs are never reused, so the registry is grown to cover every ID
 /// up to the new one; the intervening items exist and are empty.
 ///
 /// # Safety
 /// `name` is owned memory or null; `sid_out` is null or writable.
-pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut scriptitem_T {
+pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut ScriptItem {
     /// The highest script ID handed out so far.
     static last_current_SID: GlobalCell<ScriptId> = GlobalCell::new(0);
 
@@ -183,7 +183,7 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
     // A registry entry is never freed -- ids are never reused -- so the box
     // is deliberately leaked into the registry.
     while script_count() < sid {
-        let item = Box::into_raw(Box::new(scriptitem_T::new()));
+        let item = Box::into_raw(Box::new(ScriptItem::new()));
         let added = script_items.with_mut(|items| {
             items.push(item);
             items.len() as ScriptId
@@ -204,7 +204,7 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
 /// # Safety
 /// `sp` is a cookie under construction and `eap` carries the range.
 unsafe fn do_source_buffer_init(
-    sp: &mut source_cookie_T,
+    sp: &mut SourceCookie,
     eap: *const ExArg,
     ex_lua: bool,
 ) -> *mut c_char {
@@ -246,7 +246,7 @@ unsafe fn do_source_buffer_init(
 ///
 /// # Safety
 /// `sp` is a cookie under construction and `str` is NUL-terminated.
-unsafe fn do_source_str_init(sp: &mut source_cookie_T, mut str: *const c_char) {
+unsafe fn do_source_str_init(sp: &mut SourceCookie, mut str: *const c_char) {
     // SAFETY: `skip_to_newline` stops at the terminator, so every span
     // copied is within the string.
     while unsafe { *str } as c_int != NUL {
@@ -313,7 +313,7 @@ enum Origin {
     /// The current buffer, over `eap`'s range.
     Buffer,
     /// A string handed in by the API. `fname` is only a traceback name, and
-    /// no `scriptitem_T` is allocated.
+    /// no `ScriptItem` is allocated.
     Str,
     /// A file on disk named by `fname`.
     File,
@@ -377,7 +377,7 @@ impl SourceRequest {
 /// `cookie` is zeroed and the request's pointers are live.
 unsafe fn source_name(
     req: &SourceRequest,
-    cookie: &mut source_cookie_T,
+    cookie: &mut SourceCookie,
 ) -> Result<*mut c_char, c_int> {
     match req.origin {
         Origin::Buffer => {
@@ -447,7 +447,7 @@ unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
 ///
 /// # Safety
 /// `fname_exp` is the resolved name, writable when `check_other` is set.
-unsafe fn open_script(cookie: &mut source_cookie_T, fname_exp: *mut c_char, check_other: bool) {
+unsafe fn open_script(cookie: &mut SourceCookie, fname_exp: *mut c_char, check_other: bool) {
     if !cookie.source_from_buf_or_str {
         // SAFETY: the caller's contract.
         cookie.fp = unsafe { fopen_noinh_readbin(fname_exp) };
@@ -489,7 +489,7 @@ unsafe fn verbose_source_msg(plain: &'static CStr, numbered: &'static CStr, fnam
     unsafe { verbose_leave() };
 }
 
-/// Find or create the `scriptitem_T` this source runs under.  A brand-new
+/// Find or create the `ScriptItem` this source runs under.  A brand-new
 /// item takes ownership of `*fname_exp` and the caller gets a copy back,
 /// because the `SourcePost` autocommand at the end still needs a name to fire
 /// with.  Sourcing a string allocates no item at all.
@@ -500,7 +500,7 @@ unsafe fn register_script(
     req: &SourceRequest,
     sid: &mut c_int,
     fname_exp: &mut *mut c_char,
-) -> *mut scriptitem_T {
+) -> *mut ScriptItem {
     if *sid > 0 {
         // Loading the same script again.
         // SAFETY: a positive `sid` names a registered script.
@@ -524,7 +524,7 @@ unsafe fn register_script(
 ///
 /// # Safety
 /// `si` is the script's live registry item.
-unsafe fn profile_script_start(si: *mut scriptitem_T) {
+unsafe fn profile_script_start(si: *mut ScriptItem) {
     let mut forceit = false;
     // SAFETY: the caller's contract.
     if !unsafe { (*si).sn_prof_on }
@@ -609,7 +609,7 @@ unsafe fn range_is_lua(eap: *const ExArg) -> bool {
 ///
 /// # Safety
 /// `conv` is the cookie's converter and `firstline` is null or owned memory.
-unsafe fn strip_bom(conv: *mut vimconv_T, firstline: *mut c_char) -> *mut c_char {
+unsafe fn strip_bom(conv: *mut VimConv, firstline: *mut c_char) -> *mut c_char {
     // SAFETY: the caller's contract; the length check is what makes the
     // three-byte read in bounds.
     if firstline.is_null() || unsafe { cstr::bytes_at(firstline) }.len() < 3 {
@@ -637,8 +637,8 @@ unsafe fn strip_bom(conv: *mut vimconv_T, firstline: *mut c_char) -> *mut c_char
 /// is the resolved name.
 unsafe fn execute_source(
     req: &SourceRequest,
-    cookie: &mut source_cookie_T,
-    si: *mut scriptitem_T,
+    cookie: &mut SourceCookie,
+    si: *mut ScriptItem,
     fname_exp: *mut c_char,
 ) -> *mut c_char {
     // SAFETY: the caller's contract; both executors read the cookie's lines
@@ -668,7 +668,7 @@ unsafe fn execute_source(
 ///
 /// # Safety
 /// The cookie is done being read from, and `firstline` is null or owned.
-unsafe fn finish_source(cookie: &mut source_cookie_T, firstline: *mut c_char) {
+unsafe fn finish_source(cookie: &mut SourceCookie, firstline: *mut c_char) {
     // SAFETY: the caller's contract.
     if !cookie.fp.is_null() {
         unsafe { fclose(cookie.fp) };
@@ -689,7 +689,7 @@ unsafe fn finish_source(cookie: &mut source_cookie_T, firstline: *mut c_char) {
 /// read before any of this ran.
 unsafe fn source_bracket(
     req: &SourceRequest,
-    cookie: &mut source_cookie_T,
+    cookie: &mut SourceCookie,
     fname_exp: &mut *mut c_char,
     save_debug_break_level: c_int,
 ) -> c_int {
@@ -863,14 +863,14 @@ unsafe fn source_bracket(
 /// Read a script and run it.
 ///
 /// Answers FAIL when the file could not be opened, OK otherwise.  When a
-/// `scriptitem_T` was found or created, `ret_sid` -- if given -- gets its ID,
+/// `ScriptItem` was found or created, `ret_sid` -- if given -- gets its ID,
 /// and a script that has one already is *not* run again.
 ///
 /// # Safety
 /// The request's pointers are live for the call.
 unsafe fn do_source_ext(req: &SourceRequest) -> c_int {
     let save_debug_break_level = debug_break_level.get();
-    let mut cookie = source_cookie_T::new();
+    let mut cookie = SourceCookie::new();
     // SAFETY: the caller's contract.
     let mut fname_exp = match unsafe { source_name(req, &mut cookie) } {
         Ok(name) => name,

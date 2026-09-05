@@ -240,7 +240,7 @@ pub struct Buffer {
     pub b_first_abbr: *mut MapBlock,
     /// The buffer-local user commands, sorted by name. A `-buffer` command
     /// shadows a global one; `usercmd`'s `Table` is the walk over both.
-    pub b_ucmds: Vec<ucmd_T>,
+    pub b_ucmds: Vec<UserCmd>,
     pub b_op_start: Pos,
     pub b_op_start_orig: Pos,
     pub b_op_end: Pos,
@@ -820,7 +820,7 @@ pub struct Window {
     pub w_stl_visual_mode: ::core::ffi::c_int,
     pub w_stl_visual_pos: Pos,
     pub w_alt_fnum: ::core::ffi::c_int,
-    pub w_alist: *mut alist_T,
+    pub w_alist: *mut ArgList,
     pub w_arg_idx: ::core::ffi::c_int,
     /// Whether `w_arg_idx` no longer names the argument the window shows.
     pub w_arg_idx_invalid: bool,

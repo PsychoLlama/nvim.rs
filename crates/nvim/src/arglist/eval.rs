@@ -16,7 +16,7 @@ use crate::winlayer::Win;
 /// # Safety
 ///
 /// `arg` must be a valid typval.
-unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut alist_T> {
+unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut ArgList> {
     // SAFETY: caller contract; `find_win_by_nr_or_id` only reads the typval.
     if unsafe { (*arg).v_type } == VAR_UNKNOWN {
         return Some(win_alist(cur_win()));
@@ -79,7 +79,7 @@ pub unsafe fn f_arglistid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 ///
 /// `rettv` must be a valid return-value slot and `entries` hold `count`
 /// argument list entries, or be null.
-unsafe fn arglist_as_rettv(entries: *mut aentry_T, count: c_int, rettv: *mut TypVal) {
+unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, rettv: *mut TypVal) {
     // SAFETY: caller contract; every entry has a name that outlives the copy
     // `tv_list_append_string` takes.
     unsafe { tv_list_alloc_ret(rettv, count as ptrdiff_t) };

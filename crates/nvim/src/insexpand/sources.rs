@@ -490,7 +490,7 @@ pub(crate) unsafe fn ins_compl_get_next_word_or_line(
 /// with `st->set_match_pos` set, `st->first_match_pos` and `st->last_match_pos`
 /// are set too. Answers `Ok` if a new match was found, otherwise `Err`.
 pub(crate) unsafe fn get_next_default_completion(
-    st: *mut ins_compl_next_state_T,
+    st: *mut InsComplNextState,
     start_pos: *mut Pos,
 ) -> Result<(), Failed> {
     // Where a joined `CTRL-X CTRL-L` line is assembled; upstream shares

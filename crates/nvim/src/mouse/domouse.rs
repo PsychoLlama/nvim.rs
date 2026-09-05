@@ -57,7 +57,7 @@ use crate::state::{MODE_INSERT, MODE_NORMAL, REPLACE_FLAG};
 use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
-use crate::types::{NUL, OpArg, OpType, PUT_CURSEND, PUT_FIXINDENT, yankreg_T};
+use crate::types::{NUL, OpArg, OpType, PUT_CURSEND, PUT_FIXINDENT, YankReg};
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
 
@@ -532,7 +532,7 @@ fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -
 
     // The register is looked up only in Replace mode, as the C's `&&` has it;
     // everywhere else `reg` stays null and `do_put` looks it up itself.
-    let mut reg: *mut yankreg_T = ptr::null_mut();
+    let mut reg: *mut YankReg = ptr::null_mut();
     // SAFETY: `reg` is a live local, and the answer is a register the editor
     // owns.
     let replacing =
@@ -726,7 +726,7 @@ fn dispatch_action(a: Action, win: Win) {
         if regname == 0 && has_clipboard_provider() {
             regname = '*' as c_int;
         }
-        let mut reg: *mut yankreg_T = ptr::null_mut();
+        let mut reg: *mut YankReg = ptr::null_mut();
         // SAFETY: `reg` is a live local, and the answer is a register the
         // editor owns.
         let mline = unsafe { yank_register_mline(regname, &raw mut reg) };

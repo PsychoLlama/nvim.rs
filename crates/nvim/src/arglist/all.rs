@@ -26,7 +26,7 @@ use crate::winlayer::{TabPage, Win, first_tab, first_window, last_window, window
 /// need no unsafe to reach.
 struct ArgAllState {
     /// The argument list being laid out; held by a reference of its own.
-    alist: *mut alist_T,
+    alist: *mut ArgList,
     /// `cmdmod.cmod_tab` as `:all` started: nonzero for `:tab all`.
     had_tab: c_int,
     /// `:tab drop`: keep the existing tab pages and windows.

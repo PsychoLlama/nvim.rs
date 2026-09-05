@@ -24,7 +24,7 @@ use crate::memory::xfree;
 use crate::types::{
     CONV_NONE, ParserHighlight, ParserHighlightChunk, ParserInputReader, ParserInputReader_lines,
     ParserLine, ParserLineGetter, ParserPosition, ParserState, ParserState_stack, ParserStateItem,
-    ParserStateItem_data_expr_type_0, ParserStateItem_type_0, vimconv_T,
+    ParserStateItem_data_expr_type_0, ParserStateItem_type_0, VimConv,
 };
 
 pub const kExprUnknown: ParserStateItem_data_expr_type_0 = 0;
@@ -49,7 +49,7 @@ pub const PARSER_STATE_INIT: ParserState = ParserState {
             items: ptr::null_mut(),
             init_array: [EMPTY_LINE; 4],
         },
-        conv: vimconv_T {
+        conv: VimConv {
             vc_type: CONV_NONE,
             vc_factor: 1,
             vc_fd: ptr::null_mut(),

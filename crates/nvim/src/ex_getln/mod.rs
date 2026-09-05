@@ -141,9 +141,9 @@ use crate::types::{
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
     HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
     OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, String_0,
-    Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, Window,
-    XpPrefix, dobuf_action_values, dobuf_start_values, ptrdiff_t, searchit_arg_T, size_t, time_t,
+    ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg,
+    String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
+    Window, XpPrefix, dobuf_action_values, dobuf_start_values, ptrdiff_t, size_t, time_t,
     typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::{
@@ -234,7 +234,7 @@ pub struct CommandLineState {
     pub hiscnt: ::core::ffi::c_int,
     pub save_hiscnt: ::core::ffi::c_int,
     pub histype: ::core::ffi::c_int,
-    pub is_state: incsearch_state_T,
+    pub is_state: IncsearchState,
     pub did_wild_list: bool,
     pub wim_index: ::core::ffi::c_int,
     pub save_msg_scroll: ::core::ffi::c_int,
@@ -253,12 +253,12 @@ pub struct CommandLineState {
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,
 }
-pub struct incsearch_state_T {
+pub struct IncsearchState {
     pub search_start: Pos,
     pub save_cursor: Pos,
     pub winid: Handle,
-    pub init_viewstate: viewstate_T,
-    pub old_viewstate: viewstate_T,
+    pub init_viewstate: ViewState,
+    pub old_viewstate: ViewState,
     pub match_start: Pos,
     pub match_end: Pos,
     pub did_incsearch: bool,
@@ -266,7 +266,7 @@ pub struct incsearch_state_T {
     pub magic_overruled_save: OptMagic,
 }
 #[derive(Copy, Clone)]
-pub struct viewstate_T {
+pub struct ViewState {
     pub vs_curswant: ColNr,
     pub vs_leftcol: ColNr,
     pub vs_skipcol: ColNr,
@@ -382,7 +382,7 @@ pub struct CpWinInfoVec {
 pub struct CpWinInfo {
     pub win: *mut Window,
     pub save_w_cursor: Pos,
-    pub save_viewstate: viewstate_T,
+    pub save_viewstate: ViewState,
     pub save_w_p_cul: ::core::ffi::c_int,
     pub save_w_p_cuc: ::core::ffi::c_int,
 }
@@ -454,8 +454,8 @@ pub(crate) const POS_INIT: Pos = Pos {
     coladd: 0,
 };
 
-/// An all-zero [`viewstate_T`], which `save_viewstate` fills.
-pub(crate) const VIEWSTATE_INIT: viewstate_T = viewstate_T {
+/// An all-zero [`ViewState`], which `save_viewstate` fills.
+pub(crate) const VIEWSTATE_INIT: ViewState = ViewState {
     vs_curswant: 0,
     vs_leftcol: 0,
     vs_skipcol: 0,
@@ -465,8 +465,8 @@ pub(crate) const VIEWSTATE_INIT: viewstate_T = viewstate_T {
     vs_empty_rows: 0,
 };
 
-/// An all-zero [`incsearch_state_T`]; `init_incsearch_state` fills it.
-pub(crate) const INCSEARCH_STATE_INIT: incsearch_state_T = incsearch_state_T {
+/// An all-zero [`IncsearchState`]; `init_incsearch_state` fills it.
+pub(crate) const INCSEARCH_STATE_INIT: IncsearchState = IncsearchState {
     search_start: POS_INIT,
     save_cursor: POS_INIT,
     winid: 0,

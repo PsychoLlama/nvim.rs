@@ -19,7 +19,7 @@
 //! | `FIND_NAMESPACE_LIM` | how far back `LOOKFOR_*`'s namespace hunt may go |
 //! | `FM_*` | `findmatchlimit` direction/stop flags |
 //! | `KEY_*` | the pseudo-keys `in_cinkeys` is asked about that are not typed characters |
-//! | `cpp_baseclass_cache_T` | one line's `cin_is_cpp_baseclass` answer, cached across the scan |
+//! | `CppBaseclassCache` | one line's `cin_is_cpp_baseclass` answer, cached across the scan |
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -83,7 +83,7 @@ pub const KEY_COMPLETE: ::core::ffi::c_int = 259;
 pub const KEY_OPEN_BACK: ::core::ffi::c_int = 258;
 pub const KEY_OPEN_FORW: ::core::ffi::c_int = 257;
 pub const FM_BACKWARD: ::core::ffi::c_int = 1;
-pub struct cpp_baseclass_cache_T {
+pub struct CppBaseclassCache {
     pub found: ::core::ffi::c_int,
     pub lpos: LPos,
 }

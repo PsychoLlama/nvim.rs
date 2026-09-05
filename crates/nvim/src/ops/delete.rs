@@ -177,7 +177,7 @@ pub unsafe fn op_delete(oap: *mut OpArg) -> Result<(), NotDeleted> {
 fn save_deleted_text(oap: Op) -> bool {
     // SAFETY: a live `OpArg` of the current buffer, and every register
     // written is one `get_yank_register`/`get_y_register` just handed back.
-    let mut reg: *mut yankreg_T = ::core::ptr::null_mut();
+    let mut reg: *mut YankReg = ::core::ptr::null_mut();
     let mut did_yank = false;
 
     if oap.regname != 0 {

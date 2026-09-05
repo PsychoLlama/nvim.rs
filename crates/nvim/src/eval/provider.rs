@@ -38,9 +38,9 @@ use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
-    Buffer, Callback, CallbackReader, Channel, ColNr, Dict, FAIL, FuncCallEntry, FuncExe, List,
-    NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, caller_scope,
-    estack_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
+    Buffer, Callback, CallbackReader, Channel, ColNr, Dict, EStack, FAIL, FuncCallEntry, FuncExe,
+    List, NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
+    caller_scope, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live};
@@ -62,7 +62,7 @@ type Reader = Live<CallbackReader>;
 /// called it.
 ///
 /// The innermost execution-stack frame.
-fn top_estack() -> estack_T {
+fn top_estack() -> EStack {
     crate::runtime::innermost_frame()
 }
 

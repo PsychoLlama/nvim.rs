@@ -17,7 +17,7 @@ use crate::channel::channel_connect;
 use crate::event::socket::socket_address_is_tcp;
 use crate::lua::executor::nlua_exec;
 use crate::main::exit::os_exit;
-use crate::main::{ARRAY_DICT_INIT, WIN_TABS, kRetObject, mparm_T, ui_client_channel_id};
+use crate::main::{ARRAY_DICT_INIT, MainParams, WIN_TABS, kRetObject, ui_client_channel_id};
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
@@ -90,7 +90,7 @@ unsafe fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
 /// Returns only when the process should carry on starting up; the server's
 /// answer may instead exit.
 pub(crate) unsafe fn remote_request(
-    params: *mut mparm_T,
+    params: *mut MainParams,
     remote_args: c_int,
     server_addr: *mut c_char,
     argc: c_int,

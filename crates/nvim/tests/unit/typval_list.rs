@@ -29,8 +29,8 @@ use neovim::garray::ga_clear;
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xstrdup};
 use neovim::types::{
-    List, ListItem, ListWatch, Refcount, TypVal, VAR_FLOAT, VAR_LIST, VarLock, typval_vval_union,
-    vimconv_T,
+    List, ListItem, ListWatch, Refcount, TypVal, VAR_FLOAT, VAR_LIST, VarLock, VimConv,
+    typval_vval_union,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -931,7 +931,7 @@ fn copying_a_list_shares_or_rebuilds_its_containers() {
 }
 
 /// `itp('copies list correctly and converts items')`, spec line 870: the
-/// same walk through a `vimconv_T`, which rewrites every string it copies.
+/// same walk through a `VimConv`, which rewrites every string it copies.
 ///
 /// The allocation for a converted string is the *source* length plus one,
 /// not the answer's — which is why the sizes here look too big.
@@ -940,7 +940,7 @@ fn a_converting_copy_rewrites_every_string() {
     let log = AllocLog::start();
     // SAFETY: the converter and every list are this case's own.
     unsafe {
-        let mut vc: vimconv_T = std::mem::zeroed();
+        let mut vc: VimConv = std::mem::zeroed();
         assert_eq!(
             convert_setup(
                 &raw mut vc,

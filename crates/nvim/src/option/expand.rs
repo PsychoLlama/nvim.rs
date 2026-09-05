@@ -35,8 +35,8 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, ColNr, Expand, ExpandContext, Failed, GArray, MAXPATHL, NUL, OptExpand,
-    OptIndex, OptionSetFlags, RegMatch, XpPrefix, fuzmatch_str_T, size_t, uint32_t,
+    BackslashEscape, ColNr, Expand, ExpandContext, Failed, FuzMatchStr, GArray, MAXPATHL, NUL,
+    OptExpand, OptIndex, OptionSetFlags, RegMatch, XpPrefix, size_t, uint32_t,
 };
 use crate::winlayer::Live;
 
@@ -429,7 +429,7 @@ struct Matcher {
     /// The plain array of names.
     matches: *mut *mut c_char,
     /// The scored array, used instead when `fuzzy`.
-    fuzmatch: *mut fuzmatch_str_T,
+    fuzmatch: *mut FuzMatchStr,
     /// What a fuzzy pass matches against.
     fuzzystr: *const c_char,
     fuzzy: bool,
@@ -487,7 +487,7 @@ pub(crate) unsafe fn expand_settings(
 ) -> Result<(), Failed> {
     let mut num_normal = 0;
     let mut count = 0;
-    let mut fuzmatch: *mut fuzmatch_str_T = ptr::null_mut();
+    let mut fuzmatch: *mut FuzMatchStr = ptr::null_mut();
 
     // SAFETY: the caller's expansion state and out-parameters, and the
     // option table.
@@ -554,8 +554,8 @@ pub(crate) unsafe fn expand_settings(
             }
             unsafe { *numMatches = num_normal };
             if fuzzy {
-                let room = (num_normal as size_t).wrapping_mul(size_of::<fuzmatch_str_T>());
-                fuzmatch = unsafe { xmalloc(room) }.cast::<fuzmatch_str_T>();
+                let room = (num_normal as size_t).wrapping_mul(size_of::<FuzMatchStr>());
+                fuzmatch = unsafe { xmalloc(room) }.cast::<FuzMatchStr>();
             } else {
                 let room = (num_normal as size_t).wrapping_mul(size_of::<*mut c_char>());
                 let array = unsafe { xmalloc(room) }.cast::<*mut c_char>();

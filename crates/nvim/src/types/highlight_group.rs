@@ -11,7 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub struct color_name_table_T {
+pub struct ColorNameTable {
     pub name: *mut ::core::ffi::c_char,
     pub color: RgbValue,
 }

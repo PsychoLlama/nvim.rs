@@ -32,11 +32,11 @@ pub(crate) unsafe fn cmdline_pum_create(
     debug_assert!(numMatches >= 0);
     // Add all the completion matches.
     compl_match_array
-        .set(unsafe { xmalloc(size_of::<pumitem_T>() * numMatches as size_t) } as *mut pumitem_T);
+        .set(unsafe { xmalloc(size_of::<PumItem>() * numMatches as size_t) } as *mut PumItem);
     compl_match_arraysize.set(numMatches);
     for i in 0..numMatches {
         let m = unsafe { *matches.offset(i as isize) };
-        let item = pumitem_T {
+        let item = PumItem {
             // C's SHOW_MATCH(i).
             pum_text: if showtail {
                 // SAFETY: `m` is one of the caller's `numMatches` matches.

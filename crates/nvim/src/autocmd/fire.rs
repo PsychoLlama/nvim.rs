@@ -26,8 +26,8 @@ use crate::guard::{Depth, Script, Suppress};
 use crate::types::{FAIL, MAXPATHL, OK};
 use crate::winlayer::{Buf, Win, tab_windows};
 
-/// An empty `save_redo_T`; `save_redobuff` fills it in.
-const SAVE_REDO_INIT: save_redo_T = save_redo_T {
+/// An empty `SaveRedo`; `save_redobuff` fills it in.
+const SAVE_REDO_INIT: SaveRedo = SaveRedo {
     sr_redobuff: KeyBuffer::EMPTY,
     sr_old_redobuff: KeyBuffer::EMPTY,
 };

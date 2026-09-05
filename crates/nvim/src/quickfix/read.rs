@@ -69,7 +69,7 @@ pub(crate) struct Reader {
     /// reaching [`LINE_MAXLEN`] is what makes the rest be discarded.
     room: usize,
     /// The conversion from the errorfile's encoding, or none.
-    vc: vimconv_T,
+    vc: VimConv,
 }
 
 impl Drop for Reader {
@@ -120,7 +120,7 @@ impl Reader {
             line: vec![0; READ_CHUNK],
             len: 0,
             room: 0,
-            vc: vimconv_T {
+            vc: VimConv {
                 vc_type: CONV_NONE,
                 vc_factor: 0,
                 vc_fd: ptr::null_mut(),

@@ -246,7 +246,7 @@ pub unsafe fn vim_is_ctrl_x_key(c: c_int) -> bool {
 }
 
 /// True if `match_0` is the first match in the completion list.
-pub(crate) fn is_first_match(match_0: *const compl_T) -> bool {
+pub(crate) fn is_first_match(match_0: *const ComplItem) -> bool {
     ptr::eq(match_0, compl_first_match.get())
 }
 

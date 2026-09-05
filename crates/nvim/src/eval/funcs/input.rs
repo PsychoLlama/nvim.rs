@@ -31,7 +31,7 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalFuncData, FAIL, ListItem, NUL, TypVal, VAR_LIST, VAR_STRING, VarNumber, tasave_T,
+    EvalFuncData, FAIL, ListItem, NUL, TypVal, TypeaheadSave, VAR_LIST, VAR_STRING, VarNumber,
 };
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -208,14 +208,14 @@ pub unsafe fn f_inputlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 
 /// The typeahead states `inputsave()` has stacked up.
 ///
-/// A `Vec`, not a `GArray`: [`tasave_T`] owns its buffers now, so the stack
+/// A `Vec`, not a `GArray`: [`TypeaheadSave`] owns its buffers now, so the stack
 /// has to move whole values rather than blit bytes into a grown tail.
-static SAVED_TYPEAHEAD: GlobalCell<Vec<tasave_T>> = GlobalCell::new(Vec::new());
+static SAVED_TYPEAHEAD: GlobalCell<Vec<TypeaheadSave>> = GlobalCell::new(Vec::new());
 
 /// `inputsave()` — push the typeahead aside so that a prompt reads real
 /// keys.
 pub unsafe fn f_inputsave(_argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let mut saved = tasave_T::default();
+    let mut saved = TypeaheadSave::default();
     // SAFETY: `saved` is a fresh state of the right type, and the stack owns
     // it from here on.
     unsafe { save_typeahead(&raw mut saved) };

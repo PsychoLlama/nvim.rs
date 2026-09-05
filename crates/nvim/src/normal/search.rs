@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::pos::equalpos;
 use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
-use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, searchit_arg_T, size_t};
+use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg, size_t};
 use crate::window::goto_tabpage_lastused;
 use core::ffi::{c_char, c_int, c_uint};
 
@@ -119,7 +119,7 @@ pub(crate) unsafe fn normal_search(
     let ca = unsafe { CmdArgRef::new(cap) };
     // SAFETY: `cap` is the caller's live command argument, `pat` is null or a
     // pattern `patlen` bytes long, and `wrapped` is null or an out-parameter.
-    let mut sia: searchit_arg_T = unsafe { core::mem::zeroed() };
+    let mut sia: SearchItArg = unsafe { core::mem::zeroed() };
     let prev_cursor = cur_win().w_cursor;
     let mut op = ca.op();
     op.motion_type = kMTCharWise;

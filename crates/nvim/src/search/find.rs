@@ -122,7 +122,7 @@ impl Searcher {
     #[inline(always)]
     fn aborted(&self) -> bool {
         // SAFETY: `timed_out` is null or points into the caller's
-        // `searchit_arg_T`.
+        // `SearchItArg`.
         called_emsg.get() > self.called_emsg_before
             || unsafe { !self.timed_out.is_null() && *self.timed_out != 0 }
     }
@@ -130,7 +130,7 @@ impl Searcher {
     /// Whether the timeout has been passed.
     #[inline(always)]
     fn out_of_time(&self) -> bool {
-        // SAFETY: `tm` is null or points into the caller's `searchit_arg_T`.
+        // SAFETY: `tm` is null or points into the caller's `SearchItArg`.
         unsafe { !self.tm.is_null() && profile_passed_limit(*self.tm) }
     }
 
@@ -377,7 +377,7 @@ pub unsafe fn searchit(
     mut count: c_int,
     options: c_int,
     pat_use: c_int,
-    extra_arg: *mut searchit_arg_T,
+    extra_arg: *mut SearchItArg,
 ) -> c_int {
     let mut regmatch = RegMMatch::default();
     if unsafe {

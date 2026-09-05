@@ -54,7 +54,7 @@ use crate::strings::vim_strchr;
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
     CmdArg, ColNr, FoFlag, LineNr, NUL, OpType, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT,
-    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, size_t, yankreg_T,
+    PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -676,7 +676,7 @@ pub(crate) unsafe fn nv_put_opt(cap: *mut CmdArg, fix_indent: bool) {
     }
 
     let was_visual = visual_active();
-    let mut savereg: *mut yankreg_T = ptr::null_mut();
+    let mut savereg: *mut YankReg = ptr::null_mut();
     let mut emptied = false;
     if was_visual {
         let regname = ca.op().regname;

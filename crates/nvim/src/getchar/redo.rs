@@ -62,13 +62,13 @@ pub unsafe fn cancel_redo() {
 /// # Safety
 /// `save_redo` must point at writable storage that outlives the matching
 /// [`restore_redobuff`].
-pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
+pub unsafe fn save_redobuff(save_redo: *mut SaveRedo) {
     // SAFETY (this body): the caller's promise -- `save_redo` is writable
     // storage that outlives the matching restore.
     unsafe { (*save_redo).sr_redobuff = redobuff().take() };
     unsafe { (*save_redo).sr_old_redobuff = old_redobuff().take() };
 
-    // SAFETY: as above — the caller's own `save_redo_T`; the copy the
+    // SAFETY: as above — the caller's own `SaveRedo`; the copy the
     // contents are read into is freed below.
     let (copy, len) = unsafe { (*save_redo).sr_redobuff.contents(false) };
     if copy.is_null() {
@@ -82,7 +82,7 @@ pub unsafe fn save_redobuff(save_redo: *mut save_redo_T) {
 ///
 /// # Safety
 /// `save_redo` must be the one a matching [`save_redobuff`] filled.
-pub unsafe fn restore_redobuff(save_redo: *mut save_redo_T) {
+pub unsafe fn restore_redobuff(save_redo: *mut SaveRedo) {
     // SAFETY (this body): as [`save_redobuff`] -- `save_redo` is the one a
     // matching save filled.
     unsafe { redobuff().free() };

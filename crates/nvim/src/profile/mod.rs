@@ -41,8 +41,8 @@ use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
-    ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, UserFunc, VarNumber, Vv, int64_t,
-    scriptitem_T, sn_prl_T,
+    ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
+    VarNumber, Vv, int64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -541,7 +541,7 @@ pub unsafe fn func_line_end(cookie: *mut c_void) {
 ///
 /// # Safety
 /// `si` is a live script item.
-pub unsafe fn profile_init(si: *mut scriptitem_T) {
+pub unsafe fn profile_init(si: *mut ScriptItem) {
     // SAFETY: the caller's script item.
     let si = unsafe { &mut *si };
     si.sn_pr_count = 0;
@@ -613,7 +613,7 @@ pub unsafe fn script_line_start() {
         // counters this leaves behind.
         let lines = lnum as usize;
         if si.sn_prl_ga.len() < lines {
-            si.sn_prl_ga.resize(lines, sn_prl_T::default());
+            si.sn_prl_ga.resize(lines, SnPrl::default());
         }
         si.sn_prl_idx = lnum - 1;
         si.sn_prl_execed = 0;
@@ -665,7 +665,7 @@ pub unsafe fn script_line_end() {
 // Shared accessors for the editor's script/function tables.
 
 /// The current script's item, if `current_sctx` points at a valid one.
-fn current_script() -> Option<*mut scriptitem_T> {
+fn current_script() -> Option<*mut ScriptItem> {
     let sid = current_sctx.get().sc_sid;
     script_id_valid(sid).then(|| script_item(sid))
 }

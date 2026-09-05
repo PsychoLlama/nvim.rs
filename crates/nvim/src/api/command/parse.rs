@@ -113,8 +113,8 @@ unsafe fn parse_args(ea: &ExArg, arena: *mut Arena) -> Array {
 /// built-in table's, or the empty string where the line named no command.
 ///
 /// # Safety
-/// `cmd` must be null or point at a live `ucmd_T`.
-unsafe fn command_name(ea: &ExArg, cmd: *const ucmd_T) -> *const c_char {
+/// `cmd` must be null or point at a live `UserCmd`.
+unsafe fn command_name(ea: &ExArg, cmd: *const UserCmd) -> *const c_char {
     if ea.cmdidx == CmdIdx::SIZE {
         return c"".as_ptr();
     }
@@ -265,13 +265,13 @@ pub unsafe fn nvim_parse_cmd(
     };
     // SAFETY: `parse_args` reads the arguments `parse_cmdline` left in `ea`.
     let args = unsafe { parse_args(&ea, arena) };
-    let cmd: *mut ucmd_T = match ea.cmdidx {
+    let cmd: *mut UserCmd = match ea.cmdidx {
         CmdIdx::USER => nth(Table::Global),
         CmdIdx::USER_BUF => nth(Table::Buffer(curbuf.get())),
         _ => ptr::null_mut(),
     };
     // A user command carries its own default count.
-    // SAFETY: `cmd`, when non-null, points at a live `ucmd_T`.
+    // SAFETY: `cmd`, when non-null, points at a live `UserCmd`.
     let uc_def = (!cmd.is_null()).then(|| unsafe { (*cmd).uc_def });
 
     result.is_set__cmd_ |= 1 << KEYSET_OPTIDX_cmd__cmd;

@@ -460,7 +460,7 @@ pub unsafe fn do_search(
     patlen: size_t,
     count: c_int,
     options: c_int,
-    sia: *mut searchit_arg_T,
+    sia: *mut SearchItArg,
 ) -> c_int {
     searchcmdlen.set(0);
     // A line offset is not remembered; this is vi compatible.

@@ -1,7 +1,7 @@
 //! Converting text between encodings.
 //!
 //! [`convert_setup`] works out *how* to get from one encoding to another and
-//! records it in a `vimconv_T`; [`string_convert_ext`] runs that plan over a
+//! records it in a `VimConv`; [`string_convert_ext`] runs that plan over a
 //! string. Four pairs are done here directly — Latin-1 and Latin-9 to and
 //! from UTF-8 — because they are the common cases and are pure arithmetic.
 //! Everything else goes through iconv.
@@ -111,7 +111,7 @@ pub unsafe fn my_iconv_open(to: *mut c_char, from: *mut c_char) -> iconv_t {
 /// `vcp.vc_fd` must be an open descriptor and `str` must have `slen` readable
 /// bytes. The result is `xmalloc`'d, or null when the conversion failed.
 unsafe fn iconv_string(
-    vcp: *const vimconv_T,
+    vcp: *const VimConv,
     str: *const c_char,
     slen: size_t,
     unconvlenp: *mut size_t,
@@ -245,7 +245,7 @@ pub unsafe fn f_iconv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
 /// `vcp` must be writable and hold either a valid plan or zeroed memory;
 /// `from` and `to` must be null or NUL-terminated.
 pub unsafe fn convert_setup(
-    vcp: *mut vimconv_T,
+    vcp: *mut VimConv,
     from: *mut c_char,
     to: *mut c_char,
 ) -> Result<(), Failed> {
@@ -264,7 +264,7 @@ pub unsafe fn convert_setup(
 ///
 /// As [`convert_setup`].
 pub unsafe fn convert_setup_ext(
-    vcp: *mut vimconv_T,
+    vcp: *mut VimConv,
     from: *mut c_char,
     from_unicode_is_utf8: bool,
     to: *mut c_char,
@@ -339,7 +339,7 @@ pub unsafe fn convert_setup_ext(
 ///
 /// As [`string_convert_ext`].
 pub unsafe fn string_convert(
-    vcp: *const vimconv_T,
+    vcp: *const VimConv,
     ptr: *mut c_char,
     lenp: *mut size_t,
 ) -> *mut c_char {
@@ -361,7 +361,7 @@ pub unsafe fn string_convert(
 /// `ptr` must have `*lenp` readable bytes, or be NUL-terminated when `lenp`
 /// is null. The result is `xmalloc`'d.
 pub unsafe fn string_convert_ext(
-    vcp: *const vimconv_T,
+    vcp: *const VimConv,
     ptr: *mut c_char,
     lenp: *mut size_t,
     unconvlenp: *mut size_t,
@@ -386,7 +386,7 @@ pub unsafe fn string_convert_ext(
     // answer first and copying it in would be tighter, but the allocation
     // size is observable -- `test/unit/eval/typval_spec.lua` asserts the
     // exact malloc sizes a converting `tv_list_copy` makes -- and it is
-    // the same bound `vimconv_T::vc_factor` promises callers.
+    // the same bound `VimConv::vc_factor` promises callers.
     let factor: size_t = match unsafe { (*vcp).vc_type } {
         CONV_TO_UTF8 => 2,
         CONV_9_TO_UTF8 => 3,

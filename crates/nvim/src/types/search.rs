@@ -28,7 +28,7 @@ pub struct SearchPattern {
     pub off: SearchOffset,
     pub additional_data: *mut AdditionalData,
 }
-pub struct searchit_arg_T {
+pub struct SearchItArg {
     pub sa_stop_lnum: LineNr,
     pub sa_tm: *mut ProfTime,
     pub sa_timed_out: ::core::ffi::c_int,

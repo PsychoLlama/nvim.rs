@@ -300,7 +300,7 @@ pub unsafe fn expand_mappings(
     }
 
     // Exactly one of these fills: `fuzzy` is fixed for the whole call.
-    let mut scored = Vec::<fuzmatch_str_T>::new();
+    let mut scored = Vec::<FuzMatchStr>::new();
     let mut plain = Vec::<*mut c_char>::new();
 
     // Whether `p` matches, and with what fuzzy score.
@@ -318,10 +318,10 @@ pub unsafe fn expand_mappings(
     // C's `GA_APPEND`, in whichever of the two element shapes is in use.
     // The two vectors are parameters rather than captures so the loops below
     // can still read them.
-    let push = |scored: &mut Vec<fuzmatch_str_T>, plain: &mut Vec<*mut c_char>, s, score| {
+    let push = |scored: &mut Vec<FuzMatchStr>, plain: &mut Vec<*mut c_char>, s, score| {
         if fuzzy {
             let idx = c_int::try_from(scored.len()).expect("a match count fits a c_int");
-            scored.push(fuzmatch_str_T { idx, str: s, score });
+            scored.push(FuzMatchStr { idx, str: s, score });
         } else {
             plain.push(s);
         }
@@ -387,7 +387,7 @@ pub unsafe fn expand_mappings(
     // SAFETY: both out-parameters are the caller's writable slots.
     let mut count = unsafe {
         if fuzzy {
-            let raw = Box::into_raw(scored.into_boxed_slice()).cast::<fuzmatch_str_T>();
+            let raw = Box::into_raw(scored.into_boxed_slice()).cast::<FuzMatchStr>();
             fuzzymatches_to_strmatches(raw, matches, found, false);
         } else {
             *matches = Box::into_raw(plain.into_boxed_slice()).cast::<*mut c_char>();

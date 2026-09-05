@@ -260,7 +260,7 @@ pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut List {
 /// # Safety
 /// `id` is a live script id whose `sn_vars` has not been set.
 pub unsafe fn new_script_vars(id: ScriptId) {
-    let sv = unsafe { xcalloc(1, ::core::mem::size_of::<scriptvar_T>()) } as *mut scriptvar_T;
+    let sv = unsafe { xcalloc(1, ::core::mem::size_of::<ScriptVar>()) } as *mut ScriptVar;
     unsafe { init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE) };
     unsafe { (*script_item(id)).sn_vars = sv };
 }

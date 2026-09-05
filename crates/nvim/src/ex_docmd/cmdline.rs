@@ -30,7 +30,7 @@ use crate::ex_docmd::source::{
 };
 
 use crate::ex_docmd::{
-    CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, dbg_stuff, loop_cookie, wcmd_T,
+    CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, WhileCmd, dbg_stuff, loop_cookie,
 };
 use crate::ex_eval::{CsFlags, CsLoopFlags};
 use crate::ex_eval::{
@@ -59,14 +59,14 @@ use crate::runtime::{
 
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CondStack, EsList, Failed, GArray, LineGetter, LineNr, MsgList, OptInt, estack_T, size_t,
+    CondStack, EStack, EsList, Failed, GArray, LineGetter, LineNr, MsgList, OptInt, size_t,
 };
 use crate::ui::ui_has;
 
 /// The top of the execution stack: the script or function whose line is
 /// running. `SOURCING_LNUM`/`SOURCING_NAME` in the C, where they are macros
 /// over `exestack`'s last entry.
-pub(crate) fn sourcing_entry() -> estack_T {
+pub(crate) fn sourcing_entry() -> EStack {
     crate::runtime::innermost_frame()
 }
 
@@ -90,7 +90,7 @@ fn empty_cstack() -> CondStack {
 unsafe fn clear_loop_lines(gap: *mut GArray) {
     if !unsafe { (*gap).ga_data }.is_null() {
         for i in 0..unsafe { (*gap).ga_len } {
-            let item = unsafe { ((*gap).ga_data as *mut wcmd_T).offset(i as isize) };
+            let item = unsafe { ((*gap).ga_data as *mut WhileCmd).offset(i as isize) };
             unsafe { xfree((*item).line as *mut c_void) };
         }
     }
@@ -180,7 +180,7 @@ pub unsafe fn do_cmdline(
         return Err(Failed);
     }
 
-    unsafe { ga_init(&raw mut lines_ga, size_of::<wcmd_T>() as c_int, 10) };
+    unsafe { ga_init(&raw mut lines_ga, size_of::<WhileCmd>() as c_int, 10) };
 
     let real_cookie = unsafe { getline_cookie(fgetline, cookie) };
 
@@ -286,7 +286,8 @@ pub unsafe fn do_cmdline(
                 unsafe { *dbg_tick = debug_tick.get() };
             }
 
-            let stored = unsafe { (lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize) };
+            let body = lines_ga.ga_data as *mut WhileCmd;
+            let stored = unsafe { body.offset(current_line as isize) };
             next_cmdline = unsafe { (*stored).line };
             set_sourcing_lnum(unsafe { (*stored).lnum });
 
@@ -502,13 +503,12 @@ pub unsafe fn do_cmdline(
 
                     // The next breakpoint at or after the `:while`.
                     if !breakpoint.is_null() && lines_ga.ga_len > current_line {
+                        let body = lines_ga.ga_data as *mut WhileCmd;
                         unsafe {
                             *breakpoint = dbg_find_breakpoint(
                                 getline_equal(fgetline, cookie, Some(getsourceline)),
                                 fname,
-                                (*(lines_ga.ga_data as *mut wcmd_T).offset(current_line as isize))
-                                    .lnum
-                                    - 1,
+                                (*body.offset(current_line as isize)).lnum - 1,
                             )
                         };
                         unsafe { *dbg_tick = debug_tick.get() };
@@ -532,8 +532,8 @@ pub unsafe fn do_cmdline(
         // Outside every loop, the stored lines are of no further use.
         if cstack.cs_looplevel == 0 {
             if lines_ga.ga_len > 0 {
-                let last =
-                    unsafe { (lines_ga.ga_data as *mut wcmd_T).add(lines_ga.ga_len as usize - 1) };
+                let body = lines_ga.ga_data as *mut WhileCmd;
+                let last = unsafe { body.add(lines_ga.ga_len as usize - 1) };
                 set_sourcing_lnum(unsafe { (*last).lnum });
                 unsafe { clear_loop_lines(&raw mut lines_ga) };
             }

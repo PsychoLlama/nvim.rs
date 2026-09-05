@@ -58,7 +58,7 @@ pub(crate) unsafe fn do_autocmd_completedone(c: c_int, mode: c_int, word: *mut c
 }
 
 /// One match as a locked `v:completed_item` dict.
-pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut compl_T) -> *mut Dict {
+pub(crate) unsafe fn ins_compl_dict_alloc(match_0: *mut ComplItem) -> *mut Dict {
     // { word, abbr, menu, kind, info, user_data } — the same keys and the
     // same order `complete_info()` fills in, minus its "match" flag.
     let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
@@ -353,7 +353,7 @@ pub unsafe fn f_complete_check(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr:
 /// Fill `di` with one match, as `complete_info()` reports it.
 pub(crate) unsafe fn fill_complete_info_dict(
     di: *mut Dict,
-    match_0: *mut compl_T,
+    match_0: *mut ComplItem,
     add_match: bool,
 ) {
     let add_str = |key: &str, val: *const c_char| unsafe {

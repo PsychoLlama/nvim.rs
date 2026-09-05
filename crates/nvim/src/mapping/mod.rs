@@ -80,9 +80,9 @@ use crate::state::{
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
     ApiDict, Arena, Array, ArrayBuilder, BufferHandle, Dict, Error, EvalFuncData, ExArg, Expand,
-    FILE, Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback, MapRhs,
-    MapStr, Object, OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber,
-    fuzmatch_str_T, key_value_pair, ptrdiff_t, size_t, typval_vval_union, uint64_t,
+    FILE, FuzMatchStr, Integer, KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapBlock, MapCallback,
+    MapRhs, MapStr, Object, OptSet, RegMatch, RemapValues, ScriptId, String_0, TypVal, VarNumber,
+    key_value_pair, ptrdiff_t, size_t, typval_vval_union, uint64_t,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};

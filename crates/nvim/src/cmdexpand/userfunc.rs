@@ -307,7 +307,7 @@ pub(crate) unsafe fn expand_user_defined(
     }
 
     // Exactly one of these fills: `fuzzy` is fixed for the whole call.
-    let mut scored = Vec::<fuzmatch_str_T>::new();
+    let mut scored = Vec::<FuzMatchStr>::new();
     let mut found = Vec::<CString>::new();
 
     // The answer is one match per line.
@@ -340,7 +340,7 @@ pub(crate) unsafe fn expand_user_defined(
 
             if fuzzy {
                 let idx = c_int::try_from(scored.len()).expect("a match count fits a c_int");
-                scored.push(fuzmatch_str_T { idx, str: p, score });
+                scored.push(FuzMatchStr { idx, str: p, score });
             } else {
                 // SAFETY: `xmemdupz` answers a fresh NUL-terminated string.
                 found.push(unsafe { CString::from_raw(p) });
@@ -363,7 +363,7 @@ pub(crate) unsafe fn expand_user_defined(
     if fuzzy {
         // `fuzzymatches_to_strmatches` takes the array over and `xfree`s it,
         // which a boxed slice may cross (`allocator.rs`).
-        let raw = Box::into_raw(scored.into_boxed_slice()).cast::<fuzmatch_str_T>();
+        let raw = Box::into_raw(scored.into_boxed_slice()).cast::<FuzMatchStr>();
         // SAFETY: `count` live entries at `raw`, and the caller's slot.
         unsafe { fuzzymatches_to_strmatches(raw, matches, count, false) };
     } else {

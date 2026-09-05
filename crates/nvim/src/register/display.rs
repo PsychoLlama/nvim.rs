@@ -83,7 +83,7 @@ unsafe fn dis_special(
 ///
 /// # Safety
 /// `yb` must point at a register whose `y_array` holds `y_size` strings.
-unsafe fn dis_register(yb: *mut yankreg_T, name: c_int, type_0: c_int, hl_id: c_int) {
+unsafe fn dis_register(yb: *mut YankReg, name: c_int, type_0: c_int, hl_id: c_int) {
     // Both of these re-read the register every time, as the transpiled code
     // did: printing can run `:redir`, which writes into a register.
     //

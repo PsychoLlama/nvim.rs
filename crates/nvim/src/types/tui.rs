@@ -108,7 +108,7 @@ pub struct TUIData {
     pub modes: TermModes,
     /// Where a screenshot is being written instead of to the terminal.
     pub screenshot: *mut FILE,
-    pub cursor_shapes: [cursorentry_T; 18],
+    pub cursor_shapes: [CursorEntry; 18],
     /// The colours unset colours fall back to.
     pub clear_attrs: HlAttrs,
     /// Every highlight the editor has defined, indexed by id. Ids the

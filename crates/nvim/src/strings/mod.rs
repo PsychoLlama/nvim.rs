@@ -7,7 +7,7 @@ use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xmalloc, xmallocz};
 use crate::os::cshim::{strchr, strstr};
 use crate::semsg;
-use crate::types::{TypVal, VAR_UNKNOWN, keyvalue_T, size_t};
+use crate::types::{KeyValue, TypVal, VAR_UNKNOWN, size_t};
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
@@ -253,14 +253,14 @@ pub unsafe fn strrep(src: *const c_char, what: *const c_char, rep: *const c_char
     ret
 }
 
-/// `qsort` comparator: two `keyvalue_T` by value, case-sensitively.
+/// `qsort` comparator: two `KeyValue` by value, case-sensitively.
 ///
 /// The comparison length is the *longer* of the two, so a prefix sorts
 /// before the string it prefixes — `strncmp` stops at the shorter one's
 /// terminator either way.
 pub unsafe fn cmp_keyvalue_value_n(a: *const c_void, b: *const c_void) -> ::core::ffi::c_int {
-    let kv1 = unsafe { &*(a as *const keyvalue_T) };
-    let kv2 = unsafe { &*(b as *const keyvalue_T) };
+    let kv1 = unsafe { &*(a as *const KeyValue) };
+    let kv2 = unsafe { &*(b as *const KeyValue) };
     let n = kv1.length.max(kv2.length);
     // SAFETY: two NUL-terminated keys of the caller's table.
     unsafe { cstr::prefix_cmp(kv1.value, kv2.value, n) as c_int }

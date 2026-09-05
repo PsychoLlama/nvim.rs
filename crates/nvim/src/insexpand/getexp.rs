@@ -153,7 +153,7 @@ pub(crate) unsafe fn may_advance_cpt_index(cpt: *const c_char) -> bool {
 /// `INS_COMPL_CPT_CONT` to skip it, `INS_COMPL_CPT_END` when `'complete'` is
 /// exhausted.
 pub(crate) unsafe fn process_next_cpt_value(
-    st: *mut ins_compl_next_state_T,
+    st: *mut InsComplNextState,
     compl_type_arg: *mut c_int,
     start_match_pos: *mut Pos,
     fuzzy_collect: bool,
@@ -576,7 +576,7 @@ pub(crate) unsafe fn get_next_spell_completion(lnum: LineNr) {
 /// Returns true when a new match was found.
 pub(crate) unsafe fn get_next_completion_match(
     type_0: c_int,
-    st: *mut ins_compl_next_state_T,
+    st: *mut InsComplNextState,
     ini: *mut Pos,
 ) -> bool {
     let mut found_new_match = Err(Failed);
@@ -638,13 +638,13 @@ pub(crate) fn compl_source_start_timer(source_idx: c_int) {
 /// found; the answer is the total number of matches, or −1 while that is still
 /// unknown. -- Acevedo
 pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
-    // Upstream's function-scope `static ins_compl_next_state_T st`: the
+    // Upstream's function-scope `static InsComplNextState st`: the
     // scan is collected over many calls, so the state outlives each one.
     // The pointer is taken once, here, because `st.cur_match_pos` points
     // *into* `st` — the address has to stay put for the whole call — and
     // because `process_next_cpt_value` and `get_next_completion_match`
     // want it by pointer anyway.
-    static st_cell: GlobalCell<ins_compl_next_state_T> = GlobalCell::new(INS_COMPL_NEXT_STATE_INIT);
+    static st_cell: GlobalCell<InsComplNextState> = GlobalCell::new(INS_COMPL_NEXT_STATE_INIT);
     static st_cleared: GlobalCell<bool> = GlobalCell::new(false);
     let st = st_cell.ptr();
 

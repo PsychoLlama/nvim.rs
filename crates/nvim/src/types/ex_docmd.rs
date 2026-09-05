@@ -23,5 +23,5 @@ pub struct SaveState {
     pub save_opcount: ::core::ffi::c_int,
     pub save_reg_executing: ::core::ffi::c_int,
     pub save_pending_end_reg_executing: bool,
-    pub tabuf: tasave_T,
+    pub tabuf: TypeaheadSave,
 }

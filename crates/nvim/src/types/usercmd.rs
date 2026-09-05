@@ -14,7 +14,7 @@ use super::*;
 /// Neither `Copy` nor `Clone`. One entry owns its name, its replacement
 /// text, its `-complete=` argument and its three Lua references; nothing may
 /// duplicate one, and the absence of the derives is what says so.
-pub struct ucmd_T {
+pub struct UserCmd {
     pub uc_name: *mut ::core::ffi::c_char,
     pub uc_argt: ExArgt,
     pub uc_rep: *mut ::core::ffi::c_char,

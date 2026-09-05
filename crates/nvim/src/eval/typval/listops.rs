@@ -183,7 +183,7 @@ pub unsafe fn tv_list_append_number(l: *mut List, n: VarNumber) {
 /// is written onto `orig`, and a stale one makes an unrelated walk believe
 /// this list is already visited.
 pub unsafe fn tv_list_copy(
-    conv: *const vimconv_T,
+    conv: *const VimConv,
     orig: *mut List,
     deep: bool,
     copyID: ::core::ffi::c_int,

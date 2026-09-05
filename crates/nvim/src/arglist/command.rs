@@ -86,10 +86,10 @@ fn copy_global_arglist() {
     // SAFETY: both lists are live, and each name is copied into an
     // allocation the new entry owns. The copies are collected before any of
     // them joins the window's list, which is never the global one here.
-    let copies: Vec<aentry_T> = unsafe { &(*global_arglist()).al_ga }
+    let copies: Vec<ArgEntry> = unsafe { &(*global_arglist()).al_ga }
         .iter()
         .filter(|entry| !entry.ae_fname.is_null())
-        .map(|entry| aentry_T {
+        .map(|entry| ArgEntry {
             ae_fname: unsafe { xstrdup(entry.ae_fname) },
             ae_fnum: entry.ae_fnum,
         })

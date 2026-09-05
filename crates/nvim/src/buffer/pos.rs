@@ -1,7 +1,7 @@
 //! Where the cursor was -- the per-window remembered position.
 //!
 //! Every window remembers, for every buffer it has shown, the cursor position
-//! and the topline it was at, in a `wininfo_T`.  [`buflist_setfpos`] records
+//! and the topline it was at, in a [`WinInfo`].  [`buflist_setfpos`] records
 //! one, [`find_wininfo`] picks the entry to restore (preferring this window,
 //! then this tab page, then any), [`get_winopts`] restores the window-local
 //! options and folds along with it, and [`buflist_findfmark`] answers the

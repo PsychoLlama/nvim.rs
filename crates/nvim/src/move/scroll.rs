@@ -5,7 +5,7 @@
 //! number of lines without regard to where the cursor is, leaving the cursor
 //! correction to the caller.  The `_clamp` pair stops before the cursor would
 //! leave the window at all, which is what CTRL-E/CTRL-Y need; [`topline_back`]
-//! and [`botline_forw`] step one [`lineoff_T`] at a time over folds and diff
+//! and [`botline_forw`] step one [`LineOff`] at a time over folds and diff
 //! filler, and are the shared primitive the `scroll_cursor_*` family walks
 //! with.
 //!
@@ -600,7 +600,7 @@ pub unsafe fn scrollup_clamp() {
 /// text line. Uses and sets `lp.fill`, and answers the height of the added
 /// line in `lp.height`. Lines above the first one are incredibly high --
 /// `MAXCOL`. `winheight` limits a line's height to the window's.
-pub(super) fn topline_back_winheight(win: Win, lp: &mut lineoff_T, winheight: bool) {
+pub(super) fn topline_back_winheight(win: Win, lp: &mut LineOff, winheight: bool) {
     if lp.fill < win.fill_above(lp.lnum) {
         // Add a filler line.
         lp.fill += 1;
@@ -621,13 +621,13 @@ pub(super) fn topline_back_winheight(win: Win, lp: &mut lineoff_T, winheight: bo
 }
 
 /// [`topline_back_winheight`], capping a line's height at the window's.
-pub(super) fn topline_back(win: Win, lp: &mut lineoff_T) {
+pub(super) fn topline_back(win: Win, lp: &mut LineOff) {
     topline_back_winheight(win, lp, true);
 }
 
 /// Add one line below `lp.lnum`, as [`topline_back_winheight`] adds one above.
 /// Lines below the last one are incredibly high.
-pub(super) fn botline_forw(win: Win, lp: &mut lineoff_T) {
+pub(super) fn botline_forw(win: Win, lp: &mut LineOff) {
     if lp.fill < win.fill_above(lp.lnum + 1) {
         // Add a filler line.
         lp.fill += 1;

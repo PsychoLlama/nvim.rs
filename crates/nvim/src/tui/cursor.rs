@@ -1,7 +1,7 @@
 //! The shape, blink and colour of the terminal cursor.
 //!
 //! The editor describes the cursor it wants per mode -- one
-//! [`cursorentry_T`] for each entry in `'guicursor'` -- and the TUI turns
+//! [`CursorEntry`] for each entry in `'guicursor'` -- and the TUI turns
 //! whichever is current into escape sequences. Two of those are terminfo
 //! capabilities (`set_cursor_style`, `set_cursor_color`); the shape
 //! numbering they take is DECSCUSR's, which is not the numbering the editor
@@ -20,7 +20,7 @@ use crate::tui::terminfo::caps::{
     kTerm_set_cursor_style,
 };
 use crate::types::{
-    ApiDict, CursorShape, HlAttrs, Object, RgbValue, TUIData, cursorentry_T, int32_t,
+    ApiDict, CursorEntry, CursorShape, HlAttrs, Object, RgbValue, TUIData, int32_t,
 };
 use core::ffi::{CStr, c_int};
 
@@ -38,7 +38,7 @@ const BLEND_INVISIBLE: int32_t = 100;
 /// odd number for blinking, the even one above it for steady -- the inverse
 /// of the editor's `blinkon`/`blinkoff` pair, where zero means "do not
 /// blink". Hence the `+ 1` rather than a second table.
-fn decscusr_code(entry: &cursorentry_T) -> c_int {
+fn decscusr_code(entry: &CursorEntry) -> c_int {
     let base = match entry.shape {
         SHAPE_BLOCK => 1,
         SHAPE_HOR => 3,
@@ -85,7 +85,7 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
 ///
 /// # Safety
 /// `args` must be a valid `ApiDict` whose items outlive the call.
-pub unsafe fn decode_cursor_entry(args: ApiDict) -> cursorentry_T {
+pub unsafe fn decode_cursor_entry(args: ApiDict) -> CursorEntry {
     // SAFETY: the caller guarantees the dict and its items are valid.
     unsafe {
         let mut entry = shape_entry(SHAPE_IDX_N);
@@ -135,7 +135,7 @@ pub fn set_mode(tui: &mut TUIData, mode: usize) {
 /// the cursor colour capability takes an RGB value, and there is nothing
 /// sensible to send it from a palette index.
 ///
-fn apply_color(tui: &mut TUIData, entry: &cursorentry_T) {
+fn apply_color(tui: &mut TUIData, entry: &CursorEntry) {
     let in_range = entry.id != 0 && (entry.id as usize) < tui.attrs.len() && tui.rgb;
     if !in_range {
         // Attribute 0 means "no special cursor". Only bother resetting if a

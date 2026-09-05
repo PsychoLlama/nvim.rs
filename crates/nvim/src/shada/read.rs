@@ -254,7 +254,7 @@ impl Reading {
                 return;
             }
         }
-        let yank = yankreg_T {
+        let yank = YankReg {
             y_array: reg.contents,
             y_size: reg.contents_size,
             y_type: reg.type_0,

@@ -222,9 +222,9 @@ pub unsafe fn pum_show_popupmenu(menu: *mut VimMenu) {
         return;
     }
 
-    let mut array: Vec<pumitem_T> = entries
+    let mut array: Vec<PumItem> = entries
         .iter()
-        .map(|text| pumitem_T {
+        .map(|text| PumItem {
             pum_text: text.as_ptr().cast_mut(),
             ..Default::default()
         })

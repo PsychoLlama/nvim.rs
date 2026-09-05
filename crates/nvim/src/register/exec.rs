@@ -536,7 +536,7 @@ pub unsafe fn do_execreg(
 /// `reg` must be null or a live register. May run arbitrary Vimscript.
 pub unsafe fn insert_reg(
     regname: c_int,
-    reg: *mut yankreg_T,
+    reg: *mut YankReg,
     literally_arg: bool,
 ) -> Result<(), Failed> {
     let literally = literally_arg || is_literal_register(regname);

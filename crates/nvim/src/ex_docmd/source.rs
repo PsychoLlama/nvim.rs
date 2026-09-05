@@ -22,8 +22,8 @@ use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 
 use crate::ex_docmd::{
-    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, cmdline_call_depth, dbg_stuff, ex_pressedreturn,
-    loop_cookie, wcmd_T,
+    DoCmdOpts, ETYPE_EXCEPT, MSG_BUF_LEN, WhileCmd, cmdline_call_depth, dbg_stuff,
+    ex_pressedreturn, loop_cookie,
 };
 use crate::ex_eval::discard_current_exception;
 use crate::ex_getln::{getcmdline, getexline};
@@ -340,14 +340,14 @@ pub(crate) unsafe fn get_loop_line(
     // A replayed line was not typed.
     KeyTyped.set(false);
     cp.current_line += 1;
-    let wp = unsafe { ((*cp.lines_gap).ga_data as *mut wcmd_T).offset(cp.current_line as isize) };
+    let wp = unsafe { ((*cp.lines_gap).ga_data as *mut WhileCmd).offset(cp.current_line as isize) };
     set_sourcing_lnum(unsafe { (*wp).lnum });
     unsafe { xstrdup((*wp).line) }
 }
 
 /// Remember a line, with the source line number it came from.
 pub(crate) unsafe fn store_loop_line(gap: *mut GArray, line: *mut c_char) {
-    let p = unsafe { ga_append_via_ptr(gap, size_of::<wcmd_T>()) } as *mut wcmd_T;
+    let p = unsafe { ga_append_via_ptr(gap, size_of::<WhileCmd>()) } as *mut WhileCmd;
     unsafe { (*p).line = xstrdup(line) };
     unsafe { (*p).lnum = sourcing_entry().es_lnum };
 }

@@ -35,7 +35,7 @@ use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    ApiDict, Arena, Buffer, ExArgt, IOSIZE, LuaRef, NUL, Object, int64_t, size_t, ucmd_T,
+    ApiDict, Arena, Buffer, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
@@ -154,7 +154,7 @@ pub(super) unsafe fn uc_list(name: *const c_char, name_len: size_t) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn list_one(cmd: &ucmd_T, scope: Scope, name_len: size_t) {
+unsafe fn list_one(cmd: &UserCmd, scope: Scope, name_len: size_t) {
     let mut middle = [0 as c_char; IOSIZE as usize];
     let a = cmd.uc_argt;
     // The flag column is right-aligned in four cells.
@@ -298,7 +298,7 @@ pub(crate) unsafe fn commands_array(buf: *mut Buffer, arena: *mut Arena) -> ApiD
 ///
 /// # Safety
 /// Module contract.
-unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> ApiDict {
+unsafe fn describe(cmd: &UserCmd, arena: *mut Arena) -> ApiDict {
     let a = cmd.uc_argt;
     // SAFETY: module contract; the entry owns each reference, and
     // `api_new_luaref` takes a fresh one for the caller to own.
@@ -372,7 +372,7 @@ unsafe fn describe(cmd: &ucmd_T, arena: *mut Arena) -> ApiDict {
 
 /// The `addr` field: the name of the command's address type, when it has
 /// one that is not the default.
-fn addr_object(cmd: &ucmd_T) -> Object {
+fn addr_object(cmd: &UserCmd) -> Object {
     match named_addr_type(cmd.uc_addr_type) {
         Some(row) => Object::string(static_cstring(row.name)),
         None => Object::Nil,

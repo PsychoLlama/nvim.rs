@@ -32,9 +32,9 @@ fn scrolloff_or_drag(win: Win) -> int64_t {
     }
 }
 
-/// An empty [`lineoff_T`] at `lnum`, which the walks below fill in.
-fn lineoff_at(lnum: LineNr) -> lineoff_T {
-    lineoff_T {
+/// An empty [`LineOff`] at `lnum`, which the walks below fill in.
+fn lineoff_at(lnum: LineNr) -> LineOff {
+    LineOff {
         lnum,
         fill: 0,
         height: 0,
@@ -400,7 +400,7 @@ impl Win {
         }
         // Scroll the minimal number of lines.
         let mut line_count = 0;
-        let mut boff = lineoff_T {
+        let mut boff = LineOff {
             lnum: self.w_topline - 1,
             fill: self.w_topfill,
             height: 0,
@@ -696,7 +696,7 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
     } else {
         win.w_topline - 1
     };
-    let mut loff = lineoff_T {
+    let mut loff = LineOff {
         lnum,
         // Paging backwards, the filler lines that matter are the ones above
         // the line *below* this one.
@@ -716,7 +716,7 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
 
     // One step outwards per examined line, against the direction the page
     // moves: paging forward, the overlap is measured upwards from `w_botline`.
-    let step = |lp: &mut lineoff_T| {
+    let step = |lp: &mut LineOff| {
         if forward {
             topline_back(win, lp);
         } else {

@@ -19,9 +19,9 @@ use crate::lua::executor::{get_global_lstate, nlua_pcall};
 use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
-    DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, PATHSEP, SID_CARG, SID_CMDARG,
-    SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, exmode_active, kEqualFiles, kXDGConfigDirs, mparm_T,
-    msg_scroll, p_exrc, silent_mode, time_msg_at,
+    DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, MainParams, PATHSEP, SID_CARG,
+    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, exmode_active, kEqualFiles,
+    kXDGConfigDirs, msg_scroll, p_exrc, silent_mode, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::os::cshim::{gettext, stderr};
@@ -35,10 +35,10 @@ use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
 use ::libc::fprintf;
 
 /// The parameter block `main` filled in, which outlives every call here.
-type Mp = Live<mparm_T>;
+type Mp = Live<MainParams>;
 
 /// Run the `--cmd` commands, which come before any config.
-pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
+pub(crate) unsafe fn exe_pre_commands(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block; the commands it
     // holds point into argv.
     let count = unsafe { (*parmp).n_pre_commands };
@@ -67,7 +67,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
 
 /// Run the `-c` and `+cmd` commands, which come after the config and the
 /// first file.
-pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
+pub(crate) unsafe fn exe_commands(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block.
     let parm = unsafe { Mp::new(parmp) };
     msg_scroll.set(1);
@@ -308,7 +308,7 @@ pub(crate) unsafe fn do_exrc_initialization() {
 ///
 /// `-u NONE` and `-u NORC` name no file at all and source nothing; silent
 /// (batch) mode skips the standard sources too.
-pub(crate) unsafe fn source_startup_scripts(parmp: *const mparm_T) {
+pub(crate) unsafe fn source_startup_scripts(parmp: *const MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block.
     if !unsafe { (*parmp).use_vimrc }.is_null() {
         let named_none = unsafe { strequal((*parmp).use_vimrc, c"NONE".as_ptr()) }

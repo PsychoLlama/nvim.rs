@@ -97,11 +97,11 @@ use crate::types::{
     KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
     KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LineNr,
     LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal,
-    RemapValues, ScreenChar, ScriptId, SignTextAttrs, String_0, StringBuilder, TabpageHandle,
-    TerminalOptions, VarNumber, Vv, Window, WindowHandle, bln_values, dobuf_action_values,
-    dobuf_start_values, int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t, statuscol_T,
-    uint8_t, uint16_t, uint64_t, yankreg_T,
+    RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0, StringBuilder,
+    TabpageHandle, TerminalOptions, VarNumber, Vv, Window, WindowHandle, YankReg, bln_values,
+    dobuf_action_values, dobuf_start_values, int64_t, kCdScopeGlobal, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t,
+    uint8_t, uint16_t, uint64_t,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

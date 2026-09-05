@@ -26,8 +26,8 @@ use crate::register::{
     kMTCharWise, kMTLineWise, kMTUnknown, update_yankreg_width,
 };
 use crate::types::{
-    AdditionalData, NUL, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, ptrdiff_t, size_t, ssize_t,
-    yankreg_T,
+    AdditionalData, NUL, String_0, VAR_LIST, VAR_NUMBER, VAR_STRING, YankReg, ptrdiff_t, size_t,
+    ssize_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 
@@ -67,7 +67,7 @@ pub(crate) unsafe fn adjust_clipboard_name(
     name: &mut c_int,
     quiet: bool,
     writing: bool,
-) -> *mut yankreg_T {
+) -> *mut YankReg {
     let explicit_cb_reg = *name == '*' as c_int || *name == '+' as c_int;
     let implicit_cb_reg =
         *name == NUL && cb_flags.get() & (kOptCbFlagUnnamed | kOptCbFlagUnnamedplus) != 0;
@@ -156,7 +156,7 @@ fn regtype_of(byte: u8) -> Option<c_int> {
 /// Main-thread editor call; runs the clipboard provider.
 pub(crate) unsafe fn get_clipboard(
     mut name: c_int,
-    target: &mut *mut yankreg_T,
+    target: &mut *mut YankReg,
     quiet: bool,
 ) -> bool {
     // SAFETY: main-thread editor call.
@@ -281,7 +281,7 @@ pub(crate) unsafe fn get_clipboard(
 ///
 /// Main-thread editor call; runs the clipboard provider. `reg` must point
 /// to a valid register whose y_type is known.
-pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut yankreg_T) {
+pub(crate) unsafe fn set_clipboard(mut name: c_int, reg: *mut YankReg) {
     // SAFETY: main-thread editor call.
     if unsafe { adjust_clipboard_name(&mut name, false, true) }.is_null() {
         return;

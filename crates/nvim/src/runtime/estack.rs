@@ -1,7 +1,7 @@
 //! The execution stack -- what `<sfile>`, `<stack>` and every error message's
 //! "line N of ..." prefix are read from.
 //!
-//! `exestack` is a stack of [`estack_T`] entries, one per nested thing being
+//! `exestack` is a stack of [`EStack`] entries, one per nested thing being
 //! executed: a sourced script, a user function, an autocommand.  [`estack_push`]
 //! and [`estack_pop`] bracket each of them, and [`estack_sfile`] renders the
 //! stack the three ways vimscript can ask for it -- `<sfile>` (the innermost
@@ -10,7 +10,7 @@
 //! I am in".  [`stacktrace_create`] and [`f_getstacktrace`] are the same data
 //! as a list of dicts.
 //!
-//! The stack is a `Vec<estack_T>` behind a [`GlobalCell`], so every walk below
+//! The stack is a `Vec<EStack>` behind a [`GlobalCell`], so every walk below
 //! is checked code; only the FFI calls and the `es_info` union still reach for
 //! a pointer. `with`/`with_mut` are also the guard: a push made while a walk
 //! holds a borrow is a debug panic rather than a reallocated buffer under a
@@ -28,8 +28,8 @@ use std::ffi::CString;
 
 /// A stack entry with no `es_info` payload yet; the pushers that have one fill
 /// it in through the returned pointer.
-fn entry_for(es_type: EStackType, name: *mut c_char, lnum: LineNr) -> estack_T {
-    estack_T {
+fn entry_for(es_type: EStackType, name: *mut c_char, lnum: LineNr) -> EStack {
+    EStack {
         es_lnum: lnum,
         es_name: name,
         es_type,
@@ -38,7 +38,7 @@ fn entry_for(es_type: EStackType, name: *mut c_char, lnum: LineNr) -> estack_T {
 }
 
 /// Append `entry` to the execution stack.
-fn push_entry(entry: estack_T) {
+fn push_entry(entry: EStack) {
     exestack.with_mut(|stack| stack.push(entry));
 }
 
@@ -89,7 +89,7 @@ pub fn estack_pop() {
 /// the `None`: its macros index the stack unconditionally and rely on
 /// [`estack_init`] having run. Eight files each had their own copy of that
 /// index before the stack became a `Vec`.
-pub fn innermost() -> Option<estack_T> {
+pub fn innermost() -> Option<EStack> {
     exestack.with(|stack| stack.last().copied())
 }
 
@@ -102,7 +102,7 @@ pub fn innermost() -> Option<estack_T> {
 /// it; a release build answers the bottom frame rather than reading past the
 /// end of the stack, which is what upstream would do.
 #[track_caller]
-pub fn innermost_frame() -> estack_T {
+pub fn innermost_frame() -> EStack {
     match innermost() {
         Some(entry) => entry,
         None => {
@@ -115,7 +115,7 @@ pub fn innermost_frame() -> estack_T {
 /// Run `f` over the innermost frame, if there is one. See [`innermost_frame`]
 /// for why there always is.
 #[track_caller]
-pub fn with_innermost(f: impl FnOnce(&mut estack_T)) {
+pub fn with_innermost(f: impl FnOnce(&mut EStack)) {
     exestack.with_mut(|stack| match stack.last_mut() {
         Some(entry) => f(entry),
         None => debug_assert!(false, "the execution stack has no frame"),
@@ -195,7 +195,7 @@ pub unsafe fn estack_sfile(which: EStackArg) -> *mut c_char {
 ///
 /// Every frame's `es_info` must match its `es_type`, which is [`estack_push`]'s
 /// contract with its callers.
-unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
+unsafe fn defining_script(stack: &[EStack]) -> *mut c_char {
     for entry in stack.iter().rev() {
         match entry.es_type {
             ETYPE_UFUNC | ETYPE_AUCMD => {
@@ -228,7 +228,7 @@ unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
 /// # Safety
 ///
 /// Every frame's `es_name`, when non-null, must be NUL-terminated.
-unsafe fn render_stack(stack: &[estack_T], which: EStackArg) -> *mut c_char {
+unsafe fn render_stack(stack: &[EStack], which: EStackArg) -> *mut c_char {
     let mut text = Vec::<u8>::new();
     // Whether any frame contributed: a stack of unnamed frames answers null,
     // which is not the same answer as an empty string.

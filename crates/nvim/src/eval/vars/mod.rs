@@ -81,12 +81,12 @@ use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
     AcoSave, BoolVarValue, Buffer, Dict, DictItem, EvalArg, EvalFuncData, ExArg, Expand, Failed,
     GRegFlags, HashTab, LVal, List, ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount,
-    ScopeDictDictItem, ScopeType, ScriptId, SpecialVarValue, SwitchWin, Tabpage, TypVal, VAR_BLOB,
-    VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
-    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
-    VarLock, VarNumber, VarType, VimVarFlags, Vv, Window, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kListLenUnknown, kSpecialVarNull, ptrdiff_t, scriptvar_T, size_t, ssize_t, typval_vval_union,
+    ScopeDictDictItem, ScopeType, ScriptId, ScriptVar, SpecialVarValue, SwitchWin, Tabpage, TypVal,
+    VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE,
+    VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
+    VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv, Window, int64_t, kBoolVarFalse,
+    kBoolVarTrue, kListLenUnknown, kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union,
     uint8_t, uint32_t,
 };
 use crate::version::{highest_patch, min_vim_version};
@@ -252,11 +252,11 @@ pub const e_setting_v_str_to_value_with_wrong_type: &CStr =
 pub const e_missing_end_marker_str: &CStr = c"E990: Missing end marker '%s'";
 pub const e_cannot_use_heredoc_here: &CStr = c"E991: Cannot use =<< here";
 
-/// The `scriptvar_T` of script `sid`: upstream's `SCRIPT_SV`.
+/// The `ScriptVar` of script `sid`: upstream's `SCRIPT_SV`.
 ///
 /// # Safety
 /// `sid` is a live script id -- `1 ..= script_items.ga_len`.
-pub(crate) unsafe fn script_sv(sid: c_int) -> *mut scriptvar_T {
+pub(crate) unsafe fn script_sv(sid: c_int) -> *mut ScriptVar {
     // SAFETY: the caller's `sid` names a live script item.
     unsafe { (*script_item(sid)).sn_vars }
 }

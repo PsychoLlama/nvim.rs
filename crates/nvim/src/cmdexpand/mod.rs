@@ -102,8 +102,8 @@ use crate::tag::expand_tags;
 use crate::types::ui::{kUICmdline, kUIMessages, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     Arena, Array, Buffer, CmdAddr, ColNr, CompleteListItemGetter, Dict, Direction, Error,
-    EvalFuncData, ExArg, Expand, GArray, HashTab, Hlf, List, ListItem, LuaRetMode, Object, OptInt,
-    Pos, RegMatch, TypVal, VarNumber, XpPrefix, fuzmatch_str_T, ptrdiff_t, pumitem_T, size_t,
+    EvalFuncData, ExArg, Expand, FuzMatchStr, GArray, HashTab, Hlf, List, ListItem, LuaRetMode,
+    Object, OptInt, Pos, PumItem, RegMatch, TypVal, VarNumber, XpPrefix, ptrdiff_t, size_t,
     ssize_t, typval_vval_union,
 };
 use crate::ui::{ui_flush, ui_has, vim_beep};
@@ -282,8 +282,8 @@ static pre_incsearch_pos: GlobalCell<Pos> = GlobalCell::new(Pos {
     col: 0,
     coladd: 0,
 });
-static compl_match_array: GlobalCell<*mut pumitem_T> =
-    GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
+static compl_match_array: GlobalCell<*mut PumItem> =
+    GlobalCell::new(::core::ptr::null_mut::<PumItem>());
 static compl_match_arraysize: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static compl_startcol: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static compl_selected: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -310,7 +310,7 @@ pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
 // ---------------------------------------------------------------------------
 // Handing a scored candidate list to the expansion machinery.
 //
-// This sat in `fuzzy.rs`, which knows nothing about `fuzmatch_str_T` beyond
+// This sat in `fuzzy.rs`, which knows nothing about `FuzMatchStr` beyond
 // its score field; every caller is an expansion, and four of the five are in
 // this module's own family.
 /// Sort `fuzmatch` by fuzzy score and hand its strings to `matches`, freeing
@@ -320,7 +320,7 @@ pub const ENV_SEPCHAR: ::core::ffi::c_int = ':' as ::core::ffi::c_int;
 /// `fuzmatch` must be an allocated array of `count` entries naming allocated
 /// strings, and `matches` must be writable.
 pub(crate) unsafe fn fuzzymatches_to_strmatches(
-    fuzmatch: *mut fuzmatch_str_T,
+    fuzmatch: *mut FuzMatchStr,
     matches: *mut *mut *mut c_char,
     count: c_int,
     funcsort: bool,
@@ -332,7 +332,7 @@ pub(crate) unsafe fn fuzzymatches_to_strmatches(
         // `<SNR>` functions after everything else whatever they scored.
         // Callers number `idx` as they fill the array, so no two entries
         // compare equal and the sort needs no stability of its own.
-        let snr = |m: &fuzmatch_str_T| funcsort && unsafe { *m.str } == b'<' as c_char;
+        let snr = |m: &FuzMatchStr| funcsort && unsafe { *m.str } == b'<' as c_char;
         found.sort_by(|a, b| {
             snr(a)
                 .cmp(&snr(b))

@@ -21,8 +21,8 @@ use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
     Buffer, CONV_NONE, EStackType, ExArg, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt,
-    RegProg, RepItem, SPL_FNAME_TMPL, SpellAddType, SpellTab, XDGVarType, file_comparison, size_t,
-    time_t, vimconv_T,
+    RegProg, RepItem, SPL_FNAME_TMPL, SpellAddType, SpellTab, VimConv, XDGVarType, file_comparison,
+    size_t, time_t,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -118,7 +118,7 @@ pub struct SpellInfo {
     pub si_add: ::core::ffi::c_int,
     pub si_clear_chartab: ::core::ffi::c_int,
     pub si_region: ::core::ffi::c_int,
-    pub si_conv: vimconv_T,
+    pub si_conv: VimConv,
     pub si_memtot: ::core::ffi::c_int,
     pub si_verbose: ::core::ffi::c_int,
     pub si_msg_count: ::core::ffi::c_int,
@@ -319,7 +319,7 @@ impl SpellInfo {
             si_add: 0,
             si_clear_chartab: 0,
             si_region: 0,
-            si_conv: vimconv_T {
+            si_conv: VimConv {
                 vc_type: 0,
                 vc_factor: 0,
                 vc_fd: ::core::ptr::null_mut(),

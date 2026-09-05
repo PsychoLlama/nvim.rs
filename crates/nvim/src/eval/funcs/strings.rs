@@ -40,7 +40,7 @@ use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
     Blob, CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal,
-    VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, kListLenMayKnow, time_t, tm, vimconv_T,
+    VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
 };
 use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
@@ -61,7 +61,7 @@ unsafe fn dummy_ap() -> VaList<'static> {
 }
 
 /// A conversion descriptor that has not been set up yet.
-const CONV_NONE_INIT: vimconv_T = vimconv_T {
+const CONV_NONE_INIT: VimConv = VimConv {
     vc_type: CONV_NONE,
     vc_factor: 0,
     vc_fd: ptr::null_mut(),
@@ -575,7 +575,7 @@ pub unsafe fn f_strftime(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
         rettv.vval.v_string = unsafe { xstrdup(gettext(c"(Invalid)").as_ptr()) };
         return;
     }
-    let mut conv: vimconv_T = CONV_NONE_INIT;
+    let mut conv: VimConv = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
     let _ = unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
     if conv.vc_type != CONV_NONE {
@@ -615,7 +615,7 @@ pub unsafe fn f_strptime(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     // format are freed on every path out.
     let mut fmt = arg_string(&mut fmt_buf, args.get(0)) as *mut c_char;
     let str = arg_string(&mut str_buf, args.get(1)) as *mut c_char;
-    let mut conv: vimconv_T = CONV_NONE_INIT;
+    let mut conv: VimConv = CONV_NONE_INIT;
     let enc = unsafe { enc_locale() };
     let _ = unsafe { convert_setup(&raw mut conv, p_enc.get(), enc) };
     if conv.vc_type != CONV_NONE {

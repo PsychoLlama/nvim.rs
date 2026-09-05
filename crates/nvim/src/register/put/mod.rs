@@ -14,7 +14,7 @@
 //! [`put_last_insert`], which does not put anything: it stuffs an Insert-mode
 //! command into the read buffer, because the last insert is *keys*, not text.
 //! And a computed register (`"%`, `":`, `"=`, ...) is turned into a
-//! one-element fake `yankreg_T` on the stack -- `"=` being the exception,
+//! one-element fake `YankReg` on the stack -- `"=` being the exception,
 //! since its result may hold newlines and has to be split.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -376,7 +376,7 @@ impl Put {
 /// # Safety
 /// The cursor must be on a valid line. May run the clipboard provider and, by
 /// way of `"=`, arbitrary Vimscript.
-pub unsafe fn do_put(regname: c_int, reg: *mut yankreg_T, dir: c_int, count: c_int, flags: c_int) {
+pub unsafe fn do_put(regname: c_int, reg: *mut YankReg, dir: c_int, count: c_int, flags: c_int) {
     let orig_start = cur_buf().b_op_start;
     let orig_end = cur_buf().b_op_end;
     // SAFETY: a live window.

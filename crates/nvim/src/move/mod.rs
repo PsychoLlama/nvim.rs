@@ -13,7 +13,7 @@
 //! | [`arith`] | the pointer-free viewport arithmetic they share |
 //!
 //! What stays here is the `w_valid` flag alphabet the five share, the
-//! `lineoff_T` cursor those flags guard, the small predicates that read or
+//! `LineOff` cursor those flags guard, the small predicates that read or
 //! invalidate them (`validate_cursor`, `validate_virtcol`,
 //! `validate_cursor_col`, `changed_cline_bef_curs` and friends), `curs_rows`,
 //! and the two `win_col_off` helpers that say how much of a window is not
@@ -72,7 +72,7 @@ pub const kMTCharWise: MotionType = 0;
 
 /// One buffer line as the vertical scrolling walks it: the line, the filler
 /// lines drawn above it, and the screen lines it takes.
-pub struct lineoff_T {
+pub struct LineOff {
     pub lnum: LineNr,
     pub fill: c_int,
     pub height: c_int,

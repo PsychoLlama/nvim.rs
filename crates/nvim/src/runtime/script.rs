@@ -54,7 +54,7 @@ pub(crate) fn script_count() -> c_int {
 ///
 /// Null for an id outside `1..=`[`script_count`], which upstream's macro
 /// would read past the end for; debug builds fail the assertion instead.
-pub(crate) fn script_item(sid: ScriptId) -> *mut scriptitem_T {
+pub(crate) fn script_item(sid: ScriptId) -> *mut ScriptItem {
     debug_assert!(script_id_valid(sid), "script id out of range");
     let idx = usize::try_from(sid - 1).ok();
     script_items.with(|items| {
@@ -91,7 +91,7 @@ pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
     // walk is sound.
     let found = script_items.with(|items| {
         items.iter().rposition(|&si| {
-            // SAFETY: a registry slot always holds a live `scriptitem_T`, and
+            // SAFETY: a registry slot always holds a live `ScriptItem`, and
             // `path_fnamecmp` only reads the two NUL-terminated names.
             unsafe { !(*si).sn_name.is_null() && path_fnamecmp((*si).sn_name, name) == 0 }
         })
@@ -247,8 +247,8 @@ pub unsafe fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> Lin
     if !getline_is_source(fgetline) {
         return sourcing_lnum();
     }
-    // SAFETY: a `getsourceline` reader always carries a `source_cookie_T`.
-    unsafe { (*cookie.cast::<source_cookie_T>()).sourcing_lnum }
+    // SAFETY: a `getsourceline` reader always carries a `SourceCookie`.
+    unsafe { (*cookie.cast::<SourceCookie>()).sourcing_lnum }
 }
 
 /// Is `fgetline` the reader [`getsourceline`] installs?
@@ -401,7 +401,7 @@ unsafe fn report_scripts(l: *mut List, query: &ScriptQuery, regmatch: &mut RegMa
     for sid in first..=last {
         // SAFETY: `sid` is in range, and nothing in the body sources a script.
         let si = script_item(sid as ScriptId);
-        // SAFETY: a registry slot always holds a live `scriptitem_T`.
+        // SAFETY: a registry slot always holds a live `ScriptItem`.
         let name = unsafe { (*si).sn_name };
         if name.is_null() {
             continue;
@@ -471,7 +471,7 @@ pub unsafe fn getsourceline(
     _indent: c_int,
     do_concat: bool,
 ) -> *mut c_char {
-    let sp = cookie.cast::<source_cookie_T>();
+    let sp = cookie.cast::<SourceCookie>();
     // SAFETY: the cookie belongs to the script currently being sourced.
     let from_buf_or_str = unsafe { (*sp).source_from_buf_or_str };
 
@@ -532,7 +532,7 @@ pub unsafe fn getsourceline(
 /// # Safety
 ///
 /// `sp` must be a file-backed source cookie.
-unsafe fn refresh_breakpoint(sp: *mut source_cookie_T) {
+unsafe fn refresh_breakpoint(sp: *mut SourceCookie) {
     unsafe { (*sp).breakpoint = dbg_find_breakpoint(true, (*sp).fname, sourcing_lnum()) };
     unsafe { (*sp).dbg_tick = debug_tick.get() };
 }
@@ -543,7 +543,7 @@ unsafe fn refresh_breakpoint(sp: *mut source_cookie_T) {
 /// # Safety
 ///
 /// `sp` must be the live source cookie.
-unsafe fn next_line(sp: *mut source_cookie_T) -> *mut c_char {
+unsafe fn next_line(sp: *mut SourceCookie) -> *mut c_char {
     if unsafe { (*sp).finished }
         || (!unsafe { (*sp).source_from_buf_or_str } && unsafe { (*sp).fp }.is_null())
     {
@@ -566,7 +566,7 @@ unsafe fn next_line(sp: *mut source_cookie_T) -> *mut c_char {
 /// # Safety
 ///
 /// `sp` must be the live source cookie and `line` its freshly read line.
-unsafe fn concat_continuations(sp: *mut source_cookie_T, line: *mut c_char) -> *mut c_char {
+unsafe fn concat_continuations(sp: *mut SourceCookie, line: *mut c_char) -> *mut c_char {
     // Compensate for the one line read-ahead.
     unsafe { (*sp).sourcing_lnum -= 1 };
     unsafe { (*sp).nextline = get_one_sourceline(sp) };
@@ -612,7 +612,7 @@ unsafe fn starts_continuation(p: *const c_char) -> bool {
 /// # Safety
 ///
 /// `sp` must be the live source cookie.
-unsafe fn get_one_sourceline(sp: *mut source_cookie_T) -> *mut c_char {
+unsafe fn get_one_sourceline(sp: *mut SourceCookie) -> *mut c_char {
     let mut line: Vec<u8> = Vec::new();
     // SAFETY: `sp` is the caller's cookie, throughout.
     unsafe { (*sp).sourcing_lnum += 1 };
@@ -665,7 +665,7 @@ unsafe fn get_one_sourceline(sp: *mut source_cookie_T) -> *mut c_char {
 /// # Safety
 ///
 /// `sp` must be a buffer- or string-backed source cookie.
-unsafe fn next_buffered_line(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> bool {
+unsafe fn next_buffered_line(sp: *mut SourceCookie, line: &mut Vec<u8>) -> bool {
     // SAFETY: the caller's cookie, whose lines outlive the copy.
     let Some(next) = unsafe { &(*sp).buflines }.get(unsafe { (*sp).buf_lnum } as usize) else {
         return false;
@@ -683,7 +683,7 @@ unsafe fn next_buffered_line(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> bo
 /// # Safety
 ///
 /// `sp` must be a file-backed source cookie.
-unsafe fn read_file_chunk(sp: *mut source_cookie_T, line: &mut Vec<u8>) -> Option<bool> {
+unsafe fn read_file_chunk(sp: *mut SourceCookie, line: &mut Vec<u8>) -> Option<bool> {
     /// How much one `fgets` reads at a time, terminator included: upstream
     /// grew its buffer by at least this much before every read. Function-
     /// local so it stays out of the unit lane's generated cdefs, which
@@ -760,7 +760,7 @@ pub unsafe fn ex_scriptencoding(eap: *mut ExArg) {
         unsafe { (*eap).arg }
     };
     // Set up for conversion from the specified encoding to 'encoding'.
-    let sp = unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie) }.cast::<source_cookie_T>();
+    let sp = unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie) }.cast::<SourceCookie>();
     let _ = unsafe { convert_setup(&raw mut (*sp).conv, name, p_enc.get()) };
     if name != unsafe { (*eap).arg } {
         unsafe { xfree(name.cast::<c_void>()) };
@@ -783,7 +783,7 @@ pub unsafe fn ex_finish(eap: *mut ExArg) {
 /// an extra `do_cmdline()`; `reanimate` says which.
 pub unsafe fn do_finish(eap: *mut ExArg, reanimate: bool) {
     // SAFETY: `eap` is the running command's block, and its cookie is a
-    // `source_cookie_T` because `ex_finish` checked before calling.
+    // `SourceCookie` because `ex_finish` checked before calling.
     if reanimate {
         unsafe { (*source_cookie(eap)).finished = false };
     }
@@ -805,8 +805,8 @@ pub unsafe fn do_finish(eap: *mut ExArg, reanimate: bool) {
 /// # Safety
 ///
 /// `eap`'s reader must be [`getsourceline`].
-unsafe fn source_cookie(eap: *mut ExArg) -> *mut source_cookie_T {
-    unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie).cast::<source_cookie_T>() }
+unsafe fn source_cookie(eap: *mut ExArg) -> *mut SourceCookie {
+    unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie).cast::<SourceCookie>() }
 }
 
 /// Did a sourced file have the `":finish"` command?  If so, don't give an error
@@ -815,7 +815,7 @@ pub unsafe fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool
     // SAFETY: `getline_equal` reads the reader's own bookkeeping; the cookie is
     // only dereferenced once that says it is a sourced script's.
     let sourced = unsafe { getline_equal(fgetline, cookie, Some(getsourceline as LineGetterFn)) };
-    sourced && unsafe { (*getline_cookie(fgetline, cookie).cast::<source_cookie_T>()).finished }
+    sourced && unsafe { (*getline_cookie(fgetline, cookie).cast::<SourceCookie>()).finished }
 }
 
 // ---------------------------------------------------------------------------

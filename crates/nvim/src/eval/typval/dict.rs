@@ -607,7 +607,7 @@ pub unsafe fn tv_dict_equal(d1: *mut Dict, d2: *mut Dict, ic: bool) -> bool {
 /// the caller reserved from `get_copyID`; passing a stale one makes an
 /// unrelated walk think this dictionary is already visited.
 pub unsafe fn tv_dict_copy(
-    conv: *const vimconv_T,
+    conv: *const VimConv,
     orig: *mut Dict,
     deep: bool,
     copyID: ::core::ffi::c_int,

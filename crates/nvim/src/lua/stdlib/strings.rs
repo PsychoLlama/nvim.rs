@@ -21,7 +21,7 @@ use crate::mbyte::{
     string_convert, utf_cp_bounds_len, utf_ptr2len_len,
 };
 use crate::memory::xfree;
-use crate::types::{CONV_NONE, intptr_t, lua_Integer, lua_Number, lua_State, size_t, vimconv_T};
+use crate::types::{CONV_NONE, VimConv, intptr_t, lua_Integer, lua_Number, lua_State, size_t};
 use ::libc::{memchr, strcasecmp};
 
 /// `vim.str_utfindex()`: the UTF-32 and UTF-16 lengths of the string at slot 1
@@ -223,7 +223,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_iconv(lstate: *mut lua_State) -> c_i
         let from = enc_canonize(enc_skip(lua_tostring(lstate, 2).cast_mut()));
         let to = enc_canonize(enc_skip(lua_tostring(lstate, 3).cast_mut()));
 
-        let mut vimconv = vimconv_T {
+        let mut vimconv = VimConv {
             vc_type: CONV_NONE,
             vc_factor: 0,
             vc_fd: ptr::null_mut(),

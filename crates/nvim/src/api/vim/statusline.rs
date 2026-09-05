@@ -74,7 +74,7 @@ pub unsafe fn nvim_eval_statusline(
         }
     }
 
-    let mut statuscol = statuscol_T::default();
+    let mut statuscol = StatusCol::default();
     let mut sattrs = [SignTextAttrs {
         text: [0; 2],
         hl_id: 0,
@@ -149,7 +149,7 @@ impl Context {
     unsafe fn of(
         opts: &KeyDict_eval_statusline,
         err: &mut Error,
-        statuscol: &mut statuscol_T,
+        statuscol: &mut StatusCol,
         sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
     ) -> Option<Context> {
         let mut fillchar = 0 as ScreenChar;
@@ -267,7 +267,7 @@ impl Context {
 unsafe fn statuscol_state(
     win: Win,
     lnum: c_int,
-    statuscol: &mut statuscol_T,
+    statuscol: &mut StatusCol,
     sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
 ) -> (c_int, c_int) {
     let lnum = lnum as LineNr;

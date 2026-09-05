@@ -1,7 +1,7 @@
 //! Yanking text into a register.
 //!
 //! [`op_yank_reg`] is the whole of `y`: it copies the operator's region into a
-//! `yankreg_T` line by line. The blockwise case goes through `block_prep` per
+//! `YankReg` line by line. The blockwise case goes through `block_prep` per
 //! line, so that a short line is padded out and a tab straddling the edge of
 //! the block is split into spaces; the charwise case is the same walk with
 //! `charwise_block_prep`, which is how the first and last lines of a charwise
@@ -36,7 +36,7 @@ use crate::types::{CpoFlag, NUL};
 /// `bd` must describe a region of the current line, and `reg.y_array` hold at
 /// least `y_idx + 1` slots.
 unsafe fn yank_copy_line(
-    reg: *mut yankreg_T,
+    reg: *mut YankReg,
     bd: *mut block_def,
     y_idx: size_t,
     exclude_trailing_space: bool,
@@ -106,7 +106,7 @@ unsafe fn yank_copy_line(
 /// # Safety
 /// Both registers must own their arrays; `reg` must hold at least one line
 /// when the charwise join runs.
-unsafe fn append_to_register(curr: *mut yankreg_T, reg: *mut yankreg_T, yank_type: MotionType) {
+unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: MotionType) {
     // Grow `curr`'s array to hold both registers' lines, moving the old ones
     // over.  `j` is where the appended lines start.
     //
@@ -219,7 +219,7 @@ unsafe fn report_yank(oap: *mut OpArg, yank_type: MotionType, yanklines: size_t)
 /// # Safety
 /// `oap` must describe a region of the current buffer and `reg` be a live
 /// register.
-pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut yankreg_T, append: bool) {
+pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg, append: bool) {
     let mut newreg = EMPTY_YANKREG;
     // Nothing this function reaches writes through `oap`, so the operator is
     // read once and worked from.
@@ -416,7 +416,7 @@ pub unsafe fn format_reg_type(
 /// # Safety
 /// `oap` and `reg` must describe the yank that just happened. Runs arbitrary
 /// autocommands, under `textlock`.
-pub unsafe fn do_autocmd_textyankpost(oap: *mut OpArg, reg: *mut yankreg_T) {
+pub unsafe fn do_autocmd_textyankpost(oap: *mut OpArg, reg: *mut YankReg) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: main thread, reading the autocommand table.

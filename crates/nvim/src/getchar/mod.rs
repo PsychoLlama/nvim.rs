@@ -70,8 +70,8 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     Arena, Array, CharsizeArg, ColNr, Error, EvalFuncData, FileDescriptor, FlushBuffers, Integer,
-    LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OpArg, OptInt, RemapValues, String_0,
-    TypVal, VarNumber, Vv, ptrdiff_t, save_redo_T, size_t, tasave_T, uint8_t, uint64_t,
+    LuaRef, LuaRetMode, MotionType, MultiQueue, Object, OpArg, OptInt, RemapValues, SaveRedo,
+    String_0, TypVal, TypeaheadSave, VarNumber, Vv, ptrdiff_t, size_t, uint8_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
@@ -113,7 +113,7 @@ pub const RM_NONE: ::core::ffi::c_uint = 1;
 pub const RM_YES: ::core::ffi::c_uint = 0;
 pub const RM_ABBR: ::core::ffi::c_uint = 4;
 #[derive(Copy, Clone)]
-pub struct gotchars_state_T {
+pub struct GotcharsState {
     pub buf: [uint8_t; 67],
     pub prev_c: ::core::ffi::c_int,
     pub buflen: size_t,

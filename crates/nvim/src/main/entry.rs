@@ -53,12 +53,13 @@ use crate::main::exit::{getout, os_exit};
 use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN, argv0, cb_flags,
-    cmdline_row, curbuf, curwin, debug_break_level, embedded_mode, err_arg_missing, exmode_active,
-    full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, mparm_T,
-    msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl, p_shada, p_uc, p_ut,
-    recoverymode, resize_events, restart_edit, scriptout, silent_mode, starting, stderr_isatty,
-    stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN,
+    argv0, cb_flags, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode,
+    err_arg_missing, exmode_active, full_screen, headless_mode, kOptCbFlagUnnamed,
+    kOptCbFlagUnnamedplus, main_loop, msg_didout, msg_row, msg_scroll, no_wait_return, p_ch, p_lpl,
+    p_shada, p_uc, p_ut, recoverymode, resize_events, restart_edit, scriptout, silent_mode,
+    starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
+    ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -139,7 +140,7 @@ pub(crate) unsafe fn event_teardown() -> bool {
 ///
 /// Exported: the unit tests build an editor without a `main`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn early_init(paramp: *mut mparm_T) {
+pub unsafe extern "C" fn early_init(paramp: *mut MainParams) {
     // SAFETY: `paramp` is null when the unit tests call this; every use of
     // it below is guarded.
     os_hint_priority();
@@ -204,7 +205,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     // All-zero is the "nothing given" state for everything except the
     // handful of fields `init_params` sets.
-    let mut params: mparm_T = unsafe { core::mem::zeroed() };
+    let mut params: MainParams = unsafe { core::mem::zeroed() };
     unsafe { init_params(&raw mut params, argc, argv) };
     unsafe { init_startuptime(&raw mut params) };
 

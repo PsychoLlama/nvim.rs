@@ -16,7 +16,7 @@
 //! # Safety
 //!
 //! Everything here runs on the main thread from the Ex-command dispatcher,
-//! with `eap` the command being executed and `cmd` its live [`ucmd_T`]. A
+//! with `eap` the command being executed and `cmd` its live [`UserCmd`]. A
 //! destination buffer is either null or has room for exactly what the
 //! measuring pass answered. That is the contract the `unsafe fn`s share.
 //!
@@ -37,7 +37,7 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc};
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{CmdMod, CmdModFlags, ExArg, ExArgt, NUL, int64_t, size_t, ucmd_T};
+use crate::types::{CmdMod, CmdModFlags, ExArg, ExArgt, NUL, UserCmd, int64_t, size_t};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT, tabpage_index};
 use ::libc::strcat;
 use core::ffi::{CStr, c_char, c_int};
@@ -533,7 +533,7 @@ unsafe fn uc_check_code(
     code: *const c_char,
     len: size_t,
     buf: *mut c_char,
-    cmd: &ucmd_T,
+    cmd: &UserCmd,
     eap: &ExArg,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
@@ -704,7 +704,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut ExArg, preview: bool) -> c_int {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn expand_replacement(cmd: &ucmd_T, eap: &ExArg) -> *mut c_char {
+unsafe fn expand_replacement(cmd: &UserCmd, eap: &ExArg) -> *mut c_char {
     let mut split_len: size_t = 0;
     let mut split_buf: *mut c_char = ptr::null_mut();
     // First round: measure with a null destination. Second: fill it.
@@ -744,7 +744,7 @@ struct Pass {
 /// # Safety
 /// Module contract.
 unsafe fn expand_pass(
-    cmd: &ucmd_T,
+    cmd: &UserCmd,
     eap: &ExArg,
     buf: *mut c_char,
     split_buf: *mut *mut c_char,

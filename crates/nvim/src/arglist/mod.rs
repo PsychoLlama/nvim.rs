@@ -3,10 +3,10 @@
 //! it, and — in the two submodules — `:all`/`:sall` and the
 //! `argc()`/`argidx()`/`arglistid()`/`argv()` builtins.
 //!
-//! Every window points at an `alist_T`, refcounted so that several windows
+//! Every window points at an `ArgList`, refcounted so that several windows
 //! can share one. [`global_arglist`] is the list nvim starts with, the one
 //! `:argglobal` returns a window to; `:arglocal` gives a window a private
-//! copy. Entries are `aentry_T` in a garray, so index arithmetic — a
+//! copy. Entries are `ArgEntry` in a garray, so index arithmetic — a
 //! `memmove` to close a hole, a `w_arg_idx` fixup after it — is the shape of
 //! most of this file.
 //!
@@ -72,7 +72,7 @@ pub use eval::{f_argc, f_argidx, f_arglistid, f_argv};
 /// An argument list — the global one, or a window's own copy — the same
 /// promise as [`Ea`]. A list is reference counted and outlives any command
 /// walking it.
-pub(crate) type Al = Live<alist_T>;
+pub(crate) type Al = Live<ArgList>;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
@@ -112,36 +112,36 @@ fn as_count(n: c_int) -> usize {
 /// The global argument list — `GARGLIST`/`GARGCOUNT` upstream. It is the one
 /// list that is never freed, which is why several tests here compare against
 /// its address rather than a flag.
-pub(crate) fn global_arglist() -> *mut alist_T {
+pub(crate) fn global_arglist() -> *mut ArgList {
     global_alist.ptr()
 }
 
 /// `AARGLIST(al)` and `ALIST_COUNT(al)`: an argument list's entries and length.
 /// The transpiler spelled these out at every use; the C had them as macros.
-fn alist_entries(al: *mut alist_T) -> (*mut aentry_T, c_int) {
-    // SAFETY: the caller's promise -- a live `alist_T`. The pointer is
+fn alist_entries(al: *mut ArgList) -> (*mut ArgEntry, c_int) {
+    // SAFETY: the caller's promise -- a live `ArgList`. The pointer is
     // derived from the vector itself on every call, so a growth between two
     // calls cannot leave a stale one behind.
     let entries = unsafe { &mut (*al).al_ga };
     (entries.as_mut_ptr(), entries.len() as c_int)
 }
 
-fn alist_arg(al: *mut alist_T, n: c_int) -> *mut aentry_T {
+fn alist_arg(al: *mut ArgList, n: c_int) -> *mut ArgEntry {
     alist_entries(al).0.wrapping_add(n as usize)
 }
 
-fn alist_count(al: *mut alist_T) -> c_int {
+fn alist_count(al: *mut ArgList) -> c_int {
     alist_entries(al).1
 }
 
 /// `WARGLIST(wp)[n]` and `WARGCOUNT(wp)`: a window's argument list.
 ///
 /// Every window always has one, so this is total.
-fn win_alist(wp: Win) -> *mut alist_T {
+fn win_alist(wp: Win) -> *mut ArgList {
     wp.w_alist
 }
 
-fn warg(wp: Win, n: c_int) -> *mut aentry_T {
+fn warg(wp: Win, n: c_int) -> *mut ArgEntry {
     alist_arg(win_alist(wp), n)
 }
 
@@ -150,7 +150,7 @@ fn wargcount(wp: Win) -> c_int {
 }
 
 /// `ARGLIST[n]` and `ARGCOUNT`: the current window's argument list.
-fn arg(n: c_int) -> *mut aentry_T {
+fn arg(n: c_int) -> *mut ArgEntry {
     warg(cur_win(), n)
 }
 
@@ -164,7 +164,7 @@ fn argcount() -> c_int {
 /// # Safety
 ///
 /// The borrow must not outlive a call that can replace the window's list.
-unsafe fn cur_arglist<'a>() -> &'a mut Vec<aentry_T> {
+unsafe fn cur_arglist<'a>() -> &'a mut Vec<ArgEntry> {
     // SAFETY: the current window always has an argument list.
     unsafe { &mut (*win_alist(cur_win())).al_ga }
 }
@@ -223,11 +223,11 @@ fn arglist_is_locked() -> bool {
 /// # Safety
 ///
 /// `al` must be a valid argument list.
-unsafe fn alist_clear(al: *mut alist_T) {
+unsafe fn alist_clear(al: *mut ArgList) {
     if arglist_is_locked() {
         return;
     }
-    // SAFETY: the caller's promise -- a live `alist_T`, each of whose
+    // SAFETY: the caller's promise -- a live `ArgList`, each of whose
     // entries owns its `ae_fname`.
     let entries = unsafe { &mut (*al).al_ga };
     for entry in entries.drain(..) {
@@ -241,9 +241,9 @@ unsafe fn alist_clear(al: *mut alist_T) {
 ///
 /// # Safety
 ///
-/// `al` must be a live `alist_T`.
-pub unsafe fn alist_init(al: *mut alist_T) {
-    // SAFETY: the caller's promise -- a live `alist_T`.
+/// `al` must be a live `ArgList`.
+pub unsafe fn alist_init(al: *mut ArgList) {
+    // SAFETY: the caller's promise -- a live `ArgList`.
     unsafe { (*al).al_ga = Vec::new() };
 }
 
@@ -253,8 +253,8 @@ pub unsafe fn alist_init(al: *mut alist_T) {
 /// # Safety
 ///
 /// `al` must be a valid argument list.
-pub unsafe fn alist_unlink(al: *mut alist_T) {
-    // SAFETY: the caller's promise -- a live `alist_T`.
+pub unsafe fn alist_unlink(al: *mut ArgList) {
+    // SAFETY: the caller's promise -- a live `ArgList`.
     let mut al = unsafe { Al::new(al) };
     if ptr::eq(al.raw(), global_arglist()) {
         return;
@@ -275,7 +275,7 @@ fn alist_new() {
     max_alist_id.set(max_alist_id.get() + 1);
     // The new list starts out owned by the current window alone; it is
     // released, and its box reclaimed, by `alist_unlink`.
-    cur_win().w_alist = Box::into_raw(Box::new(alist_T {
+    cur_win().w_alist = Box::into_raw(Box::new(ArgList {
         al_ga: Vec::new(),
         al_refcount: Refcount::ONE,
         id: max_alist_id.get(),
@@ -292,14 +292,14 @@ fn alist_new() {
 /// `al` must be a valid argument list, `files` an owned array of `count`
 /// owned names, and `fnum_list` — when non-null — `fnum_len` buffer numbers.
 unsafe fn alist_set(
-    al: *mut alist_T,
+    al: *mut ArgList,
     count: c_int,
     files: *mut *mut c_char,
     use_curbuf: bool,
     fnum_list: *mut c_int,
     fnum_len: c_int,
 ) {
-    // SAFETY: the caller's promise -- a live `alist_T`.
+    // SAFETY: the caller's promise -- a live `ArgList`.
     let mut al = unsafe { Al::new(al) };
     if arglist_is_locked() {
         return;
@@ -347,7 +347,7 @@ unsafe fn alist_set(
 /// # Safety
 ///
 /// `al` must be a valid argument list and `fname` an owned name or null.
-pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
+pub unsafe fn alist_add(al: *mut ArgList, fname: *mut c_char, set_fnum: c_int) {
     if fname.is_null() {
         // Don't add NULL file names.
         return;
@@ -367,7 +367,7 @@ pub unsafe fn alist_add(al: *mut alist_T, fname: *mut c_char, set_fnum: c_int) {
         0
     };
     unsafe {
-        (*al).al_ga.push(aentry_T {
+        (*al).al_ga.push(ArgEntry {
             ae_fname: fname,
             ae_fnum,
         })
@@ -505,10 +505,10 @@ unsafe fn alist_add_list(count: c_int, files: *mut *mut c_char, after: c_int, wi
     // SAFETY: caller contract -- `files` holds `count` owned names. The
     // entries are built before any of them joins the list, so the
     // autocommands `buflist_add` may run see the list they started with.
-    let added: Vec<aentry_T> = (0..count)
+    let added: Vec<ArgEntry> = (0..count)
         .map(|i| {
             let name = unsafe { *files.offset(i as isize) };
-            aentry_T {
+            ArgEntry {
                 ae_fname: name,
                 ae_fnum: unsafe { buflist_add(name, flags) },
             }
@@ -759,7 +759,7 @@ pub fn check_arg_idx(mut win: Win) {
 /// # Safety
 ///
 /// `aep` must be a valid argument list entry.
-pub unsafe fn alist_name(aep: *mut aentry_T) -> *mut c_char {
+pub unsafe fn alist_name(aep: *mut ArgEntry) -> *mut c_char {
     // SAFETY: caller contract; a found buffer outlives this call.
     let bp = find_buf(unsafe { (*aep).ae_fnum });
     match bp.filter(|bp| !bp.b_fname.is_null()) {

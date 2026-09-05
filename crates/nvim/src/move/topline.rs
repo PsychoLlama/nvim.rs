@@ -239,7 +239,7 @@ fn enough_below(win: Win, so: OptInt) -> bool {
     if (win.w_cursor.lnum as OptInt) < win.w_botline as OptInt - so && !win.lines_concealed() {
         return true;
     }
-    let mut loff = lineoff_T {
+    let mut loff = LineOff {
         // In a fold, count from its last line.
         lnum: win.fold_last(win.w_cursor.lnum),
         fill: 0,
@@ -266,7 +266,7 @@ fn enough_below(win: Win, so: OptInt) -> bool {
 fn check_top_offset(win: Win) -> bool {
     let so = win.scrolloff();
     if (win.w_cursor.lnum as int64_t) < win.w_topline as int64_t + so || win.lines_concealed() {
-        let mut loff = lineoff_T {
+        let mut loff = LineOff {
             lnum: win.w_cursor.lnum,
             fill: 0,
             height: 0,

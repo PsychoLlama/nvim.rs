@@ -73,8 +73,8 @@ use crate::types::{
     DictWatcher, Failed, FileMark, FileMarkView, HashItem, HashTab, HtStack, List, ListItem,
     ListStack, NUL, OptInt, Partial, Pos, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc,
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Window, XFileMark, size_t, typval_vval_union,
-    vimconv_T, yankreg_T,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VimConv, Window, XFileMark, YankReg, size_t,
+    typval_vval_union,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -324,7 +324,7 @@ fn trim_exestack() {
 unsafe fn walk_shada_iterators() {
     let mut reg_iter: *const c_void = null();
     loop {
-        let mut reg = yankreg_T {
+        let mut reg = YankReg {
             y_array: null_mut::<String_0>(),
             y_size: 0,
             y_type: kMTCharWise,
@@ -655,7 +655,7 @@ pub unsafe fn set_ref_in_item(
 /// # Safety
 /// `from` and `to` must be valid; `conv` null or valid.
 pub unsafe fn var_item_copy(
-    conv: *const vimconv_T,
+    conv: *const VimConv,
     from: *mut TypVal,
     to: *mut TypVal,
     deep: bool,
@@ -687,7 +687,7 @@ pub unsafe fn var_item_copy(
             } else {
                 dst.v_type = VAR_STRING;
                 dst.v_lock = VarLock::Unlocked;
-                let (cv, s) = (conv as *mut vimconv_T, src.string_or_null());
+                let (cv, s) = (conv as *mut VimConv, src.string_or_null());
                 // SAFETY: `s` is the source string and `cv` the conversion.
                 dst.vval.v_string = unsafe { string_convert(cv, s, null_mut::<size_t>()) };
                 // A conversion that failed keeps the original bytes.

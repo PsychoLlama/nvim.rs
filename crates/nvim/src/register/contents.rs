@@ -2,7 +2,7 @@
 //!
 //! [`get_reg_contents`] and the `write_reg_contents*` family are what
 //! `getreg()`, `setreg()`, `nvim_paste`, the clipboard provider and shada all
-//! use, so these are the functions that turn a `yankreg_T` into lines or one
+//! use, so these are the functions that turn a `YankReg` into lines or one
 //! string and back.
 //!
 //! [`str_to_reg`] is the interesting direction. It splits an incoming string
@@ -197,9 +197,9 @@ pub unsafe fn get_reg_contents(regname: c_int, flags: c_int) -> *mut c_void {
 /// so nothing may still be pointing at them.
 unsafe fn init_write_reg(
     name: c_int,
-    old_y_previous: &mut *mut yankreg_T,
+    old_y_previous: &mut *mut YankReg,
     must_append: bool,
-) -> *mut yankreg_T {
+) -> *mut YankReg {
     // SAFETY: `valid_yank_reg` only looks the name up.
     if !unsafe { valid_yank_reg(name, true) } {
         // SAFETY: reports the name, which is all it reads.
@@ -228,7 +228,7 @@ unsafe fn init_write_reg(
 /// `y_ptr` must be a live register, and `str` must hold `len` bytes, or --
 /// with `str_list` -- be a null-terminated array of NUL-terminated strings.
 unsafe fn count_lines(
-    y_ptr: *mut yankreg_T,
+    y_ptr: *mut YankReg,
     yank_type: MotionType,
     str: *const c_char,
     len: size_t,
@@ -278,7 +278,7 @@ unsafe fn count_lines(
 /// `str` must hold `len` bytes, or -- with `str_list` -- be a
 /// null-terminated array of NUL-terminated strings.
 unsafe fn str_to_reg(
-    y_ptr: *mut yankreg_T,
+    y_ptr: *mut YankReg,
     mut yank_type: MotionType,
     str: *const c_char,
     len: size_t,
@@ -450,7 +450,7 @@ unsafe fn str_to_reg(
 ///
 /// # Safety
 /// `reg` must be the register [`init_write_reg`] answered.
-unsafe fn finish_write_reg(name: c_int, reg: *mut yankreg_T, old_y_previous: *mut yankreg_T) {
+unsafe fn finish_write_reg(name: c_int, reg: *mut YankReg, old_y_previous: *mut YankReg) {
     // SAFETY: `reg` is the register `init_write_reg` answered, which the
     // provider is handed the contents of.
     unsafe { clipboard::set_clipboard(name, reg) };
@@ -511,7 +511,7 @@ pub unsafe fn write_reg_contents_lst(
         return; // black hole
     }
 
-    let mut old_y_previous: *mut yankreg_T = ::core::ptr::null_mut();
+    let mut old_y_previous: *mut YankReg = ::core::ptr::null_mut();
     // SAFETY: a plain write, so nothing is still holding the old contents.
     let reg = unsafe { init_write_reg(name, &mut old_y_previous, must_append) };
     if reg.is_null() {
@@ -610,7 +610,7 @@ pub unsafe fn write_reg_contents_ex(
         return; // black hole
     }
 
-    let mut old_y_previous: *mut yankreg_T = ::core::ptr::null_mut();
+    let mut old_y_previous: *mut YankReg = ::core::ptr::null_mut();
     // SAFETY: a plain write, so nothing is still holding the old contents.
     let reg = unsafe { init_write_reg(name, &mut old_y_previous, must_append) };
     if reg.is_null() {
@@ -630,7 +630,7 @@ pub unsafe fn write_reg_contents_ex(
 /// # Safety
 /// `reg` must be writable and `regtype` describe readable bytes.
 pub unsafe fn prepare_yankreg_from_object(
-    reg: *mut yankreg_T,
+    reg: *mut YankReg,
     regtype: String_0,
     _lines: size_t,
 ) -> bool {
@@ -689,7 +689,7 @@ pub unsafe fn prepare_yankreg_from_object(
 ///
 /// # Safety
 /// `reg` must own an array of `y_size` lines.
-pub unsafe fn finish_yankreg_from_object(reg: *mut yankreg_T, clipboard_adjust: bool) {
+pub unsafe fn finish_yankreg_from_object(reg: *mut YankReg, clipboard_adjust: bool) {
     // SAFETY: `reg` owns an array of `y_size` lines; these are its fields.
     let (y_type, y_size, y_array) = unsafe { ((*reg).y_type, (*reg).y_size, (*reg).y_array) };
     // SAFETY: the `y_size > 0` in front is the bounds proof for the read, so

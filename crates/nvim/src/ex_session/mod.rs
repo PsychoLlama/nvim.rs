@@ -74,8 +74,8 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, Window,
-    aentry_T, size_t,
+    ArgEntry, Buffer, CdCause, ExArg, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv,
+    Window, size_t,
 };
 use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy};
@@ -331,7 +331,7 @@ unsafe fn ses_put_fname(out: SessionFile, name: *mut c_char) -> bool {
 ///
 /// # Safety
 /// Every entry's name is NUL-terminated and stays alive for the call.
-unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[aentry_T], fullname: bool) -> bool {
+unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullname: bool) -> bool {
     if !out.puts(cmd) || !out.eol() || !out.line(c"%argdel") {
         return false;
     }

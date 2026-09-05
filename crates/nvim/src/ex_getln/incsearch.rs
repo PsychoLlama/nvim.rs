@@ -3,7 +3,7 @@
 //! [`may_do_incsearch_highlighting`] runs on every command-line change and,
 //! for the commands that take a pattern, searches from the saved view state
 //! and highlights what it found.  [`parse_pattern_and_range`] is what decides
-//! whether the line being typed *is* such a command, and the `viewstate_T`
+//! whether the line being typed *is* such a command, and the `ViewState`
 //! pair saves and restores the window the preview scrolled.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -35,10 +35,10 @@ pub(crate) fn cmdline_autocmd(evt: AutoEvent, fname: *mut ::core::ffi::c_char) -
 
 /// Record everything about `wp`'s view that an incremental search may scroll.
 ///
-/// C wrote through a `viewstate_T *`; the structure is seven scalars and
+/// C wrote through a `ViewState *`; the structure is seven scalars and
 /// `Copy`, so answering by value says the same thing in safe code.
-pub(crate) fn save_viewstate(wp: Win) -> viewstate_T {
-    viewstate_T {
+pub(crate) fn save_viewstate(wp: Win) -> ViewState {
+    ViewState {
         vs_curswant: wp.w_curswant,
         vs_leftcol: wp.w_leftcol,
         vs_skipcol: wp.w_skipcol,
@@ -50,7 +50,7 @@ pub(crate) fn save_viewstate(wp: Win) -> viewstate_T {
 }
 
 /// Put back what [`save_viewstate`] recorded.
-pub(crate) fn restore_viewstate(mut wp: Win, vs: viewstate_T) {
+pub(crate) fn restore_viewstate(mut wp: Win, vs: ViewState) {
     wp.w_curswant = vs.vs_curswant;
     wp.w_leftcol = vs.vs_leftcol;
     wp.w_skipcol = vs.vs_skipcol;
@@ -372,7 +372,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         }
         // Half a second of search time.
         let mut tm: ProfTime = profile_setlimit(500);
-        let mut sia = searchit_arg_T {
+        let mut sia = SearchItArg {
             sa_stop_lnum: 0,
             sa_tm: &raw mut tm,
             sa_timed_out: 0,
@@ -677,7 +677,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     let dir = if next_match { FORWARD } else { BACKWARD } as Direction;
     let (plen, flags) = (patlen as size_t, search_flags);
     let re = RE_SEARCH as ::core::ffi::c_int;
-    let sia = ::core::ptr::null_mut::<searchit_arg_T>();
+    let sia = ::core::ptr::null_mut::<SearchItArg>();
     // SAFETY: `tp` is this frame's start position and `pat` the pattern
     // inside the command line, terminated just above.
     let found = unsafe { searchit(w, b, tp, e, dir, pat, plen, count, flags, re, sia) };

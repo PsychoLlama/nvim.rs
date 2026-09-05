@@ -82,7 +82,7 @@ pub(crate) unsafe fn indent_at_top_level(line: &Line) -> c_int {
 /// Moves the cursor; may unlock the current line.
 unsafe fn search_backwards(line: &Line) -> c_int {
     let mut amount = 0;
-    let mut cache = cpp_baseclass_cache_T {
+    let mut cache = CppBaseclassCache {
         found: 0,
         lpos: LPos {
             lnum: MAXLNUM as LineNr,

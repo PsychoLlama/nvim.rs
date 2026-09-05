@@ -66,8 +66,8 @@ use crate::strings::reverse_text;
 use crate::tr_c;
 use crate::types::{
     Blob, Dict, DictItem, EvalFuncData, List, ListItem, TypVal, VAR_BLOB, VAR_DICT, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, Vv, int64_t, ptrdiff_t, size_t,
-    typval_vval_union, uint8_t, vimconv_T,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, VimConv, Vv, int64_t, ptrdiff_t, size_t,
+    typval_vval_union, uint8_t,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -268,7 +268,7 @@ impl ListRef {
     #[inline(always)]
     pub(crate) fn copy(self) -> ListRef {
         // SAFETY: live or NULL; no conversion, and a fresh copyID.
-        Self(unsafe { tv_list_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copy_id()) })
+        Self(unsafe { tv_list_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) })
     }
 
     #[inline(always)]
@@ -460,7 +460,7 @@ impl DictRef {
     #[inline(always)]
     pub(crate) fn copy(self) -> DictRef {
         // SAFETY: live; no conversion, and a fresh copyID.
-        Self(unsafe { tv_dict_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copy_id()) })
+        Self(unsafe { tv_dict_copy(core::ptr::null::<VimConv>(), self.0, false, get_copy_id()) })
     }
 
     #[inline(always)]

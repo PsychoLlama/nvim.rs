@@ -33,13 +33,13 @@ use crate::guard::{SavedSctx, Script};
 use crate::main::exit::os_exit;
 use crate::main::usage::{mainerr, usage, version};
 use crate::main::{
-    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, SESSION_FILE,
-    SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, current_sctx, embedded_mode, err_arg_missing,
-    err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args, exmode_active,
-    headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile, kOptVerbosefile,
-    kOptWindow, mparm_T, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose, p_write,
-    readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
-    time_msg_at,
+    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, ETYPE_ENV, MAX_ARG_CMDS, MainParams,
+    SESSION_FILE, SID_ENV, WIN_HOR, WIN_TABS, WIN_VER, current_sctx, embedded_mode,
+    err_arg_missing, err_extra_cmd, err_opt_garbage, err_opt_unknown, err_too_many_args,
+    exmode_active, headless_mode, kOptArabic, kOptKeymap, kOptRightleft, kOptShadafile,
+    kOptVerbosefile, kOptWindow, nlua_disable_preload, p_lpl, p_shadafile, p_uc, p_verbose,
+    p_write, readonlymode, recoverymode, silent_mode, stderr_isatty, stdin_fd, stdin_isatty,
+    stdout_isatty, time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
@@ -122,7 +122,7 @@ pub(crate) unsafe fn get_number_arg(p: *const c_char, idx: *mut c_int, def: c_in
 /// handed a pipe and nothing else claims it: not headless, not an embedded
 /// server without a stdin, not Ex mode reading commands from it, and `-s -`
 /// did not already take it.
-pub(crate) unsafe fn edit_stdin(parmp: *mut mparm_T) -> bool {
+pub(crate) unsafe fn edit_stdin(parmp: *mut MainParams) -> bool {
     // SAFETY: `parmp` is the caller's live parameter block.
     let implicit = !headless_mode.get()
         && !(embedded_mode.get() && stdin_fd.get() <= 0)
@@ -138,7 +138,7 @@ pub(crate) unsafe fn edit_stdin(parmp: *mut mparm_T) -> bool {
 ///
 /// One `Live` for the whole scan: the block is the caller's, it outlives
 /// `command_line_scan`, and nothing here can free it.
-type Mp = Live<mparm_T>;
+type Mp = Live<MainParams>;
 
 /// The walking cursor over argv.
 struct Scan {
@@ -157,12 +157,12 @@ impl Scan {
     ///
     /// # Safety
     ///
-    /// `parmp` must point at an `mparm_T` that outlives the scan, and `argv`
+    /// `parmp` must point at an `MainParams` that outlives the scan, and `argv`
     /// at `argc` NUL-terminated words. That promise is what makes every
     /// method below ordinary safe code: the struct is private to this file
     /// and `argv_idx` only ever moves within the word `argv` points at, so
     /// each dereference is checked by construction rather than at its use.
-    unsafe fn new(parmp: *mut mparm_T, argc: c_int, argv: *mut *mut c_char) -> Self {
+    unsafe fn new(parmp: *mut MainParams, argc: c_int, argv: *mut *mut c_char) -> Self {
         Self {
             // SAFETY: the caller promised `parmp` outlives the scan.
             parm: unsafe { Mp::new(parmp) },
@@ -617,7 +617,7 @@ impl Scan {
 }
 
 /// Walk the command line once, filling in `parmp`.
-pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
+pub(crate) unsafe fn command_line_scan(parmp: *mut MainParams) {
     // SAFETY: `parmp` is the caller's live parameter block and holds the
     // process's own argv, which outlives everything here -- which is why the
     // strings stored into `parmp` are borrowed rather than copied.
@@ -676,9 +676,9 @@ pub(crate) unsafe fn command_line_scan(parmp: *mut mparm_T) {
 
 /// Zero the parameter block, and set the fields whose "not given" value is
 /// not zero.
-pub(crate) unsafe fn init_params(paramp: *mut mparm_T, argc: c_int, argv: *mut *mut c_char) {
-    // SAFETY: `paramp` points at one live `mparm_T`.
-    unsafe { paramp.cast::<u8>().write_bytes(0, size_of::<mparm_T>()) };
+pub(crate) unsafe fn init_params(paramp: *mut MainParams, argc: c_int, argv: *mut *mut c_char) {
+    // SAFETY: `paramp` points at one live `MainParams`.
+    unsafe { paramp.cast::<u8>().write_bytes(0, size_of::<MainParams>()) };
     unsafe { (*paramp).argc = argc };
     unsafe { (*paramp).argv = argv };
     unsafe { (*paramp).use_debug_break_level = -1 };
@@ -695,7 +695,7 @@ pub(crate) unsafe fn init_params(paramp: *mut mparm_T, argc: c_int, argv: *mut *
 /// This runs its own tiny scan of argv because the real one is far too late:
 /// the point of `--startuptime` is to time the whole startup, the argument
 /// scan included.
-pub(crate) unsafe fn init_startuptime(paramp: *mut mparm_T) {
+pub(crate) unsafe fn init_startuptime(paramp: *mut MainParams) {
     // SAFETY: `paramp.argv[0..argc]` are the process arguments.
     // The last word cannot be either of these: both take a value.
     let last = unsafe { (*paramp).argc } - 1;
@@ -719,7 +719,7 @@ pub(crate) unsafe fn init_startuptime(paramp: *mut mparm_T) {
 }
 
 /// Remember which of the three standard streams are terminals.
-pub(crate) unsafe fn check_and_set_isatty(_paramp: *mut mparm_T) {
+pub(crate) unsafe fn check_and_set_isatty(_paramp: *mut MainParams) {
     // SAFETY: three `isatty` calls on the standard descriptors.
     stdin_isatty.set(os_isatty(STDIN_FILENO));
     stdout_isatty.set(os_isatty(STDOUT_FILENO));
@@ -744,7 +744,7 @@ pub(crate) unsafe fn init_path(exename: *const c_char) {
 }
 
 /// `-d` with no `-o`/`-O` splits the way 'diffopt' asks.
-pub(crate) unsafe fn set_window_layout(paramp: *mut mparm_T) {
+pub(crate) unsafe fn set_window_layout(paramp: *mut MainParams) {
     // SAFETY: `paramp` is the caller's live parameter block.
     if unsafe { (*paramp).diff_mode } != 0 && unsafe { (*paramp).window_layout } == 0 {
         let layout = if diffopt_horizontal() {

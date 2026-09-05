@@ -109,9 +109,9 @@ use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData,
     Expand, ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, OptSet,
-    Pos, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv,
-    Window, XpPrefix, extmark_undo_vec_t, ptrdiff_t, pumitem_T, size_t, typval_vval_union, uint8_t,
-    uint64_t,
+    Pos, PumItem, RegMatch, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock,
+    VarNumber, Vv, Window, XpPrefix, extmark_undo_vec_t, ptrdiff_t, size_t, typval_vval_union,
+    uint8_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -168,11 +168,10 @@ pub const CTRL_X_SPELL: ::core::ffi::c_int = 14;
 pub const CTRL_X_EVAL: ::core::ffi::c_int = 16;
 pub const CTRL_X_REGISTER: ::core::ffi::c_int = 19;
 pub const CTRL_X_BUFNAMES: ::core::ffi::c_int = 18;
-pub type compl_T = compl_S;
-pub struct compl_S {
-    pub cp_next: *mut compl_T,
-    pub cp_prev: *mut compl_T,
-    pub cp_match_next: *mut compl_T,
+pub struct ComplItem {
+    pub cp_next: *mut ComplItem,
+    pub cp_prev: *mut ComplItem,
+    pub cp_match_next: *mut ComplItem,
     pub cp_str: String_0,
     pub cp_text: [*mut ::core::ffi::c_char; 4],
     pub cp_user_data: TypVal,
@@ -196,15 +195,15 @@ pub const CPT_KIND: ::core::ffi::c_int = 1;
 pub const CPT_MENU: ::core::ffi::c_int = 2;
 pub const CPT_ABBR: ::core::ffi::c_int = 0;
 #[derive(Copy, Clone)]
-pub struct cpt_source_T {
+pub struct CptSource {
     pub cs_refresh_always: bool,
     pub cs_startcol: ::core::ffi::c_int,
     pub cs_max_matches: ::core::ffi::c_int,
     pub compl_start_tv: uint64_t,
     pub cs_flag: ::core::ffi::c_char,
 }
-/// A zeroed `cpt_source_T`, which is what `xcalloc` left every row as.
-pub(crate) const CPT_SOURCE_INIT: cpt_source_T = cpt_source_T {
+/// A zeroed `CptSource`, which is what `xcalloc` left every row as.
+pub(crate) const CPT_SOURCE_INIT: CptSource = CptSource {
     cs_refresh_always: false,
     cs_startcol: 0,
     cs_max_matches: 0,
@@ -212,7 +211,7 @@ pub(crate) const CPT_SOURCE_INIT: cpt_source_T = cpt_source_T {
     cs_flag: 0,
 };
 pub const CP_EQUAL: ::core::ffi::c_int = 8;
-pub struct ins_compl_next_state_T {
+pub struct InsComplNextState {
     /// The copy of `'complete'` being walked, and where the walk is up to.
     /// Owning, which is why this struct is no longer `Copy`.
     pub(crate) cpt: CptScan,
@@ -255,8 +254,8 @@ pub(crate) const GARRAY_T_INIT: GArray = GArray {
     ga_growsize: 0,
     ga_data: ptr::null_mut(),
 };
-/// A zeroed `ins_compl_next_state_T`: C's `CLEAR_FIELD(st)`.
-pub(crate) const INS_COMPL_NEXT_STATE_INIT: ins_compl_next_state_T = ins_compl_next_state_T {
+/// A zeroed `InsComplNextState`: C's `CLEAR_FIELD(st)`.
+pub(crate) const INS_COMPL_NEXT_STATE_INIT: InsComplNextState = InsComplNextState {
     cpt: CptScan::EMPTY,
     ins_buf: ptr::null_mut(),
     cur_match_pos: ptr::null_mut(),
@@ -492,14 +491,14 @@ pub(crate) const E_HITEND: &CStr = c"Hit end of paragraph";
 /// C's `e_compldel`.
 pub(crate) const E_COMPLDEL: &CStr = c"E840: Completion function deleted text";
 
-static compl_first_match: GlobalCell<*mut compl_T> =
-    GlobalCell::new(::core::ptr::null_mut::<compl_T>());
-static compl_curr_match: GlobalCell<*mut compl_T> =
-    GlobalCell::new(::core::ptr::null_mut::<compl_T>());
-static compl_shown_match: GlobalCell<*mut compl_T> =
-    GlobalCell::new(::core::ptr::null_mut::<compl_T>());
-static compl_old_match: GlobalCell<*mut compl_T> =
-    GlobalCell::new(::core::ptr::null_mut::<compl_T>());
+static compl_first_match: GlobalCell<*mut ComplItem> =
+    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
+static compl_curr_match: GlobalCell<*mut ComplItem> =
+    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
+static compl_shown_match: GlobalCell<*mut ComplItem> =
+    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
+static compl_old_match: GlobalCell<*mut ComplItem> =
+    GlobalCell::new(::core::ptr::null_mut::<ComplItem>());
 
 /// The head of the match list, `None` while there is no completion.
 pub(crate) fn first_match() -> Option<Cm> {
@@ -628,13 +627,13 @@ static compl_selected_item: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
 static compl_fuzzy_scores: GlobalCell<*mut ::core::ffi::c_int> =
     GlobalCell::new(::core::ptr::null_mut::<::core::ffi::c_int>());
-static CPT_SOURCES: GlobalCell<*mut cpt_source_T> =
-    GlobalCell::new(::core::ptr::null_mut::<cpt_source_T>());
+static CPT_SOURCES: GlobalCell<*mut CptSource> =
+    GlobalCell::new(::core::ptr::null_mut::<CptSource>());
 static CPT_SOURCES_COUNT: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static CPT_SOURCES_INDEX: GlobalCell<::core::ffi::c_int> =
     GlobalCell::new(-1 as ::core::ffi::c_int);
-static COMPL_MATCH_ARRAY: GlobalCell<*mut pumitem_T> =
-    GlobalCell::new(::core::ptr::null_mut::<pumitem_T>());
+static COMPL_MATCH_ARRAY: GlobalCell<*mut PumItem> =
+    GlobalCell::new(::core::ptr::null_mut::<PumItem>());
 static COMPL_MATCH_ARRAYSIZE: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 pub const DICT_FIRST: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const DICT_EXACT: ::core::ffi::c_int = 2 as ::core::ffi::c_int;

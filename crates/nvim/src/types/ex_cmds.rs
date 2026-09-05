@@ -42,7 +42,7 @@ pub struct SubReplacementString {
 }
 /// What an Ex command's range counts -- upstream's `ADDR_*`, the value
 /// `ExArg::addr_type`, `CommandDefinition::cmd_addr_type` and
-/// `ucmd_T::uc_addr_type` carry.
+/// `UserCmd::uc_addr_type` carry.
 ///
 /// A range is `1,5` whatever it addresses; this is what those numbers *are*.
 /// `:1,5delete` is line numbers, `:1,5bdelete` buffer numbers and `:1,5close`
@@ -50,7 +50,7 @@ pub struct SubReplacementString {
 /// for each. c2rust gave the family a bare `c_uint`, so every one of the ~70
 /// `match` sites over it needed a catch-all arm for values that cannot exist.
 ///
-/// `#[repr(u32)]` with the upstream discriminants: `ExArg` and `ucmd_T` are
+/// `#[repr(u32)]` with the upstream discriminants: `ExArg` and `UserCmd` are
 /// `repr(C)`, and the discriminants are what `ex_cmds.lua` and the
 /// `nvim_parse_cmd` API answer with.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

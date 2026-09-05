@@ -6,7 +6,7 @@
 //! `k` (`b_ind_cpp_baseclass`) is the harder one: [`cin_is_cpp_baseclass`]
 //! decides whether a line is inside a constructor's initialiser list or a
 //! class's base clause, which needs a scan back to the `class`/`:` that
-//! started it -- so it caches its answer in the [`cpp_baseclass_cache_T`] its
+//! started it -- so it caches its answer in the [`CppBaseclassCache`] its
 //! caller owns.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -166,7 +166,7 @@ pub(crate) unsafe fn cin_is_cpp_extern_c(s: *const c_char) -> bool {
 ///
 /// # Safety
 /// Reads the cursor and the buffer; may unlock the current line.
-pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) -> bool {
+pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut CppBaseclassCache) -> bool {
     let mut lnum = cur_win().w_cursor.lnum;
     // SAFETY: the cursor is on a line of the current buffer.
     let mut line = get_cursor_line_ptr().cast_const();

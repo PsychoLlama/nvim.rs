@@ -1,4 +1,4 @@
-//! The `compl_T` match list: adding, freeing and ordering the matches.
+//! The `ComplItem` match list: adding, freeing and ordering the matches.
 //!
 //! [`ins_compl_add`] links a new match into the circular doubly-linked list
 //! `compl_first_match` heads, rejecting duplicates unless the caller allows
@@ -7,7 +7,7 @@
 //! [`sort_compl_match_list`] are `'completeopt'`'s `fuzzy` and `nearest`
 //! orderings.
 //!
-//! A node is held as a [`Cm`] — the `Copy` handle declared beside `compl_T`
+//! A node is held as a [`Cm`] — the `Copy` handle declared beside `ComplItem`
 //! itself — so the walks and the pointer surgery below are ordinary checked
 //! code and only the C calls they make are not.
 
@@ -23,19 +23,19 @@ use crate::winlayer::{Live, Win};
 ///
 /// The matches are a doubly linked chain headed by `compl_first_match`,
 /// which [`ins_compl_make_cyclic`] closes into a ring and
-/// [`ins_compl_make_linear`] opens again. Upstream passes `*mut compl_T`
+/// [`ins_compl_make_linear`] opens again. Upstream passes `*mut ComplItem`
 /// around rather than holding a borrow because a completion runs
 /// `'completefunc'`, autocommands and Lua, any of which can reach the same
 /// list — which is exactly the timing [`Live`]'s `Deref` gives, a borrow
 /// that lasts one field access. Wrapping is the unsafe step, once; every
 /// `(*m).cp_field` after it is ordinary checked code.
-pub(crate) type Cm = Live<compl_T>;
+pub(crate) type Cm = Live<ComplItem>;
 
 impl Cm {
     /// The match `p` names, `None` for null.
     ///
     /// Safe on the list's own invariant, the one every walk in this family
-    /// already rests on: a non-null `compl_T` pointer reached from the four
+    /// already rests on: a non-null `ComplItem` pointer reached from the four
     /// state cells or from a node's `cp_next`/`cp_prev`/`cp_match_next`
     /// names a node of the live list, and the one free path
     /// ([`ins_compl_item_free`]) is reached only with the node already
@@ -44,7 +44,7 @@ impl Cm {
     ///
     /// [`FrameRef`]: crate::winlayer::FrameRef
     #[inline(always)]
-    pub(crate) fn at(p: *mut compl_T) -> Option<Self> {
+    pub(crate) fn at(p: *mut ComplItem) -> Option<Self> {
         // SAFETY: the list invariant above.
         (!p.is_null()).then(|| unsafe { Self::new(p) })
     }
@@ -184,9 +184,9 @@ pub(crate) unsafe fn ins_compl_add(
     // SAFETY: a completion is running, which is what the pum belongs to.
     unsafe { ins_compl_del_pum() };
 
-    // SAFETY: `xcalloc` answers a fresh zeroed `compl_T` or aborts, and this
+    // SAFETY: `xcalloc` answers a fresh zeroed `ComplItem` or aborts, and this
     // is the allocation the list takes over.
-    let mut match_0 = unsafe { Cm::new(xcalloc(1, size_of::<compl_T>()) as *mut compl_T) };
+    let mut match_0 = unsafe { Cm::new(xcalloc(1, size_of::<ComplItem>()) as *mut ComplItem) };
     match_0.cp_number = if flags & CP_ORIGINAL_TEXT != 0 { 0 } else { -1 };
     // SAFETY: `str` is readable for `len` bytes -- the caller's promise.
     match_0.cp_str = unsafe { cbuf_to_string(str, len as size_t) };
@@ -519,43 +519,43 @@ pub(crate) fn ins_compl_make_linear() {
 // so they keep their C ABI.
 
 /// # Safety
-/// `node` is a live `compl_T`.
+/// `node` is a live `ComplItem`.
 pub(crate) unsafe fn cp_get_next(node: *mut c_void) -> *mut c_void {
     // SAFETY: the caller's live node.
-    unsafe { (*(node as *mut compl_T)).cp_next as *mut c_void }
+    unsafe { (*(node as *mut ComplItem)).cp_next as *mut c_void }
 }
 
 /// # Safety
-/// `node` is a live `compl_T` and `next` is one or null.
+/// `node` is a live `ComplItem` and `next` is one or null.
 pub(crate) unsafe fn cp_set_next(node: *mut c_void, next: *mut c_void) {
     // SAFETY: the caller's live node.
-    unsafe { (*(node as *mut compl_T)).cp_next = next as *mut compl_T };
+    unsafe { (*(node as *mut ComplItem)).cp_next = next as *mut ComplItem };
 }
 
 /// # Safety
-/// `node` is a live `compl_T`.
+/// `node` is a live `ComplItem`.
 pub(crate) unsafe fn cp_get_prev(node: *mut c_void) -> *mut c_void {
     // SAFETY: the caller's live node.
-    unsafe { (*(node as *mut compl_T)).cp_prev as *mut c_void }
+    unsafe { (*(node as *mut ComplItem)).cp_prev as *mut c_void }
 }
 
 /// # Safety
-/// `node` is a live `compl_T` and `prev` is one or null.
+/// `node` is a live `ComplItem` and `prev` is one or null.
 pub(crate) unsafe fn cp_set_prev(node: *mut c_void, prev: *mut c_void) {
     // SAFETY: the caller's live node.
-    unsafe { (*(node as *mut compl_T)).cp_prev = prev as *mut compl_T };
+    unsafe { (*(node as *mut ComplItem)).cp_prev = prev as *mut ComplItem };
 }
 
 /// Highest fuzzy score first.
 ///
 /// # Safety
-/// `a` and `b` are live `compl_T`s.
+/// `a` and `b` are live `ComplItem`s.
 pub(crate) unsafe fn cp_compare_fuzzy(a: *const c_void, b: *const c_void) -> c_int {
     // SAFETY: the caller's two live nodes.
     let (score_a, score_b) = unsafe {
         (
-            (*(a as *const compl_T)).cp_score,
-            (*(b as *const compl_T)).cp_score,
+            (*(a as *const ComplItem)).cp_score,
+            (*(b as *const ComplItem)).cp_score,
         )
     };
     score_b.cmp(&score_a) as c_int
@@ -564,13 +564,13 @@ pub(crate) unsafe fn cp_compare_fuzzy(a: *const c_void, b: *const c_void) -> c_i
 /// Nearest to the cursor first; unscored matches compare equal to everything.
 ///
 /// # Safety
-/// `a` and `b` are live `compl_T`s.
+/// `a` and `b` are live `ComplItem`s.
 pub(crate) unsafe fn cp_compare_nearest(a: *const c_void, b: *const c_void) -> c_int {
     // SAFETY: the caller's two live nodes.
     let (score_a, score_b) = unsafe {
         (
-            (*(a as *const compl_T)).cp_score,
-            (*(b as *const compl_T)).cp_score,
+            (*(a as *const ComplItem)).cp_score,
+            (*(b as *const ComplItem)).cp_score,
         )
     };
     if score_a == FUZZY_SCORE_NONE || score_b == FUZZY_SCORE_NONE {
@@ -648,7 +648,7 @@ pub(crate) unsafe fn set_fuzzy_score() {
 /// # Safety
 /// `head` is null or the first node of a match list [`ins_compl_make_linear`]
 /// has opened.
-unsafe fn sort_nodes(head: *mut compl_T, compare: MergeSortCompareFunc) -> *mut compl_T {
+unsafe fn sort_nodes(head: *mut ComplItem, compare: MergeSortCompareFunc) -> *mut ComplItem {
     let head = head.cast::<c_void>();
     let get_next: MergeSortGetFunc = Some(cp_get_next);
     let set_next: MergeSortSetFunc = Some(cp_set_next);
@@ -657,14 +657,14 @@ unsafe fn sort_nodes(head: *mut compl_T, compare: MergeSortCompareFunc) -> *mut 
     // SAFETY: the four accessors are this module's own and read nothing but
     // the two links, and `head` is the caller's opened list.
     let sorted = unsafe { mergesort_list(head, get_next, set_next, get_prev, set_prev, compare) };
-    sorted.cast::<compl_T>()
+    sorted.cast::<ComplItem>()
 }
 
 /// Sort the match list with `compare`, leaving the node holding the leader
 /// (the original text) where it is.
 ///
 /// # Safety
-/// `compare` is `Some` and orders two live `compl_T`s.
+/// `compare` is `Some` and orders two live `ComplItem`s.
 pub(crate) unsafe fn sort_compl_match_list(compare: MergeSortCompareFunc) {
     let Some(mut first) = first_match() else {
         return;

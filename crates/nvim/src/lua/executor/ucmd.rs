@@ -27,8 +27,8 @@ use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CmdModFlags, ExArg, ExArgt, Handle, LineNr, OptInt, ScriptCtx, ScriptId, lua_Integer, size_t,
-    ucmd_T,
+    CmdModFlags, ExArg, ExArgt, Handle, LineNr, OptInt, ScriptCtx, ScriptId, UserCmd, lua_Integer,
+    size_t,
 };
 use crate::usercmd::{uc_mods, uc_split_args_iter};
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
@@ -112,7 +112,7 @@ pub unsafe fn nlua_set_sctx(current: *mut ScriptCtx) {
 /// # Safety
 /// `cmd` and `eap` must be live, and the command must carry the `LuaRef`
 /// this is being asked for.
-pub unsafe fn nlua_do_ucmd(cmd: *mut ucmd_T, eap: *mut ExArg, preview: bool) -> c_int {
+pub unsafe fn nlua_do_ucmd(cmd: *mut UserCmd, eap: *mut ExArg, preview: bool) -> c_int {
     unsafe {
         let lstate = get_global_lstate();
         nlua_pushref(

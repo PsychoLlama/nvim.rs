@@ -46,7 +46,7 @@ use crate::types::{CpoFlag, FoFlag, NUL};
 ///
 /// A `static` inside `do_pending_operator` in C. Process-wide on purpose --
 /// `.` after `viwd` deletes the same *number of characters* at the cursor.
-static REDO_VISUAL: GlobalCell<redo_VIsual_T> = GlobalCell::new(redo_VIsual_T {
+static REDO_VISUAL: GlobalCell<RedoVisual> = GlobalCell::new(RedoVisual {
     rv_mode: NUL,
     rv_line_count: 0,
     rv_vcol: 0,
@@ -530,7 +530,7 @@ fn prepare_visual_redo(cap: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
     }
 
     if !redo_VIsual_busy.get() {
-        REDO_VISUAL.set(redo_VIsual_T {
+        REDO_VISUAL.set(RedoVisual {
             rv_mode: resel_VIsual_mode.get().raw(),
             rv_vcol: resel_VIsual_vcol.get(),
             rv_line_count: resel_VIsual_line_count.get(),

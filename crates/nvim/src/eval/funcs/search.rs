@@ -31,8 +31,8 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, TypVal, VAR_UNKNOWN,
-    VarNumber, int64_t, searchit_arg_T, size_t,
+    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, SearchItArg, TypVal,
+    VAR_UNKNOWN, VarNumber, int64_t, size_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -58,7 +58,7 @@ unsafe fn search_here(
     pat: *mut c_char,
     len: size_t,
     opts: c_int,
-    sa: *mut searchit_arg_T,
+    sa: *mut SearchItArg,
 ) -> c_int {
     // SAFETY: `curwin`/`curbuf` name live objects from startup to exit;
     // everything else is the caller's obligation, handed straight on.
@@ -236,7 +236,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
         col: 0,
         coladd: 0,
     };
-    let mut sia = searchit_arg_T {
+    let mut sia = SearchItArg {
         sa_stop_lnum: lnum_stop,
         sa_tm: &raw mut tm,
         sa_timed_out: 0,
@@ -602,7 +602,7 @@ pub unsafe fn do_searchpair(
     // nested, since a middle only counts at the outermost level.
     let mut pat = &full;
     loop {
-        let mut sia = searchit_arg_T {
+        let mut sia = SearchItArg {
             sa_stop_lnum: lnum_stop,
             sa_tm: &raw mut tm,
             sa_timed_out: 0,

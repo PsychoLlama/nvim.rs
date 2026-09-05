@@ -88,11 +88,11 @@ use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn,
-    EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE, FuncCallEntry,
-    GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object, OptSet, OptVal,
-    ProfTime, RegMatch, ScriptCtx, ScriptId, String_0, TypVal, UV_MUTEX_INIT, UserFunc, VAR_DICT,
-    VarLock, VarNumber, XDGVarType, estack_T, int64_t, kBoolVarFalse, ptrdiff_t, scriptitem_T,
-    size_t, typval_vval_union, uv_mutex_t, vimconv_T,
+    EStack, EStackArg, EStackType, Error, EstackInfo, EvalFuncData, ExArg, Expand, FILE,
+    FuncCallEntry, GArray, Integer, LineGetter, LineGetterFn, LineNr, List, LuaRetMode, Object,
+    OptSet, OptVal, ProfTime, RegMatch, ScriptCtx, ScriptId, ScriptItem, String_0, TypVal,
+    UV_MUTEX_INIT, UserFunc, VAR_DICT, VarLock, VarNumber, VimConv, XDGVarType, int64_t,
+    kBoolVarFalse, ptrdiff_t, size_t, typval_vval_union, uv_mutex_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
@@ -169,7 +169,7 @@ crate::flag_set! {
     /// Look for both directories and files.
     const DIRFILE = 512;
 }
-pub struct source_cookie_T {
+pub struct SourceCookie {
     pub fp: *mut FILE,
     pub nextline: *mut ::core::ffi::c_char,
     pub sourcing_lnum: LineNr,
@@ -181,10 +181,10 @@ pub struct source_cookie_T {
     pub fname: *mut ::core::ffi::c_char,
     pub dbg_tick: ::core::ffi::c_int,
     pub level: ::core::ffi::c_int,
-    pub conv: vimconv_T,
+    pub conv: VimConv,
 }
 
-impl source_cookie_T {
+impl SourceCookie {
     /// A cookie nothing has been loaded into yet -- what upstream's
     /// `CLEAR_FIELD` left behind.
     pub fn new() -> Self {
@@ -200,7 +200,7 @@ impl source_cookie_T {
             fname: ::core::ptr::null_mut(),
             dbg_tick: 0,
             level: 0,
-            conv: vimconv_T {
+            conv: VimConv {
                 vc_type: 0,
                 vc_factor: 0,
                 vc_fd: ::core::ptr::null_mut(),
@@ -210,7 +210,7 @@ impl source_cookie_T {
     }
 }
 
-impl Default for source_cookie_T {
+impl Default for SourceCookie {
     fn default() -> Self {
         Self::new()
     }
@@ -257,7 +257,7 @@ pub const SID_STR: ::core::ffi::c_int = -10;
 /// element type is fixed, and every walk over it is then a checked one.
 /// Reach it through [`GlobalCell::with`]/[`GlobalCell::with_mut`], which also
 /// catch a push made while a walk holds a borrow.
-pub static exestack: GlobalCell<Vec<estack_T>> = GlobalCell::new(Vec::new());
+pub static exestack: GlobalCell<Vec<EStack>> = GlobalCell::new(Vec::new());
 /// The script registry, script 1 at index 0 -- see [`script`].
 ///
 /// A `Vec`, not a `GArray`: the element type is fixed, ids are never
@@ -265,7 +265,7 @@ pub static exestack: GlobalCell<Vec<estack_T>> = GlobalCell::new(Vec::new());
 /// be a *safe* bounds-checked lookup instead of an offset off `ga_data`.
 /// Reach it through [`script::script_item`], [`script::script_count`] and
 /// [`script::script_id_valid`], never directly.
-pub static script_items: GlobalCell<Vec<*mut scriptitem_T>> = GlobalCell::new(Vec::new());
+pub static script_items: GlobalCell<Vec<*mut ScriptItem>> = GlobalCell::new(Vec::new());
 /// Every autoload script `script_autoload` has already run, by path.
 ///
 /// A `Vec`, not a `GArray` of owned `char *`: the list is private to

@@ -35,7 +35,7 @@ use crate::state::{
     MODE_CMDLINE, MODE_INSERT, MODE_SHOWMATCH, MODE_TERMINAL, REPLACE_FLAG, VREPLACE_FLAG,
 };
 use crate::types::builders::static_cstring;
-use crate::types::{Arena, Array, CursorShape, Object, cursorentry_T, size_t};
+use crate::types::{Arena, Array, CursorEntry, CursorShape, Object, size_t};
 use crate::ui::ui_mode_info_set;
 
 /// Where a mode's cursor shape sits in the shape table.
@@ -96,9 +96,9 @@ const DEFAULT_SHAPES: [(&CStr, &CStr, [c_int; 3], c_int); SHAPE_IDX_COUNT as usi
     (c"terminal",         c"t",  [  0,   0,   0], SHAPE_CURSOR),
 ];
 
-const fn default_entry(idx: usize) -> cursorentry_T {
+const fn default_entry(idx: usize) -> CursorEntry {
     let (full_name, name, blink, used_for) = DEFAULT_SHAPES[idx];
-    cursorentry_T {
+    CursorEntry {
         full_name: full_name.as_ptr().cast_mut(),
         shape: SHAPE_BLOCK,
         mshape: 0,
@@ -113,7 +113,7 @@ const fn default_entry(idx: usize) -> cursorentry_T {
     }
 }
 
-const fn default_table() -> [cursorentry_T; SHAPE_IDX_COUNT as usize] {
+const fn default_table() -> [CursorEntry; SHAPE_IDX_COUNT as usize] {
     let mut table = [default_entry(0); SHAPE_IDX_COUNT as usize];
     let mut idx = 1;
     while idx < SHAPE_IDX_COUNT as usize {
@@ -124,11 +124,11 @@ const fn default_table() -> [cursorentry_T; SHAPE_IDX_COUNT as usize] {
 }
 
 /// The shapes in force, as `'guicursor'` last left them.
-static SHAPE_TABLE: GlobalCell<[cursorentry_T; SHAPE_IDX_COUNT as usize]> =
+static SHAPE_TABLE: GlobalCell<[CursorEntry; SHAPE_IDX_COUNT as usize]> =
     GlobalCell::new(default_table());
 
 /// One mode's entry, copied out of the table.
-pub(crate) fn shape_entry(idx: ShapeIdx) -> cursorentry_T {
+pub(crate) fn shape_entry(idx: ShapeIdx) -> CursorEntry {
     SHAPE_TABLE.with(|table| table[idx as usize])
 }
 
@@ -137,7 +137,7 @@ pub(crate) fn shape_entry(idx: ShapeIdx) -> cursorentry_T {
 /// `f` runs with the table borrowed, so it must be arithmetic and nothing
 /// else: anything that calls out of this module can read the table back
 /// (module docs).
-pub(crate) fn update_shape_entry(idx: ShapeIdx, f: impl FnOnce(&mut cursorentry_T)) {
+pub(crate) fn update_shape_entry(idx: ShapeIdx, f: impl FnOnce(&mut CursorEntry)) {
     SHAPE_TABLE.with_mut(|table| f(&mut table[idx as usize]));
 }
 

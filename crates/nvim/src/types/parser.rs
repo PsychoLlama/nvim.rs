@@ -22,7 +22,7 @@ pub struct ParserInputReader {
     pub get_line: ParserLineGetter,
     pub cookie: *mut ::core::ffi::c_void,
     pub lines: ParserInputReader_lines,
-    pub conv: vimconv_T,
+    pub conv: VimConv,
 }
 #[derive(Copy, Clone)]
 pub struct ParserInputReader_lines {

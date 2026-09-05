@@ -13,17 +13,18 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, Array, AucmdWin, BreakAt, Buffer, BufferRef, Callback, Channel, CmdMod,
-    CmdModFlags, ColNr, DecorState, DispTick, EStackType, EstackInfo, Exception, FILE, FileMark,
-    FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop, LuaRef, LuaRetMode, MTNode,
-    MTPos, MarkTreeIter, MarkTreeIter_s, MatchState, MsgList, MultiQueue, NS, Object, OptInt,
-    OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, RegMMatch, RegMatch, RegProg, RgbValue,
-    ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT,
-    VimMenu, WinExtmark, Window, XDGVarType, XFileMark, alist_T, bln_values, caller_scope,
-    estack_T, file_comparison, int16_t, int32_t, int64_t, nlua_ref_state_t, nvim_stats_s, size_t,
-    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
-    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
-    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    AdditionalData, ArgList, Array, AucmdWin, BreakAt, Buffer, BufferRef, Callback, Channel,
+    CmdMod, CmdModFlags, ColNr, DecorState, DispTick, EStack, EStackType, EstackInfo, Exception,
+    FILE, FileMark, FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop, LuaRef,
+    LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MatchState, MsgList, MultiQueue, NS,
+    Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, RegMMatch, RegMatch,
+    RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage,
+    UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType, XFileMark, bln_values,
+    caller_scope, file_comparison, int16_t, int32_t, int64_t, nlua_ref_state_t, nvim_stats_s,
+    size_t, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
+    uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
+    uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u,
+    uv_timer_t,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -89,7 +90,7 @@ pub(crate) const ETYPE_ARGS: EStackType = 6;
 pub(crate) const ETYPE_TOP: EStackType = 0;
 pub(crate) const kRetObject: LuaRetMode = 0;
 #[derive(Clone)] // not `Copy`: it owns several of its strings
-pub struct mparm_T {
+pub struct MainParams {
     pub argc: c_int,
     pub argv: *mut *mut c_char,
     pub use_vimrc: *mut c_char,
@@ -592,7 +593,7 @@ pub static current_ui: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub static did_source_packages: GlobalCell<bool> = GlobalCell::new(false);
 pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
     script_ctx: ScriptCtx::NONE,
-    es_entry: estack_T {
+    es_entry: EStack {
         es_lnum: 0,
         es_name: ::core::ptr::null_mut::<c_char>(),
         es_type: ETYPE_TOP,
@@ -641,7 +642,7 @@ pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
-pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
+pub static global_alist: GlobalCell<ArgList> = GlobalCell::new(ArgList {
     al_ga: Vec::new(),
     al_refcount: Refcount::ZERO,
     id: 0,

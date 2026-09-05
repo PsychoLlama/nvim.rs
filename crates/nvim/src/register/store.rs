@@ -49,12 +49,12 @@ pub unsafe fn get_unname_register() -> c_int {
 ///
 /// # Safety
 /// `reg` must be a valid index, as [`op_reg_index`] answers.
-pub unsafe fn get_y_register(reg: c_int) -> *mut yankreg_T {
-    unsafe { (y_regs.ptr() as *mut yankreg_T).offset(reg as isize) }
+pub unsafe fn get_y_register(reg: c_int) -> *mut YankReg {
+    unsafe { (y_regs.ptr() as *mut YankReg).offset(reg as isize) }
 }
 
 /// The register `""` points at, or null.
-pub fn get_y_previous() -> *mut yankreg_T {
+pub fn get_y_previous() -> *mut YankReg {
     y_previous.get()
 }
 
@@ -98,16 +98,16 @@ pub unsafe fn get_default_register_name() -> c_int {
 /// `name`, `reg` and `is_unnamed` must be writable.
 pub unsafe fn op_reg_iter(
     iter: *const c_void,
-    regs: *const yankreg_T,
+    regs: *const YankReg,
     name: *mut c_char,
-    reg: *mut yankreg_T,
+    reg: *mut YankReg,
     is_unnamed: *mut bool,
 ) -> *const c_void {
     unsafe { *name = NUL as c_char };
     let mut iter_reg = if iter.is_null() {
         regs
     } else {
-        iter as *const yankreg_T
+        iter as *const YankReg
     };
     while unsafe { iter_reg.offset_from(regs) } < NUM_SAVED_REGISTERS as isize
         && unsafe { reg_empty(iter_reg) }
@@ -144,7 +144,7 @@ pub unsafe fn op_reg_iter(
 pub unsafe fn op_global_reg_iter(
     iter: *const c_void,
     name: *mut c_char,
-    reg: *mut yankreg_T,
+    reg: *mut YankReg,
     is_unnamed: *mut bool,
 ) -> *const c_void {
     unsafe { op_reg_iter(iter, get_y_register(0), name, reg, is_unnamed) }
@@ -156,7 +156,7 @@ pub unsafe fn op_global_reg_iter(
 ///
 /// # Safety
 /// `reg` must own its `y_array` and additional data; the store takes them.
-pub unsafe fn op_reg_set(name: c_char, reg: yankreg_T, is_unnamed: bool) -> bool {
+pub unsafe fn op_reg_set(name: c_char, reg: YankReg, is_unnamed: bool) -> bool {
     let i = op_reg_index(c_int::from(name));
     if i == -1 {
         return false;
@@ -173,7 +173,7 @@ pub unsafe fn op_reg_set(name: c_char, reg: yankreg_T, is_unnamed: bool) -> bool
 ///
 /// # Safety
 /// Reads the register store; main thread only.
-pub unsafe fn op_reg_get(name: c_char) -> *const yankreg_T {
+pub unsafe fn op_reg_get(name: c_char) -> *const YankReg {
     let i = op_reg_index(c_int::from(name));
     if i == -1 {
         return ::core::ptr::null();
@@ -202,7 +202,7 @@ pub unsafe fn op_reg_set_previous(name: c_char) -> bool {
 ///
 /// # Safety
 /// `reg` must point at a register whose `y_array` holds `y_size` strings.
-pub unsafe fn update_yankreg_width(reg: *mut yankreg_T) {
+pub unsafe fn update_yankreg_width(reg: *mut YankReg) {
     if unsafe { (*reg).y_type } != kMTBlockWise {
         return;
     }
@@ -231,8 +231,8 @@ pub unsafe fn update_yankreg_width(reg: *mut yankreg_T) {
 /// # Safety
 /// `regname` must be a valid register name (see [`valid_yank_reg`]). May run
 /// the clipboard provider, and so arbitrary Lua.
-pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut yankreg_T {
-    let mut reg: *mut yankreg_T = ::core::ptr::null_mut();
+pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut YankReg {
+    let mut reg: *mut YankReg = ::core::ptr::null_mut();
     if (mode == YREG_PASTE || mode == YREG_PUT)
         && unsafe { clipboard::get_clipboard(regname, &mut reg, false) }
     {
@@ -241,7 +241,7 @@ pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut yankreg_T {
     if mode == YREG_PUT && (regname == '*' as c_int || regname == '+' as c_int) {
         // Reporting only: hand back an empty register rather than asking
         // the provider what the clipboard holds.
-        static empty_reg: GlobalCell<yankreg_T> = GlobalCell::new(EMPTY_YANKREG);
+        static empty_reg: GlobalCell<YankReg> = GlobalCell::new(EMPTY_YANKREG);
         return empty_reg.ptr();
     }
     if mode != YREG_YANK
@@ -270,7 +270,7 @@ pub unsafe fn get_yank_register(regname: c_int, mode: c_int) -> *mut yankreg_T {
 ///
 /// # Safety
 /// `reg` must be writable. May run the clipboard provider.
-pub unsafe fn yank_register_mline(regname: c_int, reg: *mut *mut yankreg_T) -> bool {
+pub unsafe fn yank_register_mline(regname: c_int, reg: *mut *mut YankReg) -> bool {
     unsafe { *reg = ::core::ptr::null_mut() };
     if regname != 0 && !unsafe { valid_yank_reg(regname, false) } {
         return false;
@@ -288,9 +288,9 @@ pub unsafe fn yank_register_mline(regname: c_int, reg: *mut *mut yankreg_T) -> b
 ///
 /// # Safety
 /// `name` must be a valid register name. May run the clipboard provider.
-pub unsafe fn copy_register(name: c_int) -> *mut yankreg_T {
+pub unsafe fn copy_register(name: c_int) -> *mut YankReg {
     let reg = unsafe { get_yank_register(name, YREG_PASTE) };
-    let copy = unsafe { xmalloc(::core::mem::size_of::<yankreg_T>()) } as *mut yankreg_T;
+    let copy = unsafe { xmalloc(::core::mem::size_of::<YankReg>()) } as *mut YankReg;
     unsafe { *copy = *reg };
     if unsafe { (*copy).y_size } == 0 {
         unsafe { (*copy).y_array = ::core::ptr::null_mut() };
@@ -333,7 +333,7 @@ pub unsafe fn shift_delete_registers(y_append: bool) {
 ///
 /// # Safety
 /// `reg` must own its `y_array` and additional data.
-pub unsafe fn free_register(reg: *mut yankreg_T) {
+pub unsafe fn free_register(reg: *mut YankReg) {
     unsafe { xfree((*reg).additional_data as *mut c_void) };
     unsafe { (*reg).additional_data = ::core::ptr::null_mut() };
     if unsafe { (*reg).y_array }.is_null() {
@@ -411,7 +411,7 @@ pub fn get_register_name(num: c_int) -> c_int {
 /// # Safety
 /// `reg` must point at a register whose `y_array` holds `y_size` strings.
 #[inline]
-unsafe fn reg_empty(reg: *const yankreg_T) -> bool {
+unsafe fn reg_empty(reg: *const YankReg) -> bool {
     unsafe { (*reg).y_array }.is_null()
         || unsafe { (*reg).y_size } == 0
         || unsafe { (*reg).y_size } == 1

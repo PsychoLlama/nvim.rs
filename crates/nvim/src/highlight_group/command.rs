@@ -28,7 +28,7 @@ use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::types::ui::kUILinegrid;
-use crate::types::{OptVal, OptionSetFlags, estack_T};
+use crate::types::{EStack, OptVal, OptionSetFlags};
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{
@@ -248,9 +248,9 @@ pub(crate) unsafe fn do_highlight(line: *const c_char, forceit: bool, init: bool
     }
 }
 
-/// The innermost `estack_T`, which is what `SOURCING_LNUM`/`SOURCING_NAME`
+/// The innermost `EStack`, which is what `SOURCING_LNUM`/`SOURCING_NAME`
 /// read.
-fn sourcing() -> estack_T {
+fn sourcing() -> EStack {
     crate::runtime::innermost_frame()
 }
 

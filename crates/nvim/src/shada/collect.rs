@@ -154,7 +154,7 @@ pub(crate) unsafe fn add_search_pattern(
 pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_reg_lines: c_int) {
     let mut reg_iter = core::ptr::null::<c_void>();
     loop {
-        let mut reg: yankreg_T = unsafe { core::mem::zeroed() };
+        let mut reg: YankReg = unsafe { core::mem::zeroed() };
         let mut name: c_char = NUL as c_char;
         let mut is_unnamed = false;
         reg_iter = unsafe {

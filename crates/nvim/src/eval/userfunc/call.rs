@@ -70,7 +70,7 @@ pub unsafe fn call_user_func(
     let call_depth = Depth::of(&depth);
 
     // Save the search patterns and the redo buffer.
-    let mut save_redo = save_redo_T::default();
+    let mut save_redo = SaveRedo::default();
     let mut did_save_redo = false;
     save_search_patterns();
     if !ins_compl_active() {

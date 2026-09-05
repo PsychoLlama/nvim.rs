@@ -282,7 +282,7 @@ pub(crate) struct LineSetup {
     /// signs it points at are [`WinLineVars::sign_attrs`], which lives in
     /// `win_line`'s own frame, and a pointer derived from the `&mut` the
     /// setup half borrows would not outlive that borrow.
-    pub(crate) statuscol: statuscol_T,
+    pub(crate) statuscol: StatusCol,
     /// Virtual lines to draw above or below this buffer line.
     pub(crate) virt_lines: VirtLines,
     /// Decoration providers are being driven for this line.

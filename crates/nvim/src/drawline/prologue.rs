@@ -230,7 +230,7 @@ impl LineSetup {
             change_start: MAXCOL as ::core::ffi::c_int,
             change_end: -1,
 
-            statuscol: statuscol_T::default(),
+            statuscol: StatusCol::default(),
             virt_lines: VirtLines {
                 size: 0,
                 capacity: 0,

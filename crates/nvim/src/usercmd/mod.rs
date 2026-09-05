@@ -1,7 +1,7 @@
 //! User-defined commands: `:command`, `:comclear`, `:delcommand`, and the
 //! lookup that turns a typed name back into one.
 //!
-//! A user command is a [`ucmd_T`] -- a name, a replacement string, the
+//! A user command is a [`UserCmd`] -- a name, a replacement string, the
 //! `EX_*` flags its attributes imply, and the completion it wants for its
 //! arguments. They live in two sorted arrays: the global [`ucmds`] and the
 //! current buffer's `b_ucmds`. Everything that walks them looks at the
@@ -23,14 +23,14 @@
 //! # Safety
 //!
 //! Everything here runs on the main thread with the two command tables
-//! live. `ucmd_T` fields are raw C pointers into memory the table owns:
+//! live. `UserCmd` fields are raw C pointers into memory the table owns:
 //! `uc_name`, `uc_rep` and `uc_compl_arg` are NUL-terminated strings valid
 //! until the entry is replaced or deleted, and the Lua references are owned
 //! by the entry. That is the contract the `unsafe fn`s here share; each
 //! states it once by reference rather than restating it.
 //!
 //! The one thing to watch is that a borrow of a table -- [`Table::list`]'s
-//! slice, or a `&ucmd_T` taken out of it -- does not survive anything that
+//! slice, or a `&UserCmd` taken out of it -- does not survive anything that
 //! can add or remove a command, because growing a `Vec` moves its contents.
 //! In practice only [`uc_add_command`] and [`ex_delcommand`] do that, and
 //! both take their index before touching the table.
@@ -73,8 +73,8 @@ use crate::strings::xstrnsave;
 use crate::tr_c;
 use crate::types::CmdIdx;
 use crate::types::{
-    Buffer, CmdAddr, ExArg, ExArgt, Expand, ExpandContext, FAIL, Failed, LuaRef, OK, int64_t,
-    size_t, ucmd_T,
+    Buffer, CmdAddr, ExArg, ExArgt, Expand, ExpandContext, FAIL, Failed, LuaRef, OK, UserCmd,
+    int64_t, size_t,
 };
 use crate::window::prevwin_curwin;
 use core::cmp::Ordering;
@@ -89,11 +89,11 @@ pub(crate) const LUA_NOREF: c_int = -2;
 ///
 /// The cell's address is never handed out: a read borrows it just long
 /// enough to answer a slice, and a write is a closure that cannot re-enter.
-static ucmds: GlobalCell<Vec<ucmd_T>> = GlobalCell::new(Vec::new());
+static ucmds: GlobalCell<Vec<UserCmd>> = GlobalCell::new(Vec::new());
 
 /// One command table: the global one, or the one inside a buffer.
 ///
-/// The two are the same `Vec<ucmd_T>` in different places, and every walker
+/// The two are the same `Vec<UserCmd>` in different places, and every walker
 /// here is written against this so that one function serves both. It is the
 /// *where*; [`Scope`] is the *which of the two the current buffer sees*.
 #[derive(Clone, Copy)]
@@ -111,7 +111,7 @@ impl Table {
     /// A [`Table::Buffer`] must name a live buffer, and -- as the module
     /// docs say -- the borrow must not outlive anything that can add or
     /// remove a command, because growing a `Vec` moves its contents.
-    pub(crate) unsafe fn list<'a>(self) -> &'a [ucmd_T] {
+    pub(crate) unsafe fn list<'a>(self) -> &'a [UserCmd] {
         let (data, len) = match self {
             Table::Global => ucmds.with(|cmds| (cmds.as_ptr(), cmds.len())),
             Table::Buffer(buf) => {
@@ -136,7 +136,7 @@ impl Table {
     ///
     /// # Safety
     /// A [`Table::Buffer`] must name a live buffer.
-    unsafe fn with_mut<R>(self, f: impl FnOnce(&mut Vec<ucmd_T>) -> R) -> R {
+    unsafe fn with_mut<R>(self, f: impl FnOnce(&mut Vec<UserCmd>) -> R) -> R {
         match self {
             Table::Global => ucmds.with_mut(f),
             // SAFETY: caller contract; the raw projection borrows the field
@@ -181,7 +181,7 @@ impl Scope {
     ///
     /// # Safety
     /// As [`Scope::table`] and [`Table::list`].
-    unsafe fn list<'a>(self) -> &'a [ucmd_T] {
+    unsafe fn list<'a>(self) -> &'a [UserCmd] {
         // SAFETY: caller contract.
         unsafe { self.table().list() }
     }
@@ -191,7 +191,7 @@ impl Scope {
 ///
 /// # Safety
 /// As [`ucmd_list`]: `cmd` must be a live entry of one of the tables.
-pub(crate) unsafe fn ucmd_name(cmd: &ucmd_T) -> &[u8] {
+pub(crate) unsafe fn ucmd_name(cmd: &UserCmd) -> &[u8] {
     // SAFETY: caller contract; `uc_name` is NUL-terminated for the life of
     // the entry.
     unsafe { CStr::from_ptr(cmd.uc_name).to_bytes() }
@@ -356,7 +356,7 @@ pub(crate) unsafe fn uc_validate_name(name: *mut c_char) -> *mut c_char {
 /// # Safety
 /// Module contract; `name` must have `name_len` readable bytes and `rep`
 /// must be NUL-terminated.
-#[expect(clippy::too_many_arguments, reason = "one per ucmd_T field")]
+#[expect(clippy::too_many_arguments, reason = "one per UserCmd field")]
 pub(crate) unsafe fn uc_add_command(
     name: *mut c_char,
     name_len: size_t,
@@ -429,7 +429,7 @@ pub(crate) unsafe fn uc_add_command(
         // Everything the old entry owned bar its name, taken out of the
         // table before it is released: freeing a Lua reference re-enters,
         // and no borrow of the table may be live when it does.
-        let steal = |cmds: &mut Vec<ucmd_T>| {
+        let steal = |cmds: &mut Vec<UserCmd>| {
             let cmd = &mut cmds[idx];
             (
                 mem::replace(&mut cmd.uc_rep, ptr::null_mut()),
@@ -460,8 +460,8 @@ pub(crate) unsafe fn uc_add_command(
     // SAFETY: caller contract; `name` has `name_len` readable bytes.
     let fresh_name = (!replacing).then(|| unsafe { xstrnsave(name, name_len) });
 
-    let store = |cmds: &mut Vec<ucmd_T>| {
-        let entry = |uc_name| ucmd_T {
+    let store = |cmds: &mut Vec<UserCmd>| {
+        let entry = |uc_name| UserCmd {
             uc_name,
             uc_argt: argt,
             uc_rep: rep_buf,
@@ -641,13 +641,13 @@ pub(crate) unsafe fn ex_comclear(_eap: *mut ExArg) {
 /// Release everything one entry owns.
 ///
 /// The entry is taken by value, which is what makes the release exactly
-/// once: `ucmd_T` is neither `Copy` nor `Clone`, so the caller has had to
+/// once: `UserCmd` is neither `Copy` nor `Clone`, so the caller has had to
 /// move it out of the table to get here.
 ///
 /// # Safety
 /// Module contract; `cmd` must be an entry that has been taken out of a
 /// table and is being discarded.
-unsafe fn free_ucmd(mut cmd: ucmd_T) {
+unsafe fn free_ucmd(mut cmd: UserCmd) {
     // SAFETY: caller contract; the entry owns all six.
     unsafe { xfree(cmd.uc_name.cast()) };
     unsafe { xfree(cmd.uc_rep.cast()) };

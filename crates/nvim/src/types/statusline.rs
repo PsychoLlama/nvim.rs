@@ -195,7 +195,7 @@ impl PartialEq for StlOpt {
     }
 }
 #[derive(Copy, Clone, Default)]
-pub struct statuscol_T {
+pub struct StatusCol {
     pub width: ::core::ffi::c_int,
     pub lnum: LineNr,
     pub sign_cul_id: ::core::ffi::c_int,

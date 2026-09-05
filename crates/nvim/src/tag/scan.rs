@@ -297,7 +297,7 @@ pub(crate) struct FindTags {
     /// Read the file line by line rather than bisecting it.
     pub(crate) linear: bool,
     /// The conversion the file's `!_TAG_FILE_ENCODING` asked for.
-    pub(crate) vimconv: vimconv_T,
+    pub(crate) vimconv: VimConv,
     /// The two-letter language of the tags file being read.
     pub(crate) help_lang: [u8; 2],
     /// How far down `'helplang'` that language is, which is what orders
@@ -338,7 +338,7 @@ impl FindTags {
             did_open: false,
             mincount,
             linear: false,
-            vimconv: vimconv_T {
+            vimconv: VimConv {
                 vc_type: CONV_NONE,
                 vc_factor: 0,
                 vc_fd: ptr::null_mut(),

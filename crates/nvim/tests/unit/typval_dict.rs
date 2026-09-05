@@ -23,7 +23,7 @@ use neovim::main::{emsg_skip, sandbox};
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
 use neovim::ops::NUMBUFLEN;
-use neovim::types::{Callback, Dict, Failed, VarLock, vimconv_T};
+use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Cb, Pt, Tv};
@@ -1205,13 +1205,13 @@ fn copying_a_dict_shares_or_rebuilds_its_containers() {
 }
 
 /// `itp('copies dict correctly and converts items')`, spec line 2544 — the
-/// same walk through a `vimconv_T`, which rewrites the *keys* too.
+/// same walk through a `VimConv`, which rewrites the *keys* too.
 #[test]
 fn a_converting_dict_copy_rewrites_the_keys_as_well() {
     let _log = AllocLog::start();
     // SAFETY: the converter and both dicts are this case's own.
     unsafe {
-        let mut vc: vimconv_T = std::mem::zeroed();
+        let mut vc: VimConv = std::mem::zeroed();
         assert_eq!(
             convert_setup(
                 &raw mut vc,

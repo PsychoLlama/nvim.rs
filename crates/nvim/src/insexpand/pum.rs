@@ -1,4 +1,4 @@
-//! The popup menu: turning the match list into `pumitem_T`s and showing it.
+//! The popup menu: turning the match list into `PumItem`s and showing it.
 //!
 //! [`ins_compl_build_pum`] is the whole of it — it filters the list by the
 //! current leader, scores and sorts what survives, and fills
@@ -17,19 +17,19 @@ use crate::winlayer::Win;
 
 /// The popup menu's view of the match list.
 ///
-/// [`ins_compl_build_pum`] filters the cyclic `compl_T` list by the current
-/// leader, sorts what survives and flattens it into a `pumitem_T` array;
+/// [`ins_compl_build_pum`] filters the cyclic `ComplItem` list by the current
+/// leader, sorts what survives and flattens it into a `PumItem` array;
 /// [`ins_compl_show_pum`] lends that array to `pum_display`, and
 /// `pum_undisplay` gives the borrow back. Upstream keeps it as a bare
-/// `pumitem_T *` with `compl_match_arraysize` beside it, `xcalloc`'d in one
+/// `PumItem *` with `compl_match_arraysize` beside it, `xcalloc`'d in one
 /// function and `xfree`'d in three others, with "is the menu up?" spelled as
 /// a null check on the pointer.
 ///
 /// `ComplMatchArray` is the one owner of that allocation: a boxed slice
-/// behind the two cells, handed out either as a safe `&[pumitem_T]` or -- for
+/// behind the two cells, handed out either as a safe `&[PumItem]` or -- for
 /// `pum_display` alone, which wants the same C-shaped pair the external UI
 /// protocol does -- as a raw address. The *strings* inside each item stay
-/// borrowed from the `compl_T` they were read out of, so this owns the spine
+/// borrowed from the `ComplItem` they were read out of, so this owns the spine
 /// and nothing else; the menu must come down before the match list is freed,
 /// exactly as upstream required.
 #[derive(Clone, Copy)]
@@ -54,7 +54,7 @@ impl ComplMatchArray {
     }
 
     /// The items, empty while the menu is down.
-    pub(crate) fn items(self) -> &'static [pumitem_T] {
+    pub(crate) fn items(self) -> &'static [PumItem] {
         let array = COMPL_MATCH_ARRAY.get();
         if array.is_null() {
             return &[];
@@ -65,7 +65,7 @@ impl ComplMatchArray {
     }
 
     /// The address `pum_display` borrows, null while the menu is down.
-    pub(crate) fn as_mut_ptr(self) -> *mut pumitem_T {
+    pub(crate) fn as_mut_ptr(self) -> *mut PumItem {
         COMPL_MATCH_ARRAY.get()
     }
 
@@ -73,14 +73,14 @@ impl ComplMatchArray {
     /// `items` leaves the array unset: a zero-length boxed slice is a
     /// *dangling* pointer, not a null one, and `is_unset` is the null check
     /// upstream's callers do.
-    pub(crate) fn set(self, items: Vec<pumitem_T>) {
+    pub(crate) fn set(self, items: Vec<PumItem>) {
         self.clear();
         if items.is_empty() {
             return;
         }
         let len = items.len() as c_int;
         let array = Box::into_raw(items.into_boxed_slice());
-        COMPL_MATCH_ARRAY.set(array.cast::<pumitem_T>());
+        COMPL_MATCH_ARRAY.set(array.cast::<PumItem>());
         COMPL_MATCH_ARRAYSIZE.set(len);
     }
 
@@ -500,7 +500,7 @@ pub(crate) unsafe fn ins_compl_build_pum() -> c_int {
     let mut array = Vec::with_capacity(match_arraysize as usize);
     let mut comp = match_head;
     while let Some(mut node) = comp {
-        array.push(pumitem_T {
+        array.push(PumItem {
             pum_text: if node.cp_text[CPT_ABBR as usize].is_null() {
                 node.cp_str.data()
             } else {

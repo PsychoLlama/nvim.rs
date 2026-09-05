@@ -56,8 +56,8 @@ use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
-    OptionSetFlags, ScreenChar, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord,
-    VarNumber, Vv, WinSplit, WinStyle, Window, size_t, statuscol_T, stl_hlrec_t,
+    OptionSetFlags, ScreenChar, StatusCol, StlClickDefinition, StlClickDefinition_type_0,
+    StlClickRecord, VarNumber, Vv, WinSplit, WinStyle, Window, size_t, stl_hlrec_t,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -249,7 +249,7 @@ pub(crate) struct StlJob<'a> {
     pub hl: HlDest,
     pub want_clicks: bool,
     /// The `'statuscolumn'` state, when that is what is being built.
-    pub stcp: Option<&'a mut statuscol_T>,
+    pub stcp: Option<&'a mut StatusCol>,
 }
 
 impl StlJob<'_> {
@@ -649,7 +649,7 @@ pub unsafe fn build_statuscol_str(
     lnum: LineNr,
     relnum: LineNr,
     buf: *mut ::core::ffi::c_char,
-    stcp: *mut statuscol_T,
+    stcp: *mut StatusCol,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's promise.
     let (mut win, stcp) = unsafe { (Win::new(wp), &mut *stcp) };
