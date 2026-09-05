@@ -114,6 +114,24 @@ unused_assignments = "deny"
 # it also governs the bin/test/bench roots, which were already clean.
 non_camel_case_types = "deny"
 
+# The value half of the same story, and the largest of the four: 4 386
+# findings when the allow came off, which is every global the editor has.
+# Almost none of them can be renamed. A `p_<abbrev>` is the option table's
+# `var` field, a `kOpt<Name>` is an index the option metadata spells, a
+# `KEYSET_OPTIDX_<method>__<key>` is a mask bit apigen derives, `_ISalnum`
+# and `TSQueryErrorNone` are glibc's and tree-sitter's, and the rest are the
+# names upstream's C uses for the editor's own state. So this lift renamed
+# only what the port itself had named (`redo_block`/`redo_at`,
+# `last_bufname`/`last_bufref`) and marked the rest: 298 files carry a
+# per-file `#![allow]` with a one-line reason, eight generated files get
+# theirs from apigen (a hand-written one would not survive `just apigen`),
+# and `lua/xdiff.rs` answers for six function-local constants on the item.
+# scripts/ratchet.py holds `files_allowing_non_upper_case_globals`
+# shrink-only, and it falls a file at a time as a module is rewritten to
+# Rust's spelling. Denied here rather than in lib.rs so it also governs the
+# bin/test/bench roots, which were already clean.
+non_upper_case_globals = "deny"
+
 # `just lint` runs clippy with correctness at its deny default; suspicious/
 # complexity/perf/style warn and burn down through the ratchet
 # (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,

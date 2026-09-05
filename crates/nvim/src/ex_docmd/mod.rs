@@ -7,6 +7,8 @@
 //! driving under `onecmd`, `cmdline` and `source`, and one file per family
 //! of `ex_*` handler.
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 pub mod state;
 use crate::arglist::{

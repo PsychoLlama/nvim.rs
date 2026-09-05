@@ -21,6 +21,8 @@
 //! rather than being sent to the child.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, do_buffer};

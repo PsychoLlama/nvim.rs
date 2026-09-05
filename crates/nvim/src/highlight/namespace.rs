@@ -1,4 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 //! Highlight namespaces: `nvim_set_hl(ns, …)`, `'winhighlight'`, and the
 //! per-namespace `HLF_*` tables the drawing code reads through.

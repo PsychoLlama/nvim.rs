@@ -16,6 +16,8 @@
 // luv's C API: `luv_CFpcall` and its neighbours are that library's exported
 // names.
 #![allow(non_camel_case_types)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int, c_void};
 

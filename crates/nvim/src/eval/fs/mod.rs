@@ -31,6 +31,8 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 // The builtin call frame, shared with every other `f_*` family; named here
 // so the six children reach it as `super::{Args, frame}`.

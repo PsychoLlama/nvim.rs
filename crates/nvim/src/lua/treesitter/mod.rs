@@ -4,6 +4,8 @@
 // files are read against `runtime/lua/vim/treesitter/` and libtree-sitter's
 // own C. An inner attribute here reaches the child modules too.
 #![allow(non_snake_case)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
 use crate::global_cell::GlobalCell;

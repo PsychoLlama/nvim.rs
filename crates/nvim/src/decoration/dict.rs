@@ -11,6 +11,8 @@
 //! it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::{
     DECOR_ID_INVALID, DECOR_SIGN_HIGHLIGHT_INIT, decor_item, decor_sh_from_inline, kSHConceal,

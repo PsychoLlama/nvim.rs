@@ -1,5 +1,7 @@
 //! Matching a pattern against a string: the `match*()` family.
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::args::{Args, frame};
 use super::wrappers::{arg_number_chk, arg_string, arg_string_chk, check_arg, list_alloc_ret};

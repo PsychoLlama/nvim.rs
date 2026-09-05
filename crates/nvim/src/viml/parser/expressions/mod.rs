@@ -13,6 +13,8 @@
 //!   token to a handler in `operators`, `values`, `brackets` or `figure`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 mod ast;
 mod brackets;

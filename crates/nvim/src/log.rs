@@ -36,6 +36,8 @@
 //! [`log_file_path`] and [`with_log_lock`].
 
 #![forbid(unsafe_code)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;

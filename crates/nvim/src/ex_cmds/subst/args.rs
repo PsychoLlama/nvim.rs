@@ -11,6 +11,8 @@
 //! Original: `src/nvim/ex_cmds.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::{
     check_regexp_delim, old_sub, skip_substitute, sub_joining_lines, sub_parse_flags,

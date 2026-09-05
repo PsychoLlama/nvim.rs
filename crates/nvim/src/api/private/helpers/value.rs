@@ -7,6 +7,8 @@
 //! references, which the arena knows nothing about.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::{EMPTY_HL_MESSAGE, cstr_as_string};
 use crate::api::private::metadata::PACKED_API_METADATA;

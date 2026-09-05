@@ -4,6 +4,8 @@
 //! run `just apigen`.
 
 #![forbid(unsafe_code)]
+// The names are upstream's, and each is looked up by that spelling.
+#![allow(non_upper_case_globals)]
 
 // A chunk may hold nothing that needs the parent's support code.
 #[allow(unused_imports)]

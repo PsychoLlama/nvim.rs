@@ -15,6 +15,8 @@
 //! [`comp_textwidth`] (the margin they are all measured against).
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int, c_uint, c_void};

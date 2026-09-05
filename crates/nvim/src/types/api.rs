@@ -6,6 +6,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 // Canonical type definitions, hoisted out of the per-module copies c2rust
 // emitted. One definition per logical type; every module re-exports here.

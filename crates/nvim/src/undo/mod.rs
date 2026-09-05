@@ -10,6 +10,8 @@
 //! Original: `src/nvim/undo.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_is_dontwrite, buf_is_empty, buf_is_prompt};

@@ -6,6 +6,8 @@
 //! depends on which shell it is — see [`ShellStyle`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::ascii::ascii_iswhite;

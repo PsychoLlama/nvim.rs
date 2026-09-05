@@ -22,6 +22,8 @@
 //! the protocol.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::api::private::dispatch::key_dict_highlight_get_field;
 use crate::api::private::helpers::{

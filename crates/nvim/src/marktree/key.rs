@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 //! Key and position vocabulary for the extmark B-tree.
 //!

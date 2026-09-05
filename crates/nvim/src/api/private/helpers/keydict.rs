@@ -8,6 +8,8 @@
 //! whether the caller supplied it at all.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::{
     EMPTY_DICT, api_luarefs_free_dict, api_luarefs_free_object, api_object_to_bool, api_typename,

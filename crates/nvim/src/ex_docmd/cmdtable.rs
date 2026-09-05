@@ -16,6 +16,8 @@
 //! `ex_cmds.lua`, so they cannot disagree.
 
 #![forbid(unsafe_code)]
+// The names are upstream's, and each is looked up by that spelling.
+#![allow(non_upper_case_globals)]
 
 #[allow(unused_imports)]
 use super::*;

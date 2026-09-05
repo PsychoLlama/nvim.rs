@@ -622,6 +622,8 @@ const HEADER: &str = r#"//! The option table.
 //! own copy of the value.
 
 #![forbid(unsafe_code)]
+// The names are upstream's, and each is looked up by that spelling.
+#![allow(non_upper_case_globals)]
 "#;
 
 fn child_header(what: &str, body: &str) -> String {
@@ -637,11 +639,13 @@ fn child_header(what: &str, body: &str) -> String {
          //! run `just apigen`.\n\
          \n\
          {attr}\n\
+         {}\
          \n\
          // A chunk may hold nothing that needs the parent's support code.\n\
          #[allow(unused_imports)]\n\
          use super::*;\n\
-         \n"
+         \n",
+        crate::upper_case_globals_allow(body)
     )
 }
 

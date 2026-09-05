@@ -22,6 +22,8 @@
 //!   batch mode, not a tty-dependent accident.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::guard::Depth;

@@ -1,4 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::api::buffer::{api_buf_ensure_loaded, nvim_buf_del_keymap};
 use crate::api::deprecated::{buffer_del_line, buffer_get_line, buffer_set_line};

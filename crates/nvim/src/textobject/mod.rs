@@ -21,6 +21,8 @@
 //! This parent keeps no functions, only the vocabulary the children share.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use core::ffi::{c_uint, c_void};
 

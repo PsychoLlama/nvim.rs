@@ -16,6 +16,8 @@
 //! [`session`], and the Vimscript builtins in [`builtins`].
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::diff::state::need_diff_redraw;
 use crate::drawscreen::UPD_NOT_VALID;

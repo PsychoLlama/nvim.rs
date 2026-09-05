@@ -22,6 +22,8 @@
 //! | `display` | `:registers` |
 //! | `contents` | a register as text: `getreg()`, `setreg()`, the clipboard, shada |
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::api::private::helpers::{cbuf_to_string, copy_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite};

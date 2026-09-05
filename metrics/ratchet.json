@@ -31,6 +31,7 @@
   "files_without_deny_casts": 1048,
   "files_allowing_non_camel_case_types": 26,
   "files_allowing_non_snake_case": 5,
+  "files_allowing_non_upper_case_globals": 306,
   "files": {
     "crates/mainthread/lib.rs": {"pub_items": 3},
     "crates/nvim/src/allocator.rs": {"missing_safety_doc": 4, "unsafe_lines": 38},

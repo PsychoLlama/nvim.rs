@@ -18,6 +18,8 @@
 //! an escape sequence cannot drive the emulator.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::getchar::state::{KeyTyped, mod_mask, vgetc_char, vgetc_mod_mask};

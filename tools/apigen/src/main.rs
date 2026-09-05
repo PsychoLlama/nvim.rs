@@ -927,6 +927,46 @@ fn snake_case_allow(name: &str) -> String {
     }
 }
 
+/// `#![allow(non_upper_case_globals)]`, with its reason, for a generated file
+/// whose `const`s and `static`s are not upper case -- and nothing at all when
+/// they are.
+///
+/// The names are upstream's own: an option index is `kOptAleph`, a keyset
+/// table is `_shada_mark_table`, a keyset's mask bit is
+/// `KEYSET_OPTIDX_cmd__addr`. Every one of them is looked up by that exact
+/// spelling somewhere -- in the option metadata, in the FFI golden, in a
+/// handler table -- so the generator cannot upper-case them, and a
+/// hand-written attribute in a generated file is gone at the next
+/// `just apigen`. Emitting it here is what makes it survive, and what keeps
+/// the ratchet's `files_allowing_non_upper_case_globals` honest: a chunk that
+/// happens to hold no such name does not take the allow.
+pub(crate) fn upper_case_globals_allow(body: &str) -> &'static str {
+    let offender = body.lines().any(|line| {
+        let mut rest = line.trim_start();
+        for prefix in ["pub(crate) ", "pub ", "pub(super) "] {
+            rest = rest.strip_prefix(prefix).unwrap_or(rest);
+        }
+        let Some(rest) = rest
+            .strip_prefix("const ")
+            .or_else(|| rest.strip_prefix("static "))
+        else {
+            return false;
+        };
+        let name = rest.trim_start().strip_prefix("mut ").unwrap_or(rest);
+        let name: String = name
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        name != "fn" && name.chars().any(|c| c.is_ascii_lowercase())
+    });
+    if offender {
+        "// The names are upstream's, and each is looked up by that spelling.\n\
+         #![allow(non_upper_case_globals)]\n"
+    } else {
+        ""
+    }
+}
+
 fn emit_fn(
     out: &mut String,
     f: &ApiFn,
@@ -1833,11 +1873,13 @@ fn tables_child_header(what: &str, body: &str) -> String {
          //! run `just apigen`.\n\
          \n\
          {attr}\n\
+         {}\
          \n\
          // A chunk may hold nothing that needs the parent's support code.\n\
          #[allow(unused_imports)]\n\
          use super::*;\n\
-         \n"
+         \n",
+        upper_case_globals_allow(body)
     )
 }
 

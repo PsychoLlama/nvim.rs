@@ -24,6 +24,8 @@
 //! and [`mapblock_free`] is `Box::from_raw` plus one unlink.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::types::{NL, ScriptCtx};
 use core::ffi::{CStr, c_int};

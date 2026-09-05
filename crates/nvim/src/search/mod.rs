@@ -8,6 +8,8 @@
 //! [`includes`] with [`incline`] is `[i`/`:checkpath`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::ascii::ascii_isdigit;
 use crate::autocmd::apply_autocmds;

@@ -18,6 +18,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 // `nl_item`, from POSIX's `<langinfo.h>`.
 #![allow(non_camel_case_types)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::cstr;

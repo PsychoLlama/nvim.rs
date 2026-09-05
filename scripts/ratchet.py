@@ -514,8 +514,20 @@ plus these whole-tree metrics, which are not per-file:
                     does not count, so one frozen name never buys a file a
                     blanket one.
 
-                    Both may only fall, and a new file has no business taking
-                    either unless it is describing someone else's names.
+                    files_allowing_non_upper_case_globals  the widest of the
+                    three, because it is every global the editor has: an
+                    option's `p_<abbrev>` cell, a `kOpt<Name>` index, a
+                    `KEYSET_OPTIDX_*` mask bit, and the ~880 statics upstream
+                    declares in `globals.h`. Nothing here is a rename this
+                    phase could do -- the spelling is what the option
+                    metadata, the FFI golden and the handler tables look up --
+                    so the count falls a module at a time, as each is
+                    rewritten to Rust's spelling for a global. Eight of the
+                    files carrying it are generated and take it from apigen.
+
+                    All three may only fall, and a new file has no business
+                    taking any of them unless it is describing someone else's
+                    names.
 
 A `warnings` metric used to sit alongside it; phase 5 drove the count to
 zero and the dev shell (flake.nix) now sets `RUSTFLAGS="-D warnings"` for
@@ -989,6 +1001,7 @@ DENY_CASTS = re.compile(r"#!\[deny\([^\]]*\bclippy::cast_lossless\b", re.DOTALL)
 FILE_ALLOWS = {
     "non_camel_case_types": "#![allow(non_camel_case_types)]",
     "non_snake_case": "#![allow(non_snake_case)]",
+    "non_upper_case_globals": "#![allow(non_upper_case_globals)]",
 }
 # A `# Safety` heading in a doc comment. Any heading level, any case, because
 # what is being counted is whether the obligation is written down.
@@ -2198,6 +2211,7 @@ SELF_TEST_DENY_CASTS = [
 SELF_TEST_FILE_ALLOWS = [
     ("#![allow(non_camel_case_types)]\n", {"non_camel_case_types"}),
     ("#![allow(non_snake_case)]\n", {"non_snake_case"}),
+    ("#![allow(non_upper_case_globals)]\n", {"non_upper_case_globals"}),
     (
         "#![allow(non_camel_case_types)]\n#![allow(non_snake_case)]\n",
         {"non_camel_case_types", "non_snake_case"},
@@ -2206,6 +2220,7 @@ SELF_TEST_FILE_ALLOWS = [
     # `nvim__*` API names carry one each and their files do not count.
     ("#[allow(non_camel_case_types)]\nstruct uv_loop_t;\n", set()),
     ("#[allow(non_snake_case)]\npub fn nvim__id() {}\n", set()),
+    ("#[allow(non_upper_case_globals)]\nunsafe fn apply_opts() {}\n", set()),
     # Prose about the attribute does not switch it on.
     ("//! `#![allow(non_camel_case_types)]` is what libuv's names need.\n", set()),
 ]

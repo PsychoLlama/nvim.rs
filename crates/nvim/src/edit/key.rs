@@ -20,6 +20,8 @@
 //! both then join `Continue` in running `insert_handle_key_post`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::keycodes::ModMask;
 use crate::keycodes::{Key, NotAKey};

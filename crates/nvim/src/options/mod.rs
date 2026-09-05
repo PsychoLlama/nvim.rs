@@ -16,6 +16,8 @@
 //! own copy of the value.
 
 #![forbid(unsafe_code)]
+// The names are upstream's, and each is looked up by that spelling.
+#![allow(non_upper_case_globals)]
 
 mod flags;
 mod index;

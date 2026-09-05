@@ -7,6 +7,8 @@
 //! given survives the round trip.
 
 #![forbid(unsafe_code)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_int};

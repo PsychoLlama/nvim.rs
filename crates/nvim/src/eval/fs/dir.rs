@@ -22,6 +22,8 @@
 //! Original: `src/nvim/eval/fs.c`, Vim/Neovim, Vim license.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::{__S_IFMT, Args, FAIL, Owned, frame, no_fileinfo, ret_string, str_arg, str_arg_chk};
 use crate::eval::typval::NumBuf;

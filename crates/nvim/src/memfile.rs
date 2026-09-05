@@ -45,6 +45,8 @@
 //! from it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

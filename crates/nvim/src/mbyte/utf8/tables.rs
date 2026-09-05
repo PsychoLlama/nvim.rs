@@ -17,6 +17,8 @@
 //! directly from C, so it must stay a 256-byte array under that symbol.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 /// One of the two tables, given the answer for a byte that introduces nothing.
 const fn lead_byte_lengths(introduces_nothing: u8) -> [u8; 256] {

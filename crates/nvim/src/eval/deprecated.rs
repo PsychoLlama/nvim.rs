@@ -17,6 +17,8 @@
 //! many of the two slots below are real.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use core::ffi::{c_char, c_int};
 use core::slice;

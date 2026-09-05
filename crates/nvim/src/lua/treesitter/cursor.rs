@@ -7,6 +7,8 @@
 //! materialised if Lua asks for it.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::*;
 use crate::global_cell::ConstTable;

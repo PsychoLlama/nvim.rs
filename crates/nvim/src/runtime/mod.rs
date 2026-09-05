@@ -24,6 +24,8 @@
 //! | `runtime_search_path_valid_thread` | [`cache`], [`pack`] | [`cache`] |
 //! | `runtime_expand_flags` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `expand_runtime_cmd` |
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
 use crate::api::private::helpers::{

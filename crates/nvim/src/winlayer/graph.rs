@@ -24,6 +24,8 @@
 // Not `forbid(unsafe_code)`: that lint rejects the name-mangling override on
 // `curwin`, whose symbol plugins and the functional suite read directly.
 #![deny(unsafe_op_in_unsafe_fn)]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use super::{BufId, TabId, WinId};
 use crate::global_cell::GlobalCell;

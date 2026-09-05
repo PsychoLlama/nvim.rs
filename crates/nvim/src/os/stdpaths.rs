@@ -14,6 +14,8 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
+#![allow(non_upper_case_globals)]
 
 use crate::cstr;
 use crate::fileio::vim_gettempdir;
