@@ -134,7 +134,7 @@ pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank
 
     // Unwanted line breaks would move every column measured below.
     reset_lbr();
-    op.is_VIsual = visual_active();
+    op.is_visual = visual_active();
     apply_motion_force(op);
     record_operator_redo(cmd_arg, op, redo_yank);
 
@@ -187,7 +187,7 @@ pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank
 
     // Force a redraw for an empty Visual region, an unmodifiable buffer,
     // or a fold: none of those will redraw by themselves.
-    if op.is_VIsual && (op.empty || cur_buf().b_p_ma == 0 || op.op_type == OpType::Fold) {
+    if op.is_visual && (op.empty || cur_buf().b_p_ma == 0 || op.op_type == OpType::Fold) {
         restore_lbr(lbr_saved != 0);
         // SAFETY: touches only the current buffer's windows.
         redraw_curbuf_later(UPD_INVERTED);
@@ -610,7 +610,7 @@ fn adjust_region_end(cmd_arg: Cmd, mut op: Op) {
         && !op.inclusive
         && cmd_arg.retval & CA_NO_ADJ_OP_END as c_int == 0
         && op.end.col == 0
-        && (!op.is_VIsual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
+        && (!op.is_visual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
         && op.line_count > 1)
     {
         op.end_adjusted = false;
@@ -659,7 +659,7 @@ fn run_operator(
     // current window, which is exactly what each of them asks for.
     match op.op_type {
         OpType::Lshift | OpType::Rshift => {
-            let amount = if op.is_VIsual { cmd_arg.count1 } else { 1 };
+            let amount = if op.is_visual { cmd_arg.count1 } else { 1 };
             unsafe { op_shift(op.raw(), true, amount) };
             unsafe { auto_format(false, true) };
         }
@@ -790,14 +790,14 @@ fn run_operator(
             VIsual_reselect.set(0);
             let opening = op.op_type == OpType::Foldopen || op.op_type == OpType::Foldopenrec;
             let recursive = op.op_type == OpType::Foldopenrec || op.op_type == OpType::Foldcloserec;
-            let (start, end, visual) = (op.start, op.end, op.is_VIsual);
+            let (start, end, visual) = (op.start, op.end, op.is_visual);
             let (opening, recursive) = (c_int::from(opening), c_int::from(recursive));
             unsafe { op_fold_range(start, end, opening, recursive, visual) };
         }
         OpType::Folddel | OpType::Folddelrec => {
             VIsual_reselect.set(0);
             let recursive = c_int::from(op.op_type == OpType::Folddelrec);
-            let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_VIsual);
+            let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_visual);
             unsafe { delete_fold(curwin.get(), first, last, recursive, visual) };
         }
 

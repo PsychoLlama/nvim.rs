@@ -264,7 +264,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 ) -> Result<(), Failed> {
     // Call the user-defined function with "a:findstart" set to 1 to obtain
     // the length of the text to complete.
-    let save_State = State.get();
+    let save_state = State.get();
 
     let is_cpt_function = !cb.is_null();
     if !is_cpt_function {
@@ -295,7 +295,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
     let col = unsafe { callback_call_retnr(cb, 2, args.as_mut_ptr()) } as ColNr;
     drop(locked);
 
-    State.set(save_State);
+    State.set(save_state);
     cur_win().w_cursor = pos; // restore the cursor position
     check_cursor(unsafe { Win::current() }); // make sure the position is valid, just in case
     validate_cursor(unsafe { Win::current() });

@@ -93,7 +93,7 @@ pub(crate) fn insert_handle_key(s: &mut InsertState) -> c_int {
 
         // Toggle insert/replace mode.
         Ok(Key::Ins | Key::Kins) => {
-            ins_insert(s.replaceState);
+            ins_insert(s.replace_state);
             Next::Continue
         }
 

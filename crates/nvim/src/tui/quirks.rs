@@ -294,7 +294,7 @@ impl Terminal {
         if matches!(self.colorterm.as_deref(), Some(b"truecolor" | b"24bit")) {
             return true;
         }
-        ti.has_Tc_or_RGB
+        ti.has_tc_or_rgb
             || (cap(ti, kTerm_set_rgb_foreground).is_some()
                 && cap(ti, kTerm_set_rgb_background).is_some())
     }
@@ -561,7 +561,7 @@ pub fn augment_terminfo(ti: &mut TerminfoEntry, t: &Terminal) -> Augmentation {
         extended_underline: cap(ti, kTerm_set_underline_style).is_some()
             || t.vte_version >= 5102
             || t.konsole_version >= 221170
-            || ti.Su
+            || ti.su
             || t.wezterm_version
                 .as_deref()
                 .is_some_and(|v| v > b"20210203-095643".as_slice()),

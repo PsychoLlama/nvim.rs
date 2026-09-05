@@ -506,27 +506,28 @@ unsafe fn fc_referenced(fc: *const FuncCall) -> bool {
         || frame.fc_refcount > Refcount::ZERO
 }
 
-/// Whether nothing in `fc` carries `copyID`, i.e. nothing in use reaches it.
+/// Whether nothing in `fc` carries `copy_id`, i.e. nothing in use reaches it.
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn can_free_funccal(fc: *mut FuncCall, copyID: c_int) -> bool {
+unsafe fn can_free_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
     // SAFETY: the caller's promise -- `fc` is a live funccall.
     let frame = unsafe { Fc::new(fc) };
-    frame.fc_l_varlist.lv_copyID != copyID
-        && frame.fc_l_vars.dv_copyID != copyID
-        && frame.fc_l_avars.dv_copyID != copyID
-        && frame.fc_copyID != copyID
+    frame.fc_l_varlist.lv_copy_id != copy_id
+        && frame.fc_l_vars.dv_copy_id != copy_id
+        && frame.fc_l_avars.dv_copy_id != copy_id
+        && frame.fc_copy_id != copy_id
 }
 
 /// Free every parked funccall the garbage collector did not reach.  This is
 /// what finally gives back the reference `create_funccal` took.
 ///
 /// # Safety
-/// Called from the collector, with `copyID` the mark just used.
-pub unsafe fn free_unref_funccal(copyID: c_int, testing: c_int) -> bool {
+/// Called from the collector, with `copy_id` the mark just used.
+pub unsafe fn free_unref_funccal(copy_id: c_int, testing: c_int) -> bool {
     // SAFETY: the collector's own mark, and the parked list is this module's.
-    let did_free = unsafe { unlink_parked_funccals(Sweep::All, |fc| can_free_funccal(fc, copyID)) };
+    let did_free =
+        unsafe { unlink_parked_funccals(Sweep::All, |fc| can_free_funccal(fc, copy_id)) };
     if did_free {
         // Freeing a funccal may have made more items collectable.
         // SAFETY: called from the collector, which is between marks.
@@ -830,13 +831,13 @@ pub unsafe fn find_var_in_scoped_ht(
 
 /// Mark the parked funccalls with `copyID + 1`, so that the collector can
 /// tell "reachable from a live value" from "merely parked".
-pub unsafe fn set_ref_in_previous_funccal(copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_previous_funccal(copy_id: c_int) -> bool {
     let mut fc = previous_funccal.get();
-    let mark = copyID + 1;
+    let mark = copy_id + 1;
     while !fc.is_null() {
         // SAFETY: every node of the parked list is live, which is the list's
         // own invariant, and the three scopes are that node's own.
-        unsafe { (*fc).fc_copyID = mark };
+        unsafe { (*fc).fc_copy_id = mark };
         let (vars, avars, items) = unsafe { scopes_of(fc) };
         let reached = unsafe {
             set_ref_in_ht(vars, mark, ptr::null_mut())
@@ -871,33 +872,33 @@ unsafe fn scopes_of(fc: *mut FuncCall) -> (*mut HashTab, *mut HashTab, *mut crat
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copyID: c_int) -> bool {
+unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copy_id: c_int) -> bool {
     // SAFETY: the caller's promise -- `fc` is a live funccall, so the three
     // scopes and the function are its own.
     let mut frame = unsafe { Fc::new(fc) };
-    if frame.fc_copyID == copyID {
+    if frame.fc_copy_id == copy_id {
         return false;
     }
-    frame.fc_copyID = copyID;
+    frame.fc_copy_id = copy_id;
     let (vars, avars, items) = unsafe { scopes_of(fc) };
     let func = frame.fc_func;
     unsafe {
-        set_ref_in_ht(vars, copyID, ptr::null_mut())
-            || set_ref_in_ht(avars, copyID, ptr::null_mut())
-            || set_ref_in_list_items(items, copyID, ptr::null_mut())
-            || set_ref_in_func(ptr::null_mut(), func, copyID)
+        set_ref_in_ht(vars, copy_id, ptr::null_mut())
+            || set_ref_in_ht(avars, copy_id, ptr::null_mut())
+            || set_ref_in_list_items(items, copy_id, ptr::null_mut())
+            || set_ref_in_func(ptr::null_mut(), func, copy_id)
     }
 }
 
 /// Mark every local and argument on the call stack, including the stacks
 /// `save_funccal` set aside.
-pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_call_stack(copy_id: c_int) -> bool {
     // SAFETY: every funccall on the current stack and on each set-aside
     // stack is live, which is what `save_funccal`'s caller promised. That
     // holds for every dereference below.
     let mut fc = current_funccal.get();
     while !fc.is_null() {
-        if unsafe { set_ref_in_funccal(fc, copyID) } {
+        if unsafe { set_ref_in_funccal(fc, copy_id) } {
             return true;
         }
         fc = unsafe { (*fc).fc_caller };
@@ -907,7 +908,7 @@ pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
     while !entry.is_null() {
         let mut fc = unsafe { (*entry).top_funccal } as *mut FuncCall;
         while !fc.is_null() {
-            if unsafe { set_ref_in_funccal(fc, copyID) } {
+            if unsafe { set_ref_in_funccal(fc, copy_id) } {
                 return true;
             }
             fc = unsafe { (*fc).fc_caller };
@@ -918,7 +919,7 @@ pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
 }
 
 /// Mark everything reachable from a function that is still available by name.
-pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_functions(copy_id: c_int) -> bool {
     let mut todo = func_table().used() as c_int;
     let mut idx = 0;
     // SAFETY: the walk covers the `ht_used` kept items of the function
@@ -933,7 +934,7 @@ pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
             // function is that many bytes before it.
             let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
             let named = unsafe { func_name_refcount(uf_name_ptr(fp)) };
-            if !named && unsafe { set_ref_in_func(ptr::null_mut(), fp, copyID) } {
+            if !named && unsafe { set_ref_in_func(ptr::null_mut(), fp, copy_id) } {
                 return true;
             }
         }
@@ -942,13 +943,13 @@ pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
 }
 
 /// Mark everything reachable from an argument of a call in progress.
-pub unsafe fn set_ref_in_func_args(copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_func_args(copy_id: c_int) -> bool {
     // Marking only reads; nothing it reaches calls a function, so holding the
     // borrow across the walk is sound.
     funcargs.with(|args| {
         args.iter().any(|&tv| {
             // SAFETY: each entry points at a live caller's argument.
-            unsafe { set_ref_in_item(tv, copyID, ptr::null_mut(), ptr::null_mut()) }
+            unsafe { set_ref_in_item(tv, copy_id, ptr::null_mut(), ptr::null_mut()) }
         })
     })
 }
@@ -959,7 +960,7 @@ pub unsafe fn set_ref_in_func_args(copyID: c_int) -> bool {
 ///
 /// # Safety
 /// `name` is null or NUL-terminated; `fp_in` is null or a live function.
-pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copy_id: c_int) -> bool {
     if name.is_null() && fp_in.is_null() {
         return false;
     }
@@ -984,7 +985,7 @@ pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copyID: c
         // live funccall whose own function is live too.
         let mut fc = unsafe { (*fp).uf_scoped };
         while !fc.is_null() {
-            aborted = aborted || unsafe { set_ref_in_funccal(fc, copyID) };
+            aborted = aborted || unsafe { set_ref_in_funccal(fc, copy_id) };
             fc = unsafe { (*(*fc).fc_func).uf_scoped };
         }
     }

@@ -54,7 +54,7 @@ pub struct AcoSave {
     pub new_curbuf: BufferRef,
     pub tp_localdir: *mut ::core::ffi::c_char,
     pub globaldir: *mut ::core::ffi::c_char,
-    pub save_VIsual_active: bool,
+    pub save_visual_active: bool,
     pub save_prompt_insert: ::core::ffi::c_int,
 }
 
@@ -74,7 +74,7 @@ impl Default for AcoSave {
             },
             tp_localdir: ::core::ptr::null_mut(),
             globaldir: ::core::ptr::null_mut(),
-            save_VIsual_active: false,
+            save_visual_active: false,
             save_prompt_insert: 0,
         }
     }

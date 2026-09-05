@@ -204,7 +204,7 @@ pub unsafe fn apply_autocmds_group(
     let mut retval = false;
     let mut did_save_redobuff = false;
     let mut save_redo = SAVE_REDO_INIT;
-    let save_KeyTyped = KeyTyped.get();
+    let save_key_typed = KeyTyped.get();
 
     'bypass: {
         // Nothing to fire, or firing is off.
@@ -499,7 +499,7 @@ pub unsafe fn apply_autocmds_group(
         if do_profiling.get() == PROF_YES {
             unsafe { prof_child_exit(wait_time) };
         }
-        KeyTyped.set(save_KeyTyped);
+        KeyTyped.set(save_key_typed);
         unsafe { xfree(fname.cast::<::core::ffi::c_void>()) };
         unsafe { xfree(sfname.cast::<::core::ffi::c_void>()) };
         // The handlers below run at the enclosing level, not this one.

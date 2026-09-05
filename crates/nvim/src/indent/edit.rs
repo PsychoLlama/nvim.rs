@@ -165,13 +165,13 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     // has to reach the last line even when nothing changed, so that the
     // highlight goes away.
     if last_changed != 0 {
-        let end = if unsafe { (*op).is_VIsual } {
+        let end = if unsafe { (*op).is_visual } {
             start_lnum + line_count
         } else {
             last_changed + 1
         };
         changed_lines(unsafe { Buf::new(buf) }, first_changed, 0, end, 0, true);
-    } else if unsafe { (*op).is_VIsual } {
+    } else if unsafe { (*op).is_visual } {
         redraw_curbuf_later(UPD_INVERTED);
     }
     if line_count as OptInt > p_report.get() {

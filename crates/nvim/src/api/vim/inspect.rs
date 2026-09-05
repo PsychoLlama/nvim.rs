@@ -95,9 +95,9 @@ pub unsafe fn nvim_get_proc_children(pid: Integer, arena: *mut Arena) -> Result<
                 capacity: 0 as size_t,
                 items: ::core::ptr::null_mut::<Object>(),
             };
-            let mut a__items: [Object; 1] = [Object::Nil; 1];
+            let mut a_items: [Object; 1] = [Object::Nil; 1];
             a.capacity = 1 as size_t;
-            a.items = &raw mut a__items as *mut Object;
+            a.items = &raw mut a_items as *mut Object;
             unsafe { array_add(&mut a, Object::integer(pid)) };
             let code = String_0::from_cstr(c"return vim._os_proc_children(...)");
             let name = ::core::ptr::null::<::core::ffi::c_char>();
@@ -137,9 +137,9 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut a__items: [Object; 1] = [Object::Nil; 1];
+    let mut a_items: [Object; 1] = [Object::Nil; 1];
     a.capacity = 1 as size_t;
-    a.items = &raw mut a__items as *mut Object;
+    a.items = &raw mut a_items as *mut Object;
     if a.size == a.capacity {
         a.capacity = if a.capacity != 0 {
             a.capacity << 1 as ::core::ffi::c_int

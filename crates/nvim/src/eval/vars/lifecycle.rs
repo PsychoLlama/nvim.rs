@@ -149,29 +149,29 @@ pub unsafe fn evalvars_init() {
 /// Mark everything `g:` reaches as live, for the garbage collector.
 ///
 /// # Safety
-/// Called from the collector, with `copyID` its current mark.
-pub unsafe fn garbage_collect_globvars(copyID: c_int) -> c_int {
-    unsafe { set_ref_in_ht(get_globvar_ht(), copyID, ptr::null_mut()) as c_int }
+/// Called from the collector, with `copy_id` its current mark.
+pub unsafe fn garbage_collect_globvars(copy_id: c_int) -> c_int {
+    unsafe { set_ref_in_ht(get_globvar_ht(), copy_id, ptr::null_mut()) as c_int }
 }
 
 /// [`garbage_collect_globvars`] for `v:`.
 ///
 /// # Safety
 /// As [`garbage_collect_globvars`].
-pub unsafe fn garbage_collect_vimvars(copyID: c_int) -> bool {
-    unsafe { set_ref_in_ht(get_vimvar_ht(), copyID, ptr::null_mut()) }
+pub unsafe fn garbage_collect_vimvars(copy_id: c_int) -> bool {
+    unsafe { set_ref_in_ht(get_vimvar_ht(), copy_id, ptr::null_mut()) }
 }
 
 /// [`garbage_collect_globvars`] for every script's `s:`.
 ///
 /// # Safety
 /// As [`garbage_collect_globvars`].
-pub unsafe fn garbage_collect_scriptvars(copyID: c_int) -> bool {
+pub unsafe fn garbage_collect_scriptvars(copy_id: c_int) -> bool {
     let mut abort = false;
     for i in 1..=script_count() {
         // SAFETY: a live script id, whose own scope dictionary this marks.
         let ht = unsafe { &raw mut (*script_sv(i)).sv_dict.dv_hashtab };
-        abort = abort || unsafe { set_ref_in_ht(ht, copyID, ptr::null_mut()) };
+        abort = abort || unsafe { set_ref_in_ht(ht, copy_id, ptr::null_mut()) };
     }
     abort
 }
@@ -281,7 +281,7 @@ pub unsafe fn init_var_dict(dict: *mut Dict, dict_var: *mut ScopeDictDictItem, s
     d.dv_lock = VarLock::Unlocked;
     d.dv_scope = scope;
     d.dv_refcount = Refcount::new(DO_NOT_FREE_CNT);
-    d.dv_copyID = 0;
+    d.dv_copy_id = 0;
     var.di_tv.vval.v_dict = dict;
     var.di_tv.v_type = VAR_DICT;
     var.di_tv.v_lock = VarLock::Fixed;

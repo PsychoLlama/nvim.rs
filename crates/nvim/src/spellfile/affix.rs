@@ -143,10 +143,10 @@ pub(super) unsafe fn handle_affix_header(
     }
 
     if is_prefix && aff.af_pfxpostpone != 0 {
-        if unsafe { (*st.cur_aff).ah_newID } == 0 {
+        if unsafe { (*st.cur_aff).ah_new_id } == 0 {
             unsafe { check_renumber(spin) };
-            spin.si_newprefID += 1;
-            unsafe { (*st.cur_aff).ah_newID = spin.si_newprefID };
+            spin.si_newpref_id += 1;
+            unsafe { (*st.cur_aff).ah_new_id = spin.si_newpref_id };
             // Nothing has used the id yet; it is given back at the end
             // of the block if nothing does.
             st.did_postpone_prefix = false;
@@ -301,8 +301,8 @@ pub(super) unsafe fn postpone_prefix(
 
     // Nothing in the block was postponed after all; give the id back.
     if st.aff_todo == 0 && !st.did_postpone_prefix {
-        spin.si_newprefID -= 1;
-        unsafe { (*st.cur_aff).ah_newID = 0 };
+        spin.si_newpref_id -= 1;
+        unsafe { (*st.cur_aff).ah_new_id = 0 };
     }
 }
 
@@ -358,7 +358,7 @@ pub(super) unsafe fn file_postponed_prefix(
         n |= WFP_COMPFORBID as c_int;
     }
     let prefroot = spin.si_prefroot;
-    let newID = unsafe { (*st.cur_aff).ah_newID };
-    let _ = unsafe { tree_add_word(&mut *spin, added, prefroot, n, idx, newID) };
+    let new_id = unsafe { (*st.cur_aff).ah_new_id };
+    let _ = unsafe { tree_add_word(&mut *spin, added, prefroot, n, idx, new_id) };
     st.did_postpone_prefix = true;
 }

@@ -1,7 +1,7 @@
 //! The garbage collector: marking every value reachable from a root, then
 //! freeing the lists and dicts nothing marked.
 //!
-//! `copyID` is the mark. Anything that can hold a reference has a
+//! `copy_id` is the mark. Anything that can hold a reference has a
 //! `set_ref_in_*` that stamps it and recurses. The counter advances by two
 //! (`COPYID_INC`) per collection, because `set_ref_in_previous_funccal`
 //! adds one to distinguish "reachable only through a previous funccal"
@@ -391,7 +391,7 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
     // Pass 1: empty the unreachable dictionaries…
     let mut dd = gc_first_dict.get();
     while !dd.is_null() {
-        if stale(unsafe { (*dd).dv_copyID }, copy_id) {
+        if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
             unsafe { tv_dict_free_contents(dd) };
             did_free = true;
         }
@@ -413,7 +413,7 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
     let mut dd = gc_first_dict.get();
     while !dd.is_null() {
         let next = unsafe { (*dd).dv_used_next };
-        if stale(unsafe { (*dd).dv_copyID }, copy_id) {
+        if stale(unsafe { (*dd).dv_copy_id }, copy_id) {
             unsafe { tv_dict_free_dict(dd) };
         }
         dd = next;
@@ -421,7 +421,7 @@ pub(crate) unsafe fn free_unref_items(copy_id: c_int) -> c_int {
     let mut ll = gc_first_list.get();
     while !ll.is_null() {
         let next = unsafe { (*ll).lv_used_next };
-        if stale(unsafe { (*ll).lv_copyID }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
+        if stale(unsafe { (*ll).lv_copy_id }, copy_id) && !unsafe { tv_list_has_watchers(ll) } {
             unsafe { tv_list_free_list(ll) };
         }
         ll = next;
@@ -519,11 +519,11 @@ pub(crate) unsafe fn set_ref_in_item_dict(
     ht_stack: *mut *mut HtStack,
     list_stack: *mut *mut ListStack,
 ) -> bool {
-    if dd.is_null() || unsafe { (*dd).dv_copyID } == copy_id {
+    if dd.is_null() || unsafe { (*dd).dv_copy_id } == copy_id {
         return false;
     }
     // Not seen yet.
-    unsafe { (*dd).dv_copyID = copy_id };
+    unsafe { (*dd).dv_copy_id = copy_id };
     if ht_stack.is_null() {
         return unsafe { set_ref_in_ht(&raw mut (*dd).dv_hashtab, copy_id, list_stack) };
     }
@@ -562,10 +562,10 @@ pub(crate) unsafe fn set_ref_in_item_list(
     ht_stack: *mut *mut HtStack,
     list_stack: *mut *mut ListStack,
 ) -> bool {
-    if ll.is_null() || unsafe { (*ll).lv_copyID } == copy_id {
+    if ll.is_null() || unsafe { (*ll).lv_copy_id } == copy_id {
         return false;
     }
-    unsafe { (*ll).lv_copyID = copy_id };
+    unsafe { (*ll).lv_copy_id = copy_id };
     if list_stack.is_null() {
         return unsafe { set_ref_in_list_items(ll, copy_id, ht_stack) };
     }
@@ -591,10 +591,10 @@ pub(crate) unsafe fn set_ref_in_item_partial(
     ht_stack: *mut *mut HtStack,
     list_stack: *mut *mut ListStack,
 ) -> bool {
-    if pt.is_null() || unsafe { (*pt).pt_copyID } == copy_id {
+    if pt.is_null() || unsafe { (*pt).pt_copy_id } == copy_id {
         return false;
     }
-    unsafe { (*pt).pt_copyID = copy_id };
+    unsafe { (*pt).pt_copy_id = copy_id };
 
     let mut abort = unsafe { set_ref_in_func((*pt).pt_name, (*pt).pt_func, copy_id) };
     if !unsafe { (*pt).pt_dict }.is_null() {
@@ -648,7 +648,7 @@ pub unsafe fn set_ref_in_item(
 
 /// Copy a value, optionally deeply and optionally converting its strings.
 ///
-/// `copyID` is what makes a *deep* copy of a self-referential structure
+/// `copy_id` is what makes a *deep* copy of a self-referential structure
 /// terminate: a container already copied under this id answers with the
 /// copy it made rather than making another.
 ///
@@ -726,7 +726,7 @@ pub unsafe fn var_item_copy(
             if d.is_null() {
                 dst.vval.v_dict = null_mut::<Dict>();
             // SAFETY: `d` is the source's live Dict.
-            } else if copy_id != 0 && unsafe { (*d).dv_copyID } == copy_id {
+            } else if copy_id != 0 && unsafe { (*d).dv_copy_id } == copy_id {
                 // SAFETY: as above -- the copy it was given under this id,
                 // which gains this reference.
                 dst.vval.v_dict = unsafe { (*d).dv_copydict };
@@ -762,7 +762,7 @@ pub unsafe fn var_item_copy(
     ret
 }
 
-/// The copy this list was last given under the current `copyID`.
+/// The copy this list was last given under the current `copy_id`.
 ///
 /// # Safety
 /// `l` must be valid.

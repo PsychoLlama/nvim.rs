@@ -343,7 +343,7 @@ unsafe fn get_pfxlist(
             if hi.is_kept() {
                 // Only prefixes that were actually postponed have an
                 // id; the rest were expanded into the word list.
-                let id = unsafe { (*AffHeader::of_key(hi.hi_key)).ah_newID };
+                let id = unsafe { (*AffHeader::of_key(hi.hi_key)).ah_new_id };
                 if id != 0 {
                     unsafe { *store_afflist.offset(cnt as isize) = id as uint8_t as c_char };
                     cnt += 1;
@@ -377,7 +377,7 @@ unsafe fn get_compflags(affile: &mut AffFile, afflist: *mut c_char, store_afflis
             if hi.is_kept() {
                 unsafe {
                     *store_afflist.offset(cnt as isize) =
-                        (*CompItem::of_key(hi.hi_key)).ci_newID as uint8_t as c_char
+                        (*CompItem::of_key(hi.hi_key)).ci_new_id as uint8_t as c_char
                 };
                 cnt += 1;
             }

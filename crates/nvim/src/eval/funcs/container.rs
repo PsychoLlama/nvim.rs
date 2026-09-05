@@ -261,7 +261,7 @@ fn get_from_func(args: Args<'_>, result: &mut TypVal) -> bool {
     // call and is never stored.
     let mut fref = Partial {
         pt_refcount: Refcount::ZERO,
-        pt_copyID: 0,
+        pt_copy_id: 0,
         pt_name: ptr::null_mut(),
         pt_func: ptr::null_mut(),
         pt_auto: false,

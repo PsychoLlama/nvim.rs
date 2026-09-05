@@ -105,7 +105,7 @@ const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
     did_wild_list: false,
     wim_index: 0,
     save_msg_scroll: 0,
-    save_State: 0,
+    save_state: 0,
     prev_cmdpos: 0,
     prev_cmdbuff: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     save_p_icm: ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -205,7 +205,7 @@ pub(crate) unsafe fn command_line_enter(
         count,
         indent,
         save_msg_scroll: msg_scroll.get(),
-        save_State: State.get(),
+        save_state: State.get(),
         prev_cmdpos: -1,
         ignore_drag_release: true,
         ..COMMAND_LINE_STATE_INIT
@@ -500,7 +500,7 @@ pub(crate) unsafe fn command_line_enter(
             OptionSetFlags::NONE,
             SID_NONE,
         );
-        State.set(s.save_State);
+        State.set(s.save_state);
         if cmdpreview.get() != save_cmdpreview {
             cmdpreview.set(save_cmdpreview); // restore the preview state
             unsafe { redraw_all_later(UPD_SOME_VALID) };

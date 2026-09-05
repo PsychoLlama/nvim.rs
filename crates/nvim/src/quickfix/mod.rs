@@ -84,7 +84,7 @@ use crate::message::{
     trunc_string,
 };
 use crate::r#move::update_topline;
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::reset_visual_and_resel;
 use crate::ops::get_region_bytecount;
 use crate::option::vars::{
     fdo_flags, p_ch, p_chi, p_cpo, p_ef, p_efm, p_enc, p_gefm, p_gp, p_hh, p_ic, p_mef, p_menc,

@@ -13,7 +13,7 @@
 //! so every hook stays the direct call the macro expansion was.
 //!
 //! The walk is deliberately **not recursive**.  Containers are pushed onto an
-//! explicit stack ([`ConvStack`]) and marked with the current `copyID` while
+//! explicit stack ([`ConvStack`]) and marked with the current `copy_id` while
 //! they are on it, so a container that references itself is recognised instead
 //! of overflowing the machine stack.  That is the whole reason upstream wrote
 //! it this way, and it is why a hook can only ask the walk to stop ([`Flow`])
@@ -60,7 +60,7 @@ pub(crate) enum Flow {
 
 /// The three container kinds `check_self_reference` can be asked about:
 /// upstream's `MPConvStackValType` less the two partial stages, which are
-/// never `copyID`-marked.
+/// never `copy_id`-marked.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum ConvType {
     Dict,
@@ -112,7 +112,7 @@ pub(crate) enum Frame {
     },
 }
 
-/// A stack entry: the value being walked plus the `copyID` to restore when it
+/// A stack entry: the value being walked plus the `copy_id` to restore when it
 /// is popped.
 #[derive(Copy, Clone)]
 pub(crate) struct ConvFrame {

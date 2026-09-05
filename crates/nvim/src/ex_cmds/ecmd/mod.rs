@@ -61,7 +61,7 @@ use crate::memory::{xfree, xmalloc};
 use crate::message::msg_check_for_delay;
 use crate::message::state::{msg_listdo_overwrite, msg_scroll, msg_scrolled_ign};
 use crate::r#move::{changed_line_abv_curs, update_topline};
-use crate::normal::reset_VIsual;
+use crate::normal::reset_visual;
 use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};
 use crate::option::{ScrollMargin, ScrollOff, shortmess};
 use crate::path::fix_fname;
@@ -337,7 +337,7 @@ pub unsafe fn do_ecmd(
         // End Visual mode before switching to another buffer, so the text can
         // be copied into the GUI selection buffer.  Careful: may trigger a
         // ModeChanged autocommand.  Should we block autocommands here?
-        reset_VIsual();
+        reset_visual();
 
         // autocommands freed window :(
         // SAFETY: `oldwin` is the caller's, and `win_valid` tolerates a stale

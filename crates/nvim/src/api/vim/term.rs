@@ -133,9 +133,9 @@ unsafe fn term_write(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut args__items: [Object; 3] = [Object::Nil; 3];
+    let mut args_items: [Object; 3] = [Object::Nil; 3];
     args.capacity = 3 as size_t;
-    args.items = &raw mut args__items as *mut Object;
+    args.items = &raw mut args_items as *mut Object;
     let text = Object::string(String_0::from_raw_parts(buf.cast_mut(), size));
     // SAFETY: `chan` is the terminal's channel and `args` the three-slot
     // block just declared above it.

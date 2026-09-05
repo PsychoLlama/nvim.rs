@@ -22,7 +22,7 @@ use core::ptr;
 pub(crate) unsafe fn showmatches_oneline(
     expand: *mut Expand,
     matches: *mut *mut c_char,
-    numMatches: c_int,
+    num_matches: c_int,
     lines: c_int,
     linenr: c_int,
     maxlen: c_int,
@@ -46,7 +46,7 @@ pub(crate) unsafe fn showmatches_oneline(
 
     let mut lastlen = 999;
     let mut j = linenr;
-    while j < numMatches {
+    while j < num_matches {
         if expand.xp_context == ExpandContext::TagsListFiles {
             unsafe { msg_outtrans(*matches.offset(j as isize), HLF_D, false) };
             let name = unsafe { *matches.offset(j as isize) };
@@ -132,7 +132,7 @@ pub unsafe fn showmatches(
     let expand = unsafe { Xp::new(expand) };
     let mut shown = [0 as c_char; MAXPATHL as usize];
     let ccline = Cc::current();
-    let mut numMatches = 0;
+    let mut num_matches = 0;
     let mut matches = ptr::null_mut();
     let showtail;
 
@@ -146,7 +146,7 @@ pub unsafe fn showmatches(
                 expand.raw(),
                 ccline.text(),
                 ccline.cmdpos,
-                &raw mut numMatches,
+                &raw mut num_matches,
                 &raw mut matches,
             )
         };
@@ -155,7 +155,7 @@ pub unsafe fn showmatches(
         }
         showtail = unsafe { expand_showtail(expand.raw()) };
     } else {
-        numMatches = expand.xp_numfiles;
+        num_matches = expand.xp_numfiles;
         matches = expand.xp_files;
         showtail = cmd_showtail.get();
     }
@@ -166,7 +166,7 @@ pub unsafe fn showmatches(
                 Cc::current(),
                 expand.raw(),
                 matches,
-                numMatches,
+                num_matches,
                 showtail,
                 noselect,
             )
@@ -197,7 +197,7 @@ pub unsafe fn showmatches(
         unsafe {
             redraw_wildmenu(
                 expand.raw(),
-                numMatches,
+                num_matches,
                 matches,
                 if noselect { -1 } else { 0 },
                 showtail,
@@ -216,7 +216,7 @@ pub unsafe fn showmatches(
 
         // Find the length of the longest file name.
         let mut maxlen = 0;
-        for i in 0..numMatches {
+        for i in 0..num_matches {
             let len = if !showtail
                 && (expand.xp_context == ExpandContext::Files
                     || expand.xp_context == ExpandContext::ShellCmd
@@ -239,12 +239,12 @@ pub unsafe fn showmatches(
         }
 
         let lines = if expand.xp_context == ExpandContext::TagsListFiles {
-            numMatches
+            num_matches
         } else {
             // Compute the number of columns and lines for the listing.
             maxlen += 2; // two spaces between file names
             let columns = ((Columns.get() + 2) / maxlen).max(1);
-            (numMatches + columns - 1) / columns
+            (num_matches + columns - 1) / columns
         };
 
         if expand.xp_context == ExpandContext::TagsListFiles {
@@ -260,7 +260,7 @@ pub unsafe fn showmatches(
                 showmatches_oneline(
                     expand.raw(),
                     matches,
-                    numMatches,
+                    num_matches,
                     lines,
                     i,
                     maxlen,
@@ -279,7 +279,7 @@ pub unsafe fn showmatches(
     }
 
     if expand.xp_numfiles == -1 {
-        unsafe { free_wild(numMatches, matches) };
+        unsafe { free_wild(num_matches, matches) };
     }
 
     Expanded::Ok

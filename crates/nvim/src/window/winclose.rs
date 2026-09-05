@@ -28,7 +28,7 @@ use crate::guard::Lock;
 use crate::main::getout;
 use crate::message::internal_error;
 use crate::message::{e_autocmd_close, e_floatonly};
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{p_ea, p_ead, p_ru};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
@@ -345,7 +345,7 @@ fn leave_closing_window(win: Win) -> Leave {
     // return now.
     let mut other_buffer = false;
     if wp.w_buffer != curbuf.get() {
-        reset_VIsual_and_resel(); // stop Visual mode
+        reset_visual_and_resel(); // stop Visual mode
         other_buffer = true;
         if valid_win(win.raw()).is_none() {
             return Leave::Failed;

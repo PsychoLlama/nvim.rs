@@ -22,24 +22,24 @@ pub(crate) unsafe fn cmdline_pum_create(
     ccline: Cc,
     expand: *mut Expand,
     matches: *mut *mut c_char,
-    numMatches: c_int,
+    num_matches: c_int,
     showtail: bool,
     noselect: bool,
 ) {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
-    debug_assert!(numMatches >= 0);
+    debug_assert!(num_matches >= 0);
     // Add all the completion matches.
     compl_match_array
-        .set(unsafe { xmalloc(size_of::<PumItem>() * numMatches as size_t) } as *mut PumItem);
-    compl_match_arraysize.set(numMatches);
-    for i in 0..numMatches {
+        .set(unsafe { xmalloc(size_of::<PumItem>() * num_matches as size_t) } as *mut PumItem);
+    compl_match_arraysize.set(num_matches);
+    for i in 0..num_matches {
         let m = unsafe { *matches.offset(i as isize) };
         let item = PumItem {
             // C's SHOW_MATCH(i).
             pum_text: if showtail {
-                // SAFETY: `m` is one of the caller's `numMatches` matches.
+                // SAFETY: `m` is one of the caller's `num_matches` matches.
                 unsafe { showmatches_gettail(m, false) }
             } else {
                 m
@@ -52,7 +52,7 @@ pub(crate) unsafe fn cmdline_pum_create(
             pum_user_kind_hlattr: -1,
         };
         let slot = compl_match_array.get().wrapping_offset(i as isize);
-        // SAFETY: `slot` is the i'th of the `numMatches` items just
+        // SAFETY: `slot` is the i'th of the `num_matches` items just
         // allocated, and nothing has been written there yet.
         unsafe { slot.write(item) };
     }

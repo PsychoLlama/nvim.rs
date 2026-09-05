@@ -29,7 +29,7 @@ use crate::memory::xstrdup;
 use crate::message::state::msg_scrolled;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
-use crate::normal::{reset_VIsual_and_resel, visual_active};
+use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::buf_copy_options;
 use crate::option::vars::{p_acd, p_spk, p_wh, p_wiw};
 use crate::os::fs::{os_chdir, os_dirname};
@@ -62,7 +62,7 @@ pub(crate) fn goto_win(window: Win) {
 
     if window.w_buffer != curbuf.get() {
         // careful: triggers ModeChanged autocommand
-        reset_VIsual_and_resel();
+        reset_visual_and_resel();
     } else if visual_active() {
         window.w_cursor = cur_win().w_cursor;
     }

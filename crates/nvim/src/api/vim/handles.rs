@@ -120,7 +120,7 @@ pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
     };
     api_try(&mut err, |_| {
         if w.w_buffer != curbuf.get() {
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
         }
         // SAFETY: `w` is the live window just found.
         unsafe { goto_tabpage_win(win_find_tabpage(w.raw()), w.raw()) };

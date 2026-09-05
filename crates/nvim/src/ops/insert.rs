@@ -58,7 +58,7 @@ pub(crate) unsafe fn op_insert(op: *mut OpArg, count1: c_int) {
     let mut op = unsafe { Op::new(op) };
     let mut bd = BlockDef::ZERO;
     // `edit()` changes `w_curswant`; record it now, for `A`.
-    bd.is_MAX = c_int::from(cur_win().w_curswant == MAXCOL);
+    bd.is_max = c_int::from(cur_win().w_curswant == MAXCOL);
 
     // The Visual block is still marked; get rid of it now.
     cur_win().w_cursor.lnum = op.start.lnum;
@@ -161,7 +161,7 @@ fn move_cursor_for_append(op: Op, bd: &mut BlockDef) -> bool {
         {
             cur_win().w_cursor.col += 1;
         }
-        if bd.is_short != 0 && bd.is_MAX == 0 {
+        if bd.is_short != 0 && bd.is_max == 0 {
             // The first line was too short: pad it out and say so in `bd`.
             if u_save_cursor().is_err() {
                 return false;
@@ -209,7 +209,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
 
     // The user may have moved the cursor before typing; try to move the
     // block to match. Only when the difference is not the indent's doing.
-    if op.start.lnum == cur_buf().b_op_start_orig.lnum && bd.is_MAX == 0 && !did_indent {
+    if op.start.lnum == cur_buf().b_op_start_orig.lnum && bd.is_max == 0 && !did_indent {
         let orig = cur_buf().b_op_start_orig;
         let t = unsafe { getviscol2(orig.col, orig.coladd) };
         let orig_at = cur_buf().b_op_start_orig.col + cur_buf().b_op_start_orig.coladd;
@@ -248,7 +248,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
         op.end.col -= ind_post_col - pre.ind_pre_col;
         op.end_vcol -= ind_post_vcol - pre.ind_pre_vcol;
     }
-    if bd.is_MAX == 0 || bd2.textlen < bd.textlen {
+    if bd.is_max == 0 || bd2.textlen < bd.textlen {
         if op.op_type == OpType::Append {
             pre.pre_textlen += bd2.textlen - bd.textlen;
             if bd2.endspaces != 0 {
@@ -270,7 +270,7 @@ fn replay_insert(mut op: Op, bd: &mut BlockDef, pre: &mut BlockInsertPre, start_
         add += bd.textlen;
         // The cursor may have been moved during the insert when `$` was
         // used, and then the block has no right edge to measure from.
-        if bd.is_MAX != 0
+        if bd.is_max != 0
             && start_insert.lnum == Insstart.get().lnum
             && start_insert.col > Insstart.get().col
         {

@@ -238,8 +238,8 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
         start_vcol: 0,
         end_vcol: 0,
         is_short: 0,
-        is_MAX: 0,
-        is_oneChar: 0,
+        is_max: 0,
+        is_one_char: 0,
         pre_whitesp: 0,
         pre_whitesp_c: 0,
         end_char_vcols: 0,
@@ -260,7 +260,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
     // a later line is really a linewise one.
     //
     // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel_old = region.is_VIsual && unsafe { c_int::from(*p_sel.get()) } != 'o' as c_int;
+    let sel_old = region.is_visual && unsafe { c_int::from(*p_sel.get()) } != 'o' as c_int;
     if region.motion_type == kMTCharWise
         && region.start.col == 0
         && !region.inclusive
@@ -480,7 +480,7 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     let _ = unsafe { tv_dict_add_str(dict, c"operator".as_ptr(), 8, buf.as_mut_ptr()) };
 
     // SAFETY: as for `inclusive`.
-    let _ = unsafe { tv_dict_add_bool(dict, c"visual".as_ptr(), 6, flag(op.is_VIsual)) };
+    let _ = unsafe { tv_dict_add_bool(dict, c"visual".as_ptr(), 6, flag(op.is_visual)) };
     // SAFETY: `dict` is the one just filled in.
     unsafe { tv_dict_set_keys_readonly(dict) };
 

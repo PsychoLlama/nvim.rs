@@ -494,7 +494,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // Stop Visual mode: the cursor and "VIsual" may well be invalid after
     // switching to another buffer.
     // SAFETY: the state is this frame's and the list is locked.
-    reset_VIsual_and_resel();
+    reset_visual_and_resel();
     unsafe { arg_all_close_unused_windows(&mut aall) };
     // ARGCOUNT may have changed while doing that, because of autocommands,
     // so the count is against the recorded length.

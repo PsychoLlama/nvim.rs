@@ -89,7 +89,7 @@ pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
         }
     }
 
-    if !did_change && op.is_VIsual {
+    if !did_change && op.is_visual {
         // No change: the Visual selection still has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
     }

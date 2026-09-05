@@ -76,14 +76,14 @@ impl CompleteFuncCb {
         unsafe { copy_global_to_buflocal_cb(self.slot(), bufcb) };
     }
 
-    /// Mark what this callback references with `copyID`, so the garbage
+    /// Mark what this callback references with `copy_id`, so the garbage
     /// collector leaves it alone. Answers whether to abort.
     ///
     /// # Safety
     /// Runs the `set_ref_in_*` walk over a live typval graph.
-    pub(crate) unsafe fn set_ref(self, copyID: c_int) -> bool {
+    pub(crate) unsafe fn set_ref(self, copy_id: c_int) -> bool {
         // SAFETY: the caller's promise; the slot is this cell's own.
-        unsafe { set_ref_in_callback(self.slot(), copyID, ptr::null_mut(), ptr::null_mut()) }
+        unsafe { set_ref_in_callback(self.slot(), copy_id, ptr::null_mut(), ptr::null_mut()) }
     }
 }
 
@@ -489,12 +489,12 @@ pub unsafe fn did_set_thesaurusfunc(args: &mut OptSet) -> Option<&CStr> {
     }
 }
 
-/// Mark `copyID` references in an array of `F{func}` callbacks so they are not
+/// Mark `copy_id` references in an array of `F{func}` callbacks so they are not
 /// garbage collected.
 pub unsafe fn set_ref_in_cpt_callbacks(
     callbacks: *mut Callback,
     count: c_int,
-    copyID: c_int,
+    copy_id: c_int,
 ) -> bool {
     if callbacks.is_null() {
         return false;
@@ -506,19 +506,19 @@ pub unsafe fn set_ref_in_cpt_callbacks(
         let slot = unsafe { callbacks.offset(i) };
         // SAFETY: as above; the two nulls say there is no containing list or
         // dict to mark.
-        abort = abort || unsafe { set_ref_in_callback(slot, copyID, no_list, no_dict) };
+        abort = abort || unsafe { set_ref_in_callback(slot, copy_id, no_list, no_dict) };
     }
     abort
 }
 
 /// Mark the global `'completefunc'`, `'omnifunc'` and `'thesaurusfunc'`
-/// callbacks with `copyID` so they are not garbage collected.
-pub unsafe fn set_ref_in_insexpand_funcs(copyID: c_int) -> bool {
-    let mut abort = unsafe { cfu_cb().set_ref(copyID) };
-    abort = abort || unsafe { ofu_cb().set_ref(copyID) };
-    abort = abort || unsafe { tsrfu_cb().set_ref(copyID) };
+/// callbacks with `copy_id` so they are not garbage collected.
+pub unsafe fn set_ref_in_insexpand_funcs(copy_id: c_int) -> bool {
+    let mut abort = unsafe { cfu_cb().set_ref(copy_id) };
+    abort = abort || unsafe { ofu_cb().set_ref(copy_id) };
+    abort = abort || unsafe { tsrfu_cb().set_ref(copy_id) };
     abort =
-        abort || unsafe { set_ref_in_cpt_callbacks(cpt_cb().slots(), cpt_cb().count(), copyID) };
+        abort || unsafe { set_ref_in_cpt_callbacks(cpt_cb().slots(), cpt_cb().count(), copy_id) };
     abort
 }
 
@@ -585,7 +585,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     let mut matchlist: *mut List = ptr::null_mut();
     let mut matchdict: *mut Dict = ptr::null_mut();
     let mut rettv = TYPVAL_T_INIT;
-    let save_State = State.get();
+    let save_state = State.get();
     let pos = cur_win().w_cursor;
 
     // Lock the text to avoid weird things from happening.  Also disallow
@@ -615,7 +615,7 @@ pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb
     }
 
     // Restore State, it might have been changed.
-    State.set(save_State);
+    State.set(save_state);
     if !matchdict.is_null() {
         unsafe { tv_dict_unref(matchdict) };
     }

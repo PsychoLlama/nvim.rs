@@ -90,7 +90,7 @@ pub(crate) fn dv_hashtab(d: *mut Dict) -> *mut HashTab {
 /// The address of a dictionary's copy mark; see [`field_of`].
 #[inline(always)]
 pub(crate) fn dv_copyid(d: *mut Dict) -> *mut ::core::ffi::c_int {
-    field_of(d, ::core::mem::offset_of!(Dict, dv_copyID))
+    field_of(d, ::core::mem::offset_of!(Dict, dv_copy_id))
 }
 
 /// The address of a dictionary's watcher queue; see [`field_of`].
@@ -102,7 +102,7 @@ pub(crate) fn dv_watchers(d: *mut Dict) -> *mut QUEUE {
 /// The address of a list's copy mark; see [`field_of`].
 #[inline(always)]
 pub(crate) fn lv_copyid(l: *mut List) -> *mut ::core::ffi::c_int {
-    field_of(l, ::core::mem::offset_of!(List, lv_copyID))
+    field_of(l, ::core::mem::offset_of!(List, lv_copy_id))
 }
 
 /// The address of a list's watcher chain head; see [`field_of`].
@@ -430,7 +430,7 @@ pub unsafe fn tv_list_set_lock(l: *mut List, lock: VarLock) {
 /// `copyid` must be one the caller reserved from `get_copyID`.
 #[inline]
 pub unsafe fn tv_list_set_copyid(l: *mut List, copyid: ::core::ffi::c_int) {
-    unsafe { (*l).lv_copyID = copyid };
+    unsafe { (*l).lv_copy_id = copyid };
 }
 
 /// Number of items in `l`; a NULL list is empty.
@@ -448,7 +448,7 @@ pub unsafe fn tv_list_len(l: *const List) -> ::core::ffi::c_int {
 /// `l` must point at a live list — **not** null, unlike its neighbours.
 #[inline]
 pub unsafe fn tv_list_copyid(l: *const List) -> ::core::ffi::c_int {
-    unsafe { (*l).lv_copyID }
+    unsafe { (*l).lv_copy_id }
 }
 
 /// Normalise a possibly negative list index against `l`'s length.

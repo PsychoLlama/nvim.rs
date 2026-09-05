@@ -21,8 +21,8 @@ pub struct TPVAR {
 }
 pub struct TerminfoEntry {
     pub bce: bool,
-    pub has_Tc_or_RGB: bool,
-    pub Su: bool,
+    pub has_tc_or_rgb: bool,
+    pub su: bool,
     pub max_colors: ::core::ffi::c_int,
     pub lines: ::core::ffi::c_int,
     pub columns: ::core::ffi::c_int,

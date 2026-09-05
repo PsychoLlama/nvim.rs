@@ -662,8 +662,8 @@ pub struct Tabpage {
     /// `winlayer::windows_in_tab` encodes.
     pub(crate) tp_firstwin: Option<WinId>,
     pub(crate) tp_lastwin: Option<WinId>,
-    pub tp_old_Rows_avail: int64_t,
-    pub tp_old_Columns: int64_t,
+    pub tp_old_rows_avail: int64_t,
+    pub tp_old_columns: int64_t,
     pub tp_ch_used: OptInt,
     pub tp_did_tabclosedpre: bool,
     pub tp_first_diff: *mut DiffBlock,

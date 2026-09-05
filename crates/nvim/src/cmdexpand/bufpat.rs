@@ -186,19 +186,19 @@ pub(crate) unsafe fn concat_pattern_with_buffer_match(
 
 /// Search for strings matching `pat` in the specified range and return them.
 ///
-/// `dir` is `FORWARD` or `BACKWARD`; `matches` and `numMatches` return the
+/// `dir` is `FORWARD` or `BACKWARD`; `matches` and `num_matches` return the
 /// answer.  Returns `Ok` on success, `Err` otherwise.
 pub(crate) unsafe fn expand_pattern_in_buf(
     pat: *mut c_char,
     dir: Direction,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
 ) -> Result<(), Failed> {
     let exacttext = exacttext();
     let has_range = search_first_line.get() != 0;
 
     unsafe { *matches = ptr::null_mut() };
-    unsafe { *numMatches = 0 };
+    unsafe { *num_matches = 0 };
 
     if pat.is_null() || unsafe { *pat } as c_int == NUL {
         return Err(Failed);
@@ -358,7 +358,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
         return Err(Failed);
     }
 
-    unsafe { *numMatches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
+    unsafe { *num_matches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
     unsafe { *matches = owned_cstr_array(found) };
     Ok(())
 }

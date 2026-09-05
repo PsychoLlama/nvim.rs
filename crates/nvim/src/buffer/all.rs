@@ -23,7 +23,7 @@ use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::guard::Suppress;
 use crate::mark::setpcmark;
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::reset_visual_and_resel;
 use crate::option::vars::{jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
@@ -209,7 +209,7 @@ pub unsafe fn ex_buffer_all(args: *mut ExArg) {
 
     // Stop Visual mode: the cursor and "VIsual" may very well be invalid
     // after switching to another buffer.
-    reset_VIsual_and_resel();
+    reset_visual_and_resel();
     set_pcmark();
 
     close_superfluous_windows(had_tab, &mut open_wins);

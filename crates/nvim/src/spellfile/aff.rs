@@ -797,10 +797,10 @@ unsafe fn finish_aff(
 
     // Prefix ids count up and compound ids down; meeting means one kind
     // ran out of room.
-    if spin.si_newcompID < spin.si_newprefID {
-        let complaint = if spin.si_newcompID == 127 || spin.si_newcompID == 255 {
+    if spin.si_newcomp_id < spin.si_newpref_id {
+        let complaint = if spin.si_newcomp_id == 127 || spin.si_newcomp_id == 255 {
             c"Too many postponed prefixes"
-        } else if spin.si_newprefID == 0 || spin.si_newprefID == 127 {
+        } else if spin.si_newpref_id == 0 || spin.si_newpref_id == 127 {
             c"Too many compound flags"
         } else {
             c"Too many postponed prefixes and/or compound flags"

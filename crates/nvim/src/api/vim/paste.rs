@@ -61,11 +61,11 @@ pub unsafe fn nvim_paste(
         }
         // SAFETY: `data` names its own bytes and `arena` is the caller's.
         let lines = unsafe { string_to_array(data, crlf, arena) };
-        let mut args__items: [Object; 2] = [Object::Nil; 2];
+        let mut args_items: [Object; 2] = [Object::Nil; 2];
         let mut args = Array {
             size: 0 as size_t,
             capacity: 2 as size_t,
-            items: (&raw mut args__items).cast::<Object>(),
+            items: (&raw mut args_items).cast::<Object>(),
         };
         // SAFETY: `args` is the two-slot block just declared above it.
         unsafe {

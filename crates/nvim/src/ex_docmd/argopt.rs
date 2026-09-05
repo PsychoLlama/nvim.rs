@@ -528,13 +528,13 @@ fn expand_generic(
     expand: *mut Expand,
     regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     func: CompleteListItemGetter,
     escaped: bool,
 ) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe {
-        crate::cmdexpand::expand_generic(pat, expand, regmatch, matches, numMatches, func, escaped)
+        crate::cmdexpand::expand_generic(pat, expand, regmatch, matches, num_matches, func, escaped)
     }
 }
 

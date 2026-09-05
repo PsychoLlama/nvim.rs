@@ -74,9 +74,9 @@ pub unsafe fn did_set_tagfunc(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// # Safety
 /// Must be called from a garbage-collection sweep.
-pub unsafe fn set_ref_in_tagfunc(copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_tagfunc(copy_id: c_int) -> bool {
     // SAFETY: the caller's promise.
-    unsafe { set_ref_in_callback(global_tagfunc(), copyID, ptr::null_mut(), ptr::null_mut()) }
+    unsafe { set_ref_in_callback(global_tagfunc(), copy_id, ptr::null_mut(), ptr::null_mut()) }
 }
 
 /// Copy the global `'tagfunc'` callback into `buffer`'s local one.

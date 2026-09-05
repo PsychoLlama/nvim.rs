@@ -250,7 +250,7 @@ pub(crate) struct InsertState {
     pub old_topline: LineNr,
     pub old_topfill: ::core::ffi::c_int,
     pub inserted_space: ::core::ffi::c_int,
-    pub replaceState: ::core::ffi::c_int,
+    pub replace_state: ::core::ffi::c_int,
     pub nomove: bool,
 }
 pub(crate) const MSCR_RIGHT: ::core::ffi::c_int = -2;

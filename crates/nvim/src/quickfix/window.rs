@@ -350,7 +350,7 @@ pub unsafe fn ex_copen(args: *mut ExArg) {
     } else {
         QF_WINHEIGHT as c_int
     };
-    reset_VIsual_and_resel(); // stop Visual mode
+    reset_visual_and_resel(); // stop Visual mode
 
     // Find an existing quickfix window, or open a new one.
     let vertical = cmdmod.with(|m| m.cmod_split) & WSP_VERT as c_int != 0;

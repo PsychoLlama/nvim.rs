@@ -215,7 +215,7 @@ pub struct WordNode {
     /// How many parents point here; above one the sub-tree is shared.
     pub wn_refs: c_int,
     pub wn_byte: uint8_t,
-    pub wn_affixID: uint8_t,
+    pub wn_affix_id: uint8_t,
     pub wn_flags: uint16_t,
     pub wn_region: int16_t,
 }
@@ -378,7 +378,7 @@ unsafe fn add_per_affix(
 /// Add one word to `root`, and compress the trees when the arena has grown
 /// past the threshold.
 ///
-/// A negative `flags` means the prefix tree, where `affixID` rather than
+/// A negative `flags` means the prefix tree, where `affix_id` rather than
 /// the flags decides sibling order and no two entries are ever merged.
 ///
 /// # Safety
@@ -390,7 +390,7 @@ pub(super) unsafe fn tree_add_word(
     root: *mut WordNode,
     flags: c_int,
     region: c_int,
-    affixID: c_int,
+    affix_id: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: nodes come from the arena and outlive the call; the walk
     // follows `word` only up to its NUL.
@@ -419,7 +419,7 @@ pub(super) unsafe fn tree_add_word(
                 if unsafe { (*np).wn_byte } as c_int == NUL {
                     unsafe { (*np).wn_flags = (*copyp).wn_flags };
                     unsafe { (*np).wn_region = (*copyp).wn_region };
-                    unsafe { (*np).wn_affixID = (*copyp).wn_affixID };
+                    unsafe { (*np).wn_affix_id = (*copyp).wn_affix_id };
                 }
                 unsafe { (*np).wn_refs = 1 };
                 if !copyprev.is_null() {
@@ -435,7 +435,7 @@ pub(super) unsafe fn tree_add_word(
 
         // Skip siblings that sort before what is being added.
         while !node.is_null()
-            && unsafe { sorts_before(spin, node, *word.offset(i), flags, region, affixID) }
+            && unsafe { sorts_before(spin, node, *word.offset(i), flags, region, affix_id) }
         {
             prev = unsafe { &raw mut (*node).wn_sibling };
             node = unsafe { *prev };
@@ -451,7 +451,7 @@ pub(super) unsafe fn tree_add_word(
                 && (flags < 0
                     || spin.si_sugtree != 0
                     || unsafe { (*node).wn_flags } as c_int != flags & WN_MASK
-                    || unsafe { (*node).wn_affixID } as c_int != affixID));
+                    || unsafe { (*node).wn_affix_id } as c_int != affix_id));
         if need_new && !unsafe { insert_before(spin, &mut node, prev, *word.offset(i)) } {
             return Err(Failed);
         }
@@ -459,7 +459,7 @@ pub(super) unsafe fn tree_add_word(
         if unsafe { *word.offset(i) } as c_int == NUL {
             unsafe { (*node).wn_flags = flags as uint16_t };
             unsafe { (*node).wn_region |= region as int16_t };
-            unsafe { (*node).wn_affixID = affixID as uint8_t };
+            unsafe { (*node).wn_affix_id = affix_id as uint8_t };
             break;
         }
         prev = unsafe { &raw mut (*node).wn_child };
@@ -494,7 +494,7 @@ pub(super) unsafe fn tree_add_word(
             unsafe { ui_flush() };
         }
         unsafe { wordtree_compress(spin, spin.si_foldroot, c"case-folded") };
-        if affixID >= 0 {
+        if affix_id >= 0 {
             unsafe { wordtree_compress(spin, spin.si_keeproot, c"keep-case") };
         }
     }
@@ -513,7 +513,7 @@ unsafe fn sorts_before(
     byte: c_char,
     flags: c_int,
     region: c_int,
-    affixID: c_int,
+    affix_id: c_int,
 ) -> bool {
     // SAFETY: the caller promises a live node.
     if (unsafe { (*node).wn_byte } as c_int) < byte as uint8_t as c_int {
@@ -525,7 +525,7 @@ unsafe fn sorts_before(
     // Word ends sort among themselves: by affix id in the prefix tree,
     // otherwise by flags and then by region or affix id.
     if flags < 0 {
-        return (unsafe { (*node).wn_affixID } as c_uint) < affixID as c_uint;
+        return (unsafe { (*node).wn_affix_id } as c_uint) < affix_id as c_uint;
     }
     if (unsafe { (*node).wn_flags } as c_uint) < (flags & WN_MASK) as c_uint {
         return true;
@@ -536,7 +536,7 @@ unsafe fn sorts_before(
     if spin.si_sugtree != 0 {
         (unsafe { (*node).wn_region } as c_int & 0xffff) < region
     } else {
-        (unsafe { (*node).wn_affixID } as c_uint) < affixID as c_uint
+        (unsafe { (*node).wn_affix_id } as c_uint) < affix_id as c_uint
     }
 }
 
@@ -764,7 +764,7 @@ unsafe fn write_digest(node: *mut WordNode, len: c_int) {
         let n: c_uint = if unsafe { (*np).wn_byte } as c_int == NUL {
             (unsafe { (*np).wn_flags } as c_int
                 + ((unsafe { (*np).wn_region } as c_int) << 8)
-                + ((unsafe { (*np).wn_affixID } as c_int) << 16)) as c_uint
+                + ((unsafe { (*np).wn_affix_id } as c_int) << 16)) as c_uint
         } else {
             (unsafe { (*np).wn_byte } as usize).wrapping_add(
                 unsafe { (*np).wn_child }
@@ -825,7 +825,7 @@ unsafe fn node_equal(n1: *mut WordNode, n2: *mut WordNode) -> bool {
             unsafe {
                 (*p1).wn_flags != (*p2).wn_flags
                     || (*p1).wn_region != (*p2).wn_region
-                    || (*p1).wn_affixID != (*p2).wn_affixID
+                    || (*p1).wn_affix_id != (*p2).wn_affix_id
             }
         } else {
             unsafe { (*p1).wn_child != (*p2).wn_child }
@@ -852,7 +852,7 @@ mod tests {
             wn_sibling: ptr::null_mut(),
             wn_refs: 0,
             wn_byte: 0,
-            wn_affixID: 0,
+            wn_affix_id: 0,
             wn_flags: 0,
             wn_region: 0,
         }
@@ -895,7 +895,7 @@ mod tests {
             wn_sibling,
             wn_refs,
             wn_byte,
-            wn_affixID,
+            wn_affix_id,
             wn_flags,
             wn_region,
         } = blank_node();
@@ -906,7 +906,7 @@ mod tests {
             + size_of_val(&wn_sibling)
             + size_of_val(&wn_refs)
             + size_of_val(&wn_byte)
-            + size_of_val(&wn_affixID)
+            + size_of_val(&wn_affix_id)
             + size_of_val(&wn_flags)
             + size_of_val(&wn_region);
         assert!(

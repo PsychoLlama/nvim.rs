@@ -22,7 +22,7 @@ use crate::ex_getln::text_or_buf_locked;
 use crate::getchar::beep_flush;
 use crate::message::e_floatexchange;
 use crate::message::{emsg, iemsg};
-use crate::normal::{reset_VIsual_and_resel, visual_active};
+use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{FAIL, Failed, Frame, OptInt, Window};
 use crate::winlayer::graph::{curbuf, lastwin};
@@ -157,7 +157,7 @@ pub(crate) fn exchange(prenum: c_int) {
     comp_positions();
 
     if wp.w_buffer != curbuf.get() {
-        reset_VIsual_and_resel();
+        reset_visual_and_resel();
     } else if visual_active() {
         wp.w_cursor = cur.w_cursor;
     }

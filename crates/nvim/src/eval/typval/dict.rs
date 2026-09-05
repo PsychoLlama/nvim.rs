@@ -143,7 +143,7 @@ pub unsafe fn tv_dict_alloc() -> *mut Dict {
     dict.dv_lock = VarLock::Unlocked;
     dict.dv_scope = VAR_NO_SCOPE;
     dict.dv_refcount = Refcount::ZERO;
-    dict.dv_copyID = 0;
+    dict.dv_copy_id = 0;
     unsafe { queue_init(&raw mut (*d).watchers) };
     dict.lua_table_ref = LUA_NOREF as LuaRef;
     d
@@ -570,7 +570,7 @@ pub unsafe fn tv_dict_extend(d1: *mut Dict, d2: *mut Dict, action: *const ::core
 /// # Safety
 /// `d1` and `d2` are each null or a live dictionary. Comparing values can
 /// recurse, so a cycle must already have been ruled out by the caller's
-/// `copyID` bookkeeping.
+/// `copy_id` bookkeeping.
 pub unsafe fn tv_dict_equal(d1: *mut Dict, d2: *mut Dict, ic: bool) -> bool {
     if d1 == d2 {
         return true;
@@ -598,29 +598,29 @@ pub unsafe fn tv_dict_equal(d1: *mut Dict, d2: *mut Dict, ic: bool) -> bool {
 
 /// Copy `orig`, deeply when `deep`, converting keys through `conv`.
 ///
-/// `copyID` is the garbage collector's mark: non-zero records the copy on the
+/// `copy_id` is the garbage collector's mark: non-zero records the copy on the
 /// original so a self-referencing dictionary resolves to the same copy.
 ///
 /// # Safety
 /// `orig` is null or a live dictionary and `conv` is null or a live
-/// converter. A non-zero `copyID` is written onto `orig`, so it must be one
+/// converter. A non-zero `copy_id` is written onto `orig`, so it must be one
 /// the caller reserved from `get_copyID`; passing a stale one makes an
 /// unrelated walk think this dictionary is already visited.
 pub unsafe fn tv_dict_copy(
     conv: *const VimConv,
     orig: *mut Dict,
     deep: bool,
-    copyID: ::core::ffi::c_int,
+    copy_id: ::core::ffi::c_int,
 ) -> *mut Dict {
     if orig.is_null() {
         return ::core::ptr::null_mut();
     }
 
     let mut copy = unsafe { tv_dict_alloc() };
-    if copyID != 0 {
+    if copy_id != 0 {
         // SAFETY: the caller's promise: a live dictionary.
         let mut from = unsafe { Dt::new(orig) };
-        from.dv_copyID = copyID;
+        from.dv_copy_id = copy_id;
         from.dv_copydict = copy;
     }
     for hi in unsafe { tv_dict_iter(orig) } {
@@ -647,7 +647,7 @@ pub unsafe fn tv_dict_copy(
         if deep {
             let from = di_tv(di);
             let to = di_tv(new_di);
-            if unsafe { var_item_copy(conv, from, to, deep, copyID) }.is_err() {
+            if unsafe { var_item_copy(conv, from, to, deep, copy_id) }.is_err() {
                 unsafe { xfree(new_di.cast()) };
                 break;
             }

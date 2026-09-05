@@ -282,12 +282,12 @@ const EXPAND_ARG_BUFFER: usize = 4;
 /// Answers `Ok` if any matched, `Err` otherwise.
 ///
 /// # Safety
-/// Every pointer argument must be live; `matches` and `numMatches` are
+/// Every pointer argument must be live; `matches` and `num_matches` are
 /// written unconditionally.
 pub unsafe fn expand_mappings(
     pat: *mut c_char,
     regmatch: *mut RegMatch,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise — `pat` is a live, NUL-terminated pattern.
@@ -295,7 +295,7 @@ pub unsafe fn expand_mappings(
 
     // SAFETY: the caller's promise — both out-parameters are writable.
     unsafe {
-        *numMatches = 0; // return values in case of FAIL
+        *num_matches = 0; // return values in case of FAIL
         *matches = ptr::null_mut();
     }
 
@@ -392,7 +392,7 @@ pub unsafe fn expand_mappings(
         } else {
             *matches = Box::into_raw(plain.into_boxed_slice()).cast::<*mut c_char>();
         }
-        *numMatches = found;
+        *num_matches = found;
         found
     };
     if count > 1 {
@@ -422,6 +422,6 @@ pub unsafe fn expand_mappings(
     }
 
     // SAFETY: the caller's writable out-parameter.
-    unsafe { *numMatches = count };
+    unsafe { *num_matches = count };
     if count == 0 { Err(Failed) } else { Ok(()) }
 }

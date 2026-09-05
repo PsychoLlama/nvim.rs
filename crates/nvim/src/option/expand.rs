@@ -482,7 +482,7 @@ pub(crate) unsafe fn expand_settings(
     expand: *mut Expand,
     regmatch: *mut RegMatch,
     fuzzystr: *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
     can_fuzzy: bool,
 ) -> Result<(), Failed> {
@@ -553,7 +553,7 @@ pub(crate) unsafe fn expand_settings(
             if num_normal == 0 {
                 return Ok(());
             }
-            unsafe { *numMatches = num_normal };
+            unsafe { *num_matches = num_normal };
             if fuzzy {
                 let room = (num_normal as size_t).wrapping_mul(size_of::<FuzMatchStr>());
                 fuzmatch = unsafe { xmalloc(room) }.cast::<FuzMatchStr>();
@@ -587,11 +587,11 @@ pub(crate) unsafe fn escape_option_str_cmdline(var: *mut c_char) -> *mut c_char 
 ///
 /// The out-parameters must be writable.
 pub(crate) unsafe fn expand_old_setting(
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's out-parameters, and the option table.
-    unsafe { *numMatches = 0 };
+    unsafe { *num_matches = 0 };
     unsafe { *matches = xmalloc(size_of::<*mut c_char>()).cast::<*mut c_char>() };
 
     // A terminal option has no table row, so it is looked up by the
@@ -607,7 +607,7 @@ pub(crate) unsafe fn expand_old_setting(
         rendered.as_mut_ptr()
     };
     unsafe { *(*matches) = escape_option_str_cmdline(var) };
-    unsafe { *numMatches = 1 };
+    unsafe { *num_matches = 1 };
     Ok(())
 }
 
@@ -619,7 +619,7 @@ pub(crate) unsafe fn expand_old_setting(
 pub(crate) unsafe fn expand_string_setting(
     expand: *mut Expand,
     regmatch: *mut RegMatch,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's expansion state and out-parameters, and the
@@ -648,7 +648,7 @@ pub(crate) unsafe fn expand_string_setting(
         oe_xp: expand,
         oe_set_arg: set_arg,
     };
-    let num_ret = unsafe { expand_cb(&raw mut args, numMatches, matches) };
+    let num_ret = unsafe { expand_cb(&raw mut args, num_matches, matches) };
     unsafe { xfree(escaped.cast::<c_void>()) };
     num_ret
 }
@@ -662,14 +662,14 @@ pub(crate) unsafe fn expand_string_setting(
 pub(crate) unsafe fn expand_setting_subtract(
     expand: *mut Expand,
     regmatch: *mut RegMatch,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's expansion state and out-parameters, and the
     // option table.
     let opt_idx = IDX.get();
     if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
-        return unsafe { expand_old_setting(numMatches, matches) };
+        return unsafe { expand_old_setting(num_matches, matches) };
     }
     let (buf, win) = (curbuf.get(), curwin.get());
     let varp = unsafe { get_varp_scope_from(opt_idx, FLAGS.get(), buf, win) };
@@ -722,7 +722,7 @@ pub(crate) unsafe fn expand_setting_subtract(
         }
         unsafe { xfree(copy.cast::<c_void>()) };
         unsafe { *matches = ga.ga_data.cast::<*mut c_char>() };
-        unsafe { *numMatches = ga.ga_len };
+        unsafe { *num_matches = ga.ga_len };
         return Ok(());
     }
 
@@ -752,9 +752,9 @@ pub(crate) unsafe fn expand_setting_subtract(
                 flag = unsafe { flag.add(1) };
             }
         }
-        unsafe { *numMatches = count };
+        unsafe { *num_matches = count };
         return Ok(());
     }
 
-    unsafe { expand_old_setting(numMatches, matches) }
+    unsafe { expand_old_setting(num_matches, matches) }
 }

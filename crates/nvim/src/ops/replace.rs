@@ -120,14 +120,14 @@ pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Fail
 /// `op` must be blockwise.
 fn replace_block(op: Op, c: c_int, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
-    bd.is_MAX = c_int::from(cur_win().w_curswant == MAXCOL);
+    bd.is_max = c_int::from(cur_win().w_curswant == MAXCOL);
     while cur_win().w_cursor.lnum <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
         cur_win().w_cursor.col = 0;
         // SAFETY: the cursor walks the region, so its line is the buffer's.
         let lnum = cur_win().w_cursor.lnum;
         unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
-        if bd.textlen != 0 || (op_virtual() && bd.is_MAX == 0) {
+        if bd.textlen != 0 || (op_virtual() && bd.is_max == 0) {
             replace_block_line(op, &mut bd, c, had_ctrl_v_cr);
         }
         cur_win().w_cursor.lnum += 1;
@@ -165,7 +165,7 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
 
     // How many characters to replace.
     let mut numc = op.end_vcol - op.start_vcol + 1;
-    if bd.is_short != 0 && (!op_virtual() || bd.is_MAX != 0) {
+    if bd.is_short != 0 && (!op_virtual() || bd.is_max != 0) {
         numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.

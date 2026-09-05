@@ -114,7 +114,7 @@ impl LuaSink {
     /// map's `_VAL` list lives in that member.
     ///
     /// `None` — no frame matched — cannot happen for a container the walk has
-    /// marked with the current `copyID`, and upstream pushes nothing at all in
+    /// marked with the current `copy_id`, and upstream pushes nothing at all in
     /// that case, leaving the value it promised missing.
     fn backref(path: &ConvPath, val: *mut c_void, conv_type: ConvType) -> Option<c_int> {
         let depth = path.stack.len();

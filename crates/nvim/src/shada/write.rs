@@ -674,7 +674,7 @@ unsafe fn writable_value(vartv: &TypVal) -> bool {
             let copy_id = unsafe { get_copy_id() };
             unsafe {
                 set_ref_in_ht(&raw mut (*di).dv_hashtab, copy_id, core::ptr::null_mut())
-                    || copy_id != (*di).dv_copyID
+                    || copy_id != (*di).dv_copy_id
             }
         }
         VAR_LIST => {
@@ -682,7 +682,7 @@ unsafe fn writable_value(vartv: &TypVal) -> bool {
             let copy_id = unsafe { get_copy_id() };
             unsafe {
                 set_ref_in_list_items(l, copy_id, core::ptr::null_mut())
-                    || copy_id != (*l).lv_copyID
+                    || copy_id != (*l).lv_copy_id
             }
         }
         _ => true,

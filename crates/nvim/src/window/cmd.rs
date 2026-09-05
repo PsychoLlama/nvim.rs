@@ -40,7 +40,7 @@ use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};
 use crate::message_fmt::emsg_text;
 use crate::normal::{
     add_to_showcmd, check_text_or_curbuf_locked, do_nv_ident, find_ident_under_cursor,
-    reset_VIsual_and_resel,
+    reset_visual_and_resel,
 };
 use crate::option::vars::{p_langmap, p_lrm, p_pvh, swb_flags};
 use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
@@ -131,7 +131,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel(); // stop Visual mode
+            reset_visual_and_resel(); // stop Visual mode
             split_or_new(nchar, prenum, 0);
         }
         // split the current window in two parts, vertically
@@ -139,7 +139,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             split_or_new(nchar, prenum, WSP_VERT as c_int);
         }
         // split the current window and edit the alternate file
@@ -147,7 +147,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             split_alternate(prenum);
         }
         // open a new window
@@ -155,17 +155,17 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             new_window(nchar, prenum);
         }
         // quit the current window
         Err(NotAKey(QUIT | Ctrl_Q)) => {
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             run_with_count(c"quit", prenum);
         }
         // close the current window
         Err(NotAKey(CLOSE | Ctrl_C)) => {
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             run_with_count(c"close", prenum);
         }
         // close the preview window
@@ -173,7 +173,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             run_cmd(c"pclose".as_ptr());
         }
         // cursor to the preview window
@@ -186,7 +186,7 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             run_with_count(c"only", prenum);
         }
         // cursor to the next ('w') or previous ('W') window, wrapping around
@@ -248,14 +248,14 @@ fn window_command(nchar: c_int, prenum: c_int, xchar: c_int) {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             rotate(false, prenum1);
         }
         Err(NotAKey(ROTATE_UP)) => {
             if in_cmdwin() {
                 return;
             }
-            reset_VIsual_and_resel();
+            reset_visual_and_resel();
             rotate(true, prenum1);
         }
         // move the window to the very top, bottom, left or right

@@ -35,7 +35,7 @@ pub(crate) unsafe fn op_colon(op: *mut OpArg) {
     // below is either a literal of this file's or a NUL-terminated option.
     let op = unsafe { Op::new(op) };
     stuff_readbuf_char(':' as c_int);
-    if op.is_VIsual {
+    if op.is_visual {
         unsafe { stuff_readbuf(c"'<,'>".as_ptr()) };
     } else {
         // Make the range look nice, so it can be repeated.

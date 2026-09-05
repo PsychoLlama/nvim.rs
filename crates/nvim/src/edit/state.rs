@@ -39,7 +39,7 @@ use crate::types::NUL;
 fn insert_enter(s: &mut InsertState) {
     s.did_backspace = true;
     s.old_topfill = -1;
-    s.replaceState = MODE_REPLACE;
+    s.replace_state = MODE_REPLACE;
     s.cmdchar_todo = s.cmdchar;
     s.ins_just_started = true;
     // Remember whether editing was restarted after CTRL-O.
@@ -99,7 +99,7 @@ fn insert_enter(s: &mut InsertState) {
         State.set(MODE_REPLACE);
     } else if s.cmdchar == 'V' as c_int || s.cmdchar == 'v' as c_int {
         State.set(MODE_VREPLACE);
-        s.replaceState = MODE_VREPLACE;
+        s.replace_state = MODE_VREPLACE;
         orig_line_count.set(cur_buf().b_ml.ml_line_count);
         vr_lines_changed.set(1);
     } else {
@@ -741,7 +741,7 @@ pub(crate) unsafe fn edit(cmdchar: c_int, startln: bool, count: c_int) -> bool {
         old_topline: 0,
         old_topfill: 0,
         inserted_space: 0,
-        replaceState: 0,
+        replace_state: 0,
         nomove: false,
     };
     insert_enter(&mut s);

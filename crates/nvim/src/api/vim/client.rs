@@ -37,12 +37,12 @@ pub unsafe fn nvim_set_client_info(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<KeyValuePair>(),
     };
-    let mut info__items: [KeyValuePair; 5] = [KeyValuePair {
+    let mut info_items: [KeyValuePair; 5] = [KeyValuePair {
         key: String_0::NULL,
         value: Object::Nil,
     }; 5];
     info.capacity = 5 as size_t;
-    info.items = &raw mut info__items as *mut KeyValuePair;
+    info.items = &raw mut info_items as *mut KeyValuePair;
     unsafe { dict_put(&mut info, c"name", Object::string(name)) };
     let mut has_major: bool = false;
     let mut i: size_t = 0 as size_t;

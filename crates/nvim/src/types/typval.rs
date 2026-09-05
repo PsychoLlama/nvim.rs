@@ -360,7 +360,7 @@ pub struct Dict {
     pub dv_lock: VarLock,
     pub dv_scope: ScopeType,
     pub dv_refcount: Refcount,
-    pub dv_copyID: ::core::ffi::c_int,
+    pub dv_copy_id: ::core::ffi::c_int,
     pub dv_hashtab: HashTab,
     pub dv_copydict: *mut Dict,
     pub dv_used_next: *mut Dict,
@@ -389,7 +389,7 @@ pub struct FuncCall {
     pub fc_prof_child: ProfTime,
     pub fc_caller: *mut FuncCall,
     pub fc_refcount: Refcount,
-    pub fc_copyID: ::core::ffi::c_int,
+    pub fc_copy_id: ::core::ffi::c_int,
     pub fc_ufuncs: GArray,
 }
 #[repr(C)]
@@ -424,7 +424,7 @@ pub struct List {
     pub lv_refcount: Refcount,
     pub lv_len: ::core::ffi::c_int,
     pub lv_idx: ::core::ffi::c_int,
-    pub lv_copyID: ::core::ffi::c_int,
+    pub lv_copy_id: ::core::ffi::c_int,
     pub lv_lock: VarLock,
     pub lua_table_ref: LuaRef,
 }
@@ -443,7 +443,7 @@ pub struct ListWatch {
 #[derive(Clone)]
 pub struct Partial {
     pub pt_refcount: Refcount,
-    pub pt_copyID: ::core::ffi::c_int,
+    pub pt_copy_id: ::core::ffi::c_int,
     pub pt_name: *mut ::core::ffi::c_char,
     pub pt_func: *mut UserFunc,
     pub pt_auto: bool,

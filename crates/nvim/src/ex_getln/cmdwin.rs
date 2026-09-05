@@ -111,7 +111,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let old_curwin = curwin.get();
     // Uninitialised in the C; `win_size_save` below fills it.
     let save_restart_edit = restart_edit.get();
-    let save_State = State.get();
+    let save_state = State.get();
     let save_exmode = exmode_active.get();
     let save_cmdmsg_rl = cmdmsg_rl.get();
 
@@ -292,10 +292,10 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     drop(redraw);
     crate::clipboard::restore_batch_count(save_count);
 
-    let save_KeyTyped = KeyTyped.get();
+    let save_key_typed = KeyTyped.get();
     trigger_cmd_autocmd(cmdwin_type.get(), AutoEvent::CmdwinLeave);
     // Restore KeyTyped in case an autocommand modified it.
-    KeyTyped.set(save_KeyTyped);
+    KeyTyped.set(save_key_typed);
 
     cmdwin_type.set(0);
     cmdwin_level.set(0);
@@ -397,7 +397,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     restart_edit.set(save_restart_edit);
     cmdmsg_rl.set(save_cmdmsg_rl);
 
-    State.set(save_State);
+    State.set(save_state);
     unsafe { may_trigger_modechanged() };
     setmouse();
     unsafe { setcursor() };

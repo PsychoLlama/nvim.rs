@@ -155,7 +155,7 @@ pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     if change_cnt != 0 {
         let (first, last) = (op.start.lnum, op.end.lnum + 1);
         changed_lines(cur_buf(), first, 0, last, 0, true);
-    } else if op.is_VIsual {
+    } else if op.is_visual {
         // Nothing changed, so the selection has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
     }

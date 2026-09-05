@@ -213,7 +213,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     unsafe { (*aco).new_curwin_handle = cur_win().handle };
     unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
 
-    unsafe { (*aco).save_VIsual_active = visual_active() };
+    unsafe { (*aco).save_visual_active = visual_active() };
     if !same_buffer {
         // The Visual area's positions mean nothing in another buffer.
         set_visual_active(false);
@@ -297,7 +297,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         globaldir.set(unsafe { (*aco).globaldir });
 
         // The buffer's contents may have changed under the cursor.
-        set_visual_active(unsafe { (*aco).save_VIsual_active });
+        set_visual_active(unsafe { (*aco).save_visual_active });
         check_cursor(unsafe { Win::current() });
         if cur_win().w_topline > cur_buf().b_ml.ml_line_count {
             cur_win().w_topline = cur_buf().b_ml.ml_line_count;
@@ -332,12 +332,12 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
 
             // The autocommand may have left the cursor where curbuf has
             // no such position.
-            set_visual_active(unsafe { (*aco).save_VIsual_active });
+            set_visual_active(unsafe { (*aco).save_visual_active });
             check_cursor(unsafe { Win::current() });
         }
     }
 
-    set_visual_active(unsafe { (*aco).save_VIsual_active });
+    set_visual_active(unsafe { (*aco).save_visual_active });
     // Just in case lines got deleted.
     check_cursor(unsafe { Win::current() });
     if visual_active() {

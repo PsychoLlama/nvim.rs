@@ -628,7 +628,7 @@ pub unsafe fn save_current_state(sst: *mut SaveState) -> bool {
     s.save_msg_scroll = msg_scroll.get();
     s.save_restart_edit = restart_edit.get();
     s.save_msg_didout = msg_didout.get();
-    s.save_State = State.get();
+    s.save_state = State.get();
     s.save_finish_op = finish_op.get();
     s.save_opcount = opcount.get();
     s.save_reg_executing = reg_executing.get();
@@ -658,7 +658,7 @@ pub unsafe fn restore_current_state(sst: *mut SaveState) {
     reg_executing.set(s.save_reg_executing);
     pending_end_reg_executing.set(s.save_pending_end_reg_executing);
     msg_didout.set(msg_didout.get() || s.save_msg_didout);
-    State.set(s.save_State);
+    State.set(s.save_state);
     ui_cursor_shape();
 }
 

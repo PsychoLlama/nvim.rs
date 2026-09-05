@@ -158,8 +158,8 @@ pub struct SpellInfo {
     /// One condition per postponed-prefix id; `None` where an id has
     /// none, which the writer emits as a zero length and no payload.
     pub si_prefcond: Vec<Option<Box<[u8]>>>,
-    pub si_newprefID: ::core::ffi::c_int,
-    pub si_newcompID: ::core::ffi::c_int,
+    pub si_newpref_id: ::core::ffi::c_int,
+    pub si_newcomp_id: ::core::ffi::c_int,
 }
 /// What one `.aff` file declared.
 ///
@@ -207,7 +207,7 @@ pub struct AffEntry {
 pub struct AffHeader {
     pub ah_key: [::core::ffi::c_char; 17],
     pub ah_flag: ::core::ffi::c_uint,
-    pub ah_newID: ::core::ffi::c_int,
+    pub ah_new_id: ::core::ffi::c_int,
     pub ah_combine: ::core::ffi::c_int,
     pub ah_follows: ::core::ffi::c_int,
     pub ah_first: *mut AffEntry,
@@ -241,7 +241,7 @@ impl AffHeader {
 pub struct CompItem {
     pub ci_key: [::core::ffi::c_char; 17],
     pub ci_flag: ::core::ffi::c_uint,
-    pub ci_newID: ::core::ffi::c_int,
+    pub ci_new_id: ::core::ffi::c_int,
 }
 
 impl CompItem {
@@ -357,8 +357,8 @@ impl SpellInfo {
             si_nobreak: 0,
             si_syllable: ::core::ptr::null_mut(),
             si_prefcond: Vec::new(),
-            si_newprefID: 0,
-            si_newcompID: 0,
+            si_newpref_id: 0,
+            si_newcomp_id: 0,
         }
     }
 }
@@ -486,7 +486,7 @@ pub unsafe fn mkspell(
     // SAFETY: the caller promises the paths; `wfname` and `fname` are
     // MAXPATHL buffers, which is the bound every writer below is given.
     unsafe { hash_init(&raw mut spin.si_commonwords) };
-    spin.si_newcompID = 127;
+    spin.si_newcomp_id = 127;
 
     // With one name it is both the input stem and the output; with
     // more, the first is the output and the rest are the inputs.
@@ -838,7 +838,7 @@ mod tests {
         let mut ah = AffHeader {
             ah_key: [0; 17],
             ah_flag: 0,
-            ah_newID: 0,
+            ah_new_id: 0,
             ah_combine: 0,
             ah_follows: 0,
             ah_first: ::core::ptr::null_mut(),
@@ -855,7 +855,7 @@ mod tests {
         let mut ci = CompItem {
             ci_key: [0; 17],
             ci_flag: 0,
-            ci_newID: 0,
+            ci_new_id: 0,
         };
         let at = &raw mut ci;
         let key = CompItem::key(at);

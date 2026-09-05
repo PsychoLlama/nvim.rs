@@ -271,7 +271,7 @@ pub(crate) fn end_visual_mode() {
 }
 
 /// Leave Visual mode and forget the selection, so `gv` will not bring it back.
-pub(crate) fn reset_VIsual_and_resel() {
+pub(crate) fn reset_visual_and_resel() {
     if visual_active() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
@@ -280,8 +280,8 @@ pub(crate) fn reset_VIsual_and_resel() {
     VIsual_reselect.set(0);
 }
 
-/// As [`reset_VIsual_and_resel`], but only when there was a selection.
-pub(crate) fn reset_VIsual() {
+/// As [`reset_visual_and_resel`], but only when there was a selection.
+pub(crate) fn reset_visual() {
     if visual_active() {
         end_visual_mode();
         // SAFETY: schedules a redraw of the current buffer.
@@ -353,7 +353,7 @@ pub(crate) unsafe fn get_visual_text(
             unsafe { *lenp = (*lenp).wrapping_add((tail - 1) as size_t) };
         }
     }
-    reset_VIsual_and_resel();
+    reset_visual_and_resel();
     true
 }
 

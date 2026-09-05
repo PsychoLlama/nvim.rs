@@ -32,7 +32,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
     expand: *mut Expand,
     pat: *mut c_char,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     flags: ExpandFlags,
     options: WildOpts,
 ) -> Result<(), Failed> {
@@ -84,7 +84,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
     }
 
     let ret = if expand.xp_context == ExpandContext::Findfunc {
-        unsafe { expand_findfunc(pat, matches, numMatches) }
+        unsafe { expand_findfunc(pat, matches, num_matches) }
     } else {
         flags = match expand.xp_context {
             ExpandContext::Files => flags | ExpandFlags::FILE,
@@ -96,7 +96,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
             flags |= ExpandFlags::ICASE;
         }
         // Expand wildcards, supporting %:h and the like.
-        unsafe { expand_wildcards_eval(&raw mut pat, numMatches, matches, flags) }
+        unsafe { expand_wildcards_eval(&raw mut pat, num_matches, matches, flags) }
     };
 
     if free_pat {
@@ -336,7 +336,7 @@ pub(crate) unsafe fn expand_other(
     expand: *mut Expand,
     rmp: *mut RegMatch,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
@@ -358,7 +358,7 @@ pub(crate) unsafe fn expand_other(
             expand.raw(),
             rmp,
             matches,
-            numMatches,
+            num_matches,
             Some(func),
             escaped,
         )

@@ -60,8 +60,8 @@ impl Description {
     pub fn entry(&self) -> TerminfoEntry {
         let mut entry = TerminfoEntry {
             bce: self.bce,
-            has_Tc_or_RGB: self.has_tc_or_rgb,
-            Su: self.su,
+            has_tc_or_rgb: self.has_tc_or_rgb,
+            su: self.su,
             max_colors: self.max_colors,
             lines: self.lines,
             columns: self.columns,

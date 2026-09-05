@@ -603,7 +603,7 @@ unsafe fn put_word_end(w: &mut SplWriter, np: *mut WordNode, regionmask: c_int, 
             w.byte(BY_FLAGS as c_int);
             w.byte(unsafe { (*np).wn_flags } as c_int);
         }
-        w.byte(unsafe { (*np).wn_affixID } as c_int);
+        w.byte(unsafe { (*np).wn_affix_id } as c_int);
         w.bytes(&unsafe { (*np).wn_region }.to_be_bytes());
         return;
     }
@@ -614,7 +614,7 @@ unsafe fn put_word_end(w: &mut SplWriter, np: *mut WordNode, regionmask: c_int, 
     if regionmask != 0 && unsafe { (*np).wn_region } as c_int != regionmask {
         flags |= WordFlags::REGION;
     }
-    if unsafe { (*np).wn_affixID } as c_int != 0 {
+    if unsafe { (*np).wn_affix_id } as c_int != 0 {
         flags |= WordFlags::AFX;
     }
     if flags.is_empty() {
@@ -633,7 +633,7 @@ unsafe fn put_word_end(w: &mut SplWriter, np: *mut WordNode, regionmask: c_int, 
         w.byte(unsafe { (*np).wn_region } as c_int);
     }
     if flags.has(WordFlags::AFX) {
-        w.byte(unsafe { (*np).wn_affixID } as c_int);
+        w.byte(unsafe { (*np).wn_affix_id } as c_int);
     }
 }
 

@@ -194,7 +194,7 @@ fn measure_selection(sel: VisualSelection) -> Selection {
         p_sbr.set(empty_option());
         cur_win().w_onebuf_opt.wo_sbr = empty_option();
 
-        oparg.is_VIsual = true;
+        oparg.is_visual = true;
         oparg.motion_type = kMTBlockWise;
         oparg.op_type = OpType::Nop;
         // SAFETY: a live window and two live positions in its buffer.

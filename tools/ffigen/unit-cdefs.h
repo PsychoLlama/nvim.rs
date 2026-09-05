@@ -1361,7 +1361,7 @@ struct List {
   Refcount lv_refcount;
   int lv_len;
   int lv_idx;
-  int lv_copyID;
+  int lv_copy_id;
   VarLock lv_lock;
   LuaRef lua_table_ref;
 };

@@ -215,11 +215,11 @@ pub unsafe fn nlua_func_exists(lua_funcname: *const c_char) -> bool {
         let str = xmalloc(length).cast::<c_char>();
         vim_snprintf(str, length, c"return %s".as_ptr(), lua_funcname);
 
-        let mut args__items = [Object::string(cstr_as_string(str))];
+        let mut args_items = [Object::string(cstr_as_string(str))];
         let args = Array {
             size: 1,
             capacity: 1,
-            items: args__items.as_mut_ptr(),
+            items: args_items.as_mut_ptr(),
         };
 
         let mut err = Error::none();

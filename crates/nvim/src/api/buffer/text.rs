@@ -31,9 +31,9 @@ pub unsafe fn nvim_buf_set_text(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut scratch__items: [Object; 1] = [Object::Nil; 1];
+    let mut scratch_items: [Object; 1] = [Object::Nil; 1];
     scratch.capacity = 1 as size_t;
-    scratch.items = &raw mut scratch__items as *mut Object;
+    scratch.items = &raw mut scratch_items as *mut Object;
     if replacement.size == 0 as size_t {
         let put_value = Object::string(String_0::from_raw_parts(
             c"".as_ptr() as *mut ::core::ffi::c_char,

@@ -70,7 +70,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
     }
     cur_win().w_cursor = op.start;
 
-    if op.is_VIsual {
+    if op.is_visual {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -104,7 +104,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
         // Formatting may have made the position invalid.
         check_cursor(unsafe { Win::current() });
     }
-    if op.is_VIsual {
+    if op.is_visual {
         // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The macro's tab page test is
         // `curtab == curtab` here, so it always takes the `firstwin` arm --
         // which is what [`windows`] walks.
@@ -130,7 +130,7 @@ pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
 pub(crate) unsafe fn op_formatexpr(op: *mut OpArg) {
     // SAFETY: the caller's promise -- a live operator argument.
     let region = unsafe { Op::new(op) };
-    if region.is_VIsual {
+    if region.is_visual {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }

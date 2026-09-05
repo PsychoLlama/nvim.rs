@@ -258,7 +258,7 @@ pub(super) unsafe fn process_compflags(
             };
             let hi = unsafe { hash_find(&raw mut aff.af_comp, key.as_mut_ptr()) };
             let id = if hi.is_kept() {
-                unsafe { (*CompItem::of_key(hi.hi_key)).ci_newID }
+                unsafe { (*CompItem::of_key(hi.hi_key)).ci_new_id }
             } else {
                 let ci = spin.si_arena.alloc::<CompItem>();
                 unsafe { strcpy(CompItem::key(ci), key.as_mut_ptr()) };
@@ -267,13 +267,13 @@ pub(super) unsafe fn process_compflags(
                 // meaningful in the pattern this becomes.
                 let id = loop {
                     unsafe { check_renumber(spin) };
-                    let id = spin.si_newcompID;
-                    spin.si_newcompID -= 1;
+                    let id = spin.si_newcomp_id;
+                    spin.si_newcomp_id -= 1;
                     if unsafe { vim_strchr(c"/?*+[]\\-^".as_ptr(), id) }.is_null() {
                         break id;
                     }
                 };
-                unsafe { (*ci).ci_newID = id };
+                unsafe { (*ci).ci_new_id = id };
                 let _ = unsafe { hash_add(&raw mut aff.af_comp, CompItem::key(ci)) };
                 id
             };
@@ -298,9 +298,9 @@ pub(super) unsafe fn process_compflags(
 /// `spin` must be live.
 pub(super) unsafe fn check_renumber(spin: &mut SpellInfo) {
     // SAFETY: the caller promises `spin`.
-    if spin.si_newprefID == spin.si_newcompID && spin.si_newcompID < 128 {
-        spin.si_newprefID = 127;
-        spin.si_newcompID = 255;
+    if spin.si_newpref_id == spin.si_newcomp_id && spin.si_newcomp_id < 128 {
+        spin.si_newpref_id = 127;
+        spin.si_newcomp_id = 255;
     }
 }
 

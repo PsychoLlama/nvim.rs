@@ -43,7 +43,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::reset_visual_and_resel;
 use crate::option::magic_isset;
 use crate::option::vars::{p_ea, p_fic, p_tpm};
 use crate::os::input::os_breakcheck;

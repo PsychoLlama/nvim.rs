@@ -56,8 +56,8 @@ const NO_BLOCK: BlockDef = BlockDef {
     start_vcol: 0,
     end_vcol: 0,
     is_short: 0,
-    is_MAX: 0,
-    is_oneChar: 0,
+    is_max: 0,
+    is_one_char: 0,
     pre_whitesp: 0,
     pre_whitesp_c: 0,
     end_char_vcols: 0,
@@ -78,7 +78,7 @@ const NO_OPARG: OpArg = OpArg {
     cursor_start: NOWHERE,
     line_count: 0,
     empty: false,
-    is_VIsual: false,
+    is_visual: false,
     start_vcol: 0,
     end_vcol: 0,
     prev_opcount: 0,
@@ -431,7 +431,7 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (Pos, Pos
     }
 
     let mut p1 = NOWHERE;
-    if bd.is_oneChar != 0 {
+    if bd.is_one_char != 0 {
         if r.region_type == kMTBlockWise {
             p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as ColNr + 1;
             p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.op.start_vcol);
@@ -443,7 +443,7 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (Pos, Pos
         // The block starts inside a character that begins before it.
         p1.col = MAXCOL as ColNr;
         p1.coladd = r.op.start_vcol - bd.start_vcol;
-        bd.is_oneChar = 1;
+        bd.is_one_char = 1;
     } else if bd.startspaces > 0 {
         p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as ColNr + 1;
         p1.coladd = bd.start_char_vcols - bd.startspaces;
@@ -452,7 +452,7 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (Pos, Pos
     }
 
     let mut p2 = NOWHERE;
-    if bd.is_oneChar != 0 {
+    if bd.is_one_char != 0 {
         p2.col = p1.col;
         p2.coladd = p1.coladd + bd.startspaces + bd.endspaces;
     } else if bd.endspaces > 0 {

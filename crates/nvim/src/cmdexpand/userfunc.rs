@@ -41,20 +41,20 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
     pathed_pattern: *mut c_char,
     pathlen: size_t,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     flags: ExpandFlags,
     ht: *mut HashTab,
     found: &mut Vec<CString>,
 ) {
     let mut pathed_pattern = pathed_pattern;
-    if unsafe { expand_wildcards(1, &raw mut pathed_pattern, numMatches, matches, flags) }.is_err()
+    if unsafe { expand_wildcards(1, &raw mut pathed_pattern, num_matches, matches, flags) }.is_err()
     {
         return;
     }
 
-    found.reserve(usize::try_from(unsafe { *numMatches }).unwrap_or(0));
+    found.reserve(usize::try_from(unsafe { *num_matches }).unwrap_or(0));
 
-    for i in 0..unsafe { *numMatches } {
+    for i in 0..unsafe { *num_matches } {
         let mut name = unsafe { *(*matches).offset(i as isize) };
         let namelen = unsafe { cstr::bytes_at(name) }.len();
 
@@ -84,12 +84,12 @@ pub(crate) unsafe fn expand_shellcmd_onedir(
 /// Complete a shell command.
 ///
 /// `filepat` is a pattern to match with command names; `matches` and
-/// `numMatches` return the answer, with `*matches` either NULL or allocated.
+/// `num_matches` return the answer, with `*matches` either NULL or allocated.
 /// `flagsarg` is the caller's [`ExpandFlags`] set.
 pub(crate) unsafe fn expand_shellcmd(
     filepat: *mut c_char,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     flagsarg: ExpandFlags,
 ) {
     let buf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
@@ -216,7 +216,7 @@ pub(crate) unsafe fn expand_shellcmd(
                     buf,
                     pathlen,
                     matches,
-                    numMatches,
+                    num_matches,
                     flags,
                     &raw mut found_ht,
                     &mut found,
@@ -231,7 +231,7 @@ pub(crate) unsafe fn expand_shellcmd(
     }
     // The keys borrowed `found`'s strings; the table dies here, first.
     drop(found_ht);
-    unsafe { *numMatches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
+    unsafe { *num_matches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
     unsafe { *matches = owned_cstr_array(found) };
 
     unsafe { xfree(buf as *mut c_void) };
@@ -295,14 +295,14 @@ pub(crate) unsafe fn expand_user_defined(
     expand: *mut Expand,
     regmatch: *mut RegMatch,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
     unsafe { *matches = ptr::null_mut() };
-    unsafe { *numMatches = 0 };
+    unsafe { *num_matches = 0 };
 
     let retstr = unsafe { call_user_expand_func(call_func_retstr, expand.raw()) } as *mut c_char;
     if retstr.is_null() {
@@ -372,7 +372,7 @@ pub(crate) unsafe fn expand_user_defined(
     } else {
         unsafe { *matches = owned_cstr_array(found) };
     }
-    unsafe { *numMatches = count };
+    unsafe { *num_matches = count };
     Ok(())
 }
 
@@ -380,7 +380,7 @@ pub(crate) unsafe fn expand_user_defined(
 pub(crate) unsafe fn process_user_list(
     retlist: *mut List,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
 ) {
     let mut found = Vec::<CString>::new();
 
@@ -400,7 +400,7 @@ pub(crate) unsafe fn process_user_list(
     }
     unsafe { tv_list_unref(retlist) };
 
-    unsafe { *numMatches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
+    unsafe { *num_matches = c_int::try_from(found.len()).expect("a match count fits a c_int") };
     unsafe { *matches = owned_cstr_array(found) };
 }
 
@@ -408,26 +408,26 @@ pub(crate) unsafe fn process_user_list(
 pub(crate) unsafe fn expand_user_list(
     expand: *mut Expand,
     matches: *mut *mut *mut c_char,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `expand` is the live expansion
     // context, which outlives this call.
     let expand = unsafe { Xp::new(expand) };
     unsafe { *matches = ptr::null_mut() };
-    unsafe { *numMatches = 0 };
+    unsafe { *num_matches = 0 };
     let retlist = unsafe { call_user_expand_func(call_func_retlist, expand.raw()) } as *mut List;
     if retlist.is_null() {
         return Err(Failed);
     }
 
-    unsafe { process_user_list(retlist, matches, numMatches) };
+    unsafe { process_user_list(retlist, matches, num_matches) };
     Ok(())
 }
 
 /// Expand names with a Lua completion function.
 pub(crate) unsafe fn expand_user_lua(
     expand: *mut Expand,
-    numMatches: *mut c_int,
+    num_matches: *mut c_int,
     matches: *mut *mut *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `expand` is the live expansion
@@ -444,7 +444,7 @@ pub(crate) unsafe fn expand_user_lua(
         return Err(Failed);
     }
 
-    unsafe { process_user_list(rettv.vval.v_list, matches, numMatches) };
+    unsafe { process_user_list(rettv.vval.v_list, matches, num_matches) };
     Ok(())
 }
 

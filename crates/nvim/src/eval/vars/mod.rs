@@ -276,7 +276,7 @@ const EMPTY_SCOPE_DICT: Dict = Dict {
     dv_lock: VarLock::Unlocked,
     dv_scope: VAR_NO_SCOPE,
     dv_refcount: Refcount::ZERO,
-    dv_copyID: 0,
+    dv_copy_id: 0,
     dv_hashtab: EMPTY_HASHTAB,
     dv_copydict: ::core::ptr::null_mut(),
     dv_used_next: ::core::ptr::null_mut(),

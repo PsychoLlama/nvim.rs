@@ -35,7 +35,7 @@ use crate::memory::xstrdup;
 use crate::message::e_cmdwin;
 use crate::message::set_keep_msg;
 use crate::mouse::reset_dragwin;
-use crate::normal::reset_VIsual_and_resel;
+use crate::normal::reset_visual_and_resel;
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_tpm};
 use crate::options::kOptCmdheight;
@@ -190,7 +190,7 @@ pub(crate) fn new_tabpage(
         let mut cur = cur_tab();
         stash_tabpage(cur);
         // Save this to tell whether room must be made for the tabline.
-        cur.tp_old_Rows_avail = rows_avail();
+        cur.tp_old_rows_avail = rows_avail();
         firstwin.set(None);
         lastwin.set(None);
     }
@@ -249,7 +249,7 @@ pub(crate) fn new_tabpage(
         stash_tabpage(cur_tab());
         adopt_tabpage(old_curtab);
         redraw_tabline.set(true); // the tabline may have been added, or changed
-        if cur_tab().tp_old_Rows_avail != rows_avail() {
+        if cur_tab().tp_old_rows_avail != rows_avail() {
             new_screen_rows();
         }
         // Trigger autocommands in the context of the new window, letting
@@ -428,7 +428,7 @@ fn index_of_tab(ftp: *mut Tabpage) -> c_int {
 fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<(), Failed> {
     let mut tp = cur_tab();
     leave_window(cur_win());
-    reset_VIsual_and_resel(); // stop Visual mode
+    reset_visual_and_resel(); // stop Visual mode
     if trigger_leave_autocmds {
         if raw_buf(new_curbuf) != curbuf.get() {
             fire(AutoEvent::BufLeave, cur_buf());
@@ -450,9 +450,9 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     tp.tp_prevwin = prevwin.get();
     tp.tp_firstwin = firstwin.get();
     tp.tp_lastwin = lastwin.get();
-    tp.tp_old_Rows_avail = rows_avail();
-    if tp.tp_old_Columns != -1 as int64_t {
-        tp.tp_old_Columns = Columns.get() as int64_t;
+    tp.tp_old_rows_avail = rows_avail();
+    if tp.tp_old_columns != -1 as int64_t {
+        tp.tp_old_columns = Columns.get() as int64_t;
     }
     firstwin.set(None);
     lastwin.set(None);
@@ -518,15 +518,15 @@ fn enter_tab(
 
     // The tabline may have appeared or disappeared, so the frames may need
     // resizing; the same when the editor was resized.
-    if cur_tab().tp_old_Rows_avail != rows_avail() || old_off != first_win().w_winrow {
+    if cur_tab().tp_old_rows_avail != rows_avail() || old_off != first_win().w_winrow {
         new_screen_rows();
     }
-    if cur_tab().tp_old_Columns != Columns.get() as int64_t {
+    if cur_tab().tp_old_columns != Columns.get() as int64_t {
         if starting.get() == 0 {
             new_screen_cols(); // update window widths
-            cur_tab().tp_old_Columns = Columns.get() as int64_t;
+            cur_tab().tp_old_columns = Columns.get() as int64_t;
         } else {
-            cur_tab().tp_old_Columns = -1 as int64_t; // update window widths later
+            cur_tab().tp_old_columns = -1 as int64_t; // update window widths later
         }
     }
     lastused_tabpage.set(old_curtab.raw());

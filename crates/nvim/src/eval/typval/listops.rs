@@ -173,20 +173,20 @@ pub unsafe fn tv_list_append_number(l: *mut List, n: VarNumber) {
 
 /// Copy `orig`, deeply when `deep`, converting strings through `conv`.
 ///
-/// `copyID` is the garbage collector's mark: non-zero records the copy on the
+/// `copy_id` is the garbage collector's mark: non-zero records the copy on the
 /// original *before* any item is added, so a list containing itself resolves
 /// to the same copy.  Answers NULL when a deep copy of an item failed.
 ///
 /// # Safety
 /// `orig` is null or a live list and `conv` is null or a live converter. A
-/// non-zero `copyID` must be one the caller reserved from `get_copyID`: it
+/// non-zero `copy_id` must be one the caller reserved from `get_copyID`: it
 /// is written onto `orig`, and a stale one makes an unrelated walk believe
 /// this list is already visited.
 pub unsafe fn tv_list_copy(
     conv: *const VimConv,
     orig: *mut List,
     deep: bool,
-    copyID: ::core::ffi::c_int,
+    copy_id: ::core::ffi::c_int,
 ) -> *mut List {
     if orig.is_null() {
         return ::core::ptr::null_mut();
@@ -194,12 +194,12 @@ pub unsafe fn tv_list_copy(
 
     let copy = unsafe { tv_list_alloc(tv_list_len(orig) as ptrdiff_t) };
     unsafe { tv_list_ref(copy) };
-    if copyID != 0 {
+    if copy_id != 0 {
         // Do this before adding the items, because one of the items may
         // refer back to this list.
         // SAFETY: the caller's promise: a live list.
         let mut from = unsafe { Ls::new(orig) };
-        from.lv_copyID = copyID;
+        from.lv_copy_id = copy_id;
         from.lv_copylist = copy;
     }
     for item in tv_list_iter(unsafe { orig.as_ref() }) {
@@ -210,7 +210,7 @@ pub unsafe fn tv_list_copy(
         if deep {
             let from = li_tv(item);
             let to = li_tv(ni);
-            if unsafe { var_item_copy(conv, from, to, deep, copyID) }.is_err() {
+            if unsafe { var_item_copy(conv, from, to, deep, copy_id) }.is_err() {
                 // `tv_list_copy_error`: the partial copy goes too.
                 unsafe { xfree(ni.cast()) };
                 unsafe { tv_list_unref(copy) };
@@ -359,7 +359,7 @@ pub unsafe fn tv_list_remove(
 /// # Safety
 /// `l1` and `l2` are each null or a live list. Comparing values can
 /// recurse, so a cycle must already have been ruled out by the caller's
-/// `copyID` bookkeeping.
+/// `copy_id` bookkeeping.
 pub unsafe fn tv_list_equal(l1: *mut List, l2: *mut List, ic: bool) -> bool {
     if l1 == l2 {
         return true;

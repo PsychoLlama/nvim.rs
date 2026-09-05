@@ -101,8 +101,8 @@ pub unsafe fn terminfo_from_database(termname: &CStr, arena: *mut Arena) -> Opti
 
     let mut entry = TerminfoEntry {
         bce: term.get_bool(BACK_COLOR_ERASE),
-        has_Tc_or_RGB: false,
-        Su: false,
+        has_tc_or_rgb: false,
+        su: false,
         max_colors: term.get_num(MAX_COLORS),
         lines: term.get_num(LINES),
         columns: term.get_num(COLUMNS),
@@ -112,8 +112,8 @@ pub unsafe fn terminfo_from_database(termname: &CStr, arena: *mut Arena) -> Opti
     };
     for name in term.ext_bool_names() {
         match name.to_bytes() {
-            b"Tc" | b"RGB" => entry.has_Tc_or_RGB = true,
-            b"Su" => entry.Su = true,
+            b"Tc" | b"RGB" => entry.has_tc_or_rgb = true,
+            b"Su" => entry.su = true,
             _ => {}
         }
     }
@@ -187,8 +187,8 @@ pub unsafe fn terminfo_info_msg(
              lines: {}\n  columns: {}\n  max_colors: {}\n\n\
              String capabilities:\n",
             yes_no(entry.bce),
-            yes_no(entry.has_Tc_or_RGB),
-            yes_no(entry.Su),
+            yes_no(entry.has_tc_or_rgb),
+            yes_no(entry.su),
             entry.lines,
             entry.columns,
             entry.columns,

@@ -18,7 +18,7 @@ pub struct SaveState {
     pub save_msg_scroll: ::core::ffi::c_int,
     pub save_restart_edit: ::core::ffi::c_int,
     pub save_msg_didout: bool,
-    pub save_State: ::core::ffi::c_int,
+    pub save_state: ::core::ffi::c_int,
     pub save_finish_op: bool,
     pub save_opcount: ::core::ffi::c_int,
     pub save_reg_executing: ::core::ffi::c_int,

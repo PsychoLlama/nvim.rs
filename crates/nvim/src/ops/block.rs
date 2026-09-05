@@ -104,7 +104,7 @@ pub(crate) unsafe fn block_insert(
             // Append past the end of a short line: pad out to the block's
             // edge, unless `$` made the block open-ended.
             ts_val = bdp.end_char_vcols;
-            if bdp.is_MAX == 0 {
+            if bdp.is_max == 0 {
                 spaces = op.end_vcol - bdp.end_vcol + 1;
             }
             count = spaces;
@@ -255,14 +255,14 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
     let lbr_saved = reset_lbr();
 
     // Everything but `textcol`, `textstart` (written at the end) and
-    // `is_MAX` (the caller's, meaning the block was opened with `$`).
+    // `is_max` (the caller's, meaning the block was opened with `$`).
     bdp.startspaces = 0;
     bdp.endspaces = 0;
     bdp.textlen = 0;
     bdp.start_vcol = 0;
     bdp.end_vcol = 0;
     bdp.is_short = 0;
-    bdp.is_oneChar = 0;
+    bdp.is_one_char = 0;
     bdp.pre_whitesp = 0;
     bdp.pre_whitesp_c = 0;
     bdp.end_char_vcols = 0;
@@ -314,7 +314,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
 
         if bdp.end_vcol > op.end_vcol {
             // The whole block is inside one character -- a wide TAB.
-            bdp.is_oneChar = 1;
+            bdp.is_one_char = 1;
             if op.op_type == OpType::Insert {
                 bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
             } else if op.op_type == OpType::Append {
@@ -385,7 +385,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
 /// last lines are clipped; everything between is the whole line. The
 /// 'virtualedit' arms are what make it more than that: an end inside a TAB
 /// becomes `endspaces` columns of padding, and a region that starts and ends
-/// inside the *same* character is `is_oneChar` with no text at all.
+/// inside the *same* character is `is_one_char` with no text at all.
 ///
 /// # Safety
 /// `bdp` must point to a live struct and `lnum` must be a line of the current
@@ -406,7 +406,7 @@ pub unsafe fn charwise_block_prep(
 
     bdp.startspaces = 0;
     bdp.endspaces = 0;
-    bdp.is_oneChar = 0;
+    bdp.is_one_char = 0;
     bdp.start_char_vcols = 0;
 
     let mut startcol: ColNr = 0;
@@ -439,7 +439,7 @@ pub unsafe fn charwise_block_prep(
             {
                 if start.lnum == end.lnum && start.col == end.col {
                     // The whole region is inside one character.
-                    bdp.is_oneChar = 1;
+                    bdp.is_one_char = 1;
                     bdp.startspaces = end.coladd - start.coladd + c_int::from(inclusive);
                     endcol = startcol;
                 } else {
@@ -453,7 +453,7 @@ pub unsafe fn charwise_block_prep(
     if endcol == MAXCOL {
         endcol = plen;
     }
-    bdp.textlen = if startcol > endcol || bdp.is_oneChar != 0 {
+    bdp.textlen = if startcol > endcol || bdp.is_one_char != 0 {
         0
     } else {
         endcol - startcol + c_int::from(inclusive)

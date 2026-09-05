@@ -165,7 +165,7 @@ impl TypvalSink for NothingSink {
             return;
         }
         debug_assert!(
-            unsafe { (*pt).pt_dict }.is_null() || unsafe { (*(*pt).pt_dict).dv_copyID } == copyid
+            unsafe { (*pt).pt_dict }.is_null() || unsafe { (*(*pt).pt_dict).dv_copy_id } == copyid
         );
         unsafe { (*pt).pt_dict = ptr::null_mut() };
         // SAFETY: the typval's own partial.

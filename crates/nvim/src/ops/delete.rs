@@ -87,7 +87,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
         emsg(gettext(e_modifiable));
         return Err(NotDeleted::NotModifiable);
     }
-    if visual_select() && op.is_VIsual {
+    if visual_select() && op.is_visual {
         // The register given with CTRL-R, zero by default.
         op.regname = VIsual_select_reg.get();
     }
@@ -98,7 +98,7 @@ pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
     // than one line whose result would be a blank line becomes linewise.
     // Not for `c`, and not in Visual mode.
     if op.motion_type == kMTCharWise
-        && !op.is_VIsual
+        && !op.is_visual
         && op.line_count > 1
         && op.motion_force == NUL
         && op.op_type == OpType::Delete
@@ -403,7 +403,7 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
     if cpo_has(CpoFlag::DOLLAR)
         && op.op_type == OpType::Change
         && op.end.lnum == cur_win().w_cursor.lnum
-        && !op.is_VIsual
+        && !op.is_visual
     {
         unsafe { display_dollar(op.end.col - c_int::from(!op.inclusive)) };
     }
@@ -428,7 +428,7 @@ fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
         }
     }
 
-    let fixpos = op.op_type == OpType::Delete && !op.is_VIsual;
+    let fixpos = op.op_type == OpType::Delete && !op.is_visual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
     Ok(())
 }
@@ -466,7 +466,7 @@ fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
     // From the start of the last line up to the region's end.
     let n = op.end.col + 1 - c_int::from(!op.inclusive);
     cur_win().w_cursor.col = 0;
-    let fixpos = op.op_type == OpType::Delete && !op.is_VIsual;
+    let fixpos = op.op_type == OpType::Delete && !op.is_visual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
 
     cur_win().w_cursor = curpos;

@@ -274,7 +274,7 @@ const OPARG_EMPTY: OpArg = OpArg {
     cursor_start: UNSET_POS,
     line_count: 0,
     empty: false,
-    is_VIsual: false,
+    is_visual: false,
     start_vcol: 0,
     end_vcol: 0,
     prev_opcount: 0,

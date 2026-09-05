@@ -66,7 +66,7 @@ pub(crate) unsafe fn tv_strlen(tv: *const TypVal) -> size_t {
     }
 }
 
-/// Mark `val` with `copyID`, or tell the sink it has been here before.
+/// Mark `val` with `copy_id`, or tell the sink it has been here before.
 ///
 /// Answers [`Flow::Go`] for a container the walk has not seen (upstream's
 /// `NOTDONE`), and otherwise whatever the sink makes of the self-reference.
@@ -107,7 +107,7 @@ unsafe fn check_list_seen<S: TypvalSink>(
     copyid: c_int,
     path: &ConvPath,
 ) -> Flow {
-    // SAFETY: the caller's live list; `lv_copyID` is a field of it.
+    // SAFETY: the caller's live list; `lv_copy_id` is a field of it.
     let seen = lv_copyid(list);
     // SAFETY: as above.
     unsafe { check_self_reference(sink, list.cast(), seen, conv_type, copyid, path) }
@@ -124,7 +124,7 @@ unsafe fn check_dict_seen<S: TypvalSink>(
     copyid: c_int,
     path: &ConvPath,
 ) -> Flow {
-    // SAFETY: the caller's live dictionary; `dv_copyID` is a field of it.
+    // SAFETY: the caller's live dictionary; `dv_copy_id` is a field of it.
     let seen = dv_copyid(dict);
     let ty = ConvType::Dict;
     // SAFETY: as above.
@@ -268,7 +268,7 @@ unsafe fn convert_one_value<S: TypvalSink>(
                     item_hook!(flow);
                     return Ok(());
                 }
-                let saved_copyid = d.dv_copyID;
+                let saved_copyid = d.dv_copy_id;
                 {
                     let path = ConvPath { stack, objname };
                     item_hook!(unsafe { check_dict_seen(sink, dict, copyid, &path) });
@@ -575,7 +575,7 @@ unsafe fn walk<S: TypvalSink>(
                 if todo == 0 {
                     let saved_copyid = stack.get_mut(idx).saved_copyid;
                     stack.pop();
-                    d.dv_copyID = saved_copyid;
+                    d.dv_copy_id = saved_copyid;
                     unsafe { sink.conv_dict_end(cur_tv, Some(dictp)) };
                     continue;
                 }
@@ -697,7 +697,7 @@ unsafe fn walk<S: TypvalSink>(
                                 unsafe { sink.conv_empty_dict(ptr::null_mut(), Some(dictp)) };
                                 continue;
                             }
-                            let saved_copyid = frame_dict.dv_copyID;
+                            let saved_copyid = frame_dict.dv_copy_id;
                             {
                                 let path = ConvPath {
                                     stack: &stack,

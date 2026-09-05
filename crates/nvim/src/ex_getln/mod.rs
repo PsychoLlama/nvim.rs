@@ -258,7 +258,7 @@ pub struct CommandLineState {
     pub did_wild_list: bool,
     pub wim_index: ::core::ffi::c_int,
     pub save_msg_scroll: ::core::ffi::c_int,
-    pub save_State: ::core::ffi::c_int,
+    pub save_state: ::core::ffi::c_int,
     pub prev_cmdpos: ::core::ffi::c_int,
     pub prev_cmdbuff: *mut ::core::ffi::c_char,
     pub save_p_icm: *mut ::core::ffi::c_char,
