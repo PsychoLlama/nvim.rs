@@ -415,13 +415,15 @@ plus these whole-tree metrics, which are not per-file:
                         parameter rustfmt wrapped onto its own line still
                         counts and a local variable of that type does not.
                       abbrev_params   the transpiler's parameter
-                        abbreviations (`wp`, `buf`, `eap`, `rettv`, `ptr` …)
+                        abbreviations (`wp`, `eap`, `rettv`, `ptr` …)
                         bound in a `fn` signature, over the same span, with
                         `lua/` and `vterm/` carved out — those two are ports
                         whose parameter names are the upstream project's. A
                         leading `_` counts (an unused parameter is still that
                         parameter), a qualifier does not: `old_buf` already
-                        says what `buf` does not.
+                        says what `buf` does not. `buf`/`bp` count only when
+                        the parameter's *type* names a buffer object: `buf`
+                        for a byte buffer is idiomatic Rust and stays.
                       curwin_raw      `curwin`/`curbuf`/`curtab` `.get()`
                         reads outside `winlayer`, which is the module whose
                         job it is to turn those globals into handles. The
@@ -908,8 +910,20 @@ RAW_WIN_BUF = re.compile(r"\*mut\s+(?:Window|Buffer|Tabpage)\b")
 # more than the bare abbreviation does. `:` is what makes it a *binding* and
 # not a mention, so `ptr.add` and `let buf = …` are not counted.
 ABBREV_PARAM = re.compile(
-    r"\b_?(?:wp|bp|buf|tp|eap|rettv|argvars|cap|oap|xp|fp|lp|sp|pp|cp|ptr)\s*:"
+    r"\b_?(?:wp|tp|eap|rettv|argvars|cap|oap|xp|fp|lp|sp|pp|cp|ptr)\s*:"
 )
+# `buf`/`bp` are the two abbreviations whose expansion depends on the type:
+# `buf` for a byte buffer is idiomatic Rust and stays, so only a parameter
+# whose type names a *buffer object* counts. The type is read up to the next
+# `,` or `)`, which is the whole of every shape this tree writes
+# (`*mut Buffer`, `Option<Buf>`, `&mut Buf`, `BufferHandle`); a buffer named
+# only after a comma inside a generic (`Result<E, Buffer>`) would be missed,
+# and none exists.
+ABBREV_BUF_PARAM = re.compile(r"\b_?(?:buf|bp)\s*:([^,)]*)")
+# The buffer-object types: the raw struct, its safe handle and reference
+# wrappers, and the API's integer handle. `\b` keeps `NumBuf`, `KeyBuffer`,
+# `EnvBuf` and `uv_buf_t` — byte buffers, every one — out.
+BUFFER_TYPE = re.compile(r"\b(?:Buffer|BufferRef|BufferHandle|Buf)\b")
 # The two subtrees the exit clause carves out. `vterm/` is a port of libvterm
 # and `lua/` of the Lua bindings; both keep the upstream project's own
 # spellings, so renaming their parameters would move them away from the code
@@ -1734,6 +1748,11 @@ def vocabulary(tree):
         signatures += sum(len(RAW_WIN_BUF.findall(sig)) for sig in spans)
         if not in_home(file, ABBREV_PARAM_EXEMPT):
             abbrevs += sum(len(ABBREV_PARAM.findall(sig)) for sig in spans)
+            abbrevs += sum(
+                bool(BUFFER_TYPE.search(type_))
+                for sig in spans
+                for type_ in ABBREV_BUF_PARAM.findall(sig)
+            )
     integral = int_aliases(aliases)
     return {
         **counts,
@@ -2579,14 +2598,17 @@ SELF_TEST_VOCABULARY = [
     (
         # `_eap` counts, `old_buf` and the local `ptr` do not, and the two
         # carved-out subtrees are silent however they spell a parameter.
+        # `buf` counts on a buffer object and not on a byte buffer.
         {
             "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
-            "    _eap: *mut ExArg,\n    old_buf: *mut Buffer,\n) {\n"
+            "    _eap: *mut ExArg,\n    old_buf: *mut Buffer,\n"
+            "    buf: Option<Buf>,\n    _bp: &mut [u8],\n) {\n"
             "    let ptr: *mut c_char = q;\n}\n",
+            "crates/nvim/src/b.rs": "fn e(buf: &mut NumBuf, bp: *mut Buffer) {\n}\n",
             "crates/nvim/src/lua/b.rs": "fn g(buf: *mut Buffer) {\n}\n",
             "crates/nvim/src/vterm/c.rs": "fn h(cp: *mut c_char) {\n}\n",
         },
-        {"abbrev_params": 2},
+        {"abbrev_params": 4},
     ),
     (
         {
