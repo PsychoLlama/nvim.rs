@@ -20,9 +20,9 @@ use crate::edit::{
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::state::trylevel;
 use crate::extmark::extmark_splice_cols;
+use crate::getchar::state::got_int;
 use crate::guard::Suppress;
 use crate::indent_c::in_cinkeys;
-use crate::main::got_int;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::{xfree, xmalloc, xmallocz, xmemdupz};

@@ -58,8 +58,8 @@ use crate::eval::{
 };
 use crate::ex_docmd::{ends_excmd, modifier_len};
 use crate::ex_eval::state::{did_endif, did_throw, force_abort, trylevel};
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::got_int;
 use crate::memory::xfree;
 use crate::message::state::{did_emsg, emsg_silent};
 use crate::message::{e_endfor, e_endif, e_endtry, e_endwhile, e_for, e_while};

@@ -51,11 +51,11 @@ use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, mult
 use crate::event::rstream::{Reader, rstream_may_close};
 use crate::event::stream::{stream_init, stream_may_close};
 use crate::event::{pack_int, unpack_int};
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
 use crate::main::{
-    exiting, got_int, main_loop, os_exit, preserve_exit, ui_client_channel_id,
-    ui_client_exit_status,
+    exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
 };
 use crate::message_fmt::c_str;
 use crate::os::proc::os_proc_tree_kill;

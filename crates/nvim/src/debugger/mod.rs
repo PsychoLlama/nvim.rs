@@ -38,13 +38,13 @@ use crate::ex_docmd::state::{ex_nesting_level, ex_normal_busy};
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{getcmdline_prompt, getexline};
 use crate::fileio::file_pat_to_reg_pat;
+use crate::getchar::state::{got_int, ignore_script};
 use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick, got_int,
-    ignore_script,
+    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;

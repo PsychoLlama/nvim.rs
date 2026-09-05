@@ -49,20 +49,19 @@ use crate::ex_docmd::{
     check_nextcmd, do_cmdline_cmd, ends_excmd, expand_filename, find_nextcmd, separate_nextcmd,
 };
 use crate::fold::{fold_update_all, foldmethod_is_syntax};
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{
     hash_add_item, hash_find, hash_hash, hash_init, hash_lock, hash_lookup, hash_remove,
     hash_reset, hash_set_key, hash_unlock,
 };
+use crate::highlight::state::{include_default, include_link, include_none};
 use crate::highlight_group::{
     HLF_D, highlight_group_name, highlight_link_id, highlight_num_groups, init_highlight,
     syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
 };
 use crate::indent_c::find_start_comment;
-use crate::main::{
-    got_int, include_default, include_link, include_none, re_extmatch_in, re_extmatch_out,
-    reg_do_extmatch,
-};
+use crate::main::{re_extmatch_in, re_extmatch_out, reg_do_extmatch};
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};

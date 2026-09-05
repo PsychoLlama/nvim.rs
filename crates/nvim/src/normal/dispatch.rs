@@ -21,6 +21,9 @@ use crate::edit::edit;
 use crate::eval::vars::{set_reg_var, set_vcount};
 use crate::ex_docmd::do_sleep;
 use crate::fold::fold_open_cursor;
+use crate::getchar::state::{
+    KeyStuffed, KeyTyped, langmap_mapchar, mod_mask, vgetc_busy, vgetc_char, vgetc_mod_mask,
+};
 use crate::getchar::{
     beep_flush, gotchars_ignore, ins_char_typebuf, plain_vgetc, readbuf1_empty, stuff_empty,
     typeahead, ungetchars, vpeekc, vungetc,
@@ -28,10 +31,7 @@ use crate::getchar::{
 use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
-use crate::main::{
-    KeyStuffed, KeyTyped, did_cursorhold, langmap_mapchar, mod_mask, vgetc_busy, vgetc_char,
-    vgetc_mod_mask,
-};
+use crate::main::did_cursorhold;
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
 use crate::mbyte::{

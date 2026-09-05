@@ -5,7 +5,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::{GlobalCell, SharedCell};
-use crate::keycodes::ModMask;
 use crate::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
@@ -15,13 +14,13 @@ use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, ArgList, Array, AucmdWin, BlnFlags, BufferRef, Channel, ColNr, DecorState,
     EStack, EStackType, EstackInfo, FILE, FileComparison, FileMark, FileMarkView, Handle, LineNr,
-    Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MultiQueue, NS,
-    NluaRefState, Object, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, RgbValue,
-    ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu,
-    Window, XDGVarType, XFileMark, caller_scope, int16_t, int32_t, int64_t, nvim_stats_s, size_t,
-    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
-    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
-    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    Loop, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MultiQueue, NluaRefState,
+    Object, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, ScreenGrid, ScriptCtx,
+    StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, Window, XDGVarType,
+    XFileMark, caller_scope, int16_t, int32_t, int64_t, nvim_stats_s, size_t, uint32_t, uint64_t,
+    uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -227,8 +226,6 @@ pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
 // caller comparing against it (the unit tests do, via FFI).
 pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
 pub static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-#[unsafe(no_mangle)]
-pub static test_disable_char_avail: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) const SYS_VIMRC_FILE: &CStr = c"$VIM/sysinit.vim";
 pub(crate) const VIMRC_FILE: &CStr = c".nvimrc";
 pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
@@ -237,15 +234,11 @@ pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     log_skip: 0 as int16_t,
 });
 pub(crate) const NO_BUFFERS: c_int = 1 as c_int;
-pub static mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
-pub static vgetc_mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
-pub static vgetc_char: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static cmdline_star: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static redrawing_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(false);
 pub static ex_exitval: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static rc_did_emsg: GlobalCell<bool> = GlobalCell::new(false);
-pub static vgetc_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
 pub static didset_vimruntime: GlobalCell<bool> = GlobalCell::new(false);
 pub static debug_break_level: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
@@ -276,9 +269,6 @@ pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(cal
     funccalp: ::core::ptr::null_mut::<c_void>(),
 });
 pub static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static include_none: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static include_default: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static include_link: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static highlight_match: GlobalCell<bool> = GlobalCell::new(false);
 pub static search_match_lines: GlobalCell<LineNr> = GlobalCell::new(0);
 pub static search_match_endcol: GlobalCell<ColNr> = GlobalCell::new(0);
@@ -319,17 +309,8 @@ pub static fenc_default: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static debug_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdpreview: GlobalCell<bool> = GlobalCell::new(false);
-pub static reg_recording: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static reg_executing: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static pending_end_reg_executing: GlobalCell<bool> = GlobalCell::new(false);
-pub static reg_recorded: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static no_mapping: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static no_zero_mapping: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static allow_keys: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static no_u_sync: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static u_sync_once: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static mapped_ctrl_c: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static ctrl_c_interrupts: GlobalCell<bool> = GlobalCell::new(true);
 pub(crate) const SEA_NONE: c_int = 0 as c_int;
 pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
 pub(crate) const SEA_QUIT: c_int = 2 as c_int;
@@ -337,17 +318,7 @@ pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
-pub static typebuf_was_empty: GlobalCell<bool> = GlobalCell::new(false);
-pub static expr_map_lock: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static ignore_script: GlobalCell<bool> = GlobalCell::new(false);
-pub static KeyTyped: GlobalCell<bool> = GlobalCell::new(false);
-pub static KeyStuffed: GlobalCell<c_int> = GlobalCell::new(0);
-pub static maptick: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static must_redraw_pum: GlobalCell<bool> = GlobalCell::new(false);
-pub static need_highlight_changed: GlobalCell<bool> = GlobalCell::new(true);
-pub static scriptout: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
-pub static got_int: GlobalCell<bool> = GlobalCell::new(false);
-pub static bangredo: GlobalCell<bool> = GlobalCell::new(false);
 pub static searchcmdlen: GlobalCell<c_int> = GlobalCell::new(0);
 pub static reg_do_extmatch: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static re_extmatch_in: GlobalCell<*mut RegExtMatch> =
@@ -362,7 +333,6 @@ pub static postponed_split_tab: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static g_do_tagpreview: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static g_tag_at_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static keep_help_flag: GlobalCell<bool> = GlobalCell::new(false);
-pub static langmap_mapchar: GlobalCell<[uint8_t; 256]> = GlobalCell::new([0; 256]);
 pub static save_p_ls: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
 pub static save_p_wmh: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
 pub static wild_menu_showing: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -373,7 +343,6 @@ pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
 pub static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
-pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
 pub static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
@@ -387,21 +356,6 @@ pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
-pub static highlight_attr: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
-pub static highlight_attr_last: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
-pub static highlight_user: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
-pub static highlight_stlnc: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
-pub static cterm_normal_fg_color: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static cterm_normal_bg_color: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static normal_fg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub static normal_bg: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub static normal_sp: GlobalCell<RgbValue> = GlobalCell::new(-1 as RgbValue);
-pub static ns_hl_global: GlobalCell<NS> = GlobalCell::new(0 as NS);
-pub static ns_hl_win: GlobalCell<NS> = GlobalCell::new(-1 as NS);
-pub static ns_hl_fast: GlobalCell<NS> = GlobalCell::new(-1 as NS);
-pub static ns_hl_active: GlobalCell<NS> = GlobalCell::new(0 as NS);
-pub static hl_attr_active: GlobalCell<*mut c_int> =
-    GlobalCell::new((highlight_attr.as_raw() as *const _) as *mut c_int);
 pub static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const LUA_GLOBALSINDEX: c_int = -10002 as c_int;
 pub static nlua_global_refs: GlobalCell<*mut NluaRefState> =
@@ -702,7 +656,6 @@ const UNSET_NAMED_MARK: XFileMark = XFileMark {
 pub static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
 pub static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
     GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
-pub static repeat_luaref: GlobalCell<LuaRef> = GlobalCell::new(-2 as LuaRef);
 pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
 pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
 pub static pum_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());

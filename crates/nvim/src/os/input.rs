@@ -22,6 +22,7 @@ use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_process_events, multiqueue_put_event};
 use crate::event::rstream::{rstream_init_fd, rstream_may_close, rstream_start, rstream_stop};
+use crate::getchar::state::{ctrl_c_interrupts, got_int, mapped_ctrl_c, typebuf_was_filled};
 use crate::getchar::{before_blocking, typebuf_changed};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::ModMask;
@@ -32,9 +33,8 @@ use crate::keycodes::{
 };
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
-    ch_before_blocking_events, ctrl_c_interrupts, did_cursorhold, do_profiling, getout, got_int,
-    main_loop, mapped_ctrl_c, mouse_col, mouse_grid, mouse_row, preserve_exit, silent_mode,
-    typebuf_was_filled, used_stdin,
+    ch_before_blocking_events, did_cursorhold, do_profiling, getout, main_loop, mouse_col,
+    mouse_grid, mouse_row, preserve_exit, silent_mode, used_stdin,
 };
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_mouset, p_ut};

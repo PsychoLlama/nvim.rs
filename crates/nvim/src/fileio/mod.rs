@@ -24,13 +24,14 @@ use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
 use crate::fold::{fold_update_all, foldmethod_is_manual};
 use crate::garray::{ga_clear_strings, ga_grow, ga_init};
+use crate::getchar::state::got_int;
 use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    autocmd_busy, did_check_timestamps, exiting, got_int, need_check_timestamps,
-    no_check_timestamps, readonlymode, recoverymode, stdin_fd, swap_exists_action, vim_ignored,
+    autocmd_busy, did_check_timestamps, exiting, need_check_timestamps, no_check_timestamps,
+    readonlymode, recoverymode, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,

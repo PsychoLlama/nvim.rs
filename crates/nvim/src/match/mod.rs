@@ -30,11 +30,12 @@ use crate::eval::typval::{
 use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_docmd::{ends_excmd, ex_errmsg, find_nextcmd, set_no_hlsearch};
 use crate::fold::has_folding;
+use crate::getchar::state::got_int;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
-use crate::main::{got_int, search_first_line, search_last_line};
+use crate::main::{search_first_line, search_last_line};
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};

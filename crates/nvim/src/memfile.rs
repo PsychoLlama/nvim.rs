@@ -53,7 +53,8 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 use crate::fileio::{read_eintr, write_eintr};
-use crate::main::{did_swapwrite_msg, got_int, main_loop};
+use crate::getchar::state::got_int;
+use crate::main::{did_swapwrite_msg, main_loop};
 use crate::memline::{ml_get_buf, ml_open_file};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_swapclose;

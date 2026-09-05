@@ -26,9 +26,10 @@ use crate::fileio::{
     msg_add_fileformat, msg_add_lines, need_conversion, set_rw_fname, time_differs, vim_rename,
     vim_tempname, write_eintr,
 };
+use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::main::{exiting, got_int};
+use crate::main::exiting;
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};

@@ -71,6 +71,10 @@ use crate::fileio::check_timestamps;
 use crate::fold::{
     fold_check_close, fold_open_cursor, fold_update_after_insert, has_folding, has_folding_win,
 };
+use crate::getchar::state::{
+    KeyStuffed, KeyTyped, got_int, langmap_mapchar, mod_mask, reg_recording,
+    test_disable_char_avail, vgetc_busy,
+};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally,
     append_to_redobuff_number, char_avail, get_inserted, getcmdkeycmd, map_execute_lua,
@@ -82,6 +86,7 @@ use crate::grid::{
     grid_line_flush, grid_line_getchar, grid_line_put_schar, grid_line_puts, grid_line_start,
 };
 use crate::guard::{sandbox, textlock};
+use crate::highlight::state::need_highlight_changed;
 use crate::highlight_group::{HLF_8, highlight_changed};
 use crate::indent::{
     change_indent, fix_indent, get_indent, get_sts_value, get_sw_value, inindent, ins_try_si,
@@ -108,10 +113,8 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, did_check_timestamps, did_cursorhold, got_int, langmap_mapchar,
-    last_cursormoved, last_cursormoved_win, mod_mask, need_check_timestamps,
-    need_highlight_changed, pum_want, reg_recording, spell_redraw_lnum, test_disable_char_avail,
-    u_sync_once, vgetc_busy,
+    did_check_timestamps, did_cursorhold, last_cursormoved, last_cursormoved_win,
+    need_check_timestamps, pum_want, spell_redraw_lnum, u_sync_once,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};

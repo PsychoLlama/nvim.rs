@@ -38,11 +38,11 @@ use crate::ex_eval::state::did_throw;
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
+use crate::getchar::state::{KeyTyped, got_int, mod_mask, reg_executing, reg_recording};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::main::{
-    KeyTyped, did_check_timestamps, diff_need_scrollbind, got_int, last_cursormoved,
-    last_cursormoved_win, may_garbage_collect, mod_mask, need_check_timestamps, reg_executing,
-    reg_recording, time_fd,
+    did_check_timestamps, diff_need_scrollbind, last_cursormoved, last_cursormoved_win,
+    may_garbage_collect, need_check_timestamps, time_fd,
 };
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::{

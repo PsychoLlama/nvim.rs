@@ -112,11 +112,12 @@
 )]
 
 use crate::drawscreen::state::RedrawingDisabled;
+use crate::getchar::state::{allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    allow_keys, autocmd_no_enter, autocmd_no_leave, cmdline_star, curbuf_splice_pending,
-    current_sctx, disable_fold_update, expr_map_lock, inhibit_delete_count, no_check_timestamps,
-    no_mapping, no_u_sync, no_zero_mapping, tabpage_move_disallowed,
+    autocmd_no_enter, autocmd_no_leave, cmdline_star, curbuf_splice_pending, current_sctx,
+    disable_fold_update, inhibit_delete_count, no_check_timestamps, no_u_sync,
+    tabpage_move_disallowed,
 };
 use crate::message::state::{
     emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,

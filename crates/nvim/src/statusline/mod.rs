@@ -49,9 +49,9 @@ use crate::grid::{
     GridRef, grid_adjust, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     grid_line_start, screengrid_line_start,
 };
+use crate::highlight::state::hl_attr_active;
 use crate::highlight::{hl_combine_attr, win_hl_attr};
 use crate::highlight_group::{HLF_S, HLF_SNC};
-use crate::main::hl_attr_active;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{

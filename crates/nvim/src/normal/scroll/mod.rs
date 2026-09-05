@@ -13,8 +13,8 @@ use crate::cursor::set_leftcol;
 use crate::diff::diff_set_topline;
 use crate::drawscreen::{UPD_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
+use crate::getchar::state::mod_mask;
 use crate::global_cell::GlobalCell;
-use crate::main::mod_mask;
 use crate::normal::{
     CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, set_visual_active,
     set_visual_select, visual_active, visual_select,

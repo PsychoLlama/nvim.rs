@@ -25,8 +25,8 @@ use crate::eval::typval::{NumBuf, tv_get_number, tv_get_number_chk, tv_get_strin
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
+use crate::getchar::state::{got_int, maptick};
 use crate::global_cell::GlobalCell;
-use crate::main::{got_int, maptick};
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,

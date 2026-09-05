@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod state;
 use crate::api::vim::nvim_paste;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite};
@@ -18,6 +19,12 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::update_topline_cursor;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
+use crate::getchar::state::{
+    KeyStuffed, KeyTyped, allow_keys, ctrl_c_interrupts, got_int, ignore_script, langmap_mapchar,
+    mapped_ctrl_c, maptick, mod_mask, no_mapping, no_zero_mapping, pending_end_reg_executing,
+    reg_executing, reg_recording, repeat_luaref, scriptout, test_disable_char_avail,
+    typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
+};
 use crate::global_cell::GlobalCell;
 use crate::input::get_keystroke;
 use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_x_key};
@@ -25,12 +32,8 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
-    KeyStuffed, KeyTyped, allow_keys, cmdline_star, ctrl_c_interrupts, debug_did_msg,
-    did_outofmem_msg, did_swapwrite_msg, got_int, ignore_script, langmap_mapchar, main_loop,
-    mapped_ctrl_c, maptick, may_garbage_collect, mod_mask, mouse_col, mouse_grid, mouse_row,
-    no_mapping, no_zero_mapping, pending_end_reg_executing, reg_executing, reg_recording,
-    repeat_luaref, scriptout, test_disable_char_avail, typebuf_was_empty, typebuf_was_filled,
-    vgetc_busy, vgetc_char, vgetc_mod_mask, want_garbage_collect,
+    cmdline_star, debug_did_msg, did_outofmem_msg, did_swapwrite_msg, main_loop,
+    may_garbage_collect, mouse_col, mouse_grid, mouse_row, want_garbage_collect,
 };
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,

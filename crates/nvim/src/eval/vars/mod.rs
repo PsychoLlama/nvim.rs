@@ -42,6 +42,7 @@ use crate::eval::{
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{check_nextcmd, ends_excmd};
 use crate::ex_eval::aborting;
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::guard::sandbox;
 use crate::hashtab::{
@@ -49,7 +50,7 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{current_sctx, got_int, no_hlsearch};
+use crate::main::{current_sctx, no_hlsearch};
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,

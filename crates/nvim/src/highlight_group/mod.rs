@@ -5,10 +5,10 @@ use core::ffi::{CStr, c_int, c_uint};
 use crate::api::private::helpers::cstr_as_string;
 use crate::decoration_provider::decor_provider_invalidate_hl;
 use crate::drawscreen::state::clear_cmdline;
-use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
-use crate::main::{
+use crate::highlight::state::{
     highlight_attr, highlight_attr_last, highlight_stlnc, highlight_user, need_highlight_changed,
 };
+use crate::highlight::{HlAttrFlags, hl_get_ui_attr, syn_attr2entry};
 use crate::message::msg_grid_ref;
 use crate::types::{Integer, size_t};
 use crate::ui::ui_call_hl_group_set;

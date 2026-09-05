@@ -27,7 +27,7 @@ use crate::cstr;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_docmd::check_nextcmd;
 use crate::extmark::extmark_splice;
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mark::mark_adjust;
 use crate::memline::{Lines, ml_append, ml_delete};
 use crate::message::emsg;

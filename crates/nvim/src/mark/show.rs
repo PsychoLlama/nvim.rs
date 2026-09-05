@@ -19,8 +19,8 @@
 use crate::ascii::{ascii_isdigit, ascii_islower, ascii_isupper};
 use crate::buffer::{buf_is_prompt, buflist_nr2name, find_buf};
 use crate::charset::{ptr2cells, skipwhite};
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::got_int;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};

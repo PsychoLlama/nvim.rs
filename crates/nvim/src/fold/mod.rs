@@ -19,8 +19,9 @@
 
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::garray::{ga_clear, ga_grow, ga_init};
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::{disable_fold_update, got_int, need_diff_redraw};
+use crate::main::{disable_fold_update, need_diff_redraw};
 use crate::memory::xfree;
 use crate::plines::plines_win_nofold;
 use crate::state::mode::State;

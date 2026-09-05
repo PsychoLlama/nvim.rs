@@ -37,14 +37,15 @@
 //! * [`dict`] — the API's dictionary form of an attribute set.
 //! * [`namespace`] — per-namespace group definitions and the `HLF_*` tables.
 
+pub(crate) mod state;
 use crate::api::private::helpers::{arena_array, arena_dict, cstr_as_string};
 use crate::api::ui::{remote_ui_hl_attr_define, remote_ui_hl_group_set};
 use crate::drawscreen::screen_invalidate_highlights;
 use crate::global_cell::GlobalCell;
+use crate::highlight::state::{highlight_attr, highlight_attr_last};
 use crate::highlight_group::{
     HLF_COUNT, highlight_attr_set_all, highlight_changed, hlf_names, syn_id2name,
 };
-use crate::main::{highlight_attr, highlight_attr_last};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::emsg;
 use crate::os::cshim::gettext;

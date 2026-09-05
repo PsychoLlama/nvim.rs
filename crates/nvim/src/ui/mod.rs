@@ -47,15 +47,16 @@ use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::event::libuv::uv_cwd;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::ex_getln::cmdline_ui_flush;
+use crate::getchar::state::expr_map_lock;
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, default_grid_ref, get_win_by_grid_handle};
 use crate::guard::textlock;
+use crate::highlight::state::{
+    cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp,
+};
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
-use crate::main::{
-    cterm_normal_bg_color, cterm_normal_fg_color, exiting, expr_map_lock, full_screen, normal_bg,
-    normal_fg, normal_sp, starting, ui_client_channel_id,
-};
+use crate::main::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};

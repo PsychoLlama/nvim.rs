@@ -28,6 +28,7 @@ use crate::grid::{
     schar_get_first_codepoint, schar_len,
 };
 use crate::highlight::default_hl_attr;
+use crate::highlight::state::{cterm_normal_bg_color, hl_attr_active, normal_bg};
 use crate::highlight::{
     hl_blend_attrs, hl_combine_attr, hl_get_underline, syn_attr2entry, win_bg_attr, win_hl_attr,
 };
@@ -38,10 +39,7 @@ use crate::highlight_group::{
 };
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
-use crate::main::{
-    cterm_normal_bg_color, highlight_match, hl_attr_active, normal_bg, search_match_endcol,
-    search_match_lines, spell_redraw_lnum,
-};
+use crate::main::{highlight_match, search_match_endcol, search_match_lines, spell_redraw_lnum};
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };

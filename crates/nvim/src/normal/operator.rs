@@ -14,10 +14,10 @@ use core::ptr;
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::edit::{BeginlineOpts, beginline, cursor_down, prompt_curpos_editable};
 use crate::eval::vars::{set_reg_var, set_vim_var_string};
+use crate::getchar::state::{got_int, reg_executing, reg_recorded};
 use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
-use crate::main::{got_int, reg_executing, reg_recorded};
 use crate::message::emsg;
 use crate::normal::{
     CmdArgRef, check_clear_op, check_clear_op_quit, clear_op_beep, e_cmdline_window_already_open,

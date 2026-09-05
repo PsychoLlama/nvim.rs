@@ -23,12 +23,12 @@ use crate::edit::{
     set_last_insert,
 };
 use crate::fold::{fold_update_after_insert, has_folding};
+use crate::getchar::state::got_int;
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, stuff_empty, stuff_readbuf, stuff_readbuf_char,
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::main::got_int;
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;

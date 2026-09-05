@@ -48,6 +48,9 @@ use crate::ex_docmd::state::{last_cmdline, new_last_cmdline};
 use crate::ex_getln::{cmdline_paste_str, getcmdline};
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::file_search::file_name_at_cursor;
+use crate::getchar::state::{
+    got_int, pending_end_reg_executing, reg_executing, reg_recorded, reg_recording,
+};
 use crate::getchar::{
     append_to_redobuff_char, beep_flush, get_recorded, ins_typebuf, stuff_readbuf,
     stuff_readbuf_char, stuffescaped,
@@ -60,7 +63,6 @@ use crate::keycodes::{
     Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, vim_strsave_escape_ks,
     vim_unescape_ks,
 };
-use crate::main::{got_int, pending_end_reg_executing, reg_executing, reg_recorded, reg_recording};
 use crate::mark::mark_adjust;
 use crate::mbyte::{
     mb_charlen, mb_string2cells, mb_string2cells_len, mb_tolower, utf_head_off, utf_ptr2cells_len,

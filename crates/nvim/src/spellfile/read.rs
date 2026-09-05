@@ -40,7 +40,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::memline::ml_append_buf;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xstrdup};

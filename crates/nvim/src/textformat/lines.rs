@@ -24,12 +24,12 @@ use crate::eval::eval_to_number;
 use crate::eval::vars::{set_vim_var_char, set_vim_var_nr, set_vim_var_string};
 use crate::ex_docmd::cmdmod_has;
 use crate::getchar::beep_flush;
+use crate::getchar::state::got_int;
 use crate::guard::{Lock, Script};
 use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
 };
 use crate::indent_c::{cindent_on, get_c_indent};
-use crate::main::got_int;
 use crate::mark::mark_col_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};

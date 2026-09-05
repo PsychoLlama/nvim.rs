@@ -16,7 +16,7 @@ use crate::edit::{BeginlineOpts, beginline, cursor_down, cursor_up, oneleft, one
 use crate::ex_cmds::do_ascii;
 use crate::ex_docmd::{do_cmdline_cmd, do_exmode, do_sleep};
 use crate::fold::has_any_folding;
-use crate::main::mod_mask;
+use crate::getchar::state::mod_mask;
 use crate::mbyte::{show_utf8, utf_find_illegal, utf_ptr2cells};
 use crate::memline::goto_byte;
 use crate::message::show_sb_text;

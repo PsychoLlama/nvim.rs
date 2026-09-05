@@ -20,7 +20,7 @@ use super::list::{ThreadList, addstate, addstate_here};
 use super::run::nfa_did_time_out;
 use super::step::{Run, Step, lookaround_held, step};
 use super::sub::{copy_sub, copy_sub_off, has_zsubexpr, match_follows};
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mbyte::{utf_fold, utf_ptr2char};
 use crate::regexp::{
     AUTOMATIC_ENGINE, NFA_MAX_STATES, NFA_TOO_EXPENSIVE, NfaPim, NfaRegProg, NfaState, PimResult,

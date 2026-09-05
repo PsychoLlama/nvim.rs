@@ -27,7 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mbyte::{utf_iscomposing_legacy, utf_ptr2char, utf8len_tab, utfc_ptr2len};
 use crate::spell::WordFlags;
 use crate::spellsuggest::score::similar_chars;

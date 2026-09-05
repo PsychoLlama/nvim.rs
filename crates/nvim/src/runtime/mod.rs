@@ -48,12 +48,12 @@ use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, do_exedit, getline_cookie, get
 use crate::ex_eval::{aborting, cleanup_conditionals, report_make_pending};
 use crate::garray::{ga_grow, ga_init, ga_remove_duplicate_strings};
 use crate::getchar::openscript;
+use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::main::{
-    current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling, got_int,
-    time_fd,
+    current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling, time_fd,
 };
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;

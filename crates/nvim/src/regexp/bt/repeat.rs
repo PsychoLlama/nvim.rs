@@ -14,7 +14,7 @@ use core::ffi::c_int;
 use super::op::BtOp;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc, vim_iswordp_buf};
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mbyte::{mb_tolower, mb_toupper, utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::message::e_re_corr;
 use crate::message::iemsg;

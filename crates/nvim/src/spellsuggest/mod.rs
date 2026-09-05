@@ -54,10 +54,10 @@ use sps::{spell_suggest_expr, spell_suggest_file};
 
 use crate::charset::{skiptowhite, skipwhite};
 use crate::garray::{ga_grow, ga_init};
+use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
-use crate::main::got_int;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::option::copy_option_part;

@@ -35,6 +35,7 @@ use crate::file_search::{file_name_in_line, find_file_name_in_path};
 use crate::fileio::vim_fgets;
 use crate::fold::{fold_open_cursor, has_folding};
 use crate::getchar::char_avail;
+use crate::getchar::state::{KeyStuffed, KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::indent_c::is_pos_in_string;
 use crate::insexpand::{
@@ -42,8 +43,8 @@ use crate::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, g_do_tagpreview, got_int, no_hlsearch, no_smartcase, rc_did_emsg,
-    search_match_endcol, search_match_lines, searchcmdlen,
+    g_do_tagpreview, no_hlsearch, no_smartcase, rc_did_emsg, search_match_endcol,
+    search_match_lines, searchcmdlen,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{

@@ -22,7 +22,7 @@ use core::ffi::c_int;
 use super::{
     MOUSE_FOCUS, MOUSE_LEFT, MOUSE_MAY_STOP_VIS, MOUSE_MAY_VIS, MOUSE_RIGHT, vcols_between,
 };
-use crate::main::mod_mask;
+use crate::getchar::state::mod_mask;
 use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };

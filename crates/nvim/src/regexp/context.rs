@@ -27,7 +27,8 @@ use super::{
     reg_tofree, reg_tofreelen,
 };
 use crate::charset::vim_iswordc_buf;
-use crate::main::{got_int, rc_did_emsg};
+use crate::getchar::state::got_int;
+use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xcalloc, xfree, xmalloc};

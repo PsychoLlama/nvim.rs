@@ -11,12 +11,13 @@ use core::ffi::c_int;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
+use crate::highlight::state::{
+    cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
+    normal_sp,
+};
 use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{
-    cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, need_highlight_changed, normal_bg,
-    normal_fg, normal_sp,
-};
+use crate::main::current_sctx;
 use crate::types::{HlAttrs, KeyDict_highlight, Object};
 use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 

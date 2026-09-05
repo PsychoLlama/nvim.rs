@@ -16,6 +16,7 @@ use core::ptr;
 use super::{get_global_lstate, kRetNilBool, lua_Debug, lua_getinfo, nlua_error, nlua_exec};
 use crate::api::private::helpers::cstr_as_string;
 use crate::eval::userfunc::register_luafunc;
+use crate::getchar::state::{got_int, mod_mask};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{special_to_buf, vim_unescape_ks};
 use crate::lua::executor::{nlua_pushref, nlua_ref_global};
@@ -24,7 +25,6 @@ use crate::lua::ffi::{
     lua_getmetatable, lua_gettop, lua_pcall, lua_pop, lua_pushlstring, lua_pushstring,
     lua_toboolean, lua_type, luaL_checktype,
 };
-use crate::main::{got_int, mod_mask};
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::gettext;
 use crate::os::env::home_replace_save;

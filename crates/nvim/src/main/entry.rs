@@ -36,6 +36,7 @@ use crate::event::proc::proc_teardown;
 use crate::ex_docmd::{filetype_maybe_enable, filetype_plugin_enable};
 use crate::ex_getln::cmdline_init;
 use crate::fileio::shorten_fnames;
+use crate::getchar::state::scriptout;
 use crate::getchar::{open_scriptin, stuff_readbuf_char};
 use crate::highlight::highlight_init;
 use crate::highlight_group::init_highlight;
@@ -56,9 +57,8 @@ use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, debug_break_level,
     embedded_mode, err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, main_loop, recoverymode, scriptout, silent_mode, starting,
-    stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
-    ui_client_forward_stdin,
+    kOptCbFlagUnnamedplus, main_loop, recoverymode, silent_mode, starting, stderr_isatty,
+    stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;

@@ -48,6 +48,7 @@ use crate::extmark::{extmark_apply_undo, extmark_splice_delete};
 use crate::fileio::vim_fgets;
 use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_clear, ga_grow, ga_init};
+use crate::getchar::state::{KeyTyped, got_int, test_disable_char_avail};
 use crate::getchar::{
     append_to_redobuff_char, append_to_redobuff_literally, char_avail, safe_vgetc, using_script,
     vgetc, vpeekc, vpeekc_any, vungetc,
@@ -57,7 +58,7 @@ use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
-use crate::main::{KeyTyped, g_tag_at_cursor, got_int, pum_want, test_disable_char_avail};
+use crate::main::{g_tag_at_cursor, pum_want};
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
     utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,

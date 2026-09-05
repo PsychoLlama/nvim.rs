@@ -20,8 +20,8 @@ use crate::cursor::{
 };
 use crate::drawscreen::{UPD_VALID, redraw_curbuf_later};
 use crate::edit::{backspace_until_column, get_nolist_virtcol, set_can_cindent, undisplay_dollar};
+use crate::getchar::state::got_int;
 use crate::indent::{change_indent, get_number_indent, set_indent};
-use crate::main::got_int;
 use crate::mbyte::{utf_allow_break, utf_allow_break_before};
 use crate::memory::xfree;
 use crate::r#move::update_topline;

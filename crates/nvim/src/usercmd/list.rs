@@ -22,9 +22,9 @@ use crate::api::private::helpers::{
     arena_dict, arena_string, cstr_as_string, dict_put, dict_put_str,
 };
 use crate::eval::last_set_msg;
+use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, nlua_funcref_str};
-use crate::main::got_int;
 use crate::memory::xfree;
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,

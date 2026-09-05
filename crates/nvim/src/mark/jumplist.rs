@@ -23,7 +23,7 @@
 use crate::buffer::find_buf;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_docmd::state::{global_busy, listcmd_busy};
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{
     message_filtered, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts, msg_puts_title,

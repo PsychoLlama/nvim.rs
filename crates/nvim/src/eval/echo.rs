@@ -21,8 +21,8 @@ use crate::eval::{clear_evalarg, echo_hl_id, eval1, eval1_emsg, fill_evalarg_fro
 use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
+use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_E, syn_name2id};
-use crate::main::got_int;
 use crate::memory::xfree;
 use crate::message::state::{
     called_emsg, did_emsg, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,

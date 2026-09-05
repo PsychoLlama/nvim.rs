@@ -16,7 +16,7 @@ use crate::charset::getdigits_int;
 use crate::eval::typval::{NumBuf, tv_list_unref};
 use crate::eval::vars::{eval_spell_expr, get_spellword};
 use crate::fileio::vim_fgets;
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::message_fmt::c_str;
 use crate::option::copy_option_part;
 use crate::option::vars::p_sps;

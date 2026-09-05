@@ -32,6 +32,7 @@ use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::repeat_cmdline;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
+use crate::getchar::state::{KeyTyped, bangredo, got_int, repeat_luaref};
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_keys, append_to_redobuff_literally,
     append_to_redobuff_number, beep_flush, cancel_redo, reset_redobuff, stuff_readbuf,
@@ -45,9 +46,7 @@ use crate::indent::{
 };
 use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
-use crate::main::{
-    KeyTyped, bangredo, curbuf_splice_pending, got_int, mouse_dragging, repeat_luaref,
-};
+use crate::main::{curbuf_splice_pending, mouse_dragging};
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
     bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,

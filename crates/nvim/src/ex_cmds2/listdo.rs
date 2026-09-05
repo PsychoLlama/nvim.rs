@@ -30,8 +30,8 @@ use crate::autocmd::{
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::state::listcmd_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
+use crate::getchar::state::got_int;
 use crate::guard::Suppress;
-use crate::main::got_int;
 use crate::mark::setpcmark;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;

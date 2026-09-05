@@ -27,9 +27,10 @@ use crate::ex_eval::state::{
     current_exception, did_throw, force_abort, msg_list, need_rethrow, trylevel,
 };
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
+use crate::getchar::state::got_int;
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
-use crate::main::{current_sctx, got_int};
+use crate::main::current_sctx;
 use crate::mark::setmark_pos;
 use crate::memory::xfree;
 use crate::message::state::did_emsg;

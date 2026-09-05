@@ -15,8 +15,8 @@ use crate::eval::typval::{
     tv_dict_len, tv_get_string_buf_chk, tv_list_alloc, tv_list_len, tv_list_ref,
 };
 use crate::eval::vars::get_vim_var_str;
+use crate::getchar::state::{reg_executing, reg_recorded, reg_recording};
 use crate::keycodes::Ctrl_V;
-use crate::main::{reg_executing, reg_recorded, reg_recording};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::register::{
     format_reg_type, get_reg_contents, get_reg_type, get_register_name, get_unname_register,

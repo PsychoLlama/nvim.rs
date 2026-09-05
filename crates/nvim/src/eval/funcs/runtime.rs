@@ -16,14 +16,14 @@ use crate::cstr;
 use crate::eval::typval::{NumBuf, tv_dict_alloc_ret, tv_list_append_number};
 use crate::eval::vars::{get_vim_var_nr, set_vim_var_nr};
 use crate::eval::{eval_has_provider, get_callback_depth};
+use crate::getchar::state::vgetc_busy;
 use crate::getchar::{stuff_empty, typeahead, using_script};
 use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    autocmd_busy, starting, stdin_isatty, stdout_isatty, vgetc_busy, wild_menu_showing,
-    windowsVersion,
+    autocmd_busy, starting, stdin_isatty, stdout_isatty, wild_menu_showing, windowsVersion,
 };
 use crate::memline::ml_get;
 use crate::memory::handoff::owned_cstr;

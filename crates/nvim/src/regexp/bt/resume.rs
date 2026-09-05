@@ -16,7 +16,7 @@ use super::matcher::operand_u32;
 use super::op::BtOp;
 use super::repeat::regrepeat;
 use super::state::{BackPos, Braces, RegStack, capture_slot};
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mbyte::utf_head_off;
 use crate::regexp::{
     MatchPos, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RS_BEHIND1, RS_BEHIND2, RS_BRANCH,

@@ -30,6 +30,7 @@ use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding};
 use crate::getchar::char_avail;
+use crate::getchar::state::{KeyTyped, got_int, reg_recording};
 use crate::global_cell::GlobalCell;
 use crate::grid::{
     default_grid_ref, default_gridview, grid_adjust, grid_alloc, grid_clear, grid_del_lines,
@@ -37,6 +38,7 @@ use crate::grid::{
     grid_line_getchar, grid_line_mirror, grid_line_put_schar, grid_line_start,
     schar_cache_clear_if_full, schar_from_ascii, win_grid_alloc,
 };
+use crate::highlight::state::{hl_attr_active, need_highlight_changed, ns_hl_fast};
 use crate::highlight::{
     hl_combine_attr, update_window_hl, win_bg_attr, win_check_ns_hl, win_hl_attr,
 };
@@ -45,8 +47,7 @@ use crate::highlight_group::{
 };
 use crate::insexpand::ins_compl_show_pum;
 use crate::main::{
-    KeyTyped, cmdline_was_last_drawn, exiting, got_int, hl_attr_active, must_redraw_pum,
-    need_diff_redraw, need_highlight_changed, no_hlsearch, ns_hl_fast, reg_recording, starting,
+    cmdline_was_last_drawn, exiting, must_redraw_pum, need_diff_redraw, no_hlsearch, starting,
     stl_syntax, tab_page_click_defs, tab_page_click_defs_size,
 };
 use crate::r#match::{init_search_hl, prepare_search_hl};

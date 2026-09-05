@@ -34,8 +34,9 @@ use crate::ex_eval::state::{
 };
 use crate::ex_getln::{getcmdline, getexline};
 use crate::garray::ga_append_via_ptr;
+use crate::getchar::state::{KeyTyped, got_int};
 use crate::highlight_group::HLF_E;
-use crate::main::{KeyTyped, exiting, got_int};
+use crate::main::exiting;
 use crate::message::e_empty_buffer;
 use crate::message::state::{
     did_emsg, emsg_silent, lines_left, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,

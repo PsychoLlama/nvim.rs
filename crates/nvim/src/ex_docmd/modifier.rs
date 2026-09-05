@@ -33,8 +33,8 @@ use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, exmode_plus, getexline,
 };
+use crate::getchar::state::expr_map_lock;
 use crate::guard::sandbox;
-use crate::main::expr_map_lock;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz};
 use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};

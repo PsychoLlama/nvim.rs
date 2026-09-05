@@ -54,6 +54,7 @@ use crate::ex_docmd::{
 };
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_clear;
+use crate::getchar::state::{KeyStuffed, KeyTyped, got_int, mod_mask};
 use crate::getchar::{
     beep_flush, char_avail, getcmdkeycmd, ins_typebuf, map_execute_lua, plain_vgetc, stuff_empty,
     stuff_readbuf, stuff_readbuf_char, stuff_readbuf_one_line, vgetc, vpeekc, vpeekc_any, vungetc,
@@ -63,10 +64,10 @@ use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::main::{
-    KeyStuffed, KeyTyped, cmdline_star, cmdline_was_last_drawn, cmdpreview, current_sctx, got_int,
-    highlight_match, magic_overruled, mod_mask, mouse_col, mouse_row, no_hlsearch, pum_want,
-    redrawing_cmdline, search_first_line, search_last_line, search_match_endcol,
-    search_match_lines, skip_win_fix_cursor, wild_menu_showing,
+    cmdline_star, cmdline_was_last_drawn, cmdpreview, current_sctx, highlight_match,
+    magic_overruled, mouse_col, mouse_row, no_hlsearch, pum_want, redrawing_cmdline,
+    search_first_line, search_last_line, search_match_endcol, search_match_lines,
+    skip_win_fix_cursor, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;

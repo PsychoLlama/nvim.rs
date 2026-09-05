@@ -28,12 +28,13 @@ use crate::fileio::{
     buf_store_file_info, modname, read_eintr, readfile, vim_deltempdir, vim_rename, vim_tempname,
 };
 use crate::getchar::flush_buffers;
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    did_check_timestamps, getout, got_int, inhibit_delete_count, need_check_timestamps,
-    recoverymode, swap_exists_action,
+    did_check_timestamps, getout, inhibit_delete_count, need_check_timestamps, recoverymode,
+    swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};

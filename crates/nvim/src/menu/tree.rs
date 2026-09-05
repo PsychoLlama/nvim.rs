@@ -17,8 +17,8 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use super::*;
+use crate::getchar::state::got_int;
 use crate::highlight_group::{HLF_8, HLF_D};
-use crate::main::got_int;
 use crate::memory::xfree;
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::{

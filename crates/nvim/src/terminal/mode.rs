@@ -32,10 +32,10 @@ use crate::drawscreen::{
     unshowmode, update_screen,
 };
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
+use crate::getchar::state::{got_int, mapped_ctrl_c, mod_mask};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
-use crate::main::{got_int, mapped_ctrl_c, mod_mask};
 use crate::memory::{strequal, xstrdup};
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;

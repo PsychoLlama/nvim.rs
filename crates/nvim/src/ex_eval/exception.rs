@@ -51,8 +51,9 @@ use crate::ex_eval::state::{
     caught_stack, current_exception, did_throw, force_abort, msg_list, need_rethrow,
     suppress_errthrow, trylevel,
 };
+use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
-use crate::main::{debug_break_level, got_int};
+use crate::main::debug_break_level;
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{e_interr, e_outofmem};

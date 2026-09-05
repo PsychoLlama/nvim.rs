@@ -31,11 +31,10 @@ use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::curbuf_locked;
 use crate::file_search::grab_file_name;
+use crate::getchar::state::{KeyStuffed, KeyTyped, langmap_mapchar, vgetc_busy};
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
-use crate::main::{
-    KeyStuffed, KeyTyped, g_do_tagpreview, langmap_mapchar, postponed_split, vgetc_busy,
-};
+use crate::main::{g_do_tagpreview, postponed_split};
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::{e_buffer_nr_not_found, e_cmdwin, e_noalt};

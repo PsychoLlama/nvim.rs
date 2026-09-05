@@ -17,8 +17,9 @@ use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::ex_cmds::check_secure;
+use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
-use crate::main::{got_int, main_loop};
+use crate::main::main_loop;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::called_emsg;
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};

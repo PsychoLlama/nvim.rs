@@ -16,9 +16,10 @@ use crate::cursor::check_cursor;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_later};
 use crate::ex_getln::getcmdline;
 use crate::fold::fold_open_cursor;
+use crate::getchar::state::{KeyTyped, mod_mask};
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
-use crate::main::{KeyTyped, mod_mask, no_hlsearch};
+use crate::main::no_hlsearch;
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{

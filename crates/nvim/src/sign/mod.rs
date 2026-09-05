@@ -57,10 +57,10 @@ use crate::eval::typval::{
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::extmark::{extmark_del, extmark_del_id, extmark_set};
 use crate::fold::fold_open_cursor;
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_get;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
-use crate::main::got_int;
 use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
 use crate::marktree::{marktree_itr_current, marktree_itr_next};

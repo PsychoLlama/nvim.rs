@@ -29,12 +29,13 @@ use crate::eval::vars::set_vim_var_list;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::fileio::readfile;
+use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, EDIT_QF, MainParams, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT,
-    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, got_int, kOptErrorfile, kOptShortmess,
-    recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
+    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, kOptErrorfile, kOptShortmess, recoverymode,
+    swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};

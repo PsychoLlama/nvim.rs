@@ -14,12 +14,13 @@ use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_lat
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{compute_cmdrow, getexline};
+use crate::getchar::state::{KeyTyped, got_int, typebuf_was_empty};
 use crate::getchar::{
     getcmdkeycmd, map_execute_lua, paste_repeat, stuff_readbuf, stuff_readbuf_char,
     stuff_readbuf_number,
 };
 use crate::help::ex_help;
-use crate::main::{KeyTyped, got_int, may_garbage_collect, typebuf_was_empty};
+use crate::main::may_garbage_collect;
 use crate::memline::ml_get_len;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};

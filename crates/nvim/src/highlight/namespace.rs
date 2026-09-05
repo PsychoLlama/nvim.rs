@@ -33,15 +33,15 @@ use crate::decoration_provider::with_decor_provider;
 use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::HlAttrFlags;
+use crate::highlight::state::{
+    hl_attr_active, need_highlight_changed, ns_hl_active, ns_hl_fast, ns_hl_global, ns_hl_win,
+};
 use crate::highlight_group::{
     HLF_BORDER, HLF_COUNT, HLF_INACTIVE, HLF_NFLOAT, HLF_NONE, HLF_PNI, HLF_PST, hlf_names,
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
 use crate::lua::executor::nlua_call_ref;
-use crate::main::{
-    hl_attr_active, must_redraw_pum, need_highlight_changed, ns_hl_active, ns_hl_fast,
-    ns_hl_global, ns_hl_win,
-};
+use crate::main::must_redraw_pum;
 use crate::option::check_blending;
 use crate::option::vars::p_pb;
 use crate::popupmenu::pum_drawn;

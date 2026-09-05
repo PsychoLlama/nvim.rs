@@ -20,10 +20,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::drawscreen::UPD_NOT_VALID;
+use crate::getchar::state::{KeyTyped, mod_mask, vgetc_char, vgetc_mod_mask};
 use crate::getchar::{ins_char_typebuf, ungetchars};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_AT, Ctrl_M, Key, NotAKey};
-use crate::main::{KeyTyped, mod_mask, vgetc_char, vgetc_mod_mask};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::mouse::{MousePos, do_mousescroll, find_win_inner};
 use crate::r#move::win_col_off;

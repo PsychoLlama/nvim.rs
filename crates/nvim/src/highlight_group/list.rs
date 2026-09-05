@@ -11,8 +11,9 @@ use core::ffi::{CStr, c_char, c_int};
 
 use crate::charset::{skiptowhite, skipwhite, vim_strsize};
 use crate::eval::last_set_msg;
+use crate::getchar::state::got_int;
 use crate::highlight::HlAttrFlags;
-use crate::main::{got_int, include_default, include_link, include_none};
+use crate::highlight::state::{include_default, include_link, include_none};
 use crate::message::state::{msg_col, msg_silent};
 use crate::message::{
     message_filtered, msg_advance, msg_clr_eos, msg_outtrans, msg_putchar, msg_puts_hl,

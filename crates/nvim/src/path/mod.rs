@@ -26,8 +26,8 @@ use crate::fileio::{file_pat_to_reg_pat, match_file_list};
 use crate::garray::{
     ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
 };
+use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::got_int;
 use crate::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };

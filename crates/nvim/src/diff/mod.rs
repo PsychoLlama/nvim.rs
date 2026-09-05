@@ -55,12 +55,11 @@ use crate::fold::{
     fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };
 
+use crate::getchar::state::KeyTyped;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
-use crate::main::{
-    KeyTyped, diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw,
-};
+use crate::main::{diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw};
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
     mb_get_class_tab, mb_stricmp, utf_char2bytes, utf_char2len, utf_fold, utf_head_off,

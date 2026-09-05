@@ -15,13 +15,13 @@ use crate::eval::{
     var_item_copy, var2fpos,
 };
 use crate::garray::{ga_append, ga_append_via_ptr, ga_clear, ga_concat_len, ga_grow, ga_init};
+use crate::getchar::state::got_int;
 use crate::global_cell::{ConstTable, GlobalCell};
 use crate::hashtab::{
     Slot, hash_add, hash_find, hash_find_len, hash_init, hash_lock, hash_remove, hash_reset,
     hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
-use crate::main::got_int;
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;

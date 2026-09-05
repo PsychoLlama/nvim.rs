@@ -20,7 +20,7 @@ use crate::edit::{
 use crate::eval::prompt_invoke_callback;
 use crate::fold::has_folding;
 use crate::getchar::beep_flush;
-use crate::main::mod_mask;
+use crate::getchar::state::mod_mask;
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get;

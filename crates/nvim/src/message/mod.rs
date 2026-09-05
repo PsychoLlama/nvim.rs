@@ -28,6 +28,9 @@ use crate::ex_docmd::state::global_busy;
 use crate::ex_eval::cause_errthrow;
 use crate::fileio::check_timestamps;
 use crate::garray::ga_concat_len;
+use crate::getchar::state::{
+    KeyTyped, got_int, reg_recording, scriptout, vgetc_busy, vgetc_char, vgetc_mod_mask,
+};
 use crate::getchar::{
     beep_flush, char_avail, flush_buffers, ins_char_typebuf, safe_vgetc, stuff_empty,
     typeahead_noflush,
@@ -40,6 +43,7 @@ use crate::grid::{
 };
 use crate::guard::{Depth, Suppress};
 use crate::highlight::hl_combine_attr;
+use crate::highlight::state::{hl_attr_active, need_highlight_changed};
 use crate::highlight_group::{
     HLF_0, HLF_8, HLF_AT, HLF_E, HLF_M, HLF_MSG, HLF_N, HLF_R, HLF_T, HLF_W, highlight_changed,
     syn_check_group, syn_id2attr,
@@ -49,10 +53,8 @@ use crate::input::{get_keystroke, prompt_for_input};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
-    KeyTyped, cmdline_was_last_drawn, embedded_mode, ex_exitval, exiting, full_screen, got_int,
-    headless_mode, hl_attr_active, main_loop, need_check_timestamps, need_highlight_changed,
-    nvim_testing, redrawing_cmdline, reg_recording, scriptout, silent_mode, vgetc_busy, vgetc_char,
-    vgetc_mod_mask,
+    cmdline_was_last_drawn, embedded_mode, ex_exitval, exiting, full_screen, headless_mode,
+    main_loop, need_check_timestamps, nvim_testing, redrawing_cmdline, silent_mode,
 };
 use crate::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,

@@ -25,6 +25,7 @@ use crate::event::multiqueue::{multiqueue_new_child, multiqueue_put_event};
 use crate::ex_docmd::{do_cmdline, ends_excmd, expand_sfile, get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::{aborting, should_abort};
 use crate::fileio::{check_timestamps, file_pat_to_reg_pat, match_file_pat};
+use crate::getchar::state::{KeyTyped, got_int, reg_recording};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::secure;
@@ -33,10 +34,9 @@ use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
-    KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
-    autocmd_match, autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events,
-    did_cursorhold, do_profiling, globaldir, got_int, last_cursormoved, last_cursormoved_win,
-    main_loop, reg_recording, starting,
+    aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
+    autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events, did_cursorhold,
+    do_profiling, globaldir, last_cursormoved, last_cursormoved_win, main_loop, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, msg_col};

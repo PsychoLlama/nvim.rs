@@ -41,6 +41,7 @@ use crate::ex_eval::{
 };
 use crate::ex_getln::{getcmdline, ui_ext_cmdline_block_append, ui_ext_cmdline_block_leave};
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_clear_strings, ga_grow, ga_init};
+use crate::getchar::state::{KeyTyped, got_int};
 use crate::getchar::{restore_redobuff, save_redobuff};
 use crate::global_cell::GlobalCell;
 use crate::guard::sandbox;
@@ -53,8 +54,7 @@ use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::main::{
-    KeyTyped, current_sctx, debug_backtrace_level, debug_tick, do_profiling, got_int,
-    want_garbage_collect,
+    current_sctx, debug_backtrace_level, debug_tick, do_profiling, want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{

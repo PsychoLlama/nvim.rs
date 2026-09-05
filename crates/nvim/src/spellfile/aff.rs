@@ -38,8 +38,8 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::charset::skipdigits;
 use crate::fileio::vim_fgets;
+use crate::getchar::state::got_int;
 use crate::hashtab::{hash_add, hash_find, hash_init};
-use crate::main::got_int;
 use crate::mbyte::{convert_setup, enc_canonize, string_convert};
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg;

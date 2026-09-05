@@ -34,14 +34,14 @@ use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
 use crate::fold::{close_fold, open_fold};
+use crate::getchar::state::{KeyStuffed, mod_mask};
 use crate::getchar::{
     append_to_redobuff_char, safe_vgetc, stuff_readbuf, stuff_readbuf_char, stuff_readbuf_number,
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    KeyStuffed, mod_mask, mouse_col, mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol,
-    mouse_row,
+    mouse_col, mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row,
 };
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;

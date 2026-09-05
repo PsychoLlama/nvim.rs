@@ -26,6 +26,7 @@ use crate::grid::{
     grid_draw_border, grid_line_fill, grid_line_flush, grid_line_put_schar, grid_line_puts,
     schar_from_ascii, schar_from_str, screengrid_line_start,
 };
+use crate::highlight::state::hl_attr_active;
 use crate::highlight::{hl_combine_attr, hl_get_ui_attr, win_hl_attr};
 use crate::highlight_group::{
     HLF_PBR, HLF_PMNI, HLF_PMSI, HLF_PNI, HLF_PNK, HLF_PNX, HLF_PSB, HLF_PSI, HLF_PSK, HLF_PST,
@@ -35,8 +36,8 @@ use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
 use crate::main::{
-    PumWant, g_do_tagpreview, hl_attr_active, mouse_col, mouse_grid, mouse_row, must_redraw_pum,
-    no_u_sync, pum_grid, pum_want,
+    PumWant, g_do_tagpreview, mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync,
+    pum_grid, pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};

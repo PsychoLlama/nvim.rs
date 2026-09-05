@@ -18,11 +18,13 @@ use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::eval::vars::do_unlet;
 use crate::ex_docmd::ends_excmd;
-use crate::lua::executor::nlua_set_sctx;
-use crate::main::{
-    cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, got_int, need_highlight_changed,
-    normal_bg, normal_fg, normal_sp, starting,
+use crate::getchar::state::got_int;
+use crate::highlight::state::{
+    cterm_normal_bg_color, cterm_normal_fg_color, need_highlight_changed, normal_bg, normal_fg,
+    normal_sp,
 };
+use crate::lua::executor::nlua_set_sctx;
+use crate::main::{current_sctx, starting};
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{c_str, msg_bytes};
 use crate::option::vars::p_bg;

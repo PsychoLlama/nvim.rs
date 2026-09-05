@@ -37,7 +37,8 @@ use crate::decoration::{
     DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
-use crate::main::{decor_state, got_int};
+use crate::getchar::state::got_int;
+use crate::main::decor_state;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::give_warning;

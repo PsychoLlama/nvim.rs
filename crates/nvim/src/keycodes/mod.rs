@@ -197,9 +197,9 @@ pub fn simplify_key(key: c_int, modifiers: &mut ModMask) -> c_int {
 
 /// [`simplify_key`] applied to the global `mod_mask`.
 pub(crate) fn simplify_mod_mask(key: c_int) -> c_int {
-    let mut modifiers = crate::main::mod_mask.get();
+    let mut modifiers = crate::getchar::state::mod_mask.get();
     let simplified = simplify_key(key, &mut modifiers);
-    crate::main::mod_mask.set(modifiers);
+    crate::getchar::state::mod_mask.set(modifiers);
     simplified
 }
 

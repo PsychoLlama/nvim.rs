@@ -35,9 +35,11 @@ use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{changedir_func, exec_normal};
 use crate::ex_eval::aborting;
 use crate::fold::fold_info;
+use crate::getchar::state::{typebuf_was_filled, vgetc_busy};
 use crate::getchar::{ins_typebuf, paste_store};
 use crate::global_cell::GlobalCell;
 use crate::grid::{GridRef, get_win_by_grid_handle, schar_cache_clear, schar_get, win_grid_alloc};
+use crate::highlight::state::{ns_hl_fast, ns_hl_global};
 use crate::highlight::{
     dict2hlattrs, highlight_use_hlstate, hl_check_ns, hl_get_attr_by_id, hl_inspect,
     hl_ns_get_attrs, ns_hl_def, win_check_ns_hl,
@@ -52,10 +54,7 @@ use crate::log::LOGLVL_DBG;
 use crate::lua::executor::{
     api_free_luaref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
-use crate::main::{
-    arena_alloc_count, cmdpreview, g_stats, ns_hl_fast, ns_hl_global, tslua_query_parse_count,
-    typebuf_was_filled, vgetc_busy,
-};
+use crate::main::{arena_alloc_count, cmdpreview, g_stats, tslua_query_parse_count};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};

@@ -21,7 +21,7 @@ use super::op::BtOp;
 use super::resume::resume;
 use super::single::match_one;
 use super::state::{BT_STATE, BackPos, Braces, BtState, RegStack, capture_slot};
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mbyte::{mb_isupper, mb_tolower, mb_toupper};
 use crate::message::e_re_corr;
 use crate::message::{iemsg, internal_error};

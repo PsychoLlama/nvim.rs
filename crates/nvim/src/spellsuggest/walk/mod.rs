@@ -82,7 +82,7 @@ mod split;
 mod transpose;
 
 use crate::cstr;
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::mbyte::utf_head_off;
 use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};

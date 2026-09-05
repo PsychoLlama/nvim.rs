@@ -24,6 +24,7 @@ use crate::eval::{get_v_event, restore_v_event};
 use crate::event::multiqueue::{multiqueue_empty, multiqueue_get};
 use crate::ex_docmd::state::global_busy;
 use crate::ex_getln::cmdline_overstrike;
+use crate::getchar::state::{got_int, mod_mask};
 use crate::getchar::{
     check_end_reg_executing, may_sync_undo, safe_vgetc, stuff_empty, typeahead, using_script,
     vpeekc,
@@ -31,7 +32,7 @@ use crate::getchar::{
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::main::{debug_mode, got_int, mod_mask};
+use crate::main::debug_mode;
 use crate::message::state::need_wait_return;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::normal::{visual_active, visual_mode, visual_select};

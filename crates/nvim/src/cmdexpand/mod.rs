@@ -33,11 +33,13 @@ use crate::ex_getln::{
 };
 use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_grow, ga_init};
+use crate::getchar::state::{KeyTyped, got_int};
 use crate::getchar::{beep_flush, char_avail, vpeekc};
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_fill, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::help::{cleanup_help_tags, find_help_tags};
+use crate::highlight::state::hl_attr_active;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_D, HLF_NONE, HLF_T, HLF_WM, get_highlight_name, set_context_in_highlight_cmd,
@@ -47,8 +49,8 @@ use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
 use crate::main::{
-    KeyTyped, current_sctx, got_int, hl_attr_active, pum_want, save_p_ls, save_p_wmh,
-    search_first_line, search_last_line, wild_menu_showing,
+    current_sctx, pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line,
+    wild_menu_showing,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};

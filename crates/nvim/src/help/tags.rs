@@ -26,7 +26,7 @@ use crate::charset::skipwhite;
 use crate::cmdexpand::{WildMode, WildOpts, expand_init, expand_one};
 use crate::cstr;
 use crate::fileio::vim_fgets;
-use crate::main::got_int;
+use crate::getchar::state::got_int;
 use crate::memory::{xfree, xmalloc, xstrlcat, xstrlcpy};
 use crate::message::e_fnametoolong;
 use crate::message::{emsg, emsg_ptr};
