@@ -29,6 +29,7 @@ use crate::eval::vars::get_vim_var_list;
 use crate::ex_docmd::cmdline::sourcing_entry;
 use crate::ex_docmd::scan::skip_grep_pat;
 use crate::ex_docmd::state::escape_chars;
+use crate::ex_docmd::xfree;
 use crate::ex_docmd::{
     ESTACK_SCRIPT, ESTACK_SFILE, ESTACK_STACK, FIND_EVAL, FIND_IDENT, FIND_STRING, VALID_HEAD,
     VALID_PATH, dollar_command, e_no_autocommand_buffer_number_to_substitute_for_abuf,
@@ -782,12 +783,6 @@ fn vim_strchr(string: *const c_char, c: c_int) -> *mut c_char {
 fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     // SAFETY: two NUL-terminated strings.
     unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// `xmalloc()` as checked code.

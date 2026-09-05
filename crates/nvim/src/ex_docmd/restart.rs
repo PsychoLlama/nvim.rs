@@ -18,6 +18,7 @@ use crate::eval::typval::{NumBuf, tv_list_len};
 use crate::eval::vars::{get_vim_var_list, get_vim_var_str};
 
 use crate::event::proc::{proc_stop, proc_wait};
+use crate::ex_docmd::xfree;
 use crate::ex_docmd::{cmdmod_has, kChannelPartAll};
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::memory::{xcalloc, xmemdupz};
@@ -461,12 +462,6 @@ fn strstr(
 ) -> *mut ::core::ffi::c_char {
     // SAFETY: two NUL-terminated strings.
     unsafe { crate::os::cshim::strstr(__haystack, __needle) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// `xstrdup()` as checked code.

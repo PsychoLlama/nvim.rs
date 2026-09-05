@@ -20,6 +20,7 @@ use crate::eval::vars::set_vim_var_string;
 
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
+use crate::ex_docmd::xfree;
 
 use crate::drawscreen::state::cmdline_row;
 use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
@@ -471,12 +472,6 @@ fn v_exception(oldval: *mut c_char) -> *mut c_char {
 fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::eval::vars::v_throwpoint(oldval) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// `xstrdup()` as checked code.

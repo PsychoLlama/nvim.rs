@@ -19,6 +19,7 @@ use crate::eval::typval::{callback_free, tv_clear, tv_list_copy, tv_list_find};
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::eval::{callback_call, get_copy_id, set_ref_in_callback};
+use crate::ex_docmd::xfree;
 use crate::ex_docmd::{ffu_cb, kCdCauseManual, prev_dir};
 use crate::ex_getln::allbuf_locked;
 use crate::file_search::vim_chdir;
@@ -436,12 +437,6 @@ fn tv_list_free(l: *mut List) {
 fn tv_list_len(l: *const List) -> ::core::ffi::c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::eval::typval::tv_list_len(l) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// `xstrdup()` as checked code.

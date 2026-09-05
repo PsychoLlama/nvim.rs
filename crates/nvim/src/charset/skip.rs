@@ -89,16 +89,14 @@ pub fn to_digit(s: &[u8]) -> usize {
 
 /// How many bytes of `s` come before the first hexadecimal digit.
 ///
-/// The slice form of [`skiptohex`](super::skiptohex). `pub(crate)`, like its
-/// binary twin: no ledger names either, and the crate's boundary is already
-/// wider than it should be.
+/// `pub(crate)`, like its binary twin: no ledger names either, and the
+/// crate's boundary is already wider than it should be. The pointer forms
+/// both had are gone -- nothing called them.
 pub(crate) fn to_hex(s: &[u8]) -> usize {
     count(s, |byte| !is_xdigit(byte))
 }
 
 /// How many bytes of `s` come before the first binary digit.
-///
-/// The slice form of [`skiptobin`](super::skiptobin).
 pub(crate) fn to_bin(s: &[u8]) -> usize {
     count(s, |byte| !is_bdigit(byte))
 }

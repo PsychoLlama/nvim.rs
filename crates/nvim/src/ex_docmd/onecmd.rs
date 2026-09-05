@@ -28,6 +28,7 @@ use crate::ex_docmd::address::{
     correct_range, find_excmd_after_range, parse_cmd_address, set_cmd_addr_type,
     set_cmd_dflall_range,
 };
+use crate::ex_docmd::xfree;
 
 use crate::ex_docmd::api::execute_cmd0;
 use crate::ex_docmd::argopt::{getargcmd, getargopt};
@@ -846,12 +847,6 @@ fn skipwhite(p: *const c_char) -> *mut c_char {
 fn xcalloc(count: usize, size: usize) -> *mut c_void {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::memory::xcalloc(count, size) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

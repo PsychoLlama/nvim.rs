@@ -320,3 +320,13 @@ pub const INDOFF_FILE: &CStr = c"indoff.vim";
 pub const PROF_YES: c_int = 1 as c_int;
 pub const SID_NONE: c_int = -6 as c_int;
 pub const KS_SPECIAL: c_int = 254 as c_int;
+
+/// `xfree()` as checked code.
+///
+/// Nine of the family's files free an `xmalloc`ed buffer on their way out
+/// of a command, and each had carried its own copy of this shim. One here
+/// pays the promise once for all of them.
+pub(crate) fn xfree(ptr: *mut c_void) {
+    // SAFETY: `xmalloc`ed, or null.
+    unsafe { crate::memory::xfree(ptr) }
+}

@@ -64,8 +64,8 @@ pub use display::{
 mod walk;
 
 pub use walk::{
-    getdigits, getdigits_int, getdigits_int32, skipbin, skipdigits, skiphex, skiptobin,
-    skiptodigit, skiptohex, skiptowhite, skiptowhite_esc, skipwhite,
+    getdigits, getdigits_int, getdigits_int32, skipbin, skipdigits, skiphex, skiptodigit,
+    skiptowhite, skiptowhite_esc, skipwhite,
 };
 pub(crate) use walk::{
     getdigits_long, getwhitecols, getwhitecols_curline, skip_to_newline, skipwhite_len,

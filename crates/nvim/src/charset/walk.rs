@@ -103,26 +103,6 @@ pub unsafe fn skiptodigit(q: *mut c_char) -> *mut c_char {
         .raw()
 }
 
-/// The first binary digit in `q`, or its NUL.
-///
-/// # Safety
-/// `q` must be a NUL-terminated string.
-pub unsafe fn skiptobin(q: *const c_char) -> *const c_char {
-    unsafe { Bytes::new(q) }
-        .skip_while(|byte| !is_bdigit(byte))
-        .raw()
-}
-
-/// The first hexadecimal digit in `q`, or its NUL.
-///
-/// # Safety
-/// `q` must be a NUL-terminated string.
-pub unsafe fn skiptohex(q: *mut c_char) -> *mut c_char {
-    unsafe { Bytes::new(q) }
-        .skip_while(|byte| !is_xdigit(byte))
-        .raw()
-}
-
 /// The first white space byte in `p`, or its NUL.
 ///
 /// # Safety

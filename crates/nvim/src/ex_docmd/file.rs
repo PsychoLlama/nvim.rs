@@ -23,6 +23,7 @@ use crate::ex_cmds2::{check_changed, check_fname};
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
 use crate::ex_docmd::path::findfunc_find_file;
 use crate::ex_docmd::source::ex_errmsg;
+use crate::ex_docmd::xfree;
 use crate::ex_docmd::{
     ACTION_SHOW, ACTION_SHOW_ALL, CCGD_AW, CCGD_EXCMD, CCGD_FORCEIT, CCGD_MULTWIN, CHECK_PATH,
     DOBUF_CURRENT, DOBUF_FIRST, DOBUF_LAST, DOBUF_MOD, cmdmod_has, ex_pressedreturn,
@@ -712,12 +713,6 @@ fn readfile(
 fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::undo::u_compute_hash(buffer, hash) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

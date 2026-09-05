@@ -2,6 +2,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::ex_docmd::cmdline::do_cmdline_cmd;
+use crate::ex_docmd::xfree;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -163,12 +164,6 @@ pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
 fn vim_strsave_escaped(string: *const c_char, esc_chars: *const c_char) -> *mut c_char {
     // SAFETY: two NUL-terminated strings.
     unsafe { crate::strings::vim_strsave_escaped(string, esc_chars) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// The byte `p` points at, as the C's `*p` reads it.

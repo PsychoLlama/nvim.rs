@@ -20,6 +20,7 @@ use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
+use crate::ex_docmd::xfree;
 use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::memory::xstrdup;
@@ -324,12 +325,6 @@ fn ui_flush() {
 fn update_screen() -> Result<(), Failed> {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::drawscreen::update_screen() }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// The window the editor is working in.

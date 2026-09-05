@@ -28,6 +28,7 @@ use crate::ex_docmd::source::{
     do_cmdline_end, do_cmdline_start, get_loop_line, getline_cookie, handle_did_throw,
     msg_verbose_cmd, restore_dbg_stuff, save_dbg_stuff, store_loop_line,
 };
+use crate::ex_docmd::xfree;
 
 use crate::ex_docmd::{
     CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, LoopCookie, PROF_YES, SavedDebugState, WhileCmd,
@@ -833,12 +834,6 @@ fn source_finished(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 fn ui_ext_cmdline_block_append(indent: size_t, line: *const ::core::ffi::c_char) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_getln::ui_ext_cmdline_block_append(indent, line) }
-}
-
-/// `xfree()` as checked code.
-fn xfree(ptr: *mut c_void) {
-    // SAFETY: `xmalloc`ed, or null.
-    unsafe { crate::memory::xfree(ptr) }
 }
 
 /// `xstrdup()` as checked code.
