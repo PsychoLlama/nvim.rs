@@ -173,6 +173,7 @@ class Client:
             cwd=root,
         )
         self.next_id = 1
+        self.soft = False  # see `request`
         self.replies = {}
         self.primed = threading.Event()
         self.lock = threading.Lock()
@@ -228,6 +229,17 @@ class Client:
                 if request_id in self.replies:
                     reply = self.replies.pop(request_id)
                     if "error" in reply:
+                        # A `--params` position can be real code the *other*
+                        # `cfg` profile compiles, and this one answers "no
+                        # references found". The union is the answer, so a
+                        # soft client reports and carries on; a position no
+                        # profile could rename is caught at the end.
+                        if self.soft:
+                            print(
+                                f"ra-rename: {method}: {reply['error']}",
+                                file=sys.stderr,
+                            )
+                            return None
                         sys.exit(f"ra-rename: {method}: {reply['error']}")
                     return reply.get("result")
             threading.Event().wait(0.02)
@@ -734,17 +746,32 @@ def main():
 
     for entry in entries:
         entry["changes"] = {}
+        entry["answered"] = set()
     for profile, cfgs in CFG_PROFILES:
         client = Client(root, cfgs)
+        client.soft = args.params
         try:
             client.initialize()
             for entry in entries:
                 where = f"{entry['old']} -> {entry['new']} (cfg {profile})"
-                for path, line, column, name in entry["positions"]:
+                for index, (path, line, column, name) in enumerate(entry["positions"]):
                     edit = client.rename(path, line, column, name) or {}
+                    if edit:
+                        entry["answered"].add(index)
                     collect(edit, entry["changes"], where)
         finally:
             client.shutdown()
+    unanswered = [
+        f"{path}:{line + 1}:{column + 1}  {entry['old']} -> {name}"
+        for entry in entries
+        for index, (path, line, column, name) in enumerate(entry["positions"])
+        if index not in entry["answered"]
+    ]
+    if unanswered:
+        sys.exit(
+            "ra-rename: no profile could rename these positions:\n  "
+            + "\n  ".join(unanswered)
+        )
 
     changes = {}
     for entry in entries:
