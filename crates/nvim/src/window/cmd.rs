@@ -34,8 +34,7 @@ use crate::file_search::grab_file_name;
 use crate::getchar::{plain_vgetc, typeahead};
 use crate::guard::Keys;
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, g_do_tagpreview, langmap_mapchar, postponed_split,
-    vgetc_busy,
+    KeyStuffed, KeyTyped, g_do_tagpreview, langmap_mapchar, postponed_split, vgetc_busy,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
@@ -54,6 +53,7 @@ use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{ExArg, Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t};
+use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::graph::{cmdwin_type, curtab, curwin, firstwin, lastwin, prevwin};

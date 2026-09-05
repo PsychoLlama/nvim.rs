@@ -15,6 +15,7 @@ use crate::api::extmark::nvim_create_namespace;
 use crate::buffer::maketitle;
 use crate::charset::init_chartab;
 use crate::decoration_provider::get_decor_provider;
+use crate::drawscreen::state::{need_maketitle, redraw_tabline};
 use crate::drawscreen::{
     UPD_NOT_VALID, redraw_all_later, redraw_buf_later, redraw_later, status_redraw_all,
 };
@@ -23,7 +24,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
-use crate::main::{need_maketitle, redraw_tabline, starting};
+use crate::main::starting;
 use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
 use crate::option::vars::{p_bin, p_et, p_ml, p_tw, p_wm};

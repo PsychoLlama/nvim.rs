@@ -21,6 +21,7 @@ use crate::eval::vars::set_vim_var_string;
 use crate::ex_cmds::print_line_no_prefix;
 use crate::ex_docmd::cmdline::{do_cmdline, sourcing_entry};
 
+use crate::drawscreen::state::cmdline_row;
 use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, global_busy};
 use crate::ex_docmd::{
     DoCmdOpts, ETYPE_EXCEPT, LoopCookie, MSG_BUF_LEN, SavedDebugState, WhileCmd,
@@ -35,12 +36,13 @@ use crate::ex_getln::{getcmdline, getexline};
 use crate::garray::ga_append_via_ptr;
 use crate::highlight_group::HLF_E;
 use crate::main::{
-    KeyTyped, Rows, cmdline_row, did_emsg, emsg_silent, exiting, got_int, lines_left, msg_col,
-    msg_row, msg_scroll, msg_silent, need_wait_return,
+    KeyTyped, did_emsg, emsg_silent, exiting, got_int, lines_left, msg_col, msg_row, msg_scroll,
+    msg_silent, need_wait_return,
 };
 use crate::message::e_empty_buffer;
 use crate::option::vars::p_mfd;
 use crate::state::mode::{State, exmode_active};
+use crate::ui::state::Rows;
 use crate::winlayer::graph::curbuf;
 
 use crate::message::{

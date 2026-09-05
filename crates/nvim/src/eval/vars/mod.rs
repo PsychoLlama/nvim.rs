@@ -9,6 +9,7 @@ use crate::api::private::helpers::{cstr_as_string, cstr_to_string};
 use crate::ascii::{ascii_isdigit, ascii_iswhite, ascii_iswhite_or_nul};
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::charset::{getdigits_int, skiptowhite, skipwhite};
+use crate::drawscreen::state::sc_col;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::eval::EVALARG_EVALUATE;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
@@ -48,7 +49,7 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{called_emsg, current_sctx, did_emsg, emsg_severe, got_int, no_hlsearch, sc_col};
+use crate::main::{called_emsg, current_sctx, did_emsg, emsg_severe, got_int, no_hlsearch};
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,

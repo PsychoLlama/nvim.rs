@@ -30,7 +30,6 @@ use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
-use crate::main::{Columns, Rows};
 use crate::memory::{xfree, xstrdup};
 use crate::message::e_cmdwin;
 use crate::message::emsg_ptr;
@@ -48,6 +47,7 @@ use crate::types::{
     WinStyle, Window, WindowHandle, kErrorTypeException, kFloatRelativeCursor,
     kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{
     last_status, lastwin_nofloating, merge_win_config, tabpage_win_valid, win_alloc, win_append,

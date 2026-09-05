@@ -3706,7 +3706,7 @@ fn byte_strings(expr: &syn::Expr, out: &mut Vec<String>) {
 /// that open with an underscore are the tree's own debugging switches and stay
 /// unadvertised.
 fn read_ui_options(root: &Path) -> Result<Vec<String>, String> {
-    let path = root.join("src/main/mod.rs");
+    let path = root.join("src/ui/state.rs");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut names = vec!["rgb".to_string()];

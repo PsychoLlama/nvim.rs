@@ -18,6 +18,7 @@ use core::ffi::{c_char, c_int};
 
 use crate::ascii::ascii_iswhite;
 use crate::charset::{skiptowhite, skipwhite};
+use crate::drawscreen::state::search_hl_has_cursor_lnum;
 use crate::drawscreen::{UPD_SOME_VALID, UPD_VALID, redraw_later, redraw_win_range_later};
 use crate::eval::funcs::get_optional_window;
 use crate::eval::typval::{
@@ -33,9 +34,7 @@ use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
-use crate::main::{
-    called_emsg, got_int, search_first_line, search_hl_has_cursor_lnum, search_last_line,
-};
+use crate::main::{called_emsg, got_int, search_first_line, search_last_line};
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};

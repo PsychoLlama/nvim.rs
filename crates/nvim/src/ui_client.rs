@@ -35,9 +35,8 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{
-    main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, t_colors, time_fd,
-    ui_client_attached, ui_client_channel_id, ui_client_error_exit, ui_client_exit_status,
-    ui_client_forward_stdin,
+    main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, time_fd, ui_client_attached,
+    ui_client_channel_id, ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
 };
 use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message_fmt::{c_str, msg_cstr};
@@ -65,6 +64,7 @@ use crate::types::{
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
     uint16_t,
 };
+use crate::ui::state::t_colors;
 use ::libc::{close, dup};
 use core::ffi::{CStr, c_char, c_int, c_void};
 

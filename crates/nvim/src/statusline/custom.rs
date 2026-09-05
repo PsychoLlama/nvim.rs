@@ -30,12 +30,13 @@ use crate::autocmd::is_aucmd_win;
 use crate::buffer::{col_print, get_rel_pos};
 use crate::charset::{transstr_buf, vim_strsize};
 use crate::cstr;
+use crate::drawscreen::state::ru_col;
 use crate::global_cell::GlobalCell;
 use crate::grid::{default_grid_ref, schar_from_ascii, schar_get};
 use crate::highlight_group::{HLF_MSG, HLF_TPF, HLF_WBR, HLF_WBRNC, syn_id2attr, syn_name2id_len};
 use crate::kvec::Kvec;
 use crate::main::{
-    Columns, Rows, highlight_stlnc, highlight_user, msg_col, msg_row, ru_col, tab_page_click_defs,
+    highlight_stlnc, highlight_user, msg_col, msg_row, tab_page_click_defs,
     tab_page_click_defs_size,
 };
 use crate::mbyte::{utf_ptr2cells, utfc_ptr2len};
@@ -53,6 +54,7 @@ use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
     ScreenChar, StlOpt, String_0, Tabpage, Window, int64_t, ssize_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
 use ::libc::atoi;

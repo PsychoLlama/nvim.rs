@@ -22,11 +22,11 @@ use core::ffi::c_int;
 use core::ptr;
 
 use super::*;
+use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
 use crate::main::{
     mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent,
-    redraw_cmdline,
 };
 use crate::r#move::WinValid;
 use crate::normal::{

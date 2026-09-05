@@ -31,6 +31,9 @@ use crate::cursor::{
 };
 use crate::decoration::{kMTMetaInline, kMTMetaLines};
 use crate::diff::{diff_internal, diff_lnum_win, diff_update_line};
+use crate::drawscreen::state::{
+    need_maketitle, redraw_cmdline, redraw_not_allowed, redraw_tabline, search_hl_has_cursor_lnum,
+};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_status_later, redraw_win_line, set_must_redraw, showmode,
 };
@@ -46,10 +49,9 @@ use crate::indent::{
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
 use crate::main::{
-    Rows, autocmd_busy, curbuf_splice_pending, emsg_silent, highlight_match, in_assert_fails,
+    autocmd_busy, curbuf_splice_pending, emsg_silent, highlight_match, in_assert_fails,
     last_cursormoved, last_cursormoved_win, msg_col, msg_row, msg_scroll, msg_silent,
-    need_maketitle, need_wait_return, redraw_cmdline, redraw_not_allowed, redraw_tabline,
-    search_hl_has_cursor_lnum, silent_mode,
+    need_wait_return, silent_mode,
 };
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
@@ -91,6 +93,7 @@ use crate::types::{
     BCount, Buffer, CmdModFlags, ColNr, ExtmarkOp, FileMark, FileMarkView, GraphemeState, LineNr,
     Pos, Vv, int64_t, size_t, ssize_t,
 };
+use crate::ui::state::Rows;
 use crate::ui::{ui_active, ui_has};
 use crate::undo::{curbuf_is_changed, u_clearline, u_save_cursor, u_savedel};
 use crate::winlayer::graph::{curbuf, curwin};

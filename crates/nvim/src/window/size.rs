@@ -18,11 +18,12 @@ use core::ffi::{CStr, c_int};
 
 use super::arith::NextCurwin;
 use super::*;
+use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
-use crate::main::{Columns, Rows, cmdline_row, redraw_cmdline};
 use crate::message::e_noroom;
 use crate::option::vars::{p_ch, p_wmh, p_wmw};
 use crate::types::{OptInt, OptSet, Window, kFloatRelativeWindow};
+use crate::ui::state::{Columns, Rows};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{FrameRef, Win, frames, frames_back, windows_back};
 

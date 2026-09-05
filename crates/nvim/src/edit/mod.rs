@@ -55,6 +55,9 @@ use crate::cursor::{
 };
 use crate::decoration::{decor_conceal_line, kMTMetaInline, win_lines_concealed};
 use crate::digraph::{digraph_get, do_digraph};
+use crate::drawscreen::state::{
+    RedrawingDisabled, clear_cmdline, dollar_vcol, must_redraw, redraw_cmdline, redraw_mode,
+};
 use crate::drawscreen::{
     UPD_VALID, redraw_later, redraw_statuslines, redraw_win_line, redrawing, setcursor,
     show_cursor_info_later, showmode, skip_showmode, status_redraw_curbuf, unshowmode,
@@ -105,10 +108,9 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, RedrawingDisabled, clear_cmdline, did_check_timestamps, did_cursorhold,
-    dollar_vcol, emsg_on_display, got_int, langmap_mapchar, last_cursormoved, last_cursormoved_win,
-    mod_mask, msg_scroll, msg_silent, must_redraw, need_check_timestamps, need_highlight_changed,
-    pum_want, redraw_cmdline, redraw_mode, reg_recording, spell_redraw_lnum,
+    KeyStuffed, KeyTyped, did_check_timestamps, did_cursorhold, emsg_on_display, got_int,
+    langmap_mapchar, last_cursormoved, last_cursormoved_win, mod_mask, msg_scroll, msg_silent,
+    need_check_timestamps, need_highlight_changed, pum_want, reg_recording, spell_redraw_lnum,
     test_disable_char_avail, u_sync_once, vgetc_busy,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};

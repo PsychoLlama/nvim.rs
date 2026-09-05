@@ -28,7 +28,7 @@ use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
 use crate::fold::{clear_folding, delete_fold_recurse, fold_init_win};
 use crate::grid::grid_assign_handle;
 use crate::hashtab::hash_init;
-use crate::main::{Columns, Rows, autocmd_busy};
+use crate::main::autocmd_busy;
 use crate::mark::free_jumplist;
 use crate::r#match::clear_matches;
 use crate::memory::xcalloc;
@@ -42,6 +42,7 @@ use crate::types::{
     Error, Failed, Frame, Handle, Integer, LineNr, OptInt, ScreenGrid, Tabpage, VAR_SCOPE,
     WinConfig, WinInfo, WinOpt, Window,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 use crate::winlayer::graph::{curbuf, curtab, curwin, firstwin, lastwin, prevwin, topframe};

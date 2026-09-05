@@ -16,13 +16,14 @@ use crate::cursor::{
     adjust_cursor_col, check_cursor, coladvance, gchar_cursor, get_cursor_line_len,
     get_cursor_line_ptr, inc_cursor,
 };
+use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{
     UPD_INVERTED, UPD_VALID, conceal_check_cursor_line, redraw_curbuf_later, showmode,
 };
 use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
-use crate::main::{mouse_dragging, msg_silent, redraw_cmdline};
+use crate::main::{mouse_dragging, msg_silent};
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get_len, ml_get_pos};

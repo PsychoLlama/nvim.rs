@@ -16,9 +16,10 @@ use core::ffi::c_int;
 use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{Columns, cmdline_row};
+use crate::drawscreen::state::cmdline_row;
 use crate::option::vars::{p_ead, p_ls, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{OptInt, Window};
+use crate::ui::state::Columns;
 use crate::winlayer::{FrameRef, Win};
 
 pub unsafe fn win_equal(next_curwin: *mut Window, current: bool, dir: c_int) {

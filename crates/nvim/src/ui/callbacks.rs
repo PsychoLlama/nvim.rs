@@ -22,12 +22,12 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Allow;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_ctx};
-use crate::main::ui_event_ns_id;
 use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::ui::{kUICmdline, kUILinegrid, kUIMessages};
 use crate::types::{Arena, Array, Error, LuaRef, LuaRetMode, NS};
+use crate::ui::state::ui_event_ns_id;
 use core::ffi::{CStr, c_char};
 
 const kRetNilBool: LuaRetMode = 1;

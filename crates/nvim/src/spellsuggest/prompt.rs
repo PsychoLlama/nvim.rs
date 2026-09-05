@@ -33,14 +33,13 @@ use crate::change::inserted_bytes;
 use crate::charset::rl_mirror_ascii;
 use crate::cstr;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
+use crate::drawscreen::state::cmdline_row;
 use crate::getchar::{
     append_to_redobuff, append_to_redobuff_char, append_to_redobuff_literally, beep_flush,
     reset_redobuff,
 };
 use crate::input::prompt_for_input;
-use crate::main::{
-    Rows, cmdline_row, cmdmsg_rl, lines_left, mouse_row, msg_col, msg_row, msg_scroll,
-};
+use crate::main::{cmdmsg_rl, lines_left, mouse_row, msg_col, msg_row, msg_scroll};
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
@@ -64,6 +63,7 @@ use crate::spellsuggest::{
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{ColNr, IOSIZE, NUL, Pos, int64_t};
+use crate::ui::state::Rows;
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;

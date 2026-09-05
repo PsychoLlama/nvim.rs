@@ -38,7 +38,7 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, arg_had_last, global_alist, got_int, max_alist_id};
+use crate::main::{arg_had_last, global_alist, got_int, max_alist_id};
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_VIsual_and_resel;
@@ -51,6 +51,7 @@ use crate::path::{
 };
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{Failed, *};
+use crate::ui::state::Columns;
 use crate::undo::buf_is_changed;
 use crate::version::list_in_columns;
 use crate::window::{

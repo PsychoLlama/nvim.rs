@@ -26,6 +26,7 @@ use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, do_buffer};
 use crate::cursor::coladvance;
 use crate::cursor_shape::{SHAPE_CURSOR, parse_shape_opt};
+use crate::drawscreen::state::{clear_cmdline, must_redraw, redraw_cmdline, redraw_mode};
 use crate::drawscreen::{
     UPD_SOME_VALID, UPD_VALID, redraw_statuslines, setcursor, show_cursor_info_later, showmode,
     unshowmode, update_screen,
@@ -34,9 +35,7 @@ use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::getchar::{getcmdkeycmd, map_execute_lua, merge_modifiers, paste_repeat};
 use crate::guard::Allow;
 use crate::keycodes::{Ctrl_BSL, Ctrl_C, Ctrl_N, Ctrl_O, Key};
-use crate::main::{
-    clear_cmdline, got_int, mapped_ctrl_c, mod_mask, must_redraw, redraw_cmdline, redraw_mode,
-};
+use crate::main::{got_int, mapped_ctrl_c, mod_mask};
 use crate::memory::{strequal, xstrdup};
 use crate::r#move::{set_topline, validate_cursor};
 use crate::options::kOptCuloptFlagNumber;

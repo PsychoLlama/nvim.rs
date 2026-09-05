@@ -29,6 +29,7 @@
 mod callbacks;
 mod mouse;
 mod sinks;
+pub(crate) mod state;
 
 pub use callbacks::{ui_add_cb, ui_call_event, ui_cb_ext, ui_remove_cb};
 pub use mouse::{ui_check_mouse, ui_mouse_has};
@@ -41,6 +42,7 @@ use crate::buffer::resettitle;
 use crate::cursor_shape::{
     SHAPE_IDX_N, SHAPE_IDX_R, cursor_get_mode_idx, mode_style_array, shape_entry,
 };
+use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{conceal_check_cursor_line, screen_resize};
 use crate::event::libuv::uv_cwd;
 use crate::event::multiqueue::multiqueue_put_event;
@@ -51,9 +53,8 @@ use crate::guard::textlock;
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    called_vim_beep, cterm_normal_bg_color, cterm_normal_fg_color, emsg_silent, exiting,
-    expr_map_lock, full_screen, in_assert_fails, normal_bg, normal_fg, normal_sp, resize_events,
-    starting, ui_client_channel_id, ui_ext_names, ui_refresh_cmdheight, updating_screen,
+    cterm_normal_bg_color, cterm_normal_fg_color, emsg_silent, exiting, expr_map_lock, full_screen,
+    in_assert_fails, normal_bg, normal_fg, normal_sp, starting, ui_client_channel_id,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
@@ -74,6 +75,7 @@ use crate::types::{
     ApiDict, Arena, Array, Boolean, Error, Handle, Integer, KeyValuePair, LineFlags, Object,
     OptVal, OptionSetFlags, RemoteUI, String_0, UIExtension,
 };
+use crate::ui::state::{called_vim_beep, resize_events, ui_ext_names, ui_refresh_cmdheight};
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
 };

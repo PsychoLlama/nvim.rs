@@ -27,7 +27,7 @@ use crate::lua::ffi::{
     lua_settop, lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error,
     luaL_getmetafield,
 };
-use crate::main::{got_int, main_loop, ui_event_ns_id};
+use crate::main::{got_int, main_loop};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_fast_api_disabled;
 use crate::os::cshim::gettext;
@@ -35,6 +35,7 @@ use crate::types::{
     EvalFuncDef, Event, LuaRef, MultiQueue, TimeWatcher, int64_t, intptr_t, lua_Integer, lua_State,
     ptrdiff_t, uint32_t, uint64_t,
 };
+use crate::ui::state::ui_event_ns_id;
 use crate::ui::{ui_flush, ui_remove_cb};
 
 /// How often `vim.wait` wakes to re-test its condition, in milliseconds.

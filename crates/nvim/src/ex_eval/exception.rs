@@ -42,6 +42,7 @@ use super::flag::{
 use super::{cause_abort, message};
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
+use crate::drawscreen::state::cmdline_row;
 use crate::eval::typval::{tv_list_ref, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
 use crate::eval::vars::{set_vim_var_list, set_vim_var_string};
@@ -51,9 +52,7 @@ use crate::ex_eval::state::{
     suppress_errthrow, trylevel,
 };
 use crate::guard::{Allow, Suppress};
-use crate::main::{
-    cmdline_row, debug_break_level, did_emsg, emsg_silent, got_int, msg_row, msg_scroll,
-};
+use crate::main::{debug_break_level, did_emsg, emsg_silent, got_int, msg_row, msg_scroll};
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::{e_interr, e_outofmem};
 use crate::message::{emsg, emsg_ptr, internal_error, msg_puts, verbose_enter, verbose_leave};

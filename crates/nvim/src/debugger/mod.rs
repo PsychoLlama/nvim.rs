@@ -30,6 +30,7 @@
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int32, skipwhite};
 use crate::cstr;
+use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::typval::tv_free;
 use crate::eval::{eval_expr, typval_compare, typval_tostring};
@@ -42,9 +43,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    Rows, cmd_silent, cmdline_row, debug_backtrace_level, debug_break_level, debug_did_msg,
-    debug_mode, debug_tick, did_emsg, emsg_silent, got_int, ignore_script, lines_left, msg_row,
-    msg_scroll, need_wait_return, redir_off,
+    cmd_silent, debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
+    did_emsg, emsg_silent, got_int, ignore_script, lines_left, msg_row, msg_scroll,
+    need_wait_return, redir_off,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
@@ -63,6 +64,7 @@ use crate::types::{
     Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
     TypeaheadSave, int32_t, int64_t, size_t, uint8_t,
 };
+use crate::ui::state::Rows;
 use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};

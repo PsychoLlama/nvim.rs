@@ -29,6 +29,7 @@ use crate::ascii::ascii_iswhite;
 use crate::buffer::buf_is_quickfix;
 use crate::charset::vim_iswordc;
 use crate::cursor::get_cursor_pos_ptr;
+use crate::drawscreen::state::{mode_displayed, redraw_cmdline};
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::eval::eval_has_provider;
 use crate::ex_docmd::{do_cmdline_cmd, tabpage_new};
@@ -39,8 +40,8 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    Columns, KeyStuffed, mod_mask, mode_displayed, mouse_col, mouse_dragging, mouse_grid,
-    mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent, redraw_cmdline,
+    KeyStuffed, mod_mask, mouse_col, mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol,
+    mouse_row, msg_silent,
 };
 use crate::memline::{gchar_pos, inc};
 use crate::r#move::scroll_redraw;
@@ -59,6 +60,7 @@ use crate::statusline::{
     kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTabSwitch,
 };
 use crate::types::{NUL, OpArg, OpType, PUT_CURSEND, PUT_FIXINDENT, YankReg};
+use crate::ui::state::Columns;
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
 use crate::winlayer::graph::cmdwin_type;

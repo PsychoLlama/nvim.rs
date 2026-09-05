@@ -24,7 +24,7 @@ use crate::api::private::helpers::{
 use crate::eval::last_set_msg;
 use crate::highlight_group::{HLF_8, HLF_D};
 use crate::lua::executor::{api_new_luaref, nlua_funcref_str};
-use crate::main::{Columns, got_int};
+use crate::main::got_int;
 use crate::memory::xfree;
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_outtrans_special, msg_putchar,
@@ -38,6 +38,7 @@ use crate::types::builders::static_cstring;
 use crate::types::{
     ApiDict, Arena, Buffer, ExArgt, IOSIZE, LuaRef, NUL, Object, UserCmd, int64_t, size_t,
 };
+use crate::ui::state::Columns;
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
 use core::ptr;

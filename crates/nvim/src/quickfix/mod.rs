@@ -31,6 +31,7 @@ use crate::buffer::{
 use crate::change::changed_lines;
 use crate::charset::{skipdigits, skipwhite, vim_isprintc};
 use crate::cursor::{check_cursor, coladvance};
+use crate::drawscreen::state::{cmdline_row, must_redraw};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, redraw_buf_later, redraw_curbuf_later, update_screen,
 };
@@ -61,10 +62,7 @@ use crate::fuzzy::fuzzy_match;
 use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
-use crate::main::{
-    Columns, KeyTyped, cmdline_row, got_int, msg_col, msg_didout, msg_nowait, msg_scroll,
-    msg_scrolled, must_redraw,
-};
+use crate::main::{KeyTyped, got_int, msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled};
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
 use crate::memfile::mf_fname;
@@ -125,6 +123,7 @@ use crate::types::{
     QfLine, QfList, QfListType, RegMMatch, RegMatch, RegProg, ScriptId, TypVal, VarNumber, VarType,
     VimConv, ptrdiff_t, size_t, time_t, typval_vval_union,
 };
+use crate::ui::state::Columns;
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
 use crate::window::{

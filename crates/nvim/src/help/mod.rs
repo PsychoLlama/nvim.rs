@@ -39,7 +39,7 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_cmdline_cmd};
 use crate::highlight_group::HLF_E;
 use crate::lua::executor::nlua_exec;
-use crate::main::{Columns, KeyTyped};
+use crate::main::KeyTyped;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::e_noident;
 use crate::message::{emsg, emsg_multiline};
@@ -61,6 +61,7 @@ use crate::types::{
     Array, ArrayBuf, CmdModFlags, Error, ExArg, Failed, FileComparison, IOSIZE, LuaRetMode, NUL,
     Object, OptInt, OptVal, OptionSetFlags, size_t,
 };
+use crate::ui::state::Columns;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
 use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::windows;

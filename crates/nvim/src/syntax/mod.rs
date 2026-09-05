@@ -42,6 +42,7 @@ use crate::charset::{
     vim_isprintc, vim_iswordp_buf,
 };
 use crate::cstr;
+use crate::drawscreen::state::display_tick;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_curbuf_later, redraw_later};
 use crate::eval::vars::{do_unlet, get_var_value, set_internal_string_var};
 use crate::ex_docmd::{
@@ -59,8 +60,8 @@ use crate::highlight_group::{
 };
 use crate::indent_c::find_start_comment;
 use crate::main::{
-    Columns, Rows, display_tick, got_int, include_default, include_link, include_none, msg_col,
-    re_extmatch_in, re_extmatch_out, reg_do_extmatch,
+    got_int, include_default, include_link, include_none, msg_col, re_extmatch_in, re_extmatch_out,
+    reg_do_extmatch,
 };
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
@@ -90,6 +91,7 @@ use crate::types::{
     RegMMatch, RegMatch, RegProg, SynBlock, SynState, SynTime, VarNumber, Window, int16_t, size_t,
     uint8_t, uint64_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};

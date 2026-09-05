@@ -9,6 +9,7 @@ use core::ptr;
 
 use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
+use crate::drawscreen::state::{clear_cmdline, mode_displayed, redraw_mode};
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline, do_cmdline_cmd};
@@ -18,10 +19,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::help::ex_help;
-use crate::main::{
-    KeyTyped, clear_cmdline, did_emsg, got_int, may_garbage_collect, mode_displayed, redraw_mode,
-    typebuf_was_empty,
-};
+use crate::main::{KeyTyped, did_emsg, got_int, may_garbage_collect, typebuf_was_empty};
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{

@@ -35,7 +35,7 @@ use crate::grid::{GridRef, default_grid_ref, schar_from_ascii, schar_from_buf};
 use crate::highlight::hl_blend_attrs;
 use crate::highlight_group::{HLF_MSGSEP, syn_check_group, syn_id2attr};
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::main::{Columns, Rows, hl_attr_active};
+use crate::main::hl_attr_active;
 use crate::message::msg_grid_ref;
 use crate::option::vars::{p_wd, rdb_flags};
 use crate::options::{kOptRdbFlagCompositor, kOptRdbFlagInvalid};
@@ -45,6 +45,7 @@ use crate::types::{
     Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, ScreenGrid,
     String_0, Window,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,

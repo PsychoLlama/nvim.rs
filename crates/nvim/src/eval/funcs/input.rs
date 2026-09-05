@@ -10,6 +10,7 @@ use super::{
 use crate::api::private::helpers::cstr_as_string;
 use crate::api::vim::nvim_feedkeys;
 use crate::buffer::buf_is_prompt;
+use crate::drawscreen::state::cmdline_row;
 use crate::edit::buf_prompt_text;
 use crate::eval::prompt_get_input;
 use crate::eval::typval::{NumBuf, tv_list_len};
@@ -20,7 +21,7 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_input;
-use crate::main::{Rows, cmdline_row, got_int, lines_left, mouse_row, msg_row, msg_scroll};
+use crate::main::{got_int, lines_left, mouse_row, msg_row, msg_scroll};
 use crate::memory::xstrdup;
 use crate::message::e_invarg;
 use crate::message::{
@@ -33,6 +34,7 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     EvalFuncData, FAIL, ListItem, NUL, TypVal, TypeaheadSave, VAR_LIST, VAR_STRING, VarNumber,
 };
+use crate::ui::state::Rows;
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};

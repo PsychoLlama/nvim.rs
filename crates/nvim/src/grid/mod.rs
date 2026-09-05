@@ -36,10 +36,11 @@
 
 use crate::arabic::arabic_shape;
 use crate::decoration::{decor_check_invalid_glyphs, next_virt_text_chunk};
+use crate::drawscreen::state::resizing_screen;
 use crate::global_cell::GlobalCell;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
-use crate::main::{default_grid, full_screen, hl_attr_active, resizing_screen};
+use crate::main::{default_grid, full_screen, hl_attr_active};
 use crate::map::mh_clear;
 use crate::map_glyph_cache::mh_put_glyph;
 use crate::mbyte::{

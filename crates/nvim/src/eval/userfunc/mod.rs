@@ -9,6 +9,7 @@ use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::autocmd::apply_autocmds;
 use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
+use crate::drawscreen::state::cmdline_row;
 use crate::eval::EVALARG_EVALUATE;
 pub(crate) use crate::eval::Tv;
 use crate::eval::encode::{encode_tv2echo, encode_tv2string};
@@ -52,9 +53,8 @@ use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::main::{
-    KeyTyped, Rows, cmdline_row, current_sctx, debug_backtrace_level, debug_tick, did_emsg,
-    do_profiling, emsg_severe, got_int, lines_left, msg_row, msg_scroll, need_wait_return,
-    want_garbage_collect,
+    KeyTyped, current_sctx, debug_backtrace_level, debug_tick, did_emsg, do_profiling, emsg_severe,
+    got_int, lines_left, msg_row, msg_scroll, need_wait_return, want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
@@ -92,6 +92,7 @@ use crate::types::{
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING, VAR_UNKNOWN, VarLock,
     VarNumber, Vv, funccall_S_fc_fixvar, size_t,
 };
+use crate::ui::state::Rows;
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
 use ::libc::{abort, strcpy};

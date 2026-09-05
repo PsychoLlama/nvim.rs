@@ -24,11 +24,12 @@ use crate::lua::ffi::{
     lua_setmetatable, lua_toboolean, lua_tointeger, lua_tolstring, lua_tostring, lua_type,
     lua_upvalueindex, luaL_checkinteger, luaL_error, luaL_loadbuffer, luaopen_luv, luv_set_loop,
 };
-use crate::main::{main_loop, nlua_disable_preload, ui_ext_names, ui_refresh_cmdheight};
+use crate::main::{main_loop, nlua_disable_preload};
 use crate::memory::strequal;
 use crate::os::cshim::stderr;
 use crate::types::ui::kUILinegrid;
 use crate::types::{LuaRef, lua_Integer, lua_State, size_t, uint32_t};
+use crate::ui::state::{ui_ext_names, ui_refresh_cmdheight};
 use crate::ui::{ui_add_cb, ui_remove_cb};
 use ::libc::fprintf;
 

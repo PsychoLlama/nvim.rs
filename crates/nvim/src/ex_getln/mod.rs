@@ -28,6 +28,7 @@ use crate::cursor::{
     coladvance, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_ptr,
 };
 use crate::digraph::{do_digraph, get_digraph};
+use crate::drawscreen::state::{cmdline_row, redraw_cmdline, redraw_tabline, skip_redraw};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_custom_title_later,
     redraw_later, redraw_statuslines, set_must_redraw, setcursor, status_redraw_all,
@@ -62,12 +63,11 @@ use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, cmd_silent, cmdline_row, cmdline_star,
-    cmdline_was_last_drawn, cmdmsg_rl, cmdpreview, current_sctx, did_emsg, emsg_on_display,
-    got_int, highlight_match, lines_left, magic_overruled, mod_mask, mouse_col, mouse_row, msg_col,
-    msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled, need_wait_return, no_hlsearch,
-    pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline, redrawing_cmdline,
-    search_first_line, search_last_line, search_match_endcol, search_match_lines, skip_redraw,
+    KeyStuffed, KeyTyped, cmd_silent, cmdline_star, cmdline_was_last_drawn, cmdmsg_rl, cmdpreview,
+    current_sctx, did_emsg, emsg_on_display, got_int, highlight_match, lines_left, magic_overruled,
+    mod_mask, mouse_col, mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll,
+    msg_scrolled, need_wait_return, no_hlsearch, pum_want, quit_more, redir_off, redrawing_cmdline,
+    search_first_line, search_last_line, search_match_endcol, search_match_lines,
     skip_win_fix_cursor, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
@@ -153,6 +153,7 @@ use crate::types::{
     String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
     Window, XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
     ui_call_cmdline_block_show, ui_call_cmdline_hide, ui_call_cmdline_pos, ui_call_cmdline_show,

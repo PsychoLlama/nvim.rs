@@ -34,7 +34,7 @@ use crate::event::signal::{
 use crate::event::stream::stream_set_blocking;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::main::{main_loop, t_colors, ui_client_error_exit, ui_client_exit_status};
+use crate::main::{main_loop, ui_client_error_exit, ui_client_exit_status};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
 use crate::message_fmt::c_str;
 use crate::os::env::{env_buf, os_getenv, os_getenv_into};
@@ -64,6 +64,7 @@ use crate::types::{
     HlAttrs, SignalWatcher, Staging, String_0, TUIData, TerminfoExt, uv_file, uv_handle_t,
     uv_timer_t, uv_tty_mode_t,
 };
+use crate::ui::state::t_colors;
 use crate::ui_client::{ui_client_attach, ui_client_detach, ui_client_set_size};
 use ::libc::{abort, kill, sscanf};
 use core::ffi::{CStr, c_char, c_int, c_void};

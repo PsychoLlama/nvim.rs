@@ -24,12 +24,13 @@
 use crate::api::extmark::describe_ns;
 use crate::api::private::helpers::{api_free_array, api_free_object, api_object_to_bool};
 use crate::decoration::{DecorStateRef, decor_check_to_be_deleted, decor_range_count};
+use crate::drawscreen::state::display_tick;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
 use crate::highlight::hl_check_ns;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref};
-use crate::main::{display_tick, ns_hl_active};
+use crate::main::ns_hl_active;
 use crate::message_fmt::c_str;
 use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;

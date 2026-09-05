@@ -11,9 +11,9 @@ use super::*;
 use crate::ascii::ascii_iswhite;
 use crate::charset::backslash_halve;
 use crate::cstr;
+use crate::drawscreen::state::cmdline_row;
 use crate::fileio::vim_tempname;
 use crate::guard::{sandbox, secure};
-use crate::main::{Rows, cmdline_row};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::{e_notmp, e_wildexpand};
 use crate::message::{emsg, msg, msg_putchar, msg_start};
@@ -25,6 +25,7 @@ use crate::path::{ExpandFlags, add_pathsep, invocation_path_tail, path_has_wildc
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{Failed, READBIN};
+use crate::ui::state::Rows;
 use core::ops::Range;
 
 /// The `vimglob()` shell function, for a POSIX shell.

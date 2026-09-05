@@ -20,6 +20,7 @@ use crate::autocmd::{apply_autocmds, autocmd_init};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
 use crate::diff::diff_win_options;
+use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_VALID, default_grid_alloc, redraw_all_later, redraw_later, screenclear,
 };
@@ -53,12 +54,11 @@ use crate::main::exit::{getout, os_exit};
 use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN,
-    argv0, cmdline_row, debug_break_level, embedded_mode, err_arg_missing, full_screen,
-    headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, msg_didout, msg_row,
-    msg_scroll, no_wait_return, recoverymode, resize_events, scriptout, silent_mode, starting,
-    stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
-    ui_client_forward_stdin,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, debug_break_level,
+    embedded_mode, err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed,
+    kOptCbFlagUnnamedplus, main_loop, msg_didout, msg_row, msg_scroll, no_wait_return,
+    recoverymode, scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
+    time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
@@ -88,6 +88,7 @@ use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
     CallbackReader, IOSIZE, LineNr, List, NUL, OptInt, QfInfo, VarNumber, Vv, int64_t,
 };
+use crate::ui::state::{Rows, resize_events};
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;

@@ -20,13 +20,14 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::vgetc;
 use crate::guard::Suppress;
-use crate::main::{Columns, Rows, got_int, swap_exists_action, swap_exists_did_quit};
+use crate::main::{got_int, swap_exists_action, swap_exists_did_quit};
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::vars::{jop_flags, p_ch, p_ea, p_tpm};
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
 use crate::types::{Cleanup, ExArg, Exception, FAIL, Failed, LineNr, OptInt, Window};
+use crate::ui::state::{Columns, Rows};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,

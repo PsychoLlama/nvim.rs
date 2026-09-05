@@ -18,6 +18,7 @@ use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer, setfname};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
+use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::eval::typval::{tv_dict_add_nr, tv_dict_add_str_len, tv_list_append_allocated_string};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
@@ -31,8 +32,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    cmdline_row, did_check_timestamps, getout, got_int, inhibit_delete_count, msg_ext_skip_flush,
-    msg_row, msg_silent, need_check_timestamps, need_wait_return, no_lines_msg, recoverymode,
+    did_check_timestamps, getout, got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row,
+    msg_silent, need_check_timestamps, need_wait_return, no_lines_msg, recoverymode,
     swap_exists_action,
 };
 use crate::mark::setpcmark;

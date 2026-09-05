@@ -44,6 +44,7 @@ use crate::charset::skipwhite;
 use crate::cursor::{check_cursor, check_cursor_col, check_cursor_lnum, get_cursor_line_ptr};
 use crate::diff::{diff_buf_add, diff_invalidate};
 use crate::digraph::keymap_init;
+use crate::drawscreen::state::skip_redraw;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later};
 use crate::edit::{BeginlineOpts, beginline};
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
@@ -54,8 +55,7 @@ use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
 use crate::main::{
-    exiting, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign, skip_redraw,
-    swap_exists_action,
+    exiting, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign, swap_exists_action,
 };
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};

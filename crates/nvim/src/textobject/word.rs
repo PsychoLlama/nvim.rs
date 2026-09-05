@@ -12,10 +12,10 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::cursor::{coladvance, dec_cursor, gchar_cursor, get_cursor_line_ptr, inc_cursor};
+use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, redraw_curbuf_later};
 use crate::edit::oneleft;
 use crate::global_cell::GlobalCell;
-use crate::main::redraw_cmdline;
 use crate::mbyte::utf_class;
 use crate::memline::{decl, incl, ml_get};
 use crate::r#move::adjust_skipcol;

@@ -19,12 +19,13 @@ use core::ptr;
 
 use super::*;
 use crate::buffer::{do_autochdir, maketitle};
+use crate::drawscreen::state::redraw_tabline;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, redraw_win_line};
 use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
-use crate::main::{globaldir, last_chdir_reason, msg_scrolled, redraw_tabline};
+use crate::main::{globaldir, last_chdir_reason, msg_scrolled};
 use crate::memory::xstrdup;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};

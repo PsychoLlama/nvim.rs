@@ -14,13 +14,14 @@ use core::ffi::{CStr, c_char, c_int};
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isdigit;
+use crate::drawscreen::state::updating_screen;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, redraw_all_later};
 use crate::eval::vars::do_unlet;
 use crate::ex_docmd::ends_excmd;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     cterm_normal_bg_color, cterm_normal_fg_color, current_sctx, got_int, need_highlight_changed,
-    normal_bg, normal_fg, normal_sp, starting, t_colors, updating_screen,
+    normal_bg, normal_fg, normal_sp, starting,
 };
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{c_str, msg_bytes};
@@ -30,6 +31,7 @@ use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::types::ui::kUILinegrid;
 use crate::types::{EStack, OptVal, OptionSetFlags};
+use crate::ui::state::t_colors;
 use crate::ui::{ui_default_colors_set, ui_has, ui_refresh, ui_rgb_attached};
 
 use super::{

@@ -26,6 +26,7 @@ use crate::buffer::{BufFlags, do_autochdir};
 use crate::change::save_file_ff;
 use crate::charset::buf_init_chartab;
 use crate::diff::diff_buf_adjust;
+use crate::drawscreen::state::{clear_cmdline, cmdline_row, need_maketitle, updating_screen};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, check_screensize, redraw_all_later, screen_resize, showmode,
     status_redraw_curbuf,
@@ -39,10 +40,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
-use crate::main::{
-    Columns, Rows, clear_cmdline, cmdline_row, full_screen, need_maketitle, readonlymode, starting,
-    updating_screen,
-};
+use crate::main::{full_screen, readonlymode, starting};
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
 use crate::message::e_invarg;
@@ -66,6 +64,7 @@ use crate::types::{
     Buffer, ColNr, LineNr, NUL, OptIndex, OptInt, OptSet, OptVal, OptionSetFlags, String_0, Vv,
     Window, ptrdiff_t, size_t, uint8_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
     check_colorcolumn, command_height, frame_new_height, global_stl_height, last_status, min_rows,

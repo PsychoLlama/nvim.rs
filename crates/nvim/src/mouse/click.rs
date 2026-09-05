@@ -18,7 +18,7 @@ use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor, update_screen};
 use crate::eval::call_vim_function;
 use crate::eval::typval::tv_clear;
-use crate::main::{Rows, mod_mask, mouse_grid, mouse_row};
+use crate::main::{mod_mask, mouse_grid, mouse_row};
 use crate::menu::show_popupmenu;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::p_ch;
@@ -26,6 +26,7 @@ use crate::pos::{lt, ltoreq};
 use crate::types::{
     OptInt, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, typval_vval_union,
 };
+use crate::ui::state::Rows;
 use crate::ui::ui_flush;
 
 /// Call the click definition function recorded for column `col` in

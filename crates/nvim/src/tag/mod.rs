@@ -28,8 +28,8 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::main::{
-    Columns, KeyTyped, g_do_tagpreview, g_tag_at_cursor, got_int, keep_help_flag, magic_overruled,
-    msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent, no_hlsearch, postponed_split,
+    KeyTyped, g_do_tagpreview, g_tag_at_cursor, got_int, keep_help_flag, magic_overruled, msg_col,
+    msg_didout, msg_scroll, msg_scrolled, msg_silent, no_hlsearch, postponed_split,
     postponed_split_flags, vim_ignored,
 };
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
@@ -76,6 +76,7 @@ use crate::types::{
     Pos, RegMatch, Taggy, Timestamp, TypVal, VarNumber, VimConv, int64_t, ptrdiff_t, size_t,
     typval_vval_union,
 };
+use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, tabpage_index, win_close, win_enter,

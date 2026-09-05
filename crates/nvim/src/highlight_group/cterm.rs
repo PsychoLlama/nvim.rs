@@ -16,7 +16,7 @@
 
 use core::ffi::{CStr, c_int};
 
-use crate::main::t_colors;
+use crate::ui::state::t_colors;
 
 /// The names `ctermfg=`/`ctermbg=` accept, in the order the number tables
 /// below are indexed. `NONE` is last and maps to -1 in every table.

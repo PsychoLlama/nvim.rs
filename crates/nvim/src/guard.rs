@@ -111,12 +111,13 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::drawscreen::state::RedrawingDisabled;
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    RedrawingDisabled, allow_keys, autocmd_no_enter, autocmd_no_leave, cmdline_star,
-    curbuf_splice_pending, current_sctx, disable_fold_update, emsg_off, emsg_silent, emsg_skip,
-    expr_map_lock, inhibit_delete_count, msg_listdo_overwrite, msg_silent, no_check_timestamps,
-    no_mapping, no_u_sync, no_wait_return, no_zero_mapping, tabpage_move_disallowed,
+    allow_keys, autocmd_no_enter, autocmd_no_leave, cmdline_star, curbuf_splice_pending,
+    current_sctx, disable_fold_update, emsg_off, emsg_silent, emsg_skip, expr_map_lock,
+    inhibit_delete_count, msg_listdo_overwrite, msg_silent, no_check_timestamps, no_mapping,
+    no_u_sync, no_wait_return, no_zero_mapping, tabpage_move_disallowed,
 };
 use crate::types::{ScriptCtx, ScriptId};
 use core::ffi::c_int;

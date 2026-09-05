@@ -15,14 +15,15 @@ use crate::drawscreen::{
     status_redraw_all, status_redraw_curbuf,
 };
 
+use crate::drawscreen::state::{need_maketitle, redraw_cmdline};
 use crate::eval::eval_to_string;
 use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
 use crate::main::{
-    cmdpreview, msg_col, msg_didout, need_maketitle, need_wait_return, no_hlsearch, redir_fd,
-    redir_off, redir_reg, redir_vname, redraw_cmdline,
+    cmdpreview, msg_col, msg_didout, need_wait_return, no_hlsearch, redir_fd, redir_off, redir_reg,
+    redir_vname,
 };
 use crate::memory::xstrdup;
 use crate::option::vars::{p_hls, p_lz};

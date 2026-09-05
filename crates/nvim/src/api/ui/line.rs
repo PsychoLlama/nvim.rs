@@ -31,7 +31,6 @@ use super::Ui;
 use super::events::{linegrid, remote_ui_cursor_goto, remote_ui_highlight_set, remote_ui_put};
 use super::packer::{MAX_CELLS_PENDING, UI_BUF_SIZE, prepare_call, push_call, ui_flush_buf};
 use crate::grid::{schar_get, schar_get_adv};
-use crate::main::Columns;
 use crate::mbyte::utf_ambiguous_width;
 use crate::msgpack_rpc::packer::{
     mpack_array, mpack_array_dyn16, mpack_be16, mpack_bool, mpack_str_small, mpack_uint,
@@ -39,6 +38,7 @@ use crate::msgpack_rpc::packer::{
 use crate::types::builders::ArrayBuf;
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{Integer, LineFlags, RemoteUI, ScreenAttr, ScreenChar};
+use crate::ui::state::Columns;
 use core::ffi::{c_char, c_int};
 
 /// The largest a single cell can pack to: a fixarray header, the text with

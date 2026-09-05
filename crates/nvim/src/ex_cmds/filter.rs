@@ -36,7 +36,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
-    Rows, autocmd_busy, bangredo, did_check_timestamps, got_int, info_message, msg_col, msg_didout,
+    autocmd_busy, bangredo, did_check_timestamps, got_int, info_message, msg_col, msg_didout,
     msg_row, msg_scroll, msg_silent, need_check_timestamps, silent_mode,
 };
 use crate::mark::mark_adjust;
@@ -61,6 +61,7 @@ use crate::semsg;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
 use crate::types::{CmdModFlags, CpoFlag, ExArg, LineNr, NUL, OptInt};
+use crate::ui::state::Rows;
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::buffers;

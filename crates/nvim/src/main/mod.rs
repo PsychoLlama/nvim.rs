@@ -4,7 +4,7 @@
 //! read from all over the tree. The startup path lives in the submodules.
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::global_cell::{ConstTable, GlobalCell, SharedCell};
+use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::ModMask;
 use crate::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
@@ -13,16 +13,16 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, ArgList, Array, AucmdWin, BlnFlags, Buffer, BufferRef, Callback, Channel,
-    ColNr, DecorState, DispTick, EStack, EStackType, EstackInfo, FILE, FileComparison, FileMark,
-    FileMarkView, GArray, Handle, LPos, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos,
-    MarkTreeIter, MarkTreeIterLevel, MatchState, MultiQueue, NS, NluaRefState, Object, OptMagic,
-    Pos, Proc, ProfTime, Refcount, RegExtMatch, RegMMatch, RegProg, RgbValue, ScreenGrid,
-    ScriptCtx, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark,
-    Window, XDGVarType, XFileMark, caller_scope, int16_t, int32_t, int64_t, nvim_stats_s, size_t,
-    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
-    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
-    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    AdditionalData, ArgList, Array, AucmdWin, BlnFlags, BufferRef, Callback, Channel, ColNr,
+    DecorState, EStack, EStackType, EstackInfo, FILE, FileComparison, FileMark, FileMarkView,
+    GArray, Handle, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter,
+    MarkTreeIterLevel, MultiQueue, NS, NluaRefState, Object, OptMagic, Pos, Proc, ProfTime,
+    Refcount, RegExtMatch, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
+    UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, Window, XDGVarType, XFileMark, caller_scope, int16_t,
+    int32_t, int64_t, nvim_stats_s, size_t, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue,
+    uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs,
+    uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u,
+    uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 
@@ -151,18 +151,6 @@ pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, Handle>> =
 /// Membership only; never walked.
 pub(crate) static namespace_localscope: GlobalCell<IdSet<uint32_t>> = GlobalCell::new(id_set());
 pub static next_namespace_id: GlobalCell<Handle> = GlobalCell::new(1 as Handle);
-pub static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
-    c"ext_cmdline".as_ptr(),
-    c"ext_popupmenu".as_ptr(),
-    c"ext_tabline".as_ptr(),
-    c"ext_wildmenu".as_ptr(),
-    c"ext_messages".as_ptr(),
-    c"ext_linegrid".as_ptr(),
-    c"ext_multigrid".as_ptr(),
-    c"ext_hlstate".as_ptr(),
-    c"ext_termcolors".as_ptr(),
-    c"_debug_float".as_ptr(),
-]);
 pub(crate) const PATHSEP: c_int = '/' as c_int;
 pub static last_cursormoved_win: GlobalCell<*mut Window> =
     GlobalCell::new(::core::ptr::null_mut::<Window>());
@@ -236,36 +224,6 @@ pub static diff_context: GlobalCell<c_int> = GlobalCell::new(6 as c_int);
 pub static diff_foldcolumn: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
 pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
-/// The `ui_watched` extmarks the redraw in progress has passed positions for.
-///
-/// Filled by `draw_virt_text` one window line at a time and drained by
-/// `win_update` once the window is done, so it never outlives one window's
-/// redraw. It was upstream's hand-rolled growable array; nothing outside the
-/// two of them ever named its layout.
-pub static win_extmark_arr: GlobalCell<Vec<WinExtmark>> = GlobalCell::new(Vec::new());
-pub static updating_screen: GlobalCell<bool> = GlobalCell::new(false);
-pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
-pub static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(MatchState {
-    rm: RegMMatch {
-        regprog: ::core::ptr::null_mut::<RegProg>(),
-        startpos: [LPos { lnum: 0, col: 0 }; 10],
-        endpos: [LPos { lnum: 0, col: 0 }; 10],
-        rmm_matchcol: 0,
-        rmm_ic: 0,
-        rmm_maxcol: 0,
-    },
-    buf: ::core::ptr::null_mut::<Buffer>(),
-    lnum: 0,
-    attr: 0,
-    attr_cur: 0,
-    first_lnum: 0,
-    startcol: 0,
-    endcol: 0,
-    is_addpos: false,
-    has_cursor: false,
-    tm: 0,
-});
-pub static search_hl_has_cursor_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 pub static top_bot_msg: &CStr = c"search hit TOP, continuing at BOTTOM";
 pub static bot_top_msg: &CStr = c"search hit BOTTOM, continuing at TOP";
 pub static line_msg: &CStr = c" line ";
@@ -292,20 +250,12 @@ pub static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
     log_skip: 0 as int16_t,
 });
 pub(crate) const NO_BUFFERS: c_int = 1 as c_int;
-pub static Rows: GlobalCell<c_int> = GlobalCell::new(24 as c_int);
-pub static Columns: GlobalCell<c_int> = GlobalCell::new(80 as c_int);
 pub static mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
 pub static vgetc_mod_mask: GlobalCell<ModMask> = GlobalCell::new(ModMask::NONE);
 pub static vgetc_char: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static cmdline_row: GlobalCell<c_int> = GlobalCell::new(0);
-pub static redraw_cmdline: GlobalCell<bool> = GlobalCell::new(false);
-pub static redraw_mode: GlobalCell<bool> = GlobalCell::new(false);
-pub static clear_cmdline: GlobalCell<bool> = GlobalCell::new(false);
-pub static mode_displayed: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdline_star: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static redrawing_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(false);
-pub static dollar_vcol: GlobalCell<ColNr> = GlobalCell::new(-1 as ColNr);
 pub static cmdmsg_rl: GlobalCell<bool> = GlobalCell::new(false);
 pub static msg_col: GlobalCell<c_int> = GlobalCell::new(0);
 pub static msg_row: GlobalCell<c_int> = GlobalCell::new(0);
@@ -331,7 +281,6 @@ pub static emsg_assert_fails_lnum: GlobalCell<c_long> = GlobalCell::new(0 as c_l
 pub static emsg_assert_fails_context: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static did_emsg: GlobalCell<c_int> = GlobalCell::new(0);
-pub static called_vim_beep: GlobalCell<bool> = GlobalCell::new(false);
 pub static called_emsg: GlobalCell<c_int> = GlobalCell::new(0);
 pub static ex_exitval: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static emsg_on_display: GlobalCell<bool> = GlobalCell::new(false);
@@ -339,7 +288,6 @@ pub static rc_did_emsg: GlobalCell<bool> = GlobalCell::new(false);
 pub static no_wait_return: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static need_wait_return: GlobalCell<bool> = GlobalCell::new(false);
 pub static did_wait_return: GlobalCell<bool> = GlobalCell::new(false);
-pub static need_maketitle: GlobalCell<bool> = GlobalCell::new(true);
 pub static quit_more: GlobalCell<bool> = GlobalCell::new(false);
 pub static vgetc_busy: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static didset_vim: GlobalCell<bool> = GlobalCell::new(false);
@@ -358,7 +306,6 @@ pub(crate) const SID_CMDARG: c_int = -2 as c_int;
 pub(crate) const SID_CARG: c_int = -3 as c_int;
 pub(crate) const SID_ENV: c_int = -4 as c_int;
 pub static current_sctx: GlobalCell<ScriptCtx> = GlobalCell::new(ScriptCtx::NONE);
-pub static current_ui: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub static did_source_packages: GlobalCell<bool> = GlobalCell::new(false);
 pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
     script_ctx: ScriptCtx::NONE,
@@ -375,7 +322,6 @@ pub static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(cal
     funccalp: ::core::ptr::null_mut::<c_void>(),
 });
 pub static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static t_colors: GlobalCell<c_int> = GlobalCell::new(256 as c_int);
 pub static include_none: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static include_default: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static include_link: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -397,7 +343,6 @@ pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static root_menu: GlobalCell<*mut VimMenu> =
     GlobalCell::new(::core::ptr::null_mut::<VimMenu>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 pub static global_alist: GlobalCell<ArgList> = GlobalCell::new(ArgList {
     al_ga: Vec::new(),
     al_refcount: Refcount::ZERO,
@@ -405,9 +350,6 @@ pub static global_alist: GlobalCell<ArgList> = GlobalCell::new(ArgList {
 });
 pub static max_alist_id: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static arg_had_last: GlobalCell<bool> = GlobalCell::new(false);
-pub static ru_col: GlobalCell<c_int> = GlobalCell::new(0);
-pub static ru_wid: GlobalCell<c_int> = GlobalCell::new(0);
-pub static sc_col: GlobalCell<c_int> = GlobalCell::new(0);
 #[unsafe(no_mangle)]
 pub static starting: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
 pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
@@ -444,7 +386,6 @@ pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
 pub(crate) const SEA_QUIT: c_int = 2 as c_int;
 pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
-pub static RedrawingDisabled: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_empty: GlobalCell<bool> = GlobalCell::new(false);
@@ -453,9 +394,6 @@ pub static ignore_script: GlobalCell<bool> = GlobalCell::new(false);
 pub static KeyTyped: GlobalCell<bool> = GlobalCell::new(false);
 pub static KeyStuffed: GlobalCell<c_int> = GlobalCell::new(0);
 pub static maptick: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static must_redraw: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static skip_redraw: GlobalCell<bool> = GlobalCell::new(false);
-pub static do_redraw: GlobalCell<bool> = GlobalCell::new(false);
 pub static must_redraw_pum: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_highlight_changed: GlobalCell<bool> = GlobalCell::new(true);
 pub static scriptout: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
@@ -493,8 +431,6 @@ pub static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
 pub static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
-#[unsafe(no_mangle)]
-pub static display_tick: GlobalCell<DispTick> = GlobalCell::new(0 as DispTick);
 pub static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
@@ -508,7 +444,6 @@ pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
 pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
-pub static resizing_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static highlight_attr: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
 pub static highlight_attr_last: GlobalCell<[c_int; 76]> = GlobalCell::new([0; 76]);
 pub static highlight_user: GlobalCell<[c_int; 9]> = GlobalCell::new([0; 9]);
@@ -837,10 +772,6 @@ pub static pum_want: GlobalCell<PumWant> = GlobalCell::new(PumWant {
 pub static tab_page_click_defs: GlobalCell<*mut StlClickDefinition> =
     GlobalCell::new(::core::ptr::null_mut::<StlClickDefinition>());
 pub static tab_page_click_defs_size: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
-pub static ui_event_ns_id: GlobalCell<uint32_t> = GlobalCell::new(0 as uint32_t);
-pub static resize_events: GlobalCell<*mut MultiQueue> =
-    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
-pub static ui_refresh_cmdheight: GlobalCell<bool> = GlobalCell::new(true);
 pub static ui_client_channel_id: GlobalCell<uint64_t> = GlobalCell::new(0 as uint64_t);
 pub static ui_client_error_exit: GlobalCell<c_int> = GlobalCell::new(-1 as c_int);
 pub static ui_client_exit_status: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

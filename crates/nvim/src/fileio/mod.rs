@@ -15,6 +15,7 @@ use crate::change::{appended_lines_mark, save_file_ff, unchanged};
 use crate::cstr;
 use crate::cursor::{check_cursor, check_cursor_lnum};
 use crate::diff::diff_invalidate;
+use crate::drawscreen::state::{redraw_cmdline, redraw_tabline};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_curbuf_later, status_redraw_all};
 use crate::edit::beginline;
 use crate::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_var_string};
@@ -31,8 +32,7 @@ use crate::main::{
     autocmd_busy, did_check_timestamps, emsg_silent, exiting, got_int, in_assert_fails, keep_msg,
     msg_col, msg_listdo_overwrite, msg_scroll, msg_scrolled, msg_scrolled_ign, msg_silent,
     need_check_timestamps, need_fileinfo, need_wait_return, no_check_timestamps, no_wait_return,
-    readonlymode, recoverymode, redraw_cmdline, redraw_tabline, stdin_fd, swap_exists_action,
-    vim_ignored,
+    readonlymode, recoverymode, stdin_fd, swap_exists_action, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,

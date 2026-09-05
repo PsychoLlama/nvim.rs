@@ -24,7 +24,7 @@ use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{ch_before_blocking_events, resize_events, ui_client_attached};
+use crate::main::{ch_before_blocking_events, ui_client_attached};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::message_fmt::{c_str_len, msg_addr};
 use crate::msgpack_rpc::unpacker::unpacker_advance;
@@ -33,6 +33,7 @@ use crate::types::{
     Arena, Array, Channel, Error, MessageType, MsgpackRpcRequestHandler, Object, RStream, Unpacker,
     kErrorTypeException, size_t, uint32_t, uint64_t,
 };
+use crate::ui::state::resize_events;
 use crate::ui_client::ui_client_event_raw_line;
 
 use super::envelope::serialize_response;

@@ -24,6 +24,7 @@ use crate::context::{ctx_free, ctx_from_dict, ctx_restore, ctx_save, ctx_to_dict
 use crate::cursor::get_cursor_rel_lnum;
 use crate::decoration::decor_redraw_signs;
 use crate::drawline::use_cursor_line_highlight;
+use crate::drawscreen::state::{must_redraw, redraw_tabline};
 use crate::drawscreen::{
     UPD_CLEAR, UPD_NOT_VALID, UPD_VALID, redraw_all_later, redraw_buf_later,
     redraw_buf_range_later, redraw_later, setcursor_mayforce, update_screen, win_update_cursorline,
@@ -52,9 +53,9 @@ use crate::lua::executor::{
     api_free_luaref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
 use crate::main::{
-    Columns, arena_alloc_count, cmdpreview, did_emsg, g_stats, lines_left, msg_didany, msg_no_more,
-    msg_scroll, must_redraw, need_wait_return, ns_hl_fast, ns_hl_global, redraw_tabline,
-    tslua_query_parse_count, typebuf_was_filled, vgetc_busy,
+    arena_alloc_count, cmdpreview, did_emsg, g_stats, lines_left, msg_didany, msg_no_more,
+    msg_scroll, need_wait_return, ns_hl_fast, ns_hl_global, tslua_query_parse_count,
+    typebuf_was_filled, vgetc_busy,
 };
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
@@ -104,6 +105,7 @@ use crate::types::{
     int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
     kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t, uint8_t, uint16_t, uint64_t,
 };
+use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
 use crate::winlayer::graph::{cmdwin_buf, curbuf, curwin};

@@ -16,6 +16,7 @@
 use crate::charset::vim_isprintc;
 use crate::digraph::get_digraph;
 use crate::drawscreen::showmode;
+use crate::drawscreen::state::{clear_cmdline, mode_displayed};
 use crate::edit::edit;
 use crate::eval::vars::{set_reg_var, set_vcount};
 use crate::ex_docmd::do_sleep;
@@ -28,8 +29,8 @@ use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::main::{
-    KeyStuffed, KeyTyped, clear_cmdline, did_cursorhold, langmap_mapchar, mod_mask, mode_displayed,
-    msg_col, msg_didout, msg_nowait, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    KeyStuffed, KeyTyped, did_cursorhold, langmap_mapchar, mod_mask, msg_col, msg_didout,
+    msg_nowait, vgetc_busy, vgetc_char, vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;

@@ -16,12 +16,11 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::{buf_is_prompt, current_buf};
 use crate::cstr;
 use crate::drawscreen::redraw_buf_status_later;
+use crate::drawscreen::state::{need_maketitle, redraw_tabline};
 use crate::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free};
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
-use crate::main::{
-    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, magic_overruled, need_maketitle, redraw_tabline,
-};
+use crate::main::{OPTION_MAGIC_OFF, OPTION_MAGIC_ON, magic_overruled};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::option::vars::{
     bkc_flags, p_bs, p_cpo, p_ep, p_ffs, p_ffu, p_flp, p_magic, p_sbr, p_sh, p_shm, p_siso, p_so,

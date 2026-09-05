@@ -21,12 +21,12 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::buffer::{buf_is_help, current_buf};
 use crate::decoration::decor_conceal_line;
+use crate::drawscreen::state::{cmdline_row, redraw_cmdline};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, comp_col};
 use crate::edit::{cursor_down_inner, cursor_up_inner};
 use crate::grid::{default_gridview, grid_clear};
 use crate::main::{
-    Columns, Rows, cmdline_row, exiting, full_screen, msg_row, msg_scrolled, redraw_cmdline,
-    skip_update_topline, skip_win_fix_cursor,
+    exiting, full_screen, msg_row, msg_scrolled, skip_update_topline, skip_win_fix_cursor,
 };
 use crate::mark::setmark;
 use crate::message::e_noroom;
@@ -47,6 +47,7 @@ use crate::types::{
     ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, Tabpage, Window,
     WindowHandle, size_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::winfloat::{win_border_height, win_border_width, win_float_anchor_laststatus};
 use crate::winlayer::{FrameRef, TabPage, Win, tabs, windows};

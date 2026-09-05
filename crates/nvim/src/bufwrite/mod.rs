@@ -14,6 +14,7 @@ use std::ffi::CString;
 use crate::autocmd::{apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf};
 use crate::buffer::{BufFlags, buf_get_changedtick, buf_is_nofilename, buf_set_file_id};
 use crate::change::unchanged;
+use crate::drawscreen::state::need_maketitle;
 use crate::drawscreen::status_redraw_all;
 use crate::eval::vars::eval_charconvert;
 use crate::event::libuv::uv_strerror;
@@ -27,7 +28,7 @@ use crate::fileio::{
 };
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::main::{exiting, got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return};
+use crate::main::{exiting, got_int, msg_scroll, msg_silent, no_wait_return};
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};

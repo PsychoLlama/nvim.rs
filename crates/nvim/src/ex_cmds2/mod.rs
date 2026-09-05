@@ -52,6 +52,7 @@ use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::unchanged;
 use crate::channel::channel_job_running;
 use crate::cstr;
+use crate::drawscreen::state::cmdline_row;
 use crate::eval::eval_call_provider;
 use crate::eval::typval::{
     tv_list_alloc, tv_list_append_allocated_string, tv_list_append_number, tv_list_append_string,
@@ -64,7 +65,7 @@ use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
-use crate::main::{cmdline_row, exiting, msg_col, msg_didany, msg_didout, msg_row, vgetc_busy};
+use crate::main::{exiting, msg_col, msg_didany, msg_didout, msg_row, vgetc_busy};
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
 use crate::message::{

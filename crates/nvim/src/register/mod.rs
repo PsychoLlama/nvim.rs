@@ -35,6 +35,7 @@ use crate::cursor::{
     coladvance_force, gchar_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len,
     get_cursor_pos_ptr, getviscol, getvpos,
 };
+use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{showmode, update_screen};
 use crate::edit::{beginline, get_last_insert, get_last_insert_save, oneright, stuff_inserted};
 use crate::eval::typval::{
@@ -60,8 +61,8 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, got_int, msg_ext_skip_flush, must_redraw, pending_end_reg_executing, redir_reg,
-    reg_executing, reg_recorded, reg_recording,
+    got_int, msg_ext_skip_flush, pending_end_reg_executing, redir_reg, reg_executing, reg_recorded,
+    reg_recording,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -107,6 +108,7 @@ use crate::types::{
     String_0, UndoObjectType, VarLock, YankReg, int64_t, kBoolVarFalse, kBoolVarTrue, ptrdiff_t,
     size_t, ssize_t,
 };
+use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
 use crate::winlayer::graph::curbuf;

@@ -11,6 +11,7 @@ use crate::charset::{
     transchar_byte, vim_is_ident_char, vim_isfilec_or_wc, vim_strsize,
 };
 use crate::cmdhist::get_history_arg;
+use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
 use crate::eval::funcs::{get_expr_name, get_function_name};
 use crate::eval::typval::{
@@ -46,9 +47,9 @@ use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
 use crate::main::{
-    Columns, KeyTyped, Rows, cmd_silent, cmdline_row, current_sctx, got_int, hl_attr_active,
-    msg_col, msg_didany, msg_row, msg_scrolled, pum_want, save_p_ls, save_p_wmh, search_first_line,
-    search_last_line, wild_menu_showing,
+    KeyTyped, cmd_silent, current_sctx, got_int, hl_attr_active, msg_col, msg_didany, msg_row,
+    msg_scrolled, pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line,
+    wild_menu_showing,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -107,6 +108,7 @@ use crate::types::{
     Object, OptInt, Pos, PumItem, RegMatch, TypVal, VarNumber, XpPrefix, ptrdiff_t, size_t,
     ssize_t, typval_vval_union,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_flush, ui_has, vim_beep};
 use crate::usercmd::{
     cmdcomplete_str_to_type, cmdcomplete_type_to_str, find_ucmd, get_user_cmd_addr_type,

@@ -4,6 +4,7 @@ use crate::api::vim::nvim_paste;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::cursor::get_cursor_line_ptr;
+use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_cmdline};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
 use crate::eval::garbage_collect;
@@ -24,14 +25,14 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
-    KeyStuffed, KeyTyped, allow_keys, called_emsg, cmd_silent, cmdline_row, cmdline_star,
-    ctrl_c_interrupts, debug_did_msg, did_emsg, did_outofmem_msg, did_swapwrite_msg, emsg_silent,
-    got_int, ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick,
-    may_garbage_collect, mod_mask, mode_displayed, mouse_col, mouse_grid, mouse_row, msg_col,
-    msg_didout, msg_row, msg_scroll, msg_silent, must_redraw, need_wait_return, no_mapping,
-    no_zero_mapping, pending_end_reg_executing, redraw_cmdline, reg_executing, reg_recording,
-    repeat_luaref, scriptout, test_disable_char_avail, typebuf_was_empty, typebuf_was_filled,
-    vgetc_busy, vgetc_char, vgetc_mod_mask, want_garbage_collect,
+    KeyStuffed, KeyTyped, allow_keys, called_emsg, cmd_silent, cmdline_star, ctrl_c_interrupts,
+    debug_did_msg, did_emsg, did_outofmem_msg, did_swapwrite_msg, emsg_silent, got_int,
+    ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick, may_garbage_collect,
+    mod_mask, mouse_col, mouse_grid, mouse_row, msg_col, msg_didout, msg_row, msg_scroll,
+    msg_silent, need_wait_return, no_mapping, no_zero_mapping, pending_end_reg_executing,
+    reg_executing, reg_recording, repeat_luaref, scriptout, test_disable_char_avail,
+    typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    want_garbage_collect,
 };
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,

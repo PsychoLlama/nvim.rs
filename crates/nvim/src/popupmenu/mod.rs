@@ -12,6 +12,7 @@ use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::buffer::{buf_clear, buf_is_nofile, current_buf};
 use crate::charset::{ptr2cells, transstr, vim_strsize};
 use crate::cmdexpand::{cmdline_compl_is_fuzzy, cmdline_compl_pattern};
+use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
 use crate::drawscreen::{
     UPD_NOT_VALID, UPD_SOME_VALID, redraw_later, setcursor_mayforce, update_screen,
 };
@@ -34,8 +35,8 @@ use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
 use crate::main::{
-    Columns, PumWant, RedrawingDisabled, Rows, cmdline_row, g_do_tagpreview, hl_attr_active,
-    mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync, pum_grid, pum_want,
+    PumWant, g_do_tagpreview, hl_attr_active, mouse_col, mouse_grid, mouse_row, must_redraw_pum,
+    no_u_sync, pum_grid, pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
@@ -62,6 +63,7 @@ use crate::types::{
     VimMenu, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, WindowHandle,
     kBoolVarFalse, kBoolVarTrue, size_t, uint32_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
     ui_call_popupmenu_select, ui_call_popupmenu_show, ui_call_win_close, ui_call_win_float_pos,

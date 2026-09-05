@@ -31,6 +31,7 @@ use crate::buffer::{
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::channel::channel_job_running;
 use crate::cursor::check_cursor_lnum;
+use crate::drawscreen::state::redraw_tabline;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::ex_cmds::EcmdFlags;
 use crate::ex_cmds2::{autowrite, buf_write_all, check_fname, dialog_changed};
@@ -38,7 +39,7 @@ use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
-use crate::main::{emsg_silent, exiting, getout, redraw_tabline};
+use crate::main::{emsg_silent, exiting, getout};
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
 use crate::memory::xfree;

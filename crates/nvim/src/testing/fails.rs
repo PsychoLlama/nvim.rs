@@ -22,7 +22,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{suppress_errthrow, trylevel};
 use crate::guard::{Bump, Suppress};
 use crate::main::{
-    Rows, called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
+    called_emsg, did_emsg, emsg_assert_fails_context, emsg_assert_fails_lnum,
     emsg_assert_fails_msg, emsg_on_display, got_int, in_assert_fails, lines_left, msg_col,
     need_wait_return,
 };
@@ -33,6 +33,7 @@ use crate::types::{
     EvalFuncData, List, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv,
     typval_vval_union,
 };
+use crate::ui::state::Rows;
 
 use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
 use super::{

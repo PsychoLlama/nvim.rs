@@ -22,11 +22,10 @@ use core::ffi::{CStr, c_int};
 use super::*;
 use crate::api::private::helpers::{arena_array, arena_dict, arena_string, cstr_as_string};
 use crate::charset::{ptr2cells, vim_strsize};
+use crate::drawscreen::state::redraw_tabline;
 use crate::grid::{default_grid_ref, default_gridview, schar_from_ascii};
 use crate::highlight_group::{HLF_T, HLF_TP, HLF_TPF, HLF_TPS};
-use crate::main::{
-    Columns, redraw_tabline, t_colors, tab_page_click_defs, tab_page_click_defs_size,
-};
+use crate::main::{tab_page_click_defs, tab_page_click_defs_size};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::normal::showcmd_buf;
@@ -38,6 +37,7 @@ use crate::types::{
     Arena, BufferHandle, MAXPATHL, Object, StlClickDefinition_type_0, String_0, TabpageHandle,
     Window,
 };
+use crate::ui::state::{Columns, t_colors};
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
 use crate::window::tabline_height;

@@ -23,6 +23,7 @@ use crate::cursor::{
     check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, get_cursor_pos_len,
     get_cursor_pos_ptr, inc_cursor,
 };
+use crate::drawscreen::state::{dollar_vcol, redraw_cmdline, redraw_mode, sc_col};
 use crate::drawscreen::{
     UPD_VALID, redraw_later, redraw_win_line, setcursor, showmode, update_screen,
 };
@@ -57,8 +58,8 @@ use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
 use crate::main::{
-    KeyTyped, did_emsg, dollar_vcol, emsg_silent, g_tag_at_cursor, got_int, in_assert_fails,
-    msg_hist_off, pum_want, redraw_cmdline, redraw_mode, sc_col, test_disable_char_avail,
+    KeyTyped, did_emsg, emsg_silent, g_tag_at_cursor, got_int, in_assert_fails, msg_hist_off,
+    pum_want, test_disable_char_avail,
 };
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,

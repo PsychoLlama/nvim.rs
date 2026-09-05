@@ -18,6 +18,7 @@ use crate::cmdhist::add_to_history;
 use crate::cursor::{
     check_cursor, dec_cursor, get_cursor_line_len, get_cursor_line_ptr, inc_cursor,
 };
+use crate::drawscreen::state::{dollar_vcol, sc_col};
 use crate::drawscreen::{
     UPD_INVERTED, UPD_SOME_VALID, UPD_VALID, redraw_all_later, redraw_curbuf_later, redraw_later,
     setcursor, show_cursor_info_later, showmode, update_screen,
@@ -41,10 +42,9 @@ use crate::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, bot_top_msg, called_emsg, cmd_silent, dollar_vcol,
-    g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled,
-    msg_silent, no_hlsearch, no_smartcase, rc_did_emsg, sc_col, search_match_endcol,
-    search_match_lines, searchcmdlen, top_bot_msg,
+    KeyStuffed, KeyTyped, bot_top_msg, called_emsg, cmd_silent, g_do_tagpreview, got_int,
+    msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent, no_hlsearch,
+    no_smartcase, rc_did_emsg, search_match_endcol, search_match_lines, searchcmdlen, top_bot_msg,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -87,6 +87,7 @@ use crate::types::{
     MotionType, OpArg, Pos, ProfTime, RegMMatch, RegMatch, SearchItArg, SearchOffset,
     SearchPattern, TypVal, VarNumber, Window, int64_t, ptrdiff_t, size_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};
 use crate::winlayer::graph::{curbuf, curwin};

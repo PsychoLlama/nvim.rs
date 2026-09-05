@@ -21,7 +21,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::keycodes::{get_special_key_name, has_key_name};
-use crate::main::{Columns, got_int, info_message, silent_mode};
+use crate::main::{got_int, info_message, silent_mode};
 use crate::mapping::{EscTarget, put_escstr};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{
@@ -42,6 +42,7 @@ use crate::strings::vim_strchr;
 use crate::types::{
     Buffer, FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,
 };
+use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
 use crate::winlayer::graph::{curbuf, curwin};

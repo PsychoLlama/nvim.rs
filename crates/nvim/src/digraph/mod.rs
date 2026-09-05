@@ -25,7 +25,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
-use crate::main::{Columns, cmdline_star, got_int, msg_col};
+use crate::main::{cmdline_star, got_int, msg_col};
 use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::memory::{xfree, xmemdupz};
@@ -40,6 +40,7 @@ use crate::types::{
     BoolVarValue, Buffer, EvalFuncData, ExArg, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL,
     VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, Window, int16_t,
 };
+use crate::ui::state::Columns;
 use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;

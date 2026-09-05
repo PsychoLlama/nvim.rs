@@ -39,9 +39,7 @@ use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
 use crate::event::r#loop::process_events_until;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    current_ui, main_loop, starting, stdin_fd, stdin_isatty, stdout_isatty, t_colors, ui_ext_names,
-};
+use crate::main::{main_loop, starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::memory::{strequal, xfree};
 use crate::option::set_tty_option;
 use crate::types::builders::{ArrayBuf, DictBuf};
@@ -53,6 +51,7 @@ use crate::types::{
     String_0, UIExtension, kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger,
     kObjectTypeString,
 };
+use crate::ui::state::{current_ui, t_colors, ui_ext_names};
 use crate::ui::{
     ui_active, ui_attach_impl, ui_call_ui_send, ui_can_attach_more, ui_detach_impl, ui_grid_resize,
     ui_refresh, ui_set_ext_option,

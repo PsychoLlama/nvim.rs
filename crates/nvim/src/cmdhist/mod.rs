@@ -26,7 +26,7 @@ use crate::ex_cmds::check_secure;
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_getln::{get_cmdline_firstc, get_list_range};
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, got_int, maptick};
+use crate::main::{got_int, maptick};
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts_title,
@@ -41,6 +41,7 @@ use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, ExArg, Expand, Failed, HistoryType, IOSIZE, OptInt,
     RegMatch, Timestamp, TypVal, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, size_t,
 };
+use crate::ui::state::Columns;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 pub const HIST_DEFAULT: HistoryType = -2;

@@ -13,6 +13,7 @@ use crate::ascii::ascii_iswhite;
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
+use crate::drawscreen::state::need_maketitle;
 use crate::eval::typval::{
     TV_INITIAL_VALUE, callback_copy, callback_free, callback_to_string, tv_clear, tv_dict_add_nr,
     tv_dict_add_tv, tv_dict_set_keys_readonly,
@@ -35,7 +36,7 @@ use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events,
     did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
-    last_cursormoved_win, main_loop, msg_col, need_maketitle, reg_recording, starting,
+    last_cursormoved_win, main_loop, msg_col, reg_recording, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};

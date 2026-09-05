@@ -22,6 +22,7 @@ use crate::allocator::Owned;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::diff::diff_clear;
 use crate::drawscreen::UPD_NOT_VALID;
+use crate::drawscreen::state::redraw_tabline;
 use crate::eval::typval::tv_dict_alloc;
 use crate::eval::vars::{init_var_dict, unref_var_dict, vars_clear};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
@@ -29,8 +30,8 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    Columns, Rows, diff_need_scrollbind, postponed_split_tab, redraw_tabline, skip_win_fix_scroll,
-    starting, tabpage_move_disallowed,
+    diff_need_scrollbind, postponed_split_tab, skip_win_fix_scroll, starting,
+    tabpage_move_disallowed,
 };
 use crate::memory::xstrdup;
 use crate::message::e_cmdwin;
@@ -43,6 +44,7 @@ use crate::options::kOptCmdheight;
 use crate::types::{
     Buffer, Failed, Handle, OptInt, OptVal, OptionSetFlags, SwitchWin, Tabpage, VAR_SCOPE, int64_t,
 };
+use crate::ui::state::{Columns, Rows};
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::graph::{
     cmdwin_type, curbuf, curtab, curwin, first_tabpage, firstwin, lastused_tabpage, lastwin,
