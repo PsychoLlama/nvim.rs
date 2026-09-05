@@ -89,7 +89,7 @@ pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buf: *const buf_T) -> LineNr {
+pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buf: *const Buffer) -> LineNr {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let s = val.string_or_null();

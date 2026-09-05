@@ -1,7 +1,7 @@
 //! The window, buffer and position pointers the editor works through, wrapped
 //! so that dereferencing one is not an unsafe operation at every use.
 //!
-//! The transpiled editor passes `*mut win_T` / `*mut buf_T` / `*mut pos_T`
+//! The transpiled editor passes `*mut Window` / `*mut Buffer` / `*mut pos_T`
 //! everywhere, and the pointers have to stay raw: callers interleave these
 //! calls with reads of the `curwin`/`curbuf` globals — which alias the same
 //! objects — and many of them re-enter through autocommands, so a long-lived
@@ -31,14 +31,14 @@
 //!
 //! # Who owns the object
 //!
-//! **The buffer and tab page registries own what they hold.** A `buf_T` and
-//! a `tabpage_T` are `Box`es the registry took (`allocator::Owned`), so the
+//! **The buffer and tab page registries own what they hold.** A `Buffer` and
+//! a `Tabpage` are `Box`es the registry took (`allocator::Owned`), so the
 //! free path takes the allocation back with the handle and *drops* it where
-//! the `xfree` used to be — which is what lets a `buf_T` hold a `Vec`.
+//! the `xfree` used to be — which is what lets a `Buffer` hold a `Vec`.
 //! **Windows are not there yet**: `aucmd_restbuf` takes the autocommand
 //! window out of the registry while it stays alive and `aucmd_prepbuf` puts
 //! it back, so "registered" and "owned" are different lifetimes for a
-//! `win_T` until that idle window has a named owner. `registry`'s two types
+//! `Window` until that idle window has a named owner. `registry`'s two types
 //! say which is which.
 //!
 //! **The five list links are handles all the same.** `b_next`/`b_prev`,
@@ -49,7 +49,7 @@
 //! has moved. Ownership is what a `Vec` inside the object needs; a handle
 //! link is what makes a stale link answer `None` instead of pointing into
 //! freed memory, and it is why the window list is safe to walk even though
-//! nobody owns a `win_T` yet. The one thing it asks of the allocator is an
+//! nobody owns a `Window` yet. The one thing it asks of the allocator is an
 //! order: **a window, buffer or tab page must be in the registry before it
 //! is spliced into a list, and must leave the list before it leaves the
 //! registry.** `buflist_new` and `aucmd_prepbuf` were both the other way
@@ -101,7 +101,7 @@
 //!
 //! Four shapes of the rule are in the tree and worth copying:
 //!
-//! * `BufRef` (`buffer::BufRef`, upstream's `bufref_T`) — `BufRef::of`/`of_opt`
+//! * `BufRef` (`buffer::BufRef`, upstream's `BufferRef`) — `BufRef::of`/`of_opt`
 //!   before, `BufRef::valid`/`get` after. `buffer::enter` uses it twice around
 //!   `BufLeave`.
 //! * A saved `Handle` plus a registry lookup — `autocmd::aucmdwin`'s
@@ -124,7 +124,7 @@
 //! # On [`DerefMut`] and raw pointers into the same object
 //!
 //! **A `&mut` reached through [`DerefMut`] borrows the *whole struct*, not
-//! the field.** `win.w_cursor.lnum = 1` asks for `&mut win_T` and projects;
+//! the field.** `win.w_cursor.lnum = 1` asks for `&mut Window` and projects;
 //! under Stacked and Tree Borrows that borrow pops every raw pointer
 //! previously derived from the same object off the tag stack, so a
 //! `*mut pos_T` taken earlier from `&raw mut (*wp).w_cursor` — or any other
@@ -135,13 +135,13 @@
 //! only Miri sees it, and only if a test happens to walk that path. p23-5
 //! found the same edge from the other side: `scripts/root-deref.py` refuses
 //! `&raw mut (*curwin.get()).field` precisely because the address would take
-//! its provenance from a transient `&mut win_T`.
+//! its provenance from a transient `&mut Window`.
 //!
 //! So when a body holds an interior raw pointer across writes through a
 //! `Win`/`Buf`, one of the two has to go: derive the address with
 //! [`Win::cursor`] or [`Live::field_ptr`], which compute it from the base
 //! *without* forming a `&mut` and so read nothing, or re-derive the interior
-//! pointer after each write. Converting a `*mut win_T` parameter to `Win` is
+//! pointer after each write. Converting a `*mut Window` parameter to `Win` is
 //! not by itself enough — check what else in the body still points inside.
 //!
 //! The walks at the bottom — [`windows`], [`windows_in_tab`], [`tab_windows`],
@@ -178,7 +178,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
-use crate::types::{ColNr, Handle, LineNr, StrCharInfo, buf_T, frame_T, pos_T, tabpage_T, win_T};
+use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, StrCharInfo, Tabpage, Window, pos_T};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -190,11 +190,11 @@ use crate::types::{ColNr, Handle, LineNr, StrCharInfo, buf_T, frame_T, pos_T, ta
 /// compares them (`win_valid`, `win_find_tabpage`). Identity that outlives the
 /// address is [`WinId`], taken while the window is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Win(*mut win_T);
+pub struct Win(*mut Window);
 
 /// A buffer the caller has promised is live. [`Win`]'s shape.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Buf(*mut buf_T);
+pub struct Buf(*mut Buffer);
 
 /// A frame of the window layout tree the caller has promised is live.
 ///
@@ -202,11 +202,11 @@ pub struct Buf(*mut buf_T);
 /// of child frames (`fr_child`, chained through `fr_next`); `fr_parent` walks
 /// back up. Which of the two a frame is, `fr_layout` says.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct FrameRef(*mut frame_T);
+pub struct FrameRef(*mut Frame);
 
 /// A tab page the caller has promised is live. [`Win`]'s shape.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TabPage(*mut tabpage_T);
+pub struct TabPage(*mut Tabpage);
 
 /// A cursor or mark position the caller has promised is live.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -217,10 +217,10 @@ pub struct PosRef(*mut pos_T);
 pub struct Line(*mut c_char);
 
 impl Deref for Win {
-    type Target = win_T;
+    type Target = Window;
 
     #[inline(always)]
-    fn deref(&self) -> &win_T {
+    fn deref(&self) -> &Window {
         // SAFETY: the constructor's promise — a live window.
         unsafe { &*self.0 }
     }
@@ -228,7 +228,7 @@ impl Deref for Win {
 
 impl DerefMut for Win {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut win_T {
+    fn deref_mut(&mut self) -> &mut Window {
         // SAFETY: the constructor's promise — a live window. The borrow lasts
         // only as long as the field access that asked for it.
         unsafe { &mut *self.0 }
@@ -236,10 +236,10 @@ impl DerefMut for Win {
 }
 
 impl Deref for Buf {
-    type Target = buf_T;
+    type Target = Buffer;
 
     #[inline(always)]
-    fn deref(&self) -> &buf_T {
+    fn deref(&self) -> &Buffer {
         // SAFETY: the constructor's promise — a live buffer.
         unsafe { &*self.0 }
     }
@@ -247,17 +247,17 @@ impl Deref for Buf {
 
 impl DerefMut for Buf {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut buf_T {
+    fn deref_mut(&mut self) -> &mut Buffer {
         // SAFETY: the constructor's promise — a live buffer.
         unsafe { &mut *self.0 }
     }
 }
 
 impl Deref for FrameRef {
-    type Target = frame_T;
+    type Target = Frame;
 
     #[inline(always)]
-    fn deref(&self) -> &frame_T {
+    fn deref(&self) -> &Frame {
         // SAFETY: the constructor's promise — a live frame.
         unsafe { &*self.0 }
     }
@@ -265,17 +265,17 @@ impl Deref for FrameRef {
 
 impl DerefMut for FrameRef {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut frame_T {
+    fn deref_mut(&mut self) -> &mut Frame {
         // SAFETY: the constructor's promise — a live frame.
         unsafe { &mut *self.0 }
     }
 }
 
 impl Deref for TabPage {
-    type Target = tabpage_T;
+    type Target = Tabpage;
 
     #[inline(always)]
-    fn deref(&self) -> &tabpage_T {
+    fn deref(&self) -> &Tabpage {
         // SAFETY: the constructor's promise — a live tab page.
         unsafe { &*self.0 }
     }
@@ -283,7 +283,7 @@ impl Deref for TabPage {
 
 impl DerefMut for TabPage {
     #[inline(always)]
-    fn deref_mut(&mut self) -> &mut tabpage_T {
+    fn deref_mut(&mut self) -> &mut Tabpage {
         // SAFETY: the constructor's promise — a live tab page.
         unsafe { &mut *self.0 }
     }
@@ -311,7 +311,7 @@ impl Win {
     /// # Safety
     /// `wp` must stay a live window for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(wp: *mut win_T) -> Self {
+    pub const unsafe fn new(wp: *mut Window) -> Self {
         Self(wp)
     }
 
@@ -321,7 +321,7 @@ impl Win {
     /// `wp` must be null, or stay a live window for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(wp: *mut win_T) -> Option<Self> {
+    pub const unsafe fn from_raw(wp: *mut Window) -> Option<Self> {
         if wp.is_null() { None } else { Some(Self(wp)) }
     }
 
@@ -335,7 +335,7 @@ impl Win {
     }
 
     #[inline(always)]
-    pub fn raw(self) -> *mut win_T {
+    pub fn raw(self) -> *mut Window {
         self.0
     }
 
@@ -394,10 +394,14 @@ impl Win {
     pub fn cursor(self) -> PosRef {
         // A field's address is the object's plus a constant, and computing it
         // that way needs no dereference: `wrapping_byte_add` keeps the whole
-        // `win_T`'s provenance, exactly as `&raw mut (*self.0).w_cursor`
+        // `Window`'s provenance, exactly as `&raw mut (*self.0).w_cursor`
         // would, without asking the window to be readable to say where its
         // cursor is.
-        PosRef(self.0.wrapping_byte_add(offset_of!(win_T, w_cursor)).cast())
+        PosRef(
+            self.0
+                .wrapping_byte_add(offset_of!(Window, w_cursor))
+                .cast(),
+        )
     }
 
     /// The buffer this window shows, `None` for the moment between losing one
@@ -534,7 +538,7 @@ impl Buf {
     /// # Safety
     /// `buf` must stay a live buffer for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(buf: *mut buf_T) -> Self {
+    pub const unsafe fn new(buf: *mut Buffer) -> Self {
         Self(buf)
     }
 
@@ -544,7 +548,7 @@ impl Buf {
     /// `buf` must be null, or stay a live buffer for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(buf: *mut buf_T) -> Option<Self> {
+    pub const unsafe fn from_raw(buf: *mut Buffer) -> Option<Self> {
         if buf.is_null() { None } else { Some(Self(buf)) }
     }
 
@@ -558,7 +562,7 @@ impl Buf {
     }
 
     #[inline(always)]
-    pub fn raw(self) -> *mut buf_T {
+    pub fn raw(self) -> *mut Buffer {
         self.0
     }
 
@@ -632,7 +636,7 @@ impl FrameRef {
     /// # Safety
     /// `fp` must stay a live frame for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(fp: *mut frame_T) -> Self {
+    pub const unsafe fn new(fp: *mut Frame) -> Self {
         Self(fp)
     }
 
@@ -642,12 +646,12 @@ impl FrameRef {
     /// `fp` must be null, or stay a live frame for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(fp: *mut frame_T) -> Option<Self> {
+    pub const unsafe fn from_raw(fp: *mut Frame) -> Option<Self> {
         if fp.is_null() { None } else { Some(Self(fp)) }
     }
 
     #[inline(always)]
-    pub fn raw(self) -> *mut frame_T {
+    pub fn raw(self) -> *mut Frame {
         self.0
     }
 
@@ -705,7 +709,7 @@ impl TabPage {
     /// # Safety
     /// `tp` must stay a live tab page for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(tp: *mut tabpage_T) -> Self {
+    pub const unsafe fn new(tp: *mut Tabpage) -> Self {
         Self(tp)
     }
 
@@ -716,7 +720,7 @@ impl TabPage {
     /// `tp` must be null, or stay a live tab page for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(tp: *mut tabpage_T) -> Option<Self> {
+    pub const unsafe fn from_raw(tp: *mut Tabpage) -> Option<Self> {
         if tp.is_null() { None } else { Some(Self(tp)) }
     }
 
@@ -730,7 +734,7 @@ impl TabPage {
     }
 
     #[inline(always)]
-    pub fn raw(self) -> *mut tabpage_T {
+    pub fn raw(self) -> *mut Tabpage {
         self.0
     }
 

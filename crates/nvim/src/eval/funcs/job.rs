@@ -43,9 +43,9 @@ use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
-    Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
+    Arena, Buffer, Callback, CallbackReader, Channel, ChannelStdinMode, Dict, DictItem, Error,
     EvalFuncData, IOSIZE, Integer, List, ListItem, MAXPATHL, NUL, Object, TypVal, VAR_BOOL,
-    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, Vv, buf_T, typval_vval_union,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, Vv, typval_vval_union,
     uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
@@ -659,7 +659,7 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 ///
 /// # Safety
 /// `buf` is a live buffer and `err` a live out-parameter.
-unsafe fn set_buf_var(buf: *mut buf_T, name: &CStr, value: Integer, err: &mut Error) {
+unsafe fn set_buf_var(buf: *mut Buffer, name: &CStr, value: Integer, err: &mut Error) {
     let value = Object::Integer(value);
     let arena = ptr::null_mut::<Arena>();
     // SAFETY: the caller's obligation; the name is `'static`.

@@ -267,7 +267,7 @@ pub(crate) struct LineSetup {
 
     // -- diff mode -----------------------------------------------------------
     /// The changed byte ranges of this line, in diff mode.
-    pub(crate) line_changes: diffline_T,
+    pub(crate) line_changes: DiffLine,
     /// Which of them the loop is at, or `-1` when there are none.
     pub(crate) change_index: ::core::ffi::c_int,
     /// First byte of the change the loop is at.
@@ -418,7 +418,7 @@ pub(crate) unsafe fn get_rightmost_vcol(
 /// `wp` must be a live window.
 pub(crate) unsafe fn margin_columns_win(wp: Win) -> (::core::ffi::c_int, ::core::ffi::c_int) {
     static SAVED_W_VIRTCOL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
-    static PREV_WP: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+    static PREV_WP: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
     static PREV_WIDTH1: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static PREV_WIDTH2: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
     static PREV_LEFT_COL: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);

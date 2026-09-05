@@ -16,7 +16,7 @@ use super::*;
 use crate::main::{Rows, curwin, p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
-use crate::types::{OptInt, OptVal, OptionSetFlags, frame_T};
+use crate::types::{Frame, OptInt, OptVal, OptionSetFlags};
 use crate::winlayer::{FrameRef, Win};
 
 // ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ fn step_over_fixed(frp: FrameRef, topfirst: bool, wfh: bool) -> Option<FrameRef>
 }
 
 pub unsafe fn frame_new_height(
-    topfrp: *mut frame_T,
+    topfrp: *mut Frame,
     height: ::core::ffi::c_int,
     topfirst: bool,
     wfh: bool,

@@ -113,9 +113,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData, ExtmarkOp, FILE,
-    FileInfo, LineNr, List, ListItem, OptInt, OptVal, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX,
-    QfListType, ScriptId, TypVal, VarNumber, VarType, aco_save_T, bln_values, buf_T,
+    Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData, ExtmarkOp,
+    FILE, FileInfo, LineNr, List, ListItem, OptInt, OptVal, QFLT_INTERNAL, QFLT_LOCATION,
+    QFLT_QUICKFIX, QfListType, ScriptId, TypVal, VarNumber, VarType, aco_save_T, bln_values,
     dobuf_action_values, exarg_T, getf_values, optset_T, pos_T, ptrdiff_t, qf_info_T, qf_list_T,
     qfline_T, regmatch_T, regmmatch_T, regprog_T, size_t, time_t, typval_vval_union, vimconv_T,
 };

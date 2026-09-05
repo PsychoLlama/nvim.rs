@@ -100,7 +100,7 @@ pub unsafe fn f_getbufinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     // `rettv` for the whole walk, and `tv_dict_find` hands back a live entry
     // of the dictionary the argument holds.
     let list = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
-    let mut argbuf: *mut buf_T = ptr::null_mut();
+    let mut argbuf: *mut Buffer = ptr::null_mut();
     let mut filter = Filter::default();
     if args.ty(0) == VAR_DICT {
         let sel_d = args.get(0).dict_or_null();

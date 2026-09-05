@@ -49,7 +49,7 @@ use crate::state::MODE_INSERT;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     ChangedtickDictItem, CmdModFlags, ColNr, DictItem, Failed, LineNr, NUL, OptInt, ShmFlag,
-    Terminal, TypVal, VAR_NUMBER, VarLock, time_t, typval_vval_union, uint8_t, uint64_t, win_T,
+    Terminal, TypVal, VAR_NUMBER, VarLock, Window, time_t, typval_vval_union, uint8_t, uint64_t,
 };
 use crate::undo::u_sync;
 use crate::window::{get_last_winid, win_valid};
@@ -69,7 +69,7 @@ fn last_winid() -> c_int {
 /// `win_valid` walks the window list comparing pointers and never
 /// dereferences its argument, so asking about a possibly-closed window is a
 /// safe operation.
-fn valid_win(win: *mut win_T) -> Option<Win> {
+fn valid_win(win: *mut Window) -> Option<Win> {
     // SAFETY: the pointer is only compared; a hit means a live window.
     unsafe { win_valid(win).then(|| Win::new(win)) }
 }
@@ -262,7 +262,7 @@ pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
     // The other half of the rule: ask the registry by the identity taken
     // above, not the buffer list by `buf`'s address. Stricter, too — a buffer
     // wiped and a new one allocated at the same address would pass an address
-    // comparison, the hazard `bufref_T` carries `br_buf_free_count` for.
+    // comparison, the hazard `BufferRef` carries `br_buf_free_count` for.
     let valid = buf_id.valid();
     if valid && buf.raw() != curbuf.get() && !aborting_now() || cur_win().w_buffer.is_null() {
         // autocommands changed curbuf and we will move to another buffer soon,
@@ -326,7 +326,7 @@ fn leave_prevbuf(
     let win = if prevraw == cur_win().w_buffer {
         curwin.get()
     } else {
-        ptr::null_mut::<win_T>()
+        ptr::null_mut::<Window>()
     };
     let how = if unload {
         action

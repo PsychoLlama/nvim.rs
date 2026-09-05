@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, ColNr, DictItem, GArray, Handle, HashTab, LineNr, Refcount, Timestamp, WinInfo,
-    fmark_T, fmarkv_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
+    Callback, ColNr, DictItem, GArray, Handle, HashTab, LineNr, Refcount, SynBlock, Tabpage,
+    Timestamp, WinInfo, Window, fmark_T, fmarkv_T, memfile_T, pos_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -84,15 +84,15 @@ const ZERO_FMARK: fmark_T = fmark_T {
 /// `win_valid_any_tab` walks the window lists comparing pointers and never
 /// dereferences its argument, so asking about a possibly-freed window is a
 /// safe operation -- and a hit means it is live.
-fn valid_win(win: *mut win_T) -> Option<Win> {
+fn valid_win(win: *mut Window) -> Option<Win> {
     // SAFETY: the pointer is only compared; a hit means a live window.
     unsafe { win_valid_any_tab(win).then(|| Win::new(win)) }
 }
 
 /// Whether `win` is the only non-floating window of its tab page.
-fn is_only_window(win: *mut win_T) -> bool {
+fn is_only_window(win: *mut Window) -> bool {
     // SAFETY: as [`valid_win`], `one_window` only compares the pointer.
-    unsafe { one_window(win, ptr::null_mut::<tabpage_T>()) }
+    unsafe { one_window(win, ptr::null_mut::<Tabpage>()) }
 }
 
 /// Make `win` in `tp` current again, without firing autocommands.
@@ -195,7 +195,7 @@ fn free_undo(buf: Buf) {
     u_clearallandblockfree(buf);
 }
 
-fn clear_syntax(syn: &mut synblock_T) {
+fn clear_syntax(syn: &mut SynBlock) {
     // SAFETY: the syntax block of a live buffer.
     unsafe { syntax_clear(syn) };
 }
@@ -224,7 +224,7 @@ fn buf_vars(mut buf: Buf) -> *mut HashTab {
 
 /// Free every buffer-local variable.
 ///
-/// `b:changedtick` lives in a field of `buf_T` rather than in the dictionary's
+/// `b:changedtick` lives in a field of `Buffer` rather than in the dictionary's
 /// own storage, so it is removed from the hash table first: clearing it would
 /// go through `clear_tv()` and zero the counter.
 fn clear_buf_vars(buf: Buf) {
@@ -264,7 +264,7 @@ fn forget_autocmds(buf: Buf) {
 /// promise that everything in it is live. Dropping what this answers is the
 /// free; [`free_buffer`] holds it until the point the `xfree` used to be.
 #[must_use = "dropping the answer is the free"]
-fn forget_handle(fnum: Handle) -> Owned<buf_T> {
+fn forget_handle(fnum: Handle) -> Owned<Buffer> {
     // Every buffer reaching a free path was registered when it was given its
     // number, and a number is given exactly once.
     forget_buffer(fnum).expect("a buffer being freed is a registered buffer")
@@ -400,7 +400,7 @@ pub fn close_buffer(
 }
 
 fn close_buffer_inner(
-    win: *mut win_T,
+    win: *mut Window,
     mut buf: Buf,
     action: c_int,
     abort_if_last: bool,
@@ -563,7 +563,7 @@ fn close_buffer_inner(
 fn leave_last_window(
     mut buf: Buf,
     bufref: BufRef,
-    win: *mut win_T,
+    win: *mut Window,
     how: &Disposition,
     abort_if_last: bool,
 ) -> Option<Buf> {
@@ -596,7 +596,7 @@ fn leave_last_window(
 
 /// Go back to the window the caller started in, if an autocommand left us
 /// somewhere else and it still exists.
-fn restore_curwin(was_curwin: bool, the_curwin: *mut win_T, the_curtab: *mut tabpage_T) {
+fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, the_curtab: *mut Tabpage) {
     if !was_curwin || curwin.get() == the_curwin {
         return;
     }
@@ -799,7 +799,7 @@ fn free_buffer(mut buf: Buf) {
     // address to work through; `owned` is only who gives the memory back.
     let owned = forget_handle(buf.handle());
     note_buffer_freed();
-    // b:changedtick uses an item in buf_T.
+    // b:changedtick uses an item in Buffer.
     free_buffer_stuff(buf, kBffClearWinInfo as c_int);
     // SAFETY: a live buffer's variable dictionary is live.
     if unsafe { (*buf.b_vars).dv_refcount } > Refcount::new(DO_NOT_FREE_CNT as c_int) {
@@ -829,7 +829,7 @@ fn free_buffer(mut buf: Buf) {
         buf.b_changelist = [ZERO_FMARK; 100];
         defer_free_buffer(owned);
     } else {
-        // The free: `buf_T`'s destructor runs and the memory goes back.
+        // The free: `Buffer`'s destructor runs and the memory goes back.
         drop(owned);
         if curbuf.get() == buf.raw() {
             curbuf.set(ptr::null_mut()); // make clear it's not to be used

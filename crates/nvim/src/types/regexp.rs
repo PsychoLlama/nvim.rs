@@ -32,8 +32,8 @@ pub type RegExecNl =
 pub type RegExecMulti = Option<
     unsafe fn(
         *mut regmmatch_T,
-        *mut win_T,
-        *mut buf_T,
+        *mut Window,
+        *mut Buffer,
         LineNr,
         ColNr,
         *mut ProfTime,

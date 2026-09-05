@@ -64,7 +64,7 @@ unsafe fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
 /// -1 nothing reaches a file: that pass only exists to find out whether the
 /// conversion works.
 pub(crate) unsafe fn write_lines(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     range: (LineNr, LineNr),
     writer: &mut ByteWriter,
     fileformat: c_int,
@@ -182,7 +182,7 @@ pub(crate) unsafe fn write_lines(
 
 /// Build and show the message a successful write ends with.
 pub(crate) unsafe fn report_written(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fname: *mut c_char,
     written: &Written,
     notes: &WriteNotes,

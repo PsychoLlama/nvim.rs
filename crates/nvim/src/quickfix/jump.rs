@@ -275,7 +275,7 @@ unsafe fn qf_jump_print_msg(
     qi: *mut qf_info_T,
     qf_index: c_int,
     qf_ptr: *mut qfline_T,
-    old_curbuf: *mut buf_T,
+    old_curbuf: *mut Buffer,
     old_lnum: LineNr,
 ) {
     // SAFETY: the caller's promise -- a live entry on a live stack.

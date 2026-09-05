@@ -15,7 +15,7 @@ use crate::pos::MAXCOL;
 use crate::types::{ExpandContext, NUL};
 
 /// Does this window's block define any syntax at all?
-pub(crate) unsafe fn syntax_present(win: *mut win_T) -> bool {
+pub(crate) unsafe fn syntax_present(win: *mut Window) -> bool {
     unsafe {
         !(*(*win).w_s).b_syn_patterns.is_empty()
             || !(*(*win).w_s).b_syn_clusters.is_empty()
@@ -160,7 +160,7 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_ch
 /// applies there; `keep_state` keeps the state of the character at `col` so
 /// that [`syn_get_stack_item`] can be asked about it afterwards.
 pub(crate) unsafe fn syn_get_id(
-    wp: *mut win_T,
+    wp: *mut Window,
     lnum: LineNr,
     col: ColNr,
     trans: c_int,
@@ -228,7 +228,7 @@ fn syn_cur_foldlevel() -> c_int {
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
-pub(crate) unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: LineNr) -> c_int {
+pub(crate) unsafe fn syn_get_foldlevel(wp: *mut Window, lnum: LineNr) -> c_int {
     let mut level = 0;
 
     // Answer quickly when there are no fold items at all.

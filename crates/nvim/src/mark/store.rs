@@ -10,7 +10,7 @@
 //! | `b_last_cursor` / `b_last_insert` / `b_last_change` / `b_prompt_start` | `fmark_T` | a buffer |
 //! | `b_changelist` | `fmark_T` | a buffer |
 //! | `w_jumplist` | `xfmark_T` | a window |
-//! | `w_tagstack` | `taggy_T`, whose `fmark` is one | a window |
+//! | `w_tagstack` | `Taggy`, whose `fmark` is one | a window |
 //!
 //! Every walk over any of them was written out as a cast-and-offset —
 //! `(&raw mut (*buf).b_namedm as *mut fmark_T).offset(i as isize)` and its
@@ -480,7 +480,7 @@ impl Win {
     /// The file mark of the `i`th tag stack entry.
     pub(super) fn tag_mark(self, i: c_int) -> Fmark {
         let i = slot(i, self.w_tagstack.len());
-        // SAFETY: a live window holds a live `[taggy_T; 20]`, and `i` is
+        // SAFETY: a live window holds a live `[Taggy; 20]`, and `i` is
         // inside it.
         unsafe { Fmark::new(&raw mut (*self.raw()).w_tagstack[i].fmark) }
     }

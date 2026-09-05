@@ -31,7 +31,7 @@ const STAR: c_char = b'*'.cast_signed();
 /// # Safety
 /// `buf` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_set_sign(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     id: *mut uint32_t,
     group: *const c_char,
     prio: c_int,
@@ -109,7 +109,7 @@ unsafe fn buf_set_sign(
 /// # Safety
 /// `buf` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_mod_sign(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     id: *mut uint32_t,
     group: *const c_char,
     prio: c_int,
@@ -152,7 +152,7 @@ unsafe fn placed_ns(group: *const c_char) -> Option<uint32_t> {
 ///
 /// # Safety
 /// `buf` must be live; `group` must be null or NUL-terminated.
-unsafe fn buf_findsign(buf: *mut buf_T, id: c_int, group: *const c_char) -> c_int {
+unsafe fn buf_findsign(buf: *mut Buffer, id: c_int, group: *const c_char) -> c_int {
     // SAFETY: the caller's group name.
     let Some(ns) = (unsafe { placed_ns(group) }) else {
         return 0;
@@ -238,7 +238,7 @@ pub(super) enum Keep {
 /// # Safety
 /// `buf` must be live; `group` must be null or NUL-terminated.
 unsafe fn buf_delete_signs(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     group: *const c_char,
     id: c_int,
     atlnum: LineNr,
@@ -313,7 +313,7 @@ unsafe fn buf_delete_signs(
 ///
 /// # Safety
 /// `buf` must be live.
-pub(crate) unsafe fn buf_has_signs(buf: *const buf_T) -> bool {
+pub(crate) unsafe fn buf_has_signs(buf: *const Buffer) -> bool {
     // SAFETY: the caller's buffer.
     let buf = unsafe { Buf::new(buf.cast_mut()) };
     buf.meta_total(kMTMetaSignHL) + buf.meta_total(kMTMetaSignText) != 0
@@ -332,7 +332,7 @@ pub(crate) unsafe fn sign_place(
     id: *mut uint32_t,
     group: *const c_char,
     name: *mut c_char,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     prio: c_int,
 ) -> Result<(), Failed> {
@@ -378,7 +378,7 @@ pub(crate) unsafe fn sign_place(
 /// # Safety
 /// `buf` must be live; `group` must be null or NUL-terminated.
 unsafe fn sign_unplace_inner(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     id: c_int,
     group: *const c_char,
     atlnum: LineNr,
@@ -411,7 +411,7 @@ unsafe fn sign_unplace_inner(
 /// # Safety
 /// `buf` must be null or live; `group` must be null or NUL-terminated.
 pub(crate) unsafe fn sign_unplace(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     id: c_int,
     group: *const c_char,
     atlnum: LineNr,
@@ -437,7 +437,7 @@ pub(crate) unsafe fn sign_unplace(
 ///
 /// # Safety
 /// `buf` must be live; `group` must be null or NUL-terminated.
-pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut buf_T) -> LineNr {
+pub(crate) unsafe fn sign_jump(id: c_int, group: *const c_char, buf: *mut Buffer) -> LineNr {
     // SAFETY: the caller's buffer and group.
     let lnum = unsafe { buf_findsign(buf, id, group) };
     if lnum <= 0 {

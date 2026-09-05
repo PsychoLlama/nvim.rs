@@ -27,7 +27,7 @@ use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{Cleanup, Exception, FAIL, Failed, LineNr, OptInt, exarg_T, win_T};
+use crate::types::{Cleanup, Exception, FAIL, Failed, LineNr, OptInt, Window, exarg_T};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
@@ -82,12 +82,12 @@ fn goto_tab(tp: TabPage) {
 }
 
 /// The last non-floating window of the current tab page.
-fn last_nofloat() -> *mut win_T {
+fn last_nofloat() -> *mut Window {
     // SAFETY: null asks for the current tab page.
     unsafe { lastwin_nofloating(ptr::null_mut()) }
 }
 
-fn enter_win(win: *mut win_T) {
+fn enter_win(win: *mut Window) {
     // SAFETY: a live window.
     unsafe { win_enter(win, false) };
 }
@@ -114,7 +114,7 @@ fn is_locked(win: Win) -> bool {
 /// Whether `win` is still in the window list -- asked about a pointer
 /// autocommands may already have freed, which is why it does not take a
 /// [`Win`].
-fn is_valid(win: *mut win_T) -> bool {
+fn is_valid(win: *mut Window) -> bool {
     // SAFETY: `win_valid` walks the window list and does not dereference its
     // argument.
     win_valid(win)

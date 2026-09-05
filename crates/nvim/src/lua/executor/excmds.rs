@@ -30,7 +30,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    ColNr, FileDescriptor, IOSIZE, LineNr, TypVal, buf_T, exarg_T, lua_Number, size_t,
+    Buffer, ColNr, FileDescriptor, IOSIZE, LineNr, TypVal, exarg_T, lua_Number, size_t,
 };
 use crate::undo::u_save;
 
@@ -144,7 +144,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
             return;
         }
 
-        let was_curbuf: *mut buf_T = curbuf.get();
+        let was_curbuf: *mut Buffer = curbuf.get();
         let mut l: LineNr = (*eap).line1;
         while l <= (*eap).line2 {
             if l > (*curbuf.get()).b_ml.ml_line_count {

@@ -34,13 +34,13 @@ What it refuses to touch, and why:
   &mut (*curwin.get()).w_cursor.lnum
 
     `&raw mut cur_win().w_cursor` derives its provenance from the transient
-    `&mut win_T` that `DerefMut` hands out, and the next read of `curwin`
+    `&mut Window` that `DerefMut` hands out, and the next read of `curwin`
     would invalidate it under Miri's aliasing model. Use the projection that
     already exists (`Win::cursor()` covers 42 of the 85 such sites) or leave
     the line alone.
 
     An ordinary `&mut (*curwin.get()).f` is refused for the same reason in a
-    shorter window: `DerefMut` reborrows the *whole* `win_T`, so passing one
+    shorter window: `DerefMut` reborrows the *whole* `Window`, so passing one
     field to a callee that reads any other part of `curwin` aliases. Convert
     it only after reading the callee, and say so in the SAFETY note.
 

@@ -168,7 +168,7 @@ pub(crate) struct Cells {
 
     // -- diff mode -----------------------------------------------------------
     /// The changed byte ranges of this line.
-    pub(super) line_changes: diffline_T,
+    pub(super) line_changes: DiffLine,
     /// Which of them the loop is at, or `-1` when there are none.
     pub(super) change_index: ::core::ffi::c_int,
     /// First byte of the change the loop is at.
@@ -446,7 +446,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         wp: Win,
-        buf: *mut buf_T,
+        buf: *mut Buffer,
         f: &LineFrame,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.

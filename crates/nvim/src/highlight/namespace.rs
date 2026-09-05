@@ -47,7 +47,7 @@ use crate::popupmenu::pum_drawn;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,
-    LuaRetMode, NS, Object, win_T,
+    LuaRetMode, NS, Object, Window,
 };
 use crate::winlayer::Win;
 use core::ffi::c_int;
@@ -335,7 +335,7 @@ pub unsafe fn hl_check_ns() -> bool {
 ///
 /// # Safety
 /// `wp` is null or a live window; main thread only.
-pub unsafe fn win_check_ns_hl(wp: *mut win_T) -> bool {
+pub unsafe fn win_check_ns_hl(wp: *mut Window) -> bool {
     // SAFETY: the caller's promise -- null, or a live window.
     let wp = unsafe { Win::from_raw(wp) };
     ns_hl_win.set(wp.map_or(-1, |wp| wp.w_ns_hl));
@@ -421,7 +421,7 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
 ///
 /// # Safety
 /// `wp` is a live window; main thread only.
-pub unsafe fn update_window_hl(wp: *mut win_T, invalid: bool) {
+pub unsafe fn update_window_hl(wp: *mut Window, invalid: bool) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window and the editor's own tables.
@@ -543,7 +543,7 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 ///
 /// # Safety
 /// `wp` is a live window; main thread only.
-pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
+pub unsafe fn win_bg_attr(wp: *mut Window) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window and the active namespace table.
@@ -572,7 +572,7 @@ pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
 /// # Safety
 /// `wp` is a live window; main thread only.
 #[inline]
-pub unsafe fn win_hl_attr(wp: *mut win_T, hlf: c_int) -> c_int {
+pub unsafe fn win_hl_attr(wp: *mut Window, hlf: c_int) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if

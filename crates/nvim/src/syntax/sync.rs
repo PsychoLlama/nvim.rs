@@ -28,7 +28,7 @@ use crate::types::NUL;
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
-pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: LineNr, last_valid: *mut synstate_T) {
+pub(crate) unsafe fn syn_sync(wp: *mut Window, start_lnum: LineNr, last_valid: *mut synstate_T) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
@@ -75,7 +75,7 @@ unsafe fn sync_backoff(start_lnum: LineNr) -> LineNr {
 
 /// Search backwards for the end of a C-style comment, and if the start line
 /// turns out to be inside one, push the syntax item that defines it.
-unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: LineNr) {
+unsafe fn sync_by_ccomment(wp: *mut Window, mut start_lnum: LineNr) {
     // `find_start_comment` works on the current buffer, so make syn_buf it
     // for a moment.
     let curwin_save = curwin.get();

@@ -95,7 +95,7 @@ fn a_link_round_trips_through_its_four_byte_field() {
 // points through LuaJIT's FFI. The Lua fixture built its buffer with
 // `buflist_new()` and read `b_ffname` back off it; that is what forced
 // `file_buffer`'s C layout to stay frozen, and it is the only thing the port
-// does differently — a zeroed `buf_T` with the two fields the writer reads
+// does differently — a zeroed `Buffer` with the two fields the writer reads
 // set by hand says the same thing about `u_write_undo` without pinning a
 // layout. Everything else is the same call with the same assertion.
 //
@@ -114,7 +114,7 @@ mod write {
 
     use neovim::main::{curbuf, p_udir};
     use neovim::memory::xfree;
-    use neovim::types::buf_T;
+    use neovim::types::Buffer;
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
     use neovim::winlayer::Buf;
@@ -131,13 +131,13 @@ mod write {
         // serialise these cases against each other and against nothing else.
         _guard: Editor,
         dir: PathBuf,
-        buf: Box<buf_T>,
+        buf: Box<Buffer>,
         hash: [u8; UNDO_HASH_SIZE as usize],
         // Owns the bytes `p_udir`/`b_ffname` point at for the case's life.
         _udir: CString,
         ffname: Option<CString>,
         old_udir: *mut c_char,
-        old_curbuf: *mut buf_T,
+        old_curbuf: *mut Buffer,
     }
 
     impl Fixture {
@@ -151,10 +151,10 @@ mod write {
             // `buflist_new()` leaves a fresh buffer synced with no undo
             // header; the spec then set `b_u_numhead` to pretend the buffer
             // had been changed, which is what makes the writer write.
-            let mut buf: Box<buf_T> = {
-                let mut storage = Box::<buf_T>::new_zeroed();
+            let mut buf: Box<Buffer> = {
+                let mut storage = Box::<Buffer>::new_zeroed();
                 // SAFETY: all-zero bytes are what upstream's `xcalloc` hands
-                // a fresh buffer, and the one field a zeroed `buf_T` is
+                // a fresh buffer, and the one field a zeroed `Buffer` is
                 // *not* a valid value for -- `b_ucmds`, whose empty `Vec`
                 // holds a non-null dangling pointer -- is written before
                 // anything can read or drop it.

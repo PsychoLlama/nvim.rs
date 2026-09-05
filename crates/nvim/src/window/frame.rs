@@ -19,7 +19,7 @@ use super::*;
 use crate::guard::Lock;
 use crate::main::{cmdline_win, first_tabpage, lastused_tabpage, p_sb, p_spr, tcl_flags};
 use crate::options::{kOptTclFlagLeft, kOptTclFlagUselast};
-use crate::types::{frame_T, tabpage_T, win_T};
+use crate::types::{Frame, Tabpage, Window};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::{FrameRef, TabPage, Win, tabs};
 
@@ -56,17 +56,17 @@ pub(crate) fn free_mem(win: Win, tp: Option<TabPage>) -> (Option<Win>, c_int) {
         win_tp.tp_curwin = wp.map_or(ptr::null_mut(), Win::raw);
     }
     if win.raw() == cmdline_win.get() {
-        cmdline_win.set(ptr::null_mut::<win_T>());
+        cmdline_win.set(ptr::null_mut::<Window>());
     }
     (wp, dir)
 }
 
 pub unsafe fn winframe_remove(
-    win: *mut win_T,
+    win: *mut Window,
     dirp: *mut c_int,
-    tp: *mut tabpage_T,
-    unflat_altfr: *mut *mut frame_T,
-) -> *mut win_T {
+    tp: *mut Tabpage,
+    unflat_altfr: *mut *mut Frame,
+) -> *mut Window {
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
     // and writable out-parameters (`unflat_altfr` may be null).
     unsafe {
@@ -88,7 +88,7 @@ pub unsafe fn winframe_remove(
 fn remove(
     win: Win,
     tp: Option<TabPage>,
-    unflat_altfr: Option<&mut *mut frame_T>,
+    unflat_altfr: Option<&mut *mut Frame>,
 ) -> (Option<Win>, c_int) {
     let Some(alt) = find_altwin(win, tp) else {
         return (None, 0);
@@ -131,11 +131,11 @@ fn remove(
 }
 
 pub unsafe fn winframe_find_altwin(
-    win: *mut win_T,
+    win: *mut Window,
     dirp: *mut c_int,
-    tp: *mut tabpage_T,
-    altfr: *mut *mut frame_T,
-) -> *mut win_T {
+    tp: *mut Tabpage,
+    altfr: *mut *mut Frame,
+) -> *mut Window {
     // SAFETY: the caller's promise -- a live window, a live tab page or null,
     // and writable out-parameters (`altfr` may be null).
     unsafe {
@@ -286,7 +286,7 @@ pub(crate) fn flatten(frp: FrameRef) {
     free(parent.raw());
 }
 
-pub unsafe fn winframe_restore(wp: *mut win_T, dir: c_int, unflat_altfr: *mut frame_T) {
+pub unsafe fn winframe_restore(wp: *mut Window, dir: c_int, unflat_altfr: *mut Frame) {
     // SAFETY: the caller's promise -- a live window and the live frame
     // `winframe_remove` handed back unflattened.
     unsafe { restore(Win::new(wp), dir, FrameRef::new(unflat_altfr)) };
@@ -391,7 +391,7 @@ pub(crate) fn alt_tab_page() -> TabPage {
     }
 }
 
-pub unsafe fn frame2win(frp: *mut frame_T) -> *mut win_T {
+pub unsafe fn frame2win(frp: *mut Frame) -> *mut Window {
     // SAFETY: the caller's promise -- a live frame.
     frame2window(unsafe { FrameRef::new(frp) }).raw()
 }

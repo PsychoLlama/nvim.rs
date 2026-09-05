@@ -1,6 +1,6 @@
 //! The diff block list, and which buffers are in it.
 //!
-//! A tabpage owns a linked list of `diff_T` blocks, each naming a line range
+//! A tabpage owns a linked list of `DiffBlock` blocks, each naming a line range
 //! in every one of the (up to eight) buffers `tp_diffbuf` holds.  This file
 //! owns both halves: [`diff_buf_add`]/[`diff_buf_delete`]/[`diff_buf_idx`]
 //! are the registry, and [`diff_alloc_new`]/[`diff_free`]/
@@ -21,7 +21,7 @@ use core::ffi::c_int;
 use std::ffi::CStr;
 
 /// Free one block, its cached inline changes included.
-pub(crate) unsafe fn clear_diffblock(dp: *mut diff_T) {
+pub(crate) unsafe fn clear_diffblock(dp: *mut DiffBlock) {
     // SAFETY: the caller's block, which nothing else points at; its cached
     // changes go with it.
     drop(unsafe { Box::from_raw(dp) });
@@ -181,7 +181,7 @@ unsafe fn diff_mark_adjust_tp(
     // Slide the *other* buffers' ranges by the same edit: `off` is how
     // far the block's start moved up, `n` how many lines they gain --
     // which is how a deletion in one buffer becomes a change in the rest.
-    let adjust_others = |dp: *mut diff_T, off: LineNr, n: LineNr| {
+    let adjust_others = |dp: *mut DiffBlock, off: LineNr, n: LineNr| {
         for i in 0..DB_COUNT as usize {
             if tp.tp_diffbuf[i].is_null() || i == idx {
                 continue;
@@ -192,7 +192,7 @@ unsafe fn diff_mark_adjust_tp(
     };
 
     // Fold `dp` into `dprev` if they now touch, else step past it.
-    let merge_or_advance = |dprev: *mut diff_T, dp: *mut diff_T| {
+    let merge_or_advance = |dprev: *mut DiffBlock, dp: *mut DiffBlock| {
         if !dprev.is_null()
             && !unsafe { (*dp).is_linematched }
             && !diff_busy.get()
@@ -210,7 +210,7 @@ unsafe fn diff_mark_adjust_tp(
         }
     };
 
-    let mut dprev = ::core::ptr::null_mut::<diff_T>();
+    let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
     let mut dp = tp.tp_first_diff;
     let mut lnum_deleted = line1; // lnum of the remaining deletion
     loop {
@@ -338,7 +338,7 @@ unsafe fn diff_mark_adjust_tp(
     }
 
     // A block every buffer now has nothing in is not a change any more.
-    let mut dprev = ::core::ptr::null_mut::<diff_T>();
+    let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
     let mut dp = tp.tp_first_diff;
     while !dp.is_null() {
         let empty = (0..DB_COUNT as usize)
@@ -363,10 +363,10 @@ unsafe fn diff_mark_adjust_tp(
 /// Insert a fresh, empty block between `dprev` and `dp`.
 pub(crate) unsafe fn diff_alloc_new(
     mut tp: TabPage,
-    dprev: *mut diff_T,
-    dp: *mut diff_T,
-) -> *mut diff_T {
-    let dnew = Box::into_raw(Box::new(diff_T::new(dp)));
+    dprev: *mut DiffBlock,
+    dp: *mut DiffBlock,
+) -> *mut DiffBlock {
+    let dnew = Box::into_raw(Box::new(DiffBlock::new(dp)));
     if dprev.is_null() {
         tp.tp_first_diff = dnew;
     } else {
@@ -378,9 +378,9 @@ pub(crate) unsafe fn diff_alloc_new(
 /// Unlink and free `dp`, answering the block that follows it.
 pub(crate) unsafe fn diff_free(
     mut tp: TabPage,
-    dprev: *mut diff_T,
-    dp: *mut diff_T,
-) -> *mut diff_T {
+    dprev: *mut DiffBlock,
+    dp: *mut DiffBlock,
+) -> *mut DiffBlock {
     let next = unsafe { (*dp).df_next };
     unsafe { clear_diffblock(dp) };
     if dprev.is_null() {
@@ -396,7 +396,7 @@ pub(crate) unsafe fn diff_free(
 ///
 /// An edit can leave a block claiming lines that did not actually change; the
 /// diff is not recomputed for that, so the block is trimmed instead.
-unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut diff_T) {
+unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut DiffBlock) {
     let Some(i_org) = (0..DB_COUNT as usize).find(|&i| !tp.tp_diffbuf[i].is_null()) else {
         return;
     };
@@ -461,7 +461,7 @@ unsafe fn diff_check_unchanged(tp: TabPage, dp: *mut diff_T) {
 ///
 /// An edit can leave a block naming lines that no longer exist, and every
 /// reader of a block has to check first.
-pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut diff_T) -> Result<(), Failed> {
+pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut DiffBlock) -> Result<(), Failed> {
     for i in 0..DB_COUNT as usize {
         let buf = tp.tp_diffbuf[i];
         if !buf.is_null()
@@ -477,8 +477,8 @@ pub(crate) unsafe fn diff_check_sanity(tp: TabPage, dp: *mut diff_T) -> Result<(
 /// Give buffer `idx_new` the same range as `idx_orig`, corrected for the
 /// drift the previous block left behind.
 pub(crate) unsafe fn diff_copy_entry(
-    dprev: *mut diff_T,
-    dp: *mut diff_T,
+    dprev: *mut DiffBlock,
+    dp: *mut DiffBlock,
     idx_orig: usize,
     idx_new: usize,
 ) {
@@ -486,7 +486,7 @@ pub(crate) unsafe fn diff_copy_entry(
         0
     } else {
         // SAFETY: the caller's previous block, borrowed rather than copied:
-        // a `diff_T` owns its `df_changes` array and its list links.
+        // a `DiffBlock` owns its `df_changes` array and its list links.
         let prev = unsafe { &*dprev };
         prev.df_lnum[idx_orig] + prev.df_count[idx_orig]
             - (prev.df_lnum[idx_new] + prev.df_count[idx_new])
@@ -510,7 +510,7 @@ pub fn diff_clear(mut tp: TabPage) {
 
 /// The longest of `dp`'s ranges, which is how many screen rows it occupies in
 /// every window: the shorter buffers are padded with filler.
-pub(crate) unsafe fn get_max_diff_length(dp: *const diff_T) -> c_int {
+pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
     (0..DB_COUNT as usize)
         .filter(|&k| !unsafe { (*curtab.get()).tp_diffbuf[k] }.is_null())
         .map(|k| unsafe { (*dp).df_count[k] })
@@ -522,7 +522,7 @@ pub(crate) unsafe fn get_max_diff_length(dp: *const diff_T) -> c_int {
 ///
 /// `:diffget`/`:diffput` run autocommands between reading a block and using
 /// it, and those can rebuild the list underneath.
-pub(crate) unsafe fn valid_diff(diff: *mut diff_T) -> bool {
+pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
     let mut dp = unsafe { (*curtab.get()).tp_first_diff };
     while !dp.is_null() {
         if dp == diff {

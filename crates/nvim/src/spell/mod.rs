@@ -47,8 +47,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    ColNr, LineNr, SpellMoveType, exarg_T, file_comparison, langp_T, oparg_T, pos_T,
-    searchit_arg_T, size_t, slang_T, spelltab_T, uint8_t, win_T,
+    ColNr, LineNr, SpellMoveType, Window, exarg_T, file_comparison, langp_T, oparg_T, pos_T,
+    searchit_arg_T, size_t, slang_T, spelltab_T, uint8_t,
 };
 use crate::undo::u_save_cursor;
 use ::libc::{strcat, strcpy};
@@ -235,7 +235,7 @@ pub struct matchinf_T {
     /// The best result so far, and the capitalisation it assumed.
     pub mi_result: SpellResult,
     pub mi_capflags: WordFlags,
-    pub mi_win: *mut win_T,
+    pub mi_win: *mut Window,
     /// For NOBREAK: the best result reached *without* a good word
     /// following, kept as a fall-back.
     pub mi_result2: SpellResult,

@@ -36,7 +36,7 @@ use crate::types::NUL;
 /// double-width character being overwritten is found), and `maxcells` must be
 /// positive.
 pub(crate) unsafe fn line_putchar(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     pp: &mut *const ::core::ffi::c_char,
     dest: &mut [ScreenChar],
     maxcells: ::core::ffi::c_int,
@@ -103,7 +103,7 @@ fn push_win_extmark(m: WinExtmark) {
 /// ranges for its `row`.
 pub(crate) unsafe fn draw_virt_text(
     wp: Win,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     col_off: ::core::ffi::c_int,
     mut end_col: ::core::ffi::c_int,
     wlv: &WinLineVars,
@@ -250,7 +250,7 @@ pub(crate) unsafe fn draw_virt_text(
 /// `buf` must be live, `vt`'s chunks must be live NUL-terminated strings, and
 /// the line buffers must be at least `max_col` wide.
 pub(crate) unsafe fn draw_virt_text_item(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     mut col: ::core::ffi::c_int,
     vt: VirtText,
     hl_mode: HlMode,

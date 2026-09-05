@@ -35,9 +35,9 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    ApiDict, BufferHandle, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr, MsgList,
-    NUL, ScriptId, String_0, TabpageHandle, TryState, WindowHandle, buf_T, fmarkv_T, int64_t,
-    kErrorTypeException, pos_T, tabpage_T, uint64_t, win_T,
+    ApiDict, Buffer, BufferHandle, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr,
+    MsgList, NUL, ScriptId, String_0, Tabpage, TabpageHandle, TryState, Window, WindowHandle,
+    fmarkv_T, int64_t, kErrorTypeException, pos_T, uint64_t,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -95,18 +95,18 @@ use crate::message_fmt::{c_str, msg_bytes};
 /// The buffer with this id, or null. Unlike [`find_buffer_by_handle`] it has
 /// no "0 means current" rule and reports nothing: it is upstream's
 /// `handle_get_buffer()`, the registry lookup.
-pub(crate) fn handle_get_buffer(handle: Handle) -> *mut buf_T {
+pub(crate) fn handle_get_buffer(handle: Handle) -> *mut Buffer {
     winlayer::buffer(handle).map_or(ptr::null_mut(), Buf::raw)
 }
 
 /// [`handle_get_buffer`] for a window.
-pub(crate) fn handle_get_window(handle: Handle) -> *mut win_T {
+pub(crate) fn handle_get_window(handle: Handle) -> *mut Window {
     winlayer::window(handle).map_or(ptr::null_mut(), Win::raw)
 }
 
 /// The buffer `buffer` names, or the current one for 0. Null — with `err`
 /// set — when it names nothing.
-pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> *mut buf_T {
+pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> *mut Buffer {
     if buffer == 0 {
         return curbuf.get();
     }
@@ -120,7 +120,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error
 }
 
 /// [`find_buffer_by_handle`] for a window.
-pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *mut win_T {
+pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *mut Window {
     if window == 0 {
         return curwin.get();
     }
@@ -134,7 +134,7 @@ pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *m
 }
 
 /// [`find_buffer_by_handle`] for a tab page.
-pub(crate) unsafe fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> *mut tabpage_T {
+pub(crate) unsafe fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> *mut Tabpage {
     if tabpage == 0 {
         return curtab.get();
     }
@@ -342,7 +342,7 @@ impl<T> Reported for T {
 /// 0. False, with `err` set, when the position is out of range or the mark
 /// name is not one that can be set.
 pub(crate) unsafe fn set_mark(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     name: String_0,
     line: Integer,
     col: Integer,
@@ -399,7 +399,7 @@ pub(crate) unsafe fn set_mark(
 /// The highlight group a status line, window bar or status column defaults
 /// to when its 'statusline' text names none. A null window is the tab line.
 pub(crate) fn get_default_stl_hl(
-    wp: *mut win_T,
+    wp: *mut Window,
     use_winbar: bool,
     stc_hl_id: c_int,
 ) -> *const c_char {

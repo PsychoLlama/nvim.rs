@@ -17,7 +17,7 @@ use crate::log::{LOGLVL_INF, logmsg};
 use crate::memory::{xfree, xmemdup};
 use crate::os::pty_proc_unix::{pty_proc_resize, pty_proc_resume};
 use crate::terminal::{terminal_alloc, terminal_destroy};
-use crate::types::{Channel, OptInt, TerminalOptions, buf_T, size_t, uint16_t};
+use crate::types::{Buffer, Channel, OptInt, TerminalOptions, size_t, uint16_t};
 
 use super::{channel_decref, channel_incref, channel_proc, channel_pty};
 
@@ -25,7 +25,7 @@ use super::{channel_decref, channel_incref, channel_proc, channel_pty};
 ///
 /// # Safety
 /// `buf` is a live buffer and `chan` a live pty job channel.
-pub unsafe fn channel_terminal_alloc(buf: *mut buf_T, chan: *mut Channel) {
+pub unsafe fn channel_terminal_alloc(buf: *mut Buffer, chan: *mut Channel) {
     // SAFETY: the caller's live buffer and pty job.
     let pty = unsafe { channel_pty(chan) };
     let topts = TerminalOptions {

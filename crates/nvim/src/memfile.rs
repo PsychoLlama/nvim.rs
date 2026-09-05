@@ -65,7 +65,7 @@ use crate::os::fs::{
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::full_name_save;
-use crate::types::{BlockNr, FileInfo, FileOffset, buf_T};
+use crate::types::{BlockNr, Buffer, FileInfo, FileOffset};
 use crate::winlayer::buffers;
 use ::libc::{__errno_location, close, lseek, strerror};
 
@@ -398,7 +398,7 @@ pub(crate) unsafe fn mf_close(mfp: *mut memfile_T, del_file: bool) {
 ///
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
-pub(crate) unsafe fn mf_close_file(buf: *mut buf_T, getlines: bool) {
+pub(crate) unsafe fn mf_close_file(buf: *mut Buffer, getlines: bool) {
     unsafe {
         let mfp = (*buf).b_ml.ml_mfp;
         if mfp.is_null() || (*mfp).mf_fd < 0 {

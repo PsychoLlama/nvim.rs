@@ -16,8 +16,8 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, aco_save_T, buf_T, kErrorTypeNone,
-    switchwin_T, win_T,
+    Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin, Window,
+    aco_save_T, kErrorTypeNone,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::Win;
@@ -49,11 +49,11 @@ pub(crate) unsafe fn set_option_direct_for(
     let save_curwin = curwin.get();
     match scope {
         kOptScopeWin => {
-            curwin.set(from.cast::<win_T>());
+            curwin.set(from.cast::<Window>());
             // SAFETY: the caller's `from` is a live window.
             curbuf.set(cur_win().w_buffer);
         }
-        kOptScopeBuf => curbuf.set(from.cast::<buf_T>()),
+        kOptScopeBuf => curbuf.set(from.cast::<Buffer>()),
         _ => {}
     }
     set_option_direct(opt_idx, value, opt_flags, set_sid);
@@ -71,7 +71,7 @@ pub(crate) unsafe fn set_option_direct_for(
 pub(crate) enum OptionContext {
     /// Nothing to switch: a global option is the same everywhere.
     Global,
-    Win(switchwin_T),
+    Win(SwitchWin),
     Buf(aco_save_T),
 }
 
@@ -79,7 +79,7 @@ impl OptionContext {
     /// Fresh scratch space for the given scope.
     pub(crate) fn new(scope: OptScope) -> Self {
         match scope {
-            kOptScopeWin => OptionContext::Win(switchwin_T {
+            kOptScopeWin => OptionContext::Win(SwitchWin {
                 sw_curwin: ptr::null_mut(),
                 sw_curtab: ptr::null_mut(),
                 sw_same_win: false,
@@ -103,7 +103,7 @@ impl OptionContext {
         match self {
             OptionContext::Global => false,
             OptionContext::Win(switchwin) => {
-                let win = from.cast::<win_T>();
+                let win = from.cast::<Window>();
                 if win == curwin.get() {
                     return false;
                 }
@@ -119,7 +119,7 @@ impl OptionContext {
                 true
             }
             OptionContext::Buf(aco) => {
-                let buf = from.cast::<buf_T>();
+                let buf = from.cast::<Buffer>();
                 if buf == curbuf.get() {
                     return false;
                 }

@@ -26,7 +26,7 @@
 //! `&mut MarkTreeIter` already carry. With those in hand the five children
 //! are ordinary checked code, and [`splice`] has no `unsafe` at all.
 //!
-//! `buf->b_marktree` and `buf->b_extmark_ns` are *fields of `buf_T`*, so
+//! `buf->b_marktree` and `buf->b_extmark_ns` are *fields of `Buffer`*, so
 //! taking `&mut` to either is safe once the pointer is a [`Buf`] -- the same
 //! borrow-the-field lever `buffer_updates.rs` uses on its two kvecs. Each
 //! borrow is momentary by construction: it lasts for the call that asked for
@@ -56,9 +56,9 @@ use crate::memline::ml_find_line_or_offset;
 use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
-    ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject,
-    LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType, bcount_t, buf_T,
-    extmark_undo_vec_t, int32_t, size_t, u_header_T, uint16_t, uint32_t, uint64_t,
+    Buffer, ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType,
+    ExtmarkUndoObject, LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType,
+    bcount_t, extmark_undo_vec_t, int32_t, size_t, u_header_T, uint16_t, uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -307,7 +307,7 @@ fn ns_del(map: &mut ExtmarkNs, key: uint32_t) {
     map.remove(&key);
 }
 
-/// Forget every namespace. The table is a `buf_T` field, so it keeps its
+/// Forget every namespace. The table is a `Buffer` field, so it keeps its
 /// allocation -- which is what upstream's `map_destroy` plus the `MAP_INIT`
 /// it always wrote over it amounted to.
 fn ns_destroy(map: &mut ExtmarkNs) {
@@ -424,12 +424,12 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
 // The `splice` stage's entry points
 //
 // Their bodies are in [`splice`], which forbids `unsafe` -- so the one line
-// each that turns the caller's `buf_T *` into a [`Buf`] lives here, in the
+// each that turns the caller's `Buffer *` into a [`Buf`] lives here, in the
 // file already spending the row.
 
 /// Adjust extmark rows for inserted or deleted rows; columns stay fixed.
 pub unsafe fn extmark_adjust(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
@@ -447,7 +447,7 @@ pub unsafe fn extmark_adjust(
 /// `old_col` and `new_col` encode an offset from `start_col` when the
 /// matching row extent is 0, and the end column of the region otherwise.
 pub unsafe fn extmark_splice(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     old_row: c_int,
@@ -476,7 +476,7 @@ pub unsafe fn extmark_splice(
 /// The single-line shorthand: the column delta is both the column count and
 /// the byte count.
 pub unsafe fn extmark_splice_cols(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     old_col: ColNr,
@@ -500,7 +500,7 @@ pub unsafe fn extmark_splice_cols(
 
 /// Text removed from one place and inserted at another, as `:move` does it.
 pub unsafe fn extmark_move_region(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     start_byte: bcount_t,

@@ -396,7 +396,7 @@ describe('WinScrolled', function()
     api.nvim_win_set_height(eval('popup1'), 8)
 
     -- The key is that it should not crash when WinResized closes a window
-    -- that WinScrolled might have referenced via a stale buf_T pointer
+    -- that WinScrolled might have referenced via a stale Buffer pointer
     assert_alive()
     -- Verify autocmds were actually triggered
     eq(1, eval('g:resized > 0'))

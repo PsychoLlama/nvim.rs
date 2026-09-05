@@ -105,7 +105,7 @@ pub struct fold_T {
 /// What the per-'foldmethod' level computations are handed, and what they
 /// answer in.
 pub struct fline_T {
-    pub wp: *mut win_T,
+    pub wp: *mut Window,
     /// Current line number.
     pub lnum: LineNr,
     /// Offset between `lnum` and the real line number.

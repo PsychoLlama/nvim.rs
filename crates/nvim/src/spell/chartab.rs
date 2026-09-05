@@ -31,7 +31,7 @@ use crate::mbyte::{
 };
 use crate::memory::xstrlcpy;
 use crate::strings::vim_strchr;
-use crate::types::{Failed, MB_MAXBYTES, NUL, spelltab_T, uint8_t, win_T};
+use crate::types::{Failed, MB_MAXBYTES, NUL, Window, spelltab_T, uint8_t};
 use ::libc::strcpy;
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};
@@ -131,7 +131,7 @@ pub fn init_spell_chartab() {
 /// as a word character when a word character follows it, so that
 /// `they're` is one word but `they there` is two. That only works past the
 /// first character of a word, which is all the callers need.
-pub unsafe fn spell_iswordp(p: *const c_char, wp: *const win_T) -> bool {
+pub unsafe fn spell_iswordp(p: *const c_char, wp: *const Window) -> bool {
     // SAFETY: the caller promised a live window, which owns its syntax block.
     let syn = unsafe { &*(*wp).w_s };
     let l = unsafe { utfc_ptr2len(p) };
@@ -162,7 +162,7 @@ pub unsafe fn spell_iswordp(p: *const c_char, wp: *const win_T) -> bool {
 }
 
 /// Whether `p` points at a word character, ignoring midword characters.
-pub unsafe fn spell_iswordp_nmw(p: *const c_char, wp: *const win_T) -> bool {
+pub unsafe fn spell_iswordp_nmw(p: *const c_char, wp: *const Window) -> bool {
     let c = unsafe { utf_ptr2char(p) };
     if c > 255 {
         return unsafe { spell_mb_isword_class(mb_get_class(p), wp) };
@@ -174,7 +174,7 @@ pub unsafe fn spell_iswordp_nmw(p: *const c_char, wp: *const win_T) -> bool {
 ///
 /// Only meaningful above 255. Unicode sub- and superscripts are excluded;
 /// with `'spelloptions'` containing `cjk` the East Asian scripts are too.
-unsafe fn spell_mb_isword_class(cl: c_int, wp: *const win_T) -> bool {
+unsafe fn spell_mb_isword_class(cl: c_int, wp: *const Window) -> bool {
     if unsafe { (*(*wp).w_s).b_cjk } != 0 {
         return cl == 2 || cl == 0x2800;
     }
@@ -183,7 +183,7 @@ unsafe fn spell_mb_isword_class(cl: c_int, wp: *const win_T) -> bool {
 
 /// Wide-character [`spell_iswordp`]: `w` is the tail of a character array
 /// starting at the position of interest.
-pub(super) unsafe fn spell_iswordp_w(w: &[c_int], wp: *const win_T) -> bool {
+pub(super) unsafe fn spell_iswordp_w(w: &[c_int], wp: *const Window) -> bool {
     // SAFETY: the caller promised a live window, which owns its syntax block.
     let syn = unsafe { &*(*wp).w_s };
     let midword = if w[0] < 256 {
@@ -206,7 +206,7 @@ pub(super) unsafe fn spell_iswordp_w(w: &[c_int], wp: *const win_T) -> bool {
 /// Answers `Err` when the result does not fit, having still terminated
 /// what was written.
 pub unsafe fn spell_casefold(
-    wp: *const win_T,
+    wp: *const Window,
     str: *const c_char,
     len: c_int,
     buf: *mut c_char,

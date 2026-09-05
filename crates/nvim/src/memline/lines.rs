@@ -28,7 +28,7 @@ pub fn ml_get(lnum: LineNr) -> *mut ::core::ffi::c_char {
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub unsafe fn ml_get_buf(buf: *mut buf_T, lnum: LineNr) -> *mut ::core::ffi::c_char {
+pub unsafe fn ml_get_buf(buf: *mut Buffer, lnum: LineNr) -> *mut ::core::ffi::c_char {
     unsafe { ml_get_buf_impl(buf, lnum, false) }
 }
 
@@ -39,7 +39,7 @@ pub unsafe fn ml_get_buf(buf: *mut buf_T, lnum: LineNr) -> *mut ::core::ffi::c_c
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub unsafe fn ml_get_buf_mut(buf: *mut buf_T, lnum: LineNr) -> *mut ::core::ffi::c_char {
+pub unsafe fn ml_get_buf_mut(buf: *mut Buffer, lnum: LineNr) -> *mut ::core::ffi::c_char {
     unsafe { ml_get_buf_impl(buf, lnum, true) }
 }
 
@@ -161,7 +161,7 @@ pub unsafe fn ml_get_pos_len(pos: *mut pos_T) -> ColNr {
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub unsafe fn ml_get_buf_len(buf: *mut buf_T, lnum: LineNr) -> ColNr {
+pub unsafe fn ml_get_buf_len(buf: *mut Buffer, lnum: LineNr) -> ColNr {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };
@@ -200,7 +200,7 @@ pub unsafe fn ml_line_alloced() -> bool {
 /// # Safety
 /// `buf` must point at a buffer with a memline, and `line` hold `len` bytes.
 unsafe fn ml_append_flush(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     line: *mut ::core::ffi::c_char,
     len: ColNr,
@@ -264,7 +264,7 @@ pub unsafe fn ml_append_flags(
 /// # Safety
 /// `buf` must point at a buffer; `line` must hold `len` bytes.
 pub unsafe fn ml_append_buf(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     line: *mut ::core::ffi::c_char,
     len: ColNr,
@@ -295,7 +295,7 @@ pub unsafe fn ml_add_deleted_len(ptr: *mut ::core::ffi::c_char, len: ssize_t) {
 /// # Safety
 /// `buf` must point at a buffer; `ptr` must be NUL-terminated.
 pub unsafe fn ml_add_deleted_len_buf(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     ptr: *mut ::core::ffi::c_char,
     len_arg: ssize_t,
 ) {
@@ -358,7 +358,7 @@ pub unsafe fn ml_replace_len(
 /// # Safety
 /// `buf` must point at a buffer; `line` must be NULL or NUL-terminated.
 pub unsafe fn ml_replace_buf(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     line: *mut ::core::ffi::c_char,
     copy: bool,
@@ -387,7 +387,7 @@ pub unsafe fn ml_replace_buf(
 /// `buf` must point at a buffer; `line_arg` must be NULL or hold `len_arg`
 /// bytes.
 pub unsafe fn ml_replace_buf_len(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     line_arg: *mut ::core::ffi::c_char,
     len_arg: size_t,
@@ -438,7 +438,7 @@ pub unsafe fn ml_replace_buf_len(
 ///
 /// # Safety
 /// `buf` must point at a buffer holding line `lnum`.
-pub unsafe fn ml_delete_buf(buf: *mut buf_T, lnum: LineNr, message: bool) -> Result<(), Failed> {
+pub unsafe fn ml_delete_buf(buf: *mut Buffer, lnum: LineNr, message: bool) -> Result<(), Failed> {
     unsafe { ml_flush_line(buf, false) };
     unsafe { ml_delete_int(buf, lnum, if message { ML_DEL_MESSAGE } else { 0 }) }
 }
@@ -554,7 +554,7 @@ pub unsafe fn ml_clearmarked() {
 /// # Safety
 /// `buf` must point at a buffer; the two out-parameters must be writable.
 pub unsafe fn ml_flush_deleted_bytes(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     codepoints: *mut size_t,
     codeunits: *mut size_t,
 ) -> size_t {

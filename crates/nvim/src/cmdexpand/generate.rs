@@ -167,7 +167,7 @@ pub(crate) unsafe fn get_scriptnames_arg(xp: *mut expand_T, idx: c_int) -> *mut 
     let out = unsafe { &raw mut (*xp).xp_buf }.cast::<c_char>();
     let room = EXPAND_BUF_LEN as size_t;
     // SAFETY: `si` is a live script item and `out` has `room` bytes.
-    unsafe { home_replace(ptr::null::<buf_T>(), (*si).sn_name, out, room, true) };
+    unsafe { home_replace(ptr::null::<Buffer>(), (*si).sn_name, out, room, true) };
     out
 }
 

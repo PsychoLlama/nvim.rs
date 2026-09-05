@@ -93,7 +93,7 @@ unsafe fn apply_pre(
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
 pub(crate) unsafe fn buf_write_do_autocmds(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     names: &mut WriteNames,
     start: LineNr,
     end: &mut LineNr,
@@ -270,7 +270,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
 pub(crate) unsafe fn buf_write_do_post_autocmds(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fname: *mut c_char,
     eap: *mut exarg_T,
     mode: WriteMode,

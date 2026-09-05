@@ -298,7 +298,7 @@ fn diffgetput(
     let (idx_cur, idx_from, idx_to) = (idx_cur as usize, idx_from as usize, idx_to as usize);
     let tp = cur_tab();
     let mut off = 0 as LineNr;
-    let mut dprev = ::core::ptr::null_mut::<diff_T>();
+    let mut dprev = ::core::ptr::null_mut::<DiffBlock>();
     let mut cursor = Df::first(tp);
     while let Some(mut dp) = cursor {
         if addr_count == 0 {
@@ -317,7 +317,7 @@ fn diffgetput(
         cursor = Some(dp);
         // The freed block's ranges, taken before it goes: the fold update at
         // the tail still needs its line numbers. Only the two arrays, never
-        // the block -- a `diff_T` also carries a `GArray` and its list
+        // the block -- a `DiffBlock` also carries a `GArray` and its list
         // links, and `diff_free` releases all three.
         let mut freed: Option<([LineNr; DB_COUNT as usize], [LineNr; DB_COUNT as usize])> = None;
         let mut lnum = dp.df_lnum[idx_to];

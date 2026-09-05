@@ -32,12 +32,12 @@ use crate::message::internal_error;
 use crate::normal::reset_VIsual_and_resel;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Integer, OK, frame_T, size_t};
+use crate::types::{FAIL, Frame, Integer, OK, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
 use crate::winlayer::{WinId, tabs};
 
-pub unsafe fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
+pub unsafe fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     close(unsafe { Win::new(win) }, free_buf, force)
 }
@@ -49,7 +49,7 @@ pub unsafe fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
 pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
     let prev_curtab = curtab.get();
     let win_frame = if win.w_floating {
-        ptr::null_mut::<frame_T>()
+        ptr::null_mut::<Frame>()
     } else {
         win.frame().fr_parent
     };
@@ -417,13 +417,13 @@ fn fire_winclosed(win: Win) {
     RECURSIVE.set(false);
 }
 
-pub fn trigger_tabclosedpre(tp: *mut tabpage_T) {
+pub fn trigger_tabclosedpre(tp: *mut Tabpage) {
     tabclosedpre(tp);
 }
 
 /// `TabClosedPre` for `tp`, fired from inside that tab page and never
 /// re-entered. Comes back to the tab page it started in, or to the first.
-fn tabclosedpre(tp: *mut tabpage_T) {
+fn tabclosedpre(tp: *mut Tabpage) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
     let ptp = curtab.get();
     // Return quickly when there is no TabClosedPre autocommand to run, or one
@@ -446,9 +446,9 @@ fn tabclosedpre(tp: *mut tabpage_T) {
 }
 
 pub unsafe fn win_close_othertab(
-    win: *mut win_T,
+    win: *mut Window,
     free_buf: c_int,
-    tp: *mut tabpage_T,
+    tp: *mut Tabpage,
     force: bool,
 ) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page.

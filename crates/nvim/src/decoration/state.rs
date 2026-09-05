@@ -61,9 +61,9 @@ use crate::marktree::{
 use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::types::{
-    DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
+    Buffer, DecorInline, DecorPriority, DecorPriorityInternal, DecorRange, DecorRange_data,
     DecorRange_data_ui, DecorRangeSlot, DecorSignHighlight, DecorVirtText, MTKey, MTPair, MTPos,
-    VirtTextPos, buf_T, uint32_t, win_T,
+    VirtTextPos, Window, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
@@ -222,7 +222,7 @@ pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
 ///
 /// # Safety
 /// `buf` must be live or null.
-pub unsafe fn decor_state_invalidate(buf: *mut buf_T) {
+pub unsafe fn decor_state_invalidate(buf: *mut Buffer) {
     decor_state.with_mut(|state| {
         // SAFETY: `state.win` is a live window while a redraw is running.
         if let Some(win) = unsafe { Win::from_raw(state.win) } {
@@ -247,7 +247,7 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn decor_redraw_reset(wp: *mut win_T, mut state: DecorStateRef) -> bool {
+pub unsafe fn decor_redraw_reset(wp: *mut Window, mut state: DecorStateRef) -> bool {
     // SAFETY: the caller's window.
     let wp = unsafe { Win::new(wp) };
     state.row = -1;
@@ -296,7 +296,11 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn decor_redraw_start(wp: *mut win_T, top_row: c_int, mut state: DecorStateRef) -> bool {
+pub unsafe fn decor_redraw_start(
+    wp: *mut Window,
+    top_row: c_int,
+    mut state: DecorStateRef,
+) -> bool {
     // SAFETY: the caller's window.
     let wp = unsafe { Win::new(wp) };
     let buf = wp.buffer();
@@ -357,7 +361,7 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn decor_redraw_line(wp: *mut win_T, row: c_int, mut state: DecorStateRef) {
+pub unsafe fn decor_redraw_line(wp: *mut Window, row: c_int, mut state: DecorStateRef) {
     // SAFETY: the caller's window.
     let wp = unsafe { Win::new(wp) };
     decor_state_pack(state);
@@ -674,7 +678,7 @@ pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef
 /// # Safety
 /// `wp` must be live.
 pub unsafe fn decor_redraw_col_impl(
-    wp: *mut win_T,
+    wp: *mut Window,
     col: c_int,
     win_col: c_int,
     hidden: bool,
@@ -864,7 +868,7 @@ pub unsafe fn decor_redraw_col_impl(
 /// `wp` must be live.
 #[inline(always)]
 pub unsafe fn decor_redraw_col(
-    wp: *mut win_T,
+    wp: *mut Window,
     col: c_int,
     win_col: c_int,
     hidden: bool,
@@ -884,7 +888,7 @@ pub unsafe fn decor_redraw_col(
 /// # Safety
 /// `wp` must be live and `eol_attr` writable.
 pub unsafe fn decor_redraw_eol(
-    wp: *mut win_T,
+    wp: *mut Window,
     mut state: DecorStateRef,
     eol_attr: *mut c_int,
     eol_col: c_int,

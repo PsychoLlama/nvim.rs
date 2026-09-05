@@ -37,10 +37,9 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Blob, Error, EvalFuncData, EvalFuncDef, Failed, Float, LineNr, List,
+    Arena, Array, Blob, Buffer, Error, EvalFuncData, EvalFuncDef, Failed, Float, LineNr, List,
     MsgpackRpcRequestHandler, NUL, Object, TypVal, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, VarNumber, buf_T, expand_T, kBoolVarTrue, ptrdiff_t, typval_vval_union,
-    win_T,
+    VAR_UNKNOWN, VarLock, VarNumber, Window, expand_T, kBoolVarTrue, ptrdiff_t, typval_vval_union,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -495,7 +494,7 @@ pub unsafe fn api_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFu
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut buf_T {
+pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut Buffer {
     // SAFETY: the caller's obligation; the name is the string the typval
     // owns and outlives the match.
     if unsafe { (*tv).v_type } == VAR_NUMBER {
@@ -539,7 +538,7 @@ pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut buf_T {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> *mut buf_T {
+pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> *mut Buffer {
     // SAFETY: the caller's obligation.
     if !unsafe { tv_check_str_or_nr(tv) } {
         return ptr::null_mut();
@@ -552,7 +551,7 @@ pub unsafe fn tv_get_buf_from_arg(tv: *mut TypVal) -> *mut buf_T {
 ///
 /// # Safety
 /// `arg` is a live typval.
-pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut buf_T {
+pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut Buffer {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. The guard is what makes E158 the
     // *only* message this can produce.
@@ -573,7 +572,7 @@ pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut buf_T {
 ///
 /// # Safety
 /// `argvars` is a live call frame's argument array and `idx` is within it.
-pub unsafe fn get_optional_window(argvars: *mut TypVal, idx: c_int) -> *mut win_T {
+pub unsafe fn get_optional_window(argvars: *mut TypVal, idx: c_int) -> *mut Window {
     // SAFETY: the caller's obligation.
     if unsafe { (*argvars.add(idx as usize)).v_type } == VAR_UNKNOWN {
         return curwin.get();

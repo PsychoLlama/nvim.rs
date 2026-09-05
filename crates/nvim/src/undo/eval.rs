@@ -195,7 +195,7 @@ pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 /// # Safety
 ///
 /// `buf` points at a live buffer, and a live current window.
-pub unsafe fn u_force_get_undo_header(buf: *mut buf_T) -> *mut u_header_T {
+pub unsafe fn u_force_get_undo_header(buf: *mut Buffer) -> *mut u_header_T {
     // SAFETY: a live buffer, by the contract above.
     let mut b = unsafe { Buf::new(buf) };
     if let Some(uh) = b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {

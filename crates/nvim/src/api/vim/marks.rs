@@ -57,7 +57,7 @@ pub unsafe fn nvim_del_mark(name: String_0) -> Result<Boolean, Error> {
     if unsafe { global_mark_name(name, &mut error) }.is_none() {
         return false.reported(error);
     }
-    let no_buf = ptr::null_mut::<buf_T>();
+    let no_buf = ptr::null_mut::<Buffer>();
     // SAFETY: a global mark takes no buffer, and `error` is this frame's own.
     let res = unsafe { set_mark(no_buf, name, 0, 0, &mut error) };
     res.reported(error)

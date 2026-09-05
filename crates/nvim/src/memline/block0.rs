@@ -87,7 +87,7 @@ impl ZeroBlock {
 }
 
 /// Record the file's timestamp in the swap file, after it has been written.
-pub unsafe fn ml_timestamp(buf: *mut buf_T) {
+pub unsafe fn ml_timestamp(buf: *mut Buffer) {
     unsafe { ml_upd_block0(buf, UB_FNAME) }
 }
 
@@ -111,7 +111,7 @@ pub(crate) fn ml_check_b0_strings(b0: &ZeroBlock) -> bool {
 /// Bring block zero up to date with the buffer: either the file name and
 /// timestamp ([`UB_FNAME`]), or the "swap file is beside the file" flag
 /// ([`UB_SAME_DIR`]).
-pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: UpdBlock0) {
+pub(crate) unsafe fn ml_upd_block0(buf: *mut Buffer, what: UpdBlock0) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };
@@ -139,7 +139,7 @@ pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: UpdBlock0) {
 /// `buf->b_mtime` from the same `stat`.
 ///
 /// Must not use the caller's name buffer: some of them still hold it.
-pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
+pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut Buffer) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -157,7 +157,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
         // 900 bytes and every write below lands in the copy.
         let name = unsafe { &mut (*b0p).b0_fname };
         let (out, room) = (name.as_mut_ptr(), B0_FNAME_SIZE_CRYPT as size_t);
-        let none = core::ptr::null::<buf_T>();
+        let none = core::ptr::null::<Buffer>();
         unsafe { home_replace(none, (*buf).b_ffname, out, room, true) };
         if name[0] as c_int == '~' as c_int {
             let mut uname: [c_char; B0_UNAME_SIZE as usize] = [0; B0_UNAME_SIZE as usize];
@@ -211,7 +211,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buf: *mut buf_T) {
 /// Record whether the file and its swap file are in the same directory.
 ///
 /// Fail safe: anything short of proof leaves the flag clear.
-pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buf: *mut buf_T) {
+pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buf: *mut Buffer) {
     let same = unsafe { same_directory(mf_fname((*buf).b_ml.ml_mfp).cast_mut(), (*buf).b_ffname) };
     unsafe { (*b0p).set_flag(B0_SAME_DIR, same) };
 }
@@ -221,7 +221,7 @@ pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buf: *mut buf_T) {
 /// It goes at the *end* of the name field with a NUL in front of it, so a
 /// reader that does not know about [`B0_HAS_FENC`] still sees a terminated
 /// name and never reaches the encoding.
-pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buf: *mut buf_T) {
+pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buf: *mut Buffer) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };
@@ -456,7 +456,7 @@ pub(crate) unsafe fn swapfile_unchanged(fname: *const c_char) -> bool {
 /// swap file into one place.
 ///
 /// Also publishes [`proc_running`], which the dialog below reads.
-pub(crate) unsafe fn swapfile_is_for_other_file(buf: *mut buf_T, fname: *mut c_char) -> bool {
+pub(crate) unsafe fn swapfile_is_for_other_file(buf: *mut Buffer, fname: *mut c_char) -> bool {
     // The expanded name out of block zero; upstream shares `NameBuff`, and
     // `set_b0_fname` above documents that its callers hold it.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
@@ -565,7 +565,7 @@ pub(crate) fn b0_read_number(src: &[c_char; 4]) -> c_long {
 /// Update the flags block zero carries about the buffer — whether it has
 /// unsaved changes, its `'fileformat'` and its `'fileencoding'` — and push
 /// block zero alone to disk.
-pub unsafe fn ml_setflags(buf: *mut buf_T) {
+pub unsafe fn ml_setflags(buf: *mut Buffer) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };

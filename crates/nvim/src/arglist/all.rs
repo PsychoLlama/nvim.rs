@@ -40,8 +40,8 @@ struct ArgAllState {
     opened: *mut uint8_t,
     /// Length of `opened`, i.e. `ARGCOUNT` when `:all` started.
     opened_len: c_int,
-    new_curwin: *mut win_T,
-    new_curtab: *mut tabpage_T,
+    new_curwin: *mut Window,
+    new_curtab: *mut Tabpage,
 }
 
 // ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ struct ArgAllState {
 /// Where the window walk starts, and where it restarts when an autocommand
 /// invalidated it: floating windows are walked first, backwards, then the
 /// ordinary ones.
-fn first_window_to_walk() -> *mut win_T {
+fn first_window_to_walk() -> *mut Window {
     let last = last_window().expect("the editor always has a window");
     let head = match last.w_floating {
         true => Some(last),
@@ -60,7 +60,7 @@ fn first_window_to_walk() -> *mut win_T {
 }
 
 /// `Win::raw`, or a null for "no window", as the walk above answers.
-fn raw_win(wp: Option<Win>) -> *mut win_T {
+fn raw_win(wp: Option<Win>) -> *mut Window {
     wp.map_or(ptr::null_mut(), Win::raw)
 }
 
@@ -69,8 +69,8 @@ fn raw_win(wp: Option<Win>) -> *mut win_T {
 /// # Safety
 ///
 /// `wp` must be a valid window.
-unsafe fn next_window_to_walk(wp: *mut win_T) -> *mut win_T {
-    // SAFETY: the caller's promise -- a live `win_T`.
+unsafe fn next_window_to_walk(wp: *mut Window) -> *mut Window {
+    // SAFETY: the caller's promise -- a live `Window`.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: caller contract; the window list is well formed.
     if wp.w_floating {
@@ -94,14 +94,14 @@ unsafe fn next_window_to_walk(wp: *mut win_T) -> *mut win_T {
 /// `aall` must be the live state and `wp` a valid window holding `buf`.
 unsafe fn arg_index_for_window(
     aall: &mut ArgAllState,
-    wp: *mut win_T,
-    buf: *mut buf_T,
-    old_curwin: *mut win_T,
-    old_curtab: *mut tabpage_T,
+    wp: *mut Window,
+    buf: *mut Buffer,
+    old_curwin: *mut Window,
+    old_curtab: *mut Tabpage,
 ) -> c_int {
-    // SAFETY: the caller's promise -- a live `buf_T`.
+    // SAFETY: the caller's promise -- a live `Buffer`.
     let buf = unsafe { Buf::new(buf) };
-    // SAFETY: the caller's promise -- a live `win_T`.
+    // SAFETY: the caller's promise -- a live `Window`.
     let mut wp = unsafe { Win::new(wp) };
     // SAFETY: caller contract; the window, its buffer and the argument list
     // are all valid here.
@@ -183,11 +183,11 @@ unsafe fn arg_index_for_window(
 /// `wpnext` the window the walk would continue to.
 unsafe fn close_unused_window(
     aall: &mut ArgAllState,
-    wp: *mut win_T,
-    buf: *mut buf_T,
-    wpnext: *mut win_T,
-) -> *mut win_T {
-    // SAFETY: the caller's promise -- a live `buf_T`.
+    wp: *mut Window,
+    buf: *mut Buffer,
+    wpnext: *mut Window,
+) -> *mut Window {
+    // SAFETY: the caller's promise -- a live `Buffer`.
     let buf = unsafe { Buf::new(buf) };
     // SAFETY: caller contract; `buf` is the window's own buffer.
     // SAFETY: `buf` is the window's buffer, live for the call.
@@ -247,8 +247,8 @@ unsafe fn close_unused_window(
 /// `aall` must be the live state.
 unsafe fn close_unused_windows_in_tab(
     aall: &mut ArgAllState,
-    old_curwin: *mut win_T,
-    old_curtab: *mut tabpage_T,
+    old_curwin: *mut Window,
+    old_curtab: *mut Tabpage,
 ) {
     let mut wp = first_window_to_walk();
     while !wp.is_null() {

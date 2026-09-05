@@ -101,7 +101,7 @@ pub struct slang_S {
     pub sl_sugtime: time_t,
     /// Sound-folded forms, from the `.sug` file.
     pub sl_sound_tree: WordTree,
-    pub sl_sugbuf: *mut buf_T,
+    pub sl_sugbuf: *mut Buffer,
     pub sl_sugloaded: bool,
     pub sl_has_map: bool,
     pub sl_map_hash: HashTab,

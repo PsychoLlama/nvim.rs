@@ -19,7 +19,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    Dict, EvalFuncData, List, NUL, TypVal, VarNumber, buf_T, kListLenMayKnow, kListLenUnknown,
+    Buffer, Dict, EvalFuncData, List, NUL, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
     pos_T,
 };
 use crate::winlayer::Win;
@@ -53,7 +53,7 @@ pub unsafe fn f_getchangelist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
     // SAFETY throughout: the arguments and `rettv` are live typvals; `curwin` and its
     // buffer's window-info vector are live for the whole call.
     let out = list_alloc_ret(rettv, 2);
-    let buf: *const buf_T = if !args.has(0) {
+    let buf: *const Buffer = if !args.has(0) {
         curbuf.get()
     } else {
         // The value is coerced to a Number purely so that a bad type

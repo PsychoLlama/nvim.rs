@@ -53,8 +53,8 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Cleanup, CmdModFlags, CpoFlag, Failed, LineNr, NUL, buf_T, exarg_T, memfile_T, size_t, uint8_t,
-    win_T,
+    Buffer, Cleanup, CmdModFlags, CpoFlag, Failed, LineNr, NUL, Window, exarg_T, memfile_T, size_t,
+    uint8_t,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
@@ -300,7 +300,7 @@ pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
 /// `:edit`. It is what tells the failure path that there is a new window
 /// to close again, and what makes the alternate file be set on the window
 /// left behind.
-pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
+pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut Window) {
     let mut ea = unsafe { Ea::new(eap) };
     // `:visual` and `:view` with no argument leave Ex mode.
     if exmode_active.get() && (ea.cmdidx == CmdIdx::visual || ea.cmdidx == CmdIdx::view) {
@@ -603,7 +603,7 @@ fn cur_win() -> Win {
 }
 
 /// `buf_hide()` as checked code.
-fn buf_hide(buf: *const buf_T) -> bool {
+fn buf_hide(buf: *const Buffer) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::buf_hide(buf) }
 }
@@ -623,7 +623,7 @@ fn do_ecmd(
     eap: *mut exarg_T,
     newlnum: LineNr,
     flags: EcmdFlags,
-    oldwin: *mut win_T,
+    oldwin: *mut Window,
 ) -> Result<(), Failed> {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_cmds::do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, oldwin) }

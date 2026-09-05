@@ -35,7 +35,7 @@ use crate::options::{
     kOptSsopFlagOptions, kOptSsopFlagTerminal,
 };
 use crate::pos::MAXCOL;
-use crate::types::{NUL, OptionSetFlags, int64_t, tabpage_T, win_T};
+use crate::types::{NUL, OptionSetFlags, Tabpage, Window, int64_t};
 use crate::winlayer::{Buf, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
@@ -54,8 +54,8 @@ use core::ffi::{c_char, c_int, c_void};
 /// `wp` current for the duration of the option writers.
 pub(crate) unsafe fn put_view(
     out: SessionFile,
-    wp: *mut win_T,
-    tp: *mut tabpage_T,
+    wp: *mut Window,
+    tp: *mut Tabpage,
     add_edit: bool,
     opts: SessionOpts,
     current_arg_idx: c_int,
@@ -155,7 +155,7 @@ pub(crate) unsafe fn put_view(
 ///
 /// # Safety
 /// `wp` is live.
-unsafe fn put_edit(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> Option<bool> {
+unsafe fn put_edit(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> Option<bool> {
     // SAFETY: caller contract; `fname_esc` is owned and freed on every path.
     let buf = unsafe { (*wp).w_buffer };
     let fname_esc = unsafe { ses_escape_fname(ses_get_fname(buf, opts)) };
@@ -199,7 +199,7 @@ unsafe fn put_edit(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> Optio
 ///
 /// # Safety
 /// `wp` is live.
-unsafe fn put_help_edit(out: SessionFile, wp: *mut win_T) -> bool {
+unsafe fn put_help_edit(out: SessionFile, wp: *mut Window) -> bool {
     // SAFETY: caller contract; a tag stack entry's name is NUL-terminated.
     let curtag = if 0 < unsafe { (*wp).w_tagstackidx }
         && unsafe { (*wp).w_tagstackidx } <= unsafe { (*wp).w_tagstacklen }
@@ -219,7 +219,7 @@ unsafe fn put_help_edit(out: SessionFile, wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `wp` is live.
-unsafe fn put_alternate(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> bool {
+unsafe fn put_alternate(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `find_buf` answers a live buffer or null.
     let alt = unsafe { find_buf((*wp).w_alt_fnum) };
     let restorable = alt.is_some_and(|b| {
@@ -243,7 +243,7 @@ unsafe fn put_alternate(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> 
 ///
 /// # Safety
 /// `wp` is live.
-unsafe fn put_local_options(out: SessionFile, wp: *mut win_T, opts: SessionOpts) -> bool {
+unsafe fn put_local_options(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
     let save_curwin = curwin.get();
@@ -270,7 +270,7 @@ unsafe fn put_local_options(out: SessionFile, wp: *mut win_T, opts: SessionOpts)
 ///
 /// # Safety
 /// `wp` is live.
-unsafe fn put_cursor(out: SessionFile, wp: *mut win_T) -> bool {
+unsafe fn put_cursor(out: SessionFile, wp: *mut Window) -> bool {
     // SAFETY: caller contract.
     let height = unsafe { (*wp).w_view_height };
     let lnum = unsafe { (*wp).w_cursor.lnum };
@@ -317,7 +317,7 @@ unsafe fn put_cursor(out: SessionFile, wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `wp` is live.
-unsafe fn put_view_curpos(out: SessionFile, wp: *const win_T, spaces: &str) -> bool {
+unsafe fn put_view_curpos(out: SessionFile, wp: *const Window, spaces: &str) -> bool {
     // SAFETY: caller contract.
     if unsafe { (*wp).w_curswant } == MAXCOL {
         out.write(format_args!("{spaces}normal! $\n"))

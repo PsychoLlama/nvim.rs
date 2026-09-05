@@ -35,7 +35,7 @@ use crate::os::input::line_breakcheck;
 use crate::strings::arena_printf;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    ApiDict, Arena, ExArgt, IOSIZE, LuaRef, NUL, Object, buf_T, int64_t, size_t, ucmd_T,
+    ApiDict, Arena, Buffer, ExArgt, IOSIZE, LuaRef, NUL, Object, int64_t, size_t, ucmd_T,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::fmt::Write as _;
@@ -274,7 +274,7 @@ fn dict_of<const N: usize>(
 /// # Safety
 /// Module contract; `buf` must be null or a live buffer, and `arena` the
 /// dispatcher's.
-pub(crate) unsafe fn commands_array(buf: *mut buf_T, arena: *mut Arena) -> ApiDict {
+pub(crate) unsafe fn commands_array(buf: *mut Buffer, arena: *mut Arena) -> ApiDict {
     let table = if buf.is_null() {
         Table::Global
     } else {

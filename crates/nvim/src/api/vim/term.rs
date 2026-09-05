@@ -21,7 +21,7 @@ pub unsafe fn nvim_open_term(
     opts: *mut KeyDict_open_term,
 ) -> Result<Integer, Error> {
     let mut slot = Error::none();
-    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
+    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
     if b.is_null() {
         return (0 as Integer).reported(slot);
     }

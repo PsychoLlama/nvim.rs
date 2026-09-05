@@ -30,8 +30,8 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    ColNr, LineNr, NUL, ProfTime, buf_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
-    regprog_T, uint8_t, win_T,
+    Buffer, ColNr, LineNr, NUL, ProfTime, Window, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, uint8_t,
 };
 
 /// Try to match at column `col` of the current line.
@@ -405,8 +405,8 @@ pub(crate) unsafe fn nfa_regexec_nl(
 /// buffer and window the match runs over.
 pub(crate) unsafe fn nfa_regexec_multi(
     rmp: *mut regmmatch_T,
-    win: *mut win_T,
-    buf: *mut buf_T,
+    win: *mut Window,
+    buf: *mut Buffer,
     lnum: LineNr,
     col: ColNr,
     tm: *mut ProfTime,

@@ -52,8 +52,8 @@ use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
-    Failed, GArray, MAXPATHL, NUL, SPL_FNAME_TMPL, langp_T, regprog_T, size_t, slang_T, synblock_T,
-    win_T,
+    Failed, GArray, MAXPATHL, NUL, SPL_FNAME_TMPL, SynBlock, Window, langp_T, regprog_T, size_t,
+    slang_T,
 };
 use crate::window::win_valid_any_tab;
 
@@ -228,7 +228,7 @@ static recursive: GlobalCell<bool> = GlobalCell::new(false);
 /// Parse `'spelllang'` and fill `wp->w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
-pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
+pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
     if recursive.get() {
         return None;
     }
@@ -542,7 +542,7 @@ pub unsafe fn parse_spelllang(wp: *mut win_T) -> Option<&'static CStr> {
 }
 
 /// Forget the midword characters recorded for `wp`.
-fn clear_midword(wp: *mut win_T) {
+fn clear_midword(wp: *mut Window) {
     unsafe { (*(*wp).w_s).b_spell_ismw = [false; 256] };
     unsafe { xfree((*(*wp).w_s).b_spell_ismw_mb as *mut c_void) };
     unsafe { (*(*wp).w_s).b_spell_ismw_mb = core::ptr::null_mut() };
@@ -584,7 +584,7 @@ pub unsafe fn spell_free_all() {
     for buf in buffers() {
         // SAFETY: a live buffer from the editor's own list, and its own
         // growarray. The address is taken from the raw pointer rather than
-        // through `DerefMut`, so no `&mut buf_T` is formed.
+        // through `DerefMut`, so no `&mut Buffer` is formed.
         unsafe { ga_clear(&raw mut (*buf.raw()).b_s.b_langp) };
     }
 
@@ -672,7 +672,7 @@ pub unsafe fn did_set_spell_option() -> Option<&'static CStr> {
 ///
 /// Returns an error message when the pattern does not compile, leaving the
 /// previous program in place.
-pub unsafe fn compile_cap_prog(synblock: *mut synblock_T) -> Option<&'static CStr> {
+pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr> {
     let rp: *mut regprog_T = unsafe { (*synblock).b_cap_prog };
 
     if unsafe { (*synblock).b_p_spc }.is_null() || unsafe { *(*synblock).b_p_spc } == 0 {
@@ -699,7 +699,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut synblock_T) -> Option<&'static CSt
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
-unsafe fn use_midword(lp: *mut slang_T, wp: *mut win_T) {
+unsafe fn use_midword(lp: *mut slang_T, wp: *mut Window) {
     if unsafe { (*lp).sl_midword }.is_null() {
         return;
     }

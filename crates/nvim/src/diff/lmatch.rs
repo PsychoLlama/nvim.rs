@@ -15,7 +15,7 @@ use core::ffi::c_int;
 ///
 /// `linematch:N` is a budget on the block's *total* size across every buffer,
 /// because the algorithm is exponential in the number of buffers.
-pub unsafe fn diff_linematch(dp: *mut diff_T) -> bool {
+pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
     if diff_flags.get() & DIFF_LINEMATCH == 0 {
         return false;
     }
@@ -38,7 +38,7 @@ pub unsafe fn diff_linematch(dp: *mut diff_T) -> bool {
 /// line: bit `j` says buffer `outputmap[j]` contributes a line there.  A run
 /// of identical decisions is one diff block, so the block list grows by one
 /// every time the set changes.
-unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
+unsafe fn apply_linematch_results(dp: *mut DiffBlock, decisions: &[c_int]) {
     // SAFETY: `curtab` is set from startup to exit.
     let tp = unsafe { TabPage::current() };
     let mut line_numbers = [0 as LineNr; DB_COUNT as usize];
@@ -79,7 +79,7 @@ unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
 /// Each buffer's share of the block is written out as one memory image, the
 /// alignment is computed over all of them at once, and the answer replaces
 /// the block.
-pub(crate) unsafe fn run_linematch_algorithm(dp: *mut diff_T) {
+pub(crate) unsafe fn run_linematch_algorithm(dp: *mut DiffBlock) {
     // SAFETY: `curtab` is set from startup to exit.
     let tp = unsafe { TabPage::current() };
     let mut images = [MMFILE_INIT; DB_COUNT as usize];

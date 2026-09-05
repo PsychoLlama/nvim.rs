@@ -228,7 +228,7 @@ pub(crate) unsafe fn mapblock_free(mpp: *mut *mut mapblock_T) {
 /// survives *removing* what it points at, because upstream's `continue`
 /// resumes at `*mpp` rather than at the next entry.  Holding the link rather
 /// than the entry is what makes that work, and it is also why a `Cursor` may
-/// point into `b_maphash` itself: taking a `&mut buf_T` while one is live
+/// point into `b_maphash` itself: taking a `&mut Buffer` while one is live
 /// would invalidate it, so every table this walks is reached through one raw
 /// pointer.
 ///
@@ -314,7 +314,7 @@ pub(crate) unsafe fn map_add(
 ) -> *mut mapblock_T {
     // The buffer's tables are reached through the one raw pointer, not
     // through `Buf`'s `DerefMut`: `map_table` already points into
-    // `b_maphash`, and a fresh `&mut buf_T` would invalidate it.
+    // `b_maphash`, and a fresh `&mut Buffer` would invalidate it.
     let buf = buf.raw();
     // A given `sid` is upstream's "the block was `xcalloc`ed and only these
     // two fields were filled in", not a tweak of `current_sctx`.

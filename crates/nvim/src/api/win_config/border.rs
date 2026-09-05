@@ -337,7 +337,7 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
 
 /// # Safety
 /// `wp` must be null or a live window.
-pub(crate) unsafe fn generate_api_error(wp: *mut win_T, attribute: &CStr, err: &mut Error) {
+pub(crate) unsafe fn generate_api_error(wp: *mut Window, attribute: &CStr, err: &mut Error) {
     // SAFETY: the caller's window.
     if !wp.is_null() && unsafe { (*wp).w_floating } {
         // SAFETY: the caller's window.

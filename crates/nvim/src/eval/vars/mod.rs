@@ -79,15 +79,15 @@ use crate::runtime::{
 use crate::search::set_search_direction;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
-    BoolVarValue, Dict, DictItem, EvalArg, EvalFuncData, Failed, GRegFlags, HashTab, LVal, List,
-    ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictDictItem, ScopeType,
-    ScriptId, SpecialVarValue, TypVal, VAR_BLOB, VAR_BOOL, VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT,
-    VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SPECIAL, VAR_STRING,
-    VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST,
-    VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarNumber, VarType, VimVarFlags, Vv,
-    aco_save_T, buf_T, exarg_T, expand_T, int64_t, kBoolVarFalse, kBoolVarTrue, kListLenUnknown,
-    kSpecialVarNull, ptrdiff_t, scriptvar_T, size_t, ssize_t, switchwin_T, tabpage_T,
-    typval_vval_union, uint8_t, uint32_t, win_T,
+    BoolVarValue, Buffer, Dict, DictItem, EvalArg, EvalFuncData, Failed, GRegFlags, HashTab, LVal,
+    List, ListItem, OptIndex, OptInt, OptVal, Partial, QUEUE, Refcount, ScopeDictDictItem,
+    ScopeType, ScriptId, SpecialVarValue, SwitchWin, Tabpage, TypVal, VAR_BLOB, VAR_BOOL,
+    VAR_DEF_SCOPE, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL,
+    VAR_SCOPE, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL, VAR_TYPE_DICT,
+    VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber, VarType, VimVarFlags, Vv, Window, aco_save_T, exarg_T, expand_T, int64_t,
+    kBoolVarFalse, kBoolVarTrue, kListLenUnknown, kSpecialVarNull, ptrdiff_t, scriptvar_T, size_t,
+    ssize_t, typval_vval_union, uint8_t, uint32_t,
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};

@@ -11,7 +11,7 @@
 //! and `describe_ns` answers the *first* name an id was created under, both
 //! of which the api observes (F-P21-9), and khash -- which this was -- is
 //! insertion-ordered. The two `set_*` shims that remain are the ones for
-//! `w_ns_set`, a khash still embedded in `win_T`.
+//! `w_ns_set`, a khash still embedded in `Window`.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -132,7 +132,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
         if unsafe { (*opts).wins.size } == 0 as size_t {
             set_scoped = false;
         }
-        let mut windows: IdSet<*mut win_T> = id_set();
+        let mut windows: IdSet<*mut Window> = id_set();
         let mut i: size_t = 0 as size_t;
         while i < unsafe { (*opts).wins.size } {
             // A `wins` element that is neither a window handle nor a plain
@@ -140,7 +140,7 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
             // refuses it -- the transpile read its bytes as an integer.
             let item = unsafe { *(*opts).wins.items.add(i) };
             let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
-            let wp: *mut win_T = unsafe { find_window_by_handle(win as WindowHandle, &mut error) };
+            let wp: *mut Window = unsafe { find_window_by_handle(win as WindowHandle, &mut error) };
             if wp.is_null() {
                 return ().reported(error);
             }

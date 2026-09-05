@@ -38,8 +38,8 @@ use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, Channel, ColNr, Dict, FAIL, FuncCallEntry, FuncExe, List, NUL,
-    TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, buf_T, caller_scope,
+    Buffer, Callback, CallbackReader, Channel, ColNr, Dict, FAIL, FuncCallEntry, FuncExe, List,
+    NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, caller_scope,
     estack_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
@@ -399,7 +399,7 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
 ///
 /// # Safety
 /// `buf` must be valid.
-pub unsafe fn prompt_get_input(buf: *mut buf_T) -> *mut c_char {
+pub unsafe fn prompt_get_input(buf: *mut Buffer) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
     let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
         return null_mut();

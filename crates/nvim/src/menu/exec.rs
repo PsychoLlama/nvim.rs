@@ -28,7 +28,7 @@ use crate::main::{
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
-use crate::types::{ColNr, LineNr, buf_T, exarg_T, pos_T, save_state_T, win_T};
+use crate::types::{Buffer, ColNr, LineNr, Window, exarg_T, pos_T, save_state_T};
 use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
@@ -308,12 +308,12 @@ pub(crate) unsafe fn menu_find(path_name: *const c_char) -> *mut vimmenu_T {
 // The editor state this module reads and writes. Each hands out a reference
 // for exactly one statement, so none can span the rhs being run.
 
-fn with_curwin<R>(f: impl FnOnce(&mut win_T) -> R) -> R {
+fn with_curwin<R>(f: impl FnOnce(&mut Window) -> R) -> R {
     // SAFETY: `curwin` always names a live window on the main thread.
     unsafe { f(&mut *curwin.get()) }
 }
 
-fn with_curbuf<R>(f: impl FnOnce(&buf_T) -> R) -> R {
+fn with_curbuf<R>(f: impl FnOnce(&Buffer) -> R) -> R {
     // SAFETY: `curbuf` always names a live buffer on the main thread.
     unsafe { f(&*curbuf.get()) }
 }

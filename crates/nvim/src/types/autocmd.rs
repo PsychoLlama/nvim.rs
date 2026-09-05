@@ -52,7 +52,7 @@ pub struct aco_save_T {
     pub save_curwin_handle: Handle,
     pub new_curwin_handle: Handle,
     pub save_prevwin_handle: Handle,
-    pub new_curbuf: bufref_T,
+    pub new_curbuf: BufferRef,
     pub tp_localdir: *mut ::core::ffi::c_char,
     pub globaldir: *mut ::core::ffi::c_char,
     pub save_VIsual_active: bool,
@@ -68,7 +68,7 @@ impl Default for aco_save_T {
             save_curwin_handle: 0,
             new_curwin_handle: 0,
             save_prevwin_handle: 0,
-            new_curbuf: bufref_T {
+            new_curbuf: BufferRef {
                 br_buf: ::core::ptr::null_mut(),
                 br_fnum: 0,
                 br_buf_free_count: 0,
@@ -82,7 +82,7 @@ impl Default for aco_save_T {
 }
 
 pub struct aucmdwin_T {
-    pub auc_win: *mut win_T,
+    pub auc_win: *mut Window,
     pub auc_win_used: bool,
 }
 

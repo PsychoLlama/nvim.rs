@@ -23,7 +23,7 @@ use crate::getchar::beep_flush;
 use crate::main::{curbuf, e_floatexchange, lastwin, p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::message::{emsg, iemsg};
 use crate::normal::{reset_VIsual_and_resel, visual_active};
-use crate::types::{FAIL, Failed, OptInt, frame_T, win_T};
+use crate::types::{FAIL, Failed, Frame, OptInt, Window};
 use crate::winlayer::{FrameRef, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
@@ -237,7 +237,7 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub unsafe fn win_splitmove(wp: *mut win_T, size: c_int, flags: c_int) -> Result<(), Failed> {
+pub unsafe fn win_splitmove(wp: *mut Window, size: c_int, flags: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live window.
     splitmove(unsafe { Win::new(wp) }, size, flags)
 }
@@ -255,7 +255,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> Result<(), Failed
     }
 
     let mut dir = 0;
-    let mut unflat_altfr = ptr::null_mut::<frame_T>();
+    let mut unflat_altfr = ptr::null_mut::<Frame>();
     if wp.w_floating {
         remove(wp, None);
     } else {
@@ -294,7 +294,7 @@ pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> Result<(), Failed
     Ok(())
 }
 
-pub unsafe fn win_move_after(win1: *mut win_T, win2: *mut win_T) {
+pub unsafe fn win_move_after(win1: *mut Window, win2: *mut Window) {
     // SAFETY: the caller's promise -- two live windows.
     unsafe { move_after(Win::new(win1), Win::new(win2)) };
 }

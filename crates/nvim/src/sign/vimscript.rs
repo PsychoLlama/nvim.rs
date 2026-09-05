@@ -220,7 +220,7 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
 ///
 /// # Safety
 /// `buf` must be live.
-pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut List {
+pub(crate) unsafe fn get_buffer_signs(buf: *mut Buffer) -> *mut List {
     // SAFETY: the caller's buffer.
     let signs = placed_signs(unsafe { Buf::new(buf) }, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
@@ -240,7 +240,7 @@ pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut List {
 /// # Safety
 /// `buf` and `retlist` must be live; `group` must be null or NUL-terminated.
 unsafe fn sign_get_placed_in_buf(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     sign_id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
@@ -295,7 +295,7 @@ unsafe fn sign_get_placed_in_buf(
 /// # Safety
 /// `buf` must be null or live; `retlist` must be live.
 unsafe fn sign_get_placed(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,

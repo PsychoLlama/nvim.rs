@@ -389,7 +389,7 @@ pub unsafe fn nvim_buf_get_commands(
         }
         // SAFETY: a null buffer names the global table, and `arena` is the
         // caller's.
-        let global = ::core::ptr::null_mut::<buf_T>();
+        let global = ::core::ptr::null_mut::<Buffer>();
         return unsafe { commands_array(global, arena) }.reported(error);
     }
     // SAFETY: `error` is this frame's slot.

@@ -41,9 +41,9 @@ use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, o
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::tr_c;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, OK, TypVal, VAR_NUMBER, VAR_STRING, VarLock, VarNumber,
-    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, tabpage_T,
-    typval_vval_union, uint64_t, win_T,
+    CdScope, EvalFuncData, MAXPATHL, OK, Tabpage, TypVal, VAR_NUMBER, VAR_STRING, VarLock,
+    VarNumber, Window, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t,
+    typval_vval_union, uint64_t,
 };
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, Win};
@@ -107,24 +107,24 @@ fn set_cwd(cwd: &Owned, from: *const c_char) {
 }
 
 /// The window's own directory, or NULL when it has none.
-fn win_localdir(win: *mut win_T) -> *mut c_char {
+fn win_localdir(win: *mut Window) -> *mut c_char {
     // SAFETY: a live window.
     unsafe { (*win).w_localdir }
 }
 
 /// The tabpage's own directory, or NULL when it has none.
-fn tab_localdir(tp: *mut tabpage_T) -> *mut c_char {
+fn tab_localdir(tp: *mut Tabpage) -> *mut c_char {
     // SAFETY: a live tabpage.
     unsafe { (*tp).tp_localdir }
 }
 
 /// Tabpage number `n`, or NULL when there is none.
-fn find_tab(n: c_int) -> *mut tabpage_T {
+fn find_tab(n: c_int) -> *mut Tabpage {
     find_tabpage(n)
 }
 
 /// The window argument 0 names within `tp`, or NULL when there is none.
-fn find_win(args: Args<'_>, tp: *mut tabpage_T) -> *mut win_T {
+fn find_win(args: Args<'_>, tp: *mut Tabpage) -> *mut Window {
     // SAFETY: a live typval, and a live tab page or NULL -- which the
     // resolver reads as the current one.
     unsafe { find_win_by_nr(args.ptr(0), TabPage::from_raw(tp)) }.map_or(ptr::null_mut(), Win::raw)
@@ -186,8 +186,8 @@ struct Scope {
     /// the scope and moves the answer one rung up, 0 means the current
     /// object, and a positive number names one.
     number: [c_int; 2],
-    tp: *mut tabpage_T,
-    win: *mut win_T,
+    tp: *mut Tabpage,
+    win: *mut Window,
 }
 
 impl Scope {

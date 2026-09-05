@@ -54,7 +54,7 @@ pub unsafe fn get_foldtext(
     // the direction of travel changes, so one broken expression does not
     // raise one error per drawn fold.
     static got_fdt_error: GlobalCell<bool> = GlobalCell::new(false);
-    static last_wp: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
+    static last_wp: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
     static last_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     let save_did_emsg = did_emsg.get();
     if last_wp.get().is_null()

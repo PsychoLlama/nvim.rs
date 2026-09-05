@@ -38,7 +38,7 @@ pub struct CharSize {
 /// iterator, which is what c2rust made them do.
 #[derive(Default)]
 pub struct CharsizeArg {
-    pub win: *mut win_T,
+    pub win: *mut Window,
     pub line: *mut ::core::ffi::c_char,
     pub use_tabstop: bool,
     /// Width of 'showbreak' plus 'breakindent', memoised across the line;

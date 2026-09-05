@@ -20,7 +20,7 @@
 //! A `Terminal` and its buffer can outlive each other in both directions.
 //! The buffer can be wiped while the child is still running, and the child
 //! can exit while the buffer is still on screen, so nothing here holds a
-//! `buf_T` across anything that might run autocommands — `buf_handle` plus
+//! `Buffer` across anything that might run autocommands — `buf_handle` plus
 //! [`buf_for_handle`] is the pattern throughout. `refcount` is the other
 //! half: it is raised around anything that can run Vimscript, and
 //! [`terminal_destroy`] only frees at zero. [`Term`] is how all of that
@@ -63,10 +63,10 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, BufferHandle, ColNr, Dict, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr,
+    Arena, Buffer, BufferHandle, ColNr, Dict, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr,
     MarkAdjustMode, Object, OptVal, OptionSetFlags, RefcountSize, RgbValue, SaveVEvent, Terminal,
     TerminalOptions, VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState,
-    VTermValue, VarNumber, aco_save_T, buf_T, exarg_T, int16_t, pos_T, size_t, uint8_t, win_T,
+    VTermValue, VarNumber, Window, aco_save_T, exarg_T, int16_t, pos_T, size_t, uint8_t,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -247,11 +247,11 @@ unsafe extern "C" fn term_output_callback(s: *const c_char, len: size_t, user_da
 /// The buffer is emptied: its lines are about to become a mirror of the
 /// emulator's screen, and anything already there would be taken for
 /// scrollback.
-pub(crate) unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *mut Terminal {
+pub(crate) unsafe fn terminal_alloc(buf: *mut Buffer, opts: TerminalOptions) -> *mut Terminal {
     // SAFETY: the caller hands over a live buffer that has no terminal yet.
     let mut buf = unsafe { Buf::new(buf) };
     // Leaked here and reclaimed by terminal_destroy. The buffer is the
-    // owner; every other reference reaches it through `buf_T::terminal`.
+    // owner; every other reference reaches it through `Buffer::terminal`.
     let raw: *mut Terminal = Box::into_raw(Box::new(Terminal::new(opts, buf.handle)));
     buf.terminal = raw;
     // SAFETY: just allocated, and nothing else has reached it yet.
@@ -329,7 +329,7 @@ pub(crate) unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
 /// outright — hence the re-check before touching either again.
-pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) {
+pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut Buffer) {
     // SAFETY: the caller hands over the buffer's own terminal slot.
     let mut term = unsafe { Term::new(*termpp) };
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
@@ -754,7 +754,7 @@ fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
 /// and lines below the screen are left alone.
 pub(crate) unsafe fn terminal_get_line_attributes(
     term: *mut Terminal,
-    _wp: *mut win_T,
+    _wp: *mut Window,
     linenr: c_int,
     term_attrs: *mut c_int,
 ) {
@@ -918,7 +918,7 @@ unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
 /// The result BORROWS the variable's own bytes, or is null. It must not be
 /// freed, and it stays valid only until something assigns to or unsets the
 /// variable.
-unsafe fn get_config_string(buf: *mut buf_T, key: *const c_char) -> *mut c_char {
+unsafe fn get_config_string(buf: *mut Buffer, key: *const c_char) -> *mut c_char {
     // SAFETY: `buf` is a live buffer and `key` is NUL-terminated.
     let mut obj = unsafe { dict_lookup((*buf).b_vars, key) };
     if obj.is_nil() {

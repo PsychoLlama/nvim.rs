@@ -48,8 +48,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CmdAddr, ColNr, Direction, ExArgt, ExpandContext, FAIL, LineNr, MarkGet, MarkMove, NUL, OK,
-    buf_T, exarg_T, fmark_T, pos_T, size_t,
+    Buffer, CmdAddr, ColNr, Direction, ExArgt, ExpandContext, FAIL, LineNr, MarkGet, MarkMove, NUL,
+    OK, exarg_T, fmark_T, pos_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 
@@ -945,7 +945,7 @@ fn ex_msg(msg: *const c_char) -> CString {
 }
 
 /// `mark_get_visual()` as checked code.
-fn mark_get_visual(buf: *mut buf_T, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
+fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::mark::mark_get_visual(buf, fmp, name) }
 }

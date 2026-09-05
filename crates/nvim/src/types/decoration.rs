@@ -167,7 +167,7 @@ pub struct DecorState {
     pub future_begin: ::core::ffi::c_int,
     pub free_slot_i: ::core::ffi::c_int,
     pub new_range_ordering: ::core::ffi::c_int,
-    pub win: *mut win_T,
+    pub win: *mut Window,
     pub top_row: ::core::ffi::c_int,
     pub row: ::core::ffi::c_int,
     pub col_last: ::core::ffi::c_int,

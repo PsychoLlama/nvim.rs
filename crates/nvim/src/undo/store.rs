@@ -129,7 +129,7 @@ impl UndoStore {
 /// A live undo header, wrapped so that reading and writing its fields is not
 /// an unsafe operation at every use.
 ///
-/// This is the trade [`crate::winlayer::Buf`] makes for `buf_T`, for the same
+/// This is the trade [`crate::winlayer::Buf`] makes for `Buffer`, for the same
 /// reason. The pointer has to stay raw — the store hands it back, the tree
 /// walks interleave it with reads of the buffer's own link fields, and a
 /// long-lived `&mut` would invalidate a view the caller still holds — but the
@@ -196,7 +196,7 @@ impl Header {
 impl Buf {
     /// The header `link` names in this buffer's undo store, if any.
     ///
-    /// Safe, where a bare lookup through a `*mut buf_T` would not be: a
+    /// Safe, where a bare lookup through a `*mut Buffer` would not be: a
     /// [`Buf`] already carries the promise that the buffer is live, and that
     /// is the whole of the lookup's obligation — a link that names nothing,
     /// or names a header that has been freed, resolves to `None`.

@@ -268,10 +268,10 @@ pub(crate) unsafe fn syn_maybe_enable() {
 /// A syntax block for `:ownsyntax`, all zero but for the fields a zeroed
 /// block is not a valid value for.
 ///
-/// Upstream's `xcalloc(1, sizeof(synblock_T))`; the block is released by
+/// Upstream's `xcalloc(1, sizeof(SynBlock))`; the block is released by
 /// `reset_synblock`, which takes the `Box` back.
-fn empty_synblock() -> Box<synblock_T> {
-    let mut storage = Box::<synblock_T>::new_zeroed();
+fn empty_synblock() -> Box<SynBlock> {
+    let mut storage = Box::<SynBlock>::new_zeroed();
     // SAFETY: the block was just allocated and nothing has read it.
     unsafe { init_synblock(storage.as_mut_ptr()) };
     // SAFETY: all-zero bytes are otherwise what upstream hands a fresh block.

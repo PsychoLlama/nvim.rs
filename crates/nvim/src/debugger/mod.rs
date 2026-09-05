@@ -58,7 +58,7 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, ColNr, EStackArg, Failed, LineNr, MAXPATHL, NUL, TypVal, buf_T, exarg_T, int32_t,
+    Buffer, Callback, ColNr, EStackArg, Failed, LineNr, MAXPATHL, NUL, TypVal, exarg_T, int32_t,
     int64_t, regprog_T, size_t, tasave_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
@@ -617,7 +617,7 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
         if kind == DBG_FILE {
             unsafe {
                 home_replace(
-                    ptr::null::<buf_T>(),
+                    ptr::null::<Buffer>(),
                     (*bp).dbg_name,
                     namebuff,
                     MAXPATHL as size_t,

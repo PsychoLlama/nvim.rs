@@ -39,13 +39,12 @@ use crate::normal::reset_VIsual_and_resel;
 use crate::option::set_option_value;
 use crate::options::kOptCmdheight;
 use crate::types::{
-    Failed, Handle, OptInt, OptVal, OptionSetFlags, VAR_SCOPE, buf_T, int64_t, switchwin_T,
-    tabpage_T,
+    Buffer, Failed, Handle, OptInt, OptVal, OptionSetFlags, SwitchWin, Tabpage, VAR_SCOPE, int64_t,
 };
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
-pub unsafe fn unuse_tabpage(tp: *mut tabpage_T) {
+pub unsafe fn unuse_tabpage(tp: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
     stash_tabpage(unsafe { TabPage::new(tp) });
 }
@@ -60,7 +59,7 @@ pub(crate) fn stash_tabpage(tp: TabPage) {
     tp.tp_curwin = curwin.get();
 }
 
-pub unsafe fn use_tabpage(tp: *mut tabpage_T) {
+pub unsafe fn use_tabpage(tp: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
     adopt_tabpage(unsafe { TabPage::new(tp) });
 }
@@ -74,13 +73,13 @@ pub(crate) fn adopt_tabpage(tp: TabPage) {
     curwin.set(tp.tp_curwin);
 }
 
-/// Allocate a `tabpage_T` and fill in its defaults.
+/// Allocate a `Tabpage` and fill in its defaults.
 pub(crate) fn alloc_tabpage() -> TabPage {
     static LAST_TP_HANDLE: GlobalCell<c_int> = GlobalCell::new(0);
-    // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(tabpage_T))`
+    // SAFETY: all-zero bytes are what upstream's `xcalloc(1, sizeof(Tabpage))`
     // hands a fresh tab page, and every field of `tabpage_S` that owns an
     // allocation is null when zeroed.
-    let owned = Owned::new(unsafe { Box::<tabpage_T>::new_zeroed().assume_init() });
+    let owned = Owned::new(unsafe { Box::<Tabpage>::new_zeroed().assume_init() });
     // SAFETY: the allocation just made, which `owned` keeps alive until the
     // registry takes it over two lines below.
     let mut tp = unsafe { TabPage::new(owned.address()) };
@@ -99,7 +98,7 @@ pub(crate) fn alloc_tabpage() -> TabPage {
     tp
 }
 
-pub unsafe fn free_tabpage(tp: *mut tabpage_T) {
+pub unsafe fn free_tabpage(tp: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
     free_tab(unsafe { TabPage::new(tp) });
 }
@@ -122,7 +121,7 @@ pub(crate) fn free_tab(tp: TabPage) {
         unref_var_dict(vars);
     }
     if tp.raw() == lastused_tabpage.get() {
-        lastused_tabpage.set(ptr::null_mut::<tabpage_T>());
+        lastused_tabpage.set(ptr::null_mut::<Tabpage>());
     }
     free(tp.tp_localdir);
     free(tp.tp_prevdir);
@@ -134,8 +133,8 @@ pub unsafe fn win_new_tabpage(
     after: c_int,
     filename: *mut c_char,
     enter: bool,
-    first: *mut *mut win_T,
-) -> *mut tabpage_T {
+    first: *mut *mut Window,
+) -> *mut Tabpage {
     let newtp = new_tabpage(after, filename, enter);
     if let Some((newtp, opened)) = newtp {
         if !first.is_null() {
@@ -258,9 +257,9 @@ pub(crate) fn new_tabpage(
 /// afterwards -- a scope rather than a guard, since the transpiled code has no
 /// unwinding path either.
 fn in_window(tp: TabPage, body: impl FnOnce()) {
-    let mut switchwin = switchwin_T {
-        sw_curwin: ptr::null_mut::<win_T>(),
-        sw_curtab: ptr::null_mut::<tabpage_T>(),
+    let mut switchwin = SwitchWin {
+        sw_curwin: ptr::null_mut::<Window>(),
+        sw_curtab: ptr::null_mut::<Tabpage>(),
         sw_same_win: false,
         sw_visual_active: false,
     };
@@ -331,7 +330,7 @@ pub unsafe fn make_tabpages(maxcount: c_int) -> c_int {
     count - todo
 }
 
-pub fn valid_tabpage(tpc: *mut tabpage_T) -> bool {
+pub fn valid_tabpage(tpc: *mut Tabpage) -> bool {
     valid_tab(tpc).is_some()
 }
 
@@ -340,18 +339,18 @@ pub fn valid_tabpage(tpc: *mut tabpage_T) -> bool {
 /// Takes a raw pointer deliberately: the question is asked about a tab page
 /// autocommands may already have freed, and the answer is the bridge back to a
 /// value the rest of the family may dereference.
-pub(crate) fn valid_tab(tpc: *mut tabpage_T) -> Option<TabPage> {
+pub(crate) fn valid_tab(tpc: *mut Tabpage) -> Option<TabPage> {
     tabs().find(|tp| tp.raw() == tpc)
 }
 
-pub fn valid_tabpage_win(tpc: *mut tabpage_T) -> c_int {
+pub fn valid_tabpage_win(tpc: *mut Tabpage) -> c_int {
     let Some(tp) = valid_tab(tpc) else {
         return 0; // shouldn't happen
     };
     windows_in_tab(tp).any(|wp| valid_win_any_tab(wp.raw())) as c_int
 }
 
-pub unsafe fn close_tabpage(tab: *mut tabpage_T) {
+pub unsafe fn close_tabpage(tab: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live tab page.
     close_tab(unsafe { TabPage::new(tab) });
 }
@@ -374,7 +373,7 @@ fn close_tab(tab: TabPage) {
     free_tab(tab);
 }
 
-pub fn find_tabpage(n: c_int) -> *mut tabpage_T {
+pub fn find_tabpage(n: c_int) -> *mut Tabpage {
     raw_tab(nth_tab(n))
 }
 
@@ -390,7 +389,7 @@ fn nth_tab(n: c_int) -> Option<TabPage> {
     tabs().nth(n as usize - 1)
 }
 
-pub fn tabpage_index(ftp: *mut tabpage_T) -> c_int {
+pub fn tabpage_index(ftp: *mut Tabpage) -> c_int {
     index_of_tab(ftp)
 }
 
@@ -401,7 +400,7 @@ pub(crate) fn tab_index(tp: TabPage) -> c_int {
 }
 
 /// [`tab_index`] over a pointer, which is how the C's callers ask it.
-fn index_of_tab(ftp: *mut tabpage_T) -> c_int {
+fn index_of_tab(ftp: *mut Tabpage) -> c_int {
     let mut i = 1;
     for tp in tabs() {
         if tp.raw() == ftp {
@@ -628,7 +627,7 @@ pub(crate) fn goto_tab_number(n: c_int) {
 }
 
 pub unsafe fn goto_tabpage_tp(
-    tp: *mut tabpage_T,
+    tp: *mut Tabpage,
     trigger_enter_autocmds: bool,
     trigger_leave_autocmds: bool,
 ) {
@@ -675,7 +674,7 @@ pub(crate) fn goto_last_used_tab() -> bool {
     true
 }
 
-pub unsafe fn goto_tabpage_win(tp: *mut tabpage_T, wp: *mut win_T) {
+pub unsafe fn goto_tabpage_win(tp: *mut Tabpage, wp: *mut Window) {
     // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
     goto_tab_win(tp, wp);
@@ -733,6 +732,6 @@ pub fn tabpage_move(nr: c_int) {
 }
 
 /// A buffer argument that may be absent, as `leave_tab` takes it.
-fn raw_buf(buf: Option<Buf>) -> *mut buf_T {
+fn raw_buf(buf: Option<Buf>) -> *mut Buffer {
     buf.map_or(ptr::null_mut(), Buf::raw)
 }

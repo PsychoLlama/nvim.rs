@@ -24,7 +24,7 @@
 //! # Safety
 //!
 //! Every function here takes editor state by raw pointer -- the `exarg_T` of
-//! the command being executed, or a `buf_T`/`win_T`/`tabpage_T` out of one
+//! the command being executed, or a `Buffer`/`Window`/`Tabpage` out of one
 //! of the editor's own lists -- and every one of them runs on the main
 //! thread with those lists live. That is the contract the `unsafe fn`s below
 //! share; each states it once by reference and does not restate it.
@@ -32,7 +32,7 @@
 //! What the contract does *not* buy is stability. Nearly everything here can
 //! run autocommands -- a write, a buffer switch, the command `:argdo` was
 //! given -- and an autocommand can delete the very buffer under examination.
-//! So the `bufref_T` re-checks that follow such a call are load-bearing, and
+//! So the `BufferRef` re-checks that follow such a call are load-bearing, and
 //! a walk that a callee can invalidate restarts from `firstbuf` instead of
 //! trusting the `b_next` it read before. [`buffers`] and its two siblings
 //! are only for the walks where that cannot happen.
@@ -80,8 +80,8 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, Failed, LineNr, MAXPATHL, NUL, VarNumber, Vv, buf_T, exarg_T, ptrdiff_t, size_t,
-    ssize_t, tabpage_T, uint64_t, win_T,
+    Buffer, CmdModFlags, Failed, LineNr, MAXPATHL, NUL, Tabpage, VarNumber, Vv, Window, exarg_T,
+    ptrdiff_t, size_t, ssize_t, uint64_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -132,13 +132,13 @@ mod flag {
 
 /// Every buffer, oldest first -- `FOR_ALL_BUFFERS`, as raw pointers, which is
 /// what the walks here hand straight to a still-transpiled neighbour.
-fn buffers() -> impl Iterator<Item = *mut buf_T> {
+fn buffers() -> impl Iterator<Item = *mut Buffer> {
     all_buffers().map(Buf::raw)
 }
 
 /// Every window of every tab page, paired with the tab page holding it --
 /// `FOR_ALL_TAB_WINDOWS`, which is `tabs()` followed by `windows_in_tab()`.
-fn tab_windows() -> impl Iterator<Item = (*mut tabpage_T, *mut win_T)> {
+fn tab_windows() -> impl Iterator<Item = (*mut Tabpage, *mut Window)> {
     tabs().flat_map(|tp| windows_in_tab(tp).map(move |wp| (tp.raw(), wp.raw())))
 }
 
@@ -276,7 +276,7 @@ unsafe fn script_host_do_range(name: &CStr, eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn autowrite(buf: *mut buf_T, forceit: bool) -> Result<(), Failed> {
+pub(crate) unsafe fn autowrite(buf: *mut Buffer, forceit: bool) -> Result<(), Failed> {
     // SAFETY: module contract.
     if !(p_aw.get() != 0 || p_awa.get() != 0)
         || p_write.get() == 0
@@ -327,7 +327,7 @@ pub(crate) unsafe fn autowrite_all() {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
+pub(crate) unsafe fn check_changed(buf: *mut Buffer, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
     // SAFETY: module contract, here and at every `unsafe` below.
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
@@ -379,7 +379,7 @@ pub(crate) unsafe fn check_changed(buf: *mut buf_T, flags: c_int) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn dialog_changed(buf: *mut buf_T, checkall: bool) {
+pub(crate) unsafe fn dialog_changed(buf: *mut Buffer, checkall: bool) {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // `check_overwrite` needs an exarg_T; upstream hands it an all-zero one.
     let mut ea = exarg_T::default();
@@ -464,7 +464,7 @@ unsafe fn write_all_writable() {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn dialog_close_terminal(buf: *mut buf_T) -> bool {
+pub(crate) unsafe fn dialog_close_terminal(buf: *mut Buffer) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
     let name = if unsafe { (*buf).b_fname }.is_null() {
@@ -490,7 +490,7 @@ pub(crate) unsafe fn dialog_close_terminal(buf: *mut buf_T) -> bool {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn can_abandon(buf: *mut buf_T, forceit: bool) -> bool {
+pub(crate) unsafe fn can_abandon(buf: *mut Buffer, forceit: bool) -> bool {
     // SAFETY: module contract.
     let hidden = unsafe { buf_hide(buf) };
     hidden
@@ -545,7 +545,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
         return false;
     }
     // SAFETY: module contract.
-    let mut culprit = ptr::null_mut::<buf_T>();
+    let mut culprit = ptr::null_mut::<Buffer>();
     for nr in unsafe { changed_check_order() } {
         let buf = find_buf(nr).map_or(ptr::null_mut(), |b| b.raw());
         if buf.is_null()
@@ -608,7 +608,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn report_unwritten(buf: *mut buf_T) {
+unsafe fn report_unwritten(buf: *mut Buffer) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
     if vgetc_busy.get() > 0 {
@@ -665,7 +665,7 @@ pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> Result<(), Failed> {
+pub(crate) unsafe fn buf_write_all(buf: *mut Buffer, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = curbuf.get();
     // SAFETY: module contract.
     let retval = unsafe {

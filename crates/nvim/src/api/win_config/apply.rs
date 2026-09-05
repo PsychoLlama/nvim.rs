@@ -15,9 +15,9 @@ use crate::winlayer::{TabPage, Win};
 
 /// `NULL` for "the current tab page", which is how the window family spells
 /// it throughout.
-fn other_tab(tp: *mut tabpage_T) -> *mut tabpage_T {
+fn other_tab(tp: *mut Tabpage) -> *mut Tabpage {
     if tp == curtab.get() {
-        ::core::ptr::null_mut::<tabpage_T>()
+        ::core::ptr::null_mut::<Tabpage>()
     } else {
         tp
     }
@@ -27,7 +27,7 @@ fn other_tab(tp: *mut tabpage_T) -> *mut tabpage_T {
 ///
 /// # Safety
 /// `frame` must be a live frame.
-unsafe fn sibling_count(frame: *mut frame_T) -> ::core::ffi::c_int {
+unsafe fn sibling_count(frame: *mut Frame) -> ::core::ffi::c_int {
     // SAFETY: the caller's frame, whose `fr_child`/`fr_next` links are live
     // frames or null.
     let first = unsafe { (*frame).fr_child };
@@ -48,7 +48,7 @@ unsafe fn sibling_count(frame: *mut frame_T) -> ::core::ffi::c_int {
 /// `win` must be a live window, and `config`, `fconfig` and `err` must name
 /// live objects for the whole call.
 unsafe fn win_config_split(
-    win: *mut win_T,
+    win: *mut Window,
     config: CfgKeys,
     mut fconfig: WinCfg,
     err: ErrSlot,
@@ -83,8 +83,8 @@ unsafe fn win_config_split(
         if stays_put {
             break '_resize;
         }
-        let mut parent: *mut win_T = ::core::ptr::null_mut::<win_T>();
-        let mut parent_tp: *mut tabpage_T = ::core::ptr::null_mut::<tabpage_T>();
+        let mut parent: *mut Window = ::core::ptr::null_mut::<Window>();
+        let mut parent_tp: *mut Tabpage = ::core::ptr::null_mut::<Tabpage>();
         if config.win == 0 {
             parent = curwin.get();
             parent_tp = curtab.get();
@@ -96,7 +96,7 @@ unsafe fn win_config_split(
             }
             parent_tp = win_find_tabpage(parent);
         }
-        let mut win_tp: *mut tabpage_T = win_find_tabpage(win);
+        let mut win_tp: *mut Tabpage = win_find_tabpage(win);
         if !parent.is_null() {
             // SAFETY: `parent` is the live window found above.
             if unsafe { (*parent).w_floating } {
@@ -115,8 +115,8 @@ unsafe fn win_config_split(
         let to_split_ok;
         let curwin_moving_tp = win == curwin.get() && !parent.is_null() && win_tp != parent_tp;
         let mut dir: ::core::ffi::c_int = 0;
-        let mut unflat_altfr: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-        let altwin_0: *mut win_T;
+        let mut unflat_altfr: *mut Frame = ::core::ptr::null_mut::<Frame>();
+        let altwin_0: *mut Window;
         '_restore_curwin: {
             if curwin_moving_tp {
                 // SAFETY: the caller's window, still in its tab page.
@@ -164,7 +164,7 @@ unsafe fn win_config_split(
                 if into_itself {
                     // SAFETY: the frame's parent is live -- checked above.
                     let n_frames = unsafe { sibling_count((*frame).fr_parent) };
-                    let mut neighbor: *mut win_T = ::core::ptr::null_mut::<win_T>();
+                    let mut neighbor: *mut Window = ::core::ptr::null_mut::<Window>();
                     if n_frames > 2 {
                         // SAFETY: as above.
                         let nested = !unsafe { (*(*frame).fr_parent).fr_parent }.is_null();
@@ -232,9 +232,9 @@ unsafe fn win_config_split(
             // SAFETY: `tstate` is this frame's own, live until `try_leave`.
             unsafe { try_enter(&raw mut tstate) };
             let need_switch: bool = !parent.is_null() && parent != curwin.get();
-            let mut switchwin = switchwin_T {
-                sw_curwin: ::core::ptr::null_mut::<win_T>(),
-                sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
+            let mut switchwin = SwitchWin {
+                sw_curwin: ::core::ptr::null_mut::<Window>(),
+                sw_curtab: ::core::ptr::null_mut::<Tabpage>(),
                 sw_same_win: false,
                 sw_visual_active: false,
             };
@@ -324,14 +324,14 @@ unsafe fn win_config_split(
 /// `win` must be a live window, and `config`, `fconfig` and `err` must name
 /// live objects for the whole call.
 unsafe fn win_config_float_tp(
-    win: *mut win_T,
+    win: *mut Window,
     config: CfgKeys,
     fconfig: WinCfg,
     err: ErrSlot,
 ) -> bool {
-    let mut win_tp: *mut tabpage_T = win_find_tabpage(win);
-    let mut parent: *mut win_T = win;
-    let mut parent_tp: *mut tabpage_T = win_tp;
+    let mut win_tp: *mut Tabpage = win_find_tabpage(win);
+    let mut parent: *mut Window = win;
+    let mut parent_tp: *mut Tabpage = win_tp;
     if has_key(config.is_set__win_config_, KEYSET_OPTIDX_win_config__win) {
         // SAFETY: `err` names the caller's error slot.
         parent = unsafe { find_window_by_handle(fconfig.window, slot_mut(err)) };
@@ -341,7 +341,7 @@ unsafe fn win_config_float_tp(
         parent_tp = win_find_tabpage(parent);
     }
     let mut curwin_moving_tp = false;
-    let mut altwin: *mut win_T = ::core::ptr::null_mut::<win_T>();
+    let mut altwin: *mut Window = ::core::ptr::null_mut::<Window>();
     '_restore_curwin: {
         if win_tp != parent_tp {
             // SAFETY: the caller's window and error slot.
@@ -490,13 +490,13 @@ pub unsafe fn nvim_win_set_config(
     if fconfig._cmdline_offset < INT_MAX {
         cmdline_win.set(w);
     } else if w == cmdline_win.get() && fconfig._cmdline_offset == INT_MAX {
-        cmdline_win.set(::core::ptr::null_mut::<win_T>());
+        cmdline_win.set(::core::ptr::null_mut::<Window>());
     }
     ().reported(error)
 }
 
 /// `Win::raw`, or a null for "no neighbour" — the shape the transpiled
 /// window family still takes.
-fn raw_win(wp: Option<Win>) -> *mut win_T {
+fn raw_win(wp: Option<Win>) -> *mut Window {
     wp.map_or(::core::ptr::null_mut(), Win::raw)
 }

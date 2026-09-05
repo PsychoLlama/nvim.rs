@@ -1,6 +1,6 @@
 //! Applying a new size to a window, and the rows that are not text.
 //!
-//! [`set_inner_size`] is where a height or width finally lands on a `win_T`: it
+//! [`set_inner_size`] is where a height or width finally lands on a `Window`: it
 //! resizes the grid, re-wraps the text, and keeps the view stable by
 //! remembering the cursor's [`save_fraction`] of the window and restoring it
 //! with [`to_fraction`] ([`fix_scroll`] and [`fix_cursor`] are the
@@ -42,8 +42,8 @@ use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{
-    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, WindowHandle,
-    size_t, tabpage_T, win_T,
+    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, Tabpage, Window,
+    WindowHandle, size_t,
 };
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
 use crate::winfloat::{win_border_height, win_border_width, win_float_anchor_laststatus};
@@ -122,7 +122,7 @@ pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
 // ---------------------------------------------------------------------------
 // The cursor's place in the window
 
-pub unsafe fn set_fraction(wp: *mut win_T) {
+pub unsafe fn set_fraction(wp: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     save_fraction(unsafe { Win::new(wp) });
 }
@@ -231,7 +231,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     }
 }
 
-pub unsafe fn win_new_height(wp: *mut win_T, height: c_int) {
+pub unsafe fn win_new_height(wp: *mut Window, height: c_int) {
     // SAFETY: the caller's promise -- a live window.
     new_win_height(unsafe { Win::new(wp) }, height);
 }
@@ -250,7 +250,7 @@ pub(crate) fn new_win_height(wp: Win, height: c_int) {
     set_inner_size(wp, true);
 }
 
-pub unsafe fn scroll_to_fraction(wp: *mut win_T, prev_height: c_int) {
+pub unsafe fn scroll_to_fraction(wp: *mut Window, prev_height: c_int) {
     // SAFETY: the caller's promise -- a live window.
     to_fraction(unsafe { Win::new(wp) }, prev_height);
 }
@@ -341,7 +341,7 @@ pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
     invalidate_botline(wp);
 }
 
-pub unsafe fn win_set_inner_size(wp: *mut win_T, valid_cursor: bool) {
+pub unsafe fn win_set_inner_size(wp: *mut Window, valid_cursor: bool) {
     // SAFETY: the caller's promise -- a live window.
     set_inner_size(unsafe { Win::new(wp) }, valid_cursor);
 }
@@ -428,7 +428,7 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
     wp.w_redr_status = true;
 }
 
-pub unsafe fn win_new_width(wp: *mut win_T, width: c_int) {
+pub unsafe fn win_new_width(wp: *mut Window, width: c_int) {
     // SAFETY: the caller's promise -- a live window.
     new_win_width(unsafe { Win::new(wp) }, width);
 }
@@ -441,7 +441,7 @@ pub(crate) fn new_win_width(wp: Win, width: c_int) {
     set_inner_size(wp, true);
 }
 
-pub unsafe fn win_default_scroll(wp: *mut win_T) -> OptInt {
+pub unsafe fn win_default_scroll(wp: *mut Window) -> OptInt {
     // SAFETY: the caller's promise -- a live window.
     default_scroll(unsafe { Win::new(wp) })
 }
@@ -452,7 +452,7 @@ pub(crate) fn default_scroll(wp: Win) -> OptInt {
     (wp.w_view_height / 2).max(1) as OptInt
 }
 
-pub unsafe fn win_comp_scroll(wp: *mut win_T) {
+pub unsafe fn win_comp_scroll(wp: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     comp_scroll(unsafe { Win::new(wp) });
 }
@@ -558,7 +558,7 @@ pub(crate) fn update_last_status(morewin: bool) {
     win_float_anchor_laststatus();
 }
 
-pub unsafe fn win_remove_status_line(wp: *mut win_T, add_hsep: bool) {
+pub unsafe fn win_remove_status_line(wp: *mut Window, add_hsep: bool) {
     // SAFETY: the caller's promise -- a live window.
     remove_status_line(unsafe { Win::new(wp) }, add_hsep);
 }
@@ -669,7 +669,7 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     }
 }
 
-pub unsafe fn set_winbar_win(wp: *mut win_T, make_room: bool, valid_cursor: bool) -> c_int {
+pub unsafe fn set_winbar_win(wp: *mut Window, make_room: bool, valid_cursor: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     winbar_win(unsafe { Win::new(wp) }, make_room, valid_cursor)
 }
@@ -774,7 +774,7 @@ fn first_window() -> Win {
     windows().next().expect("a tab page has a window")
 }
 
-pub unsafe fn min_rows(tp: *mut tabpage_T) -> c_int {
+pub unsafe fn min_rows(tp: *mut Tabpage) -> c_int {
     // SAFETY: the caller's promise -- a live tab page.
     min_rows_of(unsafe { TabPage::new(tp) })
 }

@@ -13,18 +13,18 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
-    EStackType, EstackInfo, Exception, FILE, GArray, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode,
-    MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MsgList, MultiQueue, NS, Object, OptInt, OptMagic,
-    Proc, ProfTime, Refcount, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
-    UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
-    bufref_T, caller_scope, cmdmod_T, estack_T, file_comparison, fmark_T, fmarkv_T, frame_T,
-    int16_t, int32_t, int64_t, lpos_T, match_T, nlua_ref_state_t, nvim_stats_s, pos_T,
-    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T, uint8_t, uint32_t,
-    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
-    xfmark_T,
+    AdditionalData, Array, BreakAt, Buffer, BufferRef, Callback, Channel, CmdModFlags, ColNr,
+    DecorState, DispTick, EStackType, EstackInfo, Exception, FILE, Frame, GArray, Handle, Hlf,
+    LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MatchState,
+    MsgList, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime, Refcount, RgbValue,
+    ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT,
+    WinExtmark, Window, XDGVarType, alist_T, aucmdwin_T, bln_values, caller_scope, cmdmod_T,
+    estack_T, file_comparison, fmark_T, fmarkv_T, int16_t, int32_t, int64_t, lpos_T,
+    nlua_ref_state_t, nvim_stats_s, pos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T,
+    size_t, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
+    uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
+    uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u,
+    uv_timer_t, vimmenu_T, xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -170,8 +170,8 @@ pub static ui_ext_names: ConstTable<[*const c_char; 10]> = ConstTable::new([
     c"_debug_float".as_ptr(),
 ]);
 pub(crate) const PATHSEP: c_int = '/' as c_int;
-pub static last_cursormoved_win: GlobalCell<*mut win_T> =
-    GlobalCell::new(::core::ptr::null_mut::<win_T>());
+pub static last_cursormoved_win: GlobalCell<*mut Window> =
+    GlobalCell::new(::core::ptr::null_mut::<Window>());
 pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0 as LineNr,
     col: 0 as ColNr,
@@ -180,7 +180,7 @@ pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
 pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub static autocmd_no_enter: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static autocmd_no_leave: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static au_new_curbuf: GlobalCell<bufref_T> = GlobalCell::new(bufref_T::new());
+pub static au_new_curbuf: GlobalCell<BufferRef> = GlobalCell::new(BufferRef::new());
 pub static autocmd_fname: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static autocmd_fname_full: GlobalCell<bool> = GlobalCell::new(false);
@@ -226,7 +226,7 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     future_begin: 0,
     free_slot_i: 0,
     new_range_ordering: 0,
-    win: ::core::ptr::null_mut::<win_T>(),
+    win: ::core::ptr::null_mut::<Window>(),
     top_row: 0,
     row: 0,
     col_last: 0,
@@ -251,7 +251,7 @@ pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
 pub static win_extmark_arr: GlobalCell<Vec<WinExtmark>> = GlobalCell::new(Vec::new());
 pub static updating_screen: GlobalCell<bool> = GlobalCell::new(false);
 pub static redraw_not_allowed: GlobalCell<bool> = GlobalCell::new(false);
-pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
+pub static screen_search_hl: GlobalCell<MatchState> = GlobalCell::new(MatchState {
     rm: regmmatch_T {
         regprog: ::core::ptr::null_mut::<regprog_T>(),
         startpos: [lpos_T { lnum: 0, col: 0 }; 10],
@@ -260,7 +260,7 @@ pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
         rmm_ic: 0,
         rmm_maxcol: 0,
     },
-    buf: ::core::ptr::null_mut::<buf_T>(),
+    buf: ::core::ptr::null_mut::<Buffer>(),
     lnum: 0,
     attr: 0,
     attr_cur: 0,
@@ -630,19 +630,18 @@ pub static root_menu: GlobalCell<*mut vimmenu_T> =
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub static prevwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+pub static prevwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
 #[unsafe(no_mangle)]
-pub static curwin: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-pub static topframe: GlobalCell<*mut frame_T> = GlobalCell::new(::core::ptr::null_mut::<frame_T>());
+pub static curwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
+pub static topframe: GlobalCell<*mut Frame> = GlobalCell::new(::core::ptr::null_mut::<Frame>());
 pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
-pub static curtab: GlobalCell<*mut tabpage_T> =
-    GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
-pub static lastused_tabpage: GlobalCell<*mut tabpage_T> =
-    GlobalCell::new(::core::ptr::null_mut::<tabpage_T>());
+pub static curtab: GlobalCell<*mut Tabpage> = GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
+pub static lastused_tabpage: GlobalCell<*mut Tabpage> =
+    GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub static curbuf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
+pub static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
 pub static global_alist: GlobalCell<alist_T> = GlobalCell::new(alist_T {
     al_ga: Vec::new(),
     al_refcount: Refcount::ZERO,
@@ -827,11 +826,12 @@ pub static km_startsel: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static cmdwin_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut::<buf_T>());
-pub static cmdwin_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
-pub static cmdwin_old_curwin: GlobalCell<*mut win_T> =
-    GlobalCell::new(::core::ptr::null_mut::<win_T>());
-pub static cmdline_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
+pub static cmdwin_buf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
+pub static cmdwin_win: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
+pub static cmdwin_old_curwin: GlobalCell<*mut Window> =
+    GlobalCell::new(::core::ptr::null_mut::<Window>());
+pub static cmdline_win: GlobalCell<*mut Window> =
+    GlobalCell::new(::core::ptr::null_mut::<Window>());
 pub static no_lines_msg: &CStr = c"--No lines in buffer--";
 pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);

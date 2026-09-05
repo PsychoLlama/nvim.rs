@@ -49,7 +49,7 @@ use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     Array, ColNr, Hlf, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags,
-    ScreenChar, StlOpt, String_0, int64_t, ssize_t, tabpage_T, win_T,
+    ScreenChar, StlOpt, String_0, Tabpage, Window, int64_t, ssize_t,
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
@@ -93,7 +93,7 @@ impl Target {
     ///
     /// # Safety
     /// `wp` must be null or a live window.
-    unsafe fn of(wp: *mut win_T, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
+    unsafe fn of(wp: *mut Window, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
         // SAFETY: the caller's promise.
         let win = unsafe { win_opt(wp) };
         let is_stl_global = stl_is_global();
@@ -448,7 +448,7 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
 /// `wp` must be null or a live window. Expanding the format re-enters the
 /// editor, so nothing may be held across this.
 pub(crate) unsafe fn win_redr_custom(
-    wp: *mut win_T,
+    wp: *mut Window,
     draw_winbar: bool,
     draw_ruler: bool,
     ui_event: bool,
@@ -469,7 +469,7 @@ pub(crate) unsafe fn win_redr_custom(
 ///
 /// # Safety
 /// As [`win_redr_custom`].
-unsafe fn draw_custom(wp: *mut win_T, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
+unsafe fn draw_custom(wp: *mut Window, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
     // SAFETY: the caller's promise.
     let Some((target, source)) = (unsafe { Target::of(wp, draw_winbar, draw_ruler) }) else {
         return;
@@ -534,7 +534,7 @@ unsafe fn draw_custom(wp: *mut win_T, draw_winbar: bool, draw_ruler: bool, ui_ev
 /// # Safety
 /// `wp` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe fn win_redr_winbar(wp: *mut win_T) {
+pub unsafe fn win_redr_winbar(wp: *mut Window) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // Reached recursively when the winbar contains an expression that
     // triggers a redraw.
@@ -577,7 +577,7 @@ pub unsafe fn redraw_ruler() {
     let mut win = if use_cur {
         cur
     } else {
-        unsafe { Win::new(lastwin_nofloating(ptr::null_mut::<tabpage_T>())) }
+        unsafe { Win::new(lastwin_nofloating(ptr::null_mut::<Tabpage>())) }
     };
     let is_stl_global = stl_is_global();
 

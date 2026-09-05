@@ -47,8 +47,8 @@ use crate::options::{
 use crate::os::env::home_replace_save;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
-    DictItem, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarType, buf_T,
-    frame_T, int64_t, win_T,
+    Buffer, DictItem, Frame, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    VarType, Window, int64_t,
 };
 use crate::window::tabpage_index;
 use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
@@ -221,7 +221,7 @@ unsafe fn put_cd(out: SessionFile, dirnow: *mut c_char) -> bool {
     } else {
         globaldir.get()
     };
-    let sname = unsafe { home_replace_save(ptr::null_mut::<buf_T>(), dir) };
+    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), dir) };
     let fname_esc = unsafe { ses_escape_fname(sname) };
     let ok = out.puts(c"cd ") && unsafe { out.bytes(fname_esc) } && out.eol();
     unsafe { xfree(fname_esc.cast::<c_void>()) };
@@ -288,7 +288,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
     let mut next_arg_idx = 0;
     // The one window whose file `makeopens` already `:edit`ed, so that
     // `put_view` need not do it again.
-    let mut edited_win = ptr::null_mut::<win_T>();
+    let mut edited_win = ptr::null_mut::<Window>();
 
     // SAFETY: caller contract; nothing here runs Vimscript, so the lists
     // cannot change under the walk.
@@ -484,7 +484,7 @@ unsafe fn ses_winsizes(out: SessionFile, restore_size: bool, tab: TabPage) -> bo
 ///
 /// # Safety
 /// `fr` is a live frame.
-unsafe fn ses_win_rec(out: SessionFile, fr: *mut frame_T) -> bool {
+unsafe fn ses_win_rec(out: SessionFile, fr: *mut Frame) -> bool {
     // SAFETY: caller contract; the frame tree is live.
     if unsafe { (*fr).fr_layout } == FR_LEAF {
         return true;
@@ -536,7 +536,7 @@ unsafe fn ses_win_rec(out: SessionFile, fr: *mut frame_T) -> bool {
 ///
 /// # Safety
 /// `fr` is null or a live frame.
-unsafe fn ses_skipframe(fr: *mut frame_T) -> *mut frame_T {
+unsafe fn ses_skipframe(fr: *mut Frame) -> *mut Frame {
     // SAFETY: caller contract.
     let mut frc = fr;
     while !frc.is_null() && !unsafe { ses_do_frame(frc) } {
@@ -549,7 +549,7 @@ unsafe fn ses_skipframe(fr: *mut frame_T) -> *mut frame_T {
 ///
 /// # Safety
 /// `fr` is a live frame.
-unsafe fn ses_do_frame(fr: *const frame_T) -> bool {
+unsafe fn ses_do_frame(fr: *const Frame) -> bool {
     // SAFETY: caller contract.
     if unsafe { (*fr).fr_layout } == FR_LEAF {
         return unsafe { ses_do_win((*fr).fr_win) };

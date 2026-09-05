@@ -598,7 +598,7 @@ pub unsafe fn tilde_replace(
     // SAFETY: the caller's promise -- `num_files` names.
     for file in unsafe { ::core::slice::from_raw_parts_mut(files, n) } {
         // SAFETY: an allocated file name.
-        let p = unsafe { home_replace_save(::core::ptr::null_mut::<buf_T>(), *file) };
+        let p = unsafe { home_replace_save(::core::ptr::null_mut::<Buffer>(), *file) };
         free(*file);
         *file = p;
     }

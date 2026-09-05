@@ -20,7 +20,7 @@ use super::arith::NextCurwin;
 use super::*;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID, showmode};
 use crate::main::{Columns, Rows, cmdline_row, e_noroom, p_ch, p_wmh, p_wmw, redraw_cmdline};
-use crate::types::{OptInt, kFloatRelativeWindow, optset_T, win_T};
+use crate::types::{OptInt, Window, kFloatRelativeWindow, optset_T};
 use crate::winfloat::win_config_float;
 use crate::winlayer::{FrameRef, Win, frames, frames_back, windows_back};
 
@@ -80,7 +80,7 @@ pub fn win_setheight(height: c_int) {
     setheight_win(height, cur_win());
 }
 
-pub unsafe fn win_setheight_win(height: c_int, win: *mut win_T) {
+pub unsafe fn win_setheight_win(height: c_int, win: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     setheight_win(height, unsafe { Win::new(win) });
 }
@@ -252,7 +252,7 @@ pub fn win_setwidth(width: c_int) {
     setwidth_win(width, cur_win());
 }
 
-pub unsafe fn win_setwidth_win(width: c_int, wp: *mut win_T) {
+pub unsafe fn win_setwidth_win(width: c_int, wp: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     setwidth_win(width, unsafe { Win::new(wp) });
 }
@@ -411,7 +411,7 @@ pub unsafe fn did_set_winminwidth(_args: &mut optset_T) -> Option<&CStr> {
     None
 }
 
-pub unsafe fn win_drag_status_line(dragwin: *mut win_T, offset: c_int) {
+pub unsafe fn win_drag_status_line(dragwin: *mut Window, offset: c_int) {
     // SAFETY: the caller's promise -- a live window.
     drag_status_line(unsafe { Win::new(dragwin) }, offset);
 }
@@ -515,7 +515,7 @@ fn drag_status_line(dragwin: Win, offset: c_int) {
     unsafe { showmode() };
 }
 
-pub unsafe fn win_drag_vsep_line(dragwin: *mut win_T, offset: c_int) {
+pub unsafe fn win_drag_vsep_line(dragwin: *mut Window, offset: c_int) {
     // SAFETY: the caller's promise -- a live window.
     drag_vsep_line(unsafe { Win::new(dragwin) }, offset);
 }

@@ -39,7 +39,7 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::strings::vim_strchr;
 use crate::types::{
-    FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, buf_T, size_t, uint32_t,
+    Buffer, FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,
 };
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
@@ -494,7 +494,7 @@ unsafe fn put_string_value(
 
     let size = unsafe { cstr::bytes_at(value_str) }.len().wrapping_add(1);
     let buf = unsafe { xmalloc(size) }.cast::<c_char>();
-    unsafe { home_replace(ptr::null::<buf_T>(), value_str, buf, size, false) };
+    unsafe { home_replace(ptr::null::<Buffer>(), value_str, buf, size, false) };
 
     if !unsafe { needs_splitting(value_str, flags) } {
         let failed = unsafe { put_escstr(fd, buf, EscTarget::SetValue) }.is_err();
@@ -565,7 +565,7 @@ pub(crate) unsafe fn option_value2string(
 
     let value = unsafe { *varp.string_var() };
     if get_option(opt_idx).flags & kOptFlagExpand as uint32_t != 0 {
-        unsafe { home_replace(ptr::null::<buf_T>(), value, buf, MAXPATHL as size_t, false) };
+        unsafe { home_replace(ptr::null::<Buffer>(), value, buf, MAXPATHL as size_t, false) };
     } else {
         unsafe { xstrlcpy(buf, value, MAXPATHL as size_t) };
     }

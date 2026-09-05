@@ -176,7 +176,7 @@ pub(crate) unsafe fn buf_do_map(
 ) -> c_int {
     // The buffer's own tables are reached through the one raw pointer, not
     // through `Buf`'s `DerefMut`: `buf_table` points into `b_maphash`, and a
-    // fresh `&mut buf_T` taken later would invalidate it.
+    // fresh `&mut Buffer` taken later would invalidate it.
     let bufp = buf.raw();
     let mut retval = 0;
 

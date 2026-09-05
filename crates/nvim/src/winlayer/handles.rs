@@ -40,17 +40,17 @@ use crate::allocator::Owned;
 use crate::buffer::free;
 use crate::global_cell::GlobalCell;
 use crate::registry::{HandleRegistry, OwnedRegistry, PendingFree};
-use crate::types::{Handle, buf_T, tabpage_T, win_T};
+use crate::types::{Buffer, Handle, Tabpage, Window};
 use crate::winlayer::{Buf, TabPage, Win};
 
 /// Every live window, by handle.
-static WINDOWS: GlobalCell<HandleRegistry<win_T>> = GlobalCell::new(HandleRegistry::new());
+static WINDOWS: GlobalCell<HandleRegistry<Window>> = GlobalCell::new(HandleRegistry::new());
 
 /// Every live buffer, by number. The registry **owns** them.
-static BUFFERS: GlobalCell<OwnedRegistry<buf_T>> = GlobalCell::new(OwnedRegistry::new());
+static BUFFERS: GlobalCell<OwnedRegistry<Buffer>> = GlobalCell::new(OwnedRegistry::new());
 
 /// Every live tab page, by handle. The registry **owns** them.
-static TABPAGES: GlobalCell<OwnedRegistry<tabpage_T>> = GlobalCell::new(OwnedRegistry::new());
+static TABPAGES: GlobalCell<OwnedRegistry<Tabpage>> = GlobalCell::new(OwnedRegistry::new());
 
 /// The window `handle` names, `None` once it has been closed.
 #[inline]
@@ -93,7 +93,7 @@ pub(crate) fn forget_window(handle: Handle) {
 ///
 /// Called by the allocator once the buffer's number is assigned — `handle`
 /// is that number, which the caller has already written into the buffer.
-pub(crate) fn register_buffer(handle: Handle, buf: Owned<buf_T>) -> Buf {
+pub(crate) fn register_buffer(handle: Handle, buf: Owned<Buffer>) -> Buf {
     Buf(BUFFERS.with_mut(|reg| reg.register(handle, buf)))
 }
 
@@ -105,18 +105,18 @@ pub(crate) fn register_buffer(handle: Handle, buf: Owned<buf_T>) -> Buf {
 /// itself; `free_buffer` holds it until the point the `xfree` used to be,
 /// and hands it to [`defer_free_buffer`] when an autocommand is running.
 #[must_use = "dropping the answer is the free; ignoring it leaks the buffer"]
-pub(crate) fn forget_buffer(handle: Handle) -> Option<Owned<buf_T>> {
+pub(crate) fn forget_buffer(handle: Handle) -> Option<Owned<Buffer>> {
     BUFFERS.with_mut(|reg| reg.forget(handle))
 }
 
 /// [`register_buffer`] for a tab page.
-pub(crate) fn register_tabpage(handle: Handle, tp: Owned<tabpage_T>) -> TabPage {
+pub(crate) fn register_tabpage(handle: Handle, tp: Owned<Tabpage>) -> TabPage {
     TabPage(TABPAGES.with_mut(|reg| reg.register(handle, tp)))
 }
 
 /// [`forget_buffer`] for a tab page.
 #[must_use = "dropping the answer is the free; ignoring it leaks the tab page"]
-pub(crate) fn forget_tabpage(handle: Handle) -> Option<Owned<tabpage_T>> {
+pub(crate) fn forget_tabpage(handle: Handle) -> Option<Owned<Tabpage>> {
     TABPAGES.with_mut(|reg| reg.forget(handle))
 }
 
@@ -139,12 +139,12 @@ pub(crate) fn forget_tabpage(handle: Handle) -> Option<Owned<tabpage_T>> {
 
 /// Buffers whose allocation is waiting for the outermost autocommand. The
 /// set owns them: it took the [`Owned`] the registry gave the free path.
-static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Owned<buf_T>>> =
+static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Owned<Buffer>>> =
     GlobalCell::new(PendingFree::new());
 
 /// Windows whose allocation is waiting for the outermost autocommand. A bare
 /// address, as the window registry still holds — see [`OwnedRegistry`].
-static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<*mut win_T>> =
+static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<*mut Window>> =
     GlobalCell::new(PendingFree::new());
 
 /// Park `buf`'s allocation until the outermost autocommand returns.
@@ -152,7 +152,7 @@ static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<*mut win_T>> =
 /// Everything else about the buffer is torn down already and its handle is
 /// out of the registry; what is left is the memory, which this set owns until
 /// [`free_deferred`] drops it. The caller must not use the buffer again.
-pub(crate) fn defer_free_buffer(buf: Owned<buf_T>) {
+pub(crate) fn defer_free_buffer(buf: Owned<Buffer>) {
     PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buf));
 }
 
@@ -172,7 +172,7 @@ pub(crate) fn defer_free_window(win: Win) {
 pub(crate) fn free_deferred() {
     // Each allocation was given up by its owner and nothing has reached it
     // since: the handle left the registry before it was parked. Dropping the
-    // buffer's `Owned` runs `buf_T`'s destructor and gives the memory back,
+    // buffer's `Owned` runs `Buffer`'s destructor and gives the memory back,
     // outside the `with_mut` so that nothing is borrowed while it runs.
     while let Some(buf) = PENDING_FREE_BUFFERS.with_mut(PendingFree::take_next) {
         drop(buf);
@@ -207,7 +207,7 @@ pub(crate) fn free_deferred() {
 /// (`aco_save_T::save_prevwin_handle`). Excluding it buys the niche, so an
 /// `Option<WinId>` is four bytes and **all-zero bytes are `None`** — which
 /// is what makes these safe to use as the graph's own list links, since a
-/// `win_T`/`buf_T`/`tabpage_T` is born from `xcalloc` or `Box::new_zeroed`
+/// `Window`/`Buffer`/`Tabpage` is born from `xcalloc` or `Box::new_zeroed`
 /// and its links have to read as "no neighbour" before anyone writes them.
 /// The test at the bottom of this file pins that.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -242,7 +242,7 @@ impl WinId {
     /// call I just made"; ask `win_valid` when the question is about layout —
     /// "is this window on screen, on this tab page". Reaching for the wrong
     /// one is a behaviour change, not a style choice. And a caller holding a
-    /// bare `*mut win_T` that an autocommand may have freed cannot use this
+    /// bare `*mut Window` that an autocommand may have freed cannot use this
     /// at all: taking a [`WinId`] from one would read the window, the very
     /// dereference the list walk exists to avoid.
     #[inline(always)]
@@ -288,8 +288,8 @@ mod tests {
 
     /// The property the graph's list links rest on. `NonZero`'s only niche
     /// is zero, so an `Option` the size of the handle itself is one whose
-    /// `None` *is* the all-zero word — which is what lets a `win_T`,
-    /// `buf_T` or `tabpage_T` come out of `xcalloc`/`Box::new_zeroed` with
+    /// `None` *is* the all-zero word — which is what lets a `Window`,
+    /// `Buffer` or `Tabpage` come out of `xcalloc`/`Box::new_zeroed` with
     /// its links already reading "no neighbour". Nothing in the language
     /// promises the niche is taken, so it is asserted rather than assumed;
     /// were it ever dropped, reading a zeroed link would be UB and Miri

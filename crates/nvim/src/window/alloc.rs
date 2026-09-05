@@ -1,6 +1,6 @@
 //! Allocating and freeing windows and frames, and the lists they live on.
 //!
-//! [`win_alloc`] creates a `win_T` with its option and variable dictionaries;
+//! [`win_alloc`] creates a `Window` with its option and variable dictionaries;
 //! [`win_free`] tears one down, including the `WinInfo` remembered positions
 //! and the autocommand bookkeeping.  [`win_append`]/[`win_remove`] and
 //! [`frame_append`]/[`frame_insert`]/[`frame_remove`] are the linked-list
@@ -40,8 +40,8 @@ use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, Failed, Handle, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo,
-    frame_T, tabpage_T, win_T, winopt_T,
+    Error, Failed, Frame, Handle, Integer, LineNr, OptInt, ScreenGrid, Tabpage, VAR_SCOPE,
+    WinConfig, WinInfo, WinOpt, Window,
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -57,7 +57,7 @@ use ::libc::abort;
 /// `xcalloc(1, size_of::<T>())`, which never answers null.
 fn zeroed<T>() -> *mut T {
     // SAFETY: `xcalloc` aborts rather than answering null, and a zeroed
-    // `win_T`/`frame_T` is what upstream starts one from.
+    // `Window`/`Frame` is what upstream starts one from.
     unsafe { xcalloc(1, size_of::<T>()) }.cast::<T>()
 }
 
@@ -67,8 +67,8 @@ fn zeroed<T>() -> *mut T {
 /// `Vec`s, whose pointers are never null -- nor a valid `w_ns_set`, which is
 /// a `HashSet` and carries a hasher, so both are written before anything can
 /// read or drop them.
-fn zeroed_window() -> *mut win_T {
-    let wp = zeroed::<win_T>();
+fn zeroed_window() -> *mut Window {
+    let wp = zeroed::<Window>();
     // SAFETY: a fresh allocation this thread alone holds; the zeroed grid
     // and set are overwritten, never read.
     unsafe { (&raw mut (*wp).w_grid_alloc).write(ScreenGrid::empty()) };
@@ -77,7 +77,7 @@ fn zeroed_window() -> *mut win_T {
 }
 
 /// Free a window's option block and the folds saved with it.
-fn clear_options(opt: *mut winopt_T) {
+fn clear_options(opt: *mut WinOpt) {
     // SAFETY: an option block inside a live window or entry.
     unsafe { clear_winopt(opt) };
 }
@@ -107,7 +107,7 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
         ..WIN_CONFIG_INIT
     };
     // SAFETY: a hidden float over a fresh scratch buffer, and a live `Error`.
-    let win = unsafe { win_new_float(ptr::null_mut::<win_T>(), true, fconfig, &mut err) };
+    let win = unsafe { win_new_float(ptr::null_mut::<Window>(), true, fconfig, &mut err) };
     // SAFETY: `aucmd_win_vec` has been sized for `idx`.
     unsafe { (*aucmd_wins().slot(idx as usize)).auc_win = win };
     // SAFETY: `win_new_float` answers a live window here.
@@ -117,7 +117,7 @@ pub unsafe fn win_alloc_aucmd_win(idx: c_int) {
     win.w_onebuf_opt.wo_crb = 0;
 }
 
-pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut win_T) -> Result<(), Failed> {
+pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut Window) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live window or null.
     alloc_firstwin(unsafe { Win::from_raw(oldwin) })
 }
@@ -126,7 +126,7 @@ pub(crate) unsafe fn win_alloc_firstwin(oldwin: *mut win_T) -> Result<(), Failed
 /// there is one and from the defaults when there is not.
 fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
     // SAFETY: `win_alloc` answers a live window.
-    let mut win = unsafe { Win::new(win_alloc(ptr::null_mut::<win_T>(), false)) };
+    let mut win = unsafe { Win::new(win_alloc(ptr::null_mut::<Window>(), false)) };
     curwin.set(win.raw());
     match oldwin {
         None => {
@@ -163,8 +163,8 @@ fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
 /// Give `wp` a fresh leaf frame of its own.
 pub(crate) fn attach_frame(wp: Win) -> FrameRef {
     let mut wp = wp;
-    // SAFETY: a fresh zeroed `frame_T`, which is live from here on.
-    let mut frp = unsafe { FrameRef::new(zeroed::<frame_T>()) };
+    // SAFETY: a fresh zeroed `Frame`, which is live from here on.
+    let mut frp = unsafe { FrameRef::new(zeroed::<Frame>()) };
     wp.w_frame = frp.raw();
     frp.fr_layout = FR_LEAF as c_char;
     frp.fr_win = wp.raw();
@@ -199,7 +199,7 @@ fn first_win() -> Win {
 // ---------------------------------------------------------------------------
 // One window's memory
 
-pub unsafe fn win_alloc(after: *mut win_T, hidden: bool) -> *mut win_T {
+pub unsafe fn win_alloc(after: *mut Window, hidden: bool) -> *mut Window {
     // SAFETY: the caller's promise -- a live window or null.
     alloc(unsafe { Win::from_raw(after) }, hidden).raw()
 }
@@ -268,7 +268,7 @@ pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     free(wip);
 }
 
-pub unsafe fn win_free(wp: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn win_free(wp: *mut Window, tp: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
     unsafe { free_win(Win::new(wp), TabPage::from_raw(tp)) };
@@ -302,11 +302,11 @@ fn free_win(wp: Win, tp: Option<TabPage>) {
     // SAFETY: as above.
     unsafe { unref_var_dict(wp.w_vars) };
     if prevwin.get() == wp.raw() {
-        prevwin.set(ptr::null_mut::<win_T>());
+        prevwin.set(ptr::null_mut::<Window>());
     }
     for mut ttp in tabs() {
         if ttp.tp_prevwin == wp.raw() {
-            ttp.tp_prevwin = ptr::null_mut::<win_T>();
+            ttp.tp_prevwin = ptr::null_mut::<Window>();
         }
     }
     free(wp.w_lines);
@@ -376,7 +376,7 @@ fn forget_wininfo(buf: Buf, wp: Win) {
         return;
     }
     let entry = &mut infos.entries_mut()[pos_wip];
-    entry.wi_win = ptr::null_mut::<win_T>();
+    entry.wi_win = ptr::null_mut::<Window>();
     // Discard saved options if the style is minimal.
     if wp.w_config.style == kWinStyleMinimal && entry.wi_optset {
         clear_options(entry.opt());
@@ -392,7 +392,7 @@ fn forget_wininfo(buf: Buf, wp: Win) {
     }
 }
 
-pub unsafe fn win_free_grid(wp: *mut win_T, reinit: bool) {
+pub unsafe fn win_free_grid(wp: *mut Window, reinit: bool) {
     // SAFETY: the caller's promise -- a live window.
     free_grid(unsafe { Win::new(wp) }, reinit);
 }
@@ -412,7 +412,7 @@ pub(crate) fn free_grid(wp: Win, reinit: bool) {
 // ---------------------------------------------------------------------------
 // The lists
 
-pub unsafe fn win_append(after: *mut win_T, wp: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn win_append(after: *mut Window, wp: *mut Window, tp: *mut Tabpage) {
     // SAFETY: the caller's promise -- live windows (`after` may be null) and a
     // live tab page or null.
     unsafe { append(Win::from_raw(after), Win::new(wp), TabPage::from_raw(tp)) };
@@ -444,7 +444,7 @@ pub(crate) fn append(after: Option<Win>, wp: Win, tp: Option<TabPage>) {
     }
 }
 
-pub unsafe fn win_remove(wp: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn win_remove(wp: *mut Window, tp: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
     unsafe { remove(Win::new(wp), TabPage::from_raw(tp)) };

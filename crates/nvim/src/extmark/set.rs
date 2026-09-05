@@ -23,13 +23,13 @@ use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_decor_any, mt_end, mt_flags, mt_invalid, mt_paired,
 };
-use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, buf_T, uint32_t, uint64_t};
+use crate::types::{Buffer, ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint32_t, uint64_t};
 
 /// Create or update an extmark.
 ///
 /// Must not be used during iteration.
 pub unsafe fn extmark_set(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     ns_id: uint32_t,
     idp: *mut uint32_t,
     row: c_int,

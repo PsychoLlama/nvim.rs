@@ -33,10 +33,10 @@ use crate::main::{
 };
 use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
-use crate::types::{CmdModFlags, ColNr, Error, FAIL, LineNr, NUL, buf_T};
+use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
-pub unsafe fn entering_window(win: *mut win_T) {
+pub unsafe fn entering_window(win: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     enter_window(unsafe { Win::new(win) });
 }
@@ -86,7 +86,7 @@ fn is_prompt(win: Win) -> bool {
     buf_is_prompt(win.buffer_or_none())
 }
 
-pub unsafe fn win_init_empty(wp: *mut win_T) {
+pub unsafe fn win_init_empty(wp: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     init_empty(unsafe { Win::new(wp) });
 }
@@ -116,7 +116,7 @@ pub fn curwin_init() {
     init_empty(cur_win());
 }
 
-pub unsafe fn close_windows(buf: *mut buf_T, keep_curwin: bool) {
+pub unsafe fn close_windows(buf: *mut Buffer, keep_curwin: bool) {
     // SAFETY: the caller's promise -- a live buffer.
     close_all(unsafe { Buf::new(buf) }, keep_curwin);
 }
@@ -183,7 +183,7 @@ fn locked(wp: Win) -> bool {
     wp.w_locked || wp.buffer().b_locked > 0
 }
 
-pub unsafe fn last_window(win: *mut win_T) -> bool {
+pub unsafe fn last_window(win: *mut Window) -> bool {
     // SAFETY: the caller's promise -- a live window.
     is_last_window(unsafe { Win::new(win) })
 }
@@ -193,7 +193,7 @@ pub(crate) fn is_last_window(win: Win) -> bool {
     only_window(win, None) && first_tab().next().is_none()
 }
 
-pub unsafe fn one_window(win: *mut win_T, tp: *mut tabpage_T) -> bool {
+pub unsafe fn one_window(win: *mut Window, tp: *mut Tabpage) -> bool {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
     unsafe { only_window(Win::new(win), TabPage::from_raw(tp)) }
@@ -241,7 +241,7 @@ pub(crate) fn can_close_floats(tp: Option<TabPage>) -> bool {
     true
 }
 
-pub unsafe fn can_close_in_cmdwin(win: *mut win_T, err: &mut Error) -> bool {
+pub unsafe fn can_close_in_cmdwin(win: *mut Window, err: &mut Error) -> bool {
     // SAFETY: the caller's promise -- a live window and a writable error slot.
     unsafe { cmdwin_allows(Win::new(win), &mut *err) }
 }
@@ -269,7 +269,7 @@ fn cmdwin_allows(win: Win, err: &mut Error) -> bool {
 pub(crate) fn close_last_tabpage_window(
     win: Win,
     free_buf: bool,
-    prev_curtab: *mut tabpage_T,
+    prev_curtab: *mut Tabpage,
 ) -> bool {
     let mut free_buf = free_buf;
     if firstwin.get() != lastwin.get() {
@@ -403,7 +403,7 @@ fn close_all_others(message: bool, forceit: bool) {
             }
             // autocommands messed this one up
             if !buf_is_valid(wp.w_buffer) && valid_win(wp.raw()).is_some() {
-                wp.w_buffer = ptr::null_mut::<buf_T>();
+                wp.w_buffer = ptr::null_mut::<Buffer>();
                 close(wp, false, false);
                 break 'skip;
             }
@@ -438,7 +438,7 @@ fn close_all_others(message: bool, forceit: bool) {
 }
 
 /// Whether `buf` is still on the buffer list.
-fn buf_is_valid(buf: *mut buf_T) -> bool {
+fn buf_is_valid(buf: *mut Buffer) -> bool {
     // SAFETY: only compared against the buffer list, never read.
     unsafe { buf_valid(buf) }
 }

@@ -35,8 +35,8 @@ use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode, NS,
-    Object, buf_T, win_T,
+    Array, Buffer, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode,
+    NS, Object, Window,
 };
 use crate::winlayer::Win;
 
@@ -186,7 +186,7 @@ unsafe fn decor_provider_invoke(
 /// # Safety
 /// `wp` must point to a live window.
 pub(crate) unsafe fn decor_providers_invoke_spell(
-    wp: *mut win_T,
+    wp: *mut Window,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -217,7 +217,7 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
 /// `wp` must point to a live window.
 ///
 /// @return whether a provider placed any marks in the callback.
-pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut win_T, row: c_int) -> bool {
+pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut Window, row: c_int) -> bool {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     let keys = unsafe { (*(*wp).w_buffer).b_marktree.n_keys };
     for idx in 0..provider_count() {
@@ -299,7 +299,7 @@ fn set_provider_running(running: bool) {
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T, state: DecorStateRef) {
+pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut Window, state: DecorStateRef) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     // This might change in the future; then this would need
     // `set_provider_running` just like "on_line" below.
@@ -342,7 +342,7 @@ pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T, state: DecorStat
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
+pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut Window, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     set_provider_running(true);
@@ -374,7 +374,7 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut win_T, row: c_int) {
 /// # Safety
 /// `wp` must point to a live window; runs Lua.
 pub(crate) unsafe fn decor_providers_invoke_range(
-    wp: *mut win_T,
+    wp: *mut Window,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -443,7 +443,7 @@ pub(crate) unsafe fn decor_providers_invoke_range(
 ///
 /// # Safety
 /// `buf` must point to a live buffer; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_buf(buf: *mut buf_T) {
+pub(crate) unsafe fn decor_providers_invoke_buf(buf: *mut Buffer) {
     // SAFETY: the caller's buffer; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);

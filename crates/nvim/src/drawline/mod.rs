@@ -72,10 +72,10 @@ use crate::syntax::{
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
-    CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, GridView, HlMode, Hlf, LineNr, NS,
-    NUL, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber, VirtLines, VirtText,
-    WinExtmark, buf_T, diffline_T, foldinfo_T, pos_T, ptrdiff_t, size_t, spellvars_T, ssize_t,
-    statuscol_T, uint8_t, uint32_t, uint64_t, virt_line, win_T,
+    Buffer, CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, DiffLine, GridView, HlMode,
+    Hlf, LineNr, NS, NUL, RgbValue, ScreenAttr, ScreenChar, SignTextAttrs, VarNumber, VirtLines,
+    VirtText, WinExtmark, Window, foldinfo_T, pos_T, ptrdiff_t, size_t, spellvars_T, ssize_t,
+    statuscol_T, uint8_t, uint32_t, uint64_t, virt_line,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
@@ -125,7 +125,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// `wp` must be a live window, `lnum` one of its buffer's lines, and `spv` a
 /// live `spellvars_T`.
 pub unsafe fn win_line(
-    wp: *mut win_T,
+    wp: *mut Window,
     lnum: LineNr,
     startrow: ::core::ffi::c_int,
     endrow: ::core::ffi::c_int,
@@ -194,7 +194,7 @@ pub unsafe fn win_line(
     };
 
     // SAFETY: the caller's window, line and spell state.
-    let buf: *mut buf_T = wp.w_buffer;
+    let buf: *mut Buffer = wp.w_buffer;
 
     // The two scratch buffers the loop needs but never owns: the spell
     // look-ahead, filled by the setup half, and the fold text.

@@ -36,8 +36,8 @@ use crate::os::input::fast_breakcheck;
 use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
-    BoolVarValue, EvalFuncData, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL, VAR_LIST,
-    VAR_STRING, VAR_UNKNOWN, VarNumber, buf_T, exarg_T, int16_t, win_T,
+    BoolVarValue, Buffer, EvalFuncData, KeymapEntry, List, NUL, OptInt, TypVal, VAR_BOOL, VAR_LIST,
+    VAR_STRING, VAR_UNKNOWN, VarNumber, Window, exarg_T, int16_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -750,7 +750,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut exarg_T) {
 ///
 /// `eap` must be a live command block whose line getter is the sourcing one,
 /// and `buf` a valid buffer.
-unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
+unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut Buffer) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
         // null at end of file.
@@ -790,7 +790,7 @@ unsafe fn read_keymap_entries(eap: *mut exarg_T, buf: *mut buf_T) {
 /// # Safety
 ///
 /// `buf` must be a valid buffer.
-unsafe fn apply_keymap_entries(buf: *mut buf_T) {
+unsafe fn apply_keymap_entries(buf: *mut Buffer) {
     // SAFETY: the caller's buffer. The commands are built before any of them
     // runs, so `do_map` cannot be reading the list it is driven by.
     let cmds: Vec<Vec<u8>> = unsafe { &(*buf).b_kmap_ga }
@@ -866,7 +866,7 @@ fn keymap_unload() {
 ///
 /// `wp` and its buffer must be valid; curwin/curbuf are restored before
 /// returning.
-pub unsafe fn keymap_str(wp: *mut win_T) -> Option<CString> {
+pub unsafe fn keymap_str(wp: *mut Window) -> Option<CString> {
     // SAFETY: caller contract; the window's buffer is valid.
     let buf = unsafe { (*wp).w_buffer };
     // SAFETY: as above.

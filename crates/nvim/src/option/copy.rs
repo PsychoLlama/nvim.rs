@@ -56,7 +56,7 @@ use crate::optionstr::{
 };
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{CmdModFlags, ColNr, CpoFlag, NUL, OptInt, buf_T, int16_t, win_T, winopt_T};
+use crate::types::{Buffer, CmdModFlags, ColNr, CpoFlag, NUL, OptInt, WinOpt, Window, int16_t};
 use crate::window::{check_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Live, Win};
 
@@ -71,7 +71,7 @@ use crate::option::cpo_has;
 /// the handle. Construction is the unsafe step; every field access after it
 /// is ordinary checked code, and the borrow it hands out lasts only as long
 /// as the access that asked for it.
-type Wop = Live<winopt_T>;
+type Wop = Live<WinOpt>;
 
 /// The string every unset string option shares.
 fn unset_string() -> *mut c_char {
@@ -79,14 +79,14 @@ fn unset_string() -> *mut c_char {
 }
 
 /// The address of one field of the buffer `$buf` points at, computed rather
-/// than read: see [`super::field_ptr`]. The `|b: &buf_T|` argument is never
+/// than read: see [`super::field_ptr`]. The `|b: &Buffer|` argument is never
 /// called; it is what ties the answer's type to the field's declaration.
 macro_rules! buf_field {
     ($buf:expr, $($field:ident).+) => {
         super::field_ptr(
             $buf,
-            offset_of!(buf_T, $($field).+),
-            |b: &buf_T| &b.$($field).+,
+            offset_of!(Buffer, $($field).+),
+            |b: &Buffer| &b.$($field).+,
         )
     };
 }
@@ -96,8 +96,8 @@ macro_rules! wop_field {
     ($wop:expr, $($field:ident).+) => {
         super::field_ptr(
             $wop,
-            offset_of!(winopt_T, $($field).+),
-            |w: &winopt_T| &w.$($field).+,
+            offset_of!(WinOpt, $($field).+),
+            |w: &WinOpt| &w.$($field).+,
         )
     };
 }
@@ -107,8 +107,8 @@ macro_rules! win_field {
     ($win:expr, $($field:ident).+) => {
         super::field_ptr(
             $win,
-            offset_of!(win_T, $($field).+),
-            |w: &win_T| &w.$($field).+,
+            offset_of!(Window, $($field).+),
+            |w: &Window| &w.$($field).+,
         )
     };
 }
@@ -137,7 +137,7 @@ fn dup_static(name: &CStr) -> *mut c_char {
 ///
 /// Both windows must be live, and `wp_to`'s option fields uninitialised or
 /// already released.
-pub(crate) unsafe fn win_copy_options(wp_from: *mut win_T, wp_to: *mut win_T) {
+pub(crate) unsafe fn win_copy_options(wp_from: *mut Window, wp_to: *mut Window) {
     // SAFETY: the caller's windows; naming a field of one reads nothing,
     // so the four addresses below are ordinary checked code.
     let one = (
@@ -171,12 +171,12 @@ pub(crate) unsafe fn copy_option_val(val: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 ///
-/// Both must point at `winopt_T`s, and `to`'s fields uninitialised or
+/// Both must point at `WinOpt`s, and `to`'s fields uninitialised or
 /// already released.
-pub(crate) unsafe fn copy_winopt(from: *mut winopt_T, to: *mut winopt_T) {
+pub(crate) unsafe fn copy_winopt(from: *mut WinOpt, to: *mut WinOpt) {
     // SAFETY: the caller's structures. Both handles borrow for the one
     // field access that asked and never across a call, so neither ever
-    // holds a `&mut winopt_T` the editor could read around.
+    // holds a `&mut WinOpt` the editor could read around.
     let f = unsafe { Wop::new(from) };
     let mut t = unsafe { Wop::new(to) };
 
@@ -259,7 +259,7 @@ pub(crate) unsafe fn copy_winopt(from: *mut winopt_T, to: *mut winopt_T) {
 /// The window-local string options, as the address of each field. Naming a
 /// field reads nothing, so this needs no promise of its own; what the two
 /// callers then *do* with the addresses does.
-fn winopt_strings(wop: *mut winopt_T) -> [*mut *mut c_char; 23] {
+fn winopt_strings(wop: *mut WinOpt) -> [*mut *mut c_char; 23] {
     [
         wop_field!(wop, wo_fdc),
         wop_field!(wop, wo_fdc_save),
@@ -292,7 +292,7 @@ fn winopt_strings(wop: *mut winopt_T) -> [*mut *mut c_char; 23] {
 /// # Safety
 ///
 /// `win` must be a live window.
-pub(crate) unsafe fn check_win_options(win: *mut win_T) {
+pub(crate) unsafe fn check_win_options(win: *mut Window) {
     // SAFETY: the caller's window, whose two option sets the addresses
     // below name without reading it.
     unsafe { check_winopt(win_field!(win, w_onebuf_opt)) };
@@ -303,8 +303,8 @@ pub(crate) unsafe fn check_win_options(win: *mut win_T) {
 ///
 /// # Safety
 ///
-/// `wop` must point at a `winopt_T`.
-pub(crate) unsafe fn check_winopt(wop: *mut winopt_T) {
+/// `wop` must point at a `WinOpt`.
+pub(crate) unsafe fn check_winopt(wop: *mut WinOpt) {
     // SAFETY: the caller's structure, and each address is one of its own
     // string fields.
     for field in winopt_strings(wop) {
@@ -316,8 +316,8 @@ pub(crate) unsafe fn check_winopt(wop: *mut winopt_T) {
 ///
 /// # Safety
 ///
-/// `wop` must point at a `winopt_T` whose string values are its own.
-pub(crate) unsafe fn clear_winopt(wop: *mut winopt_T) {
+/// `wop` must point at a `WinOpt` whose string values are its own.
+pub(crate) unsafe fn clear_winopt(wop: *mut WinOpt) {
     // SAFETY: the caller's structure, and each address is one of its own
     // string fields.
     for field in winopt_strings(wop) {
@@ -334,10 +334,10 @@ pub(crate) unsafe fn clear_winopt(wop: *mut winopt_T) {
 /// # Safety
 ///
 /// `wp` must be a live window.
-pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
+pub(crate) unsafe fn didset_window_options(wp: *mut Window, valid_cursor: bool) {
     // SAFETY: the caller's window. The handle borrows it for the one field
     // access that asked and never across a call, so none of the callees
-    // below is reached while a `&mut win_T` is live.
+    // below is reached while a `&mut Window` is live.
     let mut w = unsafe { Win::new(wp) };
     // 'wrap' and 'smoothscroll' scroll in different directions, and only
     // one of the two offsets can be non-zero.
@@ -396,7 +396,7 @@ fn copy_sctx(mut buf: Buf, bv: BufOptIndex) {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub(crate) unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
+pub(crate) unsafe fn buf_copy_options(buf: *mut Buffer, flags: c_int) {
     let mut did_isk = false;
     // SAFETY: the caller's buffer. Every field write below goes through
     // this handle, which borrows the buffer for the one access that asked
@@ -706,7 +706,7 @@ pub(crate) fn reset_modifiable() {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub(crate) unsafe fn set_iminsert_global(buf: *mut buf_T) {
+pub(crate) unsafe fn set_iminsert_global(buf: *mut Buffer) {
     // SAFETY: the caller's buffer.
     p_iminsert.set(unsafe { (*buf).b_p_iminsert });
 }
@@ -716,7 +716,7 @@ pub(crate) unsafe fn set_iminsert_global(buf: *mut buf_T) {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub(crate) unsafe fn set_imsearch_global(buf: *mut buf_T) {
+pub(crate) unsafe fn set_imsearch_global(buf: *mut Buffer) {
     // SAFETY: the caller's buffer.
     p_imsearch.set(unsafe { (*buf).b_p_imsearch });
 }

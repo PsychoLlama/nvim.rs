@@ -114,7 +114,7 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
 /// # Safety
 /// `briopt` must be null or a NUL-terminated string, and `wp` null or a
 /// window.
-pub unsafe fn briopt_check(briopt: *mut c_char, wp: *mut win_T) -> bool {
+pub unsafe fn briopt_check(briopt: *mut c_char, wp: *mut Window) -> bool {
     // SAFETY: the caller's option string, or the window's own copy of it.
     let value = unsafe {
         if !briopt.is_null() {
@@ -221,7 +221,7 @@ impl BreakindentCache {
     /// and `flp` NUL-terminated strings.
     unsafe fn refill(
         &mut self,
-        wp: *mut win_T,
+        wp: *mut Window,
         key: &BreakindentKey,
         line: *mut c_char,
         flp: *const c_char,
@@ -255,7 +255,7 @@ impl BreakindentCache {
     /// # Safety
     /// `wp` must be a window and `line` a NUL-terminated string; `self.flp`
     /// must hold the current 'formatlistpat'.
-    unsafe fn add_list_indent(&mut self, wp: *mut win_T, line: *mut c_char) {
+    unsafe fn add_list_indent(&mut self, wp: *mut Window, line: *mut c_char) {
         // SAFETY: the caller's window and line, and the cache's own pattern.
         let mut regmatch: regmatch_T = regmatch_T {
             regprog: unsafe { vim_regcomp(self.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT) },
@@ -293,7 +293,7 @@ impl BreakindentCache {
 ///
 /// # Safety
 /// `wp` must be a window and `line` a NUL-terminated string.
-pub unsafe fn get_breakindent_win(wp: *mut win_T, line: *mut c_char) -> c_int {
+pub unsafe fn get_breakindent_win(wp: *mut Window, line: *mut c_char) -> c_int {
     // SAFETY: the caller's window and its buffer.
     // SAFETY: the caller's window; a live window has a live buffer.
     let win = unsafe { Win::new(wp) };

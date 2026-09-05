@@ -6,7 +6,7 @@
 //! `nvim_buf_{lines,changedtick,detach}_event` over RPC, the callbacks get
 //! `on_lines` / `on_bytes` / `on_changedtick` / `on_reload` / `on_detach`.
 //!
-//! [`KVec`] is the lever. Both arrays are fields of `buf_T`, so borrowing
+//! [`KVec`] is the lever. Both arrays are fields of `Buffer`, so borrowing
 //! their three parts is a safe operation once the buffer pointer is wrapped
 //! as a [`Buf`], and everything above it — the loops, the compaction, the
 //! argument building — is ordinary checked code.
@@ -37,8 +37,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Arena, Array, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object, bcount_t,
-    buf_T, int64_t, size_t, uint64_t,
+    Arena, Array, BufUpdateCallbacks, Buffer, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object,
+    bcount_t, int64_t, size_t, uint64_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -52,7 +52,7 @@ const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 // ---------------------------------------------------------------------------
 // The two `kvec_t`s
 
-/// One of `buf_T`'s two subscriber arrays — `klib/kvec.h`'s growable vector
+/// One of `Buffer`'s two subscriber arrays — `klib/kvec.h`'s growable vector
 /// — borrowed field by field, so that only the element access below is
 /// unchecked.
 ///
@@ -292,7 +292,7 @@ fn collect_lines(buf: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array
 /// # Safety
 /// `buf` must be a live buffer.
 pub unsafe fn buf_updates_register(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     channel_id: uint64_t,
     cb: BufUpdateCallbacks,
     send_buffer: bool,
@@ -366,7 +366,7 @@ fn send_whole_buffer(buf: Buf, channel_id: uint64_t) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_updates_active(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_updates_active(buf: *mut Buffer) -> bool {
     // SAFETY: the caller's promise.
     active(unsafe { Buf::new(buf) })
 }
@@ -379,7 +379,7 @@ fn active(mut buf: Buf) -> bool {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_updates_send_end(buf: *mut buf_T, channelid: uint64_t) {
+pub unsafe fn buf_updates_send_end(buf: *mut Buffer, channelid: uint64_t) {
     // SAFETY: the caller's promise.
     send_end(unsafe { Buf::new(buf) }, channelid);
 }
@@ -394,7 +394,7 @@ fn send_end(buf: Buf, channelid: uint64_t) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_updates_unregister(buf: *mut buf_T, channelid: uint64_t) {
+pub unsafe fn buf_updates_unregister(buf: *mut Buffer, channelid: uint64_t) {
     // SAFETY: the caller's promise.
     unregister(unsafe { Buf::new(buf) }, channelid);
 }
@@ -437,7 +437,7 @@ fn unregister(mut buf: Buf, channelid: uint64_t) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_free_callbacks(buf: *mut buf_T) {
+pub unsafe fn buf_free_callbacks(buf: *mut Buffer) {
     // SAFETY: the caller's promise.
     free_callbacks(unsafe { Buf::new(buf) });
 }
@@ -458,7 +458,7 @@ fn free_callbacks(mut buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_updates_unload(buf: *mut buf_T, can_reload: bool) {
+pub unsafe fn buf_updates_unload(buf: *mut Buffer, can_reload: bool) {
     // SAFETY: the caller's promise.
     unload(unsafe { Buf::new(buf) }, can_reload);
 }
@@ -519,7 +519,7 @@ fn unload(mut buf: Buf, can_reload: bool) {
 /// # Safety
 /// `buf` must be a live buffer.
 pub unsafe fn buf_updates_send_changes(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     firstline: LineNr,
     num_added: int64_t,
     num_removed: int64_t,
@@ -636,7 +636,7 @@ fn tick_obj(buf: Buf, send_tick: bool) -> Object {
 /// # Safety
 /// `buf` must be a live buffer.
 pub unsafe fn buf_updates_send_splice(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     start_byte: bcount_t,
@@ -716,7 +716,7 @@ fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_updates_changedtick(buf: *mut buf_T) {
+pub unsafe fn buf_updates_changedtick(buf: *mut Buffer) {
     // SAFETY: the caller's promise.
     changedtick_event(unsafe { Buf::new(buf) });
 }
@@ -759,7 +759,7 @@ fn changedtick_event(mut buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn buf_updates_changedtick_single(buf: *mut buf_T, channel_id: uint64_t) {
+pub unsafe fn buf_updates_changedtick_single(buf: *mut Buffer, channel_id: uint64_t) {
     // SAFETY: the caller's promise.
     changedtick_single(unsafe { Buf::new(buf) }, channel_id);
 }

@@ -268,7 +268,7 @@ pub(crate) unsafe fn win_update(wp: Win) {
 ///
 /// # Safety
 /// Called from [`win_update`] with `state` reset for this window.
-unsafe fn add_suspended_terminal_note(buf: *mut buf_T, state: DecorStateRef) {
+unsafe fn add_suspended_terminal_note(buf: *mut Buffer, state: DecorStateRef) {
     // Both live for the whole process: `decor_range_add_virt` stores the
     // pointer and the range is dropped at the end of the redraw. Declarations,
     // so they sit outside the promise below.
@@ -340,7 +340,7 @@ unsafe fn clamp_skipcol(mut wp: Win) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn find_changed_lines(win: Win, buf: *mut buf_T, rg: &mut Regions) {
+unsafe fn find_changed_lines(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window and buffer.
     // What `redraw_win_range_later` asked for.
     rg.mod_top = win.w_redraw_top;
@@ -470,7 +470,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn plan_scroll(win: Win, buf: *mut buf_T, rg: &mut Regions) {
+unsafe fn plan_scroll(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and its `w_lines` array.
     // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
     // concealed, which would read as a scroll that did not happen. Compare
@@ -676,7 +676,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn plan_visual_area(win: Win, buf: *mut buf_T, rg: &mut Regions) {
+unsafe fn plan_visual_area(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
     let shown = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer });
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
@@ -876,7 +876,7 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn remember_visual_area(mut wp: Win, buf: *mut buf_T) {
+unsafe fn remember_visual_area(mut wp: Win, buf: *mut Buffer) {
     // SAFETY: the caller's window and the global Visual state.
     if let Some(sel) = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer }) {
         wp.w_old_visual_mode = sel.mode.raw() as c_char;
@@ -923,7 +923,12 @@ unsafe fn send_win_extmarks(wp: Win) {
 ///
 /// # Safety
 /// `wp` must be the window that was just drawn and `buf` its buffer.
-unsafe fn finish_botline(mut wp: Win, buf: *mut buf_T, old_botline: LineNr, nrwidth_before: c_int) {
+unsafe fn finish_botline(
+    mut wp: Win,
+    buf: *mut Buffer,
+    old_botline: LineNr,
+    nrwidth_before: c_int,
+) {
     // Recursion guard: the second pass must not start a third.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 

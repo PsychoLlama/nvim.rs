@@ -43,7 +43,7 @@ fn src2ns(src_id: &mut Integer) -> uint32_t {
 /// `buf` must be a live buffer and `decor` must own whatever it points at.
 #[expect(clippy::too_many_arguments, reason = "one per extmark_set parameter")]
 unsafe fn set_decor(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     ns: uint32_t,
     line: ::core::ffi::c_int,
     col: ColNr,

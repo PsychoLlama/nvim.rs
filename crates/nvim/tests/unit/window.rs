@@ -9,15 +9,15 @@
 //!
 //! Each expectation is derived from `v0.12.4`'s `src/nvim/window.c` rather than
 //! from the port: the C function each case is aiming at is named in its
-//! comment. The frame trees are built here out of plain `frame_T`s and zeroed
-//! `win_T`s; no editor is started, no global is read, which is also what lets
+//! comment. The frame trees are built here out of plain `Frame`s and zeroed
+//! `Window`s; no editor is started, no global is read, which is also what lets
 //! Miri run the lot.
 
 use std::ffi::c_int;
 use std::mem::MaybeUninit;
 use std::ptr;
 
-use neovim::types::{frame_T, win_T};
+use neovim::types::{Frame, Window};
 use neovim::window::arith::{
     MinSize, NextCurwin, cursor_fraction, fraction_row, frame_check_height, frame_check_width,
     frame_minheight, frame_minwidth, height_with_chrome, parent_target, sort_columns,
@@ -52,8 +52,8 @@ struct Chrome {
 /// used again (Miri's stacked borrows says so, and it is right), and the whole
 /// point here is that the tree points at them.
 struct Tree {
-    nodes: Vec<*mut frame_T>,
-    windows: Vec<*mut MaybeUninit<win_T>>,
+    nodes: Vec<*mut Frame>,
+    windows: Vec<*mut MaybeUninit<Window>>,
 }
 
 impl Drop for Tree {
@@ -78,10 +78,10 @@ impl Tree {
         }
     }
 
-    fn zeroed_frame(&mut self) -> *mut frame_T {
-        // SAFETY: `frame_T` is a plain C struct of integers and pointers, and
+    fn zeroed_frame(&mut self) -> *mut Frame {
+        // SAFETY: `Frame` is a plain C struct of integers and pointers, and
         // an all-zero one is what `xcalloc` hands `new_frame()`.
-        let node: Box<frame_T> = Box::new(unsafe { std::mem::zeroed() });
+        let node: Box<Frame> = Box::new(unsafe { std::mem::zeroed() });
         let ptr = Box::into_raw(node);
         self.nodes.push(ptr);
         ptr
@@ -89,15 +89,15 @@ impl Tree {
 
     /// A leaf frame holding a window with the given chrome, `height` rows and
     /// `width` columns.
-    fn leaf(&mut self, chrome: Chrome, height: c_int, width: c_int) -> *mut frame_T {
-        // Zeroed, and left `MaybeUninit`: a `win_T` owns allocations (its
+    fn leaf(&mut self, chrome: Chrome, height: c_int, width: c_int) -> *mut Frame {
+        // Zeroed, and left `MaybeUninit`: a `Window` owns allocations (its
         // grid's cell buffers among them) that all-zero bytes are not a
-        // valid form of, so no `win_T` value is ever produced or dropped
+        // valid form of, so no `Window` value is ever produced or dropped
         // here. `arith` reads only the four chrome fields, through the
         // pointer.
-        let slot = Box::into_raw(Box::new(MaybeUninit::<win_T>::zeroed()));
+        let slot = Box::into_raw(Box::new(MaybeUninit::<Window>::zeroed()));
         self.windows.push(slot);
-        let wp = slot.cast::<win_T>();
+        let wp = slot.cast::<Window>();
         // SAFETY: the window was just allocated and outlives the tree.
         unsafe {
             (*wp).w_winbar_height = chrome.winbar;
@@ -119,7 +119,7 @@ impl Tree {
 
     /// A row (`FR_ROW`) or column (`FR_COL`) of `children`, linked as the
     /// layout tree links them.
-    fn branch(&mut self, layout: i8, children: &[*mut frame_T]) -> *mut frame_T {
+    fn branch(&mut self, layout: i8, children: &[*mut Frame]) -> *mut Frame {
         let parent = self.zeroed_frame();
         // SAFETY: every node here was allocated by this `Tree` and outlives it.
         unsafe {
@@ -141,7 +141,7 @@ impl Tree {
         parent
     }
 
-    fn set_size(&self, fr: *mut frame_T, height: c_int, width: c_int) {
+    fn set_size(&self, fr: *mut Frame, height: c_int, width: c_int) {
         // SAFETY: a node of this tree.
         unsafe {
             (*fr).fr_height = height;
@@ -149,12 +149,12 @@ impl Tree {
         }
     }
 
-    fn window_of(&self, fr: *mut frame_T) -> *mut win_T {
+    fn window_of(&self, fr: *mut Frame) -> *mut Window {
         // SAFETY: a node of this tree.
         unsafe { (*fr).fr_win }
     }
 
-    fn frame(&self, fr: *mut frame_T) -> FrameRef {
+    fn frame(&self, fr: *mut Frame) -> FrameRef {
         // SAFETY: a node of this tree, which outlives the `Frame`.
         unsafe { FrameRef::new(fr) }
     }

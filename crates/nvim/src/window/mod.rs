@@ -60,9 +60,9 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, CdCause, Direction, Error, Handle, MotionType, OptInt, WinSplit, WinStyle,
-    bln_values, buf_T, dobuf_action_values, dobuf_start_values, getf_values, kErrorTypeException,
-    size_t, tabpage_T, win_T,
+    AlignTextPos, Buffer, CdCause, Direction, Error, Handle, MotionType, OptInt, Tabpage, WinSplit,
+    WinStyle, Window, bln_values, dobuf_action_values, dobuf_start_values, getf_values,
+    kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winlayer::{Buf, FrameRef, TabPage, Win, tab_windows, windows, windows_in_tab};
@@ -172,7 +172,7 @@ pub const FR_ROW: ::core::ffi::c_int = 1 as ::core::ffi::c_int;
 pub const FR_COL: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const NOTDONE: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
 pub const SID_WINLAYOUT: ::core::ffi::c_int = -7 as ::core::ffi::c_int;
-pub const NOWIN: *mut win_T = -1 as ::core::ffi::c_int as *mut win_T;
+pub const NOWIN: *mut Window = -1 as ::core::ffi::c_int as *mut Window;
 static e_cannot_close_last_window: &::core::ffi::CStr = c"E444: Cannot close last window";
 static e_cannot_split_window_when_closing_buffer: &::core::ffi::CStr =
     c"E1159: Cannot split a window when closing the buffer";
@@ -258,7 +258,7 @@ fn winfixbuf_allows() -> bool {
     true
 }
 
-pub unsafe fn prevwin_curwin() -> *mut win_T {
+pub unsafe fn prevwin_curwin() -> *mut Window {
     // SAFETY: reads the cmdline-window state, which is always set up.
     let in_cmdwin = is_in_cmdwin();
     let prev = prevwin.get();
@@ -269,7 +269,7 @@ pub unsafe fn prevwin_curwin() -> *mut win_T {
     }
 }
 
-pub unsafe fn swbuf_goto_win_with_buf(buf: *mut buf_T) -> *mut win_T {
+pub unsafe fn swbuf_goto_win_with_buf(buf: *mut Buffer) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer or null.
     raw_win(unsafe { Buf::from_raw(buf) }.and_then(swbuf_goto_win))
 }
@@ -291,7 +291,7 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // ---------------------------------------------------------------------------
 // Is this window still there?
 //
-// These four take a raw `win_T *` and never dereference it, deliberately: they
+// These four take a raw `Window *` and never dereference it, deliberately: they
 // are asked about a pointer an autocommand may already have freed, and the
 // whole answer is whether it is still on a list. Handing them a `Win` would
 // mean promising exactly what the caller is asking about. `valid_win` below is
@@ -326,33 +326,33 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 // whole point: `tabpage_win_valid` compares the address against the list and
 // never reads it, which is what lets an autocommand have freed it already.
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn win_valid(win: *const win_T) -> bool {
+pub fn win_valid(win: *const Window) -> bool {
     // SAFETY: `curtab` is always a live tab page, and `win` is only compared.
     unsafe { tabpage_win_valid(curtab.get(), win) }
 }
 
-pub unsafe fn tabpage_win_valid(tp: *const tabpage_T, win: *const win_T) -> bool {
+pub unsafe fn tabpage_win_valid(tp: *const Tabpage, win: *const Window) -> bool {
     // SAFETY: the caller's promise -- a live tab page. `win` is only compared.
-    valid_win_in_tab(unsafe { TabPage::new(tp as *mut tabpage_T) }, win)
+    valid_win_in_tab(unsafe { TabPage::new(tp as *mut Tabpage) }, win)
 }
 
 /// Whether `win` is on `tp`'s window list. `win` is only compared.
-fn valid_win_in_tab(tp: TabPage, win: *const win_T) -> bool {
+fn valid_win_in_tab(tp: TabPage, win: *const Window) -> bool {
     !win.is_null() && windows_in_tab(tp).any(|wp| ptr::eq(wp.raw(), win))
 }
 
-pub fn win_find_by_handle(handle: Handle) -> *mut win_T {
+pub fn win_find_by_handle(handle: Handle) -> *mut Window {
     windows()
         .find(|wp| wp.handle == handle)
         .map_or(ptr::null_mut(), Win::raw)
 }
 
-pub fn win_valid_any_tab(win: *mut win_T) -> bool {
+pub fn win_valid_any_tab(win: *mut Window) -> bool {
     valid_win_any_tab(win)
 }
 
 /// Whether `win` is on the window list of any tab page. `win` is only compared.
-fn valid_win_any_tab(win: *mut win_T) -> bool {
+fn valid_win_any_tab(win: *mut Window) -> bool {
     !win.is_null() && tab_windows().any(|wp| wp.raw() == win)
 }
 
@@ -364,7 +364,7 @@ pub fn win_count() -> ::core::ffi::c_int {
 ///
 /// The one-line bridge from [`win_valid`]'s pointer answer to a value the rest
 /// of the family may dereference.
-pub(crate) fn valid_win(win: *mut win_T) -> Option<Win> {
+pub(crate) fn valid_win(win: *mut Window) -> Option<Win> {
     // SAFETY: the walk only produced windows that are on the list.
     windows().find(|wp| wp.raw() == win)
 }
@@ -422,12 +422,12 @@ fn free<T>(ptr: *mut T) {
 }
 
 /// A tab page as the family's entry points take it: null for "the current one".
-fn raw_tab(tp: Option<TabPage>) -> *mut tabpage_T {
+fn raw_tab(tp: Option<TabPage>) -> *mut Tabpage {
     tp.map_or(ptr::null_mut(), TabPage::raw)
 }
 
 /// A window argument that may be absent, as the entry points take it.
-fn raw_win(win: Option<Win>) -> *mut win_T {
+fn raw_win(win: Option<Win>) -> *mut Window {
     win.map_or(ptr::null_mut(), Win::raw)
 }
 

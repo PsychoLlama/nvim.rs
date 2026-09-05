@@ -25,7 +25,7 @@ is how a collision batch says which one it means: a path the declaring file
 must end with (`eval/list/mod.rs`), needed exactly when the tree already holds
 two of a name -- which is the situation a collision rename exists to end.
 
-`--fold` is for an alias over a C tag struct -- `pub type win_T = window_S;`.
+`--fold` is for an alias over a C tag struct -- `pub type qf_info_T = qf_info_S;`.
 Two renames are needed, because the LSP renames the *alias*, not the tag it
 points at: both the tag and the alias are renamed to the new name, and the
 `type X = X;` line that leaves behind is deleted. Give the table the *alias*
@@ -67,13 +67,13 @@ if a `cfg` ever hides code from both.
 ## What this still does not reach, and the pitfalls behind each flag
 
 * **Comments and doc links.** rust-analyzer renames code. A `///` mention or a
-  `[`win_T`]` intra-doc link is left alone, so follow a batch with a
+  `[`exarg_T`]` intra-doc link is left alone, so follow a batch with a
   word-boundary sweep over comments only (`xform.masked` inverted) -- never an
   unmasked tree-wide `s///`, which is the mistake this tool exists to avoid.
 * **Non-Rust followers.** `tools/apigen/src` spells a few type names,
   `test/unit/fixtures/*.{c,h}` spell the ones the FFI fixtures use, and
-  `scripts/ratchet.py`'s `RAW_WIN_BUF` needle names `win_T`/`buf_T`/
-  `tabpage_T`. Fix them in the same commit; `tools/ffigen` reads the Rust and
+  `scripts/ratchet.py`'s `RAW_WIN_BUF` needle names the window/buffer/tabpage
+  structs. Fix them in the same commit; `tools/ffigen` reads the Rust and
   needs nothing. `scripts/ratchet.py` must be *excluded* from any sweep: its
   self-test fixtures spell `_T` names as data for the counts they assert.
 * **Build scripts must stay off.** With `cargo.buildScripts.enable` on, the

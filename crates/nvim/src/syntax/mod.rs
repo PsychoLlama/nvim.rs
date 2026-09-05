@@ -27,9 +27,9 @@
 //! - [`keyentry`] -- one `xmalloc` block with the keyword text inside it,
 //!   which the hash tables key on by *interior address*, and the two raw id
 //!   lists [`copy_id_list`](options::copy_id_list) makes for it.
-//! - `synblock_T::b_sst_array` -- the state cache's slab, threaded into two
+//! - `SynBlock::b_sst_array` -- the state cache's slab, threaded into two
 //!   intrusive lists of interior pointers.
-//! - [`synpat_T::sp_prog`] and `synblock_T::b_syn_linecont_prog` -- compiled
+//! - [`synpat_T::sp_prog`] and `SynBlock::b_syn_linecont_prog` -- compiled
 //!   programs, which belong to `regexp/`'s allocator discipline.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -85,9 +85,9 @@ use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    ColNr, HashTab, LineNr, OptInt, ProfTime, VarNumber, buf_T, bufstate_T, exarg_T, expand_T,
-    int16_t, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
-    synblock_T, synstate_T, uint8_t, uint64_t, win_T,
+    Buffer, ColNr, HashTab, LineNr, OptInt, ProfTime, SynBlock, SynTime, VarNumber, Window,
+    bufstate_T, exarg_T, expand_T, int16_t, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    regprog_T, size_t, synstate_T, uint8_t, uint64_t,
 };
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
@@ -290,7 +290,7 @@ pub(crate) struct synpat_T {
     /// a raw pointer released by [`Drop`] rather than becoming a `Box`.
     /// Retiring it is `regexp/`'s job, not this module's.
     pub sp_prog: *mut regprog_T,
-    pub sp_time: syn_time_T,
+    pub sp_time: SynTime,
 }
 
 impl synpat_T {
@@ -335,7 +335,7 @@ pub(crate) const EMPTY_SYNPAT: synpat_T = synpat_T {
     sp_syn: sp_syn { inc_tag: 0, id: 0 },
     sp_pattern: None,
     sp_prog: ::core::ptr::null_mut(),
-    sp_time: syn_time_T {
+    sp_time: SynTime {
         total: 0,
         slowest: 0,
         count: 0,
@@ -557,26 +557,26 @@ pub(crate) fn cur_pattern_count() -> ::core::ffi::c_int {
 pub(crate) fn cur_cluster_count() -> ::core::ffi::c_int {
     cur_syn_block().clusters().len() as ::core::ffi::c_int
 }
-/// A syntax block — a window's or a buffer's `synblock_T`, whose holder has
+/// A syntax block — a window's or a buffer's `SynBlock`, whose holder has
 /// promised it outlives the value.
 ///
 /// The promise is discharged by the window or buffer that owns the block: a
 /// `w_s` is either the buffer's `b_s` or an `:ownsyntax` block the window
 /// frees with itself.
-pub(crate) type SynBlockRef = Live<synblock_T>;
+pub(crate) type SynBlockRef = Live<SynBlock>;
 
 /// The address of one field of a syntax block, **without borrowing the
 /// block**.
 ///
 /// `&raw mut cur_syn_block().b_keywtab` would take its provenance from the
-/// transient `&mut synblock_T` that [`Live`]'s `DerefMut` hands out, and the
+/// transient `&mut SynBlock` that [`Live`]'s `DerefMut` hands out, and the
 /// block's next field access invalidates that borrow — so an address kept
 /// past the statement it was taken in is already dangling under Stacked and
 /// Tree Borrows. [`Live::field_ptr`] computes the same address from the
 /// pointer, which is why it exists.
 macro_rules! syn_field {
     ($block:expr, $field:ident) => {
-        $block.field_ptr(::core::mem::offset_of!(crate::types::synblock_T, $field))
+        $block.field_ptr(::core::mem::offset_of!(crate::types::SynBlock, $field))
     };
 }
 pub(crate) use syn_field;
@@ -617,12 +617,12 @@ static next_match_extmatch: GlobalCell<*mut reg_extmatch_T> =
 // and everything else is relative to them.
 
 /// The window being parsed for.
-static syn_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut());
+static syn_win: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut());
 /// The buffer being parsed.
-static syn_buf: GlobalCell<*mut buf_T> = GlobalCell::new(::core::ptr::null_mut());
+static syn_buf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut());
 /// The syntax block being parsed -- `syn_win`'s, which for `:ownsyntax` is not
 /// the buffer's. Reach it through [`syn_block`].
-static parsed_block: GlobalCell<*mut synblock_T> = GlobalCell::new(::core::ptr::null_mut());
+static parsed_block: GlobalCell<*mut SynBlock> = GlobalCell::new(::core::ptr::null_mut());
 
 /// The syntax block being *parsed*, which during a `:syntax` command is not
 /// necessarily [`cur_syn_block`], the one being *configured*.

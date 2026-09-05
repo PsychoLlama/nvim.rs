@@ -561,7 +561,7 @@ impl Lock {
     /// this is held, and `:cd` is refused.
     ///
     /// The scopes that take it hand control to an autocommand while
-    /// holding a raw `buf_T *`.
+    /// holding a raw `Buffer *`.
     pub fn all_buffers() -> Bump {
         Bump::new(&allbuf_lock)
     }

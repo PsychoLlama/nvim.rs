@@ -20,7 +20,7 @@ use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, vali
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::strings::vim_strchr;
-use crate::types::{NUL, OptionSetFlags, buf_T, optset_T};
+use crate::types::{Buffer, NUL, OptionSetFlags, optset_T};
 
 use super::frame::{errbuf, invalid, varp, win};
 use super::{
@@ -171,7 +171,7 @@ pub unsafe fn did_set_completeitemalign(_args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_completeopt(args: &mut optset_T) -> Option<&CStr> {
-    let (buf, opt_flags) = (args.os_buf.cast::<buf_T>(), args.os_flags);
+    let (buf, opt_flags) = (args.os_buf.cast::<Buffer>(), args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
     let value = unsafe {
@@ -342,7 +342,7 @@ pub unsafe fn did_set_spellsuggest(_args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_tagcase(args: &mut optset_T) -> Option<&CStr> {
-    let (buf, opt_flags) = (args.os_buf.cast::<buf_T>(), args.os_flags);
+    let (buf, opt_flags) = (args.os_buf.cast::<Buffer>(), args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
     let value = unsafe { if local { (*buf).b_p_tc } else { p_tc.get() } };

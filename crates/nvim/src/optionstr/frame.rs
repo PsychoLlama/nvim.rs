@@ -13,7 +13,7 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use crate::main::e_invarg;
-use crate::types::{optset_T, win_T};
+use crate::types::{Window, optset_T};
 
 /// "E474: Invalid argument", the message almost every string option's check
 /// reports when it has nothing more specific to say.
@@ -29,8 +29,8 @@ pub(crate) fn varp(args: &optset_T) -> *mut *mut c_char {
 
 /// The window the set is happening in. Not necessarily the window whose
 /// value is being set — see [`local_window`].
-pub(crate) fn win(args: &optset_T) -> *mut win_T {
-    args.os_win.cast::<win_T>()
+pub(crate) fn win(args: &optset_T) -> *mut Window {
+    args.os_win.cast::<Window>()
 }
 
 /// The window whose own copy of the option is being set, or null when the
@@ -46,9 +46,9 @@ pub(crate) fn win(args: &optset_T) -> *mut win_T {
 /// option; the comparison is of addresses only.
 pub(crate) unsafe fn local_window(
     varp: *mut *mut c_char,
-    wp: *mut win_T,
+    wp: *mut Window,
     local: *mut *mut c_char,
-) -> *mut win_T {
+) -> *mut Window {
     if varp == local { wp } else { ptr::null_mut() }
 }
 

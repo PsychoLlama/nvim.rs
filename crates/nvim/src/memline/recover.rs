@@ -55,11 +55,11 @@ pub unsafe fn ml_recover(checkext: bool) {
     recoverymode.set(true);
     let called_from_main = cur_buf().b_ml.ml_mfp.is_null();
 
-    let buf: *mut buf_T;
+    let buf: *mut Buffer;
     // Who owns what `buf` points at. The recovery buffer is not in the
     // registry, so this frame is its owner; `buf` is only the address the
     // memline code below works through.
-    let mut owned_buf: Option<Owned<buf_T>> = None;
+    let mut owned_buf: Option<Owned<Buffer>> = None;
     let mut mfp: *mut memfile_T = core::ptr::null_mut();
     let mut hp: *mut bhdr_T = core::ptr::null_mut();
     let mut fname_used: *mut c_char = core::ptr::null_mut();
@@ -356,7 +356,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         }
         unsafe { mf_close(mfp, false) }; // also frees the swap file's name
     }
-    // The free: `buf_T`'s destructor runs, taking the block stack with
+    // The free: `Buffer`'s destructor runs, taking the block stack with
     // it, and the memory goes back.
     drop(owned_buf);
     if serious_error && called_from_main {
@@ -433,7 +433,7 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
 /// appended and the number of problems found, or `Err` when block 1 itself is
 /// unusable, which leaves nothing to recover.
 unsafe fn recover_lines(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     mfp: *mut memfile_T,
     hp: &mut *mut bhdr_T,
 ) -> Result<(LineNr, c_int), ()> {
@@ -774,7 +774,7 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
 ///
 /// This is `:preserve`, and what happens when the original file has been
 /// changed or deleted. `message` reports whether it worked.
-pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
+pub unsafe fn ml_preserve(buf: *mut Buffer, message: bool, do_fsync: bool) {
     let mfp = unsafe { (*buf).b_ml.ml_mfp };
     if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
         if message {

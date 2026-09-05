@@ -49,8 +49,8 @@ use crate::search::{BACKWARD, FORWARD};
 /// `buf` must be a live buffer and `win` a live window; `fmp` must point at a
 /// live, writable `fmark_T` that outlives every use of the answer.
 pub unsafe fn mark_get(
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
     fmp: *mut fmark_T,
     flag: MarkGet,
     name: c_int,
@@ -153,8 +153,8 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut xfmark_T {
 /// `buf` must be a live buffer, `win` a live window, and `fmp` a live,
 /// writable `fmark_T` that outlives every use of the answer.
 pub unsafe fn mark_get_local(
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
     fmp: *mut fmark_T,
     name: c_int,
 ) -> *mut fmark_T {
@@ -213,8 +213,8 @@ pub unsafe fn mark_get_local(
 /// `buf` must be a live buffer, `win` a live window, and `fmp` a live,
 /// writable `fmark_T` that outlives every use of the answer.
 pub unsafe fn mark_get_motion(
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
     fmp: *mut fmark_T,
     name: c_int,
 ) -> *mut fmark_T {
@@ -299,7 +299,7 @@ const OPARG_EMPTY: oparg_T = oparg_T {
 /// # Safety
 /// `buf` must be a live buffer and `fmp` a live, writable `fmark_T` that
 /// outlives every use of the answer.
-pub unsafe fn mark_get_visual(buf: *mut buf_T, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
+pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut fmark_T, name: c_int) -> *mut fmark_T {
     if name != '<' as c_int && name != '>' as c_int {
         return ptr::null_mut();
     }

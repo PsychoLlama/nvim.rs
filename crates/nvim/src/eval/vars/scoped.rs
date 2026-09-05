@@ -20,8 +20,8 @@ use crate::option::boolean_optval;
 use crate::types::{NUL, OptionSetFlags};
 use crate::winlayer::{TabPage, Win, WinId, first_window};
 
-/// The zeroed `switchwin_T` [`switch_win`] fills in.
-const SWITCHWIN_INITIAL_VALUE: switchwin_T = switchwin_T {
+/// The zeroed `SwitchWin` [`switch_win`] fills in.
+const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
     sw_curwin: ptr::null_mut(),
     sw_curtab: ptr::null_mut(),
     sw_same_win: false,
@@ -43,9 +43,9 @@ unsafe fn get_var_from(
     rettv: *mut TypVal,
     deftv: *mut TypVal,
     htname: c_int,
-    tp: *mut tabpage_T,
-    win: *mut win_T,
-    buf: *mut buf_T,
+    tp: *mut Tabpage,
+    win: *mut Window,
+    buf: *mut Buffer,
 ) {
     let mut done = false;
     let do_change_curbuf = !buf.is_null() && htname == b'b' as c_int;
@@ -480,7 +480,7 @@ pub unsafe fn f_setbufvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: Eval
 /// Any window of `tab`, for the sake of its `t:` scope; a null when there is
 /// no such tab page. The current tab page's list hangs off `firstwin`, which
 /// upstream spells out here rather than reaching for the macro.
-fn any_window_of(tab: Option<TabPage>) -> *mut win_T {
+fn any_window_of(tab: Option<TabPage>) -> *mut Window {
     let tab = match tab {
         Some(tab) => tab,
         None => return ptr::null_mut(),

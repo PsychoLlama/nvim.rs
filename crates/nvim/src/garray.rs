@@ -11,7 +11,7 @@
 //! # Boundary
 //!
 //! Every entry point takes `*mut GArray` because its callers hold one --
-//! a field of `buf_T`, a `static`, a local the transpile never borrowed.
+//! a field of `Buffer`, a `static`, a local the transpile never borrowed.
 //! Each shim turns that pointer into a `&mut GArray` once, at the top, and
 //! the rest of the body is ordinary Rust. The *contract* the callers rely on
 //! is unchanged and load-bearing: many of them (`FoldList` and friends)

@@ -50,7 +50,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{
-    ColNr, Hlf, LineNr, NUL, ShmFlag, SpellMoveType, pos_T, size_t, uint8_t, win_T,
+    ColNr, Hlf, LineNr, NUL, ShmFlag, SpellMoveType, Window, pos_T, size_t, uint8_t,
 };
 use ::libc::strcpy;
 
@@ -65,7 +65,7 @@ use crate::spell::SMT_ALL;
 /// # Safety
 /// `wp` must be a live window and `state` the scan's own decoration state.
 unsafe fn decor_spell_nav_col(
-    wp: *mut win_T,
+    wp: *mut Window,
     lnum: LineNr,
     decor_lnum: &mut LineNr,
     col: c_int,
@@ -84,7 +84,7 @@ unsafe fn decor_spell_nav_col(
 
 /// Whether the syntax at this position is one that gets spell-checked.
 #[inline]
-unsafe fn can_syn_spell(wp: *mut win_T, lnum: LineNr, col: c_int) -> bool {
+unsafe fn can_syn_spell(wp: *mut Window, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
     unsafe { syn_get_id(wp, lnum, col as ColNr, 0, &raw mut can_spell, 0) };
     can_spell
@@ -100,7 +100,7 @@ unsafe fn can_syn_spell(wp: *mut win_T, lnum: LineNr, col: c_int) -> bool {
 ///
 /// Returns the length of the bad word, or 0 if none was found.
 pub unsafe fn spell_move_to(
-    wp: *mut win_T,
+    wp: *mut Window,
     dir: c_int,
     behaviour: SpellMoveType,
     curline: bool,

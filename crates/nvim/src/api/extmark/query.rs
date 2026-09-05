@@ -124,7 +124,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = Error::none();
     let rv: Array = ARRAY_DICT_INIT;
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -160,7 +160,7 @@ pub unsafe fn nvim_buf_get_extmarks(
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = Error::none();
     let mut rv: Array = ARRAY_DICT_INIT;
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -281,7 +281,7 @@ pub unsafe fn nvim_buf_get_extmarks(
 }
 
 unsafe fn extmark_get_index_from_obj(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     ns_id: Integer,
     obj: Object,
     row: *mut ::core::ffi::c_int,
@@ -353,7 +353,7 @@ pub unsafe fn nvim__buf_debug_extmarks(
     dot: Boolean,
 ) -> Result<String_0, Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return String_0::NULL.reported(error);
     }

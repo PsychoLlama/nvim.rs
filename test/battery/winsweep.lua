@@ -1231,7 +1231,7 @@ section('s3-resize', function()
   -- `frame_minheight`/`frame_minwidth` reserve ONE line/column for the
   -- current window when the `winmin*` option is 0 -- but only on the
   -- `next_curwin == NULL` path, and `win_equal` passes `NOWIN`
-  -- (`(win_T *)-1`), not NULL.  The only callers that pass NULL are
+  -- (`(Window *)-1`), not NULL.  The only callers that pass NULL are
   -- `frame_setheight`/`frame_setwidth` walking the SIBLINGS of the
   -- frame being resized, so the arm needs a resize of a window that is
   -- NOT the current one.  And it is only ever OBSERVABLE when the

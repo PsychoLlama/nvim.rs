@@ -42,7 +42,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{ColNr, GArray, Hlf, LineNr, langp_T, regmatch_T, size_t, uint8_t, win_T};
+use crate::types::{ColNr, GArray, Hlf, LineNr, Window, langp_T, regmatch_T, size_t, uint8_t};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -75,7 +75,7 @@ fn is_upper(c: c_int) -> bool {
 /// Returns the length of the word in bytes, good or bad, so the caller can
 /// skip over it.
 pub unsafe fn spell_check(
-    wp: *mut win_T,
+    wp: *mut Window,
     ptr: *mut c_char,
     attrp: *mut Hlf,
     capcol: *mut c_int,
@@ -304,7 +304,7 @@ fn get_char_type(c: c_int) -> c_int {
 /// after it.
 unsafe fn advance_camelcase_word(
     str: *mut c_char,
-    wp: *mut win_T,
+    wp: *mut Window,
     is_camel_case: &mut bool,
 ) -> *mut c_char {
     *is_camel_case = false;
@@ -354,14 +354,14 @@ pub fn spell_valid_case(wordflags: WordFlags, treeflags: WordFlags) -> bool {
 }
 
 /// Whether spell checking is on for `wp` and a language is actually loaded.
-pub unsafe fn spell_check_window(wp: *mut win_T) -> bool {
+pub unsafe fn spell_check_window(wp: *mut Window) -> bool {
     let on = unsafe { (*wp).w_onebuf_opt.wo_spell != 0 && *(*(*wp).w_s).b_p_spl != 0 };
     on && unsafe { (*(*wp).w_s).b_langp.ga_len } > 0
         && !unsafe { *((*(*wp).w_s).b_langp.ga_data as *mut *mut c_char) }.is_null()
 }
 
 /// Whether spell checking is *off* for `wp`, giving an error if so.
-pub unsafe fn no_spell_checking(wp: *mut win_T) -> bool {
+pub unsafe fn no_spell_checking(wp: *mut Window) -> bool {
     if unsafe { (*wp).w_onebuf_opt.wo_spell } == 0
         || unsafe { *(*(*wp).w_s).b_p_spl } == 0
         || unsafe { (*(*wp).w_s).b_langp.ga_len } <= 0
@@ -378,7 +378,7 @@ pub unsafe fn no_spell_checking(wp: *mut win_T) -> bool {
 /// The question is whether a sentence ends just before it. At the start of
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
-pub unsafe fn check_need_cap(wp: *mut win_T, lnum: LineNr, col: ColNr) -> bool {
+pub unsafe fn check_need_cap(wp: *mut Window, lnum: LineNr, col: ColNr) -> bool {
     if unsafe { (*(*wp).w_s).b_cap_prog }.is_null() {
         return false;
     }
@@ -437,7 +437,7 @@ pub unsafe fn check_need_cap(wp: *mut win_T, lnum: LineNr, col: ColNr) -> bool {
 }
 
 /// The end of the word starting at `start`, by the spell word characters.
-pub unsafe fn spell_to_word_end(start: *mut c_char, win: *mut win_T) -> *mut c_char {
+pub unsafe fn spell_to_word_end(start: *mut c_char, win: *mut Window) -> *mut c_char {
     let mut p = start;
     while unsafe { *p } != 0 && unsafe { spell_iswordp(p, win) } {
         p = unsafe { p.offset(utfc_ptr2len(p) as isize) };

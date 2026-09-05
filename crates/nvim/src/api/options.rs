@@ -37,8 +37,8 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    ApiDict, Arena, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
-    OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, uint64_t,
+    ApiDict, Arena, Buffer, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
+    OptionSetFlags, String_0, aco_save_T, kErrorTypeNone, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -61,7 +61,7 @@ struct OptionTarget {
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     scope: OptScope,
-    /// The `buf_T` or `win_T` the scope names -- `get_option_value_for` and
+    /// The `Buffer` or `Window` the scope names -- `get_option_value_for` and
     /// `set_option_value_for` take it untyped and read `scope` to know which
     /// it is -- or null for the global scope.
     from: *mut c_void,
@@ -206,17 +206,17 @@ unsafe fn do_ft_buf(
     aco: *mut aco_save_T,
     aco_used: *mut bool,
     err: &mut Error,
-) -> *mut buf_T {
+) -> *mut Buffer {
     // SAFETY: `aco_used` is the caller's out-parameter.
     unsafe { *aco_used = false };
     if filetype.is_null() {
-        return ptr::null_mut::<buf_T>();
+        return ptr::null_mut::<Buffer>();
     }
     // SAFETY: a dummy buffer of no name, which owns everything it holds.
     let ftbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as LineNr, BLN_DUMMY) };
     if ftbuf.is_null() {
         *err = Error::exception(c"Could not create internal buffer");
-        return ptr::null_mut::<buf_T>();
+        return ptr::null_mut::<Buffer>();
     }
     // SAFETY: `ftbuf` is the buffer just created.
     if unsafe { ml_open(ftbuf) }.is_err() {
@@ -262,7 +262,7 @@ unsafe fn do_ft_buf(
         if err.kind() == kErrorTypeNone {
             *err = Error::exception(c"Internal buffer was deleted");
         }
-        return ptr::null_mut::<buf_T>();
+        return ptr::null_mut::<Buffer>();
     }
     if !did_au_ft && err.kind() == kErrorTypeNone {
         *err = Error::exception(c"Could not execute FileType autocommands");
@@ -280,7 +280,7 @@ fn static_option(text: &'static CStr) -> OptVal {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-unsafe fn wipe_ft_buf(buf: *mut buf_T) {
+unsafe fn wipe_ft_buf(buf: *mut Buffer) {
     // SAFETY: `buf` is the caller's live buffer; the `bufref` re-checks it
     // after each step that can delete it.
     unsafe { block_autocmds() };
@@ -321,7 +321,7 @@ pub unsafe fn nvim_get_option_value(
     // borrows `opts`, which outlives the call.
     let ftbuf = unsafe { do_ft_buf(target.filetype, paco, pused, &mut err) };
     // SAFETY: `aco` is this frame's own and `ftbuf` is the scratch buffer.
-    let mut leave_ft_buf = |ftbuf: *mut buf_T| unsafe {
+    let mut leave_ft_buf = |ftbuf: *mut Buffer| unsafe {
         if aco_used {
             aucmd_restbuf(&raw mut aco);
         }
@@ -428,7 +428,7 @@ pub unsafe fn nvim_get_option_info2(
     // The metadata is read off a buffer and a window whatever the scope, so
     // the two the caller did not name default to the current ones.
     let buf = match target.scope == kOptScopeBuf {
-        true => target.from.cast::<buf_T>(),
+        true => target.from.cast::<Buffer>(),
         false => curbuf.get(),
     };
     let win = match target.scope == kOptScopeWin {

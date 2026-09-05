@@ -92,7 +92,10 @@ fn set_global_at_or_after(from: c_int) -> Option<c_int> {
 /// `buf` must be a live buffer and `mark_name` must point at live, writable
 /// storage holding one of the names above.
 #[inline]
-pub(super) unsafe fn next_buffer_mark(buf: *const buf_T, mark_name: *mut c_char) -> *const fmark_T {
+pub(super) unsafe fn next_buffer_mark(
+    buf: *const Buffer,
+    mark_name: *mut c_char,
+) -> *const fmark_T {
     // SAFETY: the caller promised a live buffer and a live cursor.
     let buf = unsafe { Buf::new(buf.cast_mut()) };
     // SAFETY: as above.
@@ -132,7 +135,7 @@ pub(super) unsafe fn next_buffer_mark(buf: *const buf_T, mark_name: *mut c_char)
 /// the same buffer.
 pub unsafe fn mark_buffer_iter(
     iter: *const c_void,
-    buf: *const buf_T,
+    buf: *const Buffer,
     name: *mut c_char,
     fm: *mut fmark_T,
 ) -> *const c_void {
@@ -221,7 +224,7 @@ pub unsafe fn mark_set_global(name: c_char, fm: xfmark_T, update: bool) -> bool 
 /// # Safety
 /// `buf` must be a live buffer, and `fm`'s allocations must be handed over to
 /// the store.
-pub unsafe fn mark_set_local(name: c_char, buf: *mut buf_T, fm: fmark_T, update: bool) -> bool {
+pub unsafe fn mark_set_local(name: c_char, buf: *mut Buffer, fm: fmark_T, update: bool) -> bool {
     // SAFETY: the caller promised a live buffer.
     let bufh = unsafe { Buf::new(buf) };
     let name = c_int::from(name);

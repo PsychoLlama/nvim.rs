@@ -68,7 +68,7 @@ struct InsertAt {
 /// `buf` must point at a buffer, and `line` at `len` readable bytes (or at a
 /// NUL-terminated string, if `len` is 0).
 pub(crate) unsafe fn ml_append_int(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     line: *mut c_char,
     len_arg: ColNr,
@@ -166,7 +166,7 @@ pub(crate) unsafe fn ml_append_int(
 /// # Safety
 /// `dp` must be the locked data block, with at least `space_needed` bytes free.
 unsafe fn ml_insert_in_block(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     mut dp: Db,
     at: &InsertAt,
     new: &NewLine,
@@ -244,7 +244,7 @@ unsafe fn ml_insert_in_block(
 /// `hp` must be the locked data block, and `new.text` must hold `new.len`
 /// bytes.
 unsafe fn ml_split_data_block(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     hp: *mut bhdr_T,
     at: &InsertAt,
     lnum: LineNr,
@@ -430,7 +430,11 @@ unsafe fn ml_split_data_block(
 /// # Safety
 /// `buf`'s stack must be the path ml_find_line left, and `split` must
 /// describe two blocks that exist.
-unsafe fn ml_insert_pointer(buf: *mut buf_T, mfp: *mut memfile_T, split: &mut SplitBlocks) -> bool {
+unsafe fn ml_insert_pointer(
+    buf: *mut Buffer,
+    mfp: *mut memfile_T,
+    split: &mut SplitBlocks,
+) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -544,7 +548,7 @@ unsafe fn pb_line_total(pp: Pb) -> c_int {
 /// `hp` must be the pointer block at `stack_idx`, with room for one more
 /// entry.
 unsafe fn ml_pointer_add_entry(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     hp: *mut bhdr_T,
     pb_idx: c_int,
     split: &SplitBlocks,
@@ -611,7 +615,7 @@ unsafe fn ml_pointer_add_entry(
 /// `*hp`/`*pp` must be a full pointer block, and `*stack_idx` the index of
 /// its stack entry.
 unsafe fn ml_split_pointer_block(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     mfp: *mut memfile_T,
     hp: &mut *mut bhdr_T,
     pp: &mut Pb,
@@ -665,7 +669,7 @@ unsafe fn ml_split_pointer_block(
 /// # Safety
 /// `buf` must point at a buffer holding line `lnum`.
 pub(crate) unsafe fn ml_delete_int(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     flags: c_int,
 ) -> Result<(), Failed> {
@@ -775,7 +779,7 @@ pub(crate) unsafe fn ml_delete_int(
 ///
 /// # Safety
 /// `hp` must be the locked data block, and `buf`'s stack the path to it.
-unsafe fn ml_free_data_block(buf: *mut buf_T, mfp: *mut memfile_T, hp: *mut bhdr_T) -> bool {
+unsafe fn ml_free_data_block(buf: *mut Buffer, mfp: *mut memfile_T, hp: *mut bhdr_T) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };

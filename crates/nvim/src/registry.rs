@@ -334,8 +334,8 @@ impl<V> HandleMap<V> {
 /// buffer and tab page registries use it. Windows have not followed, and the
 /// reason is the autocommand window: `aucmd_restbuf` takes it *out* of the
 /// registry while it stays alive and `aucmd_prepbuf` puts it back, so
-/// "registered" and "owned" are not the same lifetime for a `win_T` the way
-/// they are for a `buf_T`. Moving windows across means giving the idle
+/// "registered" and "owned" are not the same lifetime for a `Window` the way
+/// they are for a `Buffer`. Moving windows across means giving the idle
 /// autocommand window a named owner first.
 pub(crate) struct HandleRegistry<T> {
     /// Handle to the object it names. The value is `Copy` — see the module
@@ -690,7 +690,7 @@ mod tests {
     // interpreted. What they check is the wrapper's contract, not the slot
     // table's -- that is covered above.
 
-    /// A stand-in for `win_T`: the registry stores an address and never
+    /// A stand-in for `Window`: the registry stores an address and never
     /// reads through it, so an empty type will do.
     struct Object;
 

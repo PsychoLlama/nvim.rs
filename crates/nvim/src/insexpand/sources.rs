@@ -319,7 +319,7 @@ pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
     // This outlives the call, and a completion runs user functions and Lua in
     // between, so it stays a raw pointer that `win_valid` vets -- a `Win`
     // would be promising a liveness nothing here can keep.
-    static wp: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
+    static wp: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
 
     if flag == 'w' as c_int {
         // Just windows.
@@ -884,7 +884,7 @@ pub(super) struct LineMatch {
 /// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
 /// point at valid positions in `buf`.
 pub(super) unsafe fn search_for_fuzzy_match(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     pos: *mut pos_T,
     pattern: *const c_char,
     dir: c_int,

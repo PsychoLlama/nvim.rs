@@ -59,13 +59,13 @@ use crate::search::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, ColNr, DictItem, FileDescriptor,
+    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, Buffer, ColNr, DictItem, FileDescriptor,
     FileInfo, HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
     KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet,
     MotionType, OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
-    SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock, bln_values, buf_T,
-    fmark_T, fmarkv_T, int64_t, pos_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t,
-    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T, yankreg_T,
+    SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock, bln_values, fmark_T,
+    fmarkv_T, int64_t, pos_T, ptrdiff_t, size_t, ssize_t, typval_vval_union, uid_t, uint8_t,
+    uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T, yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -551,7 +551,7 @@ pub const KV_INITIAL_VALUE: AdditionalDataBuilder = AdditionalDataBuilder {
 /// The buffers a ShaDa write keeps no marks for: those on a removable
 /// medium (`'shada'`'s `r` prefixes) and the scratch kinds. Membership only,
 /// keyed by address, as the khash set it replaced was.
-pub(crate) type RemovableBufs = IdSet<*const buf_T>;
+pub(crate) type RemovableBufs = IdSet<*const Buffer>;
 
 /// The table key for the C string `name`: its bytes plus the terminator.
 ///

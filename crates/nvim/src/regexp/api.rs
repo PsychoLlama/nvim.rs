@@ -24,7 +24,7 @@ use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::types::{
-    ColNr, LineNr, OptInt, ProfTime, buf_T, regmatch_T, regmmatch_T, regprog_T, uint8_t, win_T,
+    Buffer, ColNr, LineNr, OptInt, ProfTime, Window, regmatch_T, regmmatch_T, regprog_T, uint8_t,
 };
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
@@ -257,8 +257,8 @@ pub unsafe fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const c_char, col: Col
 /// match; `tm`/`timed_out` bound how long the NFA engine may spend.
 pub unsafe fn vim_regexec_multi(
     rmp: *mut regmmatch_T,
-    win: *mut win_T,
-    buf: *mut buf_T,
+    win: *mut Window,
+    buf: *mut Buffer,
     lnum: LineNr,
     col: ColNr,
     tm: *mut ProfTime,

@@ -74,8 +74,8 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, aentry_T, buf_T, exarg_T,
-    size_t, win_T,
+    Buffer, CdCause, FAIL, FILE, Failed, MAXPATHL, NUL, OptionSetFlags, Vv, Window, aentry_T,
+    exarg_T, size_t,
 };
 use crate::winlayer::Win;
 use ::libc::{fclose, fprintf, fputs, strcpy};
@@ -265,7 +265,7 @@ pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Faile
 ///
 /// # Safety
 /// `buf` is a live buffer.
-unsafe fn ses_get_fname(buf: *mut buf_T, opts: SessionOpts) -> *mut c_char {
+unsafe fn ses_get_fname(buf: *mut Buffer, opts: SessionOpts) -> *mut c_char {
     // SAFETY: caller contract.
     if !unsafe { (*buf).b_sfname }.is_null()
         && opts.is_session()
@@ -282,7 +282,7 @@ unsafe fn ses_get_fname(buf: *mut buf_T, opts: SessionOpts) -> *mut c_char {
 ///
 /// # Safety
 /// `buf` is a live buffer.
-unsafe fn ses_fname(out: SessionFile, buf: *mut buf_T, opts: SessionOpts, add_eol: bool) -> bool {
+unsafe fn ses_fname(out: SessionFile, buf: *mut Buffer, opts: SessionOpts, add_eol: bool) -> bool {
     // SAFETY: caller contract.
     let name = unsafe { ses_get_fname(buf, opts) };
     let put = unsafe { ses_put_fname(out, name) };
@@ -299,7 +299,7 @@ unsafe fn ses_escape_fname(name: *mut c_char) -> *mut c_char {
     // SAFETY: caller contract; `home_replace_save` answers an owned,
     // NUL-terminated copy, and `utfc_ptr2len` advances by a whole character
     // so the scan never lands inside one.
-    let sname = unsafe { home_replace_save(ptr::null_mut::<buf_T>(), name) };
+    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), name) };
     let mut p = sname;
     while unsafe { *p } != NUL as c_char {
         if unsafe { *p } == b'\\' as c_char {
@@ -364,7 +364,7 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[aentry_T], fullna
 ///
 /// # Safety
 /// `wp` is a live window.
-pub(crate) unsafe fn ses_do_win(wp: *mut win_T) -> bool {
+pub(crate) unsafe fn ses_do_win(wp: *mut Window) -> bool {
     // SAFETY: caller contract; a window always has a buffer.
     let win = unsafe { Win::new(wp) };
     if win.w_floating {
@@ -426,7 +426,7 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
         emsg(gettext(e_noname));
         return ptr::null_mut();
     }
-    let sname = unsafe { home_replace_save(ptr::null_mut::<buf_T>(), (*curbuf.get()).b_ffname) };
+    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), (*curbuf.get()).b_ffname) };
 
     // One extra byte for each character that doubles.
     let mut extra = 0usize;

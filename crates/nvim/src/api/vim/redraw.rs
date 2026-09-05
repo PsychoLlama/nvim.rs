@@ -44,7 +44,7 @@ fn redraw_status(mut wp: Win, opts: Redraw, flush: bool) -> bool {
             if opts.statusline {
                 win_redr_status(wp.raw());
             }
-            win_check_ns_hl(::core::ptr::null_mut::<win_T>());
+            win_check_ns_hl(::core::ptr::null_mut::<Window>());
         }
     }
     flush
@@ -61,8 +61,8 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut opts = unsafe { Redraw::new(opts) };
     let keys = opts.is_set__redraw_;
     let set = |key| has_key(keys, key);
-    let mut win: *mut win_T = ::core::ptr::null_mut::<win_T>();
-    let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
+    let mut win: *mut Window = ::core::ptr::null_mut::<Window>();
+    let mut buf: *mut Buffer = ::core::ptr::null_mut::<Buffer>();
     if set(KEYSET_OPTIDX_redraw__win) {
         // SAFETY: `error` is this frame's own slot.
         win = unsafe { find_window_by_handle(opts.win, &mut error) };
@@ -113,7 +113,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             report(&mut error, c"Invalid 'range': Expected 2-tuple of Integers");
             return ().reported(error);
         };
-        let rbuf: *mut buf_T = if !win.is_null() {
+        let rbuf: *mut Buffer = if !win.is_null() {
             // SAFETY: `win` is the live window the lookup answered.
             unsafe { (*win).w_buffer }
         } else if !buf.is_null() {
@@ -169,7 +169,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         }
         flush_ui = true;
     }
-    let cwin: *mut win_T = if win.is_null() { curwin.get() } else { win };
+    let cwin: *mut Window = if win.is_null() { curwin.get() } else { win };
     // SAFETY: `cwin` is a live window, and its grid's target is a live grid
     // or null.
     let stale_grid = unsafe {

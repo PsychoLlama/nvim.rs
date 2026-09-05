@@ -38,8 +38,8 @@ use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
 use crate::types::{
-    DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, buf_T, size_t,
-    uint32_t, win_T,
+    Buffer, DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, Window, size_t,
+    uint32_t,
 };
 use crate::winlayer::Win;
 
@@ -52,7 +52,7 @@ use super::{
 
 /// What 'binary' overrode, so that switching it off again restores the
 /// values the user set rather than the defaults. The per-buffer copies live
-/// in `buf_T`; these are the global ones.
+/// in `Buffer`; these are the global ones.
 pub(crate) static p_tw_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
 pub(crate) static p_wm_nobin: GlobalCell<OptInt> = GlobalCell::new(0);
 pub(crate) static p_ml_nobin: GlobalCell<c_int> = GlobalCell::new(0);
@@ -180,7 +180,7 @@ pub(crate) fn check_options() {
 ///
 /// `wp` must be live for the options that keep their flag in a window.
 pub(crate) unsafe fn was_set_insecurely(
-    wp: *mut win_T,
+    wp: *mut Window,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> bool {
@@ -242,7 +242,7 @@ impl InsecureFlag {
 ///
 /// `wp` must be live for the options that keep their own copy.
 pub(crate) unsafe fn insecure_flag(
-    wp: *mut win_T,
+    wp: *mut Window,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> InsecureFlag {
@@ -262,7 +262,7 @@ pub(crate) unsafe fn insecure_flag(
         }
     } else if !wp.is_null() {
         // The global value of a window-local option lives in the window's
-        // second `winopt_T`. Upstream dereferences `wp` here without the
+        // second `WinOpt`. Upstream dereferences `wp` here without the
         // assert the local branch has; the null test above leaves a caller
         // that passes none on the shared mark instead.
         // SAFETY: the caller's window is live.
@@ -305,7 +305,7 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 /// # Safety
 ///
 /// `wp` must be live.
-pub(crate) unsafe fn check_blending(wp: *mut win_T) {
+pub(crate) unsafe fn check_blending(wp: *mut Window) {
     // SAFETY: the caller's window is live.
     // SAFETY: the caller's window.
     let mut wp = unsafe { Win::new(wp) };
@@ -322,7 +322,7 @@ pub(crate) unsafe fn check_blending(wp: *mut win_T) {
 ///
 /// `winhl`, when non-null, must be NUL-terminated; `wp`, when non-null, must
 /// be live.
-pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bool {
+pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut Window) -> bool {
     // SAFETY: the caller's string is NUL-terminated and its window is live.
     let mut p: *const c_char = if !winhl.is_null() {
         winhl
@@ -413,7 +413,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut win_T) -> bo
 /// # Safety
 ///
 /// `buf` and `win` must be live.
-pub(crate) unsafe fn check_redraw_for(buf: *mut buf_T, win: *mut win_T, flags: uint32_t) {
+pub(crate) unsafe fn check_redraw_for(buf: *mut Buffer, win: *mut Window, flags: uint32_t) {
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
     // SAFETY: the caller's buffer and window are live.

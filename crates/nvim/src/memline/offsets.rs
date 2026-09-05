@@ -22,7 +22,7 @@ use crate::winlayer::Win;
 /// one, and the search from chunk zero can be skipped.
 ///
 /// Setting `ml_upd_lastbuf` to null invalidates the lot.
-static ml_upd_lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(core::ptr::null_mut());
+static ml_upd_lastbuf: GlobalCell<*mut Buffer> = GlobalCell::new(core::ptr::null_mut());
 static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
@@ -37,7 +37,12 @@ static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub(crate) unsafe fn ml_updatechunk(buf: *mut buf_T, line: LineNr, len_arg: c_int, updtype: c_int) {
+pub(crate) unsafe fn ml_updatechunk(
+    buf: *mut Buffer,
+    line: LineNr,
+    len_arg: c_int,
+    updtype: c_int,
+) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -107,7 +112,7 @@ pub(crate) unsafe fn ml_updatechunk(buf: *mut buf_T, line: LineNr, len_arg: c_in
 ///
 /// # Safety
 /// `buf` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_addline(buf: *mut buf_T, line: LineNr, curline: LineNr, curix: usize) -> bool {
+unsafe fn ml_chunk_addline(buf: *mut Buffer, line: LineNr, curline: LineNr, curix: usize) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -159,7 +164,7 @@ unsafe fn ml_chunk_addline(buf: *mut buf_T, line: LineNr, curline: LineNr, curix
 ///
 /// # Safety
 /// `buf` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: LineNr) -> bool {
+unsafe fn ml_chunk_split(buf: *mut Buffer, curix: usize, curline_arg: LineNr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -223,7 +228,7 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: LineNr) -> 
 /// # Safety
 /// `buf` must point at a buffer, and `offp` be NULL or writable.
 pub unsafe fn ml_find_line_or_offset(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     offp: *mut c_int,
     no_ff: bool,

@@ -43,7 +43,7 @@ pub unsafe fn nvim_buf_set_text(
         unsafe { array_add(&mut scratch, put_value) };
         replacement = scratch;
     }
-    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
+    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -370,7 +370,7 @@ pub unsafe fn nvim_buf_set_text(
     ().reported(error)
 }
 
-pub(crate) unsafe fn fix_cursor(win: *mut win_T, lo: LineNr, hi: LineNr, extra: LineNr) {
+pub(crate) unsafe fn fix_cursor(win: *mut Window, lo: LineNr, hi: LineNr, extra: LineNr) {
     // SAFETY: the caller's promise -- `win` is a live window.
     let mut win = unsafe { Win::new(win) };
     if win.w_cursor.lnum >= lo {
@@ -389,7 +389,7 @@ pub(crate) unsafe fn fix_cursor(win: *mut win_T, lo: LineNr, hi: LineNr, extra: 
 }
 
 unsafe fn fix_pos_col(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     pos: *mut pos_T,
     start_row: LineNr,
     start_col: ColNr,
@@ -446,7 +446,7 @@ unsafe fn fix_pos_col(
 }
 
 unsafe fn fix_cursor_cols(
-    win: *mut win_T,
+    win: *mut Window,
     start_row: LineNr,
     start_col: ColNr,
     end_row: LineNr,

@@ -50,8 +50,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, buf_T, exarg_T,
-    int64_t, size_t, time_t,
+    Buffer, IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax,
+    exarg_T, int64_t, size_t, time_t,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
@@ -160,12 +160,12 @@ pub unsafe fn buflist_list(eap: *mut exarg_T) {
 /// `qsort` and `buf_time_compare` stay upstream's: two buffers entered in
 /// the same second tie, and a stable Rust sort would order the tie
 /// differently.
-fn sorted_by_last_used() -> Vec<*mut buf_T> {
-    let mut list: Vec<*mut buf_T> = buffers().map(|buf| buf.raw()).collect();
+fn sorted_by_last_used() -> Vec<*mut Buffer> {
+    let mut list: Vec<*mut Buffer> = buffers().map(|buf| buf.raw()).collect();
     let (base, n, width) = (
         list.as_mut_ptr().cast::<c_void>(),
         list.len(),
-        size_of::<*mut buf_T>(),
+        size_of::<*mut Buffer>(),
     );
     // SAFETY: `n` initialised elements of this function's own vector, and a
     // comparison function over two of them.
@@ -177,13 +177,13 @@ fn sorted_by_last_used() -> Vec<*mut buf_T> {
 /// down the buffer list itself. Upstream reads `b_next` after each line is
 /// printed, which is what the second arm does.
 struct Walk<'a> {
-    sorted: Option<&'a [*mut buf_T]>,
+    sorted: Option<&'a [*mut Buffer]>,
     at: usize,
     next: Option<Buf>,
 }
 
 impl<'a> Walk<'a> {
-    fn new(sorted: Option<&'a [*mut buf_T]>) -> Self {
+    fn new(sorted: Option<&'a [*mut Buffer]>) -> Self {
         let next = match sorted {
             Some(list) => nth(list, 0),
             None => first_buffer(),
@@ -214,7 +214,7 @@ impl<'a> Walk<'a> {
 }
 
 /// Entry `at` of the sorted array, which holds live buffers.
-fn nth(list: &[*mut buf_T], at: usize) -> Option<Buf> {
+fn nth(list: &[*mut Buffer], at: usize) -> Option<Buf> {
     // SAFETY: every entry of the sorted array is a live buffer.
     list.get(at).map(|&buf| unsafe { Buf::new(buf) })
 }
@@ -577,7 +577,7 @@ impl Msg {
 
     /// `home_replace` into the tail, followed by the length it wrote --
     /// which upstream measures with `strlen` rather than taking the answer.
-    fn put_home_replaced(&mut self, buf: *mut buf_T, name: *const c_char) {
+    fn put_home_replaced(&mut self, buf: *mut Buffer, name: *const c_char) {
         let (dst, room) = self.tail();
         // SAFETY: a live buffer or null, a NUL-terminated name, and the
         // buffer's own tail.

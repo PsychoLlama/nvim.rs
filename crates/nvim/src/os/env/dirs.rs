@@ -17,7 +17,7 @@ use crate::memory::xmemrchr;
 use crate::os::fs::os_isdir;
 use crate::path::{after_pathsep, append_path, concat_fnames, path_fnamencmp, path_tail_with_sep};
 use crate::strings::vim_strchr;
-use crate::types::{MAXPATHL, Vv, buf_T};
+use crate::types::{Buffer, MAXPATHL, Vv};
 
 /// The directory a runtime lives in, under `$VIM`.
 const RUNTIME_DIRNAME: &CStr = c"runtime";
@@ -285,7 +285,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
 /// `dst` must be writable for `dstlen` bytes; `src` NUL-terminated or NULL;
 /// `buf` a live buffer or NULL.
 pub unsafe fn home_replace(
-    buf: *const buf_T,
+    buf: *const Buffer,
     src: *const c_char,
     dst: *mut c_char,
     dstlen: size_t,
@@ -420,7 +420,7 @@ pub unsafe fn home_replace(
 ///
 /// # Safety
 /// `src` must be NUL-terminated or NULL, `buf` live or NULL.
-pub unsafe fn home_replace_save(buf: *mut buf_T, src: *const c_char) -> *mut c_char {
+pub unsafe fn home_replace_save(buf: *mut Buffer, src: *const c_char) -> *mut c_char {
     // SAFETY: the caller's contract; the buffer is sized for the source plus
     // "~/" and the NUL.
     unsafe {

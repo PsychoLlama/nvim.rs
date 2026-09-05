@@ -124,5 +124,5 @@ looks: `types/keysets.rs` is written through byte offsets by our own generated
 keydict codec, `types/mpack*.rs` and `types/rpc.rs` describe a codec that was
 vendored and ported rather than linked — the same reason `mpack/`'s codec is
 outside the perimeter — and `types/terminal_defs.rs` is `#[repr(C)]` only
-because the FFI-safety lint follows a pointer out of `buf_T`. All of those
+because the FFI-safety lint follows a pointer out of `Buffer`. All of those
 are still expected to leave the residue column the ordinary way.

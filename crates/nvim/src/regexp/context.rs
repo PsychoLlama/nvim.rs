@@ -40,7 +40,7 @@ use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
 use crate::semsg;
 use crate::types::{
-    ColNr, LineNr, buf_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t, win_T,
+    Buffer, ColNr, LineNr, Window, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
 };
 use ::libc::strcpy;
 
@@ -477,7 +477,7 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut regmatch_T, line_lbr: bool) {
     // A string match has no buffer of its own, but `\k` and friends still
     // need an 'iskeyword' to read.
     rex.set_reg_buf(curbuf.get());
-    rex.set_reg_win(core::ptr::null_mut::<win_T>());
+    rex.set_reg_win(core::ptr::null_mut::<Window>());
     // SAFETY: the caller's match structure, live with a program.
     rex.set_reg_ic(unsafe { (*rmp).rm_ic });
     rex.set_reg_nobreak(unsafe { (*(*rmp).regprog).re_flags } & RE_NOBREAK as u32 != 0);
@@ -492,8 +492,8 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut regmatch_T, line_lbr: bool) {
 pub(crate) fn init_regexec_multi(
     rex: Rex,
     rmp: *mut regmmatch_T,
-    win: *mut win_T,
-    buf: *mut buf_T,
+    win: *mut Window,
+    buf: *mut Buffer,
     lnum: LineNr,
 ) {
     rex.set_reg_match(core::ptr::null_mut::<regmatch_T>());

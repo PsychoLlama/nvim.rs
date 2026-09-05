@@ -51,8 +51,8 @@ use crate::registry::id_map;
 use crate::semsg;
 use crate::syntax::init_synblock;
 use crate::types::{
-    AdditionalData, Callback, ColNr, Failed, FileID, Handle, LineNr, OptInt, Timestamp, VAR_SCOPE,
-    buf_T, fmark_T, fmarkv_T, int16_t, memline_T, pos_T, regprog_T, size_t, uint64_t,
+    AdditionalData, Buffer, Callback, ColNr, Failed, FileID, Handle, LineNr, OptInt, Timestamp,
+    VAR_SCOPE, fmark_T, fmarkv_T, int16_t, memline_T, pos_T, regprog_T, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -202,7 +202,7 @@ pub unsafe fn buflist_new(
     sfname_arg: *mut c_char,
     lnum: LineNr,
     flags: c_int,
-) -> *mut buf_T {
+) -> *mut Buffer {
     let mut ffname = ffname_arg;
     let mut sfname = sfname_arg;
 
@@ -336,7 +336,7 @@ pub unsafe fn buflist_new(
 
 /// The entry a buffer with this name already has: refresh its position and
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
-fn reuse_entry(mut buf: Buf, lnum: LineNr, flags: c_int) -> *mut buf_T {
+fn reuse_entry(mut buf: Buf, lnum: LineNr, flags: c_int) -> *mut Buffer {
     if lnum != 0 as LineNr {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
         // SAFETY: records a position in the buffer's own entry list.
@@ -360,12 +360,12 @@ fn reuse_entry(mut buf: Buf, lnum: LineNr, flags: c_int) -> *mut buf_T {
     buf.raw()
 }
 
-/// A zeroed `buf_T` with its `b:` dictionary and `b:changedtick` in place.
+/// A zeroed `Buffer` with its `b:` dictionary and `b:changedtick` in place.
 ///
 /// The allocation is the caller's until [`append_to_list`] hands it to the
 /// registry, which owns every buffer that has a number.
-fn new_buffer() -> Owned<buf_T> {
-    // A zeroed `buf_T` is what upstream starts one from; `append_to_list`
+fn new_buffer() -> Owned<Buffer> {
+    // A zeroed `Buffer` is what upstream starts one from; `append_to_list`
     // gives it its number and puts it in the registry.
     let owned = alloc_unregistered_buffer();
     // SAFETY: the allocation just made, which `owned` keeps alive.
@@ -380,7 +380,7 @@ fn new_buffer() -> Owned<buf_T> {
     owned
 }
 
-/// A `buf_T` that lives **outside** the handle registry and off the buffer
+/// A `Buffer` that lives **outside** the handle registry and off the buffer
 /// list: scratch storage whose only real content is a memline.
 ///
 /// Two exist, and both are the editor's own business rather than the user's:
@@ -398,10 +398,10 @@ fn new_buffer() -> Owned<buf_T> {
 /// Most fields stay zero and are *not* valid buffer state: string options
 /// are null, there are no `b:` variables and no undo information. Only what
 /// the caller fills in afterwards may be read.
-pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
-    let mut storage = Box::<buf_T>::new_zeroed();
+pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
+    let mut storage = Box::<Buffer>::new_zeroed();
     let at = storage.as_mut_ptr();
-    // The fields a zeroed `buf_T` is *not* a valid value for -- an empty
+    // The fields a zeroed `Buffer` is *not* a valid value for -- an empty
     // `Vec` holds a non-null dangling pointer, not a zero one, and a `HashMap`
     // holds a seeded hasher -- are the user-command list, the keymap, the
     // buffer's syntax block (`init_synblock`), what the memline owns, and
@@ -415,13 +415,13 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<buf_T> {
     unsafe { (&raw mut (*at).b_marktree).write(MarkTree::EMPTY) };
     unsafe { (&raw mut (*at).b_extmark_ns).write(id_map()) };
     // SAFETY: all-zero bytes are otherwise what upstream's
-    // `xcalloc(1, sizeof(buf_T))` hands a fresh buffer.
+    // `xcalloc(1, sizeof(Buffer))` hands a fresh buffer.
     Owned::new(unsafe { storage.assume_init() })
 }
 
 /// Put a new buffer at the end of the buffer list, give it its number and
 /// hand its allocation to the registry, which owns it from here on.
-fn append_to_list(mut buf: Buf, owned: Owned<buf_T>) {
+fn append_to_list(mut buf: Buf, owned: Owned<Buffer>) {
     // The number and the registry entry come first, ahead of upstream's
     // order: from here on `buf.id()` names the buffer, and the list links
     // are made of exactly that. Nothing between the two reads either.
@@ -901,7 +901,7 @@ fn match_pattern(
 // ---------------------------------------------------------------------------
 // Sorting by last-used time
 
-/// `qsort`'s comparison over two `buf_T *`, most recently used first. Two
+/// `qsort`'s comparison over two `Buffer *`, most recently used first. Two
 /// buffers entered in the same second tie, and the order of a tie is
 /// whatever `qsort` lands on -- which is why the sort stays `qsort`.
 pub(crate) unsafe extern "C" fn buf_time_compare(s1: *const c_void, s2: *const c_void) -> c_int {
@@ -909,8 +909,8 @@ pub(crate) unsafe extern "C" fn buf_time_compare(s1: *const c_void, s2: *const c
     // each holding a live buffer pointer.
     let (buf1, buf2) = unsafe {
         (
-            Buf::new(*s1.cast::<*mut buf_T>()),
-            Buf::new(*s2.cast::<*mut buf_T>()),
+            Buf::new(*s1.cast::<*mut Buffer>()),
+            Buf::new(*s2.cast::<*mut Buffer>()),
         )
     };
     if buf1.b_last_used == buf2.b_last_used {

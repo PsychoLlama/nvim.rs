@@ -25,7 +25,7 @@ use std::ffi::CStr;
 /// One block of a tab page's diff list, as a pointer the caller has promised
 /// is live.
 ///
-/// The list hangs off `tabpage_T::tp_first_diff` and is chained through
+/// The list hangs off `Tabpage::tp_first_diff` and is chained through
 /// `df_next`; every reader of it walks the chain asking each block for its
 /// `df_lnum`/`df_count` in one buffer or another. Naming the pointer makes
 /// those ordinary field accesses, and leaves the two places the chain is
@@ -35,7 +35,7 @@ use std::ffi::CStr;
 /// A `Df` is a record of the caller's promise and not evidence for one: the
 /// list is rebuilt by `ex_diffupdate` and blocks are freed by `diff_free`, so
 /// a `Df` held across either is dangling. See [`Live`]'s module docs.
-pub(crate) type Df = Live<diff_T>;
+pub(crate) type Df = Live<DiffBlock>;
 
 impl Df {
     /// The block `dp` names, `None` for null.
@@ -43,7 +43,7 @@ impl Df {
     /// # Safety
     /// `dp` must be null, or stay a live block for as long as the value is
     /// used.
-    pub(crate) unsafe fn from_raw(dp: *mut diff_T) -> Option<Self> {
+    pub(crate) unsafe fn from_raw(dp: *mut DiffBlock) -> Option<Self> {
         // SAFETY: the caller's promise, for the non-null half.
         (!dp.is_null()).then(|| unsafe { Self::new(dp) })
     }
@@ -116,7 +116,7 @@ pub(crate) fn diff_slot(buf: Buf, tp: TabPage) -> c_int {
 /// [`valid_diff`], likewise safe: the walk compares `dp` against the live
 /// list without reading it, which is the point -- it is asked exactly when
 /// `dp` may have been freed underneath the caller.
-pub(crate) fn diff_still_listed(dp: *mut diff_T) -> bool {
+pub(crate) fn diff_still_listed(dp: *mut DiffBlock) -> bool {
     // SAFETY: the current tab page is live; `dp` is compared, never read.
     unsafe { valid_diff(dp) }
 }

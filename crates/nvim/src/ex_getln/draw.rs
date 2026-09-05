@@ -392,7 +392,7 @@ pub unsafe fn compute_cmdrow() {
     if exmode_active.get() || msg_scrolled.get() != 0 {
         cmdline_row.set(Rows.get() - 1);
     } else {
-        let wp = unsafe { lastwin_nofloating(::core::ptr::null_mut::<tabpage_T>()) };
+        let wp = unsafe { lastwin_nofloating(::core::ptr::null_mut::<Tabpage>()) };
         cmdline_row.set(
             unsafe { (*wp).w_winrow }
                 + unsafe { (*wp).w_height }

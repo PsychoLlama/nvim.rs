@@ -21,7 +21,7 @@ pub unsafe fn nvim_exec_autocmds(
     let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
     let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
-    let mut b: *mut buf_T = curbuf.get();
+    let mut b: *mut Buffer = curbuf.get();
     let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
     let event_array: Array = unsafe {
         unpack_string_or_array(

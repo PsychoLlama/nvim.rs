@@ -34,8 +34,8 @@ enum DiffStyle {
 /// range written into it, which is what tells the merge whether it is
 /// looking at a block from an earlier pass or one it just made.
 struct Walk {
-    dp: *mut diff_T,
-    dprev: *mut diff_T,
+    dp: *mut DiffBlock,
+    dprev: *mut DiffBlock,
     notset: bool,
 }
 

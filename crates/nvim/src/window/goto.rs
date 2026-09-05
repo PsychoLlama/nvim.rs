@@ -37,13 +37,13 @@ use crate::os::fs::{os_chdir, os_dirname};
 use crate::path::pathcmp;
 use crate::state::{MODE_CMDLINE, MODE_NORMAL, MODE_TERMINAL, get_real_state, virtual_active};
 use crate::types::{
-    CdScope, MAXPATHL, NUL, OptInt, buf_T, kCdScopeGlobal, kCdScopeTabpage, kCdScopeWindow,
-    tabpage_T,
+    Buffer, CdScope, MAXPATHL, NUL, OptInt, Tabpage, kCdScopeGlobal, kCdScopeTabpage,
+    kCdScopeWindow,
 };
 use crate::undo::u_sync;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
-pub unsafe fn win_goto(wp: *mut win_T) {
+pub unsafe fn win_goto(wp: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     goto_win(unsafe { Win::new(wp) });
 }
@@ -96,13 +96,13 @@ fn redraw_winline(wp: Win) {
 /// of the questions the editor asks about a window an autocommand may already
 /// have closed. `nvim_open_win` calls it right after `win_set_buf`, whose
 /// `BufEnter`/`BufLeave` handlers can close the very window being asked about.
-pub fn win_find_tabpage(win: *mut win_T) -> *mut tabpage_T {
+pub fn win_find_tabpage(win: *mut Window) -> *mut Tabpage {
     raw_tab(find_tab_of(win))
 }
 
 /// The tab page `win` is on, `None` when it is on none. `win` is only
 /// compared -- see [`win_find_tabpage`].
-fn find_tab_of(win: *mut win_T) -> Option<TabPage> {
+fn find_tab_of(win: *mut Window) -> Option<TabPage> {
     tabs().find(|tp| windows_in_tab(*tp).any(|wp| wp.raw() == win))
 }
 
@@ -155,11 +155,11 @@ impl Axis {
 }
 
 pub unsafe fn win_vert_neighbor(
-    tp: *mut tabpage_T,
-    wp: *mut win_T,
+    tp: *mut Tabpage,
+    wp: *mut Window,
     up: bool,
     count: c_int,
-) -> *mut win_T {
+) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
     raw_win(neighbor(tp, wp, Axis::Vertical, up, count))
@@ -173,11 +173,11 @@ pub(crate) fn goto_ver(up: bool, count: c_int) {
 }
 
 pub unsafe fn win_horz_neighbor(
-    tp: *mut tabpage_T,
-    wp: *mut win_T,
+    tp: *mut Tabpage,
+    wp: *mut Window,
     left: bool,
     count: c_int,
-) -> *mut win_T {
+) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
     let (tp, wp) = unsafe { (TabPage::new(tp), Win::new(wp)) };
     raw_win(neighbor(tp, wp, Axis::Horizontal, left, count))
@@ -245,7 +245,7 @@ fn neighbor(tp: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> 
     foundfr.win()
 }
 
-pub unsafe fn win_enter(wp: *mut win_T, undo_sync: bool) {
+pub unsafe fn win_enter(wp: *mut Window, undo_sync: bool) {
     // SAFETY: the caller's promise -- a live window.
     enter(unsafe { Win::new(wp) }, undo_sync);
 }
@@ -463,7 +463,7 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
     unsafe { do_autocmd_dirchanged(dir, scope, kCdCauseWindow, pre) };
 }
 
-pub unsafe fn buf_jump_open_win(buf: *mut buf_T) -> *mut win_T {
+pub unsafe fn buf_jump_open_win(buf: *mut Buffer) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer.
     raw_win(jump_open_win(unsafe { Buf::new(buf) }))
 }
@@ -480,7 +480,7 @@ pub(crate) fn jump_open_win(buf: Buf) -> Option<Win> {
     Some(wp)
 }
 
-pub unsafe fn buf_jump_open_tab(buf: *mut buf_T) -> *mut win_T {
+pub unsafe fn buf_jump_open_tab(buf: *mut Buffer) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer.
     raw_win(jump_open_tab(unsafe { Buf::new(buf) }))
 }

@@ -42,9 +42,9 @@ use crate::os::env::expand_env;
 
 use crate::path::pathcmp;
 use crate::types::{
-    BoolVarValue, Callback, CdCause, CdScope, CpoFlag, Failed, List, ListItem, MAXPATHL, NUL, OK,
-    OptInt, OptionSetFlags, ScriptCtx, TypVal, VAR_BOOL, VAR_LIST, VAR_STRING, VAR_UNKNOWN,
-    VarLock, buf_T, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
+    BoolVarValue, Buffer, Callback, CdCause, CdScope, CpoFlag, Failed, List, ListItem, MAXPATHL,
+    NUL, OK, OptInt, OptionSetFlags, ScriptCtx, TypVal, VAR_BOOL, VAR_LIST, VAR_STRING,
+    VAR_UNKNOWN, VarLock, exarg_T, kBoolVarFalse, kBoolVarTrue, kCdScopeGlobal, kCdScopeTabpage,
     kCdScopeWindow, optset_T, size_t,
 };
 
@@ -183,7 +183,7 @@ pub(crate) unsafe fn findfunc_find_file(
 ///
 /// The generated option table holds it as an `opt_did_set_cb` fn pointer.
 pub unsafe fn did_set_findfunc(args: &mut optset_T) -> Option<&CStr> {
-    let buf = args.os_buf as *mut buf_T;
+    let buf = args.os_buf as *mut Buffer;
     let retval = if args.os_flags.has(OptionSetFlags::LOCAL) {
         unsafe { option_set_callback_func((*buf).b_p_ffu, &raw mut (*buf).b_ffu_cb) }
     } else {

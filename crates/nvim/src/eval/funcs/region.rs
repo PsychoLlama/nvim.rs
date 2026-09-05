@@ -28,8 +28,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, TypVal, VAR_DICT, VarNumber,
-    block_def, buf_T, kListLenMayKnow, oparg_T, pos_T,
+    Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, TypVal, VAR_DICT,
+    VarNumber, block_def, kListLenMayKnow, oparg_T, pos_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -104,7 +104,7 @@ struct Region {
 /// so that the line accessors answer for it, and both must put it back
 /// however they leave.
 struct BufferSwap {
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     virtual_op: Option<bool>,
 }
 
@@ -266,7 +266,7 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
 ///
 /// # Safety
 /// `buf` is a loaded buffer.
-unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
+unsafe fn check_corner(buf: *mut Buffer, p: &mut pos_T) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
     if p.lnum < 1 || p.lnum > unsafe { (*buf).b_ml.ml_line_count } {

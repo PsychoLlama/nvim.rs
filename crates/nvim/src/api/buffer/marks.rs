@@ -15,7 +15,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut res: bool = false;
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (res as Boolean).reported(error);
     }
@@ -55,7 +55,7 @@ pub unsafe fn nvim_buf_set_mark(
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let mut res: bool = false;
-    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
+    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return (res as Boolean).reported(error);
     }
@@ -83,7 +83,7 @@ pub unsafe fn nvim_buf_get_mark(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }

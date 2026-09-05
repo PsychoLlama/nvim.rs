@@ -135,7 +135,7 @@ pub(crate) fn lines_equal(s1: &CStr, s2: &CStr) -> bool {
 }
 
 /// Whether a whole diff block holds the same text in two buffers.
-pub(crate) unsafe fn diff_equal_entry(dp: *mut diff_T, idx1: usize, idx2: usize) -> bool {
+pub(crate) unsafe fn diff_equal_entry(dp: *mut DiffBlock, idx1: usize, idx2: usize) -> bool {
     if unsafe { (*dp).df_count[idx1] } != unsafe { (*dp).df_count[idx2] } {
         return false;
     }

@@ -49,8 +49,8 @@ use crate::runtime::sourcing_a_script;
 use crate::types::{
     Arena, Dict, EvalArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL, Object,
     OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, exarg_T, ptrdiff_t,
-    size_t, ssize_t, typval_vval_union, uint8_t, win_T,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window, exarg_T,
+    ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -677,7 +677,7 @@ pub unsafe fn call_func_retlist(
 ///
 /// # Safety
 /// `wp` and `cp` must be valid.
-pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
+pub unsafe fn eval_foldexpr(wp: *mut Window, cp: *mut c_int) -> c_int {
     let mut evalarg = EVALARG_EVALUATE;
     let saved_sctx: ScriptCtx = current_sctx.get();
     // SAFETY: the caller's promise -- a live window.
@@ -735,7 +735,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
 ///
 /// # Safety
 /// `wp` must be valid.
-pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
+pub unsafe fn eval_foldtext(wp: *mut Window) -> Object {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
     /// The empty String an error answers with.

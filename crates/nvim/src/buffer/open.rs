@@ -1,6 +1,6 @@
 //! Reading a file into a buffer -- `open_buffer()` and the scratch forms.
 //!
-//! [`open_buffer`] is what turns an empty `buf_T` into one with text: read the
+//! [`open_buffer`] is what turns an empty `Buffer` into one with text: read the
 //! file (or stdin), set `'filetype'` and run the `BufRead`/`BufNewFile`
 //! autocommands, initialise undo and the swap file, and mark the buffer
 //! loaded.  [`buf_open_scratch`] and [`read_buffer_into`] are the two forms
@@ -447,7 +447,7 @@ fn open_buffer_inner(
 fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
     close_buffer(None, cur_buf(), 0, false, false);
 
-    curbuf.set(ptr::null_mut::<buf_T>());
+    curbuf.set(ptr::null_mut::<Buffer>());
     if let Some(buf) = buffers().find(|b| !b.b_ml.ml_mfp.is_null()) {
         curbuf.set(buf.raw());
     }

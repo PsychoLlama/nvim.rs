@@ -144,7 +144,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             };
         }
     } else if has_buf {
-        let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+        let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, err) };
         if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Array {
                 size: 0 as size_t,

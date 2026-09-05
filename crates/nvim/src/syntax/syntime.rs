@@ -1,7 +1,7 @@
 //! `:syntime` — per-pattern timing.
 //!
 //! With timing on, every `syn_regexec` accumulates into the pattern's own
-//! `syn_time_T`; [`syntime_report`] sorts the patterns by total time and prints
+//! `SynTime`; [`syntime_report`] sorts the patterns by total time and prints
 //! the table. Used to find the pattern that makes a syntax file slow.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -30,7 +30,7 @@ pub(crate) unsafe fn ex_syntime(eap: *mut exarg_T) {
 }
 
 /// Forget everything one pattern's timer accumulated.
-pub(crate) fn syn_clear_time(st: &mut syn_time_T) {
+pub(crate) fn syn_clear_time(st: &mut SynTime) {
     st.total = profile_zero();
     st.slowest = profile_zero();
     st.count = 0;
@@ -58,7 +58,7 @@ pub(crate) fn get_syntime_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 }
 
 /// One row of the `:syntime report` table: a pattern's accumulated timings,
-/// copied out of its `syn_time_T` so the table can be sorted.
+/// copied out of its `SynTime` so the table can be sorted.
 struct TimeEntry {
     total: ProfTime,
     count: c_int,

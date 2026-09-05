@@ -157,7 +157,7 @@ pub unsafe fn f_prompt_setinterrupt(
 /// # Safety
 /// The arguments must be live typvals, and `slot` must answer a field of the
 /// buffer it is handed.
-unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut buf_T) -> *mut Callback) {
+unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut Callback) {
     // SAFETY: the caller's obligation.
     let mut callback = Callback::None;
     if check_secure() {

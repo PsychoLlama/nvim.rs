@@ -21,7 +21,7 @@ use crate::normal::{
 };
 use crate::plines::plines_m_win_fill;
 use crate::strings::vim_strchr;
-use crate::types::{ColNr, Direction, LineNr, buf_T, cmdarg_T, win_T};
+use crate::types::{Buffer, ColNr, Direction, LineNr, Window, cmdarg_T};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
 
@@ -48,9 +48,9 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
     // The previous call's answers. They are what makes this a *difference*
     // rather than an absolute position, so that a window bound to two others
     // does not fight itself.
-    static old_curwin: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
+    static old_curwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
     static old_vtopline: GlobalCell<LineNr> = GlobalCell::new(0);
-    static old_buf: GlobalCell<*mut buf_T> = GlobalCell::new(ptr::null_mut());
+    static old_buf: GlobalCell<*mut Buffer> = GlobalCell::new(ptr::null_mut());
     static old_leftcol: GlobalCell<ColNr> = GlobalCell::new(0);
 
     // SAFETY: reads the current window and the remembered previous one.

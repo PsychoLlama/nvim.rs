@@ -50,7 +50,7 @@ use crate::path::{dir_of_file_exists, path_tail, path_tail_with_sep, vim_ispaths
 use crate::spell::{int_wordlist, spell_enc};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    FILE, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, buf_T, int32_t, langp_T, size_t,
+    Buffer, FILE, MAXPATHL, NUL, OptVal, OptionSetFlags, SpellAddType, int32_t, langp_T, size_t,
     uint8_t,
 };
 use crate::undo::buf_is_changed;
@@ -87,7 +87,7 @@ pub unsafe fn spell_add_word(
     // internal word list's name is owned by the global.
     let mut fnamebuf: *mut c_char = core::ptr::null_mut();
     // The buffer the file is open in, if the user is editing it.
-    let mut buf: *mut buf_T = core::ptr::null_mut();
+    let mut buf: *mut Buffer = core::ptr::null_mut();
     let mut new_spf = false;
 
     let fname = if idx == 0 {

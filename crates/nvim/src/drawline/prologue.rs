@@ -225,7 +225,7 @@ impl LineSetup {
             line_attr_save: 0,
             line_attr_lowprio_save: 0,
 
-            line_changes: diffline_T::default(),
+            line_changes: DiffLine::default(),
             change_index: -1,
             change_start: MAXCOL as ::core::ffi::c_int,
             change_end: -1,

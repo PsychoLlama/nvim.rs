@@ -117,7 +117,7 @@ static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// # Safety
 /// `buf` must point at a buffer.
-unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: LineNr) -> *mut c_char {
+unsafe fn ml_get_placeholder(buf: *mut Buffer, lnum: LineNr) -> *mut c_char {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -138,7 +138,7 @@ unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: LineNr) -> *mut c_char {
 /// # Safety
 /// `buf` must point at a buffer.
 pub(crate) unsafe fn ml_get_buf_impl(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     will_change: bool,
 ) -> *mut c_char {
@@ -226,7 +226,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
+pub(crate) unsafe fn ml_flush_line(buf: *mut Buffer, noalloc: bool) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -275,7 +275,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
 /// # Safety
 /// `hp` must be the block `ml_find_line(buf, lnum, ML_FIND)` returned, still
 /// locked, and `new_line` must hold `ml_line_textlen` readable bytes.
-unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: LineNr, new_line: *mut c_char) {
+unsafe fn ml_store_line(buf: *mut Buffer, hp: *mut bhdr_T, lnum: LineNr, new_line: *mut c_char) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -398,7 +398,7 @@ pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
 ///
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
-pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: LineNr, action: c_int) -> *mut bhdr_T {
+pub(crate) unsafe fn ml_find_line(buf: *mut Buffer, lnum: LineNr, action: c_int) -> *mut bhdr_T {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -574,7 +574,7 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: LineNr, action: c_int) 
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub(crate) unsafe fn ml_add_stack(buf: *mut buf_T) -> usize {
+pub(crate) unsafe fn ml_add_stack(buf: *mut Buffer) -> usize {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -589,7 +589,7 @@ pub(crate) unsafe fn ml_add_stack(buf: *mut buf_T) -> usize {
 ///
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
-pub(crate) unsafe fn ml_lineadd(buf: *mut buf_T, count: c_int) {
+pub(crate) unsafe fn ml_lineadd(buf: *mut Buffer, count: c_int) {
     // SAFETY: the caller's buffer, and its whole stack.
     unsafe { ml_lineadd_depth(buf, count, (*buf).b_ml.stack_len()) }
 }
@@ -605,7 +605,7 @@ pub(crate) unsafe fn ml_lineadd(buf: *mut buf_T, count: c_int) {
 /// # Safety
 /// `buf` must point at a buffer whose memline is open, and `depth` must not
 /// exceed the stack's length.
-pub(crate) unsafe fn ml_lineadd_depth(buf: *mut buf_T, count: c_int, depth: usize) {
+pub(crate) unsafe fn ml_lineadd_depth(buf: *mut Buffer, count: c_int, depth: usize) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };

@@ -99,20 +99,20 @@ pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
 ///
 /// # Safety
 /// `buf` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buf: *mut buf_T) -> LineNr {
+pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buf: *mut Buffer) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
     unsafe { tv_get_lnum_buf(args.ptr(i), buf) }
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
 /// which takes a number, a name or a pattern.
-pub(super) fn arg_buf(args: Args<'_>, i: usize, curtab_only: c_int) -> *mut buf_T {
+pub(super) fn arg_buf(args: Args<'_>, i: usize, curtab_only: c_int) -> *mut Buffer {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_buf(args.ptr(i), curtab_only) }
 }
 
 /// The buffer argument `i` names, reporting for a type that names none.
-pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> *mut buf_T {
+pub(super) fn arg_buf_chk(args: Args<'_>, i: usize) -> *mut Buffer {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_buf_from_arg(args.ptr(i)) }
 }
@@ -132,7 +132,7 @@ pub(super) fn cur_buf() -> Buf {
 /// The editor state [`SavedBufferState::prepare`] saves so that
 /// [`SavedBufferState::restore`] can put it back.
 struct SavedBufferState {
-    curwin_save: *mut win_T,
+    curwin_save: *mut Window,
     aco: aco_save_T,
     using_aco: bool,
     save_visual_active: bool,

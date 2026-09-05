@@ -25,7 +25,7 @@ use crate::main::{redraw_cmdline, wild_menu_showing};
 use crate::memory::xstrlcpy;
 use crate::os::env::home_replace;
 use crate::types::ui::kUIWildmenu;
-use crate::types::{MAXPATHL, buf_T, win_T};
+use crate::types::{Buffer, MAXPATHL, Window};
 use crate::ui::ui_has;
 use crate::winlayer::FrameRef;
 
@@ -34,7 +34,7 @@ use crate::winlayer::FrameRef;
 /// # Safety
 /// `wp` must be a live window. Evaluating `'statusline'` re-enters the
 /// editor, so nothing may be held across this.
-pub unsafe fn win_redr_status(wp: *mut win_T) {
+pub unsafe fn win_redr_status(wp: *mut Window) {
     // SAFETY: the caller's promise.
     let mut win = unsafe { Win::new(wp) };
     let is_stl_global = stl_is_global();
@@ -91,7 +91,7 @@ pub unsafe fn win_redr_status(wp: *mut win_T) {
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn stl_connected(wp: *mut win_T) -> bool {
+pub unsafe fn stl_connected(wp: *mut Window) -> bool {
     // SAFETY: the caller's promise; a live window has a live frame.
     let mut fr = unsafe { FrameRef::new(Win::new(wp).w_frame) };
     while let Some(parent) = fr.parent() {
@@ -118,7 +118,7 @@ pub unsafe fn stl_connected(wp: *mut win_T) -> bool {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub(crate) unsafe fn get_trans_bufname(buf: *mut buf_T, name: &mut [c_char; MAXPATHL as usize]) {
+pub(crate) unsafe fn get_trans_bufname(buf: *mut Buffer, name: &mut [c_char; MAXPATHL as usize]) {
     // SAFETY: the caller's promise.
     let spname = unsafe { buf_spname(buf) };
     let (out, room) = (name.as_mut_ptr(), MAXPATHL as size_t);

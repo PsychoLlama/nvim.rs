@@ -20,7 +20,7 @@ pub unsafe fn nvim_buf_del_extmark(
     id: Integer,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return false.reported(error);
     }
@@ -38,7 +38,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     mut line_end: Integer,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }

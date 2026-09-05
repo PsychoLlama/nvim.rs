@@ -19,8 +19,8 @@ use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{
     TypVal, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, typval_vval_union, win_T,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Window, kBoolVarFalse, kBoolVarTrue,
+    kSpecialVarNull, typval_vval_union,
 };
 
 use crate::support::alloc::{self, AllocLog};
@@ -811,17 +811,17 @@ fn getting_a_number_reads_a_string_and_reports_the_rest() {
 /// `describe('lnum()') itp('works')`, spec line 3205.
 ///
 /// The only case in the whole spec that touches `curwin`: a `"."` resolves
-/// through `var2fpos` to the cursor's line, which is what pinned `win_T`
+/// through `var2fpos` to the cursor's line, which is what pinned `Window`
 /// for the file. Everything else here allocates nothing, and says so.
 #[test]
 fn getting_a_line_number_resolves_the_cursor() {
     let log = AllocLog::start();
     // A window is all `var2fpos` needs for `"."`; it never reaches the
     // buffer on that path.
-    // Zeroed, and left `MaybeUninit`: a `win_T` owns allocations (its grid's
+    // Zeroed, and left `MaybeUninit`: a `Window` owns allocations (its grid's
     // cell buffers among them) that all-zero bytes are not a valid form of,
-    // so no `win_T` value is produced or dropped here.
-    let mut win = Box::new(std::mem::MaybeUninit::<win_T>::zeroed());
+    // so no `Window` value is produced or dropped here.
+    let mut win = Box::new(std::mem::MaybeUninit::<Window>::zeroed());
     let wp = win.as_mut_ptr();
     let saved_curwin = curwin.get();
     curwin.set(wp);

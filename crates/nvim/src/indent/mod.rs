@@ -255,7 +255,7 @@ pub unsafe fn tabstop_first(ts: *mut ColNr) -> c_int {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn get_sw_value(buf: *mut buf_T) -> c_int {
+pub unsafe fn get_sw_value(buf: *mut Buffer) -> c_int {
     unsafe { get_sw_value_col(buf, 0, false) }
 }
 
@@ -265,7 +265,7 @@ pub unsafe fn get_sw_value(buf: *mut buf_T) -> c_int {
 /// # Safety
 /// `buf` must be a live buffer and `pos` a position in the current one: the
 /// cursor is moved there and restored.
-unsafe fn get_sw_value_pos(buf: *mut buf_T, pos: *mut pos_T, left: bool) -> c_int {
+unsafe fn get_sw_value_pos(buf: *mut Buffer, pos: *mut pos_T, left: bool) -> c_int {
     let save_cursor = unsafe { (*curwin.get()).w_cursor };
     unsafe { (*curwin.get()).w_cursor = *pos };
     let sw_value = unsafe { get_sw_value_col(buf, get_nolist_virtcol(), left) };
@@ -277,7 +277,7 @@ unsafe fn get_sw_value_pos(buf: *mut buf_T, pos: *mut pos_T, left: bool) -> c_in
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_int {
+pub unsafe fn get_sw_value_indent(buf: *mut Buffer, left: bool) -> c_int {
     let mut pos = unsafe { (*curwin.get()).w_cursor };
     pos.col = unsafe { getwhitecols_curline() } as ColNr;
     unsafe { get_sw_value_pos(buf, &raw mut pos, left) }
@@ -287,7 +287,7 @@ pub unsafe fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_int {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn get_sw_value_col(buf: *mut buf_T, col: ColNr, left: bool) -> c_int {
+pub unsafe fn get_sw_value_col(buf: *mut Buffer, col: ColNr, left: bool) -> c_int {
     if unsafe { (*buf).b_p_sw } != 0 {
         unsafe { (*buf).b_p_sw as c_int }
     } else {
@@ -340,7 +340,7 @@ pub unsafe fn get_indent_lnum(lnum: LineNr) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line of `buf`.
-pub unsafe fn get_indent_buf(buf: *mut buf_T, lnum: LineNr) -> c_int {
+pub unsafe fn get_indent_buf(buf: *mut Buffer, lnum: LineNr) -> c_int {
     unsafe { indent_size_ts(ml_get_buf(buf, lnum), (*buf).b_p_ts, (*buf).b_p_vts_array) }
 }
 

@@ -26,11 +26,11 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 /// Set up the command preview buffer, creating it if it does not exist.
 ///
 /// Answers NULL if the buffer could not be made ready.
-pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
+pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     let mut cmdpreview_buf = if cmdpreview_bufnr.get() != 0 {
         find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
-        ::core::ptr::null_mut::<buf_T>()
+        ::core::ptr::null_mut::<Buffer>()
     };
 
     // If the preview buffer doesn't exist, open one.
@@ -38,14 +38,14 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
         // SAFETY: creating a scratch buffer needs only a live editor.
         let created = unsafe { nvim_create_buf(false, true) };
         let Ok(bufnr) = created else {
-            return ::core::ptr::null_mut::<buf_T>();
+            return ::core::ptr::null_mut::<Buffer>();
         };
         cmdpreview_buf = find_buf(bufnr).map_or(::core::ptr::null_mut(), |b| b.raw());
     }
 
     // The preview buffer cannot preview itself.
     if cmdpreview_buf == curbuf.get() {
-        return ::core::ptr::null_mut::<buf_T>();
+        return ::core::ptr::null_mut::<Buffer>();
     }
 
     // Rename the preview buffer.
@@ -55,7 +55,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
     unsafe { aucmd_restbuf(&raw mut aco) };
 
     if retv.is_err() {
-        return ::core::ptr::null_mut::<buf_T>();
+        return ::core::ptr::null_mut::<Buffer>();
     }
 
     // Temporarily switch to the preview buffer to set it up.
@@ -73,7 +73,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
 
 /// Open the command preview window, if it is not already open, and return to
 /// the original window.  Answers NULL if it could not be opened.
-pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win_T {
+pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Window {
     let save_curwin = curwin.get();
 
     if win_split(
@@ -82,7 +82,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
     )
     .is_err()
     {
-        return ::core::ptr::null_mut::<win_T>();
+        return ::core::ptr::null_mut::<Window>();
     }
 
     let preview_win = curwin.get();
@@ -102,7 +102,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
 
     if err.is_set() || result.is_err() {
         err.clear();
-        return ::core::ptr::null_mut::<win_T>();
+        return ::core::ptr::null_mut::<Window>();
     }
 
     cur_win().w_onebuf_opt.wo_cul = 0;
@@ -119,7 +119,7 @@ pub(crate) unsafe fn cmdpreview_close_win() {
     let buf = if cmdpreview_bufnr.get() != 0 {
         find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
-        ::core::ptr::null_mut::<buf_T>()
+        ::core::ptr::null_mut::<Buffer>()
     };
     if !buf.is_null() {
         unsafe { close_windows(buf, false) };
@@ -190,7 +190,7 @@ pub(crate) fn cmdpreview_prepare(mut cpinfo: Cp) {
         }};
     }
 
-    let mut saved_bufs: IdSet<*mut buf_T> = id_set();
+    let mut saved_bufs: IdSet<*mut Buffer> = id_set();
 
     cpinfo.buf_info = CP_INFO_INIT.buf_info;
     cpinfo.win_info = CP_INFO_INIT.win_info;
@@ -413,8 +413,8 @@ pub(crate) unsafe fn cmdpreview_may_show(_s: *mut CommandLineState) -> bool {
         // 'inccommand' = "split"
         let mut icm_split =
             unsafe { *p_icm.get() } as ::core::ffi::c_int == 's' as ::core::ffi::c_int;
-        let mut cmdpreview_buf = ::core::ptr::null_mut::<buf_T>();
-        let mut cmdpreview_win = ::core::ptr::null_mut::<win_T>();
+        let mut cmdpreview_buf = ::core::ptr::null_mut::<Buffer>();
+        let mut cmdpreview_win = ::core::ptr::null_mut::<Window>();
 
         // Block error reporting (the command may be incomplete), but
         // still update v:errmsg; block messages, namely ones that prompt;

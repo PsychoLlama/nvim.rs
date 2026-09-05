@@ -19,8 +19,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    ColNr, Failed, LineNr, List, ListItem, NUL, TypVal, VAR_LIST, VAR_STRING, buf_T, fmark_T,
-    pos_T, uint8_t, win_T,
+    Buffer, ColNr, Failed, LineNr, List, ListItem, NUL, TypVal, VAR_LIST, VAR_STRING, Window,
+    fmark_T, pos_T, uint8_t,
 };
 use crate::winlayer::Win;
 
@@ -28,7 +28,7 @@ use crate::winlayer::Win;
 ///
 /// # Safety
 /// `buf` must be null or valid.
-pub unsafe fn buf_byteidx_to_charidx(buf: *mut buf_T, mut lnum: LineNr, byteidx: c_int) -> c_int {
+pub unsafe fn buf_byteidx_to_charidx(buf: *mut Buffer, mut lnum: LineNr, byteidx: c_int) -> c_int {
     // SAFETY: the caller's promise -- `buf` is null or a live buffer.
     let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
         return -1;
@@ -72,7 +72,7 @@ pub unsafe fn buf_byteidx_to_charidx(buf: *mut buf_T, mut lnum: LineNr, byteidx:
 /// # Safety
 /// `buf` must be null or valid.
 pub unsafe fn buf_charidx_to_byteidx(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     mut lnum: LineNr,
     mut charidx: c_int,
 ) -> c_int {
@@ -114,7 +114,7 @@ pub unsafe fn var2fpos(
     dollar_lnum: bool,
     ret_fnum: *mut c_int,
     charcol: bool,
-    wp: *mut win_T,
+    wp: *mut Window,
 ) -> Option<pos_T> {
     let mut numbuf = NumBuf::new();
     // The record a `'m` lookup answers into: a motion mark has no store of

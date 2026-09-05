@@ -63,7 +63,7 @@ pub(crate) struct Backup {
 ///
 /// The size is not checked: a tool like `gzip` keeps the timestamp but
 /// cannot keep the size. Returns false if the user answers "no".
-unsafe fn check_mtime(buf: *mut buf_T, file_info: *mut FileInfo) -> bool {
+unsafe fn check_mtime(buf: *mut Buffer, file_info: *mut FileInfo) -> bool {
     if unsafe { (*buf).b_mtime_read } == 0
         || !time_differs(
             unsafe { &*file_info },
@@ -124,7 +124,7 @@ unsafe fn get_fileinfo_os(
 /// `Err(None)` is the user declining the "file has changed since reading it"
 /// prompt — a failure with nothing left to report.
 pub(crate) unsafe fn get_fileinfo(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fname: *mut c_char,
     overwriting: bool,
     forceit: bool,
@@ -673,7 +673,7 @@ pub(crate) unsafe fn open_write_file(
 /// Sync and close the file just written, and give it the original's
 /// ownership, permissions and ACL.
 pub(crate) unsafe fn finish_write(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fd: c_int,
     wfname: *mut c_char,
     target: &TargetFile,

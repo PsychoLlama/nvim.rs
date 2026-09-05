@@ -38,7 +38,7 @@ use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
 use crate::types::{
-    Failed, NUL, UVarNumber, VarNumber, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t,
+    Buffer, Failed, NUL, UVarNumber, VarNumber, int32_t, intmax_t, intptr_t, size_t, uint8_t,
     uint64_t,
 };
 use ::libc::{__errno_location, abort};
@@ -231,7 +231,7 @@ pub unsafe fn init_chartab() -> bool {
 ///
 /// # Safety
 /// `buf` must be a valid buffer.
-pub unsafe fn buf_init_chartab(buf: *mut buf_T, global: bool) -> bool {
+pub unsafe fn buf_init_chartab(buf: *mut Buffer, global: bool) -> bool {
     if global {
         // Control characters display as `^X` or `<xx>`; printable ASCII is
         // one cell wide; the Latin-1 upper half is printable and valid in a
@@ -294,7 +294,7 @@ pub unsafe fn check_isopt(var: *mut c_char) -> Result<(), Failed> {
 /// # Safety
 /// `buf` must be a valid buffer.
 #[inline(always)]
-unsafe fn set_buf_chartab(buf: *mut buf_T, c: c_int, on: bool) {
+unsafe fn set_buf_chartab(buf: *mut Buffer, c: c_int, on: bool) {
     let word = (c as c_uint >> 6) as usize;
     let bit = 1u64 << (c & 0x3f);
     // SAFETY: `c` is under 256, so `word` is one of the set's four.
@@ -395,7 +395,7 @@ unsafe fn next_isopt_entry(cursor: &mut Bytes) -> Option<IsoptEntry> {
 ///
 /// # Safety
 /// `buf` must be a valid buffer when `table` is the keyword set.
-unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buf: *mut buf_T) {
+unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buf: *mut Buffer) {
     for c in entry.first..=entry.last {
         // The `mb_` predicates rather than `isalpha`, which misreads the
         // Latin-1 upper half under the C locale.
@@ -430,7 +430,11 @@ unsafe fn apply_isopt_entry(table: IsoptTable, entry: &IsoptEntry, buf: *mut buf
 /// # Safety
 /// `var` must be a NUL-terminated string, and `buf` a valid buffer unless
 /// `only_check`.
-unsafe fn parse_isopt(var: *const c_char, buf: *mut buf_T, only_check: bool) -> Result<(), Failed> {
+unsafe fn parse_isopt(
+    var: *const c_char,
+    buf: *mut Buffer,
+    only_check: bool,
+) -> Result<(), Failed> {
     let table = if var == p_isi.get().cast_const() {
         IsoptTable::Ident
     } else if var == p_isp.get().cast_const() {
@@ -502,7 +506,7 @@ pub unsafe fn vim_iswordc_tab(c: c_int, chartab: *const uint64_t) -> bool {
 ///
 /// # Safety
 /// `buf` must be a valid buffer.
-pub unsafe fn vim_iswordc_buf(c: c_int, buf: *mut buf_T) -> bool {
+pub unsafe fn vim_iswordc_buf(c: c_int, buf: *mut Buffer) -> bool {
     // SAFETY: a valid buffer carries the four-word keyword set inline.
     unsafe { vim_iswordc_tab(c, (&raw const (*buf).b_chartab).cast()) }
 }
@@ -519,7 +523,7 @@ pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
 ///
 /// # Safety
 /// `p` must point into a NUL-terminated string and `buf` be a valid buffer.
-pub unsafe fn vim_iswordp_buf(p: *const c_char, buf: *mut buf_T) -> bool {
+pub unsafe fn vim_iswordp_buf(p: *const c_char, buf: *mut Buffer) -> bool {
     let lead = unsafe { Bytes::new(p) }.byte();
     let c = if utf8len_tab[lead as usize] > 1 {
         // SAFETY: as above; a lead byte promises the rest of its sequence.

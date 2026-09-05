@@ -51,7 +51,7 @@ macro_rules! msg_buf {
 ///
 /// # Safety
 /// `rbuf` must be null or live; `group` must be null or NUL-terminated.
-pub(crate) unsafe fn sign_list_placed(rbuf: *mut buf_T, group: *const c_char) {
+pub(crate) unsafe fn sign_list_placed(rbuf: *mut Buffer, group: *const c_char) {
     // SAFETY: the caller's group name.
     let ns = unsafe { group_get_ns(group) };
     // SAFETY: a static title.
@@ -282,7 +282,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
 /// `buf` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_place_cmd(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     name: *mut c_char,
     id: c_int,
@@ -319,7 +319,7 @@ unsafe fn sign_place_cmd(
 /// `buf` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_unplace_cmd(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     name: *const c_char,
     id: c_int,
@@ -350,7 +350,7 @@ unsafe fn sign_unplace_cmd(
 /// `buf` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_jump_cmd(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     name: *const c_char,
     id: c_int,
@@ -381,7 +381,7 @@ struct SignCmdArgs {
     id: c_int,
     group: *const c_char,
     prio: c_int,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
 }
 

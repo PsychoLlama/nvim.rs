@@ -20,8 +20,8 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, EStackType, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt, RepItem,
-    SPL_FNAME_TMPL, SpellAddType, XDGVarType, buf_T, exarg_T, file_comparison, regprog_T, size_t,
+    Buffer, CONV_NONE, EStackType, FAIL, Failed, HashTab, MAXPATHL, NUL, OK, OptInt, RepItem,
+    SPL_FNAME_TMPL, SpellAddType, XDGVarType, exarg_T, file_comparison, regprog_T, size_t,
     spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
@@ -113,7 +113,7 @@ pub struct spellinfo_T {
     pub si_compress_cnt: ::core::ffi::c_int,
     pub si_first_free: *mut wordnode_T,
     pub si_free_count: ::core::ffi::c_int,
-    pub si_spellbuf: *mut buf_T,
+    pub si_spellbuf: *mut Buffer,
     pub si_ascii: ::core::ffi::c_int,
     pub si_add: ::core::ffi::c_int,
     pub si_clear_chartab: ::core::ffi::c_int,

@@ -149,7 +149,7 @@ fn clamp_entries(len: c_int) -> c_int {
 ///
 /// Called from `update_screen()` before the screen is updated, once for each
 /// displayed buffer.
-pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
+pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut Buffer) {
     unsafe { syn_stack_apply_changes_block(SynBlockRef::new(&raw mut (*buf).b_s), buf) };
 
     for wp in windows() {
@@ -164,7 +164,7 @@ pub(crate) unsafe fn syn_stack_apply_changes(buf: *mut buf_T) {
 /// An entry below the change is not thrown away: it is moved by the number of
 /// inserted or deleted lines and given an `sst_change_lnum`, which records the
 /// line that has to be re-parsed before the entry can be trusted again.
-unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buf: *mut buf_T) {
+unsafe fn syn_stack_apply_changes_block(mut block: SynBlockRef, buf: *mut Buffer) {
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
     let mut p = block.b_sst_first;
     while !p.is_null() {

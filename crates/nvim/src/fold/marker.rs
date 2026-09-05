@@ -55,7 +55,7 @@ pub(super) unsafe fn fold_create_markers(wp: Win, start: pos_T, end: pos_T) {
 /// `buf` must be a live buffer, `pos` a line inside it, and
 /// `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_add_marker(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     pos: pos_T,
     marker: *const c_char,
     markerlen: size_t,
@@ -175,7 +175,7 @@ pub(super) unsafe fn delete_fold_markers(
 /// # Safety
 /// `buf` must be a live buffer and `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_del_marker(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: LineNr,
     marker: *mut c_char,
     markerlen: size_t,

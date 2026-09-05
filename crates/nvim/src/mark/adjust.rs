@@ -238,7 +238,7 @@ pub unsafe fn mark_adjust_nofold(
 /// `buf` must be a live buffer, and the editor's window and tab page lists
 /// must be live.
 pub unsafe fn mark_adjust_buf(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,

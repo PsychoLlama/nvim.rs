@@ -55,11 +55,11 @@ enum Gap {
 /// mode's first line-map entry sits: `inline:char` compares the last token of
 /// the left block, `inline:word` the one before it.
 unsafe fn merge_gaps(
-    dp_orig: *mut diff_T,
+    dp_orig: *mut DiffBlock,
     linemap: &LineMap,
     idx1: usize,
     entry_back: LineNr,
-    mut decide: impl FnMut(*mut diff_T, &linemap_entry_T, &linemap_entry_T) -> Gap,
+    mut decide: impl FnMut(*mut DiffBlock, &linemap_entry_T, &linemap_entry_T) -> Gap,
 ) -> (bool, bool) {
     let (mut merged, mut unmerged) = (false, false);
     let map = &linemap[idx1];
@@ -119,7 +119,7 @@ unsafe fn merge_gaps(
 /// Repeated until nothing more merges, because merging two blocks can make
 /// the next gap worth swallowing too -- but at most four passes, and only
 /// while the last pass both merged something and left something alone.
-unsafe fn refine_inline_char(dp_orig: *mut diff_T, linemap: &LineMap, idx1: usize) {
+unsafe fn refine_inline_char(dp_orig: *mut DiffBlock, linemap: &LineMap, idx1: usize) {
     for _ in 0..4 {
         let (merged, unmerged) = unsafe {
             merge_gaps(dp_orig, linemap, idx1, 1, |dp, _, _| {
@@ -152,7 +152,7 @@ unsafe fn refine_inline_char(dp_orig: *mut diff_T, linemap: &LineMap, idx1: usiz
 /// Always four passes: unlike `inline:char` there is no cheap test for
 /// "nothing left to do", and merging can expose a new short gap.
 unsafe fn refine_inline_word(
-    dp_orig: *mut diff_T,
+    dp_orig: *mut DiffBlock,
     linemap: &LineMap,
     idx1: usize,
     start_lnum: LineNr,
@@ -338,8 +338,8 @@ unsafe fn tokenize_line(
 /// insertion as far as that buffer is concerned, which is spelled `MAXCOL`
 /// and an `INT_MAX` line offset -- the marker `diff_find_change` reads to
 /// decide a line is an addition.
-fn change_for(new_diff: &diff_T, linemap: &LineMap) -> diffline_change_T {
-    let mut change = diffline_change_T {
+fn change_for(new_diff: &DiffBlock, linemap: &LineMap) -> DiffLineChange {
+    let mut change = DiffLineChange {
         dc_start: [0; 8],
         dc_end: [0; 8],
         dc_start_lnum_off: [0; 8],
@@ -388,7 +388,7 @@ fn change_for(new_diff: &diff_T, linemap: &LineMap) -> diffline_change_T {
 /// diff is built by pointing `tp_first_diff` at a fresh list and calling the
 /// ordinary `diff_file_internal`/`diff_read` pair, so the real block list and
 /// buffer table are saved and put back at the end.
-pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut diff_T) {
+pub(crate) unsafe fn diff_find_change_inline_diff(dp: *mut DiffBlock) {
     let save_diff_algorithm = diff_algorithm.get();
     let mut dio = diffio_T {
         dio_orig: DIFFIN_INIT,

@@ -74,7 +74,7 @@ pub(crate) unsafe fn pum_compute_size() {
 /// mode, which is the one case that never dereferences it.
 pub(crate) unsafe fn pum_compute_vertical_placement(
     size: c_int,
-    target_win: *mut win_T,
+    target_win: *mut Window,
     pum_win_row: c_int,
     above_row: c_int,
     below_row: c_int,
@@ -179,7 +179,7 @@ fn set_pum_width_aligned_with_cursor(width: c_int, available_width: c_int) -> bo
 /// # Safety
 /// `target_win` must be live, or null.
 pub(crate) unsafe fn pum_compute_horizontal_placement(
-    target_win: *mut win_T,
+    target_win: *mut Window,
     cursor_col: c_int,
     border_width: c_int,
 ) {

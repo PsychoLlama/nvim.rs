@@ -34,7 +34,7 @@ use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::regexp::vim_regfree;
 use crate::strings::vim_strchr;
 use crate::types::{
-    HashValue, NUL, OK, buf_T, regprog_T, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
+    Buffer, HashValue, NUL, OK, regprog_T, size_t, slang_T, uint8_t, uint16_t, wordcount_T,
 };
 
 use super::{MAXWLEN, MAXWORDCOUNT, SP_FORMERROR, SY_MAXLEN, WC_KEY_OFF, WordTree, syl_item_T};
@@ -297,7 +297,7 @@ pub(super) unsafe fn count_syllables(slang: *mut slang_T, word: *const c_char) -
 ///
 /// Most of its fields are invalid: string options are null and there is no
 /// undo information.
-pub unsafe fn open_spellbuf() -> *mut buf_T {
+pub unsafe fn open_spellbuf() -> *mut Buffer {
     // Never registered and never on the buffer list -- see
     // `alloc_unregistered_buffer`.
     // The allocation travels as a bare address: it is stored in a
@@ -320,12 +320,12 @@ pub unsafe fn open_spellbuf() -> *mut buf_T {
 }
 
 /// Close a buffer from [`open_spellbuf`].
-pub unsafe fn close_spellbuf(buf: *mut buf_T) {
+pub unsafe fn close_spellbuf(buf: *mut Buffer) {
     if buf.is_null() {
         return;
     }
     unsafe { ml_close(buf, 1) };
-    // The free: `buf_T`'s destructor runs and the memory goes back.
+    // The free: `Buffer`'s destructor runs and the memory goes back.
     // SAFETY: `open_spellbuf` gave up this address and nothing else
     // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after
     // this call.

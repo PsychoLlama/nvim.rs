@@ -18,7 +18,7 @@ use neovim::buffer::{
     BLN_LISTED, DOBUF_DEL, DOBUF_UNLOAD, DOBUF_WIPE, buf_valid, buflist_findpat, buflist_new,
     close_buffer,
 };
-use neovim::types::buf_T;
+use neovim::types::Buffer;
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
@@ -43,7 +43,7 @@ const ALLOW_UNLISTED: bool = true;
 struct Buffers {
     /// Held for its drop: the lock, the directory and the fixtures.
     _sandbox: Sandbox,
-    opened: std::cell::RefCell<Vec<*mut buf_T>>,
+    opened: std::cell::RefCell<Vec<*mut Buffer>>,
 }
 
 impl Buffers {
@@ -62,7 +62,7 @@ impl Buffers {
     ///
     /// The spec passed the same pointer as both the full and the short name,
     /// which is what a caller with a bare relative name does.
-    fn open(&self, name: &str) -> *mut buf_T {
+    fn open(&self, name: &str) -> *mut Buffer {
         let mut owned: Vec<c_char> = cstr(name)
             .as_bytes_with_nul()
             .iter()
@@ -85,7 +85,7 @@ impl Buffers {
     }
 
     /// `close_buffer(NULL, buf, action, 0, 0)`.
-    fn close(&self, buf: *mut buf_T, action: c_int) {
+    fn close(&self, buf: *mut Buffer, action: c_int) {
         // SAFETY: a buffer this case opened and has not yet wiped, and a
         // null window -- the spec's own call.
         unsafe { close_buffer(None, Buf::new(buf), action, false, false) };
@@ -95,13 +95,13 @@ impl Buffers {
     }
 
     /// The handle of a live buffer.
-    fn handle(&self, buf: *mut buf_T) -> c_int {
+    fn handle(&self, buf: *mut Buffer) -> c_int {
         // SAFETY: a buffer this case opened and has not wiped.
         unsafe { (*buf).handle }
     }
 
     /// `buf_valid`, which is the whole of the first `describe` block.
-    fn valid(&self, buf: *mut buf_T) -> bool {
+    fn valid(&self, buf: *mut Buffer) -> bool {
         // SAFETY: `buf_valid` walks the list and compares addresses; it
         // never dereferences the pointer it is given.
         unsafe { buf_valid(buf) }

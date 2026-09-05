@@ -15,7 +15,7 @@ use core::ffi::c_int;
 use super::*;
 
 /// Clear all syntax info for one block.
-pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
+pub(crate) unsafe fn syntax_clear(block: *mut SynBlock) {
     // SAFETY: the caller's promise -- a live syntax block.
     let mut block = unsafe { SynBlockRef::new(block) };
     block.b_syn_error = false; // clear previous error
@@ -55,7 +55,7 @@ pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
     running_syn_inc_tag.set(0);
 }
 
-/// Put the owning fields of a freshly zeroed `synblock_T` into a valid state.
+/// Put the owning fields of a freshly zeroed `SynBlock` into a valid state.
 ///
 /// A zeroed `Vec` is not one -- an empty `Vec` holds a dangling non-null
 /// pointer -- and `Option`'s null representation is not something to lean
@@ -64,7 +64,7 @@ pub(crate) unsafe fn syntax_clear(block: *mut synblock_T) {
 ///
 /// # Safety
 /// `at` must point at a zeroed block nothing has read or dropped.
-pub(crate) unsafe fn init_synblock(at: *mut synblock_T) {
+pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
     // SAFETY: the caller's promise; `write` does not drop what was there.
     unsafe {
         (&raw mut (*at).b_syn_patterns).write(Vec::new());
@@ -74,7 +74,7 @@ pub(crate) unsafe fn init_synblock(at: *mut synblock_T) {
 }
 
 /// Get rid of `:ownsyntax` for window `wp`.
-pub(crate) unsafe fn reset_synblock(wp: *mut win_T) {
+pub(crate) unsafe fn reset_synblock(wp: *mut Window) {
     if unsafe { (*wp).w_s } != unsafe { &raw mut (*(*wp).w_buffer).b_s } {
         unsafe { syntax_clear((*wp).w_s) };
         // SAFETY: an `:ownsyntax` block, which `ex_ownsyntax` boxed and

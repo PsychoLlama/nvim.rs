@@ -7,7 +7,7 @@
 //! options and folds along with it, and [`buflist_findfmark`] answers the
 //! same question for a mark rather than a window.
 //!
-//! The entries live in `buf_T`'s `b_wininfo`, a `klib/kvec.h` vector of
+//! The entries live in `Buffer`'s `b_wininfo`, a `klib/kvec.h` vector of
 //! `WinInfo *`. [`WinInfos`] borrows its three parts -- which is a safe
 //! operation once the buffer pointer is a [`Buf`] -- and hands out a slice of
 //! [`Entry`], the pointer-to-one-entry newtype whose `Deref` makes every
@@ -30,8 +30,8 @@ use crate::memory::{xcalloc, xrealloc};
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    AdditionalData, ColNr, GArray, LineNr, OptInt, Timestamp, WinInfo, buf_T, fmark_T, fmarkv_T,
-    pos_T, size_t, win_T, winopt_T,
+    AdditionalData, Buffer, ColNr, GArray, LineNr, OptInt, Timestamp, WinInfo, WinOpt, Window,
+    fmark_T, fmarkv_T, pos_T, size_t,
 };
 use crate::winfloat::win_set_minimal_style;
 use crate::winlayer::{Buf, Win, windows};
@@ -75,11 +75,11 @@ impl Entry {
     }
 
     /// The window this entry belongs to, null for the entry `:badd` leaves.
-    pub(crate) fn window(self) -> *mut win_T {
+    pub(crate) fn window(self) -> *mut Window {
         self.wi_win
     }
 
-    pub(crate) fn opt(&mut self) -> *mut winopt_T {
+    pub(crate) fn opt(&mut self) -> *mut WinOpt {
         &raw mut self.wi_opt
     }
 
@@ -100,7 +100,7 @@ pub(crate) struct WinInfos<'a> {
 }
 
 impl<'a> WinInfos<'a> {
-    pub(crate) fn of(buf: &'a mut buf_T) -> Self {
+    pub(crate) fn of(buf: &'a mut Buffer) -> Self {
         let kv = &mut buf.b_wininfo;
         WinInfos {
             size: &mut kv.size,
@@ -181,12 +181,12 @@ impl<'a> WinInfos<'a> {
 // argument types below carry; they collapse when option.rs and fold.rs are
 // themselves rewritten.
 
-fn clear_options(opt: *mut winopt_T) {
+fn clear_options(opt: *mut WinOpt) {
     // SAFETY: an option block inside a live entry or window.
     unsafe { clear_winopt(opt) };
 }
 
-fn copy_options(from: *mut winopt_T, to: *mut winopt_T) {
+fn copy_options(from: *mut WinOpt, to: *mut WinOpt) {
     // SAFETY: two option blocks inside a live entry or window.
     unsafe { copy_winopt(from, to) };
 }

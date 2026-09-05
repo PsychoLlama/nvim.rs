@@ -60,7 +60,7 @@ unsafe fn wanted_kinds(flags: c_int, want_marks: bool, get_old_files: bool) -> c
 
 /// The loaded buffer for each file name asked about, or null when there is
 /// none. Memoises the walk of the buffer list.
-type FnameBufs = IdMap<Box<[u8]>, *mut buf_T>;
+type FnameBufs = IdMap<Box<[u8]>, *mut Buffer>;
 
 /// What one pass of [`shada_read`] carries between entries.
 struct Reading {
@@ -77,7 +77,7 @@ struct Reading {
     oldfiles_set: IdSet<Box<[u8]>>,
     /// Buffers whose change list grew; the windows showing them are moved
     /// to the end of it once the whole file has been read.
-    cl_bufs: IdSet<*mut buf_T>,
+    cl_bufs: IdSet<*mut Buffer>,
     /// File name to the loaded buffer for it, or null when there is none.
     /// Memoises the walk of the buffer list; the keys are owned copies.
     fname_bufs: FnameBufs,
@@ -425,7 +425,7 @@ unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: buffer_list) {
 ///
 /// Answers are memoised in `fname_bufs`, whose keys are copies this makes
 /// and the caller frees.
-unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> *mut buf_T {
+unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> *mut Buffer {
     // SAFETY: the caller's file name, null or NUL-terminated.
     let key = unsafe { shada_key(fname) };
     if let Some(&memoised) = fname_bufs.get(key) {
@@ -448,7 +448,7 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
 /// A jump the list already holds — same position, same file — is dropped
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
-unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
+unsafe fn insert_jump(fm: xfmark_T, buf: *mut Buffer, mut entry: ShadaEntry) {
     // SAFETY: `curwin` is set from startup to exit, and nothing below can
     // change which window that is.
     let mut win = unsafe { Win::current() };
@@ -494,7 +494,7 @@ unsafe fn insert_jump(fm: xfmark_T, buf: *mut buf_T, mut entry: ShadaEntry) {
 
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
-unsafe fn insert_change(buf: *mut buf_T, fm: fmark_T) {
+unsafe fn insert_change(buf: *mut Buffer, fm: fmark_T) {
     // SAFETY: the caller's promise — `buf` is a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     let mut i = buf.b_changelistlen;

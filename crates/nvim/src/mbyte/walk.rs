@@ -379,9 +379,9 @@ pub unsafe fn mb_adjust_cursor() {
 ///
 /// # Safety
 ///
-/// `win_` must be a live `win_T`.
+/// `win_` must be a live `Window`.
 pub unsafe fn mb_check_adjust_col(win_: *mut c_void) {
-    let win = win_ as *mut win_T;
+    let win = win_ as *mut Window;
     let oldcol = unsafe { (*win).w_cursor.col };
     if oldcol == 0 {
         return;

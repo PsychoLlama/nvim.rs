@@ -59,7 +59,7 @@ struct Counted {
     patlen: size_t,
     chgtick: c_int,
     /// Which buffer the numbers were counted in, by identity rather than by
-    /// address: a wiped buffer's `buf_T` can be handed back out by the
+    /// address: a wiped buffer's `Buffer` can be handed back out by the
     /// allocator, and a *handle* is never reissued (p23-5).
     buf: Option<BufId>,
 }

@@ -29,9 +29,9 @@ use crate::os::cshim::gettext_ptr;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    ApiDict, Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_win_text_height, LineNr,
-    LuaRef, Object, String_0, TabpageHandle, WindowHandle, buf_T, int64_t, size_t, switchwin_T,
-    tabpage_T, win_execute_T,
+    ApiDict, Arena, Array, Boolean, Buffer, BufferHandle, Error, Integer, KeyDict_win_text_height,
+    LineNr, LuaRef, Object, String_0, SwitchWin, Tabpage, TabpageHandle, WinExecute, WindowHandle,
+    int64_t, size_t,
 };
 use crate::window::{
     can_close_in_cmdwin, win_close, win_close_othertab, win_find_tabpage, win_get_tabwin,
@@ -121,8 +121,8 @@ pub unsafe fn nvim_win_set_cursor(win: WindowHandle, pos: Array) -> Result<(), E
     // callees run can reach it.
     check_cursor_col(w);
     w.w_set_curswant = true;
-    let mut switchwin = switchwin_T::default();
-    let any_tab = ptr::null_mut::<tabpage_T>();
+    let mut switchwin = SwitchWin::default();
+    let any_tab = ptr::null_mut::<Tabpage>();
     let _ = unsafe { switch_win(&raw mut switchwin, w.raw(), any_tab, true) };
     update_topline(unsafe { Win::current() });
     validate_cursor(unsafe { Win::current() });
@@ -325,7 +325,7 @@ pub fn nvim_win_close(win: WindowHandle, force: Boolean) -> Result<(), Error> {
     // `ex_win_close` reads a null tab page as "the current one", which is the
     // only case where it may close the window the user is in.
     let other_tab = if tabpage == curtab.get() {
-        ptr::null_mut::<tabpage_T>()
+        ptr::null_mut::<Tabpage>()
     } else {
         tabpage
     };
@@ -344,7 +344,7 @@ pub fn nvim_win_call(win: WindowHandle, fun: LuaRef) -> Result<Object, Error> {
     };
     let tabpage = win_find_tabpage(w.raw());
     let res = api_try(&mut err, |err| {
-        let mut switch_args = win_execute_T::default();
+        let mut switch_args = WinExecute::default();
         let mut res = Object::Nil;
         // SAFETY: `switch_args` is this frame's own and nothing the call runs
         // can reach it.
@@ -406,7 +406,7 @@ pub unsafe fn nvim_win_text_height(
     let Some(w) = window_by_handle(win, &mut err) else {
         return rv.reported(err);
     };
-    let buf: *mut buf_T = w.buffer().raw();
+    let buf: *mut Buffer = w.buffer().raw();
     let line_count: LineNr = w.buffer().line_count();
 
     // SAFETY: `opts` is the caller's, per this function's contract; `set` and

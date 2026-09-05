@@ -43,8 +43,8 @@ use crate::message::msg_ptr;
 use crate::os::cshim::snprintf;
 
 use crate::types::{
-    CmdModFlags, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, buf_T, exarg_T, ptrdiff_t, tabpage_T,
-    win_T,
+    Buffer, CmdModFlags, FAIL, Failed, Integer, LineNr, NUL, OK, Tabpage, Vv, Window, exarg_T,
+    ptrdiff_t,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
@@ -94,7 +94,7 @@ pub(crate) unsafe fn ex_bunload(eap: *mut exarg_T) {
 /// # Safety
 /// `wp` must be a live window on entry. It need not survive the call: the
 /// autocommands may close it, which is what `quit_was_cancelled` is for.
-pub(crate) unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forceit: bool) -> bool {
+pub(crate) unsafe fn before_quit_autocmds(wp: *mut Window, quit_all: bool, forceit: bool) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
     if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
@@ -140,7 +140,7 @@ pub(crate) unsafe fn before_quit_autocmds(wp: *mut win_T, quit_all: bool, forcei
 /// autocommand may have closed `wp` — and an *argument* would be evaluated
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
-fn quit_was_cancelled(wp: *mut win_T, buf: impl FnOnce() -> *mut buf_T) -> bool {
+fn quit_was_cancelled(wp: *mut Window, buf: impl FnOnce() -> *mut Buffer) -> bool {
     if win_valid(wp) && !curbuf_locked() {
         let buf = buf();
         if !(unsafe { (*buf).b_nwindows } == 1 && unsafe { (*buf).b_locked } > 0) {
@@ -219,7 +219,7 @@ pub(crate) unsafe fn ex_quit(eap: *mut exarg_T) {
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
-fn window_at(nr: LineNr) -> *mut win_T {
+fn window_at(nr: LineNr) -> *mut Window {
     let mut wp = first_win();
     let mut n = nr;
     while let Some(next) = wp.next() {
@@ -313,7 +313,7 @@ pub(crate) unsafe fn ex_close(eap: *mut exarg_T) {
 ///
 /// Unlike `window_at`, this counts from one and falls back to `lastwin`
 /// rather than stopping at the end.
-fn numbered_window(nr: LineNr) -> *mut win_T {
+fn numbered_window(nr: LineNr) -> *mut Window {
     let mut winnr = 0;
     for wp in windows() {
         winnr += 1;
@@ -340,7 +340,7 @@ pub(crate) unsafe fn ex_pclose(eap: *mut exarg_T) {
 /// `tp` is the tab page the window belongs to, or null for this one; a
 /// window in another tab page cannot simply be entered, so it takes the
 /// other close path.
-pub unsafe fn ex_win_close(forceit: c_int, win: *mut win_T, tp: *mut tabpage_T) {
+pub unsafe fn ex_win_close(forceit: c_int, win: *mut Window, tp: *mut Tabpage) {
     if is_aucmd_win(win) {
         emsg(gettext(e_autocmd_close.as_ptr()));
         return;
@@ -487,7 +487,7 @@ pub unsafe fn tabpage_close(forceit: c_int) {
 ///
 /// Its windows are closed from the last backwards; the loop stops as soon
 /// as one refuses, which is what `tp_lastwin` not changing means.
-pub unsafe fn tabpage_close_other(tp: *mut tabpage_T, forceit: c_int) {
+pub unsafe fn tabpage_close_other(tp: *mut Tabpage, forceit: c_int) {
     if window_layout_locked(CmdIdx::SIZE) {
         return;
     }
@@ -552,7 +552,7 @@ pub(crate) unsafe fn ex_only(eap: *mut exarg_T) {
 ///
 /// `:1only` is the *current* window: the count is spent before the walk
 /// starts, unlike `window_at`, which always steps at least once.
-fn window_at_stepwise(nr: LineNr) -> *mut win_T {
+fn window_at_stepwise(nr: LineNr) -> *mut Window {
     let mut wp = first_win();
     let mut n = nr;
     loop {
@@ -648,14 +648,14 @@ fn apply_autocmds(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
 ) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::autocmd::apply_autocmds(event, fname, fname_io, force, buf) }
 }
 
 /// `buf_hide()` as checked code.
-fn buf_hide(buf: *const buf_T) -> bool {
+fn buf_hide(buf: *const Buffer) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::buffer::buf_hide(buf) }
 }
@@ -733,7 +733,7 @@ fn text_locked_msg() {
 }
 
 /// `win_close()` as checked code.
-fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
+fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::window::win_close(win, free_buf, force) }
 }

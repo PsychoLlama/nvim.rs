@@ -17,7 +17,7 @@ use std::ffi::c_int;
 
 use neovim::indent::{get_sts_value, indent_size_ts};
 use neovim::main::curbuf;
-use neovim::types::{ColNr, OptInt, buf_T};
+use neovim::types::{Buffer, ColNr, OptInt};
 
 use crate::support::{Editor, Sandbox, cstr};
 
@@ -28,14 +28,14 @@ use crate::support::{Editor, Sandbox, cstr};
 /// child could get away with. Zeroed is the right starting point: every
 /// field `get_sts_value` reads is set below, and `b_p_vts_array` being null
 /// is what "no 'vartabstop'" means.
-fn with_buffer(f: impl FnOnce(&mut buf_T)) {
+fn with_buffer(f: impl FnOnce(&mut Buffer)) {
     let _sandbox = Sandbox::globals();
     // Boxed rather than a local: `curbuf` is a raw pointer the crate reads
     // through, and a heap allocation has an address that is nobody else's.
-    let mut buf: Box<buf_T> = {
-        let mut storage = Box::<buf_T>::new_zeroed();
+    let mut buf: Box<Buffer> = {
+        let mut storage = Box::<Buffer>::new_zeroed();
         // SAFETY: all-zero bytes are what upstream's `xcalloc` hands a fresh
-        // buffer, and the one field a zeroed `buf_T` is *not* a valid value
+        // buffer, and the one field a zeroed `Buffer` is *not* a valid value
         // for -- `b_ucmds`, whose empty `Vec` holds a non-null dangling
         // pointer -- is written before anything can read or drop it.
         unsafe {

@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
-use crate::types::{Arena, Array, Error, OptInt, ShmFlag, exarg_T, tabpage_T};
+use crate::types::{Arena, Array, Error, OptInt, ShmFlag, Tabpage, exarg_T};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::first_window;
@@ -390,7 +390,7 @@ pub(crate) unsafe fn may_show_intro() -> bool {
         && unsafe { (*curbuf.get()).b_fname }.is_null()
         && unsafe { (*curbuf.get()).handle } == 1
         && unsafe { (*curwin.get()).handle } == LOWEST_WIN_ID as c_int
-        && unsafe { one_window(curwin.get(), ptr::null_mut::<tabpage_T>()) }
+        && unsafe { one_window(curwin.get(), ptr::null_mut::<Tabpage>()) }
         && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
 }
 

@@ -81,7 +81,7 @@ impl AucmdWins {
 /// Safe, and it keeps the raw pointer on purpose: `win` is only ever
 /// *compared*, never dereferenced, so a caller may hand it an address an
 /// autocommand has already freed — exactly as `win_valid` is.
-pub fn is_aucmd_win(win: *mut win_T) -> bool {
+pub fn is_aucmd_win(win: *mut Window) -> bool {
     let vec = aucmd_wins();
     (0..vec.len()).any(|i| {
         // SAFETY: `i` is below `len`, so the slot is initialised.
@@ -92,7 +92,7 @@ pub fn is_aucmd_win(win: *mut win_T) -> bool {
 
 /// Make `buf` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
+pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut Buffer) {
     let entry = |idx: usize| aucmd_wins().slot(idx);
 
     let same_buffer = buf == curbuf.get();
@@ -100,7 +100,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
     // A window already showing `buf` is preferred: making it current
     // has the fewest side effects.  Only `curtab` is searched, which is
     // why `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` starts at `firstwin`.
-    let win: *mut win_T = if same_buffer {
+    let win: *mut Window = if same_buffer {
         curwin.get()
     } else {
         windows()
@@ -110,7 +110,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut aco_save_T, buf: *mut buf_T) {
 
     // Allocate an autocommand window when there is no window to use.
     let mut need_append = true;
-    let mut auc_win: *mut win_T = ::core::ptr::null_mut();
+    let mut auc_win: *mut Window = ::core::ptr::null_mut();
     let mut auc_idx = aucmd_wins().len();
     if win.is_null() {
         auc_idx = 0;

@@ -57,7 +57,7 @@ unsafe fn find(d: *const Dict, key: &str) -> *mut DictItem {
 unsafe fn matchadd_dict_arg(
     tv: *mut TypVal,
     conceal_char: *mut *const c_char,
-    win: *mut *mut win_T,
+    win: *mut *mut Window,
     numbuf: &mut NumBuf,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's typval and out-parameters.
@@ -280,7 +280,7 @@ pub(crate) unsafe fn f_setmatches(argvars: *mut TypVal, rettv: *mut TypVal, _fpt
 unsafe fn optional_args(
     argvars: *mut TypVal,
     numbuf: &mut NumBuf,
-) -> Option<(c_int, c_int, *const c_char, *mut win_T)> {
+) -> Option<(c_int, c_int, *const c_char, *mut Window)> {
     // SAFETY: the evaluator's slots.
     let mut prio = DEFAULT_PRIORITY;
     let mut id = -1;

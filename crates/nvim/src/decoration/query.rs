@@ -24,8 +24,8 @@ use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::xrealloc;
 use crate::types::{
-    DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, buf_T, size_t, uint64_t,
-    virt_line, win_T,
+    Buffer, DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, Window, size_t,
+    uint64_t, virt_line,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -101,7 +101,7 @@ pub unsafe fn next_virt_text_chunk(
 /// # Safety
 /// `buf` must point to a live buffer.
 pub unsafe fn decor_find_virttext(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     row: c_int,
     ns_id: uint64_t,
 ) -> *mut DecorVirtText {
@@ -137,7 +137,7 @@ pub unsafe fn decor_find_virttext(
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua through the providers.
-pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool) -> bool {
+pub unsafe fn decor_conceal_line(wp: *mut Window, row: c_int, check_cursor: bool) -> bool {
     // SAFETY: the caller's window.
     let wp = unsafe { Win::new(wp) };
     if row < 0
@@ -186,7 +186,7 @@ pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool)
 ///
 /// # Safety
 /// `wp` must point to a live window.
-pub unsafe fn win_lines_concealed(wp: *mut win_T) -> bool {
+pub unsafe fn win_lines_concealed(wp: *mut Window) -> bool {
     // SAFETY: the caller's window.
     let wp = unsafe { Win::new(wp) };
     wp.has_any_folding() || wp.w_onebuf_opt.wo_cole >= 2 as OptInt
@@ -204,7 +204,7 @@ pub unsafe fn win_lines_concealed(wp: *mut win_T) -> bool {
 /// `wp` must be live; `lines` must be null or a live `VirtLines` this may
 /// grow; `num_below` null or writable.
 pub unsafe fn decor_virt_lines(
-    wp: *mut win_T,
+    wp: *mut Window,
     start_row: c_int,
     end_row: c_int,
     num_below: *mut c_int,

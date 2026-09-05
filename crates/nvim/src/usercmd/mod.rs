@@ -73,7 +73,7 @@ use crate::strings::xstrnsave;
 use crate::tr_c;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdAddr, ExArgt, ExpandContext, FAIL, Failed, LuaRef, OK, buf_T, exarg_T, expand_T, int64_t,
+    Buffer, CmdAddr, ExArgt, ExpandContext, FAIL, Failed, LuaRef, OK, exarg_T, expand_T, int64_t,
     size_t, ucmd_T,
 };
 use crate::window::prevwin_curwin;
@@ -101,7 +101,7 @@ pub(crate) enum Table {
     /// The global [`ucmds`].
     Global,
     /// `buf`'s own `b_ucmds`.
-    Buffer(*mut buf_T),
+    Buffer(*mut Buffer),
 }
 
 impl Table {

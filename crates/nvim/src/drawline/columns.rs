@@ -136,7 +136,7 @@ impl WinLineVars {
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn use_cursor_line_highlight(wp: *mut win_T, lnum: LineNr) -> bool {
+pub unsafe fn use_cursor_line_highlight(wp: *mut Window, lnum: LineNr) -> bool {
     // SAFETY: the caller's live window.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
@@ -245,7 +245,7 @@ unsafe fn fold_column_cells(
 /// `wp` must be live, `fdc` may not exceed [`MAX_FOLDCOLUMN`], and both arrays
 /// must have `fdc` entries.
 pub unsafe fn fill_foldcolumn(
-    wp: *mut win_T,
+    wp: *mut Window,
     foldinfo: foldinfo_T,
     lnum: LineNr,
     fdc: ::core::ffi::c_int,

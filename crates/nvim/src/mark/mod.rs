@@ -182,7 +182,7 @@ pub unsafe fn clear_fmark(fm: *mut fmark_T, timestamp: Timestamp) {
 ///
 /// # Safety
 /// `pos` must point at a live position and `buf` at a live buffer.
-unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
+unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut Buffer) {
     // SAFETY: the autocommand tables are the editor's own, live from startup.
     if !has_event(AutoEvent::MarkSet) {
         return;
@@ -308,7 +308,7 @@ pub unsafe fn setmark_pos(
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn mark_forget_file(wp: *mut win_T, fnum: c_int) {
+pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
     // SAFETY: the caller promised a live window.
     let mut wp = unsafe { Win::new(wp) };
     unsafe { mark_jumplist_forget_file(wp.raw(), fnum) };
@@ -324,15 +324,15 @@ pub unsafe fn mark_forget_file(wp: *mut win_T, fnum: c_int) {
             wp.w_tagstackidx -= 1;
         }
         wp.w_tagstacklen -= 1;
-        // SAFETY: source and destination are inside `[taggy_T; 20]` and the
+        // SAFETY: source and destination are inside `[Taggy; 20]` and the
         // length is what is left above `i`, so the move stays in the array.
-        let stack = unsafe { &raw mut (*wp.raw()).w_tagstack }.cast::<taggy_T>();
+        let stack = unsafe { &raw mut (*wp.raw()).w_tagstack }.cast::<Taggy>();
         unsafe {
             (stack.offset(i as isize)).cast::<u8>().copy_from(
                 (stack.offset(i as isize + 1)).cast(),
                 size_t::try_from(wp.w_tagstacklen - i)
                     .unwrap_or(0)
-                    .wrapping_mul(size_of::<taggy_T>()),
+                    .wrapping_mul(size_of::<Taggy>()),
             )
         };
     }
@@ -357,7 +357,7 @@ pub unsafe fn mark_forget_file(wp: *mut win_T, fnum: c_int) {
 /// # Safety
 /// `buf` must be a live buffer and `fmp` must point at a live, writable
 /// `fmark_T` that outlives every use of the answer.
-pub unsafe fn pos_to_mark(buf: *mut buf_T, fmp: *mut fmark_T, pos: pos_T) -> *mut fmark_T {
+pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut fmark_T, pos: pos_T) -> *mut fmark_T {
     debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
     // SAFETY: the caller promised a live, writable record.
     let fm = unsafe { Fmark::new(fmp) };
@@ -411,7 +411,7 @@ pub unsafe fn mark_view_restore(fmp: *mut fmark_T) {
 
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn mark_view_make(wp: *const win_T, pos: pos_T) -> fmarkv_T {
+pub unsafe fn mark_view_make(wp: *const Window, pos: pos_T) -> fmarkv_T {
     // SAFETY: the caller promised a live window.
     mark_view_make_at(unsafe { Win::new(wp.cast_mut()) }, pos)
 }
@@ -474,7 +474,7 @@ pub(super) unsafe fn fname2fnum(fm: *mut xfmark_T) {
 ///
 /// # Safety
 /// `buf` must be a live buffer, and the editor's window list must be live.
-pub unsafe fn fmarks_check_names(buf: *mut buf_T) {
+pub unsafe fn fmarks_check_names(buf: *mut Buffer) {
     // SAFETY: the caller promised a live buffer.
     let buf = unsafe { Buf::new(buf) };
     let name = buf.b_ffname;
@@ -556,7 +556,7 @@ pub(crate) unsafe fn mark_check(fm: *mut fmark_T, errormsg: &mut Option<CString>
 /// `buf` must be null or a live buffer, and `fm` must point at a live
 /// `fmark_T`.
 pub(crate) unsafe fn mark_check_line_bounds(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fm: *mut fmark_T,
     errormsg: &mut Option<CString>,
 ) -> bool {
@@ -583,7 +583,7 @@ pub(crate) unsafe fn mark_check_line_bounds(
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
+pub unsafe fn clrallmarks(buf: *mut Buffer, timestamp: Timestamp) {
     // SAFETY: the caller promised a live buffer.
     let mut buf = unsafe { Buf::new(buf) };
     for mark in buf.named_marks() {
@@ -606,7 +606,7 @@ pub unsafe fn clrallmarks(buf: *mut buf_T, timestamp: Timestamp) {
 
 /// # Safety
 /// `win` must be a live window.
-pub unsafe fn set_last_cursor(win: *mut win_T) {
+pub unsafe fn set_last_cursor(win: *mut Window) {
     // SAFETY: the caller promised a live window.
     let win = unsafe { Win::new(win) };
     let Some(buf) = win.buffer_or_none() else {
@@ -627,7 +627,7 @@ pub unsafe fn set_last_cursor(win: *mut win_T) {
 /// # Safety
 /// `buf` must be a live buffer and `lp` must point at a live, writable
 /// position naming a line of it.
-pub unsafe fn mark_mb_adjustpos(buf: *mut buf_T, lp: *mut pos_T) {
+pub unsafe fn mark_mb_adjustpos(buf: *mut Buffer, lp: *mut pos_T) {
     // SAFETY: the caller promised a live position.
     let mut pos = unsafe { *lp };
     if pos.col <= 0 && pos.coladd <= 1 {

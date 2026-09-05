@@ -26,8 +26,8 @@ use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
-    DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTPos, MarkTreeIter, SignItem,
-    SignTextAttrs, buf_T, uint32_t, win_T,
+    Buffer, DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTPos, MarkTreeIter, SignItem,
+    SignTextAttrs, Window, uint32_t,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -76,7 +76,7 @@ static SIGN_ADD_ID: GlobalCell<c_int> = GlobalCell::new(0);
 /// # Safety
 /// `buf` and `sh` must be live.
 pub unsafe fn buf_put_decor_sh(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     sh: *mut DecorSignHighlight,
     row1: c_int,
     row2: c_int,
@@ -101,7 +101,7 @@ pub unsafe fn buf_put_decor_sh(
 /// # Safety
 /// `buf` and `sh` must be live.
 pub unsafe fn buf_remove_decor_sh(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     row1: c_int,
     row2: c_int,
     sh: *mut DecorSignHighlight,
@@ -188,8 +188,8 @@ fn row_signs(buf: Buf, wp: Win, row: c_int) -> Vec<SignItem> {
 /// `wp` and `buf` must be live; `sattrs`, when not null, must have room for
 /// `wp`'s sign column width; the `*_id` pointers must be null or writable.
 pub unsafe fn decor_redraw_signs(
-    wp: *mut win_T,
-    buf: *mut buf_T,
+    wp: *mut Window,
+    buf: *mut Buffer,
     row: c_int,
     sattrs: *mut SignTextAttrs,
     line_id: *mut c_int,
@@ -298,7 +298,7 @@ pub enum SignCountHalf {
 /// # Safety
 /// `buf` must point to a live buffer.
 pub unsafe fn buf_signcols_count_range(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     row1: c_int,
     row2: c_int,
     add: c_int,

@@ -65,13 +65,13 @@ pub unsafe fn nvim_open_win(
         // SAFETY: paired with the `unblock_autocmds` at the end.
         unsafe { block_autocmds() };
     }
-    let wp: *mut win_T;
-    let mut tp: *mut tabpage_T = curtab.get();
+    let wp: *mut Window;
+    let mut tp: *mut Tabpage = curtab.get();
     debug_assert!(!curwin.get().is_null(), "curwin != NULL");
-    let mut parent: *mut win_T = if keys.win == 0 {
+    let mut parent: *mut Window = if keys.win == 0 {
         curwin.get()
     } else {
-        ::core::ptr::null_mut::<win_T>()
+        ::core::ptr::null_mut::<Window>()
     };
     '_cleanup: {
         if keys.win > 0 {
@@ -133,9 +133,9 @@ pub unsafe fn nvim_open_win(
                 // SAFETY: a split of the current window, which is live.
                 wp = unsafe { split_ins(size, flags) };
             } else {
-                let mut switchwin = switchwin_T {
-                    sw_curwin: ::core::ptr::null_mut::<win_T>(),
-                    sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
+                let mut switchwin = SwitchWin {
+                    sw_curwin: ::core::ptr::null_mut::<Window>(),
+                    sw_curtab: ::core::ptr::null_mut::<Tabpage>(),
                     sw_same_win: false,
                     sw_visual_active: false,
                 };
@@ -177,7 +177,7 @@ pub unsafe fn nvim_open_win(
                 break '_cleanup;
             }
             // SAFETY: `error` is this frame's slot.
-            let (none, slot) = (::core::ptr::null_mut::<win_T>(), &mut error);
+            let (none, slot) = (::core::ptr::null_mut::<Window>(), &mut error);
             wp = unsafe { win_new_float(none, false, fconfig, slot) };
         }
         if wp.is_null() {
@@ -192,9 +192,9 @@ pub unsafe fn nvim_open_win(
         // SAFETY: `b` is the live buffer found above.
         bufref = BufRef::of_opt(unsafe { Buf::from_raw(b) });
         if !noautocmd {
-            let mut switchwin_0 = switchwin_T {
-                sw_curwin: ::core::ptr::null_mut::<win_T>(),
-                sw_curtab: ::core::ptr::null_mut::<tabpage_T>(),
+            let mut switchwin_0 = SwitchWin {
+                sw_curwin: ::core::ptr::null_mut::<Window>(),
+                sw_curtab: ::core::ptr::null_mut::<Tabpage>(),
                 sw_same_win: false,
                 sw_visual_active: false,
             };
@@ -267,15 +267,15 @@ pub unsafe fn nvim_open_win(
 ///
 /// # Safety
 /// The current window must be the one to split.
-unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> *mut win_T {
+unsafe fn split_ins(size: ::core::ffi::c_int, flags: ::core::ffi::c_int) -> *mut Window {
     // SAFETY: the caller's promise.
     unsafe {
         win_split_ins(
             size,
             flags,
-            ::core::ptr::null_mut::<win_T>(),
+            ::core::ptr::null_mut::<Window>(),
             0 as ::core::ffi::c_int,
-            ::core::ptr::null_mut::<frame_T>(),
+            ::core::ptr::null_mut::<Frame>(),
         )
     }
 }
@@ -339,11 +339,11 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
 /// # Safety
 /// `wp` must be a live window, `tp` a live tab page and `err` the caller's
 /// error slot.
-pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: &mut Error) -> bool {
+pub(crate) unsafe fn win_can_move_tp(wp: *mut Window, tp: *mut Tabpage, err: &mut Error) -> bool {
     // SAFETY: the caller's error slot.
     let report = unsafe { ErrSlot::new(err) };
     let other_tab = if tp == curtab.get() {
-        ::core::ptr::null_mut::<tabpage_T>()
+        ::core::ptr::null_mut::<Tabpage>()
     } else {
         tp
     };
@@ -386,12 +386,12 @@ pub(crate) unsafe fn win_can_move_tp(wp: *mut win_T, tp: *mut tabpage_T, err: &m
 ///
 /// # Safety
 /// `win` must be a live window and `tp` a live tab page.
-pub(crate) unsafe fn win_find_altwin(win: *mut win_T, tp: *mut tabpage_T) -> *mut win_T {
+pub(crate) unsafe fn win_find_altwin(win: *mut Window, tp: *mut Tabpage) -> *mut Window {
     let at = (tp != curtab.get()).then(|| {
         // SAFETY: the caller's tab page.
         unsafe { TabPage::new(tp) }
     });
-    let other_tab = at.map_or(::core::ptr::null_mut::<tabpage_T>(), TabPage::raw);
+    let other_tab = at.map_or(::core::ptr::null_mut::<Tabpage>(), TabPage::raw);
     // SAFETY: the caller's window.
     if unsafe { (*win).w_floating } {
         // SAFETY: as above, and `at` names the tab page to look in.

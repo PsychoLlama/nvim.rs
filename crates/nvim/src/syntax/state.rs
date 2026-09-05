@@ -21,7 +21,7 @@ use crate::winlayer::Buf;
 /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
 /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
 /// are likely to point somewhere else entirely.
-pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: LineNr) {
+pub(crate) unsafe fn syntax_start(wp: *mut Window, lnum: LineNr) {
     // The last change id we parsed at. A change may have invalidated the
     // current state, so this is checked as if it were part of the identity
     // of the buffer.
@@ -324,7 +324,7 @@ pub(crate) fn syn_update_ends(startofline: bool) {
 /// now depends on the line below the last parsed one. The window looks like:
 /// the line which changed, the displayed lines, then `lnum` -- the line below
 /// the window.
-pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: LineNr) {
+pub(crate) unsafe fn syntax_end_parsing(wp: *mut Window, lnum: LineNr) {
     if syn_block().raw() != unsafe { (*wp).w_s } {
         return; // not the right window
     }

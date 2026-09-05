@@ -94,7 +94,7 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 ///
 /// `must_redraw` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
-pub unsafe fn redraw_later(wp: *mut win_T, redr_type: c_int) {
+pub unsafe fn redraw_later(wp: *mut Window, redr_type: c_int) {
     debug_assert!(!wp.is_null() || exiting.get(), "wp != NULL || exiting");
     if exiting.get() || redraw_not_allowed.get() {
         return;
@@ -155,7 +155,7 @@ pub fn redraw_curbuf_later(redr_type: c_int) {
 }
 
 /// Mark every window showing `buf`.
-pub unsafe fn redraw_buf_later(buf: *mut buf_T, redr_type: c_int) {
+pub unsafe fn redraw_buf_later(buf: *mut Buffer, redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_buffer == buf {
@@ -168,7 +168,7 @@ pub unsafe fn redraw_buf_later(buf: *mut buf_T, redr_type: c_int) {
 ///
 /// `force` also marks a line *past* the end of the buffer, which is how a
 /// deletion gets the rows it used to occupy redrawn.
-pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: LineNr, force: bool) {
+pub unsafe fn redraw_buf_line_later(buf: *mut Buffer, line: LineNr, force: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buf {
@@ -183,7 +183,7 @@ pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: LineNr, force: bool) 
 /// Widen window `wp`'s pending redraw range to cover lines `first..=last`.
 ///
 /// Nothing is marked when the range is entirely outside the window.
-pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: LineNr, last: LineNr) {
+pub unsafe fn redraw_win_range_later(wp: *mut Window, first: LineNr, last: LineNr) {
     // SAFETY: a live window on the main thread.
     let mut win = unsafe { Win::new(wp) };
     if last >= win.w_topline && first < win.w_botline {
@@ -201,13 +201,13 @@ pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: LineNr, last: LineNr
 ///
 /// Inserting or deleting lines invalidates the range this widens, so a caller
 /// that does either has to mark the whole window instead.
-pub unsafe fn redraw_win_line(wp: *mut win_T, lnum: LineNr) {
+pub unsafe fn redraw_win_line(wp: *mut Window, lnum: LineNr) {
     // SAFETY: a live window on the main thread.
     unsafe { redraw_win_range_later(wp, lnum, lnum) }
 }
 
 /// Mark lines `first..=last` of `buf` in every window showing it.
-pub unsafe fn redraw_buf_range_later(buf: *mut buf_T, first: LineNr, last: LineNr) {
+pub unsafe fn redraw_buf_range_later(buf: *mut Buffer, first: LineNr, last: LineNr) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_buffer == buf {
@@ -217,7 +217,7 @@ pub unsafe fn redraw_buf_range_later(buf: *mut buf_T, first: LineNr, last: LineN
 }
 
 /// Mark the status lines and window bars of every window showing `buf`.
-pub unsafe fn redraw_buf_status_later(buf: *mut buf_T) {
+pub unsafe fn redraw_buf_status_later(buf: *mut Buffer) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buf
@@ -253,7 +253,7 @@ pub unsafe fn status_redraw_curbuf() {
 }
 
 /// Mark the status lines and window bars of `buf`.
-pub unsafe fn status_redraw_buf(buf: *mut buf_T) {
+pub unsafe fn status_redraw_buf(buf: *mut Buffer) {
     // SAFETY: walking the current tab page's window list on the main thread.
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
@@ -300,7 +300,7 @@ pub unsafe fn redraw_statuslines() {
 /// Mark the status lines at the bottom of frame `frp`.
 ///
 /// One per column of a row frame; the last one of a column frame.
-pub unsafe fn win_redraw_last_status(frp: *const frame_T) {
+pub unsafe fn win_redraw_last_status(frp: *const Frame) {
     // SAFETY: a live frame of the window layout tree, walked on the main thread.
     match unsafe { (*frp).fr_layout } as c_int {
         FR_LEAF => unsafe { (*(*frp).fr_win).w_redr_status = true },

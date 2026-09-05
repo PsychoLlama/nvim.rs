@@ -107,11 +107,11 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData,
+    Arena, BackslashEscape, BoolVarValue, Buffer, Callback, ColNr, Dict, Direction, EvalFuncData,
     ExpandContext, ExtmarkOp, GArray, HashTab, LineNr, List, MB_MAXCHAR, OptInt, SaveVEvent,
-    ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix, buf_T, expand_T,
+    ScriptCtx, String_0, TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, Window, XpPrefix, expand_T,
     extmark_undo_vec_t, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
-    typval_vval_union, uint8_t, uint64_t, win_T,
+    typval_vval_union, uint8_t, uint64_t,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -220,7 +220,7 @@ pub struct ins_compl_next_state_T {
     /// functions and Lua a completion runs, which is exactly the liveness a
     /// [`crate::winlayer::Buf`] would be promising. Each use builds one where
     /// the buffer is known live and drops it again.
-    pub ins_buf: *mut buf_T,
+    pub ins_buf: *mut Buffer,
     pub cur_match_pos: *mut pos_T,
     pub prev_match_pos: pos_T,
     pub set_match_pos: bool,

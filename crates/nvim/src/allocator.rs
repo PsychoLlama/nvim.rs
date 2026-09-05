@@ -114,13 +114,13 @@ static GLOBAL: LibcAllocator = LibcAllocator;
 /// the editor works from.
 ///
 /// [`Box`] is the right owner for a value nothing else points at. It is the
-/// wrong one for the editor's long-lived objects. A `buf_T`'s *address* is
-/// what the editor passes around: it sits in `curbuf`, in every `win_T`'s
+/// wrong one for the editor's long-lived objects. A `Buffer`'s *address* is
+/// what the editor passes around: it sits in `curbuf`, in every `Window`'s
 /// `w_buffer`, on the `firstbuf` list and in whatever an autocommand kept —
 /// and a `Box` **retags** every time it is moved (into a container, out of
 /// one, across a call), which under Stacked and Tree Borrows invalidates
 /// every raw pointer previously derived from it. A registry holding
-/// `Box<buf_T>` would therefore break `curbuf` the first time a buffer was
+/// `Box<Buffer>` would therefore break `curbuf` the first time a buffer was
 /// filed or taken out.
 ///
 /// `Owned<T>` is that `Box` turned into its address once, at birth. Moving

@@ -115,7 +115,7 @@ const COMMAND_LINE_STATE_INIT: CommandLineState = CommandLineState {
     break_ctrl_c: false,
     xpc: EXPAND_T_INIT,
     b_im_ptr: ::core::ptr::null_mut::<OptInt>(),
-    b_im_ptr_buf: ::core::ptr::null_mut::<buf_T>(),
+    b_im_ptr_buf: ::core::ptr::null_mut::<Buffer>(),
     cmdline_type: 0,
     event_cmdlineleavepre_triggered: false,
     did_hist_navigate: false,

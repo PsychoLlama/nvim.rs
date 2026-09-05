@@ -90,10 +90,10 @@ use crate::syntax::{
 use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Handle, Hlf, Integer, LineNr,
-    OptInt, ProfTime, ScreenChar, VarNumber, VirtText, VirtTextChunk, WindowHandle, buf_T,
-    foldinfo_T, frame_T, int64_t, match_T, pos_T, regmmatch_T, regprog_T, size_t, spellvars_T,
-    uint16_t, win_T,
+    Buffer, ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Frame, Handle, Hlf,
+    Integer, LineNr, MatchState, OptInt, ProfTime, ScreenChar, VarNumber, VirtText, VirtTextChunk,
+    Window, WindowHandle, foldinfo_T, int64_t, pos_T, regmmatch_T, regprog_T, size_t, spellvars_T,
+    uint16_t,
 };
 use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,
@@ -149,13 +149,13 @@ pub const DECOR_PRIORITY_BASE: ::core::ffi::c_int = 0x1000 as ::core::ffi::c_int
 /// itself safe — it walks the registry, so the walk has the C's
 /// `FOR_ALL_WINDOWS_IN_TAB` timing (the next link is read before the body).
 /// What the *caller* does with the pointer is the unsafe part, and stays so.
-pub(crate) fn windows_in_curtab() -> impl Iterator<Item = *mut win_T> {
+pub(crate) fn windows_in_curtab() -> impl Iterator<Item = *mut Window> {
     winlayer::windows().map(Win::raw)
 }
 
 /// The head of the current tab page's window list as the raw pointer the
 /// transpiled redraw entry points still take, or a null before there is one.
-fn first_win_raw() -> *mut win_T {
+fn first_win_raw() -> *mut Window {
     winlayer::first_window().map_or(core::ptr::null_mut(), Win::raw)
 }
 
@@ -169,7 +169,7 @@ static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false);
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub(crate) unsafe fn win_endrow(wp: *const win_T) -> c_int {
+pub(crate) unsafe fn win_endrow(wp: *const Window) -> c_int {
     // SAFETY: caller's promise.
     unsafe { (*wp).w_winrow + (*wp).w_height }
 }
@@ -180,7 +180,7 @@ pub(crate) unsafe fn win_endrow(wp: *const win_T) -> c_int {
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub(crate) unsafe fn win_endcol(wp: *const win_T) -> c_int {
+pub(crate) unsafe fn win_endcol(wp: *const Window) -> c_int {
     // SAFETY: caller's promise.
     unsafe { (*wp).w_wincol + (*wp).w_width }
 }
@@ -573,7 +573,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
 /// handed to `drawline/`, which runs decoration providers that re-enter the
 /// draw pass, so no borrow could span the walk.
 #[derive(Clone, Copy)]
-pub(crate) struct SearchHl(*mut match_T);
+pub(crate) struct SearchHl(*mut MatchState);
 
 impl SearchHl {
     /// The one place the redraw matcher's address is taken.
@@ -582,7 +582,7 @@ impl SearchHl {
     }
 
     /// The address, for the `*_search_hl` helpers that take one.
-    pub(crate) fn raw(self) -> *mut match_T {
+    pub(crate) fn raw(self) -> *mut MatchState {
         self.0
     }
 
@@ -646,7 +646,7 @@ pub unsafe fn setcursor() {
 /// Put the terminal cursor where the cursor is in window `wp`.
 ///
 /// `force` positions it even when not redrawing.
-pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
+pub unsafe fn setcursor_mayforce(wp: *mut Window, force: bool) {
     // SAFETY: a live window; `grid_adjust` maps its coordinates onto whichever
     // grid actually carries them.
     if !force && !unsafe { redrawing() } {
@@ -684,7 +684,7 @@ pub unsafe fn setcursor_mayforce(wp: *mut win_T, force: bool) {
 /// `'foldcolumn'` asks for a width; what it gets is bounded by the room left
 /// beside the text, which must be at least one column ('winminwidth' of 0 still
 /// leaves one for the current window).
-pub unsafe fn compute_foldcolumn(wp: *mut win_T, col: c_int) -> c_int {
+pub unsafe fn compute_foldcolumn(wp: *mut Window, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
     let wp = unsafe { Win::new(wp) };
     let fdc = unsafe { win_fdccol_count(wp.raw()) };
@@ -701,7 +701,7 @@ pub unsafe fn compute_foldcolumn(wp: *mut win_T, col: c_int) -> c_int {
 /// Callers check whether either option is set; this only decides how wide the
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
-pub unsafe fn number_width(wp: *mut win_T) -> c_int {
+pub unsafe fn number_width(wp: *mut Window) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
     let mut wp = unsafe { Win::new(wp) };
     // With 'relativenumber' alone the largest number shown is the window
@@ -757,7 +757,7 @@ pub unsafe fn number_width(wp: *mut win_T) -> c_int {
 
 /// Whether the cursor line in window `wp` may be concealed, per
 /// `'concealcursor'`.
-pub unsafe fn conceal_cursor_line(wp: *const win_T) -> bool {
+pub unsafe fn conceal_cursor_line(wp: *const Window) -> bool {
     // SAFETY: a live window, on the main thread.
     if unsafe { *(*wp).w_onebuf_opt.wo_cocu } == 0 {
         return false;
@@ -780,7 +780,7 @@ pub unsafe fn conceal_cursor_line(wp: *const win_T) -> bool {
 ///
 /// When it is, moving the cursor within the window means redrawing both the old
 /// cursor line and the new one.
-pub unsafe fn win_cursorline_standout(wp: *const win_T) -> bool {
+pub unsafe fn win_cursorline_standout(wp: *const Window) -> bool {
     // SAFETY: a live window, on the main thread.
     unsafe {
         (*wp).w_onebuf_opt.wo_cul != 0
@@ -794,7 +794,7 @@ pub unsafe fn win_cursorline_standout(wp: *const win_T) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
-pub unsafe fn win_update_cursorline(wp: *mut win_T, foldinfo: *mut foldinfo_T) {
+pub unsafe fn win_update_cursorline(wp: *mut Window, foldinfo: *mut foldinfo_T) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
     let mut wp = unsafe { Win::new(wp) };
     unsafe {

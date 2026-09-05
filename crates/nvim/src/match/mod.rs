@@ -2,7 +2,7 @@
 //!
 //! A *match* is a pattern (or a list of positions) that a window paints in a
 //! highlight group, independently of `'hlsearch'`. Matches live in a
-//! priority-ordered singly-linked list hanging off `win_T::w_match_head`,
+//! priority-ordered singly-linked list hanging off `Window::w_match_head`,
 //! high priority first, and are addressed by an id: 1, 2 and 3 belong to the
 //! `:match`, `:2match` and `:3match` commands, everything above to
 //! `matchadd()` and `matchaddpos()`.
@@ -46,8 +46,9 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::types::{
-    ColNr, Dict, DictItem, EvalFuncData, LineNr, List, TypVal, VAR_LIST, VAR_NUMBER, VarNumber,
-    exarg_T, int64_t, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, uint8_t, win_T,
+    ColNr, Dict, DictItem, EvalFuncData, LLPos, LineNr, List, MatchItem, MatchState, TypVal,
+    VAR_LIST, VAR_NUMBER, VarNumber, Window, exarg_T, int64_t, ptrdiff_t, regprog_T, size_t,
+    uint8_t,
 };
 use crate::winlayer::{Live, Win};
 
@@ -62,13 +63,13 @@ use crate::regexp::re_multiline;
 /// match's — whose holder has promised it outlives the value.
 ///
 /// The `'hlsearch'` one is a `static` in `drawscreen`; a match's is a field of
-/// the `matchitem_T` the window's list owns, so both live as long as the
+/// the `MatchItem` the window's list owns, so both live as long as the
 /// redraw that reads them.
-pub(crate) type Shl = Live<match_T>;
+pub(crate) type Shl = Live<MatchState>;
 
 /// One entry of a window's match list, on [`Shl`]'s terms: the window owns it
 /// until `:call matchdelete()` frees it.
-pub(crate) type Mi = Live<matchitem_T>;
+pub(crate) type Mi = Live<MatchItem>;
 
 /// `matchadd()`'s and `:match`'s default priority.
 const DEFAULT_PRIORITY: c_int = 10;
@@ -84,7 +85,7 @@ const DEFAULT_PRIORITY: c_int = 10;
 /// be null or NUL-terminated; `pos_list` must be null or a live list.
 #[allow(clippy::too_many_arguments)]
 unsafe fn match_add(
-    wp: *mut win_T,
+    wp: *mut Window,
     grp: *const c_char,
     pat: *const c_char,
     prio: c_int,
@@ -145,14 +146,14 @@ unsafe fn match_add(
     // SAFETY: a fresh allocation, live until this frame hands it to the
     // window's match list.
     let mut m =
-        unsafe { Mi::new(xcalloc(1, ::core::mem::size_of::<matchitem_T>()).cast::<matchitem_T>()) };
+        unsafe { Mi::new(xcalloc(1, ::core::mem::size_of::<MatchItem>()).cast::<MatchItem>()) };
     if unsafe { tv_list_len(pos_list) } > 0 {
         unsafe {
             m.mit_pos_array = xcalloc(
                 tv_list_len(pos_list) as size_t,
-                ::core::mem::size_of::<llpos_T>(),
+                ::core::mem::size_of::<LLPos>(),
             )
-            .cast::<llpos_T>()
+            .cast::<LLPos>()
         };
         unsafe { m.mit_pos_count = tv_list_len(pos_list) };
     }
@@ -225,7 +226,7 @@ unsafe fn match_add(
 /// # Safety
 /// `m` must be live with `mit_pos_array` sized for the list, and `pos_list`
 /// must be a live list.
-unsafe fn fill_pos_array(m: *mut matchitem_T, pos_list: *mut List) -> Option<(LineNr, LineNr)> {
+unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(LineNr, LineNr)> {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let m = unsafe { Mi::new(m) };
     // SAFETY: the caller's match and list.
@@ -324,7 +325,7 @@ unsafe fn fill_pos_array(m: *mut matchitem_T, pos_list: *mut List) -> Option<(Li
 ///
 /// # Safety
 /// `wp` must be live.
-unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
+unsafe fn match_delete(wp: *mut Window, id: c_int, perr: bool) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
@@ -374,7 +375,7 @@ unsafe fn match_delete(wp: *mut win_T, id: c_int, perr: bool) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live.
-pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
+pub(crate) unsafe fn clear_matches(wp: *mut Window) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let mut wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
@@ -395,7 +396,7 @@ pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
 ///
 /// # Safety
 /// `wp` must be live.
-unsafe fn get_match(wp: *mut win_T, id: c_int) -> *mut matchitem_T {
+unsafe fn get_match(wp: *mut Window, id: c_int) -> *mut MatchItem {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.

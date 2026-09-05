@@ -31,8 +31,8 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, TypVal, VAR_BOOL, VAR_DICT,
-    VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, buf_T, kListLenMayKnow,
+    Buffer, Callback, ColNr, Dict, EvalFuncData, LineNr, List, ListItem, TypVal, VAR_BOOL,
+    VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, kListLenMayKnow,
     kListLenUnknown, regmatch_T, regprog_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -414,7 +414,7 @@ pub unsafe fn f_matchbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
         return;
     }
     let prev_did_emsg = did_emsg.get();
-    let buf: *mut buf_T = unsafe { tv_get_buf(args.ptr(0), 0) };
+    let buf: *mut Buffer = unsafe { tv_get_buf(args.ptr(0), 0) };
     if buf.is_null() {
         // Only report the name when `tv_get_buf` was silent about it.
         if did_emsg.get() == prev_did_emsg {

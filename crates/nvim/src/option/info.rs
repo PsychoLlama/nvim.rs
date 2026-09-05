@@ -13,8 +13,8 @@ use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
-    ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, ScriptCtx,
-    String_0, buf_T, int64_t, key_value_pair, size_t, win_T,
+    ApiDict, Arena, Buffer, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags,
+    ScriptCtx, String_0, Window, int64_t, key_value_pair, size_t,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -70,8 +70,8 @@ fn int_value(n: Integer) -> Object {
 pub(crate) unsafe fn get_vimoption(
     name: String_0,
     opt_flags: OptionSetFlags,
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
     arena: *mut Arena,
     err: &mut Error,
 ) -> ApiDict {
@@ -127,8 +127,8 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
 unsafe fn last_set(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
 ) -> ScriptCtx {
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live for the scopes reached below.
@@ -159,8 +159,8 @@ unsafe fn last_set(
 pub(crate) unsafe fn vimoption2dict(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
     arena: *mut Arena,
 ) -> ApiDict {
     let opt = get_option(opt_idx);

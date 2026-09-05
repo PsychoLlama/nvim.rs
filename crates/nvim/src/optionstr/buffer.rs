@@ -45,7 +45,7 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, buf_T, fmark_T,
+    AdditionalData, Buffer, ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, fmark_T,
     fmarkv_T, optset_T, pos_T,
 };
 use crate::window::global_stl_height;
@@ -82,7 +82,7 @@ pub unsafe fn did_set_backspace(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_backupcopy(args: &mut optset_T) -> Option<&CStr> {
-    let (buf, opt_flags) = (args.os_buf.cast::<buf_T>(), args.os_flags);
+    let (buf, opt_flags) = (args.os_buf.cast::<Buffer>(), args.os_flags);
     let local = opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: the frame's buffer.
     let value = unsafe {
@@ -152,7 +152,7 @@ pub unsafe fn did_set_backupext_or_patchmode(_args: &mut optset_T) -> Option<&CS
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_bufhidden(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's buffer, and the table's own word list.
-    let buf = args.os_buf.cast::<buf_T>();
+    let buf = args.os_buf.cast::<Buffer>();
     unsafe { did_set_opt_flags((*buf).b_p_bh, &opt_bh_values, false) }
 }
 
@@ -162,7 +162,7 @@ pub unsafe fn did_set_bufhidden(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
-    let (buf, wp) = (args.os_buf.cast::<buf_T>(), win(args));
+    let (buf, wp) = (args.os_buf.cast::<Buffer>(), win(args));
     // SAFETY: the buffer's own C string value; only the first letter is
     // ever distinguishing.
     let first = unsafe { *(*buf).b_p_bt };
@@ -218,7 +218,7 @@ pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_cinoptions(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's buffer; `parse_cino` re-derives its cache.
-    unsafe { parse_cino(Buf::new(args.os_buf.cast::<buf_T>())) };
+    unsafe { parse_cino(Buf::new(args.os_buf.cast::<Buffer>())) };
     None
 }
 
@@ -318,7 +318,7 @@ pub unsafe fn did_set_diffopt(_args: &mut optset_T) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_encoding(args: &mut optset_T) -> Option<&CStr> {
     let (buf, varp, opt_flags, idx) = (
-        args.os_buf.cast::<buf_T>(),
+        args.os_buf.cast::<Buffer>(),
         varp(args),
         args.os_flags,
         args.os_idx,
@@ -365,7 +365,7 @@ pub unsafe fn did_set_eventignore(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_fileformat(args: &mut optset_T) -> Option<&CStr> {
-    let (buf, opt_flags) = (args.os_buf.cast::<buf_T>(), args.os_flags);
+    let (buf, opt_flags) = (args.os_buf.cast::<Buffer>(), args.os_flags);
     // SAFETY: `optset_T` names a live buffer for exactly this call.
     let b = unsafe { Buf::new(buf) };
     // Changing a buffer's line endings changes its text.
@@ -498,7 +498,7 @@ pub unsafe fn did_set_iskeyword(args: &mut optset_T) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_isopt(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the frame's buffer.
-    if !unsafe { buf_init_chartab(args.os_buf.cast::<buf_T>(), true) } {
+    if !unsafe { buf_init_chartab(args.os_buf.cast::<Buffer>(), true) } {
         args.os_restore_chartab = true;
         return invalid();
     }
@@ -513,7 +513,7 @@ pub unsafe fn did_set_isopt(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_keymap(args: &mut optset_T) -> Option<&CStr> {
-    let (buf, varp, opt_flags) = (args.os_buf.cast::<buf_T>(), varp(args), args.os_flags);
+    let (buf, varp, opt_flags) = (args.os_buf.cast::<Buffer>(), varp(args), args.os_flags);
     // SAFETY: the frame's C string value.
     if !unsafe { valid_filetype(CStr::from_ptr(*varp)) } {
         return invalid();
@@ -606,7 +606,7 @@ pub unsafe fn did_set_matchpairs(args: &mut optset_T) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_varsofttabstop(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's frame and buffer.
-    let buf = args.os_buf.cast::<buf_T>();
+    let buf = args.os_buf.cast::<Buffer>();
     unsafe { did_set_vartabs(args, &raw mut (*buf).b_p_vsts_array) }
 }
 
@@ -614,7 +614,7 @@ pub unsafe fn did_set_varsofttabstop(args: &mut optset_T) -> Option<&CStr> {
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_vartabstop(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the caller's frame, buffer and window.
-    let buf = args.os_buf.cast::<buf_T>();
+    let buf = args.os_buf.cast::<Buffer>();
     let errmsg = unsafe { did_set_vartabs(args, &raw mut (*buf).b_p_vts_array) };
     if errmsg.is_none() {
         // Indent folds are computed from the tab stops.

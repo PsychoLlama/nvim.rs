@@ -23,8 +23,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    ColNr, LineNr, Magic, MarkGet, ProfTime, buf_T, int16_t, int64_t, lpos_T, regengine,
-    regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
+    Buffer, ColNr, LineNr, Magic, MarkGet, ProfTime, Window, int16_t, int64_t, lpos_T, regengine,
+    regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
 /// Last-pattern selectors and the regexp-engine/flag bits.
@@ -83,8 +83,8 @@ pub struct regexec_T {
     pub reg_endp: *mut *mut uint8_t,
     pub reg_startpos: *mut lpos_T,
     pub reg_endpos: *mut lpos_T,
-    pub reg_win: *mut win_T,
-    pub reg_buf: *mut buf_T,
+    pub reg_win: *mut Window,
+    pub reg_buf: *mut Buffer,
     pub reg_firstlnum: LineNr,
     pub reg_maxline: LineNr,
     pub reg_line_lbr: bool,
@@ -328,8 +328,8 @@ static rex: GlobalCell<regexec_T> = GlobalCell::new(regexec_T {
     reg_endp: core::ptr::null_mut::<*mut uint8_t>(),
     reg_startpos: core::ptr::null_mut::<lpos_T>(),
     reg_endpos: core::ptr::null_mut::<lpos_T>(),
-    reg_win: core::ptr::null_mut::<win_T>(),
-    reg_buf: core::ptr::null_mut::<buf_T>(),
+    reg_win: core::ptr::null_mut::<Window>(),
+    reg_buf: core::ptr::null_mut::<Buffer>(),
     reg_firstlnum: 0,
     reg_maxline: 0,
     reg_line_lbr: false,

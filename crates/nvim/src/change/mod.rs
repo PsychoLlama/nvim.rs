@@ -85,7 +85,7 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, ColNr, ExtmarkOp, GraphemeState, LineNr, Vv, bcount_t, buf_T, fmark_T, fmarkv_T,
+    Buffer, CmdModFlags, ColNr, ExtmarkOp, GraphemeState, LineNr, Vv, bcount_t, fmark_T, fmarkv_T,
     int64_t, pos_T, size_t, ssize_t,
 };
 use crate::ui::{ui_active, ui_has};

@@ -12,27 +12,27 @@
 use super::*;
 use crate::types::Failed;
 
-pub struct switchwin_T {
-    pub sw_curwin: *mut win_T,
-    pub sw_curtab: *mut tabpage_T,
+pub struct SwitchWin {
+    pub sw_curwin: *mut Window,
+    pub sw_curtab: *mut Tabpage,
     pub sw_same_win: bool,
     pub sw_visual_active: bool,
 }
-pub struct win_execute_T {
-    pub wp: *mut win_T,
+pub struct WinExecute {
+    pub wp: *mut Window,
     pub curpos: pos_T,
     pub cwd: [::core::ffi::c_char; 4096],
     pub cwd_status: Result<(), Failed>,
     pub apply_acd: bool,
     pub save_sfname: *mut ::core::ffi::c_char,
-    pub switchwin: switchwin_T,
+    pub switchwin: SwitchWin,
 }
 
-impl Default for switchwin_T {
+impl Default for SwitchWin {
     /// The zeroed state a caller declares before handing it to `switch_win`,
     /// which fills every field. Nothing reads one of these before that.
     fn default() -> Self {
-        switchwin_T {
+        SwitchWin {
             sw_curwin: ::core::ptr::null_mut(),
             sw_curtab: ::core::ptr::null_mut(),
             sw_same_win: false,
@@ -41,12 +41,12 @@ impl Default for switchwin_T {
     }
 }
 
-impl Default for win_execute_T {
+impl Default for WinExecute {
     /// The zeroed state a caller declares before handing it to
     /// `win_execute_before`, which fills what it needs and leaves the rest --
     /// `cwd` in particular is only written when 'autochdir' is on.
     fn default() -> Self {
-        win_execute_T {
+        WinExecute {
             wp: ::core::ptr::null_mut(),
             curpos: pos_T {
                 lnum: 0,
@@ -57,7 +57,7 @@ impl Default for win_execute_T {
             cwd_status: Err(Failed),
             apply_acd: false,
             save_sfname: ::core::ptr::null_mut(),
-            switchwin: switchwin_T::default(),
+            switchwin: SwitchWin::default(),
         }
     }
 }

@@ -19,10 +19,10 @@ use core::ptr;
 /// One entry of a window's tag stack, whose caller has promised it outlives
 /// the value.
 ///
-/// The tag code passes `*mut taggy_T` around because `'tagfunc'` can close
+/// The tag code passes `*mut Taggy` around because `'tagfunc'` can close
 /// the window the entries live in, so no borrow may outlive one field
 /// access — which is what [`Live`]'s `Deref` gives.
-pub(crate) type Tagg = Live<taggy_T>;
+pub(crate) type Tagg = Live<Taggy>;
 
 /// `emsg(_(msg))`: report one of this family's messages.
 ///
@@ -90,7 +90,7 @@ impl TagStack {
     }
 
     /// The entries in use, oldest first.
-    pub(crate) fn entries(&mut self) -> &mut [taggy_T] {
+    pub(crate) fn entries(&mut self) -> &mut [Taggy] {
         let len = self.len();
         &mut self.win.w_tagstack[..len]
     }
@@ -138,7 +138,7 @@ impl TagStack {
         let idx = self.len();
         // `idx` is now within the array, because `shift` made room for it.
         self.win.w_tagstacklen += 1;
-        // Field by field, not a whole `taggy_T`: the timestamp and the
+        // Field by field, not a whole `Taggy`: the timestamp and the
         // additional data of the slot are deliberately left as they were.
         let entry = &mut self.entries()[idx];
         entry.tagname = item.tagname;
@@ -214,7 +214,7 @@ impl TagStack {
 /// # Safety
 /// The entry's `tagname` and `user_data` must be NULL or allocations the
 /// entry owns.
-pub unsafe fn tagstack_clear_entry(item: &mut taggy_T) {
+pub unsafe fn tagstack_clear_entry(item: &mut Taggy) {
     // SAFETY: the caller promises both fields are ours to free.
     unsafe { xfree(item.tagname.cast()) };
     unsafe { xfree(item.user_data.cast()) };
@@ -287,7 +287,7 @@ pub unsafe fn do_tags(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Both pointers must be live.
-unsafe fn tag_details(tag: &taggy_T, retdict: *mut Dict) {
+unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
     // SAFETY: the dict is live, and the entry's strings are
     // NUL-terminated.
     unsafe { add_str(retdict, c"tagname", tag.tagname) };

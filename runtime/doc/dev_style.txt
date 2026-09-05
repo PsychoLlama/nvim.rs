@@ -552,7 +552,7 @@ it is for and how it should be used. >c
 If the field comments are short, you can also put them next to the field. But
 be consistent within one struct, and follow the necessary doxygen style. >c
 
-    struct wininfo_S {
+    struct WinInfo {
       WinInfo *wi_next;  ///< Next entry or NULL for last entry.
       WinInfo *wi_prev;  ///< Previous entry or NULL for first entry.
       Win *wi_win;       ///< Pointer to window that did the wi_fpos.

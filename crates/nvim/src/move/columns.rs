@@ -24,7 +24,7 @@ use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
 use crate::semsg;
 use crate::types::{
-    ColNr, Dict, EvalFuncData, LineNr, TypVal, VarNumber, int64_t, pos_T, size_t, win_T,
+    ColNr, Dict, EvalFuncData, LineNr, TypVal, VarNumber, Window, int64_t, pos_T, size_t,
 };
 use crate::winlayer::{PosRef, Win};
 
@@ -217,7 +217,7 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
 /// `wp` must be a valid window, `pos` a position in its buffer, and the four
 /// out-params must be writable.
 pub unsafe fn textpos2screenpos(
-    wp: *mut win_T,
+    wp: *mut Window,
     pos: *mut pos_T,
     rowp: *mut c_int,
     scolp: *mut c_int,

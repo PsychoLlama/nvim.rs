@@ -35,10 +35,10 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, ScreenGrid, TryState, WinConfig,
-    WinStyle, WindowHandle, buf_T, int64_t, kErrorTypeException, kFloatAnchorEast,
-    kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow,
-    pos_T, size_t, switchwin_T, win_T,
+    Boolean, Buffer, ColNr, Error, FAIL, Float, Integer, LineNr, OK, ScreenGrid, SwitchWin,
+    TryState, WinConfig, WinStyle, Window, WindowHandle, int64_t, kErrorTypeException,
+    kFloatAnchorEast, kFloatAnchorSouth, kFloatRelativeLaststatus, kFloatRelativeTabline,
+    kFloatRelativeWindow, pos_T, size_t,
 };
 use crate::ui::{
     ui_call_win_external_pos, ui_call_win_float_pos, ui_call_win_hide, ui_call_win_pos,
@@ -60,7 +60,7 @@ const TRY_STATE: TryState = TryState {
 };
 use crate::api_error;
 
-pub unsafe fn win_set_buf(win: *mut win_T, buf: *mut buf_T, err: &mut Error) {
+pub unsafe fn win_set_buf(win: *mut Window, buf: *mut Buffer, err: &mut Error) {
     // SAFETY: the caller's promise -- a live window, a live buffer and a live
     // `Error` to report through.
     unsafe { set_buf(Win::new(win), Buf::new(buf), &mut *err) };
@@ -76,8 +76,8 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     let tab = win_find_tabpage(win.raw());
     let _redraw_off = Suppress::redraw();
 
-    let mut switchwin = switchwin_T {
-        sw_curwin: ptr::null_mut::<win_T>(),
+    let mut switchwin = SwitchWin {
+        sw_curwin: ptr::null_mut::<Window>(),
         sw_curtab: ptr::null_mut(),
         sw_same_win: false,
         sw_visual_active: false,
@@ -114,7 +114,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
 }
 
-pub unsafe fn win_fdccol_count(wp: *mut win_T) -> c_int {
+pub unsafe fn win_fdccol_count(wp: *mut Window) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     fdccol_count(unsafe { Win::new(wp) })
 }
@@ -181,7 +181,7 @@ fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
 // ---------------------------------------------------------------------------
 // Telling the UI where a window sits
 
-pub unsafe fn ui_ext_win_position(wp: *mut win_T, validate: bool) {
+pub unsafe fn ui_ext_win_position(wp: *mut Window, validate: bool) {
     // SAFETY: the caller's promise -- a live window.
     ext_win_position(unsafe { Win::new(wp) }, validate);
 }
@@ -369,7 +369,7 @@ fn anchor_to_window(
     *col += (tcol - 1) as Float;
 }
 
-pub unsafe fn ui_ext_win_viewport(wp: *mut win_T) {
+pub unsafe fn ui_ext_win_viewport(wp: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
     ext_win_viewport(unsafe { Win::new(wp) });
 }
@@ -476,7 +476,7 @@ fn text_height(
 // ---------------------------------------------------------------------------
 // May the layout change at all?
 
-pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
+pub unsafe fn check_split_disallowed(wp: *const Window) -> c_int {
     let mut err = Error::none();
     // SAFETY: the caller's promise -- a live window; `err` is ours.
     let ok = unsafe { check_split_disallowed_err(wp, &mut err) };
@@ -489,13 +489,13 @@ pub unsafe fn check_split_disallowed(wp: *const win_T) -> c_int {
     if ok { OK } else { FAIL }
 }
 
-pub unsafe fn check_split_disallowed_err(wp: *const win_T, err: &mut Error) -> bool {
+pub unsafe fn check_split_disallowed_err(wp: *const Window, err: &mut Error) -> bool {
     if split_disallowed.get() > 0 {
         *err = Error::exception(c"E242: Can't split a window while closing another");
         return false;
     }
     // SAFETY: the caller's promise -- a live window, whose buffer is live.
-    if unsafe { Win::new(wp as *mut win_T) }
+    if unsafe { Win::new(wp as *mut Window) }
         .buffer()
         .b_locked_split
         != 0

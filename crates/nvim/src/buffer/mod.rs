@@ -29,7 +29,7 @@
 //!
 //! Half of this family fires autocommands (`BufEnter`, `BufLeave`,
 //! `BufUnload`, `BufDelete`, `BufWipeout`, ...) and **an autocommand may free
-//! the buffer in hand**.  The C's answer is `bufref_T`: remember the pointer
+//! the buffer in hand**.  The C's answer is `BufferRef`: remember the pointer
 //! together with the buffer number and a global free counter, and ask again
 //! afterwards.  [`BufRef`] is that answer as a value type: it is *taken* from
 //! a [`Buf`] ([`BufRef::of`], [`BufRef::of_opt`]) rather than written through
@@ -67,9 +67,10 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, CdCause, EStackType, ExtmarkOp, FAIL, Failed, LineNr, MarkAdjustMode, MarkTree,
-    MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle, bfa_values, bln_values, buf_T,
-    bufref_T, dobuf_action_values, dobuf_start_values, exarg_T, getf_values, uint32_t,
+    AlignTextPos, Buffer, BufferRef, CdCause, EStackType, ExtmarkOp, FAIL, Failed, LineNr,
+    MarkAdjustMode, MarkTree, MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle,
+    bfa_values, bln_values, dobuf_action_values, dobuf_start_values, exarg_T, getf_values,
+    uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -156,7 +157,7 @@ pub const kBffInitChangedtick: ::core::ffi::c_uint = 2;
 pub const kBffClearWinInfo: ::core::ffi::c_uint = 1;
 pub const BCO_ALWAYS: ::core::ffi::c_uint = 2;
 pub struct bufmatch_T {
-    pub buf: *mut buf_T,
+    pub buf: *mut Buffer,
     pub match_0: *mut ::core::ffi::c_char,
 }
 pub const FUZZY_SCORE_NONE: ::core::ffi::c_int = -2147483648;
@@ -167,7 +168,7 @@ pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 crate::flag_set! {
     /// What has and has not happened to a buffer -- upstream's `BF_*`, the
-    /// bits `buf_T::b_flags` carries.
+    /// bits `Buffer::b_flags` carries.
     pub struct BufFlags;
 
     /// The buffer was recovered from a swap file.
@@ -227,7 +228,7 @@ pub(crate) fn trigger_undo_ftplugin(mut buf: Buf, mut win: Win) {
 // ---------------------------------------------------------------------------
 // A buffer that survives an autocommand
 
-/// A remembered buffer, as the C's `bufref_T`: the pointer, the buffer number
+/// A remembered buffer, as the C's `BufferRef`: the pointer, the buffer number
 /// it had, and the value of the global free counter when it was taken.
 ///
 /// Autocommands fired anywhere in this family may free the buffer in hand, so
@@ -236,20 +237,20 @@ pub(crate) fn trigger_undo_ftplugin(mut buf: Buf, mut win: Win) {
 /// [`Buf`]. The buffer number is part of the check because a `:bwipe` followed
 /// by a `:new` can hand the same allocation back as a *different* buffer.
 #[derive(Clone, Copy)]
-pub(crate) struct BufRef(bufref_T);
+pub(crate) struct BufRef(BufferRef);
 
 impl BufRef {
     /// The reference that names no buffer, for a cell's initial value.
-    pub(crate) const NONE: Self = BufRef(bufref_T::new());
+    pub(crate) const NONE: Self = BufRef(BufferRef::new());
 
     /// `set_bufref()`, where the C passes a pointer that may be NULL.
     ///
     /// Safe because the absence is in the type: this used to take a
-    /// `*mut buf_T` and read `(*buf).handle` whenever it was non-null, which
+    /// `*mut Buffer` and read `(*buf).handle` whenever it was non-null, which
     /// made it a *safe* function with an unstated precondition about a
     /// pointer -- the shape p23-5 rules out.
     pub(crate) fn of_opt(buf: Option<Buf>) -> Self {
-        BufRef(bufref_T {
+        BufRef(BufferRef {
             br_buf: buf.map_or(ptr::null_mut(), Buf::raw),
             br_fnum: buf.map_or(0, |b| b.handle as c_int),
             br_buf_free_count: buf_free_count.get(),
@@ -281,18 +282,18 @@ impl BufRef {
 
     /// The remembered pointer, valid or not -- for the two comparisons the C
     /// makes without dereferencing it.
-    pub(crate) fn raw(self) -> *mut buf_T {
+    pub(crate) fn raw(self) -> *mut Buffer {
         self.0.br_buf
     }
 
     /// The record itself, for the two places it has to live in a C struct:
     /// `aco_save_T`'s `new_curbuf`.
-    pub(crate) const fn record(self) -> bufref_T {
+    pub(crate) const fn record(self) -> BufferRef {
         self.0
     }
 
     /// [`record`](BufRef::record) the other way.
-    pub(crate) const fn of_record(record: bufref_T) -> Self {
+    pub(crate) const fn of_record(record: BufferRef) -> Self {
         BufRef(record)
     }
 }
@@ -308,7 +309,7 @@ impl BufRef {
 /// has a null address, so removing it changes no answer. That is why the
 /// "NULL is not a valid buffer" case cannot fail — it states the contract
 /// callers rely on rather than covering a branch.
-pub unsafe fn buf_valid(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_valid(buf: *mut Buffer) -> bool {
     // Assume that we more often have a recent buffer, start with the last one.
     !buf.is_null() && buffers_back().any(|b| b.raw() == buf)
 }

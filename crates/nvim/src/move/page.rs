@@ -30,7 +30,7 @@ use crate::normal::{
 };
 use crate::pos::equalpos;
 use crate::search::FORWARD;
-use crate::types::{ColNr, Direction, FAIL, LineNr, OK, OptInt, cmdarg_T, oparg_T, pos_T, win_T};
+use crate::types::{ColNr, Direction, FAIL, LineNr, OK, OptInt, Window, cmdarg_T, oparg_T, pos_T};
 use crate::winlayer::{Buf, Win, first_window};
 
 /// A command with nothing set, as C's `cmdarg_T ca = { 0 }` leaves it.
@@ -209,7 +209,7 @@ fn whole_page(mut win: Win, dir: Direction, count: c_int) -> bool {
 /// # Safety
 /// The editor's window list must be valid.
 pub unsafe fn do_check_cursorbind() {
-    static prev_curwin: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut::<win_T>());
+    static prev_curwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut::<Window>());
     static prev_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
         lnum: 0,
         col: 0,

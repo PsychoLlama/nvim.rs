@@ -39,7 +39,7 @@ use crate::options::{
 };
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf;
-use crate::types::{Failed, NUL, StlOpt, buf_T, size_t, uint32_t, win_T};
+use crate::types::{Buffer, Failed, NUL, StlOpt, Window, size_t, uint32_t};
 
 use super::{
     SCL_NO, check_str_opt, e_illegal_character_after_chr, e_unbalanced_groups,
@@ -119,7 +119,7 @@ pub(crate) unsafe fn illegal_char_after_chr<'a>(
 ///
 /// # Safety
 /// `buf` points at a live buffer.
-pub unsafe fn check_buf_options(buf: *mut buf_T) {
+pub unsafe fn check_buf_options(buf: *mut Buffer) {
     // SAFETY: the caller's buffer; each field is one of its `char *`
     // options, and `parse_cino` re-derives the 'cinoptions' cache from the
     // string this just made non-null.
@@ -269,7 +269,7 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 ///
 /// # Safety
 /// `scl` is null or a C string; `wp` is null or a live window.
-pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut win_T) -> Result<(), Failed> {
+pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut Window) -> Result<(), Failed> {
     let val = if !scl.is_null() {
         scl.cast_const()
     } else if !wp.is_null() {

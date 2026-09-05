@@ -27,7 +27,7 @@ use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Handle, Integer, LineNr, NUL, OptInt, frame_T, tabpage_T, win_T};
+use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt, Tabpage, Window};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -108,7 +108,7 @@ pub fn reset_lnums() {
 // which leaf held `curwin`, and none of its frames is linked into the layout.
 
 /// `tp->tp_snapshot[idx]`, borrowed as one slot.
-fn snapshot_slot(tp: TabPage, idx: c_int) -> *mut *mut frame_T {
+fn snapshot_slot(tp: TabPage, idx: c_int) -> *mut *mut Frame {
     let mut tp = tp;
     &raw mut tp.tp_snapshot[idx as usize]
 }
@@ -132,11 +132,11 @@ pub(crate) fn take_snapshot(idx: c_int) {
 
 /// Copy `fr` and everything hanging off it into a freshly allocated tree at
 /// `slot`.
-fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut frame_T) {
+fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut Frame) {
     // SAFETY: `xcalloc` aborts rather than answering null; `slot` is a field of
     // a live tab page or of a frame this walk has just allocated.
     let mut copy = unsafe {
-        let frp = xcalloc(1, size_of::<frame_T>()).cast::<frame_T>();
+        let frp = xcalloc(1, size_of::<Frame>()).cast::<Frame>();
         *slot = frp;
         FrameRef::new(frp)
     };
@@ -160,7 +160,7 @@ pub(crate) fn drop_snapshot(tp: TabPage, idx: c_int) {
     if let Some(fr) = snapshot_of(tp, idx) {
         clear_snapshot_rec(fr);
     }
-    tp.tp_snapshot[idx as usize] = ptr::null_mut::<frame_T>();
+    tp.tp_snapshot[idx as usize] = ptr::null_mut::<Frame>();
 }
 
 /// Free `fr` and everything hanging off it.
@@ -269,7 +269,7 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
-pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut win_T) -> Option<&'static CStr> {
+pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut Window) -> Option<&'static CStr> {
     // SAFETY: the caller's promise -- a live window or null, and a
     // NUL-terminated string or null.
     let win = unsafe { Win::from_raw(wp) };
@@ -385,7 +385,7 @@ pub fn get_last_winid() -> c_int {
     last_win_id.get()
 }
 
-pub unsafe fn win_locked(wp: *mut win_T) -> c_int {
+pub unsafe fn win_locked(wp: *mut Window) -> c_int {
     // SAFETY: the caller's promise -- a live window.
     unsafe { Win::new(wp) }.w_locked as c_int
 }
@@ -445,7 +445,7 @@ pub unsafe fn win_ui_flush(validate: bool) {
     }
 }
 
-pub unsafe fn lastwin_nofloating(tp: *mut tabpage_T) -> *mut win_T {
+pub unsafe fn lastwin_nofloating(tp: *mut Tabpage) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page or null.
     last_nonfloating(unsafe { TabPage::from_raw(tp) }).raw()
 }

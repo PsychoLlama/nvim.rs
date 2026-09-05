@@ -66,7 +66,7 @@ struct Walk {
 /// search-highlight state must be set up for this redraw.
 pub(crate) unsafe fn draw_window_lines(
     mut wp: Win,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     rg: &mut Regions,
     cursorline_fi: foldinfo_T,
     spv: &mut spellvars_T,
@@ -206,7 +206,7 @@ pub(crate) unsafe fn draw_window_lines(
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn line_needs_drawing(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) -> bool {
+unsafe fn line_needs_drawing(wp: Win, buf: *mut Buffer, rg: &Regions, w: &Walk) -> bool {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     if w.row < rg.top_end
         || (w.row >= rg.mid_start && w.row < rg.mid_end)
@@ -256,7 +256,7 @@ unsafe fn line_needs_drawing(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) -
 /// `wp` must be a live window and `buf` its buffer.
 unsafe fn draw_one_line(
     wp: Win,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     rg: &mut Regions,
     w: &mut Walk,
     cursorline_fi: foldinfo_T,
@@ -593,7 +593,7 @@ unsafe fn move_line_entries(
 /// `wp` must be a live window and `buf` its buffer.
 unsafe fn skip_one_line(
     wp: Win,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     rg: &Regions,
     w: &mut Walk,
     cursorline_fi: foldinfo_T,
@@ -730,7 +730,7 @@ unsafe fn draw_unfinished_last_line(mut wp: Win, w: &Walk) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn draw_end_of_buffer(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) {
+unsafe fn draw_end_of_buffer(wp: Win, buf: *mut Buffer, rg: &Regions, w: &Walk) {
     // SAFETY: the caller's window and buffer.
     let mut lastline = rg.bot_scroll_start;
     if rg.mid_end >= w.row {
@@ -760,7 +760,7 @@ unsafe fn draw_end_of_buffer(wp: Win, buf: *mut buf_T, rg: &Regions, w: &Walk) {
 /// Positive `line_count` scrolls down, making room at `row`; negative deletes
 /// rows there. Nothing happens when the area to move would be off the window --
 /// the caller redraws it instead.
-pub unsafe fn win_scroll_lines(wp: *mut win_T, row: c_int, line_count: c_int) {
+pub unsafe fn win_scroll_lines(wp: *mut Window, row: c_int, line_count: c_int) {
     // SAFETY: a live window; `grid_adjust` maps its rows onto the grid that
     // carries them.
     if !unsafe { redrawing() } || line_count == 0 {

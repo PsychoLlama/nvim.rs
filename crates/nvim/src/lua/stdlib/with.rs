@@ -23,8 +23,8 @@ use crate::lua::ffi::{
 };
 use crate::main::g_min_log_level;
 use crate::types::{
-    CmdModFlags, Error, Failed, aco_save_T, buf_T, cmdmod_T, lua_State, pos_T, switchwin_T, win_T,
-    win_execute_T,
+    Buffer, CmdModFlags, Error, Failed, SwitchWin, WinExecute, Window, aco_save_T, cmdmod_T,
+    lua_State, pos_T,
 };
 use crate::window::win_find_tabpage;
 
@@ -44,8 +44,8 @@ const FLAG_KEYS: [(&CStr, CmdModFlags); 11] = [
     (c"keeppatterns", CmdModFlags::KEEPPATTERNS),
 ];
 
-/// An all-zero [`win_execute_T`]; `win_execute_before` fills it.
-const WIN_EXECUTE_INIT: win_execute_T = win_execute_T {
+/// An all-zero [`WinExecute`]; `win_execute_before` fills it.
+const WIN_EXECUTE_INIT: WinExecute = WinExecute {
     wp: ptr::null_mut(),
     curpos: pos_T {
         lnum: 0,
@@ -56,7 +56,7 @@ const WIN_EXECUTE_INIT: win_execute_T = win_execute_T {
     cwd_status: Err(Failed),
     apply_acd: false,
     save_sfname: ptr::null_mut(),
-    switchwin: switchwin_T {
+    switchwin: SwitchWin {
         sw_curwin: ptr::null_mut(),
         sw_curtab: ptr::null_mut(),
         sw_same_win: false,
@@ -72,8 +72,8 @@ const WIN_EXECUTE_INIT: win_execute_T = win_execute_T {
 pub(crate) unsafe extern "C-unwind" fn nlua_with(lstate: *mut lua_State) -> c_int {
     unsafe {
         let mut flags = CmdModFlags::NONE;
-        let mut buf: *mut buf_T = ptr::null_mut();
-        let mut win: *mut win_T = ptr::null_mut();
+        let mut buf: *mut Buffer = ptr::null_mut();
+        let mut win: *mut Window = ptr::null_mut();
         let mut log_level: c_int = -1;
 
         luaL_argcheck(

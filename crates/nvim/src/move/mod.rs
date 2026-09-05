@@ -63,7 +63,7 @@ use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
 };
-use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, int64_t, win_T, wline_T};
+use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, WLine, Window, int64_t};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
@@ -80,7 +80,7 @@ pub struct lineoff_T {
 
 crate::flag_set! {
     /// Which of a window's cached cursor and scroll positions are still
-    /// right -- upstream's `VALID_*`, the bits `win_T::w_valid` carries.
+    /// right -- upstream's `VALID_*`, the bits `Window::w_valid` carries.
     /// A field whose bit is clear must be recomputed before it is read.
     pub struct WinValid;
 
@@ -294,7 +294,7 @@ impl Win {
     ///
     /// Copied rather than borrowed because the walk that reads these also
     /// calls back into the fold and decoration layers between reads.
-    pub(super) fn remembered_line(self, i: c_int) -> wline_T {
+    pub(super) fn remembered_line(self, i: c_int) -> WLine {
         debug_assert!(i >= 0 && i < self.w_lines_valid, "i < wp->w_lines_valid");
         // SAFETY: `w_lines` holds at least `w_lines_valid` live entries.
         unsafe { *self.w_lines.offset(i as isize) }
@@ -337,7 +337,7 @@ impl Win {
 /// # Safety
 /// `wp` must be a valid window.
 pub unsafe fn plines_correct_topline(
-    wp: *mut win_T,
+    wp: *mut Window,
     lnum: LineNr,
     limit_winheight: bool,
 ) -> (c_int, LineNr) {
@@ -695,7 +695,7 @@ pub fn validate_cursor_col(mut win: Win) {
 /// # Safety
 /// `wp` must be a valid window.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn win_col_off(wp: *mut win_T) -> c_int {
+pub unsafe extern "C" fn win_col_off(wp: *mut Window) -> c_int {
     // SAFETY: the caller's promise.
     unsafe { Win::new(wp) }.col_off()
 }

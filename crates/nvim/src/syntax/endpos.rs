@@ -64,7 +64,7 @@ pub(crate) unsafe fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool,
     let spp = block.pattern_mut(idx);
     regmatch.rmm_ic = spp.sp_ic;
     regmatch.regprog = spp.sp_prog;
-    let time: *mut syn_time_T = &raw mut spp.sp_time;
+    let time: *mut SynTime = &raw mut spp.sp_time;
     // SAFETY: `time` is this pattern's own timer, live across the call, and
     // `regmatch` is the local just built.
     let matched = unsafe { syn_regexec(&raw mut regmatch, lnum, col, time) };
@@ -459,7 +459,7 @@ pub(crate) unsafe fn syn_regexec(
     rmp: *mut regmmatch_T,
     lnum: LineNr,
     col: ColNr,
-    st: *mut syn_time_T,
+    st: *mut SynTime,
 ) -> bool {
     let timing = syn_time_on.get();
     let start = if timing { profile_start() } else { 0 };

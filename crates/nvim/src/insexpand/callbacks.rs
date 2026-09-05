@@ -25,7 +25,7 @@ use crate::winlayer::{Buf, Win};
 /// `callback_copy`, `callback_free`, `set_ref_in_callback` -- is C-shaped
 /// and takes the *slot's* address so it can free what is there and write the
 /// new value in place; the buffer-local twin of each of these lives in a
-/// `buf_T` field, and the same helpers serve both.
+/// `Buffer` field, and the same helpers serve both.
 ///
 /// `CompleteFuncCb` names the cell rather than pointing into it, so it is
 /// `Copy` and needs no `unsafe` to make. The one thing it cannot avoid is

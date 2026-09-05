@@ -88,7 +88,7 @@ unsafe extern "C" fn input_cb(
     bytes_read: *mut uint32_t,
 ) -> *const ::core::ffi::c_char {
     unsafe {
-        let bp: *mut buf_T = payload as *mut buf_T;
+        let bp: *mut Buffer = payload as *mut Buffer;
         static buf: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
         if position.row as LineNr >= (*bp).b_ml.ml_line_count {
             *bytes_read = 0 as uint32_t;
@@ -157,7 +157,7 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
         let mut len: size_t = 0;
         let str: *const ::core::ffi::c_char;
         let bufnr: Handle;
-        let buf: *mut buf_T;
+        let buf: *mut Buffer;
         let input: TSInput;
         match lua_type(L, 3 as ::core::ffi::c_int) {
             LUA_TSTRING => {

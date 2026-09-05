@@ -82,7 +82,7 @@ use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
     ColNr, LineNr, MAXPATHL, OptIndex, ScreenChar, StlClickRecord, TypVal, VAR_NUMBER, VarLock,
-    VarNumber, Vv, int64_t, size_t, statuscol_T, stl_hlrec_t, typval_vval_union, win_T,
+    VarNumber, Vv, Window, int64_t, size_t, statuscol_T, stl_hlrec_t, typval_vval_union,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
@@ -676,7 +676,7 @@ impl StlSinks {
 /// pointer in `sinks` must be null or writable. This re-enters the editor,
 /// so nothing may be held across it.
 pub unsafe fn build_stl_str_hl(
-    wp: *mut win_T,
+    wp: *mut Window,
     out: &mut [c_char],
     fmt: *mut c_char,
     from: FmtSource,

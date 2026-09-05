@@ -726,7 +726,7 @@ unsafe fn goto_match(
     tagpreview: c_int,
 ) -> After {
     walk.found = true;
-    let mut curwin_save: *mut win_T = ptr::null_mut();
+    let mut curwin_save: *mut Window = ptr::null_mut();
     if walk.files.depth() == -1 && walk.lnum == cur_win().w_cursor.lnum && tagpreview == 0 {
         emsg(gettext(c"E387: Match is on current line"));
     } else if action == ACTION_SHOW {

@@ -70,8 +70,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, exarg_T, ptrdiff_t, time_t,
-    win_T,
+    Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, Window, exarg_T, ptrdiff_t,
+    time_t,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -236,7 +236,7 @@ pub unsafe fn do_ecmd(
     eap: *mut exarg_T,
     newlnum: LineNr,
     flags: EcmdFlags,
-    oldwin: *mut win_T,
+    oldwin: *mut Window,
 ) -> Result<(), Failed> {
     let mut ffname = ffname;
     let mut sfname = sfname;

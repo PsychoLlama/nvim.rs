@@ -50,9 +50,7 @@ use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
 use crate::popupmenu::pum_make_popup;
 use crate::strings::vim_snprintf;
-use crate::types::{
-    CmdModFlags, IOSIZE, NUL, exarg_T, intmax_t, size_t, tabpage_T, uint8_t, win_T,
-};
+use crate::types::{CmdModFlags, IOSIZE, NUL, Tabpage, Window, exarg_T, intmax_t, size_t, uint8_t};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
@@ -159,7 +157,7 @@ fn cur_buf() -> Buf {
 }
 
 /// `do_exedit()`: run the `:edit` half of a command that opened a window.
-fn edit(ea: Ex, old_curwin: *mut win_T) {
+fn edit(ea: Ex, old_curwin: *mut Window) {
     // SAFETY: a live command, and a live window or null.
     unsafe { do_exedit(ea.raw(), old_curwin) };
 }
@@ -183,7 +181,7 @@ fn skip_white(p: *mut c_char) -> *mut c_char {
 ///
 /// A window not in the list answers the number of windows, which is what
 /// `winnr()` reports for one that has just been closed.
-pub(crate) fn current_win_nr(win: *const win_T) -> c_int {
+pub(crate) fn current_win_nr(win: *const Window) -> c_int {
     let mut nr = 0;
     for wp in windows() {
         nr += 1;
@@ -195,7 +193,7 @@ pub(crate) fn current_win_nr(win: *const win_T) -> c_int {
 }
 
 /// The same for tab pages. `current_tab_nr(NULL)` is the count.
-pub(crate) fn current_tab_nr(tab: *mut tabpage_T) -> c_int {
+pub(crate) fn current_tab_nr(tab: *mut Tabpage) -> c_int {
     let mut nr = 0;
     for tp in tabs() {
         nr += 1;
@@ -305,7 +303,7 @@ fn find_file(arg: *mut c_char, count: c_int) -> *mut c_char {
 ///
 /// Nothing happens at all when there was no room for a tab page: the file is
 /// not edited anywhere.
-fn open_tabpage(ea: Ex, old_curwin: *mut win_T) {
+fn open_tabpage(ea: Ex, old_curwin: *mut Window) {
     let after = if cmdmod.with(|m| m.cmod_tab) != 0 {
         cmdmod.with(|m| m.cmod_tab)
     } else if ea.addr_count == 0 {
@@ -452,7 +450,7 @@ pub(crate) unsafe fn ex_tabs(_eap: *mut exarg_T) {
 }
 
 /// The `:tabs` entry for each window of `tp`.
-fn list_tab_windows(tp: TabPage, lastused_win: *mut win_T, line: &mut [c_char; IOSIZE as usize]) {
+fn list_tab_windows(tp: TabPage, lastused_win: *mut Window, line: &mut [c_char; IOSIZE as usize]) {
     for wp in windows_in_tab(tp) {
         if got_int.get() {
             break;
@@ -710,7 +708,7 @@ fn prepare_preview_window() {
 }
 
 /// Go back to the window `:pedit` was run from, if it is still there.
-fn back_to_current_window(curwin_save: *mut win_T) {
+fn back_to_current_window(curwin_save: *mut Window) {
     if curwin.get() != curwin_save
         && let Some(saved) = valid_win(curwin_save)
     {

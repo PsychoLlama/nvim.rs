@@ -43,8 +43,8 @@ use crate::options::{
 use crate::os::cshim::gettext_ptr;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber, exarg_T,
-    size_t, uint8_t, uint32_t, win_T,
+    Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber, Window,
+    exarg_T, size_t, uint8_t, uint32_t,
 };
 
 use super::{
@@ -136,7 +136,7 @@ unsafe fn get_option_prefix(argp: &mut *mut c_char) -> Prefix {
 ///
 /// `win` must be a live window.
 unsafe fn validate_opt_idx(
-    win: *mut win_T,
+    win: *mut Window,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
     flags: uint32_t,

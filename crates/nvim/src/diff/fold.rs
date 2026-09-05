@@ -267,7 +267,7 @@ pub fn diff_infold(wp: Win, lnum: LineNr) -> bool {
 /// that just changed.
 ///
 /// Takes the ranges, not the block: the one caller reads them off a block it
-/// is about to free, and a `diff_T` carries a `GArray` and two list links
+/// is about to free, and a `DiffBlock` carries a `GArray` and two list links
 /// that a copy taken across the free would leave dangling.
 pub(crate) fn diff_fold_update(
     lnum: &[LineNr; DB_COUNT as usize],

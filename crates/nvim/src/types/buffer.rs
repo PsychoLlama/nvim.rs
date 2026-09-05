@@ -14,7 +14,7 @@ use crate::buffer::BufFlags;
 use crate::registry::{IdMap, IdSet};
 use crate::syntax::{syn_cluster_T, synpat_T};
 
-/// Namespace id to the highest extmark id handed out in it: `buf_T`'s
+/// Namespace id to the highest extmark id handed out in it: `Buffer`'s
 /// `b_extmark_ns`, which upstream declared `Map(uint32_t, uint32_t)[1]` so
 /// that it decayed to a pointer.
 pub(crate) type ExtmarkNs = IdMap<uint32_t, uint32_t>;
@@ -89,7 +89,6 @@ pub struct WinConfig {
     pub hide: bool,
     pub _cmdline_offset: ::core::ffi::c_int,
 }
-pub type WinInfo = wininfo_S;
 pub type WinSplit = ::core::ffi::c_uint;
 pub type WinStyle = ::core::ffi::c_uint;
 pub type bfa_values = ::core::ffi::c_uint;
@@ -99,31 +98,30 @@ pub type bln_values = ::core::ffi::c_uint;
 /// says whether the address still means that buffer. Duplicating one
 /// duplicates no claim on anything.
 #[derive(Copy, Clone)]
-pub struct bufref_T {
-    pub br_buf: *mut buf_T,
+pub struct BufferRef {
+    pub br_buf: *mut Buffer,
     pub br_fnum: ::core::ffi::c_int,
     pub br_buf_free_count: ::core::ffi::c_int,
 }
-pub type diff_T = diffblock_S;
 /// Not `Copy` and not `Clone`: a block is a node of the tab page's list and
 /// `df_changes` is an array it allocates, so a by-value duplicate would name
 /// a `ga_data` and a `df_next` it does not own. Code that wants a block's
 /// ranges past the block's lifetime copies the two `LineNr` arrays.
-pub struct diffblock_S {
-    pub df_next: *mut diff_T,
+pub struct DiffBlock {
+    pub df_next: *mut DiffBlock,
     pub df_lnum: [LineNr; 8],
     pub df_count: [LineNr; 8],
     pub is_linematched: bool,
     pub has_changes: bool,
     /// The block's inline changes, cached by `diff_find_change_inline_diff`
     /// and windowed per line by `diff_find_change`.
-    pub df_changes: Vec<diffline_change_T>,
+    pub df_changes: Vec<DiffLineChange>,
 }
 
-impl diffblock_S {
+impl DiffBlock {
     /// A block with no ranges and no cached changes -- `xcalloc`'s answer,
     /// which is what every caller wanted from it.
-    pub fn new(df_next: *mut diff_T) -> Self {
+    pub fn new(df_next: *mut DiffBlock) -> Self {
         Self {
             df_next,
             df_lnum: [0; 8],
@@ -135,25 +133,23 @@ impl diffblock_S {
     }
 }
 #[derive(Default)]
-pub struct diffline_S {
-    pub changes: *mut diffline_change_T,
+pub struct DiffLine {
+    pub changes: *mut DiffLineChange,
     pub num_changes: ::core::ffi::c_int,
     pub bufidx: ::core::ffi::c_int,
     pub lineoff: ::core::ffi::c_int,
 }
-pub type diffline_T = diffline_S;
 #[derive(Copy, Clone)]
-pub struct diffline_change_S {
+pub struct DiffLineChange {
     pub dc_start: [ColNr; 8],
     pub dc_end: [ColNr; 8],
     pub dc_start_lnum_off: [::core::ffi::c_int; 8],
     pub dc_end_lnum_off: [::core::ffi::c_int; 8],
 }
-pub type diffline_change_T = diffline_change_S;
 pub type DispTick = uint64_t;
 pub type dobuf_action_values = ::core::ffi::c_uint;
 pub type dobuf_start_values = ::core::ffi::c_uint;
-pub struct fcs_chars_T {
+pub struct FcsChars {
     pub stl: ScreenChar,
     pub stlnc: ScreenChar,
     pub wbr: ScreenChar,
@@ -184,13 +180,13 @@ pub(crate) struct KeymapEntry {
 }
 
 /// Neither `Copy` nor `Clone`, and now the *owner* of what hangs off it.
-/// The registry holds a buffer as an `allocator::Owned<buf_T>`, so this
+/// The registry holds a buffer as an `allocator::Owned<Buffer>`, so this
 /// struct is dropped rather than `xfree`d and a field with a destructor
 /// works: the buffer-local user commands are a `Vec`. Every one of the
 /// seventy raw pointers below is either a borrowed edge into the graph or
 /// an allocation this buffer releases in `free_buffer`, and duplicating one
 /// would make a second owner of all of them.
-pub struct file_buffer {
+pub struct Buffer {
     pub handle: Handle,
     pub b_ml: memline_T,
     /// The buffer list, `firstbuf`..`lastbuf`. A handle rather than an
@@ -443,7 +439,7 @@ pub struct file_buffer {
     pub b_prompt_append_new_line: bool,
     pub b_prompt_insert: ::core::ffi::c_int,
     pub b_prompt_start: fmark_T,
-    pub b_s: synblock_T,
+    pub b_s: SynBlock,
     pub b_signcols: file_buffer_b_signcols,
     pub terminal: *mut Terminal,
     pub additional_data: *mut AdditionalData,
@@ -492,25 +488,24 @@ pub struct file_buffer_update_channels {
 /// would put a second node into a structure the editor walks by pointer.
 /// Frames are allocated one at a time and freed with the window; nothing in
 /// the tree may copy one, and the absence of the derives is what says so.
-pub struct frame_S {
+pub struct Frame {
     pub fr_layout: ::core::ffi::c_char,
     pub fr_width: ::core::ffi::c_int,
     pub fr_newwidth: ::core::ffi::c_int,
     pub fr_height: ::core::ffi::c_int,
     pub fr_newheight: ::core::ffi::c_int,
-    pub fr_parent: *mut frame_T,
-    pub fr_next: *mut frame_T,
-    pub fr_prev: *mut frame_T,
-    pub fr_child: *mut frame_T,
-    pub fr_win: *mut win_T,
+    pub fr_parent: *mut Frame,
+    pub fr_next: *mut Frame,
+    pub fr_prev: *mut Frame,
+    pub fr_child: *mut Frame,
+    pub fr_win: *mut Window,
 }
-pub type frame_T = frame_S;
 pub type getf_retvalues = ::core::ffi::c_int;
 pub type getf_values = ::core::ffi::c_uint;
 /// Not `Copy`: `multispace` and `leadmultispace` are owned runs, allocated
 /// by 'listchars' and freed when the window's value is replaced.
 #[derive(Clone)]
-pub struct lcs_chars_T {
+pub struct LcsChars {
     pub eol: ScreenChar,
     pub ext: ScreenChar,
     pub prec: ScreenChar,
@@ -528,15 +523,15 @@ pub struct lcs_chars_T {
     pub leadmultispace: *mut ScreenChar,
     pub conceal: ScreenChar,
 }
-pub struct llpos_T {
+pub struct LLPos {
     pub lnum: LineNr,
     pub col: ColNr,
     pub len: ::core::ffi::c_int,
 }
 #[derive(Clone)]
-pub struct match_T {
+pub struct MatchState {
     pub rm: regmmatch_T,
-    pub buf: *mut buf_T,
+    pub buf: *mut Buffer,
     pub lnum: LineNr,
     pub attr: ::core::ffi::c_int,
     pub attr_cur: ::core::ffi::c_int,
@@ -548,36 +543,35 @@ pub struct match_T {
     pub tm: ProfTime,
 }
 #[derive(Clone)]
-pub struct matchitem {
-    pub mit_next: *mut matchitem_T,
+pub struct MatchItem {
+    pub mit_next: *mut MatchItem,
     pub mit_id: ::core::ffi::c_int,
     pub mit_priority: ::core::ffi::c_int,
     pub mit_pattern: *mut ::core::ffi::c_char,
     pub mit_match: regmmatch_T,
-    pub mit_pos_array: *mut llpos_T,
+    pub mit_pos_array: *mut LLPos,
     pub mit_pos_count: ::core::ffi::c_int,
     pub mit_pos_cur: ::core::ffi::c_int,
     pub mit_toplnum: LineNr,
     pub mit_botlnum: LineNr,
-    pub mit_hl: match_T,
+    pub mit_hl: MatchState,
     pub mit_hlg_id: ::core::ffi::c_int,
     pub mit_conceal_char: ::core::ffi::c_int,
 }
-pub type matchitem_T = matchitem;
-pub struct pos_save_T {
+pub struct PosSave {
     pub w_topline_save: ::core::ffi::c_int,
     pub w_topline_corr: ::core::ffi::c_int,
     pub w_cursor_save: pos_T,
     pub w_cursor_corr: pos_T,
 }
 #[derive(Copy, Clone)]
-pub struct syn_time_T {
+pub struct SynTime {
     pub total: ProfTime,
     pub slowest: ProfTime,
     pub count: ::core::ffi::c_int,
     pub match_0: ::core::ffi::c_int,
 }
-pub struct synblock_T {
+pub struct SynBlock {
     pub b_keywtab: HashTab,
     pub b_keywtab_ic: HashTab,
     pub b_syn_error: bool,
@@ -608,7 +602,7 @@ pub struct synblock_T {
     /// discipline (`vim_regcomp` / `vim_regfree`), so it stays a raw pointer,
     /// released by `syntax_clear`.
     pub b_syn_linecont_prog: *mut regprog_T,
-    pub b_syn_linecont_time: syn_time_T,
+    pub b_syn_linecont_time: SynTime,
     pub b_syn_linecont_ic: ::core::ffi::c_int,
     pub b_syn_topgrp: ::core::ffi::c_int,
     pub b_syn_conceal: ::core::ffi::c_int,
@@ -651,15 +645,15 @@ pub struct synblock_T {
 /// window list, so a bitwise copy would be a second owner of all of them.
 /// Tab pages are reached through `winlayer::TabPage`, which is the `Copy`
 /// handle naming this one.
-pub struct tabpage_S {
+pub struct Tabpage {
     pub handle: Handle,
     /// The tab page list off `first_tabpage`. A handle, as the buffer
     /// list's links are — `winlayer::TabPage::next` and `winlayer::tabs`
     /// are how it is walked.
     pub(crate) tp_next: Option<TabId>,
-    pub tp_topframe: *mut frame_T,
-    pub tp_curwin: *mut win_T,
-    pub tp_prevwin: *mut win_T,
+    pub tp_topframe: *mut Frame,
+    pub tp_curwin: *mut Window,
+    pub tp_prevwin: *mut Window,
     /// This tab page's window list, its two ends. Handles, as the links
     /// between them are. **Stale while the tab page is the current one** —
     /// the `firstwin`/`lastwin` globals are then the truth, which is what
@@ -670,20 +664,19 @@ pub struct tabpage_S {
     pub tp_old_Columns: int64_t,
     pub tp_ch_used: OptInt,
     pub tp_did_tabclosedpre: bool,
-    pub tp_first_diff: *mut diff_T,
-    pub tp_diffbuf: [*mut buf_T; 8],
+    pub tp_first_diff: *mut DiffBlock,
+    pub tp_diffbuf: [*mut Buffer; 8],
     pub tp_diff_invalid: ::core::ffi::c_int,
     pub tp_diff_update: ::core::ffi::c_int,
-    pub tp_snapshot: [*mut frame_T; 3],
+    pub tp_snapshot: [*mut Frame; 3],
     pub tp_winvar: ScopeDictDictItem,
     pub tp_vars: *mut Dict,
     pub tp_localdir: *mut ::core::ffi::c_char,
     pub tp_prevdir: *mut ::core::ffi::c_char,
 }
-pub type tabpage_T = tabpage_S;
 /// Not `Copy`: `tagname` and `user_data` are owned strings.
 #[derive(Clone)]
-pub struct taggy_T {
+pub struct Taggy {
     pub tagname: *mut ::core::ffi::c_char,
     pub fmark: fmark_T,
     pub cur_match: ::core::ffi::c_int,
@@ -694,10 +687,10 @@ pub struct taggy_T {
 /// grid, its option strings, its tag stack and its jump list; nothing in
 /// the tree may duplicate one, and the absence of the derives is what says
 /// so.
-pub struct window_S {
+pub struct Window {
     pub handle: Handle,
-    pub w_buffer: *mut buf_T,
-    pub w_s: *mut synblock_T,
+    pub w_buffer: *mut Buffer,
+    pub w_s: *mut SynBlock,
     pub w_ns_hl: ::core::ffi::c_int,
     pub w_ns_hl_winhl: ::core::ffi::c_int,
     pub w_ns_hl_active: ::core::ffi::c_int,
@@ -722,7 +715,7 @@ pub struct window_S {
     pub(crate) w_prev: Option<WinId>,
     pub(crate) w_next: Option<WinId>,
     pub w_locked: bool,
-    pub w_frame: *mut frame_T,
+    pub w_frame: *mut Frame,
     pub w_cursor: pos_T,
     pub w_curswant: ColNr,
     /// Whether the next cursor move should recompute `w_curswant` — the
@@ -739,8 +732,8 @@ pub struct window_S {
     pub w_old_visual_col: ColNr,
     pub w_old_curswant: ColNr,
     pub w_last_cursor_lnum_rnu: LineNr,
-    pub w_p_lcs_chars: lcs_chars_T,
-    pub w_p_fcs_chars: fcs_chars_T,
+    pub w_p_lcs_chars: LcsChars,
+    pub w_p_fcs_chars: FcsChars,
     pub w_topline: LineNr,
     /// Whether `w_topline` was set on purpose rather than left at its
     /// default, which decides whether entering the buffer may move it.
@@ -767,7 +760,7 @@ pub struct window_S {
     pub w_width: ::core::ffi::c_int,
     pub w_hsep_height: ::core::ffi::c_int,
     pub w_vsep_width: ::core::ffi::c_int,
-    pub w_save_cursor: pos_save_T,
+    pub w_save_cursor: PosSave,
     pub w_do_win_fix_cursor: bool,
     pub w_winrow_off: ::core::ffi::c_int,
     pub w_wincol_off: ::core::ffi::c_int,
@@ -797,7 +790,7 @@ pub struct window_S {
     pub w_empty_rows: ::core::ffi::c_int,
     pub w_filler_rows: ::core::ffi::c_int,
     pub w_lines_valid: ::core::ffi::c_int,
-    pub w_lines: *mut wline_T,
+    pub w_lines: *mut WLine,
     pub w_lines_size: ::core::ffi::c_int,
     pub w_folds: GArray,
     pub w_fold_manual: bool,
@@ -833,8 +826,8 @@ pub struct window_S {
     pub w_arg_idx_invalid: bool,
     pub w_localdir: *mut ::core::ffi::c_char,
     pub w_prevdir: *mut ::core::ffi::c_char,
-    pub w_onebuf_opt: winopt_T,
-    pub w_allbuf_opt: winopt_T,
+    pub w_onebuf_opt: WinOpt,
+    pub w_allbuf_opt: WinOpt,
     pub w_p_cc_cols: *mut ::core::ffi::c_int,
     pub w_p_culopt_flags: uint8_t,
     pub w_briopt_min: ::core::ffi::c_int,
@@ -851,9 +844,9 @@ pub struct window_S {
     pub w_jumplistlen: ::core::ffi::c_int,
     pub w_jumplistidx: ::core::ffi::c_int,
     pub w_changelistidx: ::core::ffi::c_int,
-    pub w_match_head: *mut matchitem_T,
+    pub w_match_head: *mut MatchItem,
     pub w_next_match_id: ::core::ffi::c_int,
-    pub w_tagstack: [taggy_T; 20],
+    pub w_tagstack: [Taggy; 20],
     pub w_tagstackidx: ::core::ffi::c_int,
     pub w_tagstacklen: ::core::ffi::c_int,
     pub w_grid: GridView,
@@ -877,11 +870,11 @@ pub struct window_S {
     pub w_statuscol_click_defs_size: size_t,
 }
 #[derive(Clone)]
-pub struct wininfo_S {
-    pub wi_win: *mut win_T,
+pub struct WinInfo {
+    pub wi_win: *mut Window,
     pub wi_mark: fmark_T,
     pub wi_optset: bool,
-    pub wi_opt: winopt_T,
+    pub wi_opt: WinOpt,
     pub wi_fold_manual: bool,
     pub wi_folds: GArray,
     pub wi_changelistidx: ::core::ffi::c_int,
@@ -890,7 +883,7 @@ pub struct wininfo_S {
 /// exists precisely to duplicate them. A shallow copy is a step in that,
 /// never the whole of it.
 #[derive(Clone)]
-pub struct winopt_T {
+pub struct WinOpt {
     pub wo_arab: ::core::ffi::c_int,
     pub wo_bri: ::core::ffi::c_int,
     pub wo_briopt: *mut ::core::ffi::c_char,
@@ -959,7 +952,7 @@ pub struct winopt_T {
     pub wo_script_ctx: [ScriptCtx; 51],
 }
 #[derive(Copy, Clone)]
-pub struct wline_T {
+pub struct WLine {
     pub wl_lnum: LineNr,
     pub wl_size: uint16_t,
     pub wl_valid: bool,
@@ -968,7 +961,7 @@ pub struct wline_T {
     pub wl_lastlnum: LineNr,
 }
 
-impl bufref_T {
+impl BufferRef {
     /// The "names nothing" state. `BufRef::NONE` is how the editor spells
     /// it; the two remaining raw holders (`main::au_new_curbuf` and
     /// `aco_save_T::new_curbuf`) start from this.
@@ -976,7 +969,7 @@ impl bufref_T {
     /// A `const fn` as well as a [`Default`] because two of them are
     /// statics.
     pub const fn new() -> Self {
-        bufref_T {
+        BufferRef {
             br_buf: ::core::ptr::null_mut(),
             br_fnum: 0,
             br_buf_free_count: 0,
@@ -984,7 +977,7 @@ impl bufref_T {
     }
 }
 
-impl Default for bufref_T {
+impl Default for BufferRef {
     fn default() -> Self {
         Self::new()
     }

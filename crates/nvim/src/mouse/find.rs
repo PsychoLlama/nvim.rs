@@ -253,7 +253,7 @@ pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr)
 /// `wp` must be a live window and `lnum` a line of the buffer it shows;
 /// `coladdp` must be writable or null.
 pub(crate) unsafe fn vcol2col(
-    wp: *mut win_T,
+    wp: *mut Window,
     lnum: LineNr,
     vcol: ColNr,
     coladdp: *mut ColNr,

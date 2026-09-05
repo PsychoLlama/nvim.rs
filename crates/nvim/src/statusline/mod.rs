@@ -57,7 +57,7 @@ use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
     OptionSetFlags, ScreenChar, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord,
-    VarNumber, Vv, WinSplit, WinStyle, size_t, statuscol_T, stl_hlrec_t, win_T,
+    VarNumber, Vv, WinSplit, WinStyle, Window, size_t, statuscol_T, stl_hlrec_t,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -571,7 +571,7 @@ pub(crate) fn stl_is_global() -> bool {
 ///
 /// # Safety
 /// `wp` must be null or a live window.
-pub(crate) unsafe fn win_opt(wp: *mut win_T) -> Option<Win> {
+pub(crate) unsafe fn win_opt(wp: *mut Window) -> Option<Win> {
     // SAFETY: the caller's promise, minus the null case.
     (!wp.is_null()).then(|| unsafe { Win::new(wp) })
 }
@@ -609,7 +609,7 @@ pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
 ///
 /// # Safety
 /// `wp` must be a live window and `group` a writable `Hlf`.
-pub unsafe fn fillchar_status(group: *mut Hlf, wp: *mut win_T) -> ScreenChar {
+pub unsafe fn fillchar_status(group: *mut Hlf, wp: *mut Window) -> ScreenChar {
     // SAFETY: the caller's promise.
     let (g, fillchar) = fillchar_status_of(unsafe { Win::new(wp) });
     // SAFETY: the caller's out-parameter.
@@ -622,7 +622,7 @@ pub unsafe fn fillchar_status(group: *mut Hlf, wp: *mut win_T) -> ScreenChar {
 /// # Safety
 /// `wp` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe fn redraw_custom_statusline(wp: *mut win_T) {
+pub unsafe fn redraw_custom_statusline(wp: *mut Window) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // A `'statusline'` expression that triggers a redraw gets here again.
     if ENTERED.get() {
@@ -645,7 +645,7 @@ pub unsafe fn redraw_custom_statusline(wp: *mut win_T) {
 /// `wp` must be a live window, `lnum` one of its buffer's lines, `buf` a
 /// buffer of `MAXPATHL` bytes and `stcp` this line's status-column state.
 pub unsafe fn build_statuscol_str(
-    wp: *mut win_T,
+    wp: *mut Window,
     lnum: LineNr,
     relnum: LineNr,
     buf: *mut ::core::ffi::c_char,

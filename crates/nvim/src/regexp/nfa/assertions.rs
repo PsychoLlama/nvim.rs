@@ -18,7 +18,7 @@ use crate::pos::MAXCOL;
 use crate::regexp::{
     Rex, kMarkBufLocal, nfa_state_T, reg_getline, reg_getline_len, reg_match_visual,
 };
-use crate::types::{ColNr, LineNr, MB_MAXBYTES, fmark_T, uint8_t, win_T};
+use crate::types::{ColNr, LineNr, MB_MAXBYTES, Window, fmark_T, uint8_t};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
@@ -33,7 +33,7 @@ fn lnum(rex: Rex) -> LineNr {
 }
 
 /// The window the match runs in, for the assertions that need one.
-fn window(rex: Rex) -> *mut win_T {
+fn window(rex: Rex) -> *mut Window {
     match rex.reg_win() {
         w if w.is_null() => curwin.get(),
         w => w,

@@ -19,8 +19,8 @@ use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf, ml_delete_buf};
 use crate::types::{
-    ColNr, LineNr, NUL, OptInt, ScreenChar, VTermColor, VTermPos, VTermScreenCell,
-    VTermScreenCellAttrs, buf_T,
+    Buffer, ColNr, LineNr, NUL, OptInt, ScreenChar, VTermColor, VTermPos, VTermScreenCell,
+    VTermScreenCellAttrs,
 };
 use crate::vterm::screen::vterm_screen_get_cell;
 use crate::winlayer::Buf;
@@ -226,7 +226,7 @@ pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-unsafe fn mark_adjust_term(buf: *mut buf_T, line1: LineNr, line2: LineNr, amount: LineNr) {
+unsafe fn mark_adjust_term(buf: *mut Buffer, line1: LineNr, line2: LineNr, amount: LineNr) {
     let (end, after) = (MAXLNUM as LineNr, true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
     // SAFETY: the caller's promise.

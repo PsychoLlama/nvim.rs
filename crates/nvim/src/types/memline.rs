@@ -175,7 +175,7 @@ impl MlChunks {
 ///
 /// It is deliberately **not** a `Drop` guard. The block is held *across*
 /// calls -- a run of reads keeps the same one locked, which is the whole
-/// point of it -- and by the time a `buf_T` is dropped `ml_close` has run
+/// point of it -- and by the time a `Buffer` is dropped `ml_close` has run
 /// `mf_close`, which freed every `bhdr_T` in the memfile; a `Drop` that put
 /// the block back would be a use-after-free. What makes it a guard is that
 /// there is exactly one acquire (`ml_find_line`'s walk, through
@@ -275,9 +275,9 @@ pub struct memline_T {
 }
 
 impl memline_T {
-    /// A closed memline, which is what a fresh `buf_T` holds.
+    /// A closed memline, which is what a fresh `Buffer` holds.
     ///
-    /// A zeroed `buf_T` is a valid one everywhere *except* the owned
+    /// A zeroed `Buffer` is a valid one everywhere *except* the owned
     /// collections in here -- an empty `Vec` holds a non-null dangling
     /// pointer, not a zero one -- so `alloc_unregistered_buffer` writes this
     /// over the zeroes.

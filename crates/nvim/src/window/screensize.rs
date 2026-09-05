@@ -33,8 +33,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VAR_NUMBER, VarLock, VarNumber,
-    buf_T, ptrdiff_t, size_t, typval_vval_union,
+    Buffer, Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VAR_NUMBER, VarLock,
+    VarNumber, ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -334,7 +334,7 @@ impl Subject {
 
     /// The buffer to fire the event for: the window's own if it is still
     /// there, the current one otherwise.
-    fn buffer(&mut self) -> *mut buf_T {
+    fn buffer(&mut self) -> *mut Buffer {
         if self.bufref.valid() {
             self.bufref.raw()
         } else {

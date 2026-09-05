@@ -57,9 +57,9 @@ use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     AlignTextPos, Array, BufferHandle, Dict, Error, Float, Handle, Hlf, Integer, LineNr, Object,
-    OptInt, OptVal, ScreenAttr, ScreenChar, String_0, VarNumber, VirtText, VirtTextChunk,
-    WinConfig, WinSplit, WinStyle, WindowHandle, exarg_T, kBoolVarFalse, kBoolVarTrue, lpos_T,
-    pumitem_T, size_t, tabpage_T, uint32_t, vimmenu_T, win_T,
+    OptInt, OptVal, ScreenAttr, ScreenChar, String_0, Tabpage, VarNumber, VirtText, VirtTextChunk,
+    WinConfig, WinSplit, WinStyle, Window, WindowHandle, exarg_T, kBoolVarFalse, kBoolVarTrue,
+    lpos_T, pumitem_T, size_t, uint32_t, vimmenu_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -201,7 +201,7 @@ unsafe fn pum_border_width() -> c_int {
 struct PumAnchor {
     /// The window the menu belongs to. Null only for a cmdline menu with no
     /// cmdline window, which is why the placement code guards on it.
-    target_win: *mut win_T,
+    target_win: *mut Window,
     /// Grid row of the line the menu hangs off.
     win_row: c_int,
     /// Grid column the menu is aligned with.

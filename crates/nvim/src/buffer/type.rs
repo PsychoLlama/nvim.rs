@@ -32,7 +32,7 @@ use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
-    CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, buf_T, ptrdiff_t,
+    Buffer, CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, ptrdiff_t,
 };
 use crate::winlayer::Buf;
 
@@ -166,7 +166,7 @@ pub(crate) fn buf_dontwrite_msg(buf: Option<Buf>) -> bool {
 
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
-pub unsafe fn buf_hide(buf: *const buf_T) -> bool {
+pub unsafe fn buf_hide(buf: *const Buffer) -> bool {
     // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
     // this one without a null test.
     let bufhidden = unsafe { *(*buf).b_p_bh };
@@ -182,7 +182,7 @@ pub unsafe fn buf_hide(buf: *const buf_T) -> bool {
 // The name a buffer without a file is shown under
 
 /// The name to display for a special buffer, or null for an ordinary one.
-pub unsafe fn buf_spname(buf: *mut buf_T) -> *mut c_char {
+pub unsafe fn buf_spname(buf: *mut Buffer) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
     let b = unsafe { Buf::new(buf) };
     if buf_is_quickfix(Some(b)) {
@@ -209,7 +209,7 @@ pub unsafe fn buf_spname(buf: *mut buf_T) -> *mut c_char {
     ptr::null_mut()
 }
 
-pub unsafe fn buf_get_fname(buf: *const buf_T) -> *mut c_char {
+pub unsafe fn buf_get_fname(buf: *const Buffer) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
     let name = unsafe { (*buf).b_fname };
     if name.is_null() {
@@ -240,7 +240,7 @@ pub unsafe fn set_buflisted(on: c_int) {
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
 }
 
-pub unsafe fn buf_is_empty(buf: *mut buf_T) -> bool {
+pub unsafe fn buf_is_empty(buf: *mut Buffer) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     let b = unsafe { Buf::new(buf) };
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
@@ -248,13 +248,13 @@ pub unsafe fn buf_is_empty(buf: *mut buf_T) -> bool {
     b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buf, 1 as LineNr) } == 0
 }
 
-pub unsafe fn buf_inc_changedtick(buf: *mut buf_T) {
+pub unsafe fn buf_inc_changedtick(buf: *mut Buffer) {
     // SAFETY: the caller's promise -- a live buffer.
     unsafe { buf_set_changedtick(buf, buf_get_changedtick(Buf::new(buf)) + 1 as VarNumber) };
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub unsafe fn buf_set_changedtick(buf: *mut buf_T, changedtick: VarNumber) {
+pub unsafe fn buf_set_changedtick(buf: *mut Buffer, changedtick: VarNumber) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut b = unsafe { Buf::new(buf) };
     let mut old_val: TypVal = b.changedtick_di.di_tv;

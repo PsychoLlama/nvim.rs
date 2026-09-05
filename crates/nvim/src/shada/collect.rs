@@ -31,7 +31,7 @@ use crate::types::{
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
 /// file is on removable media.
-pub(crate) unsafe fn ignore_buf(buf: *const buf_T, removable_bufs: &RemovableBufs) -> bool {
+pub(crate) unsafe fn ignore_buf(buf: *const Buffer, removable_bufs: &RemovableBufs) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
     let Some(b) = (unsafe { Buf::from_raw(buf.cast_mut()) }) else {
         return true;

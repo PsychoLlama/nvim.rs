@@ -25,7 +25,7 @@ use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{ColNr, Failed, buf_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
+use crate::types::{Buffer, ColNr, Failed, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -90,7 +90,7 @@ fn regexec(rmp: &mut regmatch_T, name: *mut c_char) -> bool {
 
 /// `home_replace_save`: `name` with `$HOME` written as `~`, freshly
 /// allocated. `buf` decides whether a help file keeps only its tail.
-fn home_replaced(buf: *mut buf_T, name: *const c_char) -> *mut c_char {
+fn home_replaced(buf: *mut Buffer, name: *const c_char) -> *mut c_char {
     // SAFETY: a live buffer or null, and a NUL-terminated name.
     unsafe { home_replace_save(buf, name) }
 }

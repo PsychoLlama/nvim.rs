@@ -81,7 +81,7 @@ fn cur_buf() -> Buf {
 ///
 /// Takes a raw pointer deliberately — the question is asked about a buffer an
 /// autocommand may already have freed, and the pointer is only compared.
-fn buf_is_valid(buf: *mut buf_T) -> bool {
+fn buf_is_valid(buf: *mut Buffer) -> bool {
     // SAFETY: `buf` is only compared, never read.
     unsafe { buf_valid(buf) }
 }

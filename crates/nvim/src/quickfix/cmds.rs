@@ -235,7 +235,7 @@ pub unsafe fn ex_cbuffer(eap: *mut exarg_T) {
     }
     let save_qfid = qf_current_list(qi).qf_id;
     if let Some(name) = au_name {
-        let curbuf_old: *const buf_T = curbuf.get();
+        let curbuf_old: *const Buffer = curbuf.get();
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         // The autocommand switched buffers: do not jump away from
         // wherever it left the user.

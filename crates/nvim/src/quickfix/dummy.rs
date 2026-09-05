@@ -9,7 +9,7 @@
 //! the file runs the `BufRead` family, and closing a window runs `WinClosed`.
 //! An autocommand can change the current directory, so every entry point
 //! ends by putting it back ([`restore_start_dir`]), and every buffer pointer
-//! is re-checked through a `bufref_T` rather than trusted across such a
+//! is re-checked through a `BufferRef` rather than trusted across such a
 //! call.
 
 #![deny(unsafe_op_in_unsafe_fn)]

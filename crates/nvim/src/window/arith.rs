@@ -33,7 +33,7 @@
 use core::ffi::c_int;
 
 use super::{FR_COL, FR_ROW, FRACTION_MULT, NOWIN};
-use crate::types::win_T;
+use crate::types::Window;
 use crate::winlayer::FrameRef;
 
 /// The C's `next_curwin` argument to [`frame_minheight`]/[`frame_minwidth`],
@@ -42,7 +42,7 @@ use crate::winlayer::FrameRef;
 ///
 /// * `NULL` asks for the minimum as things stand, and reserves a line (or a
 ///   column) for the *current* window when `'winminheight'` is zero;
-/// * `NOWIN`, the `(win_T *)-1` sentinel `win_equal()` and `win_split_ins()`
+/// * `NOWIN`, the `(Window *)-1` sentinel `win_equal()` and `win_split_ins()`
 ///   pass, asks for the same minimum with **no** such reservation;
 /// * a window asks for the minimum given that this window is about to become
 ///   current, so it gets `'winheight'`/`'winwidth'` rather than the minimum.
@@ -53,12 +53,12 @@ pub enum NextCurwin {
     /// The C's `NOWIN`.
     NoWin,
     /// A window that is about to become current.
-    Win(*mut win_T),
+    Win(*mut Window),
 }
 
 impl NextCurwin {
-    /// The `win_T *` the C passes, read back as the three cases.
-    pub fn of(win: *mut win_T) -> Self {
+    /// The `Window *` the C passes, read back as the three cases.
+    pub fn of(win: *mut Window) -> Self {
         if win.is_null() {
             Self::Unset
         } else if win == NOWIN {
@@ -68,8 +68,8 @@ impl NextCurwin {
         }
     }
 
-    /// The `win_T *` back again, for the entry points that still hand one on.
-    pub fn raw(self) -> *mut win_T {
+    /// The `Window *` back again, for the entry points that still hand one on.
+    pub fn raw(self) -> *mut Window {
         match self {
             Self::Unset => core::ptr::null_mut(),
             Self::NoWin => NOWIN,
@@ -79,7 +79,7 @@ impl NextCurwin {
 
     /// Whether this asks about `win` in particular — the C's
     /// `topfrp->fr_win == next_curwin`, which neither sentinel can satisfy.
-    fn is(self, win: *mut win_T) -> bool {
+    fn is(self, win: *mut Window) -> bool {
         self == Self::Win(win)
     }
 }
@@ -92,7 +92,7 @@ impl NextCurwin {
 pub struct MinSize {
     pub wanted: c_int,
     pub minimum: c_int,
-    pub curwin: *mut win_T,
+    pub curwin: *mut Window,
 }
 
 /// The minimal height of frame `topfrp`, from `frame_minheight()`.

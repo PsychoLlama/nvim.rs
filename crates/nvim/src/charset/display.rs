@@ -22,7 +22,7 @@ use crate::mbyte::{
 };
 use crate::memory::{xmalloc, xrealloc};
 use crate::option::get_fileformat;
-use crate::types::{GArray, NUL, StringBuilder, buf_T, size_t, ssize_t, uint8_t};
+use crate::types::{Buffer, GArray, NUL, StringBuilder, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
 
 use super::{
@@ -456,7 +456,7 @@ unsafe fn write_rendered(dst: *mut c_char, rendered: &render::Rendered) {
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_nonprint(buf: *const buf_T, c: c_int) -> render::Rendered {
+unsafe fn render_nonprint(buf: *const Buffer, c: c_int) -> render::Rendered {
     let c = if c == NL {
         // A NUL is stored as a newline internally.
         NUL
@@ -482,7 +482,7 @@ unsafe fn render_nonprint(buf: *const buf_T, c: c_int) -> render::Rendered {
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_char(buf: *const buf_T, c: c_int) -> render::Rendered {
+unsafe fn render_char(buf: *const Buffer, c: c_int) -> render::Rendered {
     // A negative code is one of the key-translation escapes; it renders as
     // its byte behind a `~@`.
     let (prefix, c) = if c < 0 {
@@ -515,7 +515,7 @@ unsafe fn render_char(buf: *const buf_T, c: c_int) -> render::Rendered {
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_byte(buf: *const buf_T, c: c_int) -> render::Rendered {
+unsafe fn render_byte(buf: *const Buffer, c: c_int) -> render::Rendered {
     if c >= 0x80 {
         // SAFETY: forwarded to this function's contract.
         return unsafe { render_nonprint(buf, c) };
@@ -538,7 +538,7 @@ pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_buf(buf: *const buf_T, c: c_int) -> CharDisplay {
+pub(crate) unsafe fn transchar_buf(buf: *const Buffer, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
     owned(&unsafe { render_char(buf, c) })
 }
@@ -548,7 +548,7 @@ pub(crate) unsafe fn transchar_buf(buf: *const buf_T, c: c_int) -> CharDisplay {
 ///
 /// # Safety
 /// `buf` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_byte_buf(buf: *const buf_T, c: c_int) -> CharDisplay {
+pub(crate) unsafe fn transchar_byte_buf(buf: *const Buffer, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
     owned(&unsafe { render_byte(buf, c) })
 }
@@ -566,7 +566,7 @@ pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
 ///
 /// # Safety
 /// `charbuf` must have room for five bytes; `buf` may be null.
-pub unsafe fn transchar_nonprint(buf: *const buf_T, charbuf: *mut c_char, c: c_int) {
+pub unsafe fn transchar_nonprint(buf: *const Buffer, charbuf: *mut c_char, c: c_int) {
     // SAFETY: forwarded to the caller's contract; a byte's rendering and its
     // terminator are at most five bytes.
     unsafe { write_rendered(charbuf, &render_nonprint(buf, c)) };

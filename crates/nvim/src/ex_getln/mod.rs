@@ -134,17 +134,17 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
-    Arena, Array, BackslashEscape, Boolean, Callback, CmdAddr, CmdBuff, CmdParseInfo,
+    Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdParseInfo,
     CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
     CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArgt, Exception, ExpandContext,
     ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
     ExprOptScope, ExprParserFlags, Handle, HashTab, HistoryType, Integer, LineNr, List, ListItem,
     Magic, MotionType, MsgList, Object, OptInt, OptMagic, OptVal, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime, RemapValues,
-    SaveVEvent, ScriptCtx, String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
-    VarNumber, VimState, XpPrefix, aco_save_T, buf_T, cmdmod_T, dobuf_action_values,
-    dobuf_start_values, exarg_T, expand_T, oparg_T, optset_T, pos_T, ptrdiff_t, searchit_arg_T,
-    size_t, tabpage_T, time_t, typval_vval_union, uint8_t, uint32_t, win_T,
+    SaveVEvent, ScriptCtx, String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink,
+    UndoObjectType, VarNumber, VimState, Window, XpPrefix, aco_save_T, cmdmod_T,
+    dobuf_action_values, dobuf_start_values, exarg_T, expand_T, oparg_T, optset_T, pos_T,
+    ptrdiff_t, searchit_arg_T, size_t, time_t, typval_vval_union, uint8_t, uint32_t,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -248,7 +248,7 @@ pub struct CommandLineState {
     pub break_ctrl_c: bool,
     pub xpc: expand_T,
     pub b_im_ptr: *mut OptInt,
-    pub b_im_ptr_buf: *mut buf_T,
+    pub b_im_ptr_buf: *mut Buffer,
     pub cmdline_type: ::core::ffi::c_int,
     pub event_cmdlineleavepre_triggered: bool,
     pub did_hist_navigate: bool,
@@ -347,7 +347,7 @@ pub struct CpBufInfoVec {
 }
 #[derive(Copy, Clone)]
 pub struct CpBufInfo {
-    pub buf: *mut buf_T,
+    pub buf: *mut Buffer,
     pub save_b_p_ul: OptInt,
     pub save_b_p_ma: ::core::ffi::c_int,
     pub save_b_changed: ::core::ffi::c_int,
@@ -380,7 +380,7 @@ pub struct CpWinInfoVec {
 }
 #[derive(Copy, Clone)]
 pub struct CpWinInfo {
-    pub win: *mut win_T,
+    pub win: *mut Window,
     pub save_w_cursor: pos_T,
     pub save_viewstate: viewstate_T,
     pub save_w_p_cul: ::core::ffi::c_int,
@@ -589,7 +589,7 @@ pub(crate) const CP_UNDO_INFO_INIT: CpUndoInfo = CpUndoInfo {
 
 /// An all-zero [`CpBufInfo`]; every field is assigned before it is pushed.
 pub(crate) const CP_BUF_INFO_INIT: CpBufInfo = CpBufInfo {
-    buf: ::core::ptr::null_mut::<buf_T>(),
+    buf: ::core::ptr::null_mut::<Buffer>(),
     save_b_p_ul: 0,
     save_b_p_ma: 0,
     save_b_changed: 0,
@@ -601,7 +601,7 @@ pub(crate) const CP_BUF_INFO_INIT: CpBufInfo = CpBufInfo {
 
 /// An all-zero [`CpWinInfo`]; every field is assigned before it is pushed.
 pub(crate) const CP_WIN_INFO_INIT: CpWinInfo = CpWinInfo {
-    win: ::core::ptr::null_mut::<win_T>(),
+    win: ::core::ptr::null_mut::<Window>(),
     save_w_cursor: POS_INIT,
     save_viewstate: VIEWSTATE_INIT,
     save_w_p_cul: 0,

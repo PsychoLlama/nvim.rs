@@ -24,7 +24,7 @@ pub const kBoolVarTrue: BoolVarValue = 1;
 ///
 /// `#[repr(C, u32)]` with `None` at zero, because several aggregates that
 /// hold one are born from all-zero bytes and never write the field:
-/// `buf_T` from `Box::new_zeroed`, `qf_list_T` and a channel's readers from
+/// `Buffer` from `Box::new_zeroed`, `qf_list_T` and a channel's readers from
 /// `mem::zeroed`, `'complete'`'s per-source array from `xcalloc`. The
 /// discriminant may not move into a niche, or "no callback" stops being
 /// what those zeroes mean.

@@ -42,9 +42,9 @@ use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BufferHandle, ColNr, Error, FAIL, FloatAnchor, LineNr, OptInt, OptScope, OptVal,
-    OptionSetFlags, ScreenChar, String_0, VirtText, WinConfig, WinSplit, WinStyle, WindowHandle,
-    kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus,
-    kFloatRelativeMouse, kFloatRelativeWindow, lpos_T, pos_T, tabpage_T, win_T,
+    OptionSetFlags, ScreenChar, String_0, Tabpage, VirtText, WinConfig, WinSplit, WinStyle, Window,
+    WindowHandle, kErrorTypeException, kFloatRelativeCursor, kFloatRelativeEditor,
+    kFloatRelativeLaststatus, kFloatRelativeMouse, kFloatRelativeWindow, lpos_T, pos_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -116,7 +116,7 @@ pub(crate) const WIN_CONFIG_INIT: WinConfig = WinConfig {
 // The tab page
 
 /// `NULL` for "the current tab page", as window.rs spells it.
-fn raw_tab(tp: Option<TabPage>) -> *mut tabpage_T {
+fn raw_tab(tp: Option<TabPage>) -> *mut Tabpage {
     tp.map_or(ptr::null_mut(), TabPage::raw)
 }
 
@@ -205,7 +205,7 @@ fn concat(old: *const c_char, tail: &'static CStr) -> *mut c_char {
 // every call site in this file is ordinary code. They collapse to nothing when
 // window.rs is itself rewritten.
 
-fn last_nofloat(tp: Option<TabPage>) -> *mut win_T {
+fn last_nofloat(tp: Option<TabPage>) -> *mut Window {
     // SAFETY: null, or a live tab page.
     unsafe { lastwin_nofloating(raw_tab(tp)) }
 }
@@ -215,7 +215,7 @@ fn tabpage_of(win: Win) -> Option<TabPage> {
 }
 
 /// A fresh window appended after `after` (at the head when null), not hidden.
-fn alloc_window(after: *mut win_T) -> Win {
+fn alloc_window(after: *mut Window) -> Win {
     // SAFETY: `after` is null or a live window; `win_alloc` aborts on failure
     // rather than answering null.
     unsafe { Win::new(win_alloc(after, false)) }
@@ -243,7 +243,7 @@ fn remove_window(win: Win, tp: Option<TabPage>) {
     // SAFETY: a live window of `tp`.
     unsafe { win_remove(win.raw(), raw_tab(tp)) };
 }
-fn append_window(after: *mut win_T, win: Win, tp: Option<TabPage>) {
+fn append_window(after: *mut Window, win: Win, tp: Option<TabPage>) {
     // SAFETY: `after` is null or a live window of `tp`; `win` is in no list.
     unsafe { win_append(after, win.raw(), raw_tab(tp)) };
 }
@@ -275,11 +275,11 @@ fn merge_config(win: &mut Win, fconfig: WinConfig) {
 /// The pointer may already have been freed -- that is what the check is for --
 /// so it stays raw until the answer is yes. Neither `win_valid` nor
 /// `tabpage_win_valid` reads it; they walk the list comparing addresses.
-fn valid_window(win: *mut win_T) -> Option<Win> {
+fn valid_window(win: *mut Window) -> Option<Win> {
     // SAFETY: `win` is compared, never read, and one found in the list is live.
     unsafe { win_valid(win).then(|| Win::new(win)) }
 }
-fn valid_in_tab(tp: TabPage, win: *mut win_T) -> Option<Win> {
+fn valid_in_tab(tp: TabPage, win: *mut Window) -> Option<Win> {
     // SAFETY: a live tab page; `win` is compared, never read.
     unsafe { tabpage_win_valid(tp.raw(), win).then(|| Win::new(win)) }
 }
@@ -483,11 +483,11 @@ fn show_statusline() -> bool {
 }
 
 pub(crate) unsafe fn win_new_float(
-    wp: *mut win_T,
+    wp: *mut Window,
     last: bool,
     fconfig: WinConfig,
     err: &mut Error,
-) -> *mut win_T {
+) -> *mut Window {
     // SAFETY: the caller's promise -- a writable error slot, and `wp` null or
     // a live window.
     let (err, win) = unsafe { (&mut *err, (!wp.is_null()).then(|| Win::new(wp))) };
@@ -695,7 +695,7 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
 unsafe extern "C" fn float_zindex_cmp(a: *const c_void, b: *const c_void) -> c_int {
     // SAFETY: `qsort` passes pointers into the array below, whose elements are
     // live windows.
-    let z = |p: *const c_void| unsafe { (**p.cast::<*mut win_T>()).w_config.zindex };
+    let z = |p: *const c_void| unsafe { (**p.cast::<*mut Window>()).w_config.zindex };
     z(b).cmp(&z(a)) as c_int
 }
 
@@ -703,11 +703,11 @@ pub(crate) unsafe fn win_float_remove(bang: bool, mut count: c_int) {
     // The whole list is collected before anything is closed: `win_close`
     // fires autocommands that can close further floats, which is what the
     // `win_valid` re-check below is for.
-    let mut float_win_arr: Vec<*mut win_T> = floats().map(Win::raw).collect();
+    let mut float_win_arr: Vec<*mut Window> = floats().map(Win::raw).collect();
     if !float_win_arr.is_empty() {
         let items = float_win_arr.as_mut_ptr().cast::<c_void>();
-        let (len, size) = (float_win_arr.len(), size_of::<*mut win_T>());
-        // SAFETY: `len` elements of `*mut win_T` at `items`, and a comparator
+        let (len, size) = (float_win_arr.len(), size_of::<*mut Window>());
+        // SAFETY: `len` elements of `*mut Window` at `items`, and a comparator
         // that reads exactly that.
         unsafe { qsort(items, len, size, Some(float_zindex_cmp)) };
     }
@@ -775,7 +775,7 @@ pub(crate) fn win_float_find_preview() -> Option<Win> {
 /// # Safety
 /// `win` is only ever compared below, never read, so it stays raw -- but it
 /// must be null or an address that was once a window.
-pub(crate) unsafe fn win_float_find_altwin(win: *const win_T, tp: Option<TabPage>) -> Option<Win> {
+pub(crate) unsafe fn win_float_find_altwin(win: *const Window, tp: Option<TabPage>) -> Option<Win> {
     let Some(tp) = tp else {
         return valid_window(prevwin.get())
             .filter(|wp| wp.raw() != win.cast_mut())

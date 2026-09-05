@@ -61,7 +61,7 @@ unsafe fn pum_selected_info() -> Option<*mut c_char> {
 /// # Safety
 /// `win` must be live and `info` NUL-terminated. `info` is written through
 /// and restored, so it must be writable — the callers own it.
-unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (LineNr, c_int) {
+unsafe fn pum_preview_set_text(win: *mut Window, info: *mut c_char) -> (LineNr, c_int) {
     // SAFETY: the buffer is `win`'s own and `nvim_buf_set_lines` copies out of
     // `replacement` before it is freed.
     let buf = unsafe { (*win).w_buffer };
@@ -148,7 +148,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (LineNr, c
 ///
 /// # Safety
 /// `wp` must be a live float and the menu's placement settled.
-unsafe fn pum_adjust_info_position(wp: *mut win_T, width: c_int) -> bool {
+unsafe fn pum_adjust_info_position(wp: *mut Window, width: c_int) -> bool {
     // SAFETY: `wp` is live and `win_config_float` takes the config by value.
     let border_width = unsafe { pum_border_width() };
     let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
@@ -202,7 +202,7 @@ unsafe fn pum_adjust_info_position(wp: *mut win_T, width: c_int) -> bool {
 ///
 /// # Safety
 /// `info` must be a writable NUL-terminated string owned by the caller.
-pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut win_T {
+pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut Window {
     // SAFETY: the preview helpers answer live windows or null.
     if !pum_is_visible.get() || !unsafe { compl_match_curr_select(selected) } {
         return ::core::ptr::null_mut();
@@ -398,7 +398,7 @@ unsafe fn pum_fill_info(
     use_float: bool,
     prev_selected: c_int,
     mut resized: bool,
-    curwin_save: *mut win_T,
+    curwin_save: *mut Window,
 ) -> bool {
     // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
     // `curwin_save` is the window completion started in and is re-validated.
@@ -440,8 +440,8 @@ unsafe fn pum_fill_info(
 /// # Safety
 /// `curwin_save`/`curtab_save` are re-checked before use.
 unsafe fn pum_restore_window(
-    curwin_save: *mut win_T,
-    curtab_save: *mut tabpage_T,
+    curwin_save: *mut Window,
+    curtab_save: *mut Tabpage,
     resized: bool,
 ) -> bool {
     // SAFETY: both pointers are validated before they are entered.

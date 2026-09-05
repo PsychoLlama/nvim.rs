@@ -559,7 +559,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
     // contents. But if reading the file fails we should keep the old
     // contents. Memory alone will not do, the file might be too big, so
     // move the buffer contents to a hidden buffer.
-    let mut savebuf = ptr::null_mut::<buf_T>();
+    let mut savebuf = ptr::null_mut::<Buffer>();
     let mut bufref = BufRef::NONE;
     if !(unsafe { buf_is_empty(curbuf.get()) } || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.

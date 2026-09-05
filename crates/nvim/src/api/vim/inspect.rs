@@ -186,7 +186,7 @@ pub unsafe fn nvim__inspect_cell(
     if grid == pum_grid_ref().handle as Integer {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
-        let wp: *mut win_T = unsafe { get_win_by_grid_handle(grid as Handle) };
+        let wp: *mut Window = unsafe { get_win_by_grid_handle(grid as Handle) };
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
             let name = c"grid handle".as_ptr();
             // SAFETY: `error` is this frame's own slot and `name` a literal.

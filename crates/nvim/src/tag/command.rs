@@ -27,11 +27,11 @@ use core::ptr;
 
 /// The preview window's stand-in for a tag stack.
 ///
-/// A window carries a whole `taggy_T` stack; `:ptag` has this one entry
+/// A window carries a whole `Taggy` stack; `:ptag` has this one entry
 /// instead, and the handle *names* it rather than borrowing it, so it
 /// survives the `'tagfunc'` call and the autocommands a jump runs.
 #[derive(Clone, Copy)]
-pub(super) struct PtagEntry(*mut taggy_T);
+pub(super) struct PtagEntry(*mut Taggy);
 
 /// The one place the preview entry's address is taken.
 pub(super) fn ptag_entry_handle() -> PtagEntry {
@@ -137,7 +137,7 @@ struct DoTag {
     /// Deliberately a pointer taken once: `'tagfunc'` may close the window
     /// out from under us, and comparing this against `curwin`'s stack
     /// afterwards is how that is noticed.
-    tagstack: *mut taggy_T,
+    tagstack: *mut Taggy,
     /// Our own copy of the stack index and length, written back at the end.
     idx: c_int,
     len: c_int,
@@ -241,7 +241,7 @@ impl DoTag {
     /// # Safety
     /// `at` must be within the stack, and the window must not have been
     /// closed since the command started.
-    unsafe fn entry(&self, at: c_int) -> *mut taggy_T {
+    unsafe fn entry(&self, at: c_int) -> *mut Taggy {
         // SAFETY: the caller's promise.
         unsafe { self.tagstack.offset(at as isize) }
     }
@@ -523,7 +523,7 @@ impl DoTag {
         if !self.selecting() {
             let entry = unsafe {
                 (&raw mut (*curwin.get()).w_tagstack)
-                    .cast::<taggy_T>()
+                    .cast::<Taggy>()
                     .offset(self.idx as isize)
             };
             unsafe { (*entry).cur_match = self.cur_match };

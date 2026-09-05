@@ -73,10 +73,9 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    BlockNr, CmdModFlags, ColNr, Dict, Failed, FileInfo, FileOffset, FlushBuffers, LineNr, List,
-    NUL, OptVal, String_0, Timestamp, VarNumber, bhdr_T, buf_T, file_comparison, infoptr_T,
-    int16_t, int64_t, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
-    uv_uid_t,
+    BlockNr, Buffer, CmdModFlags, ColNr, Dict, Failed, FileInfo, FileOffset, FlushBuffers, LineNr,
+    List, NUL, OptVal, String_0, Timestamp, VarNumber, bhdr_T, file_comparison, infoptr_T, int16_t,
+    int64_t, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
@@ -287,7 +286,7 @@ static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buf` must point at a buffer with no memline open.
-pub unsafe fn ml_open(buf: *mut buf_T) -> Result<(), Failed> {
+pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -328,7 +327,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `mfp` must be a memfile with no blocks in it yet.
-unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhdr_T) -> bool {
+unsafe fn ml_open_blocks(buf: *mut Buffer, mfp: *mut memfile_T, hp: &mut *mut bhdr_T) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let b = unsafe { Buf::new(buf) };
@@ -446,7 +445,7 @@ pub unsafe fn ml_open_files() {
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub unsafe fn ml_open_file(buf: *mut buf_T) {
+pub unsafe fn ml_open_file(buf: *mut Buffer) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -545,7 +544,7 @@ pub unsafe fn check_need_swap(newfile: bool) {
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub unsafe fn ml_close(buf: *mut buf_T, del_file: ::core::ffi::c_int) {
+pub unsafe fn ml_close(buf: *mut Buffer, del_file: ::core::ffi::c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };

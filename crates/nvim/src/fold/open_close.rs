@@ -354,7 +354,7 @@ pub unsafe fn fold_create(wp: Win, start_pos: pos_T, end_pos: pos_T) {
 /// # Safety
 /// `wp` must be a live window with a live buffer.
 pub unsafe fn delete_fold(
-    wp: *mut win_T,
+    wp: *mut Window,
     start: LineNr,
     end: LineNr,
     recursive: c_int,

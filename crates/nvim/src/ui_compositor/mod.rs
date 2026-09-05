@@ -42,7 +42,7 @@ use crate::os::time::os_sleep;
 use crate::types::ui::{kLineFlagInvalid, kLineFlagWrap, kUIMultigrid};
 use crate::types::{
     Boolean, Handle, Integer, LineFlags, NUL, RemoteUI, ScreenAttr, ScreenChar, ScreenGrid,
-    String_0, win_T,
+    String_0, Window,
 };
 use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
@@ -64,7 +64,7 @@ fn msg_layer() -> GridRef {
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn win_layer(wp: *mut win_T) -> GridRef {
+unsafe fn win_layer(wp: *mut Window) -> GridRef {
     // SAFETY: a live window owns its `w_grid_alloc` outright.
     unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) }
 }

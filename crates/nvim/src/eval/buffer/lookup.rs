@@ -20,7 +20,7 @@ use crate::types::{VAR_NUMBER, VAR_STRING};
 ///
 /// # Safety
 /// `avar` must point at a live typval.
-pub unsafe fn find_buffer(avar: *mut TypVal) -> *mut buf_T {
+pub unsafe fn find_buffer(avar: *mut TypVal) -> *mut Buffer {
     // SAFETY: the caller's obligation; under `VAR_STRING` the union's live arm
     // is `v_string`, a NUL-terminated string or NULL.
     match unsafe { (*avar).v_type } {
@@ -132,7 +132,7 @@ pub unsafe fn f_bufnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
     let (args, rettv) = frame!(argvars, rettv);
     rettv.vval.v_number = -1;
     // SAFETY: the arguments are live typvals and `curbuf` is set.
-    let mut buf: *mut buf_T = if !args.has(0) {
+    let mut buf: *mut Buffer = if !args.has(0) {
         curbuf.get()
     } else {
         if !unsafe { tv_check_str_or_nr(args.ptr(0)) } {

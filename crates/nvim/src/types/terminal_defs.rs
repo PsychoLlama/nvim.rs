@@ -14,10 +14,10 @@ pub const SELECTIONBUF_SIZE: usize = 0x400;
 ///
 /// Owned by the buffer it draws into: `terminal_alloc` leaks a `Box` and
 /// `terminal_destroy` reclaims it. Not `Copy` — there is exactly one of
-/// these per terminal buffer, reached through `buf_T::terminal`, and
+/// these per terminal buffer, reached through `Buffer::terminal`, and
 /// duplicating it would duplicate the allocations it owns.
 ///
-/// Still `repr(C)`: `buf_T` is `repr(C)` and holds a `*mut Terminal`, so
+/// Still `repr(C)`: `Buffer` is `repr(C)` and holds a `*mut Terminal`, so
 /// the FFI-safety lint follows the pointer into this definition.
 #[repr(C)]
 pub struct terminal {

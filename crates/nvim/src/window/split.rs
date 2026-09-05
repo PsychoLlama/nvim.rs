@@ -2,7 +2,7 @@
 //!
 //! [`split_ins`] is the whole operation, in stages: [`split_room`] decides the
 //! new window's size from `'winheight'`/`'winwidth'` and refuses when there is
-//! no room, [`insert_window`] links a `win_T` into the list, [`split_frame`]
+//! no room, [`insert_window`] links a `Window` into the list, [`split_frame`]
 //! puts a frame beside or around the existing one, [`size_vertical`] and
 //! [`size_horizontal`] hand out the rows and columns, and the tail
 //! redistributes the space and enters the new window unless `WSP_NOENTER` said
@@ -32,7 +32,7 @@ use crate::r#move::WinValid;
 use crate::option::win_copy_options;
 use crate::quickfix::copy_loclist_stack;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{FAIL, Failed, Integer, OptInt, frame_T, qf_info_T, win_T};
+use crate::types::{FAIL, Failed, Frame, Integer, OptInt, Window, qf_info_T};
 use crate::ui::{ui_call_win_hide, ui_has};
 use crate::ui_compositor::ui_comp_remove_grid;
 use crate::winfloat::win_float_anchor_laststatus;
@@ -82,10 +82,10 @@ pub(crate) fn split(size: c_int, flags: c_int) -> Result<(), Failed> {
 pub unsafe fn win_split_ins(
     size: c_int,
     flags: c_int,
-    new_wp: *mut win_T,
+    new_wp: *mut Window,
     dir: c_int,
-    to_flatten: *mut frame_T,
-) -> *mut win_T {
+    to_flatten: *mut Frame,
+) -> *mut Window {
     // SAFETY: the caller's promise -- a live window or null, and a live frame
     // or null.
     let (new_wp, to_flatten) = unsafe { (Win::from_raw(new_wp), FrameRef::from_raw(to_flatten)) };
@@ -553,10 +553,10 @@ fn split_frame(
         let mut outer = curfrp;
         outer.fr_layout = layout as c_char;
         inner.fr_parent = outer.raw();
-        inner.fr_next = ptr::null_mut::<frame_T>();
-        inner.fr_prev = ptr::null_mut::<frame_T>();
+        inner.fr_next = ptr::null_mut::<Frame>();
+        inner.fr_prev = ptr::null_mut::<Frame>();
         outer.fr_child = inner.raw();
-        outer.fr_win = ptr::null_mut::<win_T>();
+        outer.fr_win = ptr::null_mut::<Window>();
         curfrp = inner;
         match inner.win() {
             // `oldwin`'s frame moved: it now lives one level down.
@@ -585,7 +585,7 @@ fn split_frame(
 /// A copy of `frame`, allocated: the C's `*frp = *curfrp` over a fresh
 /// `xcalloc`.
 ///
-/// Written out field by field because `frame_T` is deliberately neither
+/// Written out field by field because `Frame` is deliberately neither
 /// `Copy` nor `Clone` — a frame is a node of the layout tree, and this is the
 /// one place in the editor that duplicates one. The links come across with
 /// the rest, exactly as the struct assignment copied them, and the caller
@@ -609,7 +609,7 @@ fn new_frame_like(frame: FrameRef) -> FrameRef {
 fn attach_frame_raw() -> FrameRef {
     // SAFETY: `xcalloc` aborts rather than answering null; the frame is live
     // from here on.
-    unsafe { FrameRef::new(xcalloc(1, size_of::<frame_T>()).cast::<frame_T>()) }
+    unsafe { FrameRef::new(xcalloc(1, size_of::<Frame>()).cast::<Frame>()) }
 }
 
 /// Hand out the columns for a `:vsplit`.
@@ -770,7 +770,7 @@ fn size_horizontal(
 // ---------------------------------------------------------------------------
 // Copying a window
 
-pub unsafe fn win_init(newp: *mut win_T, oldp: *mut win_T, flags: c_int) {
+pub unsafe fn win_init(newp: *mut Window, oldp: *mut Window, flags: c_int) {
     // SAFETY: the caller's promise -- two live windows.
     unsafe { init(Win::new(newp), Win::new(oldp), flags) };
 }

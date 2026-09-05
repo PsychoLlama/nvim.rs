@@ -191,8 +191,8 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
         cmdwin_type.set(0);
         cmdwin_level.set(0);
-        cmdwin_win.set(::core::ptr::null_mut::<win_T>());
-        cmdwin_old_curwin.set(::core::ptr::null_mut::<win_T>());
+        cmdwin_win.set(::core::ptr::null_mut::<Window>());
+        cmdwin_old_curwin.set(::core::ptr::null_mut::<Window>());
         beep_flush();
         return Ctrl_C;
     }
@@ -299,9 +299,9 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
 
     cmdwin_type.set(0);
     cmdwin_level.set(0);
-    cmdwin_buf.set(::core::ptr::null_mut::<buf_T>());
-    cmdwin_win.set(::core::ptr::null_mut::<win_T>());
-    cmdwin_old_curwin.set(::core::ptr::null_mut::<win_T>());
+    cmdwin_buf.set(::core::ptr::null_mut::<Buffer>());
+    cmdwin_win.set(::core::ptr::null_mut::<Window>());
+    cmdwin_old_curwin.set(::core::ptr::null_mut::<Window>());
 
     exmode_active.set(save_exmode);
 
@@ -412,7 +412,7 @@ pub fn is_in_cmdwin() -> bool {
 
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command
 /// window's buffer out, window-less and without forcing.
-fn wipe_buffer(buf: *mut buf_T) {
+fn wipe_buffer(buf: *mut Buffer) {
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
     // SAFETY: the callers have just asked `BufRef::valid` about `buf`.
     unsafe { close_buffer(None, Buf::new(buf), wipe, false, false) };

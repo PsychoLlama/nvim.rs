@@ -370,7 +370,7 @@ struct Jump {
     preview: bool,
     /// The window to go back to afterwards, for a preview jump. By
     /// identity, not by address: `getfile` below runs autocommands that may
-    /// close it, and a freed `win_T`'s address can be handed back out.
+    /// close it, and a freed `Window`'s address can be handed back out.
     saved_win: Option<WinId>,
     /// Whether `'switchbuf'` already put us in a window holding the file,
     /// so that the usual loading must be skipped.

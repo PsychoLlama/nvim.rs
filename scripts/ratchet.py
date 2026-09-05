@@ -409,8 +409,8 @@ plus these whole-tree metrics, which are not per-file:
                         files is free and only deleting or renaming one
                         counts. `type` aliases are in deliberately: the
                         integer aliases are the bulk of phase 27's rename.
-                      raw_win_buf_sigs  `*mut win_T`/`*mut buf_T`/
-                        `*mut tabpage_T` inside a `fn` *signature* — the span
+                      raw_win_buf_sigs  `*mut Window`/`*mut Buffer`/
+                        `*mut Tabpage` inside a `fn` *signature* — the span
                         from the `fn` keyword through the return type, so a
                         parameter rustfmt wrapped onto its own line still
                         counts and a local variable of that type does not.
@@ -637,11 +637,11 @@ CELL_COPY_OWNER = (
     "behind_pos",
     # the rest, one or a few sites each
     "curgrid",
-    # `au_new_curbuf` left the list in phase 23's S11. It is a `bufref_T`,
+    # `au_new_curbuf` left the list in phase 23's S11. It is a `BufferRef`,
     # which is upstream's own *weak* reference -- the `br_buf_free_count`
     # generation check exists precisely because the pointer is borrowed --
     # and since S11 the buffer's owner is a named one, the buffer registry's
-    # `Owned<buf_T>`. A `get` on this cell copies a reference, not an owner.
+    # `Owned<Buffer>`. A `get` on this cell copies a reference, not an owner.
     "dont_sync_undo",
     "old_sub",
     # ccline is done: `cmdline_block` and `restart_args` retired in phase 22's
@@ -740,7 +740,7 @@ PERIMETER = {
 # was vendored and ported rather than linked (docs/perimeter.md keeps
 # `mpack/`'s codec outside for the same reason), and `types/terminal_defs.rs`
 # is `repr(C)` only because the FFI-safety lint follows a pointer out of
-# `buf_T`. All of those stay in `repr_c_editor_state`, where a rewrite is
+# `Buffer`. All of those stay in `repr_c_editor_state`, where a rewrite is
 # still expected to retire them.
 FOREIGN_ABI_TYPES = {
     "crates/nvim/src/types/uv.rs": "libuv's own structs: the loop, handles, "
@@ -885,7 +885,7 @@ T_SUFFIX_DECL = re.compile(
     r"\b(?:struct|enum|union|type)\s+([A-Za-z_][A-Za-z0-9_]*_T)\b"
 )
 # The raw graph pointers, counted inside `fn` signature spans only.
-RAW_WIN_BUF = re.compile(r"\*mut\s+(?:win_T|buf_T|tabpage_T)\b")
+RAW_WIN_BUF = re.compile(r"\*mut\s+(?:Window|Buffer|Tabpage)\b")
 # The transpiler's parameter abbreviations, also inside `fn` signature spans
 # only: the leading `\b` plus the optional `_` catches both `buf:` and the
 # `_buf:` an unused parameter is spelled with, while keeping the needle off
@@ -2496,6 +2496,9 @@ SELF_TEST_VOCABULARY = [
     ),
     (
         # A name is counted once however many files declare or mention it.
+        # The `_T` spellings here are fixture *data* for the count being
+        # asserted, not references to real types: a rename sweep that
+        # reaches them changes the expected number.
         {
             "crates/nvim/src/a.rs": "pub struct buf_T {\n    x: u8,\n}\n"
             "pub type linenr_T = c_long;\n"
@@ -2508,10 +2511,10 @@ SELF_TEST_VOCABULARY = [
     ),
     (
         {
-            "crates/nvim/src/a.rs": "fn f(\n    wp: *mut win_T,\n"
-            "    buf: *mut buf_T,\n) -> *mut tabpage_T {\n"
-            "    let x: *mut win_T = q;\n}\n"
-            "type Cb = fn(*mut win_T);\n"
+            "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
+            "    buf: *mut Buffer,\n) -> *mut Tabpage {\n"
+            "    let x: *mut Window = q;\n}\n"
+            "type Cb = fn(*mut Window);\n"
         },
         {"raw_win_buf_sigs": 3},
     ),
@@ -2519,10 +2522,10 @@ SELF_TEST_VOCABULARY = [
         # `_eap` counts, `old_buf` and the local `ptr` do not, and the two
         # carved-out subtrees are silent however they spell a parameter.
         {
-            "crates/nvim/src/a.rs": "fn f(\n    wp: *mut win_T,\n"
-            "    _eap: *mut exarg_T,\n    old_buf: *mut buf_T,\n) {\n"
+            "crates/nvim/src/a.rs": "fn f(\n    wp: *mut Window,\n"
+            "    _eap: *mut exarg_T,\n    old_buf: *mut Buffer,\n) {\n"
             "    let ptr: *mut c_char = q;\n}\n",
-            "crates/nvim/src/lua/b.rs": "fn g(buf: *mut buf_T) {\n}\n",
+            "crates/nvim/src/lua/b.rs": "fn g(buf: *mut Buffer) {\n}\n",
             "crates/nvim/src/vterm/c.rs": "fn h(cp: *mut c_char) {\n}\n",
         },
         {"abbrev_params": 2},

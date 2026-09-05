@@ -42,8 +42,8 @@ use crate::state::virtual_active;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, TypVal, VarNumber, cmdarg_T,
-    pos_T, size_t, tabpage_T, win_T,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, Tabpage, TypVal, VarNumber,
+    Window, cmdarg_T, pos_T, size_t,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -155,7 +155,7 @@ static got_click: GlobalCell<bool> = GlobalCell::new(false);
 
 /// The window a drag started in, whose status line or separator the drag
 /// moves.
-static dragwin: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
+static dragwin: GlobalCell<*mut Window> = GlobalCell::new(ptr::null_mut());
 
 /// Reset the window being dragged.  To be called when switching tab page.
 pub(crate) fn reset_dragwin() {
@@ -422,7 +422,7 @@ fn move_tab_to_mouse(defs: ClickDefs) {
 
 /// Close tab page `c1`, or the current one when it is 999.
 fn mouse_tab_close(c1: c_int) {
-    let tp: *mut tabpage_T = if c1 == 999 {
+    let tp: *mut Tabpage = if c1 == 999 {
         curtab.get()
     } else {
         find_tabpage(c1)

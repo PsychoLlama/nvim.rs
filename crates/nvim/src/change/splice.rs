@@ -185,7 +185,7 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
                 // needs no dereference to compute.
                 let head = buf
                     .raw()
-                    .wrapping_byte_add(offset_of!(buf_T, b_changelist))
+                    .wrapping_byte_add(offset_of!(Buffer, b_changelist))
                     .cast::<c_void>();
                 let one = ::core::mem::size_of::<fmark_T>();
                 let bytes = one.wrapping_mul((JUMPLISTSIZE - 1) as size_t);
@@ -408,7 +408,7 @@ pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn appended_lines_buf(buf: *mut buf_T, lnum: LineNr, count: LineNr) {
+pub unsafe fn appended_lines_buf(buf: *mut Buffer, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
     unsafe { changed_lines(Buf::new(buf), lnum + 1, 0, lnum + 1, count, true) };
 }
@@ -440,7 +440,7 @@ pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn deleted_lines_buf(buf: *mut buf_T, lnum: LineNr, count: LineNr) {
+pub unsafe fn deleted_lines_buf(buf: *mut Buffer, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
     unsafe { changed_lines(Buf::new(buf), lnum, 0, lnum + count, -count, true) };
 }

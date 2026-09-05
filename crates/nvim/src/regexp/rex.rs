@@ -36,7 +36,7 @@ use super::{regexec_T, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{
-    ColNr, LineNr, buf_T, lpos_T, regmatch_T, regmmatch_T, regprog_T, uint8_t, win_T,
+    Buffer, ColNr, LineNr, Window, lpos_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
 };
 
 /// A running match's context.
@@ -202,23 +202,23 @@ impl Rex {
     /// The buffer the match runs against. Set even for a string match, so
     /// that `\k` and friends have an 'iskeyword' to read.
     #[inline(always)]
-    pub(crate) fn reg_buf(self) -> *mut buf_T {
+    pub(crate) fn reg_buf(self) -> *mut Buffer {
         unsafe { (*self.0).reg_buf }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_buf(self, buf: *mut buf_T) {
+    pub(crate) fn set_reg_buf(self, buf: *mut Buffer) {
         unsafe { (*self.0).reg_buf = buf }
     }
 
     /// The window the match runs in, or null: `\%#` and `\%V` need one.
     #[inline(always)]
-    pub(crate) fn reg_win(self) -> *mut win_T {
+    pub(crate) fn reg_win(self) -> *mut Window {
         unsafe { (*self.0).reg_win }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_win(self, win: *mut win_T) {
+    pub(crate) fn set_reg_win(self, win: *mut Window) {
         unsafe { (*self.0).reg_win = win }
     }
 

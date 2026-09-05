@@ -34,7 +34,7 @@ use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, StrCharInfo,
-    VirtLines, int32_t, int64_t, pos_T, uint32_t, win_T,
+    VirtLines, Window, int32_t, int64_t, pos_T, uint32_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -618,7 +618,7 @@ pub(crate) unsafe fn charsize_regular(
 /// `wp` must be live and `cur` must point into a NUL-terminated line.
 #[inline(always)]
 unsafe fn charsize_fast_impl(
-    wp: *mut win_T,
+    wp: *mut Window,
     cur: *const c_char,
     use_tabstop: bool,
     vcol: ColNr,
@@ -723,7 +723,7 @@ pub(crate) unsafe fn charsize_nowrap(
 /// # Safety
 /// `wp` must be live.
 #[inline]
-unsafe fn in_win_border(wp: *mut win_T, vcol: ColNr) -> bool {
+unsafe fn in_win_border(wp: *mut Window, vcol: ColNr) -> bool {
     // SAFETY: the caller's window.
     let view_width = unsafe { (*wp).w_view_width };
     if view_width == 0 {

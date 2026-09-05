@@ -61,7 +61,7 @@ fn emsg_gettext(msg: *const c_char) {
 pub unsafe fn ex_diffpatch(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     let mut eap = unsafe { Live::<exarg_T>::new(eap) };
-    let old_curwin: *mut win_T = curwin.get();
+    let old_curwin: *mut Window = curwin.get();
     let mut newname: *mut c_char = ptr::null_mut();
     let mut esc_name: *mut c_char = ptr::null_mut();
     let mut fullname: *mut c_char = ptr::null_mut();
@@ -226,7 +226,7 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
 pub unsafe fn ex_diffsplit(eap: *mut exarg_T) {
     // SAFETY: the caller's command.
     let mut eap = unsafe { Live::<exarg_T>::new(eap) };
-    let old_curwin: *mut win_T = curwin.get();
+    let old_curwin: *mut Window = curwin.get();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
     validate_cursor(unsafe { Win::new(old_curwin) });

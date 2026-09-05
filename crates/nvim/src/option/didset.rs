@@ -60,8 +60,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    ColNr, LineNr, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, buf_T, optset_T,
-    ptrdiff_t, size_t, uint8_t, win_T,
+    Buffer, ColNr, LineNr, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, Window,
+    optset_T, ptrdiff_t, size_t, uint8_t,
 };
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -117,8 +117,8 @@ impl Frame {
             flags: unsafe { (*args).os_flags },
             old: unsafe { (*args).os_oldval },
             new: unsafe { (*args).os_newval },
-            win: unsafe { Win::new((*args).os_win.cast::<win_T>()) },
-            buf: unsafe { Buf::new((*args).os_buf.cast::<buf_T>()) },
+            win: unsafe { Win::new((*args).os_win.cast::<Window>()) },
+            buf: unsafe { Buf::new((*args).os_buf.cast::<Buffer>()) },
         }
     }
 
@@ -529,7 +529,7 @@ pub(crate) unsafe fn did_set_shiftwidth_tabstop(args: &mut optset_T) -> Option<&
     }
     // A zero 'shiftwidth' means "use 'tabstop'", so 'tabstop' feeds the
     // C indent options too.
-    let own_sw = field_ptr(f.buf.raw(), offset_of!(buf_T, b_p_sw), |b: &buf_T| {
+    let own_sw = field_ptr(f.buf.raw(), offset_of!(Buffer, b_p_sw), |b: &Buffer| {
         &b.b_p_sw
     });
     if f.varp == OptSlot::Number(own_sw) || f.buf.b_p_sw == 0 {
@@ -632,7 +632,7 @@ pub(crate) unsafe fn did_set_undolevels(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the buffer it names is live.
     let mut f = unsafe { Frame::read(args) };
     let pp = f.varp.number_var();
-    let own_ul = field_ptr(f.buf.raw(), offset_of!(buf_T, b_p_ul), |b: &buf_T| {
+    let own_ul = field_ptr(f.buf.raw(), offset_of!(Buffer, b_p_ul), |b: &Buffer| {
         &b.b_p_ul
     });
     let (value, old_value) = (f.new_number(), f.old_number());
@@ -748,7 +748,7 @@ pub(crate) unsafe fn did_set_xhistory(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 ///
 /// `buf` must be a live buffer.
-pub(crate) unsafe fn do_syntax_autocmd(buf: *mut buf_T, value_changed: bool) {
+pub(crate) unsafe fn do_syntax_autocmd(buf: *mut Buffer, value_changed: bool) {
     static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
     let _syn_recursive = Depth::of(&syn_recursive);
@@ -773,7 +773,7 @@ pub(crate) unsafe fn do_syntax_autocmd(buf: *mut buf_T, value_changed: bool) {
 /// # Safety
 ///
 /// `win` must be a live window.
-pub(crate) unsafe fn do_spelllang_source(win: *mut win_T) {
+pub(crate) unsafe fn do_spelllang_source(win: *mut Window) {
     let mut fname: [c_char; 200] = [0; 200];
 
     // SAFETY: the caller's window is live, and its 'spelllang' is a

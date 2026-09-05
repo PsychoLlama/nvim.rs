@@ -43,9 +43,9 @@ use crate::marktree::key::MtFlags;
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
-    ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
-    DecorSignHighlight, DecorVirtText, HlMode, LineNr, MTKey, MetaIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, buf_T, lpos_T, uint8_t, uint16_t, uint32_t, virt_line,
+    Buffer, ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority,
+    DecorRangeKind, DecorSignHighlight, DecorVirtText, HlMode, LineNr, MTKey, MetaIndex, VirtLines,
+    VirtText, VirtTextChunk, VirtTextPos, lpos_T, uint8_t, uint16_t, uint32_t, virt_line,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
@@ -521,7 +521,7 @@ pub unsafe fn decor_check_invalid_glyphs() {
 /// # Safety
 /// `buf` must be live and the positions must be inside it.
 pub unsafe fn bufhl_add_hl_pos_offset(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     src_id: c_int,
     hl_id: c_int,
     pos_start: lpos_T,
@@ -573,7 +573,7 @@ pub unsafe fn bufhl_add_hl_pos_offset(
 /// # Safety
 /// `buf` must be live and `decor` must be its mark's decoration.
 pub unsafe fn decor_redraw(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     row1: c_int,
     row2: c_int,
     col1: c_int,
@@ -612,7 +612,7 @@ pub unsafe fn decor_redraw(
 ///
 /// # Safety
 /// `buf` must be live.
-pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
+pub unsafe fn decor_redraw_sh(buf: *mut Buffer, row1: c_int, row2: c_int, sh: DecorSignHighlight) {
     // SAFETY: the caller's buffer and the editor's window list.
     let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
     if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
@@ -638,7 +638,7 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
 ///
 /// # Safety
 /// `buf` must be live and `decor` must be its mark's decoration.
-pub unsafe fn buf_put_decor(buf: *mut buf_T, decor: DecorInline, row: c_int, mut row2: c_int) {
+pub unsafe fn buf_put_decor(buf: *mut Buffer, decor: DecorInline, row: c_int, mut row2: c_int) {
     // SAFETY: the caller's buffer and decoration.
     if !decor.ext || row as LineNr >= unsafe { (*buf).b_ml.ml_line_count } {
         return;
@@ -658,7 +658,7 @@ pub unsafe fn buf_put_decor(buf: *mut buf_T, decor: DecorInline, row: c_int, mut
 /// # Safety
 /// `buf` must be live and `decor` must be its mark's decoration.
 pub unsafe fn buf_decor_remove(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     row1: c_int,
     mut row2: c_int,
     col1: c_int,

@@ -20,7 +20,7 @@ pub unsafe fn nvim_buf_get_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return Object::Nil.reported(error);
     }
@@ -29,7 +29,7 @@ pub unsafe fn nvim_buf_get_var(
 
 pub unsafe fn nvim_buf_get_changedtick(buf: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let b: *const buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *const Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (-1 as Integer).reported(error);
     }
@@ -42,7 +42,7 @@ pub unsafe fn nvim_buf_get_keymap(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return Array {
             size: 0 as size_t,
@@ -89,7 +89,7 @@ pub unsafe fn nvim_buf_set_var(
     value: Object,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -103,7 +103,7 @@ pub unsafe fn nvim_buf_set_var(
 
 pub unsafe fn nvim_buf_del_var(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -119,7 +119,7 @@ pub unsafe fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
     let mut error = Error::none();
     let rv: String_0 =
         String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() || unsafe { (*b).b_ffname }.is_null() {
         return rv.reported(error);
     }
@@ -128,7 +128,7 @@ pub unsafe fn nvim_buf_get_name(buf: BufferHandle) -> Result<String_0, Error> {
 
 pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -169,7 +169,7 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
 
 pub unsafe fn nvim_buf_is_loaded(buf: BufferHandle) -> Boolean {
     let mut stub: Error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut stub) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut stub) };
     stub.clear();
     !b.is_null() && !unsafe { (*b).b_ml.ml_mfp }.is_null()
 }
@@ -179,7 +179,7 @@ pub unsafe fn nvim_buf_delete(
     opts: *mut KeyDict_buf_delete,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }

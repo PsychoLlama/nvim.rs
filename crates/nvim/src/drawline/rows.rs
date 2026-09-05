@@ -209,7 +209,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         wp: Win,
-        buf: *mut buf_T,
+        buf: *mut Buffer,
         f: &LineFrame,
         grid: GridView,
     ) -> Step {
@@ -352,7 +352,7 @@ impl Cells {
         &mut self,
         wlv: &mut WinLineVars,
         wp: Win,
-        buf: *mut buf_T,
+        buf: *mut Buffer,
         f: &LineFrame,
     ) {
         let mut line = linebuf();

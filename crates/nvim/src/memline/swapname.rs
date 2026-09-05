@@ -32,7 +32,7 @@ use crate::types::{CmdModFlags, Failed, IOSIZE, MAXPATHL, NUL, ShmFlag, Vv};
 /// The name is what identifies the swap file to the next `:recover`, so it
 /// has to follow the file. Failing that, the swap file is at least reopened
 /// under its old name — losing it entirely is worse than a stale name.
-pub unsafe fn ml_setname(buf: *mut buf_T) {
+pub unsafe fn ml_setname(buf: *mut Buffer) {
     let mfp = unsafe { (*buf).b_ml.ml_mfp };
     if unsafe { (*mfp).mf_fd } < 0 {
         // There is no swap file yet: with `'updatecount'` zero and
@@ -214,7 +214,7 @@ fn ends_with_double_sep(dir: &[u8]) -> bool {
 pub unsafe fn makeswapname(
     fname: *mut c_char,
     _ffname: *mut c_char,
-    _buf: *mut buf_T,
+    _buf: *mut Buffer,
     dir_name: *mut c_char,
 ) -> *mut c_char {
     // Expand a symlink, so that the swap file goes with the actual file
@@ -291,7 +291,7 @@ pub unsafe fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_
 ///
 /// `fhname` is `fname` with the home directory replaced by `~`.
 unsafe fn attention_message(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fname: *mut c_char,
     fhname: *mut c_char,
     msg: &mut Vec<u8>,
@@ -346,7 +346,7 @@ unsafe fn attention_message(
 
 /// Fire the `SwapExists` autocommands and read the choice they left in
 /// `v:swapchoice`.
-unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> SwapExistsChoice {
+unsafe fn do_swapexists(buf: *mut Buffer, fname: *mut c_char) -> SwapExistsChoice {
     unsafe { set_vim_var_string(Vv::Swapname, fname, -1) };
     unsafe { set_vim_var_string(Vv::Swapchoice, core::ptr::null(), -1) };
 
@@ -377,7 +377,7 @@ unsafe fn do_swapexists(buf: *mut buf_T, fname: *mut c_char) -> SwapExistsChoice
 ///
 /// Returns true when the swap file is gone afterwards, so its name is free.
 unsafe fn resolve_swapfile_clash(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fname: *mut c_char,
     buf_fname: *mut c_char,
 ) -> bool {
@@ -447,7 +447,7 @@ unsafe fn resolve_swapfile_clash(
 
 /// Show the ATTENTION message, as a dialog if the caller can act on an
 /// answer and as a warning otherwise.
-unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> SwapExistsChoice {
+unsafe fn ask_about_swapfile(buf: *mut Buffer, fname: *mut c_char) -> SwapExistsChoice {
     let mut choice = SEA_CHOICE_NONE;
     let no_prompt = Suppress::wait_return();
 
@@ -514,7 +514,7 @@ unsafe fn ask_about_swapfile(buf: *mut buf_T, fname: *mut c_char) -> SwapExistsC
 ///
 /// Returns the allocated name, or null.
 pub(crate) unsafe fn findswapname(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     dirp: *mut *mut c_char,
     old_fname: *const c_char,
     found_existing_dir: *mut bool,

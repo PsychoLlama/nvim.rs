@@ -21,7 +21,7 @@ use crate::main::{cmdwin_buf, cmdwin_type, curwin, e_cmdwin};
 use crate::narrow::number_as_int;
 use crate::types::{
     Arena, Array, Boolean, BufferHandle, Error, Integer, KeyDict_tabpage_config, Object, String_0,
-    TabpageHandle, WindowHandle, kErrorTypeException, size_t, tabpage_T, win_T,
+    Tabpage, TabpageHandle, Window, WindowHandle, kErrorTypeException, size_t,
 };
 use crate::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
@@ -122,7 +122,7 @@ pub fn nvim_tabpage_get_win(tabpage: TabpageHandle) -> Result<WindowHandle, Erro
         // SAFETY: the current window is whatever `curwin` names.
         return Ok(unsafe { nvim_get_current_win() });
     }
-    let curwin_of_tab: *mut win_T = tab.tp_curwin;
+    let curwin_of_tab: *mut Window = tab.tp_curwin;
     match windows_in_tab(tab).find(|wp| wp.raw() == curwin_of_tab) {
         Some(wp) => Ok(wp.handle as WindowHandle),
         // A tab page that is not current always has a `tp_curwin` in its own
@@ -211,9 +211,9 @@ pub unsafe fn nvim_open_tabpage(
         }
     };
 
-    let mut wp: *mut win_T = ptr::null_mut();
+    let mut wp: *mut Window = ptr::null_mut();
     // SAFETY: `wp` is this frame's own out-parameter and `b` is live.
-    let tp: *mut tabpage_T = api_try(&mut err, |_| {
+    let tp: *mut Tabpage = api_try(&mut err, |_| {
         let filename = ptr::null_mut::<::core::ffi::c_char>();
         // SAFETY: `wp` is this frame's own out-parameter.
         unsafe { win_new_tabpage(after + 1, filename, enter, &raw mut wp) }

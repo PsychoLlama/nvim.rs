@@ -23,13 +23,9 @@ use crate::types::VAR_STRING;
 /// is, because the saved state is written before the switch is attempted.
 ///
 /// # Safety
-/// `args` must point at a writable `win_execute_T`, and `wp`/`tp` must be a
+/// `args` must point at a writable `WinExecute`, and `wp`/`tp` must be a
 /// live window and tab page.
-pub unsafe fn win_execute_before(
-    args: *mut win_execute_T,
-    wp: *mut win_T,
-    tp: *mut tabpage_T,
-) -> bool {
+pub unsafe fn win_execute_before(args: *mut WinExecute, wp: *mut Window, tp: *mut Tabpage) -> bool {
     // SAFETY: the caller's obligation. `args` is the caller's own storage and
     // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
     // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
@@ -79,7 +75,7 @@ pub unsafe fn win_execute_before(
 ///
 /// # Safety
 /// `args` must be the value [`win_execute_before`] was handed.
-pub unsafe fn win_execute_after(args: *mut win_execute_T) {
+pub unsafe fn win_execute_after(args: *mut WinExecute) {
     // SAFETY: the caller's obligation. `args` is the caller's own storage and
     // nothing below can reach it; `win_valid` re-checks the saved window,
     // because the code that ran may have closed it.
@@ -120,7 +116,7 @@ pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     let Some((wp, tp)) = win_and_tab_by_id(id) else {
         return;
     };
-    let mut saved: win_execute_T = unsafe { mem::zeroed() };
+    let mut saved: WinExecute = unsafe { mem::zeroed() };
     if unsafe { win_execute_before(&raw mut saved, wp.raw(), tp.raw()) } {
         unsafe { execute_common(argvars, rettv, 1) };
     }
@@ -139,9 +135,9 @@ pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 /// `switchwin` must be writable, `win` a live window and `tp` a live tab page
 /// or NULL.
 pub unsafe fn switch_win(
-    switchwin: *mut switchwin_T,
-    win: *mut win_T,
-    tp: *mut tabpage_T,
+    switchwin: *mut SwitchWin,
+    win: *mut Window,
+    tp: *mut Tabpage,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation.
@@ -154,16 +150,16 @@ pub unsafe fn switch_win(
 /// # Safety
 /// As [`switch_win`].
 pub unsafe fn switch_win_noblock(
-    switchwin: *mut switchwin_T,
-    win: *mut win_T,
-    tp: *mut tabpage_T,
+    switchwin: *mut SwitchWin,
+    win: *mut Window,
+    tp: *mut Tabpage,
     no_display: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
     // storage and nothing below can reach it, so the exclusive borrow is
-    // sound; all-zero is a valid `switchwin_T`.
+    // sound; all-zero is a valid `SwitchWin`.
     let into = switchwin.cast::<u8>();
-    unsafe { into.write_bytes(0, size_of::<switchwin_T>()) };
+    unsafe { into.write_bytes(0, size_of::<SwitchWin>()) };
     let switchwin = unsafe { &mut *switchwin };
     switchwin.sw_curwin = curwin.get();
     if win == curwin.get() {
@@ -197,7 +193,7 @@ pub unsafe fn switch_win_noblock(
 ///
 /// # Safety
 /// `switchwin` must be the value [`switch_win`] was handed.
-pub unsafe fn restore_win(switchwin: *mut switchwin_T, no_display: bool) {
+pub unsafe fn restore_win(switchwin: *mut SwitchWin, no_display: bool) {
     // SAFETY: the caller's obligation.
     unsafe { restore_win_noblock(switchwin, no_display) };
     unsafe { unblock_autocmds() };
@@ -207,7 +203,7 @@ pub unsafe fn restore_win(switchwin: *mut switchwin_T, no_display: bool) {
 ///
 /// # Safety
 /// As [`restore_win`].
-pub unsafe fn restore_win_noblock(switchwin: *mut switchwin_T, no_display: bool) {
+pub unsafe fn restore_win_noblock(switchwin: *mut SwitchWin, no_display: bool) {
     // SAFETY: the caller's obligation. `switchwin` is the caller's own
     // storage and nothing below can reach it; both saved pointers are
     // re-checked before being entered, because the code that ran may have

@@ -69,11 +69,12 @@ use crate::registry::SlotTable;
 use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
-    AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, DictWatcher,
-    Failed, HashItem, HashTab, HtStack, List, ListItem, ListStack, NUL, OptInt, Partial, QUEUE,
-    String_0, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, fmark_T,
-    fmarkv_T, pos_T, size_t, tabpage_T, typval_vval_union, vimconv_T, win_T, xfmark_T, yankreg_T,
+    AdditionalData, Buffer, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem,
+    DictWatcher, Failed, HashItem, HashTab, HtStack, List, ListItem, ListStack, NUL, OptInt,
+    Partial, QUEUE, String_0, Tabpage, Timer, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT,
+    VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VarLock, Window, fmark_T, fmarkv_T, pos_T, size_t, typval_vval_union, vimconv_T, xfmark_T,
+    yankreg_T,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
 
@@ -164,24 +165,24 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
 
     for buf in buffers() {
         // The addresses come off `Buf::raw`, never through `DerefMut`, so
-        // no `&mut buf_T` is formed while they are live. `Live::field_ptr`
+        // no `&mut Buffer` is formed while they are live. `Live::field_ptr`
         // is what says where a field is without reading the object, so
         // naming these seven is ordinary code.
         // SAFETY: `buffers()` walks the editor's own list of live buffers.
-        let buf = unsafe { Live::<buf_T>::new(buf.raw()) };
+        let buf = unsafe { Live::<Buffer>::new(buf.raw()) };
         // buffer-local variables
-        let bufvar = buf.field_ptr(offset_of!(buf_T, b_bufvar.di_tv));
+        let bufvar = buf.field_ptr(offset_of!(Buffer, b_bufvar.di_tv));
         // SAFETY: `bufvar` is the buffer's own variable dictionary.
         abort = abort || unsafe { mark_root(bufvar, copy_id) };
         // buffer callback functions
         for offset in [
-            offset_of!(buf_T, b_prompt_callback),
-            offset_of!(buf_T, b_prompt_interrupt),
-            offset_of!(buf_T, b_cfu_cb),
-            offset_of!(buf_T, b_ofu_cb),
-            offset_of!(buf_T, b_tsrfu_cb),
-            offset_of!(buf_T, b_tfu_cb),
-            offset_of!(buf_T, b_ffu_cb),
+            offset_of!(Buffer, b_prompt_callback),
+            offset_of!(Buffer, b_prompt_interrupt),
+            offset_of!(Buffer, b_cfu_cb),
+            offset_of!(Buffer, b_ofu_cb),
+            offset_of!(Buffer, b_tsrfu_cb),
+            offset_of!(Buffer, b_tfu_cb),
+            offset_of!(Buffer, b_ffu_cb),
         ] {
             let cb: *mut Callback = buf.field_ptr(offset);
             // SAFETY: `cb` is one of the buffer's own callbacks.
@@ -205,8 +206,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     // window-local variables, in every tab page
     for wp in tab_windows() {
         // SAFETY: the walk answers the editor's own live windows.
-        let wp = unsafe { Live::<win_T>::new(wp.raw()) };
-        let winvar = wp.field_ptr(offset_of!(win_T, w_winvar.di_tv));
+        let wp = unsafe { Live::<Window>::new(wp.raw()) };
+        let winvar = wp.field_ptr(offset_of!(Window, w_winvar.di_tv));
         // SAFETY: `winvar` is the window's own variable dictionary.
         abort = abort || unsafe { mark_root(winvar, copy_id) };
     }
@@ -218,8 +219,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
         let win = unsafe { (*wins.slot(i)).auc_win };
         if !win.is_null() {
             // SAFETY: as above.
-            let win = unsafe { Live::<win_T>::new(win) };
-            let winvar = win.field_ptr(offset_of!(win_T, w_winvar.di_tv));
+            let win = unsafe { Live::<Window>::new(win) };
+            let winvar = win.field_ptr(offset_of!(Window, w_winvar.di_tv));
             // SAFETY: `winvar` is that window's own variable dictionary.
             abort = abort || unsafe { mark_root(winvar, copy_id) };
         }
@@ -230,8 +231,8 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     // tabpage-local variables
     for tp in tabs() {
         // SAFETY: the walk answers the editor's own live tab pages.
-        let tp = unsafe { Live::<tabpage_T>::new(tp.raw()) };
-        let tpvar = tp.field_ptr(offset_of!(tabpage_T, tp_winvar.di_tv));
+        let tp = unsafe { Live::<Tabpage>::new(tp.raw()) };
+        let tpvar = tp.field_ptr(offset_of!(Tabpage, tp_winvar.di_tv));
         // SAFETY: `tpvar` is the tab page's own variable dictionary.
         abort = abort || unsafe { mark_root(tpvar, copy_id) };
     }

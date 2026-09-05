@@ -26,8 +26,8 @@ use crate::os::cshim::gettext;
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::options::*;
 use crate::types::{
-    OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags, buf_T, ssize_t, synblock_T,
-    win_T,
+    Buffer, OptIndex, OptInt, OptScope, OptValType, OptVar, OptionSetFlags, SynBlock, Window,
+    ssize_t,
 };
 
 use super::{
@@ -37,17 +37,17 @@ use super::{
 
 /// The signed distance from a field of `w_onebuf_opt` to the same field of
 /// `w_allbuf_opt`. The two are the same type, so their fields sit at the
-/// same offsets *within* a `winopt_T`; the distance between the two copies
+/// same offsets *within* a `WinOpt`; the distance between the two copies
 /// is therefore the distance between the copies themselves, whichever order
-/// `win_T` happens to store them in. `get_varp_scope_from` walks it rather
+/// `Window` happens to store them in. `get_varp_scope_from` walks it rather
 /// than repeating the whole field table for the `:setglobal` case.
 ///
-/// It is deliberately not `size_of::<winopt_T>()`: `win_T` has no
+/// It is deliberately not `size_of::<WinOpt>()`: `Window` has no
 /// guaranteed layout, so the two copies need be neither adjacent nor in
 /// declaration order.
 const ALLBUF_OFFSET: isize = {
-    let one = offset_of!(win_T, w_onebuf_opt) as isize;
-    let all = offset_of!(win_T, w_allbuf_opt) as isize;
+    let one = offset_of!(Window, w_onebuf_opt) as isize;
+    let all = offset_of!(Window, w_allbuf_opt) as isize;
     all - one
 };
 
@@ -139,7 +139,7 @@ impl OptSlot {
         }
     }
 
-    /// The same field of the window's *other* `winopt_T`. See
+    /// The same field of the window's *other* `WinOpt`. See
     /// [`ALLBUF_OFFSET`].
     fn byte_offset(self, delta: isize) -> Self {
         match self {
@@ -171,8 +171,8 @@ macro_rules! buf_var {
     ($buf:expr, $($field:ident).+) => {
         OptSlot::from(field_ptr(
             $buf,
-            offset_of!(buf_T, $($field).+),
-            |b: &buf_T| &b.$($field).+,
+            offset_of!(Buffer, $($field).+),
+            |b: &Buffer| &b.$($field).+,
         ))
     };
 }
@@ -182,8 +182,8 @@ macro_rules! win_var {
     ($win:expr, $($field:ident).+) => {
         OptSlot::from(field_ptr(
             $win,
-            offset_of!(win_T, $($field).+),
-            |w: &win_T| &w.$($field).+,
+            offset_of!(Window, $($field).+),
+            |w: &Window| &w.$($field).+,
         ))
     };
 }
@@ -193,8 +193,8 @@ macro_rules! syn_var {
     ($syn:expr, $($field:ident).+) => {
         OptSlot::from(field_ptr(
             $syn,
-            offset_of!(synblock_T, $($field).+),
-            |s: &synblock_T| &s.$($field).+,
+            offset_of!(SynBlock, $($field).+),
+            |s: &SynBlock| &s.$($field).+,
         ))
     };
 }
@@ -308,13 +308,13 @@ pub(crate) fn option_scope_idx(opt_idx: OptIndex, scope: OptScope) -> ssize_t {
 pub(crate) unsafe fn get_varp_scope_from(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buf: *mut buf_T,
-    win: *mut win_T,
+    buf: *mut Buffer,
+    win: *mut Window,
 ) -> OptSlot {
     // SAFETY: the caller's pointers are live.
     if opt_flags.has(OptionSetFlags::GLOBAL) && !option_is_global_only(opt_idx) {
         // A window-local option's global copy is its own field in the
-        // window's second `winopt_T`, not the table's `var`.
+        // window's second `WinOpt`, not the table's `var`.
         if option_is_window_local(opt_idx) {
             return unsafe { get_varp_from(opt_idx, buf, win) }.byte_offset(ALLBUF_OFFSET);
         }
@@ -376,7 +376,11 @@ pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> Op
 ///
 /// `buf` and `win` must be live, and `win->w_s` must be set for the four
 /// 'spell*' options.
-pub(crate) unsafe fn get_varp_from(opt_idx: OptIndex, buf: *mut buf_T, win: *mut win_T) -> OptSlot {
+pub(crate) unsafe fn get_varp_from(
+    opt_idx: OptIndex,
+    buf: *mut Buffer,
+    win: *mut Window,
+) -> OptSlot {
     let global = option_var(opt_idx);
     if is_option_hidden(opt_idx) || option_is_global_only(opt_idx) {
         return global;

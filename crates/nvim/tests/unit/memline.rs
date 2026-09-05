@@ -35,7 +35,7 @@ use neovim::memline::{
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
     ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
-use neovim::types::{ColNr, LineNr, buf_T};
+use neovim::types::{Buffer, ColNr, LineNr};
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
@@ -92,7 +92,7 @@ impl OnDisk {
 /// wiped and `'directory'` is put back when the case ends.
 struct Swapped {
     sandbox: Sandbox,
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     /// `'directory'`'s value on the way in.
     saved_dir: *mut c_char,
     /// The sandbox-local value, owned here so it outlives every read of it.

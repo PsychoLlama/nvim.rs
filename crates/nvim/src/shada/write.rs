@@ -430,7 +430,7 @@ impl Writing {
         }
     }
 
-    unsafe fn collect_one_buffer(&mut self, buf: *mut buf_T) {
+    unsafe fn collect_one_buffer(&mut self, buf: *mut Buffer) {
         let fname = unsafe { (*buf).b_ffname };
         let filemarks = unsafe { self.file_marks_for(fname) };
 

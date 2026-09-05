@@ -4,7 +4,7 @@
 //! Both options are a comma-separated list of `name:chars` fields, and both
 //! are set through the same code with a [`CharsOption`] saying which. The
 //! field tables below say where each field's character lands in the window's
-//! `fcs_chars_T`/`lcs_chars_T`, and what it falls back to when the value
+//! `FcsChars`/`LcsChars`, and what it falls back to when the value
 //! does not mention it.
 //!
 //! Three things about this are easy to get wrong.
@@ -42,8 +42,8 @@ use crate::options::kOptListchars as kOptListcharsIdx;
 use crate::os::cshim::gettext_ptr;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    CharsOption, NUL, OptionSetFlags, ScreenChar, expand_T, fcs_chars_T, int64_t, lcs_chars_T,
-    optset_T, size_t, win_T,
+    CharsOption, FcsChars, LcsChars, NUL, OptionSetFlags, ScreenChar, Window, expand_T, int64_t,
+    optset_T, size_t,
 };
 use crate::winlayer;
 
@@ -55,7 +55,7 @@ use super::{
 
 /// A 'fillchars' struct with every field blank -- what the assignment round
 /// starts from, before the defaults and then the value fill it in.
-const NO_FILL_CHARS: fcs_chars_T = fcs_chars_T {
+const NO_FILL_CHARS: FcsChars = FcsChars {
     stl: 0,
     stlnc: 0,
     wbr: 0,
@@ -80,7 +80,7 @@ const NO_FILL_CHARS: fcs_chars_T = fcs_chars_T {
 };
 
 /// A 'listchars' struct with every field blank, owning no runs.
-const NO_LIST_CHARS: lcs_chars_T = lcs_chars_T {
+const NO_LIST_CHARS: LcsChars = LcsChars {
     eol: 0,
     ext: 0,
     prec: 0,
@@ -152,60 +152,60 @@ const fn one(
 /// The fields of 'fillchars', with the defaults that make a box-drawing
 /// terminal look right and the ASCII fallbacks for one that cannot.
 static FCS_TAB: [Field; 21] = [
-    one(c"stl", offset_of!(fcs_chars_T, stl), Some(c" "), None),
-    one(c"stlnc", offset_of!(fcs_chars_T, stlnc), Some(c" "), None),
-    one(c"wbr", offset_of!(fcs_chars_T, wbr), Some(c" "), None),
+    one(c"stl", offset_of!(FcsChars, stl), Some(c" "), None),
+    one(c"stlnc", offset_of!(FcsChars, stlnc), Some(c" "), None),
+    one(c"wbr", offset_of!(FcsChars, wbr), Some(c" "), None),
     one(
         c"horiz",
-        offset_of!(fcs_chars_T, horiz),
+        offset_of!(FcsChars, horiz),
         Some(c"\u{2500}"),
         Some(c"-"),
     ),
     one(
         c"horizup",
-        offset_of!(fcs_chars_T, horizup),
+        offset_of!(FcsChars, horizup),
         Some(c"\u{2534}"),
         Some(c"-"),
     ),
     one(
         c"horizdown",
-        offset_of!(fcs_chars_T, horizdown),
+        offset_of!(FcsChars, horizdown),
         Some(c"\u{252c}"),
         Some(c"-"),
     ),
     one(
         c"vert",
-        offset_of!(fcs_chars_T, vert),
+        offset_of!(FcsChars, vert),
         Some(c"\u{2502}"),
         Some(c"|"),
     ),
     one(
         c"vertleft",
-        offset_of!(fcs_chars_T, vertleft),
+        offset_of!(FcsChars, vertleft),
         Some(c"\u{2524}"),
         Some(c"|"),
     ),
     one(
         c"vertright",
-        offset_of!(fcs_chars_T, vertright),
+        offset_of!(FcsChars, vertright),
         Some(c"\u{251c}"),
         Some(c"|"),
     ),
     one(
         c"verthoriz",
-        offset_of!(fcs_chars_T, verthoriz),
+        offset_of!(FcsChars, verthoriz),
         Some(c"\u{253c}"),
         Some(c"+"),
     ),
     one(
         c"fold",
-        offset_of!(fcs_chars_T, fold),
+        offset_of!(FcsChars, fold),
         Some(c"\u{b7}"),
         Some(c"-"),
     ),
     one(
         c"foldopen",
-        offset_of!(fcs_chars_T, foldopen),
+        offset_of!(FcsChars, foldopen),
         Some(c"-"),
         None,
     ),
@@ -213,60 +213,55 @@ static FCS_TAB: [Field; 21] = [
     // `foldclosed`.
     one(
         c"foldclose",
-        offset_of!(fcs_chars_T, foldclosed),
+        offset_of!(FcsChars, foldclosed),
         Some(c"+"),
         None,
     ),
     one(
         c"foldsep",
-        offset_of!(fcs_chars_T, foldsep),
+        offset_of!(FcsChars, foldsep),
         Some(c"\u{2502}"),
         Some(c"|"),
     ),
-    one(c"foldinner", offset_of!(fcs_chars_T, foldinner), None, None),
-    one(c"diff", offset_of!(fcs_chars_T, diff), Some(c"-"), None),
-    one(c"msgsep", offset_of!(fcs_chars_T, msgsep), Some(c" "), None),
-    one(c"eob", offset_of!(fcs_chars_T, eob), Some(c"~"), None),
+    one(c"foldinner", offset_of!(FcsChars, foldinner), None, None),
+    one(c"diff", offset_of!(FcsChars, diff), Some(c"-"), None),
+    one(c"msgsep", offset_of!(FcsChars, msgsep), Some(c" "), None),
+    one(c"eob", offset_of!(FcsChars, eob), Some(c"~"), None),
     one(
         c"lastline",
-        offset_of!(fcs_chars_T, lastline),
+        offset_of!(FcsChars, lastline),
         Some(c"@"),
         None,
     ),
-    one(c"trunc", offset_of!(fcs_chars_T, trunc), Some(c">"), None),
-    one(
-        c"truncrl",
-        offset_of!(fcs_chars_T, truncrl),
-        Some(c"<"),
-        None,
-    ),
+    one(c"trunc", offset_of!(FcsChars, trunc), Some(c">"), None),
+    one(c"truncrl", offset_of!(FcsChars, truncrl), Some(c"<"), None),
 ];
 
 /// The fields of 'listchars'. None of them has a default: an unmentioned
 /// field draws nothing.
 static LCS_TAB: [Field; 12] = [
-    one(c"eol", offset_of!(lcs_chars_T, eol), None, None),
-    one(c"extends", offset_of!(lcs_chars_T, ext), None, None),
-    one(c"nbsp", offset_of!(lcs_chars_T, nbsp), None, None),
-    one(c"precedes", offset_of!(lcs_chars_T, prec), None, None),
-    one(c"space", offset_of!(lcs_chars_T, space), None, None),
+    one(c"eol", offset_of!(LcsChars, eol), None, None),
+    one(c"extends", offset_of!(LcsChars, ext), None, None),
+    one(c"nbsp", offset_of!(LcsChars, nbsp), None, None),
+    one(c"precedes", offset_of!(LcsChars, prec), None, None),
+    one(c"space", offset_of!(LcsChars, space), None, None),
     Field {
         name: c"tab",
-        slot: Some(offset_of!(lcs_chars_T, tab2)),
+        slot: Some(offset_of!(LcsChars, tab2)),
         def: None,
         fallback: None,
         shape: Shape::Tab,
     },
     Field {
         name: c"leadtab",
-        slot: Some(offset_of!(lcs_chars_T, leadtab2)),
+        slot: Some(offset_of!(LcsChars, leadtab2)),
         def: None,
         fallback: None,
         shape: Shape::LeadTab,
     },
-    one(c"lead", offset_of!(lcs_chars_T, lead), None, None),
-    one(c"trail", offset_of!(lcs_chars_T, trail), None, None),
-    one(c"conceal", offset_of!(lcs_chars_T, conceal), None, None),
+    one(c"lead", offset_of!(LcsChars, lead), None, None),
+    one(c"trail", offset_of!(LcsChars, trail), None, None),
+    one(c"conceal", offset_of!(LcsChars, conceal), None, None),
     Field {
         name: c"multispace",
         slot: None,
@@ -390,7 +385,7 @@ fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
 /// `wp` is a live window, `value` a C string, and `errbuf` null or
 /// `errbuflen` writable bytes.
 pub unsafe fn set_chars_option<'a>(
-    wp: *mut win_T,
+    wp: *mut Window,
     value: *const c_char,
     what: CharsOption,
     apply: bool,
@@ -677,7 +672,7 @@ unsafe fn alloc_run(len: c_int) -> *mut ScreenChar {
 /// `win` is a live window, `val` a C string, `errbuf` null or `errbuflen`
 /// writable bytes.
 pub(crate) unsafe fn did_set_global_chars_option<'a>(
-    win: *mut win_T,
+    win: *mut Window,
     val: *mut c_char,
     what: CharsOption,
     opt_flags: OptionSetFlags,
@@ -733,7 +728,7 @@ pub(crate) unsafe fn did_set_global_chars_option<'a>(
 /// `args` points at the option table's call frame.
 pub unsafe fn did_set_chars_option(args: &mut optset_T) -> Option<&CStr> {
     let (win, varp, idx, flags, errbuf, errbuflen) = (
-        args.os_win.cast::<win_T>(),
+        args.os_win.cast::<Window>(),
         args.os_varp.string_var(),
         args.os_idx,
         args.os_flags,
@@ -822,7 +817,7 @@ pub unsafe fn check_chars_options() -> Option<&'static CStr> {
 /// knows that the current tab page's windows hang off `firstwin` rather than
 /// off its own stale list.
 fn for_each_window(
-    mut visit: impl FnMut(*mut win_T) -> Option<&'static CStr>,
+    mut visit: impl FnMut(*mut Window) -> Option<&'static CStr>,
 ) -> Option<&'static CStr> {
     for wp in winlayer::tab_windows() {
         if let Some(errmsg) = visit(wp.raw()) {

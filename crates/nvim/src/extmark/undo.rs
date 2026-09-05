@@ -26,7 +26,7 @@ use crate::marktree::key::{
     mt_right,
 };
 use crate::types::{
-    ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, buf_T,
+    Buffer, ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter,
     extmark_undo_vec_t,
 };
 
@@ -35,7 +35,7 @@ use crate::types::{
 ///
 /// Copying does nothing on redo; it enforces the right position on undo.
 pub unsafe fn extmark_splice_delete(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     l_row: c_int,
     l_col: ColNr,
     u_row: c_int,

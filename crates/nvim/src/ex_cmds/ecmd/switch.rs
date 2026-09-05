@@ -39,7 +39,7 @@ use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::terminal::terminal_running;
-use crate::types::{CmdModFlags, LineNr, win_T};
+use crate::types::{CmdModFlags, LineNr, Window};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
 use crate::winlayer::{Buf, Win};
@@ -66,7 +66,7 @@ pub(super) enum Switch {
 /// exists to doubt.
 pub(super) unsafe fn switch_to_other_buffer(
     args: &EcmdArgs,
-    oldwin: &mut *mut win_T,
+    oldwin: &mut *mut Window,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {
@@ -218,7 +218,7 @@ pub(super) unsafe fn switch_to_other_buffer(
 unsafe fn leave_for_buffer(
     mut buf: Buf,
     args: &EcmdArgs,
-    oldwin: *mut win_T,
+    oldwin: *mut Window,
     old_curbuf: &mut BufRef,
     state: &mut Ecmd,
 ) -> Switch {

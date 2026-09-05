@@ -55,8 +55,8 @@ use crate::optionstr::check_chars_options;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
     AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Handle, Integer, MHPutStatus,
-    MapHash, ScreenChar, ScreenGrid, Set_glyph, String_0, VirtText, WinConfig, size_t, uint32_t,
-    win_T, wline_T,
+    MapHash, ScreenChar, ScreenGrid, Set_glyph, String_0, VirtText, WLine, WinConfig, Window,
+    size_t, uint32_t,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,
@@ -247,7 +247,7 @@ pub fn grid_alloc(grid: &mut ScreenGrid, rows: c_int, columns: c_int, copy: bool
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn win_grid_alloc(wp: *mut win_T) {
+pub unsafe fn win_grid_alloc(wp: *mut Window) {
     let grid: *mut GridView = unsafe { &raw mut (*wp).w_grid };
     let grid_allocated: *mut ScreenGrid = unsafe { &raw mut (*wp).w_grid_alloc };
 
@@ -264,7 +264,7 @@ pub unsafe fn win_grid_alloc(wp: *mut win_T) {
         unsafe { xfree((*wp).w_lines.cast::<c_void>()) };
         unsafe {
             (*wp).w_lines =
-                xcalloc((*wp).w_view_height as size_t + 1, size_of::<wline_T>()).cast::<wline_T>()
+                xcalloc((*wp).w_view_height as size_t + 1, size_of::<WLine>()).cast::<WLine>()
         };
         unsafe { (*wp).w_lines_size = (*wp).w_view_height };
     }
@@ -460,7 +460,7 @@ pub fn grid_del_lines(
 ///
 /// The walk keeps that promise itself now; the signature stays `unsafe`
 /// because every caller still spells the call out that way.
-pub unsafe fn get_win_by_grid_handle(handle: Handle) -> *mut win_T {
+pub unsafe fn get_win_by_grid_handle(handle: Handle) -> *mut Window {
     windows()
         .find(|wp| wp.w_grid_alloc.handle == handle)
         .map_or(::core::ptr::null_mut(), Win::raw)

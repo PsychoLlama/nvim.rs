@@ -39,7 +39,7 @@ pub unsafe fn diff_update_line(lnum: LineNr) {
 ///
 /// A cell rather than a local because [`diff_find_change`] hands a pointer to
 /// it back to the drawer; it is alive until the next call.
-static simple_diffline_change: GlobalCell<diffline_change_T> = GlobalCell::new(diffline_change_T {
+static simple_diffline_change: GlobalCell<DiffLineChange> = GlobalCell::new(DiffLineChange {
     dc_start: [0; 8],
     dc_end: [0; 8],
     dc_start_lnum_off: [0; 8],
@@ -53,15 +53,15 @@ static simple_diffline_change: GlobalCell<diffline_change_T> = GlobalCell::new(d
 /// The answer is whether the range is an *addition* rather than a change,
 /// which the caller paints `DiffTextAdd` instead of `DiffText`.
 pub unsafe fn diff_change_parse(
-    diffline: *mut diffline_T,
-    change: *mut diffline_change_T,
+    diffline: *mut DiffLine,
+    change: *mut DiffLineChange,
     change_start: *mut c_int,
     change_end: *mut c_int,
 ) -> bool {
     // SAFETY: the caller's line description, and one of the changes it names.
-    let dl = unsafe { Live::<diffline_T>::new(diffline) };
+    let dl = unsafe { Live::<DiffLine>::new(diffline) };
     // SAFETY: as above.
-    let ch = unsafe { Live::<diffline_change_T>::new(change) };
+    let ch = unsafe { Live::<DiffLineChange>::new(change) };
     let buf = dl.bufidx as usize;
     let lineoff = dl.lineoff;
     // A range that starts above this line begins at column 0, and one that
@@ -218,8 +218,8 @@ fn diff_find_change_simple(
 /// [`diff_find_change_inline_diff`].
 ///
 /// # Safety
-/// `diffline` must be a writable `diffline_T`.
-pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T) -> bool {
+/// `diffline` must be a writable `DiffLine`.
+pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut DiffLine) -> bool {
     let tp = cur_tab();
     let idx = diff_slot(wp.buffer(), tp);
     if idx == DB_COUNT {
@@ -240,7 +240,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T)
         let start = &mut change_start;
         let end = &mut change_end;
         let added = diff_find_change_simple(wp, lnum, dp, idx, start, end);
-        let mut only = diffline_change_T {
+        let mut only = DiffLineChange {
             dc_start: [0; 8],
             dc_end: [0; 8],
             dc_start_lnum_off: [0; 8],
@@ -251,7 +251,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T)
         only.dc_start_lnum_off[idx as usize] = off;
         only.dc_end_lnum_off[idx as usize] = off;
         let change = simple_diffline_change.ptr();
-        let line = diffline_S {
+        let line = DiffLine {
             changes: change,
             num_changes: 1,
             bufidx: idx,
@@ -272,7 +272,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T)
     // them is the run whose line-offset span covers `off`.
     let changes = dp.df_changes.as_mut_ptr();
     let len = dp.df_changes.len() as c_int;
-    let mut first = ::core::ptr::null_mut::<diffline_change_T>();
+    let mut first = ::core::ptr::null_mut::<DiffLineChange>();
     let mut num_changes = 0;
     let mut change_idx = 0;
     while change_idx < len {
@@ -290,7 +290,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T)
         }
         change_idx += 1;
     }
-    let line = diffline_S {
+    let line = DiffLine {
         changes: first,
         num_changes,
         bufidx: idx,
@@ -328,8 +328,8 @@ pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     static change_end: GlobalCell<c_int> = GlobalCell::new(0);
     static hlID: GlobalCell<Hlf> = GlobalCell::new(HLF_NONE);
 
-    let mut diffline = diffline_S {
-        changes: ::core::ptr::null_mut::<diffline_change_T>(),
+    let mut diffline = DiffLine {
+        changes: ::core::ptr::null_mut::<DiffLineChange>(),
         num_changes: 0,
         bufidx: 0,
         lineoff: 0,

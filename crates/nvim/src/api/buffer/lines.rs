@@ -18,7 +18,7 @@ use crate::winlayer::{Buf, tab_windows};
 
 pub unsafe fn nvim_buf_line_count(buf: BufferHandle) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Integer).reported(error);
     }
@@ -45,7 +45,7 @@ pub unsafe fn nvim_buf_get_lines(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -84,7 +84,7 @@ pub unsafe fn nvim_buf_set_lines(
     arena: *mut Arena,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
+    let b: *mut Buffer = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -302,7 +302,7 @@ pub unsafe fn nvim_buf_get_text(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -373,7 +373,7 @@ pub unsafe fn nvim_buf_get_text(
 
 pub unsafe fn nvim_buf_get_offset(buf: BufferHandle, index: Integer) -> Result<Integer, Error> {
     let mut error = Error::none();
-    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (0 as Integer).reported(error);
     }
@@ -448,7 +448,7 @@ unsafe fn push_linestr(
 }
 
 pub unsafe fn buf_collect_lines(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     n: size_t,
     start: LineNr,
     start_idx: ::core::ffi::c_int,

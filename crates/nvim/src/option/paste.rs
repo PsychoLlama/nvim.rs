@@ -23,13 +23,13 @@ use crate::options::{
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::types::{ColNr, OptIndex, OptInt, OptionSetFlags, optset_T};
 
-use crate::types::buf_T;
+use crate::types::Buffer;
 use crate::winlayer::buffers;
 
 use super::{didset_options_sctx, field_ptr};
 
 /// What 'paste' overrode, so that switching it off again restores the
-/// values the user set. The per-buffer copies live in `buf_T`; these are
+/// values the user set. The per-buffer copies live in `Buffer`; these are
 /// the global ones.
 pub(crate) static p_ai_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
 pub(crate) static p_et_nopaste: GlobalCell<c_int> = GlobalCell::new(0);
@@ -56,7 +56,7 @@ const PASTE_DEP_OPTS: [OptIndex; 10] = [
 /// 'paste': switch off everything that would reformat pasted text, and
 /// remember what to switch back on.
 /// Where a buffer keeps its parsed 'varsofttabstop' stops.
-const VSTS_ARRAY: usize = core::mem::offset_of!(buf_T, b_p_vsts_array);
+const VSTS_ARRAY: usize = core::mem::offset_of!(Buffer, b_p_vsts_array);
 
 pub(crate) unsafe fn did_set_paste(_args: &mut optset_T) -> Option<&CStr> {
     static old_p_paste: GlobalCell<c_int> = GlobalCell::new(0);
@@ -140,7 +140,7 @@ pub(crate) unsafe fn did_set_paste(_args: &mut optset_T) -> Option<&CStr> {
             if !buf.b_p_vsts.is_null() && !is_empty_option(buf.b_p_vsts) {
                 // The array's address is the buffer's plus a constant, so
                 // naming it reads nothing.
-                let array = field_ptr(buf.raw(), VSTS_ARRAY, |b: &buf_T| &b.b_p_vsts_array);
+                let array = field_ptr(buf.raw(), VSTS_ARRAY, |b: &Buffer| &b.b_p_vsts_array);
                 unsafe { tabstop_set(buf.b_p_vsts, array) };
             } else {
                 buf.b_p_vsts_array = ptr::null_mut::<ColNr>();

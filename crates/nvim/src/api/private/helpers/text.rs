@@ -15,7 +15,7 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    Arena, Array, ArrayBuilder, Error, LineNr, NUL, Object, String_0, buf_T, int64_t, size_t,
+    Arena, Array, ArrayBuilder, Buffer, Error, LineNr, NUL, Object, String_0, int64_t, size_t,
 };
 use ::libc::strnlen;
 use core::ffi::{CStr, c_char};
@@ -176,7 +176,7 @@ pub(crate) unsafe fn string_to_array(input: String_0, crlf: bool, arena: *mut Ar
 /// `end_exclusive` allows one past the last line, which is what an
 /// end-of-range index means.
 pub(crate) unsafe fn normalize_index(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     index: int64_t,
     end_exclusive: bool,
     oob: *mut bool,
@@ -205,7 +205,7 @@ pub(crate) unsafe fn normalize_index(
 /// The text of line `lnum` between the two columns, as a *borrowed* string
 /// into the buffer's own line. Negative columns count back from the end.
 pub(crate) unsafe fn buf_get_text(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum: int64_t,
     start_col: int64_t,
     end_col: int64_t,

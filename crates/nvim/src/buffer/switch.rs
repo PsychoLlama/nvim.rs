@@ -49,8 +49,8 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    Cleanup, CmdModFlags, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, exarg_T, int64_t,
-    win_T,
+    Cleanup, CmdModFlags, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, Window, exarg_T,
+    int64_t,
 };
 use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
@@ -100,7 +100,7 @@ fn is_last_window(win: Win) -> bool {
     // SAFETY: a live window.
     unsafe { last_window(win.raw()) }
 }
-fn is_autocmd_window(win: *mut win_T) -> bool {
+fn is_autocmd_window(win: *mut Window) -> bool {
     // SAFETY: the pointer is only compared against the autocommand windows.
     is_aucmd_win(win)
 }
@@ -256,7 +256,7 @@ pub unsafe fn goto_buffer(eap: *mut exarg_T, start: c_int, dir: c_int, count: c_
 }
 
 /// Handle the situation of `swap_exists_action` being set.  `old_curbuf` is
-/// the buffer to go back to, `None` where the C passed a NULL `bufref_T *`;
+/// the buffer to go back to, `None` where the C passed a NULL `BufferRef *`;
 /// it is only ever re-validated, never trusted.
 pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
     let old_tw: OptInt = cur_buf().b_p_tw;

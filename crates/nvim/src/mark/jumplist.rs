@@ -127,7 +127,7 @@ pub unsafe fn checkpcmark() {
 ///
 /// # Safety
 /// `win` must be a live window and the editor's globals must be live.
-pub unsafe fn get_jumplist(win: *mut win_T, mut count: c_int) -> *mut fmark_T {
+pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut fmark_T {
     // SAFETY: the caller promised a live window.
     let mut win = unsafe { Win::new(win) };
     // SAFETY: as above.
@@ -176,7 +176,7 @@ pub unsafe fn get_jumplist(win: *mut win_T, mut count: c_int) -> *mut fmark_T {
 ///
 /// # Safety
 /// `buf` must be a live buffer and `win` a live window.
-pub unsafe fn get_changelist(buf: *mut buf_T, win: *mut win_T, count: c_int) -> *mut fmark_T {
+pub unsafe fn get_changelist(buf: *mut Buffer, win: *mut Window, count: c_int) -> *mut fmark_T {
     // SAFETY: the caller promised a live buffer and window.
     let (buf, mut win) = unsafe { (Buf::new(buf), Win::new(win)) };
     if buf.b_changelistlen == 0 {
@@ -213,7 +213,7 @@ pub unsafe fn get_changelist(buf: *mut buf_T, win: *mut win_T, count: c_int) -> 
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn mark_jumplist_forget_file(wp: *mut win_T, fnum: c_int) {
+pub unsafe fn mark_jumplist_forget_file(wp: *mut Window, fnum: c_int) {
     // SAFETY: the caller promised a live window.
     let mut wp = unsafe { Win::new(wp) };
     // Backwards, so removing an entry cannot skip the one after it.
@@ -249,7 +249,7 @@ pub unsafe fn mark_jumplist_forget_file(wp: *mut win_T, fnum: c_int) {
 ///
 /// # Safety
 /// `wp` must be a live window and the editor's globals must be live.
-pub unsafe fn cleanup_jumplist(wp: *mut win_T, loadfiles: bool) {
+pub unsafe fn cleanup_jumplist(wp: *mut Window, loadfiles: bool) {
     // SAFETY: the caller promised a live window.
     let mut wp = unsafe { Win::new(wp) };
     if loadfiles {
@@ -332,7 +332,7 @@ pub unsafe fn cleanup_jumplist(wp: *mut win_T, loadfiles: bool) {
 ///
 /// # Safety
 /// Both windows must be live.
-pub unsafe fn copy_jumplist(from: *mut win_T, to: *mut win_T) {
+pub unsafe fn copy_jumplist(from: *mut Window, to: *mut Window) {
     // SAFETY: the caller promised two live windows.
     let (from, mut to) = unsafe { (Win::new(from), Win::new(to)) };
     for i in 0..from.w_jumplistlen {
@@ -352,7 +352,7 @@ pub unsafe fn copy_jumplist(from: *mut win_T, to: *mut win_T) {
 ///
 /// # Safety
 /// `wp` must be a live window whose jump list entries own their allocations.
-pub unsafe fn free_jumplist(wp: *mut win_T) {
+pub unsafe fn free_jumplist(wp: *mut Window) {
     // SAFETY: the caller promised a live window.
     let mut wp = unsafe { Win::new(wp) };
     for jump in wp.jumps() {
@@ -514,7 +514,7 @@ pub unsafe fn ex_changes(_eap: *mut exarg_T) {
 /// the same window.
 pub unsafe fn mark_jumplist_iter(
     iter: *const c_void,
-    win: *const win_T,
+    win: *const Window,
     fm: *mut xfmark_T,
 ) -> *const c_void {
     // SAFETY: the caller promised a live window and a live out-parameter.

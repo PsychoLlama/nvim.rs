@@ -32,8 +32,8 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    ColNr, Direction, EvalFuncData, List, NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber,
-    buf_T, pos_T, win_T,
+    Buffer, ColNr, Direction, EvalFuncData, List, NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VarNumber, Window, pos_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -98,7 +98,7 @@ pub unsafe fn f_charcol(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
 /// current window unless a window id names another, in which case its
 /// cursor is validated first. `None` means the id named no window, which
 /// every caller treats as "no answer".
-fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut win_T> {
+fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut Window> {
     if !args.has(idx) {
         return Some(curwin.get());
     }
@@ -153,7 +153,7 @@ fn get_col(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
 ///
 /// # Safety
 /// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
-unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> ColNr {
+unsafe fn virtualedit_tail(wp: *mut Window, bp: *mut Buffer, fp: *mut pos_T) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = unsafe { Win::new(wp) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
@@ -347,7 +347,7 @@ fn getpos_both(args: Args<'_>, rettv: &mut TypVal, getcurpos: bool, charcol: boo
 ///
 /// # Safety
 /// `l` is a live list and `wp` is a window pointer or null.
-unsafe fn append_curswant(l: *mut List, wp: *mut win_T) {
+unsafe fn append_curswant(l: *mut List, wp: *mut Window) {
     // SAFETY throughout: the caller's obligation.
     let cur = curwin.get();
     let saved_set_curswant = unsafe { (*cur).w_set_curswant };

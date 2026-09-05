@@ -366,7 +366,7 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
             //
             // SAFETY: the mark is a position in the current buffer, and the
             // borrow is taken through the root because `dec` reads `curbuf`
-            // itself -- handing it a borrow of the whole `buf_T` would alias.
+            // itself -- handing it a borrow of the whole `Buffer` would alias.
             unsafe { decl(&mut (*curbuf.get()).b_op_end) };
         }
     }

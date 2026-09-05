@@ -25,7 +25,7 @@ use core::mem::offset_of;
 /// # Safety
 /// `buf` must be a live buffer or NULL, and `lines`/`rettv` live typvals.
 pub(crate) unsafe fn set_buffer_lines(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     lnum_arg: LineNr,
     append: bool,
     lines: *mut TypVal,
@@ -156,7 +156,7 @@ unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut TypVal, append: bool) 
 /// # Safety
 /// `buf` must be a live buffer or NULL, and `rettv` a live typval.
 unsafe fn get_buffer_lines(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     mut start: LineNr,
     mut end: LineNr,
     retlist: bool,

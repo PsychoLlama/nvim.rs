@@ -52,8 +52,8 @@ use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
-    CmdModFlags, CpoFlag, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL, ShmFlag,
-    VimAcl, aco_save_T, buf_T, exarg_T, iconv_t, int64_t, pos_T, size_t, uint64_t, uv_gid_t,
+    Buffer, CmdModFlags, CpoFlag, FAIL, Failed, FileInfo, FileOffset, IOSIZE, LineNr, MAXPATHL,
+    ShmFlag, VimAcl, aco_save_T, exarg_T, iconv_t, int64_t, pos_T, size_t, uint64_t, uv_gid_t,
     uv_uid_t,
 };
 use crate::ui::ui_flush;
@@ -273,7 +273,7 @@ impl WriteRequest {
 ///
 /// `eap` may be null; it carries a forced `'ff'`/`'fenc'`.
 pub unsafe fn buf_write(
-    buf: *mut buf_T,
+    buf: *mut Buffer,
     fname: *mut ::core::ffi::c_char,
     sfname: *mut ::core::ffi::c_char,
     start: LineNr,

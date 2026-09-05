@@ -103,7 +103,7 @@ pub(crate) unsafe fn win_redraw_signcols(mut wp: Win) -> bool {
 ///
 /// # Safety
 /// `wp` must be a live window of the current layout.
-unsafe fn neighbour_frame(wp: Win, layout: c_int, before: bool) -> Option<*mut frame_T> {
+unsafe fn neighbour_frame(wp: Win, layout: c_int, before: bool) -> Option<*mut Frame> {
     // SAFETY: walking the window layout tree on the main thread.
     let mut fr = wp.w_frame;
     while !unsafe { (*fr).fr_parent }.is_null() {
