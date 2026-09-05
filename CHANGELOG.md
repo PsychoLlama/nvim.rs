@@ -9,6 +9,12 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Renamed every type the C-to-Rust transpiler left with a C name: the 212
+  `_T` typedefs, the tag structs under them and the lowercase struct tags
+  beside them all read as Rust types now (`buf_T` is `Buffer`, `typval_T`
+  is `TypVal`, `vimoption_T` is `VimOption`), and only the names a linked
+  library defines keep their own spelling. Nothing about the editor's
+  behaviour changes; the crate's public type names do.
 - Rewrote the growable buffers the editor builds text and match lists in:
   `:execute`/`:echomsg`/`:echoerr`, `string()`, `json_encode()`, `:echo` of
   a container, `substitute()`, `tr()`, `state()`, `winrestcmd()`, the
