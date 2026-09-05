@@ -25,7 +25,6 @@ use crate::event::multiqueue::{
 use crate::event::proc::{proc_is_stopped, proc_stop, proc_wait};
 use crate::ex_cmds::check_secure;
 use crate::ex_getln::{text_locked, text_locked_msg};
-use crate::main::main_loop;
 use crate::memline::ml_open;
 use crate::memory::{xcalloc, xfree};
 use crate::message::{e_channotpty, e_invarg};
@@ -41,6 +40,7 @@ use crate::os::shell::shell_free_argv;
 use crate::os::time::os_hrtime;
 use crate::path::vim_full_name;
 use crate::semsg;
+use crate::startup::main_loop;
 use crate::terminal::{terminal_buf, terminal_open, terminal_running};
 use crate::types::AutoEvent;
 use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};

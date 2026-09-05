@@ -33,9 +33,9 @@ use crate::ex_docmd::{
 
 use crate::getchar::beep_flush;
 use crate::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
-use crate::main::exiting;
 use crate::message::e_autocmd_close;
 use crate::option::vars::{p_awa, p_confirm, p_write};
+use crate::startup::exiting;
 use crate::winlayer::graph::{
     cmdwin_result, cmdwin_type, curbuf, curtab, curwin, firstwin, lastwin, topframe,
 };
@@ -699,7 +699,7 @@ fn emsg(s: *const c_char) -> bool {
 /// `getout()` as checked code.
 fn getout(exitval: c_int) -> ! {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
-    unsafe { crate::main::getout(exitval) }
+    unsafe { crate::startup::getout(exitval) }
 }
 
 /// `gettext()` as checked code.

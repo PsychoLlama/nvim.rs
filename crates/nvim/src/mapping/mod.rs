@@ -236,7 +236,7 @@ pub const KS_SPECIAL: ::core::ffi::c_int = 254 as ::core::ffi::c_int;
 pub const KS_EXTRA: ::core::ffi::c_int = 253 as ::core::ffi::c_int;
 pub const KS_MODIFIER: ::core::ffi::c_int = 252 as ::core::ffi::c_int;
 /// The error texts `mapping` raises for itself; the rest come from the
-/// shared table in `main`.
+/// shared table in `message`.
 pub const E_GLOBAL_ABBREVIATION_ALREADY_EXISTS_FOR_STR: &CStr =
     c"E224: Global abbreviation already exists for %s";
 pub const E_GLOBAL_MAPPING_ALREADY_EXISTS_FOR_STR: &CStr =

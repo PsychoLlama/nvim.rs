@@ -34,7 +34,6 @@ use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_
 use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
-use crate::main::main_loop;
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
 };
@@ -69,6 +68,7 @@ use crate::os::env::expand_env;
 use crate::os::fileio::{FileOpenFlags, file_close, file_open, file_open_stdin, file_read};
 use crate::os::input::{input_available, input_get, line_breakcheck, os_breakcheck};
 use crate::plines::{init_charsize_arg, win_charsize};
+use crate::startup::main_loop;
 use crate::state::mode::{
     State, VIsual_reselect, arrow_used, did_ai, exmode_active, finish_op, pending_exmode_active,
     redo_VIsual_busy, restart_edit,

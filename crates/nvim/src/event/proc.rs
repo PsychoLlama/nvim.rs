@@ -54,9 +54,6 @@ use crate::event::{pack_int, unpack_int};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, logmsg};
-use crate::main::{
-    exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
-};
 use crate::message_fmt::c_str;
 use crate::os::proc::os_proc_tree_kill;
 use crate::os::pty_proc_unix::{
@@ -65,6 +62,9 @@ use crate::os::pty_proc_unix::{
 use crate::os::shell::shell_free_argv;
 use crate::os::signal::{SIGHUP, SIGKILL, SIGTERM};
 use crate::os::time::os_hrtime;
+use crate::startup::{
+    exiting, main_loop, os_exit, preserve_exit, ui_client_channel_id, ui_client_exit_status,
+};
 use crate::types::{
     LibuvProc, Loop, MultiQueue, Proc, ProcType, PtyProc, Refcount, Stream, uv_loop_t, uv_timer_t,
 };

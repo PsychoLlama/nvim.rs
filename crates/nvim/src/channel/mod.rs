@@ -40,7 +40,6 @@ use crate::event::stream::stream_may_close;
 use crate::event::wstream::{wstream_new_buffer, wstream_write};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::api_free_luaref;
-use crate::main::{exiting, main_loop};
 use crate::memory::{xfree, xmemdup};
 use crate::message::{e_invchan, e_invstream, e_invstreamrpc};
 use crate::msgpack_rpc::channel::call_stack::CallStack;
@@ -49,6 +48,7 @@ use crate::os::cshim::{gettext, gettext_ptr, stderr};
 use crate::os::fs::os_write;
 use crate::os::pty_proc_unix::pty_proc_close_master;
 use crate::registry::SlotTable;
+use crate::startup::{exiting, main_loop};
 use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{

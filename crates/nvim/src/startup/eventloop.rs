@@ -3,7 +3,7 @@
 //! One `static`, and 250 lines of it: libuv's `uv_loop_t` has no const
 //! zero value of its own, so the transpiler wrote every nested field out.
 //! `loop_init` overwrites all of it at startup. It sits in its own file
-//! purely so that `main/mod.rs` stays readable.
+//! purely so that `startup/mod.rs` stays readable.
 
 #![forbid(unsafe_code)]
 #![deny(

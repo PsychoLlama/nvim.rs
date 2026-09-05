@@ -48,7 +48,6 @@ use crate::highlight_group::{
     HLF_AT, HLF_C, HLF_CM, HLF_COUNT, HLF_EOB, HLF_FC, HLF_MSG, HLF_N, HLF_SC, highlight_changed,
 };
 use crate::insexpand::ins_compl_show_pum;
-use crate::main::{exiting, starting};
 use crate::r#match::{init_search_hl, prepare_search_hl};
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
@@ -82,6 +81,7 @@ use crate::regexp::vim_regfree;
 use crate::search::last_pat_prog;
 use crate::search::state::no_hlsearch;
 use crate::spell::spell_check_window;
+use crate::startup::{exiting, starting};
 use crate::state::mode::{
     State, edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exmode_active,
     restart_edit,

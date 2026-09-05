@@ -28,7 +28,7 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 // Named here so the expression tree and `list.rs` can reach it by one
-// path; it belongs to `main`.
+// path; it belongs to `message`.
 pub(crate) use crate::message::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{

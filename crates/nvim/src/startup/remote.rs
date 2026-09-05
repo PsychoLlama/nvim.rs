@@ -18,11 +18,11 @@ use crate::event::socket::socket_address_is_tcp;
 use crate::kvec::ARRAY_DICT_INIT;
 use crate::lua::executor::nlua_exec;
 use crate::lua::state::kRetObject;
-use crate::main::exit::os_exit;
-use crate::main::{MainParams, WIN_TABS, ui_client_channel_id};
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
+use crate::startup::exit::os_exit;
+use crate::startup::{MainParams, WIN_TABS, ui_client_channel_id};
 use crate::types::{
     ApiDict, Arena, Array, CallbackReader, Error, Integer, Object, String_0, size_t, uint64_t,
 };

@@ -113,7 +113,7 @@ use std::ffi::CString;
 ///
 /// c2rust spelled every `static char foo[] = "…"` as a `transmute` from the
 /// byte string, which is one `unsafe` block per global — 194 of them in
-/// `main/mod.rs` alone before this replaced them. Copying the bytes is
+/// `startup/mod.rs` alone before this replaced them. Copying the bytes is
 /// const-evaluable, needs no `unsafe`, and unlike `transmute` it works with
 /// a const generic length.
 pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {

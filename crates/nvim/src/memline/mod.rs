@@ -34,7 +34,6 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
-use crate::main::{getout, recoverymode};
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memfile::{
@@ -73,6 +72,7 @@ use crate::path::{
 use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::spell::spell_delete_wordlist;
+use crate::startup::{getout, recoverymode};
 use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;

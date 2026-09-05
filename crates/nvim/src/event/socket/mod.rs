@@ -44,11 +44,11 @@ use crate::event::socket::address::{SOCKET_ADDR_LEN, port_suffix, tcp_host_end};
 use crate::event::stream::{may_close, stream_init, stream_may_close};
 use crate::event::{pack_int, unpack_int};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, logmsg};
-use crate::main::main_loop;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::os::cshim::gettext;
 use crate::os::fs::{os_path_exists, os_remove};
 use crate::path::path_tail;
+use crate::startup::main_loop;
 use crate::types::{
     Loop, RStream, SocketWatcher, Stream, addrinfo, intmax_t, sa_family_t, socket_cb,
     socket_close_cb, uv_connect_t, uv_getaddrinfo_t, uv_handle_t, uv_handle_type, uv_loop_t,

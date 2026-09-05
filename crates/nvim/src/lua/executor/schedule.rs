@@ -28,10 +28,10 @@ use crate::lua::ffi::{
     lua_settop, lua_toboolean, lua_type, luaL_checkinteger, luaL_checknumber, luaL_error,
     luaL_getmetafield,
 };
-use crate::main::main_loop;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_fast_api_disabled;
 use crate::os::cshim::gettext;
+use crate::startup::main_loop;
 use crate::types::{
     EvalFuncDef, Event, LuaRef, MultiQueue, TimeWatcher, int64_t, intptr_t, lua_Integer, lua_State,
     ptrdiff_t, uint32_t, uint64_t,

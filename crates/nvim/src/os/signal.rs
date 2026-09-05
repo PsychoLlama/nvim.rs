@@ -15,11 +15,11 @@ use crate::event::signal::{
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{main_loop, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::message_fmt::c_str;
 use crate::option::vars::p_awa;
 use crate::os::cshim::snprintf;
+use crate::startup::{main_loop, preserve_exit, v_dying};
 use crate::types::AutoEvent;
 use crate::types::{
     IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,

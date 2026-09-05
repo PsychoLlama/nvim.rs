@@ -33,7 +33,6 @@ use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
 use crate::guard::sandbox;
-use crate::main::silent_mode;
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::state::info_message;
 use crate::message::{e_invarg, e_sandbox, e_trailing};
@@ -43,6 +42,7 @@ use crate::options::{
     kOptAleph, kOptFoldmethod, kOptInvalid, kOptWildchar, kOptWildcharm, kOptWrap,
 };
 use crate::os::cshim::gettext_ptr;
+use crate::startup::silent_mode;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,

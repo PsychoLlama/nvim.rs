@@ -24,13 +24,13 @@ use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_s
 use crate::highlight::state::hl_attr_active;
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
-use crate::main::starting;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::state::msg_col;
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
 use crate::option::vars::{p_ls, p_shm, p_verbose};
 use crate::os::cshim::gettext;
 use crate::os::env::{default_vim_dir, default_vimruntime_dir};
+use crate::startup::starting;
 use crate::types::builders::static_cstring;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag, Tabpage};

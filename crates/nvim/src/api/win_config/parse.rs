@@ -105,7 +105,7 @@ pub(crate) fn err_msg(err: ErrSlot, kind: ErrorType, msg: &CStr) {
     store(err, Error::from_message(kind, msg));
 }
 
-/// [`err_msg`] for the messages `main`'s statics hold rather than a literal.
+/// [`err_msg`] for the messages `message`'s statics hold rather than a literal.
 ///
 /// # Safety
 /// `msg` must be NUL-terminated.

@@ -39,9 +39,9 @@ use crate::autocmd::{do_autocmd_focusgained, may_trigger_vim_suspend_resume};
 use crate::channel::find_channel;
 use crate::event::r#loop::process_events_until;
 use crate::global_cell::GlobalCell;
-use crate::main::{main_loop, starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::memory::{strequal, xfree};
 use crate::option::set_tty_option;
+use crate::startup::{main_loop, starting, stdin_fd, stdin_isatty, stdout_isatty};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::ui::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,

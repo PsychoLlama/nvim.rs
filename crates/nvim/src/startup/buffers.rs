@@ -36,10 +36,6 @@ use crate::fileio::readfile;
 use crate::fileio::state::{READ_NEW, READ_STDIN};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
-use crate::main::exit::getout;
-use crate::main::{
-    EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
-};
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg_putchar;
@@ -52,6 +48,10 @@ use crate::path::vim_full_name;
 use crate::profile::time_msg_at;
 use crate::quickfix::qf_init;
 use crate::runtime::state::SID_CARG;
+use crate::startup::exit::getout;
+use crate::startup::{
+    EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
+};
 use crate::strings::vim_snprintf;
 use crate::types::{
     ExArg, Handle, IOSIZE, Integer, LineNr, List, MAXPATHL, OptInt, OptVal, OptionSetFlags,
@@ -65,8 +65,8 @@ use crate::window::{
 use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::arglist::global_arglist;
-use crate::main::exit::os_exit;
 use crate::pos::MAXLNUM;
+use crate::startup::exit::os_exit;
 use crate::winlayer::{Buf, Live, TabPage, Win, first_window};
 
 /// The user answered "quit" to the swap-file ATTENTION prompt: leave with

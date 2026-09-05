@@ -24,7 +24,6 @@ use crate::highlight::state::{
     normal_sp,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::starting;
 use crate::message::{emsg, msg_ext_set_kind};
 use crate::message_fmt::{c_str, msg_bytes};
 use crate::option::vars::p_bg;
@@ -32,6 +31,7 @@ use crate::option::{option_was_set, reset_option_was_set, set_option_value_give_
 use crate::options::kOptBackground;
 use crate::os::cshim::gettext;
 use crate::runtime::state::current_sctx;
+use crate::startup::starting;
 use crate::types::ui::kUILinegrid;
 use crate::types::{EStack, OptVal, OptionSetFlags};
 use crate::ui::state::t_colors;

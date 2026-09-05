@@ -26,11 +26,11 @@ use crate::lua::ffi::{
     lua_getfield, lua_gettop, lua_pcall, lua_pop, lua_pushcclosure, lua_pushlightuserdata,
     lua_pushstring, lua_toboolean, lua_tostring, lua_type, luaL_checktype, luaL_error, luaL_where,
 };
-use crate::main::{main_loop, preserve_exit};
 use crate::memory::xstrdup;
 use crate::message::e_outofmem;
 use crate::os::cshim::stderr;
 use crate::runtime::runtime_get_named_thread;
+use crate::startup::{main_loop, preserve_exit};
 use crate::types::{Arena, Array, Error, Event, intptr_t, lua_CFunction, lua_State, size_t};
 use ::libc::{fprintf, pthread_exit};
 

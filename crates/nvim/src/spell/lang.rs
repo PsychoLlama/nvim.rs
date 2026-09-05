@@ -41,7 +41,6 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::starting;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::message::e_invarg;
@@ -52,6 +51,7 @@ use crate::os::fs::os_remove;
 use crate::path::{path_fnamecmp, path_full_compare, path_tail};
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regfree};
 use crate::spellfile::spell_load_file;
+use crate::startup::starting;
 use crate::strings::{concat_str, vim_snprintf, vim_strchr, xstrnsave};
 use crate::types::{
     Failed, GArray, LangP, MAXPATHL, NUL, RegProg, SPL_FNAME_TMPL, SpellLang, SynBlock, Window,

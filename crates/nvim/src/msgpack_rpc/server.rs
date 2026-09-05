@@ -20,13 +20,13 @@ use crate::event::socket::address::is_bare_server_name;
 use crate::event::socket::{socket_watcher_close, socket_watcher_init, socket_watcher_start};
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::main::main_loop;
 use crate::memory::{strequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message_fmt::{c_str, msg_bytes};
 use crate::os::cshim::snprintf;
 use crate::os::env::{os_env_exists, os_get_pid, os_getenv, os_unsetenv};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var};
 use crate::path::fix_fname;
+use crate::startup::main_loop;
 use crate::types::{IOSIZE, SocketWatcher, Vv, size_t, uint32_t};
 
 use crate::event::socket::address::SOCKET_ADDR_LEN;

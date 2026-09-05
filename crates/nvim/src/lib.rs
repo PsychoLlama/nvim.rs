@@ -1,9 +1,5 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(non_upper_case_globals)]
-// `src/main/` is the transpiled `main.c`, not a binary entry point (the real
-// one is `src/bin/nvim.rs`). Rust flags any `mod main;` as a likely mistake;
-// the lint only listens at the crate root, not on the `mod` item itself.
-#![allow(special_module_name)]
 // The crate root cannot carry `forbid(unsafe_code)` — `forbid` reaches the
 // whole subtree and cannot be lifted by a module, and the tree is still tens
 // of thousands of unchecked lines deep. `deny(unsafe_op_in_unsafe_fn)` is the
@@ -76,7 +72,6 @@ pub(crate) mod kvec;
 pub mod linematch;
 pub mod log;
 pub mod lua;
-pub mod main;
 pub mod map;
 pub(crate) mod map_glyph_cache;
 pub mod mapping;
@@ -119,6 +114,7 @@ pub(crate) mod sign;
 pub mod spell;
 pub mod spellfile;
 pub(crate) mod spellsuggest;
+pub mod startup;
 pub mod state;
 pub mod statusline;
 pub mod strings;

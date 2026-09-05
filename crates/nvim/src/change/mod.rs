@@ -50,7 +50,6 @@ use crate::indent::{
 };
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
-use crate::main::silent_mode;
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
     mb_adjust_cursor, utf_char2bytes, utf_composinglike, utf_head_off, utf_iscomposing_first,
@@ -81,6 +80,7 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::state::highlight_match;
 use crate::search::{BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, showmatch};
 use crate::spell::spell_check_window;
+use crate::startup::silent_mode;
 use crate::state::mode::{
     Insstart, State, ai_col, can_si, can_si_back, did_ai, did_si, end_comment_pending,
     orig_line_count, restart_edit, vr_lines_changed,

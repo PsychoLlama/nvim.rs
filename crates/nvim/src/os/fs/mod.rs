@@ -34,7 +34,6 @@ use crate::event::libuv::{
 };
 use crate::log::g_stats;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::main::stdin_fd;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;
@@ -42,6 +41,7 @@ use crate::option::vars::p_verbose;
 use crate::os::env::os_getenv;
 use crate::path::{append_path, gettail_dir, save_abs_path};
 use crate::smsg;
+use crate::startup::stdin_fd;
 use crate::types::libc::STDIN_FILENO;
 use crate::types::{
     FAIL, FILE, Failed, OK, OptInt, iovec, ptrdiff_t, size_t, uv__queue, uv__work, uv_buf_t,

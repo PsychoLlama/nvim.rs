@@ -55,7 +55,6 @@ use std::ffi::CString;
 use crate::fileio::{read_eintr, write_eintr};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::main_loop;
 use crate::memline::{ml_get_buf, ml_open_file};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_swapclose;
@@ -68,6 +67,7 @@ use crate::os::fs::{
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::full_name_save;
+use crate::startup::main_loop;
 use crate::types::{BlockNr, Buffer, FileInfo, FileOffset};
 use crate::winlayer::buffers;
 use ::libc::{__errno_location, close, lseek, strerror};

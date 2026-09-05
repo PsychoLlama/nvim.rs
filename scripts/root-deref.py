@@ -75,9 +75,10 @@ ADDR_OF = re.compile(
     r"(?<![&\w])&(?!&)\s*(?:raw\s+(?:mut|const)\s+|mut\s+)?"
     r"\(\s*\*\s*(curwin|curbuf)\s*\.\s*get\(\)\s*\)\s*\."
 )
-# A `use crate::main::{...}` item list, so a root that is no longer named
-# can be dropped from it.
-MAIN_USE = re.compile(r"use crate::main::\{([^}]*)\};", re.S)
+# A `use crate::winlayer::graph::{...}` item list, so a root that is no longer
+# named can be dropped from it. (The roots sat in `crate::main` until phase 27
+# moved the window graph out of the startup module.)
+ROOT_USE = re.compile(r"use crate::winlayer::graph::\{([^}]*)\};", re.S)
 
 HELPER = """
 /// The {noun} the editor is working in.
@@ -136,13 +137,13 @@ def rewrite(text: str) -> tuple[str, dict[str, int], int]:
     return "\n".join(lines), used, refused
 
 
-def drop_from_main_use(text: str, root: str) -> str:
-    """Take `root` out of `use crate::main::{...}` when nothing names it.
+def drop_from_root_use(text: str, root: str) -> str:
+    """Take `root` out of `use crate::winlayer::graph::{...}` when unnamed.
 
     The search runs over code with comments and strings blanked out, so the
     helper's own SAFETY comment does not count as a use of the name.
     """
-    rest = MAIN_USE.sub("", text)
+    rest = ROOT_USE.sub("", text)
     code = "\n".join(strip_noncode(line) for line in rest.split("\n"))
     if re.search(rf"\b{root}\b", code):
         return text
@@ -154,9 +155,9 @@ def drop_from_main_use(text: str, root: str) -> str:
             return match.group(0)
         if not kept:
             return ""
-        return "use crate::main::{" + ", ".join(kept) + "};"
+        return "use crate::winlayer::graph::{" + ", ".join(kept) + "};"
 
-    return MAIN_USE.sub(edit, text)
+    return ROOT_USE.sub(edit, text)
 
 
 def process(path: pathlib.Path, dry_run: bool) -> bool:
@@ -173,7 +174,7 @@ def process(path: pathlib.Path, dry_run: bool) -> bool:
         if not re.search(rf"\bfn {fn}\(\)", text):
             text += HELPER.format(fn=fn, ty=ty, noun=noun, root=root)
         wanted.append(ty)
-        text = drop_from_main_use(text, root)
+        text = drop_from_root_use(text, root)
 
     missing = [ty for ty in wanted if not re.search(rf"\b{ty}\b", original)]
     if missing:

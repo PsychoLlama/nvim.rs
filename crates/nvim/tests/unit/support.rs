@@ -95,8 +95,8 @@ fn init_editor() {
     // SAFETY: the caller holds the editor lock, and `Once` makes this the
     // only initialisation.
     ONCE.call_once(|| unsafe {
-        neovim::main::event_init();
-        neovim::main::early_init(std::ptr::null_mut());
+        neovim::startup::event_init();
+        neovim::startup::early_init(std::ptr::null_mut());
         neovim::drawscreen::default_grid_alloc();
     });
 }

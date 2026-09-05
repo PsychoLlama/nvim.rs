@@ -24,7 +24,6 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
-use crate::main::starting;
 use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
 use crate::option::vars::{p_bin, p_et, p_ml, p_tw, p_wm};
@@ -37,6 +36,7 @@ use crate::os::cshim::strchr;
 use crate::spell::{compile_cap_prog, did_set_spell_option};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;
+use crate::startup::starting;
 use crate::types::{
     Buffer, DecorProvider, HlAttrs, NS, OptIndex, OptInt, OptionSetFlags, String_0, Window, size_t,
     uint32_t,

@@ -14,9 +14,9 @@
 
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_DBG, LOGLVL_WRN, logmsg};
-use crate::main::nvim_testing;
 use crate::memory::strequal;
 use crate::message_fmt::c_str;
+use crate::startup::nvim_testing;
 use crate::tui::output::{flush, out, out_fmt};
 use crate::tui::terminfo::caps::kTerm_set_underline_style;
 use crate::types::{KeyEncoding, TUIData, TermInput, TermMode, TermModeState, termios};

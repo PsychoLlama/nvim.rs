@@ -26,10 +26,10 @@ use crate::lua::ffi::{
 };
 use crate::lua::stdlib::nlua_state_add_stdlib;
 use crate::lua::treesitter::nlua_treesitter_init;
-use crate::main::os_exit;
 use crate::os::cshim::{gettext, stderr};
 use crate::profile::time_fd;
 use crate::runtime::runtime_search_path_validate;
+use crate::startup::os_exit;
 use crate::types::{NluaRefState, lua_Integer, lua_State, uv_thread_t};
 use ::libc::{exit, fprintf};
 

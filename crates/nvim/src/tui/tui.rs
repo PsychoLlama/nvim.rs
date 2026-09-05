@@ -34,12 +34,12 @@ use crate::event::signal::{
 use crate::event::stream::stream_set_blocking;
 use crate::highlight::HlAttrFlags;
 use crate::log::{LOGLVL_ERR, LOGLVL_WRN, logmsg};
-use crate::main::{main_loop, ui_client_error_exit, ui_client_exit_status};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, arena_strdup, xfree};
 use crate::message_fmt::c_str;
 use crate::os::env::{env_buf, os_getenv, os_getenv_into};
 use crate::os::input::os_isatty;
 use crate::os::uv_error::UV_EINTR;
+use crate::startup::{main_loop, ui_client_error_exit, ui_client_exit_status};
 use crate::tui::events::{tui_mode_change, tui_mouse_off, tui_mouse_on, tui_set_title};
 use crate::tui::input::{tinput_destroy, tinput_init, tinput_start, tinput_stop};
 use crate::tui::negotiate::{

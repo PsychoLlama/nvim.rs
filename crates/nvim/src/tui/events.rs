@@ -12,10 +12,10 @@
 
 use crate::event::libuv::{uv_chdir, uv_run, uv_sleep, uv_strerror, uv_tty_set_mode, uv_write};
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::main::{stdin_isatty, ui_client_channel_id};
 use crate::memory::{strequal, xfree};
 use crate::message_fmt::c_str;
 use crate::msgpack_rpc::channel::rpc_send_event;
+use crate::startup::{stdin_isatty, ui_client_channel_id};
 use crate::tui::cursor::{
     cursor_style_enabled, decode_cursor_entry, reset_style as cursor_reset_style,
     set_mode as cursor_set_mode,

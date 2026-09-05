@@ -23,11 +23,6 @@ use crate::eval::vars::{get_vim_var_str, set_vim_var_nr, set_vim_var_string, set
 use crate::event::stream::stream_set_blocking;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::entry::event_teardown;
-use crate::main::{
-    ex_exitval, exiting, stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status,
-    used_stdin, v_dying,
-};
 use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};
 use crate::message::state::{did_emsg, no_wait_return};
@@ -37,6 +32,11 @@ use crate::os::cshim::stderr;
 use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
+use crate::startup::entry::event_teardown;
+use crate::startup::{
+    ex_exitval, exiting, stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status,
+    used_stdin, v_dying,
+};
 use crate::state::mode::exmode_active;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{NUL, VAR_NUMBER, VarNumber, Vv};

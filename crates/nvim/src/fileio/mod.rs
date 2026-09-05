@@ -33,7 +33,6 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
-use crate::main::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
     utf_head_off, utf_ptr2char, utf_ptr2len_len,
@@ -81,6 +80,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::sha256::Sha256;
 use crate::shada::check_marks_read;
+use crate::startup::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
 use crate::state::mode::{State, exmode_active, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_NORMAL_BUSY};
 use crate::strings::{sort_strings, vim_strchr};

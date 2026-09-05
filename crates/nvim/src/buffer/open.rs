@@ -34,7 +34,6 @@ use crate::fileio::{Loaded, prep_exarg, readfile};
 use crate::getchar::state::got_int;
 use crate::help::get_local_additions;
 use crate::indent_c::parse_cino;
-use crate::main::{getout, readonlymode, v_dying};
 use crate::memfile::MfDirty;
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_open};
 use crate::memory::xrealloc;
@@ -43,6 +42,7 @@ use crate::option::{boolean_optval, cpo_has, set_option_value_give_err};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
+use crate::startup::{getout, readonlymode, v_dying};
 use crate::types::{
     AcoSave, ColNr, CpoFlag, ExArg, Failed, Handle, LineNr, NUL, OptInt, OptVal, OptionSetFlags,
     ShmFlag, String_0, StringBuilder, VarNumber, int64_t, size_t,

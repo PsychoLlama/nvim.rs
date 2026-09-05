@@ -33,7 +33,6 @@ use crate::keycodes::{
     KE_X2MOUSE, KE_X2RELEASE, KS_EXTRA, KS_MODIFIER, KS_SPECIAL, trans_special,
 };
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::main::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
 use crate::message_fmt::c_str;
 use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::msgpack_rpc::channel::ch_before_blocking_events;
@@ -42,6 +41,7 @@ use crate::os::cshim::gettext;
 use crate::os::time::os_hrtime;
 use crate::profile::do_profiling;
 use crate::profile::{prof_input_end, prof_input_start};
+use crate::startup::{getout, main_loop, preserve_exit, silent_mode, used_stdin};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, get_real_state};
 use crate::types::AutoEvent;

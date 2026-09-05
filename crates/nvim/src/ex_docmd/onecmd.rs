@@ -58,7 +58,6 @@ use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
 use crate::guard::Depth;
 use crate::guard::sandbox;
 use crate::input::ask_yesno;
-use crate::main::exiting;
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
 use crate::message::state::{did_emsg, msg_silent};
@@ -67,6 +66,7 @@ use crate::message::{
     e_trailing_arg,
 };
 use crate::profile::do_profiling;
+use crate::startup::exiting;
 use crate::state::mode::exmode_active;
 use crate::winlayer::graph::cmdwin_type;
 

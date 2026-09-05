@@ -23,10 +23,10 @@ use crate::eval::typval::tv_dict_to_env;
 use crate::event::libuv::{uv_close, uv_pipe, uv_pipe_open, uv_spawn, uv_strerror};
 use crate::event::proc::{kProcTypeUv, proc_get_exepath, proc_init};
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::ui_client_forward_stdin;
 use crate::message_fmt::c_str;
 use crate::narrow::number_as_int;
 use crate::os::env::os_free_fullenv;
+use crate::startup::ui_client_forward_stdin;
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
     LibuvProc, Loop, Proc, uv_file, uv_handle_t, uv_loop_t, uv_pipe_t, uv_process_options_t,

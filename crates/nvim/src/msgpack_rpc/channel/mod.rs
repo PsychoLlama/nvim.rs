@@ -43,10 +43,10 @@ use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{main_loop, ui_client_channel_id, ui_client_error_exit};
 use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
 use crate::registry::SlotTable;
+use crate::startup::{main_loop, ui_client_channel_id, ui_client_error_exit};
 use crate::types::{
     ApiDict, Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType,
     ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, MultiQueue, Object,

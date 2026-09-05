@@ -35,7 +35,6 @@ use crate::ex_docmd::cmdmod_has;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
 use crate::indent::inindent;
-use crate::main::starting;
 use crate::message::state::{msg_silent, need_fileinfo};
 use crate::message::{
     e_job_still_running, e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
@@ -47,6 +46,7 @@ use crate::option::buf_copy_options;
 use crate::option::vars::p_acd;
 use crate::os::state::last_chdir_reason;
 use crate::spell::parse_spelllang;
+use crate::startup::starting;
 use crate::state::MODE_INSERT;
 use crate::state::mode::{State, VIsual_reselect};
 use crate::terminal::terminal_check_size;

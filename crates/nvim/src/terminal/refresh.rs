@@ -28,10 +28,10 @@ use crate::event::time::{
     time_watcher_close, time_watcher_init, time_watcher_start, time_watcher_stop,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{exiting, main_loop};
 use crate::mbyte::mb_check_adjust_col;
 use crate::memline::{ml_append_buf, ml_replace_buf};
 use crate::r#move::{curs_columns, set_topline};
+use crate::startup::{exiting, main_loop};
 use crate::types::{ColNr, LineNr, MultiQueue, Terminal, TimeWatcher, WinInfo, uint16_t, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};

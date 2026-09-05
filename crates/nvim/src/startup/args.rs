@@ -31,15 +31,6 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::guard::{SavedSctx, Script};
 use crate::lua::state::nlua_disable_preload;
-use crate::main::exit::os_exit;
-use crate::main::usage::{mainerr, usage, version};
-use crate::main::{
-    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, MAX_ARG_CMDS, MainParams, SESSION_FILE,
-    WIN_HOR, WIN_TABS, WIN_VER, embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage,
-    err_opt_unknown, err_too_many_args, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
-    kOptShadafile, kOptVerbosefile, kOptWindow, readonlymode, recoverymode, silent_mode,
-    stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
-};
 use crate::memory::{strequal, xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_lpl, p_shadafile, p_uc, p_verbose, p_write};
 use crate::option::{boolean_optval, reset_modifiable, set_option_value_give_err, set_options_bin};
@@ -52,6 +43,15 @@ use crate::profile::time_msg_at;
 use crate::profile::{time_init, time_start};
 use crate::runtime::state::{ETYPE_ENV, SID_ENV, current_sctx};
 use crate::runtime::{estack_pop, estack_push};
+use crate::startup::exit::os_exit;
+use crate::startup::usage::{mainerr, usage, version};
+use crate::startup::{
+    EDIT_FILE, EDIT_NONE, EDIT_QF, EDIT_STDIN, EDIT_TAG, MAX_ARG_CMDS, MainParams, SESSION_FILE,
+    WIN_HOR, WIN_TABS, WIN_VER, embedded_mode, err_arg_missing, err_extra_cmd, err_opt_garbage,
+    err_opt_unknown, err_too_many_args, headless_mode, kOptArabic, kOptKeymap, kOptRightleft,
+    kOptShadafile, kOptVerbosefile, kOptWindow, readonlymode, recoverymode, silent_mode,
+    stderr_isatty, stdin_fd, stdin_isatty, stdout_isatty,
+};
 use crate::state::mode::exmode_active;
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};

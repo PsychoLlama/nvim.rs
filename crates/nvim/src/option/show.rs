@@ -22,7 +22,6 @@ use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::getchar::state::got_int;
 use crate::keycodes::{get_special_key_name, has_key_name};
-use crate::main::silent_mode;
 use crate::mapping::{EscTarget, put_escstr};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::state::info_message;
@@ -40,6 +39,7 @@ use crate::options::{
 use crate::os::cshim::{gettext, snprintf};
 use crate::os::env::home_replace;
 use crate::os::input::os_breakcheck;
+use crate::startup::silent_mode;
 use crate::strings::vim_strchr;
 use crate::types::{
     Buffer, FILE, Failed, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, size_t, uint32_t,

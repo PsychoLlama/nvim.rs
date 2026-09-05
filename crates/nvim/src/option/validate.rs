@@ -18,12 +18,12 @@ use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use crate::main::full_screen;
 use crate::memory::xfree;
 use crate::message::{e_invarg, e_positive, e_scroll, e_winheight, e_winwidth};
 use crate::option::vars::{p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::*;
 use crate::os::cshim::{gettext, snprintf};
+use crate::startup::full_screen;
 use crate::strings::vim_snprintf;
 use crate::types::{IOSIZE, MAX_MCO, OptIndex, OptInt, OptVal, OptionSetFlags, size_t};
 use crate::ui::state::Rows;

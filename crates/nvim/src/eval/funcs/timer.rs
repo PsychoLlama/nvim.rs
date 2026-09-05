@@ -19,11 +19,11 @@ use crate::event::time::{
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
-use crate::main::main_loop;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::called_emsg;
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
+use crate::startup::main_loop;
 use crate::types::{
     Callback, EvalFuncData, Float, MultiQueue, ProfTime, TimeWatcher, TypVal, VAR_FLOAT, VAR_LIST,
     VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, int32_t, kListLenUnknown, time_t,

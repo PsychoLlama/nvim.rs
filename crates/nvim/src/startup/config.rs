@@ -18,8 +18,6 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::lua::executor::{get_global_lstate, nlua_pcall};
 use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::lua::state::LUA_GLOBALSINDEX;
-use crate::main::args::execute_env;
-use crate::main::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::message::state::msg_scroll;
 use crate::option::vars::p_exrc;
@@ -36,6 +34,8 @@ use crate::runtime::state::{
     DOSO_NONE, DOSO_VIMRC, ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx,
 };
 use crate::runtime::{do_source, estack_pop, estack_push};
+use crate::startup::args::execute_env;
+use crate::startup::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::state::mode::exmode_active;
 use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
 use ::libc::fprintf;

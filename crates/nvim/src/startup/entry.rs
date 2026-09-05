@@ -44,23 +44,6 @@ use crate::highlight_group::init_highlight;
 use crate::keycodes::KE_NOP;
 use crate::log::{LOGLVL_DBG, LOGLVL_INF, log_init, logmsg};
 use crate::lua::executor::{nlua_exec_file, nlua_init, nlua_init_defaults, nlua_run_script};
-use crate::main::args::{
-    check_and_set_isatty, command_line_scan, edit_stdin, init_params, init_path, init_startuptime,
-    set_window_layout,
-};
-use crate::main::buffers::{
-    create_windows, edit_buffers, get_fname, handle_quickfix, handle_tag, read_stdin, set_argf_var,
-};
-use crate::main::config::{exe_commands, exe_pre_commands, source_startup_scripts};
-use crate::main::exit::{getout, os_exit};
-use crate::main::remote::remote_request;
-use crate::main::usage::{mainerr, print_mainerr};
-use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, embedded_mode,
-    err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
-    main_loop, recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
-    ui_client_channel_id, ui_client_forward_stdin,
-};
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
 use crate::memory::strequal;
@@ -85,6 +68,23 @@ use crate::quickfix::{qf_init_stack, qf_jump};
 use crate::register::get_default_register_name;
 use crate::runtime::{estack_init, load_plugins, runtime_init};
 use crate::shada::shada_read_everything;
+use crate::startup::args::{
+    check_and_set_isatty, command_line_scan, edit_stdin, init_params, init_path, init_startuptime,
+    set_window_layout,
+};
+use crate::startup::buffers::{
+    create_windows, edit_buffers, get_fname, handle_quickfix, handle_tag, read_stdin, set_argf_var,
+};
+use crate::startup::config::{exe_commands, exe_pre_commands, source_startup_scripts};
+use crate::startup::exit::{getout, os_exit};
+use crate::startup::remote::remote_request;
+use crate::startup::usage::{mainerr, print_mainerr};
+use crate::startup::{
+    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, embedded_mode,
+    err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
+    main_loop, recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
+    ui_client_channel_id, ui_client_forward_stdin,
+};
 use crate::state::mode::{exmode_active, restart_edit};
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};

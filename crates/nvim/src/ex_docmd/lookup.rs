@@ -18,10 +18,10 @@ use crate::eval::typval::NumBuf;
 use crate::ex_docmd::address::skip_range;
 use crate::ex_docmd::modifier::{CMDMODS, shared_prefix};
 use crate::ex_docmd::{EXFLAG_LIST, EXFLAG_PRINT, cmdidxs1, cmdidxs2, cmdnames, command_count};
-use crate::main::getout;
 use crate::memory::xstrdup;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
+use crate::startup::getout;
 
 use crate::types::{CmdAddr, EvalFuncData, ExArg, ExArgt, Expand, NUL, TypVal, VAR_STRING, size_t};
 use crate::usercmd::{expand_user_command_name, find_ucmd, get_user_command_name};

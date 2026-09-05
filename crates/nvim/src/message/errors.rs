@@ -459,7 +459,7 @@ pub unsafe fn give_warning(message: *const c_char, hl: bool, hist: bool) {
 
 // The shared message text. Upstream keeps these in `errors.h` as one
 // `EXTERN char[]` per message so that a wording appears once however many
-// call sites raise it, and c2rust parked the header in `main/mod.rs`. Only
+// call sites raise it, and c2rust parked the header in `startup/mod.rs`. Only
 // the ones raised from more than one place are here; a message with a single
 // caller is written at the call.
 //

@@ -54,10 +54,6 @@ use crate::indent::tabstop_padding;
 use crate::input::{get_keystroke, prompt_for_input};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
-use crate::main::{
-    embedded_mode, ex_exitval, exiting, full_screen, headless_mode, main_loop, nvim_testing,
-    silent_mode,
-};
 use crate::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,
     utf_head_off, utf_ptr2cells, utf_ptr2char, utf_ptr2len, utf8len_tab, utfc_ptr2len,
@@ -94,6 +90,10 @@ use crate::os::input::{input_available, os_breakcheck};
 use crate::os::time::os_delay;
 use crate::register::write_reg_contents;
 use crate::runtime::estack_sfile;
+use crate::startup::{
+    embedded_mode, ex_exitval, exiting, full_screen, headless_mode, main_loop, nvim_testing,
+    silent_mode,
+};
 use crate::state::mode::{State, exmode_active};
 use crate::state::{MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_SETWSIZE};
 use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};

@@ -39,7 +39,6 @@ use crate::ex_docmd::{before_quit_all, cmdmod_has, dialog_msg, not_exiting};
 use crate::ex_eval::aborting;
 use crate::ex_getln::{curbuf_locked, text_locked};
 use crate::guard::Suppress;
-use crate::main::{exiting, getout};
 use crate::mark::setpcmark;
 use crate::memline::makeswapname;
 use crate::memory::xfree;
@@ -53,6 +52,7 @@ use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::fs::{os_file_is_writable, os_file_mkdir, os_isdir, os_nodetype, os_path_exists};
 use crate::path::fix_fname;
 use crate::semsg;
+use crate::startup::{exiting, getout};
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{

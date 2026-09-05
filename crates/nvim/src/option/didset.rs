@@ -40,7 +40,6 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
-use crate::main::{full_screen, readonlymode, starting};
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
 use crate::message::e_invarg;
@@ -58,6 +57,7 @@ use crate::popupmenu::{pum_drawn, pum_redraw};
 use crate::quickfix::{ll_resize_stack, qf_resize_stack};
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::spell::parse_spelllang;
+use crate::startup::{full_screen, readonlymode, starting};
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{

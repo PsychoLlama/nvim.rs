@@ -37,12 +37,12 @@ use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_long, c_ulong, c_void};
 use core::{ptr, slice};
 
-use crate::main::preserve_exit;
 use crate::memfile::mf_release_all;
 use crate::message::clear_sb_text;
 use crate::message::e_outofmem;
 use crate::message::state::emsg_silent;
 use crate::os::cshim::gettext;
+use crate::startup::preserve_exit;
 use crate::types::size_t;
 use ::libc::{calloc, free, malloc, realloc};
 

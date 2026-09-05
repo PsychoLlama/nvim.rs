@@ -30,7 +30,6 @@ use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_getln::{text_locked, text_locked_msg};
 use crate::global_cell::GlobalCell;
-use crate::main::starting;
 use crate::memory::xstrdup;
 use crate::message::e_cmdwin;
 use crate::message::set_keep_msg;
@@ -39,6 +38,7 @@ use crate::normal::reset_visual_and_resel;
 use crate::option::set_option_value;
 use crate::option::vars::{p_ch, p_tpm};
 use crate::options::kOptCmdheight;
+use crate::startup::starting;
 use crate::tag::state::postponed_split_tab;
 use crate::types::{
     Buffer, Failed, Handle, OptInt, OptVal, OptionSetFlags, SwitchWin, Tabpage, VAR_SCOPE, int64_t,

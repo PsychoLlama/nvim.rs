@@ -29,7 +29,6 @@ use crate::fileio::{
 use crate::getchar::state::got_int;
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
-use crate::main::exiting;
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
 use crate::memory::{verbose_try_malloc, xfree, xmemcpyz, xstrlcat};
@@ -52,6 +51,7 @@ use crate::os::fs::{
 use crate::os::input::os_breakcheck;
 use crate::path::{after_pathsep, path_fnamecmp, path_tail};
 use crate::sha256::Sha256;
+use crate::startup::exiting;
 use crate::strings::{vim_snprintf, vim_snprintf_add};
 use crate::types::{
     AcoSave, Buffer, CmdModFlags, CpoFlag, ExArg, FAIL, Failed, FileInfo, FileOffset, IOSIZE,

@@ -39,7 +39,6 @@
 
 use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;
-use crate::main::ui_client_channel_id;
 use crate::message_fmt::{msg_cstr, to_bytes};
 use crate::msg_schedule_semsg;
 use crate::os::env::{env_get_bounded, env_set, expand_env_into, os_get_pid};
@@ -47,6 +46,7 @@ use crate::os::fs::{MkdirFailure, dir_exists, mkdir_recurse};
 use crate::os::stdpaths::{user_state_subpath, xdg_home};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::tail_index;
+use crate::startup::ui_client_channel_id;
 use crate::types::{Vv, XDGVarType, int16_t, int32_t, int64_t, nvim_stats_s};
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into

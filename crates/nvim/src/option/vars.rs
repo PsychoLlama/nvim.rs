@@ -1,7 +1,7 @@
 //! Where an option's value actually lives.
 //!
 //! Upstream declares these in `option_vars.h` as one `EXTERN` per option, and
-//! the transpiler parked the lot in `main/mod.rs` beside `main()`. They are
+//! the transpiler parked the lot in `startup/mod.rs` beside `main()`. They are
 //! the storage half of an option: [`crate::options::options`] is the table
 //! row -- name, type, scopes, flags -- and its `var` field points at the cell
 //! here. `crate::option` is what reads and writes them.

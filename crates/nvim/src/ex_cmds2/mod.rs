@@ -66,7 +66,6 @@ use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::getchar::state::vgetc_busy;
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
-use crate::main::exiting;
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
@@ -80,6 +79,7 @@ use crate::os::cshim::gettext;
 use crate::path::vim_full_name;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
+use crate::startup::exiting;
 use crate::types::CmdIdx;
 use crate::types::{
     Buffer, CmdModFlags, ExArg, Failed, LineNr, MAXPATHL, NUL, Tabpage, VarNumber, Vv, Window,

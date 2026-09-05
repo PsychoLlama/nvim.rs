@@ -56,7 +56,6 @@ use crate::highlight::state::{
 };
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
-use crate::main::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
@@ -65,6 +64,7 @@ use crate::option::{set_option_value, ui_refresh_options};
 use crate::options::{kOptBoFlagAll, kOptCmdheight, kOptRdbFlagFlush, kOptRdbFlagLine};
 use crate::os::cshim::gettext;
 use crate::os::time::{os_hrtime, os_sleep};
+use crate::startup::{exiting, full_screen, starting, ui_client_channel_id};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
 use crate::strings::vim_strchr;

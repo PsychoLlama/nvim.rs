@@ -36,13 +36,13 @@ use crate::eval::vars::{
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, secure};
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::starting;
 use crate::memory::{xfree, xmalloc, xstrdup, xstrlcpy};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_sandbox, e_secure, e_unsupportedoption};
 use crate::message_fmt::msg_cstr;
 use crate::mouse::setmouse;
 use crate::runtime::state::current_sctx;
+use crate::startup::starting;
 use crate::ui::state::t_colors;
 use crate::winlayer::graph::{curbuf, curwin};
 
