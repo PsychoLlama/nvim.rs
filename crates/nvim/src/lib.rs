@@ -1,5 +1,4 @@
 #![allow(clippy::missing_safety_doc)]
-#![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 // `src/main/` is the transpiled `main.c`, not a binary entry point (the real
 // one is `src/bin/nvim.rs`). Rust flags any `mod main;` as a likely mistake;

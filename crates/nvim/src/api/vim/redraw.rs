@@ -55,6 +55,8 @@ fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
 /// # Safety
 /// `opts` must be the caller's decoded keyset, whose `range` array names its
 /// own items.
+// `nvim__redraw` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
     let mut error = Error::none();
     // SAFETY: the caller's keyset, live for the whole call.

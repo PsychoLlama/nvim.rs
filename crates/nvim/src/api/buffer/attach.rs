@@ -122,6 +122,8 @@ pub unsafe fn nvim_buf_call(buf: BufferHandle, fun: LuaRef) -> Result<Object, Er
     res.reported(error)
 }
 
+// `nvim__buf_stats` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__buf_stats(buf: BufferHandle, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let b: *mut Buffer = unsafe { find_buffer_by_handle(buf, &mut error) };

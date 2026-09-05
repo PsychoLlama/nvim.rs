@@ -193,6 +193,8 @@ unsafe fn nlua_luv_thread_common_cfpcall(
 ///
 /// # Safety
 /// `lstate` must be a live Lua state holding this function's arguments.
+// Named after `nvim__get_runtime`, whose double underscore is the API's.
+#[allow(non_snake_case)]
 pub(crate) unsafe extern "C-unwind" fn nlua_thr_api_nvim__get_runtime(
     lstate: *mut lua_State,
 ) -> c_int {

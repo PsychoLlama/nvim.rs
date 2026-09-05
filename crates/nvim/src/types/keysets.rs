@@ -6,6 +6,11 @@
     clippy::cast_sign_loss,
     clippy::ptr_as_ptr
 )]
+// The leading `is_set__<name>_` mask is apigen's contract, not a spelling
+// choice: `tools/apigen` looks the field up by that exact name and reads
+// each key's bit out of it. Upstream's `KeyDict_*` macro is where the
+// double underscore comes from.
+#![allow(non_snake_case)]
 
 //! The keysets: the option-dict layouts the API takes by name.
 //!

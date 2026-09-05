@@ -27,6 +27,8 @@ pub unsafe fn nvim_exec_lua(
     unsafe { nlua_exec(code, name, args, kRetObject, arena, &mut error) }.reported(error)
 }
 
+// `nvim__exec_lua_fast` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__exec_lua_fast(
     code: String_0,
     args: Array,
@@ -48,6 +50,8 @@ pub unsafe fn nvim_list_runtime_paths(arena: *mut Arena) -> Result<Array, Error>
     unsafe { nvim_get_runtime_file(String_0::NULL, true, arena) }
 }
 
+// `nvim__runtime_inspect` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__runtime_inspect(arena: *mut Arena) -> Array {
     unsafe { runtime_inspect(arena) }
 }
@@ -134,10 +138,14 @@ unsafe fn find_runtime_cb(
     num_fnames > 0 as ::core::ffi::c_int
 }
 
+// `nvim__get_lib_dir` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__get_lib_dir() -> String_0 {
     unsafe { cstr_as_string(get_lib_dir()) }
 }
 
+// `nvim__get_runtime` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__get_runtime(
     pat: Array,
     all: Boolean,

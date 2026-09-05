@@ -1,4 +1,9 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+// The whole subtree binds LuaJIT's `lua_State *L` under its own name: it is
+// the tree-sitter bindings' first argument in every entry point, and these
+// files are read against `runtime/lua/vim/treesitter/` and libtree-sitter's
+// own C. An inner attribute here reaches the child modules too.
+#![allow(non_snake_case)]
 
 use crate::event::libuv::{uv_dlclose, uv_dlerror, uv_dlopen, uv_dlsym};
 use crate::global_cell::GlobalCell;

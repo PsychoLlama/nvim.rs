@@ -80,6 +80,8 @@ pub unsafe fn nvim_set_client_info(
     unsafe { rpc_set_client_info(channel_id, copy_dict(info, no_arena)) };
 }
 
+// `nvim__chan_set_detach` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     let mut error = Error::none();
     let chan: *mut Channel = find_channel(channel_id);

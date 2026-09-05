@@ -132,6 +132,8 @@ pub fn ns_initialized(ns: uint32_t) -> bool {
     ns < next_namespace_id.get() as uint32_t
 }
 
+// `nvim__ns_set` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result<(), Error> {
     let mut error = Error::none();
     if !ns_initialized(ns_id as uint32_t) {
@@ -195,6 +197,8 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
     ().reported(error)
 }
 
+// `nvim__ns_get` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__ns_get(ns_id: Integer, arena: *mut Arena) -> Result<KeyDict_ns_opts, Error> {
     let mut error = Error::none();
     let mut opts: KeyDict_ns_opts = KEYDICT_INIT;

@@ -74,6 +74,17 @@ unsafe_op_in_unsafe_fn = "allow"
 unreachable_pub = "deny"
 unused_qualifications = "deny"
 
+# c2rust wrote every name the C's way, so `non_snake_case` was allowed at the
+# crate root for the whole transpile. Phase 27 renamed what the port owns and
+# marked what it does not: an API method's own name (`nvim__id`, and every
+# wrapper apigen derives from it) carries an item-level allow, and five files
+# whose *value* names are someone else's -- LuaJIT's `L`, apigen's
+# `is_set__<name>_` keyset mask -- carry a file-level one with a reason. The
+# ratchet's `files_allowing_non_snake_case` may only fall from there. Denying
+# it here rather than on the lib target means the bin, test and bench roots
+# are held to it too.
+non_snake_case = "deny"
+
 # c2rust wrote `mut` on every binding it emitted, whether or not the value was
 # ever reassigned — 956 findings in 169 files at the point the allow came off.
 # `cargo fix` cleared all of them mechanically (the fix is textual and cannot

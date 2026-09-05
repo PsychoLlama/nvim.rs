@@ -23,6 +23,8 @@
 //! MIT license; the notice is reproduced in licenses/libmpack-LICENSE.txt.
 
 #![deny(unsafe_op_in_unsafe_fn)]
+// libmpack-lua's `L`, the Lua state every entry point takes first.
+#![allow(non_snake_case)]
 
 pub mod session;
 pub mod walk;

@@ -347,6 +347,8 @@ unsafe fn extmark_get_index_from_obj(
     panic!("Reached end of non-void function without returning");
 }
 
+// `nvim__buf_debug_extmarks` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__buf_debug_extmarks(
     buf: BufferHandle,
     keys: Boolean,

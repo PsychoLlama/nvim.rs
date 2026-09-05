@@ -397,6 +397,8 @@ fn highlight_dicts(
     values
 }
 
+// `nvim__complete_set` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__complete_set(
     index: Integer,
     opts: *mut KeyDict_complete_set,

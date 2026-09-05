@@ -17,18 +17,26 @@ use crate::grid::default_grid_ref;
 use crate::log::logmsg;
 use crate::popupmenu::pum_grid_ref;
 
+// `nvim__id` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__id(obj: Object, arena: *mut Arena) -> Object {
     unsafe { copy_object(obj, arena) }
 }
 
+// `nvim__id_array` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
     unsafe { copy_array(arr, arena) }
 }
 
+// `nvim__id_dict` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__id_dict(dct: ApiDict, arena: *mut Arena) -> ApiDict {
     unsafe { copy_dict(dct, arena) }
 }
 
+// `nvim__id_float` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__id_float(flt: Float) -> Float {
     flt
 }
@@ -38,6 +46,8 @@ pub unsafe fn nvim__id_float(flt: Float) -> Float {
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
+// `nvim__stats` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__stats(arena: *mut Arena) -> ApiDict {
     let stats = g_stats.get();
     // SAFETY: the Lua state exists from startup to exit.
@@ -170,6 +180,8 @@ pub unsafe fn nvim_get_proc(pid: Integer, arena: *mut Arena) -> Result<Object, E
     rvobj.reported(error)
 }
 
+// `nvim__inspect_cell` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__inspect_cell(
     grid: Integer,
     row: Integer,
@@ -219,15 +231,21 @@ pub unsafe fn nvim__inspect_cell(
     ret.reported(error)
 }
 
+// `nvim__screenshot` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__screenshot(path: String_0) {
     ui_call_screenshot(path);
 }
 
+// `nvim__invalidate_glyph_cache` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__invalidate_glyph_cache() {
     unsafe { schar_cache_clear() };
     must_redraw.set(UPD_CLEAR);
 }
 
+// `nvim__unpack` is an API method's own name, published over msgpack-RPC.
+#[allow(non_snake_case)]
 pub unsafe fn nvim__unpack(str: String_0, arena: *mut Arena) -> Result<Object, Error> {
     let mut error = Error::none();
     unsafe { unpack(str.data(), str.len(), arena, &mut error).reported(error) }
