@@ -18,8 +18,8 @@ use core::ptr;
 /// Where [`read_redo`] is up to: the block it is reading, and the byte within
 /// it. A pair of walk cursors rather than an index, because the blocks are
 /// separately allocated and the walk crosses from one to the next mid-key.
-static redo_block: GlobalCell<*mut KeyBlock> = GlobalCell::new(ptr::null_mut());
-static redo_at: GlobalCell<*const u8> = GlobalCell::new(ptr::null());
+static REDO_BLOCK: GlobalCell<*mut KeyBlock> = GlobalCell::new(ptr::null_mut());
+static REDO_AT: GlobalCell<*const u8> = GlobalCell::new(ptr::null());
 
 /// Move the current redo buffer to `old_redobuff` and start a fresh one.
 ///
@@ -233,15 +233,15 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
         if head.is_null() {
             return FAIL;
         }
-        redo_block.set(head);
-        // SAFETY (this body): `redo_block` and `redo_at` name a live block of
+        REDO_BLOCK.set(head);
+        // SAFETY (this body): `REDO_BLOCK` and `REDO_AT` name a live block of
         // the redo buffer and a byte inside it; the walk crosses to `next`
         // only at that block's NUL.
-        redo_at.set(unsafe { block_str(head) }.cast());
+        REDO_AT.set(unsafe { block_str(head) }.cast());
         return OK;
     }
 
-    let mut c = c_int::from(unsafe { *redo_at.get() });
+    let mut c = c_int::from(unsafe { *REDO_AT.get() });
     if c == NUL {
         return c;
     }
@@ -249,7 +249,7 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
     // How many bytes this character occupies. An escaped K_SPECIAL is
     // three bytes that stand for one, so only a byte that is *not* the
     // start of an escape can begin a multibyte sequence.
-    let n = if c != K_SPECIAL || c_int::from(unsafe { *redo_at.get().add(1) }) == KS_SPECIAL {
+    let n = if c != K_SPECIAL || c_int::from(unsafe { *REDO_AT.get().add(1) }) == KS_SPECIAL {
         mb_byte2len_check(c)
     } else {
         1
@@ -260,18 +260,18 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
     loop {
         if c == K_SPECIAL {
             // Special key or escaped K_SPECIAL: three bytes, one key.
-            c = key_unescape(unsafe { *redo_at.get().add(1) }, unsafe {
-                *redo_at.get().add(2)
+            c = key_unescape(unsafe { *REDO_AT.get().add(1) }, unsafe {
+                *REDO_AT.get().add(2)
             });
-            redo_at.set(unsafe { redo_at.get().add(2) });
+            REDO_AT.set(unsafe { REDO_AT.get().add(2) });
         }
-        redo_at.set(unsafe { redo_at.get().add(1) });
-        if c_int::from(unsafe { *redo_at.get() }) == NUL
-            && !unsafe { (*redo_block.get()).next }.is_null()
+        REDO_AT.set(unsafe { REDO_AT.get().add(1) });
+        if c_int::from(unsafe { *REDO_AT.get() }) == NUL
+            && !unsafe { (*REDO_BLOCK.get()).next }.is_null()
         {
-            let next = unsafe { (*redo_block.get()).next };
-            redo_block.set(next);
-            redo_at.set(unsafe { block_str(next) }.cast());
+            let next = unsafe { (*REDO_BLOCK.get()).next };
+            REDO_BLOCK.set(next);
+            REDO_AT.set(unsafe { block_str(next) }.cast());
         }
 
         buf[i] = c as u8;
@@ -282,7 +282,7 @@ pub(crate) unsafe fn read_redo(init: bool, old_redo: bool) -> c_int {
             }
             break;
         }
-        c = c_int::from(unsafe { *redo_at.get() });
+        c = c_int::from(unsafe { *REDO_AT.get() });
         if c == NUL {
             break; // cannot happen?
         }

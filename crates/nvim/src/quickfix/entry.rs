@@ -24,13 +24,13 @@ use core::ptr;
 /// The file name the previous entry was filed under, and the buffer it
 /// named. Consecutive entries usually name the same file, so remembering
 /// the last answer saves a `buflist_new` lookup per entry.
-static last_bufname: GlobalCell<Option<Name>> = GlobalCell::new(None);
-static last_bufref: GlobalCell<BufRef> = GlobalCell::new(BufRef::NONE);
+static LAST_BUFNAME: GlobalCell<Option<Name>> = GlobalCell::new(None);
+static LAST_BUFREF: GlobalCell<BufRef> = GlobalCell::new(BufRef::NONE);
 
 /// Throw the cache away. The buffer it names may have been wiped out since,
 /// and a stale hit would file entries under a dead buffer.
 pub(crate) fn forget_last_buffer() {
-    last_bufname.with_mut(|name| *name = None);
+    LAST_BUFNAME.with_mut(|name| *name = None);
 }
 
 /// The buffer for `bufname`, from the cache or freshly listed.
@@ -40,18 +40,18 @@ pub(crate) fn forget_last_buffer() {
 /// `bufname` must be NUL-terminated.
 unsafe fn buffer_for(bufname: *mut c_char) -> Option<Buf> {
     // SAFETY: forwarded from the caller; `bufref_valid` only reads.
-    let cached = last_bufname.with(|name| match name {
+    let cached = LAST_BUFNAME.with(|name| match name {
         Some(name) => unsafe { cstr::eq(bufname, name.as_ptr()) },
         None => false,
     });
-    if cached && last_bufref.get().valid() {
-        return unsafe { Buf::from_raw(last_bufref.get().raw()) };
+    if cached && LAST_BUFREF.get().valid() {
+        return unsafe { Buf::from_raw(LAST_BUFREF.get().raw()) };
     }
     let buf = unsafe { buflist_new(bufname, ptr::null_mut(), 0, BLN_NOOPT as c_int) };
     let name = unsafe { Name::from_ptr(bufname) };
-    last_bufname.with_mut(|slot| *slot = Some(name));
+    LAST_BUFNAME.with_mut(|slot| *slot = Some(name));
     let buf = unsafe { Buf::from_raw(buf) };
-    last_bufref.set(BufRef::of_opt(buf));
+    LAST_BUFREF.set(BufRef::of_opt(buf));
     buf
 }
 

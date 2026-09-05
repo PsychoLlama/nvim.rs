@@ -393,6 +393,9 @@ fn is_set(opts: &KeyDict_xdl_diff, optidx: c_int) -> bool {
 ///
 /// # Safety
 /// `lstate` must be live; `opts` must be a populated keydict.
+// The `KEYSET_OPTIDX_*` constants below are spelled the way apigen names the
+// keyset's mask bits, so the lint is answered here rather than file-wide.
+#[allow(non_upper_case_globals)]
 unsafe fn apply_opts(
     lstate: *mut lua_State,
     opts: &KeyDict_xdl_diff,
