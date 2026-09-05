@@ -34,9 +34,7 @@ use crate::eval::vars::{unref_var_dict, vars_clear};
 use crate::extmark::extmark_free_all;
 use crate::garray::ga_clear;
 use crate::hashtab::{hash_find, hash_remove};
-use crate::main::{
-    autocmd_busy, curbuf, curtab, curwin, exiting, firstbuf, lastbuf, updating_screen,
-};
+use crate::main::{autocmd_busy, exiting, updating_screen};
 use crate::mapping::map_clear_mode;
 use crate::mark::{clear_fmark, free_fmark, mark_adjust_buf, mark_forget_file, set_last_cursor};
 use crate::memline::ml_close;
@@ -54,6 +52,7 @@ use crate::types::{
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
+use crate::winlayer::graph::{curbuf, curtab, curwin, firstbuf, lastbuf};
 use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,

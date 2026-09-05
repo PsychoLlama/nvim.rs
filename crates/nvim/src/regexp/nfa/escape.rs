@@ -11,7 +11,7 @@ use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
 use super::{Parsed, Rejected, postfix};
 use crate::ascii::ascii_isdigit;
-use crate::main::{curwin, rc_did_emsg, reg_do_extmatch};
+use crate::main::{rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
 use crate::regexp::{
     INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs,
@@ -19,6 +19,7 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{ColNr, MB_MAXBYTES, NUL};
+use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.

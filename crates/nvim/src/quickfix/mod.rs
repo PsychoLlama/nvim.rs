@@ -61,8 +61,8 @@ use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
 use crate::main::{
-    Columns, KeyTyped, cmdline_row, cmdmod, curbuf, curtab, curwin, firstwin, got_int, lastwin,
-    msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled, must_redraw, prevwin, restart_edit,
+    Columns, KeyTyped, cmdline_row, cmdmod, got_int, msg_col, msg_didout, msg_nowait, msg_scroll,
+    msg_scrolled, must_redraw, restart_edit,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
@@ -129,6 +129,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, check_lnums, goto_tabpage_win, win_close, win_enter, win_goto,
     win_setheight, win_split, win_valid,
 };
+use crate::winlayer::graph::{curbuf, curtab, curwin, firstwin, lastwin, prevwin};
 use ::libc::{__errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, time};
 use core::ffi::{CStr, c_int, c_uint};
 

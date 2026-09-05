@@ -24,7 +24,7 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::entry::event_teardown;
 use crate::main::{
-    curbuf, did_emsg, ex_exitval, exiting, exmode_active, garbage_collect_at_exit, no_wait_return,
+    did_emsg, ex_exitval, exiting, exmode_active, garbage_collect_at_exit, no_wait_return,
     stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
 };
 use crate::memfile::mf_fname;
@@ -39,6 +39,7 @@ use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{NUL, VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
+use crate::winlayer::graph::curbuf;
 use ::libc::{exit, fprintf, tcdrain};
 
 use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};

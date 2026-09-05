@@ -21,7 +21,7 @@ use crate::lua::ffi::{
     LUA_TNIL, lua_getglobal, lua_isnil, lua_isstring, lua_pop, lua_pushnumber, lua_pushstring,
     lua_pushvalue, lua_tolstring, lua_type, luaL_loadbuffer,
 };
-use crate::main::{curbuf, got_int};
+use crate::main::got_int;
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_replace};
 use crate::memory::{strequal, xfree, xmalloc, xmallocz, xmemdupz, xrealloc};
 use crate::message::e_argreq;
@@ -34,6 +34,7 @@ use crate::types::{
     Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, TypVal, lua_Number, size_t,
 };
 use crate::undo::u_save;
+use crate::winlayer::graph::curbuf;
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
 const DOSTART: &CStr = c"return function(line, linenr) ";

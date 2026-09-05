@@ -51,10 +51,10 @@
 use std::ffi::{CString, c_char, c_int};
 
 use neovim::garray::{ga_clear, ga_grow, ga_init};
-use neovim::main::curwin;
 use neovim::spell::{REGION_ALL, init_spell_chartab, spell_check};
 use neovim::spellfile::{mkspell, spell_check_msm, spell_load_file};
 use neovim::types::{LangP, SpellLang};
+use neovim::winlayer::graph::curwin;
 
 use crate::support::{Sandbox, cstr};
 

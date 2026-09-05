@@ -31,7 +31,7 @@ use crate::buffer::buf_get_changedtick;
 use crate::guard::Lock;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::{api_free_luaref, nlua_call_ref_quiet};
-use crate::main::{cmdpreview, curbuf};
+use crate::main::cmdpreview;
 use crate::memline::ml_flush_deleted_bytes;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
@@ -40,6 +40,7 @@ use crate::types::{
     Arena, Array, BCount, BufUpdateCallbacks, Buffer, ColNr, Integer, LineNr, LuaRef, LuaRetMode,
     Object, int64_t, size_t, uint64_t,
 };
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Win};
 
 pub const kRetObject: LuaRetMode = 0;

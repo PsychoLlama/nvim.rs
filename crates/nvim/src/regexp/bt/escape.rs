@@ -12,7 +12,7 @@ use super::compile::{regc, regmbc, regnext, regnode, regnr, regtail, use_multiby
 use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
-use crate::main::{curwin, rc_did_emsg, reg_do_extmatch};
+use crate::main::{rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE,
@@ -21,6 +21,7 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{ColNr, NUL, int64_t, uint8_t, uint32_t};
+use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.

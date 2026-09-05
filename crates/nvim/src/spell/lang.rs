@@ -41,7 +41,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_append_via_ptr, ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, starting};
+use crate::main::starting;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemcpyz, xmemdupz, xstrdup, xstrlcpy};
 use crate::message::e_invarg;
@@ -58,6 +58,7 @@ use crate::types::{
     size_t,
 };
 use crate::window::win_valid_any_tab;
+use crate::winlayer::graph::{curbuf, curwin};
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;

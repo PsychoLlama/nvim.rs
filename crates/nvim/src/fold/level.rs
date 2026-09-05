@@ -18,12 +18,13 @@ use crate::drawscreen::redraw_win_range_later;
 use crate::eval::eval_foldexpr;
 use crate::eval::vars::set_vim_var_nr;
 use crate::indent::{get_indent_buf, get_sw_value};
-use crate::main::{KeyTyped, curbuf, curwin, diff_context, got_int};
+use crate::main::{KeyTyped, diff_context, got_int};
 use crate::memline::ml_get_buf;
 use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;
 use crate::strings::vim_strchr;
 use crate::syntax::syn_get_foldlevel;
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Buf, Win};
 use core::ffi::c_int;
 

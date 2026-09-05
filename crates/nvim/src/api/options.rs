@@ -28,7 +28,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::api_error;
-use crate::main::{curbuf, curwin};
 use crate::memline::ml_open;
 use crate::memory::xstrdup;
 use crate::message_fmt::{c_str, msg_cstr};
@@ -42,6 +41,7 @@ use crate::types::{
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ptr;
 
 const kOptScopeBuf: OptScope = 2;

@@ -15,7 +15,7 @@ use crate::event::signal::{
 use crate::ex_cmds2::autowrite_all;
 use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{curbuf, main_loop, preserve_exit, v_dying};
+use crate::main::{main_loop, preserve_exit, v_dying};
 use crate::memline::ml_sync_all;
 use crate::message_fmt::c_str;
 use crate::option::vars::p_awa;
@@ -25,6 +25,7 @@ use crate::types::{
     IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
     uv_signal_t,
 };
+use crate::winlayer::graph::curbuf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

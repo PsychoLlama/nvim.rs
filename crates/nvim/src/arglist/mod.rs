@@ -37,10 +37,7 @@ use crate::ex_cmds2::{autowrite, check_changed};
 use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    Columns, arg_had_last, cmdmod, cmdwin_type, curbuf, curtab, curwin, firstwin, global_alist,
-    got_int, lastused_tabpage, lastwin, max_alist_id,
-};
+use crate::main::{Columns, arg_had_last, cmdmod, global_alist, got_int, max_alist_id};
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_VIsual_and_resel;
@@ -58,6 +55,9 @@ use crate::version::list_in_columns;
 use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
+};
+use crate::winlayer::graph::{
+    cmdwin_type, curbuf, curtab, curwin, firstwin, lastused_tabpage, lastwin,
 };
 use crate::winlayer::{Buf, Ea, Live, Win, tab_windows};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

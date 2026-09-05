@@ -24,10 +24,10 @@ use std::ptr;
 
 use neovim::buffer::setfname;
 use neovim::grid::schar_from_str;
-use neovim::main::curwin;
 use neovim::statusline::{FmtSource, StlSinks, build_stl_str_hl};
 use neovim::types::ScreenChar;
 use neovim::winlayer::Buf;
+use neovim::winlayer::graph::curwin;
 
 use crate::support::{Sandbox, cstr};
 

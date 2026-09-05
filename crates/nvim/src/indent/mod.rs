@@ -26,7 +26,7 @@ use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::edit::get_nolist_virtcol;
 use crate::extmark::extmark_splice_cols;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::main::{State, curbuf, curwin, saved_cursor};
+use crate::main::{State, saved_cursor};
 use crate::memline::{ml_get, ml_get_buf, ml_get_pos, ml_replace};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_positive;
@@ -37,6 +37,7 @@ use crate::os::cshim::gettext;
 use crate::plines::getvcol;
 use crate::textformat::has_format_option;
 use crate::types::*;
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::abort;
 
 // `regexp.rs` keeps its own copy of `RegProg`, so these stay declarations

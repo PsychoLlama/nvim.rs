@@ -28,7 +28,6 @@ use crate::eval::window::find_win_by_nr_or_id;
 use crate::ex_cmds::check_secure;
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::main::{curbuf, curwin};
 use crate::memory::{arena_finish, arena_mem_free};
 use crate::message::e_invalwindow;
 use crate::message::emsg;
@@ -44,6 +43,7 @@ use crate::types::{
     VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Window, kBoolVarTrue, ptrdiff_t,
     typval_vval_union,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};

@@ -26,7 +26,7 @@
   "raw_win_buf_sigs": 625,
   "abbrev_params": 3388,
   "curwin_raw": 1182,
-  "files_without_forbid_unsafe": 1060,
+  "files_without_forbid_unsafe": 1061,
   "files_without_deny_unsafe_op": 0,
   "files_without_deny_casts": 1048,
   "files_allowing_non_camel_case_types": 26,
@@ -626,7 +626,7 @@
     "crates/nvim/src/main/config.rs": {"missing_safety_doc": 9, "unsafe_lines": 64},
     "crates/nvim/src/main/entry.rs": {"cell_ptr": 7, "extern_abi": 2, "missing_safety_doc": 4, "no_mangle": 2, "pub_items": 3, "unsafe_lines": 105},
     "crates/nvim/src/main/exit.rs": {"missing_safety_doc": 4, "pub_items": 3, "unsafe_lines": 43},
-    "crates/nvim/src/main/mod.rs": {"cell_ptr": 1, "no_mangle": 4, "pub_items": 355, "unsafe_lines": 1},
+    "crates/nvim/src/main/mod.rs": {"cell_ptr": 1, "no_mangle": 3, "pub_items": 342, "unsafe_lines": 1},
     "crates/nvim/src/main/remote.rs": {"missing_safety_doc": 4, "unsafe_lines": 41},
     "crates/nvim/src/main/usage.rs": {"missing_safety_doc": 4, "unsafe_lines": 13},
     "crates/nvim/src/map/mod.rs": {"pub_items": 10, "unsafe_lines": 12},
@@ -1259,7 +1259,8 @@
     "crates/nvim/src/window/tabpage.rs": {"missing_safety_doc": 8, "pub_items": 15, "unsafe_lines": 27},
     "crates/nvim/src/window/winclose.rs": {"missing_safety_doc": 2, "pub_items": 3, "unsafe_lines": 7},
     "crates/nvim/src/winfloat.rs": {"extern_abi": 1, "missing_safety_doc": 3, "unsafe_lines": 40},
-    "crates/nvim/src/winlayer.rs": {"pub_items": 13, "unsafe_lines": 24},
+    "crates/nvim/src/winlayer.rs": {"pub_items": 14, "unsafe_lines": 24},
+    "crates/nvim/src/winlayer/graph.rs": {"no_mangle": 1, "pub_items": 2},
     "crates/nvim/src/winlayer/live.rs": {"unsafe_lines": 2},
     "crates/nvim/src/xdiff/ffi.rs": {"unsafe_lines": 40}
   }

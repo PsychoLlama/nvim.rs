@@ -20,8 +20,7 @@ use crate::eval::typval::{callback_free, tv_dict_add_tv, tv_dict_alloc, tv_free}
 use crate::eval::vars::optval_as_tv;
 use crate::eval::{callback_from_typval, eval_expr};
 use crate::main::{
-    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, curbuf, magic_overruled, need_maketitle,
-    redraw_tabline,
+    OPTION_MAGIC_OFF, OPTION_MAGIC_ON, State, magic_overruled, need_maketitle, redraw_tabline,
 };
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::option::vars::{
@@ -38,6 +37,7 @@ use crate::types::{
     BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
     ShmFlag, TypVal, VAR_STRING, int64_t, size_t, uint8_t,
 };
+use crate::winlayer::graph::curbuf;
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,

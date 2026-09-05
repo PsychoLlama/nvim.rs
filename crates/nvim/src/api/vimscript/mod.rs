@@ -13,7 +13,7 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    capture_ga, curwin, did_emsg, did_throw, force_abort, msg_col, redir_off, suppress_errthrow,
+    capture_ga, did_emsg, did_throw, force_abort, msg_col, redir_off, suppress_errthrow,
 };
 use crate::memory::xfree;
 use crate::runtime::do_source_str;
@@ -30,6 +30,7 @@ use crate::viml::parser::expressions::{
     viml_pexpr_parse,
 };
 use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
+use crate::winlayer::graph::curwin;
 use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.

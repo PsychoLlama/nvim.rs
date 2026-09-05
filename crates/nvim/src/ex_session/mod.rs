@@ -51,7 +51,7 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::shorten_fnames;
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curtab, curwin, globaldir, no_hlsearch};
+use crate::main::{globaldir, no_hlsearch};
 use crate::mapping::makemap;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xmemcpyz};
@@ -77,6 +77,7 @@ use crate::types::{
     Window, size_t,
 };
 use crate::winlayer::Win;
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 use ::libc::{fclose, fprintf, fputs, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};

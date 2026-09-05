@@ -39,7 +39,7 @@ use crate::change::inserted_bytes;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::ex_cmds::do_sub_msg;
 use crate::global_cell::GlobalCell;
-use crate::main::{curwin, got_int, sub_nlines, sub_nsubs};
+use crate::main::{got_int, sub_nlines, sub_nsubs};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
@@ -52,6 +52,7 @@ use crate::types::{
     SpellTab, Window, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
+use crate::winlayer::graph::curwin;
 use ::libc::{strcat, strcpy};
 
 mod chartab;

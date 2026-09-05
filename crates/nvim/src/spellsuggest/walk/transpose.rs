@@ -34,12 +34,12 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::main::curwin;
 use crate::mbyte::{char_at, char_len, cluster_len, encode_char, utf_char2len};
 use crate::spell::spell_iswordp;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::spellsuggest::{SCORE_SWAP, SCORE_SWAP3};
 use crate::types::NUL;
+use crate::winlayer::graph::curwin;
 use core::ffi::c_int;
 
 impl Walk<'_> {

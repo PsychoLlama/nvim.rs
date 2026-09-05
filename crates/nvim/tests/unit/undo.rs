@@ -112,13 +112,13 @@ mod write {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
 
-    use neovim::main::curbuf;
     use neovim::memory::xfree;
     use neovim::option::vars::p_udir;
     use neovim::types::Buffer;
     use neovim::undo::format::UF_START_MAGIC;
     use neovim::undo::{UNDO_HASH_SIZE, u_compute_hash, u_get_undo_file_name, u_write_undo};
     use neovim::winlayer::Buf;
+    use neovim::winlayer::graph::curbuf;
 
     use crate::support::{Editor, editor_lock};
 

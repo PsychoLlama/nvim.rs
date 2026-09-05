@@ -38,9 +38,8 @@ use crate::highlight_group::{
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
-    State, cmdwin_type, cmdwin_win, cterm_normal_bg_color, curwin, did_emsg, dollar_vcol,
-    highlight_match, hl_attr_active, normal_bg, search_match_endcol, search_match_lines,
-    spell_redraw_lnum, win_extmark_arr,
+    State, cterm_normal_bg_color, did_emsg, dollar_vcol, highlight_match, hl_attr_active,
+    normal_bg, search_match_endcol, search_match_lines, spell_redraw_lnum, win_extmark_arr,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -80,6 +79,7 @@ use crate::types::{
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
+use crate::winlayer::graph::{cmdwin_type, cmdwin_win, curwin};
 use ::libc::abs;
 
 // The carve of the transpiled module; see each child's docs.

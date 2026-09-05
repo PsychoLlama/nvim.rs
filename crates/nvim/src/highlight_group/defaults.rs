@@ -13,13 +13,12 @@ use core::ffi::{CStr, c_char};
 use crate::autocmd::apply_autocmds;
 use crate::eval::vars::get_var_value;
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    cterm_normal_bg_color, cterm_normal_fg_color, curbuf, normal_bg, normal_fg, normal_sp,
-};
+use crate::main::{cterm_normal_bg_color, cterm_normal_fg_color, normal_bg, normal_fg, normal_sp};
 use crate::memory::{xfree, xstrdup};
 use crate::option::vars::p_bg;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::types::{Failed, RgbValue};
+use crate::winlayer::graph::curbuf;
 
 use super::do_highlight;
 use crate::eval::typval::NumBuf;

@@ -46,8 +46,9 @@ use crate::ex_getln::{
 };
 use crate::fold::has_folding;
 use crate::guard::Suppress;
-use crate::main::{cmdmod, cmdwin_type, emsg_silent, global_busy};
+use crate::main::{cmdmod, emsg_silent, global_busy};
 use crate::message::{e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange};
+use crate::winlayer::graph::cmdwin_type;
 
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};

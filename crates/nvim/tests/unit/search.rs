@@ -19,10 +19,11 @@
 use std::ffi::{CStr, c_char, c_int};
 use std::ptr;
 
-use neovim::main::{cmdmod, curwin};
+use neovim::main::cmdmod;
 use neovim::regexp::vim_regfree;
 use neovim::search::{get_search_pat, pat_has_uppercase, search_regcomp};
 use neovim::types::{CmdModFlags, RegMMatch};
+use neovim::winlayer::graph::curwin;
 
 use crate::support::{Sandbox, cstr};
 

@@ -14,13 +14,13 @@ use core::ptr;
 
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
-use crate::main::{curbuf, curwin};
 use crate::types::{
     AcoSave, Buffer, Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, SwitchWin,
     Window, kErrorTypeNone,
 };
 use crate::window::win_find_tabpage;
 use crate::winlayer::Win;
+use crate::winlayer::graph::{curbuf, curwin};
 
 use super::{
     get_option_value, kOptScopeBuf, kOptScopeWin, set_option_direct, set_option_value_handle_tty,

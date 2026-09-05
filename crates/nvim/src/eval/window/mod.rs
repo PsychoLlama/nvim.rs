@@ -62,7 +62,6 @@ use crate::eval::typval::{
     tv_list_append_number, tv_list_append_string,
 };
 use crate::ex_getln::text_or_buf_locked;
-use crate::main::{cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, prevwin};
 use crate::memory::{xfree, xmallocz, xstrdup};
 use crate::r#move::{
     changed_window_setting, check_topfill, set_topline, update_curswant, validate_botline_win,
@@ -73,6 +72,9 @@ use crate::normal::end_visual_mode;
 use crate::option::vars::p_acd;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::types::*;
+use crate::winlayer::graph::{
+    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, prevwin,
+};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };

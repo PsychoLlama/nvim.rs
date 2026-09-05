@@ -36,7 +36,6 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::buffer::buflist_findname_exp;
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
 use crate::fileio::{buf_reload, vim_fgets, vim_tempname};
-use crate::main::{curbuf, curwin};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrlcat, xstrlcpy};
 use crate::message::e_bufloaded;
 use crate::message::emsg;
@@ -56,6 +55,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror};
 
 use super::wordtree::valid_spell_word;

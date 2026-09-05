@@ -29,7 +29,7 @@ use crate::indent::{
     get_expr_indent, get_indent, get_indent_lnum, get_lisp_indent, get_number_indent, set_indent,
 };
 use crate::indent_c::{cindent_on, get_c_indent};
-use crate::main::{State, curwin, got_int, saved_cursor};
+use crate::main::{State, got_int, saved_cursor};
 use crate::mark::mark_col_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xstrdup};
@@ -48,6 +48,7 @@ use crate::types::{
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
+use crate::winlayer::graph::curwin;
 
 /// The `gq` / `gw` operator.
 ///

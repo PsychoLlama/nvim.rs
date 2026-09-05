@@ -33,9 +33,9 @@ use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, EDIT_QF, MainParams, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT,
-    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, curbuf, curwin, did_emsg, got_int,
-    kOptErrorfile, kOptShortmess, msg_didany, msg_scroll, no_wait_return, recoverymode,
-    swap_exists_action, swap_exists_did_quit, time_msg_at,
+    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, did_emsg, got_int, kOptErrorfile,
+    kOptShortmess, msg_didany, msg_scroll, no_wait_return, recoverymode, swap_exists_action,
+    swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -56,6 +56,7 @@ use crate::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_close, win_count, win_enter,
     win_equal,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::arglist::global_arglist;
 use crate::main::exit::os_exit;

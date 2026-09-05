@@ -21,11 +21,11 @@ use core::ffi::{CStr, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
 use crate::cursor::get_cursor_pos_ptr;
-use crate::main::{cmdwin_buf, curbuf, curwin};
 use crate::mbyte::{utf_iscomposing_first, utf_ptr2char};
 use crate::option::vars::p_paste;
 use crate::types::FoFlag;
 use crate::window::win_fdccol_count;
+use crate::winlayer::graph::{cmdwin_buf, curbuf, curwin};
 
 mod auto;
 mod lines;

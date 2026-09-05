@@ -33,7 +33,7 @@ use crate::eval::typval::{tv_dict_add_nr, tv_dict_alloc_ret};
 use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
-use crate::main::{curbuf, curtab, curwin, mouse_col, mouse_row, tab_page_click_defs};
+use crate::main::{mouse_col, mouse_row, tab_page_click_defs};
 use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
 use crate::normal::sel_exclusive;
 use crate::plines::{getvcols, win_chartabsize};
@@ -50,6 +50,7 @@ use crate::window::{
     self, find_tabpage, tabpage_index, tabpage_move, win_drag_status_line, win_drag_vsep_line,
     win_enter, win_valid,
 };
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::winlayer::{Buf, PosRef, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.

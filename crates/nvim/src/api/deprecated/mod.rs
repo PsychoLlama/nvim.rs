@@ -14,7 +14,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::hl_get_attr_by_id;
 use crate::highlight_group::{syn_check_group, syn_get_final_id, syn_id2attr, syn_name2id};
 use crate::lua::executor::nlua_exec;
-use crate::main::{curbuf, curwin, got_int, msg_didout, msg_silent};
+use crate::main::{got_int, msg_didout, msg_silent};
 use crate::memory::{xmalloc, xrealloc};
 use crate::message::msg_end;
 use crate::option::{
@@ -32,6 +32,7 @@ use crate::types::{
     int64_t, kErrorTypeNone, kObjectTypeArray, kObjectTypeString, lua_State, size_t, uint8_t,
     uint16_t, uint32_t, uint64_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 
 // The carve of the transpiled module; see each child's docs.
 mod bufhl;

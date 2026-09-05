@@ -25,10 +25,10 @@ use crate::cstr;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
-use crate::main::curwin;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::memory::xstrdup;
 use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
+use crate::winlayer::graph::curwin;
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};

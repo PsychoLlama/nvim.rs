@@ -38,16 +38,15 @@ use crate::highlight_group::{
 use crate::insexpand::ins_compl_show_pum;
 use crate::main::{
     Columns, KeyTyped, RedrawingDisabled, Rows, State, clear_cmdline, cmdline_row,
-    cmdline_was_last_drawn, curbuf, curtab, curwin, display_tick, do_redraw, dollar_vcol,
-    edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exiting, exmode_active,
-    global_busy, got_int, hl_attr_active, lines_left, mode_displayed, msg_col, msg_did_scroll,
-    msg_didany, msg_didout, msg_grid_scroll_discount, msg_no_more, msg_row, msg_scrolled,
-    msg_scrolled_at_flush, msg_silent, must_redraw, must_redraw_pum, need_diff_redraw,
-    need_highlight_changed, need_maketitle, need_wait_return, no_hlsearch, ns_hl_fast,
-    redraw_cmdline, redraw_mode, redraw_not_allowed, redraw_tabline, reg_recording,
-    resizing_screen, restart_edit, ru_col, ru_wid, sc_col, screen_search_hl,
-    search_hl_has_cursor_lnum, starting, stl_syntax, tab_page_click_defs, tab_page_click_defs_size,
-    updating_screen, win_extmark_arr,
+    cmdline_was_last_drawn, display_tick, do_redraw, dollar_vcol, edit_submode, edit_submode_extra,
+    edit_submode_highl, edit_submode_pre, exiting, exmode_active, global_busy, got_int,
+    hl_attr_active, lines_left, mode_displayed, msg_col, msg_did_scroll, msg_didany, msg_didout,
+    msg_grid_scroll_discount, msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush,
+    msg_silent, must_redraw, must_redraw_pum, need_diff_redraw, need_highlight_changed,
+    need_maketitle, need_wait_return, no_hlsearch, ns_hl_fast, redraw_cmdline, redraw_mode,
+    redraw_not_allowed, redraw_tabline, reg_recording, resizing_screen, restart_edit, ru_col,
+    ru_wid, sc_col, screen_search_hl, search_hl_has_cursor_lnum, starting, stl_syntax,
+    tab_page_click_defs, tab_page_click_defs_size, updating_screen, win_extmark_arr,
 };
 use crate::r#match::{init_search_hl, prepare_search_hl};
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
@@ -108,6 +107,7 @@ use crate::window::{
     frame2win, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
     win_fdccol_count, win_new_screensize, win_ui_flush,
 };
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::winlayer::{self, Cc, Win};
 
 // The carve of the transpiled module; see each child's docs.

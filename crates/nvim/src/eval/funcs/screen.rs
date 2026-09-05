@@ -17,7 +17,6 @@ use crate::highlight_group::{
     get_highlight_name_ext, highlight_color, highlight_exists, highlight_has_attr,
     syn_get_final_id, syn_name2id,
 };
-use crate::main::{curbuf, curwin};
 use crate::mbyte::{utf_ptr2char, utf_ptr2len};
 use crate::memline::ml_get_len;
 use crate::memory::xstrdup;
@@ -28,6 +27,7 @@ use crate::types::{
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

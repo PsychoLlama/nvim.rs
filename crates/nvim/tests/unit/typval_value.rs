@@ -14,7 +14,7 @@ use neovim::eval::typval::{
     tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf,
     tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
 };
-use neovim::main::{curwin, kTVCstring};
+use neovim::main::kTVCstring;
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{
@@ -22,6 +22,7 @@ use neovim::types::{
     VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Window, kBoolVarFalse, kBoolVarTrue,
     kSpecialVarNull, typval_vval_union,
 };
+use neovim::winlayer::graph::curwin;
 
 use crate::support::alloc::{self, AllocLog};
 use crate::support::tv::{self, Pt, Tv};

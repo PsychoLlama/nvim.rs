@@ -21,9 +21,7 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
-use crate::main::{
-    Rows, curwin, ex_normal_busy, hl_attr_active, msg_silent, redraw_tabline, sc_col,
-};
+use crate::main::{Rows, ex_normal_busy, hl_attr_active, msg_silent, redraw_tabline, sc_col};
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
 use crate::message::{msg_grid_validate, msg_grid_view};
@@ -38,6 +36,7 @@ use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
 use crate::types::{Array, ColNr, LineNr, NUL, Object, OptInt};
 use crate::ui::{ui_call_msg_showcmd, ui_has};
+use crate::winlayer::graph::curwin;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::highlight_group::HLF_MSG;

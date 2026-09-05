@@ -15,7 +15,6 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::cursor::check_cursor;
 use crate::eval::typval::{NumBuf, tv_get_string_buf_chk, tv_list_append_number};
 use crate::eval::{eval_expr_to_bool, eval_expr_valid_arg};
-use crate::main::curwin;
 use crate::mark::setpcmark;
 use crate::memline::{decl, incl};
 use crate::message_fmt::c_str;
@@ -35,6 +34,7 @@ use crate::types::{
     Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, SearchItArg, TypVal,
     VAR_UNKNOWN, VarNumber, int64_t, size_t,
 };
+use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;

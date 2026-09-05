@@ -58,11 +58,12 @@ use crate::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
 };
 use crate::main::{
-    State, curbuf, current_sctx, curwin, got_int, langmap_mapchar, mapped_ctrl_c, msg_col, msg_row,
-    msg_silent, no_abbr, secure,
+    State, current_sctx, got_int, langmap_mapchar, mapped_ctrl_c, msg_col, msg_row, msg_silent,
+    no_abbr, secure,
 };
 use crate::message::{e_invarg, e_noabbr, e_nomap};
 use crate::option::vars::{p_cpo, p_langmap, p_verbose};
+use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::mbyte::{
     cluster_len, mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,

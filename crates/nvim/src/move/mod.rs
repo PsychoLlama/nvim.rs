@@ -55,7 +55,6 @@ use crate::drawscreen::{
     redraw_win_line, redrawing, win_cursorline_standout,
 };
 use crate::fold::fold_adjust_cursor;
-use crate::main::{cmdwin_win, curbuf};
 use crate::normal::visual_active;
 use crate::option::{cpo_has, get_scrolloff_value, get_showbreak_value, get_sidescrolloff_value};
 use crate::options::kOptCuloptFlagScreenline;
@@ -67,6 +66,7 @@ use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, WLine, Window, int64
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
+use crate::winlayer::graph::{cmdwin_win, curbuf};
 
 pub const kMTCharWise: MotionType = 0;
 

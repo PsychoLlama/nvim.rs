@@ -41,10 +41,10 @@ use crate::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
 use crate::main::{
-    Columns, KeyStuffed, KeyTyped, Rows, State, bot_top_msg, called_emsg, cmd_silent, curbuf,
-    curwin, dollar_vcol, g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait,
-    msg_row, msg_scrolled, msg_silent, no_hlsearch, no_smartcase, rc_did_emsg, sc_col,
-    search_match_endcol, search_match_lines, searchcmdlen, top_bot_msg,
+    Columns, KeyStuffed, KeyTyped, Rows, State, bot_top_msg, called_emsg, cmd_silent, dollar_vcol,
+    g_do_tagpreview, got_int, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled,
+    msg_silent, no_hlsearch, no_smartcase, rc_did_emsg, sc_col, search_match_endcol,
+    search_match_lines, searchcmdlen, top_bot_msg,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -88,6 +88,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{atol, fclose, strpbrk};
 /// `searchit`/`do_search` flags plus the search-stat sizing constants.
 pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0;

@@ -31,9 +31,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    cmdline_row, curbuf, did_check_timestamps, getout, got_int, inhibit_delete_count,
-    msg_ext_skip_flush, msg_row, msg_silent, need_check_timestamps, need_wait_return, no_lines_msg,
-    recoverymode, swap_exists_action,
+    cmdline_row, did_check_timestamps, getout, got_int, inhibit_delete_count, msg_ext_skip_flush,
+    msg_row, msg_silent, need_check_timestamps, need_wait_return, no_lines_msg, recoverymode,
+    swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -82,6 +82,7 @@ use crate::types::{
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, buffers};
 use ::libc::{__errno_location, close, lseek, readlink, strcasecmp};
 

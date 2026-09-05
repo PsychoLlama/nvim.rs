@@ -23,7 +23,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HlAttrFlags, ns_hl_def};
 use crate::highlight_group::{highlight_changed, syn_check_group};
 use crate::indent::tabstop_set;
-use crate::main::{curbuf, curwin, need_maketitle, redraw_tabline, starting};
+use crate::main::{need_maketitle, redraw_tabline, starting};
 use crate::memory::{xfree, xstrchrnul};
 use crate::r#move::changed_window_setting;
 use crate::option::vars::{p_bin, p_et, p_ml, p_tw, p_wm};
@@ -41,6 +41,7 @@ use crate::types::{
     uint32_t,
 };
 use crate::winlayer::Win;
+use crate::winlayer::graph::{curbuf, curwin};
 
 use super::{
     HLATTRS_INIT, NO_SCREEN, didset_options_sctx, didset_window_options, get_option, get_varp,

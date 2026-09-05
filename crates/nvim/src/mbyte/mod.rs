@@ -46,7 +46,7 @@ use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_from_buf;
 use crate::keycodes::{K_SPECIAL, KE_FILLER};
-use crate::main::{curbuf, curwin, fenc_default};
+use crate::main::fenc_default;
 use crate::mark::mark_mb_adjustpos;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
@@ -74,6 +74,7 @@ use crate::utf8proc::{
     utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{
     __errno_location, iconv, iconv_close, iconv_open, setlocale, strcpy, tolower, toupper,
 };

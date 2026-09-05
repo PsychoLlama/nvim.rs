@@ -19,7 +19,7 @@ use crate::types::AutoEvent;
 
 use crate::garray::{ga_clear, ga_init};
 use crate::lua::executor::{api_free_luaref, api_new_luaref};
-use crate::main::{capture_ga, curbuf, msg_col, redir_off};
+use crate::main::{capture_ga, msg_col, redir_off};
 use crate::mbyte::mb_islower;
 use crate::memory::{arena_alloc, arena_memdupz, xcalloc, xfree};
 use crate::os::cshim::snprintf;
@@ -38,6 +38,7 @@ use crate::usercmd::{
     uc_add_command, uc_del_command, uc_nargs_upper_bound, uc_split_args_iter, uc_validate_name,
 };
 use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_BOT, WSP_HOR, WSP_TOP, WSP_VERT};
+use crate::winlayer::graph::curbuf;
 use ::libc::strtol;
 
 // The carve of the transpiled module; see each child's docs.

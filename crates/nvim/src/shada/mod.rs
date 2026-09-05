@@ -20,7 +20,7 @@ use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, no_hlsearch};
+use crate::main::no_hlsearch;
 use crate::mark::{
     cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,
     mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
@@ -68,6 +68,7 @@ use crate::types::{
     uv_uid_t,
 };
 use crate::version::LONG_VERSION;
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{buffers, tab_windows};
 use ::libc::{atoi, getgid, getuid, qsort};
 

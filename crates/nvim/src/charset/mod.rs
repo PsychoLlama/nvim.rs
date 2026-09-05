@@ -27,7 +27,6 @@ use core::ptr;
 
 use crate::cursor::get_cursor_line_ptr;
 use crate::global_cell::GlobalCell;
-use crate::main::curbuf;
 use crate::mbyte::{
     mb_islower, mb_isupper, mb_ptr2char_adv, utf_class_tab, utf_printable, utf_ptr2char,
     utf8len_tab,
@@ -42,6 +41,7 @@ use crate::types::{
     Buffer, Failed, NUL, UVarNumber, VarNumber, int32_t, intmax_t, intptr_t, size_t, uint8_t,
     uint64_t,
 };
+use crate::winlayer::graph::curbuf;
 use ::libc::{__errno_location, abort};
 
 pub mod display;

@@ -64,8 +64,7 @@ use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_v
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
 use crate::main::{
-    KeyTyped, State, curbuf, curwin, did_emsg, msg_loclist, msg_qflist, redraw_not_allowed,
-    updating_screen,
+    KeyTyped, State, did_emsg, msg_loclist, msg_qflist, redraw_not_allowed, updating_screen,
 };
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
@@ -86,6 +85,7 @@ use crate::types::{
     VarLock, VarNumber, Vv, Window, int64_t, size_t, stl_hlrec_t, typval_vval_union,
 };
 use crate::undo::buf_is_changed;
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Buf, Win};
 use ::libc::{atoi, toupper};
 

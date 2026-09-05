@@ -28,7 +28,7 @@ use crate::eval::typval::{
 use crate::eval::{get_v_event, restore_v_event};
 use crate::ex_getln::compute_cmdrow;
 use crate::global_cell::GlobalCell;
-use crate::main::{Columns, Rows, curbuf, skip_win_fix_scroll};
+use crate::main::{Columns, Rows, skip_win_fix_scroll};
 use crate::option::option_was_set;
 use crate::option::vars::{p_ch, p_window};
 use crate::options::kOptWindow;
@@ -38,6 +38,7 @@ use crate::types::{
     VarNumber, ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::winfloat::win_reconfig_floats;
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Win, windows};
 
 /// The rows the frame tree has to itself: the screen minus the command line,

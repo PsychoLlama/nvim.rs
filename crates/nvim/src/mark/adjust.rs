@@ -33,8 +33,9 @@ use crate::diff::diff_mark_adjust;
 use crate::ex_docmd::cmdmod_has;
 use crate::extmark::extmark_adjust;
 use crate::fold::fold_mark_adjust;
-use crate::main::{curbuf, saved_cursor};
+use crate::main::saved_cursor;
 use crate::pos::{MAXLNUM, equalpos};
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
 

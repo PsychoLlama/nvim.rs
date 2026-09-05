@@ -27,7 +27,7 @@ use crate::garray::{
     ga_clear_strings, ga_concat_strings, ga_grow, ga_init, ga_remove_duplicate_strings,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, got_int};
+use crate::main::got_int;
 use crate::mbyte::{
     mb_isalpha, mb_strcmp_ic, mb_strnicmp, mb_toupper, utf_head_off, utf_ptr2char, utfc_ptr2len,
 };
@@ -49,6 +49,7 @@ use crate::types::{
     Directory, Failed, FileComparison, FileID, FileInfo, GArray, MAXPATHL, PATHSEPSTR, RegMatch,
     size_t,
 };
+use crate::winlayer::graph::curbuf;
 use ::libc::{qsort, strcasecmp, strcpy};
 
 // The carve of the transpiled module; see each child's docs.

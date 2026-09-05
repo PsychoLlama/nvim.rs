@@ -17,7 +17,7 @@ use crate::types::NL;
 use crate::decoration::kMTMetaLines;
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
 use crate::lua::ffi::{lua_createtable, lua_pushlstring, lua_rawseti};
-use crate::main::{State, curbuf, curwin};
+use crate::main::State;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::{mark_adjust_buf, mark_get};
 use crate::memline::{
@@ -42,6 +42,7 @@ use crate::types::{
     WinSplit, WinStyle, Window, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
+use crate::winlayer::graph::{curbuf, curwin};
 
 // The carve of the transpiled module; see each child's docs.
 mod attach;

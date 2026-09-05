@@ -27,7 +27,7 @@ use crate::fileio::{
 use crate::highlight_group::HLF_E;
 use crate::input::ask_yesno;
 use crate::main::{
-    curbuf, ex_no_reprint, exiting, got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return,
+    ex_no_reprint, exiting, got_int, msg_scroll, msg_silent, need_maketitle, no_wait_return,
 };
 use crate::mbyte::{enc_canonize, my_iconv_open, utf_ptr2char, utf_ptr2len_len};
 use crate::memline::{get_file_in_dir, make_percent_swname, ml_get_buf, ml_preserve, ml_timestamp};
@@ -58,6 +58,7 @@ use crate::types::{
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;
+use crate::winlayer::graph::curbuf;
 use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close};
 
 // The carve of the transpiled module; see each child's docs.

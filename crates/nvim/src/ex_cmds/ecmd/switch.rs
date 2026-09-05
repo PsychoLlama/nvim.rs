@@ -30,7 +30,7 @@ use crate::ex_cmds::{BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLO
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
-use crate::main::{au_new_curbuf, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf};
+use crate::main::au_new_curbuf;
 use crate::message::e_cannot_switch_to_a_closing_buffer;
 use crate::message::emsg;
 use crate::option::buf_copy_options;
@@ -40,6 +40,7 @@ use crate::terminal::terminal_running;
 use crate::types::{CmdModFlags, LineNr, Window};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
+use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf};
 use crate::winlayer::{Buf, Win};
 use ::libc::atol;
 use core::ffi::c_int;

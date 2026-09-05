@@ -40,8 +40,8 @@ use crate::guard::Depth;
 use crate::highlight::hl_invalidate_blends;
 use crate::indent_c::parse_cino;
 use crate::main::{
-    Columns, Rows, clear_cmdline, cmdline_row, curtab, firstwin, full_screen, lastwin,
-    need_maketitle, readonlymode, starting, topframe, updating_screen,
+    Columns, Rows, clear_cmdline, cmdline_row, full_screen, need_maketitle, readonlymode, starting,
+    updating_screen,
 };
 use crate::memfile::mf_close_file;
 use crate::memline::{ml_open_file, ml_open_files};
@@ -72,6 +72,7 @@ use crate::window::{
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
+use crate::winlayer::graph::{curtab, firstwin, lastwin, topframe};
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, answer_err,

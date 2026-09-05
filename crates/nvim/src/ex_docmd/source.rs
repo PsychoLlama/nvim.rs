@@ -30,13 +30,14 @@ use crate::ex_getln::{getcmdline, getexline};
 use crate::garray::ga_append_via_ptr;
 use crate::highlight_group::HLF_E;
 use crate::main::{
-    KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, curbuf, current_exception,
-    did_emsg, did_throw, emsg_silent, ex_no_reprint, ex_normal_busy, exiting, exmode_active,
-    force_abort, global_busy, got_int, lines_left, msg_col, msg_row, msg_scroll, msg_silent,
-    need_rethrow, need_wait_return, suppress_errthrow, trylevel,
+    KeyTyped, Rows, State, caught_stack, check_cstack, cmdline_row, current_exception, did_emsg,
+    did_throw, emsg_silent, ex_no_reprint, ex_normal_busy, exiting, exmode_active, force_abort,
+    global_busy, got_int, lines_left, msg_col, msg_row, msg_scroll, msg_silent, need_rethrow,
+    need_wait_return, suppress_errthrow, trylevel,
 };
 use crate::message::e_empty_buffer;
 use crate::option::vars::p_mfd;
+use crate::winlayer::graph::curbuf;
 
 use crate::message::{
     emsg_multiline, msg_clr_eos, msg_ptr, msg_puts, msg_scroll_flush, verbose_enter_scroll,

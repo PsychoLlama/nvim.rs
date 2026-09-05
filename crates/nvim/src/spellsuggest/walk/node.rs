@@ -31,7 +31,6 @@ use crate::ascii::ascii_iswhite;
 use crate::charset::{skiptowhite, skipwhite};
 use crate::cstr;
 use crate::hashtab::hash_find;
-use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memory::xmemcpyz;
 use crate::spell::WordFlags;
@@ -49,6 +48,7 @@ use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_NONWORD, SCORE_RARE, SCORE_REGION, SugInfo, badword_captype,
 };
 use crate::types::{NUL, SpellIdx, size_t};
+use crate::winlayer::graph::curwin;
 use ::libc::strcpy;
 use core::ffi::{c_char, c_int};
 use core::ptr;

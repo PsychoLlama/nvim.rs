@@ -27,7 +27,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::charset::{skiptowhite, skipwhite};
-use crate::main::curwin;
 use crate::mbyte::{mb_charlen, utfc_ptr2len};
 use crate::memory::xstrlcat;
 use crate::spell::WordFlags;
@@ -36,6 +35,7 @@ use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
 use crate::spellsuggest::{MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, badword_captype};
 use crate::types::NUL;
+use crate::winlayer::graph::curwin;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 

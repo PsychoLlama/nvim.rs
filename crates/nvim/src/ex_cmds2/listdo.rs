@@ -30,7 +30,7 @@ use crate::autocmd::{
 use crate::buffer::{BufFlags, buf_hide, goto_buffer};
 use crate::ex_docmd::{DoCmdOpts, do_cmdline};
 use crate::guard::Suppress;
-use crate::main::{curbuf, curwin, got_int, listcmd_busy, prevwin};
+use crate::main::{got_int, listcmd_busy};
 use crate::mark::setpcmark;
 use crate::message::emsg;
 use crate::r#move::validate_cursor;
@@ -42,6 +42,7 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{AcoSave, ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
+use crate::winlayer::graph::{curbuf, curwin, prevwin};
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

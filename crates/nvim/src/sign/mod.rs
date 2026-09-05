@@ -60,7 +60,7 @@ use crate::fold::fold_open_cursor;
 use crate::global_cell::GlobalCell;
 use crate::grid::schar_get;
 use crate::highlight_group::{HLF_D, get_highlight_name_ext, syn_check_group};
-use crate::main::{curwin, got_int};
+use crate::main::got_int;
 use crate::marktree::cursor::{Cursor, lookup_ns, tree_of};
 use crate::marktree::key::{MtFlags, mt_decor, mt_decor_sign, mt_end};
 use crate::marktree::{marktree_itr_current, marktree_itr_next};
@@ -77,6 +77,7 @@ use crate::types::{
     size_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
+use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};
 use ::libc::atoi;
 

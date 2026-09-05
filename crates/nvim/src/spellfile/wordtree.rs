@@ -64,7 +64,7 @@ use core::{mem, ptr};
 
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
-use crate::main::{curwin, got_int, msg_col, msg_didout};
+use crate::main::{got_int, msg_col, msg_didout};
 use crate::mbyte::{utf_valid_string, utfc_ptr2len};
 use crate::message::{msg_clr_eos, msg_puts, msg_start};
 use crate::option::vars::p_verbose;
@@ -73,6 +73,7 @@ use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
 use crate::types::{Failed, HashTab, NUL, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
+use crate::winlayer::graph::curwin;
 
 use super::{MAXWLEN, SpellInfo, spell_message_fmt};
 

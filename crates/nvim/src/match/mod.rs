@@ -34,7 +34,7 @@ use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
 use crate::main::{
-    called_emsg, curwin, got_int, search_first_line, search_hl_has_cursor_lnum, search_last_line,
+    called_emsg, got_int, search_first_line, search_hl_has_cursor_lnum, search_last_line,
 };
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
@@ -50,6 +50,7 @@ use crate::types::{
     ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
     RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, size_t, uint8_t,
 };
+use crate::winlayer::graph::curwin;
 use crate::winlayer::{Live, Win};
 
 mod searchhl;

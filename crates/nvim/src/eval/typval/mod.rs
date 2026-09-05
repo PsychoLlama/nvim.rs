@@ -21,7 +21,7 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
-use crate::main::{curwin, did_emsg, got_int};
+use crate::main::{did_emsg, got_int};
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;
@@ -41,6 +41,7 @@ use crate::types::{
     kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
 };
 use crate::winlayer::Live;
+use crate::winlayer::graph::curwin;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
 
 // The carve of the transpiled module; see each child's docs.

@@ -39,7 +39,7 @@ use crate::getchar::{
 };
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    Columns, KeyStuffed, State, VIsual_reselect, cmdwin_type, mod_mask, mode_displayed, mouse_col,
+    Columns, KeyStuffed, State, VIsual_reselect, mod_mask, mode_displayed, mouse_col,
     mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row, msg_silent,
     redraw_cmdline, restart_edit, where_paste_started,
 };
@@ -61,6 +61,7 @@ use crate::statusline::{
 use crate::types::{NUL, OpArg, OpType, PUT_CURSEND, PUT_FIXINDENT, YankReg};
 use crate::ui::ui_mouse_has;
 use crate::window::{goto_tabpage, tabpage_move};
+use crate::winlayer::graph::cmdwin_type;
 
 /// Whether the last click was in the tab page line, so that its release is
 /// ignored rather than treated as a click in a window.

@@ -34,7 +34,7 @@ use self::arith::{
 };
 use crate::change::inserted_bytes;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::{State, curwin, restart_edit};
+use crate::main::{State, restart_edit};
 use crate::mbyte::{utf_head_off, utf_ptr2char};
 use crate::memline::{dec, inc, ml_get_len, ml_replace};
 use crate::memory::xmallocz;
@@ -49,6 +49,7 @@ use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, Pos, StrCharInfo, int64_t,
 };
+use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Line, PosRef, Win};
 
 const TAB: c_int = 9;

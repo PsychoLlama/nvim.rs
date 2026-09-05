@@ -154,6 +154,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod graph;
 mod handles;
 mod live;
 
@@ -173,12 +174,14 @@ use core::{iter, ptr};
 
 use crate::drawscreen::redraw_later;
 use crate::fold::{has_any_folding, has_folding};
-use crate::main::{curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, lastbuf, lastwin};
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
 use crate::types::{Buffer, ColNr, Frame, Handle, LineNr, Pos, StrCharInfo, Tabpage, Window};
+use crate::winlayer::graph::{
+    curbuf, curtab, curwin, first_tabpage, firstbuf, firstwin, lastbuf, lastwin,
+};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped

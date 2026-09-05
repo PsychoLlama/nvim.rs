@@ -22,7 +22,7 @@ use crate::decoration::{decor_conceal_line, decor_virt_lines, mark_virt_chain, n
 use crate::diff::{diff_check_fill, diffopt_filler};
 use crate::fold::{has_folding, has_folding_win, line_folded};
 use crate::indent::{get_breakindent_win, tabstop_padding};
-use crate::main::{State, curwin};
+use crate::main::State;
 use crate::marktree::cursor::Cursor;
 use crate::marktree::key::{kMTFilterSelect, mt_invalid, mt_right};
 use crate::marktree::meta::MetaCount;
@@ -37,6 +37,7 @@ use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrCharInfo,
     VirtLines, Window, int32_t, int64_t, uint32_t,
 };
+use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win};
 
 use core::ffi::{c_char, c_int, c_long};

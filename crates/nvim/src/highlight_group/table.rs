@@ -26,12 +26,13 @@ use crate::charset::vim_isprintc;
 use crate::cursor_shape::cursor_mode_uses_syn_id;
 use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, HlAttrFlags, hl_get_syn_attr, ns_get_hl};
-use crate::main::{curwin, normal_bg, normal_fg};
+use crate::main::{normal_bg, normal_fg};
 use crate::message::{e_highlight_group_name_invalid_char, e_highlight_group_name_too_long};
 use crate::message::{emsg, msg_source};
 use crate::os::cshim::gettext;
 use crate::types::{HlAttrs, NS, RgbValue, ScriptCtx, int16_t, size_t};
 use crate::ui::ui_mode_info_set;
+use crate::winlayer::graph::curwin;
 
 use super::{HLF_W, MAX_HL_ID, MAX_SYN_NAME, SG_LINK, kColorIdxBg, kColorIdxFg, kColorIdxNone};
 

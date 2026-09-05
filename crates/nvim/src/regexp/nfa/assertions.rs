@@ -11,12 +11,12 @@ use crate::regexp::NfaOp;
 use core::ffi::{c_char, c_int};
 
 use super::run::nfa_re_num_cmp;
-use crate::main::curwin;
 use crate::mark::mark_get;
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{NfaState, Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, Window, uint8_t};
+use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.

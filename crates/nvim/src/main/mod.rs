@@ -15,17 +15,16 @@ use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, ArgList, Array, AucmdWin, BlnFlags, Buffer, BufferRef, Callback, Channel,
     CmdMod, CmdModFlags, ColNr, DecorState, DispTick, EStack, EStackType, EstackInfo, Exception,
-    FILE, FileComparison, FileMark, FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop,
-    LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MatchState, MsgList,
-    MultiQueue, NS, NluaRefState, Object, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch,
-    RegMMatch, RegMatch, RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
-    Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType, XFileMark,
+    FILE, FileComparison, FileMark, FileMarkView, GArray, Handle, Hlf, LPos, LineNr, Loop, LuaRef,
+    LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MatchState, MsgList, MultiQueue,
+    NS, NluaRefState, Object, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, RegMMatch,
+    RegMatch, RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
+    UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType, XFileMark,
     caller_scope, int16_t, int32_t, int64_t, nvim_stats_s, size_t, uint8_t, uint32_t, uint64_t,
     uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
     uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
     uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
 };
-use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 
 mod entry;
@@ -425,20 +424,7 @@ pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static root_menu: GlobalCell<*mut VimMenu> =
     GlobalCell::new(::core::ptr::null_mut::<VimMenu>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
-pub static prevwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
-#[unsafe(no_mangle)]
-pub static curwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub static topframe: GlobalCell<*mut Frame> = GlobalCell::new(::core::ptr::null_mut::<Frame>());
-pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
-pub static curtab: GlobalCell<*mut Tabpage> = GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
-pub static lastused_tabpage: GlobalCell<*mut Tabpage> =
-    GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
 pub static redraw_tabline: GlobalCell<bool> = GlobalCell::new(false);
-pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
 pub static global_alist: GlobalCell<ArgList> = GlobalCell::new(ArgList {
     al_ga: Vec::new(),
     al_refcount: Refcount::ZERO,
@@ -620,15 +606,6 @@ pub static last_chdir_reason: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static km_stopsel: GlobalCell<bool> = GlobalCell::new(false);
 pub static km_startsel: GlobalCell<bool> = GlobalCell::new(false);
-pub static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static cmdwin_buf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
-pub static cmdwin_win: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub static cmdwin_old_curwin: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub static cmdline_win: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
 pub static no_lines_msg: &CStr = c"--No lines in buffer--";
 pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
 pub static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);

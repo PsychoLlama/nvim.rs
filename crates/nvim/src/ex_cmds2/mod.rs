@@ -64,8 +64,7 @@ use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    cmdline_row, cmdmod, curbuf, curtab, curwin, exiting, msg_col, msg_didany, msg_didout, msg_row,
-    vgetc_busy,
+    cmdline_row, cmdmod, exiting, msg_col, msg_didany, msg_didout, msg_row, vgetc_busy,
 };
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
@@ -86,6 +85,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::winlayer::{
     Buf, Win, buffers as all_buffers, first_buffer, tabs, windows, windows_in_tab,
 };

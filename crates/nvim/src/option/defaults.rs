@@ -27,7 +27,7 @@ use crate::drawscreen::comp_col;
 use crate::garray::{ga_grow, ga_init};
 use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::{Rows, curbuf, current_sctx, curwin, fenc_default};
+use crate::main::{Rows, current_sctx, fenc_default};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
@@ -52,6 +52,7 @@ use crate::types::{
     GArray, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, PATHSEPSTR, String_0, size_t, uint32_t,
 };
 use crate::window::{last_status, win_comp_scroll};
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{self, Buf};
 use ::libc::getuid;
 

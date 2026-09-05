@@ -28,7 +28,7 @@ use crate::ex_docmd::{
     BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
     dollar_command, quitmore,
 };
-use crate::main::{arg_had_last, curtab, lastused_tabpage};
+use crate::main::arg_had_last;
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;
@@ -37,6 +37,7 @@ use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
+use crate::winlayer::graph::{curtab, lastused_tabpage};
 
 use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 

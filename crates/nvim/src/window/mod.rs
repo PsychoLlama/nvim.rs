@@ -49,7 +49,6 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_getln::is_in_cmdwin;
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::main::{curtab, curwin, first_tabpage, firstwin, lastwin, prevwin, topframe};
 use crate::memory::xfree;
 use crate::message::{
     e_not_allowed_to_change_window_layout_in_this_autocmd, e_winfixbuf_cannot_go_to_buffer,
@@ -65,6 +64,7 @@ use crate::types::{
     kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
+use crate::winlayer::graph::{curtab, curwin, first_tabpage, firstwin, lastwin, prevwin, topframe};
 use crate::winlayer::{Buf, FrameRef, TabPage, Win, tab_windows, windows, windows_in_tab};
 
 // The carve of the transpiled module; see each child's docs.

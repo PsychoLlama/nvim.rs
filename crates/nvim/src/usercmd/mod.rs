@@ -62,7 +62,7 @@ use crate::ex_docmd::ends_excmd;
 use crate::global_cell::GlobalCell;
 use crate::keycodes::replace_termcodes;
 use crate::lua::executor::{api_free_luaref, nlua_set_sctx};
-use crate::main::{curbuf, current_sctx};
+use crate::main::current_sctx;
 use crate::memory::{xfree, xstrdup};
 use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text};
@@ -78,6 +78,7 @@ use crate::types::{
     int64_t, size_t,
 };
 use crate::window::prevwin_curwin;
+use crate::winlayer::graph::curbuf;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr, slice};

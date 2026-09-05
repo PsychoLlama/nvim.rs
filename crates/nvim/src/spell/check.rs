@@ -32,7 +32,6 @@ use core::mem;
 use crate::charset::{getwhitecols, skipbin, skipdigits, skiphex, skipwhite};
 use crate::cursor::get_cursor_line_ptr;
 use crate::global_cell::GlobalCell;
-use crate::main::curwin;
 use crate::mbyte::{mb_isupper, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::xfree;
@@ -44,6 +43,7 @@ use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
 use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, Window, size_t, uint8_t};
+use crate::winlayer::graph::curwin;
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};

@@ -57,7 +57,7 @@ use crate::garray::{ga_grow, ga_init};
 use crate::getchar::vgetc;
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_clear_all, hash_init};
-use crate::main::{curbuf, curwin, got_int};
+use crate::main::got_int;
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup};
 use crate::option::copy_option_part;
@@ -75,6 +75,7 @@ use crate::spellsuggest::soundalike::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::types::{GArray, HashTab, Hlf, LangP, MAXPATHL, NUL, SpellLang};
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;

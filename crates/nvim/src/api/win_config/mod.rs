@@ -11,10 +11,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later, set_must_redraw};
 use crate::eval::window::{restore_win, restore_win_noblock, switch_win, switch_win_noblock};
 use crate::ex_docmd::expr_map_locked;
 use crate::highlight_group::{syn_check_group, syn_id2name};
-use crate::main::{
-    cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
-    textlock,
-};
+use crate::main::textlock;
 use crate::mbyte::{mb_string2cells, mb_string2cells_len};
 use crate::memory::{strequal, xstrdup};
 use crate::message::{e_cmdwin, e_textlock};
@@ -46,6 +43,9 @@ use crate::window::{
 };
 use crate::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
+};
+use crate::winlayer::graph::{
+    cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
 };
 
 // The carve of the transpiled module; see each child's docs.

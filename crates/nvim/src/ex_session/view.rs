@@ -26,7 +26,6 @@ use super::{
 use crate::arglist::global_arglist;
 use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_normal, buf_is_terminal, find_buf};
 use crate::fold::put_folds;
-use crate::main::{curbuf, curwin};
 use crate::mapping::makemap;
 use crate::memory::xfree;
 use crate::option::vars::ssop_flags;
@@ -37,6 +36,7 @@ use crate::options::{
 };
 use crate::pos::MAXCOL;
 use crate::types::{NUL, OptionSetFlags, Tabpage, Window, int64_t};
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Buf, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};

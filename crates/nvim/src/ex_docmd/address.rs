@@ -35,8 +35,8 @@ use crate::ex_docmd::{
 };
 
 use crate::fold::has_folding;
-use crate::main::{curbuf, curtab, curwin};
 use crate::mark::{mark_check, mark_get, mark_move_to};
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 
 use crate::message::iemsg;
 use crate::option::magic_isset;

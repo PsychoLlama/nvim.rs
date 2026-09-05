@@ -24,10 +24,7 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::ex_eval::aborting;
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
-use crate::main::{
-    curbuf, curtab, curwin, first_tabpage, firstwin, getout, lastwin, redraw_cmdline,
-    redraw_tabline,
-};
+use crate::main::{getout, redraw_cmdline, redraw_tabline};
 use crate::message::internal_error;
 use crate::message::{e_autocmd_close, e_floatonly};
 use crate::normal::reset_VIsual_and_resel;
@@ -37,6 +34,7 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, Frame, Integer, OK, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
+use crate::winlayer::graph::{curbuf, curtab, curwin, first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
 pub unsafe fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {

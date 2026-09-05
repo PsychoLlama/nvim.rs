@@ -22,9 +22,7 @@ use crate::getchar::plain_vgetc;
 use crate::grid::{default_gridview, grid_line_flush, grid_line_puts, grid_line_start};
 use crate::highlight_group::{HLF_8, syn_id2attr, syn_name2id};
 use crate::lua::executor::{kRetObject, nlua_exec};
-use crate::main::{
-    Columns, Rows, curbuf, curwin, got_int, hl_attr_active, msg_col, starting, topframe,
-};
+use crate::main::{Columns, Rows, got_int, hl_attr_active, msg_col, starting};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::message::{msg_ext_set_kind, msg_putchar, msg_puts};
 use crate::option::vars::{p_ls, p_shm, p_verbose};
@@ -36,6 +34,7 @@ use crate::types::{Arena, Array, Error, ExArg, OptInt, ShmFlag, Tabpage};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::first_window;
+use crate::winlayer::graph::{curbuf, curwin, topframe};
 
 pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
 pub(crate) const NVIM_VERSION_MINOR: c_int = 12;

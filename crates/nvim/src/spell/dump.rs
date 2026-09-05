@@ -36,7 +36,7 @@ use crate::drawscreen::{UPD_NOT_VALID, redraw_later};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::hashtab::hash_find;
 use crate::insexpand::{ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted};
-use crate::main::{curbuf, curwin, got_int};
+use crate::main::got_int;
 use crate::mbyte::{mb_strnicmp, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::xstrlcpy;
@@ -52,6 +52,7 @@ use crate::types::{
     Direction, ExArg, IOSIZE, LangP, LineNr, NUL, OK, OptVal, OptionSetFlags, SpellLang, WordCount,
     size_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;

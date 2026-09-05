@@ -59,8 +59,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
 use crate::main::{
-    KeyTyped, curbuf, curtab, curwin, diff_context, diff_foldcolumn, diff_need_scrollbind,
-    need_diff_redraw,
+    KeyTyped, diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw,
 };
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
@@ -103,6 +102,7 @@ use crate::undo::{u_save, u_sync};
 use crate::window::{
     WSP_VERT, frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_WHITESPACE,

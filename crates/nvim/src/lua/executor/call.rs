@@ -24,7 +24,7 @@ use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
-use crate::main::{curwin, did_emsg, did_throw, force_abort, suppress_errthrow};
+use crate::main::{did_emsg, did_throw, force_abort, suppress_errthrow};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::message::e_fast_api_disabled;
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
@@ -33,6 +33,7 @@ use crate::types::{
     Arena, ArenaMem, Array, ConsumedBlk, Error, Object, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
 };
+use crate::winlayer::graph::curwin;
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.

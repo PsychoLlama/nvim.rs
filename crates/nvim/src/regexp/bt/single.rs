@@ -11,7 +11,7 @@ use super::exec::re_num_cmp;
 use super::op::BtOp;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::main::{curwin, re_extmatch_in};
+use crate::main::re_extmatch_in;
 use crate::mark::mark_get;
 use crate::mbyte::{
     mb_get_class_tab, utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len,
@@ -25,6 +25,7 @@ use crate::regexp::{
     reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
 use crate::types::{FileMark, GraphemeState, LineNr, NUL, Pos, uint8_t, uint32_t, uint64_t};
+use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 

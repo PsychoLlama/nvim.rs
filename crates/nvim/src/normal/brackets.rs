@@ -11,7 +11,6 @@ use crate::cursor::{dec_cursor, gchar_cursor, inc_cursor};
 use crate::diff::diff_move_to;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::fold::fold_move_to;
-use crate::main::{curbuf, curwin};
 use crate::mark::{getnextmark, pos_to_mark, setpcmark};
 use crate::memory::{xfree, xmemdupz};
 use crate::mouse::do_mouse;
@@ -29,6 +28,7 @@ use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
 use crate::types::{CmdArg, FileMark, LineNr, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.

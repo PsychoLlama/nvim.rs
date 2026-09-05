@@ -17,7 +17,6 @@ use crate::api::vim::nvim_get_current_win;
 
 use crate::api_error;
 use crate::guard::Suppress;
-use crate::main::{cmdwin_buf, cmdwin_type, curwin};
 use crate::message::e_cmdwin;
 use crate::narrow::number_as_int;
 use crate::types::{
@@ -27,6 +26,7 @@ use crate::types::{
 use crate::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
+use crate::winlayer::graph::{cmdwin_buf, cmdwin_type, curwin};
 use crate::winlayer::{TabPage, Win, windows_in_tab};
 use ::libc::abort;
 use core::ffi::CStr;

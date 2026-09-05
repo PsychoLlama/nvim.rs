@@ -20,10 +20,7 @@ use crate::cursor::check_cursor_lnum;
 use crate::edit::{BeginlineOpts, beginline};
 use crate::global_cell::GlobalCell;
 use crate::indent::get_indent_lnum;
-use crate::main::{
-    Columns, Rows, State, ex_no_reprint, firstwin, lastwin, lines_left, msg_scroll,
-    need_wait_return,
-};
+use crate::main::{Columns, Rows, State, ex_no_reprint, lines_left, msg_scroll, need_wait_return};
 use crate::memline::MlFlags;
 use crate::memline::{ml_append, ml_delete};
 use crate::memory::{xfree, xmemdupz, xstrdup};
@@ -36,6 +33,7 @@ use crate::types::CmdIdx;
 use crate::types::{ExArg, LineNr, NUL, OptInt, int64_t, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
+use crate::winlayer::graph::{firstwin, lastwin};
 use ::libc::atol;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;

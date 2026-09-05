@@ -35,9 +35,7 @@ use crate::ex_docmd::cmdmod_has;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::{buf_check_timestamp, shorten_fnames};
 use crate::indent::inindent;
-use crate::main::{
-    State, VIsual_reselect, curbuf, curwin, last_chdir_reason, msg_silent, need_fileinfo, starting,
-};
+use crate::main::{State, VIsual_reselect, last_chdir_reason, msg_silent, need_fileinfo, starting};
 use crate::message::{
     e_job_still_running, e_job_still_running_add_bang_to_end_the_job, e_no_write_since_last_change,
     e_no_write_since_last_change_add_bang_to_override,
@@ -55,6 +53,7 @@ use crate::types::{
 };
 use crate::undo::u_sync;
 use crate::window::{get_last_winid, win_valid};
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::time;
 
 // ---------------------------------------------------------------------------

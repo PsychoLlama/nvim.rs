@@ -32,7 +32,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::{changedir_func, vim_mkdir_emsg};
 use crate::fileio::{delete_recursive, vim_copyfile, vim_rename, vim_tempname};
-use crate::main::{curtab, curwin, globaldir};
+use crate::main::globaldir;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
 use crate::message::emsg;
 use crate::message::{e_invarg, e_invargNval, e_invexpr2, e_mkdir};
@@ -47,6 +47,7 @@ use crate::types::{
     typval_vval_union, uint64_t,
 };
 use crate::window::find_tabpage;
+use crate::winlayer::graph::{curtab, curwin};
 use crate::winlayer::{TabPage, Win};
 use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int, c_void};

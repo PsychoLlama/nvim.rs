@@ -24,10 +24,7 @@ use crate::ex_eval::aborting;
 use crate::ex_getln::text_or_buf_locked;
 use crate::file_search::do_autocmd_dirchanged;
 use crate::fileio::shorten_fnames;
-use crate::main::{
-    curbuf, curwin, globaldir, last_chdir_reason, msg_scrolled, prevwin, redraw_tabline,
-    restart_edit,
-};
+use crate::main::{globaldir, last_chdir_reason, msg_scrolled, redraw_tabline, restart_edit};
 use crate::memory::xstrdup;
 use crate::mouse::setmouse;
 use crate::r#move::{changed_line_abv_curs, update_topline};
@@ -42,6 +39,7 @@ use crate::types::{
     kCdScopeWindow,
 };
 use crate::undo::u_sync;
+use crate::winlayer::graph::{curbuf, curwin, prevwin};
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
 pub unsafe fn win_goto(wp: *mut Window) {

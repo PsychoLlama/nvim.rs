@@ -24,7 +24,7 @@ use crate::fuzzy::fuzzy_match_str;
 use crate::garray::{ga_grow, ga_init};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::get_special_key_code;
-use crate::main::{curbuf, curwin, escape_chars};
+use crate::main::escape_chars;
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptCdpath, kOptCount, kOptDirectory, kOptFiletype, kOptInvalid,
@@ -39,6 +39,7 @@ use crate::types::{
     OptExpand, OptIndex, OptionSetFlags, RegMatch, XpPrefix, size_t, uint32_t,
 };
 use crate::winlayer::Live;
+use crate::winlayer::graph::{curbuf, curwin};
 
 use super::{
     FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,

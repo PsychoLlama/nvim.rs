@@ -32,7 +32,7 @@ use crate::drawscreen::{UPD_CLEAR, redraw_all_later};
 use crate::eval::last_set_msg;
 use crate::ex_getln::gotocmdline;
 use crate::guard::Suppress;
-use crate::main::{curwin, info_message, sandbox, silent_mode};
+use crate::main::{info_message, sandbox, silent_mode};
 use crate::memory::{strequal, xstrlcpy};
 use crate::message::{e_invarg, e_sandbox, e_trailing};
 use crate::message::{emsg_ptr, msg_ext_set_kind, msg_putchar};
@@ -46,6 +46,7 @@ use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,
     Window, size_t, uint8_t, uint32_t,
 };
+use crate::winlayer::graph::curwin;
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,

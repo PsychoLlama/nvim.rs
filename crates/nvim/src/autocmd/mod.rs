@@ -32,10 +32,10 @@ use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
-    autocmd_match, autocmd_no_enter, autocmd_no_leave, curbuf, current_sctx, curtab, curwin,
-    deferred_events, did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
-    last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, prevwin, reg_recording,
-    secure, starting,
+    autocmd_match, autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events,
+    did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
+    last_cursormoved_win, last_mode, main_loop, msg_col, need_maketitle, reg_recording, secure,
+    starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
@@ -75,6 +75,7 @@ use crate::window::{
     win_init_empty, win_remove,
 };
 use crate::winfloat::win_config_float;
+use crate::winlayer::graph::{curbuf, curtab, curwin, prevwin};
 use crate::winlayer::{forget_window, free_deferred, register_window};
 use ::libc::{abort, atoi, strcasecmp, strcpy};
 

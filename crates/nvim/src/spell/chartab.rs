@@ -24,7 +24,6 @@
 use crate::spell::WordFlags;
 use core::ffi::{c_char, c_int};
 
-use crate::main::curwin;
 use crate::mbyte::{
     mb_cptr2char_adv, mb_get_class, mb_islower, mb_isupper, mb_ptr2char_adv, mb_toupper,
     utf_char2bytes, utf_class, utf_fold, utf_ptr2char, utfc_ptr2len,
@@ -32,6 +31,7 @@ use crate::mbyte::{
 use crate::memory::xstrlcpy;
 use crate::strings::vim_strchr;
 use crate::types::{Failed, MB_MAXBYTES, NUL, SpellTab, Window, uint8_t};
+use crate::winlayer::graph::curwin;
 use ::libc::strcpy;
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};

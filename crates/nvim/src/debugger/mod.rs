@@ -41,9 +41,9 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    Rows, State, cmd_silent, cmdline_row, curbuf, curwin, debug_backtrace_level, debug_break_level,
-    debug_did_msg, debug_mode, debug_tick, did_emsg, emsg_silent, ex_nesting_level, ex_normal_busy,
-    got_int, ignore_script, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
+    Rows, State, cmd_silent, cmdline_row, debug_backtrace_level, debug_break_level, debug_did_msg,
+    debug_mode, debug_tick, did_emsg, emsg_silent, ex_nesting_level, ex_normal_busy, got_int,
+    ignore_script, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
@@ -61,6 +61,7 @@ use crate::types::{
     Buffer, Callback, ColNr, EStackArg, ExArg, Failed, LineNr, MAXPATHL, NUL, RegProg, TypVal,
     TypeaheadSave, int32_t, int64_t, size_t, uint8_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;

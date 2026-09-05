@@ -21,12 +21,12 @@ use crate::cmdexpand::fuzzymatches_to_strmatches;
 use crate::cstr;
 use crate::diff::diff_mode_buf;
 use crate::fuzzy::fuzzy_match_str;
-use crate::main::curbuf;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::option::vars::{p_fic, p_wic};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{Buffer, ColNr, Failed, FuzMatchStr, RegMatch, RegProg, size_t};
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 

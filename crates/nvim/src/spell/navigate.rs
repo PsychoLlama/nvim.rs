@@ -37,7 +37,7 @@ use crate::decoration::{
     DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
-use crate::main::{bot_top_msg, curwin, decor_state, got_int, top_bot_msg};
+use crate::main::{bot_top_msg, decor_state, got_int, top_bot_msg};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::give_warning;
@@ -51,6 +51,7 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{ColNr, Hlf, LineNr, NUL, Pos, ShmFlag, SpellMoveType, Window, size_t, uint8_t};
+use crate::winlayer::graph::curwin;
 use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};

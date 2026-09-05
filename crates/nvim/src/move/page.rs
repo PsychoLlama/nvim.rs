@@ -22,7 +22,7 @@ use crate::drawscreen::UPD_VALID;
 use crate::edit::{BeginlineOpts, beginline, cursor_down_inner, cursor_up_inner};
 use crate::getchar::beep_flush;
 use crate::global_cell::GlobalCell;
-use crate::main::{Rows, curbuf, curwin, firstwin, lastwin, restart_edit};
+use crate::main::{Rows, restart_edit};
 use crate::mbyte::mb_adjust_cursor;
 use crate::normal::{
     nv_g_home_m_cmd, nv_screengo, set_visual_active, set_visual_select, visual_active,
@@ -32,6 +32,7 @@ use crate::option::vars::{p_sol, p_window};
 use crate::pos::equalpos;
 use crate::search::FORWARD;
 use crate::types::{CmdArg, ColNr, Direction, FAIL, LineNr, OK, OpArg, OptInt, Pos, Window};
+use crate::winlayer::graph::{curbuf, curwin, firstwin, lastwin};
 use crate::winlayer::{Buf, Win, first_window};
 
 /// A command with nothing set, as C's `CmdArg ca = { 0 }` leaves it.

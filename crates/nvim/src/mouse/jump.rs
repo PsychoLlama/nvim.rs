@@ -25,8 +25,8 @@ use super::*;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    VIsual_reselect, cmdwin_type, cmdwin_win, mouse_col, mouse_dragging, mouse_past_bottom,
-    mouse_past_eol, mouse_row, msg_silent, redraw_cmdline,
+    VIsual_reselect, mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row,
+    msg_silent, redraw_cmdline,
 };
 use crate::r#move::WinValid;
 use crate::normal::{
@@ -34,6 +34,7 @@ use crate::normal::{
 };
 use crate::option::vars::p_smd;
 use crate::types::Pos;
+use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 
 // What the last event that could move focus landed on.  A drag or a release
 // must act on the *same* status line or separator the press did, so these

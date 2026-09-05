@@ -27,7 +27,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::main::{
-    Columns, curbuf, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle, need_wait_return,
+    Columns, got_int, msg_col, msg_scroll, msg_scrolled, need_maketitle, need_wait_return,
     no_lines_msg, restart_edit, stl_syntax,
 };
 use crate::mbyte::utf_cp_bounds;
@@ -55,6 +55,7 @@ use crate::types::{
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
 use ::libc::{qsort, strcpy};
 

@@ -39,7 +39,7 @@ use crate::highlight_group::{
 };
 use crate::lua::executor::nlua_call_ref;
 use crate::main::{
-    curwin, hl_attr_active, must_redraw_pum, need_highlight_changed, ns_hl_active, ns_hl_fast,
+    hl_attr_active, must_redraw_pum, need_highlight_changed, ns_hl_active, ns_hl_fast,
     ns_hl_global, ns_hl_win,
 };
 use crate::option::check_blending;
@@ -51,6 +51,7 @@ use crate::types::{
     LuaRetMode, NS, Object, Window,
 };
 use crate::winlayer::Win;
+use crate::winlayer::graph::curwin;
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;

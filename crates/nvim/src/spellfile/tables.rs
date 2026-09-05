@@ -17,11 +17,11 @@ use crate::message_fmt::c_str;
 use crate::smsg;
 use core::ffi::{c_char, c_int};
 
-use crate::main::curwin;
 use crate::mbyte::{char_at, char_len, mb_ptr2char_adv, utfc_ptr2len};
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, RepItem};
+use crate::winlayer::graph::curwin;
 use ::libc::{strcat, strcpy};
 
 use super::aff::{AffState, is_digit_byte};

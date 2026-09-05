@@ -22,15 +22,14 @@ use crate::ascii::ascii_iswhite;
 use crate::cursor::{check_cursor, gchar_cursor};
 use crate::ex_docmd::{exec_normal_cmd, restore_current_state, save_current_state};
 use crate::getchar::ins_typebuf;
-use crate::main::{
-    State, VIsual_reselect, curbuf, current_sctx, curwin, ex_normal_busy, restart_edit,
-};
+use crate::main::{State, VIsual_reselect, current_sctx, ex_normal_busy, restart_edit};
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::option::vars::p_sel;
 use crate::pos::MAXCOL;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
 use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState, Window};
 use crate::winlayer::Win;
+use crate::winlayer::graph::{curbuf, curwin};
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
 type Range = Option<(LineNr, LineNr)>;

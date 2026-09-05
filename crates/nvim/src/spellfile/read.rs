@@ -40,7 +40,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::drawscreen::{UPD_SOME_VALID, redraw_all_later};
-use crate::main::{curwin, got_int};
+use crate::main::got_int;
 use crate::memline::ml_append_buf;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::{xfree, xstrdup};
@@ -56,6 +56,7 @@ use crate::spell::{
     slang_clear_sug, slang_free,
 };
 use crate::types::{ColNr, LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
+use crate::winlayer::graph::curwin;
 use ::libc::{strcpy, strrchr};
 
 use super::sections::{

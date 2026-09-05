@@ -19,10 +19,10 @@ use crate::lua::ffi::{
     luaL_error,
 };
 use crate::luaL_reg_table;
-use crate::main::curbuf;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{Buffer, ColNr, Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
+use crate::winlayer::graph::curbuf;
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.

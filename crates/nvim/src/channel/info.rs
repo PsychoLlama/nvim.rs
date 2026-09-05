@@ -21,7 +21,7 @@ use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::multiqueue_put_event;
 use crate::event::proc::proc_is_stopped;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::{channels, curbuf};
+use crate::main::channels;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree};
 use crate::message_fmt::c_str;
 use crate::os::pty_proc_unix::pty_proc_tty_name;
@@ -31,6 +31,7 @@ use crate::types::{
     ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
     VAR_UNKNOWN, VarLock, key_value_pair, typval_vval_union, uint64_t,
 };
+use crate::winlayer::graph::curbuf;
 
 use super::known::*;
 use super::{

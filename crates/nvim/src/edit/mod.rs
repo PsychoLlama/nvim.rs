@@ -104,15 +104,14 @@ use crate::keycodes::{
 };
 use crate::main::{
     Insstart, Insstart_orig, KeyStuffed, KeyTyped, RedrawingDisabled, State, ai_col, arrow_used,
-    can_si, can_si_back, clear_cmdline, cmdwin_result, cmdwin_type, curbuf, curwin, did_ai,
-    did_check_timestamps, did_cursorhold, did_si, dollar_vcol, edit_submode_extra, emsg_on_display,
-    end_comment_pending, ex_normal_busy, force_restart_edit, got_int, ins_at_eol, km_startsel,
-    langmap_mapchar, last_cursormoved, last_cursormoved_win, mod_mask, msg_scroll, msg_silent,
-    must_redraw, need_check_timestamps, need_highlight_changed, need_start_insertmode, no_abbr,
-    old_indent, orig_line_count, pum_want, redraw_cmdline, redraw_mode, reg_recording,
-    replace_offset, restart_VIsual_select, restart_edit, sandbox, spell_redraw_lnum,
-    stop_insert_mode, test_disable_char_avail, textlock, u_sync_once, vgetc_busy, vr_lines_changed,
-    where_paste_started,
+    can_si, can_si_back, clear_cmdline, did_ai, did_check_timestamps, did_cursorhold, did_si,
+    dollar_vcol, edit_submode_extra, emsg_on_display, end_comment_pending, ex_normal_busy,
+    force_restart_edit, got_int, ins_at_eol, km_startsel, langmap_mapchar, last_cursormoved,
+    last_cursormoved_win, mod_mask, msg_scroll, msg_silent, must_redraw, need_check_timestamps,
+    need_highlight_changed, need_start_insertmode, no_abbr, old_indent, orig_line_count, pum_want,
+    redraw_cmdline, redraw_mode, reg_recording, replace_offset, restart_VIsual_select,
+    restart_edit, sandbox, spell_redraw_lnum, stop_insert_mode, test_disable_char_avail, textlock,
+    u_sync_once, vgetc_busy, vr_lines_changed, where_paste_started,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};
@@ -180,6 +179,7 @@ use crate::types::{
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
 use crate::window::{goto_tabpage, may_trigger_win_scrolled_resized};
+use crate::winlayer::graph::{cmdwin_result, cmdwin_type, curbuf, curwin};
 
 // The carve of the transpiled module; see each child's docs.
 mod bs;

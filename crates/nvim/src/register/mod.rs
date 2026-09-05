@@ -59,9 +59,8 @@ use crate::keycodes::{
     vim_unescape_ks,
 };
 use crate::main::{
-    Columns, State, curbuf, got_int, last_cmdline, msg_ext_skip_flush, must_redraw,
-    new_last_cmdline, pending_end_reg_executing, redir_reg, reg_executing, reg_recorded,
-    reg_recording, restart_edit,
+    Columns, State, got_int, last_cmdline, msg_ext_skip_flush, must_redraw, new_last_cmdline,
+    pending_end_reg_executing, redir_reg, reg_executing, reg_recorded, reg_recording, restart_edit,
 };
 use crate::mark::mark_adjust;
 use crate::mbyte::{
@@ -108,6 +107,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
+use crate::winlayer::graph::curbuf;
 use ::libc::{abort, atoi, strcpy};
 
 // The carve of the transpiled module; see each child's docs.

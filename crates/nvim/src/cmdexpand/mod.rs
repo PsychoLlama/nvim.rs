@@ -46,9 +46,9 @@ use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
 use crate::main::{
-    Columns, KeyTyped, Rows, cmd_silent, cmdline_row, cmdline_win, curbuf, current_sctx, curwin,
-    got_int, hl_attr_active, msg_col, msg_didany, msg_row, msg_scrolled, pum_want, save_p_ls,
-    save_p_wmh, search_first_line, search_last_line, topframe, wild_menu_showing,
+    Columns, KeyTyped, Rows, cmd_silent, cmdline_row, current_sctx, got_int, hl_attr_active,
+    msg_col, msg_didany, msg_row, msg_scrolled, pum_want, save_p_ls, save_p_wmh, search_first_line,
+    search_last_line, wild_menu_showing,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -114,6 +114,7 @@ use crate::usercmd::{
     set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
 use crate::window::{global_stl_height, last_status};
+use crate::winlayer::graph::{cmdline_win, curbuf, curwin, topframe};
 use crate::winlayer::{Cc, Live};
 use ::libc::{qsort, strcpy, strncpy};
 use core::ffi::{CStr, c_char, c_int};

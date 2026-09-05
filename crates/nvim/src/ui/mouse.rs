@@ -9,13 +9,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::global_cell::GlobalCell;
-use crate::main::{State, curbuf};
+use crate::main::State;
 use crate::normal::visual_active;
 use crate::option::vars::p_mouse;
 use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
 use crate::strings::vim_strchr;
+use crate::winlayer::graph::curbuf;
 use core::ffi::{CStr, c_int};
 
 /// What [`ui_check_mouse`] last worked out.

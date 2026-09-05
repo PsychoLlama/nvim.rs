@@ -18,7 +18,7 @@ use crate::ex_getln::getcmdline;
 use crate::fold::fold_open_cursor;
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
-use crate::main::{KeyTyped, curbuf, curwin, mod_mask, no_hlsearch};
+use crate::main::{KeyTyped, mod_mask, no_hlsearch};
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
@@ -35,6 +35,7 @@ use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search}
 use crate::state::virtual_active;
 use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg, size_t};
 use crate::window::goto_tabpage_lastused;
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{c_char, c_int, c_uint};
 
 /// Whether the highlight of the previous match has to be redrawn.

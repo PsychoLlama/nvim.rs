@@ -32,7 +32,7 @@ use crate::fileio::file_pat_to_reg_pat;
 use crate::guard::Suppress;
 use crate::hashtab::hash_init;
 use crate::insexpand::clear_cpt_callbacks;
-use crate::main::{curbuf, emsg_silent, firstbuf, in_assert_fails, lastbuf};
+use crate::main::{emsg_silent, in_assert_fails};
 use crate::mark::{clrallmarks, fmarks_check_names, mark_view_restore};
 use crate::memory::{xfree, xstrdup};
 use crate::message::e_noalt;
@@ -56,6 +56,7 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
+use crate::winlayer::graph::{curbuf, firstbuf, lastbuf};
 use crate::winlayer::{Buf, Win, buffers_back, register_buffer, windows};
 
 use super::expand::{NO_REGMATCH, buflist_match, find_buf};

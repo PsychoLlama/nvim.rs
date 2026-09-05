@@ -18,7 +18,7 @@ use crate::getchar::{plain_vgetc, start_redo, stuff_readbuf_char};
 use crate::guard::Keys;
 use crate::keycodes::{Ctrl_V, KE_CMDWIN};
 use crate::main::{
-    VIsual_select_reg, arrow_used, cmdwin_type, got_int, reg_executing, reg_recorded, restart_edit,
+    VIsual_select_reg, arrow_used, got_int, reg_executing, reg_recorded, restart_edit,
 };
 use crate::message::emsg;
 use crate::normal::{
@@ -31,6 +31,7 @@ use crate::os::input::line_breakcheck;
 use crate::register::{do_execreg, do_record, get_expr_register, valid_yank_reg};
 use crate::types::{CmdArg, NUL, OpType, Vv};
 use crate::undo::{u_redo, u_undo, u_undoline};
+use crate::winlayer::graph::cmdwin_type;
 use core::ffi::{c_char, c_int};
 
 /// Re-run this command as the two-character `g<nchar>` operator instead.

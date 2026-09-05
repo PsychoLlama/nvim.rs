@@ -23,9 +23,9 @@ use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, curbuf, curwin, finish_op,
-    motion_force, mouse_dragging, msg_silent, redraw_cmdline, resel_VIsual_line_count,
-    resel_VIsual_mode, resel_VIsual_vcol,
+    VIsual_reselect, VIsual_select_exclu_adj, VIsual_select_reg, finish_op, motion_force,
+    mouse_dragging, msg_silent, redraw_cmdline, resel_VIsual_line_count, resel_VIsual_mode,
+    resel_VIsual_vcol,
 };
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::utfc_ptr2len;
@@ -47,6 +47,7 @@ use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Pos, size_t};
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};

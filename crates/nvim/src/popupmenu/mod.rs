@@ -34,9 +34,8 @@ use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
 use crate::main::{
-    Columns, PumWant, RedrawingDisabled, Rows, State, cmdline_row, cmdline_win, cmdwin_type,
-    curbuf, curtab, curwin, g_do_tagpreview, hl_attr_active, mouse_col, mouse_grid, mouse_row,
-    must_redraw_pum, no_u_sync, pum_grid, pum_want,
+    Columns, PumWant, RedrawingDisabled, Rows, State, cmdline_row, g_do_tagpreview, hl_attr_active,
+    mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync, pum_grid, pum_want,
 };
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
@@ -72,6 +71,7 @@ use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
+use crate::winlayer::graph::{cmdline_win, cmdwin_type, curbuf, curtab, curwin};
 use crate::winlayer::{Win, windows};
 
 // The carve of the transpiled module; see each child's docs.

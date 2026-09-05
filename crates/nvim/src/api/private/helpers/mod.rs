@@ -27,8 +27,8 @@ use crate::ex_eval::{discard_current_exception, free_global_msglist, get_excepti
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
 use crate::main::{
-    curbuf, current_exception, current_sctx, curtab, curwin, did_emsg, did_throw, force_abort,
-    got_int, msg_list, need_rethrow, trylevel,
+    current_exception, current_sctx, did_emsg, did_throw, force_abort, got_int, msg_list,
+    need_rethrow, trylevel,
 };
 use crate::mark::setmark_pos;
 use crate::memory::xfree;
@@ -39,6 +39,7 @@ use crate::types::{
     Integer, LineNr, MsgList, NUL, Pos, ScriptId, String_0, Tabpage, TabpageHandle, TryState,
     Window, WindowHandle, int64_t, kErrorTypeException, uint64_t,
 };
+use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::winlayer::{self, Buf, TabPage, Win};
 
 mod keydict;

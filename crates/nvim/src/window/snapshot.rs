@@ -20,7 +20,6 @@ use super::*;
 use crate::ascii::ascii_isdigit;
 use crate::charset::getdigits_int;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::curbuf;
 use crate::memory::{xcalloc, xmalloc};
 use crate::message::e_invarg;
 use crate::message::msg_ui_flush;
@@ -30,6 +29,7 @@ use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
 use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt, Tabpage, Window};
 use crate::ui::ui_call_win_hide;
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };

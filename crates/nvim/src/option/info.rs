@@ -10,12 +10,12 @@ use core::ffi::c_char;
 use core::ptr;
 
 use crate::api::private::helpers::{arena_dict, cstr_as_string};
-use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
     ApiDict, Arena, Buffer, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags,
     ScriptCtx, String_0, Window, int64_t, key_value_pair, size_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::api::private::validate::err_bad_value;
 

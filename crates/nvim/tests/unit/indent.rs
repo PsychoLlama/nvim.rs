@@ -16,8 +16,8 @@
 use std::ffi::c_int;
 
 use neovim::indent::{get_sts_value, indent_size_ts};
-use neovim::main::curbuf;
 use neovim::types::{Buffer, ColNr, OptInt};
+use neovim::winlayer::graph::curbuf;
 
 use crate::support::{Editor, Sandbox, cstr};
 

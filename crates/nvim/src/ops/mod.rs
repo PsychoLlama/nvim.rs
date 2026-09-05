@@ -46,9 +46,9 @@ use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::main::{
     Insstart, KeyTyped, State, VIsual_reselect, VIsual_select_reg, ai_col, bangredo, can_si,
-    curbuf, curbuf_splice_pending, curwin, did_ai, finish_op, got_int, motion_force,
-    mouse_dragging, msg_scroll, no_lines_msg, redo_VIsual_busy, repeat_cmdline, repeat_luaref,
-    resel_VIsual_line_count, resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
+    curbuf_splice_pending, did_ai, finish_op, got_int, motion_force, mouse_dragging, msg_scroll,
+    no_lines_msg, redo_VIsual_busy, repeat_cmdline, repeat_luaref, resel_VIsual_line_count,
+    resel_VIsual_mode, resel_VIsual_vcol, restart_edit, virtual_op,
 };
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
@@ -95,6 +95,7 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Live, PosRef};
 use ::libc::{abort, strcpy};
 use core::mem::offset_of;

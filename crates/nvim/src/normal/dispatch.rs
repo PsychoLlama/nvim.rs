@@ -28,9 +28,9 @@ use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::main::{
-    KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, curwin, did_cursorhold,
-    finish_op, km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force, msg_col,
-    msg_didout, msg_nowait, opcount, restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char,
+    KeyStuffed, KeyTyped, State, VIsual_select_reg, clear_cmdline, did_cursorhold, finish_op,
+    km_startsel, langmap_mapchar, mod_mask, mode_displayed, motion_force, msg_col, msg_didout,
+    msg_nowait, opcount, restart_VIsual_select, restart_edit, vgetc_busy, vgetc_char,
     vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
@@ -58,6 +58,7 @@ use crate::types::{
     CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, VimState, int16_t, int64_t,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
+use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 

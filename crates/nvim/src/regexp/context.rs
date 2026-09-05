@@ -27,7 +27,7 @@ use super::{
     reg_tofree, reg_tofreelen,
 };
 use crate::charset::vim_iswordc_buf;
-use crate::main::{curbuf, curwin, got_int, rc_did_emsg};
+use crate::main::{got_int, rc_did_emsg};
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xcalloc, xfree, xmalloc};
@@ -44,6 +44,7 @@ use crate::semsg;
 use crate::types::{
     Buffer, ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::strcpy;
 
 use crate::winlayer::{Buf, Win};

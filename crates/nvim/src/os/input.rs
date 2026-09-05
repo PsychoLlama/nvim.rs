@@ -32,9 +32,9 @@ use crate::keycodes::{
 };
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
-    Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, curbuf, current_ui,
-    did_cursorhold, do_profiling, getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid,
-    mouse_row, preserve_exit, silent_mode, typebuf_was_filled, used_stdin,
+    Columns, Rows, State, ch_before_blocking_events, ctrl_c_interrupts, current_ui, did_cursorhold,
+    do_profiling, getout, got_int, main_loop, mapped_ctrl_c, mouse_col, mouse_grid, mouse_row,
+    preserve_exit, silent_mode, typebuf_was_filled, used_stdin,
 };
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_mouset, p_ut};
@@ -48,6 +48,7 @@ use crate::types::{
     Event, KeyExtra, MultiQueue, RStream, Stream, String_0, size_t, uint8_t, uint64_t,
     uv_handle_type,
 };
+use crate::winlayer::graph::curbuf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;

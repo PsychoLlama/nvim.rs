@@ -20,9 +20,9 @@
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 
-use crate::main::{curbuf, curwin};
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
+use crate::winlayer::graph::{curbuf, curwin};
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::options::*;
 use crate::types::{

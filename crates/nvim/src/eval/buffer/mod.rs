@@ -63,7 +63,7 @@ use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 
-use crate::main::{cmdwin_buf, curbuf, curwin, did_emsg, swap_exists_action, u_sync_once};
+use crate::main::{did_emsg, swap_exists_action, u_sync_once};
 use crate::memline::{ml_append, ml_delete_flags, ml_get, ml_replace, ml_replace_buf};
 use crate::memory::{strnequal, xfree, xstrdup};
 use crate::r#move::update_topline;
@@ -71,6 +71,7 @@ use crate::path::path_with_url;
 use crate::sign::{buf_has_signs, get_buffer_signs};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
+use crate::winlayer::graph::{cmdwin_buf, curbuf, curwin};
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};

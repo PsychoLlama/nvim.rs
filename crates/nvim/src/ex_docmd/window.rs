@@ -36,8 +36,8 @@ use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
 use crate::main::{
-    Columns, Rows, cmdmod, curbuf, curwin, g_do_tagpreview, got_int, lastused_tabpage, msg_col,
-    msg_scroll, must_redraw, postponed_split_flags, postponed_split_tab,
+    Columns, Rows, cmdmod, g_do_tagpreview, got_int, msg_col, msg_scroll, must_redraw,
+    postponed_split_flags, postponed_split_tab,
 };
 use crate::memory::{xfree, xstrlcpy};
 use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
@@ -57,6 +57,7 @@ use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
     tabpage_move, valid_tab, valid_win,
 };
+use crate::winlayer::graph::{curbuf, curwin, lastused_tabpage};
 use crate::winlayer::{Buf, Ea, TabPage, Win, tabs, windows, windows_in_tab};
 use ::libc::atol;
 

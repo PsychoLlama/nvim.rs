@@ -20,7 +20,7 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::garray::{ga_clear, ga_grow};
 use crate::highlight_group::{HLF_COUNT, HLF_SPB, HLF_SPC, HLF_SPL, HLF_SPR};
 use crate::keycodes::vim_strsave_escape_ks;
-use crate::main::{curbuf, curwin, did_emsg};
+use crate::main::did_emsg;
 use crate::mbyte::{
     convert_setup, enc_locale, string_convert, utf_char2bytes, utf_ptr2char, utfc_ptr2len,
 };
@@ -44,6 +44,7 @@ use crate::types::{
     Blob, CONV_NONE, ColNr, EvalFuncData, GArray, Hlf, List, NUL, RegMatch, RegProg, TypVal,
     VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, VimConv, kListLenMayKnow, time_t, tm,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
 use core::ptr;

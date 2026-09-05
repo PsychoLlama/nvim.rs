@@ -15,7 +15,6 @@ use crate::buffer::do_modelines;
 use crate::eval::typval::{callback_free, callback_to_string};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::{api_new_luaref, nlua_ref_is_function};
-use crate::main::curbuf;
 use crate::memory::{strequal, xfree};
 use crate::strings::arena_printf;
 use crate::types::AutoEvent;
@@ -26,6 +25,7 @@ use crate::types::{
     String_0, TryState, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, size_t,
     uint64_t,
 };
+use crate::winlayer::graph::curbuf;
 use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.

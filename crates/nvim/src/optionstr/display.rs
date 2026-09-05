@@ -21,7 +21,7 @@ use crate::eval::vars::{do_unlet, get_var_value};
 use crate::ex_getln::check_opt_wim;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
-use crate::main::{cmdpreview, curwin, km_startsel, km_stopsel};
+use crate::main::{cmdpreview, km_startsel, km_stopsel};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
 use crate::message::e_unsupportedoption;
@@ -39,6 +39,7 @@ use crate::types::{
     VirtText, WinConfig, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
+use crate::winlayer::graph::curwin;
 
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{

@@ -34,7 +34,6 @@ use crate::eval::userfunc::call_func;
 use crate::eval::{eval_to_string, partial_name};
 use crate::global_cell::GlobalCell;
 use crate::keycodes::{Ctrl_H, K_SPECIAL};
-use crate::main::curbuf;
 use crate::mbyte::{
     mb_tolower, mb_toupper, utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len, utfc_ptr2len,
 };
@@ -49,6 +48,7 @@ use crate::types::{
     VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
 };
 use crate::winlayer::Live;
+use crate::winlayer::graph::curbuf;
 use ::libc::strcpy;
 
 /// How deep a `\=` expression may nest substitutions before it is more

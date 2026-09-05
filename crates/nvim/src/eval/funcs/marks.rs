@@ -13,7 +13,7 @@ use crate::eval::typval::{
 };
 use crate::eval::window::{find_tabwin, find_win_by_nr_or_id};
 use crate::guard::Suppress;
-use crate::main::{curbuf, curwin, vim_ignored};
+use crate::main::vim_ignored;
 use crate::mark::{cleanup_jumplist, get_buf_local_marks, get_global_marks};
 use crate::message_fmt::c_str;
 use crate::semsg;
@@ -22,6 +22,7 @@ use crate::types::{
     Buffer, Dict, EvalFuncData, List, NUL, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
 use crate::winlayer::Win;
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 

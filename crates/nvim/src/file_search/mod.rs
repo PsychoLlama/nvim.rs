@@ -22,7 +22,7 @@ use crate::eval::typval::{tv_dict_add_bool, tv_dict_add_str, tv_dict_set_keys_re
 use crate::eval::vars::set_vim_var_string;
 use crate::eval::{eval_to_string_safe, get_v_event, restore_v_event};
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin, got_int, line_msg};
+use crate::main::{got_int, line_msg};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
 use crate::message::emsg;
@@ -48,6 +48,7 @@ use crate::types::AutoEvent;
 use crate::types::{
     BoolVarValue, CdCause, CdScope, CmdArg, FileID, LineNr, MAXPATHL, SaveVEvent, ptrdiff_t, size_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{abort, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;

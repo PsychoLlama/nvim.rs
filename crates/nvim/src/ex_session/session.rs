@@ -35,7 +35,7 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
-use crate::main::{Columns, Rows, curtab, curwin, firstwin, globaldir, topframe};
+use crate::main::{Columns, Rows, globaldir};
 use crate::memory::xfree;
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
@@ -50,6 +50,7 @@ use crate::types::{
     VarType, Window, int64_t,
 };
 use crate::window::tabpage_index;
+use crate::winlayer::graph::{curtab, curwin, firstwin, topframe};
 use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};

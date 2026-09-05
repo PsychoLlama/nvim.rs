@@ -54,10 +54,10 @@ use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, RedrawingDisabled, Rows, WRITEBIN,
-    argv0, cmdline_row, curbuf, curwin, debug_break_level, embedded_mode, err_arg_missing,
-    exmode_active, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop,
-    msg_didout, msg_row, msg_scroll, no_wait_return, recoverymode, resize_events, restart_edit,
-    scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
+    argv0, cmdline_row, debug_break_level, embedded_mode, err_arg_missing, exmode_active,
+    full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, main_loop, msg_didout,
+    msg_row, msg_scroll, no_wait_return, recoverymode, resize_events, restart_edit, scriptout,
+    silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at,
     ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
@@ -91,6 +91,7 @@ use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Win, first_window, windows};
 use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 

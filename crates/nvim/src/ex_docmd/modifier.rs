@@ -33,12 +33,13 @@ use crate::ex_docmd::{
     ExFunc, SID_NONE, cmdnames, e_invrange, ex_msg, ex_pressedreturn, exmode_plus, getexline,
 };
 use crate::main::{
-    cmdmod, curtab, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col, msg_scroll,
-    msg_silent, sandbox,
+    cmdmod, did_emsg, emsg_silent, exmode_active, expr_map_lock, msg_col, msg_scroll, msg_silent,
+    sandbox,
 };
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::memory::{xfree, xmemcpyz};
 use crate::option::vars::{p_ei, p_verbose};
+use crate::winlayer::graph::curtab;
 
 use crate::message::redirecting;
 use crate::option::set_option_direct;

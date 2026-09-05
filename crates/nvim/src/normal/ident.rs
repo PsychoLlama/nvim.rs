@@ -24,8 +24,7 @@ use crate::file_search::grab_file_name;
 use crate::fold::fold_open_cursor;
 use crate::keycodes::Ctrl_RSB;
 use crate::main::{
-    KeyTyped, clear_cmdline, curbuf, curwin, g_tag_at_cursor, msg_silent, no_smartcase,
-    restart_edit,
+    KeyTyped, clear_cmdline, g_tag_at_cursor, msg_silent, no_smartcase, restart_edit,
 };
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
@@ -56,6 +55,7 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
+use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 

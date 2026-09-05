@@ -48,8 +48,7 @@ use crate::hashtab::{
 };
 use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
-    called_emsg, curbuf, current_sctx, curtab, curwin, did_emsg, emsg_severe, got_int,
-    lastused_tabpage, no_hlsearch, sandbox, sc_col,
+    called_emsg, current_sctx, did_emsg, emsg_severe, got_int, no_hlsearch, sandbox, sc_col,
 };
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
@@ -94,6 +93,7 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
+use crate::winlayer::graph::{curbuf, curtab, curwin, lastused_tabpage};
 use crate::winlayer::{Ea, Live};
 use ::libc::{abort, memchr, strcpy};
 

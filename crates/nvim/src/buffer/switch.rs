@@ -35,8 +35,8 @@ use crate::ex_cmds2::{can_abandon, dialog_changed, dialog_close_terminal};
 use crate::ex_docmd::{cmdmod_has, ex_errmsg, ex_msg};
 use crate::ex_eval::{enter_cleanup, leave_cleanup};
 use crate::main::{
-    au_new_curbuf, cmdline_row, curbuf, got_int, msg_row, msg_scroll, need_fileinfo,
-    swap_exists_action, swap_exists_did_quit,
+    au_new_curbuf, cmdline_row, got_int, msg_row, msg_scroll, need_fileinfo, swap_exists_action,
+    swap_exists_did_quit,
 };
 use crate::mark::mark_jumplist_forget_file;
 use crate::memline::ml_recover;
@@ -56,6 +56,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
     win_split,
 };
+use crate::winlayer::graph::curbuf;
 use crate::winlayer::{buffers, last_window as last_listed_window, windows};
 
 use super::expand::find_buf;

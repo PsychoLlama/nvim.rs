@@ -22,8 +22,8 @@ use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    State, autocmd_busy, curbuf, curtab, msg_scrolled, starting, stdin_isatty, stdout_isatty,
-    vgetc_busy, wild_menu_showing, windowsVersion,
+    State, autocmd_busy, msg_scrolled, starting, stdin_isatty, stdout_isatty, vgetc_busy,
+    wild_menu_showing, windowsVersion,
 };
 use crate::memline::ml_get;
 use crate::memory::handoff::owned_cstr;
@@ -44,6 +44,7 @@ use crate::types::{
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
 use crate::window::find_tabpage;
+use crate::winlayer::graph::{curbuf, curtab};
 use crate::winlayer::{TabPage, windows_in_tab};
 use ::libc::{atoi, strcasecmp, strtoul};
 use core::ffi::{CStr, c_char, c_int};
@@ -226,7 +227,7 @@ unsafe fn special_feature(name: *const c_char) -> Option<bool> {
         _ if unsafe { same_name(name, c"multi_byte_encoding") } => true,
         _ if unsafe { same_name(name, c"gui_running") } => ui_gui_attached(),
         _ if unsafe { same_name(name, c"syntax_items") } => unsafe {
-            syntax_present(crate::main::curwin.get())
+            syntax_present(crate::winlayer::graph::curwin.get())
         },
         _ if unsafe { same_name(name, c"wsl") } => has_wsl(),
         _ => return None,

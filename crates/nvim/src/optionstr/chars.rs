@@ -34,7 +34,6 @@ use core::{ptr, slice};
 use crate::charset::{char2cells, hexhex2nr, ptr2cells};
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::grid::{schar_from_char, schar_from_str};
-use crate::main::curwin;
 use crate::mbyte::{utfc_ptr2len, utfc_ptr2schar};
 use crate::memory::{xfree, xmalloc};
 use crate::message::{e_invarg, e_leadtab_requires_tab};
@@ -48,6 +47,7 @@ use crate::types::{
     int64_t, size_t,
 };
 use crate::winlayer;
+use crate::winlayer::graph::curwin;
 
 use super::{
     clear_string_option, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,

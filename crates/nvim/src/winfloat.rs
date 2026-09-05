@@ -30,7 +30,7 @@ use crate::api::vim::nvim_create_buf;
 use crate::autocmd::{block_autocmds, unblock_autocmds};
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID, set_must_redraw};
 use crate::grid::grid_adjust;
-use crate::main::{Columns, Rows, cmdwin_win, prevwin};
+use crate::main::{Columns, Rows};
 use crate::memory::{xfree, xstrdup};
 use crate::message::e_cmdwin;
 use crate::message::emsg_ptr;
@@ -54,6 +54,7 @@ use crate::window::{
     win_close, win_comp_pos, win_enter, win_find_tabpage, win_free, win_init, win_remove,
     win_remove_status_line, win_set_buf, win_set_inner_size, win_valid, winframe_remove,
 };
+use crate::winlayer::graph::{cmdwin_win, prevwin};
 use crate::winlayer::{
     Buf, TabPage, Win, WinId, first_window, last_window, windows_back, windows_in_tab,
 };

@@ -51,7 +51,7 @@ use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
 use crate::main::{
-    cmdmod, curbuf, current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling,
+    cmdmod, current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling,
     ex_nesting_level, global_busy, got_int, listcmd_busy, msg_col, time_fd,
 };
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
@@ -96,6 +96,7 @@ use crate::types::{
     kBoolVarFalse, ptrdiff_t, size_t, typval_vval_union, uv_mutex_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
+use crate::winlayer::graph::curbuf;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
 use std::ffi::CString;
 

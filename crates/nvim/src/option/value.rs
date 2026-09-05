@@ -14,12 +14,12 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use crate::api::private::helpers::{api_free_string, copy_string, cstr_as_string};
-use crate::main::curbuf;
 use crate::memory::{strnequal, xmalloc, xstrdup};
 use crate::optionstr::is_empty_option;
 use crate::os::cshim::snprintf;
 use crate::types::{Arena, Object, OptIndex, OptVal, OptValType, size_t};
 use crate::undo::curbuf_is_changed;
+use crate::winlayer::graph::curbuf;
 
 use super::{
     NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,

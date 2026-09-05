@@ -28,7 +28,7 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::guard::Suppress;
-use crate::main::{State, curbuf, curwin, got_int, restart_edit};
+use crate::main::{State, got_int, restart_edit};
 use crate::mbyte::{mb_adjust_cursor, mb_charlen};
 use crate::memline::{inc, ml_delete_flags, ml_get};
 use crate::memory::xfree;
@@ -57,6 +57,7 @@ use crate::types::{
     PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
+use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.

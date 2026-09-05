@@ -59,8 +59,8 @@ use crate::highlight_group::{
 };
 use crate::indent_c::find_start_comment;
 use crate::main::{
-    Columns, Rows, curbuf, curwin, display_tick, got_int, include_default, include_link,
-    include_none, msg_col, re_extmatch_in, re_extmatch_out, reg_do_extmatch,
+    Columns, Rows, display_tick, got_int, include_default, include_link, include_none, msg_col,
+    re_extmatch_in, re_extmatch_out, reg_do_extmatch,
 };
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
@@ -90,6 +90,7 @@ use crate::types::{
     RegMMatch, RegMatch, RegProg, SynBlock, SynState, SynTime, VarNumber, Window, int16_t, size_t,
     uint8_t, uint64_t,
 };
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
 

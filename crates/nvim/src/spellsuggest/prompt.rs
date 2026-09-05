@@ -39,7 +39,7 @@ use crate::getchar::{
 };
 use crate::input::prompt_for_input;
 use crate::main::{
-    Rows, cmdline_row, cmdmsg_rl, curwin, lines_left, mouse_row, msg_col, msg_row, msg_scroll,
+    Rows, cmdline_row, cmdmsg_rl, lines_left, mouse_row, msg_col, msg_row, msg_scroll,
 };
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
@@ -67,6 +67,7 @@ use crate::types::{ColNr, IOSIZE, NUL, Pos, int64_t};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
+use crate::winlayer::graph::curwin;
 use ::libc::{strcat, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;

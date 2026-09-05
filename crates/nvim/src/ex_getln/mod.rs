@@ -59,14 +59,13 @@ use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::main::{
     Columns, KeyStuffed, KeyTyped, Rows, State, allbuf_lock, cmd_silent, cmdline_row, cmdline_star,
-    cmdline_was_last_drawn, cmdline_win, cmdmod, cmdmsg_rl, cmdpreview, cmdwin_buf, cmdwin_level,
-    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, current_sctx, curwin,
-    did_emsg, emsg_on_display, ex_normal_busy, exec_from_reg, exmode_active, global_busy, got_int,
-    highlight_match, lines_left, magic_overruled, mod_mask, mouse_col, mouse_row, msg_col,
-    msg_didout, msg_no_more, msg_row, msg_scroll, msg_scrolled, need_wait_return, new_last_cmdline,
-    no_abbr, no_hlsearch, pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline,
-    redrawing_cmdline, restart_edit, search_first_line, search_last_line, search_match_endcol,
-    search_match_lines, skip_redraw, skip_win_fix_cursor, textlock, wild_menu_showing,
+    cmdline_was_last_drawn, cmdmod, cmdmsg_rl, cmdpreview, current_sctx, did_emsg, emsg_on_display,
+    ex_normal_busy, exec_from_reg, exmode_active, global_busy, got_int, highlight_match,
+    lines_left, magic_overruled, mod_mask, mouse_col, mouse_row, msg_col, msg_didout, msg_no_more,
+    msg_row, msg_scroll, msg_scrolled, need_wait_return, new_last_cmdline, no_abbr, no_hlsearch,
+    pum_want, quit_more, redir_off, redraw_cmdline, redraw_tabline, redrawing_cmdline,
+    restart_edit, search_first_line, search_last_line, search_match_endcol, search_match_lines,
+    skip_redraw, skip_win_fix_cursor, textlock, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
@@ -165,6 +164,10 @@ use crate::window::{
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,
 };
 use crate::winlayer::Cc;
+use crate::winlayer::graph::{
+    cmdline_win, cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type,
+    cmdwin_win, curbuf, curwin,
+};
 use ::libc::{abort, strcpy, strrchr};
 
 // The carve of the transpiled module; see each child's docs.

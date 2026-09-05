@@ -18,9 +18,8 @@ use crate::getchar::{
 };
 use crate::help::ex_help;
 use crate::main::{
-    KeyTyped, clear_cmdline, cmdwin_result, cmdwin_type, curwin, did_emsg, ex_normal_busy,
-    finish_op, got_int, may_garbage_collect, mode_displayed, redraw_mode, restart_VIsual_select,
-    restart_edit, typebuf_was_empty,
+    KeyTyped, clear_cmdline, did_emsg, ex_normal_busy, finish_op, got_int, may_garbage_collect,
+    mode_displayed, redraw_mode, restart_VIsual_select, restart_edit, typebuf_was_empty,
 };
 use crate::memline::ml_get_len;
 use crate::message::{msg, msg_ext_set_trigger};
@@ -37,6 +36,7 @@ use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
+use crate::winlayer::graph::{cmdwin_result, cmdwin_type, curwin};
 use core::ffi::{c_int, c_uint};
 
 /// A key the command loop must swallow without doing anything: it marks the

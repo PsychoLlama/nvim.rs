@@ -57,7 +57,6 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::aborting;
 use crate::fold::{clear_folding, fold_update_all};
 use crate::global_cell::GlobalCell;
-use crate::main::{curbuf, curwin};
 use crate::mark::setpcmark;
 use crate::memline::ml_delete;
 use crate::memory::xfree;
@@ -73,6 +72,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
+use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Buf, Win, buffers_back, first_buffer, last_buffer};
 
 // The carve of the transpiled module; see each child's docs.
