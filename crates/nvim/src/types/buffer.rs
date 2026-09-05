@@ -91,8 +91,8 @@ pub struct WinConfig {
 }
 pub type WinSplit = ::core::ffi::c_uint;
 pub type WinStyle = ::core::ffi::c_uint;
-pub type bfa_values = ::core::ffi::c_uint;
-pub type bln_values = ::core::ffi::c_uint;
+pub type BfaFlags = ::core::ffi::c_uint;
+pub type BlnFlags = ::core::ffi::c_uint;
 /// `Copy`, and not an owner: the three fields together are a *weak* name for
 /// a buffer -- the address it had, the number it had, and the free count that
 /// says whether the address still means that buffer. Duplicating one
@@ -147,8 +147,8 @@ pub struct DiffLineChange {
     pub dc_end_lnum_off: [::core::ffi::c_int; 8],
 }
 pub type DispTick = uint64_t;
-pub type dobuf_action_values = ::core::ffi::c_uint;
-pub type dobuf_start_values = ::core::ffi::c_uint;
+pub type DoBufAction = ::core::ffi::c_uint;
+pub type DoBufStart = ::core::ffi::c_uint;
 pub struct FcsChars {
     pub stl: ScreenChar,
     pub stlnc: ScreenChar,
@@ -500,8 +500,8 @@ pub struct Frame {
     pub fr_child: *mut Frame,
     pub fr_win: *mut Window,
 }
-pub type getf_retvalues = ::core::ffi::c_int;
-pub type getf_values = ::core::ffi::c_uint;
+pub type GetFileRet = ::core::ffi::c_int;
+pub type GetFileFlags = ::core::ffi::c_uint;
 /// Not `Copy`: `multispace` and `leadmultispace` are owned runs, allocated
 /// by 'listchars' and freed when the window's value is replaced.
 #[derive(Clone)]

@@ -67,8 +67,8 @@ use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, Callback, ColNr, Dict, DictItem, ExArg, Expand, FILE, FileMark, FileMarkView,
-    FileOffset, LineNr, List, OptInt, OptMagic, OptSet, Pos, RegMatch, Taggy, Timestamp, TypVal,
-    VarNumber, VimConv, file_comparison, getf_retvalues, getf_values, int64_t, ptrdiff_t, size_t,
+    FileOffset, GetFileFlags, GetFileRet, LineNr, List, OptInt, OptMagic, OptSet, Pos, RegMatch,
+    Taggy, Timestamp, TypVal, VarNumber, VimConv, file_comparison, int64_t, ptrdiff_t, size_t,
     typval_vval_union,
 };
 use crate::ui::ui_has;
@@ -100,9 +100,9 @@ pub use self::stack::*;
 mod command;
 pub use self::command::*;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
-pub const GETF_SETMARK: getf_values = 1;
-pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
-pub const GETFILE_SAME_FILE: getf_retvalues = 0;
+pub const GETF_SETMARK: GetFileFlags = 1;
+pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
+pub const GETFILE_SAME_FILE: GetFileRet = 0;
 pub const FINDFILE_FILE: ::core::ffi::c_uint = 0;
 pub const kEqualFiles: file_comparison = 1;
 pub const LSIZE: ::core::ffi::c_uint = 512;

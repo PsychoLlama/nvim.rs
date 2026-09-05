@@ -179,7 +179,7 @@ pub(crate) unsafe fn hms_load_pending(hms_p: *mut HistoryMergerState) {
         .map(|he| ShadaEntry {
             can_free_entry: unsafe { (*hms_p).reading },
             timestamp: he.timestamp,
-            data: ShadaEntryData::HistoryEntry(history_item {
+            data: ShadaEntryData::HistoryEntry(ShadaHistoryItem {
                 histtype: history_type,
                 string: he.text,
                 sep: he.sep,
@@ -522,7 +522,7 @@ pub(crate) unsafe fn shada_read_when_writing(
 unsafe fn merge_history(
     wms: *mut WriteMergerState,
     mut entry: ShadaEntry,
-    item: history_item,
+    item: ShadaHistoryItem,
     packer: *mut PackerBuffer,
     ret: ShaDaWriteResult,
 ) -> ShaDaWriteResult {
@@ -549,7 +549,7 @@ unsafe fn merge_history(
 unsafe fn merge_global_mark(
     wms: *mut WriteMergerState,
     mut entry: ShadaEntry,
-    mark: shada_filemark,
+    mark: ShadaFileMark,
     packer: *mut PackerBuffer,
     ret: ShaDaWriteResult,
 ) -> ShaDaWriteResult {

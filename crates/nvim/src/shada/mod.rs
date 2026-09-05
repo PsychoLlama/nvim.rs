@@ -59,13 +59,14 @@ use crate::search::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, Buffer, ColNr, DictItem, FileDescriptor,
-    FileInfo, FileMark, FileMarkView, HistoryType, Integer, KeyDict__shada_buflist_item,
-    KeyDict__shada_mark, KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr,
-    List, MarkGet, MotionType, OptionalKeys, PackerBuffer, Pos, SearchOffset, SearchPattern,
-    String_0, StringArray, SubReplacementString, Timestamp, TypVal, VAR_UNKNOWN, VarFlavour,
-    VarLock, XFileMark, YankReg, bln_values, int64_t, ptrdiff_t, size_t, ssize_t,
-    typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
+    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, BlnFlags, Buffer, ColNr, DictItem,
+    FileDescriptor, FileInfo, FileMark, FileMarkView, HistoryType, Integer,
+    KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
+    KeyDict__shada_search_pat, KeyValuePair, LineNr, List, MarkGet, MotionType, OptionalKeys,
+    PackerBuffer, Pos, SearchOffset, SearchPattern, String_0, StringArray, SubReplacementString,
+    Timestamp, TypVal, VAR_UNKNOWN, VarFlavour, VarLock, XFileMark, YankReg, int64_t, ptrdiff_t,
+    size_t, ssize_t, typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t,
+    uv_uid_t,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -89,7 +90,7 @@ pub use self::read::*;
 mod write;
 pub(crate) use self::write::*;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const BLN_LISTED: bln_values = 2;
+pub const BLN_LISTED: BlnFlags = 2;
 pub const HIST_SEARCH: HistoryType = 1;
 pub const HIST_CMD: HistoryType = 0;
 pub const HIST_COUNT: ::core::ffi::c_uint = 5;
@@ -177,18 +178,18 @@ pub enum ShadaEntryData {
     Missing,
     Header(ApiDict),
     SearchPattern(KeyDict__shada_search_pat),
-    SubString(sub_string),
-    HistoryEntry(history_item),
-    Register(reg),
-    Variable(global_var),
-    GlobalMark(shada_filemark),
-    Jump(shada_filemark),
-    BufferList(buffer_list),
-    LocalMark(shada_filemark),
-    Change(shada_filemark),
+    SubString(ShadaSubString),
+    HistoryEntry(ShadaHistoryItem),
+    Register(ShadaRegister),
+    Variable(ShadaGlobalVar),
+    GlobalMark(ShadaFileMark),
+    Jump(ShadaFileMark),
+    BufferList(ShadaBufferList),
+    LocalMark(ShadaFileMark),
+    Change(ShadaFileMark),
     /// An entry of a type this Nvim does not know, kept byte for byte so
     /// that writing the file back does not lose it.
-    Unknown(unknown_item),
+    Unknown(ShadaUnknownItem),
 }
 
 impl ShadaEntryData {
@@ -238,7 +239,7 @@ impl ShadaEntryData {
     }
 
     /// The mark a global mark, local mark, jump or change entry carries.
-    pub(crate) fn filemark(&self) -> shada_filemark {
+    pub(crate) fn filemark(&self) -> ShadaFileMark {
         match self {
             ShadaEntryData::GlobalMark(mark)
             | ShadaEntryData::Jump(mark)
@@ -249,7 +250,7 @@ impl ShadaEntryData {
     }
 
     /// [`Self::filemark`], to write to.
-    pub(crate) fn filemark_mut(&mut self) -> &mut shada_filemark {
+    pub(crate) fn filemark_mut(&mut self) -> &mut ShadaFileMark {
         match self {
             ShadaEntryData::GlobalMark(mark)
             | ShadaEntryData::Jump(mark)
@@ -268,7 +269,7 @@ impl ShadaEntryData {
     }
 
     /// The line a history entry carries.
-    pub(crate) fn history(&self) -> history_item {
+    pub(crate) fn history(&self) -> ShadaHistoryItem {
         match self {
             ShadaEntryData::HistoryEntry(item) => *item,
             other => unreachable!("shada: entry type {} is not a history entry", other.kind()),
@@ -276,7 +277,7 @@ impl ShadaEntryData {
     }
 
     /// [`Self::history`], to write to.
-    pub(crate) fn history_mut(&mut self) -> &mut history_item {
+    pub(crate) fn history_mut(&mut self) -> &mut ShadaHistoryItem {
         match self {
             ShadaEntryData::HistoryEntry(item) => item,
             other => unreachable!("shada: entry type {} is not a history entry", other.kind()),
@@ -284,7 +285,7 @@ impl ShadaEntryData {
     }
 
     /// The register a register entry carries.
-    pub(crate) fn register_mut(&mut self) -> &mut reg {
+    pub(crate) fn register_mut(&mut self) -> &mut ShadaRegister {
         match self {
             ShadaEntryData::Register(reg) => reg,
             other => unreachable!("shada: entry type {} is not a register", other.kind()),
@@ -292,7 +293,7 @@ impl ShadaEntryData {
     }
 
     /// The variable a variable entry carries.
-    pub(crate) fn variable_mut(&mut self) -> &mut global_var {
+    pub(crate) fn variable_mut(&mut self) -> &mut ShadaGlobalVar {
         match self {
             ShadaEntryData::Variable(var) => var,
             other => unreachable!("shada: entry type {} is not a variable", other.kind()),
@@ -300,7 +301,7 @@ impl ShadaEntryData {
     }
 
     /// The replacement string a sub-string entry carries.
-    pub(crate) fn sub_string_mut(&mut self) -> &mut sub_string {
+    pub(crate) fn sub_string_mut(&mut self) -> &mut ShadaSubString {
         match self {
             ShadaEntryData::SubString(sub) => sub,
             other => unreachable!("shada: entry type {} is not a sub string", other.kind()),
@@ -308,7 +309,7 @@ impl ShadaEntryData {
     }
 
     /// The buffer list a buffer-list entry carries.
-    pub(crate) fn buffer_list(&self) -> buffer_list {
+    pub(crate) fn buffer_list(&self) -> ShadaBufferList {
         match self {
             ShadaEntryData::BufferList(list) => *list,
             other => unreachable!("shada: entry type {} is not a buffer list", other.kind()),
@@ -316,7 +317,7 @@ impl ShadaEntryData {
     }
 
     /// [`Self::buffer_list`], to write to.
-    pub(crate) fn buffer_list_mut(&mut self) -> &mut buffer_list {
+    pub(crate) fn buffer_list_mut(&mut self) -> &mut ShadaBufferList {
         match self {
             ShadaEntryData::BufferList(list) => list,
             other => unreachable!("shada: entry type {} is not a buffer list", other.kind()),
@@ -324,7 +325,7 @@ impl ShadaEntryData {
     }
 
     /// The bytes an entry of an unrecognised type arrived as.
-    pub(crate) fn unknown_mut(&mut self) -> &mut unknown_item {
+    pub(crate) fn unknown_mut(&mut self) -> &mut ShadaUnknownItem {
         match self {
             ShadaEntryData::Unknown(item) => item,
             other => unreachable!("shada: entry type {} is a known one", other.kind()),
@@ -332,33 +333,33 @@ impl ShadaEntryData {
     }
 }
 #[derive(Copy, Clone)]
-pub struct buffer_list {
+pub struct ShadaBufferList {
     pub size: size_t,
-    pub buffers: *mut buffer_list_buffer,
+    pub buffers: *mut ShadaBufferListItem,
 }
 #[derive(Copy, Clone)]
-pub struct buffer_list_buffer {
+pub struct ShadaBufferListItem {
     pub pos: Pos,
     pub fname: *mut ::core::ffi::c_char,
     pub additional_data: *mut AdditionalData,
 }
 #[derive(Copy, Clone)]
-pub struct sub_string {
+pub struct ShadaSubString {
     pub sub: *mut ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-pub struct unknown_item {
+pub struct ShadaUnknownItem {
     pub type_0: uint64_t,
     pub contents: *mut ::core::ffi::c_char,
     pub size: size_t,
 }
 #[derive(Copy, Clone)]
-pub struct global_var {
+pub struct ShadaGlobalVar {
     pub name: *mut ::core::ffi::c_char,
     pub value: TypVal,
 }
 #[derive(Copy, Clone)]
-pub struct reg {
+pub struct ShadaRegister {
     pub name: ::core::ffi::c_char,
     pub type_0: MotionType,
     pub contents: *mut String_0,
@@ -367,13 +368,13 @@ pub struct reg {
     pub width: size_t,
 }
 #[derive(Copy, Clone)]
-pub struct history_item {
+pub struct ShadaHistoryItem {
     pub histtype: uint8_t,
     pub string: *mut ::core::ffi::c_char,
     pub sep: ::core::ffi::c_char,
 }
 #[derive(Copy, Clone)]
-pub struct shada_filemark {
+pub struct ShadaFileMark {
     pub name: ::core::ffi::c_char,
     pub mark: Pos,
     pub fname: *mut ::core::ffi::c_char,
@@ -495,11 +496,10 @@ fn shada_heap<T>(value: T) -> *mut T {
     ptr
 }
 
-pub type HMLListEntry = hm_llist_entry;
-pub struct hm_llist_entry {
+pub struct HMLListEntry {
     pub data: ShadaEntry,
-    pub next: *mut hm_llist_entry,
-    pub prev: *mut hm_llist_entry,
+    pub next: *mut HMLListEntry,
+    pub prev: *mut HMLListEntry,
 }
 pub struct FileMarks {
     pub marks: [ShadaEntry; 29],
@@ -638,19 +638,19 @@ const DEFAULT_SEARCH_PATTERN: KeyDict__shada_search_pat = KeyDict__shada_search_
 };
 
 /// What a sub-string entry defaults to.
-const DEFAULT_SUB_STRING: sub_string = sub_string {
+const DEFAULT_SUB_STRING: ShadaSubString = ShadaSubString {
     sub: ::core::ptr::null_mut::<::core::ffi::c_char>(),
 };
 
 /// What a history entry defaults to: the command-line history, no separator.
-const DEFAULT_HISTORY_ITEM: history_item = history_item {
+const DEFAULT_HISTORY_ITEM: ShadaHistoryItem = ShadaHistoryItem {
     histtype: HIST_CMD as uint8_t,
     string: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     sep: 0,
 };
 
 /// What a register entry defaults to: charwise, unnamed, no width.
-const DEFAULT_REGISTER: reg = reg {
+const DEFAULT_REGISTER: ShadaRegister = ShadaRegister {
     name: 0,
     type_0: kMTCharWise,
     contents: ::core::ptr::null_mut::<String_0>(),
@@ -660,7 +660,7 @@ const DEFAULT_REGISTER: reg = reg {
 };
 
 /// What a variable entry defaults to.
-const DEFAULT_VARIABLE: global_var = global_var {
+const DEFAULT_VARIABLE: ShadaGlobalVar = ShadaGlobalVar {
     name: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     value: TypVal {
         v_type: VAR_UNKNOWN,
@@ -672,16 +672,16 @@ const DEFAULT_VARIABLE: global_var = global_var {
 };
 
 /// What a buffer-list entry defaults to.
-const DEFAULT_BUFFER_LIST: buffer_list = buffer_list {
+const DEFAULT_BUFFER_LIST: ShadaBufferList = ShadaBufferList {
     size: 0 as size_t,
-    buffers: ::core::ptr::null_mut::<buffer_list_buffer>(),
+    buffers: ::core::ptr::null_mut::<ShadaBufferListItem>(),
 };
 
 /// What a mark entry's fields default to. Only the name differs between the
 /// kinds: a jump and a change have none, while a mark the file does not name
 /// is the `"` one.
-const fn default_filemark(kind: ShadaEntryType) -> shada_filemark {
-    shada_filemark {
+const fn default_filemark(kind: ShadaEntryType) -> ShadaFileMark {
+    ShadaFileMark {
         name: match kind {
             kSDItemGlobalMark | kSDItemLocalMark => b'"' as ::core::ffi::c_char,
             _ => 0,

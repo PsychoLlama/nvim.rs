@@ -102,7 +102,7 @@ pub(crate) use listdo::ex_listdo;
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
     use super::c_int;
-    use crate::types::{dobuf_action_values, dobuf_start_values};
+    use crate::types::{DoBufAction, DoBufStart};
 
     /// `check_changed` flags.
     pub(super) const CCGD_AW: c_int = 1;
@@ -112,9 +112,9 @@ mod flag {
     pub(super) const CCGD_EXCMD: c_int = 16;
 
     /// `do_buffer` actions and starting points.
-    pub(super) const DOBUF_GOTO: dobuf_action_values = 0;
-    pub(super) const DOBUF_UNLOAD: dobuf_action_values = 2;
-    pub(super) const DOBUF_FIRST: dobuf_start_values = 1;
+    pub(super) const DOBUF_GOTO: DoBufAction = 0;
+    pub(super) const DOBUF_UNLOAD: DoBufAction = 2;
+    pub(super) const DOBUF_FIRST: DoBufStart = 1;
 
     /// `do_dialog` types; the answers live in `message.rs`.
     pub(super) const VIM_QUESTION: c_int = 4;

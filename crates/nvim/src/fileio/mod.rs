@@ -81,9 +81,9 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AcoSave, Buffer, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo, FileOffset,
-    GArray, IOSIZE, LineNr, OK, OptInt, OptVal, OptionSetFlags, RegMatch, RegProg, ScriptId,
-    ShmFlag, bln_values, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t,
+    AcoSave, BlnFlags, Buffer, CheckItem, ColNr, Directory, ExArg, FAIL, FILE, Failed, FileInfo,
+    FileOffset, GArray, IOSIZE, LineNr, OK, OptInt, OptVal, OptionSetFlags, RegMatch, RegProg,
+    ScriptId, ShmFlag, iconv_t, int64_t, ptrdiff_t, size_t, ssize_t, time_t, uint64_t, uintmax_t,
     uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
@@ -116,7 +116,7 @@ mod names;
 pub use self::names::*;
 mod tempfile;
 pub use self::tempfile::*;
-pub const BLN_DUMMY: bln_values = 4;
+pub const BLN_DUMMY: BlnFlags = 4;
 pub const ENC_LATIN1: ::core::ffi::c_uint = 512;
 pub const ENC_2WORD: ::core::ffi::c_uint = 256;
 pub const ENC_4BYTE: ::core::ffi::c_uint = 128;

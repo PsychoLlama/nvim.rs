@@ -60,8 +60,8 @@ use crate::options::{kOptSwbFlagUseopen, kOptSwbFlagUsetab};
 use crate::os::cshim::gettext_ptr;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    AlignTextPos, Buffer, CdCause, Direction, Error, Handle, MotionType, OptInt, Tabpage, WinSplit,
-    WinStyle, Window, bln_values, dobuf_action_values, dobuf_start_values, getf_values,
+    AlignTextPos, BlnFlags, Buffer, CdCause, Direction, DoBufAction, DoBufStart, Error,
+    GetFileFlags, Handle, MotionType, OptInt, Tabpage, WinSplit, WinStyle, Window,
     kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -113,21 +113,21 @@ pub const NUMBUFLEN: ::core::ffi::c_uint = 65;
 pub const kDirectionNotSet: Direction = 0;
 pub const kCdCauseWindow: CdCause = 1;
 pub const kCdCauseManual: CdCause = 0;
-pub const GETF_SWITCH: getf_values = 4;
-pub const GETF_ALT: getf_values = 2;
-pub const GETF_SETMARK: getf_values = 1;
-pub const BLN_NOOPT: bln_values = 16;
-pub const BLN_DUMMY: bln_values = 4;
-pub const BLN_LISTED: bln_values = 2;
-pub const BLN_CURBUF: bln_values = 1;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub const DOBUF_MOD: dobuf_start_values = 3;
-pub const DOBUF_LAST: dobuf_start_values = 2;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub const DOBUF_CURRENT: dobuf_start_values = 0;
+pub const GETF_SWITCH: GetFileFlags = 4;
+pub const GETF_ALT: GetFileFlags = 2;
+pub const GETF_SETMARK: GetFileFlags = 1;
+pub const BLN_NOOPT: BlnFlags = 16;
+pub const BLN_DUMMY: BlnFlags = 4;
+pub const BLN_LISTED: BlnFlags = 2;
+pub const BLN_CURBUF: BlnFlags = 1;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_DEL: DoBufAction = 3;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
+pub const DOBUF_GOTO: DoBufAction = 0;
+pub const DOBUF_MOD: DoBufStart = 3;
+pub const DOBUF_LAST: DoBufStart = 2;
+pub const DOBUF_FIRST: DoBufStart = 1;
+pub const DOBUF_CURRENT: DoBufStart = 0;
 pub const kMTLineWise: MotionType = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const FIND_EVAL: ::core::ffi::c_uint = 4;

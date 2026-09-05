@@ -57,9 +57,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    CmdModFlags, ExArg, ExtmarkOp, LPos, LineNr, List, NUL, OptVal, OptionSetFlags, String_0,
-    UndoObjectType, Vv, Window, bcount_t, bfa_values, bln_values, dobuf_action_values,
-    getf_retvalues, size_t, uint8_t,
+    BfaFlags, BlnFlags, CmdModFlags, DoBufAction, ExArg, ExtmarkOp, GetFileRet, LPos, LineNr, List,
+    NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, Window, bcount_t, size_t, uint8_t,
 };
 use crate::window::{win_enter, win_split};
 use crate::winlayer::{Buf, Win, windows};
@@ -96,17 +95,17 @@ pub const REGSUB_COPY: ::core::ffi::c_uint = 1;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 pub const kExtmarkUndo: ExtmarkOp = 1;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
-pub const GETFILE_OPEN_OTHER: getf_retvalues = -1;
-pub const GETFILE_SAME_FILE: getf_retvalues = 0;
-pub const GETFILE_NOT_WRITTEN: getf_retvalues = 2;
-pub const GETFILE_ERROR: getf_retvalues = 1;
-pub const BLN_NOCURWIN: bln_values = 128;
-pub const BLN_LISTED: bln_values = 2;
-pub const BLN_CURBUF: bln_values = 1;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const BFA_KEEP_UNDO: bfa_values = 4;
+pub const GETFILE_OPEN_OTHER: GetFileRet = -1;
+pub const GETFILE_SAME_FILE: GetFileRet = 0;
+pub const GETFILE_NOT_WRITTEN: GetFileRet = 2;
+pub const GETFILE_ERROR: GetFileRet = 1;
+pub const BLN_NOCURWIN: BlnFlags = 128;
+pub const BLN_LISTED: BlnFlags = 2;
+pub const BLN_CURBUF: BlnFlags = 1;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_DEL: DoBufAction = 3;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
+pub const BFA_KEEP_UNDO: BfaFlags = 4;
 pub const HIST_SEARCH: ::core::ffi::c_int = 1;
 pub const VIM_QUESTION: ::core::ffi::c_uint = 4;
 pub const VIM_YES: ::core::ffi::c_uint = 2;

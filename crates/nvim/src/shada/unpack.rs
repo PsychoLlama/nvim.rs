@@ -457,7 +457,7 @@ unsafe fn read_unknown(
     parse_pos: uint64_t,
     mut cursor: Cursor,
 ) -> ShaDaReadResult {
-    let item = unknown_item {
+    let item = ShadaUnknownItem {
         type_0: header.type_u64,
         contents: core::ptr::null_mut(),
         size: header.length,

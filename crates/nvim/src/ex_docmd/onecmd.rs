@@ -609,7 +609,7 @@ pub(crate) unsafe fn do_one_cmd(
 /// Does the "type `:q` twice" counter belong to a command the *user* typed?
 fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
     // SAFETY: `getline_equal` only compares `fgetline` against a known line
-    // getter, walking `cookie` as a `loop_cookie` chain the caller owns.
+    // getter, walking `cookie` as a `LoopCookie` chain the caller owns.
     quitmore.get() != 0
         && !getline_equal(fgetline, cookie, Some(get_func_line))
         && !getline_equal(fgetline, cookie, Some(getnextac))

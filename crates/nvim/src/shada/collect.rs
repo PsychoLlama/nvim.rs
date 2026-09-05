@@ -68,7 +68,7 @@ pub(crate) unsafe fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaE
             && buf.b_p_bl != 0
             && (max_bufs < 0 || wanted.len() < max_bufs as usize)
         {
-            wanted.push(buffer_list_buffer {
+            wanted.push(ShadaBufferListItem {
                 pos: buf.b_last_cursor.mark,
                 fname: buf.b_ffname,
                 additional_data: buf.additional_data,
@@ -78,12 +78,12 @@ pub(crate) unsafe fn shada_get_buflist(removable_bufs: &RemovableBufs) -> ShadaE
 
     // The array is `xmalloc`ed because the caller releases it with
     // `xfree`, as it does for a buffer list that came off the wire.
-    let buffers = unsafe { xmalloc(size_of_val(&wanted[..])) }.cast::<buffer_list_buffer>();
+    let buffers = unsafe { xmalloc(size_of_val(&wanted[..])) }.cast::<ShadaBufferListItem>();
     unsafe { buffers.copy_from_nonoverlapping(wanted.as_ptr(), wanted.len()) };
     ShadaEntry {
         can_free_entry: false,
         timestamp: os_time(),
-        data: ShadaEntryData::BufferList(buffer_list {
+        data: ShadaEntryData::BufferList(ShadaBufferList {
             size: wanted.len(),
             buffers,
         }),
@@ -168,7 +168,7 @@ pub(crate) unsafe fn shada_initialize_registers(wms: *mut WriteMergerState, max_
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: reg.timestamp,
-                data: ShadaEntryData::Register(reg {
+                data: ShadaEntryData::Register(ShadaRegister {
                     name,
                     type_0: reg.y_type,
                     contents: reg.y_array,
@@ -293,7 +293,7 @@ pub(crate) unsafe fn shada_init_jumps(
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: fm.fmark.timestamp,
-                data: ShadaEntryData::Jump(shada_filemark {
+                data: ShadaEntryData::Jump(ShadaFileMark {
                     name: NUL as c_char,
                     mark: fm.fmark.mark,
                     fname: fname.cast_mut(),
@@ -414,7 +414,7 @@ pub unsafe fn shada_encode_gvars() -> String_0 {
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: cur_timestamp,
-                data: ShadaEntryData::Variable(global_var {
+                data: ShadaEntryData::Variable(ShadaGlobalVar {
                     name: name.cast_mut(),
                     value: tgttv,
                 }),

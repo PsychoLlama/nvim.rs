@@ -25,8 +25,8 @@ use crate::keycodes::{
 };
 use crate::mouse::{nv_mouse, nv_mousescroll};
 use crate::types::{
-    Array, CmdArg, Direction, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL, Object, OpArg, Pos,
-    SpellAddType, SpellMoveType, VimState, getf_values, int16_t, size_t, uint16_t,
+    Array, CmdArg, Direction, GetFileFlags, MarkGet, MarkMove, MarkMoveRes, MotionType, NUL,
+    Object, OpArg, Pos, SpellAddType, SpellMoveType, VimState, int16_t, size_t, uint16_t,
 };
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
@@ -71,8 +71,8 @@ pub(crate) const KMarkNoContext: MarkMove = 4;
 pub(crate) const kMarkContext: MarkMove = 2;
 pub(crate) const kMarkBeginLine: MarkMove = 1;
 pub(crate) const kMarkAll: MarkGet = 1;
-pub(crate) const GETF_ALT: getf_values = 2;
-pub(crate) const GETF_SETMARK: getf_values = 1;
+pub(crate) const GETF_ALT: GetFileFlags = 2;
+pub(crate) const GETF_SETMARK: GetFileFlags = 1;
 pub(crate) const OPENLINE_DO_COM: c_uint = 2;
 pub(crate) const HIST_SEARCH: c_int = 1;
 pub(crate) const VSE_NONE: c_uint = 0;
@@ -92,7 +92,7 @@ pub(crate) const MSCR_DOWN: c_int = 0;
 pub(crate) const FIND_EVAL: c_uint = 4;
 pub(crate) const FIND_STRING: c_uint = 2;
 pub(crate) const FIND_IDENT: c_uint = 1;
-pub(crate) struct nv_cmd {
+pub(crate) struct NvCmd {
     pub cmd_char: c_int,
     pub cmd_func: NvFunc,
     pub cmd_flags: uint16_t,
@@ -172,8 +172,8 @@ pub(crate) const NV_NCW: c_int = 0x200 as c_int;
 /// The flags and the argument are written as the `c_int` constants that name
 /// them and narrowed here, so a row reads as the four things it is rather than
 /// as four casts.
-const fn cmd(cmd_char: c_int, cmd_func: NvFunc, cmd_flags: c_int, cmd_arg: c_int) -> nv_cmd {
-    nv_cmd {
+const fn cmd(cmd_char: c_int, cmd_func: NvFunc, cmd_flags: c_int, cmd_arg: c_int) -> NvCmd {
+    NvCmd {
         cmd_char,
         cmd_func,
         cmd_flags: cmd_flags as uint16_t,
@@ -186,7 +186,7 @@ const fn cmd(cmd_char: c_int, cmd_func: NvFunc, cmd_flags: c_int, cmd_arg: c_int
 /// A `const` so that [`NV_CMD_IDX`](crate::normal::NV_CMD_IDX) can be sorted
 /// at compile time; `nv_cmds` is the `static` everything indexes, so the rows
 /// exist once.
-pub(crate) const NV_CMDS: [nv_cmd; 188] = [
+pub(crate) const NV_CMDS: [NvCmd; 188] = [
     cmd(NUL, Some(nv_error), 0, 0),
     cmd(Ctrl_A, Some(nv_addsub), 0, 0),
     cmd(Ctrl_B, Some(nv_page), NV_STS, BACKWARD as c_int),
@@ -616,12 +616,12 @@ pub(crate) const NV_CMDS: [nv_cmd; 188] = [
         0,
     ),
 ];
-static nv_cmds: [nv_cmd; 188] = NV_CMDS;
-pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[nv_cmd; 188]>()
-    .wrapping_div(::core::mem::size_of::<nv_cmd>())
+static nv_cmds: [NvCmd; 188] = NV_CMDS;
+pub(crate) const NV_CMDS_SIZE: usize = ::core::mem::size_of::<[NvCmd; 188]>()
+    .wrapping_div(::core::mem::size_of::<NvCmd>())
     .wrapping_div(
-        (::core::mem::size_of::<[nv_cmd; 188]>().wrapping_rem(::core::mem::size_of::<nv_cmd>())
-            == 0) as c_int as usize,
+        (::core::mem::size_of::<[NvCmd; 188]>().wrapping_rem(::core::mem::size_of::<NvCmd>()) == 0)
+            as c_int as usize,
     );
 static current_oap: GlobalCell<*mut OpArg> = GlobalCell::new(::core::ptr::null_mut::<OpArg>());
 static showcmd_is_clear: GlobalCell<bool> = GlobalCell::new(true);

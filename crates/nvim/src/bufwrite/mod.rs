@@ -195,7 +195,7 @@ pub(crate) unsafe fn conversion_failed(lnum: LineNr) -> WriteError {
     WriteError::formatted(unsafe { CStr::from_ptr(msg.as_ptr()) }.to_owned())
 }
 
-pub struct bw_info {
+pub struct BufWriteInfo {
     pub bw_fd: ::core::ffi::c_int,
     pub bw_buf: *mut ::core::ffi::c_char,
     pub bw_len: ::core::ffi::c_int,

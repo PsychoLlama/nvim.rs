@@ -274,7 +274,7 @@ impl Writing {
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp,
-                data: ShadaEntryData::Variable(global_var {
+                data: ShadaEntryData::Variable(ShadaGlobalVar {
                     name: name.cast_mut(),
                     value: tgttv,
                 }),
@@ -348,7 +348,7 @@ impl Writing {
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: sub.timestamp,
-                data: ShadaEntryData::SubString(sub_string { sub: sub.sub }),
+                data: ShadaEntryData::SubString(ShadaSubString { sub: sub.sub }),
                 additional_data: sub.additional_data,
             };
             unsafe { (*self.wms).replacement = entry };
@@ -377,7 +377,7 @@ impl Writing {
                 let entry = ShadaEntry {
                     can_free_entry: false,
                     timestamp: fm.fmark.timestamp,
-                    data: ShadaEntryData::GlobalMark(shada_filemark {
+                    data: ShadaEntryData::GlobalMark(ShadaFileMark {
                         name,
                         mark: fm.fmark.mark,
                         fname: fname.cast_mut(),
@@ -445,7 +445,7 @@ impl Writing {
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: fm.timestamp,
-                data: ShadaEntryData::LocalMark(shada_filemark {
+                data: ShadaEntryData::LocalMark(ShadaFileMark {
                     name,
                     mark: fm.mark,
                     fname,
@@ -466,7 +466,7 @@ impl Writing {
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: fm.timestamp,
-                data: ShadaEntryData::Change(shada_filemark {
+                data: ShadaEntryData::Change(ShadaFileMark {
                     name: 0,
                     mark: fm.mark,
                     fname,
@@ -501,7 +501,7 @@ impl Writing {
         let entry = ShadaEntry {
             can_free_entry: false,
             timestamp: os_time(),
-            data: ShadaEntryData::GlobalMark(shada_filemark {
+            data: ShadaEntryData::GlobalMark(ShadaFileMark {
                 name: '0' as c_char,
                 mark: unsafe { (*curwin.get()).w_cursor },
                 fname: unsafe { (*curbuf.get()).b_ffname },

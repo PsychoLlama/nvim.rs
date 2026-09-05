@@ -35,11 +35,11 @@ use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::types::{
     AcoSave, AlignTextPos, ApiDict, Arena, Array, Boolean, BufUpdateCallbacks, Buffer,
-    BufferHandle, ColNr, Error, Exception, ExtmarkOp, FileMark, Integer, KeyDict_buf_attach,
-    KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair, LineNr, LuaRef,
-    MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType, WinSplit,
-    WinStyle, Window, bcount_t, dobuf_action_values, dobuf_start_values, int64_t, kErrorTypeNone,
-    lua_State, ptrdiff_t, size_t, uint64_t,
+    BufferHandle, ColNr, DoBufAction, DoBufStart, Error, Exception, ExtmarkOp, FileMark, Integer,
+    KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair, LineNr,
+    LuaRef, MarkAdjustMode, MarkGet, MsgList, Object, Pos, String_0, TryState, UndoObjectType,
+    WinSplit, WinStyle, Window, bcount_t, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t,
+    uint64_t,
 };
 use crate::undo::u_save_buf;
 
@@ -66,12 +66,12 @@ pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMarkAdjustTerm: MarkAdjustMode = 2;
 pub const kMarkAdjustApi: MarkAdjustMode = 1;
 pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
+pub const DOBUF_FIRST: DoBufStart = 1;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
 pub const kMarkAllNoResolve: MarkGet = 2;
 pub const kMarkBufLocal: MarkGet = 0;
-pub const DOBUF_DEL: dobuf_action_values = 3;
+pub const DOBUF_DEL: DoBufAction = 3;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const INTERNAL_CALL_MASK: uint64_t = (1 as ::core::ffi::c_int as uint64_t)

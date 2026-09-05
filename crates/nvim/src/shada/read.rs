@@ -207,7 +207,7 @@ impl Reading {
     }
 
     /// The last `:substitute` replacement string.
-    unsafe fn apply_sub_string(&self, mut entry: ShadaEntry, sub_string: sub_string) {
+    unsafe fn apply_sub_string(&self, mut entry: ShadaEntry, sub_string: ShadaSubString) {
         if !self.force {
             let mut current: SubReplacementString = unsafe { core::mem::zeroed() };
             unsafe { sub_get_replacement(&raw mut current) };
@@ -231,7 +231,7 @@ impl Reading {
     }
 
     /// One history entry, handed to the merger for its type.
-    unsafe fn apply_history(&mut self, mut entry: ShadaEntry, item: history_item) {
+    unsafe fn apply_history(&mut self, mut entry: ShadaEntry, item: ShadaHistoryItem) {
         let histtype = item.histtype as c_uint;
         if histtype >= HIST_COUNT {
             unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -242,7 +242,7 @@ impl Reading {
 
     /// One register. The register this session already holds wins a tie,
     /// unless the read was forced.
-    unsafe fn apply_register(&self, mut entry: ShadaEntry, reg: reg) {
+    unsafe fn apply_register(&self, mut entry: ShadaEntry, reg: ShadaRegister) {
         if reg.type_0 != kMTCharWise && reg.type_0 != kMTLineWise && reg.type_0 != kMTBlockWise {
             unsafe { shada_free_shada_entry(&raw mut entry) };
             return;
@@ -385,7 +385,7 @@ impl Reading {
 
 /// A global variable. `var_set_global` takes the value over, so the entry
 /// is emptied of it before the rest is freed.
-unsafe fn apply_variable(mut entry: ShadaEntry, var: global_var) {
+unsafe fn apply_variable(mut entry: ShadaEntry, var: ShadaGlobalVar) {
     unsafe { var_set_global(var.name, var.value) };
     entry.data.variable_mut().value.v_type = VAR_UNKNOWN;
     unsafe { shada_free_shada_entry(&raw mut entry) };
@@ -393,7 +393,7 @@ unsafe fn apply_variable(mut entry: ShadaEntry, var: global_var) {
 
 /// The buffer list the file was written with: each name becomes a listed
 /// buffer with its cursor where it was left.
-unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: buffer_list) {
+unsafe fn apply_buffer_list(mut entry: ShadaEntry, list: ShadaBufferList) {
     for i in 0..list.size {
         let item = unsafe { list.buffers.add(i) };
         let sfname = unsafe { path_try_shorten_fname((*item).fname) };

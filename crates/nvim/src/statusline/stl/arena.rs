@@ -27,7 +27,7 @@ use super::{kStlClickDisabled, kStlClickFuncRun, kStlClickTabClose, kStlClickTab
 use crate::global_cell::GlobalCell;
 use crate::types::{StlClickDefinition, StlClickRecord, StlOpt, stl_hlrec_t};
 
-/// What one `%` item turned into. Upstream's `stl_item_t`, with the `char *`
+/// What one `%` item turned into. Upstream's `StlItem`, with the `char *`
 /// into the output buffer replaced by a byte offset into it -- which is what
 /// lets every stage that shifts the text around be safe code.
 #[derive(Clone, Copy)]
@@ -60,7 +60,7 @@ impl Default for StlItem {
 }
 
 /// The kinds of item the format language has. Upstream's anonymous enum in
-/// `stl_item_t`.
+/// `StlItem`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Kind {
     /// Text, laid out by the item's width fields.

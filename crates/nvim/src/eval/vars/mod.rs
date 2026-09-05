@@ -192,7 +192,7 @@ pub const kGRegExprSrc: GRegFlags = 2;
 /// What `ex_unletlock` does to each argument it resolves: `do_unlet_var` or
 /// `do_lock_var`.  The two are written together because the walk that finds
 /// the arguments is what makes `:unlet` and `:lockvar` agree.
-pub type ex_unletlock_callback =
+pub type UnletLockCallback =
     unsafe fn(*mut LVal, *mut c_char, *mut ExArg, c_int) -> Result<(), Failed>;
 
 pub const NULL: *mut c_void = ::core::ptr::null_mut::<c_void>();

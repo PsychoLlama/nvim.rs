@@ -67,9 +67,9 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, Buffer, BufferRef, CdCause, EStackType, ExArg, ExtmarkOp, FAIL, Failed, LineNr,
-    MarkAdjustMode, MarkTree, MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle,
-    bfa_values, bln_values, dobuf_action_values, dobuf_start_values, getf_values, uint32_t,
+    AlignTextPos, BfaFlags, BlnFlags, Buffer, BufferRef, CdCause, DoBufAction, DoBufStart,
+    EStackType, ExArg, ExtmarkOp, FAIL, Failed, GetFileFlags, LineNr, MarkAdjustMode, MarkTree,
+    MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle, uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -119,30 +119,30 @@ pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMarkAdjustTerm: MarkAdjustMode = 2;
 pub const kMarkAdjustApi: MarkAdjustMode = 1;
 pub const kMarkAdjustNormal: MarkAdjustMode = 0;
-pub const GETF_SWITCH: getf_values = 4;
-pub const GETF_ALT: getf_values = 2;
-pub const GETF_SETMARK: getf_values = 1;
-pub const BLN_NOCURWIN: bln_values = 128;
-pub const BLN_NOOPT: bln_values = 16;
-pub const BLN_NEW: bln_values = 8;
-pub const BLN_DUMMY: bln_values = 4;
-pub const BLN_LISTED: bln_values = 2;
-pub const BLN_CURBUF: bln_values = 1;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const DOBUF_SPLIT: dobuf_action_values = 1;
-pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub const DOBUF_MOD: dobuf_start_values = 3;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub const DOBUF_CURRENT: dobuf_start_values = 0;
-pub type dobuf_flags_value = ::core::ffi::c_uint;
-pub const DOBUF_SKIPHELP: dobuf_flags_value = 4;
-pub const DOBUF_FORCEIT: dobuf_flags_value = 1;
-pub const BFA_IGNORE_ABORT: bfa_values = 8;
-pub const BFA_KEEP_UNDO: bfa_values = 4;
-pub const BFA_WIPE: bfa_values = 2;
-pub const BFA_DEL: bfa_values = 1;
+pub const GETF_SWITCH: GetFileFlags = 4;
+pub const GETF_ALT: GetFileFlags = 2;
+pub const GETF_SETMARK: GetFileFlags = 1;
+pub const BLN_NOCURWIN: BlnFlags = 128;
+pub const BLN_NOOPT: BlnFlags = 16;
+pub const BLN_NEW: BlnFlags = 8;
+pub const BLN_DUMMY: BlnFlags = 4;
+pub const BLN_LISTED: BlnFlags = 2;
+pub const BLN_CURBUF: BlnFlags = 1;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_DEL: DoBufAction = 3;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
+pub const DOBUF_SPLIT: DoBufAction = 1;
+pub const DOBUF_GOTO: DoBufAction = 0;
+pub const DOBUF_MOD: DoBufStart = 3;
+pub const DOBUF_FIRST: DoBufStart = 1;
+pub const DOBUF_CURRENT: DoBufStart = 0;
+pub type DoBufFlags = ::core::ffi::c_uint;
+pub const DOBUF_SKIPHELP: DoBufFlags = 4;
+pub const DOBUF_FORCEIT: DoBufFlags = 1;
+pub const BFA_IGNORE_ABORT: BfaFlags = 8;
+pub const BFA_KEEP_UNDO: BfaFlags = 4;
+pub const BFA_WIPE: BfaFlags = 2;
+pub const BFA_DEL: BfaFlags = 1;
 pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
 pub const ETYPE_MODELINE: EStackType = 4;
 pub const READ_BUFFER: ::core::ffi::c_uint = 8;

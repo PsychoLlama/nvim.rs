@@ -66,7 +66,7 @@ unsafe fn ex_unletlock(
     argstart: *mut c_char,
     deep: c_int,
     glv_flags: c_int,
-    callback: ex_unletlock_callback,
+    callback: UnletLockCallback,
 ) {
     // SAFETY: the caller's obligation -- a live command and a NUL-terminated
     // argument text, which `arg` and `name_end` both stay inside.

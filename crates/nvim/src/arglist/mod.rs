@@ -76,11 +76,11 @@ pub(crate) type Al = Live<ArgList>;
 
 /// Constants the transpiler copied in from the headers this module includes.
 mod flag {
-    use super::{bln_values, c_uint, file_comparison};
+    use super::{BlnFlags, c_uint, file_comparison};
 
     /// `buflist_new` flags.
-    pub(super) const BLN_CURBUF: bln_values = 1;
-    pub(super) const BLN_LISTED: bln_values = 2;
+    pub(super) const BLN_CURBUF: BlnFlags = 1;
+    pub(super) const BLN_LISTED: BlnFlags = 2;
 
     /// `check_changed` flags.
     pub(super) const CCGD_AW: c_uint = 1;

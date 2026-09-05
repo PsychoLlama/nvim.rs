@@ -136,15 +136,15 @@ use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     AcoSave, Arena, Array, BackslashEscape, Boolean, Buffer, Callback, CmdAddr, CmdBuff, CmdMod,
     CmdParseInfo, CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr,
-    ColoredCmdline, CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArg, ExArgt,
-    Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
-    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Handle, HashTab,
-    HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList, Object, OpArg,
-    OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx, SearchItArg,
-    String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
-    Window, XpPrefix, dobuf_action_values, dobuf_start_values, ptrdiff_t, size_t, time_t,
-    typval_vval_union, uint8_t, uint32_t,
+    ColoredCmdline, CondStack, Dict, Direction, DispTick, DoBufAction, DoBufStart, Error,
+    EvalFuncData, ExArg, ExArgt, Exception, Expand, ExpandContext, ExprAST, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    Handle, HashTab, HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, MsgList,
+    Object, OpArg, OptInt, OptMagic, OptSet, OptVal, ParserHighlight, ParserHighlightChunk,
+    ParserLine, ParserPosition, ParserState, Pos, ProfTime, RemapValues, SaveVEvent, ScriptCtx,
+    SearchItArg, String_0, Tabpage, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType,
+    VarNumber, VimState, Window, XpPrefix, ptrdiff_t, size_t, time_t, typval_vval_union, uint8_t,
+    uint32_t,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -201,11 +201,11 @@ pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub const OPTION_MAGIC_NOT_SET: OptMagic = 0;
 pub const MAGIC_ALL: Magic = 4;
 pub const MAGIC_ON: Magic = 3;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_DEL: DoBufAction = 3;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
+pub const DOBUF_GOTO: DoBufAction = 0;
+pub const DOBUF_FIRST: DoBufStart = 1;
 pub const kMTCharWise: MotionType = 0;
 pub const kCmdRedrawAll: CmdRedraw = 2;
 pub const kCmdRedrawPos: CmdRedraw = 1;

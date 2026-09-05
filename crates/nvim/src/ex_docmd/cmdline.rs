@@ -30,7 +30,7 @@ use crate::ex_docmd::source::{
 };
 
 use crate::ex_docmd::{
-    CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, PROF_YES, WhileCmd, dbg_stuff, loop_cookie,
+    CSTP_ERROR, CSTP_INTERRUPT, CSTP_THROW, LoopCookie, PROF_YES, SavedDebugState, WhileCmd,
 };
 use crate::ex_eval::{CsFlags, CsLoopFlags};
 use crate::ex_eval::{
@@ -160,8 +160,8 @@ pub unsafe fn do_cmdline(
     let mut fname: *mut c_char = ptr::null_mut();
     let mut breakpoint: *mut LineNr = ptr::null_mut();
     let mut dbg_tick: *mut c_int = ptr::null_mut();
-    let mut debug_saved: dbg_stuff = unsafe { core::mem::zeroed() };
-    let mut cmd_loop_cookie: loop_cookie = unsafe { core::mem::zeroed() };
+    let mut debug_saved: SavedDebugState = unsafe { core::mem::zeroed() };
+    let mut cmd_loop_cookie: LoopCookie = unsafe { core::mem::zeroed() };
 
     // Every do_cmdline/do_one_cmd pair gets its own place to store the
     // error messages an exception may be built from. Without that, the
@@ -211,7 +211,7 @@ pub unsafe fn do_cmdline(
         unsafe { save_dbg_stuff(&raw mut debug_saved) };
     } else {
         let into = (&raw mut debug_saved).cast::<u8>();
-        unsafe { into.write_bytes(0, size_of::<dbg_stuff>()) };
+        unsafe { into.write_bytes(0, size_of::<SavedDebugState>()) };
     }
 
     let initial_trylevel = trylevel.get();

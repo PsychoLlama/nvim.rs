@@ -76,7 +76,7 @@ mod mode;
 pub use self::mode::*;
 
 /// One breakpoint or profiling point.
-pub struct debuggy {
+pub struct Breakpoint {
     /// Breakpoint number, as `:breaklist` prints it.
     pub dbg_nr: c_int,
     /// [`DBG_FUNC`], [`DBG_FILE`] or [`DBG_EXPR`].
@@ -95,7 +95,7 @@ pub struct debuggy {
     pub dbg_level: c_int,
 }
 
-impl debuggy {
+impl Breakpoint {
     /// An entry the parser is about to fill in. It owns nothing yet, so
     /// dropping it on a parse error frees nothing.
     fn new() -> Self {
@@ -123,15 +123,15 @@ static debug_greedy: GlobalCell<bool> = GlobalCell::new(false);
 static debug_oldval: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 static debug_newval: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
 
-static dbg_breakp: GlobalCell<Vec<debuggy>> = GlobalCell::new(Vec::new());
-static prof_ga: GlobalCell<Vec<debuggy>> = GlobalCell::new(Vec::new());
+static dbg_breakp: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
+static prof_ga: GlobalCell<Vec<Breakpoint>> = GlobalCell::new(Vec::new());
 /// Number of the last breakpoint defined; `:breakadd` hands out the next.
 static last_breakp: GlobalCell<c_int> = GlobalCell::new(0);
 /// Whether any `dbg_breakp` entry is a `DBG_EXPR`, so that `do_one_cmd` can
 /// skip the per-command expression evaluation when none is.
 static has_expr_breakpoint: GlobalCell<bool> = GlobalCell::new(false);
 
-/// Which of the two lists of [`debuggy`] entries a command works on.
+/// Which of the two lists of [`Breakpoint`] entries a command works on.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BreakList {
     /// `:breakadd`/`:breakdel`/`:breaklist` -- the debugger's breakpoints.
@@ -154,7 +154,7 @@ impl BreakList {
         }
     }
 
-    fn cell(self) -> &'static GlobalCell<Vec<debuggy>> {
+    fn cell(self) -> &'static GlobalCell<Vec<Breakpoint>> {
         match self {
             Self::Debug => &dbg_breakp,
             Self::Profiling => &prof_ga,
@@ -180,19 +180,19 @@ impl BreakList {
     /// # Safety
     /// `idx` must be below [`BreakList::len`], and the pointer must not be
     /// held across anything that can add to the list.
-    unsafe fn entry(self, idx: c_int) -> *mut debuggy {
+    unsafe fn entry(self, idx: c_int) -> *mut Breakpoint {
         self.cell()
             .with_mut(|entries| entries.as_mut_ptr().wrapping_offset(idx as isize))
     }
 
     /// Keep a parsed entry, which takes over whatever it owns.
-    fn push(self, entry: debuggy) {
+    fn push(self, entry: Breakpoint) {
         self.cell().with_mut(|entries| entries.push(entry));
     }
 
     /// Take the `idx`th entry out of the list, leaving the caller to release
     /// what it owns.
-    fn remove(self, idx: c_int) -> debuggy {
+    fn remove(self, idx: c_int) -> Breakpoint {
         self.cell().with_mut(|entries| entries.remove(idx as usize))
     }
 }
@@ -303,7 +303,7 @@ pub fn dbg_breakpoint(name: *mut c_char, lnum: LineNr) {
 ///
 /// # Safety
 /// `bp` must point at a live entry whose `dbg_name` is the expression.
-unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut TypVal {
+unsafe fn eval_expr_no_emsg(bp: *mut Breakpoint) -> *mut TypVal {
     let _no_emsg = Suppress::emsg();
     // SAFETY: caller contract.
     unsafe { eval_expr((*bp).dbg_name, ptr::null_mut()) }
@@ -323,8 +323,8 @@ unsafe fn eval_expr_no_emsg(bp: *mut debuggy) -> *mut TypVal {
 ///
 /// # Safety
 /// `arg` must be NUL-terminated.
-unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<debuggy, Failed> {
-    let mut entry = debuggy::new();
+unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, Failed> {
+    let mut entry = Breakpoint::new();
     let bp = &raw mut entry;
     let debugger = list == BreakList::Debug;
 
@@ -753,7 +753,7 @@ unsafe fn debuggy_find(
 ///
 /// # Safety
 /// `bp` must point at a live `DBG_EXPR` entry.
-unsafe fn watch_changed(bp: *mut debuggy) -> bool {
+unsafe fn watch_changed(bp: *mut Breakpoint) -> bool {
     // SAFETY: caller contract throughout. Evaluating the expression runs
     // arbitrary Vimscript, so `bp` outliving the call rests on the same
     // assumption the C makes -- that a watch does not itself add a

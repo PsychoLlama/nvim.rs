@@ -10,7 +10,7 @@
 //! | [`tabline`] | `draw_tabline()` and its `ext_tabline` form |
 //! | [`stl`] | `build_stl_str_hl()`, the `%` format language itself |
 //!
-//! What stays here is what the four share: the `stl_item_t` kinds, because
+//! What stays here is what the four share: the `StlItem` kinds, because
 //! the expander and its callers both name them (the format language's own
 //! alphabet is [`crate::types::StlOpt`]); [`build_statuscol_str`]
 //! (`'statuscolumn'`, which is the same language with a different item set)
@@ -82,26 +82,6 @@ pub const kWinStyleUnused: WinStyle = 0;
 pub const kWinSplitLeft: WinSplit = 0;
 /// Most sign columns `'signcolumn'` will ever ask for.
 pub const SIGN_SHOW_MAX: ::core::ffi::c_int = 9;
-pub struct stl_item {
-    pub start: *mut ::core::ffi::c_char,
-    pub cmd: *mut ::core::ffi::c_char,
-    pub minwid: ::core::ffi::c_int,
-    pub maxwid: ::core::ffi::c_int,
-    pub type_0: StlItemType,
-}
-pub type StlItemType = ::core::ffi::c_uint;
-pub const Trunc: StlItemType = 10;
-pub const ClickFunc: StlItemType = 9;
-pub const TabPage: StlItemType = 8;
-pub const HighlightFold: StlItemType = 7;
-pub const HighlightSign: StlItemType = 6;
-pub const HighlightCombining: StlItemType = 5;
-pub const Highlight: StlItemType = 4;
-pub const Separate: StlItemType = 3;
-pub const Group: StlItemType = 2;
-pub const Empty: StlItemType = 1;
-pub const Normal: StlItemType = 0;
-pub type stl_item_t = stl_item;
 pub type NumberBase = ::core::ffi::c_uint;
 pub const kNumBaseHexadecimal: NumberBase = 16;
 pub const kNumBaseDecimal: NumberBase = 10;

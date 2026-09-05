@@ -70,9 +70,9 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArg, ExArgt,
-    Exception, GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic,
-    RemapValues, dobuf_action_values, dobuf_start_values, uint8_t, uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, DoBufAction, DoBufStart, EStackArg,
+    EStackType, ExArg, ExArgt, Exception, GArray, Handle, LineGetter, LineNr, LuaRetMode, MarkGet,
+    MotionType, OptMagic, RemapValues, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -190,13 +190,13 @@ pub struct CommandDefinition {
     pub cmd_argt: ExArgt,
     pub cmd_addr_type: CmdAddr,
 }
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
-pub const DOBUF_MOD: dobuf_start_values = 3;
-pub const DOBUF_LAST: dobuf_start_values = 2;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub const DOBUF_CURRENT: dobuf_start_values = 0;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_DEL: DoBufAction = 3;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
+pub const DOBUF_MOD: DoBufStart = 3;
+pub const DOBUF_LAST: DoBufStart = 2;
+pub const DOBUF_FIRST: DoBufStart = 1;
+pub const DOBUF_CURRENT: DoBufStart = 0;
 pub const kChannelPartAll: ChannelPart = 4;
 pub const kMTLineWise: MotionType = 1;
 pub const VIM_QUESTION: c_uint = 4;
@@ -210,7 +210,7 @@ pub const REMAP_YES: RemapValues = 0;
 pub const VALID_HEAD: c_uint = 2;
 pub const VALID_PATH: c_uint = 1;
 pub const DIALOG_MSG_SIZE: c_uint = 1000;
-pub struct dbg_stuff {
+pub struct SavedDebugState {
     pub trylevel: c_int,
     pub force_abort: c_int,
     pub caught_stack: *mut Exception,
@@ -223,7 +223,7 @@ pub struct dbg_stuff {
     pub check_cstack: c_int,
     pub current_exception: *mut Exception,
 }
-pub struct loop_cookie {
+pub struct LoopCookie {
     pub lines_gap: *mut GArray,
     pub current_line: c_int,
     pub repeating: c_int,

@@ -211,7 +211,7 @@ unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
 
 /// One history line: the history it belongs to, its text, and — for search
 /// history only — the character the search was started with.
-unsafe fn pack_history(entry: &ShadaEntry, history: history_item, sbuf: &mut PackerBuffer) {
+unsafe fn pack_history(entry: &ShadaEntry, history: ShadaHistoryItem, sbuf: &mut PackerBuffer) {
     let is_search = history.histtype as c_int == HIST_SEARCH;
     mpack_array(
         &mut sbuf.ptr,
@@ -229,7 +229,7 @@ unsafe fn pack_history(entry: &ShadaEntry, history: history_item, sbuf: &mut Pac
 /// carries a trailing type tag to tell the two apart when read back.
 unsafe fn pack_variable(
     entry: &ShadaEntry,
-    mut global_var: global_var,
+    mut global_var: ShadaGlobalVar,
     sbuf: &mut PackerBuffer,
 ) -> Result<(), ShaDaWriteResult> {
     let is_blob = global_var.value.v_type == VAR_BLOB;
@@ -271,7 +271,7 @@ unsafe fn pack_variable(
 }
 
 /// The last `:substitute` replacement string.
-unsafe fn pack_sub_string(entry: &ShadaEntry, sub: sub_string, sbuf: &mut PackerBuffer) {
+unsafe fn pack_sub_string(entry: &ShadaEntry, sub: ShadaSubString, sbuf: &mut PackerBuffer) {
     mpack_array(
         &mut sbuf.ptr,
         1 + unsafe { additional_data_len(entry.additional_data) },
@@ -331,7 +331,7 @@ unsafe fn pack_search_pattern(
 
 /// A global mark, local mark, jump or change: a file name and a position in
 /// it, plus the mark's letter for the two kinds that have one.
-unsafe fn pack_mark(entry: &ShadaEntry, mark: shada_filemark, payload: &mut Payload) {
+unsafe fn pack_mark(entry: &ShadaEntry, mark: ShadaFileMark, payload: &mut Payload) {
     let default = default_filemark(entry.kind());
 
     let size = 1 // the file name is always there
@@ -366,7 +366,7 @@ unsafe fn pack_mark(entry: &ShadaEntry, mark: shada_filemark, payload: &mut Payl
 }
 
 /// One register: its lines, its name, and how it is put back.
-unsafe fn pack_register(entry: &ShadaEntry, reg: reg, payload: &mut Payload) {
+unsafe fn pack_register(entry: &ShadaEntry, reg: ShadaRegister, payload: &mut Payload) {
     let default = DEFAULT_REGISTER;
 
     let size = 2 // the contents and the name are always there
@@ -401,7 +401,7 @@ unsafe fn pack_register(entry: &ShadaEntry, reg: reg, payload: &mut Payload) {
 /// The buffer list: one map per buffer, each a file name and the cursor
 /// position in it. The position's defaults are the same for every buffer,
 /// so they come from `DEFAULT_POS` rather than from an entry type.
-unsafe fn pack_buffer_list(list: buffer_list, payload: &mut Payload) {
+unsafe fn pack_buffer_list(list: ShadaBufferList, payload: &mut Payload) {
     let default = DEFAULT_POS;
     mpack_array(&mut payload.buf.ptr, list.size as uint32_t);
     for i in 0..list.size {

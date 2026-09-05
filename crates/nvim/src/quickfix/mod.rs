@@ -113,11 +113,11 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    AcoSave, Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction, EvalFuncData,
-    ExArg, ExtmarkOp, FILE, FileInfo, LineNr, List, ListItem, OptInt, OptSet, OptVal, Pos,
-    QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfInfo, QfLine, QfList, QfListType, RegMMatch,
-    RegMatch, RegProg, ScriptId, TypVal, VarNumber, VarType, VimConv, bln_values,
-    dobuf_action_values, getf_values, ptrdiff_t, size_t, time_t, typval_vval_union,
+    AcoSave, BlnFlags, Buffer, Callback, Cleanup, ColNr, Dict, DictItem, DirStack, Direction,
+    DoBufAction, EvalFuncData, ExArg, ExtmarkOp, FILE, FileInfo, GetFileFlags, LineNr, List,
+    ListItem, OptInt, OptSet, OptVal, Pos, QFLT_INTERNAL, QFLT_LOCATION, QFLT_QUICKFIX, QfInfo,
+    QfLine, QfList, QfListType, RegMMatch, RegMatch, RegProg, ScriptId, TypVal, VarNumber, VarType,
+    VimConv, ptrdiff_t, size_t, time_t, typval_vval_union,
 };
 use crate::ui::ui_flush;
 use crate::undo::u_clearallandblockfree;
@@ -210,12 +210,12 @@ impl From<KeyTaken> for QfError {
 }
 
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
-pub const GETF_SWITCH: getf_values = 4;
-pub const GETF_SETMARK: getf_values = 1;
-pub const BLN_NOOPT: bln_values = 16;
-pub const BLN_DUMMY: bln_values = 4;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
+pub const GETF_SWITCH: GetFileFlags = 4;
+pub const GETF_SETMARK: GetFileFlags = 1;
+pub const BLN_NOOPT: BlnFlags = 16;
+pub const BLN_DUMMY: BlnFlags = 4;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
 pub const READ_DUMMY: c_uint = 16;
 pub const READ_NEW: c_uint = 1;
 pub const FUZZY_MATCH_MAX_LEN: c_uint = 1024;

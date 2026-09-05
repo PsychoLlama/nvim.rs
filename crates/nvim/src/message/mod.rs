@@ -136,15 +136,15 @@ pub use self::errors::*;
 pub const kZIndexMessages: c_uint = 200;
 /// One entry of the message history. See [`self::history`].
 #[derive(Clone)]
-pub struct msg_hist {
-    pub next: *mut msg_hist,
-    pub prev: *mut msg_hist,
+pub struct MsgHist {
+    pub next: *mut MsgHist,
+    pub prev: *mut MsgHist,
     pub msg: HlMessage,
     pub kind: *mut ::core::ffi::c_char,
     pub temp: bool,
     pub append: bool,
 }
-pub type MessageHistoryEntry = msg_hist;
+pub type MessageHistoryEntry = MsgHist;
 /// [`do_dialog`] answers, as `confirm()` reports them.
 pub const VIM_DISCARDALL: c_uint = 6;
 pub const VIM_ALL: c_uint = 5;

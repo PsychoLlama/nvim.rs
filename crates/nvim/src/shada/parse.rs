@@ -438,8 +438,8 @@ unsafe fn parse_buffer_list(
     }
 
     let list = unsafe { (*entry).data.buffer_list_mut() };
-    list.buffers = unsafe { xcalloc(len as size_t, size_of::<buffer_list_buffer>()) }
-        .cast::<buffer_list_buffer>();
+    list.buffers = unsafe { xcalloc(len as size_t, size_of::<ShadaBufferListItem>()) }
+        .cast::<ShadaBufferListItem>();
     for i in 0..len as usize {
         // Count it before it is filled in, so that a failure below still
         // frees what has been built.

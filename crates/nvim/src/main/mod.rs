@@ -13,13 +13,13 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, ArgList, Array, AucmdWin, BreakAt, Buffer, BufferRef, Callback, Channel,
-    CmdMod, CmdModFlags, ColNr, DecorState, DispTick, EStack, EStackType, EstackInfo, Exception,
-    FILE, FileMark, FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop, LuaRef,
-    LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MatchState, MsgList, MultiQueue, NS,
-    Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, RegMMatch, RegMatch,
-    RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, Tabpage,
-    UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType, XFileMark, bln_values,
+    AdditionalData, ArgList, Array, AucmdWin, BlnFlags, BreakAt, Buffer, BufferRef, Callback,
+    Channel, CmdMod, CmdModFlags, ColNr, DecorState, DispTick, EStack, EStackType, EstackInfo,
+    Exception, FILE, FileMark, FileMarkView, Frame, GArray, Handle, Hlf, LPos, LineNr, Loop,
+    LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MatchState, MsgList,
+    MultiQueue, NS, Object, OptInt, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch,
+    RegMMatch, RegMatch, RegProg, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
+    Tabpage, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, WinExtmark, Window, XDGVarType, XFileMark,
     caller_scope, file_comparison, int16_t, int32_t, int64_t, nlua_ref_state_t, nvim_stats_s,
     size_t, uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t,
     uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t,
@@ -81,7 +81,7 @@ pub struct AucmdWinVec {
     pub capacity: size_t,
     pub items: *mut AucmdWin,
 }
-pub(crate) const BLN_LISTED: bln_values = 2;
+pub(crate) const BLN_LISTED: BlnFlags = 2;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
 pub(crate) const READ_STDIN: c_uint = 4;
 pub(crate) const READ_NEW: c_uint = 1;

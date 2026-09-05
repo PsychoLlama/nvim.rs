@@ -74,7 +74,7 @@ pub use show::{ex_delmarks, ex_marks, fm_getname};
 
 use store::{Fmark, GlobalMarks, NO_VIEW, NUL_BYTE, Xfmark, mark_name};
 
-pub const GETF_SETMARK: getf_values = 1;
+pub const GETF_SETMARK: GetFileFlags = 1;
 pub const AUGROUP_ALL: c_int = -3;
 pub const BUF_HAS_QF_ENTRY: c_int = 1;
 pub const BUF_HAS_LL_ENTRY: c_int = 2;

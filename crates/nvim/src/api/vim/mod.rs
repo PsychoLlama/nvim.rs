@@ -91,17 +91,16 @@ use crate::terminal::{
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    AdditionalData, ApiDict, Arena, Array, ArrayBuilder, Boolean, Buffer, BufferHandle, Channel,
-    ChannelStreamType, Context, DictItem, Error, Float, FoldInfo, Handle, HlAttrs, HlMessage,
-    Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts, KeyDict_empty,
-    KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight,
-    KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime, KeyValuePair, LineNr,
-    LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object, OptScope, OptVal,
-    RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0, StringBuilder,
-    TabpageHandle, TerminalOptions, VarNumber, Vv, Window, WindowHandle, YankReg, bln_values,
-    dobuf_action_values, dobuf_start_values, int64_t, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t,
-    uint8_t, uint16_t, uint64_t,
+    AdditionalData, ApiDict, Arena, Array, ArrayBuilder, BlnFlags, Boolean, Buffer, BufferHandle,
+    Channel, ChannelStreamType, Context, DictItem, DoBufAction, DoBufStart, Error, Float, FoldInfo,
+    Handle, HlAttrs, HlMessage, Integer, KeyDict_complete_set, KeyDict_context, KeyDict_echo_opts,
+    KeyDict_empty, KeyDict_eval_statusline, KeyDict_get_highlight, KeyDict_get_ns,
+    KeyDict_highlight, KeyDict_keymap, KeyDict_open_term, KeyDict_redraw, KeyDict_runtime,
+    KeyValuePair, LineNr, LuaRef, LuaRetMode, MessageData, MessageType, MotionType, NS, Object,
+    OptScope, OptVal, RemapValues, ScreenChar, ScriptId, SignTextAttrs, StatusCol, String_0,
+    StringBuilder, TabpageHandle, TerminalOptions, VarNumber, Vv, Window, WindowHandle, YankReg,
+    int64_t, kCdScopeGlobal, kErrorTypeException, kErrorTypeNone, kErrorTypeValidation,
+    kObjectTypeString, mpack_token_type_t, ptrdiff_t, size_t, uint8_t, uint16_t, uint64_t,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
@@ -151,11 +150,11 @@ pub struct RuntimeCookie {
     pub arena: *mut Arena,
 }
 pub const DOSO_NONE: ::core::ffi::c_uint = 0;
-pub const DOBUF_FIRST: dobuf_start_values = 1;
-pub const DOBUF_GOTO: dobuf_action_values = 0;
-pub const BLN_LISTED: bln_values = 2;
-pub const BLN_NEW: bln_values = 8;
-pub const BLN_NOOPT: bln_values = 16;
+pub const DOBUF_FIRST: DoBufStart = 1;
+pub const DOBUF_GOTO: DoBufAction = 0;
+pub const BLN_LISTED: BlnFlags = 2;
+pub const BLN_NEW: BlnFlags = 8;
+pub const BLN_NOOPT: BlnFlags = 16;
 pub const BCO_NOHELP: ::core::ffi::c_uint = 4;
 pub const BCO_ENTER: ::core::ffi::c_uint = 1;
 pub const MPACK_TOKEN_SINT: mpack_token_type_t = 4;
@@ -167,10 +166,10 @@ pub const kCtxGVars: ::core::ffi::c_uint = 8;
 pub const kCtxBufs: ::core::ffi::c_uint = 4;
 pub const kCtxJumps: ::core::ffi::c_uint = 2;
 pub const kCtxRegs: ::core::ffi::c_uint = 1;
-pub const BLN_CURBUF: bln_values = 1;
-pub const DOBUF_WIPE: dobuf_action_values = 4;
-pub const DOBUF_DEL: dobuf_action_values = 3;
-pub const DOBUF_UNLOAD: dobuf_action_values = 2;
+pub const BLN_CURBUF: BlnFlags = 1;
+pub const DOBUF_WIPE: DoBufAction = 4;
+pub const DOBUF_DEL: DoBufAction = 3;
+pub const DOBUF_UNLOAD: DoBufAction = 2;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const LUA_NOREF: ::core::ffi::c_int = -2 as ::core::ffi::c_int;
 pub const MAX_SCHAR_SIZE: ::core::ffi::c_int = 32 as ::core::ffi::c_int;
