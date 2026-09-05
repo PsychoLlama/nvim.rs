@@ -201,14 +201,14 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
     si
 }
 
-/// Collect `args`'s range of the current buffer into `sp`, and answer the name
+/// Collect `args`'s range of the current buffer into `source`, and answer the name
 /// to show for those lines: the buffer's own file name, or a synthetic
 /// `:source buffer=N` when it has none.
 ///
 /// # Safety
-/// `sp` is a cookie under construction and `args` carries the range.
+/// `source` is a cookie under construction and `args` carries the range.
 unsafe fn do_source_buffer_init(
-    sp: &mut SourceCookie,
+    source: &mut SourceCookie,
     args: *const ExArg,
     ex_lua: bool,
 ) -> *mut c_char {
@@ -235,36 +235,37 @@ unsafe fn do_source_buffer_init(
     };
     // SAFETY: every line of the range is readable through `ml_get`, and each
     // one is copied before the next is asked for.
-    sp.buflines = (line1..=line2)
+    source.buflines = (line1..=line2)
         .map(|lnum| unsafe { CStr::from_ptr(ml_get(lnum)) }.to_owned())
         .collect();
-    sp.buf_lnum = 0;
-    sp.source_from_buf_or_str = true;
+    source.buf_lnum = 0;
+    source.source_from_buf_or_str = true;
     // The first line the reader hands out is `line1`, so the counter starts
     // one below it.
-    sp.sourcing_lnum = line1 - 1;
+    source.sourcing_lnum = line1 - 1;
     fname
 }
 
-/// Split `str` into lines and collect them into `sp`.
+/// Split `str` into lines and collect them into `source`.
 ///
 /// # Safety
-/// `sp` is a cookie under construction and `str` is NUL-terminated.
-unsafe fn do_source_str_init(sp: &mut SourceCookie, mut str: *const c_char) {
+/// `source` is a cookie under construction and `str` is NUL-terminated.
+unsafe fn do_source_str_init(source: &mut SourceCookie, mut str: *const c_char) {
     // SAFETY: `skip_to_newline` stops at the terminator, so every span
     // copied is within the string.
     while unsafe { *str } as c_int != NUL {
         let eol = unsafe { skip_to_newline(str) };
         let len = unsafe { eol.offset_from(str) } as usize;
         let line = unsafe { slice::from_raw_parts(str.cast::<u8>(), len) };
-        sp.buflines
+        source
+            .buflines
             .push(CString::new(line).expect("a sourced line holds no NUL"));
         // Step over the newline, unless this was the last line -- which
         // ends at the terminator instead.
         str = unsafe { eol.add((*eol as c_int != NUL) as usize) };
     }
-    sp.buf_lnum = 0;
-    sp.source_from_buf_or_str = true;
+    source.buf_lnum = 0;
+    source.source_from_buf_or_str = true;
 }
 
 /// Source the current buffer's lines, as Vimscript or (with `ex_lua`) as Lua.

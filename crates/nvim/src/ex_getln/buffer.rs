@@ -567,10 +567,10 @@ fn escaped(
     unsafe { vim_strsave_escaped(s, esc_chars) }
 }
 
-/// Put a backslash before the file name in `pp`, which is allocated memory.
-pub unsafe fn escape_fname(pp: *mut *mut ::core::ffi::c_char) {
+/// Put a backslash before the file name in `fname`, which is allocated memory.
+pub unsafe fn escape_fname(fname: *mut *mut ::core::ffi::c_char) {
     // SAFETY: the caller's promise -- a slot holding allocated memory.
-    unsafe { *pp = with_backslash(*pp) };
+    unsafe { *fname = with_backslash(*fname) };
 }
 
 /// A fresh copy of `name` with a backslash in front, `name` freed.

@@ -327,21 +327,21 @@ pub unsafe fn str2special_arena(
 /// buffer, which is why `str2special_arena` cannot hold two answers.
 ///
 /// # Safety
-/// `sp` must point at a readable pointer into a NUL-terminated string.
+/// `cursor` must point at a readable pointer into a NUL-terminated string.
 pub(crate) unsafe fn str2special(
-    sp: *mut *const c_char,
+    cursor: *mut *const c_char,
     replace_spaces: bool,
     replace_lt: bool,
     out: &mut SpecialKeyName,
 ) -> *const c_char {
     let mut ch = [0 as c_char; MB_MAXCHAR];
     // A multi-byte character escaped into the stream comes back whole.
-    if !unsafe { mb_unescape(sp, &mut ch) }.is_null() {
+    if !unsafe { mb_unescape(cursor, &mut ch) }.is_null() {
         out[..MB_MAXCHAR].copy_from_slice(&ch);
         return out.as_ptr();
     }
 
-    let mut str = unsafe { *sp };
+    let mut str = unsafe { *cursor };
     let mut c = unsafe { *str as u8 as c_int };
     let mut modifiers = ModMask::NONE;
     let mut special = false;
@@ -361,19 +361,19 @@ pub(crate) unsafe fn str2special(
     }
 
     if c >= 0 && utf8len_tab[c as usize] > 1 {
-        unsafe { *sp = str };
+        unsafe { *cursor = str };
         // Try to un-escape a multi-byte character after the modifiers.
-        let unescaped = unsafe { mb_unescape(sp, &mut ch) };
+        let unescaped = unsafe { mb_unescape(cursor, &mut ch) };
         if unescaped.is_null() {
             // Illegal byte.
-            unsafe { *sp = str.add(1) };
+            unsafe { *cursor = str.add(1) };
         } else {
             // `special` is set, so get_special_key_name() renders it.
             c = unsafe { utf_ptr2char(unescaped) };
         }
     } else {
         // Single-byte character, NUL or illegal byte.
-        unsafe { *sp = str.add(usize::from(*str != 0)) };
+        unsafe { *cursor = str.add(usize::from(*str != 0)) };
     }
 
     if special

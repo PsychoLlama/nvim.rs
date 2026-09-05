@@ -526,15 +526,15 @@ pub unsafe fn getsourceline(
     line
 }
 
-/// Look up the next breakpoint in the script `sp` is reading, and remember the
+/// Look up the next breakpoint in the script `source` is reading, and remember the
 /// debugger's tick so we only look again when something changed.
 ///
 /// # Safety
 ///
-/// `sp` must be a file-backed source cookie.
-unsafe fn refresh_breakpoint(sp: *mut SourceCookie) {
-    unsafe { (*sp).breakpoint = dbg_find_breakpoint(true, (*sp).fname, sourcing_lnum()) };
-    unsafe { (*sp).dbg_tick = debug_tick.get() };
+/// `source` must be a file-backed source cookie.
+unsafe fn refresh_breakpoint(source: *mut SourceCookie) {
+    unsafe { (*source).breakpoint = dbg_find_breakpoint(true, (*source).fname, sourcing_lnum()) };
+    unsafe { (*source).dbg_tick = debug_tick.get() };
 }
 
 /// The next line of the script, using the one `getsourceline` read ahead if
@@ -542,36 +542,36 @@ unsafe fn refresh_breakpoint(sp: *mut SourceCookie) {
 ///
 /// # Safety
 ///
-/// `sp` must be the live source cookie.
-unsafe fn next_line(sp: *mut SourceCookie) -> *mut c_char {
-    if unsafe { (*sp).finished }
-        || (!unsafe { (*sp).source_from_buf_or_str } && unsafe { (*sp).fp }.is_null())
+/// `source` must be the live source cookie.
+unsafe fn next_line(source: *mut SourceCookie) -> *mut c_char {
+    if unsafe { (*source).finished }
+        || (!unsafe { (*source).source_from_buf_or_str } && unsafe { (*source).fp }.is_null())
     {
         return ptr::null_mut();
     }
-    if unsafe { (*sp).nextline }.is_null() {
-        return unsafe { get_one_sourceline(sp) };
+    if unsafe { (*source).nextline }.is_null() {
+        return unsafe { get_one_sourceline(source) };
     }
-    let line = unsafe { (*sp).nextline };
-    unsafe { (*sp).nextline = ptr::null_mut() };
-    unsafe { (*sp).sourcing_lnum += 1 };
+    let line = unsafe { (*source).nextline };
+    unsafe { (*source).nextline = ptr::null_mut() };
+    unsafe { (*source).sourcing_lnum += 1 };
     line
 }
 
 /// Join the `\`-continuation lines that follow `line` onto it.
 ///
 /// We always have to read the next line to find out, so it is kept in
-/// `sp->nextline`.  A comment between continuation lines (`"\ `) counts as one.
+/// `source.nextline`.  A comment between continuation lines (`"\ `) counts as one.
 ///
 /// # Safety
 ///
-/// `sp` must be the live source cookie and `line` its freshly read line.
-unsafe fn concat_continuations(sp: *mut SourceCookie, line: *mut c_char) -> *mut c_char {
+/// `source` must be the live source cookie and `line` its freshly read line.
+unsafe fn concat_continuations(source: *mut SourceCookie, line: *mut c_char) -> *mut c_char {
     // Compensate for the one line read-ahead.
-    unsafe { (*sp).sourcing_lnum -= 1 };
-    unsafe { (*sp).nextline = get_one_sourceline(sp) };
-    if unsafe { (*sp).nextline }.is_null()
-        || !unsafe { starts_continuation(skipwhite((*sp).nextline)) }
+    unsafe { (*source).sourcing_lnum -= 1 };
+    unsafe { (*source).nextline = get_one_sourceline(source) };
+    if unsafe { (*source).nextline }.is_null()
+        || !unsafe { starts_continuation(skipwhite((*source).nextline)) }
     {
         return line;
     }
@@ -579,14 +579,14 @@ unsafe fn concat_continuations(sp: *mut SourceCookie, line: *mut c_char) -> *mut
     // SAFETY (this body): `line` and every `nextline` are NUL-terminated
     // lines this function owns.
     let mut joined = unsafe { cstr::bytes_at(line) }.to_vec();
-    while !unsafe { (*sp).nextline }.is_null()
+    while !unsafe { (*source).nextline }.is_null()
         && unsafe {
-            let next = cstr::bytes_at((*sp).nextline);
-            concat_continued_line(&mut joined, (*sp).nextline, next.len())
+            let next = cstr::bytes_at((*source).nextline);
+            concat_continued_line(&mut joined, (*source).nextline, next.len())
         }
     {
-        unsafe { xfree((*sp).nextline.cast::<c_void>()) };
-        unsafe { (*sp).nextline = get_one_sourceline(sp) };
+        unsafe { xfree((*source).nextline.cast::<c_void>()) };
+        unsafe { (*source).nextline = get_one_sourceline(source) };
     }
     unsafe { xfree(line.cast::<c_void>()) };
     owned_cstr(joined)
@@ -611,17 +611,17 @@ unsafe fn starts_continuation(p: *const c_char) -> bool {
 ///
 /// # Safety
 ///
-/// `sp` must be the live source cookie.
-unsafe fn get_one_sourceline(sp: *mut SourceCookie) -> *mut c_char {
+/// `source` must be the live source cookie.
+unsafe fn get_one_sourceline(source: *mut SourceCookie) -> *mut c_char {
     let mut line: Vec<u8> = Vec::new();
-    // SAFETY: `sp` is the caller's cookie, throughout.
-    unsafe { (*sp).sourcing_lnum += 1 };
+    // SAFETY: `source` is the caller's cookie, throughout.
+    unsafe { (*source).sourcing_lnum += 1 };
 
     // Loop until there is a finished line (or end-of-file).
     let mut have_read = false;
     loop {
-        if unsafe { (*sp).source_from_buf_or_str } {
-            if !unsafe { next_buffered_line(sp, &mut line) } {
+        if unsafe { (*source).source_from_buf_or_str } {
+            if !unsafe { next_buffered_line(source, &mut line) } {
                 break;
             }
             // A buffer or string line is handed over whole: it cannot hold a
@@ -629,7 +629,7 @@ unsafe fn get_one_sourceline(sp: *mut SourceCookie) -> *mut c_char {
             // test below can fire for one.
             have_read = true;
         } else {
-            let Some(filled_the_chunk) = (unsafe { read_file_chunk(sp, &mut line) }) else {
+            let Some(filled_the_chunk) = (unsafe { read_file_chunk(source, &mut line) }) else {
                 break;
             };
             have_read = true;
@@ -639,7 +639,7 @@ unsafe fn get_one_sourceline(sp: *mut SourceCookie) -> *mut c_char {
             }
             if line.last() == Some(&b'\n') {
                 if escaped_newline(&line) {
-                    unsafe { (*sp).sourcing_lnum += 1 };
+                    unsafe { (*source).sourcing_lnum += 1 };
                     continue;
                 }
                 // Remove the NL.
@@ -664,14 +664,15 @@ unsafe fn get_one_sourceline(sp: *mut SourceCookie) -> *mut c_char {
 ///
 /// # Safety
 ///
-/// `sp` must be a buffer- or string-backed source cookie.
-unsafe fn next_buffered_line(sp: *mut SourceCookie, line: &mut Vec<u8>) -> bool {
+/// `source` must be a buffer- or string-backed source cookie.
+unsafe fn next_buffered_line(source: *mut SourceCookie, line: &mut Vec<u8>) -> bool {
     // SAFETY: the caller's cookie, whose lines outlive the copy.
-    let Some(next) = unsafe { &(*sp).buflines }.get(unsafe { (*sp).buf_lnum } as usize) else {
+    let Some(next) = unsafe { &(*source).buflines }.get(unsafe { (*source).buf_lnum } as usize)
+    else {
         return false;
     };
     line.extend_from_slice(next.to_bytes());
-    unsafe { (*sp).buf_lnum += 1 };
+    unsafe { (*source).buf_lnum += 1 };
     true
 }
 
@@ -682,8 +683,8 @@ unsafe fn next_buffered_line(sp: *mut SourceCookie, line: &mut Vec<u8>) -> bool 
 ///
 /// # Safety
 ///
-/// `sp` must be a file-backed source cookie.
-unsafe fn read_file_chunk(sp: *mut SourceCookie, line: &mut Vec<u8>) -> Option<bool> {
+/// `source` must be a file-backed source cookie.
+unsafe fn read_file_chunk(source: *mut SourceCookie, line: &mut Vec<u8>) -> Option<bool> {
     /// How much one `fgets` reads at a time, terminator included: upstream
     /// grew its buffer by at least this much before every read. Function-
     /// local so it stays out of the unit lane's generated cdefs, which
@@ -695,12 +696,12 @@ unsafe fn read_file_chunk(sp: *mut SourceCookie, line: &mut Vec<u8>) -> Option<b
     loop {
         // SAFETY: the reserve above put `SOURCE_CHUNK` writable bytes at
         // `filled`, which is exactly what `fgets` is allowed to touch (it
-        // writes at most one fewer, plus the terminator). `sp`'s file is the
+        // writes at most one fewer, plus the terminator). `source`'s file is the
         // caller's promise.
         let rest = unsafe {
             *__errno_location() = 0;
             let dst = line.as_mut_ptr().add(filled).cast::<c_char>();
-            if fgets(dst, SOURCE_CHUNK as c_int, (*sp).fp).is_null() {
+            if fgets(dst, SOURCE_CHUNK as c_int, (*source).fp).is_null() {
                 if *__errno_location() != EINTR {
                     return None;
                 }

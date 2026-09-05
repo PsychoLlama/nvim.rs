@@ -308,7 +308,7 @@ pub(crate) fn restore_visual_mode() {
 /// succeeds.
 pub(crate) unsafe fn get_visual_text(
     cmd_arg: *mut CmdArg,
-    pp: *mut *mut c_char,
+    cursor: *mut *mut c_char,
     lenp: *mut size_t,
 ) -> bool {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
@@ -318,7 +318,7 @@ pub(crate) unsafe fn get_visual_text(
         unadjust_for_sel();
     }
     let anchor = visual_anchor();
-    // SAFETY: `cmd_arg` is null or the caller's live command argument, and `pp`
+    // SAFETY: `cmd_arg` is null or the caller's live command argument, and `cursor`
     // and `lenp` are its out-parameters.
     if anchor.lnum != cur_win().w_cursor.lnum {
         if !cmd_arg.is_null() {
@@ -327,19 +327,19 @@ pub(crate) unsafe fn get_visual_text(
         return false;
     }
     if visual_mode().is_line() {
-        unsafe { *pp = get_cursor_line_ptr() };
+        unsafe { *cursor = get_cursor_line_ptr() };
         unsafe { *lenp = get_cursor_line_len() as size_t };
     } else {
         // The earlier of the two ends is the start; the length is the
         // column difference, inclusive.
         if lt(cur_win().w_cursor, anchor) {
-            unsafe { *pp = ml_get_pos(&raw mut (*curwin.get()).w_cursor) };
+            unsafe { *cursor = ml_get_pos(&raw mut (*curwin.get()).w_cursor) };
             unsafe { *lenp = (anchor.col - cur_win().w_cursor.col + 1) as size_t };
         } else {
-            unsafe { *pp = ml_get_pos(&raw const anchor) };
+            unsafe { *cursor = ml_get_pos(&raw const anchor) };
             unsafe { *lenp = (cur_win().w_cursor.col - anchor.col + 1) as size_t };
         }
-        if unsafe { **pp } as c_int == NUL {
+        if unsafe { **cursor } as c_int == NUL {
             unsafe { *lenp = 0 };
         }
         // The last character may be multibyte; take the rest of it.
@@ -349,7 +349,7 @@ pub(crate) unsafe fn get_visual_text(
         // Reachable: a blockwise selection whose last line is short ends
         // on the terminator. Kept wrapping, deliberately.
         if unsafe { *lenp } > 0 {
-            let tail = unsafe { utfc_ptr2len((*pp).add(*lenp - 1)) };
+            let tail = unsafe { utfc_ptr2len((*cursor).add(*lenp - 1)) };
             unsafe { *lenp = (*lenp).wrapping_add((tail - 1) as size_t) };
         }
     }
@@ -725,36 +725,36 @@ pub(crate) fn unadjust_for_sel() -> bool {
 /// Move one position back, across a line break if there is nothing else left.
 ///
 /// Answers whether it crossed one.
-pub(crate) fn unadjust_for_sel_inner(pp: &mut Pos) -> bool {
+pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
     VIsual_select_exclu_adj.set(false);
-    if pp.coladd > 0 {
-        pp.coladd -= 1;
-    } else if pp.col > 0 {
-        pp.col -= 1;
-        // SAFETY: `curbuf` is set from startup to exit, and `pp` is lent for
+    if pos.coladd > 0 {
+        pos.coladd -= 1;
+    } else if pos.col > 0 {
+        pos.col -= 1;
+        // SAFETY: `curbuf` is set from startup to exit, and `pos` is lent for
         // the length of the call.
-        unsafe { mark_mb_adjustpos(curbuf.get(), pp) };
+        unsafe { mark_mb_adjustpos(curbuf.get(), pos) };
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
         // SAFETY: `curwin` is set from startup to exit.
         if virtual_active(cur_win()) {
             let (mut cs, mut ce): (ColNr, ColNr) = (0, 0);
-            // SAFETY: the current window, `pp` lent for the call, and two
+            // SAFETY: the current window, `pos` lent for the call, and two
             // columns of this frame's own.
             unsafe {
                 getvcol(
                     Win::new(curwin.get()),
-                    pp,
+                    pos,
                     &raw mut cs,
                     ptr::null_mut(),
                     &raw mut ce,
                 )
             };
-            pp.coladd = ce - cs;
+            pos.coladd = ce - cs;
         }
-    } else if pp.lnum > 1 {
-        pp.lnum -= 1;
-        pp.col = ml_get_len(pp.lnum);
+    } else if pos.lnum > 1 {
+        pos.lnum -= 1;
+        pos.col = ml_get_len(pos.lnum);
         return true;
     }
     false

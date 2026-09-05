@@ -237,9 +237,9 @@ pub(crate) unsafe fn utf_safe_read_char_adv(s: *mut *const c_char, n: *mut size_
 /// # Safety
 ///
 /// `*pp` must point at a NUL-terminated string.
-pub unsafe fn mb_ptr2char_adv(pp: *mut *const c_char) -> c_int {
-    let c = unsafe { utf_ptr2char(*pp) };
-    unsafe { *pp = (*pp).offset(utfc_ptr2len(*pp) as isize) };
+pub unsafe fn mb_ptr2char_adv(cursor: *mut *const c_char) -> c_int {
+    let c = unsafe { utf_ptr2char(*cursor) };
+    unsafe { *cursor = (*cursor).offset(utfc_ptr2len(*cursor) as isize) };
     c
 }
 
@@ -249,9 +249,9 @@ pub unsafe fn mb_ptr2char_adv(pp: *mut *const c_char) -> c_int {
 /// # Safety
 ///
 /// `*pp` must point at a NUL-terminated string.
-pub unsafe fn mb_cptr2char_adv(pp: *mut *const c_char) -> c_int {
-    let c = unsafe { utf_ptr2char(*pp) };
-    unsafe { *pp = (*pp).offset(utf_ptr2len(*pp) as isize) };
+pub unsafe fn mb_cptr2char_adv(cursor: *mut *const c_char) -> c_int {
+    let c = unsafe { utf_ptr2char(*cursor) };
+    unsafe { *cursor = (*cursor).offset(utf_ptr2len(*cursor) as isize) };
     c
 }
 

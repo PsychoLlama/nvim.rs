@@ -36,23 +36,24 @@ pub(crate) fn no_iconv() -> iconv_t {
 
 /// Find the next `'fileencodings'` entry to try.
 ///
-/// `pp` is advanced past the entry it returns, and set to NULL once the list
+/// `cursor` is advanced past the entry it returns, and set to NULL once the list
 /// is exhausted — which is reported as an empty name. `alloced` says whether
 /// the result has to be freed.
-pub(crate) unsafe fn next_fenc(pp: &mut *mut c_char, alloced: &mut bool) -> *mut c_char {
+pub(crate) unsafe fn next_fenc(cursor: &mut *mut c_char, alloced: &mut bool) -> *mut c_char {
     *alloced = false;
-    if unsafe { **pp } == 0 {
-        *pp = ptr::null_mut();
+    if unsafe { **cursor } == 0 {
+        *cursor = ptr::null_mut();
         return c"".as_ptr().cast_mut();
     }
-    let comma = unsafe { vim_strchr(*pp, b',' as c_int) };
+    let comma = unsafe { vim_strchr(*cursor, b',' as c_int) };
     let r = if comma.is_null() {
-        let r = unsafe { enc_canonize(*pp) };
-        *pp = unsafe { (*pp).add(cstr::bytes_at(*pp).len()) };
+        let r = unsafe { enc_canonize(*cursor) };
+        *cursor = unsafe { (*cursor).add(cstr::bytes_at(*cursor).len()) };
         r
     } else {
-        let one = unsafe { xmemdupz(pp.cast(), comma.offset_from(*pp) as size_t) }.cast::<c_char>();
-        *pp = unsafe { comma.add(1) };
+        let one = unsafe { xmemdupz(cursor.cast(), comma.offset_from(*cursor) as size_t) }
+            .cast::<c_char>();
+        *cursor = unsafe { comma.add(1) };
         let r = unsafe { enc_canonize(one) };
         unsafe { xfree(one.cast()) };
         r

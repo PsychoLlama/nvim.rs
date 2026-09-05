@@ -396,9 +396,9 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, args: *mut ExArg, skip: bool
 /// Step the cursor over an expression without evaluating it.
 ///
 /// # Safety
-/// `pp` must point at the cursor into a NUL-terminated expression;
+/// `cursor` must point at the cursor into a NUL-terminated expression;
 /// `evalarg` null or valid.
-pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut EvalArg) -> Result<(), Failed> {
+pub unsafe fn skip_expr(cursor: *mut *mut c_char, evalarg: *mut EvalArg) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a non-null `evalarg` outlives the
     // call.
     let ev = (!evalarg.is_null()).then(|| unsafe { Ev::new(evalarg) });
@@ -406,15 +406,15 @@ pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut EvalArg) -> Result<(
     if let Some(mut e) = ev {
         e.eval_flags &= !(EVAL_EVALUATE as c_int);
     }
-    // SAFETY: the caller's promise -- `pp` holds a cursor into a
+    // SAFETY: the caller's promise -- `cursor` holds a cursor into a
     // NUL-terminated expression, and blanks stop at the terminator.
-    unsafe { *pp = skipwhite(*pp) };
+    unsafe { *cursor = skipwhite(*cursor) };
     let mut rettv = UNSET_TV;
     // Deliberately not handed `evalarg`: the flags were cleared on it
     // for the benefit of anything else looking, but this walk wants no
     // line getter either.
-    // SAFETY: `pp` is the caller's cursor and `rettv` is this frame's.
-    let res = unsafe { eval1(pp, &raw mut rettv, null_mut()) };
+    // SAFETY: `cursor` is the caller's cursor and `rettv` is this frame's.
+    let res = unsafe { eval1(cursor, &raw mut rettv, null_mut()) };
     if let Some(mut e) = ev {
         e.eval_flags = save_flags;
     }
@@ -672,13 +672,13 @@ pub unsafe fn call_func_retlist(
     rettv.list_or_null() as *mut c_void
 }
 
-/// Run 'foldexpr' for the window's current line. `cp` comes back holding
+/// Run 'foldexpr' for the window's current line. `marker` comes back holding
 /// the leading marker character (`>`, `<`, `=`, `a`, `s`) when there was
 /// one.
 ///
 /// # Safety
-/// `wp` and `cp` must be valid.
-pub unsafe fn eval_foldexpr(window: *mut Window, cp: *mut c_int) -> c_int {
+/// `wp` and `marker` must be valid.
+pub unsafe fn eval_foldexpr(window: *mut Window, marker: *mut c_int) -> c_int {
     let mut evalarg = EVALARG_EVALUATE;
     let saved_sctx: ScriptCtx = current_sctx.get();
     // SAFETY: the caller's promise -- a live window.
@@ -692,8 +692,8 @@ pub unsafe fn eval_foldexpr(window: *mut Window, cp: *mut c_int) -> c_int {
         let _no_emsg = Suppress::emsg();
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
-        // SAFETY: the caller's promise about `cp`.
-        unsafe { *cp = NUL };
+        // SAFETY: the caller's promise about `marker`.
+        unsafe { *marker = NUL };
 
         let mut tv = UNSET_TV;
         let mut retval: VarNumber = 0;
@@ -713,9 +713,9 @@ pub unsafe fn eval_foldexpr(window: *mut Window, cp: *mut c_int) -> c_int {
                     && !ascii_isdigit(first as c_int)
                     && first != b'-' as c_char
                 {
-                    // SAFETY: the caller's promise about `cp`; `first` is
+                    // SAFETY: the caller's promise about `marker`; `first` is
                     // not the terminator, so the rest is inside the string.
-                    unsafe { *cp = first as u8 as c_int };
+                    unsafe { *marker = first as u8 as c_int };
                     s = unsafe { s.add(1) };
                 }
                 // SAFETY: `s` is inside the NUL-terminated string.

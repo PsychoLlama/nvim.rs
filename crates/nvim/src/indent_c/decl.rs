@@ -225,11 +225,11 @@ pub(crate) unsafe fn cin_ispreproc(s: *const c_char) -> bool {
 /// # Safety
 /// `*pp` must point at a NUL-terminated line; may unlock the current line.
 pub(crate) unsafe fn cin_ispreproc_cont(
-    pp: &mut *const c_char,
+    cursor: &mut *const c_char,
     lnump: &mut LineNr,
     amount: &mut c_int,
 ) -> bool {
-    let mut line = *pp;
+    let mut line = *cursor;
     let mut lnum = *lnump;
     let mut retval = false;
     let mut candidate_amount = *amount;
@@ -264,7 +264,7 @@ pub(crate) unsafe fn cin_ispreproc_cont(
 
     if lnum != *lnump {
         // SAFETY: `*lnump` is a line of the current buffer.
-        *pp = ml_get(*lnump);
+        *cursor = ml_get(*lnump);
     }
     if retval {
         *amount = candidate_amount;
@@ -278,14 +278,14 @@ pub(crate) unsafe fn cin_ispreproc_cont(
 ///
 /// A line ending in `,` continues into the next one, which is why this can
 /// read further down the buffer.  `min_lnum` bounds how far *back* the
-/// matching `(` may be, and `sp`, when given, both supplies the first line
+/// matching `(` may be, and `cursor`, when given, both supplies the first line
 /// and is restored to it before returning.
 ///
 /// # Safety
 /// `*sp` must point at a NUL-terminated line; reads and restores the cursor
 /// line number, and may unlock the current line.
 pub(crate) unsafe fn cin_isfuncdecl(
-    sp: Option<&mut *const c_char>,
+    cursor: Option<&mut *const c_char>,
     first_lnum: LineNr,
     min_lnum: LineNr,
 ) -> bool {
@@ -294,7 +294,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
     let mut retval = false;
     let mut just_started = true;
 
-    let mut s = match &sp {
+    let mut s = match &cursor {
         Some(p) => **p,
         // SAFETY: on the main thread with a current buffer; `ml_get` reports
         // a line number of its own that is out of range, and hands back a
@@ -431,7 +431,7 @@ pub(crate) unsafe fn cin_isfuncdecl(
     }
 
     if lnum != first_lnum
-        && let Some(p) = sp
+        && let Some(p) = cursor
     {
         // SAFETY: `first_lnum` is the line the caller named; `ml_get` reports
         // a line number of its own that is out of range.

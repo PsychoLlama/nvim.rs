@@ -165,28 +165,33 @@ pub(crate) unsafe fn sign_cmd_idx(begin_cmd: *mut c_char, end_cmd: *mut c_char) 
 /// The `:sign list` report for one definition.
 ///
 /// # Safety
-/// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_list_defined(sp: SignRef) {
+/// `sign` must be a live sign definition.
+pub(crate) unsafe fn sign_list_defined(sign: SignRef) {
     // SAFETY: a definition's name, icon and cells are its own.
-    let sn_name = unsafe { c_str(sp.sn_name) };
+    let sn_name = unsafe { c_str(sign.sn_name) };
     smsg!(0, "sign {sn_name}");
-    if !sp.sn_icon.is_null() {
+    if !sign.sn_icon.is_null() {
         unsafe { msg_puts(c" icon=".as_ptr()) };
-        unsafe { msg_outtrans(sp.sn_icon, 0, false) };
+        unsafe { msg_outtrans(sign.sn_icon, 0, false) };
         unsafe { msg_puts(gettext(c" (not supported)").as_ptr()) };
     }
-    if sp.sn_text[0] != 0 {
+    if sign.sn_text[0] != 0 {
         unsafe { msg_puts(c" text=".as_ptr()) };
         let mut buf = [0 as c_char; SIGN_TEXT_BUF];
-        unsafe { describe_sign_text(buf.as_mut_ptr(), sp.cells()) };
+        unsafe { describe_sign_text(buf.as_mut_ptr(), sign.cells()) };
         unsafe { msg_outtrans(buf.as_ptr(), 0, false) };
     }
-    if sp.sn_priority > 0 {
-        let lbuf = msg_buf!(c" priority=%d", sp.sn_priority);
+    if sign.sn_priority > 0 {
+        let lbuf = msg_buf!(c" priority=%d", sign.sn_priority);
         unsafe { msg_puts(lbuf.as_ptr()) };
     }
     let labels = [c" linehl=", c" texthl=", c" culhl=", c" numhl="];
-    let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
+    let ids = [
+        sign.sn_line_hl,
+        sign.sn_text_hl,
+        sign.sn_cul_hl,
+        sign.sn_num_hl,
+    ];
     for (label, id) in labels.into_iter().zip(ids) {
         if id > 0 {
             unsafe { msg_puts(label.as_ptr()) };

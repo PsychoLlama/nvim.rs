@@ -193,22 +193,22 @@ pub unsafe fn f_reg_recorded(_args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     unsafe { return_register(reg_recorded.get(), &mut *result) };
 }
 
-/// Read a register-type letter, advancing `pp` past the width digits a
+/// Read a register-type letter, advancing `cursor` past the width digits a
 /// blockwise type may carry.
 ///
-/// `pp` is left on the *last* byte consumed, not one past it, because both
+/// `cursor` is left on the *last* byte consumed, not one past it, because both
 /// callers step it forward themselves.
 ///
 /// # Safety
 /// `*pp` points into a NUL-terminated string.
 unsafe fn get_yank_type(
-    pp: &mut *const c_char,
+    cursor: &mut *const c_char,
     yank_type: &mut MotionType,
     block_len: &mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY throughout: the caller's obligation; `getdigits_int` only walks forward
     // and stops at the first non-digit.
-    let mut p = *pp;
+    let mut p = *cursor;
     match unsafe { *p } as u8 {
         b'v' | b'c' => *yank_type = kMTCharWise,
         b'V' | b'l' => *yank_type = kMTLineWise,
@@ -221,7 +221,7 @@ unsafe fn get_yank_type(
         *block_len = unsafe { getdigits_int(&raw mut q, false, 0) } - 1;
         p = unsafe { q.sub(1) };
     }
-    *pp = p;
+    *cursor = p;
     Ok(())
 }
 

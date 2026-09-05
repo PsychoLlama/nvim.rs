@@ -786,9 +786,9 @@ fn cur_win() -> Win {
 }
 
 /// `checkforcmd()` as checked code.
-fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
+fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::lookup::checkforcmd(pp, cmd, len) }
+    unsafe { crate::ex_docmd::lookup::checkforcmd(cursor, cmd, len) }
 }
 
 /// `memmove()`'s byte copy as checked code: `n` bytes, overlap allowed.

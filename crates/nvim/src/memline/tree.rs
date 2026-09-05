@@ -91,8 +91,8 @@ pub(crate) unsafe fn db_line_start(dp: Db, idx: c_int) -> c_uint {
 /// zero-length-array provenance rule as [`db_index`].
 ///
 /// As [`db_index`], naming the array costs no read.
-pub(crate) fn pb_entries(pp: Pb) -> *mut PointerEntry {
-    pp.field_ptr(offset_of!(PointerBlock, pb_pointer))
+pub(crate) fn pb_entries(block: Pb) -> *mut PointerEntry {
+    block.field_ptr(offset_of!(PointerBlock, pb_pointer))
 }
 
 impl PointerBlock {

@@ -49,22 +49,22 @@ use super::{
     ZERO_FLAG, vim_regfree,
 };
 
-/// Decode one flag and advance `pp` past it. Returns 0 when there is none.
+/// Decode one flag and advance `cursor` past it. Returns 0 when there is none.
 ///
 /// # Safety
 ///
-/// `pp` must point at a pointer into a NUL-terminated string.
-pub(super) unsafe fn get_affitem(flagtype: c_int, pp: *mut *mut c_char) -> c_uint {
-    // SAFETY: the caller promises the string; each branch advances `pp` by
+/// `cursor` must point at a pointer into a NUL-terminated string.
+pub(super) unsafe fn get_affitem(flagtype: c_int, cursor: *mut *mut c_char) -> c_uint {
+    // SAFETY: the caller promises the string; each branch advances `cursor` by
     // at most what it read.
     if flagtype == AFT_NUM {
-        if !ascii_isdigit(unsafe { **pp } as c_int) {
+        if !ascii_isdigit(unsafe { **cursor } as c_int) {
             // Not a number at all; step over the offending byte so the
             // caller makes progress.
-            unsafe { *pp = (*pp).add(1) };
+            unsafe { *cursor = (*cursor).add(1) };
             return 0;
         }
-        let mut res = unsafe { getdigits_int(pp, true, 0) };
+        let mut res = unsafe { getdigits_int(cursor, true, 0) };
         if res == 0 {
             // Zero would read as "no flag", so it gets its own value.
             res = ZERO_FLAG;
@@ -72,16 +72,16 @@ pub(super) unsafe fn get_affitem(flagtype: c_int, pp: *mut *mut c_char) -> c_uin
         return res as c_uint;
     }
 
-    let mut res = unsafe { mb_ptr2char_adv(pp.cast::<*const c_char>()) };
+    let mut res = unsafe { mb_ptr2char_adv(cursor.cast::<*const c_char>()) };
     // Two-character flags: always for LONG, and for CAPLONG only when
     // the first character is upper case ASCII.
     if flagtype == AFT_LONG
         || (flagtype == AFT_CAPLONG && res >= b'A' as c_int && res <= b'Z' as c_int)
     {
-        if unsafe { **pp } as c_int == NUL {
+        if unsafe { **cursor } as c_int == NUL {
             return 0;
         }
-        res = unsafe { mb_ptr2char_adv(pp.cast::<*const c_char>()) } + (res << 16);
+        res = unsafe { mb_ptr2char_adv(cursor.cast::<*const c_char>()) } + (res << 16);
     }
     res as c_uint
 }

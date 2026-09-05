@@ -43,13 +43,13 @@ pub fn is_user_cmd(cmdidx: CmdIdx) -> bool {
 /// scan that runs per Ex command.
 const ROWS: usize = command_count as usize;
 
-/// Does `pp` start with at least `len` characters of `cmd`, and end there?
+/// Does `cursor` start with at least `len` characters of `cmd`, and end there?
 ///
 /// **Advances `*pp` past the word on a match**, which is why the modifier
 /// scan's arms are ordered the way they are: a failed `checkforcmd` leaves
 /// the cursor alone, a successful one does not.
-pub unsafe fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
-    let p = unsafe { *pp };
+pub unsafe fn checkforcmd(cursor: *mut *mut c_char, cmd: *const c_char, len: c_int) -> bool {
+    let p = unsafe { *cursor };
     let mut i = 0isize;
     while byte_at(cmd, i) != NUL && unsafe { *cmd.offset(i) } == unsafe { *p.offset(i) } {
         i += 1;
@@ -57,7 +57,7 @@ pub unsafe fn checkforcmd(pp: *mut *mut c_char, cmd: *const c_char, len: c_int) 
     // A letter after the abbreviation means this is a longer word, not
     // this command: `:silentx` is not `:silent`.
     if i as c_int >= len && !(ubyte_at(p, i)).is_ascii_alphabetic() {
-        unsafe { *pp = skipwhite(p.offset(i)) };
+        unsafe { *cursor = skipwhite(p.offset(i)) };
         return true;
     }
     false

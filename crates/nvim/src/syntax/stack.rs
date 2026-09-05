@@ -346,19 +346,19 @@ fn state_continues_from_previous_line() -> bool {
     false
 }
 
-/// Take `sp` out of the used list.
-unsafe fn unlink_entry(mut block: SynBlockRef, sp: *mut SynState) {
-    if block.b_sst_first == sp {
-        unsafe { block.b_sst_first = (*sp).sst_next };
+/// Take `state` out of the used list.
+unsafe fn unlink_entry(mut block: SynBlockRef, state: *mut SynState) {
+    if block.b_sst_first == state {
+        unsafe { block.b_sst_first = (*state).sst_next };
         return;
     }
     let mut p = block.b_sst_first;
-    while !p.is_null() && unsafe { (*p).sst_next } != sp {
+    while !p.is_null() && unsafe { (*p).sst_next } != state {
         p = unsafe { (*p).sst_next };
     }
     if !p.is_null() {
         // "just in case": an entry that is not in the list is left alone.
-        unsafe { (*p).sst_next = (*sp).sst_next };
+        unsafe { (*p).sst_next = (*state).sst_next };
     }
 }
 
@@ -390,21 +390,21 @@ unsafe fn new_entry(mut block: SynBlockRef, mut after: *mut SynState) -> *mut Sy
     p
 }
 
-/// Copy the current state stack into `sp`, overwriting whatever was there.
-unsafe fn fill_entry(sp: *mut SynState) {
-    unsafe { clear_syn_state(sp) };
+/// Copy the current state stack into `state`, overwriting whatever was there.
+unsafe fn fill_entry(state: *mut SynState) {
+    unsafe { clear_syn_state(state) };
     let size = state_len();
-    unsafe { (*sp).sst_stacksize = size };
+    unsafe { (*state).sst_stacksize = size };
     if size > SST_FIX_STATES {
         // The entry takes a heap arm of exactly `size` items. `clear_syn_state`
         // released whatever was there, inline arm included, so nothing of the
         // previous stack survives into this one.
         let states = vec![EMPTY_BUFSTATE; size as usize].into_boxed_slice();
-        // SAFETY: `sp` is the cache entry being filled; the box is leaked into
+        // SAFETY: `state` is the cache entry being filled; the box is leaked into
         // the union arm and put back together by `clear_syn_state`.
-        unsafe { (*sp).sst_union.sst_heap = Box::into_raw(states).cast() };
+        unsafe { (*state).sst_union.sst_heap = Box::into_raw(states).cast() };
     }
-    let bp = unsafe { entry_states(sp, size) };
+    let bp = unsafe { entry_states(state, size) };
     let mut i = 0;
     while i < size {
         let si = unsafe { state_at(i) };
@@ -416,10 +416,10 @@ unsafe fn fill_entry(sp: *mut SynState) {
         unsafe { (*b).bs_extmatch = ref_extmatch(si.si_extmatch) };
         i += 1;
     }
-    unsafe { (*sp).sst_next_flags = current_next_flags.get() };
-    unsafe { (*sp).sst_next_list = current_next_list.get() };
-    unsafe { (*sp).sst_tick = display_tick.get() };
-    unsafe { (*sp).sst_change_lnum = 0 };
+    unsafe { (*state).sst_next_flags = current_next_flags.get() };
+    unsafe { (*state).sst_next_list = current_next_list.get() };
+    unsafe { (*state).sst_tick = display_tick.get() };
+    unsafe { (*state).sst_change_lnum = 0 };
 }
 
 /// Copy a cached state stack into the current state.
@@ -468,20 +468,20 @@ pub(crate) unsafe fn load_current_state(from: *mut SynState) {
     current_lnum.set(unsafe { (*from).sst_lnum });
 }
 
-/// Is the saved state stack `sp` equal to the current one?
+/// Is the saved state stack `state` equal to the current one?
 ///
 /// Equality means the re-parse that produced the current state has arrived
 /// back at what was cached, so everything below can be trusted again.
-pub(crate) unsafe fn syn_stack_equal(sp: *mut SynState) -> bool {
+pub(crate) unsafe fn syn_stack_equal(state: *mut SynState) -> bool {
     // A quick check first: same size and same nextlist.
     let size = state_len();
-    if unsafe { (*sp).sst_stacksize } != size
-        || unsafe { (*sp).sst_next_list } != current_next_list.get()
+    if unsafe { (*state).sst_stacksize } != size
+        || unsafe { (*state).sst_next_list } != current_next_list.get()
     {
         return false;
     }
 
-    let bp = unsafe { entry_states(sp, (*sp).sst_stacksize) };
+    let bp = unsafe { entry_states(state, (*state).sst_stacksize) };
     let mut i = size;
     while i > 0 {
         i -= 1;

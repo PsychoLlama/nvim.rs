@@ -306,11 +306,11 @@ pub unsafe fn utf_valid_string(s: *const c_char, end: *const c_char) -> bool {
 ///
 /// `*pp` must be a NUL-terminated string.
 pub(crate) unsafe fn mb_unescape(
-    pp: *mut *const c_char,
+    cursor: *mut *const c_char,
     into: &mut [c_char; MB_MAXCHAR],
 ) -> *const c_char {
     let out = into.as_mut_ptr();
-    let str = unsafe { *pp } as *const u8;
+    let str = unsafe { *cursor } as *const u8;
     let mut buf_idx = 0;
     let mut str_idx = 0;
     while unsafe { *str.add(str_idx) } != 0 && buf_idx < 4 {
@@ -331,7 +331,7 @@ pub(crate) unsafe fn mb_unescape(
         // An illegal sequence answers 1 here, so this only fires on a
         // character that is really multibyte.
         if unsafe { utf_ptr2len(out) } > 1 {
-            unsafe { *pp = (str as *const c_char).add(str_idx + 1) };
+            unsafe { *cursor = (str as *const c_char).add(str_idx + 1) };
             return out;
         }
         if (unsafe { *out } as u8) < 128 {

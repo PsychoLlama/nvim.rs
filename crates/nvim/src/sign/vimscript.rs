@@ -175,23 +175,28 @@ unsafe fn each_dict_arg(args: Args<'_>, result: &mut TypVal, one: impl FnMut(*mu
 /// `sign_getdefined()`'s dictionary for one defined sign.
 ///
 /// # Safety
-/// `sp` must be a live sign definition.
-pub(crate) unsafe fn sign_get_info_dict(sp: SignRef) -> *mut Dict {
+/// `sign` must be a live sign definition.
+pub(crate) unsafe fn sign_get_info_dict(sign: SignRef) -> *mut Dict {
     // SAFETY: a definition's name, icon and cells are its own.
     let d = unsafe { tv_dict_alloc() };
-    unsafe { put_str(d, "name", sp.sn_name) };
-    if !sp.sn_icon.is_null() {
-        unsafe { put_str(d, "icon", sp.sn_icon) };
+    unsafe { put_str(d, "name", sign.sn_name) };
+    if !sign.sn_icon.is_null() {
+        unsafe { put_str(d, "icon", sign.sn_icon) };
     }
-    if sp.sn_text[0] != 0 {
+    if sign.sn_text[0] != 0 {
         let mut buf = [0 as ::core::ffi::c_char; SIGN_TEXT_BUF];
-        unsafe { describe_sign_text(buf.as_mut_ptr(), sp.cells()) };
+        unsafe { describe_sign_text(buf.as_mut_ptr(), sign.cells()) };
         unsafe { put_str(d, "text", buf.as_ptr()) };
     }
-    if sp.sn_priority > 0 {
-        unsafe { put_nr(d, "priority", VarNumber::from(sp.sn_priority)) };
+    if sign.sn_priority > 0 {
+        unsafe { put_nr(d, "priority", VarNumber::from(sign.sn_priority)) };
     }
-    let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
+    let ids = [
+        sign.sn_line_hl,
+        sign.sn_text_hl,
+        sign.sn_cul_hl,
+        sign.sn_num_hl,
+    ];
     for (key, id) in HL_KEYS.iter().zip(ids) {
         if id > 0 {
             unsafe { put_str(d, key, hl_name(id)) };

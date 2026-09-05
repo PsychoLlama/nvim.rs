@@ -149,8 +149,8 @@ static LAST_CLASS: GlobalCell<usize> = GlobalCell::new(0);
 /// # Safety
 ///
 /// `*pp` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> Option<CharClass> {
-    let p = *pp;
+pub(crate) unsafe fn take_char_class(cursor: &mut *mut c_char) -> Option<CharClass> {
+    let p = *cursor;
     // Only `[:` followed by at least three lowercase letters is a
     // candidate. That is load-bearing, not just a guard against reading
     // off the end: `[:a:]` is a literal, not a class.
@@ -185,7 +185,7 @@ pub(crate) unsafe fn take_char_class(pp: &mut *mut c_char) -> Option<CharClass> 
     };
     let i = hit?;
     LAST_CLASS.set(i);
-    *pp = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
+    *cursor = unsafe { p.add(2 + CHAR_CLASS_TAB[i].0.to_bytes().len()) };
     Some(CHAR_CLASS_TAB[i].1)
 }
 
@@ -207,8 +207,8 @@ pub unsafe fn re_multiline(prog: *const RegProg) -> bool {
 /// # Safety
 ///
 /// `*pp` must point into a NUL-terminated pattern.
-pub(crate) unsafe fn take_bracketed(pp: &mut *mut c_char, delim: u8) -> c_int {
-    let p = *pp;
+pub(crate) unsafe fn take_bracketed(cursor: &mut *mut c_char, delim: u8) -> c_int {
+    let p = *cursor;
     if unsafe { *p } == 0 || unsafe { *p.add(1) } as u8 != delim || unsafe { *p.add(2) } == 0 {
         return 0;
     }
@@ -216,7 +216,7 @@ pub(crate) unsafe fn take_bracketed(pp: &mut *mut c_char, delim: u8) -> c_int {
     if unsafe { *p.add(len + 2) } as u8 != delim || unsafe { *p.add(len + 3) } as u8 != b']' {
         return 0;
     }
-    *pp = unsafe { p.add(len + 4) };
+    *cursor = unsafe { p.add(len + 4) };
     unsafe { utf_ptr2char(p.add(2)) }
 }
 

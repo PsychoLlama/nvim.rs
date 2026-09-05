@@ -272,7 +272,7 @@ pub unsafe fn printable_func_name(func: *mut UserFunc) -> *mut c_char {
 /// `lv` is a resolved lvalue with a non-null `ll_name`, and `start`/`end`
 /// bracket the name in the command line.
 unsafe fn mangle_function_name(
-    pp: *mut *mut c_char,
+    cursor: *mut *mut c_char,
     lv: &mut LVal,
     start: *const c_char,
     end: *const c_char,
@@ -321,7 +321,7 @@ unsafe fn mangle_function_name(
     } else if lead > 0 {
         lead = 3;
         if (!lv.ll_exp_name.is_null() && unsafe { eval_fname_sid(lv.ll_exp_name) })
-            || unsafe { eval_fname_sid(*pp) }
+            || unsafe { eval_fname_sid(*cursor) }
         {
             // It's "s:" or "<SID>".
             if current_sctx.get().sc_sid <= 0 {
@@ -375,7 +375,7 @@ unsafe fn mangle_function_name(
     let into = into.cast::<u8>();
     unsafe { into.copy_from(lv.ll_name.cast(), len as size_t) };
     unsafe { *name.offset((lead + len) as isize) = NUL as c_char };
-    unsafe { *pp = end as *mut c_char };
+    unsafe { *cursor = end as *mut c_char };
     name
 }
 
@@ -386,7 +386,7 @@ unsafe fn mangle_function_name(
 /// `*pp` is a NUL-terminated command line; `fdp` and `partial` are null or
 /// writable.
 pub unsafe fn trans_function_name(
-    pp: *mut *mut c_char,
+    cursor: *mut *mut c_char,
     skip: bool,
     flags: c_int,
     fdp: *mut FuncDict,
@@ -399,16 +399,16 @@ pub unsafe fn trans_function_name(
     if !fdp.is_null() {
         unsafe { fdp.cast::<u8>().write_bytes(0, size_of::<FuncDict>()) };
     }
-    let mut start: *const c_char = unsafe { *pp };
+    let mut start: *const c_char = unsafe { *cursor };
 
     // A hard-coded <SNR> is an already translated function id, from a
     // user command.
-    if unsafe { *(*pp) } as u8 as c_int == K_SPECIAL
-        && unsafe { *(*pp).add(1) } as u8 as c_int == KS_EXTRA
-        && unsafe { *(*pp).add(2) } as c_int == KE_SNR as c_int
+    if unsafe { *(*cursor) } as u8 as c_int == K_SPECIAL
+        && unsafe { *(*cursor).add(1) } as u8 as c_int == KS_EXTRA
+        && unsafe { *(*cursor).add(2) } as c_int == KE_SNR as c_int
     {
-        unsafe { *pp = (*pp).add(3) };
-        len = unsafe { get_id_len(pp as *mut *const c_char) } + 3;
+        unsafe { *cursor = (*cursor).add(3) };
+        len = unsafe { get_id_len(cursor as *mut *const c_char) } + 3;
         return unsafe { xmemdupz(start as *const c_void, len as size_t) } as *mut c_char;
     }
 
@@ -446,7 +446,7 @@ pub unsafe fn trans_function_name(
                 }
             } else {
                 unsafe {
-                    *pp = find_name_end(start, ptr::null_mut(), ptr::null_mut(), FNE_INCL_BR)
+                    *cursor = find_name_end(start, ptr::null_mut(), ptr::null_mut(), FNE_INCL_BR)
                         as *mut c_char
                 };
             }
@@ -464,7 +464,7 @@ pub unsafe fn trans_function_name(
                 && !unsafe { (*lv.ll_tv).func_name_or_null() }.is_null()
             {
                 name = unsafe { xstrdup((*lv.ll_tv).func_name_or_null()) };
-                unsafe { *pp = end as *mut c_char };
+                unsafe { *cursor = end as *mut c_char };
             } else if unsafe { (*lv.ll_tv).v_type } == VAR_PARTIAL
                 && !unsafe { (*lv.ll_tv).partial_or_null() }.is_null()
             {
@@ -481,10 +481,10 @@ pub unsafe fn trans_function_name(
                     let from = unsafe { end.add(1) } as *const c_void;
                     let into = name.cast::<u8>();
                     unsafe { into.copy_from_nonoverlapping(from.cast(), len as size_t) };
-                    unsafe { *pp = (end as *mut c_char).add(1).offset(len as isize) };
+                    unsafe { *cursor = (end as *mut c_char).add(1).offset(len as isize) };
                 } else {
                     name = unsafe { xstrdup(partial_name((*lv.ll_tv).partial_or_null())) };
-                    unsafe { *pp = end as *mut c_char };
+                    unsafe { *cursor = end as *mut c_char };
                 }
                 if !partial.is_null() {
                     unsafe { *partial = (*lv.ll_tv).partial_or_null() };
@@ -498,7 +498,7 @@ pub unsafe fn trans_function_name(
                 {
                     emsg(gettext(E_FUNCREF));
                 } else {
-                    unsafe { *pp = end as *mut c_char };
+                    unsafe { *cursor = end as *mut c_char };
                 }
                 name = ptr::null_mut();
             }
@@ -507,7 +507,7 @@ pub unsafe fn trans_function_name(
 
         if lv.ll_name.is_null() {
             // Error found, but carry on after the function name.
-            unsafe { *pp = end as *mut c_char };
+            unsafe { *cursor = end as *mut c_char };
             break 'theend;
         }
 
@@ -521,17 +521,17 @@ pub unsafe fn trans_function_name(
                 name = ptr::null_mut();
             }
         } else if flags & TFN_NO_DEREF == 0 {
-            len = unsafe { end.offset_from(*pp) } as c_int;
+            len = unsafe { end.offset_from(*cursor) } as c_int;
             let (lenp, quiet) = (&raw mut len, flags & TFN_NO_AUTOLOAD != 0);
-            let at = unsafe { *pp };
+            let at = unsafe { *cursor };
             name = unsafe { deref_func_name(at, lenp, partial, quiet, ptr::null_mut()) };
-            if name == unsafe { *pp } {
+            if name == unsafe { *cursor } {
                 name = ptr::null_mut();
             }
         }
         if !name.is_null() {
             name = unsafe { xstrdup(name) };
-            unsafe { *pp = end as *mut c_char };
+            unsafe { *cursor = end as *mut c_char };
             if unsafe { cstr::starts_with(name, b"<SNR>") } {
                 // Change "<SNR>" to the byte sequence.
                 unsafe { *name = K_SPECIAL as c_char };
@@ -544,7 +544,7 @@ pub unsafe fn trans_function_name(
             break 'theend;
         }
 
-        name = unsafe { mangle_function_name(pp, &mut lv, start, end, lead, skip, flags) };
+        name = unsafe { mangle_function_name(cursor, &mut lv, start, end, lead, skip, flags) };
     }
 
     unsafe { clear_lval(&raw mut lv) };

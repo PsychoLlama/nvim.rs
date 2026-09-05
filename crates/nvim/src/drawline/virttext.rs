@@ -37,7 +37,7 @@ use crate::types::NUL;
 /// positive.
 pub(crate) unsafe fn line_putchar(
     buffer: *mut Buffer,
-    pp: &mut *const ::core::ffi::c_char,
+    cursor: &mut *const ::core::ffi::c_char,
     dest: &mut [ScreenChar],
     maxcells: ::core::ffi::c_int,
     vcol: ::core::ffi::c_int,
@@ -48,7 +48,7 @@ pub(crate) unsafe fn line_putchar(
     debug_assert!(maxcells > 0);
 
     // SAFETY: the caller's string and buffer.
-    let p = *pp;
+    let p = *cursor;
     let mut cells = unsafe { utf_ptr2cells(p) };
     let c_len = unsafe { utfc_ptr2len(p) };
     if cells > maxcells {
@@ -77,7 +77,7 @@ pub(crate) unsafe fn line_putchar(
         }
     }
 
-    *pp = unsafe { p.add(c_len as usize) };
+    *cursor = unsafe { p.add(c_len as usize) };
     cells
 }
 

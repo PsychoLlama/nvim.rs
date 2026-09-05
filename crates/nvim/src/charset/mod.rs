@@ -710,12 +710,12 @@ pub unsafe fn skip_to_newline(p: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
-pub unsafe fn try_getdigits(pp: *mut *mut c_char, nr: *mut intmax_t) -> bool {
+pub unsafe fn try_getdigits(cursor: *mut *mut c_char, nr: *mut intmax_t) -> bool {
     // SAFETY: `*pp` is a NUL-terminated string, `strtoimax` advances it past
     // whatever it consumed, and `errno` is the C library's own thread-local.
     let number = unsafe {
         *__errno_location() = 0;
-        strtoimax(*pp, pp, 10)
+        strtoimax(*cursor, cursor, 10)
     };
     // SAFETY: the caller's out-argument is writable.
     unsafe { *nr = number };
@@ -737,10 +737,10 @@ pub unsafe fn try_getdigits(pp: *mut *mut c_char, nr: *mut intmax_t) -> bool {
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
-pub unsafe fn getdigits(pp: *mut *mut c_char, strict: bool, def: intmax_t) -> intmax_t {
+pub unsafe fn getdigits(cursor: *mut *mut c_char, strict: bool, def: intmax_t) -> intmax_t {
     let mut number: intmax_t = 0;
     // SAFETY: forwarded to the caller's contract; `number` is a local.
-    let ok = unsafe { try_getdigits(pp, &raw mut number) };
+    let ok = unsafe { try_getdigits(cursor, &raw mut number) };
     if ok || strict { number } else { def }
 }
 
@@ -751,8 +751,8 @@ pub unsafe fn getdigits(pp: *mut *mut c_char, strict: bool, def: intmax_t) -> in
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
-pub unsafe fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
-    let number = unsafe { getdigits(pp, strict, def as intmax_t) };
+pub unsafe fn getdigits_int(cursor: *mut *mut c_char, strict: bool, def: c_int) -> c_int {
+    let number = unsafe { getdigits(cursor, strict, def as intmax_t) };
     if strict {
         return number.clamp(c_int::MIN as intmax_t, c_int::MAX as intmax_t) as c_int;
     }
@@ -763,8 +763,8 @@ pub unsafe fn getdigits_int(pp: *mut *mut c_char, strict: bool, def: c_int) -> c
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
-pub unsafe fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: int32_t) -> int32_t {
-    let number = unsafe { getdigits(pp, strict, def as intmax_t) };
+pub unsafe fn getdigits_int32(cursor: *mut *mut c_char, strict: bool, def: int32_t) -> int32_t {
+    let number = unsafe { getdigits(cursor, strict, def as intmax_t) };
     if strict {
         return number.clamp(int32_t::MIN as intmax_t, int32_t::MAX as intmax_t) as int32_t;
     }
@@ -776,8 +776,8 @@ pub unsafe fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: int32_t) 
 ///
 /// # Safety
 /// `*pp` must be a NUL-terminated string.
-pub unsafe fn getdigits_long(pp: *mut *mut c_char, strict: bool, def: c_long) -> c_long {
-    unsafe { getdigits(pp, strict, def as intmax_t) as c_long }
+pub unsafe fn getdigits_long(cursor: *mut *mut c_char, strict: bool, def: c_long) -> c_long {
+    unsafe { getdigits(cursor, strict, def as intmax_t) as c_long }
 }
 
 /// Whether `lbuf` holds nothing but white space.

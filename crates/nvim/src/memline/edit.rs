@@ -533,11 +533,11 @@ unsafe fn ml_insert_pointer(
 /// Sum of the line counts of every entry in a pointer block.
 ///
 /// # Safety
-/// `pp` must point at a pointer block.
-unsafe fn pb_line_total(pp: Pb) -> c_int {
+/// `block` must point at a pointer block.
+unsafe fn pb_line_total(block: Pb) -> c_int {
     let mut total = 0;
-    for i in 0..pp.pb_count as c_int {
-        total += unsafe { *pb_entries(pp).wrapping_offset(i as isize) }.pe_line_count;
+    for i in 0..block.pb_count as c_int {
+        total += unsafe { *pb_entries(block).wrapping_offset(i as isize) }.pe_line_count;
     }
     total
 }
@@ -619,7 +619,7 @@ unsafe fn ml_split_pointer_block(
     buffer: *mut Buffer,
     mfp: *mut MemFile,
     hp: &mut *mut BlockHdr,
-    pp: &mut Pb,
+    block: &mut Pb,
     stack_idx: &mut c_int,
 ) -> Option<*mut BlockHdr> {
     // SAFETY: the caller's buffer, reached through a handle that
@@ -642,21 +642,21 @@ unsafe fn ml_split_pointer_block(
         // `mf_new` just handed back a page that cannot be block 1's.
         unsafe {
             core::ptr::copy_nonoverlapping(
-                pp.raw().cast::<u8>(),
+                block.raw().cast::<u8>(),
                 pp_new.raw().cast::<u8>(),
                 page_size,
             )
         };
-        pp.pb_count = 1;
+        block.pb_count = 1;
         // SAFETY: block 1 now holds exactly one entry, and this is it.
-        let mut root = unsafe { Pe::new(pb_entries(*pp)) };
+        let mut root = unsafe { Pe::new(pb_entries(*block)) };
         root.pe_bnum = unsafe { (*hp_new).bh_bnum };
         root.pe_line_count = unsafe { (*buffer).b_ml.ml_line_count };
         root.pe_old_lnum = 1;
         root.pe_page_count = 1;
         unsafe { mf_put(mfp, *hp, true, false) }; // release block 1
         *hp = hp_new; // the new block is the one to split
-        *pp = pp_new;
+        *block = pp_new;
         b.b_ml.stack_set_index(ip, 0);
         *stack_idx += 1; // do block 1 again later
     }

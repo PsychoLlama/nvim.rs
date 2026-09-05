@@ -102,9 +102,9 @@ pub(crate) fn syn_scl_namen2id(name: &[u8]) -> c_int {
 /// Like [`syn_scl_namen2id`], but create the cluster when it does not exist.
 ///
 /// Answers 0 only when there is no room for another cluster.
-pub(crate) unsafe fn syn_check_cluster(pp: *const c_char, len: c_int) -> c_int {
+pub(crate) unsafe fn syn_check_cluster(name: *const c_char, len: c_int) -> c_int {
     // SAFETY: the caller's promise -- `len` readable bytes.
-    let name = unsafe { name_at(pp, len as usize) };
+    let name = unsafe { name_at(name, len as usize) };
     match scl_name2id(&name) {
         0 => syn_add_cluster(name),
         id => id,

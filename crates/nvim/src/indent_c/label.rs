@@ -77,7 +77,7 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
     unsafe { line_vcol(lnum, p.offset_from(l) as ColNr) }
 }
 
-/// The indent of line `lnum` ignoring any case or jump label, with `pp` left
+/// The indent of line `lnum` ignoring any case or jump label, with `cursor` left
 /// pointing at the text the amount belongs to.
 ///
 /// ```text
@@ -87,7 +87,7 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
 ///
 /// # Safety
 /// Moves the cursor and restores it; may unlock the current line.
-pub(crate) unsafe fn skip_label(lnum: LineNr, pp: &mut *const c_char) -> c_int {
+pub(crate) unsafe fn skip_label(lnum: LineNr, cursor: &mut *const c_char) -> c_int {
     let cursor_save = cur_win().w_cursor;
     cur_win().w_cursor.lnum = lnum;
     // SAFETY: the cursor now sits on line `lnum` of the current buffer, so
@@ -104,7 +104,7 @@ pub(crate) unsafe fn skip_label(lnum: LineNr, pp: &mut *const c_char) -> c_int {
         // SAFETY: the cursor is still on line `lnum`.
         text = get_cursor_line_ptr(); // just in case
     }
-    *pp = text;
+    *cursor = text;
 
     cur_win().w_cursor = cursor_save;
     amount

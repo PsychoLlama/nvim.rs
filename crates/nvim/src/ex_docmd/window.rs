@@ -614,10 +614,10 @@ fn winsize(ea: Ex) {
     }
 }
 
-/// `getdigits_int()`: the number `pp` is on, leaving `pp` after it.
-fn digits(pp: *mut *mut c_char) -> c_int {
+/// `getdigits_int()`: the number `cursor` is on, leaving `cursor` after it.
+fn digits(cursor: *mut *mut c_char) -> c_int {
     // SAFETY: a slot holding a pointer into a NUL-terminated string.
-    unsafe { getdigits_int(pp, false, 10) }
+    unsafe { getdigits_int(cursor, false, 10) }
 }
 
 /// `:wincmd` — one window command, spelled as a command line.

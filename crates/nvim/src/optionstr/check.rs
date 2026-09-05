@@ -233,23 +233,23 @@ pub unsafe fn free_string_option(p: *mut c_char) {
 /// empty string.
 ///
 /// # Safety
-/// `pp` points at a string option's variable.
-pub unsafe fn clear_string_option(pp: *mut *mut c_char) {
+/// `option` points at a string option's variable.
+pub unsafe fn clear_string_option(option: *mut *mut c_char) {
     // SAFETY: the caller's variable, holding a value `free_string_option`
     // accepts.
-    unsafe { free_string_option(*pp) };
-    unsafe { *pp = empty_option() };
+    unsafe { free_string_option(*option) };
+    unsafe { *option = empty_option() };
 }
 
 /// Replace a null option value with the shared empty string, so that
 /// everything downstream can dereference it.
 ///
 /// # Safety
-/// `pp` points at a string option's variable.
-pub unsafe fn check_string_option(pp: *mut *mut c_char) {
+/// `option` points at a string option's variable.
+pub unsafe fn check_string_option(option: *mut *mut c_char) {
     // SAFETY: the caller's variable.
-    if unsafe { *pp }.is_null() {
-        unsafe { *pp = empty_option() };
+    if unsafe { *option }.is_null() {
+        unsafe { *option = empty_option() };
     }
 }
 
