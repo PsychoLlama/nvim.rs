@@ -90,16 +90,20 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
-# Thirty-two stored-baseline differential oracles plus the startup probe, run
-# over the binary this tree builds. ~15 min. Every row must say IDENTICAL and
-# the last line must be `BATTERY_EXIT=0`; anything else is a behaviour change,
-# intended or not, and a baseline is re-cut in its own commit — never the one
-# it gates. See test/battery/README.md.
+# Thirty-two differential oracles plus the startup probe, run over the binary
+# this tree builds. Every row must say IDENTICAL and the last line must be
+# `BATTERY_EXIT=0`; anything else is a behaviour change, intended or not, and
+# the pin it is measured against (test/battery/BASE) moves in a commit of its
+# own — never the one it gates. See test/battery/README.md.
+#
+# No baseline is committed: each row's is cut from the binary BASE pins and
+# cached under target/battery/base/<sha>/. A cold run builds that binary once
+# (~1 min) and then runs every row twice, ~13 min; a warm one is ~7 min.
 #
 # `label` names the log set under target/battery-logs (default: short HEAD), so
 # two runs can be diffed line for line.
 #
-# Run the differential battery over the built binary (~15 min).
+# Run the differential battery over the built binary.
 battery label='':
   test/battery/battery.sh "{{ if label == '' { '$(git rev-parse --short HEAD)' } else { label } }}"
 

@@ -1,27 +1,62 @@
 # The differential battery
 
-Thirty-two stored-baseline oracles plus a paired startup probe. Each row drives
-the binary this tree builds through a fixed corpus, scrubs everything that names
-_where_ or _when_ the run happened, and diffs the result against a baseline
-committed here. A row says `IDENTICAL` or `DIFFERS`; the last line is
-`BATTERY_EXIT=0` when every row agreed.
+Thirty-two baselined oracles plus a paired startup probe. Each row drives the
+binary this tree builds through a fixed corpus, scrubs everything that names
+_where_ or _when_ the run happened, and diffs the result against the same
+corpus run through the binary of a **pinned reference commit**. A row says
+`IDENTICAL` or `DIFFERS`; the last line is `BATTERY_EXIT=0` when every row
+agreed.
+
+Nothing generated is committed. The baselines used to be 276 files and 53 MiB
+of `*base/` in git; they are now **cut on demand** and cached under `target/`.
 
 ```
-just battery              # all 33, ~15 min, logs under target/battery-logs
+just battery              # all 33, ~7 min warm, logs under target/battery-logs
 just battery my-label     # same, naming the log set
-test/battery/keyverify.sh # one row, on its own
+test/battery/keyverify.sh # one row, on its own — same cache, same pin
 ```
 
 These are **behaviour** gates, not correctness gates: a baseline records what
-nvim did at the commit it was cut from, not what it should do. A `DIFFERS` means
+nvim did at the commit `BASE` names, not what it should do. A `DIFFERS` means
 the behaviour moved — which is a bug report or a deliberate change, and you have
 to say which.
+
+## Where a baseline comes from
+
+`BASE` holds one line: the commit the baselines speak for. Everything else
+follows from it.
+
+1. `refbin.sh` materialises that commit **once per checkout** — a detached
+   `git worktree` under `target/battery/ref/<sha>/src`, built with its own
+   `CARGO_TARGET_DIR` so it never races the main tree's `target/`. That
+   directory is named `target/` on purpose: the reference binary's path has to
+   end in `/target/debug/nvim`, because fourteen sweeps mask the binary out of
+   their artifacts with `%S*/target/debug/nvim`, and a binary anywhere else
+   would survive the mask and make every one of those rows differ on nothing
+   but its own path.
+2. `baseline.sh <row>` prints `target/battery/base/<sha>/<row>base`, cutting it
+   on a miss by re-entering `<row>verify.sh --cut <nvim> <dir>`. The cut runs
+   **the current tree's** sweep script and corpus — only the _binary_ comes
+   from `BASE`. Scripts and corpora are versioned with the tree, and a row must
+   always run the corpus it was just edited to run.
+3. The head run then diffs against that directory exactly as it used to diff
+   against a committed one. `$<ROW>_BASELINE` still overrides.
+
+The cache key is the sha, so **a stale cache is impossible**: bump `BASE` and
+every row misses and re-cuts; revert it and the old cut is still there.
+`rm -rf target/battery` is always safe. A cut is stamped only on success
+(`<row>base/.cut`), so an interrupted run re-cuts rather than comparing against
+half-written artifacts.
+
+Cost: the reference build, ~1 min 15 s, once. A cold `just battery` runs every
+row twice — once for the cut, once for head — so it costs about twice a warm
+one.
 
 ## The rows
 
 Each row is `<name>verify.sh` (build + diff), `<name>sweep.sh` (sandbox,
 environment, the scrubs only the shell can see), `<name>sweep.lua` (the corpus)
-and `<name>base/` (the baseline artifacts). Four rows deviate: `sess` and `undo`
+and a `<name>base/` cut into the cache. Four rows deviate: `sess` and `undo`
 use `<row>gold.{sh,lua}`, `ex` uses `ex-run.sh` + `exprobe.lua`/`parseprobe.lua`, and
 `decode` has no sweep at all — `decodeverify.sh` runs the five
 `decodecorpus-*` files directly.
@@ -66,26 +101,28 @@ Every `*verify.sh` and `*sweep.sh` carries a long header explaining what its row
 paid for. Read it before touching the row; several of them record a hazard that
 cost a whole slice to find.
 
-## Re-cutting a baseline
+## Bumping BASE
 
-Only when the behaviour change is **intended and reviewed**. Each `*verify.sh`
-header gives the exact regeneration command; they all follow the same shape:
+Only when the behaviour change is **intended and reviewed**. There is no
+re-cutting in place any more: a deliberate re-cut is one line of `BASE`.
 
 ```sh
-just build                              # never regenerate from a mutant binary
-test/battery/keysweep.sh target/debug/nvim runtime test/battery/keybase base
-git -C . rev-parse HEAD > test/battery/keybase/COMMIT
+git rev-parse --short HEAD > test/battery/BASE   # then commit that alone
+just battery                                     # every row re-cuts and agrees
 ```
 
 Three rules:
 
-1. **A baseline change never shares a commit with the change it gates.** Land the
-   behaviour change, watch the row go red, then re-cut in a follow-up commit whose
-   body says why every changed line is expected. A gate that moves in the same
-   commit as the code gates nothing.
-2. **Build first.** A mutation harness leaves the binary built from its last
-   mutant; a baseline cut from that compares mutant against mutant forever after.
-3. **Read the diff line by line.** "The row is green again" is not review.
+1. **A `BASE` bump is its own commit, and its body says what moved.** Land the
+   behaviour change, watch the row go red, then bump in a follow-up commit that
+   names every row that moved and why each changed line is expected. A gate
+   that moves in the same commit as the code gates nothing.
+2. **Bump to a commit whose binary you trust.** `BASE` is built from a clean
+   worktree of that commit, so a mutation harness cannot leave a mutant behind
+   — but a commit that was never green is still a mutant baseline.
+3. **Read the diff line by line.** "The row is green again" is not review. The
+   old cut is still on disk at `target/battery/base/<old-sha>/`, and
+   `diff -r` against the new one is the review.
 
 ## Paths and formatting
 
@@ -100,8 +137,7 @@ For the same reason LuaJIT elides a chunk name past ~60 characters, so every
 `rtsweep` additionally masks `$HERE` **before** `$VIM`: now that the harness
 lives inside the checkout, the checkout is a prefix of the script path.
 
-The corpora are frozen text. `test/battery/` is in `.styluaignore` — stylua would
-reflow the `.lua` sweeps and the baselines record `<SCRIPT> line N`. Edits inside
-a `.lua` must be **line-neutral** (chain a `gsub` onto the same physical line)
-for the same reason. `.gitignore` carries a `!test/battery/**/*.un~` negation so
-the `*~` rule does not swallow the undo row's goldens.
+The corpora are frozen text. `test/battery/` is in `.styluaignore` — stylua
+would reflow the `.lua` sweeps and the baselines record `<SCRIPT> line N`. Edits
+inside a `.lua` must be **line-neutral** (chain a `gsub` onto the same physical
+line) for the same reason.
