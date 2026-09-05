@@ -90,6 +90,19 @@ unittest *args: build
 benchmark *args: build
   scripts/run-tests.sh benchmark {{ args }}
 
+# Thirty-two stored-baseline differential oracles plus the startup probe, run
+# over the binary this tree builds. ~15 min. Every row must say IDENTICAL and
+# the last line must be `BATTERY_EXIT=0`; anything else is a behaviour change,
+# intended or not, and a baseline is re-cut in its own commit — never the one
+# it gates. See test/battery/README.md.
+#
+# `label` names the log set under target/battery-logs (default: short HEAD), so
+# two runs can be diffed line for line.
+#
+# Run the differential battery over the built binary (~15 min).
+battery label='':
+  test/battery/battery.sh "{{ if label == '' { '$(git rev-parse --short HEAD)' } else { label } }}"
+
 # Run clippy over the two generators (tools/apigen, tools/ffigen). They carry
 # their own workspace and lockfile on purpose — membership would make every
 # `just build` compile syn — so `cargo clippy` in the root workspace never sees

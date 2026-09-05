@@ -32,6 +32,8 @@ target-*/
 *.mo
 .*.sw?
 *~
+# ...but the undo row's byte goldens are named for what nvim writes.
+!test/battery/**/*.un~
 *.pyc
 *.o
 *.so

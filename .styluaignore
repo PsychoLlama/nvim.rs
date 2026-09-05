@@ -13,3 +13,8 @@ test/functional/fixtures/lua/syntax_error.lua
 test/functional/legacy/030_fileformats_spec.lua
 test/functional/legacy/044_099_regexp_multibyte_magic_spec.lua
 test/functional/legacy/093_mksession_cursor_cols_latin1_spec.lua
+
+# The differential battery's corpora. stylua would reflow them, and their
+# baselines record `<SCRIPT> line N` -- a formatter is a false DIFFERS on
+# every row it touches.
+test/battery/
