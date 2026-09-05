@@ -9,6 +9,15 @@ and this project adheres to [CalVer](https://calver.org/).
 
 ### Changed
 
+- Broke up the transpiled `globals.h`. Upstream declares the editor's ~880
+  globals in a header with no translation unit, so the port had parked all
+  of them in one module beside `main()`. Each now lives in the module that
+  owns it — the window and buffer lists with the window layer, the mode
+  word with the mode loop, the message cursor with the message code, the
+  option variables with the option code — and the startup module holds only
+  the process. Nothing about the editor's behaviour changes; the crate's
+  public item paths do, and all but eight of the globals are no longer
+  visible outside it.
 - Renamed every type the C-to-Rust transpiler left with a C name: the 212
   `_T` typedefs, the tag structs under them and the lowercase struct tags
   beside them all read as Rust types now (`buf_T` is `Buffer`, `typval_T`
