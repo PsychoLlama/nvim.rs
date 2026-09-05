@@ -39,10 +39,10 @@ pub(crate) use self::zet::*;
 /// buffer, which is what 'scrollbind' has to keep equal between windows: two
 /// windows showing the same buffer at different widths wrap it differently,
 /// so buffer line numbers would not line up.
-pub(crate) fn get_vtopline(wp: Win) -> c_int {
+pub(crate) fn get_vtopline(window: Win) -> c_int {
     // SAFETY: a live window, by `Win`'s contract, which is the whole of what
     // `plines_m_win_fill` asks for.
-    unsafe { plines_m_win_fill(wp, 1, wp.w_topline) - wp.w_topfill }
+    unsafe { plines_m_win_fill(window, 1, window.w_topline) - window.w_topfill }
 }
 
 /// After a command that may have scrolled: bring the 'scrollbind' windows

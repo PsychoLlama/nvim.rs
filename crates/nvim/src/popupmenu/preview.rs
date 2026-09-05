@@ -147,9 +147,9 @@ unsafe fn pum_preview_set_text(win: *mut Window, info: *mut c_char) -> (LineNr, 
 /// window hidden — when neither side has enough space to be worth it.
 ///
 /// # Safety
-/// `wp` must be a live float and the menu's placement settled.
-unsafe fn pum_adjust_info_position(wp: *mut Window, width: c_int) -> bool {
-    // SAFETY: `wp` is live and `win_config_float` takes the config by value.
+/// `window` must be a live float and the menu's placement settled.
+unsafe fn pum_adjust_info_position(window: *mut Window, width: c_int) -> bool {
+    // SAFETY: `window` is live and `win_config_float` takes the config by value.
     let border_width = unsafe { pum_border_width() };
     let col = pum_col.get() + pum_width.get() + 1 + border_width.max(pum_scrollbar.get());
     // TODO(glepnir): support config align border by using completepopup
@@ -161,21 +161,21 @@ unsafe fn pum_adjust_info_position(wp: *mut Window, width: c_int) -> bool {
     // 'completepopup' width/height options.
     let max_extra = right_extra.max(left_extra);
     if max_extra < 10 {
-        unsafe { (*wp).w_config.hide = true };
+        unsafe { (*window).w_config.hide = true };
         return false;
     }
 
     if right_extra > width {
-        unsafe { (*wp).w_config.width = width };
-        unsafe { (*wp).w_config.col = f64::from(col - 1) };
+        unsafe { (*window).w_config.width = width };
+        unsafe { (*window).w_config.col = f64::from(col - 1) };
     } else if left_extra > width {
-        unsafe { (*wp).w_config.width = width };
-        unsafe { (*wp).w_config.col = f64::from(pum_col.get() - width - 1) };
+        unsafe { (*window).w_config.width = width };
+        unsafe { (*window).w_config.col = f64::from(pum_col.get() - width - 1) };
     } else {
         // Neither side fits the text; take the bigger one.
-        unsafe { (*wp).w_config.width = max_extra };
+        unsafe { (*window).w_config.width = max_extra };
         unsafe {
-            (*wp).w_config.col = f64::from(if right_extra > left_extra {
+            (*window).w_config.col = f64::from(if right_extra > left_extra {
                 col - 1
             } else {
                 pum_col.get() - max_extra - 1
@@ -183,15 +183,18 @@ unsafe fn pum_adjust_info_position(wp: *mut Window, width: c_int) -> bool {
         };
     }
 
-    unsafe { (*wp).w_config.anchor = 0 }; // NW: align its top with the menu's top
-    let count = unsafe { (*(*wp).w_buffer).b_ml.ml_line_count };
-    unsafe { (*wp).w_view_width = (*wp).w_config.width };
+    unsafe { (*window).w_config.anchor = 0 }; // NW: align its top with the menu's top
+    let count = unsafe { (*(*window).w_buffer).b_ml.ml_line_count };
+    unsafe { (*window).w_view_width = (*window).w_config.width };
     unsafe {
-        (*wp).w_config.height = plines_m_win(Win::new(wp), (*wp).w_topline, count, Rows.get())
+        (*window).w_config.height =
+            plines_m_win(Win::new(window), (*window).w_topline, count, Rows.get())
     };
-    unsafe { (*wp).w_config.row = f64::from(pum_row.get()) };
-    unsafe { (*wp).w_config.hide = false };
-    win_config_float(unsafe { Win::new(wp) }, unsafe { (*wp).w_config.clone() });
+    unsafe { (*window).w_config.row = f64::from(pum_row.get()) };
+    unsafe { (*window).w_config.hide = false };
+    win_config_float(unsafe { Win::new(window) }, unsafe {
+        (*window).w_config.clone()
+    });
     true
 }
 

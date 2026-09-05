@@ -19,30 +19,30 @@ type Redraw = Live<KeyDict_redraw>;
 
 /// One window's share of the redraw -- its status column, winbar and status
 /// line -- answering what `flush` becomes.
-fn redraw_status(mut wp: Win, opts: Redraw, flush: bool) -> bool {
+fn redraw_status(mut window: Win, opts: Redraw, flush: bool) -> bool {
     // SAFETY: a window's `'statuscolumn'` is a live NUL-terminated string.
-    let has_statuscolumn = unsafe { *wp.w_onebuf_opt.wo_stc } as ::core::ffi::c_int != NUL;
+    let has_statuscolumn = unsafe { *window.w_onebuf_opt.wo_stc } as ::core::ffi::c_int != NUL;
     if opts.statuscolumn && has_statuscolumn {
-        wp.w_nrwidth_line_count = 0 as LineNr;
-        changed_window_setting(wp);
+        window.w_nrwidth_line_count = 0 as LineNr;
+        changed_window_setting(window);
     }
-    let old_row_offset = wp.w_grid.row_offset;
-    // SAFETY: `wp` is a live window.
-    unsafe { win_grid_alloc(wp.raw()) };
-    let flush = flush || wp.w_lines_valid == 0 || wp.w_grid.row_offset != old_row_offset;
+    let old_row_offset = window.w_grid.row_offset;
+    // SAFETY: `window` is a live window.
+    unsafe { win_grid_alloc(window.raw()) };
+    let flush = flush || window.w_lines_valid == 0 || window.w_grid.row_offset != old_row_offset;
     let status = opts.statusline || opts.winbar;
     if flush && status {
-        wp.w_redr_status = true;
+        window.w_redr_status = true;
     } else if status {
-        // SAFETY: `wp` is a live window, and the last call puts back the
+        // SAFETY: `window` is a live window, and the last call puts back the
         // namespace the first one set.
         unsafe {
-            win_check_ns_hl(wp.raw());
+            win_check_ns_hl(window.raw());
             if opts.winbar {
-                win_redr_winbar(wp.raw());
+                win_redr_winbar(window.raw());
             }
             if opts.statusline {
-                win_redr_status(wp.raw());
+                win_redr_status(window.raw());
             }
             win_check_ns_hl(::core::ptr::null_mut::<Window>());
         }

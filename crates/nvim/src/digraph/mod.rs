@@ -865,15 +865,15 @@ fn keymap_unload() {
 
 /// The keymap name to show in the status line ('statusline' `%k`/`%K` and
 /// the mode message): `b:keymap_name`, the 'keymap' value, or "lang".
-/// `None` unless language mappings are active for `wp`'s buffer.
+/// `None` unless language mappings are active for `window`'s buffer.
 ///
 /// # Safety
 ///
-/// `wp` and its buffer must be valid; curwin/curbuf are restored before
+/// `window` and its buffer must be valid; curwin/curbuf are restored before
 /// returning.
-pub unsafe fn keymap_str(wp: *mut Window) -> Option<CString> {
+pub unsafe fn keymap_str(window: *mut Window) -> Option<CString> {
     // SAFETY: caller contract; the window's buffer is valid.
-    let buf = unsafe { (*wp).w_buffer };
+    let buf = unsafe { (*window).w_buffer };
     // SAFETY: as above.
     if unsafe { (*buf).b_p_iminsert } != B_IMODE_LMAP {
         return None;
@@ -882,7 +882,7 @@ pub unsafe fn keymap_str(wp: *mut Window) -> Option<CString> {
     let old_curwin = curwin.get();
     // Evaluate b:keymap_name in wp's buffer.
     curbuf.set(buf);
-    curwin.set(wp);
+    curwin.set(window);
     let skipping = Suppress::emsg_skip();
     let mut expr = *b"b:keymap_name\0";
     // SAFETY: `expr` is NUL-terminated and outlives the call; the result is

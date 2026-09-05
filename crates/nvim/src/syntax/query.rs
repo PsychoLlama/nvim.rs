@@ -160,7 +160,7 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut Expand, idx: c_int) -> *mut c_char
 /// applies there; `keep_state` keeps the state of the character at `col` so
 /// that [`syn_get_stack_item`] can be asked about it afterwards.
 pub(crate) unsafe fn syn_get_id(
-    wp: *mut Window,
+    window: *mut Window,
     lnum: LineNr,
     col: ColNr,
     trans: c_int,
@@ -169,12 +169,12 @@ pub(crate) unsafe fn syn_get_id(
 ) -> c_int {
     // Parsing has to restart unless this position is at or after the
     // current one, in the same line of the same window and buffer.
-    if wp != syn_win.get()
-        || unsafe { (*wp).w_buffer } != syn_buf.get()
+    if window != syn_win.get()
+        || unsafe { (*window).w_buffer } != syn_buf.get()
         || lnum != current_lnum.get()
         || col < current_col.get()
     {
-        unsafe { syntax_start(wp, lnum) };
+        unsafe { syntax_start(window, lnum) };
     } else if col > current_col.get() {
         // `next_match` may be wrong when moving around, e.g. with the
         // "skip" expression of `searchpair()`.
@@ -228,20 +228,20 @@ fn syn_cur_foldlevel() -> c_int {
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
-pub(crate) unsafe fn syn_get_foldlevel(wp: *mut Window, lnum: LineNr) -> c_int {
+pub(crate) unsafe fn syn_get_foldlevel(window: *mut Window, lnum: LineNr) -> c_int {
     let mut level = 0;
 
     // Answer quickly when there are no fold items at all.
-    if unsafe { (*(*wp).w_s).b_syn_folditems } != 0
-        && !unsafe { (*(*wp).w_s).b_syn_error }
-        && !unsafe { (*(*wp).w_s).b_syn_slow }
+    if unsafe { (*(*window).w_s).b_syn_folditems } != 0
+        && !unsafe { (*(*window).w_s).b_syn_error }
+        && !unsafe { (*(*window).w_s).b_syn_slow }
     {
-        unsafe { syntax_start(wp, lnum) };
+        unsafe { syntax_start(window, lnum) };
 
         // Start with the fold level at the start of the line.
         level = syn_cur_foldlevel();
 
-        if unsafe { (*(*wp).w_s).b_syn_foldlevel } == SYNFLD_MINIMUM {
+        if unsafe { (*(*window).w_s).b_syn_foldlevel } == SYNFLD_MINIMUM {
             // Find the lowest fold level that is followed by a higher one.
             let mut low_level = level;
             while !current_finished.get() {
@@ -257,8 +257,8 @@ pub(crate) unsafe fn syn_get_foldlevel(wp: *mut Window, lnum: LineNr) -> c_int {
         }
     }
 
-    if level as OptInt > unsafe { (*wp).w_onebuf_opt.wo_fdn } {
-        level = unsafe { (*wp).w_onebuf_opt.wo_fdn } as c_int;
+    if level as OptInt > unsafe { (*window).w_onebuf_opt.wo_fdn } {
+        level = unsafe { (*window).w_onebuf_opt.wo_fdn } as c_int;
         if level < 0 {
             level = 0;
         }

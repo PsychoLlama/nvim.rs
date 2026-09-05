@@ -185,9 +185,9 @@ unsafe fn decor_provider_invoke(
 /// checker is looking at this span.
 ///
 /// # Safety
-/// `wp` must point to a live window.
+/// `window` must point to a live window.
 pub(crate) unsafe fn decor_providers_invoke_spell(
-    wp: *mut Window,
+    window: *mut Window,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -198,8 +198,10 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.spell_nav != LUA_NOREF {
             let mut args = ArrayBuf::<6>::new();
-            args.push(Object::integer(unsafe { (*wp).handle }.into()));
-            args.push(Object::integer(unsafe { (*(*wp).w_buffer).handle }.into()));
+            args.push(Object::integer(unsafe { (*window).handle }.into()));
+            args.push(Object::integer(
+                unsafe { (*(*window).w_buffer).handle }.into(),
+            ));
             args.push(Object::integer(start_row.into()));
             args.push(Object::integer(start_col.into()));
             args.push(Object::integer(end_row.into()));
@@ -215,18 +217,20 @@ pub(crate) unsafe fn decor_providers_invoke_spell(
 /// Ask every `_on_conceal_line` callback about `row`.
 ///
 /// # Safety
-/// `wp` must point to a live window.
+/// `window` must point to a live window.
 ///
 /// @return whether a provider placed any marks in the callback.
-pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut Window, row: c_int) -> bool {
+pub(crate) unsafe fn decor_providers_invoke_conceal_line(window: *mut Window, row: c_int) -> bool {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
-    let keys = unsafe { (*(*wp).w_buffer).b_marktree.n_keys };
+    let keys = unsafe { (*(*window).w_buffer).b_marktree.n_keys };
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state != kDecorProviderDisabled && p.conceal_line != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
-            args.push(Object::integer(unsafe { (*wp).handle }.into()));
-            args.push(Object::integer(unsafe { (*(*wp).w_buffer).handle }.into()));
+            args.push(Object::integer(unsafe { (*window).handle }.into()));
+            args.push(Object::integer(
+                unsafe { (*(*window).w_buffer).handle }.into(),
+            ));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"conceal_line".as_ptr(), p.conceal_line, args.array());
             // SAFETY: the provider is named by index, so the vector may
@@ -234,8 +238,8 @@ pub(crate) unsafe fn decor_providers_invoke_conceal_line(wp: *mut Window, row: c
             unsafe { decor_provider_invoke(idx, name, cb, args, true, None) };
         }
     }
-    // SAFETY: `wp` is live, so its buffer and marktree are.
-    let now = unsafe { (*(*wp).w_buffer).b_marktree.n_keys };
+    // SAFETY: `window` is live, so its buffer and marktree are.
+    let now = unsafe { (*(*window).w_buffer).b_marktree.n_keys };
     now > keys
 }
 
@@ -299,18 +303,18 @@ fn set_provider_running(running: bool) {
 /// skipped for the rest of this window.
 ///
 /// # Safety
-/// `wp` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut Window, state: DecorStateRef) {
+/// `window` must point to a live window; runs Lua.
+pub(crate) unsafe fn decor_providers_invoke_win(window: *mut Window, state: DecorStateRef) {
     // SAFETY: the caller's window; the callbacks re-enter the editor.
     // This might change in the future; then this would need
     // `set_provider_running` just like "on_line" below.
     debug_assert!(state.current_end == 0 && state.future_begin == decor_range_count(state));
 
     if provider_count() > 0 {
-        validate_botline_win(unsafe { Win::new(wp) });
+        validate_botline_win(unsafe { Win::new(window) });
     }
     let botline: LineNr =
-        unsafe { (*wp).w_botline }.min(unsafe { (*(*wp).w_buffer).b_ml.ml_line_count });
+        unsafe { (*window).w_botline }.min(unsafe { (*(*window).w_buffer).b_ml.ml_line_count });
 
     for idx in 0..provider_count() {
         let p = with_provider(idx, |p| {
@@ -324,10 +328,10 @@ pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut Window, state: DecorSta
 
         if p.state == kDecorProviderActive && p.redraw_win != LUA_NOREF {
             let mut args = ArrayBuf::<4>::new();
-            args.push(Object::window(unsafe { (*wp).handle }));
-            args.push(Object::buffer(unsafe { (*(*wp).w_buffer).handle }));
+            args.push(Object::window(unsafe { (*window).handle }));
+            args.push(Object::buffer(unsafe { (*(*window).w_buffer).handle }));
             // TODO(bfredl): we are not using this, but should be first drawn line?
-            args.push(Object::integer((unsafe { (*wp).w_topline } - 1).into()));
+            args.push(Object::integer((unsafe { (*window).w_topline } - 1).into()));
             args.push(Object::integer((botline - 1).into()));
             // TODO(bfredl): could skip a call if retval was interpreted like range?
             if !unsafe {
@@ -342,8 +346,8 @@ pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut Window, state: DecorSta
 /// Run every `on_line` callback for one window row.
 ///
 /// # Safety
-/// `wp` must point to a live window; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut Window, row: c_int) {
+/// `window` must point to a live window; runs Lua.
+pub(crate) unsafe fn decor_providers_invoke_line(window: *mut Window, row: c_int) {
     // SAFETY: the caller's window; the callbacks re-enter the editor and may
     // place ephemeral decorations, which is what the flag below announces.
     set_provider_running(true);
@@ -351,8 +355,8 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut Window, row: c_int) {
         let p = provider(idx);
         if p.state == kDecorProviderActive && p.redraw_line != LUA_NOREF {
             let mut args = ArrayBuf::<3>::new();
-            args.push(Object::window(unsafe { (*wp).handle }));
-            args.push(Object::buffer(unsafe { (*(*wp).w_buffer).handle }));
+            args.push(Object::window(unsafe { (*window).handle }));
+            args.push(Object::buffer(unsafe { (*(*window).w_buffer).handle }));
             args.push(Object::integer(row.into()));
             let (name, cb, args) = (c"line".as_ptr(), p.redraw_line, args.array());
             // SAFETY: as above.
@@ -373,9 +377,9 @@ pub(crate) unsafe fn decor_providers_invoke_line(wp: *mut Window, row: c_int) {
 /// which the next call for an earlier span skips on.
 ///
 /// # Safety
-/// `wp` must point to a live window; runs Lua.
+/// `window` must point to a live window; runs Lua.
 pub(crate) unsafe fn decor_providers_invoke_range(
-    wp: *mut Window,
+    window: *mut Window,
     start_row: c_int,
     start_col: c_int,
     end_row: c_int,
@@ -393,8 +397,8 @@ pub(crate) unsafe fn decor_providers_invoke_range(
         }
 
         let mut args = ArrayBuf::<6>::new();
-        args.push(Object::window(unsafe { (*wp).handle }));
-        args.push(Object::buffer(unsafe { (*(*wp).w_buffer).handle }));
+        args.push(Object::window(unsafe { (*window).handle }));
+        args.push(Object::buffer(unsafe { (*(*window).w_buffer).handle }));
         args.push(Object::integer(start_row.into()));
         args.push(Object::integer(start_col.into()));
         args.push(Object::integer(end_row.into()));

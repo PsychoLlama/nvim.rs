@@ -418,7 +418,7 @@ impl Reader {
 ///
 /// The strings must be NUL-terminated.
 pub unsafe fn qf_init(
-    wp: Option<Win>,
+    window: Option<Win>,
     efile: *const c_char,
     errorformat: *mut c_char,
     newlist: c_int,
@@ -426,7 +426,7 @@ pub unsafe fn qf_init(
     enc: *mut c_char,
 ) -> c_int {
     // SAFETY: forwarded from the caller.
-    let qi = match wp {
+    let qi = match window {
         Some(wp) => ll_get_or_alloc_list(wp),
         None => QfStack::Global.raw(),
     };

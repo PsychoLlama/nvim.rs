@@ -486,14 +486,14 @@ fn show_statusline() -> bool {
 }
 
 pub(crate) unsafe fn win_new_float(
-    wp: *mut Window,
+    window: *mut Window,
     last: bool,
     fconfig: WinConfig,
     err: &mut Error,
 ) -> *mut Window {
-    // SAFETY: the caller's promise -- a writable error slot, and `wp` null or
+    // SAFETY: the caller's promise -- a writable error slot, and `window` null or
     // a live window.
-    let (err, win) = unsafe { (&mut *err, (!wp.is_null()).then(|| Win::new(wp))) };
+    let (err, win) = unsafe { (&mut *err, (!window.is_null()).then(|| Win::new(window))) };
     new_float(win, last, fconfig, err).map_or(ptr::null_mut(), Win::raw)
 }
 

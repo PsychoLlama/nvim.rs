@@ -105,22 +105,22 @@ unsafe fn parse_briopt(value: *const c_char) -> Option<Briopt> {
     Some(opt)
 }
 
-/// Checks `briopt` as 'breakindentopt' and, when `wp` is not null, writes
+/// Checks `briopt` as 'breakindentopt' and, when `window` is not null, writes
 /// what it says onto that window. Called when the option is set and when a
 /// window is initialised.
 ///
-/// A null `briopt` reads the window's own value; a null `wp` only checks.
+/// A null `briopt` reads the window's own value; a null `window` only checks.
 ///
 /// # Safety
-/// `briopt` must be null or a NUL-terminated string, and `wp` null or a
+/// `briopt` must be null or a NUL-terminated string, and `window` null or a
 /// window.
-pub unsafe fn briopt_check(briopt: *mut c_char, wp: *mut Window) -> bool {
+pub unsafe fn briopt_check(briopt: *mut c_char, window: *mut Window) -> bool {
     // SAFETY: the caller's option string, or the window's own copy of it.
     let value = unsafe {
         if !briopt.is_null() {
             briopt.cast_const()
-        } else if !wp.is_null() {
-            (*wp).w_onebuf_opt.wo_briopt.cast_const()
+        } else if !window.is_null() {
+            (*window).w_onebuf_opt.wo_briopt.cast_const()
         } else {
             // Upstream reads `empty_string_option` here, which is only ever
             // the empty string and is never written through.
@@ -131,15 +131,15 @@ pub unsafe fn briopt_check(briopt: *mut c_char, wp: *mut Window) -> bool {
     let Some(opt) = (unsafe { parse_briopt(value) }) else {
         return false;
     };
-    if wp.is_null() {
+    if window.is_null() {
         return true; // Only the check was asked for.
     }
     // SAFETY: the caller's window.
-    unsafe { (*wp).w_briopt_shift = opt.shift };
-    unsafe { (*wp).w_briopt_min = opt.min };
-    unsafe { (*wp).w_briopt_sbr = opt.sbr };
-    unsafe { (*wp).w_briopt_list = opt.list };
-    unsafe { (*wp).w_briopt_vcol = opt.vcol };
+    unsafe { (*window).w_briopt_shift = opt.shift };
+    unsafe { (*window).w_briopt_min = opt.min };
+    unsafe { (*window).w_briopt_sbr = opt.sbr };
+    unsafe { (*window).w_briopt_list = opt.list };
+    unsafe { (*window).w_briopt_vcol = opt.vcol };
     true
 }
 
@@ -217,11 +217,11 @@ impl BreakindentCache {
     /// Measures `line`'s indent and stores it against `key`.
     ///
     /// # Safety
-    /// `wp` must be a window whose buffer `key` was read from, and `line`
+    /// `window` must be a window whose buffer `key` was read from, and `line`
     /// and `flp` NUL-terminated strings.
     unsafe fn refill(
         &mut self,
-        wp: *mut Window,
+        window: *mut Window,
         key: &BreakindentKey,
         line: *mut c_char,
         flp: *const c_char,
@@ -234,7 +234,7 @@ impl BreakindentCache {
         self.flp = unsafe { xstrdup(flp) };
         self.key = *key;
         self.list = 0;
-        if unsafe { (*wp).w_briopt_vcol } != 0 {
+        if unsafe { (*window).w_briopt_vcol } != 0 {
             // A fixed column needs no measurement.
             return;
         }
@@ -243,8 +243,8 @@ impl BreakindentCache {
         } else {
             unsafe { indent_size_ts(line, key.ts, key.vts) }
         };
-        if unsafe { (*wp).w_briopt_list } != 0 {
-            unsafe { self.add_list_indent(wp, line) };
+        if unsafe { (*window).w_briopt_list } != 0 {
+            unsafe { self.add_list_indent(window, line) };
         }
     }
 
@@ -253,9 +253,9 @@ impl BreakindentCache {
     /// of what 'formatlistpat' matched, which then *replaces* the indent.
     ///
     /// # Safety
-    /// `wp` must be a window and `line` a NUL-terminated string; `self.flp`
+    /// `window` must be a window and `line` a NUL-terminated string; `self.flp`
     /// must hold the current 'formatlistpat'.
-    unsafe fn add_list_indent(&mut self, wp: *mut Window, line: *mut c_char) {
+    unsafe fn add_list_indent(&mut self, window: *mut Window, line: *mut c_char) {
         // SAFETY: the caller's window and line, and the cache's own pattern.
         let mut regmatch: RegMatch = RegMatch {
             regprog: unsafe { vim_regcomp(self.flp, RE_MAGIC + RE_STRING + RE_AUTO + RE_STRICT) },
@@ -268,8 +268,8 @@ impl BreakindentCache {
             return;
         }
         if unsafe { vim_regexec(&raw mut regmatch, line, 0 as ColNr) } {
-            if unsafe { (*wp).w_briopt_list } > 0 {
-                self.list += unsafe { (*wp).w_briopt_list };
+            if unsafe { (*window).w_briopt_list } > 0 {
+                self.list += unsafe { (*window).w_briopt_list };
             } else {
                 // Measure the match with `win_chartabsize`, so that a TAB
                 // is the right width and wrapping is ignored.
@@ -277,7 +277,7 @@ impl BreakindentCache {
                 let mut ptr = regmatch.startp[0];
                 let mut indent = 0;
                 while ptr < end {
-                    indent += unsafe { win_chartabsize(Win::new(wp), ptr, indent as ColNr) };
+                    indent += unsafe { win_chartabsize(Win::new(window), ptr, indent as ColNr) };
                     ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
                 }
                 self.indent = indent;
@@ -292,11 +292,11 @@ impl BreakindentCache {
 /// The window has to be named because it is not necessarily the current one.
 ///
 /// # Safety
-/// `wp` must be a window and `line` a NUL-terminated string.
-pub unsafe fn get_breakindent_win(wp: *mut Window, line: *mut c_char) -> c_int {
+/// `window` must be a window and `line` a NUL-terminated string.
+pub unsafe fn get_breakindent_win(window: *mut Window, line: *mut c_char) -> c_int {
     // SAFETY: the caller's window and its buffer.
     // SAFETY: the caller's window; a live window has a live buffer.
-    let win = unsafe { Win::new(wp) };
+    let win = unsafe { Win::new(window) };
     let buf = win.buffer();
     let key = BreakindentKey {
         fnum: buf.handle,
@@ -317,15 +317,15 @@ pub unsafe fn get_breakindent_win(wp: *mut Window, line: *mut c_char) -> c_int {
     // SAFETY: a live window.
     let (col_off2, flp) = (win_col_off2(win), get_flp_value(buf));
     // The window width minus its margins: what is left for text.
-    let eff_wwidth = win.w_view_width - unsafe { win_col_off(wp) } + col_off2;
+    let eff_wwidth = win.w_view_width - unsafe { win_col_off(window) } + col_off2;
     // One exclusive borrow for the whole computation: nothing below calls
     // back into this function (the regex engine and chartabsize helpers run
     // no user code), and debug builds will catch it if that ever changes.
     let mut bri = CACHE.with_mut(|prev| {
-        // SAFETY: `line` and `flp` are NUL-terminated, and `wp` is the
+        // SAFETY: `line` and `flp` are NUL-terminated, and `window` is the
         // caller's window, which `key` was just read from.
         if !unsafe { prev.answers(&key, line, flp) } {
-            unsafe { prev.refill(wp, &key, line, flp) };
+            unsafe { prev.refill(window, &key, line, flp) };
         }
         let mut bri = if opt.vcol != 0 {
             // A column value has priority over the measured indent.

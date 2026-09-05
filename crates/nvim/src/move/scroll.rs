@@ -184,13 +184,13 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: LineNr) {
 }
 
 /// [`Win::scrolldown`], for the callers still holding a raw window.
-pub fn scrolldown(wp: Win, line_count: LineNr, byfold: bool) -> bool {
-    wp.scrolldown(line_count, byfold)
+pub fn scrolldown(window: Win, line_count: LineNr, byfold: bool) -> bool {
+    window.scrolldown(line_count, byfold)
 }
 
 /// [`Win::scrollup`], for the callers still holding a raw window.
-pub fn scrollup(wp: Win, line_count: LineNr, byfold: bool) -> bool {
-    wp.scrollup(line_count, byfold)
+pub fn scrollup(window: Win, line_count: LineNr, byfold: bool) -> bool {
+    window.scrollup(line_count, byfold)
 }
 
 impl Win {
@@ -491,8 +491,8 @@ pub unsafe fn adjust_skipcol() {
 }
 
 /// [`Win::check_topfill`], for the callers still holding a raw window.
-pub fn check_topfill(wp: Win, down: bool) {
-    wp.check_topfill(down);
+pub fn check_topfill(window: Win, down: bool) {
+    window.check_topfill(down);
 }
 
 impl Win {

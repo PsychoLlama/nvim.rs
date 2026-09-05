@@ -28,13 +28,13 @@ use core::ffi::{c_char, c_int, c_void};
 use super::*;
 
 use crate::winlayer::Buf;
-/// Create a fold from line "start" to line "end" (inclusive) in window `wp`
+/// Create a fold from line "start" to line "end" (inclusive) in window `window`
 /// by adding markers.
 ///
 /// # Safety
-/// `wp` must have a live buffer, and `start`/`end` must be lines inside it.
-pub(super) unsafe fn fold_create_markers(wp: Win, start: Pos, end: Pos) {
-    let buf = wp.w_buffer;
+/// `window` must have a live buffer, and `start`/`end` must be lines inside it.
+pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
+    let buf = window.w_buffer;
     // SAFETY: a live buffer.
     if unsafe { (*buf).b_p_ma } == 0 {
         emsg(gettext(e_modifiable));
@@ -42,8 +42,15 @@ pub(super) unsafe fn fold_create_markers(wp: Win, start: Pos, end: Pos) {
     }
     let num_changed = (1 + end.lnum - start.lnum) as int64_t;
     // SAFETY: the caller's promise; both lines are inside the buffer.
-    parse_marker(wp);
-    unsafe { fold_add_marker(buf, start, wp.w_onebuf_opt.wo_fmr, foldstartmarkerlen.get()) };
+    parse_marker(window);
+    unsafe {
+        fold_add_marker(
+            buf,
+            start,
+            window.w_onebuf_opt.wo_fmr,
+            foldstartmarkerlen.get(),
+        )
+    };
     unsafe { fold_add_marker(buf, end, foldendmarker.get(), foldendmarkerlen.get()) };
     changed_lines(unsafe { Buf::new(buf) }, start.lnum, 0, end.lnum, 0, false);
     unsafe { buf_updates_send_changes(buf, start.lnum, num_changed, num_changed) };
@@ -134,10 +141,10 @@ pub(super) unsafe fn fold_add_marker(
 /// `lnum_off` — offset for fold.top()
 ///
 /// # Safety
-/// `fold` must be one of `wp`'s folds at `lnum_off`, and [`parse_marker`]
-/// must have run for `wp`.
+/// `fold` must be one of `window`'s folds at `lnum_off`, and [`parse_marker`]
+/// must have run for `window`.
 pub(super) unsafe fn delete_fold_markers(
-    wp: Win,
+    window: Win,
     fold: FoldRef,
     recursive: bool,
     lnum_off: LineNr,
@@ -145,21 +152,21 @@ pub(super) unsafe fn delete_fold_markers(
     if recursive {
         for child in fold.nested().folds() {
             // SAFETY: the caller's promise, one level down.
-            unsafe { delete_fold_markers(wp, child, true, lnum_off + fold.top()) };
+            unsafe { delete_fold_markers(window, child, true, lnum_off + fold.top()) };
         }
     }
     // SAFETY: the caller's promise.
     unsafe {
         fold_del_marker(
-            wp.w_buffer,
+            window.w_buffer,
             fold.top() + lnum_off,
-            wp.w_onebuf_opt.wo_fmr,
+            window.w_onebuf_opt.wo_fmr,
             foldstartmarkerlen.get(),
         )
     };
     unsafe {
         fold_del_marker(
-            wp.w_buffer,
+            window.w_buffer,
             fold.last() + lnum_off,
             foldendmarker.get(),
             foldendmarkerlen.get(),
@@ -250,8 +257,8 @@ pub(super) unsafe fn fold_del_marker(
 /// Note that `foldendmarker` points *into* 'foldmarker', so it dangles the
 /// moment the option is set again — which is why every caller re-runs this.
 ///
-pub(super) fn parse_marker(wp: Win) {
-    let foldmarker = wp.w_onebuf_opt.wo_fmr;
+pub(super) fn parse_marker(window: Win) {
+    let foldmarker = window.w_onebuf_opt.wo_fmr;
     // SAFETY: 'foldmarker' has already been validated as two non-empty
     // halves separated by a comma, so the comma is there.
     let comma = unsafe { vim_strchr(foldmarker, ',' as c_int) };

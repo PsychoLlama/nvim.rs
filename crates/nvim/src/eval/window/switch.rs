@@ -27,14 +27,14 @@ use crate::types::VAR_STRING;
 /// live window and tab page.
 pub unsafe fn win_execute_before(
     args: *mut WinExecute,
-    wp: *mut Window,
+    window: *mut Window,
     tabpage: *mut Tabpage,
 ) -> bool {
     // SAFETY: the caller's obligation. `args` is the caller's own storage and
     // nothing below can reach it, so the exclusive borrow is sound; `autocwd`
     // is a live local and `os_dirname` fills at most `MAXPATHL` bytes.
-    let (args, win, tab) = unsafe { (&mut *args, Win::new(wp), TabPage::new(tabpage)) };
-    args.wp = wp;
+    let (args, win, tab) = unsafe { (&mut *args, Win::new(window), TabPage::new(tabpage)) };
+    args.wp = window;
     args.curpos = win.w_cursor;
     args.cwd_status = Err(Failed);
     args.apply_acd = false;
@@ -68,7 +68,7 @@ pub unsafe fn win_execute_before(
             args.apply_acd = unsafe { cstr::eq(args.cwd.as_mut_ptr(), autocwd.as_mut_ptr()) };
         }
     }
-    if unsafe { switch_win_noblock(&raw mut args.switchwin, wp, tabpage, true) }.is_ok() {
+    if unsafe { switch_win_noblock(&raw mut args.switchwin, window, tabpage, true) }.is_ok() {
         check_cursor(cur_win());
         return true;
     }

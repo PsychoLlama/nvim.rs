@@ -42,14 +42,18 @@ pub(crate) fn win(args: &OptSet) -> *mut Window {
 /// window.
 ///
 /// # Safety
-/// `wp` is the window from [`win`] and `local` its own variable for this
+/// `window` is the window from [`win`] and `local` its own variable for this
 /// option; the comparison is of addresses only.
 pub(crate) unsafe fn local_window(
     varp: *mut *mut c_char,
-    wp: *mut Window,
+    window: *mut Window,
     local: *mut *mut c_char,
 ) -> *mut Window {
-    if varp == local { wp } else { ptr::null_mut() }
+    if varp == local {
+        window
+    } else {
+        ptr::null_mut()
+    }
 }
 
 /// The value the option held before this set, as a C string.

@@ -87,7 +87,7 @@ const DEFAULT_PRIORITY: c_int = 10;
 /// be null or NUL-terminated; `pos_list` must be null or a live list.
 #[allow(clippy::too_many_arguments)]
 unsafe fn match_add(
-    wp: *mut Window,
+    window: *mut Window,
     grp: *const c_char,
     pat: *const c_char,
     prio: c_int,
@@ -96,7 +96,7 @@ unsafe fn match_add(
     conceal_char: *const c_char,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window, strings and list.
     let mut id = id;
     let mut rtype = UPD_SOME_VALID;
@@ -327,9 +327,9 @@ unsafe fn fill_pos_array(m: *mut MatchItem, pos_list: *mut List) -> Option<(Line
 ///
 /// # Safety
 /// `wp` must be live.
-unsafe fn match_delete(wp: *mut Window, id: c_int, perr: bool) -> c_int {
+unsafe fn match_delete(window: *mut Window, id: c_int, perr: bool) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     let mut rtype = UPD_SOME_VALID;
 
@@ -377,9 +377,9 @@ unsafe fn match_delete(wp: *mut Window, id: c_int, perr: bool) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live.
-pub(crate) unsafe fn clear_matches(wp: *mut Window) {
+pub(crate) unsafe fn clear_matches(window: *mut Window) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     while !wp.w_match_head.is_null() {
         // SAFETY: the window owns every entry of its list until it is
@@ -398,9 +398,9 @@ pub(crate) unsafe fn clear_matches(wp: *mut Window) {
 ///
 /// # Safety
 /// `wp` must be live.
-unsafe fn get_match(wp: *mut Window, id: c_int) -> *mut MatchItem {
+unsafe fn get_match(window: *mut Window, id: c_int) -> *mut MatchItem {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window.
     let mut cur = wp.w_match_head;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {

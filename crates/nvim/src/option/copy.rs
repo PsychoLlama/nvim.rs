@@ -333,12 +333,12 @@ pub(crate) unsafe fn clear_winopt(wop: *mut WinOpt) {
 ///
 /// # Safety
 ///
-/// `wp` must be a live window.
-pub(crate) unsafe fn didset_window_options(wp: *mut Window, valid_cursor: bool) {
+/// `window` must be a live window.
+pub(crate) unsafe fn didset_window_options(window: *mut Window, valid_cursor: bool) {
     // SAFETY: the caller's window. The handle borrows it for the one field
     // access that asked and never across a call, so none of the callees
     // below is reached while a `&mut Window` is live.
-    let mut w = unsafe { Win::new(wp) };
+    let mut w = unsafe { Win::new(window) };
     // 'wrap' and 'smoothscroll' scroll in different directions, and only
     // one of the two offsets can be non-zero.
     if w.w_onebuf_opt.wo_wrap != 0 {
@@ -349,21 +349,21 @@ pub(crate) unsafe fn didset_window_options(wp: *mut Window, valid_cursor: bool) 
     let no_err: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's window, which is all any of these needs; the
     // null out-parameters say "report nothing", which each accepts.
-    unsafe { check_colorcolumn(ptr::null_mut(), wp) };
-    unsafe { briopt_check(ptr::null_mut(), wp) };
+    unsafe { check_colorcolumn(ptr::null_mut(), window) };
+    unsafe { briopt_check(ptr::null_mut(), window) };
     let _ = unsafe { fill_culopt_flags(None, w) };
     // Read each value where it is used: the calls above parse other
     // options and this one must see whatever they left behind.
     let fcs = w.w_onebuf_opt.wo_fcs;
     // SAFETY: as above; 'fillchars' and 'listchars' are string options.
-    unsafe { set_chars_option(wp, fcs, kFillchars, true, no_err, 0) };
+    unsafe { set_chars_option(window, fcs, kFillchars, true, no_err, 0) };
     let lcs = w.w_onebuf_opt.wo_lcs;
-    unsafe { set_chars_option(wp, lcs, kListchars, true, no_err, 0) };
+    unsafe { set_chars_option(window, lcs, kListchars, true, no_err, 0) };
     // SAFETY: the caller's window.
-    unsafe { parse_winhl_opt(ptr::null(), wp) };
-    unsafe { check_blending(wp) };
-    unsafe { set_winbar_win(wp, false, valid_cursor) };
-    let _ = unsafe { check_signcolumn(ptr::null_mut(), wp) };
+    unsafe { parse_winhl_opt(ptr::null(), window) };
+    unsafe { check_blending(window) };
+    unsafe { set_winbar_win(window, false, valid_cursor) };
+    let _ = unsafe { check_signcolumn(ptr::null_mut(), window) };
     w.w_grid_alloc.blending = w.w_onebuf_opt.wo_winbl > 0 as OptInt;
 }
 

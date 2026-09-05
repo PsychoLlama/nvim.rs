@@ -24,17 +24,17 @@ impl Cells {
     /// that starts part-way into the line.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn draw_precedes(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn draw_precedes(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
-        let scrolled = if wp.w_onebuf_opt.wo_wrap != 0 {
-            let skipcol = wp.w_skipcol;
+        let scrolled = if window.w_onebuf_opt.wo_wrap != 0 {
+            let skipcol = window.w_skipcol;
             skipcol > 0 && wlv.row == 0
         } else {
-            wp.w_leftcol > 0
+            window.w_leftcol > 0
         };
         if self.lcs_prec_todo == NUL as ScreenChar
-            || wp.w_onebuf_opt.wo_list == 0
+            || window.w_onebuf_opt.wo_list == 0
             || !scrolled
             || wlv.filler_todo > 0
             || wlv.skip_cells > 0
@@ -57,12 +57,12 @@ impl Cells {
                 wlv.n_attr = 2;
             }
             wlv.extra_todo = 1;
-            wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+            wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
         }
-        self.cell_char = wp.w_p_lcs_chars.prec;
+        self.cell_char = window.w_p_lcs_chars.prec;
         self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         self.attr_before_prec = wlv.char_attr;
-        wlv.char_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+        wlv.char_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
         self.prec_attr_todo = 1;
     }
 
@@ -70,10 +70,10 @@ impl Cells {
     /// line goes on past the right edge.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn draw_extends(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn draw_extends(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
-        let lcs_ext = unsafe { get_lcs_ext(wp) };
+        let lcs_ext = unsafe { get_lcs_ext(window) };
         if lcs_ext == NUL as ScreenChar
             || wlv.filler_todo > 0
             || wlv.col != self.view_width - 1
@@ -90,7 +90,7 @@ impl Cells {
             // character.
             unsafe {
                 decor_redraw_col(
-                    wp.raw(),
+                    window.raw(),
                     self.byte_col(),
                     -1,
                     false,
@@ -108,7 +108,7 @@ impl Cells {
                 && unsafe { wlv.has_more_inline_virt(self.ptr.offset_from(self.line)) })
         {
             self.cell_char = lcs_ext;
-            wlv.char_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+            wlv.char_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }
     }
@@ -117,8 +117,8 @@ impl Cells {
     /// fill that follows it.
     ///
     /// # Safety
-    /// `wp` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn fold_text(&mut self, wlv: &mut WinLineVars, wp: Win, f: &LineFrame) {
+    /// `window` must be live and `f` must hold the caller's frame.
+    pub(super) unsafe fn fold_text(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
         // SAFETY: the caller's window, frame and fold scratch.
         if self.draw_folded
             && self.has_foldtext
@@ -131,7 +131,7 @@ impl Cells {
             unsafe { into.write_bytes(b' ', FOLD_TEXT_LEN as size_t) };
             wlv.extra_text = unsafe {
                 get_foldtext(
-                    Win::new(wp.raw()),
+                    Win::new(window.raw()),
                     wlv.lnum,
                     lnume,
                     wlv.foldinfo,
@@ -148,7 +148,7 @@ impl Cells {
             wlv.extra_last = NUL as ScreenChar;
             unsafe { *wlv.extra_text.offset(wlv.extra_todo as isize) = NUL as ::core::ffi::c_char };
             // Evaluating 'foldtext' may have freed the line.
-            unsafe { self.refetch_line(wp, wlv.lnum, at) };
+            unsafe { self.refetch_line(window, wlv.lnum, at) };
         }
 
         // Fill the rest of the row with the 'fold' fillchar — after the
@@ -158,11 +158,11 @@ impl Cells {
             && wlv.col < self.view_width
             && (self.has_foldtext
                 || (unsafe { *self.ptr } as ::core::ffi::c_int == NUL
-                    && (wp.w_onebuf_opt.wo_list == 0
+                    && (window.w_onebuf_opt.wo_list == 0
                         || !self.lcs_eol_todo
                         || self.lcs_eol == NUL as ScreenChar)))
         {
-            wlv.extra_fill = wp.w_p_fcs_chars.fold;
+            wlv.extra_fill = window.w_p_fcs_chars.fold;
             wlv.extra_last = NUL as ScreenChar;
             wlv.extra_todo = self.view_width - wlv.col;
             // Search highlighting stops at the first filler character.
@@ -179,15 +179,15 @@ impl Cells {
     /// includes the line break or an `'hlsearch'` match that ends there.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn highlight_at_eol(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn highlight_at_eol(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's match state.
         if self.cell_char != NUL as ScreenChar || self.eol_extra_cell != 0 {
             return;
         }
         // Does the previous column start a search match?
         let prevcol_hl_flag = unsafe {
-            get_prevcol_hl_flag(wp.raw(), SearchHl::current().raw(), self.byte_col() - 1)
+            get_prevcol_hl_flag(window.raw(), SearchHl::current().raw(), self.byte_col() - 1)
         };
         let want = self.lcs_eol_todo
             && ((self.area_attr != 0
@@ -212,7 +212,7 @@ impl Cells {
             // Use the attributes of the highest-priority match.
             unsafe {
                 get_search_match_hl(
-                    wp.raw(),
+                    window.raw(),
                     SearchHl::current().raw(),
                     self.byte_col(),
                     &raw mut wlv.char_attr,
@@ -236,18 +236,21 @@ impl Cells {
     /// that ends the line, or something that shows as `^X` or `<xx>`.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn unprintable(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn unprintable(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the loop's line pointers.
-        if self.char_code == TAB && (wp.w_onebuf_opt.wo_list == 0 || wp.w_p_lcs_chars.tab1 != 0) {
-            unsafe { self.tab(wlv, wp) };
-        } else if self.cell_char == NUL as ScreenChar && unsafe { self.wants_eol_cell(wlv, wp) } {
-            unsafe { self.eol_cell(wlv, wp) };
+        if self.char_code == TAB
+            && (window.w_onebuf_opt.wo_list == 0 || window.w_p_lcs_chars.tab1 != 0)
+        {
+            unsafe { self.tab(wlv, window) };
+        } else if self.cell_char == NUL as ScreenChar && unsafe { self.wants_eol_cell(wlv, window) }
+        {
+            unsafe { self.eol_cell(wlv, window) };
         } else if self.cell_char != NUL as ScreenChar {
-            unsafe { self.escaped(wlv, wp) };
+            unsafe { self.escaped(wlv, window) };
         } else if visual_active()
             && (visual_mode().is_block() || visual_mode().is_char())
-            && virtual_active(unsafe { Win::new(wp.raw()) })
+            && virtual_active(unsafe { Win::new(window.raw()) })
             && wlv.tocol != MAXCOL as ::core::ffi::c_int
             && wlv.vcol < wlv.tocol
             && wlv.col < self.view_width
@@ -264,13 +267,13 @@ impl Cells {
     /// Turn a Tab into the cells it occupies.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn tab(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn tab(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the scratch buffer, which is not
         // held across another `get_extra_buf`.
-        let lcs = &wp.w_p_lcs_chars;
+        let lcs = &window.w_p_lcs_chars;
         let (mut lcs_tab1, mut lcs_tab2, mut lcs_tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
-        if wp.w_onebuf_opt.wo_list != 0
+        if window.w_onebuf_opt.wo_list != 0
             && lcs.leadtab1 != NUL as ScreenChar
             && self.ptr < unsafe { self.line.offset(self.leadcol as isize) }
         {
@@ -281,10 +284,10 @@ impl Cells {
 
         // The Tab's width depends on the column, with `'showbreak'`
         // removed: it is not part of the buffer line.
-        let sbr = get_showbreak_value(wp);
+        let sbr = get_showbreak_value(window);
         let vcol_adjusted = if unsafe { *sbr } != NUL as ::core::ffi::c_char
             && wlv.vcol == wlv.showbreak_vcol
-            && wp.w_onebuf_opt.wo_wrap != 0
+            && window.w_onebuf_opt.wo_wrap != 0
         {
             wlv.vcol - unsafe { mb_charlen(sbr) }
         } else {
@@ -293,12 +296,12 @@ impl Cells {
         let mut tab_len = unsafe {
             tabstop_padding(
                 vcol_adjusted,
-                (*wp.w_buffer).b_p_ts,
-                (*wp.w_buffer).b_p_vts_array,
+                (*window.w_buffer).b_p_ts,
+                (*window.w_buffer).b_p_vts_array,
             )
         } - 1;
 
-        if wp.w_onebuf_opt.wo_lbr == 0 || wp.w_onebuf_opt.wo_list == 0 {
+        if window.w_onebuf_opt.wo_lbr == 0 || window.w_onebuf_opt.wo_list == 0 {
             wlv.extra_todo = tab_len;
         } else {
             let saved_nextra = wlv.extra_todo;
@@ -366,20 +369,20 @@ impl Cells {
             // Put back what the line below needs to get the Tab's own
             // highlight right.
             if wlv.extra_todo == tab_len + vc_saved
-                && wp.w_onebuf_opt.wo_list != 0
-                && wp.w_p_lcs_chars.tab1 != 0
+                && window.w_onebuf_opt.wo_list != 0
+                && window.w_p_lcs_chars.tab1 != 0
             {
                 tab_len += vc_saved;
             }
         }
 
-        if wp.w_onebuf_opt.wo_list != 0 {
+        if window.w_onebuf_opt.wo_list != 0 {
             self.cell_char = if wlv.extra_todo == 0 && lcs_tab3 != 0 {
                 lcs_tab3
             } else {
                 lcs_tab1
             };
-            if wp.w_onebuf_opt.wo_lbr != 0
+            if window.w_onebuf_opt.wo_lbr != 0
                 && !wlv.extra_text.is_null()
                 && unsafe { *wlv.extra_text } != NUL as ::core::ffi::c_char
             {
@@ -390,7 +393,7 @@ impl Cells {
             }
             wlv.extra_last = lcs_tab3;
             wlv.n_attr = tab_len + 1;
-            wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_0) };
+            wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_0) };
             self.attr_before_run = wlv.char_attr;
         } else {
             wlv.extra_last = NUL as ScreenChar;
@@ -403,21 +406,21 @@ impl Cells {
     /// Draw an unprintable character in its `^X` or `<xx>` form.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn escaped(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn escaped(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window; `transchar_buf` answers a static
         // NUL-terminated buffer.
-        wlv.escape_buf = unsafe { transchar_buf(wp.w_buffer, self.char_code) };
+        wlv.escape_buf = unsafe { transchar_buf(window.w_buffer, self.char_code) };
         wlv.extra_text = wlv.escape_buf.as_mut_ptr();
         if wlv.extra_todo == 0 {
             wlv.extra_todo = unsafe { byte2cells(self.char_code) } - 1;
         }
-        if dy_flags.get() & kOptDyFlagUhex as uint32_t != 0 && wp.w_onebuf_opt.wo_rl != 0 {
+        if dy_flags.get() & kOptDyFlagUhex as uint32_t != 0 && window.w_onebuf_opt.wo_rl != 0 {
             // Reverse "<12>".
             unsafe { rl_mirror_ascii(wlv.extra_text, ::core::ptr::null_mut()) };
         }
         (wlv.extra_fill, wlv.extra_last) = (NUL as ScreenChar, NUL as ScreenChar);
-        if wp.w_onebuf_opt.wo_lbr != 0 {
+        if window.w_onebuf_opt.wo_lbr != 0 {
             // With 'linebreak' the escape has to be padded out to the
             // width the character would have had.
             self.char_code = unsafe { *wlv.extra_text } as uint8_t as ::core::ffi::c_int;
@@ -434,7 +437,7 @@ impl Cells {
             wlv.extra_text = unsafe { wlv.extra_text.offset(1) };
         }
         wlv.n_attr = wlv.extra_todo + 1;
-        wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_8) };
+        wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_8) };
         self.attr_before_run = wlv.char_attr;
         self.cell_char = schar_from_ascii(self.char_code as u8);
     }
@@ -445,15 +448,17 @@ impl Cells {
     /// `'incsearch'` range includes the break and needs somewhere to show it.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn wants_eol_cell(&self, wlv: &WinLineVars, wp: Win) -> bool {
+    /// `window` must be a live window.
+    pub(super) unsafe fn wants_eol_cell(&self, wlv: &WinLineVars, window: Win) -> bool {
         // SAFETY: the caller's window.
-        (wp.w_onebuf_opt.wo_list != 0
+        (window.w_onebuf_opt.wo_list != 0
             || ((wlv.fromcol >= 0 || self.fromcol_prev >= 0)
                 && wlv.tocol > wlv.vcol
                 && !visual_mode().is_block()
                 && wlv.col < self.view_width
-                && !(self.noinvcur && wlv.lnum == wp.w_cursor.lnum && wlv.vcol == wp.w_virtcol)))
+                && !(self.noinvcur
+                    && wlv.lnum == window.w_cursor.lnum
+                    && wlv.vcol == window.w_virtcol)))
             && self.lcs_eol_todo
             && self.lcs_eol != NUL as ScreenChar
     }
@@ -462,13 +467,13 @@ impl Cells {
     /// for the line break.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn eol_cell(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn eol_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         // For a diff line the highlighting continues after the "$".
         if wlv.diff_hlf == HLF_NONE && wlv.line_attr == 0 && wlv.line_attr_lowprio == 0 {
             if !(self.area_highlighting
-                && virtual_active(unsafe { Win::new(wp.raw()) })
+                && virtual_active(unsafe { Win::new(window.raw()) })
                 && wlv.tocol != MAXCOL as ::core::ffi::c_int
                 && wlv.vcol < wlv.tocol)
             {
@@ -478,15 +483,15 @@ impl Cells {
             }
             wlv.extra_todo = 0;
         }
-        self.cell_char = if wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol > 0 {
-            wp.w_p_lcs_chars.eol
+        self.cell_char = if window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol > 0 {
+            window.w_p_lcs_chars.eol
         } else {
             schar_from_ascii(b' ')
         };
         self.lcs_eol_todo = false;
         // Put the pointer back at the NUL.
         self.ptr = unsafe { self.ptr.offset(-1) };
-        wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+        wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
         wlv.n_attr = 1;
         self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
     }
@@ -495,20 +500,20 @@ impl Cells {
     /// one stand-in character, or drop the cell entirely.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn conceal(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn conceal(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
-        let wants_conceal = wp.w_onebuf_opt.wo_cole > 0
-            && (wp.raw() != curwin.get()
-                || wlv.lnum != wp.w_cursor.lnum
-                || unsafe { conceal_cursor_line(wp.raw()) })
+        let wants_conceal = window.w_onebuf_opt.wo_cole > 0
+            && (window.raw() != curwin.get()
+                || wlv.lnum != window.w_cursor.lnum
+                || unsafe { conceal_cursor_line(window.raw()) })
             && (self.syntax_flags.has(SynFlags::CONCEAL)
                 || self.has_match_conc > 0
                 || self.decor_conceal > 0)
             // 'concealcursor' does not name "v", so the Visual area shows
             // its text.
             && !(self.lnum_in_visual_area
-                && unsafe { vim_strchr(wp.w_onebuf_opt.wo_cocu, 'v' as ::core::ffi::c_int) }.is_null());
+                && unsafe { vim_strchr(window.w_onebuf_opt.wo_cocu, 'v' as ::core::ffi::c_int) }.is_null());
         if !wants_conceal {
             self.prev_syntax_id = 0;
             self.is_concealing = false;
@@ -527,8 +532,8 @@ impl Cells {
         let have_char = (syntax_conceal && syn_get_sub_char() != NUL)
             || (self.has_match_conc != 0 && self.match_conc != 0)
             || (self.decor_conceal != 0 && wlv.decor.conceal_char != 0)
-            || wp.w_onebuf_opt.wo_cole == 1;
-        if first_of_run && have_char && wp.w_onebuf_opt.wo_cole != 3 {
+            || window.w_onebuf_opt.wo_cole == 1;
+        if first_of_run && have_char && window.w_onebuf_opt.wo_cole != 3 {
             if unsafe { schar_cells(self.cell_char) } > 1 {
                 // The first concealed character is double-width, so one
                 // more virtual column goes with it.
@@ -543,8 +548,8 @@ impl Cells {
                 wlv.decor.conceal_char
             } else if syntax_conceal && syn_get_sub_char() != NUL {
                 schar_from_char(syn_get_sub_char())
-            } else if wp.w_p_lcs_chars.conceal != NUL as ScreenChar {
-                wp.w_p_lcs_chars.conceal
+            } else if window.w_p_lcs_chars.conceal != NUL as ScreenChar {
+                window.w_p_lcs_chars.conceal
             } else {
                 schar_from_ascii(b' ')
             };

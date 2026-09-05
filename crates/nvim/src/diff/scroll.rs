@@ -286,14 +286,14 @@ pub fn diff_get_corresponding_line(buf1: Buf, lnum1: LineNr) -> LineNr {
     diff_get_corresponding_line_int(buf1, lnum1).min(cur_buf().b_ml.ml_line_count)
 }
 
-/// The line of `wp`'s buffer matching `lnum` of the current one.
+/// The line of `window`'s buffer matching `lnum` of the current one.
 ///
 /// Unlike [`diff_get_corresponding_line`] this clamps to the *block*, not the
 /// buffer: it is used to decide what a window shows beside a given line, and
 /// running past the block would point at the next change.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_lnum_win(lnum: LineNr, wp: Win) -> LineNr {
+pub fn diff_lnum_win(lnum: LineNr, window: Win) -> LineNr {
     let tp = cur_tab();
     let idx = diff_slot(cur_buf(), tp);
     if idx == DB_COUNT {
@@ -306,7 +306,7 @@ pub fn diff_lnum_win(lnum: LineNr, wp: Win) -> LineNr {
     let idx = idx as usize;
 
     // SAFETY: a live window's buffer is live.
-    let buf = unsafe { Buf::new(wp.w_buffer) };
+    let buf = unsafe { Buf::new(window.w_buffer) };
     let Some(dp) = diff_blocks(tp).find(|dp| lnum <= dp.end(idx)) else {
         return buf.b_ml.ml_line_count - (cur_buf().b_ml.ml_line_count - lnum);
     };

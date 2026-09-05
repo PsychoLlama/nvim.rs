@@ -28,7 +28,7 @@ use crate::types::NUL;
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
-pub(crate) unsafe fn syn_sync(wp: *mut Window, start_lnum: LineNr, last_valid: *mut SynState) {
+pub(crate) unsafe fn syn_sync(window: *mut Window, start_lnum: LineNr, last_valid: *mut SynState) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
@@ -37,7 +37,7 @@ pub(crate) unsafe fn syn_sync(wp: *mut Window, start_lnum: LineNr, last_valid: *
 
     let flags = syn_block().b_syn_sync_flags;
     if flags & SF_CCOMMENT != 0 {
-        unsafe { sync_by_ccomment(wp, start_lnum) };
+        unsafe { sync_by_ccomment(window, start_lnum) };
     } else if flags & SF_MATCH != 0 {
         unsafe { sync_by_match(start_lnum, last_valid) };
     }
@@ -75,11 +75,11 @@ unsafe fn sync_backoff(start_lnum: LineNr) -> LineNr {
 
 /// Search backwards for the end of a C-style comment, and if the start line
 /// turns out to be inside one, push the syntax item that defines it.
-unsafe fn sync_by_ccomment(wp: *mut Window, mut start_lnum: LineNr) {
+unsafe fn sync_by_ccomment(window: *mut Window, mut start_lnum: LineNr) {
     // `find_start_comment` works on the current buffer, so make syn_buf it
     // for a moment.
     let curwin_save = curwin.get();
-    curwin.set(wp);
+    curwin.set(window);
     let curbuf_save = curbuf.get();
     curbuf.set(syn_buf.get());
 
@@ -97,9 +97,9 @@ unsafe fn sync_by_ccomment(wp: *mut Window, mut start_lnum: LineNr) {
     current_lnum.set(start_lnum);
 
     // Set the cursor to the start of the search.
-    let cursor_save = unsafe { (*wp).w_cursor };
-    unsafe { (*wp).w_cursor.lnum = start_lnum };
-    unsafe { (*wp).w_cursor.col = 0 };
+    let cursor_save = unsafe { (*window).w_cursor };
+    unsafe { (*window).w_cursor.lnum = start_lnum };
+    unsafe { (*window).w_cursor.col = 0 };
 
     // Restrict the search for the end of the comment to "maxlines".
     if unsafe { find_start_comment(syn_block().b_syn_sync_maxlines as c_int) }.is_some() {
@@ -119,7 +119,7 @@ unsafe fn sync_by_ccomment(wp: *mut Window, mut start_lnum: LineNr) {
         }
     }
 
-    unsafe { (*wp).w_cursor = cursor_save };
+    unsafe { (*window).w_cursor = cursor_save };
     curwin.set(curwin_save);
     curbuf.set(curbuf_save);
 }

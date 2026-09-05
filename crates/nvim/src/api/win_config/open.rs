@@ -333,14 +333,14 @@ pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c
     flags
 }
 
-/// Whether `wp` may be moved to tab page `tabpage`, reporting why not through
+/// Whether `window` may be moved to tab page `tabpage`, reporting why not through
 /// `err`.
 ///
 /// # Safety
-/// `wp` must be a live window, `tabpage` a live tab page and `err` the caller's
+/// `window` must be a live window, `tabpage` a live tab page and `err` the caller's
 /// error slot.
 pub(crate) unsafe fn win_can_move_tp(
-    wp: *mut Window,
+    window: *mut Window,
     tabpage: *mut Tabpage,
     err: &mut Error,
 ) -> bool {
@@ -352,13 +352,13 @@ pub(crate) unsafe fn win_can_move_tp(
         tabpage
     };
     // SAFETY: the caller's window and tab page.
-    if unsafe { one_window(wp, other_tab) } {
+    if unsafe { one_window(window, other_tab) } {
         let msg = c"Cannot move last non-floating window";
         err_msg(report, kErrorTypeException, msg);
         return false;
     }
     // SAFETY: the caller's window.
-    if unsafe { win_locked(wp) } != 0 {
+    if unsafe { win_locked(window) } != 0 {
         let msg = c"Cannot move window to another tabpage whilst in use";
         err_msg(report, kErrorTypeException, msg);
         return false;
@@ -372,12 +372,12 @@ pub(crate) unsafe fn win_can_move_tp(
         unsafe { err_msg_raw(report, kErrorTypeException, e_textlock.as_ptr()) };
         return false;
     }
-    if is_aucmd_win(wp) {
+    if is_aucmd_win(window) {
         let msg = c"Cannot move autocmd window to another tabpage";
         err_msg(report, kErrorTypeException, msg);
         return false;
     }
-    if wp == cmdwin_win.get() || wp == cmdwin_old_curwin.get() {
+    if window == cmdwin_win.get() || window == cmdwin_old_curwin.get() {
         // SAFETY: `e_cmdwin` is a static NUL-terminated message.
         unsafe { err_msg_raw(report, kErrorTypeException, e_cmdwin.as_ptr()) };
         return false;

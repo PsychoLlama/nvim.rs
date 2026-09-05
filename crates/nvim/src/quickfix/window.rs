@@ -113,13 +113,13 @@ fn fill_buffer(qfl: Qfl, buf: Buf, win: Win) {
     unsafe { qf_fill_buffer(qfl.raw(), buf, ptr::null_mut(), win.handle) };
 }
 
-fn is_location_list_window(wp: Win) -> bool {
-    is_ll_window(wp)
+fn is_location_list_window(window: Win) -> bool {
+    is_ll_window(window)
 }
 
-fn clamp_cursor(wp: Win) {
+fn clamp_cursor(window: Win) {
     // SAFETY: a live window.
-    check_cursor(wp);
+    check_cursor(window);
 }
 
 /// The stack `eap`'s command names, or none when there is not one.
@@ -457,12 +457,12 @@ pub unsafe fn ex_cbottom(eap: *mut ExArg) {
 /// The line of the quickfix window holding the current entry, which is what
 /// the display code highlights.
 ///
-/// `wp` must be showing a quickfix buffer.
-pub fn qf_current_entry(wp: Win) -> LineNr {
+/// `window` must be showing a quickfix buffer.
+pub fn qf_current_entry(window: Win) -> LineNr {
     let mut qi = QfStack::Global.qi();
-    if is_location_list_window(wp) {
+    if is_location_list_window(window) {
         // In the location list window, the referenced list is the one.
-        qi = QfStack::Local(wp.w_llist_ref.cast()).qi();
+        qi = QfStack::Local(window.w_llist_ref.cast()).qi();
     }
     qi.curlist().qf_index as LineNr
 }

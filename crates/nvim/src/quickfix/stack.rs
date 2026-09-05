@@ -176,8 +176,8 @@ pub(crate) fn qf_cmd_stack_or_alloc(eap: Ea) -> (Qi, Option<Win>) {
 }
 
 /// [`win_loclist`], as a stack that may be absent.
-pub(crate) fn qf_win_loclist(wp: Win) -> Option<Qi> {
-    qf_opt(win_loclist(wp))
+pub(crate) fn qf_win_loclist(window: Win) -> Option<Qi> {
+    qf_opt(win_loclist(window))
 }
 
 /// [`qf_jump`]: go to the `errornr`th entry, counting from the current one
@@ -228,8 +228,8 @@ pub(crate) fn qf_redraw(qi: Qi, old_last: *mut QfLine) {
 
 /// `qflist_valid()`: whether the list `qf_id` names is still the one a
 /// command started on. `None` asks about the quickfix stack.
-pub(crate) fn qf_list_still_valid(wp: Option<Win>, qf_id: c_uint) -> bool {
-    qflist_valid(wp, qf_id)
+pub(crate) fn qf_list_still_valid(window: Option<Win>, qf_id: c_uint) -> bool {
+    qflist_valid(window, qf_id)
 }
 
 /// [`decr_quickfix_busy`], which only ever frees stacks nothing can reach.
@@ -259,45 +259,45 @@ pub(crate) unsafe fn qf_stack_empty(qi: *const QfInfo) -> bool {
 // what it actually holds. A live window's `w_buffer` is a live buffer or
 // null, which is exactly what each of them takes.
 
-/// Whether `wp` shows a quickfix or location list buffer, without saying
+/// Whether `window` shows a quickfix or location list buffer, without saying
 /// which: C's bare `bt_quickfix(wp->w_buffer)`.
 #[inline]
-pub(crate) fn is_qf_buffer(wp: Win) -> bool {
-    buf_is_quickfix(wp.buffer_or_none())
+pub(crate) fn is_qf_buffer(window: Win) -> bool {
+    buf_is_quickfix(window.buffer_or_none())
 }
 
-/// Whether `wp` shows a help file.
+/// Whether `window` shows a help file.
 #[inline]
-pub(crate) fn is_help_buffer(wp: Win) -> bool {
-    buf_is_help(wp.buffer_or_none())
+pub(crate) fn is_help_buffer(window: Win) -> bool {
+    buf_is_help(window.buffer_or_none())
 }
 
-/// Whether `wp` shows an ordinary file.
+/// Whether `window` shows an ordinary file.
 #[inline]
-pub(crate) fn is_normal_buffer(wp: Win) -> bool {
-    buf_is_normal(wp.buffer_or_none())
+pub(crate) fn is_normal_buffer(window: Win) -> bool {
+    buf_is_normal(window.buffer_or_none())
 }
 
-/// Whether `wp` *is* a location list window, i.e. shows another window's
+/// Whether `window` *is* a location list window, i.e. shows another window's
 /// location list rather than owning one.
 #[inline]
-pub(crate) fn is_ll_window(wp: Win) -> bool {
-    is_qf_buffer(wp) && !wp.w_llist_ref.is_null()
+pub(crate) fn is_ll_window(window: Win) -> bool {
+    is_qf_buffer(window) && !window.w_llist_ref.is_null()
 }
 
-/// Whether `wp` is a *quickfix* window, as opposed to a location list one.
-pub(crate) fn is_qf_window(wp: Win) -> bool {
-    is_qf_buffer(wp) && wp.w_llist_ref.is_null()
+/// Whether `window` is a *quickfix* window, as opposed to a location list one.
+pub(crate) fn is_qf_window(window: Win) -> bool {
+    is_qf_buffer(window) && window.w_llist_ref.is_null()
 }
 
-/// The location list stack `wp` works on: the one it references when it is
+/// The location list stack `window` works on: the one it references when it is
 /// a location list window, otherwise its own. May be null.
 #[inline]
-pub(crate) fn win_loclist(wp: Win) -> *mut QfInfo {
-    if is_ll_window(wp) {
-        wp.w_llist_ref
+pub(crate) fn win_loclist(window: Win) -> *mut QfInfo {
+    if is_ll_window(window) {
+        window.w_llist_ref
     } else {
-        wp.w_llist
+        window.w_llist
     }
 }
 
@@ -469,10 +469,10 @@ unsafe fn ll_release(qi: *mut QfInfo) {
 
 /// Free the lists a window's location list stacks hold, or — for `None` —
 /// those of the quickfix stack.
-pub fn qf_free_all(wp: Option<Win>) {
+pub fn qf_free_all(window: Option<Win>) {
     // SAFETY: the two slots are the window's own, and the global stack is
     // the editor's; both frees walk lists nothing else can reach.
-    match wp {
+    match window {
         Some(mut wp) => {
             unsafe { ll_free_all(&raw mut wp.w_llist) };
             unsafe { ll_free_all(&raw mut wp.w_llist_ref) };
@@ -544,16 +544,16 @@ pub fn qf_resize_stack(n: c_int) {
 }
 
 /// Give a window's location list stack room for `n` lists (`'lhistory'`).
-pub fn ll_resize_stack(wp: Win, n: c_int) {
+pub fn ll_resize_stack(window: Win, n: c_int) {
     // A location list window and the window it belongs to share the
     // stack, so whichever of them was set must tell the other.
-    if is_ll_window(wp) {
-        qf_sync_llw_to_win(wp);
+    if is_ll_window(window) {
+        qf_sync_llw_to_win(window);
     } else {
-        qf_sync_win_to_llw(wp);
+        qf_sync_win_to_llw(window);
     }
     // SAFETY: `ll_get_or_alloc_list` answers a live stack for a live window.
-    unsafe { qf_resize_stack_base(ll_get_or_alloc_list(wp), n) };
+    unsafe { qf_resize_stack_base(ll_get_or_alloc_list(window), n) };
 }
 
 /// Resize a stack, dropping the oldest lists if they no longer fit.
@@ -600,19 +600,19 @@ fn qf_sync_win_to_llw(pwp: Win) {
 }
 
 /// The location list stack for a window, allocating one if it has none.
-pub(crate) fn ll_get_or_alloc_list(mut wp: Win) -> *mut QfInfo {
-    if is_ll_window(wp) {
-        return wp.w_llist_ref;
+pub(crate) fn ll_get_or_alloc_list(mut window: Win) -> *mut QfInfo {
+    if is_ll_window(window) {
+        return window.w_llist_ref;
     }
     // A window that is not a location list window has no business
     // referencing someone else's list.
     // SAFETY: the slot is the window's own, and the stack it holds is one
     // only this window still references.
-    unsafe { ll_free_all(&raw mut wp.w_llist_ref) };
-    if wp.w_llist.is_null() {
-        wp.w_llist = qf_alloc_stack(QFLT_LOCATION, wp.w_onebuf_opt.wo_lhi as c_int);
+    unsafe { ll_free_all(&raw mut window.w_llist_ref) };
+    if window.w_llist.is_null() {
+        window.w_llist = qf_alloc_stack(QFLT_LOCATION, window.w_onebuf_opt.wo_lhi as c_int);
     }
-    wp.w_llist
+    window.w_llist
 }
 
 /// The stack an Ex command works on. For a location list command that is
@@ -712,7 +712,7 @@ pub fn copy_loclist_stack(from: Win, mut to: Win) {
 /// was showing it a fresh empty stack to show.
 ///
 /// `wp` is `None` for the quickfix stack, which belongs to no window.
-pub(crate) fn qf_free_stack(mut wp: Option<Win>, mut qi: Qi) {
+pub(crate) fn qf_free_stack(mut window: Option<Win>, mut qi: Qi) {
     let qfwin = qf_find_win(qi);
     if qfwin.is_some() {
         if qi.qf_curlist < qi.qf_listcount {
@@ -721,13 +721,13 @@ pub(crate) fn qf_free_stack(mut wp: Option<Win>, mut qi: Qi) {
         }
         qf_redraw(qi, ptr::null_mut());
     }
-    if wp.is_some_and(is_ll_window) {
+    if window.is_some_and(is_ll_window) {
         // Prefer the window the location list belongs to over the
         // location list window showing it.
-        wp = qf_find_win_with_loclist(qi.raw().cast_const()).or(wp);
+        window = qf_find_win_with_loclist(qi.raw().cast_const()).or(window);
     }
-    qf_free_all(wp);
-    let Some(wp) = wp else {
+    qf_free_all(window);
+    let Some(wp) = window else {
         qi.qf_curlist = 0;
         qi.qf_listcount = 0;
         return;

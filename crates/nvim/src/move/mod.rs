@@ -335,14 +335,14 @@ impl Win {
 /// caller ever asked for the third.
 ///
 /// # Safety
-/// `wp` must be a valid window.
+/// `window` must be a valid window.
 pub unsafe fn plines_correct_topline(
-    wp: *mut Window,
+    window: *mut Window,
     lnum: LineNr,
     limit_winheight: bool,
 ) -> (c_int, LineNr) {
     // SAFETY: the caller's promise.
-    let (n, next, _) = unsafe { Win::new(wp) }.corrected_plines(lnum, limit_winheight);
+    let (n, next, _) = unsafe { Win::new(window) }.corrected_plines(lnum, limit_winheight);
     (n, next)
 }
 
@@ -425,8 +425,8 @@ pub fn set_valid_virtcol(mut win: Win, vcol: ColNr) {
 }
 
 /// [`Win::marker_overlap`], for the callers still holding a raw window.
-pub fn sms_marker_overlap(wp: Win, extra2: c_int) -> c_int {
-    wp.marker_overlap(extra2)
+pub fn sms_marker_overlap(window: Win, extra2: c_int) -> c_int {
+    window.marker_overlap(extra2)
 }
 
 impl Win {
@@ -468,8 +468,8 @@ impl Win {
 /// The length of the cursor line changed *before* the cursor, so its screen
 /// height -- and with it `w_topline` and `w_crow` -- may have changed.
 /// `w_botline` is the caller's problem.
-pub fn changed_cline_bef_curs(wp: Win) {
-    wp.invalidate_above_cursor();
+pub fn changed_cline_bef_curs(window: Win) {
+    window.invalidate_above_cursor();
 }
 
 /// As [`changed_cline_bef_curs`], for a line *above* the cursor in the
@@ -483,8 +483,8 @@ pub unsafe fn changed_line_abv_curs() {
 }
 
 /// As [`changed_line_abv_curs`], for a given window.
-pub fn changed_line_abv_curs_win(wp: Win) {
-    wp.invalidate_above_cursor();
+pub fn changed_line_abv_curs_win(window: Win) {
+    window.invalidate_above_cursor();
 }
 
 impl Win {
@@ -531,13 +531,13 @@ impl Win {
 }
 
 /// [`Win::validate_botline`], for the callers still holding a raw window.
-pub fn validate_botline_win(wp: Win) {
-    wp.validate_botline();
+pub fn validate_botline_win(window: Win) {
+    window.validate_botline();
 }
 
 /// [`Win::invalidate_botline`], for the callers still holding a raw window.
-pub fn invalidate_botline_win(wp: Win) {
-    wp.invalidate_botline();
+pub fn invalidate_botline_win(window: Win) {
+    window.invalidate_botline();
 }
 
 impl Win {
@@ -562,8 +562,8 @@ pub fn cursor_valid(win: Win) -> c_int {
 
 /// Make sure `w_wrow` and `w_wcol` are right. `w_topline` must already be --
 /// callers usually want `update_topline()` first.
-pub fn validate_cursor(wp: Win) {
-    wp.validate_cursor();
+pub fn validate_cursor(window: Win) {
+    window.validate_cursor();
 }
 
 /// Compute `w_cline_row` and `w_cline_height` from the current `w_topline`.
@@ -647,13 +647,13 @@ fn curs_rows(mut win: Win) {
 }
 
 /// Make sure `w_virtcol` is right, and nothing else.
-pub fn validate_virtcol(wp: Win) {
-    wp.validate_virtcol();
+pub fn validate_virtcol(window: Win) {
+    window.validate_virtcol();
 }
 
 /// [`Win::validate_cheight`], for the callers still holding a raw window.
-pub fn validate_cheight(wp: Win) {
-    wp.validate_cheight();
+pub fn validate_cheight(window: Win) {
+    window.validate_cheight();
 }
 
 impl Win {
@@ -693,14 +693,14 @@ pub fn validate_cursor_col(mut win: Win) {
 /// window scrolls horizontally.
 ///
 /// # Safety
-/// `wp` must be a valid window.
+/// `window` must be a valid window.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn win_col_off(wp: *mut Window) -> c_int {
+pub unsafe extern "C" fn win_col_off(window: *mut Window) -> c_int {
     // SAFETY: the caller's promise.
-    unsafe { Win::new(wp) }.col_off()
+    unsafe { Win::new(window) }.col_off()
 }
 
 /// The extra column offset a wrapped line's later screen lines get.
-pub fn win_col_off2(wp: Win) -> c_int {
-    wp.col_off2()
+pub fn win_col_off2(window: Win) -> c_int {
+    window.col_off2()
 }

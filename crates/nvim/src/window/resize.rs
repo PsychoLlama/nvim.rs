@@ -55,64 +55,64 @@ use crate::winlayer::{FrameRef, TabPage, Win, tabs, windows};
 // ---------------------------------------------------------------------------
 // The neighbours only this file reaches
 
-/// How many screen lines line `lnum` takes in `wp`.
-fn plines(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
+/// How many screen lines line `lnum` takes in `window`.
+fn plines(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
     // SAFETY: a line of the window's own buffer.
-    unsafe { plines_win(wp, lnum, limit_winheight) }
+    unsafe { plines_win(window, lnum, limit_winheight) }
 }
 
 /// [`plines`] up to and including column `col` of the line.
-fn plines_to_col(wp: Win, lnum: LineNr, col: ::core::ffi::c_long) -> c_int {
+fn plines_to_col(window: Win, lnum: LineNr, col: ::core::ffi::c_long) -> c_int {
     // SAFETY: a position in the window's own buffer.
-    unsafe { plines_win_col(wp, lnum, col) }
+    unsafe { plines_win_col(window, lnum, col) }
 }
 
 /// [`plines`] without the virtual lines a diff fills the window with.
-fn plines_nofill(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
+fn plines_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
     // SAFETY: a line of the window's own buffer.
-    unsafe { plines_win_nofill(wp, lnum, limit_winheight) }
+    unsafe { plines_win_nofill(window, lnum, limit_winheight) }
 }
 
-/// Columns of `wp` the text does not start in: `'number'`, signs and folds.
-fn col_off(wp: Win) -> c_int {
+/// Columns of `window` the text does not start in: `'number'`, signs and folds.
+fn col_off(window: Win) -> c_int {
     // SAFETY: a live window.
-    unsafe { win_col_off(wp.raw()) }
+    unsafe { win_col_off(window.raw()) }
 }
 
 /// The extra indent a wrapped line gets from `'cpoptions'`'s `n` flag.
-fn col_off2(wp: Win) -> c_int {
+fn col_off2(window: Win) -> c_int {
     // SAFETY: a live window.
-    win_col_off2(wp)
+    win_col_off2(window)
 }
 
 /// Forget everything cached below the window's last drawn line.
-fn invalidate_botline(wp: Win) {
+fn invalidate_botline(window: Win) {
     // SAFETY: a live window.
-    invalidate_botline_win(wp);
+    invalidate_botline_win(window);
 }
 
 /// Recompute the window's last drawn line.
-fn validate_botline(wp: Win) {
+fn validate_botline(window: Win) {
     // SAFETY: a live window.
-    validate_botline_win(wp);
+    validate_botline_win(window);
 }
 
 /// Move the cursor `n` lines down (or up, for [`cursor_up`]) without touching
 /// the view, as `'splitkeep'` needs to measure it.
-fn cursor_down(wp: Win, n: c_int) {
+fn cursor_down(window: Win, n: c_int) {
     // SAFETY: a live window.
-    cursor_down_inner(wp, n, false);
+    cursor_down_inner(window, n, false);
 }
 
-fn cursor_up(wp: Win, n: LineNr) {
+fn cursor_up(window: Win, n: LineNr) {
     // SAFETY: a live window.
-    cursor_up_inner(wp, n, false);
+    cursor_up_inner(window, n, false);
 }
 
-/// The effective `'scrolloff'` for `wp`.
-fn scrolloff(wp: Win) -> ::core::ffi::c_long {
+/// The effective `'scrolloff'` for `window`.
+fn scrolloff(window: Win) -> ::core::ffi::c_long {
     // SAFETY: a live window.
-    get_scrolloff_value(wp) as ::core::ffi::c_long
+    get_scrolloff_value(window) as ::core::ffi::c_long
 }
 
 /// Free a window's status line or window bar click definitions.
@@ -125,15 +125,15 @@ pub(crate) fn free_click_defs(defs: *mut StlClickDefinition, size: size_t) {
 // ---------------------------------------------------------------------------
 // The cursor's place in the window
 
-pub unsafe fn set_fraction(wp: *mut Window) {
+pub unsafe fn set_fraction(window: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
-    save_fraction(unsafe { Win::new(wp) });
+    save_fraction(unsafe { Win::new(window) });
 }
 
 /// Remember where the cursor is as a fraction of the window's height, so a
 /// resize can put it back in the same relative place.
-pub(crate) fn save_fraction(wp: Win) {
-    let mut wp = wp;
+pub(crate) fn save_fraction(window: Win) {
+    let mut wp = window;
     if wp.w_view_height > 1 {
         wp.w_fraction = arith::cursor_fraction(wp.w_wrow, wp.w_view_height);
     }
@@ -234,14 +234,14 @@ pub(crate) fn fix_cursor(normal: bool) {
     }
 }
 
-pub unsafe fn win_new_height(wp: *mut Window, height: c_int) {
+pub unsafe fn win_new_height(window: *mut Window, height: c_int) {
     // SAFETY: the caller's promise -- a live window.
-    new_win_height(unsafe { Win::new(wp) }, height);
+    new_win_height(unsafe { Win::new(window) }, height);
 }
 
 /// Give window `wp` height `height`.
-pub(crate) fn new_win_height(wp: Win, height: c_int) {
-    let mut wp = wp;
+pub(crate) fn new_win_height(window: Win, height: c_int) {
+    let mut wp = window;
     // Don't want a negative height: happens when splitting a tiny window, and
     // is equalized away soon after.
     let height = height.max(0);
@@ -253,15 +253,15 @@ pub(crate) fn new_win_height(wp: Win, height: c_int) {
     set_inner_size(wp, true);
 }
 
-pub unsafe fn scroll_to_fraction(wp: *mut Window, prev_height: c_int) {
+pub unsafe fn scroll_to_fraction(window: *mut Window, prev_height: c_int) {
     // SAFETY: the caller's promise -- a live window.
-    to_fraction(unsafe { Win::new(wp) }, prev_height);
+    to_fraction(unsafe { Win::new(window) }, prev_height);
 }
 
 /// Put the cursor back at the [`save_fraction`] of the window it was at before
 /// the resize, scrolling the view to suit.
-pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
-    let mut wp = wp;
+pub(crate) fn to_fraction(window: Win, prev_height: c_int) {
+    let mut wp = window;
     let height = wp.w_view_height;
     // Don't change `w_topline` when the window has no height, when
     // `'scrollbind'` is set on a window that is not current, or when the whole
@@ -344,15 +344,15 @@ pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
     invalidate_botline(wp);
 }
 
-pub unsafe fn win_set_inner_size(wp: *mut Window, valid_cursor: bool) {
+pub unsafe fn win_set_inner_size(window: *mut Window, valid_cursor: bool) {
     // SAFETY: the caller's promise -- a live window.
-    set_inner_size(unsafe { Win::new(wp) }, valid_cursor);
+    set_inner_size(unsafe { Win::new(window) }, valid_cursor);
 }
 
 /// Give the window's *text area* the size its frame now implies, and tell the
 /// UI, the terminal and the view about it.
-pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
-    let mut wp = wp;
+pub(crate) fn set_inner_size(window: Win, valid_cursor: bool) {
+    let mut wp = window;
     let mut width = wp.w_width_request;
     if width == 0 {
         width = wp.w_width;
@@ -431,39 +431,39 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
     wp.w_redr_status = true;
 }
 
-pub unsafe fn win_new_width(wp: *mut Window, width: c_int) {
+pub unsafe fn win_new_width(window: *mut Window, width: c_int) {
     // SAFETY: the caller's promise -- a live window.
-    new_win_width(unsafe { Win::new(wp) }, width);
+    new_win_width(unsafe { Win::new(window) }, width);
 }
 
 /// Give window `wp` width `width`.
-pub(crate) fn new_win_width(wp: Win, width: c_int) {
-    let mut wp = wp;
+pub(crate) fn new_win_width(window: Win, width: c_int) {
+    let mut wp = window;
     wp.w_width = width.max(0);
     wp.w_pos_changed = true;
     set_inner_size(wp, true);
 }
 
-pub unsafe fn win_default_scroll(wp: *mut Window) -> OptInt {
+pub unsafe fn win_default_scroll(window: *mut Window) -> OptInt {
     // SAFETY: the caller's promise -- a live window.
-    default_scroll(unsafe { Win::new(wp) })
+    default_scroll(unsafe { Win::new(window) })
 }
 
 /// The `'scroll'` a window gets when the option is not set by hand: half its
 /// height, and never less than one.
-pub(crate) fn default_scroll(wp: Win) -> OptInt {
-    (wp.w_view_height / 2).max(1) as OptInt
+pub(crate) fn default_scroll(window: Win) -> OptInt {
+    (window.w_view_height / 2).max(1) as OptInt
 }
 
-pub unsafe fn win_comp_scroll(wp: *mut Window) {
+pub unsafe fn win_comp_scroll(window: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
-    comp_scroll(unsafe { Win::new(wp) });
+    comp_scroll(unsafe { Win::new(window) });
 }
 
 /// Recompute `'scroll'` after a resize, marking it as set by the layout rather
 /// than by the user.
-pub(crate) fn comp_scroll(wp: Win) {
-    let mut wp = wp;
+pub(crate) fn comp_scroll(window: Win) {
+    let mut wp = window;
     let old = wp.w_onebuf_opt.wo_scr;
     wp.w_onebuf_opt.wo_scr = default_scroll(wp);
     if wp.w_onebuf_opt.wo_scr != old {
@@ -561,15 +561,15 @@ pub(crate) fn update_last_status(morewin: bool) {
     win_float_anchor_laststatus();
 }
 
-pub unsafe fn win_remove_status_line(wp: *mut Window, add_hsep: bool) {
+pub unsafe fn win_remove_status_line(window: *mut Window, add_hsep: bool) {
     // SAFETY: the caller's promise -- a live window.
-    remove_status_line(unsafe { Win::new(wp) }, add_hsep);
+    remove_status_line(unsafe { Win::new(window) }, add_hsep);
 }
 
 /// Take `wp`'s status line away, giving its row either to a horizontal
 /// separator or back to the window's text.
-pub(crate) fn remove_status_line(wp: Win, add_hsep: bool) {
-    let mut wp = wp;
+pub(crate) fn remove_status_line(window: Win, add_hsep: bool) {
+    let mut wp = window;
     wp.w_status_height = 0;
     if add_hsep {
         wp.w_hsep_height = 1;
@@ -672,14 +672,14 @@ fn last_status_rec(fr: FrameRef, statusline: bool, is_stl_global: bool) {
     }
 }
 
-pub unsafe fn set_winbar_win(wp: *mut Window, make_room: bool, valid_cursor: bool) -> c_int {
+pub unsafe fn set_winbar_win(window: *mut Window, make_room: bool, valid_cursor: bool) -> c_int {
     // SAFETY: the caller's promise -- a live window.
-    winbar_win(unsafe { Win::new(wp) }, make_room, valid_cursor)
+    winbar_win(unsafe { Win::new(window) }, make_room, valid_cursor)
 }
 
 /// Give `wp` the window bar `'winbar'` asks for, or take it away.
-fn winbar_win(wp: Win, make_room: bool, valid_cursor: bool) -> c_int {
-    let mut wp = wp;
+fn winbar_win(window: Win, make_room: bool, valid_cursor: bool) -> c_int {
+    let mut wp = window;
     // SAFETY: both are NUL-terminated option strings.
     let (global, local) = unsafe { (*p_wbr.get() as c_int, *wp.w_onebuf_opt.wo_wbr as c_int) };
     let winbar_height = if wp.w_floating {

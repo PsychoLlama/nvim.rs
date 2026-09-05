@@ -258,16 +258,16 @@ pub(crate) fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
     }
 }
 
-/// Whether marks in namespace `ns_id` are visible in `wp`: a namespace that is
+/// Whether marks in namespace `ns_id` are visible in `window`: a namespace that is
 /// not window-local is visible everywhere, a window-local one only where it
 /// was opted into.
 ///
 #[inline]
-pub fn ns_in_win(ns_id: uint32_t, wp: Win) -> bool {
+pub fn ns_in_win(ns_id: uint32_t, window: Win) -> bool {
     if !ns_is_local(ns_id) {
         return true;
     }
-    wp.w_ns_set.contains(&ns_id)
+    window.w_ns_set.contains(&ns_id)
 }
 
 // ---------------------------------------------------------------------------

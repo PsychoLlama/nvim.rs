@@ -670,16 +670,16 @@ impl StlSinks {
 /// Build a string from the status line items in `fmt`, answering its width in
 /// screen cells.
 ///
-/// Normally works for window `wp`, except when working for `'tabline'`, when
+/// Normally works for window `window`, except when working for `'tabline'`, when
 /// it is `curwin`. `out` is the buffer to write into and must not be
 /// `NameBuff`, which the expander uses as scratch.
 ///
 /// # Safety
-/// `wp` must be a live window, `fmt` must be NUL-terminated, and every
+/// `window` must be a live window, `fmt` must be NUL-terminated, and every
 /// pointer in `sinks` must be null or writable. This re-enters the editor,
 /// so nothing may be held across it.
 pub unsafe fn build_stl_str_hl(
-    wp: *mut Window,
+    window: *mut Window,
     out: &mut [c_char],
     fmt: *mut c_char,
     from: FmtSource,
@@ -698,7 +698,7 @@ pub unsafe fn build_stl_str_hl(
     // bytes; the caller's slice spells them `char`.
     let out = unsafe { slice::from_raw_parts_mut(out.as_mut_ptr().cast::<u8>(), out.len()) };
     // SAFETY: the caller's live window.
-    let win = unsafe { Win::new(wp) };
+    let win = unsafe { Win::new(window) };
     let save_redraw_not_allowed = redraw_not_allowed.get();
     let save_key_typed = KeyTyped.get();
     let did_emsg_before = did_emsg.get();
@@ -714,7 +714,7 @@ pub unsafe fn build_stl_str_hl(
     // therefore never sandboxed.
     let sandbox = opt_idx as c_int != kOptInvalid as c_int && {
         // SAFETY: a live window and one of the option indices.
-        unsafe { was_set_insecurely(wp, opt_idx, opt_scope) }
+        unsafe { was_set_insecurely(window, opt_idx, opt_scope) }
     };
 
     // SAFETY: the caller's NUL-terminated format string.

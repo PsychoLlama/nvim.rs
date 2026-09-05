@@ -114,10 +114,10 @@ pub(crate) unsafe fn vimrc_found(fname: *mut c_char, envname: *mut c_char) {
 /// # Safety
 ///
 /// `val`, where given, must outlive the call.
-pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> Result<(), Failed> {
+pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut window: Win) -> Result<(), Failed> {
     let mut p = match val {
         Some(val) => val.as_ptr().cast_mut(),
-        None => wp.w_onebuf_opt.wo_culopt,
+        None => window.w_onebuf_opt.wo_culopt,
     };
     let mut flags: uint8_t = 0;
     while unsafe { *p } != 0 {
@@ -151,7 +151,7 @@ pub(crate) unsafe fn fill_culopt_flags(val: Option<&CStr>, mut wp: Win) -> Resul
     {
         return Err(Failed);
     }
-    wp.w_p_culopt_flags = flags;
+    window.w_p_culopt_flags = flags;
     Ok(())
 }
 
@@ -247,8 +247,8 @@ pub(crate) fn get_flp_value(buf: Buf) -> *mut c_char {
 /// so a window can spell out that it overrides the global value with
 /// nothing, so they never reach a caller.
 ///
-pub(crate) fn get_ve_flags(wp: Win) -> c_uint {
-    let flags = match wp.w_onebuf_opt.wo_ve_flags {
+pub(crate) fn get_ve_flags(window: Win) -> c_uint {
+    let flags = match window.w_onebuf_opt.wo_ve_flags {
         0 => ve_flags.get(),
         local => local,
     };
@@ -461,12 +461,12 @@ pub(crate) fn get_winbuf_options(bufopt: c_int) -> *mut Dict {
 /// 'scrolloff' for a window, local where set. A terminal buffer never
 /// scrolls off, whatever the option says.
 ///
-pub(crate) fn get_scrolloff_value(wp: Win) -> int64_t {
+pub(crate) fn get_scrolloff_value(window: Win) -> int64_t {
     // SAFETY: a window that is being scrolled has a buffer.
-    if State.get() & MODE_TERMINAL != 0 && !unsafe { (*wp.w_buffer).terminal }.is_null() {
+    if State.get() & MODE_TERMINAL != 0 && !unsafe { (*window.w_buffer).terminal }.is_null() {
         return 0;
     }
-    match wp.w_onebuf_opt.wo_so {
+    match window.w_onebuf_opt.wo_so {
         local if local < 0 => p_so.get(),
         local => local,
     }
@@ -474,8 +474,8 @@ pub(crate) fn get_scrolloff_value(wp: Win) -> int64_t {
 
 /// 'sidescrolloff' for a window, local where set.
 ///
-pub(crate) fn get_sidescrolloff_value(wp: Win) -> int64_t {
-    match wp.w_onebuf_opt.wo_siso {
+pub(crate) fn get_sidescrolloff_value(window: Win) -> int64_t {
+    match window.w_onebuf_opt.wo_siso {
         local if local < 0 => p_siso.get(),
         local => local,
     }

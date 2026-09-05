@@ -185,8 +185,8 @@ pub unsafe fn state_handle_k_event() {
     }
 }
 
-/// Whether the cursor may sit where there is no character, in `wp`.
-pub fn virtual_active(wp: Win) -> bool {
+/// Whether the cursor may sit where there is no character, in `window`.
+pub fn virtual_active(window: Win) -> bool {
     // Inside an operator, the operator's own answer stands.
     if let Some(active) = virtual_op.get() {
         return active;
@@ -194,7 +194,7 @@ pub fn virtual_active(wp: Win) -> bool {
     if State.get() & MODE_TERMINAL != 0 {
         return true;
     }
-    let flags = get_ve_flags(wp);
+    let flags = get_ve_flags(window);
     ve_flags_allow(flags, State.get(), visual_active(), visual_mode().raw())
 }
 

@@ -10,22 +10,22 @@ use super::*;
 use crate::pos::MAXCOL;
 use crate::types::NUL;
 
-/// Whether there may be filler lines anywhere in `wp`.
+/// Whether there may be filler lines anywhere in `window`.
 ///
-pub(crate) fn win_may_fill(wp: Win) -> bool {
-    wp.w_onebuf_opt.wo_diff != 0 && diffopt_filler()
-        || buf_meta_total(wp.buffer(), MT_META_LINES) != 0
+pub(crate) fn win_may_fill(window: Win) -> bool {
+    window.w_onebuf_opt.wo_diff != 0 && diffopt_filler()
+        || buf_meta_total(window.buffer(), MT_META_LINES) != 0
 }
 
 /// Filler lines above `lnum`: virtual lines plus, in a diff, the lines the
 /// other buffer has here and this one does not.
 ///
 /// # Safety
-/// `wp` must be live.
-pub(crate) unsafe fn win_get_fill(wp: Win, lnum: LineNr) -> c_int {
+/// `window` must be live.
+pub(crate) unsafe fn win_get_fill(window: Win, lnum: LineNr) -> c_int {
     let virt_lines = unsafe {
         decor_virt_lines(
-            wp.raw(),
+            window.raw(),
             lnum - 1,
             lnum,
             ::core::ptr::null_mut::<c_int>(),
@@ -36,7 +36,7 @@ pub(crate) unsafe fn win_get_fill(wp: Win, lnum: LineNr) -> c_int {
 
     // Be quick when there are no filler lines.
     if diffopt_filler() {
-        let n = diff_check_fill(wp, lnum);
+        let n = diff_check_fill(window, lnum);
         if n > 0 {
             return virt_lines + n;
         }
@@ -47,30 +47,30 @@ pub(crate) unsafe fn win_get_fill(wp: Win, lnum: LineNr) -> c_int {
 /// Window lines buffer line `lnum` occupies, filler lines included.
 ///
 /// # Safety
-/// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    unsafe { plines_win_nofill(wp, lnum, limit_winheight) + win_get_fill(wp, lnum) }
+/// `window` must be live and `lnum` a line of its buffer.
+pub(crate) unsafe fn plines_win(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
+    unsafe { plines_win_nofill(window, lnum, limit_winheight) + win_get_fill(window, lnum) }
 }
 
 /// Window lines buffer line `lnum` occupies, filler lines excluded.
 ///
 /// # Safety
-/// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win_nofill(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
-    if unsafe { decor_conceal_line(wp.raw(), lnum - 1, false) } {
+/// `window` must be live and `lnum` a line of its buffer.
+pub(crate) unsafe fn plines_win_nofill(window: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
+    if unsafe { decor_conceal_line(window.raw(), lnum - 1, false) } {
         return 0;
     }
-    if wp.w_onebuf_opt.wo_wrap == 0 || wp.w_view_width == 0 {
+    if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
         return 1;
     }
     // A folded line is handled just like an empty one.
-    if line_folded(wp, lnum) {
+    if line_folded(window, lnum) {
         return 1;
     }
 
-    let lines = unsafe { plines_win_nofold(wp, lnum) };
-    if limit_winheight && lines > wp.w_view_height {
-        return wp.w_view_height;
+    let lines = unsafe { plines_win_nofold(window, lnum) };
+    if limit_winheight && lines > window.w_view_height {
+        return window.w_view_height;
     }
     lines
 }
@@ -79,11 +79,11 @@ pub(crate) unsafe fn plines_win_nofill(wp: Win, lnum: LineNr, limit_winheight: b
 /// filler lines.
 ///
 /// # Safety
-/// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: LineNr) -> c_int {
-    let s = unsafe { ml_get_buf(wp.w_buffer, lnum) };
+/// `window` must be live and `lnum` a line of its buffer.
+pub(crate) unsafe fn plines_win_nofold(window: Win, lnum: LineNr) -> c_int {
+    let s = unsafe { ml_get_buf(window.w_buffer, lnum) };
     let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, wp, lnum, s) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, s) };
     if unsafe { *s } == NUL as c_char && csarg.virt_row < 0 {
         // Be quick for an empty line.
         return 1;
@@ -95,12 +95,12 @@ pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: LineNr) -> c_int {
     } as int64_t;
 
     // In 'list' mode the trailing '$' may take one more column.
-    if wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol != 0 {
+    if window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.eol != 0 {
         col += 1;
     }
 
     // Column offset for 'number', 'relativenumber' and 'foldcolumn'.
-    let mut width = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
+    let mut width = window.w_view_width - unsafe { win_col_off(window.raw()) };
     if width <= 0 {
         // Bigger than the number of screen lines.
         return 32000;
@@ -109,7 +109,7 @@ pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: LineNr) -> c_int {
         return 1;
     }
     col -= width as int64_t;
-    width += win_col_off2(wp);
+    width += win_col_off2(window);
     let lines = (col + (width - 1) as int64_t) / width as int64_t + 1;
     if lines > 0 && lines <= c_int::MAX as int64_t {
         lines as c_int
@@ -121,18 +121,18 @@ pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: LineNr) -> c_int {
 /// Window lines used from the start of line `lnum` up to `column`.
 ///
 /// # Safety
-/// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win_col(wp: Win, lnum: LineNr, mut column: c_long) -> c_int {
+/// `window` must be live and `lnum` a line of its buffer.
+pub(crate) unsafe fn plines_win_col(window: Win, lnum: LineNr, mut column: c_long) -> c_int {
     // Filler lines above this buffer line.
-    let mut lines = unsafe { win_get_fill(wp, lnum) };
+    let mut lines = unsafe { win_get_fill(window, lnum) };
 
-    if wp.w_onebuf_opt.wo_wrap == 0 || wp.w_view_width == 0 {
+    if window.w_onebuf_opt.wo_wrap == 0 || window.w_view_width == 0 {
         return lines + 1;
     }
 
-    let line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
+    let line = unsafe { ml_get_buf(window.w_buffer, lnum) };
     let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, wp, lnum, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, window, lnum, line) };
 
     let mut vcol: ColNr = 0;
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
@@ -142,9 +142,10 @@ pub(crate) unsafe fn plines_win_col(wp: Win, lnum: LineNr, mut column: c_long) -
             column -= 1;
             column >= 0
         } {
-            vcol +=
-                unsafe { charsize_fast_impl(wp.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value) }
-                    .width;
+            vcol += unsafe {
+                charsize_fast_impl(window.raw(), ci.ptr, use_tabstop, vcol, ci.chr.value)
+            }
+            .width;
             ci = unsafe { utfc_next(ci) };
         }
     } else {
@@ -167,14 +168,14 @@ pub(crate) unsafe fn plines_win_col(wp: Win, lnum: LineNr, mut column: c_long) -
     }
 
     // Column offset for 'number', 'relativenumber', 'foldcolumn', etc.
-    let width = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
+    let width = window.w_view_width - unsafe { win_col_off(window.raw()) };
     if width <= 0 {
         return 9999;
     }
 
     lines += 1;
     if col > width {
-        lines += (col - width) / (width + win_col_off2(wp)) + 1;
+        lines += (col - width) / (width + win_col_off2(window)) + 1;
     }
     lines
 }
@@ -184,34 +185,34 @@ pub(crate) unsafe fn plines_win_col(wp: Win, lnum: LineNr, mut column: c_long) -
 /// Because of topfill this only makes sense for `lnum >= wp->w_topline`.
 ///
 /// # Safety
-/// `lnum` must be a line of `wp`'s buffer. `nextp` is set to the last line of
+/// `lnum` must be a line of `window`'s buffer. `nextp` is set to the last line of
 /// a fold, `foldedp` to whether there was one.
 pub(crate) unsafe fn plines_win_full(
-    wp: Win,
+    window: Win,
     mut lnum: LineNr,
     nextp: Option<&mut LineNr>,
     foldedp: Option<&mut bool>,
     cache: bool,
     limit_winheight: bool,
 ) -> c_int {
-    let folded = has_folding_win(wp, lnum, Some(&mut lnum), nextp, cache, None);
+    let folded = has_folding_win(window, lnum, Some(&mut lnum), nextp, cache, None);
     if let Some(foldedp) = foldedp {
         *foldedp = folded;
     }
-    let filler_lines = if lnum == wp.w_topline {
-        wp.w_topfill
+    let filler_lines = if lnum == window.w_topline {
+        window.w_topfill
     } else {
-        unsafe { win_get_fill(wp, lnum) }
+        unsafe { win_get_fill(window, lnum) }
     };
 
-    if unsafe { decor_conceal_line(wp.raw(), lnum - 1, false) } {
+    if unsafe { decor_conceal_line(window.raw(), lnum - 1, false) } {
         return filler_lines;
     }
 
     let text_lines = if folded {
         1
     } else {
-        unsafe { plines_win_nofill(wp, lnum, limit_winheight) }
+        unsafe { plines_win_nofill(window, lnum, limit_winheight) }
     };
     text_lines + filler_lines
 }
@@ -223,16 +224,21 @@ pub(crate) unsafe fn plines_win_full(
 /// Because of topfill this only makes sense for `first >= wp->w_topline`.
 ///
 /// # Safety
-/// `wp` must be live.
-pub(crate) unsafe fn plines_m_win(wp: Win, mut first: LineNr, last: LineNr, max: c_int) -> c_int {
+/// `window` must be live.
+pub(crate) unsafe fn plines_m_win(
+    window: Win,
+    mut first: LineNr,
+    last: LineNr,
+    max: c_int,
+) -> c_int {
     let mut count = 0;
     while first <= last && count < max {
         let mut next = first;
-        count += unsafe { plines_win_full(wp, first, Some(&mut next), None, false, false) };
+        count += unsafe { plines_win_full(window, first, Some(&mut next), None, false, false) };
         first = next + 1;
     }
-    if first == unsafe { (*wp.w_buffer).b_ml.ml_line_count } + 1 {
-        count += unsafe { win_get_fill(wp, first) };
+    if first == unsafe { (*window.w_buffer).b_ml.ml_line_count } + 1 {
+        count += unsafe { win_get_fill(window, first) };
     }
     max.min(count)
 }
@@ -242,13 +248,13 @@ pub(crate) unsafe fn plines_m_win(wp: Win, mut first: LineNr, last: LineNr, max:
 /// several. Mainly used for scrolling offsets.
 ///
 /// # Safety
-/// `wp` must be live.
-pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: LineNr, last: LineNr) -> c_int {
+/// `window` must be live.
+pub(crate) unsafe fn plines_m_win_fill(window: Win, first: LineNr, last: LineNr) -> c_int {
     let mut count = last - first
         + 1
         + unsafe {
             decor_virt_lines(
-                wp.raw(),
+                window.raw(),
                 first - 1,
                 last,
                 ::core::ptr::null_mut::<c_int>(),
@@ -261,7 +267,7 @@ pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: LineNr, last: LineNr) -> 
         let mut lnum = first;
         while lnum <= last {
             // This also considers folds: no filler lines inside a fold.
-            count += diff_check_fill(wp, lnum).max(0);
+            count += diff_check_fill(window, lnum).max(0);
             lnum += 1;
         }
     }
@@ -269,7 +275,7 @@ pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: LineNr, last: LineNr) -> 
     count.max(0)
 }
 
-/// Screen lines a range of text takes in `wp`.
+/// Screen lines a range of text takes in `window`.
 ///
 /// `start_vcol` below zero counts all of `start_lnum` including the filler
 /// lines above it; at or above zero it starts at that virtual column, rounded
@@ -279,9 +285,9 @@ pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: LineNr, last: LineNr) -> 
 /// the one passed in when `max` is reached first.
 ///
 /// # Safety
-/// `wp`, `end_lnum` and `end_vcol` must be live; `fill` may be null.
+/// `window`, `end_lnum` and `end_vcol` must be live; `fill` may be null.
 pub(crate) unsafe fn win_text_height(
-    wp: Win,
+    window: Win,
     start_lnum: LineNr,
     start_vcol: int64_t,
     end_lnum: *mut LineNr,
@@ -289,9 +295,9 @@ pub(crate) unsafe fn win_text_height(
     fill: *mut int64_t,
     max: int64_t,
 ) -> int64_t {
-    let first_width = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
+    let first_width = window.w_view_width - unsafe { win_col_off(window.raw()) };
     let width1 = first_width.max(0);
-    let width2 = (first_width + win_col_off2(wp)).max(0);
+    let width2 = (first_width + win_col_off2(window)).max(0);
 
     let mut height_sum_fill: int64_t = 0;
     let mut height_cur_nofill: int64_t = 0;
@@ -302,8 +308,8 @@ pub(crate) unsafe fn win_text_height(
 
     if start_vcol >= 0 {
         let mut lnum_next = lnum;
-        cur_folded = has_folding(wp, lnum, Some(&mut lnum), Some(&mut lnum_next));
-        height_cur_nofill = unsafe { plines_win_nofill(wp, lnum, false) } as int64_t;
+        cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
+        height_cur_nofill = unsafe { plines_win_nofill(window, lnum, false) } as int64_t;
         height_sum_nofill += height_cur_nofill;
         let row_off = if start_vcol < width1 as int64_t || width2 <= 0 {
             0
@@ -316,9 +322,9 @@ pub(crate) unsafe fn win_text_height(
 
     while lnum <= unsafe { *end_lnum } && height_sum_nofill + height_sum_fill < max {
         let mut lnum_next = lnum;
-        cur_folded = has_folding(wp, lnum, Some(&mut lnum), Some(&mut lnum_next));
-        height_sum_fill += unsafe { win_get_fill(wp, lnum) } as int64_t;
-        height_cur_nofill = unsafe { plines_win_nofill(wp, lnum, false) } as int64_t;
+        cur_folded = has_folding(window, lnum, Some(&mut lnum), Some(&mut lnum_next));
+        height_sum_fill += unsafe { win_get_fill(window, lnum) } as int64_t;
+        height_cur_nofill = unsafe { plines_win_nofill(window, lnum, false) } as int64_t;
         height_sum_nofill += height_cur_nofill;
         cur_lnum = lnum;
         lnum = lnum_next + 1;
@@ -341,7 +347,7 @@ pub(crate) unsafe fn win_text_height(
     if cur_folded {
         vcol_end = 0;
     } else {
-        let linesize = unsafe { linetabsize_eol(wp, cur_lnum) } as int64_t;
+        let linesize = unsafe { linetabsize_eol(window, cur_lnum) } as int64_t;
         let asked = if use_vcol { vcol_end } else { int64_t::MAX };
         vcol_end = asked.min(linesize);
     }

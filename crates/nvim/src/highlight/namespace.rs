@@ -337,9 +337,9 @@ pub unsafe fn hl_check_ns() -> bool {
 ///
 /// # Safety
 /// `wp` is null or a live window; main thread only.
-pub unsafe fn win_check_ns_hl(wp: *mut Window) -> bool {
+pub unsafe fn win_check_ns_hl(window: *mut Window) -> bool {
     // SAFETY: the caller's promise -- null, or a live window.
-    let wp = unsafe { Win::from_raw(wp) };
+    let wp = unsafe { Win::from_raw(window) };
     ns_hl_win.set(wp.map_or(-1, |wp| wp.w_ns_hl));
     unsafe { hl_check_ns() }
 }
@@ -423,9 +423,9 @@ pub unsafe fn hl_get_ui_attr(ns_id: c_int, idx: c_int, final_id: c_int, optional
 ///
 /// # Safety
 /// `wp` is a live window; main thread only.
-pub unsafe fn update_window_hl(wp: *mut Window, invalid: bool) {
+pub unsafe fn update_window_hl(window: *mut Window, invalid: bool) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window and the editor's own tables.
     let ns_id = wp.w_ns_hl;
     unsafe { update_ns_hl(ns_id) };
@@ -545,9 +545,9 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 ///
 /// # Safety
 /// `wp` is a live window; main thread only.
-pub unsafe fn win_bg_attr(wp: *mut Window) -> c_int {
+pub unsafe fn win_bg_attr(window: *mut Window) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
     if ns_hl_fast.get() < 0 {
@@ -574,9 +574,9 @@ pub unsafe fn win_bg_attr(wp: *mut Window) -> c_int {
 /// # Safety
 /// `wp` is a live window; main thread only.
 #[inline]
-pub unsafe fn win_hl_attr(wp: *mut Window, hlf: c_int) -> c_int {
+pub unsafe fn win_hl_attr(window: *mut Window, hlf: c_int) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.
     let table = if !wp.w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {

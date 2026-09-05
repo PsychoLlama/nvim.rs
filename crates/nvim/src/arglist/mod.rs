@@ -142,16 +142,16 @@ fn alist_count(al: *mut ArgList) -> c_int {
 /// `WARGLIST(wp)[n]` and `WARGCOUNT(wp)`: a window's argument list.
 ///
 /// Every window always has one, so this is total.
-fn win_alist(wp: Win) -> *mut ArgList {
-    wp.w_alist
+fn win_alist(window: Win) -> *mut ArgList {
+    window.w_alist
 }
 
-fn warg(wp: Win, n: c_int) -> *mut ArgEntry {
-    alist_arg(win_alist(wp), n)
+fn warg(window: Win, n: c_int) -> *mut ArgEntry {
+    alist_arg(win_alist(window), n)
 }
 
-fn wargcount(wp: Win) -> c_int {
-    alist_count(win_alist(wp))
+fn wargcount(window: Win) -> c_int {
+    alist_count(win_alist(window))
 }
 
 /// `ARGLIST[n]` and `ARGCOUNT`: the current window's argument list.

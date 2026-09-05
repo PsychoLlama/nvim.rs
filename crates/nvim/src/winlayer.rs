@@ -312,20 +312,20 @@ impl DerefMut for PosRef {
 
 impl Win {
     /// # Safety
-    /// `wp` must stay a live window for as long as the value is used.
+    /// `raw` must stay a live window for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(wp: *mut Window) -> Self {
-        Self(wp)
+    pub const unsafe fn new(raw: *mut Window) -> Self {
+        Self(raw)
     }
 
-    /// The window `wp` names, `None` for null.
+    /// The window `raw` names, `None` for null.
     ///
     /// # Safety
-    /// `wp` must be null, or stay a live window for as long as the value is
+    /// `raw` must be null, or stay a live window for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(wp: *mut Window) -> Option<Self> {
-        if wp.is_null() { None } else { Some(Self(wp)) }
+    pub const unsafe fn from_raw(raw: *mut Window) -> Option<Self> {
+        if raw.is_null() { None } else { Some(Self(raw)) }
     }
 
     /// The window the editor is working in.

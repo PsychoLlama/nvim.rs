@@ -387,14 +387,14 @@ pub fn ins_compl_active() -> bool {
     compl_started.get()
 }
 
-/// A completion is running, and `wp` is the window it started in.
+/// A completion is running, and `window` is the window it started in.
 ///
 /// Safe: [`Win`] is a live window, and the two globals hold only the
 /// identities it is compared against.
-pub fn ins_compl_win_active(wp: Win) -> bool {
+pub fn ins_compl_win_active(window: Win) -> bool {
     ins_compl_active()
-        && compl_curr_win.get() == Some(wp.id())
-        && compl_curr_buf.get() == wp.buffer_or_none().map(Buf::id)
+        && compl_curr_win.get() == Some(window.id())
+        && compl_curr_buf.get() == window.buffer_or_none().map(Buf::id)
 }
 
 pub fn ins_compl_used_match() -> bool {

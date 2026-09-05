@@ -41,7 +41,7 @@ use crate::winlayer::{Buf, Win};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
 
-/// Write the commands that restore `wp`'s view.
+/// Write the commands that restore `window`'s view.
 ///
 /// `add_edit` asks for the `:edit` that loads the file; `:mksession` clears
 /// it for the one window whose file it already edited, and `:mkview` clears
@@ -51,11 +51,11 @@ use core::ffi::{c_char, c_int, c_void};
 /// The caller must have set 'scrolloff' to zero.
 ///
 /// # Safety
-/// `wp` and `tabpage` are live; `wp` belongs to `tabpage`. Main thread: this makes
-/// `wp` current for the duration of the option writers.
+/// `window` and `tabpage` are live; `window` belongs to `tabpage`. Main thread: this makes
+/// `window` current for the duration of the option writers.
 pub(crate) unsafe fn put_view(
     out: SessionFile,
-    wp: *mut Window,
+    window: *mut Window,
     tabpage: *mut Tabpage,
     add_edit: bool,
     opts: SessionOpts,
@@ -68,7 +68,7 @@ pub(crate) unsafe fn put_view(
     // SAFETY: caller contract; a window always has a buffer and an argument
     // list.
     // The argument list: the global one, or a local copy written out.
-    if unsafe { (*wp).w_alist } == global_arglist() {
+    if unsafe { (*window).w_alist } == global_arglist() {
         if !out.line(c"argglobal") {
             return false;
         }
@@ -78,8 +78,8 @@ pub(crate) unsafe fn put_view(
         let fullname = !opts.is_session()
             || !opts.has(kOptSsopFlagCurdir)
             || !unsafe { (*tabpage).tp_localdir }.is_null()
-            || !unsafe { (*wp).w_localdir }.is_null();
-        if !unsafe { ses_arglist(out, c"arglocal", &(*(*wp).w_alist).al_ga, fullname) } {
+            || !unsafe { (*window).w_localdir }.is_null();
+        if !unsafe { ses_arglist(out, c"arglocal", &(*(*window).w_alist).al_ga, fullname) } {
             return false;
         }
     }
@@ -87,13 +87,13 @@ pub(crate) unsafe fn put_view(
     // Restore the argument index, but only as part of a session and only
     // when it still points at something: arguments may have been deleted.
     let mut did_next = false;
-    if unsafe { (*wp).w_arg_idx } != current_arg_idx
-        && unsafe { (*wp).w_arg_idx } < unsafe { (*(*wp).w_alist).al_ga.len() as c_int }
+    if unsafe { (*window).w_arg_idx } != current_arg_idx
+        && unsafe { (*window).w_arg_idx } < unsafe { (*(*window).w_alist).al_ga.len() as c_int }
         && opts.is_session()
     {
         if !out.write(format_args!(
             "{}argu\n",
-            unsafe { (*wp).w_arg_idx } as int64_t + 1
+            unsafe { (*window).w_arg_idx } as int64_t + 1
         )) {
             return false;
         }
@@ -101,48 +101,50 @@ pub(crate) unsafe fn put_view(
     }
 
     // Edit the file, unless the `:next` above already did.
-    if add_edit && (!did_next || unsafe { (*wp).w_arg_idx_invalid }) {
-        match unsafe { put_edit(out, wp, opts) } {
+    if add_edit && (!did_next || unsafe { (*window).w_arg_idx_invalid }) {
+        match unsafe { put_edit(out, window, opts) } {
             Some(keep_cursor) => do_cursor &= keep_cursor,
             None => return false,
         }
     }
 
-    if unsafe { (*wp).w_alt_fnum } != 0 && !unsafe { put_alternate(out, wp, opts) } {
+    if unsafe { (*window).w_alt_fnum } != 0 && !unsafe { put_alternate(out, window, opts) } {
         return false;
     }
 
     // Local mappings and abbreviations.
     if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions)
-        && unsafe { makemap(out.raw(), Buf::from_raw((*wp).w_buffer)) }.is_err()
+        && unsafe { makemap(out.raw(), Buf::from_raw((*window).w_buffer)) }.is_err()
     {
         return false;
     }
 
-    if !unsafe { put_local_options(out, wp, opts) } {
+    if !unsafe { put_local_options(out, window, opts) } {
         return false;
     }
 
     // Folds, when 'buftype' is empty and for help files.
-    let buf = unsafe { Win::new(wp) }.buffer();
+    let buf = unsafe { Win::new(window) }.buffer();
     if opts.has(kOptSsopFlagFolds)
         && !buf.b_ffname.is_null()
         && (buf_is_normal(Some(buf)) || buf_is_help(Some(buf)))
-        && unsafe { put_folds(out.raw(), Win::new(wp)) }.is_err()
+        && unsafe { put_folds(out.raw(), Win::new(window)) }.is_err()
     {
         return false;
     }
 
     // The cursor goes last: creating folds moves it.
-    if do_cursor && !unsafe { put_cursor(out, wp) } {
+    if do_cursor && !unsafe { put_cursor(out, window) } {
         return false;
     }
 
     // The window-local directory, unless this is a view that was not
     // asked for directories.
-    if !unsafe { (*wp).w_localdir }.is_null() && (opts.is_session() || opts.has(kOptSsopFlagCurdir))
+    if !unsafe { (*window).w_localdir }.is_null()
+        && (opts.is_session() || opts.has(kOptSsopFlagCurdir))
     {
-        if !out.puts(c"lcd ") || !unsafe { ses_put_fname(out, (*wp).w_localdir) } || !out.eol() {
+        if !out.puts(c"lcd ") || !unsafe { ses_put_fname(out, (*window).w_localdir) } || !out.eol()
+        {
             return false;
         }
         did_lcd.set(true);
@@ -150,18 +152,18 @@ pub(crate) unsafe fn put_view(
     true
 }
 
-/// Write the command that loads `wp`'s file. Answers whether the cursor
+/// Write the command that loads `window`'s file. Answers whether the cursor
 /// position is still worth restoring afterwards -- an empty buffer has no
 /// position -- or `None` when a write failed.
 ///
 /// # Safety
-/// `wp` is live.
-unsafe fn put_edit(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> Option<bool> {
+/// `window` is live.
+unsafe fn put_edit(out: SessionFile, window: *mut Window, opts: SessionOpts) -> Option<bool> {
     // SAFETY: caller contract; `fname_esc` is owned and freed on every path.
-    let buf = unsafe { (*wp).w_buffer };
+    let buf = unsafe { (*window).w_buffer };
     let fname_esc = unsafe { ses_escape_fname(ses_get_fname(buf, opts)) };
     let outcome = if buf_is_help(unsafe { Buf::from_raw(buf) }) {
-        unsafe { put_help_edit(out, wp) }.then_some(true)
+        unsafe { put_help_edit(out, window) }.then_some(true)
     } else if !unsafe { (*buf).b_ffname }.is_null()
         && (!buf_is_nofilename(unsafe { Buf::from_raw(buf) })
             || !unsafe { (*buf).terminal }.is_null())
@@ -199,13 +201,13 @@ unsafe fn put_edit(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> Opti
 /// even when "options" is not in 'sessionoptions'.
 ///
 /// # Safety
-/// `wp` is live.
-unsafe fn put_help_edit(out: SessionFile, wp: *mut Window) -> bool {
+/// `window` is live.
+unsafe fn put_help_edit(out: SessionFile, window: *mut Window) -> bool {
     // SAFETY: caller contract; a tag stack entry's name is NUL-terminated.
-    let curtag = if 0 < unsafe { (*wp).w_tagstackidx }
-        && unsafe { (*wp).w_tagstackidx } <= unsafe { (*wp).w_tagstacklen }
+    let curtag = if 0 < unsafe { (*window).w_tagstackidx }
+        && unsafe { (*window).w_tagstackidx } <= unsafe { (*window).w_tagstacklen }
     {
-        unsafe { (*wp).w_tagstack[((*wp).w_tagstackidx - 1) as usize].tagname }
+        unsafe { (*window).w_tagstack[((*window).w_tagstackidx - 1) as usize].tagname }
     } else {
         c"".as_ptr().cast_mut()
     };
@@ -219,10 +221,10 @@ unsafe fn put_help_edit(out: SessionFile, wp: *mut Window) -> bool {
 /// written and the alternate buffer is one a restore could find again.
 ///
 /// # Safety
-/// `wp` is live.
-unsafe fn put_alternate(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> bool {
+/// `window` is live.
+unsafe fn put_alternate(out: SessionFile, window: *mut Window, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `find_buf` answers a live buffer or null.
-    let alt = unsafe { find_buf((*wp).w_alt_fnum) };
+    let alt = unsafe { find_buf((*window).w_alt_fnum) };
     let restorable = alt.is_some_and(|b| {
         // SAFETY: a live buffer's own file name, which is NUL-terminated.
         !b.b_fname.is_null() && unsafe { *b.b_fname } != NUL as c_char && b.b_p_bl != 0
@@ -243,12 +245,12 @@ unsafe fn put_alternate(out: SessionFile, wp: *mut Window, opts: SessionOpts) ->
 /// for the duration. Nothing between the two assignments runs Vimscript.
 ///
 /// # Safety
-/// `wp` is live.
-unsafe fn put_local_options(out: SessionFile, wp: *mut Window, opts: SessionOpts) -> bool {
+/// `window` is live.
+unsafe fn put_local_options(out: SessionFile, window: *mut Window, opts: SessionOpts) -> bool {
     // SAFETY: caller contract; `curwin`/`curbuf` are restored before
     // returning either way.
     let save_curwin = curwin.get();
-    curwin.set(wp);
+    curwin.set(window);
     curbuf.set(unsafe { (*curwin.get()).w_buffer });
     let f = if opts.has(kOptSsopFlagOptions | kOptSsopFlagLocaloptions) {
         // Store only the local values for a view, and for a session
@@ -270,17 +272,17 @@ unsafe fn put_local_options(out: SessionFile, wp: *mut Window, opts: SessionOpts
 /// change the jumplist.
 ///
 /// # Safety
-/// `wp` is live.
-unsafe fn put_cursor(out: SessionFile, wp: *mut Window) -> bool {
+/// `window` is live.
+unsafe fn put_cursor(out: SessionFile, window: *mut Window) -> bool {
     // SAFETY: caller contract.
-    let height = unsafe { (*wp).w_view_height };
-    let lnum = unsafe { (*wp).w_cursor.lnum };
+    let height = unsafe { (*window).w_view_height };
+    let lnum = unsafe { (*window).w_cursor.lnum };
     let placed = if height <= 0 {
         out.write(format_args!("let s:l = {lnum}\n"))
     } else {
         out.write(format_args!(
             "let s:l = {lnum} - (({} * winheight(0) + {}) / {height})\n",
-            lnum - unsafe { (*wp).w_topline },
+            lnum - unsafe { (*window).w_topline },
             height / 2,
         ))
     };
@@ -293,23 +295,26 @@ unsafe fn put_cursor(out: SessionFile, wp: *mut Window) -> bool {
     }
 
     // The column, and the left offset when not wrapping.
-    if unsafe { (*wp).w_cursor.col } == 0 {
+    if unsafe { (*window).w_cursor.col } == 0 {
         return out.line(c"normal! 0");
     }
-    let width = unsafe { (*wp).w_width };
-    if unsafe { (*wp).w_onebuf_opt.wo_wrap } == 0 && unsafe { (*wp).w_leftcol } > 0 && width > 0 {
-        let virtcol = unsafe { (*wp).w_virtcol } as int64_t;
+    let width = unsafe { (*window).w_width };
+    if unsafe { (*window).w_onebuf_opt.wo_wrap } == 0
+        && unsafe { (*window).w_leftcol } > 0
+        && width > 0
+    {
+        let virtcol = unsafe { (*window).w_virtcol } as int64_t;
         return out.write(format_args!(
             "let s:c = {} - (({} * winwidth(0) + {}) / {})\nif s:c > 0\n  exe 'normal! ' . s:c . '|zs' . {} . '|'\nelse\n",
             virtcol + 1,
-            (unsafe { (*wp) .w_virtcol } - unsafe { (*wp) .w_leftcol }) as int64_t,
+            (unsafe { (*window) .w_virtcol } - unsafe { (*window) .w_leftcol }) as int64_t,
             (width / 2) as int64_t,
             width as int64_t,
             virtcol + 1,
-        )) && unsafe { put_view_curpos(out, wp, "  ") }
+        )) && unsafe { put_view_curpos(out, window, "  ") }
             && out.line(c"endif");
     }
-    unsafe { put_view_curpos(out, wp, "") }
+    unsafe { put_view_curpos(out, window, "") }
 }
 
 /// The `normal!` command that puts the cursor on its column. `$` when the
@@ -317,15 +322,15 @@ unsafe fn put_cursor(out: SessionFile, wp: *mut Window) -> bool {
 /// column, one-based.
 ///
 /// # Safety
-/// `wp` is live.
-unsafe fn put_view_curpos(out: SessionFile, wp: *const Window, spaces: &str) -> bool {
+/// `window` is live.
+unsafe fn put_view_curpos(out: SessionFile, window: *const Window, spaces: &str) -> bool {
     // SAFETY: caller contract.
-    if unsafe { (*wp).w_curswant } == MAXCOL {
+    if unsafe { (*window).w_curswant } == MAXCOL {
         out.write(format_args!("{spaces}normal! $\n"))
     } else {
         out.write(format_args!(
             "{spaces}normal! 0{}|\n",
-            unsafe { (*wp).w_virtcol } + 1
+            unsafe { (*window).w_virtcol } + 1
         ))
     }
 }

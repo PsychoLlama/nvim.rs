@@ -336,12 +336,12 @@ pub unsafe fn parse_border_style(style: Object, fconfig: *mut WinConfig, err: &m
 }
 
 /// # Safety
-/// `wp` must be null or a live window.
-pub(crate) unsafe fn generate_api_error(wp: *mut Window, attribute: &CStr, err: &mut Error) {
+/// `window` must be null or a live window.
+pub(crate) unsafe fn generate_api_error(window: *mut Window, attribute: &CStr, err: &mut Error) {
     // SAFETY: the caller's window.
-    if !wp.is_null() && unsafe { (*wp).w_floating } {
+    if !window.is_null() && unsafe { (*window).w_floating } {
         // SAFETY: the caller's window.
-        let handle = unsafe { (*wp).handle };
+        let handle = unsafe { (*window).handle };
         let e = api_error!(
             kErrorTypeValidation,
             "Required: 'relative' when reconfiguring floating window {handle}"

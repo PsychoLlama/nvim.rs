@@ -155,10 +155,10 @@ fn get_col(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
 /// (always false) answer. See F-P22-36.
 ///
 /// # Safety
-/// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
-unsafe fn virtualedit_tail(wp: *mut Window, bp: *mut Buffer, fp: *mut Pos) -> ColNr {
+/// `window`, `bp` and `fp` are live, and `fp` is a position in `bp`.
+unsafe fn virtualedit_tail(window: *mut Window, bp: *mut Buffer, fp: *mut Pos) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut win = unsafe { Win::new(wp) };
+    let mut win = unsafe { Win::new(window) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
     // and is only walked forward by one character.
     if !virtual_active(win) || fp != &raw mut win.w_cursor {
@@ -349,29 +349,29 @@ fn getpos_both(args: Args<'_>, rettv: &mut TypVal, getcurpos: bool, charcol: boo
 /// invalidated so the next reader recomputes it properly.
 ///
 /// # Safety
-/// `l` is a live list and `wp` is a window pointer or null.
-unsafe fn append_curswant(l: *mut List, wp: *mut Window) {
+/// `l` is a live list and `window` is a window pointer or null.
+unsafe fn append_curswant(l: *mut List, window: *mut Window) {
     // SAFETY throughout: the caller's obligation.
     let cur = curwin.get();
     let saved_set_curswant = unsafe { (*cur).w_set_curswant };
     let saved_curswant = unsafe { (*cur).w_curswant };
     let saved_virtcol = unsafe { (*cur).w_virtcol };
-    if wp == cur {
+    if window == cur {
         unsafe { update_curswant() };
     }
-    // SAFETY throughout: `wp` is null or the window resolved above, and `l` the list
+    // SAFETY throughout: `window` is null or the window resolved above, and `l` the list
     // being filled in.
-    let curswant = if wp.is_null() {
+    let curswant = if window.is_null() {
         0
-    } else if unsafe { (*wp).w_curswant } == END_OF_LINE {
+    } else if unsafe { (*window).w_curswant } == END_OF_LINE {
         MAXCOL as VarNumber
     } else {
-        (unsafe { (*wp).w_curswant }) as VarNumber + 1
+        (unsafe { (*window).w_curswant }) as VarNumber + 1
     };
     unsafe { tv_list_append_number(l, curswant) };
     // Only restored when 'curswant' was due to be recomputed anyway:
     // if it was already valid, `update_curswant` did not change it.
-    if wp == cur && saved_set_curswant {
+    if window == cur && saved_set_curswant {
         unsafe { (*cur).w_set_curswant = saved_set_curswant };
         unsafe { (*cur).w_curswant = saved_curswant };
         unsafe { (*cur).w_virtcol = saved_virtcol };

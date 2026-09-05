@@ -179,7 +179,7 @@ impl ScanLine {
 /// accepts anything that is not white space. Each pass scans forward from the
 /// position for a character it will take, then backs up to that run's start.
 pub(crate) unsafe fn find_ident_at_pos(
-    wp: Win,
+    window: Win,
     lnum: LineNr,
     mut startcol: ColNr,
     text: *mut *mut c_char,
@@ -187,8 +187,8 @@ pub(crate) unsafe fn find_ident_at_pos(
     find_type: c_int,
 ) -> size_t {
     let eval = find_type & FIND_EVAL as c_int != 0;
-    // SAFETY: `wp` is a live window, so its buffer is live too.
-    let mut line = ScanLine(unsafe { ml_get_buf(wp.w_buffer, lnum) });
+    // SAFETY: `window` is a live window, so its buffer is live too.
+    let mut line = ScanLine(unsafe { ml_get_buf(window.w_buffer, lnum) });
     let mut col: c_int = 0;
     let mut this_class: c_int = 0;
     // Pass 0 wants a word character; pass 1 will take punctuation too.

@@ -92,7 +92,11 @@ pub unsafe fn diff_redraw(dofold: bool) {
 ///
 /// # Safety
 /// `linestatus` must be null or writable.
-pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: LineNr, linestatus: *mut c_int) -> c_int {
+pub unsafe fn diff_check_with_linestatus(
+    window: Win,
+    lnum: LineNr,
+    linestatus: *mut c_int,
+) -> c_int {
     let set_status = |status| {
         if !linestatus.is_null() {
             // SAFETY: the caller's out-parameter, and it is not null.
@@ -103,12 +107,12 @@ pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: LineNr, linestatus: *mut
 
     let tp = cur_tab();
     // SAFETY: a live window's buffer is live; a diffed window always has one.
-    let buf = unsafe { Buf::new(wp.w_buffer) };
+    let buf = unsafe { Buf::new(window.w_buffer) };
     if tp.tp_diff_invalid != 0 {
         // SAFETY: the editor exists.
         unsafe { ex_diffupdate(::core::ptr::null_mut()) };
     }
-    if tp.tp_first_diff.is_null() || wp.w_onebuf_opt.wo_diff == 0 {
+    if tp.tp_first_diff.is_null() || window.w_onebuf_opt.wo_diff == 0 {
         return 0;
     }
     // One past the last line is legal: that is where the filler for a
@@ -127,7 +131,7 @@ pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: LineNr, linestatus: *mut
     //
     // SAFETY: a live window. The short circuit is upstream's: the conceal
     // query runs only for a line that is not folded away.
-    if wp.fold_span(lnum).0 || unsafe { decor_conceal_line(wp.raw(), lnum - 1, false) } {
+    if window.fold_span(lnum).0 || unsafe { decor_conceal_line(window.raw(), lnum - 1, false) } {
         return 0;
     }
 
@@ -142,8 +146,8 @@ pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: LineNr, linestatus: *mut
 
     // Line matching is deferred until a block is actually on screen.
     // SAFETY: a live block and a live tab page, in all three calls.
-    let match_now = lnum >= wp.w_topline
-        && lnum < wp.w_botline
+    let match_now = lnum >= window.w_topline
+        && lnum < window.w_botline
         && !dp.is_linematched
         && unsafe { diff_linematch(dp.raw()) }
         && dp.is_sane(tp);
@@ -210,12 +214,12 @@ pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: LineNr, linestatus: *mut
 /// `filler`.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_check_fill(wp: Win, lnum: LineNr) -> c_int {
+pub fn diff_check_fill(window: Win, lnum: LineNr) -> c_int {
     if diff_flags.get() & DIFF_FILLER == 0 {
         return 0;
     }
     // SAFETY: no status is asked for, so there is nothing to write through.
-    unsafe { diff_check_with_linestatus(wp, lnum, ::core::ptr::null_mut()) }.max(0)
+    unsafe { diff_check_with_linestatus(window, lnum, ::core::ptr::null_mut()) }.max(0)
 }
 
 /// Whether `lnum` belongs inside a closed diff fold.
@@ -224,15 +228,15 @@ pub fn diff_check_fill(wp: Win, lnum: LineNr) -> c_int {
 /// window whose buffer is the only one in the diff folds nothing.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_infold(wp: Win, lnum: LineNr) -> bool {
-    if wp.w_onebuf_opt.wo_diff == 0 {
+pub fn diff_infold(window: Win, lnum: LineNr) -> bool {
+    if window.w_onebuf_opt.wo_diff == 0 {
         return false;
     }
     let tp = cur_tab();
     let mut idx = None;
     let mut other = false;
     for i in 0..DB_COUNT as usize {
-        if tp.tp_diffbuf[i] == wp.w_buffer {
+        if tp.tp_diffbuf[i] == window.w_buffer {
             idx = Some(i);
         } else if !tp.tp_diffbuf[i].is_null() {
             other = true;

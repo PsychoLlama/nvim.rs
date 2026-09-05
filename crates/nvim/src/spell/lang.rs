@@ -231,7 +231,7 @@ static recursive: GlobalCell<bool> = GlobalCell::new(false);
 /// Parse `'spelllang'` and fill `wp->w_s->b_langp`.
 ///
 /// Returns null on success, or an untranslated error message.
-pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
+pub unsafe fn parse_spelllang(window: *mut Window) -> Option<&'static CStr> {
     if recursive.get() {
         return None;
     }
@@ -245,16 +245,16 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
     let mut nobreak = false;
     let mut ret_msg: Option<&'static CStr> = None;
 
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw((*wp).w_buffer) });
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw((*window).w_buffer) });
 
     let mut ga: GArray = unsafe { core::mem::zeroed() };
     unsafe { ga_init(&raw mut ga, size_of::<LangP>() as c_int, 2) };
-    clear_midword(wp);
+    clear_midword(window);
 
     // The SpellFileMissing autocommands may change 'spelllang' underfoot.
-    let spl_copy = unsafe { xstrdup((*(*wp).w_s).b_p_spl) };
+    let spl_copy = unsafe { xstrdup((*(*window).w_s).b_p_spl) };
 
-    unsafe { (*(*wp).w_s).b_cjk = 0 };
+    unsafe { (*(*window).w_s).b_cjk = 0 };
 
     let mut splp = spl_copy;
     'names: while unsafe { *splp } != 0 {
@@ -268,7 +268,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
         }
 
         if unsafe { cstr::eq_bytes(lang.as_ptr(), b"cjk") } {
-            unsafe { (*(*wp).w_s).b_cjk = 1 };
+            unsafe { (*(*window).w_s).b_cjk = 1 };
             continue;
         }
 
@@ -341,7 +341,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                 unsafe { spell_load_lang(lang.as_mut_ptr()) };
                 // The autocommands may have destroyed the buffer being
                 // used, or closed the window.
-                if !bufref.valid() || !win_valid_any_tab(wp) {
+                if !bufref.valid() || !win_valid_any_tab(window) {
                     ret_msg = Some(c"E797: SpellFileMissing autocommand deleted buffer");
                     break 'names;
                 }
@@ -384,7 +384,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                     unsafe { (*p_).lp_slang = slang };
                     unsafe { (*p_).lp_region = region_mask };
 
-                    unsafe { use_midword(slang, wp) };
+                    unsafe { use_midword(slang, window) };
                     if unsafe { (*slang).sl_nobreak } {
                         nobreak = true;
                     }
@@ -486,15 +486,15 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                     unsafe { (*p_).lp_replang = core::ptr::null_mut() };
                     unsafe { (*p_).lp_region = region_mask };
 
-                    unsafe { use_midword(slang, wp) };
+                    unsafe { use_midword(slang, window) };
                 }
             }
             round += 1;
         }
 
         // Everything worked; publish the new list.
-        unsafe { ga_clear(&raw mut (*(*wp).w_s).b_langp) };
-        unsafe { (*(*wp).w_s).b_langp = ga };
+        unsafe { ga_clear(&raw mut (*(*window).w_s).b_langp) };
+        unsafe { (*(*window).w_s).b_langp = ga };
 
         // A language with no sound folding or no REP items of its own
         // borrows from the first similarly-named one that has them, so
@@ -536,7 +536,7 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
                 }
             }
         }
-        unsafe { redraw_later(wp, UPD_NOT_VALID) };
+        unsafe { redraw_later(window, UPD_NOT_VALID) };
     }
 
     unsafe { xfree(spl_copy as *mut c_void) };
@@ -544,11 +544,11 @@ pub unsafe fn parse_spelllang(wp: *mut Window) -> Option<&'static CStr> {
     ret_msg
 }
 
-/// Forget the midword characters recorded for `wp`.
-fn clear_midword(wp: *mut Window) {
-    unsafe { (*(*wp).w_s).b_spell_ismw = [false; 256] };
-    unsafe { xfree((*(*wp).w_s).b_spell_ismw_mb as *mut c_void) };
-    unsafe { (*(*wp).w_s).b_spell_ismw_mb = core::ptr::null_mut() };
+/// Forget the midword characters recorded for `window`.
+fn clear_midword(window: *mut Window) {
+    unsafe { (*(*window).w_s).b_spell_ismw = [false; 256] };
+    unsafe { xfree((*(*window).w_s).b_spell_ismw_mb as *mut c_void) };
+    unsafe { (*(*window).w_s).b_spell_ismw_mb = core::ptr::null_mut() };
 }
 
 /// The index of region `region[..2]` in `rp` (which is `sl_regions`, two
@@ -694,7 +694,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
     None
 }
 
-/// Record `lp`'s `MIDWORD` characters in `wp`, so that [`spell_iswordp`]
+/// Record `lp`'s `MIDWORD` characters in `window`, so that [`spell_iswordp`]
 /// treats them as part of a word when a word character follows.
 ///
 /// Characters below 256 that take at most two bytes go in the flat
@@ -702,7 +702,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
-unsafe fn use_midword(lp: *mut SpellLang, wp: *mut Window) {
+unsafe fn use_midword(lp: *mut SpellLang, window: *mut Window) {
     if unsafe { (*lp).sl_midword }.is_null() {
         return;
     }
@@ -712,15 +712,15 @@ unsafe fn use_midword(lp: *mut SpellLang, wp: *mut Window) {
         let c = unsafe { utf_ptr2char(p) };
         let l = unsafe { utfc_ptr2len(p) };
         if c < 256 && l <= 2 {
-            unsafe { (*(*wp).w_s).b_spell_ismw[c as usize] = true };
-        } else if unsafe { (*(*wp).w_s).b_spell_ismw_mb }.is_null() {
+            unsafe { (*(*window).w_s).b_spell_ismw[c as usize] = true };
+        } else if unsafe { (*(*window).w_s).b_spell_ismw_mb }.is_null() {
             let copy = unsafe { xmemdupz(p as *const c_void, l as size_t) };
-            unsafe { (*(*wp).w_s).b_spell_ismw_mb = copy as *mut c_char };
+            unsafe { (*(*window).w_s).b_spell_ismw_mb = copy as *mut c_char };
         } else {
-            let n = unsafe { cstr::bytes_at((*(*wp).w_s).b_spell_ismw_mb) }.len() as c_int;
-            let bp = unsafe { xstrnsave((*(*wp).w_s).b_spell_ismw_mb, (n + l) as size_t) };
-            unsafe { xfree((*(*wp).w_s).b_spell_ismw_mb as *mut c_void) };
-            unsafe { (*(*wp).w_s).b_spell_ismw_mb = bp };
+            let n = unsafe { cstr::bytes_at((*(*window).w_s).b_spell_ismw_mb) }.len() as c_int;
+            let bp = unsafe { xstrnsave((*(*window).w_s).b_spell_ismw_mb, (n + l) as size_t) };
+            unsafe { xfree((*(*window).w_s).b_spell_ismw_mb as *mut c_void) };
+            unsafe { (*(*window).w_s).b_spell_ismw_mb = bp };
             let at = unsafe { bp.offset(n as isize) } as *mut c_void;
             unsafe { xmemcpyz(at, p as *const c_void, l as size_t) };
         }

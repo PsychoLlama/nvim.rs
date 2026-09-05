@@ -384,13 +384,13 @@ pub(crate) fn add_hsep(frp: FrameRef) {
 }
 
 /// Set a leaf frame's width from the window it contains.
-pub(crate) fn frame_fix_width(wp: Win) {
-    let mut frame = wp.frame();
-    frame.fr_width = wp.w_width + wp.w_vsep_width;
+pub(crate) fn frame_fix_width(window: Win) {
+    let mut frame = window.frame();
+    frame.fr_width = window.w_width + window.w_vsep_width;
 }
 
 /// Set a leaf frame's height from the window it contains.
-pub(crate) fn frame_fix_height(wp: Win) {
-    let mut frame = wp.frame();
-    frame.fr_height = wp.w_height + wp.w_hsep_height + wp.w_status_height;
+pub(crate) fn frame_fix_height(window: Win) {
+    let mut frame = window.frame();
+    frame.fr_height = window.w_height + window.w_hsep_height + window.w_status_height;
 }

@@ -141,19 +141,24 @@ pub unsafe fn set_ref_in_quickfix(copy_id: c_int) -> bool {
 /// # Safety
 ///
 /// The two values must be live.
-unsafe fn get_qf_loc_list(is_qf: bool, wp: Option<Win>, what_arg: *mut TypVal, rettv: *mut TypVal) {
+unsafe fn get_qf_loc_list(
+    is_qf: bool,
+    window: Option<Win>,
+    what_arg: *mut TypVal,
+    rettv: *mut TypVal,
+) {
     // SAFETY: forwarded from the caller.
     if unsafe { (*what_arg).v_type } == VAR_UNKNOWN {
         unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
-        if is_qf || wp.is_some() {
+        if is_qf || window.is_some() {
             // No list, or an empty one, is an empty answer, not an error.
-            let _ = unsafe { get_errorlist(ptr::null_mut(), wp, -1, 0, (*rettv).vval.v_list) };
+            let _ = unsafe { get_errorlist(ptr::null_mut(), window, -1, 0, (*rettv).vval.v_list) };
         }
         return;
     }
 
     unsafe { tv_dict_alloc_ret(rettv) };
-    if !is_qf && wp.is_none() {
+    if !is_qf && window.is_none() {
         return;
     }
     if unsafe { (*what_arg).v_type } != VAR_DICT {
@@ -164,7 +169,7 @@ unsafe fn get_qf_loc_list(is_qf: bool, wp: Option<Win>, what_arg: *mut TypVal, r
     if !d.is_null() {
         // A request that names nothing readable answers the empty
         // dictionary that is already in `rettv`.
-        let _ = unsafe { qf_get_properties(wp, d, (*rettv).vval.v_dict) };
+        let _ = unsafe { qf_get_properties(window, d, (*rettv).vval.v_dict) };
     }
 }
 
@@ -194,8 +199,8 @@ pub unsafe fn f_getqflist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 ///
-/// `wp` must be null or a live window, and `args` hold three values.
-unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut TypVal, rettv: *mut TypVal) {
+/// `window` must be null or a live window, and `args` hold three values.
+unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, rettv: *mut TypVal) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     /// Set while `set_errorlist` runs, because an autocommand it fires may
@@ -255,7 +260,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut TypVal, rettv: *mut TypVal)
     }
 
     if title.is_null() {
-        title = if wp.is_none() {
+        title = if window.is_none() {
             c":setqflist()".as_ptr()
         } else {
             c":setloclist()".as_ptr()
@@ -264,7 +269,7 @@ unsafe fn set_qf_ll_list(wp: Option<Win>, args: *mut TypVal, rettv: *mut TypVal)
 
     let _recursing = Depth::of(&RECURSIVE);
     let l = unsafe { (*list_arg).vval.v_list };
-    if unsafe { set_errorlist(wp, l, action as c_int, title.cast_mut(), what) }.is_ok() {
+    if unsafe { set_errorlist(window, l, action as c_int, title.cast_mut(), what) }.is_ok() {
         unsafe { (*rettv).vval.v_number = 0 };
     }
 }

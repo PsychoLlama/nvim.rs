@@ -187,9 +187,9 @@ pub unsafe fn fold_adjust_visual() {
 }
 
 /// Move the cursor to the first line of a closed fold.
-pub fn fold_adjust_cursor(wp: Win) {
-    let mut cursor = wp.cursor();
-    if let Some(first) = wp.fold_first(cursor.lnum) {
+pub fn fold_adjust_cursor(window: Win) {
+    let mut cursor = window.cursor();
+    if let Some(first) = window.fold_first(cursor.lnum) {
         cursor.lnum = first;
     }
 }
@@ -200,7 +200,7 @@ pub fn fold_adjust_cursor(wp: Win) {
 /// make sure that line2 does not get smaller than line1
 ///
 pub fn fold_mark_adjust(
-    wp: Win,
+    window: Win,
     mut line1: LineNr,
     mut line2: LineNr,
     amount: LineNr,
@@ -215,7 +215,7 @@ pub fn fold_mark_adjust(
     if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as LineNr {
         line1 -= 1;
     }
-    adjust_fold_list(window_folds(wp), line1, line2, amount, amount_after);
+    adjust_fold_list(window_folds(window), line1, line2, amount, amount_after);
 }
 
 /// Shift and truncate the folds of `gap` for a change to lines

@@ -247,9 +247,9 @@ pub fn decor_state_free(mut state: DecorStateRef) {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn decor_redraw_reset(wp: *mut Window, mut state: DecorStateRef) -> bool {
+pub unsafe fn decor_redraw_reset(window: *mut Window, mut state: DecorStateRef) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     state.row = -1;
     state.win = wp.raw();
 
@@ -297,12 +297,12 @@ pub unsafe fn decor_virt_pos_kind(decor: *const DecorRange) -> VirtTextPos {
 /// # Safety
 /// `wp` must be live.
 pub unsafe fn decor_redraw_start(
-    wp: *mut Window,
+    window: *mut Window,
     top_row: c_int,
     mut state: DecorStateRef,
 ) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     let buf = wp.buffer();
     state.top_row = top_row;
     state.itr_valid = true;
@@ -361,9 +361,9 @@ pub(crate) fn decor_state_pack(mut state: DecorStateRef) {
 ///
 /// # Safety
 /// `wp` must be live.
-pub unsafe fn decor_redraw_line(wp: *mut Window, row: c_int, mut state: DecorStateRef) {
+pub unsafe fn decor_redraw_line(window: *mut Window, row: c_int, mut state: DecorStateRef) {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     decor_state_pack(state);
 
     if state.row == -1 {
@@ -678,7 +678,7 @@ pub fn decor_recheck_draw_col(win_col: c_int, hidden: bool, state: DecorStateRef
 /// # Safety
 /// `wp` must be live.
 pub unsafe fn decor_redraw_col_impl(
-    wp: *mut Window,
+    window: *mut Window,
     col: c_int,
     win_col: c_int,
     hidden: bool,
@@ -686,7 +686,7 @@ pub unsafe fn decor_redraw_col_impl(
     max_col_last: c_int,
 ) -> c_int {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     let buf = wp.buffer();
     let row = state.row;
     let mut col_last = max_col_last;
@@ -865,10 +865,10 @@ pub unsafe fn decor_redraw_col_impl(
 /// column has not passed the point the last answer holds to.
 ///
 /// # Safety
-/// `wp` must be live.
+/// `window` must be live.
 #[inline(always)]
 pub unsafe fn decor_redraw_col(
-    wp: *mut Window,
+    window: *mut Window,
     col: c_int,
     win_col: c_int,
     hidden: bool,
@@ -879,16 +879,16 @@ pub unsafe fn decor_redraw_col(
         return state.current;
     }
     // SAFETY: the caller's window.
-    unsafe { decor_redraw_col_impl(wp, col, win_col, hidden, state, max_col_last) }
+    unsafe { decor_redraw_col_impl(window, col, win_col, hidden, state, max_col_last) }
 }
 
 /// Finishes the line: folds in the `hl_eol` highlights that colour past the
 /// end of the text, and says whether anything virtual still wants drawing.
 ///
 /// # Safety
-/// `wp` must be live and `eol_attr` writable.
+/// `window` must be live and `eol_attr` writable.
 pub unsafe fn decor_redraw_eol(
-    wp: *mut Window,
+    window: *mut Window,
     mut state: DecorStateRef,
     eol_attr: *mut c_int,
     eol_col: c_int,
@@ -896,7 +896,7 @@ pub unsafe fn decor_redraw_eol(
     // SAFETY: the caller's out-parameter.
     let eol_attr = unsafe { &mut *eol_attr };
     // SAFETY: the caller's window.
-    unsafe { decor_redraw_col(wp, MAXCOL, MAXCOL, false, state, MAXCOL) };
+    unsafe { decor_redraw_col(window, MAXCOL, MAXCOL, false, state, MAXCOL) };
     state.eol_col = eol_col;
 
     let mut has_virt_pos = false;

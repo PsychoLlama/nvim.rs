@@ -806,8 +806,8 @@ fn cur_win() -> Win {
     unsafe { Win::current() }
 }
 
-/// Whether `lnum` is inside a closed fold of `wp`.
-fn folded(wp: Win, lnum: LineNr) -> bool {
+/// Whether `lnum` is inside a closed fold of `window`.
+fn folded(window: Win, lnum: LineNr) -> bool {
     // Both fold ends are unwanted.
-    has_folding(wp, lnum, None, None)
+    has_folding(window, lnum, None, None)
 }

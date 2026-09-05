@@ -137,9 +137,9 @@ pub unsafe fn decor_find_virttext(
 ///
 /// # Safety
 /// `wp` must point to a live window; runs Lua through the providers.
-pub unsafe fn decor_conceal_line(wp: *mut Window, row: c_int, check_cursor: bool) -> bool {
+pub unsafe fn decor_conceal_line(window: *mut Window, row: c_int, check_cursor: bool) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     if row < 0
         || wp.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
@@ -186,9 +186,9 @@ pub unsafe fn decor_conceal_line(wp: *mut Window, row: c_int, check_cursor: bool
 ///
 /// # Safety
 /// `wp` must point to a live window.
-pub unsafe fn win_lines_concealed(wp: *mut Window) -> bool {
+pub unsafe fn win_lines_concealed(window: *mut Window) -> bool {
     // SAFETY: the caller's window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     wp.has_any_folding() || wp.w_onebuf_opt.wo_cole >= 2 as OptInt
 }
 
@@ -204,7 +204,7 @@ pub unsafe fn win_lines_concealed(wp: *mut Window) -> bool {
 /// `wp` must be live; `lines` must be null or a live `VirtLines` this may
 /// grow; `num_below` null or writable.
 pub unsafe fn decor_virt_lines(
-    wp: *mut Window,
+    window: *mut Window,
     start_row: c_int,
     end_row: c_int,
     num_below: *mut c_int,
@@ -213,7 +213,7 @@ pub unsafe fn decor_virt_lines(
 ) -> c_int {
     // SAFETY: the caller's window and out-parameters, null or writable.
     let (wp, mut lines, mut num_below) =
-        unsafe { (Win::new(wp), lines.as_mut(), num_below.as_mut()) };
+        unsafe { (Win::new(window), lines.as_mut(), num_below.as_mut()) };
     let buf = wp.buffer();
     // Only pay for what you use: in a buffer with no virt_lines the layout
     // code does not reach the marktree at all.

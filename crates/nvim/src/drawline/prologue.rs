@@ -32,11 +32,11 @@ use crate::types::NUL;
 /// behind a decoration.
 ///
 /// # Safety
-/// `wp` must be a live window, `spv` a live `SpellVars`, and `wlv` must have
+/// `window` must be a live window, `spv` a live `SpellVars`, and `wlv` must have
 /// been initialised for this line (`lnum`, `foldinfo`, `startrow`).
 pub(crate) unsafe fn prepare_line(
     wlv: &mut WinLineVars,
-    wp: Win,
+    window: Win,
     endrow: ::core::ffi::c_int,
     col_rows: ::core::ffi::c_int,
     concealed: bool,
@@ -45,98 +45,102 @@ pub(crate) unsafe fn prepare_line(
 ) -> LineSetup {
     // SAFETY: the caller's window, spell state and line.
     let lnum = wlv.lnum;
-    let mut s = unsafe { LineSetup::new(wp, wlv, concealed) };
+    let mut s = unsafe { LineSetup::new(window, wlv, concealed) };
 
     if col_rows == 0 && s.draw_text {
         // `extra_check` is the character loop's "nothing here needs the
         // slow path" test; every source of per-character work sets it.
-        s.extra_check = wp.w_onebuf_opt.wo_lbr != 0;
-        unsafe { s.start_syntax(wp, lnum) };
+        s.extra_check = window.w_onebuf_opt.wo_lbr != 0;
+        unsafe { s.start_syntax(window, lnum) };
         s.check_decor_providers = true;
 
         // 'colorcolumn'; a terminal buffer never shows one.
-        wlv.color_cols = if unsafe { (*wp.w_buffer).terminal }.is_null() {
-            wp.w_p_cc_cols
+        wlv.color_cols = if unsafe { (*window.w_buffer).terminal }.is_null() {
+            window.w_p_cc_cols
         } else {
             ::core::ptr::null_mut()
         };
         unsafe { wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co) };
 
-        if wp.w_buffer == unsafe { (*curwin.get()).w_buffer }
+        if window.w_buffer == unsafe { (*curwin.get()).w_buffer }
             && let Some(sel) = visual_selection()
         {
-            unsafe { s.visual_area(wlv, wp, sel) };
+            unsafe { s.visual_area(wlv, window, sel) };
         } else if highlight_match.get()
-            && wp.raw() == curwin.get()
+            && window.raw() == curwin.get()
             && !s.has_foldtext
             && lnum >= unsafe { (*curwin.get()).w_cursor.lnum }
             && lnum <= unsafe { (*curwin.get()).w_cursor.lnum } + search_match_lines.get()
         {
-            unsafe { s.incsearch_area(wlv, wp) };
+            unsafe { s.incsearch_area(wlv, window) };
         }
     }
 
-    s.bg_attr = unsafe { win_bg_attr(wp.raw()) };
-    unsafe { s.diff_state(wlv, Win::new(wp.raw())) };
-    unsafe { s.filler_lines(wlv, wp) };
-    unsafe { s.cursorline(wlv, wp) };
-    unsafe { s.signs_and_statuscolumn(wlv, wp) };
+    s.bg_attr = unsafe { win_bg_attr(window.raw()) };
+    unsafe { s.diff_state(wlv, Win::new(window.raw())) };
+    unsafe { s.filler_lines(wlv, window) };
+    unsafe { s.cursorline(wlv, window) };
+    unsafe { s.signs_and_statuscolumn(wlv, window) };
     s.line_attr_save = wlv.line_attr;
     s.line_attr_lowprio_save = wlv.line_attr_lowprio;
 
     if unsafe { (*spv).spv_has_spell } && col_rows == 0 && s.draw_text {
-        unsafe { s.spell_line_start(wp, lnum, spv, nextline) };
+        unsafe { s.spell_line_start(window, lnum, spv, nextline) };
     }
 
     s.line = if s.draw_text {
-        unsafe { ml_get_buf(wp.w_buffer, lnum) }
+        unsafe { ml_get_buf(window.w_buffer, lnum) }
     } else {
         c"".as_ptr().cast_mut()
     };
     s.ptr = s.line;
-    s.lcs_eol = wp.w_p_lcs_chars.eol;
-    s.lcs_prec_todo = wp.w_p_lcs_chars.prec;
-    if wp.w_onebuf_opt.wo_list != 0 && !s.has_foldtext && s.draw_text {
-        unsafe { s.listchars_columns(wp, lnum) };
+    s.lcs_eol = window.w_p_lcs_chars.eol;
+    s.lcs_prec_todo = window.w_p_lcs_chars.prec;
+    if window.w_onebuf_opt.wo_list != 0 && !s.has_foldtext && s.draw_text {
+        unsafe { s.listchars_columns(window, lnum) };
     }
 
     // 'nowrap', or 'wrap' with a line scrolled sideways: advance to the
     // first character that is on screen.
-    s.start_vcol = if wp.w_onebuf_opt.wo_wrap != 0 {
-        if wlv.startrow == 0 { wp.w_skipcol } else { 0 }
+    s.start_vcol = if window.w_onebuf_opt.wo_wrap != 0 {
+        if wlv.startrow == 0 {
+            window.w_skipcol
+        } else {
+            0
+        }
     } else {
-        wp.w_leftcol
+        window.w_leftcol
     };
     if s.has_foldtext {
         wlv.vcol = s.start_vcol;
     } else if s.start_vcol > 0 && col_rows == 0 {
-        unsafe { s.skip_to_start_vcol(wlv, wp, spv) };
+        unsafe { s.skip_to_start_vcol(wlv, window, spv) };
     }
 
     if s.check_decor_providers {
         let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
         s.decor_provider_end_col = unsafe {
-            decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, wp)
+            decor_providers_setup(endrow - wlv.startrow, s.start_vcol == 0, lnum, at, window)
         };
         // A provider is Lua and may have changed the buffer under us.
-        s.line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
+        s.line = unsafe { ml_get_buf(window.w_buffer, lnum) };
         s.ptr = unsafe { s.line.offset(at as isize) };
     }
 
-    unsafe { decor_redraw_line(wp.raw(), lnum - 1, wlv.decor) };
+    unsafe { decor_redraw_line(window.raw(), lnum - 1, wlv.decor) };
     if !s.has_decor && decor_has_more_decorations(wlv.decor, lnum - 1) {
         s.has_decor = true;
         s.extra_check = true;
     }
 
-    unsafe { s.keep_cursor_visible(wlv, wp) };
+    unsafe { s.keep_cursor_visible(wlv, window) };
 
     if col_rows == 0 && s.draw_text && !s.has_foldtext {
         let at = unsafe { s.ptr.offset_from(s.line) } as ::core::ffi::c_int;
         // `|=`, not `||`: `prepare_search_hl_line` runs either way.
         s.area_highlighting |= unsafe {
             prepare_search_hl_line(
-                wp.raw(),
+                window.raw(),
                 lnum,
                 at,
                 &raw mut s.line,
@@ -151,22 +155,22 @@ pub(crate) unsafe fn prepare_line(
 
     // Insert-mode completion highlights the text it inserted.
     if State.get() & MODE_INSERT != 0
-        && ins_compl_win_active(unsafe { Win::new(wp.raw()) })
+        && ins_compl_win_active(unsafe { Win::new(window.raw()) })
         && (s.in_curline || unsafe { ins_compl_lnum_in_range(lnum) })
     {
         s.area_highlighting = true;
     }
 
-    unsafe { wlv.start_line(wp) };
+    unsafe { wlv.start_line(window) };
 
     // The `:terminal` attributes themselves are filled in by the caller:
     // see [`LineSetup::has_terminal`].
-    if !unsafe { (*wp.w_buffer).terminal }.is_null() {
+    if !unsafe { (*window.w_buffer).terminal }.is_null() {
         s.has_terminal = true;
         s.extra_check = true;
     }
     s.may_have_inline_virt = !s.has_foldtext
-        && buf_meta_total(unsafe { Win::new(wp.raw()) }.buffer(), kMTMetaInline) > 0;
+        && buf_meta_total(unsafe { Win::new(window.raw()) }.buffer(), kMTMetaInline) > 0;
 
     s
 }
@@ -176,25 +180,26 @@ impl LineSetup {
     /// against, plus "nothing found yet" for the rest.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn new(wp: Win, wlv: &WinLineVars, concealed: bool) -> Self {
+    /// `window` must be a live window.
+    unsafe fn new(window: Win, wlv: &WinLineVars, concealed: bool) -> Self {
         // SAFETY: the caller's window.
         let has_fold = wlv.foldinfo.fi_level != 0 && wlv.foldinfo.fi_lines > 0;
-        let has_foldtext = has_fold && unsafe { *wp.w_onebuf_opt.wo_fdt } != 0;
+        let has_foldtext = has_fold && unsafe { *window.w_onebuf_opt.wo_fdt } != 0;
         LineSetup {
             // First, because `win_hl_attr` hands out attribute ids in the
             // order it is asked for them.
-            conceal_attr: unsafe { win_hl_attr(wp.raw(), HLF_CONCEAL) },
-            view_width: wp.w_view_width,
-            view_height: wp.w_view_height,
-            in_curline: wp.raw() == curwin.get()
+            conceal_attr: unsafe { win_hl_attr(window.raw(), HLF_CONCEAL) },
+            view_width: window.w_view_width,
+            view_height: window.w_view_height,
+            in_curline: window.raw() == curwin.get()
                 && wlv.lnum == unsafe { (*curwin.get()).w_cursor.lnum },
             has_fold,
             has_foldtext,
-            is_wrapped: wp.w_onebuf_opt.wo_wrap != 0 && !has_fold,
+            is_wrapped: window.w_onebuf_opt.wo_wrap != 0 && !has_fold,
             // The line one past the end of the buffer exists only to carry
             // the filler lines below the last one.
-            draw_text: !concealed && wlv.lnum != unsafe { (*wp.w_buffer).b_ml.ml_line_count } + 1,
+            draw_text: !concealed
+                && wlv.lnum != unsafe { (*window.w_buffer).b_ml.ml_line_count } + 1,
             start_vcol: 0,
             bg_attr: 0,
             may_have_inline_virt: false,
@@ -254,24 +259,24 @@ impl LineSetup {
     /// than being reported once per redraw.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn start_syntax(&mut self, mut wp: Win, lnum: LineNr) {
+    /// `window` must be a live window.
+    unsafe fn start_syntax(&mut self, mut window: Win, lnum: LineNr) {
         // SAFETY: the caller's window.
-        if !unsafe { syntax_present(wp.raw()) }
-            || unsafe { (*wp.w_s).b_syn_error }
-            || unsafe { (*wp.w_s).b_syn_slow }
+        if !unsafe { syntax_present(window.raw()) }
+            || unsafe { (*window.w_s).b_syn_error }
+            || unsafe { (*window.w_s).b_syn_slow }
             || self.has_foldtext
         {
             return;
         }
         let save_did_emsg = did_emsg.get();
         did_emsg.set(0);
-        unsafe { syntax_start(wp.raw(), lnum) };
+        unsafe { syntax_start(window.raw(), lnum) };
         if did_emsg.get() != 0 {
-            unsafe { (*wp.w_s).b_syn_error = true };
+            unsafe { (*window.w_s).b_syn_error = true };
         } else {
             did_emsg.set(save_did_emsg);
-            if !unsafe { (*wp.w_s).b_syn_slow } {
+            if !unsafe { (*window.w_s).b_syn_slow } {
                 self.has_syntax = true;
                 self.extra_check = true;
             }
@@ -281,8 +286,8 @@ impl LineSetup {
     /// The inverted range for an active Visual selection.
     ///
     /// # Safety
-    /// `wp` must be a live window showing the current buffer.
-    unsafe fn visual_area(&mut self, wlv: &mut WinLineVars, wp: Win, sel: VisualSelection) {
+    /// `window` must be a live window showing the current buffer.
+    unsafe fn visual_area(&mut self, wlv: &mut WinLineVars, window: Win, sel: VisualSelection) {
         let lnum = wlv.lnum;
         // Both ends by value: nothing here writes through either, and copying
         // the cursor keeps the ordering out of the unsafe region.
@@ -299,8 +304,8 @@ impl LineSetup {
             // Blockwise: the columns were worked out for the whole
             // selection when it last moved.
             if self.lnum_in_visual_area {
-                wlv.fromcol = wp.w_old_cursor_fcol;
-                wlv.tocol = wp.w_old_cursor_lcol;
+                wlv.fromcol = window.w_old_cursor_fcol;
+                wlv.tocol = window.w_old_cursor_lcol;
             }
         } else {
             if lnum > top.lnum && lnum <= bot.lnum {
@@ -311,7 +316,7 @@ impl LineSetup {
                 } else {
                     unsafe {
                         getvvcol(
-                            Win::new(wp.raw()),
+                            Win::new(window.raw()),
                             &raw mut top,
                             &raw mut wlv.fromcol,
                             ::core::ptr::null_mut(),
@@ -340,7 +345,7 @@ impl LineSetup {
                     if unsafe { *p_sel.get() } == b'e' as ::core::ffi::c_char {
                         unsafe {
                             getvvcol(
-                                Win::new(wp.raw()),
+                                Win::new(window.raw()),
                                 &raw mut pos,
                                 &raw mut wlv.tocol,
                                 ::core::ptr::null_mut(),
@@ -350,7 +355,7 @@ impl LineSetup {
                     } else {
                         unsafe {
                             getvvcol(
-                                Win::new(wp.raw()),
+                                Win::new(window.raw()),
                                 &raw mut pos,
                                 ::core::ptr::null_mut(),
                                 ::core::ptr::null_mut(),
@@ -374,15 +379,15 @@ impl LineSetup {
 
         if wlv.fromcol >= 0 {
             self.area_highlighting = true;
-            self.vi_attr = unsafe { win_hl_attr(wp.raw(), HLF_V) };
+            self.vi_attr = unsafe { win_hl_attr(window.raw(), HLF_V) };
         }
     }
 
     /// The inverted range for `'incsearch'` and `:s///c`.
     ///
     /// # Safety
-    /// `wp` must be the current window.
-    unsafe fn incsearch_area(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be the current window.
+    unsafe fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
         // SAFETY: the caller's window.
         if lnum == unsafe { (*curwin.get()).w_cursor.lnum } {
@@ -420,7 +425,7 @@ impl LineSetup {
             wlv.tocol = wlv.fromcol + 1;
         }
         self.area_highlighting = true;
-        self.vi_attr = unsafe { win_hl_attr(wp.raw(), HLF_I) };
+        self.vi_attr = unsafe { win_hl_attr(window.raw(), HLF_I) };
     }
 
     /// Diff-mode state for this line: how many filler lines it needs above it
@@ -428,16 +433,18 @@ impl LineSetup {
     ///
     /// # Safety
     /// `self.line_changes` must be writable.
-    unsafe fn diff_state(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    unsafe fn diff_state(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: `linestatus` and `line_changes` are writable.
         let mut linestatus = 0;
-        wlv.filler_lines = unsafe { diff_check_with_linestatus(wp, wlv.lnum, &raw mut linestatus) };
+        wlv.filler_lines =
+            unsafe { diff_check_with_linestatus(window, wlv.lnum, &raw mut linestatus) };
         if linestatus >= 0 {
             return;
         }
         // An added line, either because the status says so or because
         // the change scan found nothing to narrow it to.
-        if linestatus != -1 || unsafe { diff_find_change(wp, wlv.lnum, &raw mut self.line_changes) }
+        if linestatus != -1
+            || unsafe { diff_find_change(window, wlv.lnum, &raw mut self.line_changes) }
         {
             wlv.diff_hlf = HLF_ADD;
         } else if self.line_changes.num_changes > 0 {
@@ -467,12 +474,12 @@ impl LineSetup {
     /// Count the filler lines above this one — diff filler plus virtual lines.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn filler_lines(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    unsafe fn filler_lines(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         wlv.n_virt_lines = unsafe {
             decor_virt_lines(
-                wp.raw(),
+                window.raw(),
                 wlv.lnum - 1,
                 wlv.lnum,
                 &raw mut wlv.n_virt_below,
@@ -481,9 +488,9 @@ impl LineSetup {
             )
         };
         wlv.filler_lines += wlv.n_virt_lines;
-        if wlv.lnum == wp.w_topline {
+        if wlv.lnum == window.w_topline {
             // The top line shows only as much filler as it is scrolled to.
-            wlv.filler_lines = wp.w_topfill;
+            wlv.filler_lines = window.w_topfill;
             wlv.n_virt_lines = wlv.n_virt_lines.min(wlv.filler_lines);
         }
         wlv.filler_todo = wlv.filler_lines;
@@ -492,29 +499,29 @@ impl LineSetup {
     /// Apply `'cursorline'` to this line, if it is the cursor's.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn cursorline(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    unsafe fn cursorline(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
-        if wp.w_onebuf_opt.wo_cul == 0
-            || wp.w_p_culopt_flags as ::core::ffi::c_int
+        if window.w_onebuf_opt.wo_cul == 0
+            || window.w_p_culopt_flags as ::core::ffi::c_int
                 == kOptCuloptFlagNumber as ::core::ffi::c_int
-            || wlv.lnum != wp.w_cursorline
+            || wlv.lnum != window.w_cursorline
             // Not while Visual mode is active: it would stop being clear
             // what is selected.
-            || (wp.raw() == curwin.get() && visual_active())
+            || (window.raw() == curwin.get() && visual_active())
         {
             return;
         }
         self.cul_screenline = self.is_wrapped
-            && wp.w_p_culopt_flags as ::core::ffi::c_int
+            && window.w_p_culopt_flags as ::core::ffi::c_int
                 & kOptCuloptFlagScreenline as ::core::ffi::c_int
                 != 0;
         if self.cul_screenline {
             // Only the cursor's own screen row is highlighted, so the loop
             // needs that row's margins.
-            (self.left_curline_col, self.right_curline_col) = unsafe { margin_columns_win(wp) };
+            (self.left_curline_col, self.right_curline_col) = unsafe { margin_columns_win(window) };
         } else {
-            unsafe { wlv.apply_cursorline_highlight(wp) };
+            unsafe { wlv.apply_cursorline_highlight(window) };
         }
         self.area_highlighting = true;
     }
@@ -523,16 +530,16 @@ impl LineSetup {
     /// request or resolve the sign highlights the number column will use.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn signs_and_statuscolumn(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    unsafe fn signs_and_statuscolumn(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         let mut sign_line_attr = 0;
         // TODO(bfredl, vigoux): line_attr should not take priority over
         // decoration.
         unsafe {
             decor_redraw_signs(
-                wp.raw(),
-                wp.w_buffer,
+                window.raw(),
+                window.w_buffer,
                 wlv.lnum - 1,
                 &raw mut wlv.sign_attrs as *mut SignTextAttrs,
                 &raw mut sign_line_attr,
@@ -541,22 +548,22 @@ impl LineSetup {
             )
         };
 
-        if unsafe { *wp.w_onebuf_opt.wo_stc } != 0 {
+        if unsafe { *window.w_onebuf_opt.wo_stc } != 0 {
             // 'statuscolumn' replaces the fold, sign and number columns;
             // the expression is evaluated per row by `draw_statuscol`.
             self.statuscol.draw = true;
             self.statuscol.lnum = wlv.lnum;
             self.statuscol.foldinfo = wlv.foldinfo;
-            self.statuscol.width = unsafe { win_col_off(wp.raw()) }
-                - (wp.raw() == cmdwin_win.get()) as ::core::ffi::c_int;
-            self.statuscol.sign_cul_id = if unsafe { use_cursor_line_highlight(wp.raw(), wlv.lnum) }
-            {
-                wlv.sign_cul_attr
-            } else {
-                0
-            };
+            self.statuscol.width = unsafe { win_col_off(window.raw()) }
+                - (window.raw() == cmdwin_win.get()) as ::core::ffi::c_int;
+            self.statuscol.sign_cul_id =
+                if unsafe { use_cursor_line_highlight(window.raw(), wlv.lnum) } {
+                    wlv.sign_cul_attr
+                } else {
+                    0
+                };
         } else if wlv.sign_cul_attr > 0 {
-            wlv.sign_cul_attr = if unsafe { use_cursor_line_highlight(wp.raw(), wlv.lnum) } {
+            wlv.sign_cul_attr = if unsafe { use_cursor_line_highlight(window.raw(), wlv.lnum) } {
                 unsafe { syn_id2attr(wlv.sign_cul_attr) }
             } else {
                 0
@@ -570,10 +577,10 @@ impl LineSetup {
         }
 
         // The quickfix window highlights the entry the cursor is on.
-        if is_qf_buffer(unsafe { Win::new(wp.raw()) })
-            && qf_current_entry(unsafe { Win::new(wp.raw()) }) == wlv.lnum
+        if is_qf_buffer(unsafe { Win::new(window.raw()) })
+            && qf_current_entry(unsafe { Win::new(window.raw()) }) == wlv.lnum
         {
-            wlv.line_attr = unsafe { win_hl_attr(wp.raw(), HLF_QFL) };
+            wlv.line_attr = unsafe { win_hl_attr(window.raw(), HLF_QFL) };
         }
         if wlv.line_attr_lowprio != 0 || wlv.line_attr != 0 {
             self.area_highlighting = true;
@@ -586,10 +593,10 @@ impl LineSetup {
     /// seen whole.
     ///
     /// # Safety
-    /// `wp` must be a live window and `spv` its spell state.
+    /// `window` must be a live window and `spv` its spell state.
     unsafe fn spell_line_start(
         &mut self,
-        wp: Win,
+        window: Win,
         lnum: LineNr,
         spv: *mut SpellVars,
         nextline: &mut SpellLookahead,
@@ -605,7 +612,9 @@ impl LineSetup {
         // The previous line was not spell checked — the first line of an
         // updated region, or the line after a closed fold — so this one
         // has to decide for itself whether a capital is required.
-        if unsafe { (*spv).spv_capcol_lnum } == 0 && unsafe { check_need_cap(wp.raw(), lnum, 0) } {
+        if unsafe { (*spv).spv_capcol_lnum } == 0
+            && unsafe { check_need_cap(window.raw(), lnum, 0) }
+        {
             unsafe { (*spv).spv_cap_col = 0 };
         } else if lnum != unsafe { (*spv).spv_capcol_lnum } {
             unsafe { (*spv).spv_cap_col = -1 };
@@ -615,11 +624,11 @@ impl LineSetup {
         // Trick: `spell_cat_line` skips a few characters for C/shell/Vim
         // comment leaders.
         nextline[SPELL_LOOKAHEAD] = 0;
-        if lnum < unsafe { (*wp.w_buffer).b_ml.ml_line_count } {
-            let next = unsafe { ml_get_buf(wp.w_buffer, lnum + 1) };
+        if lnum < unsafe { (*window.w_buffer).b_ml.ml_line_count } {
+            let next = unsafe { ml_get_buf(window.w_buffer, lnum + 1) };
             unsafe { spell_cat_line(nextline.as_mut_ptr().add(SPELL_LOOKAHEAD), next, SPWORDLEN) };
         }
-        let line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
+        let line = unsafe { ml_get_buf(window.w_buffer, lnum) };
 
         // An empty line: check the first word of the next one for a
         // capital instead.
@@ -637,7 +646,7 @@ impl LineSetup {
             self.nextline_idx = 0;
             return;
         }
-        let line_len = unsafe { ml_get_buf_len(wp.w_buffer, lnum) } as usize;
+        let line_len = unsafe { ml_get_buf_len(window.w_buffer, lnum) } as usize;
         if line_len < SPELL_LOOKAHEAD {
             // Short line: use all of it, then move the next line's start
             // up against it.
@@ -667,20 +676,20 @@ impl LineSetup {
     /// "trail" marks apply to.
     ///
     /// # Safety
-    /// `wp` must be a live window and [`LineSetup::line`] its line `lnum`.
-    unsafe fn listchars_columns(&mut self, wp: Win, lnum: LineNr) {
+    /// `window` must be a live window and [`LineSetup::line`] its line `lnum`.
+    unsafe fn listchars_columns(&mut self, window: Win, lnum: LineNr) {
         // SAFETY: the caller's window and line.
-        if wp.w_p_lcs_chars.space != 0
-            || !wp.w_p_lcs_chars.multispace.is_null()
-            || !wp.w_p_lcs_chars.leadmultispace.is_null()
-            || wp.w_p_lcs_chars.trail != 0
-            || wp.w_p_lcs_chars.lead != 0
-            || wp.w_p_lcs_chars.nbsp != 0
+        if window.w_p_lcs_chars.space != 0
+            || !window.w_p_lcs_chars.multispace.is_null()
+            || !window.w_p_lcs_chars.leadmultispace.is_null()
+            || window.w_p_lcs_chars.trail != 0
+            || window.w_p_lcs_chars.lead != 0
+            || window.w_p_lcs_chars.nbsp != 0
         {
             self.extra_check = true;
         }
-        if wp.w_p_lcs_chars.trail != 0 {
-            let mut trailcol = unsafe { ml_get_buf_len(wp.w_buffer, lnum) };
+        if window.w_p_lcs_chars.trail != 0 {
+            let mut trailcol = unsafe { ml_get_buf_len(window.w_buffer, lnum) };
             while trailcol > 0
                 && ascii_iswhite(
                     unsafe { *self.ptr.offset(trailcol as isize - 1) } as ::core::ffi::c_int
@@ -690,9 +699,9 @@ impl LineSetup {
             }
             self.trailcol = trailcol + unsafe { self.ptr.offset_from(self.line) } as ColNr;
         }
-        if wp.w_p_lcs_chars.lead != 0
-            || !wp.w_p_lcs_chars.leadmultispace.is_null()
-            || wp.w_p_lcs_chars.leadtab1 != 0
+        if window.w_p_lcs_chars.lead != 0
+            || !window.w_p_lcs_chars.leadmultispace.is_null()
+            || window.w_p_lcs_chars.leadtab1 != 0
         {
             let mut leadcol: ColNr = 0;
             while ascii_iswhite(unsafe { *self.ptr.offset(leadcol as isize) } as ::core::ffi::c_int)
@@ -714,16 +723,21 @@ impl LineSetup {
     /// on screen, when the line is scrolled sideways or `w_skipcol` is set.
     ///
     /// # Safety
-    /// `wp` must be a live window, `spv` its spell state, and
+    /// `window` must be a live window, `spv` its spell state, and
     /// [`LineSetup::line`] its line.
-    unsafe fn skip_to_start_vcol(&mut self, wlv: &mut WinLineVars, wp: Win, spv: *mut SpellVars) {
+    unsafe fn skip_to_start_vcol(
+        &mut self,
+        wlv: &mut WinLineVars,
+        window: Win,
+        spv: *mut SpellVars,
+    ) {
         let start_vcol = self.start_vcol;
         // SAFETY: the caller's window and line.
         let mut prev_ptr = self.ptr;
         let mut cs = CharSize { width: 0, head: 0 };
         let mut csarg = CharsizeArg::default();
         let cstype =
-            unsafe { init_charsize_arg(&mut csarg, Win::new(wp.raw()), wlv.lnum, self.line) };
+            unsafe { init_charsize_arg(&mut csarg, Win::new(window.raw()), wlv.lnum, self.line) };
         csarg.max_head_vcol = start_vcol;
         let mut vcol = wlv.vcol;
         let mut ci = unsafe { utf_ptr2str_char_info(self.ptr) };
@@ -735,8 +749,8 @@ impl LineSetup {
                 break;
             }
             ci = unsafe { utfc_next(ci) };
-            if wp.w_onebuf_opt.wo_list != 0 {
-                unsafe { self.track_multispace(wp, prev_ptr, ci.ptr) };
+            if window.w_onebuf_opt.wo_list != 0 {
+                unsafe { self.track_multispace(window, prev_ptr, ci.ptr) };
             }
         }
         wlv.vcol = vcol;
@@ -747,10 +761,10 @@ impl LineSetup {
         // or Visual mode is active, or when a fold is being drawn — all of
         // which still have something to draw out there.
         if wlv.vcol < start_vcol
-            && (wp.w_onebuf_opt.wo_cuc != 0
+            && (window.w_onebuf_opt.wo_cuc != 0
                 || !wlv.color_cols.is_null()
-                || virtual_active(unsafe { Win::new(wp.raw()) })
-                || (visual_active() && wp.w_buffer == unsafe { (*curwin.get()).w_buffer })
+                || virtual_active(unsafe { Win::new(window.raw()) })
+                || (visual_active() && window.w_buffer == unsafe { (*curwin.get()).w_buffer })
                 || self.has_fold)
         {
             wlv.vcol = start_vcol;
@@ -775,12 +789,12 @@ impl LineSetup {
 
         // With a non-zero `w_skipcol` the first row still owes a
         // 'showbreak'.
-        if wp.w_onebuf_opt.wo_wrap != 0 {
+        if window.w_onebuf_opt.wo_wrap != 0 {
             wlv.need_showbreak = true;
         }
 
         if unsafe { (*spv).spv_has_spell } {
-            unsafe { self.spell_at_start_vcol(wp, wlv.lnum) };
+            unsafe { self.spell_at_start_vcol(window, wlv.lnum) };
         }
     }
 
@@ -788,11 +802,11 @@ impl LineSetup {
     /// got to, so that `'listchars'` "multispace" resumes at the right glyph.
     ///
     /// # Safety
-    /// `wp` must be a live window and both pointers must point into
+    /// `window` must be a live window and both pointers must point into
     /// [`LineSetup::line`].
     unsafe fn track_multispace(
         &mut self,
-        wp: Win,
+        window: Win,
         prev_ptr: *const ::core::ffi::c_char,
         next_ptr: *const ::core::ffi::c_char,
     ) {
@@ -807,9 +821,9 @@ impl LineSetup {
         }
         let lead = unsafe { self.line.offset(self.leadcol as isize) };
         let pattern = if next_ptr >= lead {
-            wp.w_p_lcs_chars.multispace
+            window.w_p_lcs_chars.multispace
         } else {
-            wp.w_p_lcs_chars.leadmultispace
+            window.w_p_lcs_chars.leadmultispace
         };
         if pattern.is_null() {
             return;
@@ -825,39 +839,40 @@ impl LineSetup {
     /// boundary.
     ///
     /// # Safety
-    /// `wp` must be a live window and [`LineSetup::line`] its line `lnum`.
-    unsafe fn spell_at_start_vcol(&mut self, mut wp: Win, lnum: LineNr) {
+    /// `window` must be a live window and [`LineSetup::line`] its line `lnum`.
+    unsafe fn spell_at_start_vcol(&mut self, mut window: Win, lnum: LineNr) {
         // SAFETY: the caller's window and line.
         let linecol = unsafe { self.ptr.offset_from(self.line) } as ColNr;
         let mut spell_hlf: Hlf = HLF_COUNT;
 
-        let saved_cursor = wp.w_cursor;
-        wp.w_cursor.lnum = lnum;
-        wp.w_cursor.col = linecol;
-        let len = unsafe { spell_move_to(wp.raw(), FORWARD, SMT_ALL, true, &raw mut spell_hlf) };
+        let saved_cursor = window.w_cursor;
+        window.w_cursor.lnum = lnum;
+        window.w_cursor.col = linecol;
+        let len =
+            unsafe { spell_move_to(window.raw(), FORWARD, SMT_ALL, true, &raw mut spell_hlf) };
 
         // `spell_move_to` may call `ml_get` and invalidate "line".
-        self.line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
+        self.line = unsafe { ml_get_buf(window.w_buffer, lnum) };
         self.ptr = unsafe { self.line.offset(linecol as isize) };
 
-        if len == 0 || wp.w_cursor.col > linecol {
+        if len == 0 || window.w_cursor.col > linecol {
             // No bad word at the line start: do not check again until the
             // end of a word.
-            let end = unsafe { spell_to_word_end(self.ptr, wp.raw()) };
+            let end = unsafe { spell_to_word_end(self.ptr, window.raw()) };
             self.word_end = (unsafe { end.offset_from(self.line) } + 1) as ::core::ffi::c_int;
         } else {
             // Bad word found: its attribute applies to the end of it.
             debug_assert!(len <= ::core::ffi::c_int::MAX as size_t);
-            self.word_end = wp.w_cursor.col + len as ::core::ffi::c_int + 1;
+            self.word_end = window.w_cursor.col + len as ::core::ffi::c_int + 1;
             if spell_hlf != HLF_COUNT {
                 self.spell_attr = default_hl_attr(spell_hlf as usize);
             }
         }
-        wp.w_cursor = saved_cursor;
+        window.w_cursor = saved_cursor;
 
         // Syntax highlighting has to be restarted for this line.
         if self.has_syntax {
-            unsafe { syntax_start(wp.raw(), lnum) };
+            unsafe { syntax_start(window.raw(), lnum) };
         }
     }
 
@@ -867,20 +882,20 @@ impl LineSetup {
     /// Doing it once here saves testing for it on every character.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    unsafe fn keep_cursor_visible(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    unsafe fn keep_cursor_visible(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window.
         if wlv.fromcol < 0 {
             return;
         }
         if self.noinvcur {
-            if wlv.fromcol == wp.w_virtcol {
+            if wlv.fromcol == window.w_virtcol {
                 // Inverting starts at the cursor; start just after it.
                 self.fromcol_prev = wlv.fromcol;
                 wlv.fromcol = -1;
-            } else if wlv.fromcol < wp.w_virtcol {
+            } else if wlv.fromcol < window.w_virtcol {
                 // Resume inverting after the cursor.
-                self.fromcol_prev = wp.w_virtcol;
+                self.fromcol_prev = window.w_virtcol;
             }
         }
         if wlv.fromcol >= wlv.tocol {

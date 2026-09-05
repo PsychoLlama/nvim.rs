@@ -237,8 +237,8 @@ pub(crate) unsafe fn qf_guess_filepath(mut qfl: Qfl, filename: *mut c_char) -> *
 /// for a null window, on the quickfix stack.
 ///
 /// `wp` may name a window that has since been closed; it is checked.
-pub(crate) fn qflist_valid(wp: Option<Win>, qf_id: c_uint) -> bool {
-    let qi = match wp {
+pub(crate) fn qflist_valid(window: Option<Win>, qf_id: c_uint) -> bool {
+    let qi = match window {
         None => QfStack::Global.raw(),
         Some(wp) if win_valid(wp.raw()) => win_loclist(wp),
         Some(_) => return false,

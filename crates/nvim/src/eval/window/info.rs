@@ -16,16 +16,16 @@ use crate::types::{VAR_STRING, kListLenMayKnow, kListLenUnknown};
 /// One `getwininfo()` entry.
 ///
 /// # Safety
-/// `wp` must be a live window whose buffer is live.
-unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
+/// `window` must be a live window whose buffer is live.
+unsafe fn get_win_info(window: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the two closures add.
-    let buf = wp.buffer();
+    let buf = window.buffer();
     // "botline" is one past the last displayed line, hence the -1; the row
     // and column counts are zero-based inside and one-based to vimscript.
-    validate_botline_win(wp);
-    let (dict, textoff) = unsafe { (tv_dict_alloc(), win_col_off(wp.raw())) };
+    validate_botline_win(window);
+    let (dict, textoff) = unsafe { (tv_dict_alloc(), win_col_off(window.raw())) };
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
@@ -34,27 +34,27 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut Dict {
 
     nr(c"tabnr", VarNumber::from(tpnr));
     nr(c"winnr", VarNumber::from(winnr));
-    nr(c"winid", VarNumber::from(wp.handle));
-    nr(c"height", VarNumber::from(wp.w_view_height));
-    nr(c"status_height", VarNumber::from(wp.w_status_height));
-    nr(c"winrow", VarNumber::from(wp.w_winrow + 1));
-    nr(c"topline", VarNumber::from(wp.w_topline));
-    nr(c"botline", VarNumber::from(wp.w_botline - 1));
-    nr(c"leftcol", VarNumber::from(wp.w_leftcol));
-    nr(c"winbar", VarNumber::from(wp.w_winbar_height));
-    nr(c"width", VarNumber::from(wp.w_view_width));
+    nr(c"winid", VarNumber::from(window.handle));
+    nr(c"height", VarNumber::from(window.w_view_height));
+    nr(c"status_height", VarNumber::from(window.w_status_height));
+    nr(c"winrow", VarNumber::from(window.w_winrow + 1));
+    nr(c"topline", VarNumber::from(window.w_topline));
+    nr(c"botline", VarNumber::from(window.w_botline - 1));
+    nr(c"leftcol", VarNumber::from(window.w_leftcol));
+    nr(c"winbar", VarNumber::from(window.w_winbar_height));
+    nr(c"width", VarNumber::from(window.w_view_width));
     nr(c"bufnr", VarNumber::from(buf.handle));
-    nr(c"wincol", VarNumber::from(wp.w_wincol + 1));
+    nr(c"wincol", VarNumber::from(window.w_wincol + 1));
     nr(c"textoff", VarNumber::from(textoff));
     nr(c"terminal", VarNumber::from(terminal));
     nr(c"quickfix", VarNumber::from(quickfix));
     nr(
         c"loclist",
-        VarNumber::from(quickfix && !wp.w_llist_ref.is_null()),
+        VarNumber::from(quickfix && !window.w_llist_ref.is_null()),
     );
     // SAFETY: a live dictionary and the window's own variable dictionary.
     let vars = c"variables";
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), wp.w_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), window.w_vars) };
     dict
 }
 

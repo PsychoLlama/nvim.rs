@@ -114,7 +114,7 @@ pub unsafe fn var2fpos(
     dollar_lnum: bool,
     ret_fnum: *mut c_int,
     charcol: bool,
-    wp: *mut Window,
+    window: *mut Window,
 ) -> Option<Pos> {
     let mut numbuf = NumBuf::new();
     // The record a `'m` lookup answers into: a motion mark has no store of
@@ -124,7 +124,7 @@ pub unsafe fn var2fpos(
     // only read through here, which is what makes casting its `const` away
     // sound. Nothing below holds either across a call that could close the
     // window: `wp` is the caller's and outlives this frame.
-    let (wp, tv) = unsafe { (Win::new(wp), Tv::new(tv.cast_mut())) };
+    let (wp, tv) = unsafe { (Win::new(window), Tv::new(tv.cast_mut())) };
     let mut pos = Pos::default();
     let bp = wp.buffer();
 

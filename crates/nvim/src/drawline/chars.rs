@@ -30,11 +30,11 @@ impl Cells {
     /// Put the next character in [`Cells::cell_char`].
     ///
     /// # Safety
-    /// `wp` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn next_char(&mut self, wlv: &mut WinLineVars, wp: Win, f: &LineFrame) {
+    /// `window` must be live and `f` must hold the caller's frame.
+    pub(super) unsafe fn next_char(&mut self, wlv: &mut WinLineVars, window: Win, f: &LineFrame) {
         // SAFETY: the caller's window and frame.
         if wlv.extra_todo > 0 {
-            unsafe { self.char_from_extra(wlv, wp) };
+            unsafe { self.char_from_extra(wlv, window) };
         } else if wlv.filler_todo > 0 {
             // Wait with reading text until the filler lines are done, but
             // still give the cell something to be.
@@ -44,15 +44,15 @@ impl Cells {
             // The fold text is already placed; skip the buffer line.
             self.cell_char = NUL as ScreenChar;
         } else {
-            unsafe { self.char_from_buffer(wlv, wp, f) };
+            unsafe { self.char_from_buffer(wlv, window, f) };
         }
     }
 
     /// Take one cell from the run in [`WinLineVars::extra_todo`].
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn char_from_extra(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn char_from_extra(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window; `extra_text` is NUL-terminated whenever
         // `extra_fill` and `extra_last` are not set.
         if wlv.extra_fill != NUL as ScreenChar
@@ -82,7 +82,7 @@ impl Cells {
                 self.char_code = '>' as ::core::ffi::c_int;
                 self.char_len = 1;
                 self.cell_char = schar_from_ascii(b'>');
-                self.overflow_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+                self.overflow_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
                 if wlv.cursorline_attr != 0 {
                     self.overflow_attr = if wlv.line_attr_lowprio != 0 {
                         unsafe { hl_combine_attr(wlv.cursorline_attr, self.overflow_attr) }
@@ -109,7 +109,7 @@ impl Cells {
                 self.char_code = ' ' as ::core::ffi::c_int;
                 self.char_len = 1;
                 wlv.n_attr += 1;
-                wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+                wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
             }
         }
 
@@ -158,11 +158,11 @@ impl Cells {
     /// looks like on screen.
     ///
     /// # Safety
-    /// `wp` must be live and `f` must hold the caller's frame.
+    /// `window` must be live and `f` must hold the caller's frame.
     pub(super) unsafe fn char_from_buffer(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         f: &LineFrame,
     ) {
         // SAFETY: the caller's window and frame; `ptr` walks a NUL-terminated
@@ -192,7 +192,7 @@ impl Cells {
             // An illegal UTF-8 byte shows as `<xx>`; an unprintable
             // character as `?` or its fullwidth form.
             unsafe { transchar_hex(wlv.escape_buf.as_mut_ptr(), self.char_code) };
-            if wp.w_onebuf_opt.wo_rl != 0 {
+            if window.w_onebuf_opt.wo_rl != 0 {
                 unsafe { rl_mirror_ascii(wlv.escape_buf.as_mut_ptr(), ::core::ptr::null_mut()) };
             }
             wlv.extra_text = wlv.escape_buf.as_mut_ptr();
@@ -205,7 +205,7 @@ impl Cells {
             wlv.extra_last = NUL as ScreenChar;
             if self.area_attr == 0 && self.search_attr == 0 {
                 wlv.n_attr = wlv.extra_todo + 1;
-                wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_8) };
+                wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_8) };
                 self.attr_before_run = wlv.char_attr;
             }
         } else if self.char_len == 0 {
@@ -220,7 +220,7 @@ impl Cells {
             self.cell_char = schar_from_ascii(b'>');
             self.char_code = '>' as ::core::ffi::c_int;
             self.char_len = 1;
-            self.overflow_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+            self.overflow_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
             self.ptr = unsafe { self.ptr.offset(-1) };
             self.did_decrement_ptr = true;
         } else if unsafe { *self.ptr } as ::core::ffi::c_int != NUL {
@@ -239,7 +239,7 @@ impl Cells {
             self.char_len = 1;
             if self.area_attr == 0 && self.search_attr == 0 {
                 wlv.n_attr = wlv.extra_todo + 1;
-                wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_AT) };
+                wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_AT) };
                 self.attr_before_run = wlv.char_attr;
             }
         }
@@ -247,14 +247,14 @@ impl Cells {
 
         self.decor_attr = 0;
         if self.extra_check {
-            unsafe { self.slow_path(wlv, wp, f, &mut prev_ptr, c0) };
+            unsafe { self.slow_path(wlv, window, f, &mut prev_ptr, c0) };
         }
 
         if !unsafe { vim_isprintc(self.char_code) } {
-            unsafe { self.unprintable(wlv, wp) };
+            unsafe { self.unprintable(wlv, window) };
         }
 
-        unsafe { self.conceal(wlv, wp) };
+        unsafe { self.conceal(wlv, window) };
 
         if wlv.skip_cells > 0 && self.did_decrement_ptr {
             // The `>` is not being shown, so put the pointer back or the
@@ -271,19 +271,19 @@ impl Cells {
     /// what keeps a plain line's inner loop short.
     ///
     /// # Safety
-    /// `wp` must be live, `f` must hold the caller's frame and `prev_ptr` must
+    /// `window` must be live, `f` must hold the caller's frame and `prev_ptr` must
     /// point into the line.
     pub(super) unsafe fn slow_path(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         f: &LineFrame,
         prev_ptr: &mut *mut ::core::ffi::c_char,
         c0: ::core::ffi::c_int,
     ) {
         // SAFETY: the caller's window, frame and line pointers.
         let no_plain_buffer =
-            unsafe { (*wp.w_s).b_p_spo_flags } & kOptSpoFlagNoplainbuffer as uint32_t != 0;
+            unsafe { (*window.w_s).b_p_spo_flags } & kOptSpoFlagNoplainbuffer as uint32_t != 0;
         let mut can_spell = !no_plain_buffer;
 
         // Not at the start of the line only because a double-width
@@ -291,7 +291,7 @@ impl Cells {
         let at = self.byte_col();
         if self.has_syntax && at > 0 {
             let prev_at = unsafe { prev_ptr.offset_from(self.line) };
-            unsafe { self.syntax_attr(wlv, wp, f, at, &mut can_spell) };
+            unsafe { self.syntax_attr(wlv, window, f, at, &mut can_spell) };
             // The syntax walk may have re-fetched the line.
             *prev_ptr = unsafe { self.line.offset(prev_at) };
         }
@@ -307,13 +307,13 @@ impl Cells {
         self.attr_base = unsafe { hl_combine_attr(self.fold_attr, self.decor_attr) };
         wlv.char_attr = unsafe { hl_combine_attr(self.attr_base, self.attr_pri) };
 
-        unsafe { self.spell_at(wlv, wp, f, *prev_ptr, can_spell) };
+        unsafe { self.spell_at(wlv, window, f, *prev_ptr, can_spell) };
         if self.spell_attr != 0 {
             self.attr_base = unsafe { hl_combine_attr(self.attr_base, self.spell_attr) };
             wlv.char_attr = unsafe { hl_combine_attr(self.attr_base, self.attr_pri) };
         }
 
-        if !unsafe { (*wp.w_buffer).terminal }.is_null() {
+        if !unsafe { (*window.w_buffer).terminal }.is_null() {
             let term_attr = if wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int {
                 unsafe { *f.term_attrs.offset(wlv.vcol as isize) }
             } else {
@@ -322,19 +322,19 @@ impl Cells {
             wlv.char_attr = unsafe { hl_combine_attr(term_attr, wlv.char_attr) };
         }
 
-        unsafe { self.linebreak(wlv, wp, c0) };
-        unsafe { self.listchars(wlv, wp, *prev_ptr) };
+        unsafe { self.linebreak(wlv, window, c0) };
+        unsafe { self.listchars(wlv, window, *prev_ptr) };
     }
 
     /// Ask the syntax state machine for this character's attribute, and for
     /// whether it is in the `@Spell` cluster.
     ///
     /// # Safety
-    /// `wp` must be live and `at`/`prev_at` byte indexes into the line.
+    /// `window` must be live and `at`/`prev_at` byte indexes into the line.
     pub(super) unsafe fn syntax_attr(
         &mut self,
         wlv: &WinLineVars,
-        mut wp: Win,
+        mut window: Win,
         f: &LineFrame,
         at: ::core::ffi::c_int,
         can_spell: &mut bool,
@@ -358,17 +358,17 @@ impl Cells {
         };
 
         if did_emsg.get() != 0 {
-            unsafe { (*wp.w_s).b_syn_error = true };
+            unsafe { (*window.w_s).b_syn_error = true };
             self.has_syntax = false;
         } else {
             did_emsg.set(save_did_emsg);
         }
-        if unsafe { (*wp.w_s).b_syn_slow } {
+        if unsafe { (*window.w_s).b_syn_slow } {
             self.has_syntax = false;
         }
 
         // A multi-line regexp may have invalidated the line.
-        unsafe { self.refetch_line(wp, wlv.lnum, at) };
+        unsafe { self.refetch_line(window, wlv.lnum, at) };
 
         // No concealing past the end of the line: it would interfere with
         // the line highlighting.
@@ -388,12 +388,12 @@ impl Cells {
     /// previous buffer line already reached.
     ///
     /// # Safety
-    /// `wp` must be live, `f` must hold the caller's frame and `prev_ptr` must
+    /// `window` must be live, `f` must hold the caller's frame and `prev_ptr` must
     /// point into the line.
     pub(super) unsafe fn spell_at(
         &mut self,
         wlv: &WinLineVars,
-        wp: Win,
+        window: Win,
         f: &LineFrame,
         prev_ptr: *mut ::core::ffi::c_char,
         can_spell: bool,
@@ -429,7 +429,7 @@ impl Cells {
         unsafe { (*f.spv).spv_cap_col -= prev_at as ::core::ffi::c_int };
         let tmplen = unsafe {
             spell_check(
-                wp.raw(),
+                window.raw(),
                 p,
                 &raw mut spell_hlf,
                 &raw mut (*f.spv).spv_cap_col,
@@ -443,9 +443,9 @@ impl Cells {
         // In Insert mode do not highlight a word the cursor is touching.
         if spell_hlf != HLF_COUNT
             && State.get() & MODE_INSERT != 0
-            && wp.w_cursor.lnum == wlv.lnum
-            && wp.w_cursor.col >= prev_at as ColNr
-            && wp.w_cursor.col < self.word_end
+            && window.w_cursor.lnum == wlv.lnum
+            && window.w_cursor.col >= prev_at as ColNr
+            && window.w_cursor.col < self.word_end
         {
             spell_hlf = HLF_COUNT;
             spell_redraw_lnum.set(wlv.lnum);
@@ -493,15 +493,15 @@ impl Cells {
     /// next one.
     ///
     /// # Safety
-    /// `wp` must be a live window.
+    /// `window` must be a live window.
     pub(super) unsafe fn linebreak(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         c0: ::core::ffi::c_int,
     ) {
         // SAFETY: the caller's window and the loop's line pointers.
-        if wp.w_onebuf_opt.wo_lbr == 0 {
+        if window.w_onebuf_opt.wo_lbr == 0 {
             return;
         }
         // Do not break a line that starts with blanks followed by a long
@@ -528,7 +528,7 @@ impl Cells {
 
         let mut csarg = CharsizeArg::default();
         // `lnum` 0: virtual text is not to be counted here.
-        let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(wp.raw()), 0, self.line) };
+        let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(window.raw()), 0, self.line) };
         wlv.extra_todo =
             unsafe { win_charsize(cstype, wlv.vcol, p, utf_ptr2char_info(p).value, &mut csarg) }
                 .width
@@ -543,8 +543,8 @@ impl Cells {
             wlv.extra_todo = unsafe {
                 tabstop_padding(
                     wlv.vcol,
-                    (*wp.w_buffer).b_p_ts,
-                    (*wp.w_buffer).b_p_vts_array,
+                    (*window.w_buffer).b_p_ts,
+                    (*window.w_buffer).b_p_vts_array,
                 )
             } - 1;
         }
@@ -555,7 +555,7 @@ impl Cells {
                 // See "Tab alignment" in `unprintable`.
                 wlv.fix_for_boguscols();
             }
-            if wp.w_onebuf_opt.wo_list == 0 {
+            if window.w_onebuf_opt.wo_list == 0 {
                 self.char_code = ' ' as ::core::ffi::c_int;
                 self.cell_char = schar_from_ascii(b' ');
             }
@@ -566,15 +566,15 @@ impl Cells {
     /// the `'listchars'` character that stands for it.
     ///
     /// # Safety
-    /// `wp` must be live and `prev_ptr` point into the line.
+    /// `window` must be live and `prev_ptr` point into the line.
     pub(super) unsafe fn listchars(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         prev_ptr: *mut ::core::ffi::c_char,
     ) {
         // SAFETY: the caller's window and line pointers.
-        if wp.w_onebuf_opt.wo_list != 0 {
+        if window.w_onebuf_opt.wo_list != 0 {
             self.in_multispace = self.char_code == ' ' as ::core::ffi::c_int
                 && (unsafe { *self.ptr } as ::core::ffi::c_int == ' ' as ::core::ffi::c_int
                     || (prev_ptr > self.line
@@ -585,12 +585,12 @@ impl Cells {
             }
         }
 
-        let lcs = &wp.w_p_lcs_chars;
+        let lcs = &window.w_p_lcs_chars;
         let at = unsafe { self.ptr.offset_from(self.line) };
 
         // 'list': change 160 to "nbsp" and a space to "space" — but not
         // when a composing character follows, which `char_len` reveals.
-        if wp.w_onebuf_opt.wo_list != 0
+        if window.w_onebuf_opt.wo_list != 0
             && ((((self.char_code == 160 && self.char_len == 2)
                 || (self.char_code == 0x202f && self.char_len == 3))
                 && lcs.nbsp != 0)
@@ -616,7 +616,7 @@ impl Cells {
                 };
             }
             wlv.n_attr = 1;
-            wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_0) };
+            wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_0) };
             self.attr_before_run = wlv.char_attr;
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }
@@ -649,7 +649,7 @@ impl Cells {
                 self.cell_char = lcs.space;
             }
             wlv.n_attr = 1;
-            wlv.extra_attr = unsafe { win_hl_attr(wp.raw(), HLF_0) };
+            wlv.extra_attr = unsafe { win_hl_attr(window.raw(), HLF_0) };
             self.attr_before_run = wlv.char_attr;
             self.char_code = unsafe { schar_get_first_codepoint(self.cell_char) };
         }

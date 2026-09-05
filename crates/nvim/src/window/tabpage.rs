@@ -576,8 +576,8 @@ fn check_tabpage_windows(old_curtab: TabPage) {
 }
 
 /// Re-place a floating window under its own configuration.
-fn config_float(wp: Win) {
-    let (raw, config) = (wp.raw(), wp.w_config.clone());
+fn config_float(window: Win) {
+    let (raw, config) = (window.raw(), window.w_config.clone());
     // SAFETY: a live window and its own configuration.
     unsafe { win_config_float(Win::new(raw), config) };
 }
@@ -687,17 +687,17 @@ pub(crate) fn goto_last_used_tab() -> bool {
     true
 }
 
-pub unsafe fn goto_tabpage_win(tabpage: *mut Tabpage, wp: *mut Window) {
+pub unsafe fn goto_tabpage_win(tabpage: *mut Tabpage, window: *mut Window) {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(wp)) };
+    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(window)) };
     goto_tab_win(tp, wp);
 }
 
 /// Enter window `wp` in tab page `tabpage`, updating the GUI tab as well.
-pub(crate) fn goto_tab_win(tabpage: TabPage, wp: Win) {
+pub(crate) fn goto_tab_win(tabpage: TabPage, window: Win) {
     goto_tab(tabpage, true, true);
     if tabpage.is_current()
-        && let Some(wp) = valid_win(wp.raw())
+        && let Some(wp) = valid_win(window.raw())
     {
         enter(wp, true);
     }

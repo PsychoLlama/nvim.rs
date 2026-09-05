@@ -551,10 +551,10 @@ pub(crate) fn stl_is_global() -> bool {
 /// The window a drawing entry point was handed, or `None` for the tab line.
 ///
 /// # Safety
-/// `wp` must be null or a live window.
-pub(crate) unsafe fn win_opt(wp: *mut Window) -> Option<Win> {
+/// `window` must be null or a live window.
+pub(crate) unsafe fn win_opt(window: *mut Window) -> Option<Win> {
     // SAFETY: the caller's promise, minus the null case.
-    (!wp.is_null()).then(|| unsafe { Win::new(wp) })
+    (!window.is_null()).then(|| unsafe { Win::new(window) })
 }
 
 /// C's `PUT_C`: put `key` in a dictionary that was sized up front.
@@ -589,21 +589,21 @@ pub(crate) fn fillchar_status_of(win: Win) -> (Hlf, ScreenChar) {
 /// C's `fillchar_status()`, for the three callers outside this module.
 ///
 /// # Safety
-/// `wp` must be a live window and `group` a writable `Hlf`.
-pub unsafe fn fillchar_status(group: *mut Hlf, wp: *mut Window) -> ScreenChar {
+/// `window` must be a live window and `group` a writable `Hlf`.
+pub unsafe fn fillchar_status(group: *mut Hlf, window: *mut Window) -> ScreenChar {
     // SAFETY: the caller's promise.
-    let (g, fillchar) = fillchar_status_of(unsafe { Win::new(wp) });
+    let (g, fillchar) = fillchar_status_of(unsafe { Win::new(window) });
     // SAFETY: the caller's out-parameter.
     unsafe { *group = g };
     fillchar
 }
 
-/// Redraw `wp`'s status line from `'statusline'`.
+/// Redraw `window`'s status line from `'statusline'`.
 ///
 /// # Safety
-/// `wp` must be a live window. This evaluates the option, so it re-enters
+/// `window` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe fn redraw_custom_statusline(wp: *mut Window) {
+pub unsafe fn redraw_custom_statusline(window: *mut Window) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // A `'statusline'` expression that triggers a redraw gets here again.
     if ENTERED.get() {
@@ -611,7 +611,7 @@ pub unsafe fn redraw_custom_statusline(wp: *mut Window) {
     }
     ENTERED.set(true);
     // SAFETY: the caller's promise.
-    unsafe { win_redr_custom(wp, false, false, false) };
+    unsafe { win_redr_custom(window, false, false, false) };
     ENTERED.set(false);
 }
 
@@ -623,17 +623,17 @@ pub unsafe fn redraw_custom_statusline(wp: *mut Window) {
 /// from being rebuilt for every line of the window.
 ///
 /// # Safety
-/// `wp` must be a live window, `lnum` one of its buffer's lines, `buf` a
+/// `window` must be a live window, `lnum` one of its buffer's lines, `buf` a
 /// buffer of `MAXPATHL` bytes and `stcp` this line's status-column state.
 pub unsafe fn build_statuscol_str(
-    wp: *mut Window,
+    window: *mut Window,
     lnum: LineNr,
     relnum: LineNr,
     buf: *mut ::core::ffi::c_char,
     stcp: *mut StatusCol,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's promise.
-    let (mut win, stcp) = unsafe { (Win::new(wp), &mut *stcp) };
+    let (mut win, stcp) = unsafe { (Win::new(window), &mut *stcp) };
     // Only update the click definitions once per window per redraw, and not
     // at all while the column is empty -- it is redrawn again once it is not.
     let fillclick = relnum >= 0 && stcp.width > 0 && lnum == win.w_topline;

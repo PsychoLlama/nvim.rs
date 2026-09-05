@@ -251,16 +251,16 @@ pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr)
 /// [`vcol_to_col`], writing the leftover columns through `coladdp`.
 ///
 /// # Safety
-/// `wp` must be a live window and `lnum` a line of the buffer it shows;
+/// `window` must be a live window and `lnum` a line of the buffer it shows;
 /// `coladdp` must be writable or null.
 pub(crate) unsafe fn vcol2col(
-    wp: *mut Window,
+    window: *mut Window,
     lnum: LineNr,
     vcol: ColNr,
     coladdp: *mut ColNr,
 ) -> ColNr {
     // SAFETY: the caller's promise.
-    let (col, coladd) = unsafe { vcol_to_col(Win::new(wp), lnum, vcol) };
+    let (col, coladd) = unsafe { vcol_to_col(Win::new(window), lnum, vcol) };
     if !coladdp.is_null() {
         // SAFETY: as above.
         unsafe { *coladdp = coladd };

@@ -179,15 +179,15 @@ pub(crate) fn check_options() {
 ///
 /// # Safety
 ///
-/// `wp` must be live for the options that keep their flag in a window.
+/// `window` must be live for the options that keep their flag in a window.
 pub(crate) unsafe fn was_set_insecurely(
-    wp: *mut Window,
+    window: *mut Window,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> bool {
     debug_assert!(opt_idx != kOptInvalid);
     // SAFETY: the caller's window is live.
-    unsafe { insecure_flag(wp, opt_idx, opt_flags).is_set() }
+    unsafe { insecure_flag(window, opt_idx, opt_flags).is_set() }
 }
 
 /// Where an option's `kOptFlagInsecure` mark lives.
@@ -241,36 +241,36 @@ impl InsecureFlag {
 ///
 /// # Safety
 ///
-/// `wp` must be live for the options that keep their own copy.
+/// `window` must be live for the options that keep their own copy.
 pub(crate) unsafe fn insecure_flag(
-    wp: *mut Window,
+    window: *mut Window,
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
 ) -> InsecureFlag {
     let own: *mut uint32_t = if opt_flags.has(OptionSetFlags::LOCAL) {
-        debug_assert!(!wp.is_null());
+        debug_assert!(!window.is_null());
         // SAFETY: the caller's window, and its buffer, are live.
         match opt_idx {
-            kOptWrap => unsafe { &raw mut (*wp).w_onebuf_opt.wo_wrap_flags },
-            kOptStatusline => unsafe { &raw mut (*wp).w_onebuf_opt.wo_stl_flags },
-            kOptWinbar => unsafe { &raw mut (*wp).w_onebuf_opt.wo_wbr_flags },
-            kOptFoldexpr => unsafe { &raw mut (*wp).w_onebuf_opt.wo_fde_flags },
-            kOptFoldtext => unsafe { &raw mut (*wp).w_onebuf_opt.wo_fdt_flags },
-            kOptIndentexpr => unsafe { &raw mut (*(*wp).w_buffer).b_p_inde_flags },
-            kOptFormatexpr => unsafe { &raw mut (*(*wp).w_buffer).b_p_fex_flags },
-            kOptIncludeexpr => unsafe { &raw mut (*(*wp).w_buffer).b_p_inex_flags },
+            kOptWrap => unsafe { &raw mut (*window).w_onebuf_opt.wo_wrap_flags },
+            kOptStatusline => unsafe { &raw mut (*window).w_onebuf_opt.wo_stl_flags },
+            kOptWinbar => unsafe { &raw mut (*window).w_onebuf_opt.wo_wbr_flags },
+            kOptFoldexpr => unsafe { &raw mut (*window).w_onebuf_opt.wo_fde_flags },
+            kOptFoldtext => unsafe { &raw mut (*window).w_onebuf_opt.wo_fdt_flags },
+            kOptIndentexpr => unsafe { &raw mut (*(*window).w_buffer).b_p_inde_flags },
+            kOptFormatexpr => unsafe { &raw mut (*(*window).w_buffer).b_p_fex_flags },
+            kOptIncludeexpr => unsafe { &raw mut (*(*window).w_buffer).b_p_inex_flags },
             _ => ptr::null_mut(),
         }
-    } else if !wp.is_null() {
+    } else if !window.is_null() {
         // The global value of a window-local option lives in the window's
-        // second `WinOpt`. Upstream dereferences `wp` here without the
+        // second `WinOpt`. Upstream dereferences `window` here without the
         // assert the local branch has; the null test above leaves a caller
         // that passes none on the shared mark instead.
         // SAFETY: the caller's window is live.
         match opt_idx {
-            kOptWrap => unsafe { &raw mut (*wp).w_allbuf_opt.wo_wrap_flags },
-            kOptFoldexpr => unsafe { &raw mut (*wp).w_allbuf_opt.wo_fde_flags },
-            kOptFoldtext => unsafe { &raw mut (*wp).w_allbuf_opt.wo_fdt_flags },
+            kOptWrap => unsafe { &raw mut (*window).w_allbuf_opt.wo_wrap_flags },
+            kOptFoldexpr => unsafe { &raw mut (*window).w_allbuf_opt.wo_fde_flags },
+            kOptFoldtext => unsafe { &raw mut (*window).w_allbuf_opt.wo_fdt_flags },
             _ => ptr::null_mut(),
         }
     } else {
@@ -306,29 +306,29 @@ pub(crate) fn valid_name(val: &CStr, allowed: &[u8]) -> bool {
 /// # Safety
 ///
 /// `wp` must be live.
-pub(crate) unsafe fn check_blending(wp: *mut Window) {
+pub(crate) unsafe fn check_blending(window: *mut Window) {
     // SAFETY: the caller's window is live.
     // SAFETY: the caller's window.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     wp.w_grid_alloc.blending =
         wp.w_onebuf_opt.wo_winbl > 0 as OptInt || (wp.w_floating && wp.w_config.shadow);
 }
 
 /// Parse 'winhighlight' — a comma-separated list of `from:to` group pairs —
-/// and, when `wp` is given, install it as that window's highlight namespace.
-/// `false` for a value that does not parse; with `wp` given, a failure
+/// and, when `window` is given, install it as that window's highlight namespace.
+/// `false` for a value that does not parse; with `window` given, a failure
 /// leaves the namespace half-built, exactly as upstream does.
 ///
 /// # Safety
 ///
-/// `winhl`, when non-null, must be NUL-terminated; `wp`, when non-null, must
+/// `winhl`, when non-null, must be NUL-terminated; `window`, when non-null, must
 /// be live.
-pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut Window) -> bool {
+pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: *mut Window) -> bool {
     // SAFETY: the caller's string is NUL-terminated and its window is live.
     let mut p: *const c_char = if !winhl.is_null() {
         winhl
-    } else if !wp.is_null() {
-        unsafe { (*wp).w_onebuf_opt.wo_winhl }
+    } else if !window.is_null() {
+        unsafe { (*window).w_onebuf_opt.wo_winhl }
     } else {
         empty_option()
     };
@@ -336,30 +336,30 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut Window) -> b
     if unsafe { *p } == 0 {
         // An empty value drops the window's namespace, but only while it
         // is still the one 'winhighlight' made.
-        if !wp.is_null()
-            && unsafe { (*wp).w_ns_hl_winhl } > 0
-            && unsafe { (*wp).w_ns_hl } == unsafe { (*wp).w_ns_hl_winhl }
+        if !window.is_null()
+            && unsafe { (*window).w_ns_hl_winhl } > 0
+            && unsafe { (*window).w_ns_hl } == unsafe { (*window).w_ns_hl_winhl }
         {
-            unsafe { (*wp).w_ns_hl = 0 };
-            unsafe { (*wp).w_hl_needs_update = true };
+            unsafe { (*window).w_ns_hl = 0 };
+            unsafe { (*window).w_hl_needs_update = true };
         }
         return true;
     }
 
     let mut ns_hl: c_int = 0;
-    if !wp.is_null() {
-        if unsafe { (*wp).w_ns_hl_winhl } == 0 {
-            unsafe { (*wp).w_ns_hl_winhl = nvim_create_namespace(String_0::NULL) as c_int };
+    if !window.is_null() {
+        if unsafe { (*window).w_ns_hl_winhl } == 0 {
+            unsafe { (*window).w_ns_hl_winhl = nvim_create_namespace(String_0::NULL) as c_int };
         } else {
             // Reusing the namespace: bump the generation so attributes
             // cached against it are re-resolved.
             let dp: *mut DecorProvider =
-                unsafe { get_decor_provider((*wp).w_ns_hl_winhl as NS, true) };
+                unsafe { get_decor_provider((*window).w_ns_hl_winhl as NS, true) };
             unsafe { (*dp).hl_valid += 1 };
         }
-        ns_hl = unsafe { (*wp).w_ns_hl_winhl };
-        if unsafe { (*wp).w_ns_hl } <= 0 {
-            unsafe { (*wp).w_ns_hl = (*wp).w_ns_hl_winhl };
+        ns_hl = unsafe { (*window).w_ns_hl_winhl };
+        if unsafe { (*window).w_ns_hl } <= 0 {
+            unsafe { (*window).w_ns_hl = (*window).w_ns_hl_winhl };
         }
     }
 
@@ -391,7 +391,7 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut Window) -> b
             return false;
         }
 
-        if !wp.is_null() {
+        if !window.is_null() {
             let mut attrs: HlAttrs = HLATTRS_INIT;
             attrs.rgb_ae_attr |= HlAttrFlags::GLOBAL;
             unsafe { ns_hl_def(ns_hl as NS, hl_id_link, attrs, hl_id, None) };
@@ -403,8 +403,8 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, wp: *mut Window) -> b
         };
     }
 
-    if !wp.is_null() {
-        unsafe { (*wp).w_hl_needs_update = true };
+    if !window.is_null() {
+        unsafe { (*window).w_hl_needs_update = true };
     }
     true
 }

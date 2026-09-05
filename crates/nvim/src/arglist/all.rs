@@ -60,8 +60,8 @@ fn first_window_to_walk() -> *mut Window {
 }
 
 /// `Win::raw`, or a null for "no window", as the walk above answers.
-fn raw_win(wp: Option<Win>) -> *mut Window {
-    wp.map_or(ptr::null_mut(), Win::raw)
+fn raw_win(window: Option<Win>) -> *mut Window {
+    window.map_or(ptr::null_mut(), Win::raw)
 }
 
 /// The window after `wp` in that walk, or null at its end.
@@ -69,9 +69,9 @@ fn raw_win(wp: Option<Win>) -> *mut Window {
 /// # Safety
 ///
 /// `wp` must be a valid window.
-unsafe fn next_window_to_walk(wp: *mut Window) -> *mut Window {
+unsafe fn next_window_to_walk(window: *mut Window) -> *mut Window {
     // SAFETY: the caller's promise -- a live `Window`.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     // SAFETY: caller contract; the window list is well formed.
     if wp.w_floating {
         let prev = wp.prev().expect("a float is never the first window");
@@ -94,7 +94,7 @@ unsafe fn next_window_to_walk(wp: *mut Window) -> *mut Window {
 /// `aall` must be the live state and `wp` a valid window holding `buf`.
 unsafe fn arg_index_for_window(
     aall: &mut ArgAllState,
-    wp: *mut Window,
+    window: *mut Window,
     buf: *mut Buffer,
     old_curwin: *mut Window,
     old_curtab: *mut Tabpage,
@@ -102,7 +102,7 @@ unsafe fn arg_index_for_window(
     // SAFETY: the caller's promise -- a live `Buffer`.
     let buf = unsafe { Buf::new(buf) };
     // SAFETY: the caller's promise -- a live `Window`.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     // SAFETY: caller contract; the window, its buffer and the argument list
     // are all valid here.
     // SAFETY: `wp` is the window being considered, live for this walk.
@@ -172,18 +172,18 @@ unsafe fn arg_index_for_window(
     i
 }
 
-/// Close `wp`, whose buffer is not in the argument list — unless it is the
+/// Close `window`, whose buffer is not in the argument list — unless it is the
 /// last window, which is re-used for the first argument instead. Answers the
 /// window the walk continues from, which is the top again when an
 /// autocommand invalidated it.
 ///
 /// # Safety
 ///
-/// `aall` must be the live state, `wp` a valid window holding `buf`, and
+/// `aall` must be the live state, `window` a valid window holding `buf`, and
 /// `wpnext` the window the walk would continue to.
 unsafe fn close_unused_window(
     aall: &mut ArgAllState,
-    wp: *mut Window,
+    window: *mut Window,
     buf: *mut Buffer,
     wpnext: *mut Window,
 ) -> *mut Window {
@@ -201,7 +201,7 @@ unsafe fn close_unused_window(
     if !hide && nwindows <= 1 && changed {
         // The buffer was changed and we would like to hide it, so try
         // autowriting.
-        // SAFETY: `wp` and `buf` are live on entry; both are re-validated
+        // SAFETY: `window` and `buf` are live on entry; both are re-validated
         // afterwards, since `autowrite` runs autocommands.
         // `buf` is live until the autowrite -- which is exactly what the
         // re-check afterwards is for.
@@ -209,7 +209,7 @@ unsafe fn close_unused_window(
         // SAFETY: as above; this may fire autocommands.
         let _ = unsafe { autowrite(buf.raw(), false) };
         // `win_valid` and `BufRef::valid` are the questions to ask after one.
-        let survived = win_valid(wp) && bufref.valid();
+        let survived = win_valid(window) && bufref.valid();
         if !survived {
             // Autocommands removed the window; start all over.
             return first_window_to_walk();
@@ -223,14 +223,14 @@ unsafe fn close_unused_window(
             return wpnext;
         }
     }
-    // SAFETY: `wp` is live, and `wpnext` is re-validated because closing a
+    // SAFETY: `window` is live, and `wpnext` is re-validated because closing a
     // window runs autocommands. Whether the buffer goes with the window is
     // asked again here rather than reused from above: a successful
     // `autowrite` leaves it unchanged, and then it is the close's to free.
-    // SAFETY: `buf` is `wp`'s buffer; a hidden or changed one is kept.
+    // SAFETY: `buf` is `window`'s buffer; a hidden or changed one is kept.
     let free_buf = unsafe { !buf_hide(buf.raw().cast_const()) } && !buf_is_changed(buf);
-    // SAFETY: `wp` is a live window, and not the last one (checked above).
-    unsafe { win_close(wp, free_buf, false) };
+    // SAFETY: `window` is a live window, and not the last one (checked above).
+    unsafe { win_close(window, free_buf, false) };
     if win_valid(wpnext) {
         return wpnext;
     }

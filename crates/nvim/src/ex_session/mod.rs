@@ -359,15 +359,15 @@ unsafe fn ses_arglist(out: SessionFile, cmd: &CStr, entries: &[ArgEntry], fullna
     true
 }
 
-/// Whether window `wp` belongs in the session at all. A floating window
+/// Whether window `window` belongs in the session at all. A floating window
 /// never does (#18432); the rest is what 'sessionoptions' says about the
 /// kind of buffer it holds.
 ///
 /// # Safety
-/// `wp` is a live window.
-pub(crate) unsafe fn ses_do_win(wp: *mut Window) -> bool {
+/// `window` is a live window.
+pub(crate) unsafe fn ses_do_win(window: *mut Window) -> bool {
     // SAFETY: caller contract; a window always has a buffer.
-    let win = unsafe { Win::new(wp) };
+    let win = unsafe { Win::new(window) };
     if win.w_floating {
         return false;
     }

@@ -384,10 +384,10 @@ fn store_field(chars: &mut [u8], slot: usize, value: ScreenChar) {
 /// Returns an error message, or null when the value is good.
 ///
 /// # Safety
-/// `wp` is a live window, `value` a C string, and `errbuf` null or
+/// `window` is a live window, `value` a C string, and `errbuf` null or
 /// `errbuflen` writable bytes.
 pub unsafe fn set_chars_option<'a>(
-    wp: *mut Window,
+    window: *mut Window,
     value: *const c_char,
     what: CharsOption,
     apply: bool,
@@ -399,9 +399,9 @@ pub unsafe fn set_chars_option<'a>(
     // SAFETY: the caller's window; both are C strings.
     let local = unsafe {
         if listchars {
-            (*wp).w_onebuf_opt.wo_lcs
+            (*window).w_onebuf_opt.wo_lcs
         } else {
-            (*wp).w_onebuf_opt.wo_fcs
+            (*window).w_onebuf_opt.wo_fcs
         }
     };
     // An empty local value defers to the global one.
@@ -594,11 +594,11 @@ pub unsafe fn set_chars_option<'a>(
         // SAFETY: the caller's window; the two runs it held are this
         // module's to free, and the new ones move into the struct with it.
         if listchars {
-            unsafe { xfree((*wp).w_p_lcs_chars.multispace.cast::<c_void>()) };
-            unsafe { xfree((*wp).w_p_lcs_chars.leadmultispace.cast::<c_void>()) };
-            unsafe { (*wp).w_p_lcs_chars = lcs };
+            unsafe { xfree((*window).w_p_lcs_chars.multispace.cast::<c_void>()) };
+            unsafe { xfree((*window).w_p_lcs_chars.leadmultispace.cast::<c_void>()) };
+            unsafe { (*window).w_p_lcs_chars = lcs };
         } else {
-            unsafe { (*wp).w_p_fcs_chars = fcs };
+            unsafe { (*window).w_p_fcs_chars = fcs };
         }
     }
     None

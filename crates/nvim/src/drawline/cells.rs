@@ -413,11 +413,16 @@ impl Cells {
     /// read cursor where it was.
     ///
     /// # Safety
-    /// `wp` must be a live window and `lnum` one of its buffer's lines.
+    /// `window` must be a live window and `lnum` one of its buffer's lines.
     #[inline]
-    pub(super) unsafe fn refetch_line(&mut self, wp: Win, lnum: LineNr, at: ::core::ffi::c_int) {
+    pub(super) unsafe fn refetch_line(
+        &mut self,
+        window: Win,
+        lnum: LineNr,
+        at: ::core::ffi::c_int,
+    ) {
         // SAFETY: the caller's window and line.
-        self.line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
+        self.line = unsafe { ml_get_buf(window.w_buffer, lnum) };
         self.ptr = unsafe { self.line.offset(at as isize) };
     }
 
@@ -439,27 +444,27 @@ impl Cells {
     /// it to [`Cells::new`] as well costs 5.8 M back, so it stays here only.
     ///
     /// # Safety
-    /// `wp`, `buf` and everything in `f` must be live, and `wlv` must be the
+    /// `window`, `buf` and everything in `f` must be live, and `wlv` must be the
     /// state the setup half filled in for this line.
     #[inline(always)]
     pub(crate) unsafe fn run(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         buf: *mut Buffer,
         f: &LineFrame,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.
-        let grid: GridView = wp.w_grid;
+        let grid: GridView = window.w_grid;
         'row: loop {
             self.has_match_conc = 0;
             self.decor_conceal = 0;
             self.did_decrement_ptr = false;
-            unsafe { self.provider_chunk(wp, wlv.lnum, wlv.decor) };
+            unsafe { self.provider_chunk(window, wlv.lnum, wlv.decor) };
 
             'row_full: {
                 if self.columns_todo {
-                    match unsafe { self.draw_columns(wlv, wp, f) } {
+                    match unsafe { self.draw_columns(wlv, window, f) } {
                         Step::Done => break 'row,
                         Step::NextRow => continue 'row,
                         Step::RowFull => break 'row_full,
@@ -472,19 +477,20 @@ impl Cells {
                     && wlv.vcol >= self.left_curline_col
                     && wlv.vcol < self.right_curline_col
                 {
-                    unsafe { wlv.apply_cursorline_highlight(wp) };
+                    unsafe { wlv.apply_cursorline_highlight(window) };
                 }
 
                 // Still showing the '$' of a change command: stop at the
                 // cursor.
-                if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= wp.w_virtcol {
-                    wlv.col = unsafe { draw_virt_text(wp, buf, self.text_start_col, wlv.col, wlv) };
+                if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= window.w_virtcol {
+                    wlv.col =
+                        unsafe { draw_virt_text(window, buf, self.text_start_col, wlv.col, wlv) };
                     // Nothing after `col` is ours to clear.
-                    unsafe { wlv_put_linebuf(wp, wlv, wlv.col, false, self.bg_attr, 0) };
+                    unsafe { wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0) };
                     // Pretend the window is finished, except that
                     // 'cursorcolumn' still wants the rest of it.
-                    wlv.row = if wp.w_onebuf_opt.wo_cuc != 0 {
-                        wp.w_cline_row + wp.w_cline_height
+                    wlv.row = if window.w_onebuf_opt.wo_cuc != 0 {
+                        window.w_cline_row + window.w_cline_height
                     } else {
                         self.view_height
                     };
@@ -493,7 +499,7 @@ impl Cells {
 
                 self.draw_folded = self.has_fold && wlv.row == wlv.startrow + wlv.filler_lines;
                 if self.draw_folded && wlv.extra_todo == 0 {
-                    self.fold_attr = unsafe { win_hl_attr(wp.raw(), HLF_FL) };
+                    self.fold_attr = unsafe { win_hl_attr(window.raw(), HLF_FL) };
                     wlv.char_attr = self.fold_attr;
                     self.decor_attr = 0;
                 }
@@ -504,37 +510,37 @@ impl Cells {
                         || unsafe { (*f.spv).spv_has_spell }
                         || self.extra_check)
                 {
-                    unsafe { self.cell_attributes(wlv, wp) };
+                    unsafe { self.cell_attributes(wlv, window) };
                 }
 
-                unsafe { self.fold_text(wlv, wp, f) };
-                unsafe { self.next_char(wlv, wp, f) };
-                unsafe { self.correct_cursor_col(wlv, wp) };
+                unsafe { self.fold_text(wlv, window, f) };
+                unsafe { self.next_char(wlv, window, f) };
+                unsafe { self.correct_cursor_col(wlv, window) };
                 unsafe { self.apply_extra_attr(wlv) };
-                unsafe { self.draw_precedes(wlv, wp) };
-                unsafe { self.highlight_at_eol(wlv, wp) };
+                unsafe { self.draw_precedes(wlv, window) };
+                unsafe { self.highlight_at_eol(wlv, window) };
 
                 if self.cell_char == NUL as ScreenChar {
-                    unsafe { self.finish_line(wlv, wp, buf, f) };
+                    unsafe { self.finish_line(wlv, window, buf, f) };
                     break 'row;
                 }
 
-                unsafe { self.draw_extends(wlv, wp) };
+                unsafe { self.draw_extends(wlv, window) };
                 unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
-                unsafe { self.column_highlight(wlv, wp) };
+                unsafe { self.column_highlight(wlv, window) };
                 unsafe { self.apply_line_attr_lowprio(wlv) };
                 if wlv.filler_todo <= 0 {
                     self.prev_vcol = wlv.vcol;
                 }
-                unsafe { self.store_cell(wlv, wp) };
+                unsafe { self.store_cell(wlv, window) };
                 self.advance_vcol(wlv);
-                unsafe { self.peek_decor_past_edge(wlv, wp) };
+                unsafe { self.peek_decor_past_edge(wlv, window) };
             }
 
-            if !unsafe { self.row_is_full(wlv, wp) } {
+            if !unsafe { self.row_is_full(wlv, window) } {
                 continue 'row;
             }
-            if unsafe { self.finish_screen_line(wlv, wp, buf, f, grid) } == Step::Done {
+            if unsafe { self.finish_screen_line(wlv, window, buf, f, grid) } == Step::Done {
                 break 'row;
             }
         }
@@ -558,15 +564,20 @@ impl Cells {
     /// read cursor has walked past what their last answer covered.
     ///
     /// # Safety
-    /// `wp` must be a live window and `lnum` one of its buffer's lines.
-    pub(super) unsafe fn provider_chunk(&mut self, wp: Win, lnum: LineNr, decor: DecorStateRef) {
+    /// `window` must be a live window and `lnum` one of its buffer's lines.
+    pub(super) unsafe fn provider_chunk(
+        &mut self,
+        window: Win,
+        lnum: LineNr,
+        decor: DecorStateRef,
+    ) {
         // SAFETY: the caller's window and line.
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;
         }
         let at = self.byte_col();
-        self.decor_provider_end_col = unsafe { invoke_range_next(wp, lnum, at, 100) };
-        unsafe { self.refetch_line(wp, lnum, at) };
+        self.decor_provider_end_col = unsafe { invoke_range_next(window, lnum, at, 100) };
+        unsafe { self.refetch_line(window, lnum, at) };
         if !self.has_decor && decor_has_more_decorations(decor, lnum - 1) {
             self.has_decor = true;
             self.extra_check = true;
@@ -581,33 +592,34 @@ impl Cells {
     /// be past.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn correct_cursor_col(&mut self, wlv: &WinLineVars, mut wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn correct_cursor_col(&mut self, wlv: &WinLineVars, mut window: Win) {
         // SAFETY: the caller's window.
         if self.did_cursor_col
             || wlv.filler_todo > 0
             || !self.in_curline
-            || !unsafe { conceal_cursor_line(wp.raw()) }
-            || !(wlv.vcol + wlv.skip_cells >= wp.w_virtcol || self.cell_char == NUL as ScreenChar)
+            || !unsafe { conceal_cursor_line(window.raw()) }
+            || !(wlv.vcol + wlv.skip_cells >= window.w_virtcol
+                || self.cell_char == NUL as ScreenChar)
         {
             return;
         }
-        wp.w_wcol = wlv.col - wlv.boguscols;
-        if wlv.vcol + wlv.skip_cells < wp.w_virtcol {
+        window.w_wcol = wlv.col - wlv.boguscols;
+        if wlv.vcol + wlv.skip_cells < window.w_virtcol {
             // Cursor beyond the end of the line with 'virtualedit'.
-            wp.w_wcol += wp.w_virtcol - wlv.vcol - wlv.skip_cells;
+            window.w_wcol += window.w_virtcol - wlv.vcol - wlv.skip_cells;
         }
-        wp.w_wrow = wlv.row;
+        window.w_wrow = wlv.row;
         self.did_cursor_col = true;
-        wp.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
+        window.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
     }
 
     /// Write the cell — or, when it is being concealed or skipped over, count
     /// it without writing anything.
     ///
     /// # Safety
-    /// `wp` must be a live window and `off` inside the line buffers.
-    pub(super) unsafe fn store_cell(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window and `off` inside the line buffers.
+    pub(super) unsafe fn store_cell(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window; `off` is bounded by `view_width`.
         if wlv.filler_todo > 0 {
             // TODO(bfredl): the main render loop should get called with
@@ -639,7 +651,7 @@ impl Cells {
             }
             wlv.off += 1;
             wlv.col += 1;
-        } else if wp.w_onebuf_opt.wo_cole > 0 && self.is_concealing {
+        } else if window.w_onebuf_opt.wo_cole > 0 && self.is_concealing {
             self.skip_concealed(wlv, unsafe { schar_cells(self.cell_char) } > 1);
         } else {
             wlv.skip_cells -= 1;
@@ -720,8 +732,8 @@ impl Cells {
     /// past it.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn peek_decor_past_edge(&mut self, wlv: &WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn peek_decor_past_edge(&mut self, wlv: &WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
         if !self.has_decor || wlv.filler_todo > 0 || wlv.col < self.view_width {
             return;
@@ -729,7 +741,7 @@ impl Cells {
         if self.is_wrapped && wlv.extra_todo == 0 {
             unsafe {
                 decor_redraw_col(
-                    wp.raw(),
+                    window.raw(),
                     self.byte_col(),
                     -3,
                     false,
@@ -745,7 +757,7 @@ impl Cells {
             decor_recheck_draw_col(-1, true, wlv.decor);
             unsafe {
                 decor_redraw_col(
-                    wp.raw(),
+                    window.raw(),
                     MAXCOL as ::core::ffi::c_int,
                     -1,
                     true,

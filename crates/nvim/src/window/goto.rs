@@ -45,14 +45,14 @@ use crate::undo::u_sync;
 use crate::winlayer::graph::{curbuf, curwin, prevwin};
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
-pub unsafe fn win_goto(wp: *mut Window) {
+pub unsafe fn win_goto(window: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
-    goto_win(unsafe { Win::new(wp) });
+    goto_win(unsafe { Win::new(window) });
 }
 
 /// Make `wp` the current window and redraw what the move uncovers.
-pub(crate) fn goto_win(wp: Win) {
-    let mut wp = wp;
+pub(crate) fn goto_win(window: Win) {
+    let mut wp = window;
     let owp = cur_win();
     // SAFETY: reads the editor's lock state.
     if unsafe { text_or_buf_locked() } {
@@ -85,11 +85,11 @@ pub(crate) fn goto_win(wp: Win) {
     }
 }
 
-/// Redraw the line the cursor of `wp` is on.
-fn redraw_winline(wp: Win) {
-    let lnum = wp.w_cursor.lnum;
+/// Redraw the line the cursor of `window` is on.
+fn redraw_winline(window: Win) {
+    let lnum = window.w_cursor.lnum;
     // SAFETY: a live window and a line of its own buffer.
-    unsafe { redraw_win_line(wp.raw(), lnum) };
+    unsafe { redraw_win_line(window.raw(), lnum) };
 }
 
 /// The tab page `win` is on, or null.
@@ -138,11 +138,11 @@ impl Axis {
         }
     }
 
-    /// Where the cursor of `wp` sits along the crossed axis.
-    fn cursor(self, wp: Win) -> c_int {
+    /// Where the cursor of `window` sits along the crossed axis.
+    fn cursor(self, window: Win) -> c_int {
         match self {
-            Axis::Vertical => wp.w_wincol + wp.w_wcol,
-            Axis::Horizontal => wp.w_winrow + wp.w_wrow,
+            Axis::Vertical => window.w_wincol + window.w_wcol,
+            Axis::Horizontal => window.w_winrow + window.w_wrow,
         }
     }
 
@@ -158,12 +158,12 @@ impl Axis {
 
 pub unsafe fn win_vert_neighbor(
     tabpage: *mut Tabpage,
-    wp: *mut Window,
+    window: *mut Window,
     up: bool,
     count: c_int,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(wp)) };
+    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(window)) };
     raw_win(neighbor(tp, wp, Axis::Vertical, up, count))
 }
 
@@ -176,12 +176,12 @@ pub(crate) fn goto_ver(up: bool, count: c_int) {
 
 pub unsafe fn win_horz_neighbor(
     tabpage: *mut Tabpage,
-    wp: *mut Window,
+    window: *mut Window,
     left: bool,
     count: c_int,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live tab page and a live window.
-    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(wp)) };
+    let (tp, wp) = unsafe { (TabPage::new(tabpage), Win::new(window)) };
     raw_win(neighbor(tp, wp, Axis::Horizontal, left, count))
 }
 
@@ -192,17 +192,23 @@ pub(crate) fn goto_hor(left: bool, count: c_int) {
     }
 }
 
-/// The `count`th neighbour of `wp` along `axis`, `backwards` for up or left.
+/// The `count`th neighbour of `window` along `axis`, `backwards` for up or left.
 ///
-/// Answers `wp` itself when there is no such neighbour, and the previous
-/// window (or the first) when `wp` floats, since a float is not in the tree.
-fn neighbor(tabpage: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int) -> Option<Win> {
-    if wp.w_floating {
+/// Answers `window` itself when there is no such neighbour, and the previous
+/// window (or the first) when `window` floats, since a float is not in the tree.
+fn neighbor(
+    tabpage: TabPage,
+    window: Win,
+    axis: Axis,
+    backwards: bool,
+    count: c_int,
+) -> Option<Win> {
+    if window.w_floating {
         let prev = valid_win(prevwin.get()).filter(|p| !p.w_floating);
         return Some(prev.or_else(first_window).expect("the editor has a window"));
     }
 
-    let mut foundfr = wp.frame();
+    let mut foundfr = window.frame();
     let mut count = count;
     'end: loop {
         let more = count != 0;
@@ -234,7 +240,7 @@ fn neighbor(tabpage: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int
             let mut fr = nfr.child().expect("a frame that is not a leaf has a child");
             if nfr.fr_layout as c_int == axis.cross() {
                 // Find the frame the cursor is at, across the other axis.
-                while fr.next().is_some() && axis.frame_end(fr) <= axis.cursor(wp) {
+                while fr.next().is_some() && axis.frame_end(fr) <= axis.cursor(window) {
                     fr = fr.next().expect("just tested");
                 }
             }
@@ -247,28 +253,28 @@ fn neighbor(tabpage: TabPage, wp: Win, axis: Axis, backwards: bool, count: c_int
     foundfr.win()
 }
 
-pub unsafe fn win_enter(wp: *mut Window, undo_sync: bool) {
+pub unsafe fn win_enter(window: *mut Window, undo_sync: bool) {
     // SAFETY: the caller's promise -- a live window.
-    enter(unsafe { Win::new(wp) }, undo_sync);
+    enter(unsafe { Win::new(window) }, undo_sync);
 }
 
-/// Make `wp` the current window.
+/// Make `window` the current window.
 ///
 /// Autocommands may close it immediately, so the caller must re-check it with
 /// [`valid_win`].
-pub(crate) fn enter(wp: Win, undo_sync: bool) {
+pub(crate) fn enter(window: Win, undo_sync: bool) {
     let sync = if undo_sync { WEE_UNDO_SYNC as c_int } else { 0 };
     let enter = WEE_TRIGGER_ENTER_AUTOCMDS as c_int;
-    enter_ext(wp, sync | enter | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int);
+    enter_ext(window, sync | enter | WEE_TRIGGER_LEAVE_AUTOCMDS as c_int);
 }
 
-/// Make `wp` the current window, `flags` saying which autocommands to fire.
+/// Make `window` the current window, `flags` saying which autocommands to fire.
 ///
 /// `WEE_CURWIN_INVALID` means `curwin` has just been closed and must not be
 /// read.
-pub(crate) fn enter_ext(wp: Win, flags: c_int) {
+pub(crate) fn enter_ext(window: Win, flags: c_int) {
     let curwin_invalid = flags & WEE_CURWIN_INVALID as c_int != 0;
-    if wp.is_current() && !curwin_invalid {
+    if window.is_current() && !curwin_invalid {
         return; // nothing to do
     }
     let mut other_buffer = false;
@@ -277,15 +283,15 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     }
     if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS as c_int != 0 {
         // Be careful: if autocommands delete the window, return now.
-        if wp.w_buffer != curbuf.get() {
+        if window.w_buffer != curbuf.get() {
             fire(AutoEvent::BufLeave, cur_buf());
             other_buffer = true;
-            if valid_win(wp.raw()).is_none() {
+            if valid_win(window.raw()).is_none() {
                 return;
             }
         }
         fire(AutoEvent::WinLeave, cur_buf());
-        if valid_win(wp.raw()).is_none() {
+        if valid_win(window.raw()).is_none() {
             return;
         }
         // autocmds may abort script processing
@@ -295,7 +301,7 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     }
 
     // sync undo before leaving the current buffer
-    if flags & WEE_UNDO_SYNC as c_int != 0 && curbuf.get() != wp.w_buffer {
+    if flags & WEE_UNDO_SYNC as c_int != 0 && curbuf.get() != window.w_buffer {
         // SAFETY: reads the current buffer's undo state.
         u_sync(false);
     }
@@ -306,8 +312,8 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
         update_topline(unsafe { Win::current() });
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
-    if wp.w_buffer != curbuf.get() {
-        let (buf, flags) = (wp.w_buffer, BCO_ENTER as c_int | BCO_NOHELP as c_int);
+    if window.w_buffer != curbuf.get() {
+        let (buf, flags) = (window.w_buffer, BCO_ENTER as c_int | BCO_NOHELP as c_int);
         // SAFETY: a live window's buffer.
         unsafe { buf_copy_options(buf, flags) };
     }
@@ -315,8 +321,8 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
         prevwin.set(curwin.get()); // remember for CTRL-W p
         cur_win().w_redr_status = true;
     }
-    curwin.set(wp.raw());
-    curbuf.set(wp.w_buffer);
+    curwin.set(window.raw());
+    curbuf.set(window.w_buffer);
 
     revalidate_cursor(cur_win());
     // SAFETY: a live window.
@@ -335,7 +341,7 @@ pub(crate) fn enter_ext(wp: Win, flags: c_int) {
     fix_current_dir();
     enter_window(cur_win());
 
-    // Careful: autocommands may close the window and make `wp` invalid.
+    // Careful: autocommands may close the window and make `window` invalid.
     if flags & WEE_TRIGGER_NEW_AUTOCMDS as c_int != 0 {
         fire(AutoEvent::WinNew, cur_buf());
     }

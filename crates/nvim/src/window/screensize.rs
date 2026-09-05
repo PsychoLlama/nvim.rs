@@ -126,13 +126,13 @@ pub fn snapshot_windows_scroll_size() {
 
 /// Remember one window's view and size, so the next check can tell whether
 /// either moved.
-fn snapshot_window(wp: &mut Win) {
-    wp.w_last_topline = wp.w_topline;
-    wp.w_last_topfill = wp.w_topfill;
-    wp.w_last_leftcol = wp.w_leftcol;
-    wp.w_last_skipcol = wp.w_skipcol;
-    wp.w_last_width = wp.w_width;
-    wp.w_last_height = wp.w_height;
+fn snapshot_window(window: &mut Win) {
+    window.w_last_topline = window.w_topline;
+    window.w_last_topfill = window.w_topfill;
+    window.w_last_leftcol = window.w_leftcol;
+    window.w_last_skipcol = window.w_skipcol;
+    window.w_last_width = window.w_width;
+    window.w_last_height = window.w_height;
 }
 
 pub unsafe fn may_make_initial_scroll_size_snapshot() {

@@ -21,23 +21,23 @@ use crate::winlayer::Buf;
 /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
 /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
 /// are likely to point somewhere else entirely.
-pub(crate) unsafe fn syntax_start(wp: *mut Window, lnum: LineNr) {
+pub(crate) unsafe fn syntax_start(window: *mut Window, lnum: LineNr) {
     // The last change id we parsed at. A change may have invalidated the
     // current state, so this is checked as if it were part of the identity
     // of the buffer.
     static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
 
     current_sub_char.set(NUL);
-    if syn_block().raw() != unsafe { (*wp).w_s }
-        || syn_buf.get() != unsafe { (*wp).w_buffer }
+    if syn_block().raw() != unsafe { (*window).w_s }
+        || syn_buf.get() != unsafe { (*window).w_buffer }
         || changedtick.get() != buf_get_changedtick(unsafe { Buf::new(syn_buf.get()) })
     {
         invalidate_current_state();
-        syn_buf.set(unsafe { (*wp).w_buffer });
-        parsed_block.set(unsafe { (*wp).w_s });
+        syn_buf.set(unsafe { (*window).w_buffer });
+        parsed_block.set(unsafe { (*window).w_s });
     }
     changedtick.set(buf_get_changedtick(unsafe { Buf::new(syn_buf.get()) }));
-    syn_win.set(wp);
+    syn_win.set(window);
 
     syn_stack_alloc();
     if syn_block().b_sst_array.is_null() {
@@ -86,7 +86,7 @@ pub(crate) unsafe fn syntax_start(wp: *mut Window, lnum: LineNr) {
 
     // Still nothing: re-synchronise.
     let first_stored = if !current_state_valid() {
-        unsafe { syn_sync(wp, lnum, last_valid) };
+        unsafe { syn_sync(window, lnum, last_valid) };
         if current_lnum.get() == 1 {
             1 // the first line is always valid, whatever "minlines" says
         } else {
@@ -324,8 +324,8 @@ pub(crate) fn syn_update_ends(startofline: bool) {
 /// now depends on the line below the last parsed one. The window looks like:
 /// the line which changed, the displayed lines, then `lnum` -- the line below
 /// the window.
-pub(crate) unsafe fn syntax_end_parsing(wp: *mut Window, lnum: LineNr) {
-    if syn_block().raw() != unsafe { (*wp).w_s } {
+pub(crate) unsafe fn syntax_end_parsing(window: *mut Window, lnum: LineNr) {
+    if syn_block().raw() != unsafe { (*window).w_s } {
         return; // not the right window
     }
     let mut sp = syn_stack_find_entry(lnum);

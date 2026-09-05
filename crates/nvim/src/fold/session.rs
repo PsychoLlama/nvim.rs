@@ -19,17 +19,17 @@ use super::*;
 ///
 /// # Safety
 /// `fd` must be an open stream.
-pub unsafe fn put_folds(fd: *mut FILE, wp: Win) -> Result<(), Failed> {
+pub unsafe fn put_folds(fd: *mut FILE, window: Win) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- an open stream.
-    if foldmethod_is_manual(wp)
+    if foldmethod_is_manual(window)
         && (unsafe { put_line(fd, c"silent! normal! zE".as_ptr() as *mut c_char) }.is_err()
-            || unsafe { put_folds_recurse(fd, window_folds(wp), 0) }.is_err()
+            || unsafe { put_folds_recurse(fd, window_folds(window), 0) }.is_err()
             || unsafe { put_line(fd, c"let &fdl = &fdl".as_ptr() as *mut c_char) }.is_err())
     {
         return Err(Failed);
     }
-    if wp.w_fold_manual {
-        return unsafe { put_foldopen_recurse(fd, wp, window_folds(wp), 0) };
+    if window.w_fold_manual {
+        return unsafe { put_foldopen_recurse(fd, window, window_folds(window), 0) };
     }
     Ok(())
 }
@@ -76,7 +76,7 @@ pub(super) unsafe fn put_folds_recurse(
 /// `fd` must be an open stream.
 pub(super) unsafe fn put_foldopen_recurse(
     fd: *mut FILE,
-    wp: Win,
+    window: Win,
     folds: FoldList,
     off: LineNr,
 ) -> Result<(), Failed> {
@@ -97,7 +97,7 @@ pub(super) unsafe fn put_foldopen_recurse(
                 return Err(Failed);
             }
             // SAFETY: the caller's promise.
-            unsafe { put_foldopen_recurse(fd, wp, fold.nested(), off + fold.top()) }?;
+            unsafe { put_foldopen_recurse(fd, window, fold.nested(), off + fold.top()) }?;
             // SAFETY: the caller's promise.
             if fold.is(FD_CLOSED) {
                 unsafe { put_fold_open_close(fd, fold, off) }?;
@@ -106,8 +106,8 @@ pub(super) unsafe fn put_foldopen_recurse(
         }
         // A leaf: only write the command when its state differs from what
         // 'foldlevel' would give it anyway.
-        let level = fold_level_win(wp, off + fold.top());
-        let foldlevel = wp.w_onebuf_opt.wo_fdl;
+        let level = fold_level_win(window, off + fold.top());
+        let foldlevel = window.w_onebuf_opt.wo_fdl;
         let differs = if fold.is(FD_CLOSED) {
             foldlevel >= level as OptInt
         } else {

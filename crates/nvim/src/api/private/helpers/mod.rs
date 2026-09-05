@@ -402,22 +402,22 @@ pub(crate) unsafe fn set_mark(
 /// The highlight group a status line, window bar or status column defaults
 /// to when its 'statusline' text names none. A null window is the tab line.
 pub(crate) fn get_default_stl_hl(
-    wp: *mut Window,
+    window: *mut Window,
     use_winbar: bool,
     stc_hl_id: c_int,
 ) -> *const c_char {
-    // `wp` is only compared, never followed.
-    if wp.is_null() {
+    // `window` is only compared, never followed.
+    if window.is_null() {
         c"TabLineFill".as_ptr()
     } else if use_winbar {
-        if wp == curwin.get() {
+        if window == curwin.get() {
             c"WinBar".as_ptr()
         } else {
             c"WinBarNC".as_ptr()
         }
     } else if stc_hl_id > 0 {
         syn_id2name(stc_hl_id)
-    } else if wp == curwin.get() {
+    } else if window == curwin.get() {
         c"StatusLine".as_ptr()
     } else {
         c"StatusLineNC".as_ptr()

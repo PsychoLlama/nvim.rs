@@ -37,32 +37,32 @@ use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 /// Drop the cached display information one window holds about the lines a
 /// change covered, and shift what is below it by `xtra`.
 fn changed_lines_invalidate_win(
-    wp: Win,
+    window: Win,
     lnum: LineNr,
     col: ColNr,
     mut lnume: LineNr,
     xtra: LineNr,
 ) {
-    if wp.w_cursor.lnum <= lnum {
+    if window.w_cursor.lnum <= lnum {
         // SAFETY: a live window; the answer is an index into `w_lines` or -1.
-        let i = find_wl_entry(wp, lnum);
+        let i = find_wl_entry(window, lnum);
         // SAFETY: as above, and the short circuit is what bounds it.
-        let below =
-            i >= 0 && wp.w_cursor.lnum > unsafe { (*wp.w_lines.offset(i as isize)).wl_lnum };
+        let below = i >= 0
+            && window.w_cursor.lnum > unsafe { (*window.w_lines.offset(i as isize)).wl_lnum };
         if below {
-            changed_line_abv_curs_win(wp);
+            changed_line_abv_curs_win(window);
         }
     }
-    if wp.w_cursor.lnum > lnum {
-        changed_line_abv_curs_win(wp);
-    } else if wp.w_cursor.lnum == lnum && wp.w_cursor.col >= col {
-        changed_cline_bef_curs(wp);
+    if window.w_cursor.lnum > lnum {
+        changed_line_abv_curs_win(window);
+    } else if window.w_cursor.lnum == lnum && window.w_cursor.col >= col {
+        changed_cline_bef_curs(window);
     }
-    if wp.w_botline >= lnum {
+    if window.w_botline >= lnum {
         if xtra < 0 {
-            invalidate_botline_win(wp);
+            invalidate_botline_win(window);
         } else {
-            approximate_botline_win(wp);
+            approximate_botline_win(window);
         }
     }
 
@@ -70,15 +70,16 @@ fn changed_lines_invalidate_win(
     // after the change part of it as far as the display cache goes.
     // SAFETY: a live window's buffer is live, in both calls; the short
     // circuits are upstream's.
-    let widen =
-        xtra < 0 && wp.w_onebuf_opt.wo_wrap != 0 && buf_meta_total(wp.buffer(), kMTMetaInline) != 0
-            || xtra != 0 && buf_meta_total(wp.buffer(), kMTMetaLines) != 0;
+    let widen = xtra < 0
+        && window.w_onebuf_opt.wo_wrap != 0
+        && buf_meta_total(window.buffer(), kMTMetaInline) != 0
+        || xtra != 0 && buf_meta_total(window.buffer(), kMTMetaLines) != 0;
     if widen {
         lnume += 1;
     }
 
-    let lines = wp.w_lines;
-    for i in 0..wp.w_lines_valid {
+    let lines = window.w_lines;
+    for i in 0..window.w_lines_valid {
         // SAFETY: `w_lines` holds at least `w_lines_valid` entries, and is
         // only null while that count is zero.
         let wl = unsafe { &mut *lines.offset(i as isize) };
@@ -221,14 +222,20 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
 
 /// Bring one window's fold, scroll and cursor-line state up to date with a
 /// change that covered `lnum`..`lnume` and moved what follows by `xtra`.
-fn redraw_win_for_change(mut wp: Win, mut lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
-    if !redraw_not_allowed.get() && wp.w_redr_type < UPD_VALID {
-        wp.w_redr_type = UPD_VALID;
+fn redraw_win_for_change(
+    mut window: Win,
+    mut lnum: LineNr,
+    col: ColNr,
+    lnume: LineNr,
+    xtra: LineNr,
+) {
+    if !redraw_not_allowed.get() && window.w_redr_type < UPD_VALID {
+        window.w_redr_type = UPD_VALID;
     }
     // Adding or removing lines invalidates a pending w_redraw_top/bot
     // range, so redraw everything instead.
-    if xtra != 0 && wp.w_redraw_top != 0 {
-        wp.redraw_later(UPD_NOT_VALID);
+    if xtra != 0 && window.w_redraw_top != 0 {
+        window.redraw_later(UPD_NOT_VALID);
     }
 
     let mut last = lnume + xtra - 1; // last line after the change
@@ -237,60 +244,60 @@ fn redraw_win_for_change(mut wp: Win, mut lnum: LineNr, col: ColNr, lnume: LineN
     // that nothing would be visible, allowing for the `<<<` marker.
     // SAFETY: a live window, in both calls; the short circuits are
     // upstream's.
-    let hide_all = wp.w_skipcol > 0
-        && (last < wp.w_topline
-            || (wp.w_topline >= lnum
-                && wp.w_topline < lnume
-                && unsafe { linetabsize_eol(wp, wp.w_topline) }
-                    <= wp.w_skipcol + sms_marker_overlap(wp, -1)));
+    let hide_all = window.w_skipcol > 0
+        && (last < window.w_topline
+            || (window.w_topline >= lnum
+                && window.w_topline < lnume
+                && unsafe { linetabsize_eol(window, window.w_topline) }
+                    <= window.w_skipcol + sms_marker_overlap(window, -1)));
     if hide_all {
-        wp.w_skipcol = 0;
+        window.w_skipcol = 0;
     }
 
     // Can't postpone the fold update: a following operator might work on
     // the whole fold, as `>>dd` does.
     // SAFETY: a live window.
-    fold_update(wp, lnum, last);
+    fold_update(window, lnum, last);
 
     // The change may pull the lines above or below it into a fold, so widen
     // lnum/last to what might now be displayed differently. Setting
     // w_cline_folded here is the cheap way to keep it right when inserting
     // just above a closed fold.
     // Only `firstp` is asked for, and it is a local.
-    let mut folded = has_folding_win(wp, lnum, Some(&mut lnum), None, false, None);
-    if wp.w_cursor.lnum == lnum {
-        wp.w_cline_folded = folded;
+    let mut folded = has_folding_win(window, lnum, Some(&mut lnum), None, false, None);
+    if window.w_cursor.lnum == lnum {
+        window.w_cline_folded = folded;
     }
     // As above, for `lastp`.
-    folded = has_folding_win(wp, last, None, Some(&mut last), false, None);
-    if wp.w_cursor.lnum == last {
-        wp.w_cline_folded = folded;
+    folded = has_folding_win(window, last, None, Some(&mut last), false, None);
+    if window.w_cursor.lnum == last {
+        window.w_cline_folded = folded;
     }
 
-    changed_lines_invalidate_win(wp, lnum, col, lnume, xtra);
+    changed_lines_invalidate_win(window, lnum, col, lnume, xtra);
 
     // Setting w_topline has side effects once the folds have changed --
     // especially when the buffer was changed in another window.
-    if wp.has_any_folding() {
-        let top = wp.w_topline;
+    if window.has_any_folding() {
+        let top = window.w_topline;
         // SAFETY: a live window.
-        set_topline(wp, top);
+        set_topline(window, top);
     }
 
     // 'relativenumber' always needs a redraw when lines came or went, even
     // if the cursor did not move.
-    if wp.w_onebuf_opt.wo_rnu != 0 && xtra != 0 {
-        wp.w_last_cursor_lnum_rnu = 0;
+    if window.w_onebuf_opt.wo_rnu != 0 && xtra != 0 {
+        window.w_last_cursor_lnum_rnu = 0;
     }
 
-    if wp.w_onebuf_opt.wo_cul != 0 && wp.w_last_cursorline >= lnum {
-        if wp.w_last_cursorline < lnume {
+    if window.w_onebuf_opt.wo_cul != 0 && window.w_last_cursorline >= lnum {
+        if window.w_last_cursorline < lnume {
             // 'cursorline' was inside the change: the loop above has
             // already invalidated it in w_lines[].
-            wp.w_last_cursorline = 0;
+            window.w_last_cursorline = 0;
         } else {
             // Below the change: shift it.
-            wp.w_last_cursorline += xtra;
+            window.w_last_cursorline += xtra;
         }
     }
 }

@@ -270,17 +270,17 @@ pub unsafe fn ex_diffthis(_eap: *mut ExArg) {
     diff_win_options(cur_win(), true);
 }
 
-/// Set `'diff'` in `wp` without letting the option's side effects run.
+/// Set `'diff'` in `window` without letting the option's side effects run.
 ///
-/// `curwin` is moved to `wp` for the call because the option code reads it,
+/// `curwin` is moved to `window` for the call because the option code reads it,
 /// and `diff_buf_adjust` is suppressed so that the caller stays in charge of
 /// the buffer registry.
-fn set_diff_option(wp: Win, value: bool) {
+fn set_diff_option(window: Win, value: bool) {
     let old_curwin = curwin.get();
-    curwin.set(wp.raw());
+    curwin.set(window.raw());
     curbuf.set(cur_win().w_buffer);
     cur_buf().b_ro_locked += 1;
-    // `curwin`/`curbuf` name `wp` and its buffer, which is what the option
+    // `curwin`/`curbuf` name `window` and its buffer, which is what the option
     // code reads; the buffer is locked against a `:set` side effect.
     let val = boolean_optval(Some(value));
     set_option_value_give_err(kOptDiff, val, OptionSetFlags::LOCAL);
@@ -289,7 +289,7 @@ fn set_diff_option(wp: Win, value: bool) {
     curbuf.set(cur_win().w_buffer);
 }
 
-/// Put `wp` into diff mode: the option set, and optionally its buffer.
+/// Put `window` into diff mode: the option set, and optionally its buffer.
 ///
 /// Every option this changes is saved into the matching `w_p_*_save` field
 /// first, but **only on the first call** -- `wo_diff_saved` is what stops a
@@ -297,36 +297,36 @@ fn set_diff_option(wp: Win, value: bool) {
 /// restore.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_win_options(mut wp: Win, addbuf: bool) {
+pub fn diff_win_options(mut window: Win, addbuf: bool) {
     let old_curwin = curwin.get();
-    curwin.set(wp.raw());
-    // SAFETY: `curwin` is `wp`, which is live.
+    curwin.set(window.raw());
+    // SAFETY: `curwin` is `window`, which is live.
     unsafe { new_fold_level() };
     curwin.set(old_curwin);
 
     // Each option is saved only while the window is not already in diff
     // mode, so a second `:diffthis` cannot overwrite the saved values.
-    let first_time = wp.w_onebuf_opt.wo_diff == 0;
+    let first_time = window.w_onebuf_opt.wo_diff == 0;
     if first_time {
-        wp.w_onebuf_opt.wo_scb_save = wp.w_onebuf_opt.wo_scb;
+        window.w_onebuf_opt.wo_scb_save = window.w_onebuf_opt.wo_scb;
     }
-    wp.w_onebuf_opt.wo_scb = 1;
+    window.w_onebuf_opt.wo_scb = 1;
     if first_time {
-        wp.w_onebuf_opt.wo_crb_save = wp.w_onebuf_opt.wo_crb;
+        window.w_onebuf_opt.wo_crb_save = window.w_onebuf_opt.wo_crb;
     }
-    wp.w_onebuf_opt.wo_crb = 1;
+    window.w_onebuf_opt.wo_crb = 1;
     if diff_flags.get() & DIFF_FOLLOWWRAP == 0 {
         if first_time {
-            wp.w_onebuf_opt.wo_wrap_save = wp.w_onebuf_opt.wo_wrap;
+            window.w_onebuf_opt.wo_wrap_save = window.w_onebuf_opt.wo_wrap;
         }
-        wp.w_onebuf_opt.wo_wrap = 0;
-        wp.w_skipcol = 0 as ColNr;
+        window.w_onebuf_opt.wo_wrap = 0;
+        window.w_skipcol = 0 as ColNr;
     }
     if first_time {
-        if wp.w_onebuf_opt.wo_diff_saved != 0 {
-            free_string_option_of(wp.w_onebuf_opt.wo_fdm_save);
+        if window.w_onebuf_opt.wo_diff_saved != 0 {
+            free_string_option_of(window.w_onebuf_opt.wo_fdm_save);
         }
-        wp.w_onebuf_opt.wo_fdm_save = strdup_of(wp.w_onebuf_opt.wo_fdm);
+        window.w_onebuf_opt.wo_fdm_save = strdup_of(window.w_onebuf_opt.wo_fdm);
     }
     let foldmethod = OptVal::String(String_0::from_raw_parts(c"diff".as_ptr() as *mut c_char, 4));
     let scope = OptionSetFlags::LOCAL;
@@ -339,42 +339,42 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
             scope,
             0 as ScriptId,
             kOptScopeWin,
-            wp.raw().cast::<c_void>(),
+            window.raw().cast::<c_void>(),
         )
     };
     if first_time {
-        wp.w_onebuf_opt.wo_fen_save = wp.w_onebuf_opt.wo_fen;
-        wp.w_onebuf_opt.wo_fdl_save = wp.w_onebuf_opt.wo_fdl;
-        if wp.w_onebuf_opt.wo_diff_saved != 0 {
-            free_string_option_of(wp.w_onebuf_opt.wo_fdc_save);
+        window.w_onebuf_opt.wo_fen_save = window.w_onebuf_opt.wo_fen;
+        window.w_onebuf_opt.wo_fdl_save = window.w_onebuf_opt.wo_fdl;
+        if window.w_onebuf_opt.wo_diff_saved != 0 {
+            free_string_option_of(window.w_onebuf_opt.wo_fdc_save);
         }
-        wp.w_onebuf_opt.wo_fdc_save = strdup_of(wp.w_onebuf_opt.wo_fdc);
+        window.w_onebuf_opt.wo_fdc_save = strdup_of(window.w_onebuf_opt.wo_fdc);
     }
-    free_string_option_of(wp.w_onebuf_opt.wo_fdc);
-    wp.w_onebuf_opt.wo_fdc = strdup_of(c"2".as_ptr());
+    free_string_option_of(window.w_onebuf_opt.wo_fdc);
+    window.w_onebuf_opt.wo_fdc = strdup_of(c"2".as_ptr());
     // A single digit, because the option's buffer is one byte plus the
     // NUL. C's `assert()` is `debug_assert!`: it vanishes under NDEBUG.
     debug_assert!((0..=9).contains(&diff_foldcolumn.get()));
-    let fdc = wp.w_onebuf_opt.wo_fdc;
+    let fdc = window.w_onebuf_opt.wo_fdc;
     let width = diff_foldcolumn.get();
     // SAFETY: `fdc` is the one-digit string just allocated, and `strlen + 1`
     // is exactly the room it has.
     unsafe { snprintf(fdc, cstr::bytes_at(fdc).len() + 1, c"%d".as_ptr(), width) };
-    wp.w_onebuf_opt.wo_fen = 1;
-    wp.w_onebuf_opt.wo_fdl = 0 as OptInt;
+    window.w_onebuf_opt.wo_fen = 1;
+    window.w_onebuf_opt.wo_fdl = 0 as OptInt;
     // SAFETY: a live window, in all three calls.
-    fold_update_all(wp);
-    changed_window_setting(wp);
+    fold_update_all(window);
+    changed_window_setting(window);
     if unsafe { vim_strchr(p_sbo.get(), 'h' as c_int) }.is_null() {
         let _ = unsafe { do_cmdline_cmd(c"set sbo+=hor".as_ptr()) };
     }
-    wp.w_onebuf_opt.wo_diff_saved = 1;
-    set_diff_option(wp, true);
+    window.w_onebuf_opt.wo_diff_saved = 1;
+    set_diff_option(window, true);
     if addbuf {
         // SAFETY: a live window's buffer is live.
-        diff_buf_add(wp.buffer());
+        diff_buf_add(window.buffer());
     }
-    wp.redraw_later(UPD_NOT_VALID);
+    window.redraw_later(UPD_NOT_VALID);
 }
 
 /// `free_string_option`, for one of the window's own option strings.

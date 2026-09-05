@@ -30,14 +30,14 @@ use crate::types::{Buffer, MAXPATHL, Window};
 use crate::ui::ui_has;
 use crate::winlayer::FrameRef;
 
-/// Redraw the status line of window `wp`.
+/// Redraw the status line of window `window`.
 ///
 /// # Safety
-/// `wp` must be a live window. Evaluating `'statusline'` re-enters the
+/// `window` must be a live window. Evaluating `'statusline'` re-enters the
 /// editor, so nothing may be held across this.
-pub unsafe fn win_redr_status(wp: *mut Window) {
+pub unsafe fn win_redr_status(window: *mut Window) {
     // SAFETY: the caller's promise.
-    let mut win = unsafe { Win::new(wp) };
+    let mut win = unsafe { Win::new(window) };
     let is_stl_global = stl_is_global();
 
     static BUSY: GlobalCell<bool> = GlobalCell::new(false);
@@ -62,14 +62,14 @@ pub unsafe fn win_redr_status(wp: *mut Window) {
         || (is_stl_global && win.is_current())
     {
         // SAFETY: a live window; this evaluates the option.
-        unsafe { redraw_custom_statusline(wp) };
+        unsafe { redraw_custom_statusline(window) };
     }
 
     // May need to draw the character below the vertical separator.
     if win.w_vsep_width != 0 && win.w_status_height != 0 && is_redrawing() {
         let mut group = HLF_C;
         // SAFETY: a live window's frame chain.
-        let fillchar = if unsafe { stl_connected(wp) } {
+        let fillchar = if unsafe { stl_connected(window) } {
             let (g, fillchar) = fillchar_status_of(win);
             group = g;
             fillchar
@@ -85,16 +85,16 @@ pub unsafe fn win_redr_status(wp: *mut Window) {
     BUSY.set(false);
 }
 
-/// Whether the status line of `wp` is connected to the status line of the
+/// Whether the status line of `window` is connected to the status line of the
 /// window right of it -- as opposed to meeting a vertical separator there.
 ///
 /// Only meaningful when `wp->w_vsep_width != 0`.
 ///
 /// # Safety
-/// `wp` must be a live window.
-pub unsafe fn stl_connected(wp: *mut Window) -> bool {
+/// `window` must be a live window.
+pub unsafe fn stl_connected(window: *mut Window) -> bool {
     // SAFETY: the caller's promise; a live window has a live frame.
-    let mut fr = unsafe { FrameRef::new(Win::new(wp).w_frame) };
+    let mut fr = unsafe { FrameRef::new(Win::new(window).w_frame) };
     while let Some(parent) = fr.parent() {
         if c_int::from(parent.fr_layout) == FR_COL {
             // A row below this one ends the run.

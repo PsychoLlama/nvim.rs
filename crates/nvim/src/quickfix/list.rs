@@ -445,14 +445,14 @@ pub(crate) unsafe fn qf_free(qfl: *mut QfList) {
 /// "has entries" flag when none did.
 pub fn qf_mark_adjust(
     buf: Buf,
-    wp: Option<Win>,
+    window: Option<Win>,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
     amount_after: LineNr,
 ) -> bool {
     // SAFETY: forwarded from the caller.
-    let wanted = if wp.is_none() {
+    let wanted = if window.is_none() {
         BUF_HAS_QF_ENTRY
     } else {
         BUF_HAS_LL_ENTRY
@@ -460,7 +460,7 @@ pub fn qf_mark_adjust(
     if buf.b_has_qf_entry & wanted == 0 {
         return false;
     }
-    let qi = match wp {
+    let qi = match window {
         None => QfStack::Global.raw(),
         Some(wp) if wp.w_llist.is_null() => return false,
         Some(wp) => wp.w_llist,

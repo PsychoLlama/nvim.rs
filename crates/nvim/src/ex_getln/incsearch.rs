@@ -33,31 +33,31 @@ pub(crate) fn cmdline_autocmd(evt: AutoEvent, fname: *mut ::core::ffi::c_char) -
     unsafe { apply_autocmds(evt, fname, fname, false, curbuf.get()) }
 }
 
-/// Record everything about `wp`'s view that an incremental search may scroll.
+/// Record everything about `window`'s view that an incremental search may scroll.
 ///
 /// C wrote through a `ViewState *`; the structure is seven scalars and
 /// `Copy`, so answering by value says the same thing in safe code.
-pub(crate) fn save_viewstate(wp: Win) -> ViewState {
+pub(crate) fn save_viewstate(window: Win) -> ViewState {
     ViewState {
-        vs_curswant: wp.w_curswant,
-        vs_leftcol: wp.w_leftcol,
-        vs_skipcol: wp.w_skipcol,
-        vs_topline: wp.w_topline,
-        vs_topfill: wp.w_topfill,
-        vs_botline: wp.w_botline,
-        vs_empty_rows: wp.w_empty_rows,
+        vs_curswant: window.w_curswant,
+        vs_leftcol: window.w_leftcol,
+        vs_skipcol: window.w_skipcol,
+        vs_topline: window.w_topline,
+        vs_topfill: window.w_topfill,
+        vs_botline: window.w_botline,
+        vs_empty_rows: window.w_empty_rows,
     }
 }
 
 /// Put back what [`save_viewstate`] recorded.
-pub(crate) fn restore_viewstate(mut wp: Win, vs: ViewState) {
-    wp.w_curswant = vs.vs_curswant;
-    wp.w_leftcol = vs.vs_leftcol;
-    wp.w_skipcol = vs.vs_skipcol;
-    wp.w_topline = vs.vs_topline;
-    wp.w_topfill = vs.vs_topfill;
-    wp.w_botline = vs.vs_botline;
-    wp.w_empty_rows = vs.vs_empty_rows;
+pub(crate) fn restore_viewstate(mut window: Win, vs: ViewState) {
+    window.w_curswant = vs.vs_curswant;
+    window.w_leftcol = vs.vs_leftcol;
+    window.w_skipcol = vs.vs_skipcol;
+    window.w_topline = vs.vs_topline;
+    window.w_topfill = vs.vs_topfill;
+    window.w_botline = vs.vs_botline;
+    window.w_empty_rows = vs.vs_empty_rows;
 }
 
 /// Start an incremental search from where the cursor and view are now.

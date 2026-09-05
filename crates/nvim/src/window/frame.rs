@@ -287,16 +287,16 @@ pub(crate) fn flatten(frp: FrameRef) {
     free(parent.raw());
 }
 
-pub unsafe fn winframe_restore(wp: *mut Window, dir: c_int, unflat_altfr: *mut Frame) {
+pub unsafe fn winframe_restore(window: *mut Window, dir: c_int, unflat_altfr: *mut Frame) {
     // SAFETY: the caller's promise -- a live window and the live frame
     // `winframe_remove` handed back unflattened.
-    unsafe { restore(Win::new(wp), dir, FrameRef::new(unflat_altfr)) };
+    unsafe { restore(Win::new(window), dir, FrameRef::new(unflat_altfr)) };
 }
 
-/// Undo a [`remove`] that was told to leave the tree unflattened: link `wp`'s
+/// Undo a [`remove`] that was told to leave the tree unflattened: link `window`'s
 /// frame back in and take its room off the frame that grew into it.
-fn restore(wp: Win, dir: c_int, unflat_altfr: FrameRef) {
-    let frp = wp.frame();
+fn restore(window: Win, dir: c_int, unflat_altfr: FrameRef) {
+    let frp = window.frame();
     // Restore the lists of frames the window was in.
     match frp.prev() {
         Some(prev) => frame_append(prev, frp),
@@ -304,7 +304,7 @@ fn restore(wp: Win, dir: c_int, unflat_altfr: FrameRef) {
     }
     let parent = frp.parent().expect("a restored frame has a parent");
     // Restore the separator or status line the window gave up on the way out.
-    if wp.w_vsep_width == 0
+    if window.w_vsep_width == 0
         && parent.fr_layout as c_int == FR_ROW
         && let Some(prev) = frp.prev()
     {
@@ -313,9 +313,9 @@ fn restore(wp: Win, dir: c_int, unflat_altfr: FrameRef) {
     if parent.fr_layout as c_int == FR_COL
         && let Some(prev) = frp.prev()
     {
-        if global_stl_rows() == 0 && wp.w_status_height == 0 {
+        if global_stl_rows() == 0 && window.w_status_height == 0 {
             add_statusline(prev);
-        } else if global_stl_rows() > 0 && wp.w_hsep_height == 0 {
+        } else if global_stl_rows() > 0 && window.w_hsep_height == 0 {
             add_hsep(prev);
         }
     }
@@ -408,18 +408,18 @@ pub(crate) fn frame2window(frp: FrameRef) -> Win {
     }
 }
 
-/// Whether `wp` is one of the windows in frame `frp`.
-pub(crate) fn frame_has_win(frp: FrameRef, wp: Option<Win>) -> bool {
+/// Whether `window` is one of the windows in frame `frp`.
+pub(crate) fn frame_has_win(frp: FrameRef, window: Option<Win>) -> bool {
     if frp.fr_layout as c_int == FR_LEAF {
-        return frp.win() == wp;
+        return frp.win() == window;
     }
-    frp.children().any(|child| frame_has_win(child, wp))
+    frp.children().any(|child| frame_has_win(child, window))
 }
 
-/// Whether `wp` is along the bottom of the screen: no frame below it, all the
+/// Whether `window` is along the bottom of the screen: no frame below it, all the
 /// way up to the top frame.
-pub(crate) fn is_bottom_window(wp: Win) -> bool {
-    let mut frp = wp.frame();
+pub(crate) fn is_bottom_window(window: Win) -> bool {
+    let mut frp = window.frame();
     while let Some(parent) = frp.parent() {
         if parent.fr_layout as c_int == FR_COL && frp.next().is_some() {
             return false;

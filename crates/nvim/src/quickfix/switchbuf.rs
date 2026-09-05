@@ -44,9 +44,9 @@ pub(crate) fn qf_find_win_with_normal_buf() -> Option<Win> {
 }
 
 /// Give a window a location list, taking a reference to it.
-pub(crate) fn win_set_loclist(mut wp: Win, mut qi: Qi) {
-    debug_assert!(wp.w_llist.is_null(), "the window already holds a list");
-    wp.w_llist = qi.raw();
+pub(crate) fn win_set_loclist(mut window: Win, mut qi: Qi) {
+    debug_assert!(window.w_llist.is_null(), "the window already holds a list");
+    window.w_llist = qi.raw();
     qi.qf_refcount.retain();
 }
 
@@ -179,10 +179,11 @@ unsafe fn qf_goto_win_with_ll_file(use_win: Option<Win>, qf_fnum: c_int, ll_ref:
     }
 }
 
-/// The window before `wp` in the current tab page's list, wrapping round to
+/// The window before `window` in the current tab page's list, wrapping round to
 /// the last: the step of the two backwards walks below.
-fn prev_window(wp: Win) -> Win {
-    wp.prev()
+fn prev_window(window: Win) -> Win {
+    window
+        .prev()
         .or_else(last_window)
         .expect("the window list is never empty")
 }

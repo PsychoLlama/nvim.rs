@@ -538,10 +538,10 @@ pub fn check_cursor_col(win: Win) {
     }
 }
 
-/// Clamp the cursor to a position that exists in `wp`'s buffer.
-pub fn check_cursor(wp: Win) {
-    check_cursor_lnum(wp);
-    check_cursor_col(wp);
+/// Clamp the cursor to a position that exists in `window`'s buffer.
+pub fn check_cursor(window: Win) {
+    check_cursor_lnum(window);
+    check_cursor_col(window);
 }
 
 /// Clamp the start of the Visual area to the current buffer.

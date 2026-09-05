@@ -141,11 +141,11 @@ pub unsafe fn sign_item_cmp(a: &SignItem, b: &SignItem) -> Ordering {
     sign_rank(sa.priority, a.id, sa.sign_add_id).cmp(&sign_rank(sb.priority, b.id, sb.sign_add_id))
 }
 
-/// Every sign on `row` of `buf` that `wp` can see, in marktree order.
+/// Every sign on `row` of `buf` that `window` can see, in marktree order.
 ///
 /// The two-part walk this module's header describes: the signs that started
 /// on an earlier row and reach into this one, then the ones that start on it.
-fn row_signs(buf: Buf, wp: Win, row: c_int) -> Vec<SignItem> {
+fn row_signs(buf: Buf, window: Win, row: c_int) -> Vec<SignItem> {
     // TODO(bfredl): integrate with main decor loop.
     let mut signs: Vec<SignItem> = Vec::new();
     let mut itr = MarkTreeIter::default();
@@ -153,7 +153,8 @@ fn row_signs(buf: Buf, wp: Win, row: c_int) -> Vec<SignItem> {
 
     walk.seek_overlap(row, 0);
     while let Some(pair) = walk.step_overlap() {
-        if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, wp) {
+        if !mt_invalid(pair.start) && mt_decor_sign(pair.start) && ns_in_win(pair.start.ns, window)
+        {
             let sh = decor_find_sign(mt_decor(pair.start));
             signs.push(SignItem {
                 sh,
@@ -168,7 +169,7 @@ fn row_signs(buf: Buf, wp: Win, row: c_int) -> Vec<SignItem> {
         if mark.pos.row != row {
             break;
         }
-        if !mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, wp) {
+        if !mt_invalid(mark) && !mt_end(mark) && mt_decor_sign(mark) && ns_in_win(mark.ns, window) {
             let sh = decor_find_sign(mt_decor(mark));
             signs.push(SignItem { sh, id: mark.id });
         }
@@ -188,7 +189,7 @@ fn row_signs(buf: Buf, wp: Win, row: c_int) -> Vec<SignItem> {
 /// `wp` and `buf` must be live; `sattrs`, when not null, must have room for
 /// `wp`'s sign column width; the `*_id` pointers must be null or writable.
 pub unsafe fn decor_redraw_signs(
-    wp: *mut Window,
+    window: *mut Window,
     buf: *mut Buffer,
     row: c_int,
     sattrs: *mut SignTextAttrs,
@@ -197,7 +198,7 @@ pub unsafe fn decor_redraw_signs(
     num_id: *mut c_int,
 ) {
     // SAFETY: the caller's window and buffer.
-    let (wp, buf) = unsafe { (Win::new(wp), Buf::new(buf)) };
+    let (wp, buf) = unsafe { (Win::new(window), Buf::new(buf)) };
     if !buf.has_signs() {
         return;
     }

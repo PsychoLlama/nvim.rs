@@ -261,20 +261,20 @@ pub(crate) fn valid_filetype(val: &CStr) -> bool {
 /// Parse 'signcolumn' and, given a window, store the width range it asks
 /// for.
 ///
-/// `scl` overrides the window's own value; a null `wp` only validates. The
+/// `scl` overrides the window's own value; a null `window` only validates. The
 /// two halves are separate grammars: everything the generated table lists
 /// ("no", "yes", "yes:1".."yes:9", "auto", "auto:1".."auto:9", "number"),
 /// and then the `auto:<min>-<max>` range, which the table cannot enumerate
 /// and which is parsed by hand.
 ///
 /// # Safety
-/// `scl` is null or a C string; `wp` is null or a live window.
-pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut Window) -> Result<(), Failed> {
+/// `scl` is null or a C string; `window` is null or a live window.
+pub unsafe fn check_signcolumn(scl: *mut c_char, window: *mut Window) -> Result<(), Failed> {
     let val = if !scl.is_null() {
         scl.cast_const()
-    } else if !wp.is_null() {
+    } else if !window.is_null() {
         // SAFETY: the caller's window.
-        unsafe { (*wp).w_onebuf_opt.wo_scl }
+        unsafe { (*window).w_onebuf_opt.wo_scl }
     } else {
         empty_option()
     };
@@ -288,12 +288,13 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut Window) -> Result<(), 
     let listed = unsafe { opt_strings_ok(val.as_ptr().cast::<c_char>(), &opt_scl_values, false) };
 
     let (min, max) = if listed {
-        if wp.is_null() {
+        if window.is_null() {
             return Ok(());
         }
         // SAFETY: the caller's window; 'number' only wins when the window
         // is actually showing numbers.
-        let numbered = unsafe { (*wp).w_onebuf_opt.wo_nu != 0 || (*wp).w_onebuf_opt.wo_rnu != 0 };
+        let numbered =
+            unsafe { (*window).w_onebuf_opt.wo_nu != 0 || (*window).w_onebuf_opt.wo_rnu != 0 };
         match val {
             [b'n', b'o', ..] => (SCL_NO, SCL_NO),
             [b'n', b'u', ..] if numbered => (SCL_NUM, SCL_NUM),
@@ -314,23 +315,23 @@ pub unsafe fn check_signcolumn(scl: *mut c_char, wp: *mut Window) -> Result<(), 
         if min < 1 || max < 2 || min > 8 || min >= max {
             return Err(Failed);
         }
-        if wp.is_null() {
+        if window.is_null() {
             return Ok(());
         }
         (min, max)
     };
 
     // SAFETY: the caller's window, which the null tests above ruled out.
-    unsafe { (*wp).w_minscwidth = min };
-    unsafe { (*wp).w_maxscwidth = max };
+    unsafe { (*window).w_minscwidth = min };
+    unsafe { (*window).w_maxscwidth = max };
     // Keep the width the window is currently drawing inside the new
     // range, without widening it on its own.
     let held = if min <= 0 {
         0
     } else {
-        max.min(unsafe { (*wp).w_scwidth })
+        max.min(unsafe { (*window).w_scwidth })
     };
-    unsafe { (*wp).w_scwidth = min.max(held) };
+    unsafe { (*window).w_scwidth = min.max(held) };
     Ok(())
 }
 

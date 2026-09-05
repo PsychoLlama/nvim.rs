@@ -128,7 +128,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// `wp` must be a live window, `lnum` one of its buffer's lines, and `spv` a
 /// live `SpellVars`.
 pub unsafe fn win_line(
-    wp: *mut Window,
+    window: *mut Window,
     lnum: LineNr,
     startrow: ::core::ffi::c_int,
     endrow: ::core::ffi::c_int,
@@ -141,7 +141,7 @@ pub unsafe fn win_line(
     debug_assert!(startrow < endrow);
 
     // SAFETY: the caller's live window.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
 
     // Plain construction, so it sits outside the promise below.
     let mut wlv = WinLineVars {
@@ -264,9 +264,9 @@ pub const SPWORDLEN: ::core::ffi::c_int = 150;
 /// `'smoothscroll'` has taken part of the line off the top.
 ///
 /// # Safety
-/// `wp` must be a live window and the line buffers filled for it.
+/// `window` must be a live window and the line buffers filled for it.
 unsafe fn wlv_put_linebuf(
-    wp: Win,
+    window: Win,
     wlv: &WinLineVars,
     mut endcol: ::core::ffi::c_int,
     clear_end: bool,
@@ -275,33 +275,37 @@ unsafe fn wlv_put_linebuf(
 ) {
     let mut line = linebuf();
     // SAFETY: the caller's window and line buffers.
-    let grid: GridView = wp.w_grid;
+    let grid: GridView = window.w_grid;
     let mut startcol = 0;
-    let mut clear_width = if clear_end { wp.w_view_width } else { endcol };
+    let mut clear_width = if clear_end {
+        window.w_view_width
+    } else {
+        endcol
+    };
 
     debug_assert!(flags & SLF_RIGHTLEFT as ::core::ffi::c_int == 0);
-    if wp.w_onebuf_opt.wo_rl != 0 {
+    if window.w_onebuf_opt.wo_rl != 0 {
         linebuf_mirror(
             &mut startcol,
             &mut endcol,
             &mut clear_width,
-            wp.w_view_width,
+            window.w_view_width,
         );
         flags |= SLF_RIGHTLEFT as ::core::ffi::c_int;
     }
 
     if wlv.row == 0
-        && wp.w_skipcol > 0
+        && window.w_skipcol > 0
         // Do not overwrite the 'showbreak' text with "<<<" ...
-        && unsafe { *get_showbreak_value(wp) } as ::core::ffi::c_int == NUL
+        && unsafe { *get_showbreak_value(window) } as ::core::ffi::c_int == NUL
         // ... nor the 'listchars' "precedes" text.
-        && !(wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.prec != 0)
+        && !(window.w_onebuf_opt.wo_list != 0 && window.w_p_lcs_chars.prec != 0)
     {
         let mut off = 0;
-        if wp.w_onebuf_opt.wo_nu != 0 && wp.w_onebuf_opt.wo_rnu != 0 {
+        if window.w_onebuf_opt.wo_nu != 0 && window.w_onebuf_opt.wo_rnu != 0 {
             // Do not overwrite the line number either: "123 text" becomes
             // "123<<<xt".
-            while off < wp.w_view_width
+            while off < window.w_view_width
                 && ascii_isdigit(schar_get_ascii(line.chars()[off as usize]) as ::core::ffi::c_int)
             {
                 off += 1;
@@ -309,10 +313,11 @@ unsafe fn wlv_put_linebuf(
         }
         let at_attr = unsafe { *hl_attr_active.get().add(HLF_AT as usize) } as ScreenAttr;
         for _ in 0..3 {
-            if off >= wp.w_view_width {
+            if off >= window.w_view_width {
                 break;
             }
-            if off + 1 < wp.w_view_width && line.chars()[off as usize + 1] == NUL as ScreenChar {
+            if off + 1 < window.w_view_width && line.chars()[off as usize + 1] == NUL as ScreenChar
+            {
                 // The first half of a double-width character is being
                 // overwritten; blank its second half.
                 line.chars_mut()[off as usize + 1] = schar_from_ascii(b' ');
@@ -355,29 +360,29 @@ unsafe fn wlv_put_linebuf(
 /// answer covered.
 ///
 /// # Safety
-/// `wp` must be a live window and `lnum` one of its buffer's lines.
+/// `window` must be a live window and `lnum` one of its buffer's lines.
 unsafe fn decor_providers_setup(
     rows_to_draw: ::core::ffi::c_int,
     draw_from_line_start: bool,
     lnum: LineNr,
     col: ColNr,
-    wp: Win,
+    window: Win,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    let rem_vcols = if wp.w_onebuf_opt.wo_wrap != 0 {
-        let width = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
-        let width2 = width + win_col_off2(unsafe { Win::new(wp.raw()) });
+    let rem_vcols = if window.w_onebuf_opt.wo_wrap != 0 {
+        let width = window.w_view_width - unsafe { win_col_off(window.raw()) };
+        let width2 = width + win_col_off2(unsafe { Win::new(window.raw()) });
         let first_row_width = if draw_from_line_start { width } else { width2 };
         first_row_width + (rows_to_draw - 1) * width2
     } else {
-        unsafe { wp.w_view_width - win_col_off(wp.raw()) }
+        unsafe { window.w_view_width - win_col_off(window.raw()) }
     };
 
     // Called here because the line pointer has to be invalidated anyway.
-    unsafe { decor_providers_invoke_line(wp.raw(), lnum - 1) };
-    validate_virtcol(unsafe { Win::new(wp.raw()) });
+    unsafe { decor_providers_invoke_line(window.raw(), lnum - 1) };
+    validate_virtcol(unsafe { Win::new(window.raw()) });
 
-    unsafe { invoke_range_next(wp, lnum, col, rem_vcols + 1) }
+    unsafe { invoke_range_next(window, lnum, col, rem_vcols + 1) }
 }
 
 /// Drive the decoration providers over the next span of a line.
@@ -386,28 +391,30 @@ unsafe fn decor_providers_setup(
 /// span runs to the end of the line.
 ///
 /// # Safety
-/// `wp` must be a live window and `lnum` one of its buffer's lines.
+/// `window` must be a live window and `lnum` one of its buffer's lines.
 unsafe fn invoke_range_next(
-    wp: Win,
+    window: Win,
     lnum: LineNr,
     begin_col: ColNr,
     col_off: ColNr,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
-    let line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
-    let line_len = unsafe { ml_get_buf_len(wp.w_buffer, lnum) };
+    let line = unsafe { ml_get_buf(window.w_buffer, lnum) };
+    let line_len = unsafe { ml_get_buf_len(window.w_buffer, lnum) };
     let col_off = col_off.max(1);
 
     if col_off <= line_len - begin_col {
         let mut end_col = begin_col + col_off;
         // Do not cut a character in half.
         end_col += unsafe { mb_off_next(line, line.offset(end_col as isize)) };
-        unsafe { decor_providers_invoke_range(wp.raw(), lnum - 1, begin_col, lnum - 1, end_col) };
-        validate_virtcol(unsafe { Win::new(wp.raw()) });
+        unsafe {
+            decor_providers_invoke_range(window.raw(), lnum - 1, begin_col, lnum - 1, end_col)
+        };
+        validate_virtcol(unsafe { Win::new(window.raw()) });
         end_col
     } else {
-        unsafe { decor_providers_invoke_range(wp.raw(), lnum - 1, begin_col, lnum, 0) };
-        validate_virtcol(unsafe { Win::new(wp.raw()) });
+        unsafe { decor_providers_invoke_range(window.raw(), lnum - 1, begin_col, lnum, 0) };
+        validate_virtcol(unsafe { Win::new(window.raw()) });
         ::core::ffi::c_int::MAX
     }
 }

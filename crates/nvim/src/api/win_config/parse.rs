@@ -321,7 +321,7 @@ unsafe fn parse_bordertext(
 /// # Safety
 /// `bordertext_pos`'s bytes must be NUL-terminated.
 unsafe fn parse_bordertext_pos(
-    wp: Option<Win>,
+    window: Option<Win>,
     bordertext_pos: String_0,
     bordertext_type: BorderTextType,
     fconfig: WinCfg,
@@ -338,7 +338,7 @@ unsafe fn parse_bordertext_pos(
     if bordertext_pos.is_empty() {
         // A new window starts left-aligned; an existing one keeps what it
         // had.
-        if wp.is_none() {
+        if window.is_none() {
             *align = kAlignLeft;
         }
         return true;
@@ -382,7 +382,7 @@ fn cur_win() -> Win {
 /// Fill `fconfig` in from `config`, reporting the first thing wrong with it
 /// through `err`.
 ///
-/// `wp` is the window being reconfigured, `None` when one is being created;
+/// `window` is the window being reconfigured, `None` when one is being created;
 /// `reconf` says that the missing keys keep whatever the window already had
 /// rather than being required.
 ///
@@ -394,7 +394,7 @@ fn cur_win() -> Win {
 /// Every string in `config` must be NUL-terminated and every array must name
 /// its own items, which is what the keyset decoder guarantees.
 pub(crate) unsafe fn parse_win_config(
-    wp: Option<Win>,
+    window: Option<Win>,
     config: CfgKeys,
     mut fconfig: WinCfg,
     reconf: bool,
@@ -431,7 +431,7 @@ pub(crate) unsafe fn parse_win_config(
             if set(KEYSET_OPTIDX_win_config__vertical) || set(KEYSET_OPTIDX_win_config__split) {
                 is_split = true;
                 fconfig.external = false;
-            } else if wp.is_none() {
+            } else if window.is_none() {
                 err_required(err, c"'relative' or 'external' when creating a float");
                 break '_fail;
             }
@@ -464,21 +464,21 @@ pub(crate) unsafe fn parse_win_config(
         }
         if set(KEYSET_OPTIDX_win_config__row) {
             if !has_relative || is_split {
-                generate_error(wp, c"row", err);
+                generate_error(window, c"row", err);
                 break '_fail;
             }
             fconfig.row = config.row;
         }
         if set(KEYSET_OPTIDX_win_config__col) {
             if !has_relative || is_split {
-                generate_error(wp, c"col", err);
+                generate_error(window, c"col", err);
                 break '_fail;
             }
             fconfig.col = config.col;
         }
         if set(KEYSET_OPTIDX_win_config__bufpos) {
             if !has_relative || is_split {
-                generate_error(wp, c"bufpos", err);
+                generate_error(window, c"bufpos", err);
                 break '_fail;
             }
             // SAFETY: the caller's promise -- the keyset's arrays name their
@@ -538,7 +538,7 @@ pub(crate) unsafe fn parse_win_config(
         }
         let win_is_target = set(KEYSET_OPTIDX_win_config__win)
             && !is_split
-            && wp.as_ref().is_some_and(floating)
+            && window.as_ref().is_some_and(floating)
             && fconfig.relative == kFloatRelativeWindow;
         if relative_is_win || win_is_target {
             // SAFETY: `err` names a live error slot, and the lookup answers a
@@ -547,7 +547,7 @@ pub(crate) unsafe fn parse_win_config(
             let Some(target) = target else {
                 break '_fail;
             };
-            if Some(target) == wp {
+            if Some(target) == window {
                 let msg = c"floating window cannot be relative to itself";
                 err_msg(err, kErrorTypeException, msg);
                 break '_fail;
@@ -555,7 +555,7 @@ pub(crate) unsafe fn parse_win_config(
             fconfig.window = target.handle;
         } else {
             if set(KEYSET_OPTIDX_win_config__win) {
-                if !is_split && !has_relative && !wp.as_ref().is_some_and(floating) {
+                if !is_split && !has_relative && !window.as_ref().is_some_and(floating) {
                     err_required(err, c"non-float with 'win' requires 'split' or 'vertical'");
                     break '_fail;
                 }
@@ -593,7 +593,13 @@ pub(crate) unsafe fn parse_win_config(
             let placed = unsafe {
                 parse_bordertext(config.title, kBorderTextTitle, fconfig, err);
                 !err.is_set()
-                    && parse_bordertext_pos(wp, config.title_pos, kBorderTextTitle, fconfig, err)
+                    && parse_bordertext_pos(
+                        window,
+                        config.title_pos,
+                        kBorderTextTitle,
+                        fconfig,
+                        err,
+                    )
             };
             if !placed {
                 break '_fail;
@@ -611,7 +617,13 @@ pub(crate) unsafe fn parse_win_config(
             let placed = unsafe {
                 parse_bordertext(config.footer, kBorderTextFooter, fconfig, err);
                 !err.is_set()
-                    && parse_bordertext_pos(wp, config.footer_pos, kBorderTextFooter, fconfig, err)
+                    && parse_bordertext_pos(
+                        window,
+                        config.footer_pos,
+                        kBorderTextFooter,
+                        fconfig,
+                        err,
+                    )
             };
             if !placed {
                 break '_fail;
@@ -634,7 +646,7 @@ pub(crate) unsafe fn parse_win_config(
                     break '_fail;
                 }
             }
-        } else if !wp.as_ref().is_some_and(floating) {
+        } else if !window.as_ref().is_some_and(floating) {
             // No `border` key on a new float: `'winborder'` decides.
             // SAFETY: the option's value is a live NUL-terminated string, and
             // `fconfig` and `err` are live.
@@ -663,7 +675,7 @@ pub(crate) unsafe fn parse_win_config(
             }
         }
         if set(KEYSET_OPTIDX_win_config__noautocmd) {
-            if wp.is_some() && config.noautocmd != fconfig.noautocmd {
+            if window.is_some() && config.noautocmd != fconfig.noautocmd {
                 let msg = c"'noautocmd' cannot be changed on existing window";
                 err_msg(err, kErrorTypeValidation, msg);
                 break '_fail;
@@ -681,7 +693,7 @@ pub(crate) unsafe fn parse_win_config(
         }
         return true;
     }
-    let base = wp.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
+    let base = window.map_or(WIN_CONFIG_INIT, |w| w.w_config.clone());
     // SAFETY: `fconfig` names the live config the caller promised.
     unsafe { merge_win_config(fconfig.raw(), base) };
     false
@@ -689,8 +701,8 @@ pub(crate) unsafe fn parse_win_config(
 
 /// [`generate_api_error`] with the window as a handle and the name as a
 /// literal: "this key needs a `relative`", or "not on a split".
-fn generate_error(wp: Option<Win>, attribute: &CStr, err: ErrSlot) {
-    let wp = wp.map_or(ptr::null_mut(), Win::raw);
+fn generate_error(window: Option<Win>, attribute: &CStr, err: ErrSlot) {
+    let wp = window.map_or(ptr::null_mut(), Win::raw);
     // SAFETY: `wp` is null or a live window, and `err` names a live slot.
     unsafe { generate_api_error(wp, attribute, slot_mut(err)) };
 }

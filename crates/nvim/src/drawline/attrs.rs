@@ -25,15 +25,15 @@ impl Cells {
     /// itself: decorations, the Visual range, `'hlsearch'` and diff mode.
     ///
     /// # Safety
-    /// `wp` must be live and `f` must hold the caller's frame.
-    pub(super) unsafe fn cell_attributes(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be live and `f` must hold the caller's frame.
+    pub(super) unsafe fn cell_attributes(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and frame.
         if wlv.extra_todo == 0 || !wlv.extra_is_virt_text {
             wlv.reset_extra_attr = false;
         }
 
         if self.has_decor && wlv.extra_todo == 0 {
-            unsafe { self.decorations_at(wlv, wp) };
+            unsafe { self.decorations_at(wlv, window) };
         }
 
         // While inline virtual text is being drawn the real area
@@ -49,7 +49,7 @@ impl Cells {
             area = self.vi_attr;
             self.area_active = true;
         } else if area != 0
-            && (wlv.vcol == wlv.tocol || (self.noinvcur && wlv.vcol == wp.w_virtcol))
+            && (wlv.vcol == wlv.tocol || (self.noinvcur && wlv.vcol == window.w_virtcol))
         {
             area = 0;
             self.area_active = false;
@@ -61,11 +61,11 @@ impl Cells {
         }
 
         if !self.has_foldtext && wlv.extra_todo == 0 {
-            unsafe { self.search_highlight(wlv, wp) };
+            unsafe { self.search_highlight(wlv, window) };
         }
 
         if wlv.diff_hlf != HLF_NONE {
-            unsafe { self.diff_highlight(wlv, wp) };
+            unsafe { self.diff_highlight(wlv, window) };
         }
 
         // Decide which of the highlight attributes to use.
@@ -121,8 +121,8 @@ impl Cells {
     /// virtual text starts here.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn decorations_at(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn decorations_at(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
         // The Visual-area test below is repeated here rather than shared,
         // because this one may not look inside `extra_text`.
@@ -136,13 +136,13 @@ impl Cells {
         {
             self.area_active = true;
         } else if self.area_active
-            && (wlv.vcol == wlv.tocol || (self.noinvcur && wlv.vcol == wp.w_virtcol))
+            && (wlv.vcol == wlv.tocol || (self.noinvcur && wlv.vcol == window.w_virtcol))
         {
             self.area_active = false;
         }
 
         let selected = self.area_active
-            || (self.area_highlighting && self.noinvcur && wlv.vcol == wp.w_virtcol);
+            || (self.area_highlighting && self.noinvcur && wlv.vcol == window.w_virtcol);
 
         // Where non-inline virtual text goes can only be decided once the
         // inline text with a lower priority has been drawn.
@@ -154,7 +154,7 @@ impl Cells {
         }
         self.extmark_attr = unsafe {
             decor_redraw_col(
-                wp.raw(),
+                window.raw(),
                 self.byte_col(),
                 if self.may_have_inline_virt {
                     -3
@@ -188,13 +188,13 @@ impl Cells {
     /// the insert-mode completion highlight.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn search_highlight(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn search_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's match state.
         let at = self.byte_col();
         self.search_attr = unsafe {
             update_search_hl(
-                wp.raw(),
+                window.raw(),
                 wlv.lnum,
                 at,
                 &raw mut self.line,
@@ -215,7 +215,7 @@ impl Cells {
         }
 
         if State.get() & MODE_INSERT != 0
-            && ins_compl_win_active(unsafe { Win::new(wp.raw()) })
+            && ins_compl_win_active(unsafe { Win::new(window.raw()) })
             && (self.in_curline || unsafe { ins_compl_lnum_in_range(wlv.lnum) })
         {
             let ins_match_attr = unsafe { ins_compl_col_range_attr(wlv.lnum, self.byte_col()) };
@@ -229,8 +229,8 @@ impl Cells {
     /// changed" as the read cursor enters and leaves each changed range.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn diff_highlight(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn diff_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the diff answer for this line.
         let at = unsafe { self.ptr.offset_from(self.line) };
         if self.line_changes.num_changes > 0
@@ -272,7 +272,7 @@ impl Cells {
         {
             wlv.diff_hlf = HLF_CHD;
         }
-        unsafe { wlv.set_line_attr_for_diff(wp) };
+        unsafe { wlv.set_line_attr_for_diff(window) };
     }
 
     /// Combine [`WinLineVars::extra_attr`] in, without overriding a Visual
@@ -302,8 +302,8 @@ impl Cells {
     /// what to put back afterwards.
     ///
     /// # Safety
-    /// `wp` must be a live window.
-    pub(super) unsafe fn column_highlight(&mut self, wlv: &mut WinLineVars, wp: Win) {
+    /// `window` must be a live window.
+    pub(super) unsafe fn column_highlight(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and 'colorcolumn' list.
         self.attr_before_vcol_hl = -1;
         if self.lnum_in_visual_area
@@ -313,17 +313,17 @@ impl Cells {
         {
             return;
         }
-        if wp.w_onebuf_opt.wo_cuc != 0
-            && wlv.hl_vcol() == wp.w_virtcol
-            && wlv.lnum != wp.w_cursor.lnum
+        if window.w_onebuf_opt.wo_cuc != 0
+            && wlv.hl_vcol() == window.w_virtcol
+            && wlv.lnum != window.w_cursor.lnum
         {
             self.attr_before_vcol_hl = wlv.char_attr;
             wlv.char_attr =
-                unsafe { hl_combine_attr(win_hl_attr(wp.raw(), HLF_CUC), wlv.char_attr) };
+                unsafe { hl_combine_attr(win_hl_attr(window.raw(), HLF_CUC), wlv.char_attr) };
         } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
             self.attr_before_vcol_hl = wlv.char_attr;
             wlv.char_attr =
-                unsafe { hl_combine_attr(win_hl_attr(wp.raw(), HLF_MC), wlv.char_attr) };
+                unsafe { hl_combine_attr(win_hl_attr(window.raw(), HLF_MC), wlv.char_attr) };
         }
     }
 

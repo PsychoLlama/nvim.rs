@@ -270,10 +270,10 @@ fn restore_snapshot_rec(sn: FrameRef, fr: FrameRef) -> Option<Win> {
 // ---------------------------------------------------------------------------
 // 'colorcolumn'
 
-pub unsafe fn check_colorcolumn(cc: *mut c_char, wp: *mut Window) -> Option<&'static CStr> {
+pub unsafe fn check_colorcolumn(cc: *mut c_char, window: *mut Window) -> Option<&'static CStr> {
     // SAFETY: the caller's promise -- a live window or null, and a
     // NUL-terminated string or null.
-    let win = unsafe { Win::from_raw(wp) };
+    let win = unsafe { Win::from_raw(window) };
     if win.is_some_and(|w| w.w_buffer.is_null()) {
         return None; // buffer was closed
     }
@@ -386,9 +386,9 @@ pub fn get_last_winid() -> c_int {
     last_win_id.get()
 }
 
-pub unsafe fn win_locked(wp: *mut Window) -> c_int {
+pub unsafe fn win_locked(window: *mut Window) -> c_int {
     // SAFETY: the caller's promise -- a live window.
-    unsafe { Win::new(wp) }.w_locked as c_int
+    unsafe { Win::new(window) }.w_locked as c_int
 }
 
 pub unsafe fn win_get_tabwin(id: Handle, tabnr: *mut c_int, winnr: *mut c_int) {

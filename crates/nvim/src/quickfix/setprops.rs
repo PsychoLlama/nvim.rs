@@ -615,14 +615,14 @@ unsafe fn qf_set_properties(
 ///
 /// `list`, `title` and `what` must be null or live.
 pub unsafe fn set_errorlist(
-    wp: Option<Win>,
+    window: Option<Win>,
     list: *mut List,
     action: c_int,
     title: *mut c_char,
     what: *mut Dict,
 ) -> Result<(), QfError> {
     // SAFETY: forwarded from the caller.
-    let qi = match wp {
+    let qi = match window {
         Some(wp) => ll_get_or_alloc_list(wp),
         None => QfStack::Global.raw(),
     };
@@ -630,7 +630,7 @@ pub unsafe fn set_errorlist(
 
     if action == 'f' as c_int {
         // Free the entire quickfix or location list stack.
-        qf_free_stack(wp, unsafe { Qi::new(qi) });
+        qf_free_stack(window, unsafe { Qi::new(qi) });
         return Ok(());
     }
 

@@ -168,7 +168,7 @@ fn common_suffix(org: &[u8], new: &[u8], start: c_int, si_new: c_int) -> c_int {
 /// leftmost start and `endp` the rightmost end, so a line differing from two
 /// partners reports the union.
 fn diff_find_change_simple(
-    wp: Win,
+    window: Win,
     lnum: LineNr,
     dp: Df,
     idx: c_int,
@@ -178,7 +178,7 @@ fn diff_find_change_simple(
     // A copy: every `ml_get_buf` below invalidates the last one's buffer.
     let line_org = (diff_flags.get() & DIFF_INLINE_NONE == 0).then(|| {
         // SAFETY: a live window's buffer, and a line number inside it.
-        unsafe { CStr::from_ptr(ml_get_buf(wp.w_buffer, lnum)) }.to_owned()
+        unsafe { CStr::from_ptr(ml_get_buf(window.w_buffer, lnum)) }.to_owned()
     });
     let off = lnum - dp.df_lnum[idx as usize];
     let tp = cur_tab();
@@ -209,7 +209,7 @@ fn diff_find_change_simple(
     added
 }
 
-/// The changed column ranges covering `lnum` in `wp`, as `diffline`.
+/// The changed column ranges covering `lnum` in `window`, as `diffline`.
 ///
 /// Answers whether the line is an addition rather than a change.  Under
 /// `inline:none`/`inline:simple` that is one range in
@@ -219,9 +219,9 @@ fn diff_find_change_simple(
 ///
 /// # Safety
 /// `diffline` must be a writable `DiffLine`.
-pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut DiffLine) -> bool {
+pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLine) -> bool {
     let tp = cur_tab();
-    let idx = diff_slot(wp.buffer(), tp);
+    let idx = diff_slot(window.buffer(), tp);
     if idx == DB_COUNT {
         return false;
     }
@@ -239,7 +239,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut DiffLine) -
         let mut change_end = -1;
         let start = &mut change_start;
         let end = &mut change_end;
-        let added = diff_find_change_simple(wp, lnum, dp, idx, start, end);
+        let added = diff_find_change_simple(window, lnum, dp, idx, start, end);
         let mut only = DiffLineChange {
             dc_start: [0; 8],
             dc_end: [0; 8],

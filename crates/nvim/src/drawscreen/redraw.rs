@@ -94,14 +94,14 @@ pub unsafe fn show_cursor_info_later(force: bool) {
 ///
 /// `must_redraw` is the maximum over all windows, so it only ever rises here;
 /// [`update_screen`] resets it.
-pub unsafe fn redraw_later(wp: *mut Window, redr_type: c_int) {
-    debug_assert!(!wp.is_null() || exiting.get(), "wp != NULL || exiting");
+pub unsafe fn redraw_later(window: *mut Window, redr_type: c_int) {
+    debug_assert!(!window.is_null() || exiting.get(), "wp != NULL || exiting");
     if exiting.get() || redraw_not_allowed.get() {
         return;
     }
     // SAFETY: a live window -- the guard above has ruled out the one caller
     // that may pass a null, which is the editor on its way out.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     if wp.w_redr_type < redr_type {
         wp.w_redr_type = redr_type;
         if redr_type >= UPD_NOT_VALID {
@@ -180,12 +180,12 @@ pub unsafe fn redraw_buf_line_later(buf: *mut Buffer, line: LineNr, force: bool)
     }
 }
 
-/// Widen window `wp`'s pending redraw range to cover lines `first..=last`.
+/// Widen window `window`'s pending redraw range to cover lines `first..=last`.
 ///
 /// Nothing is marked when the range is entirely outside the window.
-pub unsafe fn redraw_win_range_later(wp: *mut Window, first: LineNr, last: LineNr) {
+pub unsafe fn redraw_win_range_later(window: *mut Window, first: LineNr, last: LineNr) {
     // SAFETY: a live window on the main thread.
-    let mut win = unsafe { Win::new(wp) };
+    let mut win = unsafe { Win::new(window) };
     if last >= win.w_topline && first < win.w_botline {
         if win.w_redraw_top == 0 || win.w_redraw_top > first {
             win.w_redraw_top = first;
@@ -193,17 +193,17 @@ pub unsafe fn redraw_win_range_later(wp: *mut Window, first: LineNr, last: LineN
         if win.w_redraw_bot == 0 || win.w_redraw_bot < last {
             win.w_redraw_bot = last;
         }
-        unsafe { redraw_later(wp, UPD_VALID) };
+        unsafe { redraw_later(window, UPD_VALID) };
     }
 }
 
-/// Mark one line of window `wp`.
+/// Mark one line of window `window`.
 ///
 /// Inserting or deleting lines invalidates the range this widens, so a caller
 /// that does either has to mark the whole window instead.
-pub unsafe fn redraw_win_line(wp: *mut Window, lnum: LineNr) {
+pub unsafe fn redraw_win_line(window: *mut Window, lnum: LineNr) {
     // SAFETY: a live window on the main thread.
-    unsafe { redraw_win_range_later(wp, lnum, lnum) }
+    unsafe { redraw_win_range_later(window, lnum, lnum) }
 }
 
 /// Mark lines `first..=last` of `buf` in every window showing it.

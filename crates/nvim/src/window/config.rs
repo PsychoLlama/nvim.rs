@@ -116,15 +116,15 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
     unsafe { restore_win_noblock(&raw mut switchwin, true) };
 }
 
-pub unsafe fn win_fdccol_count(wp: *mut Window) -> c_int {
+pub unsafe fn win_fdccol_count(window: *mut Window) -> c_int {
     // SAFETY: the caller's promise -- a live window.
-    fdccol_count(unsafe { Win::new(wp) })
+    fdccol_count(unsafe { Win::new(window) })
 }
 
-/// The columns `'foldcolumn'` asks for in `wp`, `auto[:N]` resolved against how
+/// The columns `'foldcolumn'` asks for in `window`, `auto[:N]` resolved against how
 /// deeply its folds are nested.
-fn fdccol_count(wp: Win) -> c_int {
-    let fdc = wp.w_onebuf_opt.wo_fdc;
+fn fdccol_count(window: Win) -> c_int {
+    let fdc = window.w_onebuf_opt.wo_fdc;
     // SAFETY: `'foldcolumn'` is a NUL-terminated option string, so the first
     // four bytes and -- once they read `auto` -- the two after them are inside
     // it.
@@ -139,7 +139,7 @@ fn fdccol_count(wp: Win) -> c_int {
         1
     };
     // SAFETY: a live window.
-    fdccol.min(deepest_fold_nesting(wp))
+    fdccol.min(deepest_fold_nesting(window))
 }
 
 pub unsafe fn merge_win_config(dst: *mut WinConfig, src: WinConfig) {
@@ -183,15 +183,15 @@ fn clear_float(fconfig: &mut WinConfig, free_fields: bool) {
 // ---------------------------------------------------------------------------
 // Telling the UI where a window sits
 
-pub unsafe fn ui_ext_win_position(wp: *mut Window, validate: bool) {
+pub unsafe fn ui_ext_win_position(window: *mut Window, validate: bool) {
     // SAFETY: the caller's promise -- a live window.
-    ext_win_position(unsafe { Win::new(wp) }, validate);
+    ext_win_position(unsafe { Win::new(window) }, validate);
 }
 
 /// Tell the UI where `wp` is: its position on the screen for an ordinary
 /// window, and where its own grid is anchored for a float.
-fn ext_win_position(wp: Win, validate: bool) {
-    let mut wp = wp;
+fn ext_win_position(window: Win, validate: bool) {
+    let mut wp = window;
     wp.w_pos_changed = false;
     if !wp.w_floating {
         if ui_has(kUIMultigrid) {
@@ -371,15 +371,15 @@ fn anchor_to_window(
     *col += (tcol - 1) as Float;
 }
 
-pub unsafe fn ui_ext_win_viewport(wp: *mut Window) {
+pub unsafe fn ui_ext_win_viewport(window: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
-    ext_win_viewport(unsafe { Win::new(wp) });
+    ext_win_viewport(unsafe { Win::new(window) });
 }
 
 /// Tell the UI which part of its buffer `wp` shows, and how far the text
 /// scrolled since the last time it was told.
-fn ext_win_viewport(wp: Win) {
-    let mut wp = wp;
+fn ext_win_viewport(window: Win) {
+    let mut wp = window;
     if !((wp.is_current() || ui_has(kUIMultigrid)) && wp.w_viewport_invalid && wp.w_redr_type == 0)
     {
         return;
@@ -463,7 +463,7 @@ fn ext_win_viewport(wp: Win) {
 /// The screen lines between two buffer positions, `win_text_height()` with its
 /// two in-out parameters borrowed rather than pointed at.
 fn text_height(
-    wp: Win,
+    window: Win,
     start_lnum: LineNr,
     start_vcol: int64_t,
     end_lnum: &mut LineNr,
@@ -472,16 +472,20 @@ fn text_height(
     let (none, all) = (ptr::null_mut::<int64_t>(), INT64_MAX as int64_t);
     // SAFETY: two lines of the window's own buffer, and two out-parameters of
     // the caller's.
-    unsafe { win_text_height(wp, start_lnum, start_vcol, end_lnum, end_vcol, none, all) }
+    unsafe {
+        win_text_height(
+            window, start_lnum, start_vcol, end_lnum, end_vcol, none, all,
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
 // May the layout change at all?
 
-pub unsafe fn check_split_disallowed(wp: *const Window) -> c_int {
+pub unsafe fn check_split_disallowed(window: *const Window) -> c_int {
     let mut err = Error::none();
     // SAFETY: the caller's promise -- a live window; `err` is ours.
-    let ok = unsafe { check_split_disallowed_err(wp, &mut err) };
+    let ok = unsafe { check_split_disallowed_err(window, &mut err) };
     if err.is_set() {
         // SAFETY: the message the check just wrote, owned by `err`.
         unsafe { emsg(gettext_ptr(err.message_or_empty().as_ptr())) };
@@ -491,13 +495,13 @@ pub unsafe fn check_split_disallowed(wp: *const Window) -> c_int {
     if ok { OK } else { FAIL }
 }
 
-pub unsafe fn check_split_disallowed_err(wp: *const Window, err: &mut Error) -> bool {
+pub unsafe fn check_split_disallowed_err(window: *const Window, err: &mut Error) -> bool {
     if split_disallowed.get() > 0 {
         *err = Error::exception(c"E242: Can't split a window while closing another");
         return false;
     }
     // SAFETY: the caller's promise -- a live window, whose buffer is live.
-    if unsafe { Win::new(wp as *mut Window) }
+    if unsafe { Win::new(window as *mut Window) }
         .buffer()
         .b_locked_split
         != 0

@@ -65,9 +65,9 @@ use crate::spell::SMT_ALL;
 /// spell-checked, running the `_on_spell_nav` callbacks once per line.
 ///
 /// # Safety
-/// `wp` must be a live window and `state` the scan's own decoration state.
+/// `window` must be a live window and `state` the scan's own decoration state.
 unsafe fn decor_spell_nav_col(
-    wp: *mut Window,
+    window: *mut Window,
     lnum: LineNr,
     decor_lnum: &mut LineNr,
     col: c_int,
@@ -75,20 +75,22 @@ unsafe fn decor_spell_nav_col(
 ) -> Option<bool> {
     // SAFETY: the caller's window and state; the callbacks run Lua.
     if *decor_lnum != lnum {
-        unsafe { decor_redraw_reset(wp, state) };
-        unsafe { decor_providers_invoke_spell(wp, lnum as c_int - 1, col, lnum as c_int - 1, -1) };
-        unsafe { decor_redraw_line(wp, lnum as c_int - 1, state) };
+        unsafe { decor_redraw_reset(window, state) };
+        unsafe {
+            decor_providers_invoke_spell(window, lnum as c_int - 1, col, lnum as c_int - 1, -1)
+        };
+        unsafe { decor_redraw_line(window, lnum as c_int - 1, state) };
         *decor_lnum = lnum;
     }
-    unsafe { decor_redraw_col(wp, col, 0, false, state, MAXCOL as c_int) };
+    unsafe { decor_redraw_col(window, col, 0, false, state, MAXCOL as c_int) };
     state.spell
 }
 
 /// Whether the syntax at this position is one that gets spell-checked.
 #[inline]
-unsafe fn can_syn_spell(wp: *mut Window, lnum: LineNr, col: c_int) -> bool {
+unsafe fn can_syn_spell(window: *mut Window, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
-    unsafe { syn_get_id(wp, lnum, col as ColNr, 0, &raw mut can_spell, 0) };
+    unsafe { syn_get_id(window, lnum, col as ColNr, 0, &raw mut can_spell, 0) };
     can_spell
 }
 
@@ -102,20 +104,20 @@ unsafe fn can_syn_spell(wp: *mut Window, lnum: LineNr, col: c_int) -> bool {
 ///
 /// Returns the length of the bad word, or 0 if none was found.
 pub unsafe fn spell_move_to(
-    wp: *mut Window,
+    window: *mut Window,
     dir: c_int,
     behaviour: SpellMoveType,
     curline: bool,
     attrp: *mut Hlf,
 ) -> size_t {
-    if unsafe { no_spell_checking(wp) } {
+    if unsafe { no_spell_checking(window) } {
         return 0;
     }
 
     let mut found_pos: Pos = unsafe { mem::zeroed() };
     let mut found_len: size_t = 0;
     let mut attr: Hlf = HLF_COUNT;
-    let has_syntax = unsafe { syntax_present(wp) };
+    let has_syntax = unsafe { syntax_present(window) };
     let mut buf: *mut c_char = core::ptr::null_mut();
     let mut buflen: size_t = 0;
     let mut skip = 0;
@@ -125,7 +127,7 @@ pub unsafe fn spell_move_to(
     let mut ret: size_t = 0;
     let mut done = false;
 
-    let mut lnum = unsafe { (*wp).w_cursor.lnum };
+    let mut lnum = unsafe { (*window).w_cursor.lnum };
     clearpos(&mut found_pos);
 
     // Ephemeral extmarks live in the global decor_state, so it has to be
@@ -138,8 +140,8 @@ pub unsafe fn spell_move_to(
     let mut decor_lnum: LineNr = -1;
 
     while !got_int.get() {
-        let mut line = unsafe { ml_get_buf((*wp).w_buffer, lnum) };
-        let mut len = unsafe { ml_get_buf_len((*wp).w_buffer, lnum) } as size_t;
+        let mut line = unsafe { ml_get_buf((*window).w_buffer, lnum) };
+        let mut len = unsafe { ml_get_buf_len((*window).w_buffer, lnum) } as size_t;
         if buflen < len + MAXWLEN as size_t + 2 {
             unsafe { xfree(buf as *mut core::ffi::c_void) };
             buflen = len + MAXWLEN as size_t + 2;
@@ -153,7 +155,7 @@ pub unsafe fn spell_move_to(
 
         if capcol == 0 {
             capcol = unsafe { getwhitecols(line) } as ColNr;
-        } else if curline && wp == curwin.get() {
+        } else if curline && window == curwin.get() {
             // For spellbadword(): does the first word need a capital?
             let col = unsafe { getwhitecols(line) } as ColNr;
             if unsafe { check_need_cap(curwin.get(), lnum, col) } {
@@ -161,7 +163,7 @@ pub unsafe fn spell_move_to(
             }
             // check_need_cap() looked at the previous line, so the line
             // pointer has to be taken again.
-            line = unsafe { ml_get_buf((*wp).w_buffer, lnum) };
+            line = unsafe { ml_get_buf((*window).w_buffer, lnum) };
         }
 
         // Copy the line and append the start of the next one. The
@@ -169,12 +171,12 @@ pub unsafe fn spell_move_to(
         // comes first.
         let empty_line = unsafe { *skipwhite(line) } == 0;
         unsafe { strcpy(buf, line) };
-        if lnum < unsafe { (*(*wp).w_buffer).b_ml.ml_line_count } {
+        if lnum < unsafe { (*(*window).w_buffer).b_ml.ml_line_count } {
             let buf_len = unsafe { cstr::bytes_at(buf) }.len();
             unsafe {
                 spell_cat_line(
                     buf.add(buf_len),
-                    ml_get_buf((*wp).w_buffer, lnum + 1),
+                    ml_get_buf((*window).w_buffer, lnum + 1),
                     MAXWLEN as c_int,
                 )
             };
@@ -186,15 +188,15 @@ pub unsafe fn spell_move_to(
             // Searching backwards, stop at the cursor — unless the search
             // already wrapped past the end of the buffer.
             if dir == BACKWARD
-                && lnum == unsafe { (*wp).w_cursor.lnum }
+                && lnum == unsafe { (*window).w_cursor.lnum }
                 && !wrapped
-                && unsafe { p.offset_from(buf) } as ColNr >= unsafe { (*wp).w_cursor.col }
+                && unsafe { p.offset_from(buf) } as ColNr >= unsafe { (*window).w_cursor.col }
             {
                 break;
             }
 
             attr = HLF_COUNT;
-            len = unsafe { spell_check(wp, p, &raw mut attr, &raw mut capcol, false) };
+            len = unsafe { spell_check(window, p, &raw mut attr, &raw mut capcol, false) };
 
             if attr != HLF_COUNT
                 && (behaviour == SMT_ALL
@@ -207,22 +209,23 @@ pub unsafe fn spell_move_to(
                 // are always in the same allocation.
                 let col = unsafe { p.offset_from(buf) } as ColNr;
                 let past_cursor = dir == BACKWARD
-                    || lnum != unsafe { (*wp).w_cursor.lnum }
+                    || lnum != unsafe { (*window).w_cursor.lnum }
                     || wrapped
-                    || col + if curline { len as ColNr } else { 0 } > unsafe { (*wp).w_cursor.col };
+                    || col + if curline { len as ColNr } else { 0 }
+                        > unsafe { (*window).w_cursor.col };
 
                 if past_cursor {
                     let no_plain_buffer =
-                        unsafe { (*(*wp).w_s).b_p_spo_flags } & kOptSpoFlagNoplainbuffer != 0;
+                        unsafe { (*(*window).w_s).b_p_spo_flags } & kOptSpoFlagNoplainbuffer != 0;
                     let mut can_spell = !no_plain_buffer;
                     let decor_says =
-                        unsafe { decor_spell_nav_col(wp, lnum, &mut decor_lnum, col, decor) };
+                        unsafe { decor_spell_nav_col(window, lnum, &mut decor_lnum, col, decor) };
                     if decor_says == Some(true) {
                         can_spell = true;
                     } else if decor_says == Some(false) {
                         can_spell = false;
                     } else if has_syntax {
-                        can_spell = unsafe { can_syn_spell(wp, lnum, col) };
+                        can_spell = unsafe { can_syn_spell(window, lnum, col) };
                     }
 
                     if !can_spell {
@@ -236,7 +239,7 @@ pub unsafe fn spell_move_to(
                         };
                         if dir == FORWARD {
                             // Nothing further to look for.
-                            unsafe { (*wp).w_cursor = found_pos };
+                            unsafe { (*window).w_cursor = found_pos };
                             if !attrp.is_null() {
                                 unsafe { *attrp = attr };
                             }
@@ -266,7 +269,7 @@ pub unsafe fn spell_move_to(
 
         if dir == BACKWARD && found_pos.lnum != 0 {
             // Take the last match in the line, before the cursor.
-            unsafe { (*wp).w_cursor = found_pos };
+            unsafe { (*window).w_cursor = found_pos };
             ret = found_len;
             break;
         }
@@ -276,7 +279,7 @@ pub unsafe fn spell_move_to(
         }
 
         // Back at the starting line having searched it twice: give up.
-        if lnum == unsafe { (*wp).w_cursor.lnum } && wrapped {
+        if lnum == unsafe { (*window).w_cursor.lnum } && wrapped {
             break;
         }
 
@@ -288,7 +291,7 @@ pub unsafe fn spell_move_to(
             } else {
                 // Wrap to the end. The starting line may be searched
                 // again, to accept its last match.
-                lnum = unsafe { (*(*wp).w_buffer).b_ml.ml_line_count };
+                lnum = unsafe { (*(*window).w_buffer).b_ml.ml_line_count };
                 wrapped = true;
                 if !shortmess(ShmFlag::SEARCH) {
                     unsafe { give_warning(gettext(top_bot_msg).as_ptr(), true, false) };
@@ -296,7 +299,7 @@ pub unsafe fn spell_move_to(
             }
             capcol = -1;
         } else {
-            if lnum < unsafe { (*(*wp).w_buffer).b_ml.ml_line_count } {
+            if lnum < unsafe { (*(*window).w_buffer).b_ml.ml_line_count } {
                 lnum += 1;
             } else if p_ws.get() == 0 {
                 break; // at the last line and 'nowrapscan'
@@ -311,7 +314,7 @@ pub unsafe fn spell_move_to(
             }
 
             // Back at the starting line with nothing found: give up.
-            if lnum == unsafe { (*wp).w_cursor.lnum } && !found_one {
+            if lnum == unsafe { (*window).w_cursor.lnum } && !found_one {
                 break;
             }
 

@@ -179,26 +179,26 @@ static redraw_popupmenu: GlobalCell<bool> = GlobalCell::new(false);
 static msg_grid_invalid: GlobalCell<bool> = GlobalCell::new(false);
 static resizing_autocmd: GlobalCell<bool> = GlobalCell::new(false);
 static conceal_cursor_used: GlobalCell<bool> = GlobalCell::new(false);
-/// The screen row below window `wp`'s last one -- `W_ENDROW`.
+/// The screen row below window `window`'s last one -- `W_ENDROW`.
 ///
 /// That is where its horizontal separator or status line goes.
 ///
 /// # Safety
-/// `wp` must be a live window.
-pub(crate) unsafe fn win_endrow(wp: *const Window) -> c_int {
+/// `window` must be a live window.
+pub(crate) unsafe fn win_endrow(window: *const Window) -> c_int {
     // SAFETY: caller's promise.
-    unsafe { (*wp).w_winrow + (*wp).w_height }
+    unsafe { (*window).w_winrow + (*window).w_height }
 }
 
-/// The screen column right of window `wp`'s last one -- `W_ENDCOL`.
+/// The screen column right of window `window`'s last one -- `W_ENDCOL`.
 ///
 /// That is where its vertical separator goes.
 ///
 /// # Safety
-/// `wp` must be a live window.
-pub(crate) unsafe fn win_endcol(wp: *const Window) -> c_int {
+/// `window` must be a live window.
+pub(crate) unsafe fn win_endcol(window: *const Window) -> c_int {
     // SAFETY: caller's promise.
-    unsafe { (*wp).w_wincol + (*wp).w_width }
+    unsafe { (*window).w_wincol + (*window).w_width }
 }
 
 /// Redraw the cursor line if `'concealcursor'` changed what it does to it.
@@ -662,13 +662,13 @@ pub unsafe fn setcursor() {
 /// Put the terminal cursor where the cursor is in window `wp`.
 ///
 /// `force` positions it even when not redrawing.
-pub unsafe fn setcursor_mayforce(wp: *mut Window, force: bool) {
+pub unsafe fn setcursor_mayforce(window: *mut Window, force: bool) {
     // SAFETY: a live window; `grid_adjust` maps its coordinates onto whichever
     // grid actually carries them.
     if !force && !unsafe { redrawing() } {
         return;
     }
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     validate_cursor(wp);
 
     let mut row = wp.w_wrow;
@@ -700,9 +700,9 @@ pub unsafe fn setcursor_mayforce(wp: *mut Window, force: bool) {
 /// `'foldcolumn'` asks for a width; what it gets is bounded by the room left
 /// beside the text, which must be at least one column ('winminwidth' of 0 still
 /// leaves one for the current window).
-pub unsafe fn compute_foldcolumn(wp: *mut Window, col: c_int) -> c_int {
+pub unsafe fn compute_foldcolumn(window: *mut Window, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
-    let wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(window) };
     let fdc = unsafe { win_fdccol_count(wp.raw()) };
     let min_width = if wp.raw() == curwin.get() && p_wmw.get() == 0 {
         1
@@ -717,9 +717,9 @@ pub unsafe fn compute_foldcolumn(wp: *mut Window, col: c_int) -> c_int {
 /// Callers check whether either option is set; this only decides how wide the
 /// column would be. The answer is cached against the line count it was computed
 /// for, since it only changes when that crosses a power of ten.
-pub unsafe fn number_width(wp: *mut Window) -> c_int {
+pub unsafe fn number_width(window: *mut Window) -> c_int {
     // SAFETY: a live window and its buffer, on the main thread.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
     let largest = if wp.w_onebuf_opt.wo_rnu != 0 && wp.w_onebuf_opt.wo_nu == 0 {
@@ -771,11 +771,11 @@ pub unsafe fn number_width(wp: *mut Window) -> c_int {
     n
 }
 
-/// Whether the cursor line in window `wp` may be concealed, per
+/// Whether the cursor line in window `window` may be concealed, per
 /// `'concealcursor'`.
-pub unsafe fn conceal_cursor_line(wp: *const Window) -> bool {
+pub unsafe fn conceal_cursor_line(window: *const Window) -> bool {
     // SAFETY: a live window, on the main thread.
-    if unsafe { *(*wp).w_onebuf_opt.wo_cocu } == 0 {
+    if unsafe { *(*window).w_onebuf_opt.wo_cocu } == 0 {
         return false;
     }
     let mode = if get_real_state() & MODE_VISUAL != 0 {
@@ -789,18 +789,20 @@ pub unsafe fn conceal_cursor_line(wp: *const Window) -> bool {
     } else {
         return false;
     };
-    !unsafe { vim_strchr((*wp).w_onebuf_opt.wo_cocu, mode as c_int) }.is_null()
+    !unsafe { vim_strchr((*window).w_onebuf_opt.wo_cocu, mode as c_int) }.is_null()
 }
 
-/// Whether the cursor line of window `wp` is drawn differently from any other.
+/// Whether the cursor line of window `window` is drawn differently from any other.
 ///
 /// When it is, moving the cursor within the window means redrawing both the old
 /// cursor line and the new one.
-pub unsafe fn win_cursorline_standout(wp: *const Window) -> bool {
+pub unsafe fn win_cursorline_standout(window: *const Window) -> bool {
     // SAFETY: a live window, on the main thread.
     unsafe {
-        (*wp).w_onebuf_opt.wo_cul != 0
-            || (wp == curwin.get() && (*wp).w_onebuf_opt.wo_cole > 0 && !conceal_cursor_line(wp))
+        (*window).w_onebuf_opt.wo_cul != 0
+            || (window == curwin.get()
+                && (*window).w_onebuf_opt.wo_cole > 0
+                && !conceal_cursor_line(window))
     }
 }
 
@@ -810,9 +812,9 @@ pub unsafe fn win_cursorline_standout(wp: *const Window) -> bool {
 /// On a closed fold the whole fold is the cursor line, so `w_cursorline` is
 /// moved to its first line -- otherwise the fold would not be redrawn when the
 /// cursor moves onto it.
-pub unsafe fn win_update_cursorline(wp: *mut Window, foldinfo: *mut FoldInfo) {
+pub unsafe fn win_update_cursorline(window: *mut Window, foldinfo: *mut FoldInfo) {
     // SAFETY: a live window; `foldinfo` is the caller's out-parameter.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     unsafe {
         wp.w_cursorline = if win_cursorline_standout(wp.raw()) {
             wp.w_cursor.lnum

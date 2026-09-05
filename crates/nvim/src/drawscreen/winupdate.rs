@@ -82,10 +82,10 @@ impl Regions {
     }
 
     /// Redraw every row of the window.
-    fn redraw_all(&mut self, wp: Win) {
+    fn redraw_all(&mut self, window: Win) {
         // SAFETY: a live window.
         self.mid_start = 0;
-        self.mid_end = wp.w_view_height;
+        self.mid_end = window.w_view_height;
     }
 }
 
@@ -104,9 +104,9 @@ impl Regions {
 /// - `UPD_INVERTED_ALL` -- redraw the whole Visual area
 /// - `UPD_VALID` -- scroll for a changed `w_topline`, redraw changed text, and
 ///   redraw the lines a scroll brought in at either end.
-pub(crate) unsafe fn win_update(wp: Win) {
+pub(crate) unsafe fn win_update(window: Win) {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut win = unsafe { Win::new(wp.raw()) };
+    let mut win = unsafe { Win::new(window.raw()) };
     // SAFETY: a live window of the current layout, during a redraw.
     // Return early when the window would overflow a shrunk terminal, which
     // would draw out of bounds and trip an assertion.
@@ -122,12 +122,12 @@ pub(crate) unsafe fn win_update(wp: Win) {
 
     // A window with no room for text only needs its separator.
     if win.w_view_height == 0 {
-        unsafe { draw_hsep_win(wp) };
+        unsafe { draw_hsep_win(window) };
         win.w_redr_type = 0;
         return;
     }
     if win.w_view_width == 0 {
-        unsafe { draw_vsep_win(wp) };
+        unsafe { draw_vsep_win(window) };
         win.w_redr_type = 0;
         return;
     }
@@ -149,8 +149,8 @@ pub(crate) unsafe fn win_update(wp: Win) {
     // ephemeral extmark comes back through `nvim_buf_set_extmark`, which
     // reaches the same state from the API side.
     let decor = unsafe { DecorStateRef::current() };
-    unsafe { decor_redraw_reset(wp.raw(), decor) };
-    unsafe { decor_providers_invoke_win(wp.raw(), decor) };
+    unsafe { decor_redraw_reset(window.raw(), decor) };
+    unsafe { decor_providers_invoke_win(window.raw(), decor) };
 
     unsafe { add_suspended_terminal_note(buf, decor) };
 
@@ -169,16 +169,16 @@ pub(crate) unsafe fn win_update(wp: Win) {
     validate_virtcol(win);
     rg.redr_type = win.w_redr_type;
 
-    unsafe { init_search_hl(wp.raw(), SearchHl::current().raw()) };
+    unsafe { init_search_hl(window.raw(), SearchHl::current().raw()) };
 
-    unsafe { clamp_skipcol(wp) };
+    unsafe { clamp_skipcol(window) };
 
     let nrwidth_before = win.w_nrwidth;
     let nrwidth_new = if win.w_onebuf_opt.wo_nu != 0
         || win.w_onebuf_opt.wo_rnu != 0
         || unsafe { *win.w_onebuf_opt.wo_stc } != 0
     {
-        unsafe { number_width(wp.raw()) }
+        unsafe { number_width(window.raw()) }
     } else {
         0
     };
@@ -216,33 +216,33 @@ pub(crate) unsafe fn win_update(wp: Win) {
     unsafe { plan_scroll(win, buf, &mut rg) };
 
     if rg.redr_type == UPD_SOME_VALID {
-        rg.redraw_all(wp);
+        rg.redraw_all(window);
         rg.redr_type = UPD_NOT_VALID;
     }
 
     unsafe { plan_visual_area(win, buf, &mut rg) };
-    unsafe { remember_visual_area(wp, buf) };
+    unsafe { remember_visual_area(window, buf) };
 
     let mut cursorline_fi = FoldInfo::default();
-    unsafe { win_update_cursorline(wp.raw(), &raw mut cursorline_fi) };
-    if wp.raw() == curwin.get() {
+    unsafe { win_update_cursorline(window.raw(), &raw mut cursorline_fi) };
+    if window.raw() == curwin.get() {
         conceal_cursor_used.set(unsafe { conceal_cursor_line(curwin.get()) });
     }
 
-    unsafe { win_check_ns_hl(wp.raw()) };
+    unsafe { win_check_ns_hl(window.raw()) };
 
     let mut spv = SpellVars::default();
-    if unsafe { spell_check_window(wp.raw()) } {
+    if unsafe { spell_check_window(window.raw()) } {
         spv.spv_has_spell = true;
         spv.spv_unchanged = rg.mod_top == 0;
     }
 
     let old_botline =
-        unsafe { draw_window_lines(wp, buf, &mut rg, cursorline_fi, &mut spv, decor) };
+        unsafe { draw_window_lines(window, buf, &mut rg, cursorline_fi, &mut spv, decor) };
 
     if win.w_redr_type >= UPD_REDRAW_TOP {
-        unsafe { draw_vsep_win(wp) };
-        unsafe { draw_hsep_win(wp) };
+        unsafe { draw_vsep_win(window) };
+        unsafe { draw_hsep_win(window) };
     }
     unsafe { syn_set_timeout(::core::ptr::null_mut()) };
 
@@ -251,9 +251,9 @@ pub(crate) unsafe fn win_update(wp: Win) {
     win.w_old_topfill = win.w_topfill;
     win.w_old_botfill = win.w_botfill;
 
-    unsafe { send_win_extmarks(wp) };
+    unsafe { send_win_extmarks(window) };
 
-    unsafe { finish_botline(wp, buf, old_botline, nrwidth_before) };
+    unsafe { finish_botline(window, buf, old_botline, nrwidth_before) };
 
     // Restore `got_int`, unless CTRL-C was hit while redrawing.
     if !got_int.get() {
@@ -306,28 +306,28 @@ unsafe fn add_suspended_terminal_note(buf: *mut Buffer, state: DecorStateRef) {
 /// changed since it was set.
 ///
 /// # Safety
-/// `wp` must be a live window.
-unsafe fn clamp_skipcol(mut wp: Win) {
+/// `window` must be a live window.
+unsafe fn clamp_skipcol(mut window: Win) {
     // SAFETY: a live window.
-    if wp.w_skipcol <= 0 || wp.w_view_width <= unsafe { win_col_off(wp.raw()) } {
+    if window.w_skipcol <= 0 || window.w_view_width <= unsafe { win_col_off(window.raw()) } {
         return;
     }
-    let width1 = wp.w_view_width - unsafe { win_col_off(wp.raw()) };
-    let width2 = width1 + win_col_off2(unsafe { Win::new(wp.raw()) });
+    let width1 = window.w_view_width - unsafe { win_col_off(window.raw()) };
+    let width2 = width1 + win_col_off2(unsafe { Win::new(window.raw()) });
 
     // The first screen row of a wrapped line is `width1` wide and every
     // later one `width2`, so the valid skip columns are that series.
     let mut at = 0;
     let mut step = width1;
-    while at < wp.w_skipcol {
+    while at < window.w_skipcol {
         if at > 0 {
             step = width2;
         }
         at += step;
     }
-    if at != wp.w_skipcol {
+    if at != window.w_skipcol {
         // Always round down; the higher value may not be valid.
-        wp.w_skipcol = at - step;
+        window.w_skipcol = at - step;
     }
 }
 
@@ -339,7 +339,7 @@ unsafe fn clamp_skipcol(mut wp: Win) {
 /// and none of this matters.
 ///
 /// # Safety
-/// `wp` must be a live window and `buf` its buffer.
+/// `window` must be a live window and `buf` its buffer.
 unsafe fn find_changed_lines(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window and buffer.
     // What `redraw_win_range_later` asked for.
@@ -422,7 +422,7 @@ unsafe fn find_changed_lines(win: Win, buf: *mut Buffer, rg: &mut Regions) {
 /// `w_lines[]` entry above it, and symmetrically below.
 ///
 /// # Safety
-/// `wp` must be a live window.
+/// `window` must be a live window.
 unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
     // SAFETY: the caller's window and its `w_lines` array.
     // The line below the last valid entry above `mod_top`, and the first
@@ -469,7 +469,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
 /// or gives up and marks the whole window.
 ///
 /// # Safety
-/// `wp` must be a live window and `buf` its buffer.
+/// `window` must be a live window and `buf` its buffer.
 unsafe fn plan_scroll(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and its `w_lines` array.
     // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
@@ -529,7 +529,7 @@ unsafe fn plan_scroll(win: Win, buf: *mut Buffer, rg: &mut Regions) {
 /// The new topline is above the old one: insert rows at the top.
 ///
 /// # Safety
-/// `wp` must be a live window.
+/// `window` must be a live window.
 unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
     // SAFETY: the caller's window and its `w_lines` array.
     let first_lnum = unsafe { (*win.w_lines).wl_lnum };
@@ -597,7 +597,7 @@ unsafe fn scroll_down(mut win: Win, rg: &mut Regions) {
 /// the first `w_lines[]` entry that is stale.
 ///
 /// # Safety
-/// `wp` must be a live window.
+/// `window` must be a live window.
 unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
     // Find `w_topline` in `w_lines[]`, counting the rows above it.
     let mut at = -1;
@@ -675,7 +675,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 /// taken away.
 ///
 /// # Safety
-/// `wp` must be a live window and `buf` its buffer.
+/// `window` must be a live window and `buf` its buffer.
 unsafe fn plan_visual_area(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
     let shown = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer });
@@ -748,7 +748,7 @@ unsafe fn plan_visual_area(win: Win, buf: *mut Buffer, rg: &mut Regions) {
 /// they are now.
 ///
 /// # Safety
-/// `wp` must be showing the current buffer, which `sel` is a selection in.
+/// `window` must be showing the current buffer, which `sel` is a selection in.
 unsafe fn visual_line_range(
     mut win: Win,
     sel: VisualSelection,
@@ -806,7 +806,7 @@ unsafe fn visual_line_range(
 /// The first and last screen columns of a blockwise Visual selection.
 ///
 /// # Safety
-/// `wp` must be a live window and `sel` a blockwise selection in its buffer.
+/// `window` must be a live window and `sel` a blockwise selection in its buffer.
 unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
     // A copy of the anchor: `getvcols` only reads it.
     let mut anchor = sel.anchor;
@@ -875,34 +875,34 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 /// moved.
 ///
 /// # Safety
-/// `wp` must be a live window and `buf` its buffer.
-unsafe fn remember_visual_area(mut wp: Win, buf: *mut Buffer) {
+/// `window` must be a live window and `buf` its buffer.
+unsafe fn remember_visual_area(mut window: Win, buf: *mut Buffer) {
     // SAFETY: the caller's window and the global Visual state.
     if let Some(sel) = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer }) {
-        wp.w_old_visual_mode = sel.mode.raw() as c_char;
-        unsafe { wp.w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum };
-        wp.w_old_visual_lnum = sel.anchor.lnum;
-        wp.w_old_visual_col = sel.anchor.col;
-        unsafe { wp.w_old_curswant = (*curwin.get()).w_curswant };
+        window.w_old_visual_mode = sel.mode.raw() as c_char;
+        unsafe { window.w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum };
+        window.w_old_visual_lnum = sel.anchor.lnum;
+        window.w_old_visual_col = sel.anchor.col;
+        unsafe { window.w_old_curswant = (*curwin.get()).w_curswant };
     } else {
-        wp.w_old_visual_mode = 0;
-        wp.w_old_cursor_lnum = 0;
-        wp.w_old_visual_lnum = 0;
-        wp.w_old_visual_col = 0;
+        window.w_old_visual_mode = 0;
+        window.w_old_cursor_lnum = 0;
+        window.w_old_visual_lnum = 0;
+        window.w_old_visual_col = 0;
     }
 }
 
 /// Report the `ui_watched` extmarks this redraw passed to the UI.
 ///
 /// # Safety
-/// `wp` must be the window that was just drawn.
-unsafe fn send_win_extmarks(wp: Win) {
+/// `window` must be the window that was just drawn.
+unsafe fn send_win_extmarks(window: Win) {
     // SAFETY: the caller's window; the list is filled by this redraw only.
     win_extmark_arr.with(|marks| {
         for m in marks {
             ui_call_win_extmark(
-                wp.w_grid_alloc.handle as Integer,
-                wp.handle as WindowHandle,
+                window.w_grid_alloc.handle as Integer,
+                window.handle as WindowHandle,
                 m.ns_id as Integer,
                 m.mark_id as Integer,
                 m.win_row as Integer,
@@ -922,9 +922,9 @@ unsafe fn send_win_extmarks(wp: Win) {
 /// `old_botline` is what `w_botline` held before the line loop replaced it.
 ///
 /// # Safety
-/// `wp` must be the window that was just drawn and `buf` its buffer.
+/// `window` must be the window that was just drawn and `buf` its buffer.
 unsafe fn finish_botline(
-    mut wp: Win,
+    mut window: Win,
     buf: *mut Buffer,
     old_botline: LineNr,
     nrwidth_before: c_int,
@@ -935,10 +935,10 @@ unsafe fn finish_botline(
     // SAFETY: the caller's window and buffer.
     // `dollar_vcol >= 0` means the cursor line is showing a `$` for a change
     // command and was not fully drawn, so its height is not known here.
-    if dollar_vcol.get() == -1 || wp.raw() != curwin.get() {
-        wp.w_valid |= WinValid::BOTLINE;
-        wp.w_viewport_invalid = true;
-        if wp.raw() == curwin.get() && wp.w_botline != old_botline && !RECURSIVE.get() {
+    if dollar_vcol.get() == -1 || window.raw() != curwin.get() {
+        window.w_valid |= WinValid::BOTLINE;
+        window.w_viewport_invalid = true;
+        if window.raw() == curwin.get() && window.w_botline != old_botline && !RECURSIVE.get() {
             RECURSIVE.set(true);
             unsafe { (*curwin.get()).w_valid.clear(WinValid::TOPLINE) };
             update_topline(unsafe { Win::current() }); // may invalidate w_botline again
@@ -956,7 +956,7 @@ unsafe fn finish_botline(
         }
     }
 
-    if nrwidth_before != wp.w_nrwidth && !unsafe { (*buf).terminal }.is_null() {
+    if nrwidth_before != window.w_nrwidth && !unsafe { (*buf).terminal }.is_null() {
         unsafe { terminal_check_size((*buf).terminal) };
     }
 }

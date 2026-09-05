@@ -66,10 +66,10 @@ fn msg_layer() -> GridRef {
 /// The window's own grid.
 ///
 /// # Safety
-/// `wp` must be a live window.
-unsafe fn win_layer(wp: *mut Window) -> GridRef {
+/// `window` must be a live window.
+unsafe fn win_layer(window: *mut Window) -> GridRef {
     // SAFETY: a live window owns its `w_grid_alloc` outright.
-    unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) }
+    unsafe { GridRef::new(&raw mut (*window).w_grid_alloc) }
 }
 
 /// How many UIs this module draws for. Zero means nothing is composed.

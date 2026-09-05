@@ -255,14 +255,14 @@ pub fn win_setwidth(width: c_int) {
     setwidth_win(width, cur_win());
 }
 
-pub unsafe fn win_setwidth_win(width: c_int, wp: *mut Window) {
+pub unsafe fn win_setwidth_win(width: c_int, window: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
-    setwidth_win(width, unsafe { Win::new(wp) });
+    setwidth_win(width, unsafe { Win::new(window) });
 }
 
 /// Give `wp` width `width`, moving the other windows around it to fit.
-pub(crate) fn setwidth_win(width: c_int, wp: Win) {
-    let mut wp = wp;
+pub(crate) fn setwidth_win(width: c_int, window: Win) {
+    let mut wp = window;
     // Always keep the current window at least one column wide, even when
     // 'winminwidth' is zero.
     let width = if wp.is_current() {

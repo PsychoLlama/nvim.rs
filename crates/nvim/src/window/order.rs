@@ -239,58 +239,59 @@ pub(crate) fn rotate(upwards: bool, count: c_int) {
     redraw_all(UPD_NOT_VALID);
 }
 
-pub unsafe fn win_splitmove(wp: *mut Window, size: c_int, flags: c_int) -> Result<(), Failed> {
+pub unsafe fn win_splitmove(window: *mut Window, size: c_int, flags: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live window.
-    splitmove(unsafe { Win::new(wp) }, size, flags)
+    splitmove(unsafe { Win::new(window) }, size, flags)
 }
 
-/// Take `wp` out of the layout and put it back in as a split given by `flags`,
+/// Take `window` out of the layout and put it back in as a split given by `flags`,
 /// from `win_splitmove()`. Restores the old layout on failure.
-pub(crate) fn splitmove(wp: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
-    let height = wp.w_height;
-    if is_only_window(wp, None) {
+pub(crate) fn splitmove(window: Win, size: c_int, flags: c_int) -> Result<(), Failed> {
+    let height = window.w_height;
+    if is_only_window(window, None) {
         return Ok(());
     }
     // SAFETY: a live window.
-    if is_autocmd_window(Some(wp)) || unsafe { check_split_disallowed(wp.raw()) } == FAIL {
+    if is_autocmd_window(Some(window)) || unsafe { check_split_disallowed(window.raw()) } == FAIL {
         return Err(Failed);
     }
 
     let mut dir = 0;
     let mut unflat_altfr = ptr::null_mut::<Frame>();
-    if wp.w_floating {
-        remove(wp, None);
+    if window.w_floating {
+        remove(window, None);
     } else {
         // Remove the window and frame from the tree of frames, but leave the
         // altframe unflattened so a failure can be undone.
         let (d, alt) = (&raw mut dir, &raw mut unflat_altfr);
         // SAFETY: a live window, and two out-parameters we own.
-        unsafe { winframe_remove(wp.raw(), d, ptr::null_mut(), alt) };
+        unsafe { winframe_remove(window.raw(), d, ptr::null_mut(), alt) };
         debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
-        remove(wp, None);
+        remove(window, None);
         last_status(false);
         comp_positions();
     }
 
     // SAFETY: a live window and the unflattened frame from above.
-    if unsafe { win_split_ins(size, flags, wp.raw(), dir, unflat_altfr) }.is_null() {
+    if unsafe { win_split_ins(size, flags, window.raw(), dir, unflat_altfr) }.is_null() {
         // Restore the window to its original position.
-        if !wp.w_floating {
+        if !window.w_floating {
             debug_assert!(!unflat_altfr.is_null(), "unflat_altfr != NULL");
             // SAFETY: as above.
-            unsafe { winframe_restore(wp.raw(), dir, unflat_altfr) };
+            unsafe { winframe_restore(window.raw(), dir, unflat_altfr) };
         }
-        append(wp.prev(), wp, None);
+        append(window.prev(), window, None);
         return Err(Failed);
     }
 
     // Keep the window's height when it was moved horizontally.
     // SAFETY: only compares the pointer against the window list.
-    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(wp.raw()) && !wp.w_floating {
-        setheight_win(height, wp);
+    if size == 0 && flags & WSP_VERT as c_int == 0 && win_valid(window.raw()) && !window.w_floating
+    {
+        setheight_win(height, window);
         if p_ea.get() != 0 {
             let cur = cur_win();
-            equal(Some(cur), cur == wp, 'v' as c_int);
+            equal(Some(cur), cur == window, 'v' as c_int);
         }
     }
     Ok(())

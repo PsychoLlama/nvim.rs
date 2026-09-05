@@ -27,8 +27,8 @@ use crate::window::state::skip_update_topline;
 use crate::winlayer::{Win, tab_windows};
 
 /// [`Win::update_topline`], for the callers still holding a raw window.
-pub fn update_topline(wp: Win) {
-    wp.update_topline();
+pub fn update_topline(window: Win) {
+    window.update_topline();
 }
 
 impl Win {
@@ -316,8 +316,8 @@ pub unsafe fn update_curswant() {
 }
 
 /// [`Win::check_cursor_moved`], for the callers still holding a raw window.
-pub fn check_cursor_moved(wp: Win) {
-    wp.check_cursor_moved();
+pub fn check_cursor_moved(window: Win) {
+    window.check_cursor_moved();
 }
 
 impl Win {
@@ -393,8 +393,8 @@ fn check_cursor_moved_win(mut win: Win) {
 
 /// [`Win::changed_window_setting`], for the callers still holding a raw
 /// window.
-pub fn changed_window_setting(wp: Win) {
-    wp.changed_window_setting();
+pub fn changed_window_setting(window: Win) {
+    window.changed_window_setting();
 }
 
 /// [`changed_window_setting`] for every window of every tab page.

@@ -94,9 +94,13 @@ pub(crate) unsafe fn ex_bunload(eap: *mut ExArg) {
 /// events are followed by the same three-part re-validation.
 ///
 /// # Safety
-/// `wp` must be a live window on entry. It need not survive the call: the
+/// `window` must be a live window on entry. It need not survive the call: the
 /// autocommands may close it, which is what `quit_was_cancelled` is for.
-pub(crate) unsafe fn before_quit_autocmds(wp: *mut Window, quit_all: bool, forceit: bool) -> bool {
+pub(crate) unsafe fn before_quit_autocmds(
+    window: *mut Window,
+    quit_all: bool,
+    forceit: bool,
+) -> bool {
     // `v:exitreason` is set for the autocommands to read, and cleared
     // again if the quit does not happen.
     if byte(unsafe { get_vim_var_str(Vv::Exitreason) }) == NUL {
@@ -108,12 +112,12 @@ pub(crate) unsafe fn before_quit_autocmds(wp: *mut Window, quit_all: bool, force
             ptr::null_mut(),
             ptr::null_mut(),
             false,
-            (*wp).w_buffer,
+            (*window).w_buffer,
         )
     };
-    // The buffer is read *through* `wp`, and only after `win_valid`
-    // has said `wp` is still there — QuitPre may have closed it.
-    if unsafe { quit_was_cancelled(wp, || (*wp).w_buffer) } {
+    // The buffer is read *through* `window`, and only after `win_valid`
+    // has said `window` is still there — QuitPre may have closed it.
+    if unsafe { quit_was_cancelled(window, || (*window).w_buffer) } {
         return true;
     }
 
@@ -126,7 +130,7 @@ pub(crate) unsafe fn before_quit_autocmds(wp: *mut Window, quit_all: bool, force
             false,
             curbuf.get(),
         );
-        if quit_was_cancelled(wp, || curbuf.get()) {
+        if quit_was_cancelled(window, || curbuf.get()) {
             return true;
         }
     }
@@ -139,11 +143,11 @@ pub(crate) unsafe fn before_quit_autocmds(wp: *mut Window, quit_all: bool, force
 /// **`buf` is a closure, and that is load-bearing.** The C's
 /// `!win_valid(wp) || curbuf_locked() || (wp->w_buffer->…)` reads the
 /// buffer only when the first two tests are false, because a QuitPre
-/// autocommand may have closed `wp` — and an *argument* would be evaluated
+/// autocommand may have closed `window` — and an *argument* would be evaluated
 /// before the call, which is a use-after-free ASan catches on
 /// `test_tabpage`.
-fn quit_was_cancelled(wp: *mut Window, buf: impl FnOnce() -> *mut Buffer) -> bool {
-    if win_valid(wp) && !curbuf_locked() {
+fn quit_was_cancelled(window: *mut Window, buf: impl FnOnce() -> *mut Buffer) -> bool {
+    if win_valid(window) && !curbuf_locked() {
         let buf = buf();
         if !(unsafe { (*buf).b_nwindows } == 1 && unsafe { (*buf).b_locked } > 0) {
             return false;

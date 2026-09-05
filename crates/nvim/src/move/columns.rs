@@ -39,8 +39,8 @@ impl Win {
 }
 
 /// [`Win::curs_columns`], for the callers still holding a raw window.
-pub fn curs_columns(wp: Win, may_scroll: c_int) {
-    wp.curs_columns(may_scroll != 0);
+pub fn curs_columns(window: Win, may_scroll: c_int) {
+    window.curs_columns(may_scroll != 0);
 }
 
 impl Win {
@@ -211,14 +211,14 @@ fn curs_columns_win(mut win: Win, may_scroll: bool) {
     win.w_valid |= WinValid::WCOL | WinValid::WROW | WinValid::VIRTCOL;
 }
 
-/// The screen position of the character at `pos` in window `wp`. The answers
+/// The screen position of the character at `pos` in window `window`. The answers
 /// are one-based, and zero when the character is not visible.
 ///
 /// # Safety
-/// `wp` must be a valid window, `pos` a position in its buffer, and the four
+/// `window` must be a valid window, `pos` a position in its buffer, and the four
 /// out-params must be writable.
 pub unsafe fn textpos2screenpos(
-    wp: *mut Window,
+    window: *mut Window,
     pos: *mut Pos,
     rowp: *mut c_int,
     scolp: *mut c_int,
@@ -227,7 +227,7 @@ pub unsafe fn textpos2screenpos(
     local: bool,
 ) {
     // SAFETY: the caller's promise.
-    let (win, pos) = unsafe { (Win::new(wp), PosRef::new(pos)) };
+    let (win, pos) = unsafe { (Win::new(window), PosRef::new(pos)) };
     let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) = (0, 0, 0);
     let mut coloff: ColNr = 0;
     let mut visible_row = false;
@@ -402,7 +402,7 @@ unsafe fn dict_add_nr(dict: *mut Dict, key: &CStr, value: c_int) {
 /// byte is answered.
 ///
 /// # Safety
-/// `wp` must be a valid window and `lnum` a line of its buffer.
+/// `window` must be a valid window and `lnum` a line of its buffer.
 unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
     // SAFETY: a live window and a line of its buffer.
     let offset = unsafe { vcol2col(win.raw(), lnum, vcol - 1, ::core::ptr::null_mut()) };

@@ -152,10 +152,10 @@ static foldendmarker: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut())
 static foldendmarkerlen: GlobalCell<size_t> = GlobalCell::new(0);
 
 /// A window's toplevel fold list.
-fn window_folds(mut wp: Win) -> FoldList {
+fn window_folds(mut window: Win) -> FoldList {
     // SAFETY: `w_folds` is initialised by `fold_init_win` when the window is
     // allocated and lives as long as the window does.
-    unsafe { FoldList::new(&raw mut wp.w_folds) }
+    unsafe { FoldList::new(&raw mut window.w_folds) }
 }
 
 /// Copy the folding state from window `wp_from` to window `wp_to`.
@@ -343,14 +343,14 @@ pub fn fold_info(win: Win, lnum: LineNr) -> FoldInfo {
     info
 }
 
-/// Whether 'foldmethod' in `wp` is non-empty and carries `c` at index `at`.
+/// Whether 'foldmethod' in `window` is non-empty and carries `c` at index `at`.
 ///
 /// The six predicates below are each one such test: the six values
 /// ("manual", "indent", "expr", "marker", "syntax", "diff") are told apart by
 /// a single byte in the first three, which is what upstream leans on too.
 ///
-fn foldmethod_byte_is(wp: Win, at: usize, c: u8) -> bool {
-    let fdm = wp.w_onebuf_opt.wo_fdm;
+fn foldmethod_byte_is(window: Win, at: usize, c: u8) -> bool {
+    let fdm = window.w_onebuf_opt.wo_fdm;
     // SAFETY: 'foldmethod' is a NUL-terminated option string, and the empty
     // check short-circuits before `at` is reached. Every legal value is at
     // least four bytes long, so `at <= 3` stays inside the string.
@@ -358,33 +358,33 @@ fn foldmethod_byte_is(wp: Win, at: usize, c: u8) -> bool {
 }
 
 /// Returns true if 'foldmethod' is "manual"
-pub fn foldmethod_is_manual(wp: Win) -> bool {
-    foldmethod_byte_is(wp, 3, b'u')
+pub fn foldmethod_is_manual(window: Win) -> bool {
+    foldmethod_byte_is(window, 3, b'u')
 }
 
 /// Returns true if 'foldmethod' is "indent"
-pub fn foldmethod_is_indent(wp: Win) -> bool {
-    foldmethod_byte_is(wp, 0, b'i')
+pub fn foldmethod_is_indent(window: Win) -> bool {
+    foldmethod_byte_is(window, 0, b'i')
 }
 
 /// Returns true if 'foldmethod' is "expr"
-pub fn foldmethod_is_expr(wp: Win) -> bool {
-    foldmethod_byte_is(wp, 1, b'x')
+pub fn foldmethod_is_expr(window: Win) -> bool {
+    foldmethod_byte_is(window, 1, b'x')
 }
 
 /// Returns true if 'foldmethod' is "marker"
-pub fn foldmethod_is_marker(wp: Win) -> bool {
-    foldmethod_byte_is(wp, 2, b'r')
+pub fn foldmethod_is_marker(window: Win) -> bool {
+    foldmethod_byte_is(window, 2, b'r')
 }
 
 /// Returns true if 'foldmethod' is "syntax"
-pub fn foldmethod_is_syntax(wp: Win) -> bool {
-    foldmethod_byte_is(wp, 0, b's')
+pub fn foldmethod_is_syntax(window: Win) -> bool {
+    foldmethod_byte_is(window, 0, b's')
 }
 
 /// Returns true if 'foldmethod' is "diff"
-pub fn foldmethod_is_diff(wp: Win) -> bool {
-    foldmethod_byte_is(wp, 0, b'd')
+pub fn foldmethod_is_diff(window: Win) -> bool {
+    foldmethod_byte_is(window, 0, b'd')
 }
 
 /// Remove all folding for window "win".
@@ -400,15 +400,16 @@ pub fn clear_folding(mut win: Win) {
 /// calling fold_mark_adjust().
 /// The changes in lines from top to bot (inclusive).
 ///
-pub fn fold_update(wp: Win, top: LineNr, bot: LineNr) {
-    if disable_fold_update.get() != 0 || State.get() & MODE_INSERT != 0 && !foldmethod_is_indent(wp)
+pub fn fold_update(window: Win, top: LineNr, bot: LineNr) {
+    if disable_fold_update.get() != 0
+        || State.get() & MODE_INSERT != 0 && !foldmethod_is_indent(window)
     {
         return;
     }
     if need_diff_redraw.get() {
         return;
     }
-    let folds = window_folds(wp);
+    let folds = window_folds(window);
     if !folds.is_empty() {
         // Every fold that starts inside the changed range may have changed
         // size, so its 'foldminlines' answer has to be worked out again.
@@ -423,11 +424,11 @@ pub fn fold_update(wp: Win, top: LineNr, bot: LineNr) {
             fold.set_small(None);
         }
     }
-    if foldmethod_is_indent(wp)
-        || foldmethod_is_expr(wp)
-        || foldmethod_is_marker(wp)
-        || foldmethod_is_diff(wp)
-        || foldmethod_is_syntax(wp)
+    if foldmethod_is_indent(window)
+        || foldmethod_is_expr(window)
+        || foldmethod_is_marker(window)
+        || foldmethod_is_diff(window)
+        || foldmethod_is_syntax(window)
     {
         // `fold_update_computed` runs 'foldexpr', which the user can
         // interrupt; a CTRL-C there must not leak out into whatever the
@@ -435,7 +436,7 @@ pub fn fold_update(wp: Win, top: LineNr, bot: LineNr) {
         let save_got_int = got_int.get();
         got_int.set(false);
         // SAFETY: a live window with a live buffer.
-        unsafe { fold_update_computed(wp, top, bot) };
+        unsafe { fold_update_computed(window, top, bot) };
         got_int.set(got_int.get() | save_got_int);
     }
 }
@@ -537,8 +538,8 @@ pub unsafe fn clone_fold_list(from: *mut GArray, to: *mut GArray) {
 
 /// Returns fold level at line number "lnum" in window "wp".
 ///
-fn fold_level_win(wp: Win, lnum: LineNr) -> c_int {
-    let mut folds = window_folds(wp);
+fn fold_level_win(window: Win, lnum: LineNr) -> c_int {
+    let mut folds = window_folds(window);
     let mut lnum_rel = lnum;
     let mut level = 0;
     while let Ok(i) = folds.find(lnum_rel) {
@@ -552,12 +553,12 @@ fn fold_level_win(wp: Win, lnum: LineNr) -> c_int {
 
 /// Check if the folds in window "wp" are invalid and update them if needed.
 ///
-fn checkupdate(mut wp: Win) {
-    if !wp.w_foldinvalid {
+fn checkupdate(mut window: Win) {
+    if !window.w_foldinvalid {
         return;
     }
-    fold_update(wp, 1, MAXLNUM as LineNr);
-    wp.w_foldinvalid = false;
+    fold_update(window, 1, MAXLNUM as LineNr);
+    window.w_foldinvalid = false;
 }
 
 /// Delete fold "idx" from fold list "folds".
@@ -640,11 +641,11 @@ pub unsafe fn delete_fold_recurse(gap: *mut GArray) {
 }
 
 /// Get the lowest 'foldlevel' value that makes the deepest nested fold in
-/// window `wp`.
+/// window `window`.
 ///
-pub fn deepest_fold_nesting(wp: Win) -> c_int {
-    checkupdate(wp);
-    deepest_nesting_of(window_folds(wp))
+pub fn deepest_fold_nesting(window: Win) -> c_int {
+    checkupdate(window);
+    deepest_nesting_of(window_folds(window))
 }
 
 /// How many levels of fold `folds` holds, counting itself.
@@ -666,13 +667,13 @@ fn deepest_nesting_of(folds: FoldList) -> c_int {
 /// `lnum_off` — offset for fold->top()
 ///
 /// # Safety
-/// `fold` must be a fold of `wp`'s tree at `lnum_off`.
-unsafe fn check_small(wp: Win, fold: FoldRef, lnum_off: LineNr) {
+/// `fold` must be a fold of `window`'s tree at `lnum_off`.
+unsafe fn check_small(window: Win, fold: FoldRef, lnum_off: LineNr) {
     if fold.small().is_some() {
         return;
     }
     forget_small_flags(fold.nested());
-    let foldminlines = wp.w_onebuf_opt.wo_fml;
+    let foldminlines = window.w_onebuf_opt.wo_fml;
     if fold.len() as OptInt > foldminlines {
         fold.set_small(Some(false));
         return;
@@ -680,7 +681,7 @@ unsafe fn check_small(wp: Win, fold: FoldRef, lnum_off: LineNr) {
     let mut count = 0;
     for n in 0..fold.len() {
         // SAFETY: the line is inside the fold, hence inside the buffer.
-        count += unsafe { plines_win_nofold(wp, fold.top() + lnum_off + n) };
+        count += unsafe { plines_win_nofold(window, fold.top() + lnum_off + n) };
         if count as OptInt > foldminlines {
             fold.set_small(Some(false));
             return;

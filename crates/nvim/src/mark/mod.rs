@@ -329,9 +329,9 @@ pub unsafe fn setmark_pos(
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn mark_forget_file(wp: *mut Window, fnum: c_int) {
+pub unsafe fn mark_forget_file(window: *mut Window, fnum: c_int) {
     // SAFETY: the caller promised a live window.
-    let mut wp = unsafe { Win::new(wp) };
+    let mut wp = unsafe { Win::new(window) };
     unsafe { mark_jumplist_forget_file(wp.raw(), fnum) };
     // Backwards, so removing an entry cannot skip the one after it.
     for i in (0..wp.w_tagstacklen).rev() {
@@ -431,18 +431,18 @@ pub unsafe fn mark_view_restore(fmp: *mut FileMark) {
 }
 
 /// # Safety
-/// `wp` must be a live window.
-pub unsafe fn mark_view_make(wp: *const Window, pos: Pos) -> FileMarkView {
+/// `window` must be a live window.
+pub unsafe fn mark_view_make(window: *const Window, pos: Pos) -> FileMarkView {
     // SAFETY: the caller promised a live window.
-    mark_view_make_at(unsafe { Win::new(wp.cast_mut()) }, pos)
+    mark_view_make_at(unsafe { Win::new(window.cast_mut()) }, pos)
 }
 
 /// The view [`mark_view_make`] records: how far below the window's topline the
 /// position sits, and where the window was scrolled to sideways.
-fn mark_view_make_at(wp: Win, pos: Pos) -> FileMarkView {
+fn mark_view_make_at(window: Win, pos: Pos) -> FileMarkView {
     FileMarkView {
-        topline_offset: pos.lnum - wp.w_topline,
-        skipcol: wp.w_skipcol,
+        topline_offset: pos.lnum - window.w_topline,
+        skipcol: window.w_skipcol,
     }
 }
 

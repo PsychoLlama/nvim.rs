@@ -752,12 +752,12 @@ pub unsafe fn resettitle() {
 
 /// The relative cursor position -- "All", "Top", "Bot" or a percentage --
 /// into `buf`.
-pub unsafe fn get_rel_pos(wp: Win, buf: *mut c_char, buflen: c_int) -> c_int {
+pub unsafe fn get_rel_pos(window: Win, buf: *mut c_char, buflen: c_int) -> c_int {
     // At least three characters are needed to write anything.
     if buflen < 3 {
         return 0;
     }
-    let win = wp;
+    let win = window;
     let room = buflen as size_t;
 
     // The number of lines above the window.
@@ -796,7 +796,7 @@ pub unsafe fn get_rel_pos(wp: Win, buf: *mut c_char, buflen: c_int) -> c_int {
 
 /// Append "(2 of 8)" to `buf`, when more than one file is being edited.
 /// Answers how many characters that took.
-pub unsafe fn append_arg_number(wp: Win, buf: *mut c_char, buflen: size_t) -> c_int {
+pub unsafe fn append_arg_number(window: Win, buf: *mut c_char, buflen: size_t) -> c_int {
     // Upstream asks the CURRENT window for the argument list even when
     // reporting on another one.
     // SAFETY: the current window's argument list is live.
@@ -805,7 +805,7 @@ pub unsafe fn append_arg_number(wp: Win, buf: *mut c_char, buflen: size_t) -> c_
         // Nothing to do.
         return 0;
     }
-    let win = wp;
+    let win = window;
     let fmt = if win.w_arg_idx_invalid {
         tr(c" ((%d) of %d)")
     } else {

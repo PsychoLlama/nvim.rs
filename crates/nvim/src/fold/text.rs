@@ -44,7 +44,7 @@ use crate::options::kWinOptFoldtext;
 /// # Safety
 /// `buf` must be writable for [`FOLD_TEXT_LEN`] bytes, and `vt` writable.
 pub unsafe fn get_foldtext(
-    wp: Win,
+    window: Win,
     lnum: LineNr,
     lnume: LineNr,
     foldinfo: FoldInfo,
@@ -60,7 +60,7 @@ pub unsafe fn get_foldtext(
     static last_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     let save_did_emsg = did_emsg.get();
     if last_wp.get().is_null()
-        || last_wp.get() != wp.raw()
+        || last_wp.get() != window.raw()
         || last_lnum.get() > lnum
         || last_lnum.get() == 0
     {
@@ -69,7 +69,7 @@ pub unsafe fn get_foldtext(
     if !got_fdt_error.get() {
         did_emsg.set(0);
     }
-    let win = wp;
+    let win = window;
     // SAFETY: 'foldtext' is a NUL-terminated option string.
     if unsafe { *win.w_onebuf_opt.wo_fdt } as c_int != NUL {
         let mut dashes: [c_char; 22] = [0; 22];
@@ -85,11 +85,11 @@ pub unsafe fn get_foldtext(
         if !got_fdt_error.get() {
             let save_curwin = curwin.get();
             let saved_sctx = current_sctx.get();
-            curwin.set(wp.raw());
+            curwin.set(window.raw());
             curbuf.set(win.w_buffer);
             current_sctx.set(win.w_onebuf_opt.wo_script_ctx[kWinOptFoldtext as usize]);
             let no_emsg = Suppress::emsg();
-            let mut obj: Object = unsafe { eval_foldtext(wp.raw()) };
+            let mut obj: Object = unsafe { eval_foldtext(window.raw()) };
             if let Object::Array(chunks) = obj {
                 // A list of `[text, hl]` chunks: the caller draws them,
                 // and the returned text is empty.
@@ -116,7 +116,7 @@ pub unsafe fn get_foldtext(
             current_sctx.set(saved_sctx);
         }
         last_lnum.set(lnum);
-        last_wp.set(wp.raw());
+        last_wp.set(window.raw());
         unsafe { set_vim_var_string(Vv::Folddashes, ptr::null(), -1 as ptrdiff_t) };
         if did_emsg.get() == 0 && save_did_emsg != 0 {
             did_emsg.set(save_did_emsg);

@@ -24,11 +24,11 @@ impl Cells {
     /// `'showbreak'`.
     ///
     /// # Safety
-    /// `wp` must be live and `f` must hold the caller's frame.
+    /// `window` must be live and `f` must hold the caller's frame.
     pub(super) unsafe fn draw_columns(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         f: &LineFrame,
     ) -> Step {
         // SAFETY: the caller's window and frame.
@@ -39,12 +39,12 @@ impl Cells {
         }
         debug_assert!(wlv.off == 0);
 
-        if wp.raw() == cmdwin_win.get() {
+        if window.raw() == cmdwin_win.get() {
             unsafe {
                 wlv.draw_col_fill(
                     schar_from_ascii(cmdwin_type.get() as u8),
                     1,
-                    win_hl_attr(wp.raw(), HLF_AT),
+                    win_hl_attr(window.raw(), HLF_AT),
                 )
             };
         }
@@ -68,40 +68,40 @@ impl Cells {
             let at = self.byte_col();
             unsafe {
                 wlv.draw_statuscol(
-                    wp,
+                    window,
                     wlv.row - wlv.startrow - wlv.filler_lines,
                     f.col_rows,
                     f.statuscol,
                 )
             };
-            if wp.w_redr_statuscol {
+            if window.w_redr_statuscol {
                 return Step::Done;
             }
             if self.draw_text {
                 // Evaluating 'statuscolumn' may have freed the line.
-                unsafe { self.refetch_line(wp, wlv.lnum, at) };
+                unsafe { self.refetch_line(window, wlv.lnum, at) };
             }
         } else {
-            unsafe { wlv.draw_foldcolumn(wp) };
+            unsafe { wlv.draw_foldcolumn(window) };
             // `w_scwidth` is zero when 'signcolumn' is "number".
-            for sign_idx in 0..wp.w_scwidth {
-                unsafe { wlv.draw_sign(false, wp, sign_idx) };
+            for sign_idx in 0..window.w_scwidth {
+                unsafe { wlv.draw_sign(false, window, sign_idx) };
             }
-            unsafe { wlv.draw_lnum_col(wp) };
+            unsafe { wlv.draw_lnum_col(window) };
         }
 
         self.text_start_col = wlv.off;
 
         if f.col_rows > 0 {
-            return unsafe { self.columns_only(wlv, wp, f) };
+            return unsafe { self.columns_only(wlv, window, f) };
         }
 
-        if !wp.w_briopt_sbr {
-            unsafe { wlv.handle_breakindent(wp) };
+        if !window.w_briopt_sbr {
+            unsafe { wlv.handle_breakindent(window) };
         }
-        unsafe { wlv.handle_showbreak_and_filler(wp) };
-        if wp.w_briopt_sbr {
-            unsafe { wlv.handle_breakindent(wp) };
+        unsafe { wlv.handle_showbreak_and_filler(window) };
+        if window.w_briopt_sbr {
+            unsafe { wlv.handle_breakindent(window) };
         }
 
         wlv.col = wlv.off;
@@ -114,7 +114,7 @@ impl Cells {
             // 'smoothscroll'.
             unsafe {
                 decor_redraw_col(
-                    wp.raw(),
+                    window.raw(),
                     self.byte_col() - 1,
                     wlv.off,
                     true,
@@ -134,17 +134,17 @@ impl Cells {
     /// Finish a row when only the info columns are being redrawn.
     ///
     /// # Safety
-    /// `wp` must be live and `f` must hold the caller's frame.
+    /// `window` must be live and `f` must hold the caller's frame.
     pub(super) unsafe fn columns_only(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         f: &LineFrame,
     ) -> Step {
         // SAFETY: the caller's window and frame.
         unsafe {
             wlv_put_linebuf(
-                wp,
+                window,
                 wlv,
                 wlv.off.min(self.view_width),
                 false,
@@ -157,10 +157,10 @@ impl Cells {
         // still filler.
         let more_rows = wlv.row + 1 - wlv.startrow < f.col_rows
             && (unsafe { (*f.statuscol).draw }
-                || unsafe { win_hl_attr(wp.raw(), HLF_LNA) }
-                    != unsafe { win_hl_attr(wp.raw(), HLF_N) }
-                || unsafe { win_hl_attr(wp.raw(), HLF_LNB) }
-                    != unsafe { win_hl_attr(wp.raw(), HLF_N) });
+                || unsafe { win_hl_attr(window.raw(), HLF_LNA) }
+                    != unsafe { win_hl_attr(window.raw(), HLF_N) }
+                || unsafe { win_hl_attr(window.raw(), HLF_LNB) }
+                    != unsafe { win_hl_attr(window.raw(), HLF_N) });
         if !more_rows && wlv.filler_todo <= 0 {
             return Step::Done;
         }
@@ -170,7 +170,7 @@ impl Cells {
         }
         wlv.filler_todo -= 1;
         self.virt_line_index = -1;
-        if wlv.filler_todo == 0 && (wp.w_botfill || !self.draw_text) {
+        if wlv.filler_todo == 0 && (window.w_botfill || !self.draw_text) {
             return Step::Done;
         }
         // Deliberately not `start_line`: the line buffer already holds
@@ -183,16 +183,16 @@ impl Cells {
     /// Is the screen row full, with more of the line still to come?
     ///
     /// # Safety
-    /// `wp` must be a live window and the loop's pointers readable.
-    pub(super) unsafe fn row_is_full(&self, wlv: &WinLineVars, wp: Win) -> bool {
+    /// `window` must be a live window and the loop's pointers readable.
+    pub(super) unsafe fn row_is_full(&self, wlv: &WinLineVars, window: Win) -> bool {
         // SAFETY: the caller's window and the loop's own pointers.
         wlv.col >= self.view_width
             && (!self.has_foldtext || wlv.filler_todo > 0)
             && (wlv.col <= self.left_columns_width
                 || unsafe { *self.ptr } as ::core::ffi::c_int != NUL
                 || wlv.filler_todo > 0
-                || (wp.w_onebuf_opt.wo_list != 0
-                    && wp.w_p_lcs_chars.eol != NUL as ScreenChar
+                || (window.w_onebuf_opt.wo_list != 0
+                    && window.w_p_lcs_chars.eol != NUL as ScreenChar
                     && self.lcs_eol_todo)
                 || (wlv.extra_todo != 0
                     && (wlv.extra_fill != NUL as ScreenChar
@@ -204,24 +204,24 @@ impl Cells {
     /// Hand the finished screen row to the grid and set up the next one.
     ///
     /// # Safety
-    /// `wp`, `buf`, `f` and `grid` must be live.
+    /// `window`, `buf`, `f` and `grid` must be live.
     pub(super) unsafe fn finish_screen_line(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         buf: *mut Buffer,
         f: &LineFrame,
         grid: GridView,
     ) -> Step {
         let mut line = linebuf();
         // SAFETY: the caller's window, buffer, frame and grid.
-        let grid_width = unsafe { (*wp.w_grid.target).cols };
+        let grid_width = unsafe { (*window.w_grid.target).cols };
         let wrap = self.is_wrapped                        // wrapping, not a folded line
             && wlv.filler_todo <= 0                       // not drawing filler
             && self.lcs_eol_todo                          // the "eol" is still to come
             && wlv.row != f.endrow - 1                    // not the last row shown
             && self.view_width == grid_width              // the window spans its grid
-            && wp.w_onebuf_opt.wo_rl == 0; // not right-to-left
+            && window.w_onebuf_opt.wo_rl == 0; // not right-to-left
 
         let mut draw_col = wlv.col - wlv.boguscols;
         let span = wlv.off as usize..(wlv.off + self.view_width - draw_col) as usize;
@@ -255,19 +255,19 @@ impl Cells {
                     self.view_width,
                     0,
                     if self.virt_line_flags & kVLScroll as ::core::ffi::c_int != 0 {
-                        wp.w_leftcol
+                        window.w_leftcol
                     } else {
                         0
                     },
                 )
             };
         } else if wlv.filler_todo <= 0 {
-            draw_col = unsafe { draw_virt_text(wp, buf, self.text_start_col, draw_col, wlv) };
+            draw_col = unsafe { draw_virt_text(window, buf, self.text_start_col, draw_col, wlv) };
         }
 
         unsafe {
             wlv_put_linebuf(
-                wp,
+                window,
                 wlv,
                 draw_col,
                 true,
@@ -300,15 +300,15 @@ impl Cells {
         if wlv.col <= self.left_columns_width {
             unsafe {
                 win_draw_end(
-                    wp,
+                    window,
                     schar_from_ascii(b'@'),
                     true,
                     wlv.row,
-                    wp.w_view_height,
+                    window.w_view_height,
                     HLF_AT,
                 )
             };
-            set_empty_rows(unsafe { Win::new(wp.raw()) }, wlv.row);
+            set_empty_rows(unsafe { Win::new(window.raw()) }, wlv.row);
             wlv.row = f.endrow;
         }
         // The line got too long for the screen.
@@ -317,9 +317,9 @@ impl Cells {
             return Step::Done;
         }
 
-        unsafe { wlv.start_line(wp) };
+        unsafe { wlv.start_line(window) };
         self.columns_todo = true;
-        self.lcs_prec_todo = wp.w_p_lcs_chars.prec;
+        self.lcs_prec_todo = window.w_p_lcs_chars.prec;
         if wlv.filler_todo <= 0 {
             wlv.need_showbreak = true;
         }
@@ -336,7 +336,7 @@ impl Cells {
         self.virt_line_flags = 0;
         // The filler lines are below the last line of the file, or there
         // is no text to draw for this line.
-        if wlv.filler_todo == 0 && (wp.w_botfill || !self.draw_text) {
+        if wlv.filler_todo == 0 && (window.w_botfill || !self.draw_text) {
             return Step::Done;
         }
         Step::Go
@@ -347,11 +347,11 @@ impl Cells {
     /// texts and hand the row to the grid.
     ///
     /// # Safety
-    /// `wp`, `buf` and `f` must be live.
+    /// `window`, `buf` and `f` must be live.
     pub(super) unsafe fn finish_line(
         &mut self,
         wlv: &mut WinLineVars,
-        wp: Win,
+        window: Win,
         buf: *mut Buffer,
         f: &LineFrame,
     ) {
@@ -360,7 +360,7 @@ impl Cells {
         // The line may end left of the left margin.
         wlv.vcol = wlv
             .vcol
-            .max(self.start_vcol + wlv.col - unsafe { win_col_off(wp.raw()) });
+            .max(self.start_vcol + wlv.col - unsafe { win_col_off(window.raw()) });
         // Drop the bogus columns: 'cursorcolumn' wants drawing all the way
         // to the right edge.
         wlv.col -= wlv.boguscols;
@@ -373,7 +373,7 @@ impl Cells {
         if self.has_decor {
             unsafe {
                 decor_redraw_eol(
-                    wp.raw(),
+                    window.raw(),
                     wlv.decor,
                     &raw mut wlv.line_attr,
                     wlv.col + eol_skip,
@@ -387,19 +387,19 @@ impl Cells {
             line.vcols_mut()[(wlv.off + (i - wlv.col)) as usize] = wlv.vcol + (i - wlv.col);
         }
 
-        if (wp.w_onebuf_opt.wo_cuc != 0
-            && wp.w_virtcol >= wlv.hl_vcol() - self.eol_extra_cell
-            && (wp.w_virtcol as ptrdiff_t)
+        if (window.w_onebuf_opt.wo_cuc != 0
+            && window.w_virtcol >= wlv.hl_vcol() - self.eol_extra_cell
+            && (window.w_virtcol as ptrdiff_t)
                 < self.view_width as ptrdiff_t * (wlv.row - wlv.startrow + 1) as ptrdiff_t
                     + self.start_vcol as ptrdiff_t
-            && wlv.lnum != wp.w_cursor.lnum)
+            && wlv.lnum != window.w_cursor.lnum)
             || !wlv.color_cols.is_null()
             || wlv.line_attr_lowprio != 0
             || wlv.line_attr != 0
             || wlv.diff_hlf != HLF_NONE
-            || !unsafe { (*wp.w_buffer).terminal }.is_null()
+            || !unsafe { (*window.w_buffer).terminal }.is_null()
         {
-            unsafe { self.fill_past_eol(wlv, wp, f) };
+            unsafe { self.fill_past_eol(wlv, window, f) };
         }
 
         if self.fold_vt.size > 0 {
@@ -415,13 +415,13 @@ impl Cells {
                 )
             };
         }
-        wlv.col = unsafe { draw_virt_text(wp, buf, self.text_start_col, wlv.col, wlv) };
+        wlv.col = unsafe { draw_virt_text(window, buf, self.text_start_col, wlv.col, wlv) };
         // SLF_INC_VCOL fills grid->vcols[] with increasing columns, so
         // that "curswant" (or "coladd" under 'virtualedit') is right when
         // the user clicks past the end of the line.
         unsafe {
             wlv_put_linebuf(
-                wp,
+                window,
                 wlv,
                 wlv.col,
                 true,
@@ -444,25 +444,31 @@ impl Cells {
     /// Draw the blanks past the end of the line that still carry a highlight.
     ///
     /// # Safety
-    /// `wp` and `f` must be live.
-    pub(super) unsafe fn fill_past_eol(&mut self, wlv: &mut WinLineVars, wp: Win, f: &LineFrame) {
+    /// `window` and `f` must be live.
+    pub(super) unsafe fn fill_past_eol(
+        &mut self,
+        wlv: &mut WinLineVars,
+        window: Win,
+        f: &LineFrame,
+    ) {
         let mut line = linebuf();
         // SAFETY: the caller's window and frame.
-        let mut rightmost_vcol = unsafe { get_rightmost_vcol(wp, wlv.color_cols) };
-        let cuc_attr = unsafe { win_hl_attr(wp.raw(), HLF_CUC) };
-        let mc_attr = unsafe { win_hl_attr(wp.raw(), HLF_MC) };
+        let mut rightmost_vcol = unsafe { get_rightmost_vcol(window, wlv.color_cols) };
+        let cuc_attr = unsafe { win_hl_attr(window.raw(), HLF_CUC) };
+        let mc_attr = unsafe { win_hl_attr(window.raw(), HLF_MC) };
 
         if wlv.diff_hlf == HLF_TXD || wlv.diff_hlf == HLF_TXA {
             wlv.diff_hlf = HLF_CHD;
-            unsafe { wlv.set_line_attr_for_diff(wp) };
+            unsafe { wlv.set_line_attr_for_diff(window) };
         }
         let diff_attr = if wlv.diff_hlf != HLF_NONE {
-            unsafe { win_hl_attr(wp.raw(), wlv.diff_hlf) }
+            unsafe { win_hl_attr(window.raw(), wlv.diff_hlf) }
         } else {
             0
         };
         let base_attr = unsafe { hl_combine_attr(wlv.line_attr_lowprio, diff_attr) };
-        if base_attr != 0 || wlv.line_attr != 0 || !unsafe { (*wp.w_buffer).terminal }.is_null() {
+        if base_attr != 0 || wlv.line_attr != 0 || !unsafe { (*window.w_buffer).terminal }.is_null()
+        {
             // Something applies to the whole row, so there is no column to
             // stop at.
             rightmost_vcol = ::core::ffi::c_int::MAX;
@@ -473,15 +479,15 @@ impl Cells {
             unsafe { wlv.advance_color_col(wlv.hl_vcol()) };
 
             let mut col_attr = base_attr;
-            if wp.w_onebuf_opt.wo_cuc != 0
-                && wlv.hl_vcol() == wp.w_virtcol
-                && wlv.lnum != wp.w_cursor.lnum
+            if window.w_onebuf_opt.wo_cuc != 0
+                && wlv.hl_vcol() == window.w_virtcol
+                && wlv.lnum != window.w_cursor.lnum
             {
                 col_attr = unsafe { hl_combine_attr(col_attr, cuc_attr) };
             } else if !wlv.color_cols.is_null() && wlv.hl_vcol() == unsafe { *wlv.color_cols } {
                 col_attr = unsafe { hl_combine_attr(col_attr, mc_attr) };
             }
-            if !unsafe { (*wp.w_buffer).terminal }.is_null()
+            if !unsafe { (*window.w_buffer).terminal }.is_null()
                 && wlv.vcol < TERM_ATTRS_MAX as ::core::ffi::c_int
             {
                 col_attr =

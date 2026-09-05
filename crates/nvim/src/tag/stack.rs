@@ -68,13 +68,13 @@ pub(crate) struct Push {
 }
 
 impl TagStack {
-    /// Borrow the tag stack of `wp`.
+    /// Borrow the tag stack of `window`.
     ///
     /// # Safety
-    /// Nothing else may be reaching into `wp`'s tag stack for as long as
+    /// Nothing else may be reaching into `window`'s tag stack for as long as
     /// this lives.
-    pub(crate) unsafe fn of(wp: Win) -> Self {
-        TagStack { win: wp }
+    pub(crate) unsafe fn of(window: Win) -> Self {
+        TagStack { win: window }
     }
 
     /// How many entries hold anything.
@@ -318,13 +318,13 @@ unsafe fn tag_details(tag: &Taggy, retdict: *mut Dict) {
     unsafe { tv_list_append_number(pos, mark.mark.coladd as VarNumber) };
 }
 
-/// `gettagstack()` — describe the tag stack of `wp` into `retdict`.
+/// `gettagstack()` — describe the tag stack of `window` into `retdict`.
 ///
 /// # Safety
 /// `retdict` must be a live dict.
-pub unsafe fn get_tagstack(wp: Win, retdict: *mut Dict) {
+pub unsafe fn get_tagstack(window: Win, retdict: *mut Dict) {
     // SAFETY: the dict is live, and nothing else holds the window's stack.
-    let mut stack = unsafe { TagStack::of(wp) };
+    let mut stack = unsafe { TagStack::of(window) };
     unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
     unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as VarNumber) };
 
@@ -337,14 +337,14 @@ pub unsafe fn get_tagstack(wp: Win, retdict: *mut Dict) {
     }
 }
 
-/// `settagstack()` — replace, append to or truncate the tag stack of `wp`.
+/// `settagstack()` — replace, append to or truncate the tag stack of `window`.
 ///
 /// `action` is `'a'` to append, `'r'` to replace and `'t'` to truncate.
 /// Answers `Err` with the error already reported.
 ///
 /// # Safety
 /// `d` must be a live dict.
-pub unsafe fn set_tagstack(wp: Win, d: *const Dict, action: c_int) -> Result<(), Failed> {
+pub unsafe fn set_tagstack(window: Win, d: *const Dict, action: c_int) -> Result<(), Failed> {
     // SAFETY: the dict is live for the whole call, and nothing else holds
     // the window's tag stack.
     if tfu_in_use.get() {
@@ -363,7 +363,7 @@ pub unsafe fn set_tagstack(wp: Win, d: *const Dict, action: c_int) -> Result<(),
         items = unsafe { (*di).di_tv.vval.v_list };
     }
 
-    let mut stack = unsafe { TagStack::of(wp) };
+    let mut stack = unsafe { TagStack::of(window) };
     if let Some(di) = unsafe { find(d, c"curidx") } {
         stack.set_curidx(unsafe { tv_get_number(&raw mut (*di).di_tv) } as c_int - 1);
     }

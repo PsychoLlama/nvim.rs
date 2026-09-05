@@ -42,8 +42,8 @@ fn lineoff_at(lnum: LineNr) -> LineOff {
 }
 
 /// [`Win::scroll_cursor_top`], for the callers still holding a raw window.
-pub fn scroll_cursor_top(wp: Win, min_scroll: c_int, always: c_int) {
-    wp.scroll_cursor_top(min_scroll, always != 0);
+pub fn scroll_cursor_top(window: Win, min_scroll: c_int, always: c_int) {
+    window.scroll_cursor_top(min_scroll, always != 0);
 }
 
 impl Win {
@@ -153,8 +153,8 @@ impl Win {
 }
 
 /// [`Win::set_empty_rows`], for the callers still holding a raw window.
-pub fn set_empty_rows(wp: Win, used: c_int) {
-    wp.set_empty_rows(used);
+pub fn set_empty_rows(window: Win, used: c_int) {
+    window.set_empty_rows(used);
 }
 
 impl Win {
@@ -182,8 +182,8 @@ impl Win {
 }
 
 /// [`Win::scroll_cursor_bot`], for the callers still holding a raw window.
-pub fn scroll_cursor_bot(wp: Win, min_scroll: c_int, set_topbot: bool) {
-    wp.scroll_cursor_bot(min_scroll, set_topbot);
+pub fn scroll_cursor_bot(window: Win, min_scroll: c_int, set_topbot: bool) {
+    window.scroll_cursor_bot(min_scroll, set_topbot);
 }
 
 impl Win {
@@ -420,8 +420,8 @@ impl Win {
 }
 
 /// [`Win::scroll_cursor_halfway`], for the callers still holding a raw window.
-pub fn scroll_cursor_halfway(wp: Win, atend: bool, prefer_above: bool) {
-    wp.scroll_cursor_halfway(atend, prefer_above);
+pub fn scroll_cursor_halfway(window: Win, atend: bool, prefer_above: bool) {
+    window.scroll_cursor_halfway(atend, prefer_above);
 }
 
 impl Win {
@@ -569,8 +569,8 @@ impl Win {
 }
 
 /// [`Win::cursor_correct`], for the callers still holding a raw window.
-pub fn cursor_correct(wp: Win) {
-    wp.cursor_correct();
+pub fn cursor_correct(window: Win) {
+    window.cursor_correct();
 }
 
 impl Win {

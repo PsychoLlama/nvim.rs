@@ -162,8 +162,8 @@ fn alloc_firstwin(oldwin: Option<Win>) -> Result<(), Failed> {
 }
 
 /// Give `wp` a fresh leaf frame of its own.
-pub(crate) fn attach_frame(wp: Win) -> FrameRef {
-    let mut wp = wp;
+pub(crate) fn attach_frame(window: Win) -> FrameRef {
+    let mut wp = window;
     // SAFETY: a fresh zeroed `Frame`, which is live from here on.
     let mut frp = unsafe { FrameRef::new(zeroed::<Frame>()) };
     wp.w_frame = frp.raw();
@@ -269,15 +269,15 @@ pub unsafe fn free_wininfo(wip: *mut WinInfo) {
     free(wip);
 }
 
-pub unsafe fn win_free(wp: *mut Window, tabpage: *mut Tabpage) {
+pub unsafe fn win_free(window: *mut Window, tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
-    unsafe { free_win(Win::new(wp), TabPage::from_raw(tabpage)) };
+    unsafe { free_win(Win::new(window), TabPage::from_raw(tabpage)) };
 }
 
 /// Take `wp` off the window list and free everything hanging off it.
-fn free_win(wp: Win, tabpage: Option<TabPage>) {
-    let mut wp = wp;
+fn free_win(window: Win, tabpage: Option<TabPage>) {
+    let mut wp = window;
     // SAFETY: a live window; reduces the reference count to its argument list.
     clear_folding(wp);
     // SAFETY: the window's own argument list.
@@ -357,17 +357,17 @@ fn free_win(wp: Win, tabpage: Option<TabPage>) {
     unsafe { unblock_autocmds() };
 }
 
-/// Drop `wp` from `buf`'s remembered positions, and with it the older of the
+/// Drop `window` from `buf`'s remembered positions, and with it the older of the
 /// two entries that would then have no window: only the first such entry is
 /// ever used again.
-fn forget_wininfo(buf: Buf, wp: Win) {
+fn forget_wininfo(buf: Buf, window: Win) {
     let mut buf = buf;
     let mut infos = WinInfos::of(&mut buf);
     let len = infos.entries_mut().len();
     let mut pos_wip = len;
     let mut pos_null = len;
     for (i, entry) in infos.entries_mut().iter().enumerate() {
-        if entry.window() == wp.raw() {
+        if entry.window() == window.raw() {
             pos_wip = i;
         } else if entry.window().is_null() {
             pos_null = i;
@@ -379,7 +379,7 @@ fn forget_wininfo(buf: Buf, wp: Win) {
     let entry = &mut infos.entries_mut()[pos_wip];
     entry.wi_win = ptr::null_mut::<Window>();
     // Discard saved options if the style is minimal.
-    if wp.w_config.style == kWinStyleMinimal && entry.wi_optset {
+    if window.w_config.style == kWinStyleMinimal && entry.wi_optset {
         clear_options(entry.opt());
         // SAFETY: the entry's own fold array.
         unsafe { delete_fold_recurse(entry.folds()) };
@@ -393,14 +393,14 @@ fn forget_wininfo(buf: Buf, wp: Win) {
     }
 }
 
-pub unsafe fn win_free_grid(wp: *mut Window, reinit: bool) {
+pub unsafe fn win_free_grid(window: *mut Window, reinit: bool) {
     // SAFETY: the caller's promise -- a live window.
-    free_grid(unsafe { Win::new(wp) }, reinit);
+    free_grid(unsafe { Win::new(window) }, reinit);
 }
 
 /// Give up the window's own grid, optionally leaving it zeroed for reuse.
-pub(crate) fn free_grid(wp: Win, reinit: bool) {
-    let mut wp = wp;
+pub(crate) fn free_grid(window: Win, reinit: bool) {
+    let mut wp = window;
     if wp.w_grid_alloc.handle != 0 && ui_has(kUIMultigrid) {
         ui_call_grid_destroy(wp.w_grid_alloc.handle as Integer);
     }
@@ -413,13 +413,13 @@ pub(crate) fn free_grid(wp: Win, reinit: bool) {
 // ---------------------------------------------------------------------------
 // The lists
 
-pub unsafe fn win_append(after: *mut Window, wp: *mut Window, tabpage: *mut Tabpage) {
+pub unsafe fn win_append(after: *mut Window, window: *mut Window, tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- live windows (`after` may be null) and a
     // live tab page or null.
     unsafe {
         append(
             Win::from_raw(after),
-            Win::new(wp),
+            Win::new(window),
             TabPage::from_raw(tabpage),
         )
     };
@@ -427,8 +427,8 @@ pub unsafe fn win_append(after: *mut Window, wp: *mut Window, tabpage: *mut Tabp
 
 /// Put `wp` in the window list of `tabpage` (or of the current tab page) after
 /// `after`, or at the front when there is no `after`.
-pub(crate) fn append(after: Option<Win>, wp: Win, tabpage: Option<TabPage>) {
-    let mut wp = wp;
+pub(crate) fn append(after: Option<Win>, window: Win, tabpage: Option<TabPage>) {
+    let mut wp = window;
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
@@ -451,33 +451,33 @@ pub(crate) fn append(after: Option<Win>, wp: Win, tabpage: Option<TabPage>) {
     }
 }
 
-pub unsafe fn win_remove(wp: *mut Window, tabpage: *mut Tabpage) {
+pub unsafe fn win_remove(window: *mut Window, tabpage: *mut Tabpage) {
     // SAFETY: the caller's promise -- a live window and a live tab page or
     // null.
-    unsafe { remove(Win::new(wp), TabPage::from_raw(tabpage)) };
+    unsafe { remove(Win::new(window), TabPage::from_raw(tabpage)) };
 }
 
-/// Take `wp` out of the window list of `tabpage` (or of the current tab page).
-pub(crate) fn remove(wp: Win, tabpage: Option<TabPage>) {
+/// Take `window` out of the window list of `tabpage` (or of the current tab page).
+pub(crate) fn remove(window: Win, tabpage: Option<TabPage>) {
     debug_assert!(
         tabpage.is_none_or(|tp| !tp.is_current()),
         "tp == NULL || tp != curtab"
     );
-    let (prev, next) = (wp.prev(), wp.next());
+    let (prev, next) = (window.prev(), window.next());
     match prev {
-        Some(mut prev) => prev.w_next = wp.w_next,
+        Some(mut prev) => prev.w_next = window.w_next,
         None => {
-            set_first(tabpage, wp.w_next);
+            set_first(tabpage, window.w_next);
             // Unlike `win_append`, upstream keeps the current tab page's own
             // copy of the head in step here as well.
-            sync_tab_first(tabpage, wp.w_next);
+            sync_tab_first(tabpage, window.w_next);
         }
     }
     match next {
-        Some(mut next) => next.w_prev = wp.w_prev,
+        Some(mut next) => next.w_prev = window.w_prev,
         None => {
-            set_last(tabpage, wp.w_prev);
-            sync_tab_last(tabpage, wp.w_prev);
+            set_last(tabpage, window.w_prev);
+            sync_tab_last(tabpage, window.w_prev);
         }
     }
 }
@@ -492,30 +492,30 @@ fn list_first(tabpage: Option<TabPage>) -> Option<Win> {
 
 /// The current tab page's list head lives in the `firstwin` global; another
 /// tab page's in its own `tp_firstwin`.
-fn set_first(tabpage: Option<TabPage>, wp: Option<WinId>) {
+fn set_first(tabpage: Option<TabPage>, window: Option<WinId>) {
     match tabpage {
-        Some(mut tp) => tp.tp_firstwin = wp,
-        None => firstwin.set(wp),
+        Some(mut tp) => tp.tp_firstwin = window,
+        None => firstwin.set(window),
     }
 }
 
-fn set_last(tabpage: Option<TabPage>, wp: Option<WinId>) {
+fn set_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     match tabpage {
-        Some(mut tp) => tp.tp_lastwin = wp,
-        None => lastwin.set(wp),
+        Some(mut tp) => tp.tp_lastwin = window,
+        None => lastwin.set(window),
     }
 }
 
 /// `win_remove`'s extra write, which `win_append` does not make.
-fn sync_tab_first(tabpage: Option<TabPage>, wp: Option<WinId>) {
+fn sync_tab_first(tabpage: Option<TabPage>, window: Option<WinId>) {
     if tabpage.is_none() {
-        cur_tab().tp_firstwin = wp;
+        cur_tab().tp_firstwin = window;
     }
 }
 
-fn sync_tab_last(tabpage: Option<TabPage>, wp: Option<WinId>) {
+fn sync_tab_last(tabpage: Option<TabPage>, window: Option<WinId>) {
     if tabpage.is_none() {
-        cur_tab().tp_lastwin = wp;
+        cur_tab().tp_lastwin = window;
     }
 }
 

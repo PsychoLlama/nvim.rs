@@ -513,7 +513,7 @@ fn split_after(vertical: bool) -> bool {
 /// happening in, the new window's frame, and whether it goes before.
 fn split_frame(
     flags: c_int,
-    wp: Win,
+    window: Win,
     oldwin: Win,
     toplevel: bool,
     vertical: bool,
@@ -574,7 +574,7 @@ fn split_frame(
         }
     }
 
-    let mut frp = wp.frame();
+    let mut frp = window.frame();
     frp.fr_parent = curfrp.fr_parent;
     if before {
         frame_insert(curfrp, frp);
@@ -618,7 +618,7 @@ fn attach_frame_raw() -> FrameRef {
 #[expect(clippy::too_many_arguments, reason = "upstream's one long arm")]
 fn size_vertical(
     flags: c_int,
-    wp: Win,
+    window: Win,
     oldwin: Win,
     curfrp: FrameRef,
     frp: FrameRef,
@@ -627,7 +627,7 @@ fn size_vertical(
     toplevel: bool,
     need_status: c_int,
 ) {
-    let (mut wp, mut oldwin, mut frp) = (wp, oldwin, frp);
+    let (mut wp, mut oldwin, mut frp) = (window, oldwin, frp);
     // 'scroll' is not inherited by a horizontal split, but is by a vertical
     // one.
     wp.w_onebuf_opt.wo_scr = cur_win().w_onebuf_opt.wo_scr;
@@ -686,7 +686,7 @@ fn size_vertical(
 #[expect(clippy::too_many_arguments, reason = "upstream's one long arm")]
 fn size_horizontal(
     flags: c_int,
-    wp: Win,
+    window: Win,
     oldwin: Win,
     curfrp: FrameRef,
     frp: FrameRef,
@@ -694,7 +694,7 @@ fn size_horizontal(
     before: bool,
     toplevel: bool,
 ) {
-    let (mut wp, mut oldwin, mut frp) = (wp, oldwin, frp);
+    let (mut wp, mut oldwin, mut frp) = (window, oldwin, frp);
     let is_stl_global = global_stl_rows() > 0;
     if toplevel {
         wp.w_wincol = 0;

@@ -89,14 +89,14 @@ fn is_prompt(win: Win) -> bool {
     buf_is_prompt(win.buffer_or_none())
 }
 
-pub unsafe fn win_init_empty(wp: *mut Window) {
+pub unsafe fn win_init_empty(window: *mut Window) {
     // SAFETY: the caller's promise -- a live window.
-    init_empty(unsafe { Win::new(wp) });
+    init_empty(unsafe { Win::new(window) });
 }
 
 /// Point `wp` at the top of an empty buffer.
-pub(crate) fn init_empty(wp: Win) {
-    let mut wp = wp;
+pub(crate) fn init_empty(window: Win) {
+    let mut wp = window;
     wp.redraw_later(UPD_NOT_VALID);
     wp.w_lines_valid = 0;
     wp.w_cursor.lnum = 1;
@@ -181,9 +181,9 @@ fn close_all(buf: Buf, keep_curwin: bool) {
     }
 }
 
-/// Whether `wp` or the buffer it shows is pinned against closing.
-fn locked(wp: Win) -> bool {
-    wp.w_locked || wp.buffer().b_locked > 0
+/// Whether `window` or the buffer it shows is pinned against closing.
+fn locked(window: Win) -> bool {
+    window.w_locked || window.buffer().b_locked > 0
 }
 
 pub unsafe fn last_window(win: *mut Window) -> bool {

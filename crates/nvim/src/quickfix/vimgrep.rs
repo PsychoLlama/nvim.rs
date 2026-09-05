@@ -233,14 +233,14 @@ unsafe fn load_quietly(
 ///
 /// `qi` must be a live stack and `title` NUL-terminated.
 unsafe fn list_still_usable(
-    wp: Option<Win>,
+    window: Option<Win>,
     qi: *mut QfInfo,
     qfid: c_uint,
     title: *const c_char,
 ) -> bool {
     // SAFETY: forwarded from the caller.
-    if !qf_list_still_valid(wp, qfid) {
-        if wp.is_some() {
+    if !qf_list_still_valid(window, qfid) {
+        if window.is_some() {
             qf_emsg(E_LOCATION_LIST_CHANGED.as_ptr());
             return false;
         }
@@ -420,7 +420,7 @@ unsafe fn existing_swapfile(buf: Buf) -> bool {
 ///
 /// `qi` must be a live stack.
 unsafe fn process_files(
-    wp: Option<Win>,
+    window: Option<Win>,
     qi: *mut QfInfo,
     search: &mut Search,
     files: &Files,
@@ -459,7 +459,7 @@ unsafe fn process_files(
         }
 
         // Autocommands may have changed the list under us.
-        if !unsafe { list_still_usable(wp, qi.raw(), save_qfid, search.qf_title.as_ptr()) } {
+        if !unsafe { list_still_usable(window, qi.raw(), save_qfid, search.qf_title.as_ptr()) } {
             return false;
         }
         save_qfid = qf_current_list(qi).qf_id;

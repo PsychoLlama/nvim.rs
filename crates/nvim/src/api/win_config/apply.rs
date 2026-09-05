@@ -497,6 +497,6 @@ pub unsafe fn nvim_win_set_config(
 
 /// `Win::raw`, or a null for "no neighbour" — the shape the transpiled
 /// window family still takes.
-fn raw_win(wp: Option<Win>) -> *mut Window {
-    wp.map_or(::core::ptr::null_mut(), Win::raw)
+fn raw_win(window: Option<Win>) -> *mut Window {
+    window.map_or(::core::ptr::null_mut(), Win::raw)
 }

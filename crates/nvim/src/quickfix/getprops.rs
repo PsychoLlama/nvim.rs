@@ -133,7 +133,7 @@ unsafe fn get_qfline_items(qfp: *mut QfLine, list: *mut List) {
 /// `qi` must be null or a live stack and `list` a live list.
 pub(crate) unsafe fn get_errorlist(
     qi_arg: *mut QfInfo,
-    wp: Option<Win>,
+    window: Option<Win>,
     mut qf_idx: c_int,
     eidx: c_int,
     list: *mut List,
@@ -141,7 +141,7 @@ pub(crate) unsafe fn get_errorlist(
     // SAFETY: forwarded from the caller.
     let mut qi = qi_arg;
     if qi.is_null() {
-        qi = match wp {
+        qi = match window {
             Some(wp) => win_loclist(wp),
             None => QfStack::Global.raw(),
         };
@@ -429,11 +429,11 @@ unsafe fn qf_getprop_defaults(
 ///
 /// `qi` must be a live stack and `retdict` live.
 unsafe fn qf_getprop_filewinid(
-    wp: Option<Win>,
+    window: Option<Win>,
     qi: *const QfInfo,
     retdict: *mut Dict,
 ) -> Result<(), KeyTaken> {
-    let winid = wp
+    let winid = window
         .filter(|&wp| is_ll_window(wp))
         .and_then(|_| qf_find_win_with_loclist(qi))
         .map_or(0, |ll_wp| ll_wp.handle);
@@ -525,7 +525,7 @@ unsafe fn qf_getprop_qftf(qfl: *mut QfList, retdict: *mut Dict) -> Result<(), Ke
 ///
 /// `what` and `retdict` must be live.
 pub(crate) unsafe fn qf_get_properties(
-    wp: Option<Win>,
+    window: Option<Win>,
     what: *mut Dict,
     retdict: *mut Dict,
 ) -> Result<(), QfError> {
@@ -539,11 +539,11 @@ pub(crate) unsafe fn qf_get_properties(
         return unsafe { qf_get_list_from_lines(what, lines, retdict) };
     }
 
-    if let Some(wp) = wp {
+    if let Some(wp) = window {
         qi = win_loclist(wp);
     }
 
-    let flags = unsafe { qf_getprop_keys2flags(what, wp.is_some()) };
+    let flags = unsafe { qf_getprop_keys2flags(what, window.is_some()) };
 
     let named = if unsafe { qf_stack_empty(qi) } {
         None
@@ -553,7 +553,7 @@ pub(crate) unsafe fn qf_get_properties(
     let Some(qf_idx) = named else {
         // `?` here is the `From<KeyTaken>` conversion: the defaults can
         // only fail the way the dictionary layer fails.
-        unsafe { qf_getprop_defaults(qi, flags, wp.is_some(), retdict) }?;
+        unsafe { qf_getprop_defaults(qi, flags, window.is_some(), retdict) }?;
         return Ok(());
     };
 
@@ -599,8 +599,8 @@ pub(crate) unsafe fn qf_get_properties(
     if wanted(GetListProps::TICK) {
         unsafe { add_nr(retdict, "changedtick", (*qfl).qf_changedtick as VarNumber) }?;
     }
-    if wp.is_some() && wanted(GetListProps::FILEWINID) {
-        unsafe { qf_getprop_filewinid(wp, qi, retdict) }?;
+    if window.is_some() && wanted(GetListProps::FILEWINID) {
+        unsafe { qf_getprop_filewinid(window, qi, retdict) }?;
     }
     if wanted(GetListProps::QFBUFNR) {
         unsafe { qf_getprop_qfbufnr(qi, retdict) }?;

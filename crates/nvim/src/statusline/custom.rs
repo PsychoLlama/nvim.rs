@@ -87,7 +87,7 @@ struct Source {
 }
 
 impl Target {
-    /// Set up for the task at hand: `wp` null draws `'tabline'`, otherwise
+    /// Set up for the task at hand: `window` null draws `'tabline'`, otherwise
     /// `draw_winbar` draws `'winbar'`, `draw_ruler` draws `'rulerformat'`
     /// and neither draws `'statusline'`.
     ///
@@ -95,14 +95,18 @@ impl Target {
     /// the top, or a width of nothing.
     ///
     /// # Safety
-    /// `wp` must be null or a live window.
-    unsafe fn of(wp: *mut Window, draw_winbar: bool, draw_ruler: bool) -> Option<(Target, Source)> {
+    /// `window` must be null or a live window.
+    unsafe fn of(
+        window: *mut Window,
+        draw_winbar: bool,
+        draw_ruler: bool,
+    ) -> Option<(Target, Source)> {
         // SAFETY: the caller's promise.
-        let win = unsafe { win_opt(wp) };
+        let win = unsafe { win_opt(window) };
         let is_stl_global = stl_is_global();
         let floating = win.is_some_and(|w| w.w_floating) && !is_stl_global;
         // SAFETY: a floating window owns its grid allocation.
-        let own = || unsafe { GridRef::new(&raw mut (*wp).w_grid_alloc) };
+        let own = || unsafe { GridRef::new(&raw mut (*window).w_grid_alloc) };
         let mut canvas = if floating { own() } else { screen_canvas() };
         let mut col = 0;
 
@@ -129,7 +133,7 @@ impl Target {
             let local = !opt_is_empty(win.w_onebuf_opt.wo_wbr);
             let mut row = -1; // Row zero is the first row of text.
             // SAFETY: a live window whose grid view is live.
-            canvas = unsafe { grid_adjust((*wp).w_grid, &mut row, &mut col) };
+            canvas = unsafe { grid_adjust((*window).w_grid, &mut row, &mut col) };
             if row < 0 {
                 return None;
             }
@@ -444,14 +448,14 @@ fn push_chunk(content: &mut Array, attr: c_int, text: &[c_char], group: c_int) {
     unsafe { a.push(Object::array(chunk)) };
 }
 
-/// Redraw the status line, window bar, ruler or tab line of `wp` -- null for
+/// Redraw the status line, window bar, ruler or tab line of `window` -- null for
 /// `'tabline'`.
 ///
 /// # Safety
-/// `wp` must be null or a live window. Expanding the format re-enters the
+/// `window` must be null or a live window. Expanding the format re-enters the
 /// editor, so nothing may be held across this.
 pub(crate) unsafe fn win_redr_custom(
-    wp: *mut Window,
+    window: *mut Window,
     draw_winbar: bool,
     draw_ruler: bool,
     ui_event: bool,
@@ -464,7 +468,7 @@ pub(crate) unsafe fn win_redr_custom(
     }
     ENTERED.set(true);
     // SAFETY: the caller's promise.
-    unsafe { draw_custom(wp, draw_winbar, draw_ruler, ui_event) };
+    unsafe { draw_custom(window, draw_winbar, draw_ruler, ui_event) };
     ENTERED.set(false);
 }
 
@@ -472,13 +476,13 @@ pub(crate) unsafe fn win_redr_custom(
 ///
 /// # Safety
 /// As [`win_redr_custom`].
-unsafe fn draw_custom(wp: *mut Window, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
+unsafe fn draw_custom(window: *mut Window, draw_winbar: bool, draw_ruler: bool, ui_event: bool) {
     // SAFETY: the caller's promise.
-    let Some((target, source)) = (unsafe { Target::of(wp, draw_winbar, draw_ruler) }) else {
+    let Some((target, source)) = (unsafe { Target::of(window, draw_winbar, draw_ruler) }) else {
         return;
     };
     // SAFETY: the caller's promise; `curwin` is live from startup to exit.
-    let (win, mut ewp) = unsafe { (win_opt(wp), win_opt(wp).unwrap_or(Win::current())) };
+    let (win, mut ewp) = unsafe { (win_opt(window), win_opt(window).unwrap_or(Win::current())) };
     let _ = &ewp;
 
     // Temporarily reset 'cursorbind': a side effect from moving the cursor
@@ -532,12 +536,12 @@ unsafe fn draw_custom(wp: *mut Window, draw_winbar: bool, draw_ruler: bool, ui_e
     }
 }
 
-/// Redraw `wp`'s window bar from `'winbar'`.
+/// Redraw `window`'s window bar from `'winbar'`.
 ///
 /// # Safety
-/// `wp` must be a live window. This evaluates the option, so it re-enters
+/// `window` must be a live window. This evaluates the option, so it re-enters
 /// the editor.
-pub unsafe fn win_redr_winbar(wp: *mut Window) {
+pub unsafe fn win_redr_winbar(window: *mut Window) {
     static ENTERED: GlobalCell<bool> = GlobalCell::new(false);
     // Reached recursively when the winbar contains an expression that
     // triggers a redraw.
@@ -546,13 +550,13 @@ pub unsafe fn win_redr_winbar(wp: *mut Window) {
     }
     ENTERED.set(true);
     // SAFETY: the caller's promise.
-    let win = unsafe { Win::new(wp) };
+    let win = unsafe { Win::new(window) };
     if win.w_winbar_height != 0
         && is_redrawing()
         && (!opt_is_empty(p_wbr.get()) || !opt_is_empty(win.w_onebuf_opt.wo_wbr))
     {
         // SAFETY: a live window; this evaluates the option.
-        unsafe { win_redr_custom(wp, true, false, false) };
+        unsafe { win_redr_custom(window, true, false, false) };
     }
     ENTERED.set(false);
 }

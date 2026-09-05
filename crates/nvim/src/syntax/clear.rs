@@ -73,14 +73,14 @@ pub(crate) unsafe fn init_synblock(at: *mut SynBlock) {
     }
 }
 
-/// Get rid of `:ownsyntax` for window `wp`.
-pub(crate) unsafe fn reset_synblock(wp: *mut Window) {
-    if unsafe { (*wp).w_s } != unsafe { &raw mut (*(*wp).w_buffer).b_s } {
-        unsafe { syntax_clear((*wp).w_s) };
+/// Get rid of `:ownsyntax` for window `window`.
+pub(crate) unsafe fn reset_synblock(window: *mut Window) {
+    if unsafe { (*window).w_s } != unsafe { &raw mut (*(*window).w_buffer).b_s } {
+        unsafe { syntax_clear((*window).w_s) };
         // SAFETY: an `:ownsyntax` block, which `ex_ownsyntax` boxed and
         // only this releases; a buffer's own block took the branch above.
-        drop(unsafe { Box::from_raw((*wp).w_s) });
-        unsafe { (*wp).w_s = &raw mut (*(*wp).w_buffer).b_s };
+        drop(unsafe { Box::from_raw((*window).w_s) });
+        unsafe { (*window).w_s = &raw mut (*(*window).w_buffer).b_s };
     }
 }
 

@@ -223,13 +223,13 @@ pub unsafe fn fold_manual_allowed(create: bool) -> c_int {
     0
 }
 
-/// Create a fold from line "start" to line "end" (inclusive) in window `wp`.
+/// Create a fold from line "start" to line "end" (inclusive) in window `window`.
 ///
 /// # Safety
-/// `wp` must be a live window with a live buffer.
-pub unsafe fn fold_create(wp: Win, start_pos: Pos, end_pos: Pos) {
+/// `window` must be a live window with a live buffer.
+pub unsafe fn fold_create(window: Win, start_pos: Pos, end_pos: Pos) {
     // SAFETY: the caller's promise -- a live window.
-    let mut win = wp;
+    let mut win = window;
     let (start, end) = if start_pos.lnum > end_pos.lnum {
         (end_pos, start_pos)
     } else {
@@ -238,7 +238,7 @@ pub unsafe fn fold_create(wp: Win, start_pos: Pos, end_pos: Pos) {
     if foldmethod_is_marker(win) {
         // With 'foldmethod' = "marker" the fold lives in the buffer text.
         // SAFETY: the caller's promise.
-        unsafe { fold_create_markers(wp, start, end) };
+        unsafe { fold_create_markers(window, start, end) };
         return;
     }
     checkupdate(win);
@@ -352,9 +352,9 @@ pub unsafe fn fold_create(wp: Win, start_pos: Pos, end_pos: Pos) {
 /// `had_visual` — true when Visual selection used
 ///
 /// # Safety
-/// `wp` must be a live window with a live buffer.
+/// `window` must be a live window with a live buffer.
 pub unsafe fn delete_fold(
-    wp: *mut Window,
+    window: *mut Window,
     start: LineNr,
     end: LineNr,
     recursive: c_int,
@@ -367,7 +367,7 @@ pub unsafe fn delete_fold(
     let mut first_lnum = MAXLNUM as LineNr;
     let mut last_lnum: LineNr = 0;
     // SAFETY: the caller's promise -- a live window.
-    let win = unsafe { Win::new(wp) };
+    let win = unsafe { Win::new(window) };
     checkupdate(win);
     while lnum <= end {
         let mut folds = window_folds(win);
@@ -403,7 +403,7 @@ pub unsafe fn delete_fold(
             // markers are gone from the buffer text.
             first_lnum = first_lnum.min(fold.top() + found_off);
             last_lnum = last_lnum.max(lnum);
-            // SAFETY: the caller's promise, and one of `wp`'s own folds.
+            // SAFETY: the caller's promise, and one of `window`'s own folds.
             if !did_one {
                 parse_marker(win);
             }
@@ -422,7 +422,7 @@ pub unsafe fn delete_fold(
         }
     } else {
         // SAFETY: the caller's promise.
-        check_cursor_col(unsafe { Win::new(wp) });
+        check_cursor_col(unsafe { Win::new(window) });
     }
     if last_lnum > 0 {
         let num_changed = (last_lnum - first_lnum) as int64_t;
@@ -593,7 +593,7 @@ pub(super) fn fold_open_nested(fold: FoldRef) {
 /// Returns true if fold is closed
 ///
 /// # Safety
-/// `wp` must be a live window, and `fold` one of its folds at `lnum_off`.
+/// `window` must be a live window, and `fold` one of its folds at `lnum_off`.
 pub(super) unsafe fn check_closed(
     win: Win,
     fold: FoldRef,

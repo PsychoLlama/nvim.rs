@@ -380,8 +380,8 @@ fn leave_closing_window(win: Win) -> Leave {
 
 /// The cursor would land on the preview or quickfix window: walk on round the
 /// window list looking for one it may sit in instead.
-fn away_from_preview(wp: Win) -> Win {
-    let mut wp = wp;
+fn away_from_preview(window: Win) -> Win {
+    let mut wp = window;
     loop {
         wp = wp.next().unwrap_or_else(first_win);
         if wp.is_current() {

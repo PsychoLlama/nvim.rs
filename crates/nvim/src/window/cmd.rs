@@ -416,10 +416,10 @@ fn cycle_windows(nchar: c_int, prenum: c_int) {
     goto_win(wp);
 }
 
-/// Whether the cursor may be put in `wp`: a hidden or unfocusable float is
+/// Whether the cursor may be put in `window`: a hidden or unfocusable float is
 /// skipped over.
-fn focusable(wp: Win) -> bool {
-    !wp.w_floating || (!wp.w_config.hide && wp.w_config.focusable)
+fn focusable(window: Win) -> bool {
+    !window.w_floating || (!window.w_config.hide && window.w_config.focusable)
 }
 
 /// The `prenum`th window of the list, or the last focusable one before it when
@@ -741,10 +741,10 @@ fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
     unsafe { do_ecmd(0, ptr, sfname, eap, lnum, EcmdFlags::HIDE, win) }
 }
 
-/// Clamp `wp`'s cursor line into its buffer.
-fn revalidate_cursor_lnum(wp: Win) {
+/// Clamp `window`'s cursor line into its buffer.
+fn revalidate_cursor_lnum(window: Win) {
     // SAFETY: a live window.
-    check_cursor_lnum(wp);
+    check_cursor_lnum(window);
 }
 
 /// Put the cursor on the first non-blank of its line.

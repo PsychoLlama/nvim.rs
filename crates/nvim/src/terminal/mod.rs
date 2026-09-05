@@ -755,7 +755,7 @@ fn get_underline_hl_flag(attrs: VTermScreenCellAttrs) -> HlAttrFlags {
 /// and lines below the screen are left alone.
 pub(crate) unsafe fn terminal_get_line_attributes(
     term: *mut Terminal,
-    _wp: *mut Window,
+    _window: *mut Window,
     linenr: c_int,
     term_attrs: *mut c_int,
 ) {
