@@ -38,11 +38,9 @@ use crate::getchar::{
 use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, exec_from_reg};
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
-use crate::main::{
-    got_int, magic_overruled, main_loop, msg_didout, msg_scroll, pending_end_reg_executing,
-    reg_executing,
-};
+use crate::main::{got_int, magic_overruled, main_loop, pending_end_reg_executing, reg_executing};
 use crate::mark::{checkpcmark, setmark, setpcmark};
+use crate::message::state::{msg_didout, msg_scroll};
 use crate::message::{
     e_argreq, e_empty_buffer, e_invrange, e_secure, e_undobang_cannot_redo_or_move_branch,
 };

@@ -60,10 +60,7 @@ use crate::keycodes::{
     Ctrl_A, Ctrl_F, Ctrl_L, Ctrl_P, Ctrl_R, Ctrl_U, Ctrl_V, Ctrl_W, vim_strsave_escape_ks,
     vim_unescape_ks,
 };
-use crate::main::{
-    got_int, msg_ext_skip_flush, pending_end_reg_executing, redir_reg, reg_executing, reg_recorded,
-    reg_recording,
-};
+use crate::main::{got_int, pending_end_reg_executing, reg_executing, reg_recorded, reg_recording};
 use crate::mark::mark_adjust;
 use crate::mbyte::{
     mb_charlen, mb_string2cells, mb_string2cells_len, mb_tolower, utf_head_off, utf_ptr2cells_len,
@@ -73,6 +70,7 @@ use crate::memline::{decl, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace
 use crate::memory::{
     memchrsub, memcnt, xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup,
 };
+use crate::message::state::{msg_ext_skip_flush, redir_reg};
 use crate::message::{e_noinstext, e_nolastcmd, e_noprevre, e_resulting_text_too_long};
 use crate::message::{
     emsg, emsg_invreg, message_filtered, msg, msg_ext_set_kind, msg_outtrans_len, msg_putchar,

@@ -28,13 +28,13 @@ use crate::help::help_heuristic;
 use crate::input::prompt_for_input;
 use crate::insexpand::{ins_compl_check_keys, ins_compl_interrupted};
 use crate::main::{
-    KeyTyped, g_do_tagpreview, g_tag_at_cursor, got_int, keep_help_flag, magic_overruled, msg_col,
-    msg_didout, msg_scroll, msg_scrolled, msg_silent, no_hlsearch, postponed_split,
-    postponed_split_flags, vim_ignored,
+    KeyTyped, g_do_tagpreview, g_tag_at_cursor, got_int, keep_help_flag, magic_overruled,
+    no_hlsearch, postponed_split, postponed_split_flags, vim_ignored,
 };
 use crate::mark::{fm_getname, mark_view_make, mark_view_restore, setpcmark};
 use crate::mbyte::{convert_setup, mb_strnicmp, string_convert, utfc_ptr2len};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrdup, xstrlcat};
+use crate::message::state::{msg_col, msg_didout, msg_scroll, msg_scrolled, msg_silent};
 use crate::message::{e_invarg, e_listreq};
 use crate::message::{
     emsg, give_warning, msg, msg_advance, msg_clr_eos, msg_delay, msg_ext_set_kind, msg_outtrans,

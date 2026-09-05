@@ -42,9 +42,8 @@ use crate::insexpand::{
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, bot_top_msg, called_emsg, cmd_silent, g_do_tagpreview, got_int,
-    msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row, msg_scrolled, msg_silent, no_hlsearch,
-    no_smartcase, rc_did_emsg, search_match_endcol, search_match_lines, searchcmdlen, top_bot_msg,
+    KeyStuffed, KeyTyped, g_do_tagpreview, got_int, no_hlsearch, no_smartcase, rc_did_emsg,
+    search_match_endcol, search_match_lines, searchcmdlen,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -53,6 +52,10 @@ use crate::mbyte::{
 };
 use crate::memline::{decl, inc, incl, ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xfree, xmalloc, xmemdupz, xstrlcpy};
+use crate::message::state::{
+    bot_top_msg, called_emsg, cmd_silent, msg_ext_overwrite, msg_hist_off, msg_nowait, msg_row,
+    msg_scrolled, msg_silent, top_bot_msg,
+};
 use crate::message::{e_interr, e_nopresub, e_noprevre, e_patnotf2};
 use crate::message::{
     emsg, give_warning, iemsg, messaging, msg, msg_check, msg_clr_eos, msg_end, msg_ext_set_kind,

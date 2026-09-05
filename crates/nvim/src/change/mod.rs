@@ -49,9 +49,8 @@ use crate::indent::{
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
 use crate::main::{
-    autocmd_busy, curbuf_splice_pending, emsg_silent, highlight_match, in_assert_fails,
-    last_cursormoved, last_cursormoved_win, msg_col, msg_row, msg_scroll, msg_silent,
-    need_wait_return, silent_mode,
+    autocmd_busy, curbuf_splice_pending, highlight_match, last_cursormoved, last_cursormoved_win,
+    silent_mode,
 };
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
@@ -63,6 +62,9 @@ use crate::memline::{
     ml_line_alloced, ml_open_file, ml_replace, ml_setflags,
 };
 use crate::memory::{xfree, xmalloc, xmallocz, xmemcpyz, xstrdup};
+use crate::message::state::{
+    emsg_silent, in_assert_fails, msg_col, msg_row, msg_scroll, msg_silent, need_wait_return,
+};
 use crate::message::{
     msg_clr_eos, msg_delay, msg_end, msg_ext_set_kind, msg_puts_hl, msg_source, msg_start,
     wait_return,

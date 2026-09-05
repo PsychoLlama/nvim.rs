@@ -29,9 +29,10 @@ use crate::ex_eval::state::{
 use crate::ex_eval::{discard_current_exception, free_global_msglist, get_exception_string};
 use crate::guard::{SavedSctx, Script};
 use crate::highlight_group::syn_id2name;
-use crate::main::{current_sctx, did_emsg, got_int};
+use crate::main::{current_sctx, got_int};
 use crate::mark::setmark_pos;
 use crate::memory::xfree;
+use crate::message::state::did_emsg;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{

@@ -15,11 +15,10 @@ use crate::guard::{Keys, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_C, K_SPECIAL, KS_MODIFIER, Key, key_unescape};
-use crate::main::{
-    keep_msg, keep_msg_hl_id, mapped_ctrl_c, mod_mask, msg_row, msg_scrolled, need_wait_return,
-};
+use crate::main::{mapped_ctrl_c, mod_mask};
 use crate::mbyte::{utf_ptr2char, utf8len_tab};
 use crate::memory::{xfree, xstrdup};
+use crate::message::state::{keep_msg, keep_msg_hl_id, msg_row, msg_scrolled, need_wait_return};
 use crate::message::{msg_putchar, set_keep_msg};
 use crate::mouse::{is_mouse_key, setmouse};
 use crate::os::cshim::{gettext, snprintf};

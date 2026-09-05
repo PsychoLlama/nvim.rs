@@ -12,10 +12,10 @@ use crate::eval::typval::{
     tv_list_set_lock,
 };
 use crate::eval::{eval_expr_typval, partial_name};
-use crate::main::called_emsg;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xmemdupz;
 use crate::message::emsg;
+use crate::message::state::called_emsg;
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::semsg;

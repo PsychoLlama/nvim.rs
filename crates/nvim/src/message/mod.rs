@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod state;
 use crate::api::private::helpers::{
     api_free_array, cbuf_to_string, copy_string, cstr_as_string, cstr_to_string,
 };
@@ -48,18 +49,10 @@ use crate::input::{get_keystroke, prompt_for_input};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
-    KeyTyped, called_emsg, capture_ga, cmd_silent, cmdline_was_last_drawn, cmdmsg_rl, did_emsg,
-    did_wait_return, embedded_mode, emsg_assert_fails_context, emsg_assert_fails_lnum,
-    emsg_assert_fails_msg, emsg_noredir, emsg_off, emsg_on_display, emsg_severe, emsg_silent,
-    emsg_skip, ex_exitval, exiting, full_screen, got_int, headless_mode, hl_attr_active,
-    in_assert_fails, info_message, keep_msg, keep_msg_hl_id, lines_left, main_loop, msg_col,
-    msg_did_scroll, msg_didany, msg_didout, msg_ext_overwrite, msg_ext_skip_flush,
-    msg_ext_skip_verbose, msg_grid, msg_grid_pos, msg_grid_scroll_discount, msg_hist_off,
-    msg_no_more, msg_nowait, msg_row, msg_scroll, msg_scrolled, msg_scrolled_at_flush,
-    msg_scrolled_ign, msg_silent, need_check_timestamps, need_clr_eos, need_fileinfo,
-    need_highlight_changed, need_wait_return, no_wait_return, nvim_testing, on_print, quit_more,
-    redir_fd, redir_off, redir_reg, redir_vname, redrawing_cmdline, reg_recording, scriptout,
-    silent_mode, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    KeyTyped, cmdline_was_last_drawn, embedded_mode, ex_exitval, exiting, full_screen, got_int,
+    headless_mode, hl_attr_active, main_loop, need_check_timestamps, need_highlight_changed,
+    nvim_testing, redrawing_cmdline, reg_recording, scriptout, silent_mode, vgetc_busy, vgetc_char,
+    vgetc_mod_mask,
 };
 use crate::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,
@@ -69,6 +62,17 @@ use crate::mbyte::{
 use crate::memory::{
     arena_alloc, strequal, strnequal, xcalloc, xfree, xmalloc, xmemdupz, xmemrchr, xrealloc,
     xstrdup, xstrlcat, xstrlcpy,
+};
+use crate::message::state::{
+    called_emsg, capture_ga, cmd_silent, cmdmsg_rl, did_emsg, did_wait_return,
+    emsg_assert_fails_context, emsg_assert_fails_lnum, emsg_assert_fails_msg, emsg_noredir,
+    emsg_off, emsg_on_display, emsg_severe, emsg_silent, emsg_skip, in_assert_fails, info_message,
+    keep_msg, keep_msg_hl_id, lines_left, msg_col, msg_did_scroll, msg_didany, msg_didout,
+    msg_ext_overwrite, msg_ext_skip_flush, msg_ext_skip_verbose, msg_grid, msg_grid_pos,
+    msg_grid_scroll_discount, msg_hist_off, msg_no_more, msg_nowait, msg_row, msg_scroll,
+    msg_scrolled, msg_scrolled_at_flush, msg_scrolled_ign, msg_silent, need_clr_eos, need_fileinfo,
+    need_wait_return, no_wait_return, on_print, quit_more, redir_fd, redir_off, redir_reg,
+    redir_vname,
 };
 use crate::mouse::{MOUSE_SETPOS, jump_to_mouse, setmouse};
 use crate::option::vars::{

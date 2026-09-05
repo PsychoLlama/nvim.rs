@@ -33,13 +33,13 @@ use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
     BLN_LISTED, EDIT_QF, MainParams, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT,
-    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, did_emsg, got_int, kOptErrorfile,
-    kOptShortmess, msg_didany, msg_scroll, no_wait_return, recoverymode, swap_exists_action,
-    swap_exists_did_quit, time_msg_at,
+    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, got_int, kOptErrorfile, kOptShortmess,
+    recoverymode, swap_exists_action, swap_exists_did_quit, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
 use crate::message::msg_putchar;
+use crate::message::state::{did_emsg, msg_didany, msg_scroll, no_wait_return};
 use crate::option::vars::{p_ef, p_efm, p_fdls, p_menc, p_shm};
 use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::cshim::snprintf;

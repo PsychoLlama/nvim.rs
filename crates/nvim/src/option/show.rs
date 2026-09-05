@@ -21,9 +21,10 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{transchar, vim_strsize};
 use crate::ex_session::{put_eol, put_eol_unchecked, put_line};
 use crate::keycodes::{get_special_key_name, has_key_name};
-use crate::main::{got_int, info_message, silent_mode};
+use crate::main::{got_int, silent_mode};
 use crate::mapping::{EscTarget, put_escstr};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
+use crate::message::state::info_message;
 use crate::message::{
     message_filtered, msg_advance, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_puts,
     msg_puts_title,

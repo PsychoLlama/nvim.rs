@@ -53,10 +53,11 @@ use crate::guard::textlock;
 use crate::highlight::{highlight_use_hlstate, ui_send_all_hls};
 use crate::highlight_group::HLF_W;
 use crate::main::{
-    cterm_normal_bg_color, cterm_normal_fg_color, emsg_silent, exiting, expr_map_lock, full_screen,
-    in_assert_fails, normal_bg, normal_fg, normal_sp, starting, ui_client_channel_id,
+    cterm_normal_bg_color, cterm_normal_fg_color, exiting, expr_map_lock, full_screen, normal_bg,
+    normal_fg, normal_sp, starting, ui_client_channel_id,
 };
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::message::state::{emsg_silent, in_assert_fails};
 use crate::message::{msg, msg_ext_ui_flush, msg_scroll_flush, msg_source, msg_ui_refresh};
 use crate::option::vars::{bo_flags, p_debug, p_guicursor, p_lz, p_tgc, p_vb, p_wd, rdb_flags};
 use crate::option::{set_option_value, ui_refresh_options};

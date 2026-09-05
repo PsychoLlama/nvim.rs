@@ -21,9 +21,10 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::input::prompt_for_input;
-use crate::main::{got_int, lines_left, mouse_row, msg_row, msg_scroll};
+use crate::main::{got_int, mouse_row};
 use crate::memory::xstrdup;
 use crate::message::e_invarg;
+use crate::message::state::{lines_left, msg_row, msg_scroll};
 use crate::message::{
     do_dialog, emsg, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start, verb_msg,
 };

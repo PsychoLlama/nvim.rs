@@ -18,8 +18,9 @@ use crate::event::time::{
 };
 use crate::ex_cmds::check_secure;
 use crate::getchar::vgetc;
-use crate::main::{called_emsg, got_int, main_loop};
+use crate::main::{got_int, main_loop};
 use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::message::state::called_emsg;
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{

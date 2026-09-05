@@ -64,8 +64,9 @@ use core::{mem, ptr};
 
 use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
-use crate::main::{got_int, msg_col, msg_didout};
+use crate::main::got_int;
 use crate::mbyte::{utf_valid_string, utfc_ptr2len};
+use crate::message::state::{msg_col, msg_didout};
 use crate::message::{msg_clr_eos, msg_puts, msg_start};
 use crate::option::vars::p_verbose;
 use crate::os::cshim::gettext;

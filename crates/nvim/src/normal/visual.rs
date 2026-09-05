@@ -23,10 +23,11 @@ use crate::drawscreen::{
 use crate::fold::fold_adjust_visual;
 use crate::getchar::{beep_flush, stuff_empty, typeahead};
 use crate::global_cell::GlobalCell;
-use crate::main::{mouse_dragging, msg_silent};
+use crate::main::mouse_dragging;
 use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_get_len, ml_get_pos};
+use crate::message::state::msg_silent;
 use crate::mouse::setmouse;
 use crate::normal::{
     CA_NO_ADJ_OP_END, CmdArgRef, TAB, VIsual_mode_orig, clear_op_beep, may_clear_cmdline, nv_down,

@@ -65,9 +65,10 @@ use crate::ex_getln::script_get;
 use crate::fileio::{buf_check_timestamp, check_timestamps};
 use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_W;
-use crate::main::{exiting, msg_col, msg_didany, msg_didout, msg_row, vgetc_busy};
+use crate::main::{exiting, vgetc_busy};
 use crate::memline::MlFlags;
 use crate::memory::{xfree, xstrdup};
+use crate::message::state::{msg_col, msg_didany, msg_didout, msg_row};
 use crate::message::{
     VIM_ALL, VIM_DISCARDALL, VIM_NO, VIM_YES, emsg, msg, msg_source, vim_dialog_yesnoallcancel,
     vim_dialog_yesnocancel, wait_return,

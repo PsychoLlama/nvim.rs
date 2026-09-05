@@ -29,8 +29,8 @@ use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
 use crate::main::{
-    KeyStuffed, KeyTyped, did_cursorhold, langmap_mapchar, mod_mask, msg_col, msg_didout,
-    msg_nowait, vgetc_busy, vgetc_char, vgetc_mod_mask,
+    KeyStuffed, KeyTyped, did_cursorhold, langmap_mapchar, mod_mask, vgetc_busy, vgetc_char,
+    vgetc_mod_mask,
 };
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
@@ -38,6 +38,7 @@ use crate::mbyte::{
     mb_check_adjust_col, utf_char2bytes, utf_char2len, utf_iscomposing, utf8len_tab,
 };
 use crate::memory::xfree;
+use crate::message::state::{msg_col, msg_didout, msg_nowait};
 use crate::normal::{
     B_IMODE_LMAP, CA_COMMAND_BUSY, CAR, CmdArgRef, ESC, GRAPHEME_STATE_INIT, NL, NV_CMDS,
     NV_CMDS_SIZE, NV_KEEPREG, NV_LANG, NV_NCW, NV_RL, NV_SS, NV_SSS, NormalState, NormalStateRef,

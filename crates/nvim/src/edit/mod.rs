@@ -108,10 +108,10 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
 use crate::main::{
-    KeyStuffed, KeyTyped, did_check_timestamps, did_cursorhold, emsg_on_display, got_int,
-    langmap_mapchar, last_cursormoved, last_cursormoved_win, mod_mask, msg_scroll, msg_silent,
-    need_check_timestamps, need_highlight_changed, pum_want, reg_recording, spell_redraw_lnum,
-    test_disable_char_avail, u_sync_once, vgetc_busy,
+    KeyStuffed, KeyTyped, did_check_timestamps, did_cursorhold, got_int, langmap_mapchar,
+    last_cursormoved, last_cursormoved_win, mod_mask, need_check_timestamps,
+    need_highlight_changed, pum_want, reg_recording, spell_redraw_lnum, test_disable_char_avail,
+    u_sync_once, vgetc_busy,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};
@@ -121,6 +121,7 @@ use crate::mbyte::{
 };
 use crate::memline::{gchar_pos, ml_append, ml_get, ml_get_buf, ml_get_len, ml_replace};
 use crate::memory::{strnequal, xfree, xmalloc, xmemdupz, xstrdup};
+use crate::message::state::{emsg_on_display, msg_scroll, msg_silent};
 use crate::message::{e_noinstext, e_sandbox, e_textlock};
 use crate::message::{emsg, msg_check_for_delay};
 use crate::mouse::{ins_mouse, ins_mousescroll, setmouse};

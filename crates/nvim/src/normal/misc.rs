@@ -19,8 +19,9 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::help::ex_help;
-use crate::main::{KeyTyped, did_emsg, got_int, may_garbage_collect, typebuf_was_empty};
+use crate::main::{KeyTyped, got_int, may_garbage_collect, typebuf_was_empty};
 use crate::memline::ml_get_len;
+use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};
 use crate::normal::{
     CA_COMMAND_BUSY, CmdArgRef, GETF_ALT, GETF_SETMARK, NULL, check_clear_op, check_clear_op_quit,

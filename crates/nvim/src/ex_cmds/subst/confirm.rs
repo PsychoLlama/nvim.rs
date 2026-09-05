@@ -26,11 +26,10 @@ use crate::guard::{Allow, Suppress};
 use crate::highlight_group::HLF_R;
 use crate::input::prompt_for_input;
 use crate::keycodes::{Ctrl_C, Ctrl_E, Ctrl_Y};
-use crate::main::{
-    highlight_match, msg_didout, need_wait_return, search_match_endcol, search_match_lines,
-};
+use crate::main::{highlight_match, search_match_endcol, search_match_lines};
 use crate::memline::{ml_get, ml_get_len, ml_replace};
 use crate::memory::xfree;
+use crate::message::state::{msg_didout, need_wait_return};
 use crate::mouse::setmouse;
 use crate::r#move::{
     do_check_cursorbind, scrolldown_clamp, scrollup_clamp, update_topline, validate_cursor,

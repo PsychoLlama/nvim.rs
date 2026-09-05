@@ -36,8 +36,9 @@ use crate::ex_docmd::state::cmdmod;
 use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
-use crate::main::{g_do_tagpreview, got_int, msg_scroll, quit_more};
+use crate::main::{g_do_tagpreview, got_int};
 use crate::memory::xfree;
+use crate::message::state::{msg_scroll, quit_more};
 use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
 use crate::message::{
     emsg, message_filtered, msg, msg_clr_eos, msg_end, msg_outnum, msg_outtrans, msg_putchar,

@@ -63,12 +63,10 @@ use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::main::{
-    KeyStuffed, KeyTyped, cmd_silent, cmdline_star, cmdline_was_last_drawn, cmdmsg_rl, cmdpreview,
-    current_sctx, did_emsg, emsg_on_display, got_int, highlight_match, lines_left, magic_overruled,
-    mod_mask, mouse_col, mouse_row, msg_col, msg_didout, msg_no_more, msg_row, msg_scroll,
-    msg_scrolled, need_wait_return, no_hlsearch, pum_want, quit_more, redir_off, redrawing_cmdline,
-    search_first_line, search_last_line, search_match_endcol, search_match_lines,
-    skip_win_fix_cursor, wild_menu_showing,
+    KeyStuffed, KeyTyped, cmdline_star, cmdline_was_last_drawn, cmdpreview, current_sctx, got_int,
+    highlight_match, magic_overruled, mod_mask, mouse_col, mouse_row, no_hlsearch, pum_want,
+    redrawing_cmdline, search_first_line, search_last_line, search_match_endcol,
+    search_match_lines, skip_win_fix_cursor, wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
@@ -81,6 +79,10 @@ use crate::memline::{decl, incl, ml_append, ml_replace};
 use crate::memory::{
     ARENA_EMPTY, arena_alloc, arena_finish, arena_mem_free, xfree, xmalloc, xmallocz, xmemdupz,
     xrealloc, xstrdup,
+};
+use crate::message::state::{
+    cmd_silent, cmdmsg_rl, did_emsg, emsg_on_display, lines_left, msg_col, msg_didout, msg_no_more,
+    msg_row, msg_scroll, msg_scrolled, need_wait_return, quit_more, redir_off,
 };
 use crate::message::{
     e_cannot_edit_other_buf, e_cmdwin, e_command_too_recursive, e_intern2, e_invarg, e_positive,

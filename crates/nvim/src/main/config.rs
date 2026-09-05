@@ -20,10 +20,11 @@ use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
 use crate::main::args::execute_env;
 use crate::main::{
     DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, MainParams, PATHSEP, SID_CARG,
-    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, kEqualFiles, kXDGConfigDirs, msg_scroll,
-    silent_mode, time_msg_at,
+    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, kEqualFiles, kXDGConfigDirs, silent_mode,
+    time_msg_at,
 };
 use crate::memory::{strequal, xfree, xmalloc};
+use crate::message::state::msg_scroll;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, stderr};
 use crate::os::env::vim_env_iter;

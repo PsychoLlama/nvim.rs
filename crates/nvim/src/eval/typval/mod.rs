@@ -21,10 +21,11 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::{api_free_luaref, api_new_luaref, nlua_funcref_str};
-use crate::main::{did_emsg, got_int};
+use crate::main::got_int;
 use crate::mbyte::{mb_strcmp_ic, string_convert, utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdup, xmemdupz, xstrdup, xstrndup};
 use crate::message::emsg;
+use crate::message::state::did_emsg;
 use crate::message::{
     e_cannot_change_value, e_cannot_change_value_of_str, e_invarg, e_invrange, e_listreq,
     e_value_is_locked, e_value_is_locked_str,

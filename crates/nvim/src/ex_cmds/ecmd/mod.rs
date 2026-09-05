@@ -54,12 +54,11 @@ use crate::ex_eval::{aborting, should_abort_err};
 use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
-use crate::main::{
-    exiting, keep_help_flag, msg_listdo_overwrite, msg_scroll, msg_scrolled_ign, swap_exists_action,
-};
+use crate::main::{exiting, keep_help_flag, swap_exists_action};
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};
 use crate::message::msg_check_for_delay;
+use crate::message::state::{msg_listdo_overwrite, msg_scroll, msg_scrolled_ign};
 use crate::r#move::{changed_line_abv_curs, update_topline};
 use crate::normal::reset_VIsual;
 use crate::option::vars::{p_awa, p_sol, p_ur, p_verbose};

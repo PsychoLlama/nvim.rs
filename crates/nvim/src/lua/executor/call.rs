@@ -25,9 +25,9 @@ use crate::lua::ffi::{
     lua_error, lua_gettop, lua_pushstring, lua_pushvalue, luaL_checkinteger, luaL_checklstring,
     luaL_error,
 };
-use crate::main::did_emsg;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xrealloc};
 use crate::message::e_fast_api_disabled;
+use crate::message::state::did_emsg;
 use crate::msgpack_rpc::channel::{rpc_send_call, rpc_send_event};
 use crate::strings::vim_snprintf;
 use crate::types::{

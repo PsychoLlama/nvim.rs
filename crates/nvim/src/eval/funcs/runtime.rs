@@ -22,13 +22,14 @@ use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
 use crate::main::{
-    autocmd_busy, msg_scrolled, starting, stdin_isatty, stdout_isatty, vgetc_busy,
-    wild_menu_showing, windowsVersion,
+    autocmd_busy, starting, stdin_isatty, stdout_isatty, vgetc_busy, wild_menu_showing,
+    windowsVersion,
 };
 use crate::memline::ml_get;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::xstrdup;
 use crate::menu::{get_menu_cmd_modes, menu_get};
+use crate::message::state::msg_scrolled;
 use crate::normal::op_pending;
 use crate::ops::cursor_pos_info;
 use crate::os::cshim::strncasecmp;

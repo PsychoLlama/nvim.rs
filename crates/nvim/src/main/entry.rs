@@ -56,14 +56,15 @@ use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
     APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, debug_break_level,
     embedded_mode, err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, main_loop, msg_didout, msg_row, msg_scroll, no_wait_return,
-    recoverymode, scriptout, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
-    time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
+    kOptCbFlagUnnamedplus, main_loop, recoverymode, scriptout, silent_mode, starting,
+    stderr_isatty, stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id,
+    ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;
 use crate::memory::strequal;
 use crate::message::msg_putchar;
+use crate::message::state::{msg_didout, msg_row, msg_scroll, no_wait_return};
 use crate::mouse::setmouse;
 use crate::r#move::update_topline;
 use crate::msgpack_rpc::server::{server_init, server_teardown};

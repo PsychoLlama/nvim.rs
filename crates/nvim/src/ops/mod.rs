@@ -46,8 +46,7 @@ use crate::indent::{
 use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
 use crate::main::{
-    KeyTyped, bangredo, curbuf_splice_pending, got_int, mouse_dragging, msg_scroll, no_lines_msg,
-    repeat_luaref,
+    KeyTyped, bangredo, curbuf_splice_pending, got_int, mouse_dragging, repeat_luaref,
 };
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
@@ -60,6 +59,7 @@ use crate::memline::{
     ml_get_pos_len, ml_replace, ml_replace_len,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz};
+use crate::message::state::{msg_scroll, no_lines_msg};
 use crate::message::{e_invarg, e_modifiable};
 use crate::message::{emsg, msg, msg_keep, msg_start, msgmore};
 use crate::mouse::setmouse;

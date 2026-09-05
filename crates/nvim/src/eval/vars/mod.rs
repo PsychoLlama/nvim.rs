@@ -49,11 +49,12 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{called_emsg, current_sctx, did_emsg, emsg_severe, got_int, no_hlsearch};
+use crate::main::{current_sctx, got_int, no_hlsearch};
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,
 };
+use crate::message::state::{called_emsg, did_emsg, emsg_severe};
 use crate::message::{
     e_cannot_change_readonly_variable_str, e_cannot_mod, e_cannot_set_variable_in_sandbox_str,
     e_invarg, e_listreq, e_string_required,

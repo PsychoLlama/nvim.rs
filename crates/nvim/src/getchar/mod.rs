@@ -25,14 +25,12 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
-    KeyStuffed, KeyTyped, allow_keys, called_emsg, cmd_silent, cmdline_star, ctrl_c_interrupts,
-    debug_did_msg, did_emsg, did_outofmem_msg, did_swapwrite_msg, emsg_silent, got_int,
-    ignore_script, langmap_mapchar, main_loop, mapped_ctrl_c, maptick, may_garbage_collect,
-    mod_mask, mouse_col, mouse_grid, mouse_row, msg_col, msg_didout, msg_row, msg_scroll,
-    msg_silent, need_wait_return, no_mapping, no_zero_mapping, pending_end_reg_executing,
-    reg_executing, reg_recording, repeat_luaref, scriptout, test_disable_char_avail,
-    typebuf_was_empty, typebuf_was_filled, vgetc_busy, vgetc_char, vgetc_mod_mask,
-    want_garbage_collect,
+    KeyStuffed, KeyTyped, allow_keys, cmdline_star, ctrl_c_interrupts, debug_did_msg,
+    did_outofmem_msg, did_swapwrite_msg, got_int, ignore_script, langmap_mapchar, main_loop,
+    mapped_ctrl_c, maptick, may_garbage_collect, mod_mask, mouse_col, mouse_grid, mouse_row,
+    no_mapping, no_zero_mapping, pending_end_reg_executing, reg_executing, reg_recording,
+    repeat_luaref, scriptout, test_disable_char_avail, typebuf_was_empty, typebuf_was_filled,
+    vgetc_busy, vgetc_char, vgetc_mod_mask, want_garbage_collect,
 };
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
@@ -44,6 +42,10 @@ use crate::mbyte::{
 use crate::memline::ml_sync_all;
 use crate::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz,
+};
+use crate::message::state::{
+    called_emsg, cmd_silent, did_emsg, emsg_silent, msg_col, msg_didout, msg_row, msg_scroll,
+    msg_silent, need_wait_return,
 };
 use crate::message::{e_nesting, e_toocompl};
 use crate::message::{emsg, iemsg, internal_error};

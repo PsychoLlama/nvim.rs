@@ -8,8 +8,8 @@ use std::ffi::c_int;
 
 use neovim::eval::decode::json_decode_string;
 use neovim::eval::typval::tv_clear;
-use neovim::main::emsg_silent;
 use neovim::memory::{xfree, xmemdup};
+use neovim::message::state::emsg_silent;
 use neovim::types::{Failed, TypVal, VAR_UNKNOWN, VarLock, typval_vval_union};
 
 use crate::support::alloc::AllocLog;

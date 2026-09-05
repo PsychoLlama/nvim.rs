@@ -27,11 +27,10 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::charset::{trans_characters, vim_strsize};
 use crate::drawscreen::redrawing;
 use crate::drawscreen::state::need_maketitle;
-use crate::main::{
-    got_int, msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg, stl_syntax,
-};
+use crate::main::{got_int, stl_syntax};
 use crate::mbyte::utf_cp_bounds;
 use crate::memory::{xfree, xstrdup, xstrlcpy};
+use crate::message::state::{msg_col, msg_scroll, msg_scrolled, need_wait_return, no_lines_msg};
 use crate::message::{
     message_filtered, msg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start, msg_trunc,
     set_keep_msg,

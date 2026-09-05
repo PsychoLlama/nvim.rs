@@ -43,12 +43,14 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
 use crate::main::{
-    cmd_silent, debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
-    did_emsg, emsg_silent, got_int, ignore_script, lines_left, msg_row, msg_scroll,
-    need_wait_return, redir_off,
+    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick, got_int,
+    ignore_script,
 };
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
+use crate::message::state::{
+    cmd_silent, did_emsg, emsg_silent, lines_left, msg_row, msg_scroll, need_wait_return, redir_off,
+};
 use crate::message_fmt::c_str;
 use crate::os::cshim::strstr;
 use crate::os::env::{expand_env_save, home_replace};

@@ -41,8 +41,9 @@ use crate::eval::{
 };
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
-use crate::main::{called_emsg, current_sctx, did_emsg};
+use crate::main::current_sctx;
 use crate::memory::{xfree, xmalloc, xstrdup};
+use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;

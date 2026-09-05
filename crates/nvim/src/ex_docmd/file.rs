@@ -34,9 +34,10 @@ use crate::file_search::{FileNameOpts, vim_findfile_cleanup};
 
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::getchar::stuff_readbuf;
-use crate::main::{msg_scroll, need_wait_return, readonlymode, recoverymode};
+use crate::main::{readonlymode, recoverymode};
 use crate::mark::setpcmark;
 use crate::message::e_trailing_arg;
+use crate::message::state::{msg_scroll, need_wait_return};
 use crate::option::vars::{p_awa, p_shada};
 use crate::state::mode::{exmode_active, pending_exmode_active};
 use crate::winlayer::graph::{curbuf, curwin};

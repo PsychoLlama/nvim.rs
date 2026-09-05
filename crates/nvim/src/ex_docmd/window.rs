@@ -37,10 +37,9 @@ use crate::ex_docmd::tags::ex_findpat;
 use crate::file_search::{FileNameOpts, find_file_in_path, vim_findfile_cleanup};
 use crate::highlight_group::HLF_T;
 use crate::keycodes::Ctrl_G;
-use crate::main::{
-    g_do_tagpreview, got_int, msg_col, msg_scroll, postponed_split_flags, postponed_split_tab,
-};
+use crate::main::{g_do_tagpreview, got_int, postponed_split_flags, postponed_split_tab};
 use crate::memory::{xfree, xstrlcpy};
+use crate::message::state::{msg_col, msg_scroll};
 use crate::message::{e_invarg, e_invarg2, e_invcmd, e_invrange, e_screenmode};
 use crate::message::{emsg, msg_ext_set_kind, msg_outtrans, msg_putchar, msg_start};
 use crate::message_fmt::c_str;

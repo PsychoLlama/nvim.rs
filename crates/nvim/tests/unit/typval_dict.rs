@@ -20,9 +20,9 @@ use neovim::eval::typval::{
     tv_dict_watcher_add, tv_dict_watcher_remove, tv_list_unref,
 };
 use neovim::guard::sandbox;
-use neovim::main::emsg_skip;
 use neovim::mbyte::convert_setup;
 use neovim::memory::{xfree, xmalloc, xstrdup};
+use neovim::message::state::emsg_skip;
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{Callback, Dict, Failed, VarLock, VimConv};
 

@@ -58,9 +58,8 @@ use crate::keycodes::{
 use crate::lua::executor::{
     api_free_luaref, api_new_luaref, nlua_call_ref, nlua_funcref_str, nlua_set_sctx,
 };
-use crate::main::{
-    current_sctx, got_int, langmap_mapchar, mapped_ctrl_c, msg_col, msg_row, msg_silent,
-};
+use crate::main::{current_sctx, got_int, langmap_mapchar, mapped_ctrl_c};
+use crate::message::state::{msg_col, msg_row, msg_silent};
 use crate::message::{e_invarg, e_noabbr, e_nomap};
 use crate::option::vars::{p_cpo, p_langmap, p_verbose};
 use crate::state::mode::{State, no_abbr};

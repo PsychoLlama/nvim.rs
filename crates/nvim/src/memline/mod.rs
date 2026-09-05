@@ -32,9 +32,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
-    did_check_timestamps, getout, got_int, inhibit_delete_count, msg_ext_skip_flush, msg_row,
-    msg_silent, need_check_timestamps, need_wait_return, no_lines_msg, recoverymode,
-    swap_exists_action,
+    did_check_timestamps, getout, got_int, inhibit_delete_count, need_check_timestamps,
+    recoverymode, swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
@@ -44,6 +43,9 @@ use crate::memfile::{
     mf_set_fnames, mf_sync, mf_trans_del,
 };
 use crate::memory::{xfree, xmalloc, xmemdupz, xstpcpy, xstrdup, xstrlcpy};
+use crate::message::state::{
+    msg_ext_skip_flush, msg_row, msg_silent, need_wait_return, no_lines_msg,
+};
 use crate::message::{
     do_dialog, emsg_ptr, iemsg_ptr, msg, msg_end, msg_ext_set_kind, msg_home_replace,
     msg_multiline, msg_outnum, msg_outtrans, msg_ptr, msg_putchar, msg_puts, msg_puts_hl,

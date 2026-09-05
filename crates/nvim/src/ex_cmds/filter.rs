@@ -36,12 +36,12 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
 use crate::main::{
-    autocmd_busy, bangredo, did_check_timestamps, got_int, info_message, msg_col, msg_didout,
-    msg_row, msg_scroll, msg_silent, need_check_timestamps, silent_mode,
+    autocmd_busy, bangredo, did_check_timestamps, got_int, need_check_timestamps, silent_mode,
 };
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc};
+use crate::message::state::{info_message, msg_col, msg_didout, msg_row, msg_scroll, msg_silent};
 use crate::message::{
     MSG_BUF_LEN, emsg, message_filtered, msg_ext_set_kind, msg_outtrans, msg_prt_line, msg_ptr,
     msg_puts_hl, set_keep_msg, wait_return,

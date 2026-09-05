@@ -28,8 +28,9 @@ use crate::event::time::{
 use crate::ex_docmd::{get_pressedreturn, set_pressedreturn};
 use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::did_throw;
-use crate::main::{called_emsg, did_emsg, main_loop};
+use crate::main::main_loop;
 use crate::memory::{xfree, xmalloc};
+use crate::message::state::{called_emsg, did_emsg};
 use crate::registry::SlotTable;
 use crate::types::{
     Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VAR_NUMBER, VAR_UNKNOWN,

@@ -39,8 +39,8 @@ use crate::highlight_group::{
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
 use crate::main::{
-    cterm_normal_bg_color, did_emsg, highlight_match, hl_attr_active, normal_bg,
-    search_match_endcol, search_match_lines, spell_redraw_lnum,
+    cterm_normal_bg_color, highlight_match, hl_attr_active, normal_bg, search_match_endcol,
+    search_match_lines, spell_redraw_lnum,
 };
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
@@ -51,6 +51,7 @@ use crate::mbyte::{
 };
 use crate::memline::{gchar_pos, ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc};
+use crate::message::state::did_emsg;
 use crate::r#move::{set_empty_rows, validate_virtcol, win_col_off, win_col_off2};
 use crate::option::vars::{dy_flags, p_sel};
 use crate::option::{get_showbreak_value, kOptFlagInsecure};

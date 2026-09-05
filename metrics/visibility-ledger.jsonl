@@ -191,8 +191,6 @@
 {"path":"neovim::log::log_init","kind":"fn","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}
 {"path":"neovim::log::logmsg_line","kind":"fn","file":"crates/nvim/src/log.rs","tests":["crates/nvim/tests/unit/log.rs"]}
 {"path":"neovim::main::early_init","kind":"fn","file":"crates/nvim/src/main/entry.rs","tests":["crates/nvim/tests/unit/support.rs"]}
-{"path":"neovim::main::emsg_silent","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/eval_decode.rs"]}
-{"path":"neovim::main::emsg_skip","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::main::event_init","kind":"fn","file":"crates/nvim/src/main/entry.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::main::g_min_log_level","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/log.rs"]}
 {"path":"neovim::main::kTVCstring","kind":"static","file":"crates/nvim/src/main/mod.rs","tests":["crates/nvim/tests/unit/typval_value.rs"]}
@@ -282,6 +280,8 @@
 {"path":"neovim::memory::arena::arena_mem_free","kind":"fn","file":"crates/nvim/src/memory/arena.rs","tests":["crates/nvim/tests/unit/arena.rs"]}
 {"path":"neovim::message::msg_hist_last","kind":"static","file":"crates/nvim/src/message/history.rs","tests":["crates/nvim/tests/unit/support.rs"]}
 {"path":"neovim::message::trunc_string","kind":"fn","file":"crates/nvim/src/message/mod.rs","tests":["crates/nvim/tests/unit/message.rs"]}
+{"path":"neovim::message::state::emsg_silent","kind":"static","file":"crates/nvim/src/message/state.rs","tests":["crates/nvim/tests/unit/eval_decode.rs"]}
+{"path":"neovim::message::state::emsg_skip","kind":"static","file":"crates/nvim/src/message/state.rs","tests":["crates/nvim/tests/unit/typval_dict.rs"]}
 {"path":"neovim::msgpack_rpc::packer::mpack_object","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::msgpack_rpc::packer::packer_string_buffer","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}
 {"path":"neovim::msgpack_rpc::packer::packer_take_string","kind":"fn","file":"crates/nvim/src/msgpack_rpc/packer/mod.rs","tests":["crates/nvim/tests/unit/packer.rs"]}

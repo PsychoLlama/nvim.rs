@@ -22,10 +22,11 @@ use crate::ex_docmd::{DoCmdOpts, check_nextcmd, do_cmdline};
 use crate::ex_eval::aborting;
 use crate::ex_eval::state::force_abort;
 use crate::highlight_group::{HLF_E, syn_name2id};
-use crate::main::{
-    called_emsg, did_emsg, got_int, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
-};
+use crate::main::got_int;
 use crate::memory::xfree;
+use crate::message::state::{
+    called_emsg, did_emsg, line_msg, msg_didout, msg_ext_skip_verbose, need_clr_eos,
+};
 use crate::message::{
     emsg_multiline, msg_clr_eos, msg_end, msg_ext_set_append, msg_ext_set_kind, msg_multiline,
     msg_outnum, msg_ptr, msg_puts, msg_puts_hl, msg_puts_len, msg_sb_eol, msg_start, verbose_enter,

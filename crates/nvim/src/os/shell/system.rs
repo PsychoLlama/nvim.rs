@@ -24,8 +24,9 @@ use crate::event::wstream::{
     wstream_init, wstream_new_buffer, wstream_set_write_cb, wstream_write,
 };
 use crate::guard::Suppress;
-use crate::main::{got_int, lines_left, msg_no_more};
+use crate::main::got_int;
 use crate::memory::{xfree, xrealloc, xstrlcpy};
+use crate::message::state::{lines_left, msg_no_more};
 use crate::message::{msg_end, msg_outtrans, msg_putchar, msg_sb_eol, msg_start};
 use crate::message_fmt::c_str;
 use crate::msg_schedule_semsg;

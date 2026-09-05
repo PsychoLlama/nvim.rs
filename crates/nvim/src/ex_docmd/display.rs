@@ -21,11 +21,11 @@ use crate::eval::vars::{set_vim_var_nr, var_redir_start, var_redir_stop};
 use crate::ex_docmd::argopt::open_exfile;
 use crate::ex_docmd::ex_pressedreturn;
 use crate::highlight_group::{do_highlight, load_colors};
-use crate::main::{
-    cmdpreview, msg_col, msg_didout, need_wait_return, no_hlsearch, redir_fd, redir_off, redir_reg,
-    redir_vname,
-};
+use crate::main::{cmdpreview, no_hlsearch};
 use crate::memory::xstrdup;
+use crate::message::state::{
+    msg_col, msg_didout, need_wait_return, redir_fd, redir_off, redir_reg, redir_vname,
+};
 use crate::option::vars::{p_hls, p_lz};
 use crate::state::mode::State;
 

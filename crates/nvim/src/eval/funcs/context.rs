@@ -8,8 +8,8 @@ use crate::context::{
     ctx_free, ctx_from_dict, ctx_get, ctx_restore, ctx_save, ctx_size, ctx_to_dict, kCtxAll,
 };
 use crate::eval::typval::tv_list_first;
-use crate::main::did_emsg;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
+use crate::message::state::did_emsg;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{

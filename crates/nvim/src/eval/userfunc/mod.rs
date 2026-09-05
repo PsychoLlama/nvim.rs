@@ -53,12 +53,15 @@ use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
 use crate::main::{
-    KeyTyped, current_sctx, debug_backtrace_level, debug_tick, did_emsg, do_profiling, emsg_severe,
-    got_int, lines_left, msg_row, msg_scroll, need_wait_return, want_garbage_collect,
+    KeyTyped, current_sctx, debug_backtrace_level, debug_tick, do_profiling, got_int,
+    want_garbage_collect,
 };
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
+};
+use crate::message::state::{
+    did_emsg, emsg_severe, lines_left, msg_row, msg_scroll, need_wait_return,
 };
 use crate::message::{
     e_invarg2, e_invrange, e_toofewarg, e_toomanyarg, e_unknown_function_str, e_usingsid,

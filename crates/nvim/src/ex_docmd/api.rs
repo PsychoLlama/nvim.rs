@@ -47,7 +47,7 @@ use crate::ex_getln::{
 };
 use crate::fold::has_folding;
 use crate::guard::Suppress;
-use crate::main::emsg_silent;
+use crate::message::state::emsg_silent;
 use crate::message::{e_cmdwin, e_command_too_recursive, e_modifiable, e_nobang, e_norange};
 use crate::winlayer::graph::cmdwin_type;
 

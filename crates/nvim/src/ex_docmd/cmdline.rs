@@ -48,10 +48,8 @@ use crate::ex_eval::state::{
 };
 use crate::garray::{ga_clear, ga_init};
 use crate::guard::{Bump, Depth, Suppress};
-use crate::main::{
-    KeyTyped, debug_break_level, debug_tick, did_emsg, do_profiling, got_int, msg_didany,
-    msg_didout, msg_scroll, need_wait_return,
-};
+use crate::main::{KeyTyped, debug_break_level, debug_tick, do_profiling, got_int};
+use crate::message::state::{did_emsg, msg_didany, msg_didout, msg_scroll, need_wait_return};
 use crate::message::{e_command_too_recursive, e_endfor, e_endif, e_endtry, e_endwhile};
 use crate::option::vars::p_verbose;
 

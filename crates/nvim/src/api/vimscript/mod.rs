@@ -13,8 +13,8 @@ use crate::ex_docmd::do_cmdline_cmd;
 use crate::ex_eval::state::{did_throw, force_abort, suppress_errthrow};
 use crate::garray::{ga_clear, ga_init};
 use crate::global_cell::GlobalCell;
-use crate::main::{capture_ga, did_emsg, msg_col, redir_off};
 use crate::memory::xfree;
+use crate::message::state::{capture_ga, did_emsg, msg_col, redir_off};
 use crate::runtime::do_source_str;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Dict, DictItem, Error, ExArg, ExprAST, ExprASTNode,

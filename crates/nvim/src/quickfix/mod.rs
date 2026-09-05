@@ -62,7 +62,7 @@ use crate::fuzzy::fuzzy_match;
 use crate::global_cell::GlobalCell;
 use crate::help::check_help_lang;
 use crate::highlight_group::syn_name2id;
-use crate::main::{KeyTyped, got_int, msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled};
+use crate::main::{KeyTyped, got_int};
 use crate::mark::setpcmark;
 use crate::mbyte::{convert_setup, remove_bom, string_convert};
 use crate::memfile::mf_fname;
@@ -72,6 +72,7 @@ use crate::memline::{
 use crate::memory::{
     strequal, xcalloc, xfree, xmalloc, xmallocz, xrealloc, xstrdup, xstrlcat, xstrlcpy,
 };
+use crate::message::state::{msg_col, msg_didout, msg_nowait, msg_scroll, msg_scrolled};
 use crate::message::{
     e_au_recursive, e_buffer_is_not_loaded, e_dictreq, e_invalpat, e_invarg, e_invrange, e_listreq,
     e_loclist, e_no_errors, e_nomatch, e_noprevre, e_notmp, e_readerrf, e_string_required,

@@ -35,10 +35,11 @@ use crate::lua::executor::nlua_set_sctx;
 use crate::main::{
     KeyTyped, aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full,
     autocmd_match, autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events,
-    did_cursorhold, did_emsg, do_profiling, globaldir, got_int, last_cursormoved,
-    last_cursormoved_win, main_loop, msg_col, reg_recording, starting,
+    did_cursorhold, do_profiling, globaldir, got_int, last_cursormoved, last_cursormoved_win,
+    main_loop, reg_recording, starting,
 };
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
+use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
 use crate::message::{
     emsg, give_warning, msg_advance, msg_clr_eos, msg_end, msg_ext_set_kind, msg_outtrans,

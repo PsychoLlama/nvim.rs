@@ -57,10 +57,7 @@ use crate::highlight_group::{HLF_COUNT, HLF_E, HLF_R, HLF_W, syn_name2attr};
 use crate::indent::{get_indent, inindent};
 use crate::indent_c::{cindent_on, do_c_expr_indent, in_cinkeys};
 use crate::lua::executor::nlua_expand_pat;
-use crate::main::{
-    KeyTyped, did_emsg, emsg_silent, g_tag_at_cursor, got_int, in_assert_fails, msg_hist_off,
-    pum_want, test_disable_char_avail,
-};
+use crate::main::{KeyTyped, g_tag_at_cursor, got_int, pum_want, test_disable_char_avail};
 use crate::mbyte::{
     mb_get_class, mb_islower, mb_isupper, mb_prevptr, mb_ptr2char_adv, mb_tolower, mb_toupper,
     utf_char2bytes, utf_char2len, utf_head_off, utf_ptr2char, utf_ptr2len, utf8len_tab,
@@ -71,6 +68,7 @@ use crate::memory::{
     MergeSortCompareFunc, MergeSortGetFunc, MergeSortSetFunc, mergesort_list, strequal, xcalloc,
     xfree, xmalloc, xmemdupz, xstrdup, xstrlcpy,
 };
+use crate::message::state::{did_emsg, emsg_silent, in_assert_fails, msg_hist_off};
 use crate::message::{e_invarg, e_listreq, e_patnotf};
 use crate::message::{
     emsg, internal_error, msg_clr_cmdline, msg_delay, msg_ext_set_kind, msg_progress,

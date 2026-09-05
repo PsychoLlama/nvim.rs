@@ -23,9 +23,10 @@ use crate::fold::has_folding;
 use crate::getchar::char_avail;
 use crate::global_cell::GlobalCell;
 use crate::grid::{grid_line_flush, grid_line_puts, grid_line_start};
-use crate::main::{hl_attr_active, msg_silent};
+use crate::main::hl_attr_active;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memline::ml_get_pos;
+use crate::message::state::msg_silent;
 use crate::message::{msg_grid_validate, msg_grid_view};
 use crate::normal::{
     ARRAY_DICT_INIT, SHOWCMD_BUFLEN, SHOWCMD_COLS, VisualSelection, showcmd_is_clear,

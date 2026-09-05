@@ -47,15 +47,15 @@ use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
 use crate::main::{
-    KeyTyped, cmd_silent, current_sctx, got_int, hl_attr_active, msg_col, msg_didany, msg_row,
-    msg_scrolled, pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line,
-    wild_menu_showing,
+    KeyTyped, current_sctx, got_int, hl_attr_active, pum_want, save_p_ls, save_p_wmh,
+    search_first_line, search_last_line, wild_menu_showing,
 };
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len};
 use crate::memory::{xfree, xmalloc, xmemcpyz, xmemdupz, xstpcpy, xstrdup};
 use crate::menu::{get_menu_name, get_menu_names, menu_is_separator, set_context_in_menu_cmd};
+use crate::message::state::{cmd_silent, msg_col, msg_didany, msg_row, msg_scrolled};
 use crate::message::{e_invarg, e_toomany};
 use crate::message::{
     emsg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_grid_view, msg_outtrans,

@@ -7,9 +7,10 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use crate::lua::executor::nlua_init;
+use crate::main::argv0;
 use crate::main::exit::os_exit;
-use crate::main::{argv0, info_message, msg_didout};
 use crate::message::msg_putchar;
+use crate::message::state::{info_message, msg_didout};
 use crate::os::cshim::{gettext, gettext_ptr, stderr};
 use crate::os::signal::signal_stop;
 use crate::path::path_tail;

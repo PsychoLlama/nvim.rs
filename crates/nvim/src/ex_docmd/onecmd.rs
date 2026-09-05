@@ -57,11 +57,10 @@ use crate::fold::has_folding;
 use crate::guard::Depth;
 use crate::guard::sandbox;
 use crate::input::ask_yesno;
-use crate::main::{
-    did_emsg, do_profiling, exiting, got_int, msg_silent, pending_end_reg_executing, reg_executing,
-};
+use crate::main::{do_profiling, exiting, got_int, pending_end_reg_executing, reg_executing};
 use crate::mbyte::{mb_copy_char, utf_head_off, utfc_ptr2len};
 use crate::memory::{xmemdupz, xstrlcat, xstrlcpy};
+use crate::message::state::{did_emsg, msg_silent};
 use crate::message::{
     e_argreq, e_cmdwin, e_invarg, e_invrange, e_modifiable, e_nobang, e_norange, e_sandbox,
     e_trailing_arg,

@@ -40,13 +40,16 @@ use crate::fileio::check_timestamps;
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
 use crate::main::{
-    KeyTyped, did_check_timestamps, did_emsg, did_wait_return, diff_need_scrollbind,
-    emsg_on_display, emsg_silent, got_int, in_assert_fails, keep_msg, keep_msg_hl_id,
-    last_cursormoved, last_cursormoved_win, may_garbage_collect, mod_mask, msg_didany, msg_didout,
-    msg_hist_off, msg_nowait, msg_scroll, msg_silent, need_check_timestamps, need_fileinfo,
-    need_wait_return, quit_more, reg_executing, reg_recording, time_fd,
+    KeyTyped, did_check_timestamps, diff_need_scrollbind, got_int, last_cursormoved,
+    last_cursormoved_win, may_garbage_collect, mod_mask, need_check_timestamps, reg_executing,
+    reg_recording, time_fd,
 };
 use crate::memory::{xfree, xstrdup};
+use crate::message::state::{
+    did_emsg, did_wait_return, emsg_on_display, emsg_silent, in_assert_fails, keep_msg,
+    keep_msg_hl_id, msg_didany, msg_didout, msg_hist_off, msg_nowait, msg_scroll, msg_silent,
+    need_fileinfo, need_wait_return, quit_more,
+};
 use crate::message::{may_clear_sb_text, msg_delay, msg_ptr, wait_return};
 use crate::normal::{
     CA_COMMAND_BUSY, NV_NCH, NV_NCH_ALW, NV_NCH_NOP, NV_SS, NV_SSS, NV_STS, NormalState,

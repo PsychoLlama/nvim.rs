@@ -64,10 +64,11 @@ use crate::eval::eval_to_string_safe;
 use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_var};
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
-use crate::main::{KeyTyped, did_emsg, msg_loclist, msg_qflist};
+use crate::main::{KeyTyped, msg_loclist, msg_qflist};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
+use crate::message::state::did_emsg;
 use crate::option::vars::{p_sc, p_sloc};
 use crate::option::{
     find_option, get_fileformat, get_option_default, set_option_direct, was_set_insecurely,

@@ -21,7 +21,7 @@ use core::ptr;
 
 use super::*;
 use crate::grid::get_win_by_grid_handle;
-use crate::main::{msg_grid, msg_grid_pos};
+use crate::message::state::{msg_grid, msg_grid_pos};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::popupmenu::pum_grid_ref;
 use crate::types::{CharsizeArg, Handle, LineNr};

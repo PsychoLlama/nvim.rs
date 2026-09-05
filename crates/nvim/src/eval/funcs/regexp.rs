@@ -20,12 +20,12 @@ use crate::eval::typval::{
     tv_list_item_remove, tv_list_uidx,
 };
 use crate::fuzzy::{FUZZY_MATCH_MAX_LEN, fuzzy_match, matched_char_count};
-use crate::main::did_emsg;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::ml_get_buf;
 use crate::memory::{xfree, xmemdupz};
 use crate::message::e_buffer_is_not_loaded;
 use crate::message::emsg;
+use crate::message::state::did_emsg;
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_cpo, p_ic};
 use crate::optionstr::empty_option;

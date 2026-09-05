@@ -29,12 +29,12 @@ use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
-use crate::main::{
-    capture_ga, emsg_noredir, emsg_silent, garbage_collect_at_exit, msg_col, need_clr_eos,
-    redir_off, want_garbage_collect,
-};
+use crate::main::{garbage_collect_at_exit, want_garbage_collect};
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
+use crate::message::state::{
+    capture_ga, emsg_noredir, emsg_silent, msg_col, need_clr_eos, redir_off,
+};
 use crate::message::{e_toomanyarg, e_unknown_function_str};
 use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;

@@ -45,15 +45,17 @@ use crate::highlight_group::{
 };
 use crate::insexpand::ins_compl_show_pum;
 use crate::main::{
-    KeyTyped, cmdline_was_last_drawn, exiting, got_int, hl_attr_active, lines_left, msg_col,
-    msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount, msg_no_more, msg_row,
-    msg_scrolled, msg_scrolled_at_flush, msg_silent, must_redraw_pum, need_diff_redraw,
-    need_highlight_changed, need_wait_return, no_hlsearch, ns_hl_fast, reg_recording, starting,
+    KeyTyped, cmdline_was_last_drawn, exiting, got_int, hl_attr_active, must_redraw_pum,
+    need_diff_redraw, need_highlight_changed, no_hlsearch, ns_hl_fast, reg_recording, starting,
     stl_syntax, tab_page_click_defs, tab_page_click_defs_size,
 };
 use crate::r#match::{init_search_hl, prepare_search_hl};
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
+use crate::message::state::{
+    lines_left, msg_col, msg_did_scroll, msg_didany, msg_didout, msg_grid_scroll_discount,
+    msg_no_more, msg_row, msg_scrolled, msg_scrolled_at_flush, msg_silent, need_wait_return,
+};
 use crate::message::{
     msg_check_for_delay, msg_clr_cmdline, msg_clr_eos, msg_ext_flush_showmode, msg_ext_ui_flush,
     msg_grid_ref, msg_grid_set_pos, msg_grid_validate, msg_puts_hl, msg_reset_scroll,

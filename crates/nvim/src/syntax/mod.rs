@@ -60,12 +60,13 @@ use crate::highlight_group::{
 };
 use crate::indent_c::find_start_comment;
 use crate::main::{
-    got_int, include_default, include_link, include_none, msg_col, re_extmatch_in, re_extmatch_out,
+    got_int, include_default, include_link, include_none, re_extmatch_in, re_extmatch_out,
     reg_do_extmatch,
 };
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
+use crate::message::state::msg_col;
 use crate::message::{
     emsg, msg, msg_advance, msg_ext_set_kind, msg_outnum, msg_outtrans, msg_outtrans_len,
     msg_putchar, msg_puts, msg_puts_hl, msg_puts_title,
