@@ -289,17 +289,17 @@ static lowest_marked: GlobalCell<LineNr> = GlobalCell::new(0);
 /// that owns the swap file it just described is still alive.
 static proc_running: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
-/// Open a new memline for `buf`: an in-memory memfile with block zero, a root
+/// Open a new memline for `buffer`: an in-memory memfile with block zero, a root
 /// pointer block and one data block holding a single empty line.
 ///
 /// No swap file is created here; [`ml_open_file`] does that later.
 ///
 /// # Safety
-/// `buf` must point at a buffer with no memline open.
-pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
+/// `buffer` must point at a buffer with no memline open.
+pub unsafe fn ml_open(buffer: *mut Buffer) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     // No stack, no cached block, no cached line, no chunk table yet.
     b.b_ml.stack_clear();
     b.b_ml.ml_locked = None;
@@ -311,7 +311,8 @@ pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
     }
     // A swap file may still be opened later, when 'updatecount' is set.
     unsafe {
-        (*buf).b_may_swap = (*buf).terminal.is_null() && p_uc.get() != 0 && (*buf).b_p_swf != 0
+        (*buffer).b_may_swap =
+            (*buffer).terminal.is_null() && p_uc.get() != 0 && (*buffer).b_p_swf != 0
     };
 
     let mfp = unsafe { mf_open(::core::ptr::null_mut(), 0) };
@@ -320,7 +321,7 @@ pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
         b.b_ml.ml_mfp = mfp;
         b.b_ml.ml_flags = MlFlags::EMPTY;
         b.b_ml.ml_line_count = 1;
-        if unsafe { ml_open_blocks(buf, mfp, &mut hp) } {
+        if unsafe { ml_open_blocks(buffer, mfp, &mut hp) } {
             return Ok(());
         }
         if !hp.is_null() {
@@ -337,10 +338,10 @@ pub unsafe fn ml_open(buf: *mut Buffer) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `mfp` must be a memfile with no blocks in it yet.
-unsafe fn ml_open_blocks(buf: *mut Buffer, mfp: *mut MemFile, hp: &mut *mut BlockHdr) -> bool {
+unsafe fn ml_open_blocks(buffer: *mut Buffer, mfp: *mut MemFile, hp: &mut *mut BlockHdr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buffer) };
     // Block zero: the header that says what the rest of the file means.
     *hp = unsafe { mf_new(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 0 {
@@ -372,7 +373,7 @@ unsafe fn ml_open_blocks(buf: *mut Buffer, mfp: *mut MemFile, hp: &mut *mut Bloc
         unsafe { (*b0p).set_dirty(changed) };
         let fileformat = get_fileformat(b) + 1;
         unsafe { (*b0p).set_flags(fileformat) };
-        unsafe { set_b0_fname(b0p, buf) };
+        unsafe { set_b0_fname(b0p, buffer) };
         let _ = unsafe {
             os_get_username(
                 (&raw mut (*b0p).b0_uname).cast::<::core::ffi::c_char>(),
@@ -448,17 +449,17 @@ pub unsafe fn ml_open_files() {
     }
 }
 
-/// Open a swap file for `buf`'s memfile, if it has none yet.
+/// Open a swap file for `buffer`'s memfile, if it has none yet.
 ///
 /// If no usable file name can be found the memfile keeps no name and
 /// remains memory-only, with no recovery possible.
 ///
 /// # Safety
-/// `buf` must point at a buffer.
-pub unsafe fn ml_open_file(buf: *mut Buffer) {
+/// `buffer` must point at a buffer.
+pub unsafe fn ml_open_file(buffer: *mut Buffer) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null()
         || unsafe { (*mfp).mf_fd } >= 0
@@ -489,7 +490,7 @@ pub unsafe fn ml_open_file(buf: *mut Buffer) {
         // directory is tried.
         let fname = unsafe {
             findswapname(
-                buf,
+                buffer,
                 &raw mut dirp,
                 ::core::ptr::null_mut(),
                 &raw mut found_existing_dir,
@@ -506,7 +507,7 @@ pub unsafe fn ml_open_file(buf: *mut Buffer) {
             continue;
         }
         unsafe { (*mfp).mf_dirty = MfDirty::YesNoSync }; // don't sync yet in ml_sync_all
-        unsafe { ml_upd_block0(buf, UB_SAME_DIR) };
+        unsafe { ml_upd_block0(buffer, UB_SAME_DIR) };
 
         // Flush block zero, so others can read it.
         if unsafe { mf_sync(mfp, MFS_ZERO as ::core::ffi::c_int) }.is_ok() {
@@ -516,7 +517,7 @@ pub unsafe fn ml_open_file(buf: *mut Buffer) {
             break;
         }
         // Writing block zero failed: close it and try another directory.
-        unsafe { mf_close_file(buf, false) };
+        unsafe { mf_close_file(buffer, false) };
     }
 
     if unsafe { *p_dir.get() } != NUL as ::core::ffi::c_char && unsafe { mf_fname(mfp) }.is_null() {
@@ -524,8 +525,8 @@ pub unsafe fn ml_open_file(buf: *mut Buffer) {
         let _no_prompt = Suppress::wait_return();
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg0 = unsafe {
-            c_str(if !buf_spname(buf).is_null() {
-                buf_spname(buf)
+            c_str(if !buf_spname(buffer).is_null() {
+                buf_spname(buffer)
             } else {
                 b.b_fname
             })
@@ -550,18 +551,18 @@ pub unsafe fn check_need_swap(newfile: bool) {
     }
 }
 
-/// Close `buf`'s memline, deleting the swap file if `del_file`.
+/// Close `buffer`'s memline, deleting the swap file if `del_file`.
 ///
 /// # Safety
-/// `buf` must point at a buffer.
-pub unsafe fn ml_close(buf: *mut Buffer, del_file: ::core::ffi::c_int) {
+/// `buffer` must point at a buffer.
+pub unsafe fn ml_close(buffer: *mut Buffer, del_file: ::core::ffi::c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     if b.b_ml.ml_mfp.is_null() {
         return; // not open
     }
-    unsafe { mf_close((*buf).b_ml.ml_mfp, del_file != 0) }; // closes the .swp file
+    unsafe { mf_close((*buffer).b_ml.ml_mfp, del_file != 0) }; // closes the .swp file
     // The cached line, if the memline owns it -- which it can only be
     // while a line is cached at all.
     if let Some(owned) = b.b_ml.take_owned() {

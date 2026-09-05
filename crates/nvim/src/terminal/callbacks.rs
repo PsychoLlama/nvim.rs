@@ -111,8 +111,8 @@ unsafe extern "C" fn term_movecursor(
 ///
 /// Does nothing when the buffer is gone, which happens if the child sets a
 /// title after its terminal buffer was wiped.
-pub(crate) fn buf_set_term_title(buf: Option<Buf>, title: &[u8]) {
-    let Some(mut buf) = buf else {
+pub(crate) fn buf_set_term_title(buffer: Option<Buf>, title: &[u8]) {
+    let Some(mut buf) = buffer else {
         return;
     };
     let mut err = Error::none();

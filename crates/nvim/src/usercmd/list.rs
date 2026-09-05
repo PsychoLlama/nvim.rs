@@ -270,17 +270,17 @@ fn dict_of<const N: usize>(
     dict
 }
 
-/// `nvim_get_commands()`: every user command of `buf`, or every global one
-/// when `buf` is null, as a map from name to description.
+/// `nvim_get_commands()`: every user command of `buffer`, or every global one
+/// when `buffer` is null, as a map from name to description.
 ///
 /// # Safety
-/// Module contract; `buf` must be null or a live buffer, and `arena` the
+/// Module contract; `buffer` must be null or a live buffer, and `arena` the
 /// dispatcher's.
-pub(crate) unsafe fn commands_array(buf: *mut Buffer, arena: *mut Arena) -> ApiDict {
-    let table = if buf.is_null() {
+pub(crate) unsafe fn commands_array(buffer: *mut Buffer, arena: *mut Arena) -> ApiDict {
+    let table = if buffer.is_null() {
         Table::Global
     } else {
-        Table::Buffer(buf)
+        Table::Buffer(buffer)
     };
     // SAFETY: caller contract; nothing below adds or removes a command.
     let cmds = unsafe { table.list() };

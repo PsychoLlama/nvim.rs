@@ -28,9 +28,13 @@ use crate::winlayer::Win;
 ///
 /// # Safety
 /// `buf` must be null or valid.
-pub unsafe fn buf_byteidx_to_charidx(buf: *mut Buffer, mut lnum: LineNr, byteidx: c_int) -> c_int {
+pub unsafe fn buf_byteidx_to_charidx(
+    buffer: *mut Buffer,
+    mut lnum: LineNr,
+    byteidx: c_int,
+) -> c_int {
     // SAFETY: the caller's promise -- `buf` is null or a live buffer.
-    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
+    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
         return -1;
     };
     if buf.b_ml.ml_mfp.is_null() {
@@ -72,12 +76,12 @@ pub unsafe fn buf_byteidx_to_charidx(buf: *mut Buffer, mut lnum: LineNr, byteidx
 /// # Safety
 /// `buf` must be null or valid.
 pub unsafe fn buf_charidx_to_byteidx(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     mut lnum: LineNr,
     mut charidx: c_int,
 ) -> c_int {
     // SAFETY: the caller's promise -- `buf` is null or a live buffer.
-    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
+    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
         return -1;
     };
     if buf.b_ml.ml_mfp.is_null() {

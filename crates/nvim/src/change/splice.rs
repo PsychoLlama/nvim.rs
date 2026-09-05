@@ -103,17 +103,17 @@ fn changed_lines_invalidate_win(
     }
 }
 
-/// [`changed_lines_invalidate_win`] for every window displaying `buf`.
+/// [`changed_lines_invalidate_win`] for every window displaying `buffer`.
 ///
 pub fn changed_lines_invalidate_buf(
-    buf: Buf,
+    buffer: Buf,
     lnum: LineNr,
     col: ColNr,
     lnume: LineNr,
     xtra: LineNr,
 ) {
     for wp in tab_windows() {
-        if wp.w_buffer == buf.raw() {
+        if wp.w_buffer == buffer.raw() {
             changed_lines_invalidate_win(wp, lnum, col, lnume, xtra);
         }
     }
@@ -126,7 +126,7 @@ pub fn changed_lines_invalidate_buf(
 /// then only if it is far enough from the last one -- otherwise typing
 /// `xxxxx` would fill the list. "Far enough" is a 'textwidth' away, or 79
 /// columns when 'textwidth' is 0.
-fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
+fn record_change_mark(mut buffer: Buf, lnum: LineNr, col: ColNr) {
     // Only record the view if the changed line is on screen: a change can
     // be made outside the current window's view.
     let mut view = FileMarkView {
@@ -134,34 +134,34 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
         skipcol: 0,
     };
     let win = cur_win();
-    if win.w_buffer == buf.raw() && lnum >= win.w_topline && lnum <= win.w_botline {
+    if win.w_buffer == buffer.raw() && lnum >= win.w_topline && lnum <= win.w_botline {
         let at = win.w_cursor;
         // SAFETY: the current window is live.
         view = unsafe { mark_view_make(win.raw(), at) };
     }
 
     // RESET_FMARK: the old mark's additional data is freed first.
-    let old = buf.b_last_change.clone();
+    let old = buffer.b_last_change.clone();
     // SAFETY: the additional data is the mark's own, and nothing else holds
     // it once the mark is overwritten below.
     unsafe { free_fmark(old) };
-    let handle = buf.handle;
+    let handle = buffer.handle;
     let now = os_time();
-    buf.b_last_change.mark = Pos {
+    buffer.b_last_change.mark = Pos {
         lnum,
         col,
         coladd: 0,
     };
-    buf.b_last_change.fnum = handle;
-    buf.b_last_change.timestamp = now;
-    buf.b_last_change.view = view;
-    buf.b_last_change.additional_data = ::core::ptr::null_mut();
+    buffer.b_last_change.fnum = handle;
+    buffer.b_last_change.timestamp = now;
+    buffer.b_last_change.view = view;
+    buffer.b_last_change.additional_data = ::core::ptr::null_mut();
 
-    if buf.b_new_change || buf.b_changelistlen == 0 {
-        let add = if buf.b_changelistlen == 0 {
+    if buffer.b_new_change || buffer.b_changelistlen == 0 {
+        let add = if buffer.b_changelistlen == 0 {
             true
         } else {
-            let p = buf.b_changelist[(buf.b_changelistlen - 1) as usize].mark;
+            let p = buffer.b_changelist[(buffer.b_changelistlen - 1) as usize].mark;
             if p.lnum != lnum {
                 true
             } else {
@@ -176,15 +176,15 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
         if add {
             // The first of a new sequence of undo-able changes, far enough
             // from the last one to deserve its own entry.
-            buf.b_new_change = false;
+            buffer.b_new_change = false;
 
-            if buf.b_changelistlen == JUMPLISTSIZE {
+            if buffer.b_changelistlen == JUMPLISTSIZE {
                 // The list is full: drop the oldest entry, and pull every
                 // window's index back with it.
-                buf.b_changelistlen = JUMPLISTSIZE - 1;
+                buffer.b_changelistlen = JUMPLISTSIZE - 1;
                 // A field's address is the object's plus a constant, which
                 // needs no dereference to compute.
-                let head = buf
+                let head = buffer
                     .raw()
                     .wrapping_byte_add(offset_of!(Buffer, b_changelist))
                     .cast::<c_void>();
@@ -195,27 +195,27 @@ fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
                 let into = head.cast::<u8>();
                 unsafe { into.copy_from(head.wrapping_byte_add(one).cast_const().cast(), bytes) };
                 for mut wp in tab_windows() {
-                    if wp.w_buffer == buf.raw() && wp.w_changelistidx > 0 {
+                    if wp.w_buffer == buffer.raw() && wp.w_changelistidx > 0 {
                         wp.w_changelistidx -= 1;
                     }
                 }
             }
             // A window sitting at the end of the list stays at the end.
             for mut wp in tab_windows() {
-                if wp.w_buffer == buf.raw() && wp.w_changelistidx == buf.b_changelistlen {
+                if wp.w_buffer == buffer.raw() && wp.w_changelistidx == buffer.b_changelistlen {
                     wp.w_changelistidx += 1;
                 }
             }
-            buf.b_changelistlen += 1;
+            buffer.b_changelistlen += 1;
         }
     }
-    let last = buf.b_last_change.clone();
-    let at = (buf.b_changelistlen - 1) as usize;
-    buf.b_changelist[at] = last;
+    let last = buffer.b_last_change.clone();
+    let at = (buffer.b_changelistlen - 1) as usize;
+    buffer.b_changelist[at] = last;
     // The current window is always *after* the last change, so that `g,`
     // takes you back to it.
-    let len = buf.b_changelistlen;
-    if cur_win().w_buffer == buf.raw() {
+    let len = buffer.b_changelistlen;
+    if cur_win().w_buffer == buffer.raw() {
         cur_win().w_changelistidx = len;
     }
 }
@@ -307,13 +307,13 @@ fn redraw_win_for_change(
 /// cached display state.
 ///
 /// See [`changed_lines`] for the arguments.
-fn changed_common(buf: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
+fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
     // SAFETY: a live buffer.
-    unsafe { changed(buf) };
+    unsafe { changed(buffer) };
 
     for win in windows() {
         // SAFETY: the editor exists; the short circuit is upstream's.
-        let diffed = win.w_buffer == buf.raw()
+        let diffed = win.w_buffer == buffer.raw()
             && win.w_onebuf_opt.wo_diff != 0
             && unsafe { diff_internal() } != 0;
         if diffed {
@@ -324,16 +324,16 @@ fn changed_common(buf: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineN
     }
 
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
-        record_change_mark(buf, lnum, col);
+        record_change_mark(buffer, lnum, col);
     }
 
-    if cur_win().w_buffer == buf.raw() && visual_active() {
+    if cur_win().w_buffer == buffer.raw() && visual_active() {
         // SAFETY: the editor exists.
         unsafe { check_visual_pos() };
     }
 
     for wp in tab_windows() {
-        if wp.w_buffer == buf.raw() {
+        if wp.w_buffer == buffer.raw() {
             redraw_win_for_change(wp, lnum, col, lnume, xtra);
         }
         if wp.is_current() && xtra != 0 && search_hl_has_cursor_lnum.get() >= lnum {
@@ -347,7 +347,7 @@ fn changed_common(buf: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineN
     // A change on the cursor line always triggers CursorMoved.
     let win = cur_win();
     if last_cursormoved_win.get() == win.raw()
-        && win.w_buffer == buf.raw()
+        && win.w_buffer == buffer.raw()
         && lnum <= win.w_cursor.lnum
         && lnume + xtra.abs() > win.w_cursor.lnum
     {
@@ -409,15 +409,15 @@ pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new
     unsafe { changed_bytes(lnum, start_col) };
 }
 
-/// `count` lines were appended below line `lnum` of `buf`.
+/// `count` lines were appended below line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn appended_lines_buf(buf: *mut Buffer, lnum: LineNr, count: LineNr) {
+/// `buffer` must be a live buffer.
+pub unsafe fn appended_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
-    unsafe { changed_lines(Buf::new(buf), lnum + 1, 0, lnum + 1, count, true) };
+    unsafe { changed_lines(Buf::new(buffer), lnum + 1, 0, lnum + 1, count, true) };
 }
 
 /// [`appended_lines_buf`] for the current buffer.
@@ -441,15 +441,15 @@ pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
     changed_lines(unsafe { Buf::new(cb) }, lnum + 1, 0, lnum + 1, count, true);
 }
 
-/// `count` lines were deleted at line `lnum` of `buf`.
+/// `count` lines were deleted at line `lnum` of `buffer`.
 ///
 /// Call AFTER the change and after `mark_adjust()`.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn deleted_lines_buf(buf: *mut Buffer, lnum: LineNr, count: LineNr) {
+/// `buffer` must be a live buffer.
+pub unsafe fn deleted_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
-    unsafe { changed_lines(Buf::new(buf), lnum, 0, lnum + count, -count, true) };
+    unsafe { changed_lines(Buf::new(buffer), lnum, 0, lnum + count, -count, true) };
 }
 
 /// [`deleted_lines_buf`] for the current buffer.
@@ -481,7 +481,7 @@ pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     changed_lines(unsafe { Buf::new(cb) }, lnum, 0, lnum + count, -count, true);
 }
 
-/// Widen `buf`'s pending redraw area (`b_mod_*`) to cover a change.
+/// Widen `buffer`'s pending redraw area (`b_mod_*`) to cover a change.
 ///
 /// Consider also calling [`changed_lines_invalidate_buf`].
 ///
@@ -489,34 +489,34 @@ pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
 /// one *before* the change, and `xtra` the net number of lines added
 /// (negative when deleting).
 ///
-pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: LineNr, mut lnume: LineNr, xtra: LineNr) {
+pub fn changed_lines_redraw_buf(mut buffer: Buf, lnum: LineNr, mut lnume: LineNr, xtra: LineNr) {
     // A decoration whose mark moved has to be re-measured and redrawn at
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
-    if xtra != 0 && buf.b_marktree.n_keys > 0 {
-        let lines = buf_meta_total(buf, kMTMetaLines);
+    if xtra != 0 && buffer.b_marktree.n_keys > 0 {
+        let lines = buf_meta_total(buffer, kMTMetaLines);
         lnume += 1 + LineNr::from(xtra < 0 && lines != 0);
     }
 
-    if buf.b_mod_set {
+    if buffer.b_mod_set {
         // Widen to the maximum area that must be redisplayed.
-        buf.b_mod_top = buf.b_mod_top.min(lnum);
-        if lnum < buf.b_mod_bot {
+        buffer.b_mod_top = buffer.b_mod_top.min(lnum);
+        if lnum < buffer.b_mod_bot {
             // Adjust the old bottom for the lines that came or went.
-            buf.b_mod_bot += xtra;
-            buf.b_mod_bot = buf.b_mod_bot.max(lnum);
+            buffer.b_mod_bot += xtra;
+            buffer.b_mod_bot = buffer.b_mod_bot.max(lnum);
         }
-        buf.b_mod_bot = buf.b_mod_bot.max(lnume + xtra);
-        buf.b_mod_xlines += xtra;
+        buffer.b_mod_bot = buffer.b_mod_bot.max(lnume + xtra);
+        buffer.b_mod_xlines += xtra;
     } else {
-        buf.b_mod_set = true;
-        buf.b_mod_top = lnum;
-        buf.b_mod_bot = lnume + xtra;
-        buf.b_mod_xlines = xtra;
+        buffer.b_mod_set = true;
+        buffer.b_mod_top = lnum;
+        buffer.b_mod_bot = lnume + xtra;
+        buffer.b_mod_xlines = xtra;
     }
 }
 
-/// Lines of `buf` changed.
+/// Lines of `buffer` changed.
 ///
 /// Call AFTER the change and after `mark_adjust()`. `lnum` is the first line
 /// that needs displaying, `lnume` the first line below the changed ones
@@ -527,22 +527,22 @@ pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: LineNr, mut lnume: LineNr, x
 /// `b:changedtick` *again*; those callers send the `nvim_buf_lines_event`
 /// themselves once they are done.
 ///
-/// May trigger autocommands that reload `buf`, so the caller must not go on
+/// May trigger autocommands that reload `buffer`, so the caller must not go on
 /// using it across this call without re-deriving it from its handle.
 pub fn changed_lines(
-    buf: Buf,
+    buffer: Buf,
     lnum: LineNr,
     col: ColNr,
     lnume: LineNr,
     xtra: LineNr,
     do_buf_event: bool,
 ) {
-    changed_lines_redraw_buf(buf, lnum, lnume, xtra);
+    changed_lines_redraw_buf(buffer, lnum, lnume, xtra);
 
     // SAFETY: the editor exists; the short circuit is upstream's.
     let diff_same_lines = xtra == 0
         && cur_win().w_onebuf_opt.wo_diff != 0
-        && cur_win().w_buffer == buf.raw()
+        && cur_win().w_buffer == buffer.raw()
         && unsafe { diff_internal() } == 0;
     if diff_same_lines {
         // With the line count unchanged, mark_adjust() is never called, so
@@ -559,14 +559,14 @@ pub fn changed_lines(
         }
     }
 
-    changed_common(buf, lnum, col, lnume, xtra);
+    changed_common(buffer, lnum, col, lnume, xtra);
 
     if do_buf_event {
         let num_added = int64_t::from(lnume + xtra - lnum);
         let num_removed = int64_t::from(lnume - lnum);
         // SAFETY: a live buffer, and the two counts describe the splice just
         // made to it.
-        unsafe { buf_updates_send_changes(buf.raw(), lnum, num_added, num_removed) };
+        unsafe { buf_updates_send_changes(buffer.raw(), lnum, num_added, num_removed) };
     }
 }
 

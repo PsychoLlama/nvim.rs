@@ -52,11 +52,11 @@ impl Sh {
 }
 
 /// Signs shown in the `'number'` column are only one cell wide, so placing or
-/// unplacing the first sign in `buf` has to make the number column's width be
+/// unplacing the first sign in `buffer` has to make the number column's width be
 /// recomputed rather than reused.
-fn may_force_numberwidth_recompute(buf: Buf, unplace: bool) {
+fn may_force_numberwidth_recompute(buffer: Buf, unplace: bool) {
     for mut wp in tab_windows() {
-        if wp.w_buffer == buf.raw()
+        if wp.w_buffer == buffer.raw()
             && wp.w_minscwidth == SCL_NUM
             && (wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
             && (unplace || wp.w_nrwidth_width < 2)
@@ -76,13 +76,13 @@ static SIGN_ADD_ID: GlobalCell<c_int> = GlobalCell::new(0);
 /// # Safety
 /// `buf` and `sh` must be live.
 pub unsafe fn buf_put_decor_sh(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     sh: *mut DecorSignHighlight,
     row1: c_int,
     row2: c_int,
 ) {
     // SAFETY: the caller's buffer and sign.
-    let (buf, mut sh) = unsafe { (Buf::new(buf), Sh::new(sh)) };
+    let (buf, mut sh) = unsafe { (Buf::new(buffer), Sh::new(sh)) };
     if !sh.is_sign() {
         return;
     }
@@ -101,13 +101,13 @@ pub unsafe fn buf_put_decor_sh(
 /// # Safety
 /// `buf` and `sh` must be live.
 pub unsafe fn buf_remove_decor_sh(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     row1: c_int,
     row2: c_int,
     sh: *mut DecorSignHighlight,
 ) {
     // SAFETY: the caller's buffer and sign.
-    let (mut buf, sh) = unsafe { (Buf::new(buf), Sh::new(sh)) };
+    let (mut buf, sh) = unsafe { (Buf::new(buffer), Sh::new(sh)) };
     if !sh.is_sign() || !sh.has_text() {
         return;
     }
@@ -141,15 +141,15 @@ pub unsafe fn sign_item_cmp(a: &SignItem, b: &SignItem) -> Ordering {
     sign_rank(sa.priority, a.id, sa.sign_add_id).cmp(&sign_rank(sb.priority, b.id, sb.sign_add_id))
 }
 
-/// Every sign on `row` of `buf` that `window` can see, in marktree order.
+/// Every sign on `row` of `buffer` that `window` can see, in marktree order.
 ///
 /// The two-part walk this module's header describes: the signs that started
 /// on an earlier row and reach into this one, then the ones that start on it.
-fn row_signs(buf: Buf, window: Win, row: c_int) -> Vec<SignItem> {
+fn row_signs(buffer: Buf, window: Win, row: c_int) -> Vec<SignItem> {
     // TODO(bfredl): integrate with main decor loop.
     let mut signs: Vec<SignItem> = Vec::new();
     let mut itr = MarkTreeIter::default();
-    let mut walk = Cursor::in_buffer(buf, &mut itr);
+    let mut walk = Cursor::in_buffer(buffer, &mut itr);
 
     walk.seek_overlap(row, 0);
     while let Some(pair) = walk.step_overlap() {
@@ -190,7 +190,7 @@ fn row_signs(buf: Buf, window: Win, row: c_int) -> Vec<SignItem> {
 /// `wp`'s sign column width; the `*_id` pointers must be null or writable.
 pub unsafe fn decor_redraw_signs(
     window: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     row: c_int,
     sattrs: *mut SignTextAttrs,
     line_id: *mut c_int,
@@ -198,7 +198,7 @@ pub unsafe fn decor_redraw_signs(
     num_id: *mut c_int,
 ) {
     // SAFETY: the caller's window and buffer.
-    let (wp, buf) = unsafe { (Win::new(window), Buf::new(buf)) };
+    let (wp, buf) = unsafe { (Win::new(window), Buf::new(buffer)) };
     if !buf.has_signs() {
         return;
     }
@@ -299,14 +299,14 @@ pub enum SignCountHalf {
 /// # Safety
 /// `buf` must point to a live buffer.
 pub unsafe fn buf_signcols_count_range(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     row1: c_int,
     row2: c_int,
     add: c_int,
     half: SignCountHalf,
 ) {
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     buf_signcols_count(buf, row1, row2, add, half);
 }
 
@@ -316,14 +316,14 @@ pub unsafe fn buf_signcols_count_range(
 /// widest row is `max`. `add` says what just happened to the range — 1 for an
 /// added sign, -1 for a deleted one, 0 for a range being counted from scratch
 /// — and `half` is which side of a marktree splice this call is doing.
-fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
-    if !buf.b_signcols.autom || row2 < row1 || buf.meta_total(kMTMetaSignText) == 0 {
+fn buf_signcols_count(mut buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
+    if !buffer.b_signcols.autom || row2 < row1 || buffer.meta_total(kMTMetaSignText) == 0 {
         return;
     }
 
     let mut count = vec![0 as c_int; (row2 + 1 - row1) as usize];
     let mut itr = MarkTreeIter::default();
-    let mut walk = Cursor::in_buffer(buf, &mut itr);
+    let mut walk = Cursor::in_buffer(buffer, &mut itr);
 
     // Signs that start before `row1` but reach into the range.
     walk.seek_overlap(row1, 0);
@@ -354,16 +354,16 @@ fn buf_signcols_count(mut buf: Buf, row1: c_int, row2: c_int, add: c_int, half: 
     for &rowcount in &count {
         let prevwidth = SIGN_SHOW_MAX.min(rowcount - add);
         if half != SignCountHalf::Add && prevwidth > 0 {
-            let slot = &mut buf.b_signcols.count[(prevwidth - 1) as usize];
+            let slot = &mut buffer.b_signcols.count[(prevwidth - 1) as usize];
             *slot -= 1;
             // TODO(bfredl): correct marktree splicing so that this doesn't fail
             debug_assert!(*slot >= 0);
         }
         let width = SIGN_SHOW_MAX.min(rowcount);
         if half != SignCountHalf::Subtract && width > 0 {
-            buf.b_signcols.count[(width - 1) as usize] += 1;
-            if width > buf.b_signcols.max {
-                buf.b_signcols.max = width;
+            buffer.b_signcols.count[(width - 1) as usize] += 1;
+            if width > buffer.b_signcols.max {
+                buffer.b_signcols.max = width;
             }
         }
     }

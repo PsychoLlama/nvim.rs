@@ -368,7 +368,7 @@ impl Searcher {
 ///          matching sub-pattern plus one; one if there was none.
 pub unsafe fn searchit(
     win: Option<Win>,
-    buf: Buf,
+    buffer: Buf,
     pos: *mut Pos,
     end_pos: *mut Pos,
     dir: Direction,
@@ -405,7 +405,7 @@ pub unsafe fn searchit(
     let mut stop_lnum: LineNr = 0;
     let mut s = Searcher {
         win,
-        buf,
+        buf: buffer,
         regmatch,
         tm: ptr::null_mut(),
         timed_out: ptr::null_mut(),
@@ -434,12 +434,12 @@ pub unsafe fn searchit(
         let start_char_len = if unsafe { (*pos).col } == MAXCOL as c_int {
             0
         } else if unsafe { (*pos).lnum } >= 1
-            && unsafe { (*pos).lnum } <= buf.b_ml.ml_line_count
+            && unsafe { (*pos).lnum } <= buffer.b_ml.ml_line_count
             && unsafe { (*pos).col } < MAXCOL as c_int - 2
         {
             // Watch out for "col" being MAXCOL - 2, used in a closed fold.
             let line = unsafe { s.line((*pos).lnum) };
-            if unsafe { ml_get_buf_len(buf.raw(), (*pos).lnum) } <= unsafe { (*pos).col } {
+            if unsafe { ml_get_buf_len(buffer.raw(), (*pos).lnum) } <= unsafe { (*pos).col } {
                 1
             } else {
                 unsafe { utfc_ptr2len(line.offset((*pos).col as isize)) }
@@ -481,7 +481,7 @@ pub unsafe fn searchit(
 
         // Loop twice if 'wrapscan' is set.
         for wrapped in [false, true] {
-            'lines: while lnum > 0 && lnum <= buf.b_ml.ml_line_count {
+            'lines: while lnum > 0 && lnum <= buffer.b_ml.ml_line_count {
                 // Stop after checking "stop_lnum", if it is set.
                 if stop_lnum != 0
                     && if dir == FORWARD {
@@ -539,7 +539,7 @@ pub unsafe fn searchit(
                     // The match may be in another line, with `\zs`.
                     let mut m = s.found();
                     // "lnum" may be past the end of the buffer for "\n\zs".
-                    let line = if lnum + m.start.lnum > buf.b_ml.ml_line_count {
+                    let line = if lnum + m.start.lnum > buffer.b_ml.ml_line_count {
                         c"".as_ptr() as *mut c_char
                     } else {
                         unsafe { s.line(lnum + m.start.lnum) }
@@ -608,7 +608,7 @@ pub unsafe fn searchit(
             // to be shown anyway (so SEARCH_COUNT must be absent).
             // The message is remembered in keep_msg for a redraw.
             lnum = if dir == BACKWARD {
-                buf.b_ml.ml_line_count
+                buffer.b_ml.ml_line_count
             } else {
                 1
             };
@@ -656,9 +656,9 @@ pub unsafe fn searchit(
     }
 
     // A pattern like "\n\zs" may go past the last line.
-    if unsafe { (*pos).lnum } > buf.b_ml.ml_line_count {
-        unsafe { (*pos).lnum = buf.b_ml.ml_line_count };
-        unsafe { (*pos).col = ml_get_buf_len(buf.raw(), (*pos).lnum) };
+    if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
+        unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
+        unsafe { (*pos).col = ml_get_buf_len(buffer.raw(), (*pos).lnum) };
         if unsafe { (*pos).col } > 0 {
             unsafe { (*pos).col -= 1 };
         }
@@ -695,14 +695,14 @@ unsafe fn first_submatch(rp: *mut RegMMatch) -> c_int {
 ///
 /// @return  `Ok` for success, `Err` if no line was found.
 pub unsafe fn search_for_exact_line(
-    buf: Buf,
+    buffer: Buf,
     pos: *mut Pos,
     dir: Direction,
     pat: *mut c_char,
 ) -> Result<(), Failed> {
     let mut start: LineNr = 0;
     let compl_len = ins_compl_len();
-    if buf.b_ml.ml_line_count == 0 {
+    if buffer.b_ml.ml_line_count == 0 {
         return Err(Failed);
     }
     loop {
@@ -712,11 +712,11 @@ pub unsafe fn search_for_exact_line(
                 unsafe { (*pos).lnum = 1 };
                 break;
             }
-            unsafe { (*pos).lnum = buf.b_ml.ml_line_count };
+            unsafe { (*pos).lnum = buffer.b_ml.ml_line_count };
             if !shortmess(ShmFlag::SEARCH) {
                 unsafe { give_warning(gettext(top_bot_msg).as_ptr(), true, false) };
             }
-        } else if unsafe { (*pos).lnum } > buf.b_ml.ml_line_count {
+        } else if unsafe { (*pos).lnum } > buffer.b_ml.ml_line_count {
             unsafe { (*pos).lnum = 1 };
             if p_ws.get() == 0 {
                 break;
@@ -732,7 +732,7 @@ pub unsafe fn search_for_exact_line(
             start = unsafe { (*pos).lnum };
         }
 
-        let line = unsafe { ml_get_buf(buf.raw(), (*pos).lnum) };
+        let line = unsafe { ml_get_buf(buffer.raw(), (*pos).lnum) };
         let text = unsafe { skipwhite(line) };
         unsafe { (*pos).col = text.offset_from(line) as ColNr };
 

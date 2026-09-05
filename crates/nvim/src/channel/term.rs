@@ -21,11 +21,11 @@ use crate::types::{Buffer, Channel, OptInt, TerminalOptions, size_t, uint16_t};
 
 use super::{channel_decref, channel_incref, channel_proc, channel_pty};
 
-/// Gives `buf` a terminal driven by this channel's pty.
+/// Gives `buffer` a terminal driven by this channel's pty.
 ///
 /// # Safety
-/// `buf` is a live buffer and `chan` a live pty job channel.
-pub unsafe fn channel_terminal_alloc(buf: *mut Buffer, chan: *mut Channel) {
+/// `buffer` is a live buffer and `chan` a live pty job channel.
+pub unsafe fn channel_terminal_alloc(buffer: *mut Buffer, chan: *mut Channel) {
     // SAFETY: the caller's live buffer and pty job.
     let pty = unsafe { channel_pty(chan) };
     let topts = TerminalOptions {
@@ -39,9 +39,9 @@ pub unsafe fn channel_terminal_alloc(buf: *mut Buffer, chan: *mut Channel) {
         close_cb: Some(term_close),
         force_crlf: false,
     };
-    unsafe { (*buf).b_p_channel = (*chan).id as OptInt };
+    unsafe { (*buffer).b_p_channel = (*chan).id as OptInt };
     unsafe { channel_incref(chan) };
-    unsafe { (*chan).term = terminal_alloc(buf, topts) };
+    unsafe { (*chan).term = terminal_alloc(buffer, topts) };
 }
 
 /// Back-pressure from the terminal: stop reading while it catches up.

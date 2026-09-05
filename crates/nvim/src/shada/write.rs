@@ -430,15 +430,15 @@ impl Writing {
         }
     }
 
-    unsafe fn collect_one_buffer(&mut self, buf: *mut Buffer) {
-        let fname = unsafe { (*buf).b_ffname };
+    unsafe fn collect_one_buffer(&mut self, buffer: *mut Buffer) {
+        let fname = unsafe { (*buffer).b_ffname };
         let filemarks = unsafe { self.file_marks_for(fname) };
 
         let mut mark_iter: *const c_void = core::ptr::null();
         loop {
             let mut fm: FileMark = unsafe { core::mem::zeroed() };
             let mut name: c_char = NUL as c_char;
-            mark_iter = unsafe { mark_buffer_iter(mark_iter, buf, &raw mut name, &raw mut fm) };
+            mark_iter = unsafe { mark_buffer_iter(mark_iter, buffer, &raw mut name, &raw mut fm) };
             if name as c_int == NUL {
                 break;
             }
@@ -461,8 +461,8 @@ impl Writing {
             }
         }
 
-        for i in 0..unsafe { (*buf).b_changelistlen } as usize {
-            let fm = unsafe { (*buf).b_changelist[i].clone() };
+        for i in 0..unsafe { (*buffer).b_changelistlen } as usize {
+            let fm = unsafe { (*buffer).b_changelist[i].clone() };
             let entry = ShadaEntry {
                 can_free_entry: false,
                 timestamp: fm.timestamp,
@@ -478,7 +478,7 @@ impl Writing {
                 (*filemarks).greatest_timestamp = (*filemarks).greatest_timestamp.max(fm.timestamp)
             };
         }
-        unsafe { (*filemarks).changes_size = (*buf).b_changelistlen as size_t };
+        unsafe { (*filemarks).changes_size = (*buffer).b_changelistlen as size_t };
     }
 
     /// The slot one file's marks are collected into, made on first use.

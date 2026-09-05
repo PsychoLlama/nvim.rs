@@ -308,14 +308,14 @@ pub(crate) unsafe fn ins_compl_files(
 }
 
 /// The next window, loaded buffer or non-loaded buffer (depending on `flag`)
-/// after `buf` that has not been scanned; `curbuf` when there is none.
+/// after `buffer` that has not been scanned; `curbuf` when there is none.
 ///
 /// `curbuf` is special: called with `buf == curbuf` this has to be the first
 /// call for a given flag/expansion. -- Acevedo
 ///
 /// Safe: [`Buf`] is the live buffer the walk starts from, and the window it
 /// remembers between calls is vetted below rather than trusted.
-pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
+pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
     // This outlives the call, and a completion runs user functions and Lua in
     // between, so it stays a raw pointer that `win_valid` vets -- a `Win`
     // would be promising a liveness nothing here can keep.
@@ -323,7 +323,7 @@ pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
 
     if flag == 'w' as c_int {
         // Just windows.
-        if buf.raw() == curbuf.get() || !win_valid(wp.get()) {
+        if buffer.raw() == curbuf.get() || !win_valid(wp.get()) {
             // First call for this flag/expansion, or the window was closed.
             wp.set(curwin.get());
         }
@@ -344,33 +344,33 @@ pub(crate) fn ins_compl_next_buf(mut buf: Buf, flag: c_int) -> Buf {
                 break;
             }
         }
-        buf = unsafe { Buf::new((*wp.get()).w_buffer) };
+        buffer = unsafe { Buf::new((*wp.get()).w_buffer) };
     } else {
         // 'b' (just loaded buffers), 'u' (just non-loaded buffers) or 'U'
         // (unlisted buffers).  When completing whole lines skip unloaded
         // buffers.
         loop {
             // Move to the next buffer, wrapping to the first at the end.
-            buf = match buf.next() {
+            buffer = match buffer.next() {
                 Some(next) => next,
                 None => first_buffer().expect("the editor always has a buffer"),
             };
             // Stop if we're back at the start buffer.
-            if buf.raw() == curbuf.get() {
+            if buffer.raw() == curbuf.get() {
                 break;
             }
             let skip_buffer = if flag == 'U' as c_int {
-                buf.b_p_bl != 0
+                buffer.b_p_bl != 0
             } else {
-                buf.b_p_bl == 0 || buf.b_ml.ml_mfp.is_null() != (flag == 'u' as c_int)
+                buffer.b_p_bl == 0 || buffer.b_ml.ml_mfp.is_null() != (flag == 'u' as c_int)
             };
             // Stop if we found a buffer that matches our criteria.
-            if !skip_buffer && !buf.b_scanned {
+            if !skip_buffer && !buffer.b_scanned {
                 break;
             }
         }
     }
-    buf
+    buffer
 }
 
 /// The next word or line from `ins_buf` at `cur_match_pos`, with its length in
@@ -875,16 +875,16 @@ pub(super) struct LineMatch {
     pub score: Option<c_int>,
 }
 
-/// Search `buf` for the next fuzzy match of `pattern`, starting at `pos` and
+/// Search `buffer` for the next fuzzy match of `pattern`, starting at `pos` and
 /// going in `dir`, wrapping around to `start_pos` if `'wrapscan'` is set.
 /// `pos` is left on the match. In whole-line mode (`CTRL-X CTRL-L`) whole
 /// lines are matched rather than words.
 ///
 /// # Safety
 /// `pattern` must be a NUL-terminated string, and `pos`/`start_pos` must
-/// point at valid positions in `buf`.
+/// point at valid positions in `buffer`.
 pub(super) unsafe fn search_for_fuzzy_match(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     pos: *mut Pos,
     pattern: *const c_char,
     dir: c_int,
@@ -895,11 +895,11 @@ pub(super) unsafe fn search_for_fuzzy_match(
 
     // Where the search has come full circle. Another buffer is walked
     // from wherever it is to its end rather than back to the start.
-    let circly_end = if buf == curbuf.get() {
+    let circly_end = if buffer == curbuf.get() {
         unsafe { *start_pos }
     } else {
         Pos {
-            lnum: unsafe { (*buf).b_ml.ml_line_count },
+            lnum: unsafe { (*buffer).b_ml.ml_line_count },
             col: 0,
             coladd: 0,
         }
@@ -918,8 +918,8 @@ pub(super) unsafe fn search_for_fuzzy_match(
         {
             return None;
         }
-        if current_pos.lnum >= 1 && current_pos.lnum <= unsafe { (*buf).b_ml.ml_line_count } {
-            let line = unsafe { ml_get_buf(buf, current_pos.lnum) };
+        if current_pos.lnum >= 1 && current_pos.lnum <= unsafe { (*buffer).b_ml.ml_line_count } {
+            let line = unsafe { ml_get_buf(buffer, current_pos.lnum) };
             let mut ptr = if whole_line {
                 line
             } else {
@@ -933,7 +933,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
                         unsafe { *pos = current_pos };
                         return Some(LineMatch {
                             ptr,
-                            len: unsafe { ml_get_buf_len(buf, current_pos.lnum) } as c_int,
+                            len: unsafe { ml_get_buf_len(buffer, current_pos.lnum) } as c_int,
                             score: None,
                         });
                     }
@@ -955,7 +955,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
 
         // On to the next line, or round to the far end of the buffer
         // if `'wrapscan'` allows it.
-        let last = unsafe { (*buf).b_ml.ml_line_count };
+        let last = unsafe { (*buffer).b_ml.ml_line_count };
         current_pos.lnum += if dir == FORWARD { 1 } else { -1 };
         if !(1..=last).contains(&current_pos.lnum) {
             if p_ws.get() == 0 {

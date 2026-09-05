@@ -77,13 +77,13 @@ fn cur_buf() -> Buf {
     unsafe { Buf::current() }
 }
 
-/// `buf_valid()`: whether `buf` is still on the buffer list.
+/// `buf_valid()`: whether `buffer` is still on the buffer list.
 ///
 /// Takes a raw pointer deliberately — the question is asked about a buffer an
 /// autocommand may already have freed, and the pointer is only compared.
-fn buf_is_valid(buf: *mut Buffer) -> bool {
-    // SAFETY: `buf` is only compared, never read.
-    unsafe { buf_valid(buf) }
+fn buf_is_valid(buffer: *mut Buffer) -> bool {
+    // SAFETY: `buffer` is only compared, never read.
+    unsafe { buf_valid(buffer) }
 }
 
 /// `do_ecmd()` as the quickfix window calls it: load `fnum`, or a new buffer
@@ -107,10 +107,10 @@ fn busy_end() {
     unsafe { decr_quickfix_busy() };
 }
 
-/// `qf_fill_buffer()`: rewrite `buf` from `qfl`.
-fn fill_buffer(qfl: Qfl, buf: Buf, win: Win) {
+/// `qf_fill_buffer()`: rewrite `buffer` from `qfl`.
+fn fill_buffer(qfl: Qfl, buffer: Buf, win: Win) {
     // SAFETY: a live list, buffer and window handle.
-    unsafe { qf_fill_buffer(qfl.raw(), buf, ptr::null_mut(), win.handle) };
+    unsafe { qf_fill_buffer(qfl.raw(), buffer, ptr::null_mut(), win.handle) };
 }
 
 fn is_location_list_window(window: Win) -> bool {

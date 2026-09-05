@@ -539,20 +539,20 @@ impl Win {
 
 impl Buf {
     /// # Safety
-    /// `buf` must stay a live buffer for as long as the value is used.
+    /// `raw` must stay a live buffer for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(buf: *mut Buffer) -> Self {
-        Self(buf)
+    pub const unsafe fn new(raw: *mut Buffer) -> Self {
+        Self(raw)
     }
 
-    /// The buffer `buf` names, `None` for null.
+    /// The buffer `raw` names, `None` for null.
     ///
     /// # Safety
-    /// `buf` must be null, or stay a live buffer for as long as the value is
+    /// `raw` must be null, or stay a live buffer for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(buf: *mut Buffer) -> Option<Self> {
-        if buf.is_null() { None } else { Some(Self(buf)) }
+    pub const unsafe fn from_raw(raw: *mut Buffer) -> Option<Self> {
+        if raw.is_null() { None } else { Some(Self(raw)) }
     }
 
     /// The buffer the editor is working in.

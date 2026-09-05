@@ -654,16 +654,16 @@ fn apply_autocmds(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
 ) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::autocmd::apply_autocmds(event, fname, fname_io, force, buf) }
+    unsafe { crate::autocmd::apply_autocmds(event, fname, fname_io, force, buffer) }
 }
 
 /// `buf_hide()` as checked code.
-fn buf_hide(buf: *const Buffer) -> bool {
+fn buf_hide(buffer: *const Buffer) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::buffer::buf_hide(buf) }
+    unsafe { crate::buffer::buf_hide(buffer) }
 }
 
 /// `check_changed_any()` as checked code.

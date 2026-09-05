@@ -203,24 +203,24 @@ pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline(always)]
-pub fn buf_get_changedtick(buf: Buf) -> VarNumber {
+pub fn buf_get_changedtick(buffer: Buf) -> VarNumber {
     // SAFETY: `b:changedtick`'s dict item is always a `VAR_NUMBER`, which is
     // the only variant this union is ever given here.
-    unsafe { buf.changedtick_di.di_tv.vval.v_number }
+    unsafe { buffer.changedtick_di.di_tv.vval.v_number }
 }
 static buf_free_count: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static top_file_num: GlobalCell<::core::ffi::c_int> = GlobalCell::new(1 as ::core::ffi::c_int);
 
 /// Run `b:undo_ftplugin` with the buffer and the window pinned, so that what
 /// it does cannot close either out from under the caller.
-pub(crate) fn trigger_undo_ftplugin(mut buf: Buf, mut win: Win) {
+pub(crate) fn trigger_undo_ftplugin(mut buffer: Buf, mut win: Win) {
     let win_was_locked: bool = win.w_locked;
     layout_lock();
-    buf.b_locked += 1;
+    buffer.b_locked += 1;
     win.w_locked = true;
     // b:undo_ftplugin may be set, undo it
     run_cmdline(c"if exists('b:undo_ftplugin') | exe b:undo_ftplugin | endif");
-    buf.b_locked -= 1;
+    buffer.b_locked -= 1;
     win.w_locked = win_was_locked;
     layout_unlock();
 }
@@ -249,17 +249,17 @@ impl BufRef {
     /// `*mut Buffer` and read `(*buf).handle` whenever it was non-null, which
     /// made it a *safe* function with an unstated precondition about a
     /// pointer -- the shape p23-5 rules out.
-    pub(crate) fn of_opt(buf: Option<Buf>) -> Self {
+    pub(crate) fn of_opt(buffer: Option<Buf>) -> Self {
         BufRef(BufferRef {
-            br_buf: buf.map_or(ptr::null_mut(), Buf::raw),
-            br_fnum: buf.map_or(0, |b| b.handle as c_int),
+            br_buf: buffer.map_or(ptr::null_mut(), Buf::raw),
+            br_fnum: buffer.map_or(0, |b| b.handle as c_int),
             br_buf_free_count: buf_free_count.get(),
         })
     }
 
     /// `set_bufref()` over a buffer the caller already holds.
-    pub(crate) fn of(buf: Buf) -> Self {
-        Self::of_opt(Some(buf))
+    pub(crate) fn of(buffer: Buf) -> Self {
+        Self::of_opt(Some(buffer))
     }
 
     /// `bufref_valid()`: whether the remembered buffer is still the buffer it
@@ -298,20 +298,20 @@ impl BufRef {
     }
 }
 
-/// Whether `buf` is still in the buffer list.
+/// Whether `buffer` is still in the buffer list.
 ///
 /// Can be slow when there are many buffers; prefer [`BufRef`].
 ///
 /// # Safety
-/// `buf` may be any pointer, live or dangling: it is only ever compared.
+/// `buffer` may be any pointer, live or dangling: it is only ever compared.
 ///
 /// The null test is a short circuit and nothing more: no buffer in the list
 /// has a null address, so removing it changes no answer. That is why the
 /// "NULL is not a valid buffer" case cannot fail — it states the contract
 /// callers rely on rather than covering a branch.
-pub unsafe fn buf_valid(buf: *mut Buffer) -> bool {
+pub unsafe fn buf_valid(buffer: *mut Buffer) -> bool {
     // Assume that we more often have a recent buffer, start with the last one.
-    !buf.is_null() && buffers_back().any(|b| b.raw() == buf)
+    !buffer.is_null() && buffers_back().any(|b| b.raw() == buffer)
 }
 
 static lasttitle: GlobalCell<*mut ::core::ffi::c_char> =
@@ -407,23 +407,23 @@ pub(crate) fn last_buf() -> Option<Buf> {
 ///
 /// **Everything the caller holds may be stale afterwards** -- take a
 /// [`BufRef`] first.
-pub(crate) fn fire(event: AutoEvent, buf: Buf) -> bool {
+pub(crate) fn fire(event: AutoEvent, buffer: Buf) -> bool {
     // SAFETY: a live buffer; both name arguments are optional.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer.raw()) }
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
 /// the unload/delete/wipe events take.
-pub(crate) fn fire_named(event: AutoEvent, buf: Buf) -> bool {
-    let (name, raw) = (buf.b_fname, buf.raw());
+pub(crate) fn fire_named(event: AutoEvent, buffer: Buf) -> bool {
+    let (name, raw) = (buffer.b_fname, buffer.raw());
     // SAFETY: a live buffer and its own file name.
     unsafe { apply_autocmds(event, name, name, false, raw) }
 }
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
 /// into `FAIL`.
-pub(crate) fn fire_retval<T>(event: AutoEvent, buf: Buf, retval: &mut Result<T, Failed>) {
-    let (none, raw) = (ptr::null_mut(), buf.raw());
+pub(crate) fn fire_retval<T>(event: AutoEvent, buffer: Buf, retval: &mut Result<T, Failed>) {
+    let (none, raw) = (ptr::null_mut(), buffer.raw());
     let mut status = if retval.is_ok() { OK } else { FAIL };
     // SAFETY: a live buffer and a local to report through.
     unsafe { apply_autocmds_retval(event, none, none, false, raw, &raw mut status) };
@@ -468,20 +468,20 @@ pub(crate) fn delete_line(lnum: LineNr) {
 }
 
 /// `unchanged()`: clear `'modified'`, and with `ff` the file-format flags.
-pub(crate) fn unchanged_now(buf: Buf, ff: bool, always_inc_changedtick: bool) {
-    unchanged(buf, ff, always_inc_changedtick);
+pub(crate) fn unchanged_now(buffer: Buf, ff: bool, always_inc_changedtick: bool) {
+    unchanged(buffer, ff, always_inc_changedtick);
 }
 
 pub(crate) fn end_visual() {
     end_visual_mode();
 }
 
-/// `close_windows()`: close every window showing `buf`.
+/// `close_windows()`: close every window showing `buffer`.
 ///
 /// Fires `WinClosed`/`BufWinLeave`; everything held may be stale afterwards.
-pub(crate) fn close_all_windows(buf: Buf, keep_curwin: bool) {
+pub(crate) fn close_all_windows(buffer: Buf, keep_curwin: bool) {
     // SAFETY: a live buffer.
-    unsafe { close_windows(buf.raw(), keep_curwin) };
+    unsafe { close_windows(buffer.raw(), keep_curwin) };
 }
 
 /// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.
@@ -512,10 +512,10 @@ pub(crate) fn set_pcmark() {
     setpcmark();
 }
 
-/// Whether `buf` has unsaved changes.
-pub(crate) fn is_changed(buf: Buf) -> bool {
+/// Whether `buffer` has unsaved changes.
+pub(crate) fn is_changed(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    buf_is_changed(buf)
+    buf_is_changed(buffer)
 }
 
 /// `do_ecmd()`: edit `fname` (or buffer `fnum`) in `win`.

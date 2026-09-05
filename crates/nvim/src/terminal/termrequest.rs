@@ -98,7 +98,7 @@ unsafe extern "C" fn emit_termrequest(argv: *mut *mut c_void) {
 }
 
 /// The body of [`emit_termrequest`] once the terminal is known to be alive.
-fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
+fn report(request: &mut TermRequest, mut term: Term, buffer: Buf) {
     let sequence = String_0::from_raw_parts(
         request.sequence.as_ptr().cast::<c_char>().cast_mut(),
         request.sequence.len(),
@@ -134,7 +134,7 @@ fn report(request: &mut TermRequest, mut term: Term, buf: Buf) {
     let mut event = data.object();
     let (data, none) = (&mut event, ::core::ptr::null_mut());
     let (exarg, group) = (::core::ptr::null_mut::<ExArg>(), AUGROUP_ALL);
-    let buf = buf.raw();
+    let buf = buffer.raw();
     // SAFETY: TermRequest against a live buffer; nothing of the terminal is
     // borrowed across it.
     let event = AutoEvent::TermRequest;

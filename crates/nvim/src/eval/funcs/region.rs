@@ -268,15 +268,15 @@ unsafe fn parse_type(spec: *const c_char) -> Option<(MotionType, c_int)> {
 /// its line.
 ///
 /// # Safety
-/// `buf` is a loaded buffer.
-unsafe fn check_corner(buf: *mut Buffer, p: &mut Pos) -> Option<()> {
+/// `buffer` is a loaded buffer.
+unsafe fn check_corner(buffer: *mut Buffer, p: &mut Pos) -> Option<()> {
     // SAFETY: the caller's obligation; the line length is only read once
     // the line number has been checked.
-    if p.lnum < 1 || p.lnum > unsafe { (*buf).b_ml.ml_line_count } {
+    if p.lnum < 1 || p.lnum > unsafe { (*buffer).b_ml.ml_line_count } {
         semsg!("E966: Invalid line number: {}", p.lnum);
         return None;
     }
-    let len = unsafe { ml_get_buf_len(buf, p.lnum) };
+    let len = unsafe { ml_get_buf_len(buffer, p.lnum) };
     if p.col == MAXCOL as ColNr {
         p.col = len + 1;
     } else if p.col < 1 || p.col > len + 1 {

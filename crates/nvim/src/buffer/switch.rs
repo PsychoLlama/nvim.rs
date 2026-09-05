@@ -110,11 +110,11 @@ fn split_window() -> Result<(), Failed> {
     win_split(0, 0)
 }
 
-/// Jump to a window of this tab page already showing `buf`, if `'switchbuf'`
+/// Jump to a window of this tab page already showing `buffer`, if `'switchbuf'`
 /// says to; the answer is whether one was found.
-fn window_showing(buf: Buf) -> bool {
+fn window_showing(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    !unsafe { swbuf_goto_win_with_buf(buf.raw()) }.is_null()
+    !unsafe { swbuf_goto_win_with_buf(buffer.raw()) }.is_null()
 }
 fn may_change_buffer(forceit: bool) -> bool {
     check_can_set_curbuf_forceit(forceit as c_int)
@@ -123,26 +123,26 @@ fn forget_jumps(win: Win, fnum: c_int) {
     // SAFETY: a live window.
     unsafe { mark_jumplist_forget_file(win.raw(), fnum) };
 }
-fn may_abandon(buf: Buf, forceit: bool) -> bool {
+fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.
-    unsafe { can_abandon(buf.raw(), forceit) }
+    unsafe { can_abandon(buffer.raw(), forceit) }
 }
 
 /// The "save changes?" dialog. Re-enters, and may free the buffer.
-fn ask_about_changes(buf: Buf) {
+fn ask_about_changes(buffer: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `checkall`.
-    unsafe { dialog_changed(buf.raw(), false) };
+    unsafe { dialog_changed(buffer.raw(), false) };
 }
-fn ask_about_terminal(buf: Buf) -> bool {
+fn ask_about_terminal(buffer: Buf) -> bool {
     // SAFETY: a live buffer with a live terminal.
-    unsafe { dialog_close_terminal(buf.raw()) }
+    unsafe { dialog_close_terminal(buffer.raw()) }
 }
-fn terminal_alive(buf: Buf) -> bool {
+fn terminal_alive(buffer: Buf) -> bool {
     // SAFETY: a live terminal, the caller having ruled out null.
-    unsafe { terminal_running(buf.terminal) }
+    unsafe { terminal_running(buffer.terminal) }
 }
-fn is_quickfix(buf: Buf) -> bool {
-    buf_is_quickfix(Some(buf))
+fn is_quickfix(buffer: Buf) -> bool {
+    buf_is_quickfix(Some(buffer))
 }
 fn recover_swapfile() {
     // SAFETY: reads the current buffer; `false` is upstream's `checkext`.
@@ -666,8 +666,8 @@ fn locate_arm(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool
 
 /// Step `count` listed buffers away from `buf`, wrapping at either end of the
 /// list -- what `:bnext`, `:bprevious` and a bare `:buffer` do.
-fn step_to_listed(buf: Buf, dir: c_int, count: c_int, flags: c_int, unload: bool) -> Located {
-    let mut buf = buf;
+fn step_to_listed(buffer: Buf, dir: c_int, count: c_int, flags: c_int, unload: bool) -> Located {
+    let mut buf = buffer;
     let mut count = count;
     let skip_help = flags & DOBUF_SKIPHELP as c_int != 0;
     let help_only = skip_help && buf.b_help;
@@ -724,33 +724,33 @@ enum Unloaded {
     Replace(Option<Buf>),
 }
 
-/// Unload, delete or wipe `buf`, and pick the buffer to show in its place.
-fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bool) -> Unloaded {
-    if !can_unload_buffer(buf) {
+/// Unload, delete or wipe `buffer`, and pick the buffer to show in its place.
+fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut bool) -> Unloaded {
+    if !can_unload_buffer(buffer) {
         return Unloaded::Done(Err(Failed));
     }
-    let bufref = BufRef::of(buf);
+    let bufref = BufRef::of(buffer);
 
     // When unloading or deleting a buffer that's already unloaded and
     // unlisted: fail silently.
-    if action != DOBUF_WIPE as c_int && buf.b_ml.ml_mfp.is_null() && buf.b_p_bl == 0 {
+    if action != DOBUF_WIPE as c_int && buffer.b_ml.ml_mfp.is_null() && buffer.b_p_bl == 0 {
         return Unloaded::Done(Err(Failed));
     }
 
-    if let Some(rc) = refuse_unload(buf, bufref, flags) {
+    if let Some(rc) = refuse_unload(buffer, bufref, flags) {
         return Unloaded::Done(rc);
     }
 
-    let buf_fnum = buf.handle as c_int;
+    let buf_fnum = buffer.handle as c_int;
 
     // When closing the current buffer stop Visual mode.
-    if buf.raw() == curbuf.get() && visual_active() {
+    if buffer.raw() == curbuf.get() && visual_active() {
         end_visual();
     }
 
     // If deleting the last (listed) buffer, make it empty.
     // The last (listed) buffer cannot be unloaded.
-    if !buffers().any(|b| b.b_p_bl != 0 && b != buf) && buf.raw() == curbuf.get() {
+    if !buffers().any(|b| b.b_p_bl != 0 && b != buffer) && buffer.raw() == curbuf.get() {
         let forceit = flags & DOBUF_FORCEIT as c_int;
         return Unloaded::Done(empty_curbuf(true, forceit, action));
     }
@@ -758,7 +758,7 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
     // If the deleted buffer is the current one, close the current window
     // (unless it's the only non-floating window), for as long as we end up in
     // a window with this buffer.
-    while buf.raw() == curbuf.get()
+    while buffer.raw() == curbuf.get()
         && !(window_locked(cur_win()) || cur_win().buffer().b_locked > 0)
         && (last_listed_window().is_some_and(|wp| is_autocmd_window(wp.raw()))
             || !is_last_window(cur_win()))
@@ -769,13 +769,13 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
     }
 
     // If the buffer to be deleted is not the current one, delete it here.
-    if buf.raw() != curbuf.get() {
+    if buffer.raw() != curbuf.get() {
         if jop_clean() {
             // Remove the buffer to be deleted from the jump list.
             forget_jumps(cur_win(), buf_fnum);
         }
 
-        close_all_windows(buf, false);
+        close_all_windows(buffer, false);
 
         if let Some(gone) = bufref
             .get()
@@ -793,10 +793,10 @@ fn unload_buffer(buf: Buf, action: c_int, flags: c_int, update_jumplist: &mut bo
 ///
 /// `Some(FAIL)` means the caller must stop; the dialogs re-enter, so `bufref`
 /// re-validates `buf` after each.
-fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(), Failed>> {
-    if flags & DOBUF_FORCEIT as c_int == 0 && is_changed(buf) {
+fn refuse_unload(buffer: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(), Failed>> {
+    if flags & DOBUF_FORCEIT as c_int == 0 && is_changed(buffer) {
         if confirming() && p_write.get() != 0 {
-            ask_about_changes(buf);
+            ask_about_changes(buffer);
             // Autocommand deleted buffer, oops! It's not changed now.  If it's
             // still changed fail silently, the dialog already mentioned why it
             // fails.
@@ -807,19 +807,19 @@ fn refuse_unload(buf: Buf, bufref: BufRef, flags: c_int) -> Option<Result<(), Fa
                 return Some(Err(Failed));
             }
         } else {
-            let nr = buf.handle as c_int;
+            let nr = buffer.handle as c_int;
             semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
             return Some(Err(Failed));
         }
     }
 
-    if flags & DOBUF_FORCEIT as c_int == 0 && !buf.terminal.is_null() && terminal_alive(buf) {
+    if flags & DOBUF_FORCEIT as c_int == 0 && !buffer.terminal.is_null() && terminal_alive(buffer) {
         if confirming() {
-            if !ask_about_terminal(buf) {
+            if !ask_about_terminal(buffer) {
                 return Some(Err(Failed));
             }
         } else {
-            err_fname(buf);
+            err_fname(buffer);
             return Some(Err(Failed));
         }
     }
@@ -963,9 +963,9 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
 }
 
 /// `semsg(fmt, buf->b_fname)`.
-fn err_fname(buf: Buf) {
+fn err_fname(buffer: Buf) {
     // SAFETY: a buffer's own name, NUL-terminated.
-    let name = unsafe { c_str(buf.b_fname) };
+    let name = unsafe { c_str(buffer.b_fname) };
     semsg!("E89: {name} will be killed (add ! to override)");
 }
 

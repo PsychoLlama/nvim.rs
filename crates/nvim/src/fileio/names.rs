@@ -25,33 +25,35 @@ use crate::winlayer::buffers;
 /// `S_IFLNK`: the file type bits of a symbolic link.
 const S_IFLNK: u64 = 0o120000;
 
-/// Shorten `buf`'s displayed file name to be relative to `dirname`.
+/// Shorten `buffer`'s displayed file name to be relative to `dirname`.
 ///
 /// # Safety
 /// `dirname` must be a NUL-terminated directory name.
-pub unsafe fn shorten_buf_fname(mut buf: Buf, dirname: *mut c_char, force: c_int) {
+pub unsafe fn shorten_buf_fname(mut buffer: Buf, dirname: *mut c_char, force: c_int) {
     // SAFETY: each name the buffer holds is NUL-terminated; the null check
     // ahead of `path_is_absolute` guards the name it reads.
-    if buf.b_fname.is_null()
-        || buf_is_nofilename(Some(buf))
-        || unsafe { path_with_url(buf.b_fname) } != 0
-        || !(force != 0 || buf.b_sfname.is_null() || unsafe { path_is_absolute(buf.b_sfname) })
+    if buffer.b_fname.is_null()
+        || buf_is_nofilename(Some(buffer))
+        || unsafe { path_with_url(buffer.b_fname) } != 0
+        || !(force != 0
+            || buffer.b_sfname.is_null()
+            || unsafe { path_is_absolute(buffer.b_sfname) })
     {
         return;
     }
-    if buf.b_sfname != buf.b_ffname {
+    if buffer.b_sfname != buffer.b_ffname {
         // SAFETY: the buffer's own allocation, which it no longer names.
-        unsafe { xfree(buf.b_sfname.cast()) };
-        buf.b_sfname = ptr::null_mut();
+        unsafe { xfree(buffer.b_sfname.cast()) };
+        buffer.b_sfname = ptr::null_mut();
     }
     // SAFETY: the buffer's own file name and the caller's directory name.
-    let p = unsafe { path_shorten_fname(buf.b_ffname, dirname) };
+    let p = unsafe { path_shorten_fname(buffer.b_ffname, dirname) };
     if p.is_null() {
-        buf.b_fname = buf.b_ffname;
+        buffer.b_fname = buffer.b_ffname;
     } else {
         // SAFETY: `p` points into the buffer's NUL-terminated full name.
-        buf.b_sfname = unsafe { xstrdup(p) };
-        buf.b_fname = buf.b_sfname;
+        buffer.b_sfname = unsafe { xstrdup(p) };
+        buffer.b_fname = buffer.b_sfname;
     }
 }
 

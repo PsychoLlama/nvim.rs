@@ -179,14 +179,14 @@ pub const EXFLAG_LIST: ::core::ffi::c_int = 0x1 as ::core::ffi::c_int;
 pub const EXFLAG_NR: ::core::ffi::c_int = 0x2 as ::core::ffi::c_int;
 pub const EXFLAG_PRINT: ::core::ffi::c_int = 0x4 as ::core::ffi::c_int;
 pub const EOL_MAC: ::core::ffi::c_int = 2 as ::core::ffi::c_int;
-/// Fire `event` for `buf`: no file name, no pattern, no forcing -- the shape
+/// Fire `event` for `buffer`: no file name, no pattern, no forcing -- the shape
 /// every buffer-lifecycle autocommand in this family uses.
 ///
 /// Safe: [`Buf`] is the live buffer `apply_autocmds` asks for, and the two
 /// file names it also wants are null here.
-pub(super) fn buf_autocmd(event: AutoEvent, buf: Buf) -> bool {
+pub(super) fn buf_autocmd(event: AutoEvent, buffer: Buf) -> bool {
     // SAFETY: a live buffer and no file names.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer.raw()) }
 }
 /// Refuse anything that reaches outside the editor while 'secure' is on or a
 /// sandbox is open -- shell commands, `:write`, `:cd` and friends.

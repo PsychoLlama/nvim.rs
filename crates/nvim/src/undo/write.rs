@@ -11,7 +11,7 @@ use crate::semsg;
 use crate::smsg;
 use crate::winlayer::Buf;
 
-/// Writes `buf`'s undo tree to `name`, or to the file `'undodir'` picks for
+/// Writes `buffer`'s undo tree to `name`, or to the file `'undodir'` picks for
 /// it when `name` is NULL.
 ///
 /// `forceit` is `:wundo!`: overwrite whatever is there without checking that
@@ -21,10 +21,10 @@ use crate::winlayer::Buf;
 ///
 /// `name` is NULL or a NUL-terminated path, and `hash` points at
 /// [`UNDO_HASH_SIZE`] readable bytes.
-pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buf: Buf, hash: *mut uint8_t) {
+pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buffer: Buf, hash: *mut uint8_t) {
     let file_name: *mut c_char = if name.is_null() {
         // SAFETY: `b_ffname` is the buffer's own name or NULL.
-        let picked = unsafe { u_get_undo_file_name(buf.b_ffname, false) };
+        let picked = unsafe { u_get_undo_file_name(buffer.b_ffname, false) };
         if picked.is_null() {
             verbosely(true, || {
                 // SAFETY: a NUL-terminated literal.
@@ -38,7 +38,7 @@ pub unsafe fn u_write_undo(name: *const c_char, forceit: bool, buf: Buf, hash: *
         name.cast_mut()
     };
     // SAFETY: a live buffer and a NUL-terminated path, by the above.
-    unsafe { write_undo_file(file_name, name.is_null(), forceit, buf, hash) };
+    unsafe { write_undo_file(file_name, name.is_null(), forceit, buffer, hash) };
     if !ptr::eq(file_name.cast_const(), name) {
         // SAFETY: `u_get_undo_file_name`'s allocation, which the caller's own
         // `name` is never.
@@ -60,7 +60,7 @@ unsafe fn write_undo_file(
     file_name: *mut c_char,
     automatic: bool,
     forceit: bool,
-    buf: Buf,
+    buffer: Buf,
     hash: *mut uint8_t,
 ) {
     // SAFETY: a NUL-terminated path, by the contract above.
@@ -74,7 +74,7 @@ unsafe fn write_undo_file(
         // SAFETY: as above.
         unsafe { os_remove(file_name) };
     }
-    if buf.b_u_numhead == 0 && buf.b_u_line_ptr.is_null() {
+    if buffer.b_u_numhead == 0 && buffer.b_u_line_ptr.is_null() {
         if p_verbose.get() > 0 {
             let mesg = gettext(c"Skipping undo file write, nothing to undo");
             // SAFETY: as above.
@@ -86,9 +86,9 @@ unsafe fn write_undo_file(
     // The undo file inherits the edited file's permissions, minus
     // anything but read/write: it holds the same text.
     let mut perm: c_int = 0o600;
-    if !buf.b_ffname.is_null() {
+    if !buffer.b_ffname.is_null() {
         // SAFETY: the buffer's own name, NUL-terminated.
-        perm = unsafe { os_getperm(buf.b_ffname) } as c_int;
+        perm = unsafe { os_getperm(buffer.b_ffname) } as c_int;
         if perm < 0 {
             perm = 0o600;
         }
@@ -112,7 +112,7 @@ unsafe fn write_undo_file(
         smsg!(0, "Writing undo file: {file_name}");
     });
     // SAFETY: the descriptor just opened on that path, and a live buffer.
-    unsafe { match_group(fd, file_name, perm, buf) };
+    unsafe { match_group(fd, file_name, perm, buffer) };
 
     // SAFETY: our own descriptor, and a NUL-terminated mode.
     let fp: *mut FILE = unsafe { fdopen(fd, c"w".as_ptr()) };
@@ -127,12 +127,12 @@ unsafe fn write_undo_file(
     }
     u_sync(true);
     let mut bi = BufInfo {
-        bi_buf: buf,
+        bi_buf: buffer,
         bi_fp: fp,
     };
     // SAFETY: an open undo file on a live buffer, and `hash` readable for
     // [`UNDO_HASH_SIZE`] bytes by the contract above.
-    let write_ok = unsafe { write_tree(&raw mut bi, buf, hash, fd, fp) };
+    let write_ok = unsafe { write_tree(&raw mut bi, buffer, hash, fd, fp) };
     // SAFETY: the stream opened just above, closed once.
     unsafe { fclose(fp) };
     if !write_ok {
@@ -140,8 +140,8 @@ unsafe fn write_undo_file(
         let file_name = unsafe { c_str(file_name) };
         semsg!("E829: Write error in undo file: {file_name}");
     }
-    if !buf.b_ffname.is_null() {
-        let acl: VimAcl = os_get_acl(buf.b_ffname);
+    if !buffer.b_ffname.is_null() {
+        let acl: VimAcl = os_get_acl(buffer.b_ffname);
         os_set_acl(file_name, acl);
         os_free_acl(acl);
     }
@@ -191,9 +191,9 @@ unsafe fn looks_like_undo_file(file_name: *mut c_char, automatic: bool) -> bool 
 ///
 /// # Safety
 ///
-/// `fd` is open on `file_name` and `buf` points at a live buffer.
-unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buf: Buf) {
-    if buf.b_ffname.is_null() {
+/// `fd` is open on `file_name` and `buffer` points at a live buffer.
+unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Buf) {
+    if buffer.b_ffname.is_null() {
         return;
     }
     let mut edited = FileInfo::default();
@@ -202,7 +202,7 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buf: Buf) 
     // NUL-terminated, two writable records of ours, and an open descriptor —
     // all by the contract above.
     let group_stuck = unsafe {
-        os_fileinfo(buf.b_ffname, &raw mut edited)
+        os_fileinfo(buffer.b_ffname, &raw mut edited)
             && os_fileinfo(file_name, &raw mut written)
             && edited.stat.st_gid != written.stat.st_gid
             && os_fchown(fd, u32::MAX as uv_uid_t, edited.stat.st_gid as uv_gid_t) != 0
@@ -219,12 +219,12 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buf: Buf) 
 ///
 /// # Safety
 ///
-/// `bi` is open on `buf`'s undo file, `buf` points at a live buffer, `hash`
+/// `bi` is open on `buffer`'s undo file, `buffer` points at a live buffer, `hash`
 /// at [`UNDO_HASH_SIZE`] readable bytes, and `fd`/`fp` are the same open
 /// file as `bi`.
 unsafe fn write_tree(
     bi: *mut BufInfo,
-    buf: Buf,
+    buffer: Buf,
     hash: *mut uint8_t,
     fd: c_int,
     fp: *mut FILE,
@@ -238,7 +238,7 @@ unsafe fn write_tree(
     // reaches them: the links are sequence numbers, so the reader does
     // not care which order they arrive in. One stamp does for both of the
     // walk's marks, because "reached" is the whole question here.
-    let tree = buf.tree_walk(buf.b_u_oldhead, Marks::next_once());
+    let tree = buffer.tree_walk(buffer.b_u_oldhead, Marks::next_once());
     for visit in tree {
         // SAFETY: an open undo file, and a header the walk reached, which is
         // therefore live.
@@ -250,8 +250,8 @@ unsafe fn write_tree(
     let mut write_ok = unsafe { undo_write_bytes(bi, UF_HEADER_END_MAGIC as uintmax_t, 2) };
     // 'fsync' asks for the bytes to be on the disk before we call the
     // write done.
-    let fsync_wanted = if buf.b_p_fs >= 0 {
-        buf.b_p_fs
+    let fsync_wanted = if buffer.b_p_fs >= 0 {
+        buffer.b_p_fs
     } else {
         p_fs.get()
     };

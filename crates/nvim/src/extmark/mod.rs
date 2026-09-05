@@ -251,19 +251,26 @@ fn itr_next(tree: &mut MarkTree, itr: &mut MarkTreeIter) -> bool {
 // Every one of these wants a live buffer, which is [`Buf`]'s promise, so
 // these wrappers are safe too.
 
-fn decor_remove(buf: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline, free: bool) {
+fn decor_remove(
+    buffer: Buf,
+    row1: c_int,
+    row2: c_int,
+    col1: c_int,
+    decor: DecorInline,
+    free: bool,
+) {
     // SAFETY: a live buffer and a decoration read out of one of its marks.
-    unsafe { buf_decor_remove(buf.raw(), row1, row2, col1, decor, free) }
+    unsafe { buf_decor_remove(buffer.raw(), row1, row2, col1, decor, free) }
 }
 
-fn put_decor(buf: Buf, decor: DecorInline, row: c_int, row2: c_int) {
+fn put_decor(buffer: Buf, decor: DecorInline, row: c_int, row2: c_int) {
     // SAFETY: as [`decor_remove`].
-    unsafe { buf_put_decor(buf.raw(), decor, row, row2) }
+    unsafe { buf_put_decor(buffer.raw(), decor, row, row2) }
 }
 
-fn redraw_decor(buf: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
+fn redraw_decor(buffer: Buf, row1: c_int, row2: c_int, col1: c_int, decor: DecorInline) {
     // SAFETY: as [`decor_remove`].
-    unsafe { decor_redraw(buf.raw(), row1, row2, col1, decor) }
+    unsafe { decor_redraw(buffer.raw(), row1, row2, col1, decor) }
 }
 
 fn free_decor(decor: DecorInline) {
@@ -277,14 +284,14 @@ fn type_flags(decor: DecorInline) -> uint16_t {
     unsafe { decor_type_flags(decor) }
 }
 
-fn invalidate_decor_state(buf: Buf) {
+fn invalidate_decor_state(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { decor_state_invalidate(buf.raw()) }
+    unsafe { decor_state_invalidate(buffer.raw()) }
 }
 
-fn signcols_count_range(buf: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
+fn signcols_count_range(buffer: Buf, row1: c_int, row2: c_int, add: c_int, half: SignCountHalf) {
     // SAFETY: a live buffer, whose own marktree this walks.
-    unsafe { buf_signcols_count_range(buf.raw(), row1, row2, add, half) }
+    unsafe { buf_signcols_count_range(buffer.raw(), row1, row2, add, half) }
 }
 
 /// The highest extmark id handed out in namespace `key`, registering the
@@ -318,17 +325,17 @@ fn ns_destroy(map: &mut ExtmarkNs) {
 
 /// `ml_find_line_or_offset(buf, lnum, NULL, true)`: the byte offset of a
 /// line, counted with the file format's line endings ignored.
-fn line_offset(buf: Buf, lnum: LineNr) -> c_int {
+fn line_offset(buffer: Buf, lnum: LineNr) -> c_int {
     // SAFETY: a live buffer; the `offp` out-parameter is NULL, which the
     // callee tests for.
-    unsafe { ml_find_line_or_offset(buf.raw(), lnum, ptr::null_mut(), true) }
+    unsafe { ml_find_line_or_offset(buffer.raw(), lnum, ptr::null_mut(), true) }
 }
 
 /// `u_force_get_undo_header(buf)`, and then the extmark list on it. NULL when
 /// the change is not undoable.
-fn undo_marks(buf: Buf) -> *mut extmark_undo_vec_t {
+fn undo_marks(buffer: Buf) -> *mut extmark_undo_vec_t {
     // SAFETY: a live buffer.
-    let uhp: *mut UndoHeader = unsafe { u_force_get_undo_header(buf.raw()) };
+    let uhp: *mut UndoHeader = unsafe { u_force_get_undo_header(buffer.raw()) };
     if uhp.is_null() {
         return ptr::null_mut();
     }
@@ -353,12 +360,12 @@ pub(crate) struct Extent {
 }
 
 /// `buf_updates_send_splice`: the `on_bytes` half of every change.
-fn send_splice(buf: Buf, start: Extent, old: Extent, new: Extent) {
+fn send_splice(buffer: Buf, start: Extent, old: Extent, new: Extent) {
     // SAFETY: a live buffer. This re-enters the editor through the update
     // callbacks, which is why no borrow of the buffer spans the call.
     unsafe {
         buf_updates_send_splice(
-            buf.raw(),
+            buffer.raw(),
             start.row,
             start.col,
             start.byte,
@@ -431,7 +438,7 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
 
 /// Adjust extmark rows for inserted or deleted rows; columns stay fixed.
 pub unsafe fn extmark_adjust(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
@@ -439,7 +446,7 @@ pub unsafe fn extmark_adjust(
     undo: ExtmarkOp,
 ) {
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     splice::adjust(buf, line1, line2, amount, amount_after, undo);
 }
 
@@ -449,7 +456,7 @@ pub unsafe fn extmark_adjust(
 /// `old_col` and `new_col` encode an offset from `start_col` when the
 /// matching row extent is 0, and the end column of the region otherwise.
 pub unsafe fn extmark_splice(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     old_row: c_int,
@@ -471,14 +478,14 @@ pub unsafe fn extmark_splice(
         byte: new_byte,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     splice::splice(buf, start_row, start_col, old, new, undo);
 }
 
 /// The single-line shorthand: the column delta is both the column count and
 /// the byte count.
 pub unsafe fn extmark_splice_cols(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     old_col: ColNr,
@@ -496,13 +503,13 @@ pub unsafe fn extmark_splice_cols(
         byte: new_col as BCount,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     splice::splice(buf, start_row, start_col, old, new, undo);
 }
 
 /// Text removed from one place and inserted at another, as `:move` does it.
 pub unsafe fn extmark_move_region(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     start_byte: BCount,
@@ -530,6 +537,6 @@ pub unsafe fn extmark_move_region(
         byte: new_byte,
     };
     // SAFETY: the caller's promise -- a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     splice::move_region(buf, start, extent, new, undo);
 }

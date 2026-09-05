@@ -320,14 +320,14 @@ pub unsafe fn open_spellbuf() -> *mut Buffer {
 }
 
 /// Close a buffer from [`open_spellbuf`].
-pub unsafe fn close_spellbuf(buf: *mut Buffer) {
-    if buf.is_null() {
+pub unsafe fn close_spellbuf(buffer: *mut Buffer) {
+    if buffer.is_null() {
         return;
     }
-    unsafe { ml_close(buf, 1) };
+    unsafe { ml_close(buffer, 1) };
     // The free: `Buffer`'s destructor runs and the memory goes back.
     // SAFETY: `open_spellbuf` gave up this address and nothing else
     // takes it back -- `sl_sugbuf`/`si_spellbuf` are cleared right after
     // this call.
-    drop(unsafe { Owned::from_raw(buf) });
+    drop(unsafe { Owned::from_raw(buffer) });
 }

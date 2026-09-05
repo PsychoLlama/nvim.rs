@@ -418,9 +418,9 @@ pub unsafe fn eval_fmt_source_name_line(buf: *mut c_char, bufsize: size_t) {
 ///
 /// # Safety
 /// `buf` must be valid.
-pub unsafe fn prompt_get_input(buf: *mut Buffer) -> *mut c_char {
+pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
-    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
+    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
         return null_mut();
     };
     if !buf_is_prompt(Some(buf)) {

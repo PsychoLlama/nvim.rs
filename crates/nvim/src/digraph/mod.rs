@@ -746,7 +746,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut ExArg) {
     unsafe { status_redraw_curbuf() };
 }
 
-/// Read `{from} {to}` pairs from the file being sourced into `buf`'s keymap
+/// Read `{from} {to}` pairs from the file being sourced into `buffer`'s keymap
 /// entries, until the line getter runs out. Blank lines and `"` comments are
 /// skipped; an over-long or half-empty entry is dropped, and an empty `to`
 /// reports E791.
@@ -754,8 +754,8 @@ pub unsafe fn ex_loadkeymap(eap: *mut ExArg) {
 /// # Safety
 ///
 /// `eap` must be a live command block whose line getter is the sourcing one,
-/// and `buf` a valid buffer.
-unsafe fn read_keymap_entries(eap: *mut ExArg, buf: *mut Buffer) {
+/// and `buffer` a valid buffer.
+unsafe fn read_keymap_entries(eap: *mut ExArg, buffer: *mut Buffer) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
         // null at end of file.
@@ -778,7 +778,7 @@ unsafe fn read_keymap_entries(eap: *mut ExArg, buf: *mut Buffer) {
                 // SAFETY: the caller's buffer; both slices are copied out of
                 // `line`, which is freed below.
                 unsafe {
-                    (*buf).b_kmap_ga.push(KeymapEntry {
+                    (*buffer).b_kmap_ga.push(KeymapEntry {
                         from: from.to_vec(),
                         to: to.to_vec(),
                     });
@@ -790,15 +790,15 @@ unsafe fn read_keymap_entries(eap: *mut ExArg, buf: *mut Buffer) {
     }
 }
 
-/// Make every entry of `buf`'s keymap a buffer-local language mapping.
+/// Make every entry of `buffer`'s keymap a buffer-local language mapping.
 ///
 /// # Safety
 ///
-/// `buf` must be a valid buffer.
-unsafe fn apply_keymap_entries(buf: *mut Buffer) {
+/// `buffer` must be a valid buffer.
+unsafe fn apply_keymap_entries(buffer: *mut Buffer) {
     // SAFETY: the caller's buffer. The commands are built before any of them
     // runs, so `do_map` cannot be reading the list it is driven by.
-    let cmds: Vec<Vec<u8>> = unsafe { &(*buf).b_kmap_ga }
+    let cmds: Vec<Vec<u8>> = unsafe { &(*buffer).b_kmap_ga }
         .iter()
         .map(|entry| keymap_map_cmd(&entry.from, Some(&entry.to)))
         .collect();

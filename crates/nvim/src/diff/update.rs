@@ -100,15 +100,15 @@ pub(crate) fn diff_blocks(tabpage: TabPage) -> impl Iterator<Item = Df> {
     core::iter::successors(Df::first(tabpage), |dp| dp.next())
 }
 
-/// `buf`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
+/// `buffer`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
 ///
-/// [`diff_buf_idx`] with its promise discharged: it only compares `buf`
+/// [`diff_buf_idx`] with its promise discharged: it only compares `buffer`
 /// against the tab page's eight `tp_diffbuf` slots and never dereferences it,
 /// so a live tab page is the whole precondition -- which is what a [`TabPage`]
 /// argument says. That matters because half the callers ask about a buffer
 /// they are not otherwise sure of.
-pub(crate) fn diff_slot(buf: Buf, tabpage: TabPage) -> c_int {
-    diff_buf_idx(buf, tabpage)
+pub(crate) fn diff_slot(buffer: Buf, tabpage: TabPage) -> c_int {
+    diff_buf_idx(buffer, tabpage)
 }
 
 /// Whether `dp` is still in the current tab page's block list.
@@ -155,7 +155,7 @@ pub(crate) unsafe fn clear_diffout(dout: *mut DiffOut) {
     }
 }
 
-/// Write lines `start`..`end` of `buf` into a memory image for `xdl_diff`.
+/// Write lines `start`..`end` of `buffer` into a memory image for `xdl_diff`.
 ///
 /// The image is one NL-terminated line after another.  A NL *inside* a line
 /// stands for a NUL byte in the file -- `ml_get_buf` answers the two swapped
@@ -166,15 +166,15 @@ pub(crate) unsafe fn clear_diffout(dout: *mut DiffOut) {
 /// # Safety
 /// `m` must be a writable `mmfile_t`.
 pub(crate) unsafe fn diff_write_buffer(
-    buf: Buf,
+    buffer: Buf,
     m: *mut mmfile_t,
     start: LineNr,
     mut end: LineNr,
 ) -> Result<(), Failed> {
     if end < 0 {
-        end = buf.b_ml.ml_line_count;
+        end = buffer.b_ml.ml_line_count;
     }
-    if buf.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
+    if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) || end < start {
         // SAFETY: the caller's out-parameter.
         unsafe { *m = MMFILE_INIT };
         return Ok(());
@@ -183,7 +183,7 @@ pub(crate) unsafe fn diff_write_buffer(
     let len = (start..=end)
         .map(|lnum| {
             // SAFETY: a live buffer, and a line number inside it.
-            let n = unsafe { ml_get_buf_len(buf.raw(), lnum) };
+            let n = unsafe { ml_get_buf_len(buffer.raw(), lnum) };
             n as usize + 1
         })
         .sum::<usize>();
@@ -202,7 +202,7 @@ pub(crate) unsafe fn diff_write_buffer(
     let mut at = 0;
     for lnum in start..=end {
         // SAFETY: a live buffer, and a line number inside it.
-        let line = unsafe { CStr::from_ptr(ml_get_buf(buf.raw(), lnum)) }.to_bytes();
+        let line = unsafe { CStr::from_ptr(ml_get_buf(buffer.raw(), lnum)) }.to_bytes();
         if diff_flags.get() & DIFF_ICASE == 0 {
             out[at..at + line.len()].copy_from_slice(line);
             let from = out[at..].as_mut_ptr().cast();
@@ -259,7 +259,7 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
     at
 }
 
-/// Write lines `start`..`end` of `buf` out for the external diff.
+/// Write lines `start`..`end` of `buffer` out for the external diff.
 ///
 /// The internal engine wants a memory image, which is what `din_fname` being
 /// NULL selects; otherwise the lines go through a temp file.
@@ -267,7 +267,7 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
 /// # Safety
 /// `din` must be a live input side.
 unsafe fn diff_write(
-    mut buf: Buf,
+    mut buffer: Buf,
     din: *mut DiffIn,
     start: LineNr,
     mut end: LineNr,
@@ -277,7 +277,7 @@ unsafe fn diff_write(
     if din.din_fname.is_null() {
         let image = din.field_ptr(offset_of!(DiffIn, din_mmfile));
         // SAFETY: the caller's buffer, and `din`'s own image field.
-        return unsafe { diff_write_buffer(buf, image, start, end) };
+        return unsafe { diff_write_buffer(buffer, image, start, end) };
     }
     // Writing a buffer runs `aucmd_prepbuf`/`aucmd_restbuf`, which can
     // change the window layout -- and re-entering `winframe_remove` is a
@@ -286,14 +286,14 @@ unsafe fn diff_write(
         return Err(Failed);
     }
     if end < 0 {
-        end = buf.b_ml.ml_line_count;
+        end = buffer.b_ml.ml_line_count;
     }
 
-    let was_empty = buf.b_ml.ml_flags.masked(MlFlags::EMPTY);
-    let save_ff = buf.b_p_ff;
+    let was_empty = buffer.b_ml.ml_flags.masked(MlFlags::EMPTY);
+    let save_ff = buffer.b_p_ff;
     // The diff must see the file the way the buffer holds it.
     // SAFETY: a static string; `xstrdup` aborts rather than fail.
-    buf.b_p_ff = unsafe { xstrdup(c"unix".as_ptr()) };
+    buffer.b_p_ff = unsafe { xstrdup(c"unix".as_ptr()) };
     // Writing the buffer is an implementation detail of the diff, so it
     // must not move the '[ and '] marks.
     //
@@ -305,7 +305,7 @@ unsafe fn diff_write(
     if end < start {
         // The range names a completely empty file.
         end = start;
-        buf.b_ml.ml_flags |= MlFlags::EMPTY;
+        buffer.b_ml.ml_flags |= MlFlags::EMPTY;
     }
     let name = din.din_fname;
     let req = WriteRequest::filter();
@@ -313,12 +313,12 @@ unsafe fn diff_write(
     let noeap = ::core::ptr::null_mut::<ExArg>();
     // SAFETY: a live buffer and one of this module's temp file names; no
     // short name and no `ExArg` are wanted.
-    let r = unsafe { buf_write(buf.raw(), name, noshort, start, end, noeap, req) };
+    let r = unsafe { buf_write(buffer.raw(), name, noshort, start, end, noeap, req) };
     cmdmod_set_flags(CmdModFlags::SANDBOX.when(save_cmod_flags));
     // SAFETY: the option string the buffer itself holds.
-    unsafe { free_string_option(buf.b_p_ff) };
-    buf.b_p_ff = save_ff;
-    buf.b_ml.ml_flags = buf.b_ml.ml_flags.without(MlFlags::EMPTY) | was_empty;
+    unsafe { free_string_option(buffer.b_p_ff) };
+    buffer.b_p_ff = save_ff;
+    buffer.b_ml.ml_flags = buffer.b_ml.ml_flags.without(MlFlags::EMPTY) | was_empty;
     r
 }
 

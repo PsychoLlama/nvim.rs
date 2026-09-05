@@ -488,12 +488,12 @@ fn list_tab_windows(
     }
 }
 
-/// `buf`'s display name in `out`: the special name a scratch buffer has, or
+/// `buffer`'s display name in `out`: the special name a scratch buffer has, or
 /// its file name with the home directory folded back to `~`.
-fn fill_name(buf: Buf, out: &mut [c_char; IOSIZE as usize]) {
+fn fill_name(buffer: Buf, out: &mut [c_char; IOSIZE as usize]) {
     // SAFETY: a live buffer; the answer is a static name or null.
-    let special = unsafe { buf_spname(buf.raw()) };
-    let (raw, fname) = (buf.raw(), buf.b_fname);
+    let special = unsafe { buf_spname(buffer.raw()) };
+    let (raw, fname) = (buffer.raw(), buffer.b_fname);
     let (out, size) = (out.as_mut_ptr(), IOSIZE as size_t);
     if special.is_null() {
         // SAFETY: a live buffer and its own file name, into the buffer.
@@ -517,9 +517,9 @@ fn msg_line(line: &[c_char; IOSIZE as usize], hl_id: c_int) {
     unsafe { msg_outtrans(line.as_ptr().cast_mut(), hl_id, false) };
 }
 
-fn is_changed(buf: Buf) -> bool {
+fn is_changed(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    buf_is_changed(buf)
+    buf_is_changed(buffer)
 }
 
 // ---------------------------------------------------------------------------

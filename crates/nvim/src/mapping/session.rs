@@ -134,12 +134,12 @@ impl Out {
 ///
 /// # Safety
 /// `fd` must be an open stream.
-pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
+pub unsafe fn makemap(fd: *mut FILE, buffer: Option<Buf>) -> Result<(), Failed> {
     // SAFETY: the caller's promise — `fd` is an open stream for the whole of
     // this body.
     let out = unsafe { Out::new(fd) };
     let mut did_cpo = false;
-    let table = match buf {
+    let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
         None => MapTable::Global,
     };
@@ -199,7 +199,7 @@ pub unsafe fn makemap(fd: *mut FILE, buf: Option<Buf>) -> Result<(), Failed> {
                 if !out.puts(cmd) {
                     return Some(Failed);
                 }
-                if buf.is_some() && !out.puts(c" <buffer>") {
+                if buffer.is_some() && !out.puts(c" <buffer>") {
                     return Some(Failed);
                 }
                 if mp.m_nowait && !out.puts(c" <nowait>") {

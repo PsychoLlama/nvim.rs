@@ -252,48 +252,48 @@ pub unsafe fn tabstop_first(ts: *mut ColNr) -> c_int {
     }
 }
 
-/// `buf`'s 'shiftwidth': the option, or the width of the tabstop at column
+/// `buffer`'s 'shiftwidth': the option, or the width of the tabstop at column
 /// zero when the option is 0.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn get_sw_value(buf: *mut Buffer) -> c_int {
-    unsafe { get_sw_value_col(buf, 0, false) }
+/// `buffer` must be a live buffer.
+pub unsafe fn get_sw_value(buffer: *mut Buffer) -> c_int {
+    unsafe { get_sw_value_col(buffer, 0, false) }
 }
 
-/// `buf`'s 'shiftwidth' as seen from `pos`, which only differs from
+/// `buffer`'s 'shiftwidth' as seen from `pos`, which only differs from
 /// [`get_sw_value`] under 'vartabstop'.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `pos` a position in the current one: the
+/// `buffer` must be a live buffer and `pos` a position in the current one: the
 /// cursor is moved there and restored.
-unsafe fn get_sw_value_pos(buf: *mut Buffer, pos: *mut Pos, left: bool) -> c_int {
+unsafe fn get_sw_value_pos(buffer: *mut Buffer, pos: *mut Pos, left: bool) -> c_int {
     let save_cursor = unsafe { (*curwin.get()).w_cursor };
     unsafe { (*curwin.get()).w_cursor = *pos };
-    let sw_value = unsafe { get_sw_value_col(buf, get_nolist_virtcol(), left) };
+    let sw_value = unsafe { get_sw_value_col(buffer, get_nolist_virtcol(), left) };
     unsafe { (*curwin.get()).w_cursor = save_cursor };
     sw_value
 }
 
-/// `buf`'s 'shiftwidth' as seen from the end of the current line's indent.
+/// `buffer`'s 'shiftwidth' as seen from the end of the current line's indent.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn get_sw_value_indent(buf: *mut Buffer, left: bool) -> c_int {
+/// `buffer` must be a live buffer.
+pub unsafe fn get_sw_value_indent(buffer: *mut Buffer, left: bool) -> c_int {
     let mut pos = unsafe { (*curwin.get()).w_cursor };
     pos.col = unsafe { getwhitecols_curline() } as ColNr;
-    unsafe { get_sw_value_pos(buf, &raw mut pos, left) }
+    unsafe { get_sw_value_pos(buffer, &raw mut pos, left) }
 }
 
-/// `buf`'s 'shiftwidth' at screen column `col`.
+/// `buffer`'s 'shiftwidth' at screen column `col`.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn get_sw_value_col(buf: *mut Buffer, col: ColNr, left: bool) -> c_int {
-    if unsafe { (*buf).b_p_sw } != 0 {
-        unsafe { (*buf).b_p_sw as c_int }
+/// `buffer` must be a live buffer.
+pub unsafe fn get_sw_value_col(buffer: *mut Buffer, col: ColNr, left: bool) -> c_int {
+    if unsafe { (*buffer).b_p_sw } != 0 {
+        unsafe { (*buffer).b_p_sw as c_int }
     } else {
-        unsafe { tabstop_at(col, (*buf).b_p_ts, (*buf).b_p_vts_array, left) }
+        unsafe { tabstop_at(col, (*buffer).b_p_ts, (*buffer).b_p_vts_array, left) }
     }
 }
 
@@ -338,12 +338,18 @@ pub unsafe fn get_indent_lnum(lnum: LineNr) -> c_int {
     }
 }
 
-/// The screen width of line `lnum`'s indent, in `buf`.
+/// The screen width of line `lnum`'s indent, in `buffer`.
 ///
 /// # Safety
-/// `lnum` must be a valid line of `buf`.
-pub unsafe fn get_indent_buf(buf: *mut Buffer, lnum: LineNr) -> c_int {
-    unsafe { indent_size_ts(ml_get_buf(buf, lnum), (*buf).b_p_ts, (*buf).b_p_vts_array) }
+/// `lnum` must be a valid line of `buffer`.
+pub unsafe fn get_indent_buf(buffer: *mut Buffer, lnum: LineNr) -> c_int {
+    unsafe {
+        indent_size_ts(
+            ml_get_buf(buffer, lnum),
+            (*buffer).b_p_ts,
+            (*buffer).b_p_vts_array,
+        )
+    }
 }
 
 /// The screen width of the indent at `ptr`, with every tab a fixed

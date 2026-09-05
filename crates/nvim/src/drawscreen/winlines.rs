@@ -62,11 +62,11 @@ struct Walk {
 /// the approximation it had been carrying was wrong.
 ///
 /// # Safety
-/// `window` must be a live window, `buf` its buffer, and `decor` and the
+/// `window` must be a live window, `buffer` its buffer, and `decor` and the
 /// search-highlight state must be set up for this redraw.
 pub(crate) unsafe fn draw_window_lines(
     mut window: Win,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     rg: &mut Regions,
     cursorline_fi: FoldInfo,
     spv: &mut SpellVars,
@@ -107,7 +107,7 @@ pub(crate) unsafe fn draw_window_lines(
                 w.didline = true;
                 break;
             }
-            if w.lnum > unsafe { (*buf).b_ml.ml_line_count } {
+            if w.lnum > unsafe { (*buffer).b_ml.ml_line_count } {
                 w.eof = true;
                 break;
             }
@@ -115,12 +115,13 @@ pub(crate) unsafe fn draw_window_lines(
             // Remembered for the "the line did not fit" case below.
             w.srow = w.row;
 
-            if unsafe { line_needs_drawing(window, buf, rg, &w) } {
-                if !unsafe { draw_one_line(window, buf, rg, &mut w, cursorline_fi, spv, decor) } {
+            if unsafe { line_needs_drawing(window, buffer, rg, &w) } {
+                if !unsafe { draw_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor) }
+                {
                     break;
                 }
             } else {
-                unsafe { skip_one_line(window, buf, rg, &mut w, cursorline_fi, spv, decor) };
+                unsafe { skip_one_line(window, buffer, rg, &mut w, cursorline_fi, spv, decor) };
                 if w.row > window.w_view_height {
                     break;
                 }
@@ -130,7 +131,7 @@ pub(crate) unsafe fn draw_window_lines(
                 unsafe { restart_for_statuscol(window, decor) };
                 continue 'restart;
             }
-            if w.lnum > unsafe { (*buf).b_ml.ml_line_count } {
+            if w.lnum > unsafe { (*buffer).b_ml.ml_line_count } {
                 w.eof = true;
                 break;
             }
@@ -162,7 +163,7 @@ pub(crate) unsafe fn draw_window_lines(
             if w.eof {
                 // Filler text below the last line. `win_line` recognises
                 // `ml_line_count + 1` and draws only the filler.
-                unsafe { window.w_botline = (*buf).b_ml.ml_line_count + 1 };
+                unsafe { window.w_botline = (*buffer).b_ml.ml_line_count + 1 };
                 let fill = unsafe { win_get_fill(Win::new(window.raw()), window.w_botline) };
                 if fill > 0 && !window.w_botfill && w.row < window.w_view_height {
                     let mut zero_spv = SpellVars::default();
@@ -189,7 +190,7 @@ pub(crate) unsafe fn draw_window_lines(
                 window.w_botline = w.lnum;
             }
 
-            unsafe { draw_end_of_buffer(window, buf, rg, &w) };
+            unsafe { draw_end_of_buffer(window, buffer, rg, &w) };
         }
 
         break old_botline;
@@ -205,8 +206,8 @@ pub(crate) unsafe fn draw_window_lines(
 /// or going.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
-unsafe fn line_needs_drawing(window: Win, buf: *mut Buffer, rg: &Regions, w: &Walk) -> bool {
+/// `window` must be a live window and `buffer` its buffer.
+unsafe fn line_needs_drawing(window: Win, buffer: *mut Buffer, rg: &Regions, w: &Walk) -> bool {
     // SAFETY: the caller's window, buffer and `w_lines` array.
     if w.row < rg.top_end
         || (w.row >= rg.mid_start && w.row < rg.mid_end)
@@ -238,8 +239,8 @@ unsafe fn line_needs_drawing(window: Win, buf: *mut Buffer, rg: &Regions, w: &Wa
                     // A match at a fixed position may need redrawing when
                     // lines were inserted or deleted.
                     || (!window.w_match_head.is_null()
-                        && unsafe { (*buf).b_mod_set }
-                        && unsafe { (*buf).b_mod_xlines } != 0))))
+                        && unsafe { (*buffer).b_mod_set }
+                        && unsafe { (*buffer).b_mod_xlines } != 0))))
     {
         return true;
     }
@@ -253,10 +254,10 @@ unsafe fn line_needs_drawing(window: Win, buf: *mut Buffer, rg: &Regions, w: &Wa
 /// window.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
+/// `window` must be a live window and `buffer` its buffer.
 unsafe fn draw_one_line(
     window: Win,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     rg: &mut Regions,
     w: &mut Walk,
     cursorline_fi: FoldInfo,
@@ -373,7 +374,7 @@ unsafe fn draw_one_line(
             )
         } > 0;
         while !virt_below
-            && unsafe { (*wl).wl_lastlnum } < unsafe { (*buf).b_ml.ml_line_count }
+            && unsafe { (*wl).wl_lastlnum } < unsafe { (*buffer).b_ml.ml_line_count }
             && unsafe { decor_conceal_line(window.raw(), (*wl).wl_lastlnum, false) }
         {
             virt_below = false;
@@ -592,10 +593,10 @@ unsafe fn move_line_entries(
 /// moved to another line.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
+/// `window` must be a live window and `buffer` its buffer.
 unsafe fn skip_one_line(
     window: Win,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     rg: &Regions,
     w: &mut Walk,
     cursorline_fi: FoldInfo,
@@ -607,8 +608,8 @@ unsafe fn skip_one_line(
     let numbers_moved = (window.w_onebuf_opt.wo_nu != 0
         && rg.mod_top != 0
         && w.lnum >= rg.mod_bot
-        && unsafe { (*buf).b_mod_set }
-        && unsafe { (*buf).b_mod_xlines } != 0)
+        && unsafe { (*buffer).b_mod_set }
+        && unsafe { (*buffer).b_mod_xlines } != 0)
         || (window.w_onebuf_opt.wo_rnu != 0
             && window.w_last_cursor_lnum_rnu != window.w_cursor.lnum);
     if numbers_moved {
@@ -733,8 +734,8 @@ unsafe fn draw_unfinished_last_line(mut window: Win, w: &Walk) {
 /// `bot_scroll_start` records.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
-unsafe fn draw_end_of_buffer(window: Win, buf: *mut Buffer, rg: &Regions, w: &Walk) {
+/// `window` must be a live window and `buffer` its buffer.
+unsafe fn draw_end_of_buffer(window: Win, buffer: *mut Buffer, rg: &Regions, w: &Walk) {
     // SAFETY: the caller's window and buffer.
     let mut lastline = rg.bot_scroll_start;
     if rg.mid_end >= w.row {
@@ -742,7 +743,7 @@ unsafe fn draw_end_of_buffer(window: Win, buf: *mut Buffer, rg: &Regions, w: &Wa
     }
     // The change reached past the end of the buffer, so nothing below it
     // can be trusted.
-    if rg.mod_bot > unsafe { (*buf).b_ml.ml_line_count } {
+    if rg.mod_bot > unsafe { (*buffer).b_ml.ml_line_count } {
         lastline = 0;
     }
 

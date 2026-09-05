@@ -146,9 +146,9 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut QfInfo, old_last: *mut QfLine) {
 ///
 /// # Safety
 ///
-/// `qfp` must be a live entry, and `buf` the quickfix buffer.
+/// `qfp` must be a live entry, and `buffer` the quickfix buffer.
 unsafe fn qf_buf_add_line(
-    buf: Buf,
+    buffer: Buf,
     lnum: LineNr,
     qfp: *const QfLine,
     dir: &mut CurrentDir,
@@ -224,7 +224,7 @@ unsafe fn qf_buf_add_line(
 
     unsafe {
         ml_append_buf(
-            buf.raw(),
+            buffer.raw(),
             lnum,
             line.as_ptr().cast_mut().cast(),
             line.len() as ColNr,
@@ -381,13 +381,13 @@ struct Splice {
 /// The nine numbers are bound out here rather than written into the call:
 /// rustfmt gives an argument list this wide one line per argument, and all
 /// of them would be inside the region.
-fn splice(buf: Buf, at: &Splice) {
+fn splice(buffer: Buf, at: &Splice) {
     let (srow, scol) = at.start;
     let (orow, ocol, obytes) = at.old;
     let (nrow, ncol, nbytes) = at.new;
     let undo = kExtmarkNoUndo;
-    let raw = buf.raw();
-    // SAFETY: `buf` is the quickfix window's buffer, live for the call.
+    let raw = buffer.raw();
+    // SAFETY: `buffer` is the quickfix window's buffer, live for the call.
     unsafe {
         extmark_splice(
             raw, srow, scol, orow, ocol, obytes, nrow, ncol, nbytes, undo,
@@ -398,7 +398,7 @@ fn splice(buf: Buf, at: &Splice) {
 /// Fill the quickfix buffer with the list, replacing what it held.
 ///
 /// With `old_last` the entries after that one are appended instead, and
-/// `buf` need not be the current buffer; without it `buf` must be `curbuf`,
+/// `buffer` need not be the current buffer; without it `buffer` must be `curbuf`,
 /// because lines are deleted and autocommands are triggered.
 ///
 /// # Safety
@@ -406,7 +406,7 @@ fn splice(buf: Buf, at: &Splice) {
 /// `qfl` must be null or a live list.
 pub(crate) unsafe fn qf_fill_buffer(
     qfl: *mut QfList,
-    buf: Buf,
+    buffer: Buf,
     old_last: *mut QfLine,
     qf_winid: c_int,
 ) {
@@ -415,7 +415,7 @@ pub(crate) unsafe fn qf_fill_buffer(
     let old_key_typed = KeyTyped.get();
     let rewriting = old_last.is_null();
     if rewriting {
-        if buf.raw() != curbuf.get() {
+        if buffer.raw() != curbuf.get() {
             unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
             return;
         }
@@ -431,9 +431,9 @@ pub(crate) unsafe fn qf_fill_buffer(
         let (mut qfp, mut lnum) = if rewriting {
             (unsafe { (*qfl).qf_start }, 0)
         } else if unsafe { (*old_last).qf_next.is_null() } {
-            (old_last, buf.b_ml.ml_line_count)
+            (old_last, buffer.b_ml.ml_line_count)
         } else {
-            (unsafe { (*old_last).qf_next }, buf.b_ml.ml_line_count)
+            (unsafe { (*old_last).qf_next }, buffer.b_ml.ml_line_count)
         };
 
         let qftf_list =
@@ -456,7 +456,7 @@ pub(crate) unsafe fn qf_fill_buffer(
 
             if !unsafe {
                 qf_buf_add_line(
-                    buf,
+                    buffer,
                     lnum,
                     qfp,
                     &mut dir,

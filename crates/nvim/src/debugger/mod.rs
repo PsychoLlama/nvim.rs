@@ -311,10 +311,10 @@ pub fn dbg_breakpoint(name: *mut c_char, lnum: LineNr) {
 ///
 /// # Safety
 /// `bp` must point at a live entry whose `dbg_name` is the expression.
-unsafe fn eval_expr_no_emsg(bp: *mut Breakpoint) -> *mut TypVal {
+unsafe fn eval_expr_no_emsg(breakpoint: *mut Breakpoint) -> *mut TypVal {
     let _no_emsg = Suppress::emsg();
     // SAFETY: caller contract.
-    unsafe { eval_expr((*bp).dbg_name, ptr::null_mut()) }
+    unsafe { eval_expr((*breakpoint).dbg_name, ptr::null_mut()) }
 }
 
 /// Parse the arguments of `:breakadd`, `:breakdel` or `:profile` into a
@@ -761,13 +761,13 @@ unsafe fn debuggy_find(
 ///
 /// # Safety
 /// `bp` must point at a live `DBG_EXPR` entry.
-unsafe fn watch_changed(bp: *mut Breakpoint) -> bool {
+unsafe fn watch_changed(breakpoint: *mut Breakpoint) -> bool {
     // SAFETY: caller contract throughout. Evaluating the expression runs
     // arbitrary Vimscript, so `bp` outliving the call rests on the same
     // assumption the C makes -- that a watch does not itself add a
     // breakpoint, which would grow the array and move every entry.
-    let tv = unsafe { eval_expr_no_emsg(bp) };
-    let previous = unsafe { (*bp).dbg_val };
+    let tv = unsafe { eval_expr_no_emsg(breakpoint) };
+    let previous = unsafe { (*breakpoint).dbg_val };
 
     if tv.is_null() {
         // The expression stopped evaluating at all, which counts as a
@@ -778,14 +778,14 @@ unsafe fn watch_changed(bp: *mut Breakpoint) -> bool {
         unsafe { set_oldval(previous) };
         unsafe { set_newval(ptr::null_mut()) };
         unsafe { tv_free(previous) };
-        unsafe { (*bp).dbg_val = ptr::null_mut() };
+        unsafe { (*breakpoint).dbg_val = ptr::null_mut() };
         return true;
     }
 
     if previous.is_null() {
         // First evaluation: the baseline, with no old value to show.
         unsafe { set_oldval(ptr::null_mut()) };
-        unsafe { (*bp).dbg_val = tv };
+        unsafe { (*breakpoint).dbg_val = tv };
         unsafe { set_newval(tv) };
         return true;
     }
@@ -799,10 +799,10 @@ unsafe fn watch_changed(bp: *mut Breakpoint) -> bool {
         unsafe { set_oldval(previous) };
         // `typval_compare` overwrote `tv`, so the new value has to be
         // evaluated a second time before it can be shown.
-        let fresh = unsafe { eval_expr_no_emsg(bp) };
+        let fresh = unsafe { eval_expr_no_emsg(breakpoint) };
         unsafe { set_newval(fresh) };
         unsafe { tv_free(previous) };
-        unsafe { (*bp).dbg_val = fresh };
+        unsafe { (*breakpoint).dbg_val = fresh };
     }
     unsafe { tv_free(tv) };
     changed

@@ -270,20 +270,20 @@ pub unsafe fn prevwin_curwin() -> *mut Window {
     }
 }
 
-pub unsafe fn swbuf_goto_win_with_buf(buf: *mut Buffer) -> *mut Window {
+pub unsafe fn swbuf_goto_win_with_buf(buffer: *mut Buffer) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer or null.
-    raw_win(unsafe { Buf::from_raw(buf) }.and_then(swbuf_goto_win))
+    raw_win(unsafe { Buf::from_raw(buffer) }.and_then(swbuf_goto_win))
 }
 
-/// The window `'switchbuf'` says to jump to for `buf`, having jumped to it.
-fn swbuf_goto_win(buf: Buf) -> Option<Win> {
+/// The window `'switchbuf'` says to jump to for `buffer`, having jumped to it.
+fn swbuf_goto_win(buffer: Buf) -> Option<Win> {
     let flag = |f: ::core::ffi::c_int| swb_flags.get() & f as ::core::ffi::c_uint != 0;
     let mut wp = None;
     if flag(kOptSwbFlagUseopen as ::core::ffi::c_int) {
-        wp = jump_open_win(buf);
+        wp = jump_open_win(buffer);
     }
     if wp.is_none() && flag(kOptSwbFlagUsetab as ::core::ffi::c_int) {
-        wp = jump_open_tab(buf);
+        wp = jump_open_tab(buffer);
     }
     wp
 }
@@ -484,8 +484,8 @@ fn set_err(err: &mut Error, msg: *const ::core::ffi::c_char) {
 ///
 /// **Nothing derived from a window or buffer survives this call**: the event
 /// may close windows, switch tab pages or wipe the buffer.
-fn fire(event: AutoEvent, buf: Buf) -> bool {
-    let (none, raw) = (ptr::null_mut(), buf.raw());
+fn fire(event: AutoEvent, buffer: Buf) -> bool {
+    let (none, raw) = (ptr::null_mut(), buffer.raw());
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, none, none, false, raw) }
 }
@@ -493,8 +493,8 @@ fn fire(event: AutoEvent, buf: Buf) -> bool {
 /// [`fire`] with a name, which the event reports as `<afile>` and matches
 /// against: a window id for `WinClosed`, a tab page index for `TabClosed`, a
 /// file name for `TabNew`. `None` is the buffer-less form two events take.
-fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buf: Option<Buf>) -> bool {
-    let buf = buf.map_or(ptr::null_mut(), Buf::raw);
+fn fire_named(event: AutoEvent, name: *mut ::core::ffi::c_char, buffer: Option<Buf>) -> bool {
+    let buf = buffer.map_or(ptr::null_mut(), Buf::raw);
     // SAFETY: a live buffer or null, and a NUL-terminated name or null.
     unsafe { apply_autocmds(event, name, name, false, buf) }
 }
@@ -506,11 +506,11 @@ fn beep() {
     beep_flush();
 }
 
-/// Whether `buf` may be left in a window that is closing (`'hidden'`,
+/// Whether `buffer` may be left in a window that is closing (`'hidden'`,
 /// `'bufhidden'`).
-fn hides(buf: Buf) -> bool {
+fn hides(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_hide(buf.raw()) }
+    unsafe { buf_hide(buffer.raw()) }
 }
 
 /// Clamp the cursor of `win` back into its buffer.
@@ -519,9 +519,9 @@ fn revalidate_cursor(win: Win) {
     check_cursor(win);
 }
 
-/// Tell a terminal buffer its window changed size, if `buf` has one.
-fn resize_terminal(buf: Buf) {
-    let term = buf.terminal;
+/// Tell a terminal buffer its window changed size, if `buffer` has one.
+fn resize_terminal(buffer: Buf) {
+    let term = buffer.terminal;
     if !term.is_null() {
         // SAFETY: a live buffer's terminal.
         unsafe { terminal_check_size(term) };

@@ -317,12 +317,12 @@ pub unsafe fn did_set_completefunc(args: &mut OptSet) -> Option<&CStr> {
     }
 }
 
-/// Copy the global `'completefunc'` callback into `buf`'s local one.
+/// Copy the global `'completefunc'` callback into `buffer`'s local one.
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
-pub fn set_buflocal_cfu_callback(mut buf: Buf) {
+pub fn set_buflocal_cfu_callback(mut buffer: Buf) {
     // SAFETY: a live buffer owns its callback field.
-    unsafe { cfu_cb().copy_to_buflocal(&raw mut buf.b_cfu_cb) }
+    unsafe { cfu_cb().copy_to_buflocal(&raw mut buffer.b_cfu_cb) }
 }
 
 /// Parse the `'omnifunc'` value and set the callback function; an
@@ -350,12 +350,12 @@ pub unsafe fn did_set_omnifunc(args: &mut OptSet) -> Option<&CStr> {
     }
 }
 
-/// Copy the global `'omnifunc'` callback into `buf`'s local one.
+/// Copy the global `'omnifunc'` callback into `buffer`'s local one.
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback field this writes.
-pub fn set_buflocal_ofu_callback(mut buf: Buf) {
+pub fn set_buflocal_ofu_callback(mut buffer: Buf) {
     // SAFETY: a live buffer owns its callback field.
-    unsafe { ofu_cb().copy_to_buflocal(&raw mut buf.b_ofu_cb) }
+    unsafe { ofu_cb().copy_to_buflocal(&raw mut buffer.b_ofu_cb) }
 }
 
 /// Free an array of `'complete'` `F{func}` callbacks and null the pointer.
@@ -393,18 +393,18 @@ pub(crate) unsafe fn copy_cpt_callbacks(
     }
 }
 
-/// Copy the global `'complete'` `F{func}` callbacks into `buf`'s local array,
+/// Copy the global `'complete'` `F{func}` callbacks into `buffer`'s local array,
 /// clearing any existing buffer-local callbacks first.
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback array this rebuilds --
 /// which is also what retires upstream's NULL check.
-pub fn set_buflocal_cpt_callbacks(buf: Buf) {
+pub fn set_buflocal_cpt_callbacks(buffer: Buf) {
     if cpt_cb().count() == 0 {
         return;
     }
     // SAFETY: a live buffer owns its callback array, and the cache hands back
     // its own slots.
-    let raw = buf.raw();
+    let raw = buffer.raw();
     let (slots, count) = (cpt_cb().slots(), cpt_cb().count());
     // SAFETY: the two fields are addressed from the buffer's raw pointer
     // rather than through `DerefMut`, so taking the second does not

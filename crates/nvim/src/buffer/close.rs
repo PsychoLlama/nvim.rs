@@ -115,19 +115,19 @@ fn forget_file(win: Win, fnum: c_int) {
     unsafe { mark_forget_file(win.raw(), fnum) };
 }
 
-fn detach_updates(buf: Buf) {
+fn detach_updates(buffer: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `send_closing`.
-    unsafe { buf_updates_unload(buf.raw(), false) };
+    unsafe { buf_updates_unload(buffer.raw(), false) };
 }
 
-fn free_update_callbacks(buf: Buf) {
+fn free_update_callbacks(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { buf_free_callbacks(buf.raw()) };
+    unsafe { buf_free_callbacks(buffer.raw()) };
 }
 
-fn diff_forget(buf: Buf) {
+fn diff_forget(buffer: Buf) {
     // SAFETY: a live buffer.
-    diff_buf_delete(buf);
+    diff_buf_delete(buffer);
 }
 
 /// Whether `'diffopt'` contains `hiddenoff`.
@@ -135,16 +135,16 @@ fn diff_hidden_off() -> bool {
     diffopt_hiddenoff()
 }
 
-fn free_extmarks(buf: Buf) {
+fn free_extmarks(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { extmark_free_all(buf.raw()) };
+    unsafe { extmark_free_all(buffer.raw()) };
 }
 
-fn free_user_commands(buf: Buf) {
+fn free_user_commands(buffer: Buf) {
     // SAFETY: a live buffer. `uc_clear` leaves the table empty and usable,
     // which is what the buffers that outlive this -- `:bdel`'s, and the
     // `curbuf` `buflist_new` reuses -- need.
-    unsafe { uc_clear(Table::Buffer(buf.raw())) };
+    unsafe { uc_clear(Table::Buffer(buffer.raw())) };
 }
 
 fn free_garray(ga: &mut GArray) {
@@ -153,9 +153,9 @@ fn free_garray(ga: &mut GArray) {
 }
 
 /// Drop every buffer-local mapping (`abbrev` picks the abbreviation table).
-fn clear_mappings(buf: Buf, abbrev: bool) {
+fn clear_mappings(buffer: Buf, abbrev: bool) {
     // SAFETY: a live buffer.
-    unsafe { map_clear_mode(buf, MAP_ALL_MODES, true, abbrev) };
+    unsafe { map_clear_mode(buffer, MAP_ALL_MODES, true, abbrev) };
 }
 
 fn free_callback(cb: &mut Callback) {
@@ -173,10 +173,10 @@ fn drop_mark(mark: FileMark) {
     unsafe { free_fmark(mark) };
 }
 
-/// Move every mark in `buf` up by `count` lines from line 1 -- what an
+/// Move every mark in `buffer` up by `count` lines from line 1 -- what an
 /// emptied buffer needs so a reload starts from a clean slate.
-fn forget_lines(buf: Buf, count: LineNr) {
-    let (raw, last) = (buf.raw(), MAXLNUM as LineNr);
+fn forget_lines(buffer: Buf, count: LineNr) {
+    let (raw, last) = (buffer.raw(), MAXLNUM as LineNr);
     // SAFETY: a live buffer.
     unsafe {
         mark_adjust_buf(
@@ -192,9 +192,9 @@ fn forget_lines(buf: Buf, count: LineNr) {
     };
 }
 
-fn free_undo(buf: Buf) {
+fn free_undo(buffer: Buf) {
     // SAFETY: a live buffer.
-    u_clearallandblockfree(buf);
+    u_clearallandblockfree(buffer);
 }
 
 fn clear_syntax(syn: &mut SynBlock) {
@@ -203,9 +203,9 @@ fn clear_syntax(syn: &mut SynBlock) {
 }
 
 /// Close the memline and delete the swap file.
-fn close_memline(buf: Buf) {
+fn close_memline(buffer: Buf) {
     // SAFETY: a live buffer; `true` is upstream's `del_file`.
-    unsafe { ml_close(buf.raw(), 1) };
+    unsafe { ml_close(buffer.raw(), 1) };
 }
 
 fn mark_lines_deleted(count: LineNr) {
@@ -219,9 +219,9 @@ fn free_entry(entry: *mut WinInfo) {
 }
 
 /// `buf->b_vars->dv_hashtab`.
-fn buf_vars(mut buf: Buf) -> *mut HashTab {
+fn buf_vars(mut buffer: Buf) -> *mut HashTab {
     // SAFETY: a live buffer's variable dictionary is live.
-    unsafe { &raw mut (*buf.b_vars).dv_hashtab }
+    unsafe { &raw mut (*buffer.b_vars).dv_hashtab }
 }
 
 /// Free every buffer-local variable.
@@ -229,8 +229,8 @@ fn buf_vars(mut buf: Buf) -> *mut HashTab {
 /// `b:changedtick` lives in a field of `Buffer` rather than in the dictionary's
 /// own storage, so it is removed from the hash table first: clearing it would
 /// go through `clear_tv()` and zero the counter.
-fn clear_buf_vars(buf: Buf) {
-    let vars = buf_vars(buf);
+fn clear_buf_vars(buffer: Buf) {
+    let vars = buf_vars(buffer);
     // SAFETY: the hash table of a live buffer's variable dictionary; the
     // `changedtick` entry is put there when the buffer is created.
     unsafe {
@@ -243,20 +243,23 @@ fn clear_buf_vars(buf: Buf) {
 
 /// Hand `b:changedtick` to the dictionary before the buffer goes away, for the
 /// script that is still holding a reference to it.
-fn rescue_changedtick(mut buf: Buf) {
-    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut DictItem);
+fn rescue_changedtick(mut buffer: Buf) {
+    let (vars, di) = (
+        buffer.b_vars,
+        &raw mut buffer.changedtick_di as *mut DictItem,
+    );
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
     let _ = unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
 }
 
-fn release_vars(buf: Buf) {
+fn release_vars(buffer: Buf) {
     // SAFETY: a live buffer's variable dictionary.
-    unsafe { unref_var_dict(buf.b_vars) };
+    unsafe { unref_var_dict(buffer.b_vars) };
 }
 
-fn forget_autocmds(buf: Buf) {
+fn forget_autocmds(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { aubuflocal_remove(buf) };
+    unsafe { aubuflocal_remove(buffer) };
 }
 
 /// Take the buffer's number out of the registry, so that nothing can look it
@@ -288,7 +291,7 @@ struct Disposition {
 impl Disposition {
     /// The `action` the caller asked for, forced further by `'bufhidden'` --
     /// and forced all the way for a terminal buffer, which can only be wiped.
-    fn of(buf: Buf, action: c_int) -> Self {
+    fn of(buffer: Buf, action: c_int) -> Self {
         let mut it = Disposition {
             unload: action != 0,
             del: action == DOBUF_DEL as c_int || action == DOBUF_WIPE as c_int,
@@ -296,9 +299,9 @@ impl Disposition {
         };
         // The caller must take care of NOT deleting/freeing when 'bufhidden'
         // is "hide" (otherwise we could never free or delete a buffer).
-        if buf.terminal.is_null() {
+        if buffer.terminal.is_null() {
             // SAFETY: `'bufhidden'` is a NUL-terminated option value.
-            match unsafe { *buf.b_p_bh } as u8 {
+            match unsafe { *buffer.b_p_bh } as u8 {
                 b'd' => (it.del, it.unload) = (true, true),
                 b'w' => (it.del, it.unload, it.wipe) = (true, true, true),
                 b'u' => it.unload = true,
@@ -329,26 +332,26 @@ impl Disposition {
 // ---------------------------------------------------------------------------
 // Refusing to unload
 
-/// Whether `buf` may be unloaded, with the error message when it may not.
+/// Whether `buffer` may be unloaded, with the error message when it may not.
 ///
 /// A buffer is locked while it is halfway through a command that relies on
 /// it, and cannot be unloaded from under a redraw that is showing it.
-pub(crate) fn can_unload_buffer(buf: Buf) -> bool {
-    let mut can_unload = buf.b_locked == 0;
+pub(crate) fn can_unload_buffer(buffer: Buf) -> bool {
+    let mut can_unload = buffer.b_locked == 0;
 
     if can_unload && updating_screen.get() {
-        can_unload = !windows().any(|wp| wp.w_buffer == buf.raw());
+        can_unload = !windows().any(|wp| wp.w_buffer == buffer.raw());
     }
     // Don't unload the buffer while it's still being saved
-    if can_unload && buf.b_saving {
+    if can_unload && buffer.b_saving {
         can_unload = false;
     }
 
     if !can_unload {
-        let fname = if buf.b_fname.is_null() {
-            buf.b_ffname
+        let fname = if buffer.b_fname.is_null() {
+            buffer.b_ffname
         } else {
-            buf.b_fname
+            buffer.b_fname
         };
         // SAFETY: a buffer's own name, NUL-terminated.
         let name = unsafe { c_str(fname) };
@@ -362,18 +365,18 @@ pub(crate) fn can_unload_buffer(buf: Buf) -> bool {
     can_unload
 }
 
-pub fn buf_close_terminal(mut buf: Buf) {
-    debug_assert!(!buf.terminal.is_null(), "buf->terminal");
-    buf.b_locked += 1;
+pub fn buf_close_terminal(mut buffer: Buf) {
+    debug_assert!(!buffer.terminal.is_null(), "buf->terminal");
+    buffer.b_locked += 1;
     // SAFETY: a live terminal, the assertion above having ruled out null.
-    unsafe { terminal_close(&raw mut buf.terminal, -1) };
-    buf.b_locked -= 1;
+    unsafe { terminal_close(&raw mut buffer.terminal, -1) };
+    buffer.b_locked -= 1;
 }
 
 // ---------------------------------------------------------------------------
 // Closing the link to a buffer
 
-/// Close the link between `win` and `buf`, and act on `action` once no window
+/// Close the link between `win` and `buffer`, and act on `action` once no window
 /// is left showing it.
 ///
 /// `action` is 0 (the buffer becomes hidden), `DOBUF_UNLOAD`, `DOBUF_DEL`
@@ -387,14 +390,14 @@ pub fn buf_close_terminal(mut buf: Buf) {
 ///
 pub fn close_buffer(
     win: Option<Win>,
-    buf: Buf,
+    buffer: Buf,
     action: c_int,
     abort_if_last: bool,
     ignore_abort: bool,
 ) -> bool {
     close_buffer_inner(
         win.map_or(ptr::null_mut(), Win::raw),
-        buf,
+        buffer,
         action,
         abort_if_last,
         ignore_abort,
@@ -403,13 +406,13 @@ pub fn close_buffer(
 
 fn close_buffer_inner(
     win: *mut Window,
-    mut buf: Buf,
+    mut buffer: Buf,
     action: c_int,
     abort_if_last: bool,
     ignore_abort: bool,
 ) -> bool {
-    let mut how = Disposition::of(buf, action);
-    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buf.raw());
+    let mut how = Disposition::of(buffer, action);
+    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
     let the_curwin = curwin.get();
     let the_curtab = curtab.get();
     // Upstream's CHECK_CURBUF sits here; it is a no-op outside
@@ -417,7 +420,7 @@ fn close_buffer_inner(
 
     // Disallow deleting the buffer when it is locked (already being closed or
     // halfway a command that relies on it). Unloading is allowed.
-    if (how.del || how.wipe) && !can_unload_buffer(buf) {
+    if (how.del || how.wipe) && !can_unload_buffer(buffer) {
         return false;
     }
 
@@ -427,23 +430,23 @@ fn close_buffer_inner(
         // Remember the last cursor position and window options of the buffer.
         // This used to be only for the current window, but then options like
         // 'foldmethod' may be lost with a ":only" command.
-        if buf.b_nwindows == 1 {
+        if buffer.b_nwindows == 1 {
             remember_last_cursor(wp);
         }
         let cursor = wp.w_cursor;
         let lnum = if cursor.lnum == 1 { 0 } else { cursor.lnum };
         // SAFETY: a live buffer and a live window.
-        unsafe { buflist_setfpos(buf, Some(wp), lnum, cursor.col, true) };
+        unsafe { buflist_setfpos(buffer, Some(wp), lnum, cursor.col, true) };
     }
 
-    let bufref = BufRef::of(buf);
+    let bufref = BufRef::of(buffer);
 
     // When the buffer is no longer in a window, trigger BufWinLeave
-    if buf.b_nwindows == 1 {
-        let Some(kept) = leave_last_window(buf, bufref, win, &how, abort_if_last) else {
+    if buffer.b_nwindows == 1 {
+        let Some(kept) = leave_last_window(buffer, bufref, win, &how, abort_if_last) else {
             return false;
         };
-        buf = kept;
+        buffer = kept;
         // autocmds may abort script processing
         if !ignore_abort && aborting_now() {
             return false;
@@ -455,24 +458,24 @@ fn close_buffer_inner(
     // "tabnext" BufUnload autocmd leaves a window behind without a buffer.
     restore_curwin(is_curwin, the_curwin, the_curtab);
 
-    let nwindows = buf.b_nwindows;
+    let nwindows = buffer.b_nwindows;
 
     // decrease the link count from windows (unless not in any window)
-    if buf.b_nwindows > 0 {
-        buf.b_nwindows -= 1;
+    if buffer.b_nwindows > 0 {
+        buffer.b_nwindows -= 1;
     }
 
-    if diff_hidden_off() && !how.unload && buf.b_nwindows == 0 {
-        diff_forget(buf); // Clear 'diff' for hidden buffer.
+    if diff_hidden_off() && !how.unload && buffer.b_nwindows == 0 {
+        diff_forget(buffer); // Clear 'diff' for hidden buffer.
     }
 
     // Return when a window is displaying the buffer or when it's not unloaded.
-    if buf.b_nwindows > 0 || !how.unload {
+    if buffer.b_nwindows > 0 || !how.unload {
         return true;
     }
 
     // Always remove the buffer when there is no file name.
-    if buf.b_ffname.is_null() {
+    if buffer.b_ffname.is_null() {
         how.del = true;
     }
 
@@ -480,7 +483,7 @@ fn close_buffer_inner(
     // autocommands when del_buf is true.  Remember if we are closing the
     // current buffer.  Restore the number of windows, so that autocommands in
     // buf_freeall() don't get confused.
-    let is_curbuf = buf.raw() == curbuf.get();
+    let is_curbuf = buffer.raw() == curbuf.get();
 
     // When closing the current buffer stop Visual mode before freeing
     // anything.
@@ -488,9 +491,9 @@ fn close_buffer_inner(
         end_visual();
     }
 
-    buf.b_nwindows = nwindows;
+    buffer.b_nwindows = nwindows;
 
-    buf_freeall(buf, how.free_flags(ignore_abort));
+    buf_freeall(buffer, how.free_flags(ignore_abort));
 
     // Autocommands may have deleted the buffer.
     let Some(mut buf) = bufref.get() else {
@@ -563,7 +566,7 @@ fn close_buffer_inner(
 /// buffer, or (with `abort_if_last`) it made `win` the only window.  A `Some`
 /// carries the buffer back, re-validated.
 fn leave_last_window(
-    mut buf: Buf,
+    mut buffer: Buf,
     bufref: BufRef,
     win: *mut Window,
     how: &Disposition,
@@ -577,23 +580,23 @@ fn leave_last_window(
         &[AutoEvent::BufWinLeave, AutoEvent::BufHidden]
     };
     for &event in events {
-        buf.b_locked += 1;
-        buf.b_locked_split += 1;
-        if fire_named(event, buf) && !bufref.valid() {
+        buffer.b_locked += 1;
+        buffer.b_locked_split += 1;
+        if fire_named(event, buffer) && !bufref.valid() {
             // Autocommands deleted the buffer.
             err_raw(tr_raw(e_auabort.as_ptr()));
             return None;
         }
-        buf = bufref.get()?;
-        buf.b_locked -= 1;
-        buf.b_locked_split -= 1;
+        buffer = bufref.get()?;
+        buffer.b_locked -= 1;
+        buffer.b_locked_split -= 1;
         if abort_if_last && !win.is_null() && is_only_window(win) {
             // Autocommands made this the only window.
             err_raw(tr_raw(e_auabort.as_ptr()));
             return None;
         }
     }
-    Some(buf)
+    Some(buffer)
 }
 
 /// Go back to the window the caller started in, if an autocommand left us
@@ -615,48 +618,48 @@ fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, the_curtab: *mut Ta
 
 /// The wipe arm: forget the buffer everywhere, unlink it from the buffer list
 /// and free it.
-fn unlink_and_free(mut buf: Buf, clear_w_buf: Option<Win>) {
+fn unlink_and_free(mut buffer: Buf, clear_w_buf: Option<Win>) {
     if let Some(mut wp) = clear_w_buf {
         wp.w_buffer = ptr::null_mut();
     }
-    let fnum = buf.handle as c_int;
+    let fnum = buffer.handle as c_int;
     for wp in tab_windows() {
         forget_file(wp, fnum);
     }
-    if buf.b_sfname != buf.b_ffname {
-        xfree_clear(&mut buf.b_sfname);
+    if buffer.b_sfname != buffer.b_ffname {
+        xfree_clear(&mut buffer.b_sfname);
     } else {
-        buf.b_sfname = ptr::null_mut();
+        buffer.b_sfname = ptr::null_mut();
     }
-    xfree_clear(&mut buf.b_ffname);
-    match buf.prev() {
-        None => firstbuf.set(buf.b_next),
-        Some(mut prev) => prev.b_next = buf.b_next,
+    xfree_clear(&mut buffer.b_ffname);
+    match buffer.prev() {
+        None => firstbuf.set(buffer.b_next),
+        Some(mut prev) => prev.b_next = buffer.b_next,
     }
-    match buf.next() {
-        None => lastbuf.set(buf.b_prev),
-        Some(mut next) => next.b_prev = buf.b_prev,
+    match buffer.next() {
+        None => lastbuf.set(buffer.b_prev),
+        Some(mut next) => next.b_prev = buffer.b_prev,
     }
-    free_buffer(buf);
+    free_buffer(buffer);
 }
 
 /// Make buffer not contain a file.
 ///
-pub fn buf_clear_file(mut buf: Buf) {
-    buf.b_ml.ml_line_count = 1 as LineNr;
-    unchanged_now(buf, true, true);
-    buf.b_p_eof = 0;
-    buf.b_start_eof = 0;
-    buf.b_p_eol = 1;
-    buf.b_start_eol = 1;
-    buf.b_p_bomb = 0;
-    buf.b_start_bomb = 0;
-    buf.b_ml.ml_mfp = ptr::null_mut::<MemFile>();
+pub fn buf_clear_file(mut buffer: Buf) {
+    buffer.b_ml.ml_line_count = 1 as LineNr;
+    unchanged_now(buffer, true, true);
+    buffer.b_p_eof = 0;
+    buffer.b_start_eof = 0;
+    buffer.b_p_eol = 1;
+    buffer.b_start_eol = 1;
+    buffer.b_p_bomb = 0;
+    buffer.b_start_bomb = 0;
+    buffer.b_ml.ml_mfp = ptr::null_mut::<MemFile>();
     // Upstream's `ml_flags = ML_EMPTY` also dropped the ownership of the
     // cached line, without freeing it; the memfile it pointed into is gone
     // either way.
-    buf.b_ml.forget_line();
-    buf.b_ml.ml_flags = MlFlags::EMPTY; // empty buffer
+    buffer.b_ml.forget_line();
+    buffer.b_ml.ml_flags = MlFlags::EMPTY; // empty buffer
 }
 
 /// Clear the current buffer's contents.
@@ -683,13 +686,13 @@ pub fn buf_clear() {
 ///
 /// Careful: gets here with `curwin` NULL when exiting.
 ///
-pub fn buf_freeall(buf: Buf, flags: c_int) {
-    let is_curbuf = buf.raw() == curbuf.get();
-    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buf.raw());
+pub fn buf_freeall(buffer: Buf, flags: c_int) {
+    let is_curbuf = buffer.raw() == curbuf.get();
+    let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
     let the_curwin = curwin.get();
     let the_curtab = curtab.get();
 
-    let Some(mut buf) = announce_unload(buf, flags) else {
+    let Some(mut buf) = announce_unload(buffer, flags) else {
         return;
     };
     buf.b_locked -= 1;
@@ -757,20 +760,20 @@ pub fn buf_freeall(buf: Buf, flags: c_int) {
 /// The buffer is pinned across all three (`b_locked`), but an autocommand can
 /// still delete it -- `None` says so, and the caller returns without
 /// unpinning, as upstream does.
-fn announce_unload(mut buf: Buf, flags: c_int) -> Option<Buf> {
+fn announce_unload(mut buffer: Buf, flags: c_int) -> Option<Buf> {
     // Make sure the buffer isn't closed by autocommands.
-    buf.b_locked += 1;
-    buf.b_locked_split += 1;
+    buffer.b_locked += 1;
+    buffer.b_locked_split += 1;
 
-    let bufref = BufRef::of(buf);
+    let bufref = BufRef::of(buffer);
 
-    if !buf.terminal.is_null() {
-        buf_close_terminal(buf);
+    if !buffer.terminal.is_null() {
+        buf_close_terminal(buffer);
     }
-    detach_updates(buf);
+    detach_updates(buffer);
 
-    let loaded = !buf.b_ml.ml_mfp.is_null();
-    if loaded && fire_named(AutoEvent::BufUnload, buf) && !bufref.valid() {
+    let loaded = !buffer.b_ml.ml_mfp.is_null();
+    if loaded && fire_named(AutoEvent::BufUnload, buffer) && !bufref.valid() {
         // Autocommands deleted the buffer.
         return None;
     }
@@ -796,61 +799,61 @@ fn announce_unload(mut buf: Buf, flags: c_int) -> Option<Buf> {
 
 /// Free the buffer structure and everything belonging to the *buffer* rather
 /// than to the file, which must have been freed already.
-fn free_buffer(mut buf: Buf) {
-    // The allocation, out of the registry from here on. `buf` is still the
+fn free_buffer(mut buffer: Buf) {
+    // The allocation, out of the registry from here on. `buffer` is still the
     // address to work through; `owned` is only who gives the memory back.
-    let owned = forget_handle(buf.handle());
+    let owned = forget_handle(buffer.handle());
     note_buffer_freed();
     // b:changedtick uses an item in Buffer.
-    free_buffer_stuff(buf, kBffClearWinInfo as c_int);
+    free_buffer_stuff(buffer, kBffClearWinInfo as c_int);
     // SAFETY: a live buffer's variable dictionary is live.
-    if unsafe { (*buf.b_vars).dv_refcount } > Refcount::new(DO_NOT_FREE_CNT as c_int) {
-        rescue_changedtick(buf);
+    if unsafe { (*buffer.b_vars).dv_refcount } > Refcount::new(DO_NOT_FREE_CNT as c_int) {
+        rescue_changedtick(buffer);
     }
-    release_vars(buf);
-    forget_autocmds(buf);
-    free(buf.additional_data);
-    free(buf.b_prompt_text);
-    destroy_wininfo(buf);
-    free_callback(&mut buf.b_prompt_callback);
-    free_callback(&mut buf.b_prompt_interrupt);
-    clear_mark(&mut buf.b_last_cursor);
-    clear_mark(&mut buf.b_last_insert);
-    clear_mark(&mut buf.b_last_change);
-    clear_mark(&mut buf.b_prompt_start);
+    release_vars(buffer);
+    forget_autocmds(buffer);
+    free(buffer.additional_data);
+    free(buffer.b_prompt_text);
+    destroy_wininfo(buffer);
+    free_callback(&mut buffer.b_prompt_callback);
+    free_callback(&mut buffer.b_prompt_interrupt);
+    clear_mark(&mut buffer.b_last_cursor);
+    clear_mark(&mut buffer.b_last_insert);
+    clear_mark(&mut buffer.b_last_change);
+    clear_mark(&mut buffer.b_prompt_start);
     for i in 0..NMARKS as usize {
-        drop_mark(buf.b_namedm[i].clone());
+        drop_mark(buffer.b_namedm[i].clone());
     }
-    for i in 0..buf.b_changelistlen as usize {
-        drop_mark(buf.b_changelist[i].clone());
+    for i in 0..buffer.b_changelistlen as usize {
+        drop_mark(buffer.b_changelist[i].clone());
     }
     if autocmd_busy.get() {
         // Do not free the buffer structure while autocommands are executing,
         // it's still needed. Free it when autocmd_busy is reset.
-        buf.b_namedm = [ZERO_FMARK; NMARKS as usize];
-        buf.b_changelist = [ZERO_FMARK; 100];
+        buffer.b_namedm = [ZERO_FMARK; NMARKS as usize];
+        buffer.b_changelist = [ZERO_FMARK; 100];
         defer_free_buffer(owned);
     } else {
         // The free: `Buffer`'s destructor runs and the memory goes back.
         drop(owned);
-        if curbuf.get() == buf.raw() {
+        if curbuf.get() == buffer.raw() {
             curbuf.set(ptr::null_mut()); // make clear it's not to be used
         }
     }
 }
 
 /// `kv_destroy(buf->b_wininfo)`.
-fn destroy_wininfo(mut buf: Buf) {
-    let kv = &mut buf.b_wininfo;
+fn destroy_wininfo(mut buffer: Buf) {
+    let kv = &mut buffer.b_wininfo;
     free(kv.items);
     kv.capacity = 0;
     kv.size = 0;
     kv.items = ptr::null_mut::<*mut WinInfo>();
 }
 
-/// Free the `b_wininfo` list for buffer `buf`.
-pub(crate) fn clear_wininfo(mut buf: Buf) {
-    let kv = &mut buf.b_wininfo;
+/// Free the `b_wininfo` list for buffer `buffer`.
+pub(crate) fn clear_wininfo(mut buffer: Buf) {
+    let kv = &mut buffer.b_wininfo;
     for i in 0..kv.size {
         // SAFETY: the first `size` slots of a kvec hold live entries.
         free_entry(unsafe { *kv.items.add(i) });
@@ -860,34 +863,34 @@ pub(crate) fn clear_wininfo(mut buf: Buf) {
 
 /// Free what `:bdel` and a wipe-out drop: the window memory, the local
 /// options, the variables, the user commands, the extmarks and the mappings.
-pub(crate) fn free_buffer_stuff(mut buf: Buf, free_flags: c_int) {
+pub(crate) fn free_buffer_stuff(mut buffer: Buf, free_flags: c_int) {
     if free_flags & kBffClearWinInfo as c_int != 0 {
-        clear_wininfo(buf); // including window-local options
+        clear_wininfo(buffer); // including window-local options
         // SAFETY: a live buffer.
-        unsafe { free_buf_options(buf, true) };
-        free_garray(&mut buf.b_s.b_langp);
+        unsafe { free_buf_options(buffer, true) };
+        free_garray(&mut buffer.b_s.b_langp);
     }
-    clear_buf_vars(buf); // free all internal variables
+    clear_buf_vars(buffer); // free all internal variables
     if free_flags & kBffInitChangedtick as c_int != 0 {
-        buf_init_changedtick(buf);
+        buf_init_changedtick(buffer);
     }
-    free_user_commands(buf); // clear local user commands
-    free_extmarks(buf); // delete any extmarks
-    clear_mappings(buf, false); // clear local mappings
-    clear_mappings(buf, true); // clear local abbrevs
-    xfree_clear(&mut buf.b_start_fenc);
+    free_user_commands(buffer); // clear local user commands
+    free_extmarks(buffer); // delete any extmarks
+    clear_mappings(buffer, false); // clear local mappings
+    clear_mappings(buffer, true); // clear local abbrevs
+    xfree_clear(&mut buffer.b_start_fenc);
 
-    free_update_callbacks(buf);
+    free_update_callbacks(buffer);
 }
 
-/// Wipe out `buf` outright, with autocommands blocked unless `aucmd` says the
+/// Wipe out `buffer` outright, with autocommands blocked unless `aucmd` says the
 /// caller is already inside one.
 ///
-pub fn wipe_buffer(buf: Buf, aucmd: bool) {
+pub fn wipe_buffer(buffer: Buf, aucmd: bool) {
     if !aucmd {
         block_autocmds_now();
     }
-    close_buffer(None, buf, DOBUF_WIPE as c_int, false, true);
+    close_buffer(None, buffer, DOBUF_WIPE as c_int, false, true);
     if !aucmd {
         unblock_autocmds_now();
     }

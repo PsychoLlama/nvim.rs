@@ -94,28 +94,30 @@ impl DecorStateRef {
         unsafe { marktree_itr_current(&mut (*self.raw()).itr[0]) }
     }
 
-    /// Positions the walk at the first mark of `buf` at or after `row`.
-    fn seek(self, buf: Buf, row: c_int) {
+    /// Positions the walk at the first mark of `buffer` at or after `row`.
+    fn seek(self, buffer: Buf, row: c_int) {
         // SAFETY: as [`DecorStateRef::mark`]; this is what positions the iterator.
-        unsafe { marktree_itr_get(&mut *tree_of(buf), row, 0, &mut (*self.raw()).itr[0]) };
+        unsafe { marktree_itr_get(&mut *tree_of(buffer), row, 0, &mut (*self.raw()).itr[0]) };
     }
 
-    /// Steps the walk to the next mark of `buf`.
-    fn step(self, buf: Buf) {
+    /// Steps the walk to the next mark of `buffer`.
+    fn step(self, buffer: Buf) {
         // SAFETY: as [`DecorStateRef::mark`].
-        unsafe { marktree_itr_next(&mut *tree_of(buf), &mut (*self.raw()).itr[0]) };
+        unsafe { marktree_itr_next(&mut *tree_of(buffer), &mut (*self.raw()).itr[0]) };
     }
 
     /// Positions the walk to enumerate the ranges *covering* (`row`, 0).
-    fn seek_overlap(self, buf: Buf, row: c_int) -> bool {
+    fn seek_overlap(self, buffer: Buf, row: c_int) -> bool {
         // SAFETY: as [`DecorStateRef::mark`].
-        unsafe { marktree_itr_get_overlap(&mut *tree_of(buf), row, 0, &mut (*self.raw()).itr[0]) }
+        unsafe {
+            marktree_itr_get_overlap(&mut *tree_of(buffer), row, 0, &mut (*self.raw()).itr[0])
+        }
     }
 
     /// One more range covering the position [`DecorStateRef::seek_overlap`] was given.
-    fn step_overlap(self, buf: Buf, pair: &mut MTPair) -> bool {
+    fn step_overlap(self, buffer: Buf, pair: &mut MTPair) -> bool {
         // SAFETY: as [`DecorStateRef::mark`].
-        unsafe { marktree_itr_step_overlap(&mut *tree_of(buf), &mut (*self.raw()).itr[0], pair) }
+        unsafe { marktree_itr_step_overlap(&mut *tree_of(buffer), &mut (*self.raw()).itr[0], pair) }
     }
 
     /// The range `ranges_i[i]` names.
@@ -221,12 +223,12 @@ pub fn decor_range_at(state: DecorStateRef, i: c_int) -> *mut DecorRange {
 /// `state` is holding cannot be trusted across a structural change.
 ///
 /// # Safety
-/// `buf` must be live or null.
-pub unsafe fn decor_state_invalidate(buf: *mut Buffer) {
+/// `buffer` must be live or null.
+pub unsafe fn decor_state_invalidate(buffer: *mut Buffer) {
     decor_state.with_mut(|state| {
         // SAFETY: `state.win` is a live window while a redraw is running.
         if let Some(win) = unsafe { Win::from_raw(state.win) } {
-            state.itr_valid &= win.w_buffer != buf;
+            state.itr_valid &= win.w_buffer != buffer;
         }
     });
 }

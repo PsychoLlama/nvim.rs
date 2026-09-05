@@ -360,8 +360,8 @@ fn free_win(window: Win, tabpage: Option<TabPage>) {
 /// Drop `window` from `buf`'s remembered positions, and with it the older of the
 /// two entries that would then have no window: only the first such entry is
 /// ever used again.
-fn forget_wininfo(buf: Buf, window: Win) {
-    let mut buf = buf;
+fn forget_wininfo(buffer: Buf, window: Win) {
+    let mut buf = buffer;
     let mut infos = WinInfos::of(&mut buf);
     let len = infos.entries_mut().len();
     let mut pos_wip = len;

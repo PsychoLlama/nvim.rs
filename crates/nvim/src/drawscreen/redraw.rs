@@ -154,26 +154,26 @@ pub fn redraw_curbuf_later(redr_type: c_int) {
     unsafe { redraw_buf_later(curbuf.get(), redr_type) }
 }
 
-/// Mark every window showing `buf`.
-pub unsafe fn redraw_buf_later(buf: *mut Buffer, redr_type: c_int) {
+/// Mark every window showing `buffer`.
+pub unsafe fn redraw_buf_later(buffer: *mut Buffer, redr_type: c_int) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
-        if wp.w_buffer == buf {
+        if wp.w_buffer == buffer {
             unsafe { redraw_later(wp.raw(), redr_type) };
         }
     }
 }
 
-/// Mark line `line` of `buf` in every window showing it.
+/// Mark line `line` of `buffer` in every window showing it.
 ///
 /// `force` also marks a line *past* the end of the buffer, which is how a
 /// deletion gets the rows it used to occupy redrawn.
-pub unsafe fn redraw_buf_line_later(buf: *mut Buffer, line: LineNr, force: bool) {
+pub unsafe fn redraw_buf_line_later(buffer: *mut Buffer, line: LineNr, force: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buf {
-            unsafe { redraw_win_line(wp.raw(), line.min((*buf).b_ml.ml_line_count)) };
-            if force && line > unsafe { (*buf).b_ml.ml_line_count } {
+        if wp.w_buffer == buffer {
+            unsafe { redraw_win_line(wp.raw(), line.min((*buffer).b_ml.ml_line_count)) };
+            if force && line > unsafe { (*buffer).b_ml.ml_line_count } {
                 wp.w_redraw_bot = line;
             }
         }
@@ -206,21 +206,21 @@ pub unsafe fn redraw_win_line(window: *mut Window, lnum: LineNr) {
     unsafe { redraw_win_range_later(window, lnum, lnum) }
 }
 
-/// Mark lines `first..=last` of `buf` in every window showing it.
-pub unsafe fn redraw_buf_range_later(buf: *mut Buffer, first: LineNr, last: LineNr) {
+/// Mark lines `first..=last` of `buffer` in every window showing it.
+pub unsafe fn redraw_buf_range_later(buffer: *mut Buffer, first: LineNr, last: LineNr) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
-        if wp.w_buffer == buf {
+        if wp.w_buffer == buffer {
             unsafe { redraw_win_range_later(wp.raw(), first, last) };
         }
     }
 }
 
-/// Mark the status lines and window bars of every window showing `buf`.
-pub unsafe fn redraw_buf_status_later(buf: *mut Buffer) {
+/// Mark the status lines and window bars of every window showing `buffer`.
+pub unsafe fn redraw_buf_status_later(buffer: *mut Buffer) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buf
+        if wp.w_buffer == buffer
             && (wp.w_status_height != 0
                 || (wp.raw() == curwin.get() && global_stl_height() != 0)
                 || wp.w_winbar_height != 0)
@@ -252,12 +252,12 @@ pub unsafe fn status_redraw_curbuf() {
     unsafe { status_redraw_buf(curbuf.get()) }
 }
 
-/// Mark the status lines and window bars of `buf`.
-pub unsafe fn status_redraw_buf(buf: *mut Buffer) {
+/// Mark the status lines and window bars of `buffer`.
+pub unsafe fn status_redraw_buf(buffer: *mut Buffer) {
     // SAFETY: walking the current tab page's window list on the main thread.
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
-        if wp.w_buffer == buf
+        if wp.w_buffer == buffer
             && ((!is_stl_global && wp.w_status_height != 0)
                 || (is_stl_global && wp.raw() == curwin.get())
                 || wp.w_winbar_height != 0)

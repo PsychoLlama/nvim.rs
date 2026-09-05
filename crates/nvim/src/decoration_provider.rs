@@ -447,14 +447,14 @@ pub(crate) unsafe fn decor_providers_invoke_range(
 /// Run every `on_buf` callback for one buffer.
 ///
 /// # Safety
-/// `buf` must point to a live buffer; runs Lua.
-pub(crate) unsafe fn decor_providers_invoke_buf(buf: *mut Buffer) {
+/// `buffer` must point to a live buffer; runs Lua.
+pub(crate) unsafe fn decor_providers_invoke_buf(buffer: *mut Buffer) {
     // SAFETY: the caller's buffer; the callbacks re-enter the editor.
     for idx in 0..provider_count() {
         let p = provider(idx);
         if p.state == kDecorProviderActive && p.redraw_buf != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
-            args.push(Object::buffer(unsafe { (*buf).handle }));
+            args.push(Object::buffer(unsafe { (*buffer).handle }));
             args.push(Object::integer(display_tick.get() as Integer));
             unsafe {
                 decor_provider_invoke(idx, c"buf".as_ptr(), p.redraw_buf, args.array(), true, None)

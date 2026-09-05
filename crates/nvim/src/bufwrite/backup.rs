@@ -63,12 +63,12 @@ pub(crate) struct Backup {
 ///
 /// The size is not checked: a tool like `gzip` keeps the timestamp but
 /// cannot keep the size. Returns false if the user answers "no".
-unsafe fn check_mtime(buf: *mut Buffer, file_info: *mut FileInfo) -> bool {
-    if unsafe { (*buf).b_mtime_read } == 0
+unsafe fn check_mtime(buffer: *mut Buffer, file_info: *mut FileInfo) -> bool {
+    if unsafe { (*buffer).b_mtime_read } == 0
         || !time_differs(
             unsafe { &*file_info },
-            unsafe { (*buf).b_mtime_read },
-            unsafe { (*buf).b_mtime_read_ns },
+            unsafe { (*buffer).b_mtime_read },
+            unsafe { (*buffer).b_mtime_read_ns },
         )
     {
         return true;
@@ -124,7 +124,7 @@ unsafe fn get_fileinfo_os(
 /// `Err(None)` is the user declining the "file has changed since reading it"
 /// prompt — a failure with nothing left to report.
 pub(crate) unsafe fn get_fileinfo(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     fname: *mut c_char,
     overwriting: bool,
     forceit: bool,
@@ -146,7 +146,7 @@ pub(crate) unsafe fn get_fileinfo(
         }));
     }
     // Without `!`, check the timestamp has not changed since the read.
-    if overwriting && !forceit && !unsafe { check_mtime(buf, file_info_old) } {
+    if overwriting && !forceit && !unsafe { check_mtime(buffer, file_info_old) } {
         return Err(None);
     }
     Ok(target)
@@ -673,7 +673,7 @@ pub(crate) unsafe fn open_write_file(
 /// Sync and close the file just written, and give it the original's
 /// ownership, permissions and ACL.
 pub(crate) unsafe fn finish_write(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     fd: c_int,
     wfname: *mut c_char,
     target: &TargetFile,
@@ -687,8 +687,8 @@ pub(crate) unsafe fn finish_write(
     // meta-data is journalled. Syncing slows the system down but assures
     // the data reached the disk. For a device the fsync is attempted but
     // not complained about; it could be a pipe.
-    let fsync = if unsafe { (*buf).b_p_fs } >= 0 {
-        unsafe { (*buf).b_p_fs }
+    let fsync = if unsafe { (*buffer).b_p_fs } >= 0 {
+        unsafe { (*buffer).b_p_fs }
     } else {
         p_fs.get()
     };
@@ -719,9 +719,9 @@ pub(crate) unsafe fn finish_write(
                 unsafe { os_setperm(wfname, target.perm) }; // may have changed
             }
         }
-        unsafe { buf_set_file_id(Buf::new(buf)) };
-    } else if !unsafe { (*buf).file_id_valid } {
-        unsafe { buf_set_file_id(Buf::new(buf)) }; // the file is new
+        unsafe { buf_set_file_id(Buf::new(buffer)) };
+    } else if !unsafe { (*buffer).file_id_valid } {
+        unsafe { buf_set_file_id(Buf::new(buffer)) }; // the file is new
     }
 
     let error = unsafe { os_close(fd) };

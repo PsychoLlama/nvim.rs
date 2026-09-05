@@ -119,14 +119,14 @@ pub fn curwin_init() {
     init_empty(cur_win());
 }
 
-pub unsafe fn close_windows(buf: *mut Buffer, keep_curwin: bool) {
+pub unsafe fn close_windows(buffer: *mut Buffer, keep_curwin: bool) {
     // SAFETY: the caller's promise -- a live buffer.
-    close_all(unsafe { Buf::new(buf) }, keep_curwin);
+    close_all(unsafe { Buf::new(buffer) }, keep_curwin);
 }
 
-/// Close every window showing `buf`, on this tab page and every other, unless
+/// Close every window showing `buffer`, on this tab page and every other, unless
 /// there is only one non-floating window left.
-fn close_all(buf: Buf, keep_curwin: bool) {
+fn close_all(buffer: Buf, keep_curwin: bool) {
     let _redraw_off = Suppress::redraw();
     'theend: {
         // Start from `lastwin` to close floating windows showing the buffer
@@ -137,7 +137,7 @@ fn close_all(buf: Buf, keep_curwin: bool) {
             if !is_autocmd_window(Some(last_win())) && only_window(wp, None) {
                 break;
             }
-            if wp.w_buffer == buf.raw() && (!keep_curwin || !wp.is_current()) && !locked(wp) {
+            if wp.w_buffer == buffer.raw() && (!keep_curwin || !wp.is_current()) && !locked(wp) {
                 if layout_locked(CmdIdx::SIZE) {
                     break 'theend; // Only give one error message.
                 }
@@ -160,7 +160,7 @@ fn close_all(buf: Buf, keep_curwin: bool) {
                 // Start from `tp_lastwin` to close floating windows first.
                 let mut cur = tp.tp_lastwin.and_then(WinId::get);
                 while let Some(wp) = cur {
-                    if wp.w_buffer == buf.raw() && !locked(wp) {
+                    if wp.w_buffer == buffer.raw() && !locked(wp) {
                         if layout_locked(CmdIdx::SIZE) {
                             break 'theend; // Only give one error message.
                         }
@@ -440,20 +440,20 @@ fn close_all_others(message: bool, forceit: bool) {
     }
 }
 
-/// Whether `buf` is still on the buffer list.
-fn buf_is_valid(buf: *mut Buffer) -> bool {
+/// Whether `buffer` is still on the buffer list.
+fn buf_is_valid(buffer: *mut Buffer) -> bool {
     // SAFETY: only compared against the buffer list, never read.
-    unsafe { buf_valid(buf) }
+    unsafe { buf_valid(buffer) }
 }
 
-/// Whether `buf` may be abandoned, saying why it may not.
-fn may_abandon(buf: Buf, forceit: bool) -> bool {
+/// Whether `buffer` may be abandoned, saying why it may not.
+fn may_abandon(buffer: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.
-    unsafe { can_abandon(buf.raw(), forceit) }
+    unsafe { can_abandon(buffer.raw(), forceit) }
 }
 
-/// Put up the "Save changes?" dialogue for `buf`, and act on the answer.
-fn ask_about_changes(buf: Buf) {
+/// Put up the "Save changes?" dialogue for `buffer`, and act on the answer.
+fn ask_about_changes(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { dialog_changed(buf.raw(), false) };
+    unsafe { dialog_changed(buffer.raw(), false) };
 }

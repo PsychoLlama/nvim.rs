@@ -216,13 +216,13 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut Dict {
     d
 }
 
-/// Every sign placed in `buf`, in marktree order — `getbufinfo()`'s `signs`.
+/// Every sign placed in `buffer`, in marktree order — `getbufinfo()`'s `signs`.
 ///
 /// # Safety
-/// `buf` must be live.
-pub(crate) unsafe fn get_buffer_signs(buf: *mut Buffer) -> *mut List {
+/// `buffer` must be live.
+pub(crate) unsafe fn get_buffer_signs(buffer: *mut Buffer) -> *mut List {
     // SAFETY: the caller's buffer.
-    let signs = placed_signs(unsafe { Buf::new(buf) }, 0, ALL_GROUPS, |_| Keep::Yes);
+    let signs = placed_signs(unsafe { Buf::new(buffer) }, 0, ALL_GROUPS, |_| Keep::Yes);
     // SAFETY: every mark the walk kept carries a live sign decoration.
     let l = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     for mark in signs {
@@ -231,23 +231,23 @@ pub(crate) unsafe fn get_buffer_signs(buf: *mut Buffer) -> *mut List {
     l
 }
 
-/// Appends `buf`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
+/// Appends `buffer`'s `{ bufnr, signs }` entry to `retlist`, filtered by `lnum`,
 /// `sign_id` and `group`.
 ///
 /// A zero `lnum` or `sign_id` means "any"; the two combine, so naming both
 /// asks for one specific sign on one specific line.
 ///
 /// # Safety
-/// `buf` and `retlist` must be live; `group` must be null or NUL-terminated.
+/// `buffer` and `retlist` must be live; `group` must be null or NUL-terminated.
 unsafe fn sign_get_placed_in_buf(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     sign_id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
     retlist: *mut List,
 ) {
     // SAFETY: the caller's buffer.
-    let cbuf = unsafe { Buf::new(buf) };
+    let cbuf = unsafe { Buf::new(buffer) };
     // SAFETY: the caller's list, and the buffer handle it reports.
     let l = unsafe {
         let d = tv_dict_alloc();
@@ -260,7 +260,7 @@ unsafe fn sign_get_placed_in_buf(
 
     // SAFETY: the caller's buffer and group name.
     let ns = unsafe { group_get_ns(group) };
-    if !unsafe { buf_has_signs(buf) } || ns < 0 {
+    if !unsafe { buf_has_signs(buffer) } || ns < 0 {
         return;
     }
 
@@ -289,21 +289,21 @@ unsafe fn sign_get_placed_in_buf(
     };
 }
 
-/// Appends the placed-sign report for `buf`, or for every buffer that has
-/// signs when `buf` is null.
+/// Appends the placed-sign report for `buffer`, or for every buffer that has
+/// signs when `buffer` is null.
 ///
 /// # Safety
-/// `buf` must be null or live; `retlist` must be live.
+/// `buffer` must be null or live; `retlist` must be live.
 unsafe fn sign_get_placed(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
     retlist: *mut List,
 ) {
-    if !buf.is_null() {
+    if !buffer.is_null() {
         // SAFETY: the caller's buffer and list.
-        unsafe { sign_get_placed_in_buf(buf, lnum, id, group, retlist) };
+        unsafe { sign_get_placed_in_buf(buffer, lnum, id, group, retlist) };
         return;
     }
     for cbuf in buffers() {

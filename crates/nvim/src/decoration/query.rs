@@ -101,12 +101,12 @@ pub unsafe fn next_virt_text_chunk(
 /// # Safety
 /// `buf` must point to a live buffer.
 pub unsafe fn decor_find_virttext(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     row: c_int,
     ns_id: uint64_t,
 ) -> *mut DecorVirtText {
     // SAFETY: the caller's buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     let mut itr = MarkTreeIter::default();
     let mut walk = Cursor::in_buffer(buf, &mut itr);
     walk.seek(row, 0);

@@ -126,39 +126,39 @@ pub(crate) unsafe fn cmdpreview_close_win() {
     }
 }
 
-/// Save `buf`'s whole undo state, so the preview's edits can be taken back.
-pub(crate) fn cmdpreview_save_undo(cp_undoinfo: &mut CpUndoInfo, buf: Buf) {
-    cp_undoinfo.save_b_u_synced = buf.b_u_synced;
-    cp_undoinfo.save_b_u_oldhead = buf.b_u_oldhead;
-    cp_undoinfo.save_b_u_newhead = buf.b_u_newhead;
-    cp_undoinfo.save_b_u_curhead = buf.b_u_curhead;
-    cp_undoinfo.save_b_u_numhead = buf.b_u_numhead;
-    cp_undoinfo.save_b_u_seq_last = buf.b_u_seq_last;
-    cp_undoinfo.save_b_u_save_nr_last = buf.b_u_save_nr_last;
-    cp_undoinfo.save_b_u_seq_cur = buf.b_u_seq_cur;
-    cp_undoinfo.save_b_u_time_cur = buf.b_u_time_cur;
-    cp_undoinfo.save_b_u_save_nr_cur = buf.b_u_save_nr_cur;
-    cp_undoinfo.save_b_u_line_ptr = buf.b_u_line_ptr;
-    cp_undoinfo.save_b_u_line_lnum = buf.b_u_line_lnum;
-    cp_undoinfo.save_b_u_line_colnr = buf.b_u_line_colnr;
+/// Save `buffer`'s whole undo state, so the preview's edits can be taken back.
+pub(crate) fn cmdpreview_save_undo(cp_undoinfo: &mut CpUndoInfo, buffer: Buf) {
+    cp_undoinfo.save_b_u_synced = buffer.b_u_synced;
+    cp_undoinfo.save_b_u_oldhead = buffer.b_u_oldhead;
+    cp_undoinfo.save_b_u_newhead = buffer.b_u_newhead;
+    cp_undoinfo.save_b_u_curhead = buffer.b_u_curhead;
+    cp_undoinfo.save_b_u_numhead = buffer.b_u_numhead;
+    cp_undoinfo.save_b_u_seq_last = buffer.b_u_seq_last;
+    cp_undoinfo.save_b_u_save_nr_last = buffer.b_u_save_nr_last;
+    cp_undoinfo.save_b_u_seq_cur = buffer.b_u_seq_cur;
+    cp_undoinfo.save_b_u_time_cur = buffer.b_u_time_cur;
+    cp_undoinfo.save_b_u_save_nr_cur = buffer.b_u_save_nr_cur;
+    cp_undoinfo.save_b_u_line_ptr = buffer.b_u_line_ptr;
+    cp_undoinfo.save_b_u_line_lnum = buffer.b_u_line_lnum;
+    cp_undoinfo.save_b_u_line_colnr = buffer.b_u_line_colnr;
 }
 
 /// Put back the undo state [`cmdpreview_save_undo`] recorded.
-pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: &CpUndoInfo, mut buf: Buf) {
-    buf.b_u_oldhead = cp_undoinfo.save_b_u_oldhead;
-    buf.b_u_newhead = cp_undoinfo.save_b_u_newhead;
-    buf.b_u_curhead = cp_undoinfo.save_b_u_curhead;
-    buf.b_u_numhead = cp_undoinfo.save_b_u_numhead;
-    buf.b_u_seq_last = cp_undoinfo.save_b_u_seq_last;
-    buf.b_u_save_nr_last = cp_undoinfo.save_b_u_save_nr_last;
-    buf.b_u_seq_cur = cp_undoinfo.save_b_u_seq_cur;
-    buf.b_u_time_cur = cp_undoinfo.save_b_u_time_cur;
-    buf.b_u_save_nr_cur = cp_undoinfo.save_b_u_save_nr_cur;
-    buf.b_u_line_ptr = cp_undoinfo.save_b_u_line_ptr;
-    buf.b_u_line_lnum = cp_undoinfo.save_b_u_line_lnum;
-    buf.b_u_line_colnr = cp_undoinfo.save_b_u_line_colnr;
-    if buf.b_u_curhead.is_none() {
-        buf.b_u_synced = cp_undoinfo.save_b_u_synced;
+pub(crate) fn cmdpreview_restore_undo(cp_undoinfo: &CpUndoInfo, mut buffer: Buf) {
+    buffer.b_u_oldhead = cp_undoinfo.save_b_u_oldhead;
+    buffer.b_u_newhead = cp_undoinfo.save_b_u_newhead;
+    buffer.b_u_curhead = cp_undoinfo.save_b_u_curhead;
+    buffer.b_u_numhead = cp_undoinfo.save_b_u_numhead;
+    buffer.b_u_seq_last = cp_undoinfo.save_b_u_seq_last;
+    buffer.b_u_save_nr_last = cp_undoinfo.save_b_u_save_nr_last;
+    buffer.b_u_seq_cur = cp_undoinfo.save_b_u_seq_cur;
+    buffer.b_u_time_cur = cp_undoinfo.save_b_u_time_cur;
+    buffer.b_u_save_nr_cur = cp_undoinfo.save_b_u_save_nr_cur;
+    buffer.b_u_line_ptr = cp_undoinfo.save_b_u_line_ptr;
+    buffer.b_u_line_lnum = cp_undoinfo.save_b_u_line_lnum;
+    buffer.b_u_line_colnr = cp_undoinfo.save_b_u_line_colnr;
+    if buffer.b_u_curhead.is_none() {
+        buffer.b_u_synced = cp_undoinfo.save_b_u_synced;
     }
 }
 

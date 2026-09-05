@@ -78,9 +78,9 @@ fn file_id_of(fname: *const c_char) -> (FileID, bool) {
     (file_id, valid)
 }
 
-fn same_file_id(buf: &mut Buf, file_id: *mut FileID) -> bool {
+fn same_file_id(buffer: &mut Buf, file_id: *mut FileID) -> bool {
     // SAFETY: the buffer's own file id, and the caller's, both live.
-    buf.file_id_valid && unsafe { os_fileid_equal(&raw mut buf.file_id, file_id) }
+    buffer.file_id_valid && unsafe { os_fileid_equal(&raw mut buffer.file_id, file_id) }
 }
 
 /// Whether a name slot holds nothing: null or the empty string.
@@ -125,17 +125,17 @@ pub unsafe fn buflist_name_nr(
 // ---------------------------------------------------------------------------
 // Setting one
 
-/// Give `buf` the file name `ffname_arg` (short form `sfname_arg`).
+/// Give `buffer` the file name `ffname_arg` (short form `sfname_arg`).
 ///
 /// Fails, with `message`, when another *loaded* buffer already has the name;
 /// an unloaded one is wiped to make room.
 pub unsafe fn setfname(
-    buf: Buf,
+    buffer: Buf,
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,
     message: bool,
 ) -> Result<(), Failed> {
-    let mut b = buf;
+    let mut b = buffer;
     let mut ffname = ffname_arg;
     let mut sfname = sfname_arg;
     let mut file_id = FileID {
@@ -154,7 +154,7 @@ pub unsafe fn setfname(
         xfree_clear(&mut b.b_ffname);
     } else {
         // SAFETY: two locals holding a name each.
-        unsafe { fname_expand(buf, &raw mut ffname, &raw mut sfname) };
+        unsafe { fname_expand(buffer, &raw mut ffname, &raw mut sfname) };
         if ffname.is_null() {
             // Out of memory.
             return Err(Failed);
@@ -169,7 +169,7 @@ pub unsafe fn setfname(
         } else {
             buflist_findname_file_id(ffname, &file_id, file_id_valid)
         };
-        if let Some(o) = obuf.filter(|&o| o != buf) {
+        if let Some(o) = obuf.filter(|&o| o != buffer) {
             let obuf = o.raw();
             // During startup a window may use a buffer that is not loaded yet.
             let in_use = tab_windows().any(|win| win.w_buffer == obuf);
@@ -200,7 +200,7 @@ pub unsafe fn setfname(
     }
 
     // SAFETY: a live buffer.
-    unsafe { buf_name_changed(buf) };
+    unsafe { buf_name_changed(buffer) };
     Ok(())
 }
 
@@ -308,7 +308,7 @@ pub unsafe fn otherfile(ffname: *mut c_char) -> bool {
     unsafe { otherfile_buf(Buf::current(), ffname, ptr::null_mut(), false) }
 }
 
-/// Whether `ffname` (a full path) names a different file from `buf`'s.
+/// Whether `ffname` (a full path) names a different file from `buffer`'s.
 ///
 /// `file_id_p` is the caller's already-computed file id for `ffname`, null to
 /// have it looked up here.
@@ -347,7 +347,7 @@ pub(crate) unsafe fn otherfile_buf(
     true
 }
 
-/// Record the file id of `buf`'s file, for recognising it under another name.
+/// Record the file id of `buffer`'s file, for recognising it under another name.
 pub unsafe fn buf_set_file_id(mut b: Buf) {
     if b.b_fname.is_null() {
         b.file_id_valid = false;
@@ -363,7 +363,7 @@ pub unsafe fn buf_set_file_id(mut b: Buf) {
 /// Make `*ffname` a full file name and point `*sfname` at the name given, if
 /// it had none. The value `*ffname` comes back as should be treated as not
 /// allocated.
-pub unsafe fn fname_expand(_buf: Buf, ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
+pub unsafe fn fname_expand(_buffer: Buf, ffname: *mut *mut c_char, sfname: *mut *mut c_char) {
     // SAFETY: the caller's promise -- two name slots to read and write.
     let (ffname, sfname) = unsafe { (&mut *ffname, &mut *sfname) };
     if ffname.is_null() {

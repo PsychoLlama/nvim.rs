@@ -18,12 +18,12 @@ use crate::winlayer::Win;
 /// # Safety
 ///
 /// Nothing frees a header this walk has already visited.
-pub(crate) unsafe fn u_unch_branch(buf: Buf, start: UndoLink) {
+pub(crate) unsafe fn u_unch_branch(buffer: Buf, start: UndoLink) {
     // SAFETY: nothing here frees a header.
-    for mut uh in unsafe { header_chain(buf, start, |uh| uh.uh_prev) } {
+    for mut uh in unsafe { header_chain(buffer, start, |uh| uh.uh_prev) } {
         uh.uh_flags |= UH_CHANGED;
         if uh.uh_alt_next.is_some() {
-            unsafe { u_unch_branch(buf, uh.uh_alt_next) };
+            unsafe { u_unch_branch(buffer, uh.uh_alt_next) };
         }
     }
 }
@@ -32,8 +32,8 @@ pub(crate) unsafe fn u_unch_branch(buf: Buf, start: UndoLink) {
 ///
 /// Safe: `b_u_newhead` is resolved through the store, so it names either a
 /// live header or nothing.
-pub(crate) fn u_get_headentry(buf: Buf) -> *mut UndoEntry {
-    let newhead = buf.header(buf.b_u_newhead);
+pub(crate) fn u_get_headentry(buffer: Buf) -> *mut UndoEntry {
+    let newhead = buffer.header(buffer.b_u_newhead);
     match newhead.filter(|uh| !uh.uh_entry.is_null()) {
         Some(uh) => uh.uh_entry,
         None => {
@@ -48,25 +48,25 @@ pub(crate) fn u_get_headentry(buf: Buf) -> *mut UndoEntry {
 ///
 /// Safe: `u_get_headentry` proves the newest header and its entry list are
 /// there before anything reads them.
-pub(crate) fn u_getbot(mut buf: Buf) {
-    if u_get_headentry(buf).is_null() {
+pub(crate) fn u_getbot(mut buffer: Buf) {
+    if u_get_headentry(buffer).is_null() {
         return;
     }
-    let mut newhead = buf
-        .header(buf.b_u_newhead)
+    let mut newhead = buffer
+        .header(buffer.b_u_newhead)
         .expect("u_get_headentry proved it is there");
     let uep = newhead.uh_getbot_entry;
     if !uep.is_null() {
         // SAFETY: the newest header's own deferred entry, proved live above.
-        let extra: LineNr = buf.b_ml.ml_line_count - unsafe { (*uep).ue_lcount };
+        let extra: LineNr = buffer.b_ml.ml_line_count - unsafe { (*uep).ue_lcount };
         unsafe { (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 + extra };
-        if unsafe { (*uep).ue_bot } < 1 || unsafe { (*uep).ue_bot } > buf.b_ml.ml_line_count {
+        if unsafe { (*uep).ue_bot } < 1 || unsafe { (*uep).ue_bot } > buffer.b_ml.ml_line_count {
             iemsg(gettext(c"E440: Undo line missing"));
             unsafe { (*uep).ue_bot = (*uep).ue_top + 1 };
         }
         newhead.uh_getbot_entry = ptr::null_mut();
     }
-    buf.b_u_synced = true;
+    buffer.b_u_synced = true;
 }
 
 /// Unlinks one header from the tree and frees it, along with the alternate
@@ -77,32 +77,32 @@ pub(crate) fn u_getbot(mut buf: Buf) {
 ///
 /// # Safety
 ///
-/// `uhp` points at a header `buf` owns, and `uhpp` is NULL or points at a
+/// `uhp` points at a header `buffer` owns, and `uhpp` is NULL or points at a
 /// link the caller owns.
-pub(crate) unsafe fn u_freeheader(mut buf: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
+pub(crate) unsafe fn u_freeheader(mut buffer: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
     // SAFETY: a header the buffer owns; every link below is resolved through
     // the store, so a stale one reads as "nothing".
-    let b = buf;
+    let b = buffer;
     if let Some(alt) = b.header(unsafe { (*uhp).uh_alt_next }) {
-        unsafe { u_freebranch(buf, alt.raw(), uhpp) };
+        unsafe { u_freebranch(buffer, alt.raw(), uhpp) };
     }
     if let Some(mut alt_prev) = b.header(unsafe { (*uhp).uh_alt_prev }) {
         alt_prev.uh_alt_next = UndoLink::NONE;
     }
     match b.header(unsafe { (*uhp).uh_next }) {
         Some(mut next) => next.uh_prev = unsafe { (*uhp).uh_prev },
-        None => buf.b_u_oldhead = unsafe { (*uhp).uh_prev },
+        None => buffer.b_u_oldhead = unsafe { (*uhp).uh_prev },
     }
     if unsafe { (*uhp).uh_prev.is_none() } {
-        buf.b_u_newhead = unsafe { (*uhp).uh_next };
+        buffer.b_u_newhead = unsafe { (*uhp).uh_next };
     } else {
         // The alternate headers at `uh_prev` all claim this header's
         // successor.
-        for mut uhap in unsafe { header_chain(buf, (*uhp).uh_prev, |uh| uh.uh_alt_next) } {
+        for mut uhap in unsafe { header_chain(buffer, (*uhp).uh_prev, |uh| uh.uh_alt_next) } {
             uhap.uh_next = unsafe { (*uhp).uh_next };
         }
     }
-    unsafe { u_freeentries(buf, uhp, uhpp) };
+    unsafe { u_freeentries(buffer, uhp, uhpp) };
 }
 
 /// Frees a whole alternate branch, oldest header first.
@@ -110,18 +110,18 @@ pub(crate) unsafe fn u_freeheader(mut buf: Buf, uhp: *mut UndoHeader, uhpp: *mut
 /// # Safety
 ///
 /// As [`u_freeheader`].
-pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
+pub(crate) unsafe fn u_freebranch(buffer: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
     // SAFETY: a header the buffer owns.
     // Freeing the oldest header takes the whole tree with it, so let
     // `u_freeheader` do the unlinking rather than walking here.
-    let b = buf;
+    let b = buffer;
     if unsafe { Header::new(uhp) }
         .map(Header::link)
         .unwrap_or_default()
-        == buf.b_u_oldhead
+        == buffer.b_u_oldhead
     {
-        while let Some(oldhead) = b.header(buf.b_u_oldhead) {
-            unsafe { u_freeheader(buf, oldhead.raw(), uhpp) };
+        while let Some(oldhead) = b.header(buffer.b_u_oldhead) {
+            unsafe { u_freeheader(buffer, oldhead.raw(), uhpp) };
         }
         return;
     }
@@ -133,10 +133,10 @@ pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut UndoHeader, uhpp: *mut Und
     let mut next = unsafe { Header::new(uhp) };
     while let Some(tofree) = next {
         if let Some(alt) = b.header(tofree.uh_alt_next) {
-            unsafe { u_freebranch(buf, alt.raw(), uhpp) };
+            unsafe { u_freebranch(buffer, alt.raw(), uhpp) };
         }
         next = b.header(tofree.uh_prev);
-        unsafe { u_freeentries(buf, tofree.raw(), uhpp) };
+        unsafe { u_freeentries(buffer, tofree.raw(), uhpp) };
     }
 }
 
@@ -145,15 +145,15 @@ pub(crate) unsafe fn u_freebranch(buf: Buf, uhp: *mut UndoHeader, uhpp: *mut Und
 /// # Safety
 ///
 /// As [`u_freeheader`].
-pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
+pub(crate) unsafe fn u_freeentries(mut buffer: Buf, uhp: *mut UndoHeader, uhpp: *mut UndoLink) {
     // SAFETY: a header the buffer owns; the entry list is that header's and
     // is walked one node ahead of the free.
     let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
-    if buf.b_u_curhead == link {
-        buf.b_u_curhead = UndoLink::NONE;
+    if buffer.b_u_curhead == link {
+        buffer.b_u_curhead = UndoLink::NONE;
     }
-    if buf.b_u_newhead == link {
-        buf.b_u_newhead = UndoLink::NONE;
+    if buffer.b_u_newhead == link {
+        buffer.b_u_newhead = UndoLink::NONE;
     }
     if !uhpp.is_null() && unsafe { *uhpp } == link {
         unsafe { *uhpp = UndoLink::NONE };
@@ -168,8 +168,8 @@ pub(crate) unsafe fn u_freeentries(mut buf: Buf, uhp: *mut UndoHeader, uhpp: *mu
     unsafe { (*uhp).uh_extmark.capacity = 0 };
     unsafe { (*uhp).uh_extmark.size = 0 };
     unsafe { (*uhp).uh_extmark.items = ptr::null_mut() };
-    unsafe { header_free(buf, uhp) };
-    buf.b_u_numhead -= 1;
+    unsafe { header_free(buffer, uhp) };
+    buffer.b_u_numhead -= 1;
 }
 
 /// Frees one entry and the `n` saved lines it holds.
@@ -192,75 +192,75 @@ pub(crate) unsafe fn u_freeentry(uep: *mut UndoEntry, mut n: c_int) {
 /// The headers stay in the store; a command preview puts them back.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub fn u_clearall(mut buf: Buf) {
-    buf.b_u_curhead = UndoLink::NONE;
-    buf.b_u_oldhead = UndoLink::NONE;
-    buf.b_u_newhead = UndoLink::NONE;
-    buf.b_u_synced = true;
-    buf.b_u_numhead = 0;
-    buf.b_u_line_ptr = ptr::null_mut();
-    buf.b_u_line_lnum = 0;
+pub fn u_clearall(mut buffer: Buf) {
+    buffer.b_u_curhead = UndoLink::NONE;
+    buffer.b_u_oldhead = UndoLink::NONE;
+    buffer.b_u_newhead = UndoLink::NONE;
+    buffer.b_u_synced = true;
+    buffer.b_u_numhead = 0;
+    buffer.b_u_line_ptr = ptr::null_mut();
+    buffer.b_u_line_lnum = 0;
 }
 
 /// Frees every header the buffer's tree still reaches, and the shadow line.
 ///
 /// Safe: every header freed here is one the buffer's own tree still holds.
-pub fn u_blockfree(buf: Buf) {
-    let b = buf;
-    while let Some(oldhead) = b.header(buf.b_u_oldhead) {
-        let previous_oldhead = buf.b_u_oldhead;
+pub fn u_blockfree(buffer: Buf) {
+    let b = buffer;
+    while let Some(oldhead) = b.header(buffer.b_u_oldhead) {
+        let previous_oldhead = buffer.b_u_oldhead;
         // SAFETY: a header the tree still holds, and no link the caller owns.
         // Each pass frees the oldest header, and the assert is the transpiled
         // loop's own guard against not making progress.
-        unsafe { u_freeheader(buf, oldhead.raw(), ptr::null_mut()) };
+        unsafe { u_freeheader(buffer, oldhead.raw(), ptr::null_mut()) };
         debug_assert!(
-            buf.b_u_oldhead != previous_oldhead,
+            buffer.b_u_oldhead != previous_oldhead,
             "buf->b_u_oldhead != previous_oldhead"
         );
     }
     // SAFETY: `b_u_line_ptr` is this module's own allocation.
-    unsafe { xfree(buf.b_u_line_ptr as *mut c_void) };
-    store_release(buf);
+    unsafe { xfree(buffer.b_u_line_ptr as *mut c_void) };
+    store_release(buffer);
 }
 
 /// Safe: as [`u_blockfree`] and [`u_clearall`], which are the whole of it.
-pub fn u_clearallandblockfree(buf: Buf) {
-    u_blockfree(buf);
-    u_clearall(buf);
+pub fn u_clearallandblockfree(buffer: Buf) {
+    u_blockfree(buffer);
+    u_clearall(buffer);
 }
 
 /// Remembers one line so `U` can put it back.
 ///
 /// Safe: `lnum` is checked against the buffer's own line count.
-pub(crate) fn u_saveline(mut buf: Buf, lnum: LineNr) {
-    if lnum == buf.b_u_line_lnum {
+pub(crate) fn u_saveline(mut buffer: Buf, lnum: LineNr) {
+    if lnum == buffer.b_u_line_lnum {
         return;
     }
-    if lnum < 1 || lnum > buf.b_ml.ml_line_count {
+    if lnum < 1 || lnum > buffer.b_ml.ml_line_count {
         return;
     }
-    u_clearline(buf);
-    buf.b_u_line_lnum = lnum;
-    if cur_win().w_buffer == buf.raw() && cur_win().w_cursor.lnum == lnum {
-        buf.b_u_line_colnr = cur_win().w_cursor.col;
+    u_clearline(buffer);
+    buffer.b_u_line_lnum = lnum;
+    if cur_win().w_buffer == buffer.raw() && cur_win().w_cursor.lnum == lnum {
+        buffer.b_u_line_colnr = cur_win().w_cursor.col;
     } else {
-        buf.b_u_line_colnr = 0;
+        buffer.b_u_line_colnr = 0;
     }
     // SAFETY: `lnum` was checked against the buffer's line count above.
-    buf.b_u_line_ptr = unsafe { u_save_line_buf(buf, lnum) };
+    buffer.b_u_line_ptr = unsafe { u_save_line_buf(buffer, lnum) };
 }
 
 /// Forgets the line `U` would have put back.
 ///
 /// Safe: `b_u_line_ptr` is this module's own allocation.
-pub fn u_clearline(mut buf: Buf) {
-    if buf.b_u_line_ptr.is_null() {
+pub fn u_clearline(mut buffer: Buf) {
+    if buffer.b_u_line_ptr.is_null() {
         return;
     }
     // SAFETY: this module allocated it and nothing else holds it.
-    unsafe { xfree(buf.b_u_line_ptr.cast()) };
-    buf.b_u_line_ptr = ptr::null_mut();
-    buf.b_u_line_lnum = 0;
+    unsafe { xfree(buffer.b_u_line_ptr.cast()) };
+    buffer.b_u_line_ptr = ptr::null_mut();
+    buffer.b_u_line_lnum = 0;
 }
 
 /// `U`: swap the current line against the one `u_saveline` kept.
@@ -316,14 +316,14 @@ pub(crate) unsafe fn u_save_line(lnum: LineNr) -> *mut c_char {
     unsafe { u_save_line_buf(cur_buf(), lnum) }
 }
 
-/// A fresh copy of line `lnum` of `buf`.
+/// A fresh copy of line `lnum` of `buffer`.
 ///
 /// # Safety
 ///
-/// `buf` holds line `lnum`.
-pub(crate) unsafe fn u_save_line_buf(buf: Buf, lnum: LineNr) -> *mut c_char {
+/// `buffer` holds line `lnum`.
+pub(crate) unsafe fn u_save_line_buf(buffer: Buf, lnum: LineNr) -> *mut c_char {
     // SAFETY: the buffer holds that line, by the contract above.
-    unsafe { xstrdup(ml_get_buf(buf.raw(), lnum)) }
+    unsafe { xstrdup(ml_get_buf(buffer.raw(), lnum)) }
 }
 
 /// The buffer the editor is working in.

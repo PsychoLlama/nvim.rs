@@ -156,7 +156,7 @@ fn get_col(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
 ///
 /// # Safety
 /// `window`, `bp` and `fp` are live, and `fp` is a position in `bp`.
-unsafe fn virtualedit_tail(window: *mut Window, bp: *mut Buffer, fp: *mut Pos) -> ColNr {
+unsafe fn virtualedit_tail(window: *mut Window, buffer: *mut Buffer, fp: *mut Pos) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = unsafe { Win::new(window) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
@@ -164,7 +164,7 @@ unsafe fn virtualedit_tail(window: *mut Window, bp: *mut Buffer, fp: *mut Pos) -
     if !virtual_active(win) || fp != &raw mut win.w_cursor {
         return 0;
     }
-    let p = unsafe { ml_get_buf(bp, win.w_cursor.lnum).offset(win.w_cursor.col as isize) };
+    let p = unsafe { ml_get_buf(buffer, win.w_cursor.lnum).offset(win.w_cursor.col as isize) };
     if win.w_cursor.coladd < unsafe { win_chartabsize(win, p, win.w_virtcol - win.w_cursor.coladd) }
     {
         return 0;

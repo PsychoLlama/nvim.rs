@@ -279,10 +279,10 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
 /// `:sign place`, which both places a sign and — with no id — lists them.
 ///
 /// # Safety
-/// `buf` must be null or live; `name` and `group` must be null or
+/// `buffer` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_place_cmd(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     name: *mut c_char,
     id: c_int,
@@ -297,16 +297,16 @@ unsafe fn sign_place_cmd(
         if lnum >= 0 || !name.is_null() || empty_group {
             emsg(gettext(e_invarg));
         } else {
-            unsafe { sign_list_placed(buf, group) };
+            unsafe { sign_list_placed(buffer, group) };
         }
         return;
     }
-    if name.is_null() || buf.is_null() || empty_group {
+    if name.is_null() || buffer.is_null() || empty_group {
         emsg(gettext(e_invarg));
         return;
     }
     let mut uid = id.cast_unsigned();
-    let _ = unsafe { sign_place(&raw mut uid, group, name, buf, lnum, prio) };
+    let _ = unsafe { sign_place(&raw mut uid, group, name, buffer, lnum, prio) };
 }
 
 /// `:sign unplace`.
@@ -319,7 +319,7 @@ unsafe fn sign_place_cmd(
 /// `buf` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_unplace_cmd(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     name: *const c_char,
     id: c_int,
@@ -336,7 +336,7 @@ unsafe fn sign_unplace_cmd(
             (*curwin.get()).w_cursor.lnum
         })
     } else {
-        (buf, lnum)
+        (buffer, lnum)
     };
 
     if unsafe { sign_unplace(buf, id.max(0), group, lnum) } == FAIL && lnum > 0 {
@@ -347,10 +347,10 @@ unsafe fn sign_unplace_cmd(
 /// `:sign jump {id} [group={group}] file={fname}|buffer={nr}`.
 ///
 /// # Safety
-/// `buf` must be null or live; `name` and `group` must be null or
+/// `buffer` must be null or live; `name` and `group` must be null or
 /// NUL-terminated.
 unsafe fn sign_jump_cmd(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     name: *const c_char,
     id: c_int,
@@ -362,12 +362,15 @@ unsafe fn sign_jump_cmd(
     }
     // No buffer, an empty group, or a `line=`/`name=` that jumping has
     // no use for.
-    if buf.is_null() || (!group.is_null() && unsafe { *group } == 0) || lnum >= 0 || !name.is_null()
+    if buffer.is_null()
+        || (!group.is_null() && unsafe { *group } == 0)
+        || lnum >= 0
+        || !name.is_null()
     {
         emsg(gettext(e_invarg));
         return;
     }
-    unsafe { sign_jump(id, group, buf) };
+    unsafe { sign_jump(id, group, buffer) };
 }
 
 /// What [`parse_sign_cmd_args`] read off a `:sign place`/`unplace`/`jump`

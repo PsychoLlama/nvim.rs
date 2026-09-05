@@ -16,16 +16,16 @@ use crate::narrow::len_as_int;
 use crate::types::{VAR_LIST, VAR_STRING};
 use core::mem::offset_of;
 
-/// Set or append lines in buffer `buf`, from `lines` — any type, converted to
+/// Set or append lines in buffer `buffer`, from `lines` — any type, converted to
 /// a string, or a List of them.
 ///
 /// `rettv` ends 0 when every line went in and 1 otherwise, which is what all
 /// four builtins answer.
 ///
 /// # Safety
-/// `buf` must be a live buffer or NULL, and `lines`/`rettv` live typvals.
+/// `buffer` must be a live buffer or NULL, and `lines`/`rettv` live typvals.
 pub(crate) unsafe fn set_buffer_lines(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum_arg: LineNr,
     append: bool,
     lines: *mut TypVal,
@@ -36,17 +36,17 @@ pub(crate) unsafe fn set_buffer_lines(
     // and once at the end.
     let mut lnum: LineNr = lnum_arg + LineNr::from(append);
     let mut added: c_int = 0;
-    let is_curbuf: bool = buf == curbuf.get();
+    let is_curbuf: bool = buffer == curbuf.get();
     // SAFETY: the caller's obligation -- live typvals, and a live buffer or
     // NULL, which the test below tells apart.
     let mut ret = unsafe { Tv::new(rettv) };
-    if buf.is_null() || !is_curbuf && unsafe { (*buf).b_ml.ml_mfp }.is_null() || lnum < 1 {
+    if buffer.is_null() || !is_curbuf && unsafe { (*buffer).b_ml.ml_mfp }.is_null() || lnum < 1 {
         ret.vval.v_number = 1;
         return;
     }
     let mut cob = SavedBufferState::new();
     if !is_curbuf {
-        unsafe { cob.prepare(Buf::new(buf)) };
+        unsafe { cob.prepare(Buf::new(buffer)) };
     }
     let append_lnum: LineNr = if append {
         lnum - 1
@@ -115,7 +115,7 @@ pub(crate) unsafe fn set_buffer_lines(
             // Only the current window of the current buffer follows the
             // insertion; the others keep looking at the line they were on.
             for mut wp in tab_windows() {
-                if wp.w_buffer == buf
+                if wp.w_buffer == buffer
                     && (wp.w_buffer != curbuf.get() || wp.is_current())
                     && wp.w_cursor.lnum > append_lnum
                 {
@@ -156,7 +156,7 @@ unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut TypVal, append: bool) 
 /// # Safety
 /// `buf` must be a live buffer or NULL, and `rettv` a live typval.
 unsafe fn get_buffer_lines(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     mut start: LineNr,
     mut end: LineNr,
     retlist: bool,
@@ -167,13 +167,13 @@ unsafe fn get_buffer_lines(
     let mut ret = unsafe { Tv::new(rettv) };
     ret.v_type = if retlist { VAR_LIST } else { VAR_STRING };
     ret.vval.v_string = ptr::null_mut();
-    if buf.is_null() || unsafe { (*buf).b_ml.ml_mfp }.is_null() || start < 0 || end < start {
+    if buffer.is_null() || unsafe { (*buffer).b_ml.ml_mfp }.is_null() || start < 0 || end < start {
         if retlist {
             unsafe { tv_list_alloc_ret(rettv, 0) };
         }
         return;
     }
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     if !retlist {
         let len = |n| size_t::try_from(n).expect("a line length is not negative");
         let line = (start >= 1 && start <= buf.line_count())

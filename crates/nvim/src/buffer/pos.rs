@@ -100,8 +100,8 @@ pub(crate) struct WinInfos<'a> {
 }
 
 impl<'a> WinInfos<'a> {
-    pub(crate) fn of(buf: &'a mut Buffer) -> Self {
-        let kv = &mut buf.b_wininfo;
+    pub(crate) fn of(buffer: &'a mut Buffer) -> Self {
+        let kv = &mut buffer.b_wininfo;
         WinInfos {
             size: &mut kv.size,
             capacity: &mut kv.capacity,
@@ -230,19 +230,19 @@ fn current_win() -> Win {
 // Recording and finding a position
 
 /// Remember `lnum`/`col` (and, with `copy_options`, the window-local options
-/// and folds) as where `win` was in `buf`.
+/// and folds) as where `win` was in `buffer`.
 ///
 /// `win` is `None` for `:badd`, which records a position for no window at
 /// all.
 pub unsafe fn buflist_setfpos(
-    mut buf: Buf,
+    mut buffer: Buf,
     win: Option<Win>,
     mut lnum: LineNr,
     col: ColNr,
     copy_options: bool,
 ) {
     let raw_win = win.map_or(ptr::null_mut(), Win::raw);
-    let mut list = WinInfos::of(&mut buf);
+    let mut list = WinInfos::of(&mut buffer);
 
     let found = list.entries().iter().position(|e| e.window() == raw_win);
     let mut entry = match found {
@@ -304,15 +304,15 @@ fn wininfo_other_tab_diff(entry: Entry) -> bool {
     !windows().any(|wp| entry.window() == wp.raw())
 }
 
-/// The entry for the current window in `buf`, or failing that the most
+/// The entry for the current window in `buffer`, or failing that the most
 /// recently used one.
 ///
 /// `need_options` skips entries whose options were never saved;
 /// `skip_diff_buffer` skips windows whose `'diff'` is another tab page's.
-fn find_wininfo(buf: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Option<Entry> {
+fn find_wininfo(buffer: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Option<Entry> {
     let cur = current_win().raw();
-    let raw_buf = buf.raw();
-    let list = WinInfos::of(buf);
+    let raw_buf = buffer.raw();
+    let list = WinInfos::of(buffer);
     let found = list.entries().iter().find(|e| {
         e.window() == cur
             && (!skip_diff_buffer || !wininfo_other_tab_diff(**e))
@@ -346,12 +346,12 @@ fn find_wininfo(buf: &mut Buf, need_options: bool, skip_diff_buffer: bool) -> Op
 /// Reset the current window's buffer-local options to the values last used
 /// in this window; failing that, to the most recently used window's; failing
 /// that, to the window's own global values.
-pub unsafe fn get_winopts(mut buf: Buf) {
+pub unsafe fn get_winopts(mut buffer: Buf) {
     let mut cur = current_win();
     clear_options(&raw mut cur.w_onebuf_opt);
     clear_window_folds(cur);
 
-    let entry = find_wininfo(&mut buf, true, true);
+    let entry = find_wininfo(&mut buffer, true, true);
     // SAFETY: a live window, or null, which `Option` keeps out of the
     // closure.
     let entry_win =
@@ -361,7 +361,9 @@ pub unsafe fn get_winopts(mut buf: Buf) {
         // The entry names another window still showing this buffer: copy
         // from the window itself, so that its current values are used.
         (Some(_), Some(mut wp))
-            if wp != cur && wp.w_buffer == buf.raw() && wp.w_config.style != kWinStyleMinimal =>
+            if wp != cur
+                && wp.w_buffer == buffer.raw()
+                && wp.w_config.style != kWinStyleMinimal =>
         {
             copy_options(&raw mut wp.w_onebuf_opt, &raw mut cur.w_onebuf_opt);
             cur.w_fold_manual = wp.w_fold_manual;
@@ -397,9 +399,9 @@ pub unsafe fn get_winopts(mut buf: Buf) {
     didset_options(cur);
 }
 
-/// The mark for `buf` in the current window, or a pointer to `no_position`
+/// The mark for `buffer` in the current window, or a pointer to `no_position`
 /// when there is none.
-pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut FileMark {
+pub unsafe fn buflist_findfmark(mut buffer: Buf) -> *mut FileMark {
     static no_position: GlobalCell<FileMark> = GlobalCell::new(FileMark {
         mark: Pos {
             lnum: 1 as LineNr,
@@ -414,7 +416,7 @@ pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut FileMark {
         },
         additional_data: ptr::null_mut::<AdditionalData>(),
     });
-    match find_wininfo(&mut buf, false, false) {
+    match find_wininfo(&mut buffer, false, false) {
         // The one place the shared "no position" is handed out: callers get
         // a pointer to it exactly as they do to an entry's own mark, which
         // is why it is a cell rather than a plain `static`.
@@ -423,8 +425,8 @@ pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut FileMark {
     }
 }
 
-pub unsafe fn buflist_findlnum(buf: Buf) -> LineNr {
+pub unsafe fn buflist_findlnum(buffer: Buf) -> LineNr {
     // SAFETY: the answer is a live mark -- an entry's own, or the shared
     // "no position".
-    unsafe { (*buflist_findfmark(buf)).mark.lnum }
+    unsafe { (*buflist_findfmark(buffer)).mark.lnum }
 }

@@ -90,10 +90,10 @@ fn regexec(rmp: &mut RegMatch, name: *mut c_char) -> bool {
 }
 
 /// `home_replace_save`: `name` with `$HOME` written as `~`, freshly
-/// allocated. `buf` decides whether a help file keeps only its tail.
-fn home_replaced(buf: *mut Buffer, name: *const c_char) -> *mut c_char {
+/// allocated. `buffer` decides whether a help file keeps only its tail.
+fn home_replaced(buffer: *mut Buffer, name: *const c_char) -> *mut c_char {
     // SAFETY: a live buffer or null, and a NUL-terminated name.
-    unsafe { home_replace_save(buf, name) }
+    unsafe { home_replace_save(buffer, name) }
 }
 
 fn fuzzy_score(name: *const c_char, pat: *const c_char) -> c_int {
@@ -105,9 +105,9 @@ fn fuzzy_score(name: *const c_char, pat: *const c_char) -> c_int {
     name.map_or(0, |name| fuzzy_match_str(name, pat))
 }
 
-fn diff_mode(buf: Buf) -> bool {
+fn diff_mode(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    diff_mode_buf(buf)
+    diff_mode_buf(buffer)
 }
 
 fn current_win() -> Win {
@@ -315,12 +315,12 @@ fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
 // ---------------------------------------------------------------------------
 // Matching one buffer
 
-/// Whether `buf`'s name matches `rmp`: the short file name first, then the
+/// Whether `buffer`'s name matches `rmp`: the short file name first, then the
 /// long one. `rmp->regprog` may become null when the regexp engine switches.
-pub(crate) fn buflist_match(rmp: &mut RegMatch, buf: Buf, ignore_case: bool) -> *mut c_char {
-    let mut matched = fname_match(rmp, buf.b_sfname, ignore_case);
+pub(crate) fn buflist_match(rmp: &mut RegMatch, buffer: Buf, ignore_case: bool) -> *mut c_char {
+    let mut matched = fname_match(rmp, buffer.b_sfname, ignore_case);
     if matched.is_null() && !rmp.regprog.is_null() {
-        matched = fname_match(rmp, buf.b_ffname, ignore_case);
+        matched = fname_match(rmp, buffer.b_ffname, ignore_case);
     }
     matched
 }

@@ -225,8 +225,8 @@ pub(crate) fn can_bs(what: BsFlag) -> bool {
 }
 
 /// 'backupcopy' as flags, local where set.
-pub(crate) fn get_bkc_flags(buf: Buf) -> c_uint {
-    match buf.b_bkc_flags {
+pub(crate) fn get_bkc_flags(buffer: Buf) -> c_uint {
+    match buffer.b_bkc_flags {
         0 => bkc_flags.get(),
         local => local,
     }
@@ -234,12 +234,12 @@ pub(crate) fn get_bkc_flags(buf: Buf) -> c_uint {
 
 /// 'formatlistpat', local where set.
 ///
-pub(crate) fn get_flp_value(buf: Buf) -> *mut c_char {
+pub(crate) fn get_flp_value(buffer: Buf) -> *mut c_char {
     // SAFETY: a string option is either null or NUL-terminated.
-    if buf.b_p_flp.is_null() || unsafe { *buf.b_p_flp } == 0 {
+    if buffer.b_p_flp.is_null() || unsafe { *buffer.b_p_flp } == 0 {
         p_flp.get()
     } else {
-        buf.b_p_flp
+        buffer.b_p_flp
     }
 }
 
@@ -272,10 +272,10 @@ pub(crate) fn get_showbreak_value(win: Win) -> *mut c_char {
 
 /// The buffer's line ending. 'binary' forces Unix whatever 'fileformat' says.
 ///
-pub(crate) fn get_fileformat(buf: Buf) -> c_int {
+pub(crate) fn get_fileformat(buffer: Buf) -> c_int {
     // SAFETY: 'fileformat' is a string option, so it is never null.
-    let c = unsafe { *buf.b_p_ff } as c_uchar;
-    if buf.b_p_bin != 0 || c == b'u' {
+    let c = unsafe { *buffer.b_p_ff } as c_uchar;
+    if buffer.b_p_bin != 0 || c == b'u' {
         EOL_UNIX
     } else if c == b'm' {
         EOL_MAC
@@ -289,7 +289,7 @@ pub(crate) fn get_fileformat(buf: Buf) -> c_int {
 /// # Safety
 ///
 /// `eap`, when non-null, must be a live command.
-pub(crate) unsafe fn get_fileformat_force(buf: Buf, eap: *const ExArg) -> c_int {
+pub(crate) unsafe fn get_fileformat_force(buffer: Buf, eap: *const ExArg) -> c_int {
     // SAFETY: the caller's command, where they gave one. Reading both
     // fields together is the same answer: they are plain fields of a live
     // `ExArg`, and only their values decide anything below.
@@ -304,13 +304,13 @@ pub(crate) unsafe fn get_fileformat_force(buf: Buf, eap: *const ExArg) -> c_int 
         let binary = if force_bin != 0 {
             (force_bin == FORCE_BIN) as c_int
         } else {
-            buf.b_p_bin
+            buffer.b_p_bin
         };
         if binary != 0 {
             return EOL_UNIX;
         }
         // SAFETY: 'fileformat' is a string option, so it is never null.
-        (unsafe { *buf.b_p_ff }) as c_uchar as c_int
+        (unsafe { *buffer.b_p_ff }) as c_uchar as c_int
     };
     match c as u8 {
         b'u' => EOL_UNIX,

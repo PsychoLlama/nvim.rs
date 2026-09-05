@@ -268,7 +268,7 @@ pub(crate) unsafe fn win_update(window: Win) {
 ///
 /// # Safety
 /// Called from [`win_update`] with `state` reset for this window.
-unsafe fn add_suspended_terminal_note(buf: *mut Buffer, state: DecorStateRef) {
+unsafe fn add_suspended_terminal_note(buffer: *mut Buffer, state: DecorStateRef) {
     // Both live for the whole process: `decor_range_add_virt` stores the
     // pointer and the range is dropped at the end of the redraw. Declarations,
     // so they sit outside the promise below.
@@ -292,10 +292,11 @@ unsafe fn add_suspended_terminal_note(buf: *mut Buffer, state: DecorStateRef) {
     });
 
     // SAFETY: the caller's buffer.
-    if unsafe { (*buf).terminal }.is_null() || !unsafe { terminal_suspended((*buf).terminal) } {
+    if unsafe { (*buffer).terminal }.is_null() || !unsafe { terminal_suspended((*buffer).terminal) }
+    {
         return;
     }
-    let last = unsafe { (*buf).b_ml.ml_line_count } - 1;
+    let last = unsafe { (*buffer).b_ml.ml_line_count } - 1;
     unsafe { decor_range_add_virt(state, last, 0, last, 0, VIRT_TEXT.ptr(), false) };
 }
 
@@ -339,8 +340,8 @@ unsafe fn clamp_skipcol(mut window: Win) {
 /// and none of this matters.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
-unsafe fn find_changed_lines(win: Win, buf: *mut Buffer, rg: &mut Regions) {
+/// `window` must be a live window and `buffer` its buffer.
+unsafe fn find_changed_lines(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window and buffer.
     // What `redraw_win_range_later` asked for.
     rg.mod_top = win.w_redraw_top;
@@ -350,17 +351,17 @@ unsafe fn find_changed_lines(win: Win, buf: *mut Buffer, rg: &mut Regions) {
         0
     };
 
-    if unsafe { (*buf).b_mod_set } {
-        if rg.mod_top == 0 || rg.mod_top > unsafe { (*buf).b_mod_top } {
-            rg.mod_top = unsafe { (*buf).b_mod_top };
+    if unsafe { (*buffer).b_mod_set } {
+        if rg.mod_top == 0 || rg.mod_top > unsafe { (*buffer).b_mod_top } {
+            rg.mod_top = unsafe { (*buffer).b_mod_top };
             // Lines above the change may be included in a pattern match.
             if unsafe { syntax_present(win.raw()) } {
-                rg.mod_top -= unsafe { (*buf).b_s.b_syn_sync_linebreaks };
+                rg.mod_top -= unsafe { (*buffer).b_s.b_syn_sync_linebreaks };
                 rg.mod_top = rg.mod_top.max(1);
             }
         }
-        if rg.mod_bot == 0 || rg.mod_bot < unsafe { (*buf).b_mod_bot } {
-            rg.mod_bot = unsafe { (*buf).b_mod_bot };
+        if rg.mod_bot == 0 || rg.mod_bot < unsafe { (*buffer).b_mod_bot } {
+            rg.mod_bot = unsafe { (*buffer).b_mod_bot };
         }
 
         // With a multi-line 'hlsearch' or :match pattern, a change in one
@@ -469,8 +470,8 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
 /// or gives up and marks the whole window.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
-unsafe fn plan_scroll(win: Win, buf: *mut Buffer, rg: &mut Regions) {
+/// `window` must be a live window and `buffer` its buffer.
+unsafe fn plan_scroll(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and its `w_lines` array.
     // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
     // concealed, which would read as a scroll that did not happen. Compare
@@ -480,7 +481,7 @@ unsafe fn plan_scroll(win: Win, buf: *mut Buffer, rg: &mut Regions) {
     // it: `decor_conceal_line` invokes the decoration providers, so
     // skipping it on the non-scrollable path would be a change.
     let mut topline_conceal = win.w_topline;
-    while topline_conceal < unsafe { (*buf).b_ml.ml_line_count }
+    while topline_conceal < unsafe { (*buffer).b_ml.ml_line_count }
         && unsafe { decor_conceal_line(win.raw(), topline_conceal - 1, false) }
     {
         topline_conceal += 1;
@@ -675,10 +676,10 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 /// taken away.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
-unsafe fn plan_visual_area(win: Win, buf: *mut Buffer, rg: &mut Regions) {
+/// `window` must be a live window and `buffer` its buffer.
+unsafe fn plan_visual_area(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
-    let shown = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer });
+    let shown = visual_selection().filter(|_| buffer == unsafe { (*curwin.get()).w_buffer });
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
         return;
     }
@@ -875,10 +876,11 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 /// moved.
 ///
 /// # Safety
-/// `window` must be a live window and `buf` its buffer.
-unsafe fn remember_visual_area(mut window: Win, buf: *mut Buffer) {
+/// `window` must be a live window and `buffer` its buffer.
+unsafe fn remember_visual_area(mut window: Win, buffer: *mut Buffer) {
     // SAFETY: the caller's window and the global Visual state.
-    if let Some(sel) = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer }) {
+    if let Some(sel) = visual_selection().filter(|_| buffer == unsafe { (*curwin.get()).w_buffer })
+    {
         window.w_old_visual_mode = sel.mode.raw() as c_char;
         unsafe { window.w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum };
         window.w_old_visual_lnum = sel.anchor.lnum;
@@ -922,10 +924,10 @@ unsafe fn send_win_extmarks(window: Win) {
 /// `old_botline` is what `w_botline` held before the line loop replaced it.
 ///
 /// # Safety
-/// `window` must be the window that was just drawn and `buf` its buffer.
+/// `window` must be the window that was just drawn and `buffer` its buffer.
 unsafe fn finish_botline(
     mut window: Win,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     old_botline: LineNr,
     nrwidth_before: c_int,
 ) {
@@ -956,8 +958,8 @@ unsafe fn finish_botline(
         }
     }
 
-    if nrwidth_before != window.w_nrwidth && !unsafe { (*buf).terminal }.is_null() {
-        unsafe { terminal_check_size((*buf).terminal) };
+    if nrwidth_before != window.w_nrwidth && !unsafe { (*buffer).terminal }.is_null() {
+        unsafe { terminal_check_size((*buffer).terminal) };
     }
 }
 

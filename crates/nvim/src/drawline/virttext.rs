@@ -36,7 +36,7 @@ use crate::types::NUL;
 /// double-width character being overwritten is found), and `maxcells` must be
 /// positive.
 pub(crate) unsafe fn line_putchar(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     pp: &mut *const ::core::ffi::c_char,
     dest: &mut [ScreenChar],
     maxcells: ::core::ffi::c_int,
@@ -58,7 +58,8 @@ pub(crate) unsafe fn line_putchar(
 
     let is_tab = unsafe { *p } as ::core::ffi::c_int == TAB;
     if is_tab {
-        cells = unsafe { tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array) }.min(maxcells);
+        cells = unsafe { tabstop_padding(vcol, (*buffer).b_p_ts, (*buffer).b_p_vts_array) }
+            .min(maxcells);
     }
     // Overwriting the left half of a double-width character: clear its
     // orphaned right half.
@@ -99,11 +100,11 @@ fn push_win_extmark(m: WinExtmark) {
 /// redraw is walking.
 ///
 /// # Safety
-/// `window`/`buf` must be live and [`WinLineVars::decor`] must hold the active
+/// `window`/`buffer` must be live and [`WinLineVars::decor`] must hold the active
 /// ranges for its `row`.
 pub(crate) unsafe fn draw_virt_text(
     window: Win,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     col_off: ::core::ffi::c_int,
     mut end_col: ::core::ffi::c_int,
     wlv: &WinLineVars,
@@ -206,7 +207,7 @@ pub(crate) unsafe fn draw_virt_text(
         if !vt.is_null() {
             let col = unsafe {
                 draw_virt_text_item(
-                    buf,
+                    buffer,
                     (*item).draw_col,
                     (*vt).data.text(),
                     (*vt).hl_mode as HlMode,
@@ -247,10 +248,10 @@ pub(crate) unsafe fn draw_virt_text(
 /// spaces are owed before the text resumes.
 ///
 /// # Safety
-/// `buf` must be live, `vt`'s chunks must be live NUL-terminated strings, and
+/// `buffer` must be live, `vt`'s chunks must be live NUL-terminated strings, and
 /// the line buffers must be at least `max_col` wide.
 pub(crate) unsafe fn draw_virt_text_item(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     mut col: ::core::ffi::c_int,
     vt: VirtText,
     hl_mode: HlMode,
@@ -280,7 +281,7 @@ pub(crate) unsafe fn draw_virt_text_item(
         while skip_cells > 0 && unsafe { *virt_str } as ::core::ffi::c_int != NUL {
             let c_len = unsafe { utfc_ptr2len(virt_str) };
             let cells = if unsafe { *virt_str } as ::core::ffi::c_int == TAB {
-                unsafe { tabstop_padding(vcol, (*buf).b_p_ts, (*buf).b_p_vts_array) }
+                unsafe { tabstop_padding(vcol, (*buffer).b_p_ts, (*buffer).b_p_vts_array) }
             } else {
                 unsafe { utf_ptr2cells(virt_str) }
             };
@@ -328,7 +329,7 @@ pub(crate) unsafe fn draw_virt_text_item(
         } else {
             &mut line.chars_mut()[col as usize..]
         };
-        let cells = unsafe { line_putchar(buf, &mut draw_str, dest, max_col - col, vcol) };
+        let cells = unsafe { line_putchar(buffer, &mut draw_str, dest, max_col - col, vcol) };
         let attrs = line.attrs_mut();
         for _ in 0..cells {
             attrs[col as usize] = attr as ScreenAttr;

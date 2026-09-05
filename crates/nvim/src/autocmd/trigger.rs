@@ -172,7 +172,7 @@ pub unsafe fn aucmd_defer(
     fname: *mut ::core::ffi::c_char,
     fname_io: *mut ::core::ffi::c_char,
     group: ::core::ffi::c_int,
-    buf: Buf,
+    buffer: Buf,
     eap: *mut ExArg,
     data: *mut Object,
 ) {
@@ -195,7 +195,7 @@ pub unsafe fn aucmd_defer(
     unsafe { (*evdata).group = group };
     // The *handle* is stored, not the pointer: the buffer may be gone by the
     // time the queued event runs, and `deferred_event` looks it up again.
-    unsafe { (*evdata).buf = buf.handle as BufferHandle };
+    unsafe { (*evdata).buf = buffer.handle as BufferHandle };
     unsafe { (*evdata).eap = eap };
     // SAFETY: `data` is the caller's object or NULL; the copy is owned by
     // the event from here on.
@@ -437,12 +437,12 @@ pub fn do_autocmd_focusgained(gained: bool) {
     recursive.set(false);
 }
 
-/// Fire `FileType` for `buf`, with `secure` cleared and recursion counted.
+/// Fire `FileType` for `buffer`, with `secure` cleared and recursion counted.
 ///
 /// A nested `FileType` only fires when `force` says so; the *inner* one
 /// then does not `force` the autocommands themselves, which is what the
 /// `ft_recursive == 1` test says.
-pub fn do_filetype_autocmd(mut buf: Buf, force: bool) -> bool {
+pub fn do_filetype_autocmd(mut buffer: Buf, force: bool) -> bool {
     static ft_recursive: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 
     if ft_recursive.get() > 0 && !force {
@@ -453,16 +453,16 @@ pub fn do_filetype_autocmd(mut buf: Buf, force: bool) -> bool {
     secure.set(0);
     let ft_recursing = Depth::of(&ft_recursive);
 
-    buf.b_did_filetype = true;
+    buffer.b_did_filetype = true;
     // SAFETY: `b_p_ft` and `b_fname` are that buffer's own NUL-terminated
     // names, and the buffer is live by `Buf`'s contract.
     let ret = unsafe {
         apply_autocmds(
             AutoEvent::FileType,
-            buf.b_p_ft,
-            buf.b_fname,
+            buffer.b_p_ft,
+            buffer.b_fname,
             force || ft_recursive.get() == 1,
-            buf.raw(),
+            buffer.raw(),
         )
     };
 

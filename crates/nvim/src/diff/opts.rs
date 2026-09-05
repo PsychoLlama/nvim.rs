@@ -73,7 +73,7 @@ fn number_item<'a>(text: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {
         .then_some(rest)
 }
 
-/// Read `'diffanchors'` for `buf`, optionally into `anchors`.
+/// Read `'diffanchors'` for `buffer`, optionally into `anchors`.
 ///
 /// Each item is an ordinary `:` address, which is why this has to make the
 /// buffer and its window current around `get_address` -- the grammar reaches
@@ -81,14 +81,14 @@ fn number_item<'a>(text: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {
 /// which runs before the buffer is necessarily in a window.
 pub(crate) unsafe fn parse_diffanchors(
     check_only: bool,
-    buf: Buf,
+    buffer: Buf,
     anchors: *mut LineNr,
     num_anchors: *mut c_int,
 ) -> Result<(), Failed> {
-    let mut dia = if unsafe { *buf.b_p_dia } == 0 {
+    let mut dia = if unsafe { *buffer.b_p_dia } == 0 {
         p_dia.get()
     } else {
-        buf.b_p_dia
+        buffer.b_p_dia
     };
     let orig_curbuf = curbuf.get();
     let orig_curwin = curwin.get();
@@ -96,7 +96,7 @@ pub(crate) unsafe fn parse_diffanchors(
     let bufwin = if check_only {
         curwin.get()
     } else {
-        let shown = windows().find(|w| w.w_buffer == buf.raw() && w.w_onebuf_opt.wo_diff != 0);
+        let shown = windows().find(|w| w.w_buffer == buffer.raw() && w.w_onebuf_opt.wo_diff != 0);
         if shown.is_none() && unsafe { *dia } != 0 {
             emsg(gettext(e_diff_anchors_with_hidden_windows));
             return Err(Failed);
@@ -111,7 +111,7 @@ pub(crate) unsafe fn parse_diffanchors(
         if unsafe { *dia } == b',' as c_char {
             return Err(Failed);
         }
-        curbuf.set(buf.raw());
+        curbuf.set(buffer.raw());
         curwin.set(bufwin);
         let mut errormsg = None;
         let lnum = unsafe {
@@ -140,7 +140,7 @@ pub(crate) unsafe fn parse_diffanchors(
         // The validator accepts an address it cannot resolve yet; only
         // the real parse insists the line exists.
         if !check_only
-            && (lnum == MAXLNUM as LineNr || lnum <= 0 || lnum > buf.b_ml.ml_line_count + 1)
+            && (lnum == MAXLNUM as LineNr || lnum <= 0 || lnum > buffer.b_ml.ml_line_count + 1)
         {
             emsg(gettext(e_invrange));
             return Err(Failed);

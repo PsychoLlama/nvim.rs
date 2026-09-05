@@ -154,17 +154,17 @@ pub(crate) unsafe fn load_dummy_buffer(
 ///
 /// # Safety
 ///
-/// `buf` must be a live buffer; `dirname_start` must be null or
+/// `buffer` must be a live buffer; `dirname_start` must be null or
 /// NUL-terminated.
-pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_char) {
+pub(crate) unsafe fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: *const c_char) {
     // Note: `win_close` drops `b_nwindows` behind the raw pointer.
     #[allow(clippy::while_immutable_condition)]
-    while buf.b_nwindows > 0 {
+    while buffer.b_nwindows > 0 {
         // Only close the window if it is not the last one, and only when
         // closing it actually worked — otherwise this would spin.
         let mut did_one = false;
         if windows().nth(1).is_some()
-            && let Some(wp) = windows().find(|wp| ptr::eq(wp.w_buffer, buf.raw()))
+            && let Some(wp) = windows().find(|wp| ptr::eq(wp.w_buffer, buffer.raw()))
         {
             // SAFETY: one of the live windows the walk just handed us; the
             // walk stops here, so it may free that window.
@@ -172,12 +172,12 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_cha
         }
         if !did_one {
             // The buffer keeps a window; it can only stop being a dummy.
-            buf.b_flags.clear(BufFlags::DUMMY);
+            buffer.b_flags.clear(BufFlags::DUMMY);
             return;
         }
     }
 
-    if !ptr::eq(curbuf.get(), buf.raw().cast_const()) && buf.b_nwindows == 0 {
+    if !ptr::eq(curbuf.get(), buffer.raw().cast_const()) && buffer.b_nwindows == 0 {
         // Delete the buffer and its swap file. `wipe_buffer` calls
         // `close_buffer`, which may run autocommands, so a pending
         // exception or `:return` has to be parked over the call.
@@ -186,7 +186,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_cha
             exception: ptr::null_mut(),
         };
         unsafe { enter_cleanup(&raw mut cs) };
-        wipe_buffer(buf, true);
+        wipe_buffer(buffer, true);
         unsafe { leave_cleanup(&raw mut cs) };
 
         // When autocommands/'autochdir' option changed directory: go back.
@@ -196,7 +196,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_cha
         return;
     }
 
-    buf.b_flags.clear(BufFlags::DUMMY);
+    buffer.b_flags.clear(BufFlags::DUMMY);
 }
 
 /// Unload the dummy buffer that `load_dummy_buffer` created, keeping it in
@@ -205,11 +205,11 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_cha
 /// # Safety
 ///
 /// `dirname_start` must be NUL-terminated.
-pub(crate) unsafe fn unload_dummy_buffer(buf: Buf, dirname_start: *const c_char) {
-    if ptr::eq(curbuf.get(), buf.raw()) {
+pub(crate) unsafe fn unload_dummy_buffer(buffer: Buf, dirname_start: *const c_char) {
+    if ptr::eq(curbuf.get(), buffer.raw()) {
         return;
     }
-    close_buffer(None, buf, DOBUF_UNLOAD as c_int, false, true);
+    close_buffer(None, buffer, DOBUF_UNLOAD as c_int, false, true);
 
     // When autocommands/'autochdir' option changed directory: go back.
     unsafe { restore_start_dir(dirname_start) };

@@ -469,7 +469,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
 /// `BufFlags::NEW` or `BufFlags::READERR`, check for overwriting the current file.
 ///
 /// May set `eap->forceit` if a dialog says it is fine to overwrite.  `fname` is
-/// the file name to be used (which can differ from `buf`'s), `ffname` its full
+/// the file name to be used (which can differ from `buffer`'s), `ffname` its full
 /// path version, and `other` says the write goes under another name.
 ///
 /// Answers `Err` when the write must not go ahead.
@@ -478,7 +478,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
 /// The two names must be live.
 pub unsafe fn check_overwrite(
     eap: &mut ExArg,
-    buf: Buf,
+    buffer: Buf,
     fname: *mut c_char,
     ffname: *mut c_char,
     other: bool,
@@ -486,10 +486,10 @@ pub unsafe fn check_overwrite(
     // Write to another file or b_flags set or not writing the whole file.
     // SAFETY: a live buffer.
     let contested = other
-        || (!buf_is_nofilename(Some(buf))
-            && (buf.b_flags.has(BufFlags::NOTEDITED)
-                || buf.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
-                || buf.b_flags.has(BufFlags::READERR)));
+        || (!buf_is_nofilename(Some(buffer))
+            && (buffer.b_flags.has(BufFlags::NOTEDITED)
+                || buffer.b_flags.has(BufFlags::NEW) && !cpo_has(CpoFlag::OVERNEW)
+                || buffer.b_flags.has(BufFlags::READERR)));
     // SAFETY: `ffname` is a live file name.
     if !contested || p_wa.get() != 0 || !unsafe { os_path_exists(ffname) } {
         return Ok(());
@@ -666,10 +666,10 @@ enum WriteAll {
 /// `error`.
 ///
 /// # Safety
-/// Main thread; `buf` must be a live buffer.
+/// Main thread; `buffer` must be a live buffer.
 unsafe fn write_one_buffer(
     eap: &mut ExArg,
-    buf: Buf,
+    buffer: Buf,
     save_forceit: c_int,
     error: &mut c_int,
 ) -> WriteAll {
@@ -678,12 +678,12 @@ unsafe fn write_one_buffer(
     // nvim_open_term() terminals.  Use terminal_running() instead?
     if exiting.get()
         && eap.forceit == 0
-        && !buf.terminal.is_null()
-        && unsafe { channel_job_running(buf.b_p_channel as u64) }
+        && !buffer.terminal.is_null()
+        && unsafe { channel_job_running(buffer.b_p_channel as u64) }
     {
-        no_write_message_buf(buf);
+        no_write_message_buf(buffer);
         *error += 1;
-    } else if !buf_is_changed(buf) || buf_is_dontwrite(Some(buf)) {
+    } else if !buf_is_changed(buffer) || buf_is_dontwrite(Some(buffer)) {
         return WriteAll::Next;
     }
 
@@ -697,17 +697,17 @@ unsafe fn write_one_buffer(
         return WriteAll::Stop;
     }
     let mut deleted = false;
-    if buf.b_ffname.is_null() {
-        semsg!("E141: No file name for buffer {}", buf.handle as int64_t);
+    if buffer.b_ffname.is_null() {
+        semsg!("E141: No file name for buffer {}", buffer.handle as int64_t);
         *error += 1;
-    } else if unsafe { check_readonly(&raw mut eap.forceit, buf) }
-        || unsafe { check_overwrite(eap, buf, buf.b_fname, buf.b_ffname, false) }.is_err()
+    } else if unsafe { check_readonly(&raw mut eap.forceit, buffer) }
+        || unsafe { check_overwrite(eap, buffer, buffer.b_fname, buffer.b_ffname, false) }.is_err()
     {
         *error += 1;
     } else {
-        let bufref = BufRef::of(buf);
-        if unsafe { handle_mkdir_p_arg(eap, buf.b_fname) }.is_err()
-            || unsafe { buf_write_all(buf.raw(), eap.forceit != 0) }.is_err()
+        let bufref = BufRef::of(buffer);
+        if unsafe { handle_mkdir_p_arg(eap, buffer.b_fname) }.is_err()
+            || unsafe { buf_write_all(buffer.raw(), eap.forceit != 0) }.is_err()
         {
             *error += 1;
         }
@@ -746,20 +746,20 @@ unsafe fn not_writing() -> bool {
 ///
 /// # Safety
 /// `forceit` must be live; `*forceit` may be set by the dialog.
-unsafe fn check_readonly(forceit: *mut c_int, buf: Buf) -> bool {
+unsafe fn check_readonly(forceit: *mut c_int, buffer: Buf) -> bool {
     // Handle a file being readonly when the 'readonly' option is set or when
     // the file exists and permissions are read-only.
     // SAFETY: caller's contract, and the buffer's own file name.
     let readonly = unsafe {
         *forceit == 0
-            && (buf.b_p_ro != 0
-                || os_path_exists(buf.b_ffname) && os_file_is_writable(buf.b_ffname) == 0)
+            && (buffer.b_p_ro != 0
+                || os_path_exists(buffer.b_ffname) && os_file_is_writable(buffer.b_ffname) == 0)
     };
     if !readonly {
         return false;
     }
 
-    let (is_ro, name) = (buf.b_p_ro != 0, buf.b_fname);
+    let (is_ro, name) = (buffer.b_p_ro != 0, buffer.b_fname);
     if !confirming() || name.is_null() {
         // SAFETY: live message strings; one `%s` for one string.
         if is_ro {

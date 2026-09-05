@@ -661,12 +661,12 @@ unsafe fn terminal_live(chan: *mut Channel) -> bool {
 /// Set one buffer-local variable to an Integer, discarding any error.
 ///
 /// # Safety
-/// `buf` is a live buffer and `err` a live out-parameter.
-unsafe fn set_buf_var(buf: *mut Buffer, name: &CStr, value: Integer, err: &mut Error) {
+/// `buffer` is a live buffer and `err` a live out-parameter.
+unsafe fn set_buf_var(buffer: *mut Buffer, name: &CStr, value: Integer, err: &mut Error) {
     let value = Object::Integer(value);
     let arena = ptr::null_mut::<Arena>();
     // SAFETY: the caller's obligation; the name is `'static`.
-    let vars = unsafe { (*buf).b_vars };
+    let vars = unsafe { (*buffer).b_vars };
     let name = unsafe { cstr_as_string(name.as_ptr()) };
     unsafe { dict_set_var(vars, name, value, false, false, arena, err) };
     err.clear();

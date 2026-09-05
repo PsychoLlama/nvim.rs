@@ -58,13 +58,13 @@ unsafe fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
     true
 }
 
-/// Write lines `start` through `end` of `buf`.
+/// Write lines `start` through `end` of `buffer`.
 ///
 /// `sha` hashes the text as it goes, for the undo file. When `writer.fd` is
 /// -1 nothing reaches a file: that pass only exists to find out whether the
 /// conversion works.
 pub(crate) unsafe fn write_lines(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     range: (LineNr, LineNr),
     writer: &mut ByteWriter,
     fileformat: c_int,
@@ -81,7 +81,7 @@ pub(crate) unsafe fn write_lines(
 
     let mut lnum = start;
     while lnum <= end {
-        let mut ptr = unsafe { ml_get_buf(buf, lnum) };
+        let mut ptr = unsafe { ml_get_buf(buffer, lnum) };
         if let Some(sha) = sha.as_deref_mut() {
             // The terminating NUL goes in as the line separator.
             sha.update(unsafe {
@@ -115,10 +115,10 @@ pub(crate) unsafe fn write_lines(
         // Write failed, or the last line has no end-of-line: stop here.
         if end == 0
             || (lnum == end
-                && (write_bin || unsafe { (*buf).b_p_fixeol } == 0)
-                && ((write_bin && lnum == unsafe { (*buf).b_no_eol_lnum })
-                    || (lnum == unsafe { (*buf).b_ml.ml_line_count }
-                        && unsafe { (*buf).b_p_eol } == 0)))
+                && (write_bin || unsafe { (*buffer).b_p_fixeol } == 0)
+                && ((write_bin && lnum == unsafe { (*buffer).b_no_eol_lnum })
+                    || (lnum == unsafe { (*buffer).b_ml.ml_line_count }
+                        && unsafe { (*buffer).b_p_eol } == 0)))
         {
             lnum += 1; // written the line, count it
             no_eol = true;
@@ -167,7 +167,7 @@ pub(crate) unsafe fn write_lines(
         writer.conv_error_lnum = end;
         end = 0;
     }
-    if unsafe { (*buf).b_p_fixeol } == 0 && unsafe { (*buf).b_p_eof } != 0 {
+    if unsafe { (*buffer).b_p_fixeol } == 0 && unsafe { (*buffer).b_p_eof } != 0 {
         // Write the trailing CTRL-Z that 'endoffile' asks for.
         unsafe { write_eintr(writer.fd, c"\x1a".as_ptr().cast_mut().cast(), 1) };
     }
@@ -182,7 +182,7 @@ pub(crate) unsafe fn write_lines(
 
 /// Build and show the message a successful write ends with.
 pub(crate) unsafe fn report_written(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     fname: *mut c_char,
     written: &Written,
     notes: &WriteNotes,
@@ -193,7 +193,7 @@ pub(crate) unsafe fn report_written(
     let mut report = [0 as c_char; IOSIZE as usize];
     let (lnum, nchars) = (written.lnum, written.nchars as FileOffset);
     let iobuff = report.as_mut_ptr();
-    unsafe { add_quoted_fname(iobuff, IOSIZE as size_t, Buf::new(buf), fname) };
+    unsafe { add_quoted_fname(iobuff, IOSIZE as size_t, Buf::new(buffer), fname) };
     let note = |text: &'static CStr| {
         unsafe { xstrlcat(iobuff, translate(text).as_ptr(), IOSIZE as size_t) };
     };

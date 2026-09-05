@@ -79,16 +79,16 @@ pub unsafe fn set_ref_in_tagfunc(copyID: c_int) -> bool {
     unsafe { set_ref_in_callback(global_tagfunc(), copyID, ptr::null_mut(), ptr::null_mut()) }
 }
 
-/// Copy the global `'tagfunc'` callback into `buf`'s local one.
+/// Copy the global `'tagfunc'` callback into `buffer`'s local one.
 ///
 /// Safe: the buffer is live by [`Buf`]'s promise, and the global callback
 /// lives in a static.
-pub fn set_buflocal_tfu_callback(mut buf: Buf) {
+pub fn set_buflocal_tfu_callback(mut buffer: Buf) {
     // SAFETY: a live buffer owns its own callback, and `global_tagfunc`
     // answers the address of a static.
-    unsafe { callback_free(&raw mut buf.b_tfu_cb) };
+    unsafe { callback_free(&raw mut buffer.b_tfu_cb) };
     if unsafe { &*global_tagfunc() }.is_set() {
-        unsafe { callback_copy(&raw mut buf.b_tfu_cb, global_tagfunc()) };
+        unsafe { callback_copy(&raw mut buffer.b_tfu_cb, global_tagfunc()) };
     }
 }
 

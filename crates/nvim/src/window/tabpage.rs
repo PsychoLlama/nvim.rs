@@ -745,6 +745,6 @@ pub fn tabpage_move(nr: c_int) {
 }
 
 /// A buffer argument that may be absent, as `leave_tab` takes it.
-fn raw_buf(buf: Option<Buf>) -> *mut Buffer {
-    buf.map_or(ptr::null_mut(), Buf::raw)
+fn raw_buf(buffer: Option<Buf>) -> *mut Buffer {
+    buffer.map_or(ptr::null_mut(), Buf::raw)
 }

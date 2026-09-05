@@ -36,12 +36,12 @@ use core::ffi::{CStr, c_int};
 ///
 /// Nothing else may hold the buffer while this runs: it takes a `&mut` to it
 /// for the whole of the parse.
-pub unsafe fn parse_cino(buf: Buf) {
+pub unsafe fn parse_cino(buffer: Buf) {
     // SAFETY: a live buffer, by `Buf`'s contract.
-    let sw = unsafe { get_sw_value(buf.raw()) };
+    let sw = unsafe { get_sw_value(buffer.raw()) };
     // SAFETY: the caller promises nothing else holds the buffer, and the
     // option string walked below is a separate allocation.
-    let buf = unsafe { &mut *buf.raw() };
+    let buf = unsafe { &mut *buffer.raw() };
 
     // The defaults.  A `sw` here means the option tracks 'shiftwidth'
     // unless 'cinoptions' overrides it.

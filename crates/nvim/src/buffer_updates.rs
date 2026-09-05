@@ -173,9 +173,9 @@ impl Buf {
 // The calls out of the module
 
 /// `b:changedtick`, as `buf_get_changedtick`.
-fn changedtick(buf: Buf) -> Integer {
+fn changedtick(buffer: Buf) -> Integer {
     // SAFETY: a live buffer, which is [`Buf`]'s promise.
-    buf_get_changedtick(buf)
+    buf_get_changedtick(buffer)
 }
 
 /// `rpc_send_event`, which only ever reads `args`.
@@ -258,11 +258,11 @@ struct Deleted {
     codeunits: size_t,
 }
 
-fn flush_deleted_bytes(buf: Buf) -> Deleted {
+fn flush_deleted_bytes(buffer: Buf) -> Deleted {
     let (mut codepoints, mut codeunits) = (0, 0);
     let (cp, cu) = (&raw mut codepoints, &raw mut codeunits);
     // SAFETY: a live buffer and two live out-parameters.
-    let bytes = unsafe { ml_flush_deleted_bytes(buf.raw(), cp, cu) };
+    let bytes = unsafe { ml_flush_deleted_bytes(buffer.raw(), cp, cu) };
     Deleted {
         bytes,
         codepoints,
@@ -272,10 +272,10 @@ fn flush_deleted_bytes(buf: Buf) -> Deleted {
 
 /// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`, allocated
 /// in `arena`.
-fn collect_lines(buf: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array {
+fn collect_lines(buffer: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array {
     let ar = &raw mut *arena;
     let mut linedata = arena_array(ar, n);
-    let (b, out, none) = (buf.raw(), &raw mut linedata, ptr::null_mut());
+    let (b, out, none) = (buffer.raw(), &raw mut linedata, ptr::null_mut());
     // SAFETY: a live buffer holding lines `first ..= first + n - 1`, and an
     // array of `n` slots in the same arena the callee fills from.
     unsafe { buf_collect_lines(b, n, first, 0, true, out, none, ar) };
@@ -285,26 +285,31 @@ fn collect_lines(buf: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array
 // ---------------------------------------------------------------------------
 // Registering and unregistering
 
-/// Attach `channel_id` (or, for `LUA_INTERNAL_CALL`, `cb`) to `buf`.
+/// Attach `channel_id` (or, for `LUA_INTERNAL_CALL`, `cb`) to `buffer`.
 ///
 /// True when the subscriber is watching afterwards, whether it was added
 /// now or already there; false only when the buffer is not loaded.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
+/// `buffer` must be a live buffer.
 pub unsafe fn buf_updates_register(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     channel_id: uint64_t,
     cb: BufUpdateCallbacks,
     send_buffer: bool,
 ) -> bool {
     // SAFETY: the caller's promise.
-    register(unsafe { Buf::new(buf) }, channel_id, cb, send_buffer)
+    register(unsafe { Buf::new(buffer) }, channel_id, cb, send_buffer)
 }
 
-fn register(mut buf: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buffer: bool) -> bool {
+fn register(
+    mut buffer: Buf,
+    channel_id: uint64_t,
+    cb: BufUpdateCallbacks,
+    send_buffer: bool,
+) -> bool {
     // Must fail if the buffer isn't loaded.
-    if buf.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_null() {
         return false;
     }
 
@@ -314,26 +319,26 @@ fn register(mut buf: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buf
         // subscriptions (each carries its own refs), and `nvim_buf_attach`
         // documents `send_buffer` as "Not for Lua callbacks".
         let utf_sizes = cb.utf_sizes;
-        buf.callbacks().push(cb);
+        buffer.callbacks().push(cb);
         if utf_sizes {
             // Sticky: nothing clears it when the callback detaches, so the
             // buffer keeps counting codepoints for the rest of its life.
-            buf.update_need_codepoints = true;
+            buffer.update_need_codepoints = true;
         }
         return true;
     }
 
     // Already watching: nothing to do.
-    if buf.channels().as_slice().contains(&channel_id) {
+    if buffer.channels().as_slice().contains(&channel_id) {
         return true;
     }
 
-    buf.channels().push(channel_id);
+    buffer.channels().push(channel_id);
 
     if send_buffer {
-        send_whole_buffer(buf, channel_id);
+        send_whole_buffer(buffer, channel_id);
     } else {
-        changedtick_single(buf, channel_id);
+        changedtick_single(buffer, channel_id);
     }
 
     true
@@ -341,17 +346,17 @@ fn register(mut buf: Buf, channel_id: uint64_t, cb: BufUpdateCallbacks, send_buf
 
 /// The `nvim_buf_lines_event` a channel attaching with `send_buffer` gets:
 /// the whole buffer as one replacement of the range `0 .. -1`.
-fn send_whole_buffer(buf: Buf, channel_id: uint64_t) {
-    let line_count = buf.line_count() as size_t;
+fn send_whole_buffer(buffer: Buf, channel_id: uint64_t) {
+    let line_count = buffer.line_count() as size_t;
     let mut arena = ARENA_EMPTY;
     let mut linedata = Array::EMPTY;
     if line_count > 0 {
-        linedata = collect_lines(buf, line_count, 1, &mut arena);
+        linedata = collect_lines(buffer, line_count, 1, &mut arena);
     }
 
     let mut args = ArrayBuf::<6>::new();
-    args.push(Object::buffer(buf.handle));
-    args.push(Object::integer(changedtick(buf)));
+    args.push(Object::buffer(buffer.handle));
+    args.push(Object::integer(changedtick(buffer)));
     // The first line that changed (zero-indexed), then the last.
     args.push(Object::integer(0));
     args.push(Object::integer(-1));
@@ -363,45 +368,45 @@ fn send_whole_buffer(buf: Buf, channel_id: uint64_t) {
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 }
 
-/// Whether anything is watching `buf`.
+/// Whether anything is watching `buffer`.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_updates_active(buf: *mut Buffer) -> bool {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_updates_active(buffer: *mut Buffer) -> bool {
     // SAFETY: the caller's promise.
-    active(unsafe { Buf::new(buf) })
+    active(unsafe { Buf::new(buffer) })
 }
 
-fn active(mut buf: Buf) -> bool {
-    buf.channels().len() != 0 || buf.callbacks().len() != 0
+fn active(mut buffer: Buf) -> bool {
+    buffer.channels().len() != 0 || buffer.callbacks().len() != 0
 }
 
 /// Tell one channel it is no longer attached.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_updates_send_end(buf: *mut Buffer, channelid: uint64_t) {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_updates_send_end(buffer: *mut Buffer, channelid: uint64_t) {
     // SAFETY: the caller's promise.
-    send_end(unsafe { Buf::new(buf) }, channelid);
+    send_end(unsafe { Buf::new(buffer) }, channelid);
 }
 
-fn send_end(buf: Buf, channelid: uint64_t) {
+fn send_end(buffer: Buf, channelid: uint64_t) {
     let mut args = ArrayBuf::<1>::new();
-    args.push(Object::buffer(buf.handle));
+    args.push(Object::buffer(buffer.handle));
     send_event(channelid, c"nvim_buf_detach_event", args.array());
 }
 
-/// Detach `channelid` from `buf`, if it is attached.
+/// Detach `channelid` from `buffer`, if it is attached.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_updates_unregister(buf: *mut Buffer, channelid: uint64_t) {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_updates_unregister(buffer: *mut Buffer, channelid: uint64_t) {
     // SAFETY: the caller's promise.
-    unregister(unsafe { Buf::new(buf) }, channelid);
+    unregister(unsafe { Buf::new(buffer) }, channelid);
 }
 
-fn unregister(mut buf: Buf, channelid: uint64_t) {
-    let size = buf.channels().len();
+fn unregister(mut buffer: Buf, channelid: uint64_t) {
+    let size = buffer.channels().len();
     if size == 0 {
         return;
     }
@@ -409,7 +414,7 @@ fn unregister(mut buf: Buf, channelid: uint64_t) {
     // Compact the id out of the list — it should never appear more than
     // once, but upstream counts rather than assuming.
     let (mut j, mut found) = (0, 0);
-    let mut channels = buf.channels();
+    let mut channels = buffer.channels();
     for i in 0..size {
         if channels.at(i) == channelid {
             found += 1;
@@ -423,34 +428,34 @@ fn unregister(mut buf: Buf, channelid: uint64_t) {
 
     if found != 0 {
         // Remove `found` items from the end of the array.
-        buf.channels().set_len(size - found);
+        buffer.channels().set_len(size - found);
         // Upstream tells the channel *before* releasing the array, and the
         // order is kept: `rpc_send_event` reads only the buffer handle.
-        send_end(buf, channelid);
+        send_end(buffer, channelid);
         if found == size {
-            buf.channels().destroy();
+            buffer.channels().destroy();
         }
     }
 }
 
-/// Drop everything watching `buf`, silently: the buffer itself is going
+/// Drop everything watching `buffer`, silently: the buffer itself is going
 /// away, so nobody is told.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_free_callbacks(buf: *mut Buffer) {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_free_callbacks(buffer: *mut Buffer) {
     // SAFETY: the caller's promise.
-    free_callbacks(unsafe { Buf::new(buf) });
+    free_callbacks(unsafe { Buf::new(buffer) });
 }
 
-fn free_callbacks(mut buf: Buf) {
-    buf.channels().destroy();
+fn free_callbacks(mut buffer: Buf) {
+    buffer.channels().destroy();
     let mut i = 0;
-    while i < buf.callbacks().len() {
-        callbacks_free(buf.callbacks().at(i));
+    while i < buffer.callbacks().len() {
+        callbacks_free(buffer.callbacks().at(i));
         i += 1;
     }
-    buf.callbacks().destroy();
+    buffer.callbacks().destroy();
 }
 
 /// The buffer's contents are gone: detach every channel, and give every
@@ -458,26 +463,26 @@ fn free_callbacks(mut buf: Buf) {
 /// `on_detach` (when they are not).
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_updates_unload(buf: *mut Buffer, can_reload: bool) {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_updates_unload(buffer: *mut Buffer, can_reload: bool) {
     // SAFETY: the caller's promise.
-    unload(unsafe { Buf::new(buf) }, can_reload);
+    unload(unsafe { Buf::new(buffer) }, can_reload);
 }
 
-fn unload(mut buf: Buf, can_reload: bool) {
-    let size = buf.channels().len();
+fn unload(mut buffer: Buf, can_reload: bool) {
+    let size = buffer.channels().len();
     if size != 0 {
         for i in 0..size {
-            let channelid = buf.channels().at(i);
-            send_end(buf, channelid);
+            let channelid = buffer.channels().at(i);
+            send_end(buffer, channelid);
         }
-        buf.channels().destroy();
+        buffer.channels().destroy();
     }
 
     let mut j = 0;
     let mut i = 0;
-    while i < buf.callbacks().len() {
-        let cb = buf.callbacks().at(i);
+    while i < buffer.callbacks().len() {
+        let cb = buffer.callbacks().at(i);
         let mut thecb = LUA_NOREF;
 
         let mut keep = false;
@@ -490,7 +495,7 @@ fn unload(mut buf: Buf, can_reload: bool) {
 
         if thecb != LUA_NOREF {
             let mut args = ArrayBuf::<1>::new();
-            args.push(Object::buffer(buf.handle));
+            args.push(Object::buffer(buffer.handle));
             let name = if keep { c"reload" } else { c"detach" };
             // Upstream discards the result here: a reload callback cannot
             // detach itself the way `on_lines` can.
@@ -498,17 +503,17 @@ fn unload(mut buf: Buf, can_reload: bool) {
         }
 
         if keep {
-            let moved = buf.callbacks().at(i);
-            buf.callbacks().set_at(j, moved);
+            let moved = buffer.callbacks().at(i);
+            buffer.callbacks().set_at(j, moved);
             j += 1;
         } else {
             callbacks_free(cb);
         }
         i += 1;
     }
-    buf.callbacks().set_len(j);
-    if buf.callbacks().len() == 0 {
-        buf.callbacks().destroy();
+    buffer.callbacks().set_len(j);
+    if buffer.callbacks().len() == 0 {
+        buffer.callbacks().destroy();
     }
 }
 
@@ -520,26 +525,26 @@ fn unload(mut buf: Buf, can_reload: bool) {
 /// # Safety
 /// `buf` must be a live buffer.
 pub unsafe fn buf_updates_send_changes(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     firstline: LineNr,
     num_added: int64_t,
     num_removed: int64_t,
 ) {
     // SAFETY: the caller's promise.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     send_changes(buf, firstline, num_added, num_removed);
 }
 
-fn send_changes(mut buf: Buf, firstline: LineNr, num_added: int64_t, num_removed: int64_t) {
-    let deleted = flush_deleted_bytes(buf);
+fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_removed: int64_t) {
+    let deleted = flush_deleted_bytes(buffer);
 
-    if !active(buf) {
+    if !active(buffer) {
         return;
     }
 
     // Don't send b:changedtick during 'inccommand' preview if "buf" is the
     // current buffer.
-    let send_tick = !(cmdpreview.get() && buf.raw() == curbuf.get());
+    let send_tick = !(cmdpreview.get() && buffer.raw() == curbuf.get());
 
     // If one of the channels doesn't work, put its ID here so we can remove
     // it later.
@@ -547,18 +552,18 @@ fn send_changes(mut buf: Buf, firstline: LineNr, num_added: int64_t, num_removed
 
     let mut arena = ARENA_EMPTY;
     let mut linedata = Array::EMPTY;
-    if num_added > 0 && buf.channels().len() != 0 {
+    if num_added > 0 && buffer.channels().len() != 0 {
         let n = num_added as size_t;
-        linedata = collect_lines(buf, n, firstline, &mut arena);
+        linedata = collect_lines(buffer, n, firstline, &mut arena);
     }
 
     // Notify each of the active channels.
     let mut i = 0;
-    while i < buf.channels().len() {
-        let channelid = buf.channels().at(i);
+    while i < buffer.channels().len() {
+        let channelid = buffer.channels().at(i);
         let mut args = ArrayBuf::<6>::new();
-        args.push(Object::buffer(buf.handle));
-        args.push(tick_obj(buf, send_tick));
+        args.push(Object::buffer(buffer.handle));
+        args.push(tick_obj(buffer, send_tick));
         // The first line that changed (zero-indexed), then the last.
         args.push(Object::integer((firstline - 1) as Integer));
         args.push(Object::integer((firstline - 1) as int64_t + num_removed));
@@ -577,7 +582,7 @@ fn send_changes(mut buf: Buf, firstline: LineNr, num_added: int64_t, num_removed
     // are frequent enough that a pile of them clears quickly.
     if badchannelid != 0 {
         elog_dead_channel(badchannelid);
-        unregister(buf, badchannelid);
+        unregister(buffer, badchannelid);
     }
 
     // The callbacks don't use linedata.
@@ -587,14 +592,14 @@ fn send_changes(mut buf: Buf, firstline: LineNr, num_added: int64_t, num_removed
     // Notify each of the active callbacks.
     let mut j = 0;
     let mut i = 0;
-    while i < buf.callbacks().len() {
-        let cb = buf.callbacks().at(i);
+    while i < buffer.callbacks().len() {
+        let cb = buffer.callbacks().at(i);
         let mut keep = true;
         if cb.on_lines != LUA_NOREF && (cb.preview || !cmdpreview.get()) {
             // Six arguments, or eight with the UTF sizes.
             let mut args = ArrayBuf::<8>::new();
-            args.push(Object::buffer(buf.handle));
-            args.push(tick_obj(buf, send_tick));
+            args.push(Object::buffer(buffer.handle));
+            args.push(tick_obj(buffer, send_tick));
             // First changed line, last changed line, last line of the new
             // range, then the byte count of the previous contents.
             args.push(Object::integer((firstline - 1) as Integer));
@@ -612,20 +617,20 @@ fn send_changes(mut buf: Buf, firstline: LineNr, num_added: int64_t, num_removed
             }
         }
         if keep {
-            let moved = buf.callbacks().at(i);
-            buf.callbacks().set_at(j, moved);
+            let moved = buffer.callbacks().at(i);
+            buffer.callbacks().set_at(j, moved);
             j += 1;
         }
         i += 1;
     }
-    buf.callbacks().set_len(j);
+    buffer.callbacks().set_len(j);
 }
 
 /// `b:changedtick` when it is being sent, nil when 'inccommand' preview is
 /// suppressing it.
-fn tick_obj(buf: Buf, send_tick: bool) -> Object {
+fn tick_obj(buffer: Buf, send_tick: bool) -> Object {
     if send_tick {
-        Object::integer(changedtick(buf))
+        Object::integer(changedtick(buffer))
     } else {
         Object::Nil
     }
@@ -637,7 +642,7 @@ fn tick_obj(buf: Buf, send_tick: bool) -> Object {
 /// # Safety
 /// `buf` must be a live buffer.
 pub unsafe fn buf_updates_send_splice(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     start_row: c_int,
     start_col: ColNr,
     start_byte: BCount,
@@ -649,7 +654,7 @@ pub unsafe fn buf_updates_send_splice(
     new_byte: BCount,
 ) {
     // SAFETY: the caller's promise.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     let start = Corner::new(start_row, start_col, start_byte);
     let old = Corner::new(old_row, old_col, old_byte);
     let new = Corner::new(new_row, new_col, new_byte);
@@ -672,21 +677,21 @@ impl Corner {
     }
 }
 
-fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
-    if !active(buf) || (old.byte == 0 && new.byte == 0) {
+fn send_splice(mut buffer: Buf, start: Corner, old: Corner, new: Corner) {
+    if !active(buffer) || (old.byte == 0 && new.byte == 0) {
         return;
     }
 
     // Notify each of the active callbacks.
     let mut j = 0;
     let mut i = 0;
-    while i < buf.callbacks().len() {
-        let cb = buf.callbacks().at(i);
+    while i < buffer.callbacks().len() {
+        let cb = buffer.callbacks().at(i);
         let mut keep = true;
         if cb.on_bytes != LUA_NOREF && (cb.preview || !cmdpreview.get()) {
             let mut args = ArrayBuf::<11>::new();
-            args.push(Object::buffer(buf.handle));
-            args.push(Object::integer(changedtick(buf)));
+            args.push(Object::buffer(buffer.handle));
+            args.push(Object::integer(changedtick(buffer)));
             for corner in [start, old, new] {
                 args.push(Object::integer(corner.row as Integer));
                 args.push(Object::integer(corner.col as Integer));
@@ -699,13 +704,13 @@ fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
             }
         }
         if keep {
-            let moved = buf.callbacks().at(i);
-            buf.callbacks().set_at(j, moved);
+            let moved = buffer.callbacks().at(i);
+            buffer.callbacks().set_at(j, moved);
             j += 1;
         }
         i += 1;
     }
-    buf.callbacks().set_len(j);
+    buffer.callbacks().set_len(j);
 }
 
 /// `b:changedtick` moved without the text moving.
@@ -716,30 +721,30 @@ fn send_splice(mut buf: Buf, start: Corner, old: Corner, new: Corner) {
 /// false)`, which suppresses the event outright.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_updates_changedtick(buf: *mut Buffer) {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_updates_changedtick(buffer: *mut Buffer) {
     // SAFETY: the caller's promise.
-    changedtick_event(unsafe { Buf::new(buf) });
+    changedtick_event(unsafe { Buf::new(buffer) });
 }
 
-fn changedtick_event(mut buf: Buf) {
+fn changedtick_event(mut buffer: Buf) {
     // Notify each of the active channels.
     let mut i = 0;
-    while i < buf.channels().len() {
-        let channel_id = buf.channels().at(i);
-        changedtick_single(buf, channel_id);
+    while i < buffer.channels().len() {
+        let channel_id = buffer.channels().at(i);
+        changedtick_single(buffer, channel_id);
         i += 1;
     }
 
     let mut j = 0;
     let mut i = 0;
-    while i < buf.callbacks().len() {
-        let cb = buf.callbacks().at(i);
+    while i < buffer.callbacks().len() {
+        let cb = buffer.callbacks().at(i);
         let mut keep = true;
         if cb.on_changedtick != LUA_NOREF {
             let mut args = ArrayBuf::<2>::new();
-            args.push(Object::buffer(buf.handle));
-            args.push(Object::integer(changedtick(buf)));
+            args.push(Object::buffer(buffer.handle));
+            args.push(Object::integer(changedtick(buffer)));
             let res = call_ref(cb.on_changedtick, c"changedtick", args.array(), kRetNilBool);
             if truthy(res) {
                 callbacks_free(cb);
@@ -747,28 +752,28 @@ fn changedtick_event(mut buf: Buf) {
             }
         }
         if keep {
-            let moved = buf.callbacks().at(i);
-            buf.callbacks().set_at(j, moved);
+            let moved = buffer.callbacks().at(i);
+            buffer.callbacks().set_at(j, moved);
             j += 1;
         }
         i += 1;
     }
-    buf.callbacks().set_len(j);
+    buffer.callbacks().set_len(j);
 }
 
 /// `nvim_buf_changedtick_event` for one channel.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-pub unsafe fn buf_updates_changedtick_single(buf: *mut Buffer, channel_id: uint64_t) {
+/// `buffer` must be a live buffer.
+pub unsafe fn buf_updates_changedtick_single(buffer: *mut Buffer, channel_id: uint64_t) {
     // SAFETY: the caller's promise.
-    changedtick_single(unsafe { Buf::new(buf) }, channel_id);
+    changedtick_single(unsafe { Buf::new(buffer) }, channel_id);
 }
 
-fn changedtick_single(buf: Buf, channel_id: uint64_t) {
+fn changedtick_single(buffer: Buf, channel_id: uint64_t) {
     let mut args = ArrayBuf::<2>::new();
-    args.push(Object::buffer(buf.handle));
-    args.push(Object::integer(changedtick(buf)));
+    args.push(Object::buffer(buffer.handle));
+    args.push(Object::integer(changedtick(buffer)));
     // Don't try and clean up dead channels here.
     send_event(channel_id, c"nvim_buf_changedtick_event", args.array());
 }

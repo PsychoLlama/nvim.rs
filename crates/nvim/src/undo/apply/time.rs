@@ -188,19 +188,19 @@ pub unsafe fn undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
 }
 
 /// Reads the counters off the buffer and turns `step` into an aim.
-fn undo_aim(buf: Buf, step: c_int, sec: bool, file: bool, absolute: bool) -> (Aim, c_int) {
+fn undo_aim(buffer: Buf, step: c_int, sec: bool, file: bool, absolute: bool) -> (Aim, c_int) {
     let counters = UndoCounters {
-        time_cur: buf.b_u_time_cur,
-        seq_cur: buf.b_u_seq_cur,
-        seq_last: buf.b_u_seq_last,
-        save_nr_cur: buf.b_u_save_nr_cur,
-        save_nr_last: buf.b_u_save_nr_last,
+        time_cur: buffer.b_u_time_cur,
+        seq_cur: buffer.b_u_seq_cur,
+        seq_last: buffer.b_u_seq_last,
+        save_nr_cur: buffer.b_u_save_nr_cur,
+        save_nr_last: buffer.b_u_save_nr_last,
     };
     // ":earlier 1f" needs to know whether the change just above the current
     // one is itself a file write.
-    let above = match buf.header(buf.b_u_curhead) {
-        Some(curhead) => buf.header(curhead.uh_next),
-        None => buf.header(buf.b_u_newhead),
+    let above = match buffer.header(buffer.b_u_curhead) {
+        Some(curhead) => buffer.header(curhead.uh_next),
+        None => buffer.header(buffer.b_u_newhead),
     };
     aim_for(
         counters,
@@ -294,7 +294,7 @@ fn aim_for(
 ///
 /// Answers `None` once it has reported that there is nowhere to go.
 fn undo_search(
-    buf: Buf,
+    buffer: Buf,
     step: c_int,
     absolute: bool,
     mut aim: Aim,
@@ -315,7 +315,7 @@ fn undo_search(
     }
     let mut closest = Closest {
         val: closest_start,
-        seq: buf.b_u_seq_cur,
+        seq: buffer.b_u_seq_cur,
         start: closest_start,
     };
     let mut above = false;
@@ -324,12 +324,20 @@ fn undo_search(
         // The desired state can be anywhere in the tree, so the walk goes all
         // over it, stamping as it goes.
         marks = Marks::next();
-        let start = if buf.b_u_curhead.is_some() {
-            buf.b_u_curhead
+        let start = if buffer.b_u_curhead.is_some() {
+            buffer.b_u_curhead
         } else {
-            buf.b_u_newhead // at a leaf of the tree
+            buffer.b_u_newhead // at a leaf of the tree
         };
-        if walk_to_target(buf, start, step, round == 1, &mut aim, &mut closest, marks) {
+        if walk_to_target(
+            buffer,
+            start,
+            step,
+            round == 1,
+            &mut aim,
+            &mut closest,
+            marks,
+        ) {
             return Some(UndoDest {
                 target: aim.target,
                 marks,
@@ -380,7 +388,7 @@ fn undo_search(
 /// rewritten to the target's *sequence number*, which is a different number
 /// whenever the aim was a timestamp or a file write.
 fn walk_to_target(
-    buf: Buf,
+    buffer: Buf,
     start: UndoLink,
     step: c_int,
     scoring: bool,
@@ -388,11 +396,14 @@ fn walk_to_target(
     closest: &mut Closest,
     marks: Marks,
 ) -> bool {
-    for visit in buf.tree_walk(start, marks).stopping_above(buf.b_u_curhead) {
+    for visit in buffer
+        .tree_walk(start, marks)
+        .stopping_above(buffer.b_u_curhead)
+    {
         let uhp = visit.header;
         let val = aim.value_of(&uhp);
         if scoring {
-            closest.consider(*aim, val, uhp.uh_seq, step, buf.b_u_seq_cur);
+            closest.consider(*aim, val, uhp.uh_seq, step, buffer.b_u_seq_cur);
         }
         // Stop on a match — but a timestamp match keeps looking, because the
         // best sequence number carrying that timestamp may be further on.
@@ -499,41 +510,41 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
 ///
 /// # Safety
 ///
-/// `buf` is the buffer `fork` belongs to, and nothing frees a header while
+/// `buffer` is the buffer `fork` belongs to, and nothing frees a header while
 /// this runs.
-unsafe fn take_marked_branch(mut buf: Buf, fork: Header, mark: c_int) -> Header {
+unsafe fn take_marked_branch(mut buffer: Buf, fork: Header, mark: c_int) -> Header {
     // The search marks a run of consecutive alternates; the far end of that
     // run along `uh_alt_next` is the branch it wants.
     // SAFETY: a live buffer that owns these headers, by the contract above.
-    let head = unsafe { furthest_marked(buf, fork, mark, |uh| uh.uh_alt_prev) };
+    let head = unsafe { furthest_marked(buffer, fork, mark, |uh| uh.uh_alt_prev) };
     // SAFETY: as above.
-    let mut last = unsafe { furthest_marked(buf, head, mark, |uh| uh.uh_alt_next) };
+    let mut last = unsafe { furthest_marked(buffer, head, mark, |uh| uh.uh_alt_next) };
     if last == head {
         return head;
     }
     // The whole list of alternates may start further back than the marked
     // run does, and that head is where the branch has to end up.
     // SAFETY: as above.
-    let mut first = unsafe { header_chain(buf, head.link(), |uh| uh.uh_alt_prev) }
+    let mut first = unsafe { header_chain(buffer, head.link(), |uh| uh.uh_alt_prev) }
         .last()
         .unwrap_or(head);
     // Unlink it from where it sits... (`last != head` means it was reached
     // along `uh_alt_next`, so it has a predecessor; the C dereferences that
     // without asking.)
-    if let Some(mut after) = buf.header(last.uh_alt_next) {
+    if let Some(mut after) = buffer.header(last.uh_alt_next) {
         after.uh_alt_prev = last.uh_alt_prev;
     }
-    if let Some(mut before) = buf.header(last.uh_alt_prev) {
+    if let Some(mut before) = buffer.header(last.uh_alt_prev) {
         before.uh_alt_next = last.uh_alt_next;
     }
     // ...and splice it in at the front.
     last.uh_alt_prev = UndoLink::NONE;
     last.uh_alt_next = first.link();
     first.uh_alt_prev = last.link();
-    if buf.b_u_oldhead == first.link() {
-        buf.b_u_oldhead = last.link();
+    if buffer.b_u_oldhead == first.link() {
+        buffer.b_u_oldhead = last.link();
     }
-    if let Some(mut next) = buf.header(last.uh_next) {
+    if let Some(mut next) = buffer.header(last.uh_next) {
         next.uh_prev = last.link();
     }
     last
@@ -544,17 +555,17 @@ unsafe fn take_marked_branch(mut buf: Buf, fork: Header, mark: c_int) -> Header 
 ///
 /// # Safety
 ///
-/// `buf` is the buffer `uhp` belongs to, and nothing frees a header while
+/// `buffer` is the buffer `uhp` belongs to, and nothing frees a header while
 /// this runs.
 unsafe fn furthest_marked(
-    buf: Buf,
+    buffer: Buf,
     uhp: Header,
     mark: c_int,
     step: fn(&UndoHeader) -> UndoLink,
 ) -> Header {
     // The chain always yields its start; every further hop has to be marked.
     // SAFETY: the buffer owns these headers, by the contract above.
-    unsafe { header_chain(buf, uhp.link(), step) }
+    unsafe { header_chain(buffer, uhp.link(), step) }
         .skip(1)
         .take_while(|uh| uh.uh_walk == mark)
         .last()

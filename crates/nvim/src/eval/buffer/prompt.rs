@@ -205,23 +205,30 @@ pub unsafe fn f_prompt_setprompt(argvars: *mut TypVal, _rettv: *mut TypVal, _fpt
 /// Put `new_prompt` in place of the old one on the buffer's prompt line.
 ///
 /// # Safety
-/// `buf` must be a live, loaded prompt buffer and `new_prompt` a
+/// `buffer` must be a live, loaded prompt buffer and `new_prompt` a
 /// NUL-terminated string of `new_prompt_len` bytes.
-unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_prompt_len: c_int) {
+unsafe fn rewrite_prompt_line(mut buffer: Buf, new_prompt: *const c_char, new_prompt_len: c_int) {
     // SAFETY: the caller's obligation.
-    if buf.b_prompt_start.mark.lnum < 1 || buf.b_prompt_start.mark.lnum > cur_buf().line_count() {
+    if buffer.b_prompt_start.mark.lnum < 1
+        || buffer.b_prompt_start.mark.lnum > cur_buf().line_count()
+    {
         // MAX(1, MIN(lnum, line_count)); spelled with min-then-max
         // because an empty buffer makes the two bounds cross.
-        buf.b_prompt_start.mark.lnum = buf.b_prompt_start.mark.lnum.min(buf.line_count()).max(1);
+        buffer.b_prompt_start.mark.lnum = buffer
+            .b_prompt_start
+            .mark
+            .lnum
+            .min(buffer.line_count())
+            .max(1);
         cur_buf().b_prompt_append_new_line = true;
     }
-    let prompt_lno = buf.b_prompt_start.mark.lnum;
-    let old_prompt = buf_prompt_text(buf);
-    let old_line = unsafe { buf.line(prompt_lno) }.raw();
-    let old_line_len = unsafe { buf.line_len(prompt_lno) };
+    let prompt_lno = buffer.b_prompt_start.mark.lnum;
+    let old_prompt = buf_prompt_text(buffer);
+    let old_line = unsafe { buffer.line(prompt_lno) }.raw();
+    let old_line_len = unsafe { buffer.line_len(prompt_lno) };
     let old_prompt_len = len_as_int(unsafe { cstr::bytes_at(old_prompt) }.len());
     let mut cursor_col = cur_win().w_cursor.col;
-    let prompt_col = buf.b_prompt_start.mark.col;
+    let prompt_col = buffer.b_prompt_start.mark.col;
     // A byte offset into `old_line`. Every use is guarded by the
     // `prompt_col >= old_prompt_len` test below — `&&` short-circuits —
     // and a prompt is never longer than the line it sits on, so no
@@ -242,7 +249,7 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
         };
     // The splice both arms report is the same shape: the whole of what was
     // there, replaced by the new prompt.
-    let (raw, row) = (buf.raw(), prompt_lno - 1);
+    let (raw, row) = (buffer.raw(), prompt_lno - 1);
     let splice = |old_len: c_int| {
         // SAFETY: a live buffer and a line that is inside it.
         unsafe { extmark_splice_cols(raw, row, 0, old_len, new_prompt_len, kExtmarkNoUndo) };
@@ -261,10 +268,10 @@ unsafe fn rewrite_prompt_line(mut buf: Buf, new_prompt: *const c_char, new_promp
         cursor_col = new_prompt_len;
     }
     let mut win = cur_win();
-    if win.w_buffer == buf.raw() && win.w_cursor.lnum == prompt_lno {
+    if win.w_buffer == buffer.raw() && win.w_cursor.lnum == prompt_lno {
         win.w_cursor.col = cursor_col;
         check_cursor_col(win);
     }
-    changed_lines(buf, prompt_lno, 0, prompt_lno + 1, 0, true);
-    u_clearallandblockfree(buf);
+    changed_lines(buffer, prompt_lno, 0, prompt_lno + 1, 0, true);
+    u_clearallandblockfree(buffer);
 }

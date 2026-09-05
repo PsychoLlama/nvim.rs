@@ -66,11 +66,11 @@ fn int_value(n: Integer) -> Object {
 ///
 /// # Safety
 ///
-/// `name` must be a valid string; `buf`, `win` and `arena` must be live.
+/// `name` must be a valid string; `buffer`, `win` and `arena` must be live.
 pub(crate) unsafe fn get_vimoption(
     name: String_0,
     opt_flags: OptionSetFlags,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     win: *mut Window,
     arena: *mut Arena,
     err: &mut Error,
@@ -87,7 +87,7 @@ pub(crate) unsafe fn get_vimoption(
             items: ptr::null_mut::<KeyValuePair>(),
         };
     }
-    unsafe { vimoption2dict(opt_idx, opt_flags, buf, win, arena) }
+    unsafe { vimoption2dict(opt_idx, opt_flags, buffer, win, arena) }
 }
 
 /// Every option's info dictionary, keyed by full name.
@@ -122,12 +122,12 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
 ///
 /// # Safety
 ///
-/// `buf` and `win` must be live unless `opt_flags` is exactly
+/// `buffer` and `win` must be live unless `opt_flags` is exactly
 /// `OptionSetFlags::GLOBAL`.
 unsafe fn last_set(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     win: *mut Window,
 ) -> ScriptCtx {
     let opt = get_option(opt_idx);
@@ -138,7 +138,7 @@ unsafe fn last_set(
     let mut script_ctx = ScriptCtx::NONE;
     if option_has_scope(opt_idx, kOptScopeBuf) {
         script_ctx =
-            unsafe { (*buf).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize] };
+            unsafe { (*buffer).b_p_script_ctx[opt.scope_idx[kOptScopeBuf as usize] as usize] };
     }
     if option_has_scope(opt_idx, kOptScopeWin) {
         script_ctx = unsafe {
@@ -155,11 +155,11 @@ unsafe fn last_set(
 ///
 /// # Safety
 ///
-/// `buf`, `win` and `arena` must be live.
+/// `buffer`, `win` and `arena` must be live.
 pub(crate) unsafe fn vimoption2dict(
     opt_idx: OptIndex,
     opt_flags: OptionSetFlags,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     win: *mut Window,
     arena: *mut Arena,
 ) -> ApiDict {
@@ -176,7 +176,7 @@ pub(crate) unsafe fn vimoption2dict(
     } else {
         c"global"
     };
-    let script_ctx = unsafe { last_set(opt_idx, opt_flags, buf, win) };
+    let script_ctx = unsafe { last_set(opt_idx, opt_flags, buffer, win) };
     let type_name = optval_type_name(option_get_type(opt_idx));
 
     // The thirteen keys, in the order the API reports them. Building the

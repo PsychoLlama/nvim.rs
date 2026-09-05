@@ -239,7 +239,7 @@ pub unsafe fn mark_adjust_nofold(
 /// `buf` must be a live buffer, and the editor's window and tab page lists
 /// must be live.
 pub unsafe fn mark_adjust_buf(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
@@ -256,7 +256,7 @@ pub unsafe fn mark_adjust_buf(
     }
 
     // SAFETY: the caller promised a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buf = unsafe { Buf::new(buffer) };
     let fnum = buf.handle as c_int;
     let shift = LineShift {
         line1,
@@ -421,10 +421,10 @@ pub unsafe fn mark_adjust_buf(
 ///
 /// An ordinary edit moves every window's view except the current one's; a
 /// terminal splice instead moves the views of the windows whose cursor is not
-/// already on `buf`'s last line.
-fn follows(win: Win, by_term: bool, buf: Buf) -> bool {
+/// already on `buffer`'s last line.
+fn follows(win: Win, by_term: bool, buffer: Buf) -> bool {
     if by_term {
-        win.w_cursor.lnum < buf.b_ml.ml_line_count
+        win.w_cursor.lnum < buffer.b_ml.ml_line_count
     } else {
         !win.is_current()
     }

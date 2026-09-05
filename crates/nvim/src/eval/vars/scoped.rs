@@ -37,7 +37,7 @@ const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
 ///
 /// # Safety
 /// `rettv` is writable and holds nothing; `deftv` is a live value;
-/// `tabpage`/`win`/`buf` are live or NULL.
+/// `tabpage`/`win`/`buffer` are live or NULL.
 unsafe fn get_var_from(
     mut varname: *const c_char,
     rettv: *mut TypVal,
@@ -45,10 +45,10 @@ unsafe fn get_var_from(
     htname: c_int,
     tabpage: *mut Tabpage,
     win: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
 ) {
     let mut done = false;
-    let do_change_curbuf = !buf.is_null() && htname == b'b' as c_int;
+    let do_change_curbuf = !buffer.is_null() && htname == b'b' as c_int;
 
     let _no_emsg = Suppress::emsg();
     // SAFETY: the caller's obligation -- a writable value holding nothing.
@@ -59,7 +59,7 @@ unsafe fn get_var_from(
     if !varname.is_null()
         && !tabpage.is_null()
         && !win.is_null()
-        && (htname != b'b' as c_int || !buf.is_null())
+        && (htname != b'b' as c_int || !buffer.is_null())
     {
         // Make `win` current, and its tab page with it, or the window is
         // not valid. Only when needed, since it blocks autocommands --
@@ -76,7 +76,7 @@ unsafe fn get_var_from(
                 // An option: read it from the right buffer.
                 let save_curbuf = curbuf.get();
                 if do_change_curbuf {
-                    curbuf.set(buf);
+                    curbuf.set(buffer);
                 }
                 if unsafe { *varname.add(1) } == NUL as c_char {
                     // A bare "&": every window- or buffer-local option.
@@ -92,7 +92,7 @@ unsafe fn get_var_from(
             } else if lead == NUL as u8 {
                 // An empty name: the whole scope as a dictionary.
                 let v: *const ScopeDictDictItem = match htname as u8 {
-                    b'b' => unsafe { &raw mut (*buf).b_bufvar },
+                    b'b' => unsafe { &raw mut (*buffer).b_bufvar },
                     b'w' => unsafe { &raw mut (*win).w_winvar },
                     _ => unsafe { &raw mut (*tabpage).tp_winvar },
                 };
@@ -100,7 +100,7 @@ unsafe fn get_var_from(
                 done = true;
             } else {
                 let ht = match htname as u8 {
-                    b'b' => unsafe { &raw mut (*(*buf).b_vars).dv_hashtab },
+                    b'b' => unsafe { &raw mut (*(*buffer).b_vars).dv_hashtab },
                     b'w' => unsafe { &raw mut (*(*win).w_vars).dv_hashtab },
                     _ => unsafe { &raw mut (*(*tabpage).tp_vars).dv_hashtab },
                 };

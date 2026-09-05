@@ -24,40 +24,45 @@ use crate::types::{Buffer, ColNr, MTKey, MarkTreeIter, uint32_t};
 /// Remove the extmark `id` of namespace `ns_id`.
 ///
 /// Answers false when there is no such mark.
-pub unsafe fn extmark_del_id(buf: *mut Buffer, ns_id: uint32_t, id: uint32_t) -> bool {
+pub unsafe fn extmark_del_id(buffer: *mut Buffer, ns_id: uint32_t, id: uint32_t) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
-    del_id(unsafe { Buf::new(buf) }, ns_id, id)
+    del_id(unsafe { Buf::new(buffer) }, ns_id, id)
 }
 
 /// [`extmark_del_id`] for the callers that already hold a [`Buf`].
-pub(crate) fn del_id(mut buf: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
+pub(crate) fn del_id(mut buffer: Buf, ns_id: uint32_t, id: uint32_t) -> bool {
     let mut itr = MarkTreeIter::default();
-    let key = tree_lookup_ns(buf.marktree(), ns_id, id, false, Some(&mut itr));
+    let key = tree_lookup_ns(buffer.marktree(), ns_id, id, false, Some(&mut itr));
     if key.id != 0 {
-        del(buf, &mut itr, key, false);
+        del(buffer, &mut itr, key, false);
     }
     key.id > 0
 }
 
 /// Remove the (possibly paired) extmark `key` that `itr` is on.
-pub unsafe fn extmark_del(buf: *mut Buffer, itr: *mut MarkTreeIter, key: MTKey, restore: bool) {
+pub unsafe fn extmark_del(buffer: *mut Buffer, itr: *mut MarkTreeIter, key: MTKey, restore: bool) {
     // SAFETY: the caller's promise -- a live buffer and an iterator
     // positioned in its marktree, both of which outlive the call.
-    del(unsafe { Buf::new(buf) }, unsafe { &mut *itr }, key, restore);
+    del(
+        unsafe { Buf::new(buffer) },
+        unsafe { &mut *itr },
+        key,
+        restore,
+    );
 }
 
 /// [`extmark_del`] for the callers that already hold the two.
-pub(crate) fn del(mut buf: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
+pub(crate) fn del(mut buffer: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore: bool) {
     debug_assert!(key.pos.row >= 0, "key.pos.row >= 0");
 
     let mut key2 = key;
-    let other = tree_del_itr(buf.marktree(), itr, false);
+    let other = tree_del_itr(buffer.marktree(), itr, false);
     if other != 0 {
-        key2 = tree_lookup(buf.marktree(), other, Some(itr));
+        key2 = tree_lookup(buffer.marktree(), other, Some(itr));
         debug_assert!(key2.pos.row >= 0, "key2.pos.row >= 0");
-        tree_del_itr(buf.marktree(), itr, false);
+        tree_del_itr(buffer.marktree(), itr, false);
         if restore {
-            itr_get(buf.marktree(), key.pos.row, key.pos.col, itr);
+            itr_get(buffer.marktree(), key.pos.row, key.pos.col, itr);
         }
     }
 
@@ -69,7 +74,7 @@ pub(crate) fn del(mut buf: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore:
                 mem::swap(&mut key, &mut key2);
             }
             decor_remove(
-                buf,
+                buffer,
                 key.pos.row,
                 key2.pos.row,
                 key.pos.col,
@@ -79,7 +84,7 @@ pub(crate) fn del(mut buf: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore:
         }
     }
 
-    invalidate_decor_state(buf);
+    invalidate_decor_state(buffer);
 
     // TODO(bfredl): delete it from the current undo header, opportunistically?
 }
@@ -87,7 +92,7 @@ pub(crate) fn del(mut buf: Buf, itr: &mut MarkTreeIter, mut key: MTKey, restore:
 /// Free every mark of namespace `ns_id` (or of every namespace, when it is 0)
 /// between two positions.
 pub unsafe fn extmark_clear(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     ns_id: uint32_t,
     l_row: c_int,
     l_col: ColNr,
@@ -95,7 +100,7 @@ pub unsafe fn extmark_clear(
     u_col: ColNr,
 ) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buf = unsafe { Buf::new(buffer) };
     if buf.extmark_ns().is_empty() {
         return false;
     }

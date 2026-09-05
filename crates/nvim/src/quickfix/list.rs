@@ -437,14 +437,14 @@ pub(crate) unsafe fn qf_free(qfl: *mut QfList) {
     unsafe { (*qfl).qf_changedtick = 0 };
 }
 
-/// Move the line numbers of every entry naming `buf` after an edit.
+/// Move the line numbers of every entry naming `buffer` after an edit.
 ///
-/// `buf` is the buffer that changed; `wp` names the window whose location
+/// `buffer` is the buffer that changed; `wp` names the window whose location
 /// list to walk, or is `None` for the quickfix stack. Answers whether any
 /// entry named the buffer at all — the caller clears the buffer's
 /// "has entries" flag when none did.
 pub fn qf_mark_adjust(
-    buf: Buf,
+    buffer: Buf,
     window: Option<Win>,
     line1: LineNr,
     line2: LineNr,
@@ -457,7 +457,7 @@ pub fn qf_mark_adjust(
     } else {
         BUF_HAS_LL_ENTRY
     };
-    if buf.b_has_qf_entry & wanted == 0 {
+    if buffer.b_has_qf_entry & wanted == 0 {
         return false;
     }
     let qi = match window {
@@ -472,7 +472,7 @@ pub fn qf_mark_adjust(
         let mut i = 1;
         let mut qfp = unsafe { (*qfl).qf_start };
         while !got_int.get() && i <= unsafe { (*qfl).qf_count } && !qfp.is_null() {
-            if unsafe { (*qfp).qf_fnum } == buf.handle {
+            if unsafe { (*qfp).qf_fnum } == buffer.handle {
                 found_one = true;
                 if unsafe { (*qfp).qf_lnum } >= line1 && unsafe { (*qfp).qf_lnum } <= line2 {
                     if amount == MAXLNUM as LineNr {

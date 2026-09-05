@@ -606,9 +606,9 @@ fn cur_win() -> Win {
 }
 
 /// `buf_hide()` as checked code.
-fn buf_hide(buf: *const Buffer) -> bool {
+fn buf_hide(buffer: *const Buffer) -> bool {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::buffer::buf_hide(buf) }
+    unsafe { crate::buffer::buf_hide(buffer) }
 }
 
 /// `do_bang()` as checked code.
@@ -709,9 +709,9 @@ fn readfile(
 }
 
 /// `u_compute_hash()` as checked code.
-fn u_compute_hash(buf: Buf, hash: *mut uint8_t) {
+fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::undo::u_compute_hash(buf, hash) }
+    unsafe { crate::undo::u_compute_hash(buffer, hash) }
 }
 
 /// `xfree()` as checked code.

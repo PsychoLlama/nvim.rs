@@ -204,12 +204,12 @@ impl Cells {
     /// Hand the finished screen row to the grid and set up the next one.
     ///
     /// # Safety
-    /// `window`, `buf`, `f` and `grid` must be live.
+    /// `window`, `buffer`, `f` and `grid` must be live.
     pub(super) unsafe fn finish_screen_line(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        buf: *mut Buffer,
+        buffer: *mut Buffer,
         f: &LineFrame,
         grid: GridView,
     ) -> Step {
@@ -244,7 +244,7 @@ impl Cells {
         if self.virt_line_index >= 0 {
             unsafe {
                 draw_virt_text_item(
-                    buf,
+                    buffer,
                     if self.virt_line_flags & kVLLeftcol as ::core::ffi::c_int != 0 {
                         0
                     } else {
@@ -262,7 +262,8 @@ impl Cells {
                 )
             };
         } else if wlv.filler_todo <= 0 {
-            draw_col = unsafe { draw_virt_text(window, buf, self.text_start_col, draw_col, wlv) };
+            draw_col =
+                unsafe { draw_virt_text(window, buffer, self.text_start_col, draw_col, wlv) };
         }
 
         unsafe {
@@ -347,12 +348,12 @@ impl Cells {
     /// texts and hand the row to the grid.
     ///
     /// # Safety
-    /// `window`, `buf` and `f` must be live.
+    /// `window`, `buffer` and `f` must be live.
     pub(super) unsafe fn finish_line(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        buf: *mut Buffer,
+        buffer: *mut Buffer,
         f: &LineFrame,
     ) {
         let mut line = linebuf();
@@ -405,7 +406,7 @@ impl Cells {
         if self.fold_vt.size > 0 {
             unsafe {
                 draw_virt_text_item(
-                    buf,
+                    buffer,
                     self.text_start_col,
                     self.fold_vt,
                     kHlModeCombine,
@@ -415,7 +416,7 @@ impl Cells {
                 )
             };
         }
-        wlv.col = unsafe { draw_virt_text(window, buf, self.text_start_col, wlv.col, wlv) };
+        wlv.col = unsafe { draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv) };
         // SLF_INC_VCOL fills grid->vcols[] with increasing columns, so
         // that "curswant" (or "coladd" under 'virtualedit') is right when
         // the user clicks past the end of the line.

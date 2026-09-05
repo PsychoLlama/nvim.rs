@@ -99,26 +99,26 @@ pub unsafe fn ex_undolist(_eap: *mut ExArg) {
 
 /// One branch of the tree as `undotree()` reports it: a list of dictionaries,
 /// newest change first, each carrying its own alternate branch under `alt`.
-fn eval_tree(buf: Buf, first: UndoLink) -> *mut List {
+fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
     // SAFETY: an empty list, whose length is not known up front.
     let list: *mut List = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     let mut link = first;
-    while let Some(uh) = buf.header(link) {
+    while let Some(uh) = buffer.header(link) {
         // SAFETY: a fresh dictionary.
         let dict: *mut Dict = unsafe { tv_dict_alloc() };
         dict_add_nr(dict, c"seq", VarNumber::from(uh.uh_seq));
         dict_add_nr(dict, c"time", uh.uh_time);
-        if uh.link() == buf.b_u_newhead {
+        if uh.link() == buffer.b_u_newhead {
             dict_add_nr(dict, c"newhead", 1);
         }
-        if uh.link() == buf.b_u_curhead {
+        if uh.link() == buffer.b_u_curhead {
             dict_add_nr(dict, c"curhead", 1);
         }
         if uh.uh_save_nr > 0 {
             dict_add_nr(dict, c"save", VarNumber::from(uh.uh_save_nr));
         }
         if uh.uh_alt_next.is_some() {
-            dict_add_list(dict, c"alt", eval_tree(buf, uh.uh_alt_next));
+            dict_add_list(dict, c"alt", eval_tree(buffer, uh.uh_alt_next));
         }
         // SAFETY: a list and a dictionary this function owns.
         unsafe { tv_list_append_dict(list, dict) };
@@ -185,7 +185,7 @@ pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     dict_add_list(dict, c"entries", eval_tree(buf, buf.b_u_oldhead));
 }
 
-/// The header a change to `buf` would be recorded against, making one if the
+/// The header a change to `buffer` would be recorded against, making one if the
 /// buffer has none yet.
 ///
 /// The address is what the caller wants — `extmark`'s undo list hangs off
@@ -194,17 +194,17 @@ pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer, and a live current window.
-pub unsafe fn u_force_get_undo_header(buf: *mut Buffer) -> *mut UndoHeader {
+/// `buffer` points at a live buffer, and a live current window.
+pub unsafe fn u_force_get_undo_header(buffer: *mut Buffer) -> *mut UndoHeader {
     // SAFETY: a live buffer, by the contract above.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     if let Some(uh) = b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
         return uh.raw();
     }
     // Nothing to hang it on: force an undo header, even for an empty change.
     let _ = u_savecommon(b, 0, 1, 1, true);
     // SAFETY: `u_savecommon` may have reloaded the buffer under us.
-    b = unsafe { Buf::new(buf) };
+    b = unsafe { Buf::new(buffer) };
     match b.header(b.b_u_curhead).or_else(|| b.header(b.b_u_newhead)) {
         Some(uh) => uh.raw(),
         None => {

@@ -444,14 +444,14 @@ impl Cells {
     /// it to [`Cells::new`] as well costs 5.8 M back, so it stays here only.
     ///
     /// # Safety
-    /// `window`, `buf` and everything in `f` must be live, and `wlv` must be the
+    /// `window`, `buffer` and everything in `f` must be live, and `wlv` must be the
     /// state the setup half filled in for this line.
     #[inline(always)]
     pub(crate) unsafe fn run(
         &mut self,
         wlv: &mut WinLineVars,
         window: Win,
-        buf: *mut Buffer,
+        buffer: *mut Buffer,
         f: &LineFrame,
     ) -> ::core::ffi::c_int {
         // SAFETY: the caller's window, buffer, line state and frame.
@@ -483,8 +483,9 @@ impl Cells {
                 // Still showing the '$' of a change command: stop at the
                 // cursor.
                 if dollar_vcol.get() >= 0 && self.in_curline && wlv.vcol >= window.w_virtcol {
-                    wlv.col =
-                        unsafe { draw_virt_text(window, buf, self.text_start_col, wlv.col, wlv) };
+                    wlv.col = unsafe {
+                        draw_virt_text(window, buffer, self.text_start_col, wlv.col, wlv)
+                    };
                     // Nothing after `col` is ours to clear.
                     unsafe { wlv_put_linebuf(window, wlv, wlv.col, false, self.bg_attr, 0) };
                     // Pretend the window is finished, except that
@@ -521,7 +522,7 @@ impl Cells {
                 unsafe { self.highlight_at_eol(wlv, window) };
 
                 if self.cell_char == NUL as ScreenChar {
-                    unsafe { self.finish_line(wlv, window, buf, f) };
+                    unsafe { self.finish_line(wlv, window, buffer, f) };
                     break 'row;
                 }
 
@@ -540,7 +541,7 @@ impl Cells {
             if !unsafe { self.row_is_full(wlv, window) } {
                 continue 'row;
             }
-            if unsafe { self.finish_screen_line(wlv, window, buf, f, grid) } == Step::Done {
+            if unsafe { self.finish_screen_line(wlv, window, buffer, f, grid) } == Step::Done {
                 break 'row;
             }
         }

@@ -335,70 +335,75 @@ pub unsafe fn ex_delmarks(eap: *mut ExArg) {
 ///
 /// # Safety
 /// The editor's globals must be live.
-unsafe fn delmarks_all(buf: Buf) {
+unsafe fn delmarks_all(buffer: Buf) {
     let mut gone = UNSET_POS;
     // Announced before the clearing, so an autocommand can still read the
     // buffer the mark was in. `'<`/`'>` are NOT announced and not cleared:
     // `clrallmarks` leaves the Visual range alone.
     for i in 0..NMARKS {
-        if buf.named_mark(i).is_set() {
-            // SAFETY: `gone` is on this stack and `buf` is live.
-            unsafe { do_markset_autocmd(mark_name('a' as c_int + i), &raw mut gone, buf.raw()) };
+        if buffer.named_mark(i).is_set() {
+            // SAFETY: `gone` is on this stack and `buffer` is live.
+            unsafe { do_markset_autocmd(mark_name('a' as c_int + i), &raw mut gone, buffer.raw()) };
         }
     }
     for (name, set) in [
-        ('"', buf.last_cursor().is_set()),
-        ('^', buf.last_insert().is_set()),
-        ('.', buf.last_change().is_set()),
-        ('[', buf.b_op_start.lnum != 0),
-        (']', buf.b_op_end.lnum != 0),
+        ('"', buffer.last_cursor().is_set()),
+        ('^', buffer.last_insert().is_set()),
+        ('.', buffer.last_change().is_set()),
+        ('[', buffer.b_op_start.lnum != 0),
+        (']', buffer.b_op_end.lnum != 0),
     ] {
         if set {
             // SAFETY: as above.
-            unsafe { do_markset_autocmd(name as c_char, &raw mut gone, buf.raw()) };
+            unsafe { do_markset_autocmd(name as c_char, &raw mut gone, buffer.raw()) };
         }
     }
-    // SAFETY: `buf` is live.
-    unsafe { clrallmarks(buf.raw(), os_time()) };
+    // SAFETY: `buffer` is live.
+    unsafe { clrallmarks(buffer.raw(), os_time()) };
 }
 
 /// One non-alphanumeric `:delmarks` name. `false` means the name is not a
 /// mark at all, which is E474 in the caller.
 ///
 /// # Safety
-/// `buf` must be live, `gone` must point at a live position, and the editor's
+/// `buffer` must be live, `gone` must point at a live position, and the editor's
 /// globals must be live.
-unsafe fn delmarks_one(buf: &mut Buf, name: c_char, gone: &mut Pos, timestamp: Timestamp) -> bool {
+unsafe fn delmarks_one(
+    buffer: &mut Buf,
+    name: c_char,
+    gone: &mut Pos,
+    timestamp: Timestamp,
+) -> bool {
     // `:` and a space are accepted and do nothing: the prompt mark is not the
     // user's to delete, and a space is how `:delmarks a b` separates names.
     let lnum = match c_int::from(name) {
-        34 => buf.last_cursor().lnum(),
-        94 => buf.last_insert().lnum(),
-        46 => buf.last_change().lnum(),
-        91 => buf.b_op_start.lnum,
-        93 => buf.b_op_end.lnum,
-        60 => buf.b_visual.vi_start.lnum,
-        62 => buf.b_visual.vi_end.lnum,
+        34 => buffer.last_cursor().lnum(),
+        94 => buffer.last_insert().lnum(),
+        46 => buffer.last_change().lnum(),
+        91 => buffer.b_op_start.lnum,
+        93 => buffer.b_op_end.lnum,
+        60 => buffer.b_visual.vi_start.lnum,
+        62 => buffer.b_visual.vi_end.lnum,
         58 | 32 => return true,
         _ => return false,
     };
     if lnum != 0 {
-        // SAFETY: `gone` and `buf` are the caller's, both live.
-        unsafe { do_markset_autocmd(name, &raw mut *gone, buf.raw()) };
+        // SAFETY: `gone` and `buffer` are the caller's, both live.
+        unsafe { do_markset_autocmd(name, &raw mut *gone, buffer.raw()) };
     }
     // The three fmark stores are released; the four positions are only
     // invalidated, because they own nothing.
     match c_int::from(name) {
         // SAFETY: the store is live and its allocation is the buffer's.
-        34 => unsafe { clear_fmark(buf.last_cursor().raw(), timestamp) },
+        34 => unsafe { clear_fmark(buffer.last_cursor().raw(), timestamp) },
         // SAFETY: as above.
-        94 => unsafe { clear_fmark(buf.last_insert().raw(), timestamp) },
+        94 => unsafe { clear_fmark(buffer.last_insert().raw(), timestamp) },
         // SAFETY: as above.
-        46 => unsafe { clear_fmark(buf.last_change().raw(), timestamp) },
-        91 => buf.b_op_start.lnum = 0,
-        93 => buf.b_op_end.lnum = 0,
-        60 => buf.b_visual.vi_start.lnum = 0,
-        _ => buf.b_visual.vi_end.lnum = 0,
+        46 => unsafe { clear_fmark(buffer.last_change().raw(), timestamp) },
+        91 => buffer.b_op_start.lnum = 0,
+        93 => buffer.b_op_end.lnum = 0,
+        60 => buffer.b_visual.vi_start.lnum = 0,
+        _ => buffer.b_visual.vi_end.lnum = 0,
     }
     true
 }

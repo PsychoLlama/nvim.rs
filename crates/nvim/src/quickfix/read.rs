@@ -101,7 +101,7 @@ impl Reader {
         enc: *mut c_char,
         efile: *const c_char,
         tv: *mut TypVal,
-        buf: Option<Buf>,
+        buffer: Option<Buf>,
         lnumfirst: LineNr,
         lnumlast: LineNr,
     ) -> Option<Reader> {
@@ -109,7 +109,7 @@ impl Reader {
             // Without a buffer the source is one of the two set below; a
             // caller that named none of the three gets the read failure
             // `Unusable` is, rather than a walk off a null buffer.
-            source: match buf {
+            source: match buffer {
                 Some(buf) => Source::Buffer {
                     buf,
                     lnum: lnumfirst,
@@ -470,7 +470,7 @@ pub(crate) unsafe fn qf_init_ext(
     qi: *mut QfInfo,
     mut qf_idx: c_int,
     efile: *const c_char,
-    buf: Option<Buf>,
+    buffer: Option<Buf>,
     tv: *mut TypVal,
     errorformat: *mut c_char,
     newlist: bool,
@@ -485,7 +485,7 @@ pub(crate) unsafe fn qf_init_ext(
 
     let mut old_last: *mut QfLine = ptr::null_mut();
     let mut retval = -1;
-    let reader = unsafe { Reader::open(enc, efile, tv, buf, lnumfirst, lnumlast) };
+    let reader = unsafe { Reader::open(enc, efile, tv, buffer, lnumfirst, lnumlast) };
 
     if let Some(mut reader) = reader {
         let mut adding = false;
@@ -508,7 +508,8 @@ pub(crate) unsafe fn qf_init_ext(
         // The two cheap tests stay in front of the buffer's option, as
         // C's `&&` chain had them.
         let local_efm = if errorformat == p_efm.get() && tv.is_null() {
-            buf.map(|buf| buf.b_p_efm)
+            buffer
+                .map(|buf| buf.b_p_efm)
                 .filter(|&efm| unsafe { *efm } != 0)
         } else {
             None

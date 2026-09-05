@@ -85,26 +85,26 @@ impl Buffers {
     }
 
     /// `close_buffer(NULL, buf, action, 0, 0)`.
-    fn close(&self, buf: *mut Buffer, action: c_int) {
+    fn close(&self, buffer: *mut Buffer, action: c_int) {
         // SAFETY: a buffer this case opened and has not yet wiped, and a
         // null window -- the spec's own call.
-        unsafe { close_buffer(None, Buf::new(buf), action, false, false) };
+        unsafe { close_buffer(None, Buf::new(buffer), action, false, false) };
         if action == DOBUF_WIPE as c_int {
-            self.opened.borrow_mut().retain(|&b| b != buf);
+            self.opened.borrow_mut().retain(|&b| b != buffer);
         }
     }
 
     /// The handle of a live buffer.
-    fn handle(&self, buf: *mut Buffer) -> c_int {
+    fn handle(&self, buffer: *mut Buffer) -> c_int {
         // SAFETY: a buffer this case opened and has not wiped.
-        unsafe { (*buf).handle }
+        unsafe { (*buffer).handle }
     }
 
     /// `buf_valid`, which is the whole of the first `describe` block.
-    fn valid(&self, buf: *mut Buffer) -> bool {
+    fn valid(&self, buffer: *mut Buffer) -> bool {
         // SAFETY: `buf_valid` walks the list and compares addresses; it
         // never dereferences the pointer it is given.
-        unsafe { buf_valid(buf) }
+        unsafe { buf_valid(buffer) }
     }
 
     /// `buflist_findpat(pat, NULL, unlisted, 0, 0)` — the buffer's handle,

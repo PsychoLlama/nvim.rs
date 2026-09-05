@@ -330,12 +330,12 @@ pub(crate) unsafe fn terminal_alloc(buf: *mut Buffer, opts: TerminalOptions) -> 
 ///
 /// Runs `TermOpen`, which can wipe the buffer or close the terminal
 /// outright — hence the re-check before touching either again.
-pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut Buffer) {
+pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buffer: *mut Buffer) {
     // SAFETY: the caller hands over the buffer's own terminal slot.
     let mut term = unsafe { Term::new(*termpp) };
     assert!(!term.raw().is_null(), "terminal_open without a terminal");
     // SAFETY: the caller hands over a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buf = unsafe { Buf::new(buffer) };
 
     // SAFETY: a plain save area `aucmd_prepbuf` fills in, restored below.
     let mut aco: AcoSave = unsafe { ::core::mem::zeroed() };
@@ -919,9 +919,9 @@ unsafe fn dict_lookup(dict: *mut Dict, key: *const c_char) -> Object {
 /// The result BORROWS the variable's own bytes, or is null. It must not be
 /// freed, and it stays valid only until something assigns to or unsets the
 /// variable.
-unsafe fn get_config_string(buf: *mut Buffer, key: *const c_char) -> *mut c_char {
-    // SAFETY: `buf` is a live buffer and `key` is NUL-terminated.
-    let mut obj = unsafe { dict_lookup((*buf).b_vars, key) };
+unsafe fn get_config_string(buffer: *mut Buffer, key: *const c_char) -> *mut c_char {
+    // SAFETY: `buffer` is a live buffer and `key` is NUL-terminated.
+    let mut obj = unsafe { dict_lookup((*buffer).b_vars, key) };
     if obj.is_nil() {
         // SAFETY: as above, against the global variables.
         obj = unsafe { dict_lookup(get_globvar_dict(), key) };

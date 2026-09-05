@@ -29,7 +29,7 @@ use crate::types::{Buffer, ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, uint3
 ///
 /// Must not be used during iteration.
 pub unsafe fn extmark_set(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     ns_id: uint32_t,
     idp: *mut uint32_t,
     row: c_int,
@@ -45,7 +45,7 @@ pub unsafe fn extmark_set(
 ) {
     // SAFETY: the caller's promise -- a live buffer, and an `idp` that is
     // NULL or points at a mark id.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buf = unsafe { Buf::new(buffer) };
     // Registers the namespace at 0 if it had none, which `extmark_clear`
     // reads as "this buffer has marks in it".
     ns_counter(buf.extmark_ns(), ns_id);
@@ -127,9 +127,15 @@ pub unsafe fn extmark_set(
 ///
 /// `static` upstream; only [`extmark_apply_undo`](super::extmark_apply_undo)
 /// reaches it.
-pub(crate) fn extmark_setraw(mut buf: Buf, mark: uint64_t, row: c_int, col: ColNr, invalid: bool) {
+pub(crate) fn extmark_setraw(
+    mut buffer: Buf,
+    mark: uint64_t,
+    row: c_int,
+    col: ColNr,
+    invalid: bool,
+) {
     let mut itr = MarkTreeIter::default();
-    let key = tree_lookup(buf.marktree(), mark, Some(&mut itr));
+    let key = tree_lookup(buffer.marktree(), mark, Some(&mut itr));
     let move_0 = key.pos.row != row || key.pos.col != col;
     if key.pos.row < 0 || (!move_0 && !invalid) {
         // The mark was deleted, or nothing has to change.
@@ -139,13 +145,13 @@ pub(crate) fn extmark_setraw(mut buf: Buf, mark: uint64_t, row: c_int, col: ColN
     // Only the position before the undo needs redrawing here; the position
     // after it is marked changed anyway.
     if !invalid && mt_decor_any(key) && key.pos.row != row {
-        redraw_decor(buf, key.pos.row, key.pos.row, key.pos.col, mt_decor(key));
+        redraw_decor(buffer, key.pos.row, key.pos.row, key.pos.col, mt_decor(key));
     }
 
     let mut row1 = 0;
     let mut row2 = 0;
     let mut altitr = itr;
-    let alt = tree_get_alt(buf.marktree(), key, Some(&mut altitr));
+    let alt = tree_get_alt(buffer.marktree(), key, Some(&mut altitr));
 
     if invalid {
         itr_rawkey(&mut itr).flags.clear(MtFlags::INVALID);
@@ -155,32 +161,40 @@ pub(crate) fn extmark_setraw(mut buf: Buf, mark: uint64_t, row: c_int, col: ColN
         } else {
             (&mut itr, key)
         };
-        tree_revise_meta(buf.marktree(), revised, old);
-    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buf.b_signcols.autom {
+        tree_revise_meta(buffer.marktree(), revised, old);
+    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buffer.b_signcols.autom
+    {
         row1 = alt.pos.row.min(key.pos.row.min(row));
         row2 = alt.pos.row.max(key.pos.row.max(row));
-        signcols_count_range(buf, row1, last_line().min(row2), 0, SignCountHalf::Subtract);
+        signcols_count_range(
+            buffer,
+            row1,
+            last_line().min(row2),
+            0,
+            SignCountHalf::Subtract,
+        );
     }
 
     if move_0 {
-        tree_move(buf.marktree(), &mut itr, row, col);
+        tree_move(buffer.marktree(), &mut itr, row, col);
     }
 
     if invalid {
         put_decor(
-            buf,
+            buffer,
             mt_decor(key),
             row.min(alt.pos.row),
             row.max(alt.pos.row),
         );
-    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buf.b_signcols.autom {
-        signcols_count_range(buf, row1, last_line().min(row2), 0, SignCountHalf::Add);
+    } else if !mt_invalid(key) && key.flags.has(MtFlags::DECOR_SIGNTEXT) && buffer.b_signcols.autom
+    {
+        signcols_count_range(buffer, row1, last_line().min(row2), 0, SignCountHalf::Add);
     }
 }
 
 /// `curbuf->b_ml.ml_line_count - 1`, the last row of the *current* buffer --
 /// which upstream reads here even though every other line in
-/// [`extmark_setraw`] is about `buf`.
+/// [`extmark_setraw`] is about `buffer`.
 fn last_line() -> c_int {
     current_buf().b_ml.ml_line_count - 1
 }

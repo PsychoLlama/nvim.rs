@@ -72,10 +72,10 @@ fn read_file(
     unsafe { readfile(ffname, fname, lnum, from, to, eap, flags, silent) }
 }
 
-/// Open the memline (and the swap file) for `buf`.
-fn open_memline(buf: Buf) -> Result<(), Failed> {
+/// Open the memline (and the swap file) for `buffer`.
+fn open_memline(buffer: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer.
-    unsafe { ml_open(buf.raw()) }
+    unsafe { ml_open(buffer.raw()) }
 }
 
 /// The mode bits of `fname`, negative when it cannot be stat'ed.
@@ -84,24 +84,24 @@ fn permissions_of(fname: *mut c_char) -> c_int {
     unsafe { os_getperm(fname) as c_int }
 }
 
-fn set_changed(buf: Buf) {
+fn set_changed(buffer: Buf) {
     // SAFETY: a live buffer, which survives the autocommands it may fire.
-    unsafe { changed(buf) };
+    unsafe { changed(buffer) };
 }
 
 /// Remember the file format the buffer was read with.
-fn save_fileformat(buf: Buf) {
-    save_file_ff(buf);
+fn save_fileformat(buffer: Buf) {
+    save_file_ff(buffer);
 }
 
-fn init_chartab(buf: Buf) {
+fn init_chartab(buffer: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `global` flag.
-    unsafe { buf_init_chartab(buf.raw(), false) };
+    unsafe { buf_init_chartab(buffer.raw(), false) };
 }
 
-fn parse_cindent_options(buf: Buf) {
+fn parse_cindent_options(buffer: Buf) {
     // SAFETY: a live buffer.
-    unsafe { parse_cino(buf) };
+    unsafe { parse_cino(buffer) };
 }
 
 /// Populate `*local-additions*` in `help.txt`.
@@ -110,15 +110,15 @@ fn collect_local_additions() {
     unsafe { get_local_additions() };
 }
 
-fn empty_buffer(buf: Buf) -> bool {
+fn empty_buffer(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_is_empty(buf.raw()) }
+    unsafe { buf_is_empty(buffer.raw()) }
 }
 
 /// `b:changedtick`.
-fn changedtick(buf: Buf) -> VarNumber {
+fn changedtick(buffer: Buf) -> VarNumber {
     // SAFETY: a live buffer.
-    buf_get_changedtick(buf)
+    buf_get_changedtick(buffer)
 }
 
 /// Leave the editor with exit code `n` -- never returns.
@@ -127,11 +127,11 @@ fn bail_out(n: c_int) {
     unsafe { getout(n) };
 }
 
-/// Fill in `eap` with the file format and encoding of `buf`, as the reload
+/// Fill in `eap` with the file format and encoding of `buffer`, as the reload
 /// paths need.
-fn prepare_exarg(eap: &mut ExArg, buf: Buf) {
+fn prepare_exarg(eap: &mut ExArg, buffer: Buf) {
     // SAFETY: a local to fill in.
-    unsafe { prep_exarg(eap, buf) };
+    unsafe { prep_exarg(eap, buffer) };
 }
 
 fn set_option_string(id: c_int, value: &'static CStr) {
@@ -144,32 +144,32 @@ fn set_option_false(id: c_int) {
 }
 
 /// Whether lines `a` and `b` of the two buffers differ.
-fn lines_differ(buf: Buf, lnum: LineNr) -> bool {
+fn lines_differ(buffer: Buf, lnum: LineNr) -> bool {
     // SAFETY: two live buffers and a line number inside both, the caller
     // having compared the line counts.
-    unsafe { !(cstr::eq(ml_get_buf(buf.raw(), lnum), ml_get(lnum))) }
+    unsafe { !(cstr::eq(ml_get_buf(buffer.raw(), lnum), ml_get(lnum))) }
 }
 
-/// Line `lnum` of `buf` as bytes, its terminating NUL excluded.
-fn line_bytes<'a>(buf: Buf, lnum: LineNr) -> &'a [u8] {
+/// Line `lnum` of `buffer` as bytes, its terminating NUL excluded.
+fn line_bytes<'a>(buffer: Buf, lnum: LineNr) -> &'a [u8] {
     // SAFETY: a live buffer and a line of it; `ml_get_buf` answers that many
     // readable bytes, and the line stays put until the memline is touched.
     unsafe {
-        let len = ml_get_buf_len(buf.raw(), lnum) as usize;
-        slice::from_raw_parts(ml_get_buf(buf.raw(), lnum).cast::<u8>(), len)
+        let len = ml_get_buf_len(buffer.raw(), lnum) as usize;
+        slice::from_raw_parts(ml_get_buf(buffer.raw(), lnum).cast::<u8>(), len)
     }
 }
 
-/// Run `f` with `buf` current and in a window, then restore what was current.
+/// Run `f` with `buffer` current and in a window, then restore what was current.
 ///
 /// The `aucmd_prepbuf`/`aucmd_restbuf` pair must always be matched, which is
 /// what makes this a scope rather than two calls: only a panic can skip the
 /// restore, and a panic already abandons the editor state upstream's `longjmp`
 /// would have unwound.
-fn in_buffer<R>(buf: Buf, f: impl FnOnce() -> R) -> R {
+fn in_buffer<R>(buffer: Buf, f: impl FnOnce() -> R) -> R {
     let mut aco = AcoSave::default();
     // SAFETY: a local to save into, and a live buffer.
-    unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer.raw()) };
     let answer = f();
     // SAFETY: the state `aucmd_prepbuf` has just saved.
     unsafe { aucmd_restbuf(&raw mut aco) };
@@ -253,16 +253,16 @@ fn read_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> Result<Loaded
     retval
 }
 
-/// Ensure buffer `buf` is loaded.
+/// Ensure buffer `buffer` is loaded.
 ///
-pub fn buf_ensure_loaded(buf: Buf) -> bool {
-    if !buf.b_ml.ml_mfp.is_null() {
+pub fn buf_ensure_loaded(buffer: Buf) -> bool {
+    if !buffer.b_ml.ml_mfp.is_null() {
         // already open (common case)
         return true;
     }
     // Make sure the buffer is in a window.  `status` can be OK or NOTDONE
     // (which also means ok/done).
-    let status = in_buffer(buf, || open_buffer_inner(false, ptr::null_mut(), 0));
+    let status = in_buffer(buffer, || open_buffer_inner(false, ptr::null_mut(), 0));
     status.is_ok()
 }
 
@@ -472,14 +472,14 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
 }
 
 /// The memfile's dirty state, `None` when the buffer has no memfile.
-fn dirty(buf: Buf) -> Option<MfDirty> {
-    let mfp = buf.b_ml.ml_mfp;
+fn dirty(buffer: Buf) -> Option<MfDirty> {
+    let mfp = buffer.b_ml.ml_mfp;
     // SAFETY: a live buffer's memfile is live.
     (!mfp.is_null()).then(|| unsafe { (*mfp).mf_dirty })
 }
 
-fn set_dirty(buf: Buf, state: MfDirty) {
-    let mfp = buf.b_ml.ml_mfp;
+fn set_dirty(buffer: Buf, state: MfDirty) {
+    let mfp = buffer.b_ml.ml_mfp;
     if !mfp.is_null() {
         // SAFETY: a live buffer's memfile is live.
         unsafe { (*mfp).mf_dirty = state };
@@ -489,11 +489,11 @@ fn set_dirty(buf: Buf, state: MfDirty) {
 // ---------------------------------------------------------------------------
 // Comparing a buffer with the file behind it
 
-/// Whether the file `buf` was read from now differs from what is in memory.
+/// Whether the file `buffer` was read from now differs from what is in memory.
 ///
 /// The file is read into a hidden dummy buffer and compared line by line.
 ///
-pub fn buf_contents_changed(buf: Buf) -> bool {
+pub fn buf_contents_changed(buffer: Buf) -> bool {
     let mut differ = true;
 
     // SAFETY: two null names ask for a nameless buffer.
@@ -505,16 +505,16 @@ pub fn buf_contents_changed(buf: Buf) -> bool {
     let newbuf = unsafe { Buf::new(newbuf) };
 
     let mut ea = ExArg::default();
-    prepare_exarg(&mut ea, buf);
+    prepare_exarg(&mut ea, buffer);
     in_buffer(newbuf, || {
         block_autocmds_now();
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
-        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as LineNr);
+        let (ffname, fname, last) = (buffer.b_ffname, buffer.b_fname, MAXLNUM as LineNr);
         if open_memline(cur_buf()).is_ok()
             && read_file(ffname, fname, 0, 0, last, &raw mut ea, read, false) == Ok(Loaded::Read)
-            && buf.line_count() == cur_buf().line_count()
+            && buffer.line_count() == cur_buf().line_count()
         {
-            differ = (1..=cur_buf().line_count()).any(|lnum| lines_differ(buf, lnum));
+            differ = (1..=cur_buf().line_count()).any(|lnum| lines_differ(buffer, lnum));
         }
         free(ea.cmd);
     });
@@ -555,22 +555,22 @@ pub unsafe fn buf_open_scratch(bufnr: Handle, bufname: *mut c_char) -> Result<()
     Ok(())
 }
 
-/// Read lines `start` to `end` of `buf` into `sb`, NL-separated, with the
+/// Read lines `start` to `end` of `buffer` into `sb`, NL-separated, with the
 /// buffer's embedded NULs translated back from newlines.
 ///
 /// # Safety
 /// `sb` must be a live `StringBuilder`, and `start` and `end` lines of the
 /// buffer.
-pub unsafe fn read_buffer_into(buf: Buf, start: LineNr, end: LineNr, sb: *mut StringBuilder) {
+pub unsafe fn read_buffer_into(buffer: Buf, start: LineNr, end: LineNr, sb: *mut StringBuilder) {
     debug_assert!(!sb.is_null(), "sb");
     // SAFETY: the caller's promise -- a live builder.
     let mut out = unsafe { Builder::of(&mut *sb) };
-    if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
+    if buffer.b_ml.ml_flags.has(MlFlags::EMPTY) {
         return;
     }
 
     let mut lnum = start;
-    let mut line = line_bytes(buf, lnum);
+    let mut line = line_bytes(buffer, lnum);
     let mut written = 0usize;
     loop {
         let len = if line.is_empty() {
@@ -592,8 +592,9 @@ pub unsafe fn read_buffer_into(buf: Buf, start: LineNr, end: LineNr, sb: *mut St
         if len == line.len() - written {
             // Finished a line, add a NL, unless this line should not have one.
             if lnum != end
-                || buf.b_p_bin == 0 && buf.b_p_fixeol != 0
-                || lnum != buf.b_no_eol_lnum && (lnum != buf.line_count() || buf.b_p_eol != 0)
+                || buffer.b_p_bin == 0 && buffer.b_p_fixeol != 0
+                || lnum != buffer.b_no_eol_lnum
+                    && (lnum != buffer.line_count() || buffer.b_p_eol != 0)
             {
                 out.push(NL as c_char);
             }
@@ -601,7 +602,7 @@ pub unsafe fn read_buffer_into(buf: Buf, start: LineNr, end: LineNr, sb: *mut St
             if lnum > end {
                 break;
             }
-            line = line_bytes(buf, lnum);
+            line = line_bytes(buffer, lnum);
             written = 0;
         } else if len > 0 {
             written += len;

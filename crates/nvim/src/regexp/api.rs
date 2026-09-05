@@ -255,19 +255,19 @@ pub unsafe fn vim_regexec_nl(rmp: *mut RegMatch, line: *const c_char, col: ColNr
     unsafe { vim_regexec_string(rmp, line, col, true) }
 }
 
-/// Run `rmp`'s program over `buf` starting at line `lnum`, column `col`.
+/// Run `rmp`'s program over `buffer` starting at line `lnum`, column `col`.
 /// Returns the number of lines the match spans plus one, or 0 for no
 /// match; `tm`/`timed_out` bound how long the NFA engine may spend.
 pub unsafe fn vim_regexec_multi(
     rmp: *mut RegMMatch,
     win: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     col: ColNr,
     tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
-    // SAFETY: `rmp` holds a live program; `win`/`buf`/`tm`/`timed_out` are
+    // SAFETY: `rmp` holds a live program; `win`/`buffer`/`tm`/`timed_out` are
     // the caller's and may be null where the engines allow it.
     if unsafe { (*(*rmp).regprog).re_in_use } {
         emsg(gettext(E_RECURSIVE));
@@ -279,7 +279,7 @@ pub unsafe fn vim_regexec_multi(
             (*(*(*rmp).regprog).engine)
                 .regexec_multi
                 .expect("non-null function pointer")(
-                rmp, win, buf, lnum, col, tm, timed_out
+                rmp, win, buffer, lnum, col, tm, timed_out
             )
         };
         let mut result = exec(rmp);

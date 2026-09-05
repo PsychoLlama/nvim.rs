@@ -46,10 +46,10 @@ use crate::search::{BACKWARD, FORWARD};
 /// compute (`view`, `timestamp`) are read back from it as-is.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `win` a live window; `fmp` must point at a
+/// `buffer` must be a live buffer and `win` a live window; `fmp` must point at a
 /// live, writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     win: *mut Window,
     fmp: *mut FileMark,
     flag: MarkGet,
@@ -57,7 +57,7 @@ pub unsafe fn mark_get(
 ) -> *mut FileMark {
     debug_assert!(!fmp.is_null(), "mark_get needs the caller's record");
     // SAFETY: the caller promised a live buffer.
-    let handle = unsafe { Buf::new(buf) }.handle;
+    let handle = unsafe { Buf::new(buffer) }.handle;
     let mut fm: *mut FileMark = ptr::null_mut();
     if ascii_isupper(name) || ascii_isdigit(name) {
         // SAFETY: `name` is a digit or an upper-case letter, which is what
@@ -69,14 +69,14 @@ pub unsafe fn mark_get(
         // mark: `kMarkBufLocal` answers an unset record rather than a
         // position the caller would then apply to the wrong file.
         if flag as c_uint == kMarkBufLocal as c_uint && xfm.fmark().fnum() != handle {
-            // SAFETY: `buf` is live and `fmp` is the caller's record.
-            return unsafe { pos_to_mark(buf, fmp, UNSET_POS) };
+            // SAFETY: `buffer` is live and `fmp` is the caller's record.
+            return unsafe { pos_to_mark(buffer, fmp, UNSET_POS) };
         }
         fm = xfm.fmark().raw();
     } else if name > 0 && name < NMARK_LOCAL_MAX {
         // SAFETY: the caller promised a live buffer and window, and `fmp` is
         // the caller's record.
-        fm = unsafe { mark_get_local(buf, win, fmp, name) };
+        fm = unsafe { mark_get_local(buffer, win, fmp, name) };
     }
     if fm.is_null() {
         return fm;
@@ -140,7 +140,7 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
 /// allocated, everything else is.
 /// `name` — the name of the mark.
 /// `win` — window to retrieve marks that belong to it (motions and context mark).
-/// `buf` — buf to retrieve marks that belong to it.
+/// `buffer` — buf to retrieve marks that belong to it.
 /// `fmp` — the caller's record, where the marks that have no store of their
 ///         own (`'[`, `']`, `'<`, `'>` and the motions) are computed. The
 ///         marks that *do* have a store answer that store's address and leave
@@ -150,30 +150,30 @@ pub unsafe fn mark_get_global(resolve: bool, name: c_int) -> *mut XFileMark {
 /// Returns mark, NULL if not found.
 ///
 /// # Safety
-/// `buf` must be a live buffer, `win` a live window, and `fmp` a live,
+/// `buffer` must be a live buffer, `win` a live window, and `fmp` a live,
 /// writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get_local(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     win: *mut Window,
     fmp: *mut FileMark,
     name: c_int,
 ) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
-    let (bufh, winh) = unsafe { (Buf::new(buf), Win::new(win)) };
+    let (bufh, winh) = unsafe { (Buf::new(buffer), Win::new(win)) };
     let mark: *mut FileMark = if ascii_islower(name) {
         bufh.named_mark(name - 'a' as c_int).raw()
     } else if name == '[' as c_int {
-        // SAFETY: `buf` is live and `fmp` is the caller's record.
-        unsafe { pos_to_mark(buf, fmp, bufh.b_op_start) }
+        // SAFETY: `buffer` is live and `fmp` is the caller's record.
+        unsafe { pos_to_mark(buffer, fmp, bufh.b_op_start) }
     } else if name == ']' as c_int {
         // SAFETY: as above.
-        unsafe { pos_to_mark(buf, fmp, bufh.b_op_end) }
+        unsafe { pos_to_mark(buffer, fmp, bufh.b_op_end) }
     } else if name == '<' as c_int || name == '>' as c_int {
         // SAFETY: as above.
-        unsafe { mark_get_visual(buf, fmp, name) }
+        unsafe { mark_get_visual(buffer, fmp, name) }
     } else if name == '\'' as c_int || name == '`' as c_int {
         // The context mark is the WINDOW's, but it is reported against the
-        // current buffer rather than against `buf` — upstream reads `curbuf`
+        // current buffer rather than against `buffer` — upstream reads `curbuf`
         // here and `nvim_buf_get_mark` relies on it.
         // SAFETY: `curbuf` is live from startup to exit and `fmp` is the
         // caller's record.
@@ -189,7 +189,7 @@ pub unsafe fn mark_get_local(
     } else {
         // SAFETY: the caller promised a live buffer and window, and `fmp` is
         // the caller's record.
-        unsafe { mark_get_motion(buf, win, fmp, name) }
+        unsafe { mark_get_motion(buffer, win, fmp, name) }
     };
     if !mark.is_null() {
         // SAFETY: every arm above answers a live record or null.
@@ -203,17 +203,17 @@ pub unsafe fn mark_get_local(
 /// Gets the following motions as marks: '{', '}', '(', ')'
 /// `name` — name of the mark
 /// `win` — window to retrieve the cursor to calculate the mark.
-/// `buf` — buf to wrap motion marks with it's buffer number (fm->fnum).
+/// `buffer` — buf to wrap motion marks with it's buffer number (fm->fnum).
 /// `fmp` — the caller's record, which the motion is computed into.
 ///
 /// Returns `fmp`, or NULL when `name` names no motion or the motion found
 /// nothing.
 ///
 /// # Safety
-/// `buf` must be a live buffer, `win` a live window, and `fmp` a live,
+/// `buffer` must be a live buffer, `win` a live window, and `fmp` a live,
 /// writable `FileMark` that outlives every use of the answer.
 pub unsafe fn mark_get_motion(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     win: *mut Window,
     fmp: *mut FileMark,
     name: c_int,
@@ -239,8 +239,8 @@ pub unsafe fn mark_get_motion(
         };
         // SAFETY: the editor's globals are live and `oa` lives on the stack.
         if unsafe { findpar(&raw mut oa.inclusive, dir as c_int, 1, NUL, false) } {
-            // SAFETY: `buf` is live and `fmp` is the caller's record.
-            mark = unsafe { pos_to_mark(buf, fmp, winh.w_cursor) };
+            // SAFETY: `buffer` is live and `fmp` is the caller's record.
+            mark = unsafe { pos_to_mark(buffer, fmp, winh.w_cursor) };
         }
     } else if name == '(' as c_int || name == ')' as c_int {
         let dir = if name == ')' as c_int {
@@ -251,7 +251,7 @@ pub unsafe fn mark_get_motion(
         // SAFETY: the editor's globals are live.
         if unsafe { findsent(dir as Direction, 1) }.is_ok() {
             // SAFETY: as above.
-            mark = unsafe { pos_to_mark(buf, fmp, winh.w_cursor) };
+            mark = unsafe { pos_to_mark(buffer, fmp, winh.w_cursor) };
         }
     }
     cur.w_cursor = saved;
@@ -290,21 +290,25 @@ const OPARG_EMPTY: OpArg = OpArg {
 /// 3. Not saved in shada.
 /// 4. Re-ordered when defined in reverse.
 ///
-/// `buf` — Buffer to get the mark from.
+/// `buffer` — Buffer to get the mark from.
 /// `fmp` — the caller's record, which the mark is written into.
 /// `name` — Mark name '<' or '>'.
 ///
 /// Returns `fmp`, or NULL when `name` is neither `'<` nor `'>`.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `fmp` a live, writable `FileMark` that
+/// `buffer` must be a live buffer and `fmp` a live, writable `FileMark` that
 /// outlives every use of the answer.
-pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
+pub unsafe fn mark_get_visual(
+    buffer: *mut Buffer,
+    fmp: *mut FileMark,
+    name: c_int,
+) -> *mut FileMark {
     if name != '<' as c_int && name != '>' as c_int {
         return ptr::null_mut();
     }
     // SAFETY: the caller promised a live buffer.
-    let bufh = unsafe { Buf::new(buf) };
+    let bufh = unsafe { Buf::new(buffer) };
     let (start, end) = (bufh.b_visual.vi_start, bufh.b_visual.vi_end);
     // `'<` is whichever end comes FIRST, not whichever was set first: a
     // Visual selection made backwards still reports its marks in order.
@@ -314,8 +318,8 @@ pub unsafe fn mark_get_visual(buf: *mut Buffer, fmp: *mut FileMark, name: c_int)
     } else {
         end
     };
-    // SAFETY: `buf` is live and `fmp` is the caller's record.
-    let mark = unsafe { pos_to_mark(buf, fmp, at) };
+    // SAFETY: `buffer` is live and `fmp` is the caller's record.
+    let mark = unsafe { pos_to_mark(buffer, fmp, at) };
     if bufh.b_visual.vi_mode == 'V' as c_int {
         // A linewise selection has no columns of its own; `'<` is the start
         // of the line and `'>` the end of it.

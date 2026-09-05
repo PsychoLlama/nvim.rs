@@ -118,13 +118,13 @@ pub fn au_get_autocmds_for_event(event: AutoEvent) -> *mut AutoCmdVec {
     au_event_vec(event)
 }
 
-/// Drop every `<buffer=N>` autocommand naming `buf`, which is being freed.
-pub unsafe fn aubuflocal_remove(buf: Buf) {
+/// Drop every `<buffer=N>` autocommand naming `buffer`, which is being freed.
+pub unsafe fn aubuflocal_remove(buffer: Buf) {
     // A walk in progress may be about to match on this buffer number;
     // clear it rather than let it match a freed buffer.
     let mut apc = active_apc_list.get();
     while !apc.is_null() {
-        if buf.handle == unsafe { (*apc).arg_bufnr } {
+        if buffer.handle == unsafe { (*apc).arg_bufnr } {
             unsafe { (*apc).arg_bufnr = 0 };
         }
         apc = unsafe { (*apc).next };
@@ -135,7 +135,8 @@ pub unsafe fn aubuflocal_remove(buf: Buf) {
         let mut i: usize = 0;
         while i < unsafe { (*acs).size } {
             let ac = unsafe { (*acs).items.add(i) };
-            if !unsafe { (*ac).pat.is_null() } && unsafe { (*(*ac).pat).buflocal_nr } == buf.handle
+            if !unsafe { (*ac).pat.is_null() }
+                && unsafe { (*(*ac).pat).buflocal_nr } == buffer.handle
             {
                 unsafe { aucmd_del(ac) };
                 if p_verbose.get() >= 6 {
@@ -145,7 +146,7 @@ pub unsafe fn aubuflocal_remove(buf: Buf) {
                     smsg!(
                         0,
                         "auto-removing autocommand: {arg0} <buffer={}>",
-                        buf.handle
+                        buffer.handle
                     );
                     unsafe { verbose_leave() };
                 }

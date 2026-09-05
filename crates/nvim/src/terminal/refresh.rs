@@ -222,7 +222,7 @@ pub(crate) unsafe fn on_scrollback_option_changed(term: *mut Terminal) {
 /// Only the rows marked invalid are re-read. Rows past the end of the
 /// buffer are appended instead — that is how a terminal buffer grows to a
 /// full screen after it opens.
-pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
+pub(crate) fn refresh_screen(mut term: Term, buffer: Buf) {
     let mut changed = 0;
     let mut added = 0;
     let (height, width) = term.size();
@@ -239,14 +239,14 @@ pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
         let text = term.textbuf.as_mut_ptr();
         // Past the end of the buffer means the terminal is still filling
         // out its first screen.
-        if linenr <= buf.line_count() {
+        if linenr <= buffer.line_count() {
             // SAFETY: a live buffer and a line of it, taking the row this
             // terminal's own line buffer holds.
-            let _ = unsafe { ml_replace_buf(buf.raw(), linenr, text, true, false) };
+            let _ = unsafe { ml_replace_buf(buffer.raw(), linenr, text, true, false) };
             changed += 1;
         } else {
             // SAFETY: as above, appending past the last line.
-            let _ = unsafe { ml_append_buf(buf.raw(), linenr - 1, text, 0 as ColNr, false) };
+            let _ = unsafe { ml_append_buf(buffer.raw(), linenr - 1, text, 0 as ColNr, false) };
             added += 1;
         }
     }
@@ -257,7 +257,7 @@ pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
     clear_invalid(term);
     // Reports the lines replaced and appended above.
     let added = added as LineNr;
-    changed_lines(buf, change_start, 0 as ColNr, change_end, added, true);
+    changed_lines(buffer, change_start, 0 as ColNr, change_end, added, true);
 }
 
 /// Reset the damaged-row range to "nothing damaged" — an empty range that
@@ -267,19 +267,19 @@ fn clear_invalid(mut term: Term) {
     term.invalid_end = -1;
 }
 
-/// Every window showing `buf`.
-fn windows_showing(buf: Buf) -> impl Iterator<Item = Win> {
-    tab_windows().filter(move |wp| wp.w_buffer == buf.raw())
+/// Every window showing `buffer`.
+fn windows_showing(buffer: Buf) -> impl Iterator<Item = Win> {
+    tab_windows().filter(move |wp| wp.w_buffer == buffer.raw())
 }
 
-/// Keep every window on `buf` looking at the bottom of the terminal.
+/// Keep every window on `buffer` looking at the bottom of the terminal.
 ///
 /// A window whose cursor was on the last line before `added` lines arrived
 /// was following the output, and keeps following. One that had scrolled up
 /// stays where it was, clamped to the buffer.
-pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
-    let ml_end = buf.line_count();
-    for mut wp in windows_showing(buf) {
+pub(crate) fn adjust_topline_cursor(term: Term, mut buffer: Buf, added: c_int) {
+    let ml_end = buffer.line_count();
+    for mut wp in windows_showing(buffer) {
         if wp.is_current() && is_focused(term) {
             terminal_check_cursor(term);
             continue;
@@ -299,10 +299,10 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
 
     // Windows are not the only things remembering a line: the buffer's own
     // last-cursor mark and the per-window info follow too.
-    if ml_end == buf.b_last_cursor.mark.lnum + added as LineNr {
-        buf.b_last_cursor.mark.lnum = ml_end;
+    if ml_end == buffer.b_last_cursor.mark.lnum + added as LineNr {
+        buffer.b_last_cursor.mark.lnum = ml_end;
     }
-    let (wininfos, count) = (buf.b_wininfo.items, buf.b_wininfo.size);
+    let (wininfos, count) = (buffer.b_wininfo.items, buffer.b_wininfo.size);
     for i in 0..count {
         // SAFETY: the buffer's own array of `count` live entries, none of
         // which anything above frees.

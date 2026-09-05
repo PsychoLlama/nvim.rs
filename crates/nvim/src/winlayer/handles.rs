@@ -88,13 +88,13 @@ pub(crate) fn forget_window(handle: Handle) {
     WINDOWS.with_mut(|reg| reg.forget(handle));
 }
 
-/// Hand `buf` to the buffer registry, which owns it from here on, and answer
+/// Hand `buffer` to the buffer registry, which owns it from here on, and answer
 /// the [`Buf`] the caller works through.
 ///
 /// Called by the allocator once the buffer's number is assigned — `handle`
 /// is that number, which the caller has already written into the buffer.
-pub(crate) fn register_buffer(handle: Handle, buf: Owned<Buffer>) -> Buf {
-    Buf(BUFFERS.with_mut(|reg| reg.register(handle, buf)))
+pub(crate) fn register_buffer(handle: Handle, buffer: Owned<Buffer>) -> Buf {
+    Buf(BUFFERS.with_mut(|reg| reg.register(handle, buffer)))
 }
 
 /// Take the buffer `handle` names out of the registry, handing its
@@ -147,13 +147,13 @@ static PENDING_FREE_BUFFERS: GlobalCell<PendingFree<Owned<Buffer>>> =
 static PENDING_FREE_WINDOWS: GlobalCell<PendingFree<*mut Window>> =
     GlobalCell::new(PendingFree::new());
 
-/// Park `buf`'s allocation until the outermost autocommand returns.
+/// Park `buffer`'s allocation until the outermost autocommand returns.
 ///
 /// Everything else about the buffer is torn down already and its handle is
 /// out of the registry; what is left is the memory, which this set owns until
 /// [`free_deferred`] drops it. The caller must not use the buffer again.
-pub(crate) fn defer_free_buffer(buf: Owned<Buffer>) {
-    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buf));
+pub(crate) fn defer_free_buffer(buffer: Owned<Buffer>) {
+    PENDING_FREE_BUFFERS.with_mut(|pending| pending.park(buffer));
 }
 
 /// [`defer_free_buffer`] for a window.

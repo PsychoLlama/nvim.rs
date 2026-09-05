@@ -35,7 +35,7 @@ use crate::types::{
 ///
 /// Copying does nothing on redo; it enforces the right position on undo.
 pub unsafe fn extmark_splice_delete(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     l_row: c_int,
     l_col: ColNr,
     u_row: c_int,
@@ -54,12 +54,12 @@ pub unsafe fn extmark_splice_delete(
     };
     // SAFETY: the caller's promise -- a live buffer, and a `uvp` that is NULL
     // or an undo header's own extmark list.
-    splice_delete(unsafe { Buf::new(buf) }, lo, hi, uvp, only_copy, op);
+    splice_delete(unsafe { Buf::new(buffer) }, lo, hi, uvp, only_copy, op);
 }
 
 /// [`extmark_splice_delete`] for the callers that already hold a [`Buf`].
 pub(crate) fn splice_delete(
-    mut buf: Buf,
+    mut buffer: Buf,
     lo: MTPos,
     hi: MTPos,
     uvp: *mut extmark_undo_vec_t,
@@ -68,7 +68,7 @@ pub(crate) fn splice_delete(
 ) {
     let mut itr = MarkTreeIter::default();
 
-    itr_get(buf.marktree(), lo.row, lo.col, &mut itr);
+    itr_get(buffer.marktree(), lo.row, lo.col, &mut itr);
     loop {
         let mark = itr_current(&mut itr);
         if mark.pos.row < 0 || mark.pos.row > hi.row {
@@ -92,7 +92,7 @@ pub(crate) fn splice_delete(
         let mut invalidated = false;
         if !only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark) {
             let mut enditr = itr;
-            let endpos = tree_get_altpos(buf.marktree(), mark, Some(&mut enditr));
+            let endpos = tree_get_altpos(buffer.marktree(), mark, Some(&mut enditr));
             // Invalidate unpaired marks in deleted lines, and paired marks
             // whose entire range has been deleted.
             let unpaired_gone = !mt_paired(mark) && mark.pos.row < hi.row;
@@ -101,16 +101,16 @@ pub(crate) fn splice_delete(
                 && (endpos.row < hi.row || (endpos.row == hi.row && endpos.col <= hi.col));
             if unpaired_gone || pair_gone {
                 if mt_no_undo(mark) {
-                    del(buf, &mut itr, mark, true);
+                    del(buffer, &mut itr, mark, true);
                     continue;
                 }
                 copy = true;
                 invalidated = true;
                 itr_rawkey(&mut itr).flags |= MtFlags::INVALID;
                 itr_rawkey(&mut enditr).flags |= MtFlags::INVALID;
-                tree_revise_meta(buf.marktree(), &mut itr, mark);
+                tree_revise_meta(buffer.marktree(), &mut itr, mark);
                 decor_remove(
-                    buf,
+                    buffer,
                     mark.pos.row,
                     endpos.row,
                     mark.pos.col,
@@ -134,7 +134,7 @@ pub(crate) fn splice_delete(
             push_undo(uvp, ExtmarkUndoObject::SavePos(pos));
         }
 
-        itr_next(buf.marktree(), &mut itr);
+        itr_next(buffer.marktree(), &mut itr);
     }
 }
 

@@ -216,11 +216,11 @@ pub(crate) unsafe fn au_show_for_event(
 }
 
 /// Whether any autocommand for `event` would match the file `sfname`
-/// opened in `buf`.
+/// opened in `buffer`.
 pub unsafe fn has_autocmd(
     event: AutoEvent,
     sfname: *mut ::core::ffi::c_char,
-    buf: Option<Buf>,
+    buffer: Option<Buf>,
 ) -> bool {
     // SAFETY: `sfname` is the caller's NUL-terminated file name.  `path_tail`
     // answers a position inside it, and `full_name_save` an allocation this
@@ -244,7 +244,7 @@ pub unsafe fn has_autocmd(
             //
             // SAFETY: `ap` is non-null, so it is a pattern the vector owns;
             // its `reg_prog` is the cached program `match_file_pat` may
-            // compile into, and `buf` is only read when there is one.
+            // compile into, and `buffer` is only read when there is one.
             let matched = if unsafe { (*ap).buflocal_nr } == 0 {
                 unsafe {
                     match_file_pat(
@@ -257,7 +257,7 @@ pub unsafe fn has_autocmd(
                     )
                 }
             } else {
-                buf.is_some_and(|b| unsafe { (*ap).buflocal_nr } == b.handle)
+                buffer.is_some_and(|b| unsafe { (*ap).buflocal_nr } == b.handle)
             };
             if matched {
                 retval = true;

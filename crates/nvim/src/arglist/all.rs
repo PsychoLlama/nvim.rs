@@ -95,12 +95,12 @@ unsafe fn next_window_to_walk(window: *mut Window) -> *mut Window {
 unsafe fn arg_index_for_window(
     aall: &mut ArgAllState,
     window: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     old_curwin: *mut Window,
     old_curtab: *mut Tabpage,
 ) -> c_int {
     // SAFETY: the caller's promise -- a live `Buffer`.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     // SAFETY: the caller's promise -- a live `Window`.
     let mut wp = unsafe { Win::new(window) };
     // SAFETY: caller contract; the window, its buffer and the argument list
@@ -184,11 +184,11 @@ unsafe fn arg_index_for_window(
 unsafe fn close_unused_window(
     aall: &mut ArgAllState,
     window: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     wpnext: *mut Window,
 ) -> *mut Window {
     // SAFETY: the caller's promise -- a live `Buffer`.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     // SAFETY: caller contract; `buf` is the window's own buffer.
     // SAFETY: `buf` is the window's buffer, live for the call.
     let hide = unsafe { buf_hide(buf.raw().cast_const()) };

@@ -455,15 +455,15 @@ unsafe fn write_rendered(dst: *mut c_char, rendered: &render::Rendered) {
 /// The display form of the unprintable byte `c`, as a value.
 ///
 /// # Safety
-/// `buf` may be null; otherwise it must be a valid buffer.
+/// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_nonprint(buf: *const Buffer, c: c_int) -> render::Rendered {
+unsafe fn render_nonprint(buffer: *const Buffer, c: c_int) -> render::Rendered {
     let c = if c == NL {
         // A NUL is stored as a newline internally.
         NUL
     // SAFETY: the caller's promise -- null, or a valid buffer.
     } else if c == CAR
-        && unsafe { Buf::from_raw(buf.cast_mut()) }.is_some_and(|b| get_fileformat(b) == EOL_MAC)
+        && unsafe { Buf::from_raw(buffer.cast_mut()) }.is_some_and(|b| get_fileformat(b) == EOL_MAC)
     {
         NL
     } else {
@@ -477,13 +477,13 @@ unsafe fn render_nonprint(buf: *const Buffer, c: c_int) -> render::Rendered {
     }
 }
 
-/// The display form of the character `c` as it would appear in `buf`, as a
+/// The display form of the character `c` as it would appear in `buffer`, as a
 /// value.
 ///
 /// # Safety
-/// `buf` may be null; otherwise it must be a valid buffer.
+/// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_char(buf: *const Buffer, c: c_int) -> render::Rendered {
+unsafe fn render_char(buffer: *const Buffer, c: c_int) -> render::Rendered {
     // A negative code is one of the key-translation escapes; it renders as
     // its byte behind a `~@`.
     let (prefix, c) = if c < 0 {
@@ -500,7 +500,7 @@ unsafe fn render_char(buf: *const Buffer, c: c_int) -> render::Rendered {
         render::Rendered::literal(c as uint8_t)
     } else if c <= 0xff {
         // SAFETY: forwarded to this function's contract.
-        unsafe { render_nonprint(buf, c) }
+        unsafe { render_nonprint(buffer, c) }
     } else {
         render::hex_form(c)
     };
@@ -514,15 +514,15 @@ unsafe fn render_char(buf: *const Buffer, c: c_int) -> render::Rendered {
 /// for a printable Latin-1 character.
 ///
 /// # Safety
-/// `buf` may be null; otherwise it must be a valid buffer.
+/// `buffer` may be null; otherwise it must be a valid buffer.
 #[inline(always)]
-unsafe fn render_byte(buf: *const Buffer, c: c_int) -> render::Rendered {
+unsafe fn render_byte(buffer: *const Buffer, c: c_int) -> render::Rendered {
     if c >= 0x80 {
         // SAFETY: forwarded to this function's contract.
-        return unsafe { render_nonprint(buf, c) };
+        return unsafe { render_nonprint(buffer, c) };
     }
     // SAFETY: as above.
-    unsafe { render_char(buf, c) }
+    unsafe { render_char(buffer, c) }
 }
 
 /// The display form of character `c`.
@@ -534,24 +534,24 @@ pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
     unsafe { transchar_buf(curbuf.get(), c) }
 }
 
-/// The display form of `c` as it would appear in `buf` (which decides how a
+/// The display form of `c` as it would appear in `buffer` (which decides how a
 /// carriage return renders).
 ///
 /// # Safety
-/// `buf` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_buf(buf: *const Buffer, c: c_int) -> CharDisplay {
+/// `buffer` may be null; otherwise it must be a valid buffer.
+pub(crate) unsafe fn transchar_buf(buffer: *const Buffer, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    owned(&unsafe { render_char(buf, c) })
+    owned(&unsafe { render_char(buffer, c) })
 }
 
 /// The display form of the single byte `c`. Unlike [`transchar_buf`] this
 /// never treats a high byte as a printable Latin-1 character.
 ///
 /// # Safety
-/// `buf` may be null; otherwise it must be a valid buffer.
-pub(crate) unsafe fn transchar_byte_buf(buf: *const Buffer, c: c_int) -> CharDisplay {
+/// `buffer` may be null; otherwise it must be a valid buffer.
+pub(crate) unsafe fn transchar_byte_buf(buffer: *const Buffer, c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    owned(&unsafe { render_byte(buf, c) })
+    owned(&unsafe { render_byte(buffer, c) })
 }
 
 /// [`transchar_byte_buf`] for the current buffer.
@@ -566,11 +566,11 @@ pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
 /// Write the display form of the unprintable byte `c` into `charbuf`.
 ///
 /// # Safety
-/// `charbuf` must have room for five bytes; `buf` may be null.
-pub unsafe fn transchar_nonprint(buf: *const Buffer, charbuf: *mut c_char, c: c_int) {
+/// `charbuf` must have room for five bytes; `buffer` may be null.
+pub unsafe fn transchar_nonprint(buffer: *const Buffer, charbuf: *mut c_char, c: c_int) {
     // SAFETY: forwarded to the caller's contract; a byte's rendering and its
     // terminator are at most five bytes.
-    unsafe { write_rendered(charbuf, &render_nonprint(buf, c)) };
+    unsafe { write_rendered(charbuf, &render_nonprint(buffer, c)) };
 }
 
 /// Write `c`'s `<xx>` form into `buf`. Answers the length, excluding the NUL.

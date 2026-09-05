@@ -93,11 +93,11 @@ fn set_global_at_or_after(from: c_int) -> Option<c_int> {
 /// storage holding one of the names above.
 #[inline]
 pub(super) unsafe fn next_buffer_mark(
-    buf: *const Buffer,
+    buffer: *const Buffer,
     mark_name: *mut c_char,
 ) -> *const FileMark {
     // SAFETY: the caller promised a live buffer and a live cursor.
-    let buf = unsafe { Buf::new(buf.cast_mut()) };
+    let buf = unsafe { Buf::new(buffer.cast_mut()) };
     // SAFETY: as above.
     let here = unsafe { *mark_name };
     let (next, mark): (c_char, Fmark) = match c_int::from(here) {
@@ -122,7 +122,7 @@ pub(super) unsafe fn next_buffer_mark(
 ///          progress.
 ///
 /// `iter` — Iterator. Pass NULL to start iteration.
-/// `buf` — Buffer.
+/// `buffer` — Buffer.
 /// `name` — Mark name.
 /// `fm` — Mark definition.
 ///
@@ -130,17 +130,17 @@ pub(super) unsafe fn next_buffer_mark(
 ///         NULL if iteration is over.
 ///
 /// # Safety
-/// `buf` must be a live buffer, `name` and `fm` must point at live, writable
+/// `buffer` must be a live buffer, `name` and `fm` must point at live, writable
 /// storage, and `iter` must be null or a value a previous call answered for
 /// the same buffer.
 pub unsafe fn mark_buffer_iter(
     iter: *const c_void,
-    buf: *const Buffer,
+    buffer: *const Buffer,
     name: *mut c_char,
     fm: *mut FileMark,
 ) -> *const c_void {
     // SAFETY: the caller promised a live buffer and writable out-parameters.
-    let bufh = unsafe { Buf::new(buf.cast_mut()) };
+    let bufh = unsafe { Buf::new(buffer.cast_mut()) };
     // SAFETY: as above.
     unsafe { *name = NUL_BYTE };
     // Turn the token back into the name it stands for. The last arm reads
@@ -160,15 +160,15 @@ pub unsafe fn mark_buffer_iter(
         let idx = bytes.wrapping_div(size_of::<FileMark>());
         mark_name(c_int::try_from(idx).unwrap_or(0) + 'a' as c_int)
     };
-    // SAFETY: `buf` is live and `mark_name` is on this stack.
-    let mut iter_mark = unsafe { next_buffer_mark(buf, &raw mut at) };
+    // SAFETY: `buffer` is live and `mark_name` is on this stack.
+    let mut iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
     while !iter_mark.is_null() {
-        // SAFETY: every non-null answer names a live record of `buf`.
+        // SAFETY: every non-null answer names a live record of `buffer`.
         if unsafe { Fmark::new(iter_mark.cast_mut()) }.is_set() {
             break;
         }
         // SAFETY: as above.
-        iter_mark = unsafe { next_buffer_mark(buf, &raw mut at) };
+        iter_mark = unsafe { next_buffer_mark(buffer, &raw mut at) };
     }
     if iter_mark.is_null() {
         return ptr::null();
@@ -214,7 +214,7 @@ pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool
 /// Set local mark
 ///
 /// `name` — Mark name.
-/// `buf` — Pointer to the buffer to set mark in.
+/// `buffer` — Pointer to the buffer to set mark in.
 /// `fm` — Mark to be set.
 /// `update` — If true then only set global mark if it was created
 ///                     later then existing one.
@@ -222,11 +222,16 @@ pub unsafe fn mark_set_global(name: c_char, fm: XFileMark, update: bool) -> bool
 /// Returns true on success, false on failure.
 ///
 /// # Safety
-/// `buf` must be a live buffer, and `fm`'s allocations must be handed over to
+/// `buffer` must be a live buffer, and `fm`'s allocations must be handed over to
 /// the store.
-pub unsafe fn mark_set_local(name: c_char, buf: *mut Buffer, fm: FileMark, update: bool) -> bool {
+pub unsafe fn mark_set_local(
+    name: c_char,
+    buffer: *mut Buffer,
+    fm: FileMark,
+    update: bool,
+) -> bool {
     // SAFETY: the caller promised a live buffer.
-    let bufh = unsafe { Buf::new(buf) };
+    let bufh = unsafe { Buf::new(buffer) };
     let name = c_int::from(name);
     let tgt: Fmark = if ascii_islower(name) {
         bufh.named_mark(name - 'a' as c_int)

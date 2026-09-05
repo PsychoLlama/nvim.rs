@@ -50,11 +50,11 @@ fn blank_cell() -> VTermScreenCell {
 ///
 /// Returns false only when there is no buffer to read the option from,
 /// which happens if the buffer was wiped while the terminal still lives.
-pub(crate) fn term_may_alloc_scrollback(mut term: Term, buf: Option<Buf>) -> bool {
+pub(crate) fn term_may_alloc_scrollback(mut term: Term, buffer: Option<Buf>) -> bool {
     if term.sb.is_sized() {
         return true;
     }
-    let Some(buf) = buf.or_else(|| term.buf()) else {
+    let Some(buf) = buffer.or_else(|| term.buf()) else {
         return false;
     };
     term.sb.set_capacity(scrollback_limit(buf));
@@ -63,11 +63,11 @@ pub(crate) fn term_may_alloc_scrollback(mut term: Term, buf: Option<Buf>) -> boo
 
 /// `'scrollback'` as a row count. The option's "unlimited" spelling is a
 /// negative value, which stands for a cap large enough never to be reached.
-fn scrollback_limit(mut buf: Buf) -> usize {
-    if buf.b_p_scbk < 1 as OptInt {
-        buf.b_p_scbk = SB_MAX as OptInt;
+fn scrollback_limit(mut buffer: Buf) -> usize {
+    if buffer.b_p_scbk < 1 as OptInt {
+        buffer.b_p_scbk = SB_MAX as OptInt;
     }
-    buf.b_p_scbk as usize
+    buffer.b_p_scbk as usize
 }
 
 pub(crate) unsafe extern "C" fn term_sb_push(
@@ -197,8 +197,8 @@ pub(crate) fn fetch_cell(term: Term, row: c_int, col: c_int, cell: &mut VTermScr
 ///
 /// Trimming deletes from the top of the buffer, so the marks that pointed
 /// into those lines have to move with them.
-pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
-    let limit = scrollback_limit(buf);
+pub(crate) fn adjust_scrollback(mut term: Term, buffer: Buf) {
+    let limit = scrollback_limit(buffer);
     assert!(
         term.sb.pending() == 0,
         "scrollback trimmed while rows were still owed to the buffer"
@@ -208,10 +208,10 @@ pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
         for _ in 0..diff {
             // SAFETY: a live buffer, deleting the line the row that is
             // about to be dropped was mirrored onto.
-            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as LineNr, false) };
+            let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
             term.sb.drop_oldest();
         }
-        let (buf, diff) = (buf.raw(), diff as LineNr);
+        let (buf, diff) = (buffer.raw(), diff as LineNr);
         // SAFETY: as above; the marks that pointed into the deleted lines
         // move with them.
         unsafe { mark_adjust_term(buf, 1 as LineNr, diff, -diff) };
@@ -225,12 +225,12 @@ pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
 /// of a terminal buffer, running to the end of it.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-unsafe fn mark_adjust_term(buf: *mut Buffer, line1: LineNr, line2: LineNr, amount: LineNr) {
+/// `buffer` must be a live buffer.
+unsafe fn mark_adjust_term(buffer: *mut Buffer, line1: LineNr, line2: LineNr, amount: LineNr) {
     let (end, after) = (MAXLNUM as LineNr, true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
     // SAFETY: the caller's promise.
-    unsafe { mark_adjust_buf(buf, line1, line2, end, amount, after, mode, op) };
+    unsafe { mark_adjust_buf(buffer, line1, line2, end, amount, after, mode, op) };
 }
 
 /// Mirror everything the scrollback gained or lost into the buffer's lines.
@@ -238,7 +238,7 @@ unsafe fn mark_adjust_term(buf: *mut Buffer, line1: LineNr, line2: LineNr, amoun
 /// Reading is paused for the duration: appending lines can run autocommands,
 /// and more terminal output arriving in the middle would be appended at the
 /// wrong place.
-pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
+pub(crate) fn refresh_scrollback(mut term: Term, buffer: Buf) {
     let read_pause = term.opts.read_pause_cb.expect("non-null function pointer");
     let data = term.opts.data;
     // SAFETY: the callback the channel registered, taking the data it
@@ -248,49 +248,49 @@ pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
     // Rows evicted since the last refresh are gone from the buffer's top;
     // move the marks that were pointing at them.
     let mut deleted = (term.sb.deleted() - term.old_sb_deleted) as LineNr;
-    deleted = deleted.min(buf.line_count());
+    deleted = deleted.min(buffer.line_count());
     // SAFETY: a live buffer.
-    unsafe { mark_adjust_term(buf.raw(), 1 as LineNr, deleted, -deleted) };
+    unsafe { mark_adjust_term(buffer.raw(), 1 as LineNr, deleted, -deleted) };
     term.old_sb_deleted = term.sb.deleted();
 
     let mut old_height = term.old_height;
     let (height, width) = term.size();
 
-    while deleted > 0 && buf.line_count() > old_height as LineNr {
+    while deleted > 0 && buffer.line_count() > old_height as LineNr {
         // SAFETY: a live buffer, deleting a line the scrollback no longer
         // holds.
-        let _ = unsafe { ml_delete_buf(buf.raw(), 1 as LineNr, false) };
+        let _ = unsafe { ml_delete_buf(buffer.raw(), 1 as LineNr, false) };
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf.raw(), 1 as LineNr, 1 as LineNr) };
+        unsafe { deleted_lines_buf(buffer.raw(), 1 as LineNr, 1 as LineNr) };
         deleted -= 1;
     }
-    old_height = old_height.min(buf.line_count() as c_int);
+    old_height = old_height.min(buffer.line_count() as c_int);
 
     // Each owed row is appended just above the rows that make up the
     // screen, which sit at the end of the buffer.
     while term.sb.pending() > 0 {
         fetch_row(term, -term.sb.pending(), width);
-        let at = (buf.line_count() as c_int - old_height) as LineNr;
+        let at = (buffer.line_count() as c_int - old_height) as LineNr;
         let text = term.textbuf.as_mut_ptr();
         // SAFETY: a live buffer, taking the row this terminal's own line
         // buffer holds.
-        let _ = unsafe { ml_append_buf(buf.raw(), at, text, 0 as ColNr, false) };
+        let _ = unsafe { ml_append_buf(buffer.raw(), at, text, 0 as ColNr, false) };
         // SAFETY: as above, reporting the line just appended.
-        unsafe { appended_lines_buf(buf.raw(), at, 1 as LineNr) };
+        unsafe { appended_lines_buf(buffer.raw(), at, 1 as LineNr) };
         term.sb.mark_mirrored();
     }
 
     // Anything past the scrollback plus one screen is stale.
     let max_line_count = (term.sb.len() as c_int + height) as LineNr;
-    while buf.line_count() > max_line_count {
-        let last = buf.line_count();
+    while buffer.line_count() > max_line_count {
+        let last = buffer.line_count();
         // SAFETY: a live buffer, deleting its own last line.
-        let _ = unsafe { ml_delete_buf(buf.raw(), last, false) };
+        let _ = unsafe { ml_delete_buf(buffer.raw(), last, false) };
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf.raw(), buf.line_count(), 1 as LineNr) };
+        unsafe { deleted_lines_buf(buffer.raw(), buffer.line_count(), 1 as LineNr) };
     }
 
-    adjust_scrollback(term, buf);
+    adjust_scrollback(term, buffer);
     let data = term.opts.data;
     // SAFETY: the callback the channel registered, as above.
     unsafe { read_pause(false, data) };

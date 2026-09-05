@@ -395,21 +395,21 @@ pub(crate) unsafe fn mf_close(mfp: *mut MemFile, del_file: bool) {
     }
 }
 
-/// Close and delete the swap file of `buf`, keeping the memory file. Used
+/// Close and delete the swap file of `buffer`, keeping the memory file. Used
 /// when `'swapfile'` is reset.
 ///
 /// `getlines` first pulls every line into memory — clumsy, but the blocks
 /// still in the file are about to become unreachable.
-pub(crate) unsafe fn mf_close_file(buf: *mut Buffer, getlines: bool) {
+pub(crate) unsafe fn mf_close_file(buffer: *mut Buffer, getlines: bool) {
     unsafe {
-        let mfp = (*buf).b_ml.ml_mfp;
+        let mfp = (*buffer).b_ml.ml_mfp;
         if mfp.is_null() || (*mfp).mf_fd < 0 {
             return;
         }
 
         if getlines {
-            for lnum in 1..=(*buf).b_ml.ml_line_count {
-                ml_get_buf(buf, lnum);
+            for lnum in 1..=(*buffer).b_ml.ml_line_count {
+                ml_get_buf(buffer, lnum);
             }
         }
 

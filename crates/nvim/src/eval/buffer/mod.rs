@@ -98,13 +98,13 @@ pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
     unsafe { tv_get_lnum(args.ptr(i)) }
 }
 
-/// Argument `i` as a line number in `buf`.
+/// Argument `i` as a line number in `buffer`.
 ///
 /// # Safety
-/// `buf` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buf: *mut Buffer) -> LineNr {
+/// `buffer` is a live buffer or NULL.
+pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buffer: *mut Buffer) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
-    unsafe { tv_get_lnum_buf(args.ptr(i), buf) }
+    unsafe { tv_get_lnum_buf(args.ptr(i), buffer) }
 }
 
 /// The buffer argument `i` names, or NULL -- the `bufnr()`-shaped spelling,
@@ -149,7 +149,7 @@ impl SavedBufferState {
         unsafe { mem::zeroed() }
     }
 
-    /// Make `buf` the current buffer, with a window showing it, so that a
+    /// Make `buffer` the current buffer, with a window showing it, so that a
     /// change to it has its side effects (mark adjustment and the rest) done
     /// where they belong.
     ///
@@ -157,21 +157,21 @@ impl SavedBufferState {
     ///
     /// # Safety
     /// `curwin`/`curbuf` must be set, which they are from startup to exit.
-    unsafe fn prepare(&mut self, buf: Buf) {
+    unsafe fn prepare(&mut self, buffer: Buf) {
         self.save_visual_active = visual_active();
         set_visual_active(false);
         self.curwin_save = curwin.get();
-        curbuf.set(buf.raw());
+        curbuf.set(buffer.raw());
         // SAFETY: `curbuf` was just set to the caller's live buffer.
         unsafe { find_win_for_curbuf() };
         let current = cur_win();
-        if current.w_buffer != buf.raw() {
+        if current.w_buffer != buffer.raw() {
             // No existing window for this buffer. It is dangerous to have
             // `curwin->w_buffer` differ from `curbuf`, so use the autocmd
             // window.
             curbuf.set(current.w_buffer);
             // SAFETY: `self.aco` is this frame's, and the buffer is live.
-            unsafe { aucmd_prepbuf(&raw mut self.aco, buf.raw()) };
+            unsafe { aucmd_prepbuf(&raw mut self.aco, buffer.raw()) };
             self.using_aco = true;
         }
     }

@@ -750,20 +750,20 @@ pub(crate) unsafe fn did_set_xhistory(args: &mut OptSet) -> Option<&CStr> {
 ///
 /// # Safety
 ///
-/// `buf` must be a live buffer.
-pub(crate) unsafe fn do_syntax_autocmd(buf: *mut Buffer, value_changed: bool) {
+/// `buffer` must be a live buffer.
+pub(crate) unsafe fn do_syntax_autocmd(buffer: *mut Buffer, value_changed: bool) {
     static syn_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
     let _syn_recursive = Depth::of(&syn_recursive);
     // SAFETY: the caller's buffer is live.
-    unsafe { (*buf).b_flags |= BufFlags::SYN_SET };
+    unsafe { (*buffer).b_flags |= BufFlags::SYN_SET };
     unsafe {
         apply_autocmds(
             AutoEvent::Syntax,
-            (*buf).b_p_syn,
-            (*buf).b_fname,
+            (*buffer).b_p_syn,
+            (*buffer).b_fname,
             value_changed || syn_recursive.get() == 1,
-            buf,
+            buffer,
         )
     };
 }

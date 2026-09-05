@@ -59,21 +59,21 @@ pub(super) unsafe fn fold_create_markers(window: Win, start: Pos, end: Pos) {
 /// Add "marker[markerlen]" in 'commentstring' to position `pos`.
 ///
 /// # Safety
-/// `buf` must be a live buffer, `pos` a line inside it, and
+/// `buffer` must be a live buffer, `pos` a line inside it, and
 /// `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_add_marker(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     pos: Pos,
     marker: *const c_char,
     markerlen: size_t,
 ) {
     let lnum = pos.lnum;
     // SAFETY: the caller's promise.
-    let cms = unsafe { (*buf).b_p_cms };
+    let cms = unsafe { (*buffer).b_p_cms };
     // Where 'commentstring' puts the text, if it has a place for it.
     let p = unsafe { strstr(cms, c"%s".as_ptr()) };
-    let line = unsafe { ml_get_buf(buf, lnum) };
-    let line_len = unsafe { ml_get_buf_len(buf, lnum) } as size_t;
+    let line = unsafe { ml_get_buf(buffer, lnum) };
+    let line_len = unsafe { ml_get_buf_len(buffer, lnum) } as size_t;
     if u_save(lnum - 1, lnum + 1).is_err() {
         return;
     }
@@ -121,11 +121,11 @@ pub(super) unsafe fn fold_add_marker(
             .wrapping_add(unsafe { cstr::bytes_at(cms) }.len())
             .wrapping_sub(2)
     };
-    let _ = unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
+    let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
     if added != 0 {
         unsafe {
             extmark_splice_cols(
-                buf,
+                buffer,
                 lnum as c_int - 1,
                 line_len as ColNr,
                 0,
@@ -180,21 +180,21 @@ pub(super) unsafe fn delete_fold_markers(
 /// close-marker.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `marker[..markerlen]` readable.
+/// `buffer` must be a live buffer and `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_del_marker(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     marker: *mut c_char,
     markerlen: size_t,
 ) {
     // SAFETY: the caller's promise.
-    if lnum > unsafe { (*buf).b_ml.ml_line_count } {
+    if lnum > unsafe { (*buffer).b_ml.ml_line_count } {
         return;
     }
     // SAFETY: the caller's promise; `line` is NUL-terminated, so the walk
     // below stops inside it.
-    let cms = unsafe { (*buf).b_p_cms };
-    let line = unsafe { ml_get_buf(buf, lnum) };
+    let cms = unsafe { (*buffer).b_p_cms };
+    let line = unsafe { ml_get_buf(buffer, lnum) };
     let mut p = line;
     while unsafe { *p } as c_int != NUL {
         if !unsafe { cstr::prefix_eq(p, marker, markerlen) } {
@@ -225,7 +225,7 @@ pub(super) unsafe fn fold_del_marker(
         if u_save(lnum - 1, lnum + 1).is_ok() {
             let newline = unsafe {
                 xmalloc(
-                    (ml_get_buf_len(buf, lnum) as size_t)
+                    (ml_get_buf_len(buffer, lnum) as size_t)
                         .wrapping_sub(len)
                         .wrapping_add(1),
                 )
@@ -234,10 +234,10 @@ pub(super) unsafe fn fold_del_marker(
             let into = newline.cast::<u8>();
             unsafe { into.copy_from_nonoverlapping(line.cast(), p.offset_from(line) as size_t) };
             unsafe { strcpy(newline.offset(p.offset_from(line)), p.add(len)) };
-            let _ = unsafe { ml_replace_buf(buf, lnum, newline, false, false) };
+            let _ = unsafe { ml_replace_buf(buffer, lnum, newline, false, false) };
             unsafe {
                 extmark_splice_cols(
-                    buf,
+                    buffer,
                     lnum as c_int - 1,
                     p.offset_from(line) as ColNr,
                     len as ColNr,

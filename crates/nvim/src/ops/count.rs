@@ -470,13 +470,13 @@ unsafe fn store_counts(
 /// Safe: a [`Buf`] carries the whole of the promise this needs, and every
 /// line asked for below is checked against its line count first.
 pub fn get_region_bytecount(
-    buf: Buf,
+    buffer: Buf,
     start_lnum: LineNr,
     end_lnum: LineNr,
     start_col: ColNr,
     end_col: ColNr,
 ) -> BCount {
-    let max_lnum = buf.line_count();
+    let max_lnum = buffer.line_count();
     if start_lnum > max_lnum {
         return 0;
     }
@@ -485,13 +485,13 @@ pub fn get_region_bytecount(
     }
 
     // The rest of the first line, its break included.
-    let first_len = unsafe { buf.line_len(start_lnum) };
+    let first_len = unsafe { buffer.line_len(start_lnum) };
     let mut bytes = (first_len - start_col + 1) as BCount;
     for i in 1..=end_lnum - start_lnum - 1 {
         if start_lnum + i > max_lnum {
             return bytes;
         }
-        bytes += (unsafe { buf.line_len(start_lnum + i) } + 1) as BCount;
+        bytes += (unsafe { buffer.line_len(start_lnum + i) } + 1) as BCount;
     }
     if end_lnum > max_lnum {
         return bytes;

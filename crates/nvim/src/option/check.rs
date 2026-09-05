@@ -413,8 +413,8 @@ pub(crate) unsafe fn parse_winhl_opt(winhl: *const c_char, window: *mut Window) 
 ///
 /// # Safety
 ///
-/// `buf` and `win` must be live.
-pub(crate) unsafe fn check_redraw_for(buf: *mut Buffer, win: *mut Window, flags: uint32_t) {
+/// `buffer` and `win` must be live.
+pub(crate) unsafe fn check_redraw_for(buffer: *mut Buffer, win: *mut Window, flags: uint32_t) {
     // `kOptFlagRedrAll` is the two window bits together, so test for both.
     let all = flags & kOptFlagRedrAll == kOptFlagRedrAll;
     // SAFETY: the caller's buffer and window are live.
@@ -432,7 +432,7 @@ pub(crate) unsafe fn check_redraw_for(buf: *mut Buffer, win: *mut Window, flags:
         }
     }
     if flags & kOptFlagRedrBuf != 0 {
-        unsafe { redraw_buf_later(buf, UPD_NOT_VALID) };
+        unsafe { redraw_buf_later(buffer, UPD_NOT_VALID) };
     }
     if all {
         unsafe { redraw_all_later(UPD_NOT_VALID) };

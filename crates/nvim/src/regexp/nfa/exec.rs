@@ -402,12 +402,12 @@ pub(crate) unsafe fn nfa_regexec_nl(
 ///
 /// # Safety
 ///
-/// `rmp` must hold a program this engine compiled, and `buf`/`win` be the
+/// `rmp` must hold a program this engine compiled, and `buffer`/`win` be the
 /// buffer and window the match runs over.
 pub(crate) unsafe fn nfa_regexec_multi(
     rmp: *mut RegMMatch,
     win: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     col: ColNr,
     tm: *mut ProfTime,
@@ -417,6 +417,6 @@ pub(crate) unsafe fn nfa_regexec_multi(
     // match structure over a live buffer; `init_regexec_multi` points the
     // context at them, which is what `nfa_regexec_both` reads it out of.
     let rex = unsafe { Rex::acquire() };
-    init_regexec_multi(rex, rmp, win, buf, lnum);
+    init_regexec_multi(rex, rmp, win, buffer, lnum);
     nfa_regexec_both(rex, core::ptr::null_mut::<uint8_t>(), col, tm, timed_out)
 }

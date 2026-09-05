@@ -93,7 +93,7 @@ unsafe fn apply_pre(
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
 pub(crate) unsafe fn buf_write_do_autocmds(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     names: &mut WriteNames,
     start: LineNr,
     end: &mut LineNr,
@@ -101,22 +101,22 @@ pub(crate) unsafe fn buf_write_do_autocmds(
     mode: WriteMode,
     orig: OpMarks,
 ) -> PreWrite {
-    let old_line_count = unsafe { (*buf).b_ml.ml_line_count };
+    let old_line_count = unsafe { (*buffer).b_ml.ml_line_count };
     let msg_save = msg_scroll.get();
-    let empty_memline = unsafe { (*buf).b_ml.ml_mfp }.is_null();
+    let empty_memline = unsafe { (*buffer).b_ml.ml_mfp }.is_null();
     let sfname = names.sfname;
 
     // Which of the three names are the buffer's own, and so have to be
     // re-read if the autocommands rename it.
-    let buf_ffname = names.ffname == unsafe { (*buf).b_ffname };
-    let buf_sfname = sfname == unsafe { (*buf).b_sfname };
-    let buf_fname_f = names.fname == unsafe { (*buf).b_ffname };
-    let buf_fname_s = names.fname == unsafe { (*buf).b_sfname };
+    let buf_ffname = names.ffname == unsafe { (*buffer).b_ffname };
+    let buf_sfname = sfname == unsafe { (*buffer).b_sfname };
+    let buf_fname_f = names.fname == unsafe { (*buffer).b_ffname };
+    let buf_fname_s = names.fname == unsafe { (*buffer).b_sfname };
 
     // Set curwin/curbuf to buf and save a few things.
     let mut aco = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, buf) };
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
 
     // Did a "Cmd" autocommand write the file itself?
     let mut did_cmd = false;
@@ -164,7 +164,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 
     // The buffer is gone if the autocommands deleted or unloaded it.
     let buf = if bufref.valid() {
-        buf
+        buffer
     } else {
         core::ptr::null_mut()
     };
@@ -270,7 +270,7 @@ pub(crate) unsafe fn buf_write_do_autocmds(
 ///
 /// Careful: the autocommands may call `buf_write` recursively.
 pub(crate) unsafe fn buf_write_do_post_autocmds(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     fname: *mut c_char,
     eap: *mut ExArg,
     mode: WriteMode,
@@ -279,7 +279,7 @@ pub(crate) unsafe fn buf_write_do_post_autocmds(
     cur_buf().b_no_eol_lnum = 0;
 
     let mut aco = AcoSave::default();
-    unsafe { aucmd_prepbuf(&raw mut aco, buf) };
+    unsafe { aucmd_prepbuf(&raw mut aco, buffer) };
 
     let event = if mode.req.append {
         AutoEvent::FileAppendPost

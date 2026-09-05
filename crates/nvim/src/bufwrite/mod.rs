@@ -275,7 +275,7 @@ impl WriteRequest {
 ///
 /// `eap` may be null; it carries a forced `'ff'`/`'fenc'`.
 pub unsafe fn buf_write(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     fname: *mut ::core::ffi::c_char,
     sfname: *mut ::core::ffi::c_char,
     start: LineNr,
@@ -284,10 +284,10 @@ pub unsafe fn buf_write(
     req: WriteRequest,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, taken once for the whole body.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     // The quoted file name the failure path reports against.
     let mut quoted = [0 as ::core::ffi::c_char; IOSIZE as usize];
-    let (mut buf, mut start, mut end) = (buf, start, end);
+    let (mut buf, mut start, mut end) = (buffer, start, end);
     let mut retval = Ok(());
     let msg_save = msg_scroll.get();
     let mut prev_got_int = got_int.get();

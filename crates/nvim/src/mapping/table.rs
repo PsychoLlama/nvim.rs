@@ -300,7 +300,7 @@ impl Cursor {
 /// Both table pointers must name live storage.
 #[allow(clippy::too_many_arguments)] // upstream's; the caller has no struct to pass
 pub(crate) unsafe fn map_add(
-    buf: Buf,
+    buffer: Buf,
     map_table: *mut *mut MapBlock,
     abbr_table: *mut *mut MapBlock,
     keys: &[u8],
@@ -315,7 +315,7 @@ pub(crate) unsafe fn map_add(
     // The buffer's tables are reached through the one raw pointer, not
     // through `Buf`'s `DerefMut`: `map_table` already points into
     // `b_maphash`, and a fresh `&mut Buffer` would invalidate it.
-    let buf = buf.raw();
+    let buf = buffer.raw();
     // A given `sid` is upstream's "the block was `xcalloc`ed and only these
     // two fields were filled in", not a tweak of `current_sctx`.
     let script_ctx = if sid != 0 {
@@ -385,10 +385,10 @@ pub(crate) unsafe fn map_add(
 /// # Safety
 /// The lists this walks must not be reached from anywhere else while it
 /// runs.
-pub unsafe fn map_clear_mode(buf: Buf, mode: c_int, local: bool, abbr: bool) {
+pub unsafe fn map_clear_mode(buffer: Buf, mode: c_int, local: bool, abbr: bool) {
     // As in [`map_add`]: `mpp` points into `b_maphash`, so the tables are
     // reached through the one raw pointer rather than through `DerefMut`.
-    let buf = buf.raw();
+    let buf = buffer.raw();
     // SAFETY: `Buf`'s promise — a live buffer.  `&raw` reads nothing, and both
     // addresses come off the one raw pointer rather than off a `&mut`.
     let local_abbr = unsafe { &raw mut (*buf).b_first_abbr };

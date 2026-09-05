@@ -35,7 +35,7 @@ use crate::types::{
 /// [`extmark_adjust`](super::extmark_adjust) for the callers that already
 /// hold a [`Buf`].
 pub(crate) fn adjust(
-    buf: Buf,
+    buffer: Buf,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
@@ -45,7 +45,7 @@ pub(crate) fn adjust(
     if splice_pending() {
         return;
     }
-    let start_byte = line_offset(buf, line1) as BCount;
+    let start_byte = line_offset(buffer, line1) as BCount;
     let mut old_byte = 0;
     let mut new_byte = 0;
     let old_row;
@@ -53,7 +53,7 @@ pub(crate) fn adjust(
     if amount == MAXLNUM as LineNr {
         old_row = line2 - line1 + 1;
         // TODO(bfredl): ej kasta?
-        old_byte = buf.deleted_bytes2 as BCount;
+        old_byte = buffer.deleted_bytes2 as BCount;
         new_row = amount_after + old_row;
     } else {
         // A region is either deleted (amount == MAXLNUM) or added
@@ -64,7 +64,7 @@ pub(crate) fn adjust(
         new_row = amount;
     }
     if new_row > 0 {
-        new_byte = line_offset(buf, line1 + new_row) as BCount - start_byte;
+        new_byte = line_offset(buffer, line1 + new_row) as BCount - start_byte;
     }
     let start = Extent {
         row: line1 - 1,
@@ -81,19 +81,19 @@ pub(crate) fn adjust(
         col: 0,
         byte: new_byte,
     };
-    splice_impl(buf, start, old, new, undo);
+    splice_impl(buffer, start, old, new, undo);
 }
 
 /// [`extmark_splice`] for the callers that already hold a [`Buf`].
 pub(crate) fn splice(
-    buf: Buf,
+    buffer: Buf,
     start_row: c_int,
     start_col: ColNr,
     old: Extent,
     new: Extent,
     undo: ExtmarkOp,
 ) {
-    let mut offset = line_offset(buf, start_row + 1);
+    let mut offset = line_offset(buffer, start_row + 1);
 
     // On an empty buffer, editing the first line leaves the line buffered and
     // the offset negative. The buffer is not actually empty, but the buffered
@@ -101,7 +101,7 @@ pub(crate) fn splice(
     // -- an edge case.
     //
     // TODO(vigoux): maybe there is a better way of testing that?
-    if offset < 0 && !buf.b_ml.ml_chunks.is_built() {
+    if offset < 0 && !buffer.b_ml.ml_chunks.is_built() {
         offset = 0;
     }
     let start = Extent {
@@ -109,14 +109,20 @@ pub(crate) fn splice(
         col: start_col,
         byte: (offset + start_col) as BCount,
     };
-    splice_impl(buf, start, old, new, undo);
+    splice_impl(buffer, start, old, new, undo);
 }
 
 /// The splice itself: tell the update callbacks, save and invalidate the
 /// marks the deletion covers, move the rest, and record an undo entry.
-pub(crate) fn splice_impl(mut buf: Buf, start: Extent, old: Extent, new: Extent, undo: ExtmarkOp) {
-    buf.deleted_bytes2 = 0;
-    send_splice(buf, start, old, new);
+pub(crate) fn splice_impl(
+    mut buffer: Buf,
+    start: Extent,
+    old: Extent,
+    new: Extent,
+    undo: ExtmarkOp,
+) {
+    buffer.deleted_bytes2 = 0;
+    send_splice(buffer, start, old, new);
 
     if old.row > 0 || old.col > 0 {
         // Copy and invalidate the marks a delete would affect.
@@ -124,7 +130,7 @@ pub(crate) fn splice_impl(mut buf: Buf, start: Extent, old: Extent, new: Extent,
         // the merge below).
         let end_row = start.row + old.row;
         let end_col = (if old.row != 0 { 0 } else { start.col }) + old.col;
-        let uvp = undo_marks(buf);
+        let uvp = undo_marks(buffer);
         let lo = MTPos {
             row: start.row,
             col: start.col,
@@ -133,40 +139,40 @@ pub(crate) fn splice_impl(mut buf: Buf, start: Extent, old: Extent, new: Extent,
             row: end_row,
             col: end_col,
         };
-        splice_delete(buf, lo, hi, uvp, false, undo);
+        splice_delete(buffer, lo, hi, uvp, false, undo);
     }
 
     // Take the signs inside the edited region out of `b_signcols.count`; they
     // go back after the splice.
     if old.row > 0 || new.row > 0 {
-        let count = if buf.b_prev_line_count > 0 {
-            buf.b_prev_line_count
+        let count = if buffer.b_prev_line_count > 0 {
+            buffer.b_prev_line_count
         } else {
-            buf.b_ml.ml_line_count
+            buffer.b_ml.ml_line_count
         };
         signcols_count_range(
-            buf,
+            buffer,
             start.row,
             (count - 1).min(start.row + old.row),
             0,
             SignCountHalf::Subtract,
         );
-        buf.b_prev_line_count = 0;
+        buffer.b_prev_line_count = 0;
     }
 
     let at = MTPos {
         row: start.row,
         col: start.col,
     };
-    tree_splice(buf.marktree(), at, old.row, old.col, new.row, new.col);
+    tree_splice(buffer.marktree(), at, old.row, old.col, new.row, new.col);
 
     if old.row > 0 || new.row > 0 {
-        let row2 = (buf.b_ml.ml_line_count - 1).min(start.row + new.row);
-        signcols_count_range(buf, start.row, row2, 0, SignCountHalf::Add);
+        let row2 = (buffer.b_ml.ml_line_count - 1).min(start.row + new.row);
+        signcols_count_range(buffer, start.row, row2, 0, SignCountHalf::Add);
     }
 
     if undo == kExtmarkUndo {
-        let uvp = undo_marks(buf);
+        let uvp = undo_marks(buffer);
         if uvp.is_null() {
             return;
         }
@@ -226,34 +232,41 @@ fn merge_into_last(uvp: *mut extmark_undo_vec_t, start: Extent, old: Extent, new
 
 /// [`extmark_move_region`] for the callers that already hold a [`Buf`].
 pub(crate) fn move_region(
-    mut buf: Buf,
+    mut buffer: Buf,
     start: Extent,
     extent: Extent,
     new: Extent,
     undo: ExtmarkOp,
 ) {
-    buf.deleted_bytes2 = 0;
+    buffer.deleted_bytes2 = 0;
     // TODO(bfredl): this is not synced to the buffer state inside the
     // callback. But unless the undo implementation gets smarter, it is not
     // ensured anyway.
-    send_splice(buf, start, extent, Extent::default());
+    send_splice(buffer, start, extent, Extent::default());
 
     let row1 = start.row.min(new.row);
     let row2 = start.row.max(new.row) + extent.row;
-    signcols_count_range(buf, row1, row2, 0, SignCountHalf::Subtract);
+    signcols_count_range(buffer, row1, row2, 0, SignCountHalf::Subtract);
 
     let at = MTPos {
         row: start.row,
         col: start.col,
     };
-    tree_move_region(buf.marktree(), at, extent.row, extent.col, new.row, new.col);
+    tree_move_region(
+        buffer.marktree(),
+        at,
+        extent.row,
+        extent.col,
+        new.row,
+        new.col,
+    );
 
-    signcols_count_range(buf, row1, row2, 0, SignCountHalf::Add);
+    signcols_count_range(buffer, row1, row2, 0, SignCountHalf::Add);
 
-    send_splice(buf, new, Extent::default(), extent);
+    send_splice(buffer, new, Extent::default(), extent);
 
     if undo == kExtmarkUndo {
-        let uvp = undo_marks(buf);
+        let uvp = undo_marks(buffer);
         if uvp.is_null() {
             return;
         }

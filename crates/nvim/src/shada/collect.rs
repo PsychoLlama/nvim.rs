@@ -31,9 +31,9 @@ use crate::types::{
 /// Whether a buffer's marks are not worth remembering: it has no file name,
 /// it was unlisted on purpose, it is a quickfix or terminal buffer, or its
 /// file is on removable media.
-pub(crate) unsafe fn ignore_buf(buf: *const Buffer, removable_bufs: &RemovableBufs) -> bool {
+pub(crate) unsafe fn ignore_buf(buffer: *const Buffer, removable_bufs: &RemovableBufs) -> bool {
     // SAFETY: the caller's promise -- null or a live buffer.
-    let Some(b) = (unsafe { Buf::from_raw(buf.cast_mut()) }) else {
+    let Some(b) = (unsafe { Buf::from_raw(buffer.cast_mut()) }) else {
         return true;
     };
     b.b_ffname.is_null()
@@ -41,7 +41,7 @@ pub(crate) unsafe fn ignore_buf(buf: *const Buffer, removable_bufs: &RemovableBu
         || buf_is_quickfix(Some(b))
         || buf_is_terminal(Some(b))
         // SAFETY: the caller's set, and the buffer is only compared.
-        || removable_bufs.contains(&buf)
+        || removable_bufs.contains(&buffer)
 }
 
 /// Collect the buffers whose files are on removable media.

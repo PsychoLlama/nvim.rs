@@ -412,10 +412,10 @@ pub fn is_in_cmdwin() -> bool {
 
 /// C's `close_buffer(NULL, buf, DOBUF_WIPE, false, false)`: wipe the command
 /// window's buffer out, window-less and without forcing.
-fn wipe_buffer(buf: *mut Buffer) {
+fn wipe_buffer(buffer: *mut Buffer) {
     let wipe = DOBUF_WIPE as ::core::ffi::c_int;
-    // SAFETY: the callers have just asked `BufRef::valid` about `buf`.
-    unsafe { close_buffer(None, Buf::new(buf), wipe, false, false) };
+    // SAFETY: the callers have just asked `BufRef::valid` about `buffer`.
+    unsafe { close_buffer(None, Buf::new(buffer), wipe, false, false) };
 }
 
 /// The buffer the editor is working in.

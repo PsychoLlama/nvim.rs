@@ -273,29 +273,29 @@ unsafe fn script_host_do_range(name: &CStr, eap: *mut ExArg) {
 
 // -- Writing out, and asking about it --------------------------------------
 
-/// Write `buf` if 'autowrite' or 'autowriteall' is set.
+/// Write `buffer` if 'autowrite' or 'autowriteall' is set.
 ///
-/// Careful: autocommands may make `buf` invalid.
+/// Careful: autocommands may make `buffer` invalid.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn autowrite(buf: *mut Buffer, forceit: bool) -> Result<(), Failed> {
+pub(crate) unsafe fn autowrite(buffer: *mut Buffer, forceit: bool) -> Result<(), Failed> {
     // SAFETY: module contract.
     if !(p_aw.get() != 0 || p_awa.get() != 0)
         || p_write.get() == 0
         // never autowrite a "nofile" or "nowrite" buffer
-        || buf_is_dontwrite(unsafe { Buf::from_raw(buf) })
-        || (!forceit && unsafe { (*buf) .b_p_ro } != 0)
-        || unsafe { (*buf) .b_ffname }.is_null()
+        || buf_is_dontwrite(unsafe { Buf::from_raw(buffer) })
+        || (!forceit && unsafe { (*buffer) .b_p_ro } != 0)
+        || unsafe { (*buffer) .b_ffname }.is_null()
     {
         return Err(Failed);
     }
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
-    let r = unsafe { buf_write_all(buf, forceit) };
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
+    let r = unsafe { buf_write_all(buffer, forceit) };
 
     // The write can succeed and still leave the buffer changed, e.g. on
     // a conversion error. That is a failure.
-    if bufref.valid() && buf_is_changed(unsafe { Buf::new(buf) }) {
+    if bufref.valid() && buf_is_changed(unsafe { Buf::new(buffer) }) {
         return Err(Failed);
     }
     r
@@ -325,21 +325,21 @@ pub(crate) unsafe fn autowrite_all() {
     }
 }
 
-/// Whether `buf` was changed and so cannot be abandoned. `flags` is a set of
+/// Whether `buffer` was changed and so cannot be abandoned. `flags` is a set of
 /// the `CCGD_*` values.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn check_changed(buf: *mut Buffer, flags: c_int) -> bool {
+pub(crate) unsafe fn check_changed(buffer: *mut Buffer, flags: c_int) -> bool {
     let forceit = flags & CCGD_FORCEIT != 0;
     // SAFETY: module contract, here and at every `unsafe` below.
-    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buf) });
+    let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
 
     let blocked = unsafe {
         !forceit
-            && buf_is_changed(Buf::new(buf))
-            && (flags & CCGD_MULTWIN != 0 || (*buf).b_nwindows <= 1)
-            && (flags & CCGD_AW == 0 || autowrite(buf, forceit).is_err())
+            && buf_is_changed(Buf::new(buffer))
+            && (flags & CCGD_MULTWIN != 0 || (*buffer).b_nwindows <= 1)
+            && (flags & CCGD_AW == 0 || autowrite(buffer, forceit).is_err())
     };
     if !blocked {
         return false;
@@ -369,20 +369,20 @@ pub(crate) unsafe fn check_changed(buf: *mut Buffer, flags: c_int) -> bool {
     if !bufref.valid() {
         return false;
     }
-    unsafe { dialog_changed(buf, count > 1) };
+    unsafe { dialog_changed(buffer, count > 1) };
     if !bufref.valid() {
         return false;
     }
-    buf_is_changed(unsafe { Buf::new(buf) })
+    buf_is_changed(unsafe { Buf::new(buffer) })
 }
 
-/// Ask what to do about abandoning the changed buffer `buf`. The caller must
+/// Ask what to do about abandoning the changed buffer `buffer`. The caller must
 /// have checked 'write' first. `checkall` offers to deal with every changed
 /// buffer at once.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn dialog_changed(buf: *mut Buffer, checkall: bool) {
+pub(crate) unsafe fn dialog_changed(buffer: *mut Buffer, checkall: bool) {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // `check_overwrite` needs an ExArg; upstream hands it an all-zero one.
     let mut ea = ExArg::default();
@@ -393,7 +393,7 @@ pub(crate) unsafe fn dialog_changed(buf: *mut Buffer, checkall: bool) {
         dialog_msg(
             buff.as_mut_ptr(),
             c"Save changes to \"%s\"?".as_ptr().cast_mut(),
-            (*buf).b_fname,
+            (*buffer).b_fname,
         )
     };
     let ret = if checkall {
@@ -403,27 +403,27 @@ pub(crate) unsafe fn dialog_changed(buf: *mut Buffer, checkall: bool) {
     };
 
     if ret == VIM_YES as c_int {
-        let empty_bufname = unsafe { (*buf).b_fname }.is_null();
+        let empty_bufname = unsafe { (*buffer).b_fname }.is_null();
         if empty_bufname {
-            unsafe { buf_set_name((*buf).handle as c_int, c"Untitled".as_ptr().cast_mut()) };
+            unsafe { buf_set_name((*buffer).handle as c_int, c"Untitled".as_ptr().cast_mut()) };
         }
-        let target = unsafe { Buf::new(buf) };
-        if unsafe { check_overwrite(&mut ea, target, (*buf).b_fname, (*buf).b_ffname, false) }.is_ok()
+        let target = unsafe { Buf::new(buffer) };
+        if unsafe { check_overwrite(&mut ea, target, (*buffer).b_fname, (*buffer).b_ffname, false) }.is_ok()
             // didn't hit Cancel
-            && unsafe { buf_write_all(buf, false) }.is_ok()
+            && unsafe { buf_write_all(buffer, false) }.is_ok()
         {
             return;
         }
         // Restore the empty name when the write failed or was cancelled.
         if empty_bufname {
-            unsafe { (*buf).b_fname = ptr::null_mut() };
-            unsafe { xfree((*buf).b_ffname.cast()) };
-            unsafe { (*buf).b_ffname = ptr::null_mut() };
-            unsafe { xfree((*buf).b_sfname.cast()) };
-            unsafe { (*buf).b_sfname = ptr::null_mut() };
+            unsafe { (*buffer).b_fname = ptr::null_mut() };
+            unsafe { xfree((*buffer).b_ffname.cast()) };
+            unsafe { (*buffer).b_ffname = ptr::null_mut() };
+            unsafe { xfree((*buffer).b_sfname.cast()) };
+            unsafe { (*buffer).b_sfname = ptr::null_mut() };
         }
     } else if ret == VIM_NO as c_int {
-        unchanged(unsafe { Buf::new(buf) }, true, false);
+        unchanged(unsafe { Buf::new(buffer) }, true, false);
     } else if ret == VIM_ALL as c_int {
         unsafe { write_all_writable() };
     } else if ret == VIM_DISCARDALL as c_int {
@@ -463,17 +463,17 @@ unsafe fn write_all_writable() {
     }
 }
 
-/// Ask whether to close the terminal buffer `buf`.
+/// Ask whether to close the terminal buffer `buffer`.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn dialog_close_terminal(buf: *mut Buffer) -> bool {
+pub(crate) unsafe fn dialog_close_terminal(buffer: *mut Buffer) -> bool {
     let mut buff: [c_char; DIALOG_MSG_SIZE] = [0; DIALOG_MSG_SIZE];
     // SAFETY: module contract; `buff` is `DIALOG_MSG_SIZE` bytes.
-    let name = if unsafe { (*buf).b_fname }.is_null() {
+    let name = if unsafe { (*buffer).b_fname }.is_null() {
         c"?".as_ptr().cast_mut()
     } else {
-        unsafe { (*buf).b_fname }
+        unsafe { (*buffer).b_fname }
     };
     unsafe {
         dialog_msg(
@@ -488,18 +488,18 @@ pub(crate) unsafe fn dialog_close_terminal(buf: *mut Buffer) -> bool {
     }
 }
 
-/// Whether `buf` can be abandoned -- by hiding it, autowriting it or
+/// Whether `buffer` can be abandoned -- by hiding it, autowriting it or
 /// unloading it.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn can_abandon(buf: *mut Buffer, forceit: bool) -> bool {
+pub(crate) unsafe fn can_abandon(buffer: *mut Buffer, forceit: bool) -> bool {
     // SAFETY: module contract.
-    let hidden = unsafe { buf_hide(buf) };
+    let hidden = unsafe { buf_hide(buffer) };
     hidden
-        || !buf_is_changed(unsafe { Buf::new(buf) })
-        || unsafe { (*buf).b_nwindows } > 1
-        || unsafe { autowrite(buf, forceit) }.is_ok()
+        || !buf_is_changed(unsafe { Buf::new(buffer) })
+        || unsafe { (*buffer).b_nwindows } > 1
+        || unsafe { autowrite(buffer, forceit) }.is_ok()
         || forceit
 }
 
@@ -611,7 +611,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn report_unwritten(buf: *mut Buffer) {
+unsafe fn report_unwritten(buffer: *mut Buffer) {
     // `wait_return` is a no-op while `vgetc` is busy (Quit used from a window
     // menu); make sure the message does not scroll up then.
     if vgetc_busy.get() > 0 {
@@ -620,20 +620,20 @@ unsafe fn report_unwritten(buf: *mut Buffer) {
         msg_didout.set(false);
     }
     // SAFETY: module contract.
-    let shown = if !unsafe { (*buf).terminal }.is_null()
-        && unsafe { channel_job_running((*buf).b_p_channel as uint64_t) }
+    let shown = if !unsafe { (*buffer).terminal }.is_null()
+        && unsafe { channel_job_running((*buffer).b_p_channel as uint64_t) }
     {
         unsafe {
             semsg!(
                 "E947: Job still running in buffer \"{}\"",
-                c_str((*buf).b_fname)
+                c_str((*buffer).b_fname)
             )
         }
     } else {
-        let name = if unsafe { buf_spname(buf) }.is_null() {
-            unsafe { (*buf).b_fname }
+        let name = if unsafe { buf_spname(buffer) }.is_null() {
+            unsafe { (*buffer).b_fname }
         } else {
-            unsafe { buf_spname(buf) }
+            unsafe { buf_spname(buffer) }
         };
         unsafe {
             semsg!(
@@ -664,20 +664,20 @@ pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
     Ok(())
 }
 
-/// Write out the whole of `buf`.
+/// Write out the whole of `buffer`.
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn buf_write_all(buf: *mut Buffer, forceit: bool) -> Result<(), Failed> {
+pub(crate) unsafe fn buf_write_all(buffer: *mut Buffer, forceit: bool) -> Result<(), Failed> {
     let old_curbuf = curbuf.get();
     // SAFETY: module contract.
     let retval = unsafe {
         buf_write(
-            buf,
-            (*buf).b_ffname,
-            (*buf).b_fname,
+            buffer,
+            (*buffer).b_ffname,
+            (*buffer).b_fname,
             1 as LineNr,
-            (*buf).b_ml.ml_line_count,
+            (*buffer).b_ml.ml_line_count,
             ptr::null_mut(),
             WriteRequest {
                 append: false,

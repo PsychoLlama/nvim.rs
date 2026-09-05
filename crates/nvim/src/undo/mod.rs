@@ -199,15 +199,15 @@ pub fn u_save(top: LineNr, bot: LineNr) -> Result<(), Failed> {
 ///
 /// Safe: the line range is validated here, and `Err` is the answer for one
 /// that is out of range.
-pub fn u_save_buf(buf: Buf, top: LineNr, bot: LineNr) -> Result<(), Failed> {
-    if top >= bot || bot > buf.line_count() + 1 {
+pub fn u_save_buf(buffer: Buf, top: LineNr, bot: LineNr) -> Result<(), Failed> {
+    if top >= bot || bot > buffer.line_count() + 1 {
         return Err(Failed);
     }
     if top + 2 == bot {
         // A single line: `U` can put it back.
-        u_saveline(buf, top + 1);
+        u_saveline(buffer, top + 1);
     }
-    u_savecommon(buf, top, bot, 0, false)
+    u_savecommon(buffer, top, bot, 0, false)
 }
 
 /// Saves the line a `:substitute` is about to replace.
@@ -238,11 +238,11 @@ pub fn u_savedel(lnum: LineNr, nlines: LineNr) -> Result<(), Failed> {
     )
 }
 
-/// Whether `buf` may be changed at all, saying why not when it may not.
+/// Whether `buffer` may be changed at all, saying why not when it may not.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub fn undo_allowed(buf: Buf) -> bool {
-    if buf.b_p_ma == 0 {
+pub fn undo_allowed(buffer: Buf) -> bool {
+    if buffer.b_p_ma == 0 {
         emsg(gettext(e_modifiable));
         return false;
     }
@@ -257,11 +257,11 @@ pub fn undo_allowed(buf: Buf) -> bool {
     true
 }
 
-/// `'undolevels'` for `buf`: its own, or the global one when it has none.
+/// `'undolevels'` for `buffer`: its own, or the global one when it has none.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-fn get_undolevel(buf: Buf) -> OptInt {
-    let local = buf.b_p_ul;
+fn get_undolevel(buffer: Buf) -> OptInt {
+    let local = buffer.b_p_ul;
     if local == OptInt::from(NO_LOCAL_UNDOLEVEL) {
         return p_ul.get();
     }
@@ -296,23 +296,23 @@ unsafe fn zero_fmark_additional_data(fmarks: &mut [FileMark; NMARKS as usize]) {
 ///
 /// # Safety
 ///
-/// `buf` points at a live buffer, and there is a live current window.
+/// `buffer` points at a live buffer, and there is a live current window.
 pub fn u_savecommon(
-    buf: Buf,
+    buffer: Buf,
     top: LineNr,
     bot: LineNr,
     newbot: LineNr,
     reload: bool,
 ) -> Result<(), Failed> {
-    let b = buf;
+    let b = buffer;
     if !reload {
-        if !undo_allowed(buf) {
+        if !undo_allowed(buffer) {
             return Err(Failed);
         }
-        if ptr::eq(buf.raw(), curbuf.get()) {
+        if ptr::eq(buffer.raw(), curbuf.get()) {
             // SAFETY: the current buffer, which is live and survives
             // FileChangedRO.
-            unsafe { change_warning(buf, 0) };
+            unsafe { change_warning(buffer, 0) };
         }
         if bot > b.line_count() + 1 {
             emsg(gettext(c"E881: Line count changed unexpectedly"));
@@ -327,14 +327,14 @@ pub fn u_savecommon(
             return Ok(());
         }
     } else {
-        if get_undolevel(buf) < 0 {
+        if get_undolevel(buffer) < 0 {
             return Ok(());
         }
         // SAFETY: a live current window.
         if size == 1 && unsafe { extend_last_entry(b, top, bot, newbot) } {
             return Ok(());
         }
-        u_getbot(buf);
+        u_getbot(buffer);
     }
     // SAFETY: a live current window, and a newest header to record against —
     // either the one just started or the one being extended.
@@ -679,10 +679,10 @@ pub unsafe fn ex_undojoin(_eap: *mut ExArg) {
 /// writing the file out makes true.
 ///
 /// Safe: nothing in the walk frees a header.
-pub fn u_unchanged(mut buf: Buf) {
+pub fn u_unchanged(mut buffer: Buf) {
     // SAFETY: nothing here frees a header the walk has visited.
-    unsafe { u_unch_branch(buf, buf.b_u_oldhead) };
-    buf.b_did_warn = false;
+    unsafe { u_unch_branch(buffer, buffer.b_u_oldhead) };
+    buffer.b_did_warn = false;
 }
 
 /// Moves the newest header's cursor to the first line that actually differs
@@ -720,8 +720,8 @@ pub fn u_find_first_changed() {
 /// that `:earlier 1f` can find it again.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub fn u_update_save_nr(buf: Buf) {
-    let mut b = buf;
+pub fn u_update_save_nr(buffer: Buf) {
+    let mut b = buffer;
     b.b_u_save_nr_last += 1;
     b.b_u_save_nr_cur = b.b_u_save_nr_last;
     let above = match b.header(b.b_u_curhead) {
@@ -733,14 +733,14 @@ pub fn u_update_save_nr(buf: Buf) {
     }
 }
 
-/// Whether `buf` holds changes that writing it out would save.
+/// Whether `buffer` holds changes that writing it out would save.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub fn buf_is_changed(buf: Buf) -> bool {
-    if buf_is_prompt(Some(buf)) {
-        return buf.b_modified_was_set;
+pub fn buf_is_changed(buffer: Buf) -> bool {
+    if buf_is_prompt(Some(buffer)) {
+        return buffer.b_modified_was_set;
     }
-    !buf_is_dontwrite(Some(buf)) && (buf.b_changed != 0 || file_ff_differs(buf, true))
+    !buf_is_dontwrite(Some(buffer)) && (buffer.b_changed != 0 || file_ff_differs(buffer, true))
 }
 
 /// Whether any buffer at all holds unsaved changes.

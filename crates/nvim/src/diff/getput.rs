@@ -24,10 +24,10 @@ fn emsg_gettext(msg: *const c_char) {
     unsafe { emsg(gettext_ptr(msg)) };
 }
 
-/// Whether `:diffput` may write into `buf` -- or the command is not
+/// Whether `:diffput` may write into `buffer` -- or the command is not
 /// `:diffput` at all, in which case nothing has to be modifiable.
-fn writable_target(buf: Buf, cmdidx: CmdIdx) -> bool {
-    cmdidx != CmdIdx::diffput || buf.b_p_ma != 0
+fn writable_target(buffer: Buf, cmdidx: CmdIdx) -> bool {
+    cmdidx != CmdIdx::diffput || buffer.b_p_ma != 0
 }
 
 /// `do` and `dp`: get or put the diff block under the cursor.

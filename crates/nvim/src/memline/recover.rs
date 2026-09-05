@@ -427,13 +427,13 @@ unsafe fn choose_swapfile(fname: *mut c_char) -> Option<*mut c_char> {
 /// Walk the swap file's block tree and append every line it can find to
 /// `curbuf`, after line 0.
 ///
-/// `buf` is the scratch buffer whose `ml_stack` records the descent. Nothing
+/// `buffer` is the scratch buffer whose `ml_stack` records the descent. Nothing
 /// in the file is trusted: a count or a block number that cannot be right
 /// costs a `???` line and the walk carries on. Returns the number of lines
 /// appended and the number of problems found, or `Err` when block 1 itself is
 /// unusable, which leaves nothing to recover.
 unsafe fn recover_lines(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     mfp: *mut MemFile,
     hp: &mut *mut BlockHdr,
 ) -> Result<(LineNr, c_int), ()> {
@@ -443,7 +443,7 @@ unsafe fn recover_lines(
     let mut line_count: LineNr = 0;
     let mut idx = 0; // start with the first index in block 1
     let mut error = 0;
-    unsafe { (*buf).b_ml.stack_clear() };
+    unsafe { (*buffer).b_ml.stack_clear() };
 
     // Without a file to fall back on, a data block whose number went
     // negative (never written to the swap file) is simply lost.
@@ -535,14 +535,14 @@ unsafe fn recover_lines(
                     }
 
                     // One block deeper in the tree.
-                    let top = unsafe { ml_add_stack(buf) };
+                    let top = unsafe { ml_add_stack(buffer) };
                     let frame = InfoPtr {
                         ip_bnum: bnum,
                         ip_low: 0,
                         ip_high: 0,
                         ip_index: idx,
                     };
-                    unsafe { (*buf).b_ml.stack_set(top, frame) };
+                    unsafe { (*buffer).b_ml.stack_set(top, frame) };
 
                     bnum = pe.pe_bnum;
                     line_count = pe.pe_line_count;
@@ -558,11 +558,11 @@ unsafe fn recover_lines(
                         append(&mut lnum, tr(c"???ILLEGAL BLOCK NUMBER"));
                         // Skip this entry and pop back up, to recover
                         // whatever else there is.
-                        let ip = unsafe { (*buf).b_ml.stack_at(top) };
+                        let ip = unsafe { (*buffer).b_ml.stack_at(top) };
                         idx = ip.ip_index + 1;
                         bnum = ip.ip_bnum;
                         page_count = 1;
-                        unsafe { (*buf).b_ml.stack_pop() };
+                        unsafe { (*buffer).b_ml.stack_pop() };
                         break 'step;
                     }
                     idx = 0;
@@ -645,7 +645,7 @@ unsafe fn recover_lines(
             }
 
             // One block back up the tree, and on to the next index.
-            let Some(ip) = (unsafe { (*buf).b_ml.stack_pop() }) else {
+            let Some(ip) = (unsafe { (*buffer).b_ml.stack_pop() }) else {
                 break 'walk; // finished
             };
             bnum = ip.ip_bnum;
@@ -774,8 +774,8 @@ pub unsafe fn ml_sync_all(check_file: c_int, check_char: c_int, do_fsync: bool) 
 ///
 /// This is `:preserve`, and what happens when the original file has been
 /// changed or deleted. `message` reports whether it worked.
-pub unsafe fn ml_preserve(buf: *mut Buffer, message: bool, do_fsync: bool) {
-    let mfp = unsafe { (*buf).b_ml.ml_mfp };
+pub unsafe fn ml_preserve(buffer: *mut Buffer, message: bool, do_fsync: bool) {
+    let mfp = unsafe { (*buffer).b_ml.ml_mfp };
     if mfp.is_null() || unsafe { mf_fname(mfp) }.is_null() {
         if message {
             complain(c"E313: Cannot preserve, there is no swap file");
@@ -787,13 +787,13 @@ pub unsafe fn ml_preserve(buf: *mut Buffer, message: bool, do_fsync: bool) {
     let got_int_save = got_int.get();
     got_int.set(false);
 
-    unsafe { ml_flush_line(buf, false) }; // flush the buffered line
-    unsafe { ml_find_line(buf, 0, ML_FLUSH as c_int) }; // flush the locked block
+    unsafe { ml_flush_line(buffer, false) }; // flush the buffered line
+    unsafe { ml_find_line(buffer, 0, ML_FLUSH as c_int) }; // flush the locked block
     let sync_flags = MFS_ALL as c_int | if do_fsync { MFS_FLUSH as c_int } else { 0 };
     // `ml_preserve` still answers OK/FAIL to its own callers, so the
     // memfile's result is converted here and again below.
     let mut status = unsafe { mf_sync(mfp, sync_flags) }.map_or(FAIL, |()| OK);
-    unsafe { (*buf).b_ml.stack_clear() }; // the stack is invalid after MFS_ALL
+    unsafe { (*buffer).b_ml.stack_clear() }; // the stack is invalid after MFS_ALL
 
     // Some data blocks may have gone from a negative to a positive block
     // number, which means the pointer blocks referring to them need
@@ -805,19 +805,19 @@ pub unsafe fn ml_preserve(buf: *mut Buffer, message: bool, do_fsync: bool) {
     'theend: {
         if unsafe { mf_need_trans(mfp) } && !got_int.get() {
             let mut lnum: LineNr = 1;
-            while unsafe { mf_need_trans(mfp) } && lnum <= unsafe { (*buf).b_ml.ml_line_count } {
-                if unsafe { ml_find_line(buf, lnum, ML_FIND as c_int) }.is_null() {
+            while unsafe { mf_need_trans(mfp) } && lnum <= unsafe { (*buffer).b_ml.ml_line_count } {
+                if unsafe { ml_find_line(buffer, lnum, ML_FIND as c_int) }.is_null() {
                     status = FAIL;
                     break 'theend;
                 }
-                lnum = unsafe { (*buf).b_ml.locked_high() } + 1;
+                lnum = unsafe { (*buffer).b_ml.locked_high() } + 1;
             }
-            unsafe { ml_find_line(buf, 0, ML_FLUSH as c_int) }; // flush the locked block
+            unsafe { ml_find_line(buffer, 0, ML_FLUSH as c_int) }; // flush the locked block
             // Sync the pointer blocks that were just updated.
             if unsafe { mf_sync(mfp, sync_flags) }.is_err() {
                 status = FAIL;
             }
-            unsafe { (*buf).b_ml.stack_clear() }; // the stack is invalid now
+            unsafe { (*buffer).b_ml.stack_clear() }; // the stack is invalid now
         }
     }
     got_int.set(got_int.get() | got_int_save);

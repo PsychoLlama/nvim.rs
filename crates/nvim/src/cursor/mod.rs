@@ -467,12 +467,12 @@ pub fn get_cursor_rel_lnum(win: Win, lnum: LineNr) -> LineNr {
     if lnum < cursor { -span } else { span }
 }
 
-/// Clamp `pos` to a line and column that exist in `buf`.
-pub fn check_pos(buf: Buf, pos: &mut Pos) {
-    pos.lnum = pos.lnum.min(buf.line_count());
+/// Clamp `pos` to a line and column that exist in `buffer`.
+pub fn check_pos(buffer: Buf, pos: &mut Pos) {
+    pos.lnum = pos.lnum.min(buffer.line_count());
     if pos.col > 0 {
         // SAFETY: `lnum` was just clamped to a line the buffer has.
-        pos.col = pos.col.min(unsafe { buf.line_len(pos.lnum) });
+        pos.col = pos.col.min(unsafe { buffer.line_len(pos.lnum) });
     }
 }
 

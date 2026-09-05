@@ -32,13 +32,13 @@ const W_READONLY: *const c_char = c"W10: Warning: Changing a readonly file".as_p
 ///
 /// # Safety
 /// FileChangedRO may run arbitrary autocommands, which can reload the buffer
-/// and even change `curbuf`; `buf` is read again after they have run, so it
+/// and even change `curbuf`; `buffer` is read again after they have run, so it
 /// must survive them.
-pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
-    if buf.b_did_warn || curbuf_is_changed() || autocmd_busy.get() || buf.b_p_ro == 0 {
+pub unsafe fn change_warning(mut buffer: Buf, col: c_int) {
+    if buffer.b_did_warn || curbuf_is_changed() || autocmd_busy.get() || buffer.b_p_ro == 0 {
         return;
     }
-    buf.b_ro_locked += 1;
+    buffer.b_ro_locked += 1;
     // SAFETY: a live buffer, and the event takes no file name.
     unsafe {
         apply_autocmds(
@@ -46,11 +46,11 @@ pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            buf.raw(),
+            buffer.raw(),
         )
     };
-    buf.b_ro_locked -= 1;
-    if buf.b_p_ro == 0 {
+    buffer.b_ro_locked -= 1;
+    if buffer.b_p_ro == 0 {
         // An autocommand cleared 'readonly': nothing to warn about.
         return;
     }
@@ -72,7 +72,7 @@ pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
         // Give the user time to think about it.
         unsafe { msg_delay(1002, true) };
     }
-    buf.b_did_warn = true;
+    buffer.b_did_warn = true;
     // Don't redraw and erase the message.
     redraw_cmdline.set(false);
     if msg_row.get() < Rows.get() - 1 {
@@ -81,7 +81,7 @@ pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
     }
 }
 
-/// Note that something in `buf` changed.
+/// Note that something in `buffer` changed.
 ///
 /// Most often reached through [`changed_bytes`] and [`changed_lines`], which
 /// also mark the area of the display to be redrawn. `b:changedtick` is bumped
@@ -89,23 +89,23 @@ pub unsafe fn change_warning(mut buf: Buf, col: c_int) {
 ///
 /// # Safety
 /// May trigger autocommands that reload the buffer, and notifies the
-/// `b:changedtick` watchers, which can re-enter; `buf` is used after both, so
+/// `b:changedtick` watchers, which can re-enter; `buffer` is used after both, so
 /// it must survive them.
-pub unsafe fn changed(buf: Buf) {
-    if buf.b_changed == 0 {
+pub unsafe fn changed(buffer: Buf) {
+    if buffer.b_changed == 0 {
         let save_msg_scroll = msg_scroll.get();
 
         // May check the file out, and so change `curbuf`.
-        // SAFETY: the caller's promise -- `buf` survives FileChangedRO.
-        unsafe { change_warning(buf, 0) };
+        // SAFETY: the caller's promise -- `buffer` survives FileChangedRO.
+        unsafe { change_warning(buffer, 0) };
 
         // Create a swap file if that is wanted; not for "nofile" and
         // "nowrite" buffers.
-        if buf.b_may_swap && !buf_is_dontwrite(Some(buf)) {
+        if buffer.b_may_swap && !buf_is_dontwrite(Some(buffer)) {
             let save_need_wait_return = need_wait_return.get();
             need_wait_return.set(false);
             // SAFETY: a live buffer.
-            unsafe { ml_open_file(buf.raw()) };
+            unsafe { ml_open_file(buffer.raw()) };
 
             // ml_open_file() can produce an ATTENTION message. Wait two
             // seconds so the user reads it, and call wait_return() here
@@ -123,10 +123,10 @@ pub unsafe fn changed(buf: Buf) {
                 need_wait_return.set(save_need_wait_return);
             }
         }
-        changed_internal(buf);
+        changed_internal(buffer);
     }
     // SAFETY: a live buffer.
-    unsafe { buf_inc_changedtick(buf.raw()) };
+    unsafe { buf_inc_changedtick(buffer.raw()) };
     highlight_match.set(false);
 }
 
@@ -134,17 +134,17 @@ pub unsafe fn changed(buf: Buf) {
 /// swap file or the `b:changedtick` bump [`changed`] also does.
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
-pub fn changed_internal(mut buf: Buf) {
-    buf.b_changed = true as c_int;
-    buf.b_changed_invalid = true;
+pub fn changed_internal(mut buffer: Buf) {
+    buffer.b_changed = true as c_int;
+    buffer.b_changed_invalid = true;
     // SAFETY: a live buffer, which is all either asks.
-    unsafe { ml_setflags(buf.raw()) };
-    unsafe { redraw_buf_status_later(buf.raw()) };
+    unsafe { ml_setflags(buffer.raw()) };
+    unsafe { redraw_buf_status_later(buffer.raw()) };
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }
 
-/// Note that `buf` is no longer modified -- `:w`, `:e!`, and undoing back to
+/// Note that `buffer` is no longer modified -- `:w`, `:e!`, and undoing back to
 /// the last write.
 ///
 /// With `ff` set, the buffer's 'fileformat' and friends are re-recorded as
@@ -156,46 +156,46 @@ pub fn changed_internal(mut buf: Buf) {
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
 /// The `b:changedtick` bump notifies the `b:` watchers, which may re-enter,
 /// but nothing here reads the buffer after it.
-pub fn unchanged(mut buf: Buf, ff: bool, always_inc_changedtick: bool) {
-    if buf.b_changed != 0 || (ff && file_ff_differs(buf, false)) {
-        buf.b_changed = false as c_int;
-        buf.b_changed_invalid = true;
+pub fn unchanged(mut buffer: Buf, ff: bool, always_inc_changedtick: bool) {
+    if buffer.b_changed != 0 || (ff && file_ff_differs(buffer, false)) {
+        buffer.b_changed = false as c_int;
+        buffer.b_changed_invalid = true;
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { ml_setflags(buf.raw()) };
+        unsafe { ml_setflags(buffer.raw()) };
         if ff {
-            save_file_ff(buf);
+            save_file_ff(buffer);
         }
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { redraw_buf_status_later(buf.raw()) };
+        unsafe { redraw_buf_status_later(buffer.raw()) };
         redraw_tabline.set(true);
         need_maketitle.set(true);
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { buf_inc_changedtick(buf.raw()) };
+        unsafe { buf_inc_changedtick(buffer.raw()) };
     } else if always_inc_changedtick {
         // SAFETY: a live buffer, which is all it asks.
-        unsafe { buf_inc_changedtick(buf.raw()) };
+        unsafe { buf_inc_changedtick(buffer.raw()) };
     }
 }
 
-/// Remember `buf`'s 'fileformat', 'fileencoding', end-of-line, end-of-file
+/// Remember `buffer`'s 'fileformat', 'fileencoding', end-of-line, end-of-file
 /// and BOM as they are on disk, so that [`file_ff_differs`] can tell later
 /// whether the user changed one.
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
-pub fn save_file_ff(mut buf: Buf) {
+pub fn save_file_ff(mut buffer: Buf) {
     // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    buf.b_start_ffc = c_int::from(unsafe { *buf.b_p_ff } as u8);
-    buf.b_start_eof = buf.b_p_eof;
-    buf.b_start_eol = buf.b_p_eol;
-    buf.b_start_bomb = buf.b_p_bomb;
+    buffer.b_start_ffc = c_int::from(unsafe { *buffer.b_p_ff } as u8);
+    buffer.b_start_eof = buffer.b_p_eof;
+    buffer.b_start_eol = buffer.b_p_eol;
+    buffer.b_start_bomb = buffer.b_p_bomb;
 
     // Only free and allocate when the value actually changed.
-    let (recorded, current) = (buf.b_start_fenc, buf.b_p_fenc);
+    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc);
     // SAFETY: both are NUL-terminated option strings, and `b_start_fenc` is
     // this buffer's own allocation to replace.
     if recorded.is_null() || !unsafe { cstr::eq(recorded, current) } {
         unsafe { xfree(recorded as *mut c_void) };
-        buf.b_start_fenc = unsafe { xstrdup(current) };
+        buffer.b_start_fenc = unsafe { xstrdup(current) };
     }
 }
 
@@ -205,35 +205,35 @@ pub fn save_file_ff(mut buf: Buf) {
 /// worth reporting, because the values it carries were never read off a file.
 ///
 /// Safe: [`Buf`] carries the only promise this needs, that the buffer is live.
-pub fn file_ff_differs(buf: Buf, ignore_empty: bool) -> bool {
+pub fn file_ff_differs(buffer: Buf, ignore_empty: bool) -> bool {
     // Handle a file that was never loaded as "not changed": the recorded
     // values are the defaults, not the file's.
-    if buf.b_flags.has(BufFlags::NEVERLOADED) {
+    if buffer.b_flags.has(BufFlags::NEVERLOADED) {
         return false;
     }
     if ignore_empty
-        && buf.b_flags.has(BufFlags::NEW)
-        && buf.b_ml.ml_line_count == 1
+        && buffer.b_flags.has(BufFlags::NEW)
+        && buffer.b_ml.ml_line_count == 1
         // SAFETY: the line the count just promised, NUL-terminated.
-        && c_int::from(unsafe { *ml_get_buf(buf.raw(), 1) }) == NUL
+        && c_int::from(unsafe { *ml_get_buf(buffer.raw(), 1) }) == NUL
     {
         return false;
     }
     // SAFETY: 'fileformat' is the buffer's own one-character option string.
-    if buf.b_start_ffc != c_int::from(unsafe { *buf.b_p_ff }) {
+    if buffer.b_start_ffc != c_int::from(unsafe { *buffer.b_p_ff }) {
         return true;
     }
     // 'endofline' and 'endoffile' only matter with 'binary' set or
     // 'fixendofline' off: otherwise the writer normalises them anyway.
-    if (buf.b_p_bin != 0 || buf.b_p_fixeol == 0)
-        && (buf.b_start_eof != buf.b_p_eof || buf.b_start_eol != buf.b_p_eol)
+    if (buffer.b_p_bin != 0 || buffer.b_p_fixeol == 0)
+        && (buffer.b_start_eof != buffer.b_p_eof || buffer.b_start_eol != buffer.b_p_eol)
     {
         return true;
     }
-    if buf.b_p_bin == 0 && buf.b_start_bomb != buf.b_p_bomb {
+    if buffer.b_p_bin == 0 && buffer.b_start_bomb != buffer.b_p_bomb {
         return true;
     }
-    let (recorded, current) = (buf.b_start_fenc, buf.b_p_fenc);
+    let (recorded, current) = (buffer.b_start_fenc, buffer.b_p_fenc);
     if recorded.is_null() {
         // SAFETY: the buffer's own NUL-terminated option string.
         return c_int::from(unsafe { *current }) != NUL;

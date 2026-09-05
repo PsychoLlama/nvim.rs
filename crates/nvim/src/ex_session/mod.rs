@@ -258,34 +258,39 @@ pub(crate) unsafe fn put_line(fd: *mut FILE, s: *mut c_char) -> Result<(), Faile
 
 // -- File names ------------------------------------------------------------
 
-/// The buffer name to write for `buf`.
+/// The buffer name to write for `buffer`.
 ///
 /// The short name is only usable when the working directory at the moment
 /// the session is sourced is known -- so not for a view, not under 'acd',
 /// and not once a `:lcd` has been written.
 ///
 /// # Safety
-/// `buf` is a live buffer.
-unsafe fn ses_get_fname(buf: *mut Buffer, opts: SessionOpts) -> *mut c_char {
+/// `buffer` is a live buffer.
+unsafe fn ses_get_fname(buffer: *mut Buffer, opts: SessionOpts) -> *mut c_char {
     // SAFETY: caller contract.
-    if !unsafe { (*buf).b_sfname }.is_null()
+    if !unsafe { (*buffer).b_sfname }.is_null()
         && opts.is_session()
         && opts.has(kOptSsopFlagCurdir | kOptSsopFlagSesdir)
         && p_acd.get() == 0
         && !did_lcd.get()
     {
-        return unsafe { (*buf).b_sfname };
+        return unsafe { (*buffer).b_sfname };
     }
-    unsafe { (*buf).b_ffname }
+    unsafe { (*buffer).b_ffname }
 }
 
-/// Write `buf`'s name, and a newline when `add_eol`.
+/// Write `buffer`'s name, and a newline when `add_eol`.
 ///
 /// # Safety
-/// `buf` is a live buffer.
-unsafe fn ses_fname(out: SessionFile, buf: *mut Buffer, opts: SessionOpts, add_eol: bool) -> bool {
+/// `buffer` is a live buffer.
+unsafe fn ses_fname(
+    out: SessionFile,
+    buffer: *mut Buffer,
+    opts: SessionOpts,
+    add_eol: bool,
+) -> bool {
     // SAFETY: caller contract.
-    let name = unsafe { ses_get_fname(buf, opts) };
+    let name = unsafe { ses_get_fname(buffer, opts) };
     let put = unsafe { ses_put_fname(out, name) };
     put && (!add_eol || out.eol())
 }

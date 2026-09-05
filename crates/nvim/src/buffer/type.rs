@@ -56,21 +56,21 @@ fn tr(msg: &CStr) -> *mut c_char {
 
 /// The first byte of `'buftype'`, or NUL when there is no buffer. Option
 /// variables are never null, so upstream indexes `b_p_bt` unconditionally.
-fn buftype(buf: Option<Buf>) -> c_char {
+fn buftype(buffer: Option<Buf>) -> c_char {
     // SAFETY: an option variable holds a NUL-terminated string, so its
     // first byte is there to be read.
-    buf.map_or(0, |b| unsafe { *b.b_p_bt })
+    buffer.map_or(0, |b| unsafe { *b.b_p_bt })
 }
 
 /// `b_p_bt[2]`, which upstream reads only once `b_p_bt[0] == 'n'` has said
 /// there are at least three bytes ("nofile" or "nowrite") to read.
-fn buftype_2(buf: Buf) -> c_char {
+fn buftype_2(buffer: Buf) -> c_char {
     // SAFETY: a `'buftype'` beginning with 'n' is one of those two words.
-    unsafe { *buf.b_p_bt.add(2) }
+    unsafe { *buffer.b_p_bt.add(2) }
 }
 
-fn has_terminal(buf: Buf) -> bool {
-    !buf.terminal.is_null()
+fn has_terminal(buffer: Buf) -> bool {
+    !buffer.terminal.is_null()
 }
 
 /// One byte of `'buftype'`, as a `char`.
@@ -89,49 +89,49 @@ const fn ch(byte: u8) -> c_char {
 // answer `false` for "no buffer" exactly as the C does.
 
 /// `bt_prompt()`: a "prompt" buffer.
-pub(crate) fn buf_is_prompt(buf: Option<Buf>) -> bool {
-    buftype(buf) == ch(b'p')
+pub(crate) fn buf_is_prompt(buffer: Option<Buf>) -> bool {
+    buftype(buffer) == ch(b'p')
 }
 
 /// `bt_help()`: a help buffer.
-pub(crate) fn buf_is_help(buf: Option<Buf>) -> bool {
-    buf.is_some_and(|b| b.b_help)
+pub(crate) fn buf_is_help(buffer: Option<Buf>) -> bool {
+    buffer.is_some_and(|b| b.b_help)
 }
 
 /// `bt_normal()`: a normal buffer, `'buftype'` empty.
-pub(crate) fn buf_is_normal(buf: Option<Buf>) -> bool {
-    buf.is_some() && buftype(buf) == 0
+pub(crate) fn buf_is_normal(buffer: Option<Buf>) -> bool {
+    buffer.is_some() && buftype(buffer) == 0
 }
 
 /// `bt_quickfix()`: the quickfix or location list buffer.
-pub(crate) fn buf_is_quickfix(buf: Option<Buf>) -> bool {
-    buftype(buf) == ch(b'q')
+pub(crate) fn buf_is_quickfix(buffer: Option<Buf>) -> bool {
+    buftype(buffer) == ch(b'q')
 }
 
 /// `bt_terminal()`: a terminal buffer.
-pub(crate) fn buf_is_terminal(buf: Option<Buf>) -> bool {
-    buftype(buf) == ch(b't')
+pub(crate) fn buf_is_terminal(buffer: Option<Buf>) -> bool {
+    buftype(buffer) == ch(b't')
 }
 
 /// `bt_nofilename()`: a "nofile", "acwrite", terminal or "prompt" buffer.
 /// Its name may not be a file name, at least not one to write to.
-pub(crate) fn buf_is_nofilename(buf: Option<Buf>) -> bool {
-    buf.is_some_and(is_nofilename)
+pub(crate) fn buf_is_nofilename(buffer: Option<Buf>) -> bool {
+    buffer.is_some_and(is_nofilename)
 }
 
 /// [`buf_is_nofilename`] over a buffer already in hand.
-fn is_nofilename(buf: Buf) -> bool {
-    let bt = buftype(Some(buf));
-    bt == ch(b'n') && buftype_2(buf) == ch(b'f')
+fn is_nofilename(buffer: Buf) -> bool {
+    let bt = buftype(Some(buffer));
+    bt == ch(b'n') && buftype_2(buffer) == ch(b'f')
         || bt == ch(b'a')
-        || has_terminal(buf)
+        || has_terminal(buffer)
         || bt == ch(b'p')
 }
 
 /// `bt_nofileread()`: a "nofile", "quickfix", terminal or "prompt" buffer,
 /// not to be read from a file.
-pub(crate) fn buf_is_nofileread(buf: Option<Buf>) -> bool {
-    buf.is_some_and(|b| {
+pub(crate) fn buf_is_nofileread(buffer: Option<Buf>) -> bool {
+    buffer.is_some_and(|b| {
         let bt = buftype(Some(b));
         bt == ch(b'n') && buftype_2(b) == ch(b'f')
             || bt == ch(b't')
@@ -141,24 +141,24 @@ pub(crate) fn buf_is_nofileread(buf: Option<Buf>) -> bool {
 }
 
 /// `bt_nofile()`: a "nofile" buffer.
-pub(crate) fn buf_is_nofile(buf: Option<Buf>) -> bool {
-    buf.is_some_and(|b| buftype(Some(b)) == ch(b'n') && buftype_2(b) == ch(b'f'))
+pub(crate) fn buf_is_nofile(buffer: Option<Buf>) -> bool {
+    buffer.is_some_and(|b| buftype(Some(b)) == ch(b'n') && buftype_2(b) == ch(b'f'))
 }
 
 /// `bt_dontwrite()`: a "nowrite", "nofile", terminal or "prompt" buffer.
-pub(crate) fn buf_is_dontwrite(buf: Option<Buf>) -> bool {
-    buf.is_some_and(is_dontwrite)
+pub(crate) fn buf_is_dontwrite(buffer: Option<Buf>) -> bool {
+    buffer.is_some_and(is_dontwrite)
 }
 
 /// [`buf_is_dontwrite`] over a buffer already in hand.
-fn is_dontwrite(buf: Buf) -> bool {
-    let bt = buftype(Some(buf));
-    bt == ch(b'n') || has_terminal(buf) || bt == ch(b'p')
+fn is_dontwrite(buffer: Buf) -> bool {
+    let bt = buftype(Some(buffer));
+    bt == ch(b'n') || has_terminal(buffer) || bt == ch(b'p')
 }
 
 /// `bt_dontwrite_msg()`: [`buf_is_dontwrite`], complaining when it is true.
-pub(crate) fn buf_dontwrite_msg(buf: Option<Buf>) -> bool {
-    if buf.is_some_and(is_dontwrite) {
+pub(crate) fn buf_dontwrite_msg(buffer: Option<Buf>) -> bool {
+    if buffer.is_some_and(is_dontwrite) {
         // SAFETY: a translated message literal.
         unsafe { emsg_ptr(tr(c"E382: Cannot write, 'buftype' option is set")) };
         return true;
@@ -168,10 +168,10 @@ pub(crate) fn buf_dontwrite_msg(buf: Option<Buf>) -> bool {
 
 /// Whether the buffer should be hidden rather than unloaded, according to
 /// `'bufhidden'`, `'hidden'` and `:hide`.
-pub unsafe fn buf_hide(buf: *const Buffer) -> bool {
+pub unsafe fn buf_hide(buffer: *const Buffer) -> bool {
     // SAFETY: the caller's promise -- a live buffer. Upstream dereferences
     // this one without a null test.
-    let bufhidden = unsafe { *(*buf).b_p_bh };
+    let bufhidden = unsafe { *(*buffer).b_p_bh };
     match bufhidden as u8 {
         b'u' | b'w' | b'd' => return false, // "unload", "wipe", "delete"
         b'h' => return true,                // "hide"
@@ -184,9 +184,9 @@ pub unsafe fn buf_hide(buf: *const Buffer) -> bool {
 // The name a buffer without a file is shown under
 
 /// The name to display for a special buffer, or null for an ordinary one.
-pub unsafe fn buf_spname(buf: *mut Buffer) -> *mut c_char {
+pub unsafe fn buf_spname(buffer: *mut Buffer) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
-    let b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buffer) };
     if buf_is_quickfix(Some(b)) {
         if b.handle == qf_stack_get_bufnr() {
             return tr_raw(msg_qflist.get());
@@ -197,7 +197,7 @@ pub unsafe fn buf_spname(buf: *mut Buffer) -> *mut c_char {
         if !b.b_fname.is_null() {
             return b.b_fname;
         }
-        if buf == cmdwin_buf.get() {
+        if buffer == cmdwin_buf.get() {
             return tr(c"[Command Line]");
         }
         if buf_is_prompt(Some(b)) {
@@ -211,9 +211,9 @@ pub unsafe fn buf_spname(buf: *mut Buffer) -> *mut c_char {
     ptr::null_mut()
 }
 
-pub unsafe fn buf_get_fname(buf: *const Buffer) -> *mut c_char {
+pub unsafe fn buf_get_fname(buffer: *const Buffer) -> *mut c_char {
     // SAFETY: the caller's promise -- a live buffer.
-    let name = unsafe { (*buf).b_fname };
+    let name = unsafe { (*buffer).b_fname };
     if name.is_null() {
         return tr(c"[No Name]");
     }
@@ -242,23 +242,28 @@ pub unsafe fn set_buflisted(on: c_int) {
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
 }
 
-pub unsafe fn buf_is_empty(buf: *mut Buffer) -> bool {
+pub unsafe fn buf_is_empty(buffer: *mut Buffer) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
-    let b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buffer) };
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
-    b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buf, 1 as LineNr) } == 0
+    b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buffer, 1 as LineNr) } == 0
 }
 
-pub unsafe fn buf_inc_changedtick(buf: *mut Buffer) {
+pub unsafe fn buf_inc_changedtick(buffer: *mut Buffer) {
     // SAFETY: the caller's promise -- a live buffer.
-    unsafe { buf_set_changedtick(buf, buf_get_changedtick(Buf::new(buf)) + 1 as VarNumber) };
+    unsafe {
+        buf_set_changedtick(
+            buffer,
+            buf_get_changedtick(Buf::new(buffer)) + 1 as VarNumber,
+        )
+    };
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub unsafe fn buf_set_changedtick(buf: *mut Buffer, changedtick: VarNumber) {
+pub unsafe fn buf_set_changedtick(buffer: *mut Buffer, changedtick: VarNumber) {
     // SAFETY: the caller's promise -- a live buffer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let mut old_val: TypVal = b.changedtick_di.di_tv;
     check_changedtick_item(b);
     b.changedtick_di.di_tv.vval.v_number = changedtick;
@@ -277,11 +282,11 @@ pub unsafe fn buf_set_changedtick(buf: *mut Buffer, changedtick: VarNumber) {
 
 /// The consistency checks upstream wraps in `#ifndef NDEBUG`: `b:` must
 /// still hold the fixed, read-only number `buf_init_changedtick` put there.
-fn check_changedtick_item(buf: Buf) {
+fn check_changedtick_item(buffer: Buf) {
     if !cfg!(debug_assertions) {
         return;
     }
-    let vars = buf.b_vars;
+    let vars = buffer.b_vars;
     let key = c"changedtick";
     let keylen = key.count_bytes() as ptrdiff_t;
     // SAFETY: the buffer's own dictionary; the key is a literal with its
@@ -303,7 +308,7 @@ fn check_changedtick_item(buf: Buf) {
         "changedtick_di->di_flags == (DI_FLAGS_RO|DI_FLAGS_FIX)"
     );
     assert!(
-        di == (&raw const buf.changedtick_di)
+        di == (&raw const buffer.changedtick_di)
             .cast::<DictItem>()
             .cast_mut(),
         "changedtick_di == (DictItem *)&buf->changedtick_di"

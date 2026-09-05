@@ -700,14 +700,14 @@ pub(crate) unsafe fn win_charsize(
 /// # Safety
 /// `cur` must point into a NUL-terminated line.
 pub(crate) unsafe fn charsize_nowrap(
-    buf: Buf,
+    buffer: Buf,
     cur: *const c_char,
     use_tabstop: bool,
     vcol: ColNr,
     cur_char: int32_t,
 ) -> c_int {
     if cur_char == TAB && use_tabstop {
-        buf.tab_width(vcol)
+        buffer.tab_width(vcol)
     } else if cur_char < 0 {
         INVALID_BYTE_CELLS
     } else {

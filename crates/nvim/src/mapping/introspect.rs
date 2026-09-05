@@ -464,11 +464,11 @@ pub(crate) unsafe fn parse_shortname_mode(mode: String_0) -> (c_int, bool, *mut 
 ///
 /// # Safety
 /// `arena` must be live.
-pub unsafe fn keymap_array(mode: String_0, buf: Option<Buf>, arena: *mut Arena) -> Array {
+pub unsafe fn keymap_array(mode: String_0, buffer: Option<Buf>, arena: *mut Arena) -> Array {
     // SAFETY: the caller's promise — `mode` is a live API string.
     let (int_mode, is_abbrev, _) = unsafe { parse_shortname_mode(mode) };
-    let buffer_value = buf.map_or(0, |buf| buf.handle as c_int);
-    let table = match buf {
+    let buffer_value = buffer.map_or(0, |buf| buf.handle as c_int);
+    let table = match buffer {
         Some(buf) => MapTable::Buffer(buf),
         None => MapTable::Global,
     };

@@ -78,9 +78,9 @@ unsafe fn global_map_exists(mode: c_int, lhs: &[u8], is_abbrev: bool) -> bool {
 /// whose LHS and `lhs` agree as far as the shorter of the two.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
+/// `buffer` must be a live buffer.
 unsafe fn show_buffer_local(
-    buf: Buf,
+    buffer: Buf,
     mode: c_int,
     lhs: &[u8],
     has_lhs: bool,
@@ -101,7 +101,7 @@ unsafe fn show_buffer_local(
         None
     };
     // SAFETY: `Buf`'s promise — a live buffer — and `list` only reads.
-    unsafe { map_walk::<()>(MapTable::Buffer(buf), is_abbrev, list) };
+    unsafe { map_walk::<()>(MapTable::Buffer(buffer), is_abbrev, list) };
     did_local
 }
 
@@ -153,7 +153,7 @@ unsafe fn reuse_mapblock(
     unsafe { nlua_set_sctx(sctx) };
 }
 
-/// Set or remove a mapping or abbreviation in `buf`, or display matching
+/// Set or remove a mapping or abbreviation in `buffer`, or display matching
 /// ones.
 ///
 /// `maptype` is one of the `MAPTYPE_*` values and `args` is already parsed
@@ -166,18 +166,18 @@ unsafe fn reuse_mapblock(
 /// global one.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
+/// `buffer` must be a live buffer.
 pub(crate) unsafe fn buf_do_map(
     mut maptype: c_int,
     args: &MapArguments,
     mode: c_int,
     is_abbrev: bool,
-    buf: Buf,
+    buffer: Buf,
 ) -> c_int {
     // The buffer's own tables are reached through the one raw pointer, not
     // through `Buf`'s `DerefMut`: `buf_table` points into `b_maphash`, and a
     // fresh `&mut Buffer` taken later would invalidate it.
-    let bufp = buf.raw();
+    let bufp = buffer.raw();
     let mut retval = 0;
 
     // If <buffer> was given we search the buffer's mappings, not the
@@ -289,8 +289,8 @@ pub(crate) unsafe fn buf_do_map(
 
             // When listing global mappings, also list buffer-local ones.
             if map_table != buf_table && !has_rhs && !is_unmap {
-                // SAFETY: `buf` is live.
-                did_local = unsafe { show_buffer_local(buf, mode, lhs, has_lhs, is_abbrev) };
+                // SAFETY: `buffer` is live.
+                did_local = unsafe { show_buffer_local(buffer, mode, lhs, has_lhs, is_abbrev) };
             }
 
             // Find a matching entry. For :unmap we may loop twice: once
@@ -484,10 +484,10 @@ pub(crate) unsafe fn buf_do_map(
 
             // Get here when adding a new entry to the maphash list or the
             // abbrlist.
-            // SAFETY: `buf` is live and both tables name live storage.
+            // SAFETY: `buffer` is live and both tables name live storage.
             mp_result[keyround - 1] = unsafe {
                 map_add(
-                    buf,
+                    buffer,
                     map_table,
                     abbr_table,
                     lhs,

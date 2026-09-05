@@ -242,7 +242,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 ///
 /// A live current buffer and window, and `uep` an entry of `curhead`.
 unsafe fn apply_entry(
-    mut buf: Buf,
+    mut buffer: Buf,
     curhead: Header,
     uep: *mut UndoEntry,
     pick: &mut CursorPick,
@@ -254,11 +254,11 @@ unsafe fn apply_entry(
     // writes it whenever the change ran past the last line — and it is
     // resolved here, against the buffer as it stands now.
     let bot = if saved_bot == 0 {
-        buf.b_ml.ml_line_count + 1
+        buffer.b_ml.ml_line_count + 1
     } else {
         saved_bot
     };
-    if top > buf.b_ml.ml_line_count || top >= bot || bot > buf.b_ml.ml_line_count + 1 {
+    if top > buffer.b_ml.ml_line_count || top >= bot || bot > buffer.b_ml.ml_line_count + 1 {
         return false;
     }
     let oldsize = bot - top - 1; // lines the entry covers now
@@ -279,7 +279,7 @@ unsafe fn apply_entry(
             unsafe { *taken.offset(i as isize) = u_save_line(top + 1 + i) };
             // Deleting the buffer's last line leaves a dummy empty one
             // behind, which the insert below has to replace.
-            if buf.b_ml.ml_line_count == 1 {
+            if buffer.b_ml.ml_line_count == 1 {
                 emptied = true;
             }
             // SAFETY: that same line, which is still there.
@@ -315,31 +315,31 @@ unsafe fn apply_entry(
         let maxlnum = MAXLNUM as LineNr;
         // SAFETY: a live current buffer.
         unsafe { mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP) };
-        if buf.b_op_start.lnum > top + oldsize {
-            buf.b_op_start.lnum += delta;
+        if buffer.b_op_start.lnum > top + oldsize {
+            buffer.b_op_start.lnum += delta;
         }
-        if buf.b_op_end.lnum > top + oldsize {
-            buf.b_op_end.lnum += delta;
+        if buffer.b_op_end.lnum > top + oldsize {
+            buffer.b_op_end.lnum += delta;
         }
     }
     if oldsize > 0 || newsize > 0 {
         // SAFETY: a live buffer and window.
-        changed_lines(buf, top + 1, 0, bot, newsize - oldsize, do_buf_event);
+        changed_lines(buffer, top + 1, 0, bot, newsize - oldsize, do_buf_event);
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
         // SAFETY: a live current window.
-        if unsafe { spell_check_window(curwin.get()) } && bot <= buf.b_ml.ml_line_count {
+        if unsafe { spell_check_window(curwin.get()) } && bot <= buffer.b_ml.ml_line_count {
             // SAFETY: as above.
             unsafe { redraw_win_line(curwin.get(), bot) };
         }
     }
 
     // The '[ mark, then the '] mark.
-    buf.b_op_start.lnum = buf.b_op_start.lnum.min(top + 1);
-    if newsize == 0 && top + 1 > buf.b_op_end.lnum {
-        buf.b_op_end.lnum = top + 1;
-    } else if top + newsize > buf.b_op_end.lnum {
-        buf.b_op_end.lnum = top + newsize;
+    buffer.b_op_start.lnum = buffer.b_op_start.lnum.min(top + 1);
+    if newsize == 0 && top + 1 > buffer.b_op_end.lnum {
+        buffer.b_op_end.lnum = top + 1;
+    } else if top + newsize > buffer.b_op_end.lnum {
+        buffer.b_op_end.lnum = top + newsize;
     }
     u_newcount.set(u_newcount.get() + newsize);
     u_oldcount.set(u_oldcount.get() + oldsize);
@@ -360,12 +360,12 @@ unsafe fn apply_entry(
 /// # Safety
 ///
 /// A live buffer and a live header.
-unsafe fn swap_marks(mut buf: Buf, mut curhead: Header, saved: &[FileMark; NMARKS as usize]) {
+unsafe fn swap_marks(mut buffer: Buf, mut curhead: Header, saved: &[FileMark; NMARKS as usize]) {
     for (i, saved) in saved.iter().enumerate() {
         if curhead.uh_namedm[i].mark.lnum != 0 {
             // SAFETY: a mark the buffer owns and is about to drop.
-            unsafe { free_fmark(buf.b_namedm[i].clone()) };
-            buf.b_namedm[i] = curhead.uh_namedm[i].clone();
+            unsafe { free_fmark(buffer.b_namedm[i].clone()) };
+            buffer.b_namedm[i] = curhead.uh_namedm[i].clone();
         }
         if saved.mark.lnum != 0 {
             curhead.uh_namedm[i] = saved.clone();
@@ -383,13 +383,13 @@ unsafe fn swap_marks(mut buf: Buf, mut curhead: Header, saved: &[FileMark; NMARK
 /// # Safety
 ///
 /// A live buffer, window and header.
-unsafe fn place_cursor(buf: Buf, mut win: Win, curhead: Header) {
+unsafe fn place_cursor(buffer: Buf, mut win: Win, curhead: Header) {
     // Off by exactly one line: put it back where the change started, which is
     // what the "o" command wants. Otherwise it goes to the first undone line.
     if curhead.uh_cursor.lnum + 1 == win.w_cursor.lnum && win.w_cursor.lnum > 1 {
         win.w_cursor.lnum -= 1;
     }
-    if win.w_cursor.lnum > buf.b_ml.ml_line_count {
+    if win.w_cursor.lnum > buffer.b_ml.ml_line_count {
         // Past the end, which happens after undoing lines added at the end of
         // the file. `check_cursor` below moves it to the last line, so all
         // that is left is to put it in the first column.

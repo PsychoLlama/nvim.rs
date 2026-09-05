@@ -138,19 +138,19 @@ fn global_stl_rows() -> c_int {
     global_stl_height()
 }
 
-fn buf_changed(buf: Buf) -> bool {
+fn buf_changed(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    buf_is_changed(buf)
+    buf_is_changed(buffer)
 }
 
-fn buf_hidden(buf: Buf) -> bool {
+fn buf_hidden(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_hide(buf.raw()) }
+    unsafe { buf_hide(buffer.raw()) }
 }
 
-fn auto_write(buf: Buf) -> Result<(), Failed> {
+fn auto_write(buffer: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer; `false` is upstream's `forceit`.
-    unsafe { autowrite(buf.raw(), false) }
+    unsafe { autowrite(buffer.raw(), false) }
 }
 
 fn get_key() {
@@ -158,11 +158,11 @@ fn get_key() {
     vgetc();
 }
 
-/// Make `buf` the current buffer, as `:buffer` does.
-fn goto_buf(buf: Buf) {
+/// Make `buffer` the current buffer, as `:buffer` does.
+fn goto_buf(buffer: Buf) {
     let update_jumplist = jop_flags.get() & kOptJopFlagClean as c_int as u32 == 0;
     // SAFETY: a live buffer.
-    unsafe { set_curbuf(buf, DOBUF_GOTO as c_int, update_jumplist) };
+    unsafe { set_curbuf(buffer, DOBUF_GOTO as c_int, update_jumplist) };
 }
 
 /// The swap-file dialogue's aftermath, when the user did not choose Quit.
@@ -308,23 +308,23 @@ fn should_close(win: Win, had_tab: c_int) -> bool {
 
 /// One buffer of the second stage. Answers false when the walk must stop.
 fn open_window_for(
-    buf: Buf,
+    buffer: Buf,
     all: bool,
     had_tab: c_int,
     split_ret: &mut Result<(), Failed>,
     open_wins: &mut c_int,
 ) -> bool {
     // Check whether this buffer needs a window.
-    if !all && buf.b_ml.ml_mfp.is_null() || buf.b_p_bl == 0 {
+    if !all && buffer.b_ml.ml_mfp.is_null() || buffer.b_p_bl == 0 {
         return true;
     }
 
     let wp = if had_tab != 0 {
         // With the ":tab" modifier don't move the window.
-        (buf.b_nwindows > 0).then(last_win)
+        (buffer.b_nwindows > 0).then(last_win)
     } else {
         // Check whether this buffer already has a window.
-        let wp = windows().find(|win| !win.w_floating && win.w_buffer == buf.raw());
+        let wp = windows().find(|win| !win.w_floating && win.w_buffer == buffer.raw());
         // If the buffer already has a window, move it.
         if let Some(win) = wp {
             move_win_after(win, current_win());
@@ -333,7 +333,7 @@ fn open_window_for(
     };
 
     if wp.is_none() && split_ret.is_ok() {
-        let bufref = BufRef::of(buf);
+        let bufref = BufRef::of(buffer);
         // Split the window and put the buffer in it.
         let p_ea_save = p_ea.get();
         // Use space from all windows.
@@ -347,7 +347,7 @@ fn open_window_for(
 
         // Open the buffer in this window.
         swap_exists_action.set(SEA_DIALOG);
-        goto_buf(buf);
+        goto_buf(buffer);
         if !bufref.valid() {
             // Autocommands deleted the buffer.
             swap_exists_action.set(SEA_NONE);

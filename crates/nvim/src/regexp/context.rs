@@ -492,23 +492,23 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut RegMatch, line_lbr: bool) {
 /// Point the context at a buffer match about to run.
 ///
 /// `rmp` must be live, with a compiled program, for the match's duration,
-/// and `buf` must be the buffer it runs over.
+/// and `buffer` must be the buffer it runs over.
 pub(crate) fn init_regexec_multi(
     rex: Rex,
     rmp: *mut RegMMatch,
     win: *mut Window,
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
 ) {
     rex.set_reg_match(core::ptr::null_mut::<RegMatch>());
     rex.set_reg_mmatch(rmp);
-    rex.set_reg_buf(buf);
+    rex.set_reg_buf(buffer);
     rex.set_reg_win(win);
     rex.set_reg_firstlnum(lnum);
     rex.set_reg_line_lbr(false);
     rex.set_reg_icombine(false);
     // SAFETY: the caller's match structure and buffer, live for the match.
-    rex.set_reg_maxline(unsafe { (*buf).b_ml.ml_line_count } - lnum);
+    rex.set_reg_maxline(unsafe { (*buffer).b_ml.ml_line_count } - lnum);
     rex.set_reg_ic(unsafe { (*rmp).rmm_ic } != 0);
     rex.set_reg_nobreak(unsafe { (*(*rmp).regprog).re_flags } & RE_NOBREAK as u32 != 0);
     rex.set_reg_maxcol(unsafe { (*rmp).rmm_maxcol });

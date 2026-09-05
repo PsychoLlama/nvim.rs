@@ -178,9 +178,9 @@ pub unsafe fn get_jumplist(win: *mut Window, mut count: c_int) -> *mut FileMark 
 ///
 /// # Safety
 /// `buf` must be a live buffer and `win` a live window.
-pub unsafe fn get_changelist(buf: *mut Buffer, win: *mut Window, count: c_int) -> *mut FileMark {
+pub unsafe fn get_changelist(buffer: *mut Buffer, win: *mut Window, count: c_int) -> *mut FileMark {
     // SAFETY: the caller promised a live buffer and window.
-    let (buf, mut win) = unsafe { (Buf::new(buf), Win::new(win)) };
+    let (buf, mut win) = unsafe { (Buf::new(buffer), Win::new(win)) };
     if buf.b_changelistlen == 0 {
         return ptr::null_mut();
     }

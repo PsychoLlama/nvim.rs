@@ -62,15 +62,15 @@ const TRY_STATE: TryState = TryState {
 };
 use crate::api_error;
 
-pub unsafe fn win_set_buf(win: *mut Window, buf: *mut Buffer, err: &mut Error) {
+pub unsafe fn win_set_buf(win: *mut Window, buffer: *mut Buffer, err: &mut Error) {
     // SAFETY: the caller's promise -- a live window, a live buffer and a live
     // `Error` to report through.
-    unsafe { set_buf(Win::new(win), Buf::new(buf), &mut *err) };
+    unsafe { set_buf(Win::new(win), Buf::new(buffer), &mut *err) };
 }
 
-/// Show `buf` in `win`: switch to the window, switch its buffer with the
+/// Show `buffer` in `win`: switch to the window, switch its buffer with the
 /// autocommands that implies, and switch back.
-fn set_buf(win: Win, buf: Buf, err: &mut Error) {
+fn set_buf(win: Win, buffer: Buf, err: &mut Error) {
     // `do_buffer` below fires `BufLeave`/`BufEnter`, which can close this
     // window, so its identity is taken now, while it is provably live: the
     // error message below may have to name a window that is already gone.
@@ -99,7 +99,7 @@ fn set_buf(win: Win, buf: Buf, err: &mut Error) {
             p_acd.set(0);
         }
         let (goto, first, fwd) = (DOBUF_GOTO as c_int, DOBUF_FIRST as c_int, FORWARD as c_int);
-        let nr = buf.handle();
+        let nr = buffer.handle();
         let _ = do_buffer(goto, first, fwd, nr, 0);
         if !switchwin.sw_same_win {
             p_acd.set(save_acd);

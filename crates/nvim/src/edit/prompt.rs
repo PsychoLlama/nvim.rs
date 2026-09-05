@@ -23,15 +23,15 @@ use core::ffi::{c_char, c_int};
 use super::*;
 use crate::types::NUL;
 
-/// The effective prompt for `buf`: 'b:prompt_text', or `"% "`.
+/// The effective prompt for `buffer`: 'b:prompt_text', or `"% "`.
 ///
 /// Safe: `b:prompt_text` is either null or a NUL-terminated string the
 /// buffer owns.
-pub(crate) fn buf_prompt_text(buf: Buf) -> *mut c_char {
-    if buf.b_prompt_text.is_null() {
+pub(crate) fn buf_prompt_text(buffer: Buf) -> *mut c_char {
+    if buffer.b_prompt_text.is_null() {
         return c"% ".as_ptr().cast_mut();
     }
-    buf.b_prompt_text
+    buffer.b_prompt_text
 }
 
 /// The effective prompt for the current buffer.

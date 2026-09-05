@@ -471,32 +471,32 @@ fn dirchanged(dir: *mut c_char, scope: CdScope, pre: bool) {
     unsafe { do_autocmd_dirchanged(dir, scope, kCdCauseWindow, pre) };
 }
 
-pub unsafe fn buf_jump_open_win(buf: *mut Buffer) -> *mut Window {
+pub unsafe fn buf_jump_open_win(buffer: *mut Buffer) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer.
-    raw_win(jump_open_win(unsafe { Buf::new(buf) }))
+    raw_win(jump_open_win(unsafe { Buf::new(buffer) }))
 }
 
-/// Enter the first window of the current tab page showing `buf`, if there is
+/// Enter the first window of the current tab page showing `buffer`, if there is
 /// one.
-pub(crate) fn jump_open_win(buf: Buf) -> Option<Win> {
-    if cur_win().w_buffer == buf.raw() {
+pub(crate) fn jump_open_win(buffer: Buf) -> Option<Win> {
+    if cur_win().w_buffer == buffer.raw() {
         enter(cur_win(), false);
         return Some(cur_win());
     }
-    let wp = windows().find(|wp| wp.w_buffer == buf.raw())?;
+    let wp = windows().find(|wp| wp.w_buffer == buffer.raw())?;
     enter(wp, false);
     Some(wp)
 }
 
-pub unsafe fn buf_jump_open_tab(buf: *mut Buffer) -> *mut Window {
+pub unsafe fn buf_jump_open_tab(buffer: *mut Buffer) -> *mut Window {
     // SAFETY: the caller's promise -- a live buffer.
-    raw_win(jump_open_tab(unsafe { Buf::new(buf) }))
+    raw_win(jump_open_tab(unsafe { Buf::new(buffer) }))
 }
 
 /// [`jump_open_win`] over every tab page, the current one first.
-pub(crate) fn jump_open_tab(buf: Buf) -> Option<Win> {
+pub(crate) fn jump_open_tab(buffer: Buf) -> Option<Win> {
     // First try the current tab page.
-    if let Some(wp) = jump_open_win(buf) {
+    if let Some(wp) = jump_open_win(buffer) {
         return Some(wp);
     }
     for tp in tabs() {
@@ -505,7 +505,7 @@ pub(crate) fn jump_open_tab(buf: Buf) -> Option<Win> {
             continue;
         }
         for wp in windows_in_tab(tp) {
-            if wp.w_buffer == buf.raw() {
+            if wp.w_buffer == buffer.raw() {
                 goto_tab_win(tp, wp);
                 // If the current window did not switch, something went wrong.
                 return wp.is_current().then_some(wp);

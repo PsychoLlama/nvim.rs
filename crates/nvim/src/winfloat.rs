@@ -299,9 +299,9 @@ fn enter_window(win: Win) {
     // SAFETY: a live window.
     unsafe { win_enter(win.raw(), false) };
 }
-fn set_window_buf(win: Win, buf: Buf, err: &mut Error) {
+fn set_window_buf(win: Win, buffer: Buf, err: &mut Error) {
     // SAFETY: a live window and buffer, and the caller's error slot.
-    unsafe { win_set_buf(win.raw(), buf.raw(), err) };
+    unsafe { win_set_buf(win.raw(), buffer.raw(), err) };
 }
 fn find_window(handle: WindowHandle, err: &mut Error) -> Option<Win> {
     // SAFETY: the caller's error slot; the answer is a live window or null.
@@ -362,11 +362,11 @@ fn create_scratch_buffer(err: &mut Error) -> BufferHandle {
         }
     }
 }
-fn set_bufhidden_wipe(buf: Buf) {
+fn set_bufhidden_wipe(buffer: Buf) {
     let s = String_0::from_raw_parts(c"wipe".as_ptr().cast_mut(), c"wipe".count_bytes());
     let wipe = OptVal::String(s);
-    let (opt, from) = (kOptBufhidden, buf.raw().cast::<c_void>());
-    // SAFETY: `buf` is the live buffer `kOptScopeBuf` names.
+    let (opt, from) = (kOptBufhidden, buffer.raw().cast::<c_void>());
+    // SAFETY: `buffer` is the live buffer `kOptScopeBuf` names.
     unsafe { set_option_direct_for(opt, wipe, OptionSetFlags::LOCAL, 0, kOptScopeBuf, from) };
 }
 

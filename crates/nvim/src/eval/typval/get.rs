@@ -89,16 +89,16 @@ pub unsafe fn tv_get_lnum(tv: *const TypVal) -> LineNr {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buf: *const Buffer) -> LineNr {
+pub unsafe fn tv_get_lnum_buf(tv: *const TypVal, buffer: *const Buffer) -> LineNr {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let s = val.string_or_null();
     if !s.is_null()
         && unsafe { *s } as ::core::ffi::c_int == '$' as ::core::ffi::c_int
         && unsafe { *s.add(1) } as ::core::ffi::c_int == NUL
-        && !buf.is_null()
+        && !buffer.is_null()
     {
-        return unsafe { (*buf).b_ml.ml_line_count };
+        return unsafe { (*buffer).b_ml.ml_line_count };
     }
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) as LineNr }
 }
@@ -220,7 +220,7 @@ impl NumBuf {
         unsafe { tv_get_string_buf_chk(tv, self.as_mut_ptr()) }
     }
 
-    /// The raw buffer, for the `*_buf` entry points that take one.
+    /// The raw buffer, for the `*buffer` entry points that take one.
     pub fn as_mut_ptr(&mut self) -> *mut ::core::ffi::c_char {
         self.0.as_mut_ptr()
     }

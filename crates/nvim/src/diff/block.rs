@@ -27,10 +27,10 @@ pub(crate) unsafe fn clear_diffblock(dp: *mut DiffBlock) {
     drop(unsafe { Box::from_raw(dp) });
 }
 
-/// Take `buf` out of every tabpage's diff.
-pub fn diff_buf_delete(buf: Buf) {
+/// Take `buffer` out of every tabpage's diff.
+pub fn diff_buf_delete(buffer: Buf) {
     for mut tp in tabs() {
-        let i = diff_buf_idx(buf, tp);
+        let i = diff_buf_idx(buffer, tp);
         if i != DB_COUNT {
             tp.tp_diffbuf[i as usize] = ::core::ptr::null_mut();
             tp.tp_diff_invalid = 1;
@@ -65,15 +65,15 @@ pub fn diff_buf_adjust(win: Win) {
     }
 }
 
-/// Put `buf` in the current tabpage's diff, if there is a slot free.
-pub fn diff_buf_add(buf: Buf) {
+/// Put `buffer` in the current tabpage's diff, if there is a slot free.
+pub fn diff_buf_add(buffer: Buf) {
     let mut tp = cur_tab();
-    if diff_buf_idx(buf, tp) != DB_COUNT {
+    if diff_buf_idx(buffer, tp) != DB_COUNT {
         return;
     }
     for i in 0..DB_COUNT as usize {
         if tp.tp_diffbuf[i].is_null() {
-            tp.tp_diffbuf[i] = buf.raw();
+            tp.tp_diffbuf[i] = buffer.raw();
             tp.tp_diff_invalid = 1;
             // SAFETY: nothing here holds a borrow of the tab page's block list.
             unsafe { diff_redraw(true) };
@@ -96,17 +96,17 @@ pub(crate) fn diff_buf_clear() {
     }
 }
 
-/// `buf`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
-pub(crate) fn diff_buf_idx(buf: Buf, tabpage: TabPage) -> c_int {
+/// `buffer`'s slot in `tabpage`'s diff, or `DB_COUNT` if it has none.
+pub(crate) fn diff_buf_idx(buffer: Buf, tabpage: TabPage) -> c_int {
     (0..DB_COUNT)
-        .find(|&i| tabpage.tp_diffbuf[i as usize] == buf.raw())
+        .find(|&i| tabpage.tp_diffbuf[i as usize] == buffer.raw())
         .unwrap_or(DB_COUNT)
 }
 
-/// Mark every tabpage `buf` is diffed in as needing a recompute.
-pub fn diff_invalidate(buf: Buf) {
+/// Mark every tabpage `buffer` is diffed in as needing a recompute.
+pub fn diff_invalidate(buffer: Buf) {
     for mut tp in tabs() {
-        if diff_buf_idx(buf, tp) != DB_COUNT {
+        if diff_buf_idx(buffer, tp) != DB_COUNT {
             tp.tp_diff_invalid = 1;
             if tp.is_current() {
                 // SAFETY: nothing here holds a borrow of the block list.
@@ -116,19 +116,19 @@ pub fn diff_invalidate(buf: Buf) {
     }
 }
 
-/// Adjust every tabpage's block list for an edit in `buf`.
+/// Adjust every tabpage's block list for an edit in `buffer`.
 ///
 /// The parameters are `mark_adjust`'s: lines `line1`..`line2` moved by
 /// `amount`, everything below by `amount_after`.
 pub fn diff_mark_adjust(
-    buf: Buf,
+    buffer: Buf,
     line1: LineNr,
     line2: LineNr,
     amount: LineNr,
     amount_after: LineNr,
 ) {
     for tp in tabs() {
-        let idx = diff_buf_idx(buf, tp);
+        let idx = diff_buf_idx(buffer, tp);
         if idx != DB_COUNT {
             // SAFETY: `idx` is a slot the tab page holds, and the block list
             // walked below is that tab page's own.
@@ -533,9 +533,9 @@ pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
     false
 }
 
-/// Whether `buf` is in any tabpage's diff.
-pub fn diff_mode_buf(buf: Buf) -> bool {
-    tabs().any(|tp| diff_buf_idx(buf, tp) != DB_COUNT)
+/// Whether `buffer` is in any tabpage's diff.
+pub fn diff_mode_buf(buffer: Buf) -> bool {
+    tabs().any(|tp| diff_buf_idx(buffer, tp) != DB_COUNT)
 }
 
 /// The tab page the editor is working in.

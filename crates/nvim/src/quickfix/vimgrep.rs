@@ -258,12 +258,12 @@ unsafe fn list_still_usable(
 ///
 /// # Safety
 ///
-/// `qfl` must be a live list, `buf` a loaded buffer and `fname`
+/// `qfl` must be a live list, `buffer` a loaded buffer and `fname`
 /// NUL-terminated.
 unsafe fn match_buflines(
     qfl: *mut QfList,
     fname: *mut c_char,
-    buf: Buf,
+    buffer: Buf,
     search: &mut Search,
     duplicate_name: bool,
 ) -> bool {
@@ -271,20 +271,20 @@ unsafe fn match_buflines(
     let bufnum = if duplicate_name {
         0
     } else {
-        buf.handle as c_int
+        buffer.handle as c_int
     };
     let global = search.flags & VGR_GLOBAL as c_int != 0;
     let mut found_match = false;
 
     let mut lnum: LineNr = 1;
-    while lnum <= buf.b_ml.ml_line_count && search.tomatch > 0 {
+    while lnum <= buffer.b_ml.ml_line_count && search.tomatch > 0 {
         if search.flags & VGR_FUZZY as c_int == 0 {
             let mut col: ColNr = 0;
             while unsafe {
                 vim_regexec_multi(
                     &raw mut search.regmatch,
                     curwin.get(),
-                    buf.raw(),
+                    buffer.raw(),
                     lnum,
                     col,
                     ptr::null_mut(),
@@ -301,7 +301,7 @@ unsafe fn match_buflines(
                     end_lnum: end.lnum + lnum,
                     col: start.col as c_int + 1,
                     end_col: end.col as c_int + 1,
-                    ..NewEntry::new(unsafe { ml_get_buf(buf.raw(), start.lnum + lnum) })
+                    ..NewEntry::new(unsafe { ml_get_buf(buffer.raw(), start.lnum + lnum) })
                 };
                 unsafe { qf_add_entry(qfl, new2) };
                 found_match = true;
@@ -319,13 +319,13 @@ unsafe fn match_buflines(
                 // Move past the match, and past one more column when the
                 // match was empty, so that the scan makes progress.
                 col = end.col + ColNr::from(col == end.col);
-                if col > unsafe { ml_get_buf_len(buf.raw(), lnum) } {
+                if col > unsafe { ml_get_buf_len(buffer.raw(), lnum) } {
                     break;
                 }
             }
         } else {
-            let line = unsafe { ml_get_buf(buf.raw(), lnum) };
-            let linelen = unsafe { ml_get_buf_len(buf.raw(), lnum) };
+            let line = unsafe { ml_get_buf(buffer.raw(), lnum) };
+            let linelen = unsafe { ml_get_buf_len(buffer.raw(), lnum) };
             // The pattern length is in bytes while the matcher fills one
             // position per *character*, so for a multibyte pattern the
             // position read below is one the matcher never wrote. It has
@@ -400,13 +400,13 @@ struct Outcome {
 ///
 /// # Safety
 ///
-/// `buf` must be a live buffer.
-unsafe fn existing_swapfile(buf: Buf) -> bool {
+/// `buffer` must be a live buffer.
+unsafe fn existing_swapfile(buffer: Buf) -> bool {
     // SAFETY: forwarded from the caller.
-    if buf.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_null() {
         return false;
     }
-    let fname = unsafe { mf_fname(buf.b_ml.ml_mfp) };
+    let fname = unsafe { mf_fname(buffer.b_ml.ml_mfp) };
     if fname.is_null() {
         return false;
     }
@@ -503,10 +503,10 @@ unsafe fn process_files(
 ///
 /// # Safety
 ///
-/// `buf` must be the dummy buffer just searched, and the two directory names
+/// `buffer` must be the dummy buffer just searched, and the two directory names
 /// NUL-terminated.
 unsafe fn keep_or_drop_dummy(
-    mut buf: Buf,
+    mut buffer: Buf,
     found_match: bool,
     duplicate_name: bool,
     search: &Search,
@@ -515,44 +515,44 @@ unsafe fn keep_or_drop_dummy(
     out: &mut Outcome,
 ) {
     if found_match && out.first_match_buf.is_none() {
-        out.first_match_buf = Some(buf);
+        out.first_match_buf = Some(buffer);
     }
 
     // SAFETY: forwarded from the caller -- two NUL-terminated directories.
     // Never keep a dummy buffer when another buffer has the same name.
     if duplicate_name {
-        unsafe { wipe_dummy_buffer(buf, dirname_start) };
+        unsafe { wipe_dummy_buffer(buffer, dirname_start) };
         return;
     }
 
     // `:hide` keeps the buffer loaded — unless 'bufhidden' says the
     // buffer goes away as soon as it is hidden, which wins.
     // SAFETY: `'bufhidden'` is a NUL-terminated option string.
-    let bufhidden = unsafe { *buf.b_p_bh } as u8;
+    let bufhidden = unsafe { *buffer.b_p_bh } as u8;
     let hidden_stays = cmdmod_has(CmdModFlags::HIDE) && !matches!(bufhidden, b'u' | b'w' | b'd');
     if !hidden_stays {
         if !found_match {
             // Do not keep a buffer that was not loaded before.
-            unsafe { wipe_dummy_buffer(buf, dirname_start) };
+            unsafe { wipe_dummy_buffer(buffer, dirname_start) };
             return;
         }
-        if out.first_match_buf != Some(buf)
+        if out.first_match_buf != Some(buffer)
             || search.flags & VGR_NOJUMP as c_int != 0
-            || unsafe { existing_swapfile(buf) }
+            || unsafe { existing_swapfile(buffer) }
         {
-            unsafe { unload_dummy_buffer(buf, dirname_start) };
+            unsafe { unload_dummy_buffer(buffer, dirname_start) };
             // Keeping the buffer, remove the dummy flag.
-            buf.b_flags.clear(BufFlags::DUMMY);
+            buffer.b_flags.clear(BufFlags::DUMMY);
             return;
         }
     }
 
     // Keeping the buffer, remove the dummy flag.
-    buf.b_flags.clear(BufFlags::DUMMY);
+    buffer.b_flags.clear(BufFlags::DUMMY);
 
     // The buffer is still loaded, so the jump below has to go to the
     // directory the search left it in.
-    if out.first_match_buf == Some(buf)
+    if out.first_match_buf == Some(buffer)
         && out.target_dir.is_none()
         // SAFETY: the caller's two NUL-terminated directories.
         && !unsafe { cstr::eq(dirname_start, dirname_now) }
@@ -564,10 +564,18 @@ unsafe fn keep_or_drop_dummy(
     // The Filetype autocommands and the modelines need to run now, in
     // that buffer — but not the window-local options.
     let mut aco = AcoSave::default();
-    let raw = buf.raw();
+    let raw = buffer.raw();
     // SAFETY: a live buffer, entered and left again around the events.
     unsafe { aucmd_prepbuf(&raw mut aco, raw) };
-    unsafe { apply_autocmds(AutoEvent::FileType, buf.b_p_ft, buf.b_fname, true, raw) };
+    unsafe {
+        apply_autocmds(
+            AutoEvent::FileType,
+            buffer.b_p_ft,
+            buffer.b_fname,
+            true,
+            raw,
+        )
+    };
     do_modelines(OptionSetFlags::NOWIN);
     unsafe { aucmd_restbuf(&raw mut aco) };
 }

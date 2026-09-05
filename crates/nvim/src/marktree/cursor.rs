@@ -57,31 +57,31 @@ pub struct Cursor<'a> {
     walk: PhantomData<&'a mut MarkTreeIter>,
 }
 
-/// `buf`'s marktree.
+/// `buffer`'s marktree.
 ///
 /// Safe: [`Buf`] has already promised a live buffer, and `b_marktree` is one
 /// of its own fields. Dereferencing the answer is what needs a promise.
-pub fn tree_of(mut buf: Buf) -> *mut MarkTree {
-    &raw mut buf.b_marktree
+pub fn tree_of(mut buffer: Buf) -> *mut MarkTree {
+    &raw mut buffer.b_marktree
 }
 
-/// The mark `ns`/`id` names in `buf` — the `end` half when asked for it —
+/// The mark `ns`/`id` names in `buffer` — the `end` half when asked for it —
 /// without moving any walk.
-pub fn lookup_ns(buf: Buf, ns: uint32_t, id: uint32_t, end: bool) -> MTKey {
+pub fn lookup_ns(buffer: Buf, ns: uint32_t, id: uint32_t, end: bool) -> MTKey {
     // SAFETY: a live buffer's marktree, and the lookup writes no iterator.
-    unsafe { marktree_lookup_ns(&mut *tree_of(buf), ns, id, end, None) }
+    unsafe { marktree_lookup_ns(&mut *tree_of(buffer), ns, id, end, None) }
 }
 
 impl<'a> Cursor<'a> {
-    /// A walk over `buf`'s marks, stepped with `itr`.
+    /// A walk over `buffer`'s marks, stepped with `itr`.
     ///
     /// Safe: [`Buf`] has already promised a live buffer, whose `b_marktree`
     /// is therefore a live tree, and the borrow is a live iterator — either
     /// fresh (all-zero, which is where a walk starts) or one this same
     /// buffer positioned earlier.
-    pub fn in_buffer(buf: Buf, itr: &'a mut MarkTreeIter) -> Self {
+    pub fn in_buffer(buffer: Buf, itr: &'a mut MarkTreeIter) -> Self {
         Self {
-            tree: tree_of(buf),
+            tree: tree_of(buffer),
             itr,
             walk: PhantomData,
         }

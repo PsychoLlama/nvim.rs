@@ -619,47 +619,47 @@ pub(crate) unsafe fn save_capture(rex: Rex, savep: &mut MatchPos, slot: GroupSlo
 ///
 /// `need_clear_subexpr` means the captures have not been touched yet this
 /// match, and then there is nothing to copy — the flag alone restores them.
-pub(crate) fn save_subexpr(rex: Rex, bp: &mut RegBehind) {
-    bp.save_need_clear_subexpr = rex.need_clear_subexpr();
-    if bp.save_need_clear_subexpr != 0 {
+pub(crate) fn save_subexpr(rex: Rex, behind: &mut RegBehind) {
+    behind.save_need_clear_subexpr = rex.need_clear_subexpr();
+    if behind.save_need_clear_subexpr != 0 {
         return;
     }
     // SAFETY: whichever pair of capture arrays this match's kind names holds
     // `NSUBEXP` live entries for as long as the match runs.
     if rex.multi() {
         let (starts, ends) = (rex.reg_startpos(), rex.reg_endpos());
-        bp.save_start = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *starts.add(i) }));
-        bp.save_end = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *ends.add(i) }));
+        behind.save_start = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *starts.add(i) }));
+        behind.save_end = core::array::from_fn(|i| MatchPos::from_pos(unsafe { *ends.add(i) }));
     } else {
         let (starts, ends) = (rex.reg_startp(), rex.reg_endp());
-        bp.save_start = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *starts.add(i) }));
-        bp.save_end = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *ends.add(i) }));
+        behind.save_start = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *starts.add(i) }));
+        behind.save_end = core::array::from_fn(|i| MatchPos::from_ptr(unsafe { *ends.add(i) }));
     }
 }
 
 /// Undo [`save_subexpr`].
-pub(crate) fn restore_subexpr(rex: Rex, bp: &RegBehind) {
-    rex.set_need_clear_subexpr(bp.save_need_clear_subexpr);
-    if bp.save_need_clear_subexpr != 0 {
+pub(crate) fn restore_subexpr(rex: Rex, behind: &RegBehind) {
+    rex.set_need_clear_subexpr(behind.save_need_clear_subexpr);
+    if behind.save_need_clear_subexpr != 0 {
         return;
     }
     // SAFETY: as `save_subexpr`.
     if rex.multi() {
         let starts = unsafe { core::slice::from_raw_parts_mut(rex.reg_startpos(), NSUBEXP_SLOTS) };
         let ends = unsafe { core::slice::from_raw_parts_mut(rex.reg_endpos(), NSUBEXP_SLOTS) };
-        for (slot, saved) in starts.iter_mut().zip(&bp.save_start) {
+        for (slot, saved) in starts.iter_mut().zip(&behind.save_start) {
             *slot = saved.as_pos();
         }
-        for (slot, saved) in ends.iter_mut().zip(&bp.save_end) {
+        for (slot, saved) in ends.iter_mut().zip(&behind.save_end) {
             *slot = saved.as_pos();
         }
     } else {
         let starts = unsafe { core::slice::from_raw_parts_mut(rex.reg_startp(), NSUBEXP_SLOTS) };
         let ends = unsafe { core::slice::from_raw_parts_mut(rex.reg_endp(), NSUBEXP_SLOTS) };
-        for (slot, saved) in starts.iter_mut().zip(&bp.save_start) {
+        for (slot, saved) in starts.iter_mut().zip(&behind.save_start) {
             *slot = saved.as_ptr();
         }
-        for (slot, saved) in ends.iter_mut().zip(&bp.save_end) {
+        for (slot, saved) in ends.iter_mut().zip(&behind.save_end) {
             *slot = saved.as_ptr();
         }
     }

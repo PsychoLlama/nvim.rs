@@ -199,11 +199,11 @@ pub unsafe fn clear_fmark(fm: *mut FileMark, timestamp: Timestamp) {
 ///
 /// `c` — The name of the mark, e.g., 'a'.
 /// `pos` — Position of the mark in the buffer.
-/// `buf` — The buffer of the mark.
+/// `buffer` — The buffer of the mark.
 ///
 /// # Safety
-/// `pos` must point at a live position and `buf` at a live buffer.
-unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buf: *mut Buffer) {
+/// `pos` must point at a live position and `buffer` at a live buffer.
+unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buffer: *mut Buffer) {
     // SAFETY: the autocommand tables are the editor's own, live from startup.
     if !has_event(AutoEvent::MarkSet) {
         return;
@@ -213,7 +213,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buf: *mut Buffer) {
     let mut mark_str: [c_char; 2] = [c, NUL_BYTE];
     // SAFETY: the three keys are `'static` C strings, `mark_str` and `items`
     // outlive the `aucmd_defer` call, and `aucmd_defer` copies the payload
-    // before it returns. `buf` is the caller's live buffer.
+    // before it returns. `buffer` is the caller's live buffer.
     let mut items: [KeyValuePair; 3] = [
         key_value_pair {
             key: unsafe { cstr_as_string(c"name".as_ptr()) },
@@ -239,7 +239,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut Pos, buf: *mut Buffer) {
             mark_str.as_mut_ptr(),
             ptr::null_mut(),
             AUGROUP_ALL,
-            Buf::new(buf),
+            Buf::new(buffer),
             ptr::null_mut(),
             &raw mut payload,
         )
@@ -371,19 +371,19 @@ pub unsafe fn mark_forget_file(window: *mut Window, fnum: c_int) {
 /// two motion-mark lookups invalidated each other; the slot is the caller's
 /// now precisely so they cannot.
 ///
-/// `buf` — for fmark->fnum.
+/// `buffer` — for fmark->fnum.
 /// `pos` — for fmark->mark.
 /// `fmp` — the record to write.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `fmp` must point at a live, writable
+/// `buffer` must be a live buffer and `fmp` must point at a live, writable
 /// `FileMark` that outlives every use of the answer.
-pub unsafe fn pos_to_mark(buf: *mut Buffer, fmp: *mut FileMark, pos: Pos) -> *mut FileMark {
+pub unsafe fn pos_to_mark(buffer: *mut Buffer, fmp: *mut FileMark, pos: Pos) -> *mut FileMark {
     debug_assert!(!fmp.is_null(), "pos_to_mark needs the caller's record");
     // SAFETY: the caller promised a live, writable record.
     let fm = unsafe { Fmark::new(fmp) };
     // SAFETY: the caller promised a live buffer.
-    fm.set_fnum(unsafe { Buf::new(buf) }.handle as c_int);
+    fm.set_fnum(unsafe { Buf::new(buffer) }.handle as c_int);
     fm.set_pos(pos);
     fm.raw()
 }
@@ -495,9 +495,9 @@ pub(super) unsafe fn fname2fnum(fm: *mut XFileMark) {
 ///
 /// # Safety
 /// `buf` must be a live buffer, and the editor's window list must be live.
-pub unsafe fn fmarks_check_names(buf: *mut Buffer) {
+pub unsafe fn fmarks_check_names(buffer: *mut Buffer) {
     // SAFETY: the caller promised a live buffer.
-    let buf = unsafe { Buf::new(buf) };
+    let buf = unsafe { Buf::new(buffer) };
     let name = buf.b_ffname;
     if name.is_null() {
         return;
@@ -518,13 +518,13 @@ pub unsafe fn fmarks_check_names(buf: *mut Buffer) {
 
 /// # Safety
 /// `name` must be a NUL-terminated string that outlives the call.
-unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buf: Buf) {
+unsafe fn fmarks_check_one(fm: Xfmark, name: *mut c_char, buffer: Buf) {
     let fname = fm.fname();
     // SAFETY: both names are NUL-terminated strings.
     if fm.fmark().fnum() != 0 || fname.is_null() || unsafe { path_fnamecmp(name, fname) } != 0 {
         return;
     }
-    fm.fmark().set_fnum(buf.handle as c_int);
+    fm.fmark().set_fnum(buffer.handle as c_int);
     fm.clear_fname();
 }
 
@@ -577,12 +577,12 @@ pub(crate) unsafe fn mark_check(fm: *mut FileMark, errormsg: &mut Option<CString
 /// `buf` must be null or a live buffer, and `fm` must point at a live
 /// `FileMark`.
 pub(crate) unsafe fn mark_check_line_bounds(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     fm: *mut FileMark,
     errormsg: &mut Option<CString>,
 ) -> bool {
     // SAFETY: the caller promised a live buffer or null.
-    let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
+    let Some(buf) = (unsafe { Buf::from_raw(buffer) }) else {
         return true;
     };
     // SAFETY: the caller promised a live record.
@@ -604,9 +604,9 @@ pub(crate) unsafe fn mark_check_line_bounds(
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn clrallmarks(buf: *mut Buffer, timestamp: Timestamp) {
+pub unsafe fn clrallmarks(buffer: *mut Buffer, timestamp: Timestamp) {
     // SAFETY: the caller promised a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buf = unsafe { Buf::new(buffer) };
     for mark in buf.named_marks() {
         mark.clear(timestamp);
     }
@@ -642,21 +642,21 @@ pub unsafe fn set_last_cursor(win: *mut Window) {
 ///
 /// If it points to a tail byte it is move backwards to the head byte.
 ///
-/// `buf` — Buffer to adjust position in.
+/// `buffer` — Buffer to adjust position in.
 /// `lp` — Position to adjust.
 ///
 /// # Safety
-/// `buf` must be a live buffer and `lp` must point at a live, writable
+/// `buffer` must be a live buffer and `lp` must point at a live, writable
 /// position naming a line of it.
-pub unsafe fn mark_mb_adjustpos(buf: *mut Buffer, lp: *mut Pos) {
+pub unsafe fn mark_mb_adjustpos(buffer: *mut Buffer, lp: *mut Pos) {
     // SAFETY: the caller promised a live position.
     let mut pos = unsafe { *lp };
     if pos.col <= 0 && pos.coladd <= 1 {
         return;
     }
     // SAFETY: the caller promised a live buffer and a line of it.
-    let p = unsafe { ml_get_buf(buf, pos.lnum) };
-    if unsafe { *p } == NUL_BYTE || unsafe { ml_get_buf_len(buf, pos.lnum) } < pos.col {
+    let p = unsafe { ml_get_buf(buffer, pos.lnum) };
+    if unsafe { *p } == NUL_BYTE || unsafe { ml_get_buf_len(buffer, pos.lnum) } < pos.col {
         pos.col = 0;
     } else {
         pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };

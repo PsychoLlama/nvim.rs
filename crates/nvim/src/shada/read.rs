@@ -448,7 +448,7 @@ unsafe fn buffer_for_fname(fname_bufs: &mut FnameBufs, fname: *const c_char) -> 
 /// A jump the list already holds — same position, same file — is dropped
 /// rather than inserted twice, and so is one older than a list that is
 /// already full.
-unsafe fn insert_jump(fm: XFileMark, buf: *mut Buffer, mut entry: ShadaEntry) {
+unsafe fn insert_jump(fm: XFileMark, buffer: *mut Buffer, mut entry: ShadaEntry) {
     // SAFETY: `curwin` is set from startup to exit, and nothing below can
     // change which window that is.
     let mut win = unsafe { Win::current() };
@@ -456,7 +456,7 @@ unsafe fn insert_jump(fm: XFileMark, buf: *mut Buffer, mut entry: ShadaEntry) {
     while i > 0 {
         let existing = &win.w_jumplist[i as usize - 1];
         if existing.fmark.timestamp <= fm.fmark.timestamp {
-            let same_file = if buf.is_null() {
+            let same_file = if buffer.is_null() {
                 // SAFETY: both names are NUL-terminated: the list's own, and
                 // the caller's, which it promised.
                 !existing.fname.is_null() && unsafe { cstr::eq(fm.fname, existing.fname) }
@@ -494,9 +494,9 @@ unsafe fn insert_jump(fm: XFileMark, buf: *mut Buffer, mut entry: ShadaEntry) {
 
 /// [`insert_jump`] for a buffer's change list, which needs no file name to
 /// compare on because every entry in it is in this buffer.
-unsafe fn insert_change(buf: *mut Buffer, fm: FileMark) {
+unsafe fn insert_change(buffer: *mut Buffer, fm: FileMark) {
     // SAFETY: the caller's promise — `buf` is a live buffer.
-    let mut buf = unsafe { Buf::new(buf) };
+    let mut buf = unsafe { Buf::new(buffer) };
     let mut i = buf.b_changelistlen;
     while i > 0 {
         let existing = &buf.b_changelist[i as usize - 1];

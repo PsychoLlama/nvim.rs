@@ -17,7 +17,7 @@ use super::*;
 use crate::message_fmt::c_str;
 use crate::semsg;
 
-/// The SHA-256 of every line of `buf`, each followed by a NUL separator.
+/// The SHA-256 of every line of `buffer`, each followed by a NUL separator.
 ///
 /// This is what an undo file stakes its claim on: a buffer whose hash has
 /// moved is holding different text, and the tree in the file describes text
@@ -26,11 +26,11 @@ use crate::semsg;
 /// # Safety
 ///
 /// `hash` points at [`UNDO_HASH_SIZE`] writable bytes.
-pub unsafe fn u_compute_hash(buf: Buf, hash: *mut uint8_t) {
+pub unsafe fn u_compute_hash(buffer: Buf, hash: *mut uint8_t) {
     let mut ctx = Sha256::new();
-    for lnum in 1..=buf.b_ml.ml_line_count {
+    for lnum in 1..=buffer.b_ml.ml_line_count {
         // SAFETY: a live buffer, so every line up to its own count is there.
-        let line: *mut c_char = unsafe { ml_get_buf(buf.raw(), lnum) };
+        let line: *mut c_char = unsafe { ml_get_buf(buffer.raw(), lnum) };
         // The terminating NUL goes in too, as a line separator.
         // SAFETY: that line, NUL-terminated, as `ml_get_buf` hands it back.
         let bytes =

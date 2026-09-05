@@ -108,21 +108,21 @@ pub fn is_aucmd_win(win: *mut Window) -> bool {
     })
 }
 
-/// Make `buf` the current buffer for the duration of an autocommand,
+/// Make `buffer` the current buffer for the duration of an autocommand,
 /// saving what it takes to undo that in `aco`.
-pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buf: *mut Buffer) {
+pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     let entry = |idx: usize| aucmd_wins().slot(idx);
 
-    let same_buffer = buf == curbuf.get();
+    let same_buffer = buffer == curbuf.get();
 
-    // A window already showing `buf` is preferred: making it current
+    // A window already showing `buffer` is preferred: making it current
     // has the fewest side effects.  Only `curtab` is searched, which is
     // why `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)` starts at `firstwin`.
     let win: *mut Window = if same_buffer {
         curwin.get()
     } else {
         windows()
-            .find(|wp| wp.w_buffer == buf)
+            .find(|wp| wp.w_buffer == buffer)
             .map_or(::core::ptr::null_mut(), Win::raw)
     };
 
@@ -171,9 +171,9 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buf: *mut Buffer) {
         // No window shows "buf", so borrow the autocommand window and
         // put it in the current tab page.
         unsafe { (*aco).use_aucmd_win_idx = auc_idx as ::core::ffi::c_int };
-        unsafe { (*auc_win).w_buffer = buf };
-        unsafe { (*auc_win).w_s = &raw mut (*buf).b_s };
-        unsafe { (*buf).b_nwindows += 1 };
+        unsafe { (*auc_win).w_buffer = buffer };
+        unsafe { (*auc_win).w_s = &raw mut (*buffer).b_s };
+        unsafe { (*buffer).b_nwindows += 1 };
         unsafe { win_init_empty(auc_win) };
 
         // `w_localdir`, `tp_localdir` and `globaldir` all have to be
@@ -209,7 +209,7 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buf: *mut Buffer) {
         curwin.set(auc_win);
     }
 
-    curbuf.set(buf);
+    curbuf.set(buffer);
     unsafe { (*aco).new_curwin_handle = cur_win().handle };
     unsafe { (*aco).new_curbuf = BufRef::of_opt(current_buf()).record() };
 

@@ -205,8 +205,8 @@ impl Rex {
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_buf(self, buf: *mut Buffer) {
-        unsafe { (*self.0).reg_buf = buf }
+    pub(crate) fn set_reg_buf(self, buffer: *mut Buffer) {
+        unsafe { (*self.0).reg_buf = buffer }
     }
 
     /// The window the match runs in, or null: `\%#` and `\%V` need one.

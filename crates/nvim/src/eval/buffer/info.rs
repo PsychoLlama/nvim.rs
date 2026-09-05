@@ -16,8 +16,8 @@ use crate::types::{VAR_DICT, VAR_UNKNOWN, kListLenMayKnow};
 /// One `getbufinfo()` entry: a buffer's options, variables and attributes.
 ///
 /// # Safety
-/// `buf` must be a live buffer.
-unsafe fn get_buffer_info(buf: Buf) -> *mut Dict {
+/// `buffer` must be a live buffer.
+unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     // SAFETY: the caller's obligation. The dictionary is handed straight to
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the closure adds.
@@ -36,40 +36,43 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut Dict {
         let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
-    nr(c"bufnr", VarNumber::from(buf.handle));
+    nr(c"bufnr", VarNumber::from(buffer.handle));
     str(
         c"name",
-        if buf.b_ffname.is_null() {
+        if buffer.b_ffname.is_null() {
             c"".as_ptr()
         } else {
-            buf.b_ffname as *const c_char
+            buffer.b_ffname as *const c_char
         },
     );
     // The *current* buffer's line is the cursor's; any other's is the one it
     // will be entered at.
-    let lnum = if buf.raw() == curbuf.get() {
+    let lnum = if buffer.raw() == curbuf.get() {
         // SAFETY: `curwin` is set from startup to exit.
         cur_win().w_cursor.lnum
     } else {
         // SAFETY: the answer is a live mark.
-        unsafe { buflist_findlnum(buf) }
+        unsafe { buflist_findlnum(buffer) }
     };
     nr(c"lnum", VarNumber::from(lnum));
-    nr(c"linecount", VarNumber::from(buf.line_count()));
-    nr(c"loaded", VarNumber::from(!buf.b_ml.ml_mfp.is_null()));
-    nr(c"listed", VarNumber::from(buf.b_p_bl));
+    nr(c"linecount", VarNumber::from(buffer.line_count()));
+    nr(c"loaded", VarNumber::from(!buffer.b_ml.ml_mfp.is_null()));
+    nr(c"listed", VarNumber::from(buffer.b_p_bl));
     // SAFETY: a live buffer.
-    nr(c"changed", VarNumber::from(buf_is_changed(buf)));
+    nr(c"changed", VarNumber::from(buf_is_changed(buffer)));
     // SAFETY: a live buffer.
-    nr(c"changedtick", buf_get_changedtick(buf));
+    nr(c"changedtick", buf_get_changedtick(buffer));
     nr(
         c"hidden",
-        VarNumber::from(!buf.b_ml.ml_mfp.is_null() && buf.b_nwindows == 0),
+        VarNumber::from(!buffer.b_ml.ml_mfp.is_null() && buffer.b_nwindows == 0),
     );
-    nr(c"command", VarNumber::from(buf.raw() == cmdwin_buf.get()));
+    nr(
+        c"command",
+        VarNumber::from(buffer.raw() == cmdwin_buf.get()),
+    );
     // SAFETY: a live dictionary and the buffer's own variable dictionary.
     let vars = c"variables";
-    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buf.b_vars) };
+    let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buffer.b_vars) };
 
     // The windows displaying this buffer.
     // SAFETY: the list is handed to the dictionary below, so it is not leaked.
@@ -78,17 +81,17 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut Dict {
         // SAFETY: a live list.
         unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
     };
-    for wp in tab_windows().filter(|wp| wp.w_buffer == buf.raw()) {
+    for wp in tab_windows().filter(|wp| wp.w_buffer == buffer.raw()) {
         append(wp.handle);
     }
     list(c"windows", windows);
 
     // SAFETY: a live buffer; `get_buffer_signs` hands back a fresh list the
     // dictionary takes over.
-    if unsafe { buf_has_signs(buf.raw()) } {
-        list(c"signs", unsafe { get_buffer_signs(buf.raw()) });
+    if unsafe { buf_has_signs(buffer.raw()) } {
+        list(c"signs", unsafe { get_buffer_signs(buffer.raw()) });
     }
-    nr(c"lastused", buf.b_last_used);
+    nr(c"lastused", buffer.b_last_used);
     dict
 }
 
@@ -145,11 +148,11 @@ struct Filter {
 }
 
 impl Filter {
-    /// Whether `buf` fails one of the selectors that is switched on.
-    fn rejects(&self, buf: Buf) -> bool {
+    /// Whether `buffer` fails one of the selectors that is switched on.
+    fn rejects(&self, buffer: Buf) -> bool {
         self.on
-            && (self.bufloaded && buf.b_ml.ml_mfp.is_null()
-                || self.buflisted && buf.b_p_bl == 0
-                || self.bufmodified && buf.b_changed == 0)
+            && (self.bufloaded && buffer.b_ml.ml_mfp.is_null()
+                || self.buflisted && buffer.b_p_bl == 0
+                || self.bufmodified && buffer.b_changed == 0)
     }
 }

@@ -945,9 +945,9 @@ fn ex_msg(msg: *const c_char) -> CString {
 }
 
 /// `mark_get_visual()` as checked code.
-fn mark_get_visual(buf: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
+fn mark_get_visual(buffer: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut FileMark {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::mark::mark_get_visual(buf, fmp, name) }
+    unsafe { crate::mark::mark_get_visual(buffer, fmp, name) }
 }
 
 /// `qf_get_cur_idx()` as checked code.

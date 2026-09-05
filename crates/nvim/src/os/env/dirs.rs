@@ -275,7 +275,7 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
 
 /// Replace the home directory with `~` in each file name of `src`.
 ///
-/// `buf`, when not NULL, is checked for being a help buffer — in which case
+/// `buffer`, when not NULL, is checked for being a help buffer — in which case
 /// the path is dropped entirely and `one` is ignored. `one` treats `src` as
 /// a single file name rather than a space/comma separated list.
 ///
@@ -284,9 +284,9 @@ pub unsafe fn vim_getenv(name: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `dst` must be writable for `dstlen` bytes; `src` NUL-terminated or NULL;
-/// `buf` a live buffer or NULL.
+/// `buffer` a live buffer or NULL.
 pub unsafe fn home_replace(
-    buf: *const Buffer,
+    buffer: *const Buffer,
     src: *const c_char,
     dst: *mut c_char,
     dstlen: size_t,
@@ -299,7 +299,7 @@ pub unsafe fn home_replace(
             *dst = 0;
             return 0;
         }
-        if !buf.is_null() && (*buf).b_help {
+        if !buffer.is_null() && (*buffer).b_help {
             let dlen = xstrlcpy(dst, path_tail(src), dstlen);
             return dlen.min(dstlen - 1);
         }
@@ -420,8 +420,8 @@ pub unsafe fn home_replace(
 /// [`home_replace`] into newly allocated memory.
 ///
 /// # Safety
-/// `src` must be NUL-terminated or NULL, `buf` live or NULL.
-pub unsafe fn home_replace_save(buf: *mut Buffer, src: *const c_char) -> *mut c_char {
+/// `src` must be NUL-terminated or NULL, `buffer` live or NULL.
+pub unsafe fn home_replace_save(buffer: *mut Buffer, src: *const c_char) -> *mut c_char {
     // SAFETY: the caller's contract; the buffer is sized for the source plus
     // "~/" and the NUL.
     unsafe {
@@ -431,7 +431,7 @@ pub unsafe fn home_replace_save(buf: *mut Buffer, src: *const c_char) -> *mut c_
             cstr::bytes_at(src).len()
         };
         let dst = xmalloc(len) as *mut c_char;
-        home_replace(buf, src, dst, len, true);
+        home_replace(buffer, src, dst, len, true);
         dst
     }
 }

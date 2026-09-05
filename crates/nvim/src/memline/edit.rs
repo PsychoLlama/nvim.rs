@@ -65,10 +65,10 @@ struct InsertAt {
 /// [`ML_APPEND_MARK`] and [`ML_APPEND_NEW`].
 ///
 /// # Safety
-/// `buf` must point at a buffer, and `line` at `len` readable bytes (or at a
+/// `buffer` must point at a buffer, and `line` at `len` readable bytes (or at a
 /// NUL-terminated string, if `len` is 0).
 pub(crate) unsafe fn ml_append_int(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     line: *mut c_char,
     len_arg: ColNr,
@@ -76,7 +76,7 @@ pub(crate) unsafe fn ml_append_int(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     if lnum > b.b_ml.ml_line_count || b.b_ml.ml_mfp.is_null() {
         return Err(Failed); // lnum out of range
     }
@@ -98,7 +98,7 @@ pub(crate) unsafe fn ml_append_int(
     // Find the data block holding the previous line. This also fills the
     // stack with the blocks from the root down, and releases any block
     // that was locked.
-    let mut hp = unsafe { ml_find_line(buf, if lnum == 0 { 1 } else { lnum }, ML_INSERT) };
+    let mut hp = unsafe { ml_find_line(buffer, if lnum == 0 { 1 } else { lnum }, ML_INSERT) };
     if hp.is_null() {
         return Err(Failed);
     }
@@ -126,7 +126,7 @@ pub(crate) unsafe fn ml_append_int(
         // The line is not going into the block ml_find_line just charged
         // it to, so take it back off through the block's `lineadd`.
         b.b_ml.shift_locked(-1);
-        hp = unsafe { ml_find_line(buf, lnum + 1, ML_INSERT) };
+        hp = unsafe { ml_find_line(buffer, lnum + 1, ML_INSERT) };
         if hp.is_null() {
             return Err(Failed);
         }
@@ -138,7 +138,7 @@ pub(crate) unsafe fn ml_append_int(
     if b.b_prev_line_count == 0 {
         b.b_prev_line_count = b.b_ml.ml_line_count;
     }
-    unsafe { (*buf).b_ml.ml_line_count += 1 };
+    unsafe { (*buffer).b_ml.ml_line_count += 1 };
 
     let at = InsertAt { db_idx, line_count };
     let new = NewLine {
@@ -147,16 +147,16 @@ pub(crate) unsafe fn ml_append_int(
         flags,
     };
     if dp.db_free as int64_t >= space_needed {
-        unsafe { ml_insert_in_block(buf, dp, &at, &new, space_needed) };
+        unsafe { ml_insert_in_block(buffer, dp, &at, &new, space_needed) };
     } else {
-        let mut split = unsafe { ml_split_data_block(buf, hp, &at, lnum, &new, space_needed) };
-        if !unsafe { ml_insert_pointer(buf, mfp, &mut split) } {
+        let mut split = unsafe { ml_split_data_block(buffer, hp, &at, lnum, &new, space_needed) };
+        if !unsafe { ml_insert_pointer(buffer, mfp, &mut split) } {
             return Err(Failed);
         }
     }
 
     // The line was inserted below `lnum`.
-    unsafe { ml_updatechunk(buf, lnum + 1, len, ML_CHNK_ADDLINE) };
+    unsafe { ml_updatechunk(buffer, lnum + 1, len, ML_CHNK_ADDLINE) };
     Ok(())
 }
 
@@ -166,7 +166,7 @@ pub(crate) unsafe fn ml_append_int(
 /// # Safety
 /// `dp` must be the locked data block, with at least `space_needed` bytes free.
 unsafe fn ml_insert_in_block(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     mut dp: Db,
     at: &InsertAt,
     new: &NewLine,
@@ -174,7 +174,7 @@ unsafe fn ml_insert_in_block(
 ) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let InsertAt { db_idx, line_count } = *at;
     let NewLine {
         text: line,
@@ -244,7 +244,7 @@ unsafe fn ml_insert_in_block(
 /// `hp` must be the locked data block, and `new.text` must hold `new.len`
 /// bytes.
 unsafe fn ml_split_data_block(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     hp: *mut BlockHdr,
     at: &InsertAt,
     lnum: LineNr,
@@ -253,7 +253,7 @@ unsafe fn ml_split_data_block(
 ) -> SplitBlocks {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let InsertAt { db_idx, line_count } = *at;
     let NewLine {
         text: line,
@@ -405,7 +405,7 @@ unsafe fn ml_split_data_block(
     // Flush the old data block. The lines it owes the pointer blocks
     // above it go with it, because they are about to be paid by hand.
     let lineadd = b.b_ml.take_locked_lineadd();
-    unsafe { ml_find_line(buf, 0, ML_FLUSH) };
+    unsafe { ml_find_line(buffer, 0, ML_FLUSH) };
 
     SplitBlocks {
         bnum_left,
@@ -428,12 +428,16 @@ unsafe fn ml_split_data_block(
 /// fails.
 ///
 /// # Safety
-/// `buf`'s stack must be the path ml_find_line left, and `split` must
+/// `buffer`'s stack must be the path ml_find_line left, and `split` must
 /// describe two blocks that exist.
-unsafe fn ml_insert_pointer(buf: *mut Buffer, mfp: *mut MemFile, split: &mut SplitBlocks) -> bool {
+unsafe fn ml_insert_pointer(
+    buffer: *mut Buffer,
+    mfp: *mut MemFile,
+    split: &mut SplitBlocks,
+) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let mut stack_idx = b.b_ml.stack_len() as c_int - 1;
     while stack_idx >= 0 {
         let ip = b.b_ml.stack_at(stack_idx as usize);
@@ -450,17 +454,18 @@ unsafe fn ml_insert_pointer(buf: *mut Buffer, mfp: *mut MemFile, split: &mut Spl
         }
 
         if (pp.pb_count as c_int) < pp.pb_count_max as c_int {
-            unsafe { ml_pointer_add_entry(buf, hp, pb_idx, split, stack_idx) };
+            unsafe { ml_pointer_add_entry(buffer, hp, pb_idx, split, stack_idx) };
             return true;
         }
 
         // The pointer block is full: split it, and go round again to give
         // *its* parent the two halves.
-        let hp_new =
-            match unsafe { ml_split_pointer_block(buf, mfp, &mut hp, &mut pp, &mut stack_idx) } {
-                Some(hp_new) => hp_new,
-                None => return false,
-            };
+        let hp_new = match unsafe {
+            ml_split_pointer_block(buffer, mfp, &mut hp, &mut pp, &mut stack_idx)
+        } {
+            Some(hp_new) => hp_new,
+            None => return false,
+        };
         let mut pp_new = unsafe { Pb::new((*hp_new).bh_data.cast()) };
 
         // Move the entries after the current one into the new block; if
@@ -544,7 +549,7 @@ unsafe fn pb_line_total(pp: Pb) -> c_int {
 /// `hp` must be the pointer block at `stack_idx`, with room for one more
 /// entry.
 unsafe fn ml_pointer_add_entry(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     hp: *mut BlockHdr,
     pb_idx: c_int,
     split: &SplitBlocks,
@@ -552,7 +557,7 @@ unsafe fn ml_pointer_add_entry(
 ) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let mfp = b.b_ml.ml_mfp;
     let mut pp = unsafe { Pb::new((*hp).bh_data.cast()) };
     if pb_idx + 1 < pp.pb_count as c_int {
@@ -592,7 +597,7 @@ unsafe fn ml_pointer_add_entry(
         // Fix the line count in the rest of the blocks on the stack, and
         // then the stack entry itself -- which stays on the stack, so
         // the walk has to stop below it.
-        unsafe { ml_lineadd_depth(buf, split.lineadd, stack_idx) };
+        unsafe { ml_lineadd_depth(buffer, split.lineadd, stack_idx) };
         b.b_ml.stack_add_high(stack_idx, split.lineadd);
     }
 }
@@ -611,7 +616,7 @@ unsafe fn ml_pointer_add_entry(
 /// `*hp`/`*pp` must be a full pointer block, and `*stack_idx` the index of
 /// its stack entry.
 unsafe fn ml_split_pointer_block(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     mfp: *mut MemFile,
     hp: &mut *mut BlockHdr,
     pp: &mut Pb,
@@ -619,7 +624,7 @@ unsafe fn ml_split_pointer_block(
 ) -> Option<*mut BlockHdr> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     let page_size = unsafe { (*mfp).mf_page_size } as usize;
     // Where `*hp`'s own stack entry is; `stack_idx` moves below.
     let ip = *stack_idx as usize;
@@ -646,7 +651,7 @@ unsafe fn ml_split_pointer_block(
         // SAFETY: block 1 now holds exactly one entry, and this is it.
         let mut root = unsafe { Pe::new(pb_entries(*pp)) };
         root.pe_bnum = unsafe { (*hp_new).bh_bnum };
-        root.pe_line_count = unsafe { (*buf).b_ml.ml_line_count };
+        root.pe_line_count = unsafe { (*buffer).b_ml.ml_line_count };
         root.pe_old_lnum = 1;
         root.pe_page_count = 1;
         unsafe { mf_put(mfp, *hp, true, false) }; // release block 1
@@ -663,15 +668,15 @@ unsafe fn ml_split_pointer_block(
 /// the buffer ends up empty.
 ///
 /// # Safety
-/// `buf` must point at a buffer holding line `lnum`.
+/// `buffer` must point at a buffer holding line `lnum`.
 pub(crate) unsafe fn ml_delete_int(
-    buf: *mut Buffer,
+    buffer: *mut Buffer,
     lnum: LineNr,
     flags: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     if lowest_marked.get() != 0 && lowest_marked.get() > lnum {
         lowest_marked.set(lowest_marked.get() - 1);
     }
@@ -681,8 +686,8 @@ pub(crate) unsafe fn ml_delete_int(
         if flags & ML_DEL_MESSAGE != 0 {
             unsafe { set_keep_msg(gettext(no_lines_msg).as_ptr(), 0) };
         }
-        let i = unsafe { ml_replace_buf(buf, 1, c"".as_ptr().cast_mut(), true, false) };
-        unsafe { (*buf).b_ml.ml_flags |= MlFlags::EMPTY };
+        let i = unsafe { ml_replace_buf(buffer, 1, c"".as_ptr().cast_mut(), true, false) };
+        unsafe { (*buffer).b_ml.ml_flags |= MlFlags::EMPTY };
         return i;
     }
 
@@ -692,7 +697,7 @@ pub(crate) unsafe fn ml_delete_int(
     if mfp.is_null() {
         return Err(Failed);
     }
-    let hp = unsafe { ml_find_line(buf, lnum, ML_DELETE) };
+    let hp = unsafe { ml_find_line(buffer, lnum, ML_DELETE) };
     if hp.is_null() {
         return Err(Failed);
     }
@@ -706,7 +711,7 @@ pub(crate) unsafe fn ml_delete_int(
     if b.b_prev_line_count == 0 {
         b.b_prev_line_count = b.b_ml.ml_line_count;
     }
-    unsafe { (*buf).b_ml.ml_line_count -= 1 };
+    unsafe { (*buffer).b_ml.ml_line_count -= 1 };
 
     let line_start = unsafe { db_line_start(dp, idx) } as c_int;
     let line_size = if idx == 0 {
@@ -721,7 +726,7 @@ pub(crate) unsafe fn ml_delete_int(
     debug_assert!(line_size >= 1);
     unsafe {
         ml_add_deleted_len_buf(
-            buf,
+            buffer,
             db_byte(dp, line_start as isize),
             (line_size - 1) as ssize_t,
         )
@@ -731,7 +736,7 @@ pub(crate) unsafe fn ml_delete_int(
         // The block held only this line, so it goes away, and with it the
         // entry pointing at it — and if that empties its pointer block,
         // that one too, up to the root if need be.
-        if !unsafe { ml_free_data_block(buf, mfp, hp) } {
+        if !unsafe { ml_free_data_block(buffer, mfp, hp) } {
             return Err(Failed);
         }
     } else {
@@ -764,7 +769,7 @@ pub(crate) unsafe fn ml_delete_int(
         b.b_ml.locked_has_moved();
     }
 
-    unsafe { ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE) };
+    unsafe { ml_updatechunk(buffer, lnum, line_size, ML_CHNK_DELLINE) };
     Ok(())
 }
 
@@ -774,11 +779,11 @@ pub(crate) unsafe fn ml_delete_int(
 /// Returns false if a block could not be read.
 ///
 /// # Safety
-/// `hp` must be the locked data block, and `buf`'s stack the path to it.
-unsafe fn ml_free_data_block(buf: *mut Buffer, mfp: *mut MemFile, hp: *mut BlockHdr) -> bool {
+/// `hp` must be the locked data block, and `buffer`'s stack the path to it.
+unsafe fn ml_free_data_block(buffer: *mut Buffer, mfp: *mut MemFile, hp: *mut BlockHdr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let mut b = unsafe { Buf::new(buffer) };
     unsafe { mf_free(mfp, hp) }; // free the data block; the lines it owes the
     // pointer blocks above it survive it, and are paid below.
     let locked_lineadd = b.b_ml.forget_locked();
@@ -830,7 +835,7 @@ unsafe fn ml_free_data_block(buf: *mut Buffer, mfp: *mut MemFile, hp: *mut Block
         // Fix the line count in the rest of the blocks on the stack --
         // below this one, which is corrected by hand right after.
         if locked_lineadd != 0 {
-            unsafe { ml_lineadd_depth(buf, locked_lineadd, stack_idx) };
+            unsafe { ml_lineadd_depth(buffer, locked_lineadd, stack_idx) };
             b.b_ml.stack_add_high(stack_idx, locked_lineadd);
         }
         return true;

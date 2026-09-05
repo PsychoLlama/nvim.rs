@@ -102,25 +102,25 @@ fn has_flag(arg: *const c_char, c: u8) -> bool {
     !unsafe { vim_strchr(arg, c as c_int) }.is_null()
 }
 
-fn buf_changed(buf: Buf) -> bool {
+fn buf_changed(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    buf_is_changed(buf)
+    buf_is_changed(buffer)
 }
 
-/// Whether `buf`'s terminal, if it has one, still has a job attached.
-fn job_running(buf: Buf) -> bool {
+/// Whether `buffer`'s terminal, if it has one, still has a job attached.
+fn job_running(buffer: Buf) -> bool {
     // SAFETY: a live terminal, the caller having ruled out null.
-    !buf.terminal.is_null() && unsafe { terminal_running(buf.terminal) }
+    !buffer.terminal.is_null() && unsafe { terminal_running(buffer.terminal) }
 }
 
-fn special_name(buf: Buf) -> *mut c_char {
+fn special_name(buffer: Buf) -> *mut c_char {
     // SAFETY: a live buffer.
-    unsafe { buf_spname(buf.raw()) }
+    unsafe { buf_spname(buffer.raw()) }
 }
 
-fn remembered_lnum(buf: Buf) -> LineNr {
+fn remembered_lnum(buffer: Buf) -> LineNr {
     // SAFETY: the answer is a live mark.
-    unsafe { buflist_findlnum(buf) }
+    unsafe { buflist_findlnum(buffer) }
 }
 
 // ---------------------------------------------------------------------------
@@ -223,58 +223,58 @@ fn nth(list: &[*mut Buffer], at: usize) -> Option<Buf> {
 }
 
 /// Whether the `:ls` flags in `arg` say to skip this buffer.
-fn skip(buf: Buf, arg: *const c_char, forceit: c_int) -> bool {
-    let is_terminal = !buf.terminal.is_null();
-    let job_running = job_running(buf);
-    let loaded = !buf.b_ml.ml_mfp.is_null();
+fn skip(buffer: Buf, arg: *const c_char, forceit: c_int) -> bool {
+    let is_terminal = !buffer.terminal.is_null();
+    let job_running = job_running(buffer);
+    let loaded = !buffer.b_ml.ml_mfp.is_null();
     let alt_fnum = current_win().w_alt_fnum;
 
-    buf.b_p_bl == 0 && forceit == 0 && !has_flag(arg, b'u')
-        || has_flag(arg, b'u') && buf.b_p_bl != 0
-        || has_flag(arg, b'+') && (buf.b_flags.has(BufFlags::READERR) || !buf_changed(buf))
-        || has_flag(arg, b'a') && (!loaded || buf.b_nwindows == 0)
-        || has_flag(arg, b'h') && (!loaded || buf.b_nwindows != 0)
+    buffer.b_p_bl == 0 && forceit == 0 && !has_flag(arg, b'u')
+        || has_flag(arg, b'u') && buffer.b_p_bl != 0
+        || has_flag(arg, b'+') && (buffer.b_flags.has(BufFlags::READERR) || !buf_changed(buffer))
+        || has_flag(arg, b'a') && (!loaded || buffer.b_nwindows == 0)
+        || has_flag(arg, b'h') && (!loaded || buffer.b_nwindows != 0)
         || has_flag(arg, b'R') && (!is_terminal || !job_running)
         || has_flag(arg, b'F') && (!is_terminal || job_running)
-        || has_flag(arg, b'-') && buf.b_p_ma != 0
-        || has_flag(arg, b'=') && buf.b_p_ro == 0
-        || has_flag(arg, b'x') && !buf.b_flags.has(BufFlags::READERR)
-        || has_flag(arg, b'%') && buf.raw() != curbuf.get()
-        || has_flag(arg, b'#') && (buf.raw() == curbuf.get() || alt_fnum != buf.handle)
+        || has_flag(arg, b'-') && buffer.b_p_ma != 0
+        || has_flag(arg, b'=') && buffer.b_p_ro == 0
+        || has_flag(arg, b'x') && !buffer.b_flags.has(BufFlags::READERR)
+        || has_flag(arg, b'%') && buffer.raw() != curbuf.get()
+        || has_flag(arg, b'#') && (buffer.raw() == curbuf.get() || alt_fnum != buffer.handle)
 }
 
-/// Put the name to show for `buf` into `name`.
-fn fill_name(buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
-    let special = special_name(buf);
+/// Put the name to show for `buffer` into `name`.
+fn fill_name(buffer: Buf, name: &mut [c_char; MAXPATHL as usize]) {
+    let special = special_name(buffer);
     if !special.is_null() {
         // SAFETY: a NUL-terminated name into `MAXPATHL` writable bytes.
         unsafe { xstrlcpy(name.as_mut_ptr(), special, MAXPATHL as usize) };
         return;
     }
-    let (raw, fname, dst) = (buf.raw(), buf.b_fname, name.as_mut_ptr());
+    let (raw, fname, dst) = (buffer.raw(), buffer.b_fname, name.as_mut_ptr());
     // SAFETY: a live buffer, its name, and `MAXPATHL` writable bytes.
     unsafe { home_replace(raw, fname, dst, MAXPATHL as size_t, true) };
 }
 
 /// Print one buffer's line: the number, the flag column, the name padded to
 /// column 40, and the line number or the time it was last used.
-fn show(buf: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
-    let changed_char = if buf.b_flags.has(BufFlags::READERR) {
+fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
+    let changed_char = if buffer.b_flags.has(BufFlags::READERR) {
         b'x'
-    } else if buf_changed(buf) {
+    } else if buf_changed(buffer) {
         b'+'
     } else {
         b' '
     };
-    let mut ro_char = if buf.b_p_ma == 0 {
+    let mut ro_char = if buffer.b_p_ma == 0 {
         b'-'
-    } else if buf.b_p_ro != 0 {
+    } else if buffer.b_p_ro != 0 {
         b'='
     } else {
         b' '
     };
-    if !buf.terminal.is_null() {
-        ro_char = if job_running(buf) { b'R' } else { b'F' };
+    if !buffer.terminal.is_null() {
+        ro_char = if job_running(buffer) { b'R' } else { b'F' };
     }
 
     if !ui_has(kUIMessages) || msg_col.get() > 0 {
@@ -282,31 +282,31 @@ fn show(buf: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
         unsafe { msg_putchar(b'\n' as c_int) };
     }
 
-    let listed = if buf.b_p_bl != 0 { b' ' } else { b'u' };
-    let current = if buf.raw() == curbuf.get() {
+    let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
+    let current = if buffer.raw() == curbuf.get() {
         b'%'
-    } else if current_win().w_alt_fnum == buf.handle {
+    } else if current_win().w_alt_fnum == buffer.handle {
         b'#'
     } else {
         b' '
     };
-    let state = if buf.b_ml.ml_mfp.is_null() {
+    let state = if buffer.b_ml.ml_mfp.is_null() {
         b' '
-    } else if buf.b_nwindows == 0 {
+    } else if buffer.b_nwindows == 0 {
         b'h'
     } else {
         b'a'
     };
-    let lnum = if buf.raw() == curbuf.get() {
+    let lnum = if buffer.raw() == curbuf.get() {
         current_win().w_cursor.lnum
     } else {
-        remembered_lnum(buf)
+        remembered_lnum(buffer)
     };
-    let last_used = buf.b_last_used;
+    let last_used = buffer.b_last_used;
 
     let mut io = [0 as c_char; IOSIZE as usize];
     let flags = [listed, current, state, ro_char, changed_char];
-    let mut len = format_head(&mut io, buf.handle, flags, name);
+    let mut len = format_head(&mut io, buffer.handle, flags, name);
     len = pad_to_column(&mut io, len);
     if by_time && last_used != 0 {
         format_time(&mut io, len, last_used);
@@ -580,11 +580,11 @@ impl Msg {
 
     /// `home_replace` into the tail, followed by the length it wrote --
     /// which upstream measures with `strlen` rather than taking the answer.
-    fn put_home_replaced(&mut self, buf: *mut Buffer, name: *const c_char) {
+    fn put_home_replaced(&mut self, buffer: *mut Buffer, name: *const c_char) {
         let (dst, room) = self.tail();
         // SAFETY: a live buffer or null, a NUL-terminated name, and the
         // buffer's own tail.
-        unsafe { home_replace(buf, name, dst, room, true) };
+        unsafe { home_replace(buffer, name, dst, room, true) };
         // SAFETY: what `home_replace` just NUL-terminated.
         self.len += unsafe { cstr::bytes_at(dst) }.len();
     }

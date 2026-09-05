@@ -149,9 +149,9 @@ fn regcomp(pat: &[u8], flags: c_int) -> *mut RegProg {
     unsafe { vim_regcomp(pat.as_ptr().cast::<c_char>(), flags) }
 }
 
-fn is_diff_mode(buf: Buf) -> bool {
+fn is_diff_mode(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    diff_mode_buf(buf)
+    diff_mode_buf(buffer)
 }
 
 /// The current buffer, which is null only before the first one is created.
@@ -170,15 +170,15 @@ fn current_last() -> Option<Buf> {
     last_buffer()
 }
 
-fn fire_buf_event(event: AutoEvent, buf: Buf) -> bool {
-    let raw = buf.raw();
+fn fire_buf_event(event: AutoEvent, buffer: Buf) -> bool {
+    let raw = buffer.raw();
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) }
 }
 
-fn copy_options_into(buf: Buf, flags: c_int) {
+fn copy_options_into(buffer: Buf, flags: c_int) {
     // SAFETY: a live buffer.
-    unsafe { buf_copy_options(buf.raw(), flags) };
+    unsafe { buf_copy_options(buffer.raw(), flags) };
 }
 
 fn check_cursor_column(win: Win) {
@@ -337,28 +337,28 @@ pub unsafe fn buflist_new(
 
 /// The entry a buffer with this name already has: refresh its position and
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
-fn reuse_entry(mut buf: Buf, lnum: LineNr, flags: c_int) -> *mut Buffer {
+fn reuse_entry(mut buffer: Buf, lnum: LineNr, flags: c_int) -> *mut Buffer {
     if lnum != 0 as LineNr {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
         // SAFETY: records a position in the buffer's own entry list.
-        unsafe { buflist_setfpos(buf, win, lnum, 0 as ColNr, false) };
+        unsafe { buflist_setfpos(buffer, win, lnum, 0 as ColNr, false) };
     }
     if flags & BLN_NOOPT as c_int == 0 {
         // Copy the options now, if 'cpo' doesn't have 's' and not done
         // already.
-        copy_options_into(buf, 0);
+        copy_options_into(buffer, 0);
     }
-    if flags & BLN_LISTED as c_int != 0 && buf.b_p_bl == 0 {
-        buf.b_p_bl = 1;
-        let bufref = BufRef::of(buf);
+    if flags & BLN_LISTED as c_int != 0 && buffer.b_p_bl == 0 {
+        buffer.b_p_bl = 1;
+        let bufref = BufRef::of(buffer);
         if flags & BLN_DUMMY as c_int == 0
-            && fire_buf_event(AutoEvent::BufAdd, buf)
+            && fire_buf_event(AutoEvent::BufAdd, buffer)
             && !bufref.valid()
         {
             return ptr::null_mut();
         }
     }
-    buf.raw()
+    buffer.raw()
 }
 
 /// A zeroed `Buffer` with its `b:` dictionary and `b:changedtick` in place.
@@ -422,28 +422,28 @@ pub(crate) fn alloc_unregistered_buffer() -> Owned<Buffer> {
 
 /// Put a new buffer at the end of the buffer list, give it its number and
 /// hand its allocation to the registry, which owns it from here on.
-fn append_to_list(mut buf: Buf, owned: Owned<Buffer>) {
+fn append_to_list(mut buffer: Buf, owned: Owned<Buffer>) {
     // The number and the registry entry come first, ahead of upstream's
     // order: from here on `buf.id()` names the buffer, and the list links
     // are made of exactly that. Nothing between the two reads either.
-    buf.handle = top_file_num.get() as Handle;
+    buffer.handle = top_file_num.get() as Handle;
     top_file_num.set(top_file_num.get() + 1);
-    register_buffer(buf.handle, owned);
+    register_buffer(buffer.handle, owned);
 
-    buf.b_next = None;
+    buffer.b_next = None;
     match current_last() {
         // The buffer list is empty.
         None => {
-            buf.b_prev = None;
-            firstbuf.set(Some(buf.id()));
+            buffer.b_prev = None;
+            firstbuf.set(Some(buffer.id()));
         }
         // Append the new buffer at the end of the list.
         Some(mut last) => {
-            last.b_next = Some(buf.id());
-            buf.b_prev = Some(last.id());
+            last.b_next = Some(buffer.id());
+            buffer.b_prev = Some(last.id());
         }
     }
-    lastbuf.set(Some(buf.id()));
+    lastbuf.set(Some(buffer.id()));
     if top_file_num.get() < 0 {
         // Wrap around; this may cause duplicates.
         err(tr(c"W14: Warning: List of file names overflow"));
@@ -456,8 +456,11 @@ fn append_to_list(mut buf: Buf, owned: Owned<Buffer>) {
     }
 }
 
-fn init_hashtabs(mut buf: Buf) {
-    let (keywords, keywords_ic) = (&raw mut buf.b_s.b_keywtab, &raw mut buf.b_s.b_keywtab_ic);
+fn init_hashtabs(mut buffer: Buf) {
+    let (keywords, keywords_ic) = (
+        &raw mut buffer.b_s.b_keywtab,
+        &raw mut buffer.b_s.b_keywtab_ic,
+    );
     // SAFETY: a hash table inside a live buffer.
     unsafe { hash_init(keywords) };
     // SAFETY: as above.
@@ -466,13 +469,13 @@ fn init_hashtabs(mut buf: Buf) {
 
 /// `kv_destroy` + `kv_init` of the two buffer-update subscriber arrays: a
 /// reused buffer must not keep the old one's subscribers.
-fn reset_update_subscribers(buf: &mut Buf) {
-    xfree_clear(&mut buf.update_channels.items);
-    buf.update_channels.capacity = 0 as size_t;
-    buf.update_channels.size = 0 as size_t;
-    xfree_clear(&mut buf.update_callbacks.items);
-    buf.update_callbacks.capacity = 0 as size_t;
-    buf.update_callbacks.size = 0 as size_t;
+fn reset_update_subscribers(buffer: &mut Buf) {
+    xfree_clear(&mut buffer.update_channels.items);
+    buffer.update_channels.capacity = 0 as size_t;
+    buffer.update_channels.size = 0 as size_t;
+    xfree_clear(&mut buffer.update_callbacks.items);
+    buffer.update_callbacks.capacity = 0 as size_t;
+    buffer.update_callbacks.size = 0 as size_t;
 }
 
 /// Fire `BufNew` and, when the buffer is listed, `BufAdd`. Answers false
@@ -481,12 +484,14 @@ fn reset_update_subscribers(buf: &mut Buf) {
 /// Tricky: these autocommands may change the buffer list. They could also
 /// split the window and re-use the one empty buffer, which may result in
 /// unexpectedly losing that buffer.
-fn announce_new_buffer(buf: Buf, flags: c_int) -> bool {
-    let bufref = BufRef::of(buf);
-    if fire_buf_event(AutoEvent::BufNew, buf) && !bufref.valid() {
+fn announce_new_buffer(buffer: Buf, flags: c_int) -> bool {
+    let bufref = BufRef::of(buffer);
+    if fire_buf_event(AutoEvent::BufNew, buffer) && !bufref.valid() {
         return false;
     }
-    if flags & BLN_LISTED as c_int != 0 && fire_buf_event(AutoEvent::BufAdd, buf) && !bufref.valid()
+    if flags & BLN_LISTED as c_int != 0
+        && fire_buf_event(AutoEvent::BufAdd, buffer)
+        && !bufref.valid()
     {
         return false;
     }
@@ -515,83 +520,83 @@ pub unsafe fn curbuf_reusable() -> bool {
 
 /// Free the memory for a buffer's options. `free_p_ff` frees `'fileformat'`,
 /// `'buftype'` and `'fileencoding'` too.
-pub unsafe fn free_buf_options(mut buf: Buf, free_p_ff: bool) {
+pub unsafe fn free_buf_options(mut buffer: Buf, free_p_ff: bool) {
     if free_p_ff {
-        clear_opt(&mut buf.b_p_fenc);
-        clear_opt(&mut buf.b_p_ff);
-        clear_opt(&mut buf.b_p_bh);
-        clear_opt(&mut buf.b_p_bt);
+        clear_opt(&mut buffer.b_p_fenc);
+        clear_opt(&mut buffer.b_p_ff);
+        clear_opt(&mut buffer.b_p_bh);
+        clear_opt(&mut buffer.b_p_bt);
     }
-    clear_opt(&mut buf.b_p_def);
-    clear_opt(&mut buf.b_p_inc);
-    clear_opt(&mut buf.b_p_inex);
-    clear_opt(&mut buf.b_p_inde);
-    clear_opt(&mut buf.b_p_indk);
-    clear_opt(&mut buf.b_p_fp);
-    clear_opt(&mut buf.b_p_fex);
-    clear_opt(&mut buf.b_p_kp);
-    clear_opt(&mut buf.b_p_mps);
-    clear_opt(&mut buf.b_p_fo);
-    clear_opt(&mut buf.b_p_flp);
-    clear_opt(&mut buf.b_p_isk);
-    clear_opt(&mut buf.b_p_vsts);
-    xfree_clear(&mut buf.b_p_vsts_nopaste);
-    xfree_clear(&mut buf.b_p_vsts_array);
-    clear_opt(&mut buf.b_p_vts);
-    xfree_clear(&mut buf.b_p_vts_array);
-    clear_opt(&mut buf.b_p_keymap);
-    buf.b_kmap_ga = Vec::new();
-    clear_opt(&mut buf.b_p_com);
-    clear_opt(&mut buf.b_p_cms);
-    clear_opt(&mut buf.b_p_nf);
-    clear_opt(&mut buf.b_p_syn);
-    clear_opt(&mut buf.b_s.b_syn_isk);
-    clear_opt(&mut buf.b_s.b_p_spc);
-    clear_opt(&mut buf.b_s.b_p_spf);
-    free_regprog(&mut buf.b_s.b_cap_prog);
-    clear_opt(&mut buf.b_s.b_p_spl);
-    clear_opt(&mut buf.b_s.b_p_spo);
-    clear_opt(&mut buf.b_p_sua);
-    clear_opt(&mut buf.b_p_ft);
-    clear_opt(&mut buf.b_p_cink);
-    clear_opt(&mut buf.b_p_cino);
-    clear_opt(&mut buf.b_p_lop);
-    clear_opt(&mut buf.b_p_cinsd);
-    clear_opt(&mut buf.b_p_cinw);
-    clear_opt(&mut buf.b_p_cot);
-    clear_opt(&mut buf.b_p_cpt);
-    clear_opt(&mut buf.b_p_cfu);
-    clear_callback(&mut buf.b_cfu_cb);
-    clear_opt(&mut buf.b_p_ofu);
-    clear_callback(&mut buf.b_ofu_cb);
-    clear_opt(&mut buf.b_p_tsrfu);
-    clear_callback(&mut buf.b_tsrfu_cb);
-    let cpt_count = buf.b_p_cpt_count;
-    clear_cpt(&mut buf.b_p_cpt_cb, cpt_count);
-    buf.b_p_cpt_count = 0;
-    clear_opt(&mut buf.b_p_gefm);
-    clear_opt(&mut buf.b_p_gp);
-    clear_opt(&mut buf.b_p_mp);
-    clear_opt(&mut buf.b_p_efm);
-    clear_opt(&mut buf.b_p_ep);
-    clear_opt(&mut buf.b_p_path);
-    clear_opt(&mut buf.b_p_tags);
-    clear_opt(&mut buf.b_p_tc);
-    clear_opt(&mut buf.b_p_tfu);
-    clear_callback(&mut buf.b_tfu_cb);
-    clear_opt(&mut buf.b_p_ffu);
-    clear_callback(&mut buf.b_ffu_cb);
-    clear_opt(&mut buf.b_p_dict);
-    clear_opt(&mut buf.b_p_dia);
-    clear_opt(&mut buf.b_p_tsr);
-    clear_opt(&mut buf.b_p_qe);
-    buf.b_p_ac = -1;
-    buf.b_p_ar = -1;
-    buf.b_p_fs = -1;
-    buf.b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
-    clear_opt(&mut buf.b_p_lw);
-    clear_opt(&mut buf.b_p_bkc);
-    clear_opt(&mut buf.b_p_menc);
+    clear_opt(&mut buffer.b_p_def);
+    clear_opt(&mut buffer.b_p_inc);
+    clear_opt(&mut buffer.b_p_inex);
+    clear_opt(&mut buffer.b_p_inde);
+    clear_opt(&mut buffer.b_p_indk);
+    clear_opt(&mut buffer.b_p_fp);
+    clear_opt(&mut buffer.b_p_fex);
+    clear_opt(&mut buffer.b_p_kp);
+    clear_opt(&mut buffer.b_p_mps);
+    clear_opt(&mut buffer.b_p_fo);
+    clear_opt(&mut buffer.b_p_flp);
+    clear_opt(&mut buffer.b_p_isk);
+    clear_opt(&mut buffer.b_p_vsts);
+    xfree_clear(&mut buffer.b_p_vsts_nopaste);
+    xfree_clear(&mut buffer.b_p_vsts_array);
+    clear_opt(&mut buffer.b_p_vts);
+    xfree_clear(&mut buffer.b_p_vts_array);
+    clear_opt(&mut buffer.b_p_keymap);
+    buffer.b_kmap_ga = Vec::new();
+    clear_opt(&mut buffer.b_p_com);
+    clear_opt(&mut buffer.b_p_cms);
+    clear_opt(&mut buffer.b_p_nf);
+    clear_opt(&mut buffer.b_p_syn);
+    clear_opt(&mut buffer.b_s.b_syn_isk);
+    clear_opt(&mut buffer.b_s.b_p_spc);
+    clear_opt(&mut buffer.b_s.b_p_spf);
+    free_regprog(&mut buffer.b_s.b_cap_prog);
+    clear_opt(&mut buffer.b_s.b_p_spl);
+    clear_opt(&mut buffer.b_s.b_p_spo);
+    clear_opt(&mut buffer.b_p_sua);
+    clear_opt(&mut buffer.b_p_ft);
+    clear_opt(&mut buffer.b_p_cink);
+    clear_opt(&mut buffer.b_p_cino);
+    clear_opt(&mut buffer.b_p_lop);
+    clear_opt(&mut buffer.b_p_cinsd);
+    clear_opt(&mut buffer.b_p_cinw);
+    clear_opt(&mut buffer.b_p_cot);
+    clear_opt(&mut buffer.b_p_cpt);
+    clear_opt(&mut buffer.b_p_cfu);
+    clear_callback(&mut buffer.b_cfu_cb);
+    clear_opt(&mut buffer.b_p_ofu);
+    clear_callback(&mut buffer.b_ofu_cb);
+    clear_opt(&mut buffer.b_p_tsrfu);
+    clear_callback(&mut buffer.b_tsrfu_cb);
+    let cpt_count = buffer.b_p_cpt_count;
+    clear_cpt(&mut buffer.b_p_cpt_cb, cpt_count);
+    buffer.b_p_cpt_count = 0;
+    clear_opt(&mut buffer.b_p_gefm);
+    clear_opt(&mut buffer.b_p_gp);
+    clear_opt(&mut buffer.b_p_mp);
+    clear_opt(&mut buffer.b_p_efm);
+    clear_opt(&mut buffer.b_p_ep);
+    clear_opt(&mut buffer.b_p_path);
+    clear_opt(&mut buffer.b_p_tags);
+    clear_opt(&mut buffer.b_p_tc);
+    clear_opt(&mut buffer.b_p_tfu);
+    clear_callback(&mut buffer.b_tfu_cb);
+    clear_opt(&mut buffer.b_p_ffu);
+    clear_callback(&mut buffer.b_ffu_cb);
+    clear_opt(&mut buffer.b_p_dict);
+    clear_opt(&mut buffer.b_p_dia);
+    clear_opt(&mut buffer.b_p_tsr);
+    clear_opt(&mut buffer.b_p_qe);
+    buffer.b_p_ac = -1;
+    buffer.b_p_ar = -1;
+    buffer.b_p_fs = -1;
+    buffer.b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
+    clear_opt(&mut buffer.b_p_lw);
+    clear_opt(&mut buffer.b_p_bkc);
+    clear_opt(&mut buffer.b_p_menc);
 }
 
 // ---------------------------------------------------------------------------
@@ -667,10 +672,10 @@ pub unsafe fn buflist_getfile(
 }
 
 /// The `'switchbuf'` half of [`buflist_getfile`]: go to a window already
-/// showing `buf`, or make one. Answers false when the split failed.
-fn goto_existing_window(buf: Buf) -> bool {
+/// showing `buffer`, or make one. Answers false when the split failed.
+fn goto_existing_window(buffer: Buf) -> bool {
     // SAFETY: a live buffer; the answer is a live window or null.
-    let wp = unsafe { swbuf_goto_win_with_buf(buf.raw()) };
+    let wp = unsafe { swbuf_goto_win_with_buf(buffer.raw()) };
     let splits = (kOptSwbFlagVsplit as c_int
         | kOptSwbFlagSplit as c_int
         | kOptSwbFlagNewtab as c_int) as u32;

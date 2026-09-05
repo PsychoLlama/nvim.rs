@@ -78,11 +78,11 @@ fn valid_win(win: *mut Window) -> Option<Win> {
     unsafe { win_valid(win).then(|| Win::new(win)) }
 }
 
-/// Whether `buf` may stay loaded when it is no longer shown -- `'hidden'`,
+/// Whether `buffer` may stay loaded when it is no longer shown -- `'hidden'`,
 /// `'bufhidden'` or a `:hide` modifier.
-fn may_hide(buf: Buf) -> bool {
+fn may_hide(buffer: Buf) -> bool {
     // SAFETY: a live buffer.
-    unsafe { buf_hide(buf.raw()) }
+    unsafe { buf_hide(buffer.raw()) }
 }
 
 /// Sync the undo state, so that what follows starts a new change.
@@ -99,20 +99,20 @@ fn remember_altfpos(win: Win) {
 }
 
 /// Restore the window-local options `win` last used with this buffer.
-fn restore_winopts(buf: Buf) {
+fn restore_winopts(buffer: Buf) {
     // SAFETY: reads the option tables and the window's own saved entry.
-    unsafe { get_winopts(buf) };
+    unsafe { get_winopts(buffer) };
 }
 
-/// Copy the buffer-local option values into `buf`.
-fn copy_options_into(buf: Buf, flags: c_int) {
+/// Copy the buffer-local option values into `buffer`.
+fn copy_options_into(buffer: Buf, flags: c_int) {
     // SAFETY: a live buffer.
-    unsafe { buf_copy_options(buf.raw(), flags) };
+    unsafe { buf_copy_options(buffer.raw(), flags) };
 }
 
-fn diff_add(buf: Buf) {
+fn diff_add(buffer: Buf) {
     // SAFETY: a live buffer.
-    diff_buf_add(buf);
+    diff_buf_add(buffer);
 }
 
 /// Load the buffer that has just been made current.
@@ -122,9 +122,9 @@ fn load_current_buffer() {
 }
 
 /// Warn if the file changed on disk since the buffer was read.
-fn check_timestamp(buf: Buf) {
+fn check_timestamp(buffer: Buf) {
     // SAFETY: a live buffer, which survives the autocommands it fires.
-    unsafe { buf_check_timestamp(buf) };
+    unsafe { buf_check_timestamp(buffer) };
 }
 
 /// Whether the cursor is in the indent of its line.
@@ -181,10 +181,10 @@ fn resize_terminal(term: *mut Terminal) {
     unsafe { terminal_check_size(term) };
 }
 
-/// Whether the job behind terminal buffer `buf` is still running.
-fn job_running(buf: Buf) -> bool {
+/// Whether the job behind terminal buffer `buffer` is still running.
+fn job_running(buffer: Buf) -> bool {
     // SAFETY: reads the buffer's `'channel'` and looks it up.
-    unsafe { channel_job_running(buf.b_p_channel as uint64_t) }
+    unsafe { channel_job_running(buffer.b_p_channel as uint64_t) }
 }
 
 /// Change to the directory of `fname`.
@@ -206,8 +206,11 @@ fn now() -> time_t {
 }
 
 /// Add `b:changedtick` to the buffer's variable dictionary.
-fn add_changedtick(mut buf: Buf) {
-    let (vars, di) = (buf.b_vars, &raw mut buf.changedtick_di as *mut DictItem);
+fn add_changedtick(mut buffer: Buf) {
+    let (vars, di) = (
+        buffer.b_vars,
+        &raw mut buffer.changedtick_di as *mut DictItem,
+    );
     // SAFETY: a live buffer's dictionary, and its own `changedtick` item.
     let _ = unsafe { tv_dict_add(vars, di) };
 }
@@ -215,7 +218,7 @@ fn add_changedtick(mut buf: Buf) {
 // ---------------------------------------------------------------------------
 // Leaving one buffer for another
 
-/// Make `buf` the current buffer, closing the one being left as `action` says
+/// Make `buffer` the current buffer, closing the one being left as `action` says
 /// (`DOBUF_GOTO` frees or hides it, `DOBUF_SPLIT` leaves it alone, and
 /// `DOBUF_UNLOAD`/`DEL`/`WIPE` do what they say).
 ///
@@ -223,7 +226,7 @@ fn add_changedtick(mut buf: Buf) {
 ///
 /// # Safety
 /// `curbuf`/`curwin` must be set.
-pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
+pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     let unload = action == DOBUF_UNLOAD as c_int
         || action == DOBUF_DEL as c_int
         || action == DOBUF_WIPE as c_int;
@@ -246,11 +249,11 @@ pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
     // close_windows() or apply_autocmds() may change curbuf and wipe out "buf"
     let prevbuf = cur_buf();
     let prevbufref = BufRef::of(prevbuf);
-    let newbufref = BufRef::of(buf);
+    let newbufref = BufRef::of(buffer);
     let prev_nwindows = prevbuf.b_nwindows;
-    // The re-entry rule: `buf` is about to be held across two calls that can
+    // The re-entry rule: `buffer` is about to be held across two calls that can
     // wipe it, so its identity is taken now, while it is provably live.
-    let buf_id = buf.id();
+    let buf_id = buffer.id();
 
     // Autocommands may delete the current buffer and/or the buffer we want to
     // go to.  In those cases don't close the buffer.
@@ -264,11 +267,11 @@ pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
     // did ":bunload") or aborted the script processing!  If curwin->w_buffer is
     // null, enter_buffer() will make it valid again.
     // The other half of the rule: ask the registry by the identity taken
-    // above, not the buffer list by `buf`'s address. Stricter, too — a buffer
+    // above, not the buffer list by `buffer`'s address. Stricter, too — a buffer
     // wiped and a new one allocated at the same address would pass an address
     // comparison, the hazard `BufferRef` carries `br_buf_free_count` for.
     let valid = buf_id.valid();
-    if valid && buf.raw() != curbuf.get() && !aborting_now() || cur_win().w_buffer.is_null() {
+    if valid && buffer.raw() != curbuf.get() && !aborting_now() || cur_win().w_buffer.is_null() {
         // autocommands changed curbuf and we will move to another buffer soon,
         // so decrement curbuf->b_nwindows
         if let Some(mut cur) = current_buf().filter(|c| *c != prevbuf) {
@@ -277,7 +280,7 @@ pub unsafe fn set_curbuf(buf: Buf, action: c_int, update_jumplist: bool) {
         // If the buffer is not valid but curwin->w_buffer is NULL we must enter
         // some buffer.  Using the last one is hopefully OK.
         enter_buffer(if valid {
-            buf
+            buffer
         } else {
             last_buf().expect("lastbuf != NULL")
         });
@@ -351,7 +354,7 @@ fn leave_prevbuf(
 ///
 /// The old `curbuf` must have been abandoned already -- which also means it
 /// may be pointing at freed memory, so nothing here reads it.
-pub(crate) fn enter_buffer(mut buf: Buf) {
+pub(crate) fn enter_buffer(mut buffer: Buf) {
     // when closing the current buffer stop Visual mode
     if visual_active() {
         end_visual();
@@ -359,14 +362,14 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
 
     // Get the buffer in the current window.
     let mut win = cur_win();
-    win.w_buffer = buf.raw();
-    curbuf.set(buf.raw());
-    buf.b_nwindows += 1;
+    win.w_buffer = buffer.raw();
+    curbuf.set(buffer.raw());
+    buffer.b_nwindows += 1;
 
     // Copy buffer and window local option values.  Not for a help buffer.
-    copy_options_into(buf, BCO_ENTER as c_int | BCO_NOHELP as c_int);
-    if !buf.b_help {
-        restore_winopts(buf);
+    copy_options_into(buffer, BCO_ENTER as c_int | BCO_NOHELP as c_int);
+    if !buffer.b_help {
+        restore_winopts(buffer);
     } else {
         // Remove all folds in the window.
         clear_window_folds(win);
@@ -377,7 +380,7 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
         diff_add(cur_buf());
     }
 
-    win.w_s = &raw mut buf.b_s;
+    win.w_s = &raw mut buffer.b_s;
 
     // Cursor on first line by default.
     let mut cursor = win.cursor();
@@ -391,15 +394,15 @@ pub(crate) fn enter_buffer(mut buf: Buf) {
     win.w_valid = WinValid::NONE;
 
     // Make sure the buffer is loaded.
-    if buf.b_ml.ml_mfp.is_null() {
+    if buffer.b_ml.ml_mfp.is_null() {
         // need to load the file
         //
         // If there is no filetype, allow for detecting one.  Esp. useful for
         // ":ball" used in an autocommand.  If there already is a filetype we
         // might prefer to keep it.
         // SAFETY: `'filetype'` is a NUL-terminated option value.
-        if unsafe { *buf.b_p_ft } as c_int == NUL {
-            buf.b_did_filetype = false;
+        if unsafe { *buffer.b_p_ft } as c_int == NUL {
+            buffer.b_did_filetype = false;
         }
         load_current_buffer();
     } else {
@@ -469,11 +472,11 @@ fn do_autochdir_now() {
 // ---------------------------------------------------------------------------
 // "No write since last change"
 
-pub fn no_write_message_buf(buf: Buf) {
-    if !buf.terminal.is_null() && job_running(buf) {
+pub fn no_write_message_buf(buffer: Buf) {
+    if !buffer.terminal.is_null() && job_running(buffer) {
         err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {
-        let nr = buf.handle as c_int;
+        let nr = buffer.handle as c_int;
         semsg!("E89: No write since last change for buffer {nr} (add ! to override)");
     }
 }
@@ -487,8 +490,8 @@ pub fn no_write_message() {
     }
 }
 
-pub fn no_write_message_nobang(buf: Buf) {
-    if !buf.terminal.is_null() && job_running(buf) {
+pub fn no_write_message_nobang(buffer: Buf) {
+    if !buffer.terminal.is_null() && job_running(buffer) {
         err_static(e_job_still_running);
     } else {
         err_static(e_no_write_since_last_change);
@@ -518,19 +521,19 @@ const CHANGEDTICK_KEY: [c_char; 12] = {
 };
 
 /// Initialise `b:changedtick` and its `changedtick_val` attribute.
-pub(crate) fn buf_init_changedtick(mut buf: Buf) {
-    buf.changedtick_di = ChangedtickDictItem {
+pub(crate) fn buf_init_changedtick(mut buffer: Buf) {
+    buffer.changedtick_di = ChangedtickDictItem {
         di_tv: TypVal {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Fixed,
             vval: typval_vval_union {
                 // SAFETY: a live buffer.
-                v_number: buf_get_changedtick(buf),
+                v_number: buf_get_changedtick(buffer),
             },
         },
         // Must not include DI_FLAGS_ALLOC.
         di_flags: (DI_FLAGS_RO as c_int | DI_FLAGS_FIX as c_int) as uint8_t,
         di_key: CHANGEDTICK_KEY,
     };
-    add_changedtick(buf);
+    add_changedtick(buffer);
 }

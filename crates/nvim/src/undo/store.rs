@@ -221,15 +221,15 @@ impl Buf {
     }
 }
 
-/// The header `link` names in `buf`'s store, or NULL.
+/// The header `link` names in `buffer`'s store, or NULL.
 ///
 /// Safe: a [`Buf`] already carries the promise the lookup needs, and a link
 /// that names nothing — or a header that has been freed — resolves to NULL.
-fn header_at(buf: Buf, link: UndoLink) -> *mut UndoHeader {
+fn header_at(buffer: Buf, link: UndoLink) -> *mut UndoHeader {
     // SAFETY: a live buffer, by `Buf`'s own contract; `b_u_store` is NULL or
     // a store this module allocated and nothing else writes it, and the
     // borrow does not leave this statement.
-    match unsafe { store_of(buf) } {
+    match unsafe { store_of(buffer) } {
         Some(store) => store.at(link),
         None => core::ptr::null_mut(),
     }
@@ -266,8 +266,9 @@ impl Marks {
 
     /// Whether the walk has yet to reach `link`'s header — and that header,
     /// when it has not.
-    pub(crate) fn unwalked(self, buf: Buf, link: UndoLink) -> Option<Header> {
-        buf.header(link)
+    pub(crate) fn unwalked(self, buffer: Buf, link: UndoLink) -> Option<Header> {
+        buffer
+            .header(link)
             .filter(|uh| uh.unwalked(self.mark, self.nomark))
     }
 }
@@ -389,42 +390,42 @@ impl Iterator for TreeWalk {
     }
 }
 
-/// `buf`'s store, if it has one yet.
+/// `buffer`'s store, if it has one yet.
 ///
 /// # Safety
 ///
 /// The borrow must not outlive the statement that takes it — every caller
 /// here keeps it to one expression.
-unsafe fn store_of<'a>(buf: Buf) -> Option<&'a mut UndoStore> {
+unsafe fn store_of<'a>(buffer: Buf) -> Option<&'a mut UndoStore> {
     // SAFETY: a live buffer, by `Buf`'s contract, so the field read is in
     // bounds; the pointer it holds is NULL or a leaked `Box<UndoStore>` from
     // `store_for`.
-    unsafe { (*buf.raw()).b_u_store.as_mut() }
+    unsafe { (*buffer.raw()).b_u_store.as_mut() }
 }
 
-/// `buf`'s store, created if this is the buffer's first header.
+/// `buffer`'s store, created if this is the buffer's first header.
 ///
 /// # Safety
 ///
 /// The borrow must not outlive the statement that takes it, as for
 /// [`store_of`].
-unsafe fn store_for<'a>(mut buf: Buf) -> &'a mut UndoStore {
-    if buf.b_u_store.is_null() {
-        buf.b_u_store = Box::into_raw(Box::new(UndoStore::new()));
+unsafe fn store_for<'a>(mut buffer: Buf) -> &'a mut UndoStore {
+    if buffer.b_u_store.is_null() {
+        buffer.b_u_store = Box::into_raw(Box::new(UndoStore::new()));
     }
     // SAFETY: non-null now, and what it points at is a `Box` this module
     // leaked; the borrow does not leave the caller's statement.
-    unsafe { &mut *buf.b_u_store }
+    unsafe { &mut *buffer.b_u_store }
 }
 
-/// Hands `uhp` to `buf`'s store and returns the link that now names it.
+/// Hands `uhp` to `buffer`'s store and returns the link that now names it.
 ///
 /// The header's `uh_seq` must already be set: it is the key.
 ///
 /// # Safety
 ///
 /// `uhp` points at a live header the store does not already own.
-pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut UndoHeader) -> UndoLink {
+pub(crate) unsafe fn header_adopt(buffer: Buf, uhp: *mut UndoHeader) -> UndoLink {
     // SAFETY: a live header by the contract above.
     let seq = unsafe { (*uhp).uh_seq };
     debug_assert!(seq > 0, "an undo header's sequence number is positive");
@@ -434,7 +435,7 @@ pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut UndoHeader) -> UndoLink {
         return UndoLink::NONE;
     };
     // SAFETY: the borrow does not leave this statement.
-    let displaced = unsafe { store_for(buf) }.insert(seq, uhp);
+    let displaced = unsafe { store_for(buffer) }.insert(seq, uhp);
     debug_assert!(
         displaced.is_none(),
         "two live undo headers claimed sequence number {seq}"
@@ -442,7 +443,7 @@ pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut UndoHeader) -> UndoLink {
     UndoLink::to_seq(seq)
 }
 
-/// Drops `uhp` from `buf`'s store and frees it.
+/// Drops `uhp` from `buffer`'s store and frees it.
 ///
 /// Frees the header itself and nothing it points at: `u_freeentries` has
 /// already dealt with the entry list and the extmark vector by the time it
@@ -452,11 +453,11 @@ pub(crate) unsafe fn header_adopt(buf: Buf, uhp: *mut UndoHeader) -> UndoLink {
 ///
 /// `uhp` points at a live header allocated by `xmalloc`, and nothing else
 /// holds a pointer to that header.
-pub(crate) unsafe fn header_free(buf: Buf, uhp: *mut UndoHeader) {
+pub(crate) unsafe fn header_free(buffer: Buf, uhp: *mut UndoHeader) {
     // SAFETY: a live header by the contract above.
     let link = UndoLink::to_seq(unsafe { (*uhp).uh_seq });
     // SAFETY: the borrow does not leave this statement.
-    if let Some(store) = unsafe { store_of(buf) } {
+    if let Some(store) = unsafe { store_of(buffer) } {
         let dropped = store.take(link);
         debug_assert!(
             dropped.is_none_or(|held| core::ptr::eq(held.as_ptr(), uhp)),
@@ -481,12 +482,12 @@ pub(crate) unsafe fn header_free(buf: Buf, uhp: *mut UndoHeader) {
 ///
 /// Nothing frees a header the walk has already visited.
 pub(crate) unsafe fn header_chain(
-    buf: Buf,
+    buffer: Buf,
     start: UndoLink,
     step: fn(&UndoHeader) -> UndoLink,
 ) -> HeaderChain {
     HeaderChain {
-        buf,
+        buf: buffer,
         state: ChainState::Start(start),
         step,
     }
@@ -525,7 +526,7 @@ impl Iterator for HeaderChain {
     }
 }
 
-/// Drops `buf`'s store when nothing is left in it.
+/// Drops `buffer`'s store when nothing is left in it.
 ///
 /// Called at the end of `u_blockfree`, which is the one place that knows the
 /// tree has just been walked and freed. A store that still holds something
@@ -534,15 +535,15 @@ impl Iterator for HeaderChain {
 /// headers are only reachable through the store in between.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub(crate) fn store_release(mut buf: Buf) {
-    if buf.b_u_store.is_null() {
+pub(crate) fn store_release(mut buffer: Buf) {
+    if buffer.b_u_store.is_null() {
         return;
     }
     // SAFETY: non-null, and what it points at is a `Box` this module leaked
     // and nothing else points at.
-    if unsafe { (*buf.b_u_store).is_empty() } {
-        unsafe { drop(Box::from_raw(buf.b_u_store)) };
-        buf.b_u_store = core::ptr::null_mut();
+    if unsafe { (*buffer.b_u_store).is_empty() } {
+        unsafe { drop(Box::from_raw(buffer.b_u_store)) };
+        buffer.b_u_store = core::ptr::null_mut();
     }
 }
 
