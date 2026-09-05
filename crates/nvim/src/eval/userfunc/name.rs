@@ -1,4 +1,4 @@
-//! Turning what the user wrote into the name a `ufunc_T` is stored under.
+//! Turning what the user wrote into the name a `UserFunc` is stored under.
 //!
 //! `trans_function_name` is the whole of it: it resolves `s:`/`<SID>` to
 //! the `<SNR>N_` mangling, evaluates a curly-brace name, follows a
@@ -172,13 +172,13 @@ pub(crate) unsafe fn fname_trans_sid(
 ///
 /// # Safety
 /// `name` is NUL-terminated.
-pub unsafe fn find_func(name: *const c_char) -> *mut ufunc_T {
+pub unsafe fn find_func(name: *const c_char) -> *mut UserFunc {
     let hi = unsafe { func_table().find(name) };
     if hi.is_kept() {
         // The key *is* the function's trailing name member, so the
         // function is that many bytes before it.
-        let fp = unsafe { hi.hi_key.sub(offset_of!(ufunc_T, uf_name)) };
-        fp as *mut ufunc_T
+        let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) };
+        fp as *mut UserFunc
     } else {
         ptr::null_mut()
     }
@@ -189,7 +189,7 @@ pub unsafe fn find_func(name: *const c_char) -> *mut ufunc_T {
 ///
 /// # Safety
 /// `ufunc` is a live function.
-unsafe fn func_is_global(ufunc: *const ufunc_T) -> bool {
+unsafe fn func_is_global(ufunc: *const UserFunc) -> bool {
     unsafe { *((&raw const (*ufunc).uf_name) as *const c_char) as u8 as c_int != K_SPECIAL }
 }
 
@@ -198,7 +198,11 @@ unsafe fn func_is_global(ufunc: *const ufunc_T) -> bool {
 ///
 /// # Safety
 /// `fp` is a live function and `buf` has `bufsize` writable bytes.
-pub(crate) unsafe fn cat_func_name(buf: *mut c_char, bufsize: size_t, fp: *const ufunc_T) -> c_int {
+pub(crate) unsafe fn cat_func_name(
+    buf: *mut c_char,
+    bufsize: size_t,
+    fp: *const UserFunc,
+) -> c_int {
     let uflen = unsafe { (*fp).uf_namelen };
     debug_assert!(uflen > 0);
     let name = unsafe { &raw const (*fp).uf_name } as *const c_char;
@@ -246,7 +250,7 @@ pub(crate) unsafe fn builtin_function(name: *const c_char, len: c_int) -> bool {
 ///
 /// # Safety
 /// `fp` is a live function.
-pub unsafe fn printable_func_name(fp: *mut ufunc_T) -> *mut c_char {
+pub unsafe fn printable_func_name(fp: *mut UserFunc) -> *mut c_char {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let f = unsafe { Uf::new(fp) };
     if !f.uf_name_exp.is_null() {
@@ -269,7 +273,7 @@ pub unsafe fn printable_func_name(fp: *mut ufunc_T) -> *mut c_char {
 /// bracket the name in the command line.
 unsafe fn mangle_function_name(
     pp: *mut *mut c_char,
-    lv: &mut lval_T,
+    lv: &mut LVal,
     start: *const c_char,
     end: *const c_char,
     mut lead: c_int,
@@ -385,7 +389,7 @@ pub unsafe fn trans_function_name(
     pp: *mut *mut c_char,
     skip: bool,
     flags: c_int,
-    fdp: *mut funcdict_T,
+    fdp: *mut FuncDict,
     partial: *mut *mut Partial,
 ) -> *mut c_char {
     let mut name: *mut c_char = ptr::null_mut();
@@ -393,7 +397,7 @@ pub unsafe fn trans_function_name(
     let mut lv = LVAL_INITIAL_VALUE;
 
     if !fdp.is_null() {
-        unsafe { fdp.cast::<u8>().write_bytes(0, size_of::<funcdict_T>()) };
+        unsafe { fdp.cast::<u8>().write_bytes(0, size_of::<FuncDict>()) };
     }
     let mut start: *const c_char = unsafe { *pp };
 
@@ -596,7 +600,7 @@ pub unsafe fn save_function_name(
     name: *mut *mut c_char,
     skip: bool,
     flags: c_int,
-    fudi: *mut funcdict_T,
+    fudi: *mut FuncDict,
 ) -> *mut c_char {
     let mut p = unsafe { *name };
     let saved;
@@ -606,7 +610,7 @@ pub unsafe fn save_function_name(
         saved = unsafe { xmemdupz(*name as *const c_void, p.offset_from(*name) as size_t) }
             as *mut c_char;
         if !fudi.is_null() {
-            unsafe { fudi.cast::<u8>().write_bytes(0, size_of::<funcdict_T>()) };
+            unsafe { fudi.cast::<u8>().write_bytes(0, size_of::<FuncDict>()) };
         }
     } else {
         saved = unsafe { trans_function_name(&raw mut p, skip, flags, fudi, ptr::null_mut()) };

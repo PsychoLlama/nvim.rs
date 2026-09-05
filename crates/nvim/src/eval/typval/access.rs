@@ -50,8 +50,8 @@ pub(crate) type Pt = Live<Partial>;
 pub(crate) type Dw = Live<DictWatcher>;
 /// A live `ListWatch`; see [`Tv`].
 pub(crate) type Lw = Live<ListWatch>;
-/// A live `sortinfo_T`; see [`Tv`].
-pub(crate) type Si = Live<sortinfo_T>;
+/// A live `SortInfo`; see [`Tv`].
+pub(crate) type Si = Live<SortInfo>;
 
 /// The address of a field of `*p`, **computed rather than read**.
 ///

@@ -44,8 +44,8 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    LineNr, NUL, Partial, StaticList10, TypVal, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, funcexe_T, regmatch_T, regmmatch_T,
+    FuncExe, LineNr, NUL, Partial, StaticList10, TypVal, VAR_FUNC, VAR_LIST, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, regmatch_T, regmmatch_T,
 };
 use crate::winlayer::Live;
 use ::libc::strcpy;
@@ -87,8 +87,8 @@ const E_NOT_ENOUGH_SPACE: &core::ffi::CStr = c"vim_regsub_both(): not enough spa
 /// How large a buffer `tv_get_string_buf_chk` wants for a number.
 const NUMBUFLEN: usize = 65;
 
-/// A `funcexe_T` that asks for nothing.
-const FUNCEXE_INIT: funcexe_T = funcexe_T {
+/// A `FuncExe` that asks for nothing.
+const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,
     fe_firstline: 0,
     fe_lastline: 0,

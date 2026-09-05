@@ -108,9 +108,9 @@ use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Dict, Direction, EvalFuncData,
-    ExpandContext, ExtmarkOp, LineNr, List, MB_MAXCHAR, OptInt, ScriptCtx, String_0, TypVal,
-    VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix, buf_T, expand_T, extmark_undo_vec_t, garray_T,
-    hashtab_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, size_t,
+    ExpandContext, ExtmarkOp, LineNr, List, MB_MAXCHAR, OptInt, SaveVEvent, ScriptCtx, String_0,
+    TypVal, VAR_UNKNOWN, VarLock, VarNumber, Vv, XpPrefix, buf_T, expand_T, extmark_undo_vec_t,
+    garray_T, hashtab_T, optset_T, pos_T, ptrdiff_t, pumitem_T, regmatch_T, size_t,
     typval_vval_union, uint8_t, uint64_t, win_T,
 };
 use crate::ui::{ui_flush, vim_beep};
@@ -283,8 +283,8 @@ pub(crate) const POS_T_INIT: pos_T = pos_T {
     col: 0,
     coladd: 0,
 };
-/// A zeroed `save_v_event_T`, which `get_v_event` fills in.
-pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
+/// A zeroed `SaveVEvent`, which `get_v_event` fills in.
+pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
     sve_hashtab: hashtab_T::new(),
 };

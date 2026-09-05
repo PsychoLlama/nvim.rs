@@ -51,9 +51,9 @@ pub unsafe fn nvim_create_augroup(
 pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
     let mut error = Error::none();
     let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<except_T>(),
-        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-        msg_list: ::core::ptr::null::<*const msglist_T>(),
+        current_exception: ::core::ptr::null_mut::<Exception>(),
+        private_msg_list: ::core::ptr::null_mut::<MsgList>(),
+        msg_list: ::core::ptr::null::<*const MsgList>(),
         got_int: 0,
         did_throw: false,
         need_rethrow: 0,
@@ -73,9 +73,9 @@ pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
 pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
     let mut tstate: TryState = TryState {
-        current_exception: ::core::ptr::null_mut::<except_T>(),
-        private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-        msg_list: ::core::ptr::null::<*const msglist_T>(),
+        current_exception: ::core::ptr::null_mut::<Exception>(),
+        private_msg_list: ::core::ptr::null_mut::<MsgList>(),
+        msg_list: ::core::ptr::null::<*const MsgList>(),
         got_int: 0,
         did_throw: false,
         need_rethrow: 0,

@@ -16,7 +16,7 @@ use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
 use crate::os::fs::os_fopen;
 use crate::runtime::{get_scriptname, script_count, script_item};
-use crate::types::{IOSIZE, ProfTime, scriptitem_T, ufunc_T};
+use crate::types::{IOSIZE, ProfTime, UserFunc, scriptitem_T};
 use ::libc::fclose;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::OsStr;
@@ -50,7 +50,7 @@ pub fn profile_dump() {
 ///
 /// # Safety
 /// `fp` is a live function-table entry.
-unsafe fn write_func_name(fd: &mut dyn Write, fp: *mut ufunc_T) -> io::Result<()> {
+unsafe fn write_func_name(fd: &mut dyn Write, fp: *mut UserFunc) -> io::Result<()> {
     // SAFETY: `uf_name` is the flexible NUL-terminated name at the end of the
     // entry, alive for as long as `fp` is.
     let name = unsafe { CStr::from_ptr(&raw const (*fp).uf_name as *const c_char).to_bytes() };
@@ -96,7 +96,7 @@ fn prof_func_line(
 /// `sorttab` holds live function-table entries.
 unsafe fn prof_sort_list(
     fd: &mut dyn Write,
-    sorttab: &[*mut ufunc_T],
+    sorttab: &[*mut UserFunc],
     title: &str,
     prefer_self: bool,
 ) -> io::Result<()> {
@@ -117,7 +117,7 @@ unsafe fn prof_sort_list(
 ///
 /// # Safety
 /// `fp` is a live function-table entry with a non-zero `uf_script_ctx`.
-unsafe fn write_func_origin(fd: &mut dyn Write, fp: &ufunc_T) -> io::Result<()> {
+unsafe fn write_func_origin(fd: &mut dyn Write, fp: &UserFunc) -> io::Result<()> {
     // SAFETY: `get_scriptname` answers an owned, NUL-terminated name.
     let p = unsafe { get_scriptname(fp.uf_script_ctx, true) };
     write!(fd, "    Defined: ")?;

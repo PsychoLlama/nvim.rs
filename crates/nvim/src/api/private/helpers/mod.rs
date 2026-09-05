@@ -35,8 +35,8 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    ApiDict, Buffer, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr, NUL, ScriptId,
-    String_0, Tabpage, TryState, Window, buf_T, fmarkv_T, int64_t, kErrorTypeException, msglist_T,
+    ApiDict, Buffer, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr, MsgList, NUL,
+    ScriptId, String_0, Tabpage, TryState, Window, buf_T, fmarkv_T, int64_t, kErrorTypeException,
     pos_T, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
@@ -187,7 +187,7 @@ pub(crate) unsafe fn try_enter(tstate: *mut TryState) {
     let saved = TryState {
         current_exception: current_exception.get(),
         private_msg_list: ptr::null_mut(),
-        msg_list: msg_list.get() as *const *const msglist_T,
+        msg_list: msg_list.get() as *const *const MsgList,
         got_int: got_int.get() as c_int,
         did_throw: did_throw.get(),
         need_rethrow: need_rethrow.get() as c_int,
@@ -269,7 +269,7 @@ pub(crate) unsafe fn try_leave(tstate: *const TryState, err: &mut Error) {
 
     // SAFETY: `tstate` is what the matching `try_enter` filled in.
     let saved = unsafe { *tstate };
-    msg_list.set(saved.msg_list as *mut *mut msglist_T);
+    msg_list.set(saved.msg_list as *mut *mut MsgList);
     current_exception.set(saved.current_exception);
     got_int.set(saved.got_int != 0);
     did_throw.set(saved.did_throw);

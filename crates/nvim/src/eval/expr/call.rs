@@ -34,8 +34,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::gettext;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Dict, Failed, NUL, Partial, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN, VarLock, Vv, evalarg_T,
-    funcexe_T, size_t, typval_vval_union,
+    Dict, EvalArg, Failed, FuncExe, NUL, Partial, TypVal, VAR_FUNC, VAR_PARTIAL, VAR_UNKNOWN,
+    VarLock, Vv, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -49,7 +49,7 @@ const UNSET_TV: TypVal = TypVal {
 ///
 /// # Safety
 /// `evalarg` must be null or valid.
-unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
+unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
     !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int != 0
 }
 
@@ -59,7 +59,7 @@ unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
 /// `arg` must point at the cursor, positioned on the `(`.
 pub(crate) unsafe fn eval_func(
     arg: *mut *mut c_char,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     name: *mut c_char,
     name_len: c_int,
     rettv: *mut TypVal,
@@ -87,7 +87,7 @@ pub(crate) unsafe fn eval_func(
     // SAFETY: `deref_func_name` left `resolved` naming `len` readable bytes.
     let owned = unsafe { xmemdupz(resolved.cast(), len as size_t) } as *mut c_char;
 
-    let mut funcexe: funcexe_T = FUNCEXE_INIT;
+    let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_firstline = cur_win().w_cursor.lnum;
     funcexe.fe_lastline = cur_win().w_cursor.lnum;
     funcexe.fe_evaluate = evaluate;
@@ -129,7 +129,7 @@ pub(crate) unsafe fn eval_func(
 /// `rettv` must be valid; the rest null or valid.
 pub(crate) unsafe fn call_func_rettv(
     arg: *mut *mut c_char,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     rettv: *mut TypVal,
     evaluate: bool,
     selfdict: *mut Dict,
@@ -175,7 +175,7 @@ pub(crate) unsafe fn call_func_rettv(
         funcname = c"".as_ptr();
     }
 
-    let mut funcexe: funcexe_T = FUNCEXE_INIT;
+    let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_firstline = cur_win().w_cursor.lnum;
     funcexe.fe_lastline = cur_win().w_cursor.lnum;
     funcexe.fe_evaluate = evaluate;
@@ -209,7 +209,7 @@ pub(crate) unsafe fn call_func_rettv(
 pub(crate) unsafe fn eval_lambda(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -259,7 +259,7 @@ pub(crate) unsafe fn eval_lambda(
 pub(crate) unsafe fn eval_method(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -415,7 +415,7 @@ pub(crate) unsafe fn eval_method(
     ret
 }
 
-/// The function name a partial stands for: its own, its `ufunc_T`'s, or the
+/// The function name a partial stands for: its own, its `UserFunc`'s, or the
 /// empty string.
 ///
 /// # Safety
@@ -429,7 +429,7 @@ pub(crate) unsafe fn partial_name(pt: *mut Partial) -> *mut c_char {
         }
         let func = pt.pt_func;
         if !func.is_null() {
-            // SAFETY: `pt_func` is a live `ufunc_T` whose name is inline.
+            // SAFETY: `pt_func` is a live `UserFunc` whose name is inline.
             return unsafe { &raw mut (*func).uf_name } as *mut c_char;
         }
     }

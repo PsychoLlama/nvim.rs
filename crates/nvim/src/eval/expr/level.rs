@@ -41,8 +41,8 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
-    DictItem, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, evalarg_T, exarg_T,
+    DictItem, EvalArg, Failed, Float, NUL, TypVal, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST,
+    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, exarg_T,
     kBoolVarFalse, kBoolVarTrue, size_t, typval_vval_union,
 };
 
@@ -54,22 +54,22 @@ const UNSET_TV: TypVal = TypVal {
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// The `evalarg_T` a level substitutes when the caller supplied none. It
+/// The `EvalArg` a level substitutes when the caller supplied none. It
 /// exists only to carry the "do not evaluate" flag across a short circuit.
-const BORROWED_EVALARG: evalarg_T = evalarg_T {
+const BORROWED_EVALARG: EvalArg = EvalArg {
     eval_flags: 0,
     eval_getline: None,
     eval_cookie: null_mut(),
     eval_tofree: null_mut(),
 };
 
-/// The `evalarg_T` that says "evaluate, and read no continuation lines".
+/// The `EvalArg` that says "evaluate, and read no continuation lines".
 ///
 /// A value, not a cell as the C has it: the levels below write `eval_flags`
 /// while they short-circuit and restore it afterwards, so a caller sharing
 /// one with a nested evaluation would be lending it a mutable scratch. Each
 /// declares its own — `let mut evalarg = EVALARG_EVALUATE;`.
-pub(crate) const EVALARG_EVALUATE: evalarg_T = evalarg_T {
+pub(crate) const EVALARG_EVALUATE: EvalArg = EvalArg {
     eval_flags: EVAL_EVALUATE as c_int,
     ..BORROWED_EVALARG
 };
@@ -153,8 +153,8 @@ fn flags_evaluating(orig: c_int, on: bool) -> c_int {
 /// Is this `evalarg` asking for the expression to actually be evaluated?
 ///
 /// # Safety
-/// `evalarg` must be null or a valid `evalarg_T`.
-unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
+/// `evalarg` must be null or a valid `EvalArg`.
+unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
     !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int != 0
 }
 
@@ -163,7 +163,7 @@ unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
 ///
 /// # Safety
 /// `evalarg` may be null; `eap` may be null.
-pub(crate) unsafe fn clear_evalarg(evalarg: *mut evalarg_T, eap: *mut exarg_T) {
+pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- `evalarg` is null or valid.
     if evalarg.is_null() || unsafe { (*evalarg).eval_tofree }.is_null() {
         return;
@@ -194,7 +194,7 @@ pub unsafe fn eval0(
     arg: *mut c_char,
     rettv: *mut TypVal,
     eap: *mut exarg_T,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     let did_emsg_before = did_emsg.get();
     let called_emsg_before = called_emsg.get();
@@ -289,7 +289,7 @@ pub(crate) unsafe fn eval0_simple_funccal(
     arg: *mut c_char,
     rettv: *mut TypVal,
     eap: *mut exarg_T,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, handed straight on to both.
     match unsafe { may_call_simple_func(arg, rettv) }? {
@@ -305,7 +305,7 @@ pub(crate) unsafe fn eval0_simple_funccal(
 pub(crate) unsafe fn eval1(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` is the result being built and is written whole
@@ -410,8 +410,8 @@ pub(crate) unsafe fn eval1(
 unsafe fn eval_logical(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
-    operand: unsafe fn(*mut *mut c_char, *mut TypVal, *mut evalarg_T) -> Result<(), Failed>,
+    evalarg: *mut EvalArg,
+    operand: unsafe fn(*mut *mut c_char, *mut TypVal, *mut EvalArg) -> Result<(), Failed>,
     op: u8,
     stop_at: bool,
 ) -> Result<(), Failed> {
@@ -487,7 +487,7 @@ unsafe fn eval_logical(
 pub(crate) unsafe fn eval2(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     unsafe { eval_logical(arg, rettv, evalarg, eval3, b'|', true) }
 }
@@ -499,7 +499,7 @@ pub(crate) unsafe fn eval2(
 pub(crate) unsafe fn eval3(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     unsafe { eval_logical(arg, rettv, evalarg, eval4, b'&', false) }
 }
@@ -511,7 +511,7 @@ pub(crate) unsafe fn eval3(
 pub(crate) unsafe fn eval4(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, and `rettv`/`evalarg` are the caller's own.
@@ -558,7 +558,7 @@ pub(crate) unsafe fn eval4(
 pub(crate) unsafe fn eval5(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
     // expression, `rettv` the result being built and `evalarg` null or
@@ -626,7 +626,7 @@ pub(crate) unsafe fn eval5(
 pub(crate) unsafe fn eval6(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     want_string: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -656,7 +656,7 @@ pub(crate) unsafe fn eval6(
 pub(crate) unsafe fn eval7(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     want_string: bool,
 ) -> Result<(), Failed> {
     /// How deep `eval7` is into itself. The guard is what stops a

@@ -67,7 +67,7 @@ use crate::regexp::{
 };
 use crate::runtime::do_finish;
 use crate::semsg;
-use crate::types::{NUL, cleanup_T, cstack_T, eslist_T, exarg_T, regmatch_T};
+use crate::types::{Cleanup, CondStack, EsList, NUL, exarg_T, regmatch_T};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -104,7 +104,7 @@ pub(crate) unsafe fn ex_throw(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// Module contract; an exception is current and `cstack` is the running one.
-pub(crate) unsafe fn do_throw(cstack: *mut cstack_T) {
+pub(crate) unsafe fn do_throw(cstack: *mut CondStack) {
     // Clean up and deactivate as far as the next surrounding try conditional
     // that is not in its finally clause. That conditional itself stays
     // active so its ACTIVE flag can be tested below.
@@ -167,7 +167,7 @@ pub(crate) unsafe fn ex_try(eap: *mut exarg_T) {
     // by an aborting error, an interrupt or an exception, restoring it
     // does not matter -- the effect is then just freeing the memory.
     if emsg_silent.get() != 0 {
-        let elem: *mut eslist_T = unsafe { xmalloc(size_of::<eslist_T>()) }.cast();
+        let elem: *mut EsList = unsafe { xmalloc(size_of::<EsList>()) }.cast();
         unsafe { (*elem).saved_emsg_silent = emsg_silent.get() };
         unsafe { (*elem).next = (*cstack).cs_emsg_silent_list };
         unsafe { (*cstack).cs_emsg_silent_list = elem };
@@ -605,7 +605,7 @@ pub(crate) unsafe fn ex_endtry(eap: *mut exarg_T) {
 // Called around a sequence of cleanup autocommands run for a failed command
 // -- failure meaning `emsg` was called, an interrupt happened, or a previous
 // autocommand execution for the same command left an uncaught exception.
-// The `cleanup_T` holds the pending error/interrupt/exception state across
+// The `Cleanup` holds the pending error/interrupt/exception state across
 // the pair.
 
 /// Park the current error/interrupt/exception state in `csp` and clear it,
@@ -618,7 +618,7 @@ pub(crate) unsafe fn ex_endtry(eap: *mut exarg_T) {
 /// # Safety
 /// Module contract; `csp` is writable and outlives the matching
 /// [`leave_cleanup`].
-pub(crate) unsafe fn enter_cleanup(csp: *mut cleanup_T) {
+pub(crate) unsafe fn enter_cleanup(csp: *mut Cleanup) {
     // The pending values are restored by `leave_cleanup`, unless an aborting
     // error, an interrupt or an uncaught exception happens in between.
     if !(did_emsg.get() != 0 || got_int.get() || did_throw.get() || need_rethrow.get()) {
@@ -672,7 +672,7 @@ pub(crate) unsafe fn enter_cleanup(csp: *mut cleanup_T) {
 ///
 /// # Safety
 /// Module contract; `csp` was filled by [`enter_cleanup`].
-pub(crate) unsafe fn leave_cleanup(csp: *mut cleanup_T) {
+pub(crate) unsafe fn leave_cleanup(csp: *mut Cleanup) {
     // SAFETY: caller contract.
     let pending = unsafe { (*csp).pending };
     if pending == CSTP_NONE {

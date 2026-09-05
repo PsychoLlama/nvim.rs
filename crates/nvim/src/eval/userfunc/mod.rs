@@ -81,11 +81,11 @@ use crate::search::{restore_search_patterns, save_search_patterns};
 use crate::strings::{concat_str, vim_strchr, xstrnsave};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Callback, Dict, DictItem, LineNr, ListItem, LuaRef, OptInt, Partial, String_0, TypVal,
-    VAR_DEF_SCOPE, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN,
-    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T, evalarg_T, exarg_T,
-    exception_state_T, expand_T, funccal_entry_T, funccall_S_fc_fixvar, funccall_T, funcdict_T,
-    funcexe_T, garray_T, hashtab_T, lval_T, regmatch_T, save_redo_T, size_t, ufunc_T,
+    Callback, Dict, DictItem, EvalArg, ExceptionState, FuncCall, FuncCallEntry, FuncDict, FuncExe,
+    LVal, LineNr, ListItem, LuaRef, OptInt, Partial, String_0, TypVal, UserFunc, VAR_DEF_SCOPE,
+    VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SCOPE, VAR_SHORT_LEN, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, Vv, estack_T, exarg_T, expand_T, funccall_S_fc_fixvar,
+    garray_T, hashtab_T, regmatch_T, save_redo_T, size_t,
 };
 use crate::ui::ui_has;
 pub(crate) use crate::winlayer::{Ea, Live};
@@ -120,15 +120,15 @@ pub use self::ret::*;
 /// unsafe step; every `(*p).field` after it is ordinary checked code.
 ///
 /// Emphatically **not** `&mut *p`. A user function re-enters the evaluator,
-/// autocommands and Lua while the same `funccall_T` is still reachable
-/// through `current_funccal` and the same `ufunc_T` through the function
+/// autocommands and Lua while the same `FuncCall` is still reachable
+/// through `current_funccal` and the same `UserFunc` through the function
 /// table, and a `&mut` is `noalias` to LLVM.
 ///
 /// A user function and its body.
-pub(crate) type Uf = Live<ufunc_T>;
+pub(crate) type Uf = Live<UserFunc>;
 
 /// One call of one: its `a:`/`l:` scopes, its caller and its return value.
-pub(crate) type Fc = Live<funccall_T>;
+pub(crate) type Fc = Live<FuncCall>;
 
 /// The refcount an item that must never be freed carries.
 pub const DO_NOT_FREE_CNT: c_int = 1073741823;
@@ -198,11 +198,11 @@ static func_hashtab: GlobalCell<hashtab_T> = GlobalCell::new(hashtab_T::new());
 /// collected. The entries are borrowed -- each points into a caller's own
 /// `argvars` -- which is why this is a `Vec` of pointers and not of values.
 static funcargs: GlobalCell<Vec<*mut TypVal>> = GlobalCell::new(Vec::new());
-static current_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
-static previous_funccal: GlobalCell<*mut funccall_T> = GlobalCell::new(ptr::null_mut());
+static current_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
+static previous_funccal: GlobalCell<*mut FuncCall> = GlobalCell::new(ptr::null_mut());
 
 crate::flag_set! {
-    /// `ufunc_T::uf_flags`: how a user function was defined and what has
+    /// `UserFunc::uf_flags`: how a user function was defined and what has
     /// become of it.
     pub struct FuncFlags;
 
@@ -229,7 +229,7 @@ crate::flag_set! {
     const LUAREF = 0x800;
 }
 
-pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
+pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,
     fe_firstline: 0,
     fe_lastline: 0,
@@ -250,21 +250,21 @@ pub(crate) const REGMATCH_INIT: regmatch_T = regmatch_T {
     rm_ic: false,
 };
 
-/// A zeroed `funcdict_T`: no dictionary, no key, no item.
-pub(crate) const FUNCDICT_INIT: funcdict_T = funcdict_T {
+/// A zeroed `FuncDict`: no dictionary, no key, no item.
+pub(crate) const FUNCDICT_INIT: FuncDict = FuncDict {
     fd_dict: ptr::null_mut(),
     fd_newkey: ptr::null_mut(),
     fd_di: ptr::null_mut(),
 };
 
-/// The name a `ufunc_T` carries in the flexible member at its end -- C's
+/// The name a `UserFunc` carries in the flexible member at its end -- C's
 /// `UF2HIKEY`, and the key the function hashtable is indexed by.
 ///
 /// Safe: a field's address is the object's plus a constant, so saying where
 /// the name is reads nothing. Whether there is a name *there* is the
 /// caller's business, as it is for every other pointer it holds.
-pub(crate) fn uf_name_ptr(fp: *mut ufunc_T) -> *mut c_char {
-    fp.wrapping_byte_add(offset_of!(ufunc_T, uf_name)).cast()
+pub(crate) fn uf_name_ptr(fp: *mut UserFunc) -> *mut c_char {
+    fp.wrapping_byte_add(offset_of!(UserFunc, uf_name)).cast()
 }
 
 /// The innermost entry of the `:source`/function call stack: what C's

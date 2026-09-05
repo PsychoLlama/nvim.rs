@@ -165,7 +165,7 @@ pub(crate) fn ui_ext_cmdline_hide(abort: bool) {
 /// `CmdlineEnter`/`CmdlineLeave` autocommands.  Answers the dictionary,
 /// which the caller hands back to `restore_v_event`.
 pub(crate) unsafe fn cmdline_event_dict(
-    save_v_event: *mut save_v_event_T,
+    save_v_event: *mut SaveVEvent,
     cmdtype: *const ::core::ffi::c_char,
 ) -> *mut Dict {
     let dict = unsafe { get_v_event(save_v_event) };
@@ -310,7 +310,7 @@ pub(crate) unsafe fn command_line_enter(
         firstcbuf[0] = s.cmdline_type as ::core::ffi::c_char;
 
         if has_event(AutoEvent::CmdlineEnter) {
-            let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
+            let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
 
             // C's TRY_WRAP. restore_v_event() runs *inside* the try here
@@ -387,7 +387,7 @@ pub(crate) unsafe fn command_line_enter(
         }
 
         if has_event(AutoEvent::CmdlineLeave) {
-            let mut save_v_event: save_v_event_T = SAVE_V_EVENT_INIT;
+            let mut save_v_event: SaveVEvent = SAVE_V_EVENT_INIT;
             let dict = unsafe { cmdline_event_dict(&raw mut save_v_event, firstcbuf.as_ptr()) };
             // Not readonly, unlike the keys above:
             let _ = unsafe {

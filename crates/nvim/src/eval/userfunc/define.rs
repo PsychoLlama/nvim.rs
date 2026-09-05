@@ -1,7 +1,7 @@
 //! `:function` itself -- defining, and the header a listing prints.
 //!
 //! `ex_function` decides which of the four things the command is (define,
-//! list one, list a pattern, list everything), builds the `ufunc_T` and
+//! list one, list a pattern, list everything), builds the `UserFunc` and
 //! installs it in the table.  `list_func_head` prints the `function
 //! Name(a, b = 1, ...) dict abort range` line, which is the same text in a
 //! listing and in a `:verbose` report.
@@ -19,7 +19,7 @@ use super::*;
 use crate::types::{FAIL, Failed, NUL, OK, Refcount};
 
 /// Whether the function table changed under a listing, which means the
-/// `ufunc_T` the caller is holding may be gone.  Reports E454 when it did.
+/// `UserFunc` the caller is holding may be gone.  Reports E454 when it did.
 pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
     if prev_ht_changed != func_table().changed() {
         emsg(gettext(E_FUNCTION_LIST_WAS_MODIFIED));
@@ -34,7 +34,7 @@ pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
 /// # Safety
 /// `fp` is a live function.
 pub(crate) unsafe fn list_func_head(
-    fp: *mut ufunc_T,
+    fp: *mut UserFunc,
     indent: bool,
     force: bool,
 ) -> Result<(), Failed> {
@@ -123,7 +123,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
     let mut newlines = GARRAY_EMPTY;
     let mut varargs = 0;
     let mut flags = FuncFlags::NONE;
-    let mut fp: *mut ufunc_T = ptr::null_mut();
+    let mut fp: *mut UserFunc = ptr::null_mut();
     let mut free_fp = false;
     let mut overwrite = false;
     let mut fudi = FUNCDICT_INIT;

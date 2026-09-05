@@ -1,7 +1,7 @@
 //! Vimscript control flow: `:if`, `:while`, `:for`, the try conditional, and
 //! the exception machinery underneath all three.
 //!
-//! Everything here is state on one array, `cstack_T`, which `do_cmdline`
+//! Everything here is state on one array, `CondStack`, which `do_cmdline`
 //! owns and passes in through `eap->cstack`. Each `:if`/`:while`/`:for`/
 //! `:try` pushes an entry; the matching end command pops it. An entry's
 //! `cs_flags` says what it is ([`CsFlags::WHILE`], [`CsFlags::TRY`], ...)
@@ -36,7 +36,7 @@
 //! # Safety
 //!
 //! Every `unsafe fn` here takes editor state by raw pointer -- the `exarg_T`
-//! of the command being executed, its `cstack_T`, or an `except_T` from one
+//! of the command being executed, its `CondStack`, or an `Exception` from one
 //! of the two exception stacks -- and runs on the main thread with that
 //! state live. `eap->cstack` is `do_cmdline`'s own stack local and outlives
 //! every call made from it. That is the contract these modules share; each
@@ -66,7 +66,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    FAIL, Failed, OK, TypVal, VAR_UNKNOWN, VarLock, cstack_T, eslist_T, evalarg_T, exarg_T,
+    CondStack, EsList, EvalArg, FAIL, Failed, OK, TypVal, VAR_UNKNOWN, VarLock, exarg_T,
     typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -78,7 +78,7 @@ use flag::{
 };
 
 crate::flag_set! {
-    /// `cstack_T.cs_flags`: what a conditional stack entry is, and how it
+    /// `CondStack.cs_flags`: what a conditional stack entry is, and how it
     /// stands. The first two are the state; the rest name the command.
     pub struct CsFlags;
 
@@ -108,7 +108,7 @@ crate::flag_set! {
 }
 
 crate::flag_set! {
-    /// `cstack_T.cs_lflags`: what `do_cmdline` should do next about the
+    /// `CondStack.cs_lflags`: what `do_cmdline` should do next about the
     /// innermost loop.
     pub struct CsLoopFlags;
 
@@ -135,7 +135,7 @@ pub(crate) mod flag {
     /// How deep `:if`/`:while`/`:for`/`:try` may nest.
     pub(crate) const CSTACK_LEN: c_int = 50;
 
-    /// `cstack_T.cs_pending`: what a finally clause postponed. The last
+    /// `CondStack.cs_pending`: what a finally clause postponed. The last
     /// three are alternatives, not bits -- `CSTP_RETURN` deliberately
     /// overlaps `CSTP_BREAK | CSTP_CONTINUE`, as upstream defines it.
     pub(crate) const CSTP_NONE: c_int = 0;
@@ -147,7 +147,7 @@ pub(crate) mod flag {
     pub(crate) const CSTP_RETURN: c_int = 24;
     pub(crate) const CSTP_FINISH: c_int = 32;
 
-    /// `except_T.type_0`.
+    /// `Exception.type_0`.
     pub(crate) const ET_USER: ExceptType = 0;
     pub(crate) const ET_ERROR: ExceptType = 1;
     pub(crate) const ET_INTERRUPT: ExceptType = 2;
@@ -187,7 +187,7 @@ fn err_msg(msg: &'static CStr) -> Option<CString> {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn check_skip(cstack: *mut cstack_T) -> bool {
+unsafe fn check_skip(cstack: *mut CondStack) -> bool {
     // SAFETY: module contract.
     let idx = unsafe { (*cstack).cs_idx };
     did_emsg.get() != 0
@@ -258,7 +258,7 @@ pub(crate) unsafe fn ex_eval(eap: *mut exarg_T) {
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    let mut evalarg = evalarg_T {
+    let mut evalarg = EvalArg {
         eval_flags: 0,
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
@@ -479,13 +479,13 @@ pub(crate) unsafe fn ex_while(eap: *mut exarg_T) {
 /// Module contract; `idx` is `cstack->cs_idx`.
 unsafe fn for_next_item(
     eap: *mut exarg_T,
-    cstack: *mut cstack_T,
+    cstack: *mut CondStack,
     idx: usize,
     jumped_back: bool,
     skip: bool,
     error: &mut bool,
 ) -> bool {
-    let mut evalarg = evalarg_T {
+    let mut evalarg = EvalArg {
         eval_flags: 0,
         eval_getline: None,
         eval_cookie: ptr::null_mut(),
@@ -657,7 +657,7 @@ pub(crate) unsafe fn ex_endwhile(eap: *mut exarg_T) {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn cleanup_conditionals(
-    cstack: *mut cstack_T,
+    cstack: *mut CondStack,
     searched_cond: CsFlags,
     inclusive: bool,
 ) -> c_int {
@@ -711,7 +711,7 @@ pub(crate) unsafe fn cleanup_conditionals(
         if unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::TRY)
             && unsafe { (*cstack).cs_flags[idx as usize] }.has(CsFlags::SILENT)
         {
-            let elem: *mut eslist_T = unsafe { (*cstack).cs_emsg_silent_list };
+            let elem: *mut EsList = unsafe { (*cstack).cs_emsg_silent_list };
             unsafe { (*cstack).cs_emsg_silent_list = (*elem).next };
             emsg_silent.set(unsafe { (*elem).saved_emsg_silent });
             unsafe { xfree(elem.cast()) };
@@ -732,7 +732,7 @@ pub(crate) unsafe fn cleanup_conditionals(
 ///
 /// # Safety
 /// Module contract; `idx` names a `CsFlags::TRY` entry.
-unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
+unsafe fn discard_finally_pending(cstack: *mut CondStack, idx: c_int) {
     // SAFETY: module contract.
     if !(did_emsg.get() != 0
         || got_int.get()
@@ -781,7 +781,7 @@ unsafe fn discard_finally_pending(cstack: *mut cstack_T, idx: c_int) {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn get_end_emsg(cstack: *mut cstack_T) -> Option<CString> {
+unsafe fn get_end_emsg(cstack: *mut CondStack) -> Option<CString> {
     // SAFETY: module contract.
     let flags = unsafe { (*cstack).cs_flags[(*cstack).cs_idx as usize] };
     if flags.has(CsFlags::WHILE) {
@@ -800,7 +800,7 @@ unsafe fn get_end_emsg(cstack: *mut cstack_T) -> Option<CString> {
 /// Module contract; `cond_level` points at a live counter, normally one of
 /// `cstack`'s own.
 pub(crate) unsafe fn rewind_conditionals(
-    cstack: *mut cstack_T,
+    cstack: *mut CondStack,
     idx: c_int,
     cond_type: CsFlags,
     cond_level: *mut c_int,

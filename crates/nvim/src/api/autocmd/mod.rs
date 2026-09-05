@@ -21,10 +21,10 @@ use crate::strings::arena_printf;
 use crate::types::AutoEvent;
 use crate::types::{
     ApiDict, Arena, Array, ArrayBuilder, AutoCmd, AutoCmdVec, AutoPat, Buffer, Callback, Error,
-    Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
-    KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, Object, String_0, TryState, buf_T,
-    exarg_T, except_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, msglist_T,
-    size_t, uint64_t,
+    Exception, Integer, KeyDict_clear_autocmds, KeyDict_create_augroup, KeyDict_create_autocmd,
+    KeyDict_exec_autocmds, KeyDict_get_autocmds, LuaRef, MsgList, Object, String_0, TryState,
+    buf_T, exarg_T, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, size_t,
+    uint64_t,
 };
 use ::libc::abort;
 

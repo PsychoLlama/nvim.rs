@@ -41,8 +41,8 @@ use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
-    ExpandContext, LineNr, ProfTime, VarNumber, Vv, exarg_T, expand_T, funccall_T, int64_t,
-    scriptitem_T, sn_prl_T, ufunc_T,
+    ExpandContext, FuncCall, LineNr, ProfTime, UserFunc, VarNumber, Vv, exarg_T, expand_T, int64_t,
+    scriptitem_T, sn_prl_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -54,7 +54,7 @@ pub const PROF_PAUSED: c_int = 2;
 
 /// First byte of a `<SNR>`-mangled function name.
 const NL: c_char = b'\n' as c_char;
-/// Offset of `uf_name` inside `ufunc_T`: hash keys point at the name, this
+/// Offset of `uf_name` inside `UserFunc`: hash keys point at the name, this
 /// recovers the function (the transpiled `HI2UF`, same constant as
 /// eval/userfunc/ uses).
 const UF_NAME_OFFSET: isize = 240;
@@ -394,7 +394,7 @@ pub unsafe fn prof_def_func() -> bool {
 ///
 /// # Safety
 /// `fp` is a live function-table entry.
-pub unsafe fn func_do_profile(fp: *mut ufunc_T) {
+pub unsafe fn func_do_profile(fp: *mut UserFunc) {
     // SAFETY: the caller's function.
     let fp = unsafe { &mut *fp };
     // Avoid allocating zero bytes.
@@ -458,7 +458,7 @@ pub unsafe fn prof_child_exit(wait: ProfTime) {
 ///
 /// # Safety
 /// Main-thread editor call; the call stack is live.
-unsafe fn profiled_funccal() -> Option<*mut funccall_T> {
+unsafe fn profiled_funccal() -> Option<*mut FuncCall> {
     // SAFETY: the caller's contract.
     let fc = unsafe { get_current_funccal() };
     (!fc.is_null() && unsafe { (*(*fc).fc_func).uf_profiling } != 0).then_some(fc)
@@ -469,10 +469,10 @@ unsafe fn profiled_funccal() -> Option<*mut funccall_T> {
 /// counted only if [`func_line_exec`] follows.
 ///
 /// # Safety
-/// `cookie` is the live `funccall_T` of the function being executed.
+/// `cookie` is the live `FuncCall` of the function being executed.
 pub unsafe fn func_line_start(cookie: *mut c_void) {
     // SAFETY: the caller's call frame and its function.
-    let fp = unsafe { &mut *(*(cookie as *mut funccall_T)).fc_func };
+    let fp = unsafe { &mut *(*(cookie as *mut FuncCall)).fc_func };
     let lnum = sourcing_lnum();
     if fp.uf_profiling != 0 && lnum >= 1 && lnum <= fp.uf_lines.ga_len as LineNr {
         fp.uf_tml_idx = lnum as c_int - 1;
@@ -491,7 +491,7 @@ pub unsafe fn func_line_start(cookie: *mut c_void) {
 ///
 /// # Safety
 /// `idx` is below `fp.uf_lines.ga_len`.
-unsafe fn func_line(fp: &ufunc_T, idx: isize) -> *mut c_char {
+unsafe fn func_line(fp: &UserFunc, idx: isize) -> *mut c_char {
     // SAFETY: the caller's bound; the array holds `ga_len` line pointers.
     unsafe { *(fp.uf_lines.ga_data as *mut *mut c_char).offset(idx) }
 }
@@ -499,10 +499,10 @@ unsafe fn func_line(fp: &ufunc_T, idx: isize) -> *mut c_char {
 /// Called when actually executing a function line.
 ///
 /// # Safety
-/// `cookie` is the live `funccall_T` of the function being executed.
+/// `cookie` is the live `FuncCall` of the function being executed.
 pub unsafe fn func_line_exec(cookie: *mut c_void) {
     // SAFETY: the caller's call frame and its function.
-    let fp = unsafe { &mut *(*(cookie as *mut funccall_T)).fc_func };
+    let fp = unsafe { &mut *(*(cookie as *mut FuncCall)).fc_func };
     if fp.uf_profiling != 0 && fp.uf_tml_idx >= 0 {
         fp.uf_tml_execed = 1;
     }
@@ -511,10 +511,10 @@ pub unsafe fn func_line_exec(cookie: *mut c_void) {
 /// Called when done with a function line.
 ///
 /// # Safety
-/// `cookie` is the live `funccall_T` of the function being executed.
+/// `cookie` is the live `FuncCall` of the function being executed.
 pub unsafe fn func_line_end(cookie: *mut c_void) {
     // SAFETY: the caller's call frame and its function.
-    let fp = unsafe { &mut *(*(cookie as *mut funccall_T)).fc_func };
+    let fp = unsafe { &mut *(*(cookie as *mut FuncCall)).fc_func };
     if fp.uf_profiling != 0 && fp.uf_tml_idx >= 0 {
         if fp.uf_tml_execed != 0 {
             let i = fp.uf_tml_idx as isize;
@@ -680,13 +680,13 @@ fn sourcing_lnum() -> LineNr {
 ///
 /// # Safety
 /// Main-thread editor call; the function table is live.
-unsafe fn profiled_functions() -> Vec<*mut ufunc_T> {
+unsafe fn profiled_functions() -> Vec<*mut UserFunc> {
     let mut found = Vec::new();
     // SAFETY: the caller's contract. A hash item's key points at the
-    // `uf_name` field of its `ufunc_T`, which is what the offset undoes.
+    // `uf_name` field of its `UserFunc`, which is what the offset undoes.
     let functbl = unsafe { &*func_tbl_get() };
     for hi in functbl.items() {
-        let fp = unsafe { hi.hi_key.offset(-UF_NAME_OFFSET) } as *mut ufunc_T;
+        let fp = unsafe { hi.hi_key.offset(-UF_NAME_OFFSET) } as *mut UserFunc;
         if unsafe { (*fp).uf_prof_initialized } != 0 {
             found.push(fp);
         }

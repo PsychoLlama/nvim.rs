@@ -101,8 +101,8 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     AdditionalData, CharsizeArg, CmdModFlags, ColNr, ExtmarkOp, GRegFlags, LineNr, MotionType, NUL,
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
-    PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VarLock, bcount_t, block_def, exarg_T,
-    hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, oparg_T, pos_T, ptrdiff_t, save_v_event_T,
+    PUT_LINE_SPLIT, RemapValues, SaveVEvent, String_0, UndoObjectType, VarLock, bcount_t,
+    block_def, exarg_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, oparg_T, pos_T, ptrdiff_t,
     size_t, ssize_t, yankreg_T,
 };
 use crate::ui::ui_has;

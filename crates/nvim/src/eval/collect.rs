@@ -70,10 +70,10 @@ use crate::runtime::exestack;
 use crate::tag::set_ref_in_tagfunc;
 use crate::types::{
     AdditionalData, CONV_NONE, Callback, CallbackReader, Channel, Dict, DictItem, DictWatcher,
-    Failed, HtStack, List, ListItem, ListStack, NUL, OptInt, Partial, QUEUE, String_0, TypVal,
-    VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, fmark_T, fmarkv_T, hashitem_T, hashtab_T,
-    pos_T, size_t, tabpage_T, timer_T, typval_vval_union, ufunc_T, vimconv_T, win_T, xfmark_T,
+    Failed, HtStack, List, ListItem, ListStack, NUL, OptInt, Partial, QUEUE, String_0, Timer,
+    TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, buf_T, fmark_T, fmarkv_T,
+    hashitem_T, hashtab_T, pos_T, size_t, tabpage_T, typval_vval_union, vimconv_T, win_T, xfmark_T,
     yankreg_T,
 };
 use crate::winlayer::{Live, buffers, tab_windows, tabs};
@@ -262,7 +262,7 @@ pub unsafe fn garbage_collect(testing: bool) -> bool {
     // Timers, likewise.
     for timer in timers.with(SlotTable::snapshot_values) {
         // SAFETY: the snapshot holds the registered live timers.
-        let cb = unsafe { Live::<timer_T>::new(timer) }.field_ptr(offset_of!(timer_T, callback));
+        let cb = unsafe { Live::<Timer>::new(timer) }.field_ptr(offset_of!(Timer, callback));
         // SAFETY: `cb` is the timer's own callback.
         unsafe { mark_cb(cb, copy_id) };
     }
@@ -639,7 +639,7 @@ pub unsafe fn set_ref_in_item(
         // scope of its own.
         VAR_FUNC => {
             let name = tv.func_name_or_null();
-            unsafe { set_ref_in_func(name, null_mut::<ufunc_T>(), copy_id) }
+            unsafe { set_ref_in_func(name, null_mut::<UserFunc>(), copy_id) }
         }
         VAR_PARTIAL => unsafe { set_ref_in_item_partial(tv.partial_or_null(), copy_id, ht, ls) },
         _ => false,

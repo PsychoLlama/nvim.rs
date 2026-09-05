@@ -619,14 +619,14 @@ pub(crate) fn ga_alloc(itemsize: c_int, growsize: c_int) -> neovim::types::garra
 /// The editor must be up. The answer owns its contents; clear it.
 pub(crate) unsafe fn eval0(expr: &str) -> Option<TypVal> {
     use neovim::eval::EVAL_EVALUATE;
-    use neovim::types::evalarg_T;
+    use neovim::types::EvalArg;
 
     let mut tv = TypVal {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
         vval: typval_vval_union { v_number: 0 },
     };
-    let mut evalarg = evalarg_T {
+    let mut evalarg = EvalArg {
         eval_flags: EVAL_EVALUATE as c_int,
         eval_getline: None,
         eval_cookie: ptr::null_mut(),

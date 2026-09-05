@@ -32,8 +32,8 @@ pub unsafe fn get_func_tv(
     len: c_int,
     rettv: *mut TypVal,
     arg: *mut *mut c_char,
-    evalarg: *mut evalarg_T,
-    funcexe: *mut funcexe_T,
+    evalarg: *mut EvalArg,
+    funcexe: *mut FuncExe,
 ) -> Result<(), Failed> {
     let mut argvars = ARGV_INIT;
     let mut argcount = 0;
@@ -171,11 +171,11 @@ pub unsafe fn call_func(
     rettv: *mut TypVal,
     argcount_in: c_int,
     argvars_in: *mut TypVal,
-    funcexe: *mut funcexe_T,
+    funcexe: *mut FuncExe,
 ) -> Result<(), Failed> {
     let mut ret = Err(Failed);
     let mut error = FCERR_NONE;
-    let mut fp: *mut ufunc_T = ptr::null_mut();
+    let mut fp: *mut UserFunc = ptr::null_mut();
     let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
     let mut tofree: *mut c_char = ptr::null_mut();
     let mut fname: *mut c_char = ptr::null_mut();

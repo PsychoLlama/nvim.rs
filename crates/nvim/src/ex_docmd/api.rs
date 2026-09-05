@@ -54,7 +54,7 @@ use crate::main::{
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
-    CmdAddr, CmdParseInfo, ExArgt, FAIL, Failed, LineNr, NUL, cstack_T, exarg_T, pos_T,
+    CmdAddr, CmdParseInfo, CondStack, ExArgt, FAIL, Failed, LineNr, NUL, exarg_T, pos_T,
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Ea, Win};
@@ -404,7 +404,7 @@ pub unsafe fn execute_cmd(eap: *mut exarg_T, cmdinfo: *mut CmdParseInfo, preview
 
         // A conditional stack of its own: `:try` and friends reached
         // this way are not nested inside the caller's.
-        let mut cstack: cstack_T = unsafe { core::mem::zeroed() };
+        let mut cstack: CondStack = unsafe { core::mem::zeroed() };
         cstack.cs_idx = -1;
         ea.cstack = &raw mut cstack;
 

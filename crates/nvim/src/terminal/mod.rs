@@ -64,9 +64,9 @@ use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     Arena, Buffer, ColNr, Dict, Error, Event, ExtmarkOp, Handle, HlAttrs, LineNr, MarkAdjustMode,
-    Object, OptVal, OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor,
-    VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, VarNumber,
-    aco_save_T, buf_T, exarg_T, int16_t, pos_T, save_v_event_T, size_t, uint8_t, win_T,
+    Object, OptVal, OptionSetFlags, RefcountSize, RgbValue, SaveVEvent, Terminal, TerminalOptions,
+    VTermColor, VTermColor_rgb, VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue,
+    VarNumber, aco_save_T, buf_T, exarg_T, int16_t, pos_T, size_t, uint8_t, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -493,7 +493,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
         return;
     }
     // A plain save area `get_v_event` fills in, restored below.
-    let mut save_v_event = save_v_event_T::default();
+    let mut save_v_event = SaveVEvent::default();
     // SAFETY: paired with the `restore_v_event` below.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     // SAFETY: `dict` is `v:event`, which takes a number under a fixed key.

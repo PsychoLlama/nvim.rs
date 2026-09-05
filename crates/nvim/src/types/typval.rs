@@ -370,8 +370,8 @@ pub struct Dict {
 }
 /// Not `Clone`: it holds `l:` and `a:` by value, and a dictionary owns the
 /// items its hash table indexes.
-pub struct funccall_S {
-    pub fc_func: *mut ufunc_T,
+pub struct FuncCall {
+    pub fc_func: *mut UserFunc,
     pub fc_linenr: ::core::ffi::c_int,
     pub fc_returned: ::core::ffi::c_int,
     pub fc_fixvar: [funccall_S_fc_fixvar; 12],
@@ -387,7 +387,7 @@ pub struct funccall_S {
     pub fc_level: ::core::ffi::c_int,
     pub fc_defer: garray_T,
     pub fc_prof_child: ProfTime,
-    pub fc_caller: *mut funccall_T,
+    pub fc_caller: *mut FuncCall,
     pub fc_refcount: Refcount,
     pub fc_copyID: ::core::ffi::c_int,
     pub fc_ufuncs: garray_T,
@@ -398,7 +398,6 @@ pub struct funccall_S_fc_fixvar {
     pub di_flags: uint8_t,
     pub di_key: [::core::ffi::c_char; 21],
 }
-pub type funccall_T = funccall_S;
 pub struct HtStack {
     pub ht: *mut hashtab_T,
     pub prev: *mut HtStack,
@@ -446,7 +445,7 @@ pub struct Partial {
     pub pt_refcount: Refcount,
     pub pt_copyID: ::core::ffi::c_int,
     pub pt_name: *mut ::core::ffi::c_char,
-    pub pt_func: *mut ufunc_T,
+    pub pt_func: *mut UserFunc,
     pub pt_auto: bool,
     pub pt_argc: ::core::ffi::c_int,
     pub pt_argv: *mut TypVal,
@@ -524,7 +523,7 @@ pub union typval_vval_union {
     pub v_blob: *mut Blob,
 }
 #[repr(C)]
-pub struct ufunc_S {
+pub struct UserFunc {
     pub uf_varargs: ::core::ffi::c_int,
     pub uf_flags: crate::eval::userfunc::FuncFlags,
     pub uf_calls: ::core::ffi::c_int,
@@ -549,11 +548,10 @@ pub struct ufunc_S {
     pub uf_tml_execed: ::core::ffi::c_int,
     pub uf_script_ctx: ScriptCtx,
     pub uf_refcount: Refcount,
-    pub uf_scoped: *mut funccall_T,
+    pub uf_scoped: *mut FuncCall,
     pub uf_name_exp: *mut ::core::ffi::c_char,
     pub uf_namelen: size_t,
     pub uf_name: [::core::ffi::c_char; 0],
 }
-pub type ufunc_T = ufunc_S;
 pub type UVarNumber = uint64_t;
 pub type VarNumber = int64_t;

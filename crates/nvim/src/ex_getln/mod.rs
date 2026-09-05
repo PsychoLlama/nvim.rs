@@ -135,16 +135,16 @@ use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     Arena, Array, BackslashEscape, Boolean, Callback, CmdAddr, CmdBuff, CmdParseInfo,
-    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline, Dict,
-    Direction, DispTick, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType,
-    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    Handle, HistoryType, Integer, LineNr, List, ListItem, Magic, MotionType, Object, OptInt,
-    OptMagic, OptVal, ParserHighlight, ParserHighlightChunk, ParserLine, ParserPosition,
-    ParserState, ProfTime, RemapValues, ScriptCtx, String_0, TryState, TypVal, UVarNumber,
-    UndoLink, UndoObjectType, VarNumber, VimState, XpPrefix, aco_save_T, buf_T, cmdmod_T, cstack_T,
-    dobuf_action_values, dobuf_start_values, exarg_T, except_T, expand_T, hashtab_T, msglist_T,
-    oparg_T, optset_T, pos_T, ptrdiff_t, save_v_event_T, searchit_arg_T, size_t, tabpage_T, time_t,
-    typval_vval_union, uint8_t, uint32_t, win_T,
+    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
+    CondStack, Dict, Direction, DispTick, Error, EvalFuncData, ExArgt, Exception, ExpandContext,
+    ExprAST, ExprASTNodeType, ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType,
+    ExprOptScope, ExprParserFlags, Handle, HistoryType, Integer, LineNr, List, ListItem, Magic,
+    MotionType, MsgList, Object, OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk,
+    ParserLine, ParserPosition, ParserState, ProfTime, RemapValues, SaveVEvent, ScriptCtx,
+    String_0, TryState, TypVal, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState,
+    XpPrefix, aco_save_T, buf_T, cmdmod_T, dobuf_action_values, dobuf_start_values, exarg_T,
+    expand_T, hashtab_T, oparg_T, optset_T, pos_T, ptrdiff_t, searchit_arg_T, size_t, tabpage_T,
+    time_t, typval_vval_union, uint8_t, uint32_t, win_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -504,16 +504,16 @@ pub(crate) const EXPAND_T_INIT: expand_T = expand_T {
 /// An all-zero [`TryState`], which is what the `TRY_WRAP` macro declares
 /// (uninitialised in the C; `try_enter` fills every field).
 pub(crate) const TRY_STATE_INIT: TryState = TryState {
-    current_exception: ::core::ptr::null_mut::<except_T>(),
-    private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
-    msg_list: ::core::ptr::null::<*const msglist_T>(),
+    current_exception: ::core::ptr::null_mut::<Exception>(),
+    private_msg_list: ::core::ptr::null_mut::<MsgList>(),
+    msg_list: ::core::ptr::null::<*const MsgList>(),
     got_int: 0,
     did_throw: false,
     need_rethrow: 0,
     did_emsg: 0,
 };
 
-/// An all-zero [`save_v_event_T`], the out-parameter of `get_v_event`.
+/// An all-zero [`SaveVEvent`], the out-parameter of `get_v_event`.
 /// C's `STATIC_CSTR_AS_OPTVAL`: a string option value borrowing a literal.
 /// Nothing frees it.
 pub(crate) const fn static_optval(value: &'static ::core::ffi::CStr) -> OptVal {
@@ -558,7 +558,7 @@ pub(crate) const EXARG_T_INIT: exarg_T = exarg_T {
     errmsg: None,
     ea_getline: None,
     cookie: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-    cstack: ::core::ptr::null_mut::<cstack_T>(),
+    cstack: ::core::ptr::null_mut::<CondStack>(),
 };
 
 /// An all-zero [`CmdParseInfo`]; `parse_cmdline` fills it.
@@ -625,7 +625,7 @@ pub(crate) const CP_INFO_INIT: CpInfo = CpInfo {
     save_view: Vec::new(),
 };
 
-pub(crate) const SAVE_V_EVENT_INIT: save_v_event_T = save_v_event_T {
+pub(crate) const SAVE_V_EVENT_INIT: SaveVEvent = SaveVEvent {
     sve_did_save: false,
     sve_hashtab: hashtab_T::new(),
 };

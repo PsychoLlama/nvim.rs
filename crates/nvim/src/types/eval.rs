@@ -394,14 +394,14 @@ crate::flag_set! {
 /// Not `Copy`: `eval_tofree` is the joined line the evaluator allocated and
 /// must free once.
 #[derive(Clone)]
-pub struct evalarg_T {
+pub struct EvalArg {
     pub eval_flags: ::core::ffi::c_int,
     pub eval_getline: LineGetter,
     pub eval_cookie: *mut ::core::ffi::c_void,
     pub eval_tofree: *mut ::core::ffi::c_char,
 }
 pub type ExprType = ::core::ffi::c_uint;
-pub struct lval_T {
+pub struct LVal {
     pub ll_name: *const ::core::ffi::c_char,
     pub ll_name_len: size_t,
     pub ll_exp_name: *mut ::core::ffi::c_char,
@@ -418,12 +418,12 @@ pub struct lval_T {
     pub ll_blob: *mut Blob,
 }
 #[derive(Default)]
-pub struct save_v_event_T {
+pub struct SaveVEvent {
     pub sve_did_save: bool,
     pub sve_hashtab: hashtab_T,
 }
 #[derive(Clone)]
-pub struct timer_T {
+pub struct Timer {
     pub tw: TimeWatcher,
     pub timer_id: ::core::ffi::c_int,
     pub repeat_count: ::core::ffi::c_int,

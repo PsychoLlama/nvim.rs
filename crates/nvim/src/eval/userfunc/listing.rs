@@ -33,7 +33,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
         if hi.is_kept() {
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.
-            let fp = unsafe { hi.hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
+            let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
             todo -= 1;
             // Without a pattern, skip what the user filtered out and the
             // numbered/lambda functions; with one, skip the numbered
@@ -96,7 +96,7 @@ pub(crate) unsafe fn list_one_function(
     eap: *mut exarg_T,
     name: *mut c_char,
     p: *mut c_char,
-) -> *mut ufunc_T {
+) -> *mut UserFunc {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let mut ea = unsafe { Ea::new(eap) };
     if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
@@ -240,7 +240,7 @@ pub unsafe fn get_user_func_name(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // The key *is* the function's trailing name member, so the function is
     // that many bytes before it.
     let key = func_table().slot(slot.get()).hi_key;
-    let fp = unsafe { key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
+    let fp = unsafe { key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
 
     if unsafe { (*fp).uf_flags }.has(FuncFlags::DICT)
         || unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") }

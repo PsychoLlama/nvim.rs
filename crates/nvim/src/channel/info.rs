@@ -28,8 +28,8 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, TypVal, VAR_DICT, VAR_UNKNOWN,
-    VarLock, key_value_pair, save_v_event_T, typval_vval_union, uint64_t,
+    ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
+    VAR_UNKNOWN, VarLock, key_value_pair, typval_vval_union, uint64_t,
 };
 
 use super::known::*;
@@ -151,7 +151,7 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let event = AutoEvent::at_row(unsafe { *argv.add(1) }.expose_provenance())
         .expect("`channel_info_changed` queued a real event");
 
-    let mut save_v_event = save_v_event_T::default();
+    let mut save_v_event = SaveVEvent::default();
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     let mut arena: Arena = ARENA_EMPTY;
     let retval = unsafe { info_tv((*chan).id, &raw mut arena) };

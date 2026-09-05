@@ -59,7 +59,7 @@ pub fn estack_push(es_type: EStackType, name: *mut c_char, lnum: LineNr) {
 }
 
 /// Add a user function to the execution stack.
-pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: LineNr) {
+pub unsafe fn estack_push_ufunc(ufunc: *mut UserFunc, lnum: LineNr) {
     // SAFETY: `ufunc` is a live user function. `uf_name_exp` is the
     // `<SNR>`-expanded name when one was built; otherwise the name is the
     // struct's trailing inline buffer.
@@ -291,7 +291,7 @@ unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
 /// name) is set; a script frame has neither.
 unsafe fn stacktrace_push_item(
     l: *mut List,
-    fp: *mut ufunc_T,
+    fp: *mut UserFunc,
     event: *const c_char,
     lnum: LineNr,
     filepath: *mut c_char,

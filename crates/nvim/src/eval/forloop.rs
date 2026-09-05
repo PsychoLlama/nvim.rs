@@ -1,6 +1,6 @@
 //! `:for`: the list of things to iterate, and the step from one to the next.
 //!
-//! `forinfo_T` holds exactly one of three iterations and which field is
+//! `ForInfo` holds exactly one of three iterations and which field is
 //! set is what says which: `fi_blob` a Blob by byte, `fi_string` a String
 //! by character, `fi_list` (through `fi_lw`) a List by item. They are
 //! tested in that order, so `free_for_info` and `next_for_item` agree
@@ -24,13 +24,13 @@ use crate::eval::typval::{
 };
 use crate::eval::vars::{clear_local, emsg_static};
 use crate::eval::vars::{ex_let_vars, skip_var_list};
-use crate::eval::{EVAL_EVALUATE, Fi, e_string_list_or_blob_required, eval0, forinfo_T};
+use crate::eval::{EVAL_EVALUATE, Fi, ForInfo, e_string_list_or_blob_required, eval0};
 use crate::guard::Suppress;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
 use crate::types::{
-    ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, evalarg_T, exarg_T, size_t, typval_vval_union,
+    EvalArg, ListItem, NUL, TypVal, VAR_BLOB, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
+    VarLock, VarNumber, exarg_T, size_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -41,7 +41,7 @@ const UNSET_TV: TypVal = TypVal {
 };
 
 /// Read the `for x in expr` header and set up the iteration. The answer is
-/// always a `forinfo_T` the caller owns, even on the error paths, because
+/// always a `ForInfo` the caller owns, even on the error paths, because
 /// `:endfor` frees it either way; `errp` is what says the loop must not
 /// run.
 ///
@@ -52,20 +52,20 @@ pub unsafe fn eval_for_line(
     arg: *const c_char,
     errp: *mut bool,
     eap: *mut exarg_T,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> *mut c_void {
     // SAFETY: `xcalloc` never answers NULL and hands back one zeroed
-    // `forinfo_T`, which the caller owns until `:endfor` frees it.
-    let mut fi = unsafe { Fi::new(xcalloc(1, size_of::<forinfo_T>()) as *mut forinfo_T) };
+    // `ForInfo`, which the caller owns until `:endfor` frees it.
+    let mut fi = unsafe { Fi::new(xcalloc(1, size_of::<ForInfo>()) as *mut ForInfo) };
     // SAFETY: the caller's promise about `evalarg` and `errp`.
     let skip = unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int == 0;
     // SAFETY: as above.
     unsafe { *errp = true };
 
-    let varcount = fi.field_ptr(offset_of!(forinfo_T, fi_varcount));
-    let semicolon = fi.field_ptr(offset_of!(forinfo_T, fi_semicolon));
+    let varcount = fi.field_ptr(offset_of!(ForInfo, fi_varcount));
+    let semicolon = fi.field_ptr(offset_of!(ForInfo, fi_semicolon));
     // SAFETY: the caller's promise that `arg` is NUL-terminated; the two
-    // out-parameters are the `forinfo_T`'s own fields.
+    // out-parameters are the `ForInfo`'s own fields.
     let expr = unsafe { skip_var_list(arg, varcount, semicolon, false) };
     if expr.is_null() {
         return fi.raw() as *mut c_void;
@@ -104,9 +104,9 @@ pub unsafe fn eval_for_line(
                         // is what keeps the cursor valid across changes
                         // to the List while the loop runs.
                         fi.fi_list = l;
-                        let lw = fi.field_ptr(offset_of!(forinfo_T, fi_lw));
+                        let lw = fi.field_ptr(offset_of!(ForInfo, fi_lw));
                         // SAFETY: `l` is the live List the typval held, and
-                        // `lw` is the `forinfo_T`'s own watcher.
+                        // `lw` is the `ForInfo`'s own watcher.
                         unsafe { tv_list_watch_add(l, lw) };
                         // The List holds `lw` from here on, so this write
                         // goes through the pointer rather than borrowing
@@ -160,17 +160,17 @@ pub unsafe fn eval_for_line(
 /// over, or when the assignment failed.
 ///
 /// # Safety
-/// `fi_void` must be a `forinfo_T` from `eval_for_line`; `arg` the loop's
+/// `fi_void` must be a `ForInfo` from `eval_for_line`; `arg` the loop's
 /// variable list.
 pub unsafe fn next_for_item(fi_void: *mut c_void, arg: *mut c_char) -> bool {
     // `eval_for_line` handed the List the address of `fi_lw`, so the List
     // is holding a pointer into this record for as long as the loop runs.
     // Every write below therefore goes through `rec` rather than through
-    // `DerefMut`, which would borrow the whole `forinfo_T` and pop it —
+    // `DerefMut`, which would borrow the whole `ForInfo` and pop it —
     // see `winlayer::live`'s note.
-    // SAFETY: the caller's promise -- the loop's own `forinfo_T`, which
+    // SAFETY: the caller's promise -- the loop's own `ForInfo`, which
     // `:endfor` keeps alive for as long as the loop runs.
-    let fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
+    let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
     let rec = fi.raw();
 
     if !fi.fi_blob.is_null() {
@@ -238,15 +238,15 @@ unsafe fn assign(fi: Fi, arg: *mut c_char, tv: *mut TypVal) -> bool {
 /// Release the iteration.
 ///
 /// # Safety
-/// `fi_void` must be null or a `forinfo_T` from `eval_for_line`.
+/// `fi_void` must be null or a `ForInfo` from `eval_for_line`.
 pub unsafe fn free_for_info(fi_void: *mut c_void) {
     if fi_void.is_null() {
         return;
     }
-    // SAFETY: the caller's promise -- the loop's own `forinfo_T`.
-    let fi = unsafe { Fi::new(fi_void as *mut forinfo_T) };
+    // SAFETY: the caller's promise -- the loop's own `ForInfo`.
+    let fi = unsafe { Fi::new(fi_void as *mut ForInfo) };
     if !fi.fi_list.is_null() {
-        let lw = fi.field_ptr(offset_of!(forinfo_T, fi_lw));
+        let lw = fi.field_ptr(offset_of!(ForInfo, fi_lw));
         // Read out first: `tv_list_watch_remove` writes through `lw`, which
         // points into this record, so no borrow of the record may still be
         // alive while it runs.
@@ -263,6 +263,6 @@ pub unsafe fn free_for_info(fi_void: *mut c_void) {
         // SAFETY: the String is owned, and null is fine for `xfree`.
         unsafe { xfree(fi.fi_string as *mut c_void) };
     }
-    // SAFETY: nothing reaches the `forinfo_T` after `:endfor`.
+    // SAFETY: nothing reaches the `ForInfo` after `:endfor`.
     unsafe { xfree(fi.raw() as *mut c_void) };
 }

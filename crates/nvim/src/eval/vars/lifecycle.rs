@@ -328,7 +328,7 @@ pub unsafe fn vars_clear_ext(ht: *mut hashtab_T, free_val: bool) {
     unsafe { hash_lock(ht) };
     for hi in unsafe { tv_ht_iter(ht) } {
         // Free the variable, unless it is one of the fixed ones embedded
-        // in a `funccall_S` or a scope dictionary.
+        // in a `FuncCall` or a scope dictionary.
         let v = unsafe { Di::new(tv_dict_hi2di(hi)) };
         if free_val {
             unsafe { tv_clear(v.field_ptr(offset_of!(DictItem, di_tv))) };

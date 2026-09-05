@@ -49,7 +49,7 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    CmdModFlags, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t,
+    Cleanup, CmdModFlags, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, exarg_T, int64_t,
     win_T,
 };
 use crate::window::{
@@ -61,8 +61,8 @@ use crate::winlayer::{buffers, last_window as last_listed_window, windows};
 use super::expand::find_buf;
 use crate::normal::visual_active;
 
-/// A pristine `cleanup_T` for [`enter_cleanup_now`] to fill in.
-const NO_CLEANUP: cleanup_T = cleanup_T {
+/// A pristine `Cleanup` for [`enter_cleanup_now`] to fill in.
+const NO_CLEANUP: Cleanup = Cleanup {
     pending: 0,
     exception: ptr::null_mut(),
 };
@@ -77,14 +77,14 @@ const NO_CLEANUP: cleanup_T = cleanup_T {
 
 /// Reset the error/interrupt/exception state, so that `aborting()` answers
 /// false while a window or buffer is closed. Paired with [`leave_cleanup_now`].
-fn enter_cleanup_now(cs: &mut cleanup_T) {
+fn enter_cleanup_now(cs: &mut Cleanup) {
     // SAFETY: a local to save the pending state into.
     unsafe { enter_cleanup(cs) };
 }
 
 /// Restore what [`enter_cleanup_now`] saved, unless a new aborting error,
 /// interrupt or uncaught exception has discarded it.
-fn leave_cleanup_now(cs: &mut cleanup_T) {
+fn leave_cleanup_now(cs: &mut Cleanup) {
     // SAFETY: the state `enter_cleanup` has just saved.
     unsafe { leave_cleanup(cs) };
 }

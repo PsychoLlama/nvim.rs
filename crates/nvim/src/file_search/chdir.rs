@@ -57,7 +57,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
         _ => scope_name,                     // manual, or following a window change
     };
 
-    let mut saved = save_v_event_T::default();
+    let mut saved = SaveVEvent::default();
     let dict = unsafe { get_v_event(&raw mut saved) };
     let key: &CStr = if pre { c"directory" } else { c"cwd" };
     let _ = unsafe { tv_dict_add_str(dict, key.as_ptr(), key.count_bytes(), new_dir) };

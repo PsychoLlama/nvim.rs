@@ -21,7 +21,7 @@ use crate::eval::typval::{
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, VAR_STRING, ufunc_T};
+use crate::types::{ColNr, LineNr, List, NUL, StaticList10, TypVal, UserFunc, VAR_STRING};
 use crate::winlayer::Live;
 use ::libc::{strcpy, strncpy};
 
@@ -110,7 +110,7 @@ pub(crate) unsafe fn fill_submatch_list(
     _argc: c_int,
     argv: *mut TypVal,
     argskip: c_int,
-    fp: *mut ufunc_T,
+    fp: *mut UserFunc,
 ) -> c_int {
     // SAFETY: `argv` has at least `argskip + 1` slots and `argv[argskip]`
     // holds the `StaticList10` the caller keeps alive across the call;

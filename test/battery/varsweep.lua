@@ -1077,7 +1077,7 @@ end)
 -- ---------------------------------------------------------------------
 
 section('s5-funcscope', function()
-  -- l: and a: live in a funccall_T, so every question about them has to
+  -- l: and a: live in a FuncCall, so every question about them has to
   -- be asked from inside a function.  find_var_in_scoped_ht() and the
   -- get_funccal_* accessors are the vars.rs side of that, and nothing
   -- outside a function reaches them at all.
@@ -1916,7 +1916,7 @@ section('s13-funcdef', function()
       { 'XFv5(1)', 'XFv5(1, 2)', 'XFv5(1, 2, 3)', 'XFv5(1, 2, 3, 4)' },
     },
     {
-      -- a:000 is a locked list living inside the funccall_T, not a
+      -- a:000 is a locked list living inside the FuncCall, not a
       -- separately allocated one.
       'varargslock',
       {
@@ -1940,7 +1940,7 @@ section('s13-funcdef', function()
     },
     {
       -- FIXVAR_CNT is 12: the thirteenth local spills out of the
-      -- funccall_T's embedded array and into the hashtab proper.
+      -- FuncCall's embedded array and into the hashtab proper.
       'fixvarspill',
       {
         'function! XFfix()',

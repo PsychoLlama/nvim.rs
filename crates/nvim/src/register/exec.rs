@@ -93,7 +93,7 @@ unsafe fn stuff_yank(regname: c_int, p: *mut c_char) -> Result<(), Failed> {
 /// # Safety
 /// `contents` must be null or NUL-terminated. Runs arbitrary autocommands.
 unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
-    let mut save_v_event = save_v_event_T {
+    let mut save_v_event = SaveVEvent {
         sve_did_save: false,
         sve_hashtab: hashtab_T::new(),
     };

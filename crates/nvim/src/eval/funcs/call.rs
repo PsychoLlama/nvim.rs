@@ -42,8 +42,8 @@ use crate::os::env::{expand_env_save, os_env_exists};
 use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST,
-    VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, funcdict_T, garray_T, uint8_t,
+    EvalFuncData, FuncDict, List, ListItem, NUL, Partial, Refcount, TypVal, VAR_DICT, VAR_FUNC,
+    VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VarNumber, VarType, garray_T, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -108,7 +108,7 @@ pub unsafe fn f_call(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
         let mut p = func;
         let name = &raw mut p;
         let flags = TFN_INT as c_int | TFN_QUIET as c_int;
-        let (fd, pt) = (ptr::null_mut::<funcdict_T>(), ptr::null_mut());
+        let (fd, pt) = (ptr::null_mut::<FuncDict>(), ptr::null_mut());
         // SAFETY: `p` walks a NUL-terminated string the frame owns.
         tofree = Owned(unsafe { trans_function_name(name, false, flags, fd, pt) });
         if tofree.0.is_null() {
@@ -386,7 +386,7 @@ fn common_function(args: Args, rettv: &mut TypVal, is_funcref: bool) {
             | TFN_QUIET as c_int
             | TFN_NO_AUTOLOAD as c_int
             | TFN_NO_DEREF as c_int;
-        let fd = ptr::null_mut::<funcdict_T>();
+        let fd = ptr::null_mut::<FuncDict>();
         // SAFETY: `name` walks a NUL-terminated string the frame owns.
         trans_name = Owned(unsafe { save_function_name(out, false, flags, fd) });
         // Anything left over means the name was not a name.

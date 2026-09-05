@@ -37,7 +37,7 @@ use crate::normal::{visual_active, visual_mode, visual_select};
 use crate::option::get_ve_flags;
 use crate::options::{OptVeFlags, kOptVeFlagAll, kOptVeFlagBlock, kOptVeFlagInsert};
 use crate::os::input::{input_available, input_get, os_breakcheck};
-use crate::types::{Direction, NUL, ProcType, VimState, hashtab_T, save_v_event_T, uint8_t};
+use crate::types::{Direction, NUL, ProcType, SaveVEvent, VimState, hashtab_T, uint8_t};
 use crate::ui::ui_flush;
 use crate::winlayer::{Cc, Win};
 
@@ -445,7 +445,7 @@ pub unsafe fn may_trigger_modechanged() {
 
     let mut pattern = modechanged_pattern(&old_mode, &curr_mode);
 
-    let mut save_v_event = save_v_event_T {
+    let mut save_v_event = SaveVEvent {
         sve_did_save: false,
         sve_hashtab: hashtab_T::new(),
     };

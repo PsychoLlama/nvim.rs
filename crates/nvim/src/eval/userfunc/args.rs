@@ -204,7 +204,7 @@ pub(crate) unsafe fn get_function_args(
 /// past `*argcount`.
 pub(crate) unsafe fn get_func_arguments(
     arg: *mut *mut c_char,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     partial_argc: c_int,
     argvars: *mut TypVal,
     argcount: *mut c_int,
@@ -315,7 +315,7 @@ pub(crate) unsafe fn add_nr_var(dp: *mut Dict, v: *mut DictItem, name: *mut c_ch
 ///
 /// # Safety
 /// `fp` is a live function.
-pub(crate) unsafe fn check_user_func_argcount(fp: *mut ufunc_T, argcount: c_int) -> c_int {
+pub(crate) unsafe fn check_user_func_argcount(fp: *mut UserFunc, argcount: c_int) -> c_int {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let f = unsafe { Uf::new(fp) };
     let regular_args = f.uf_args.ga_len;

@@ -53,8 +53,8 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CmdModFlags, CpoFlag, Failed, LineNr, NUL, buf_T, cleanup_T, exarg_T, memfile_T, size_t,
-    uint8_t, win_T,
+    Cleanup, CmdModFlags, CpoFlag, Failed, LineNr, NUL, buf_T, exarg_T, memfile_T, size_t, uint8_t,
+    win_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{curbuf_is_changed, u_read_undo, u_save, u_savedel, u_write_undo};
@@ -397,7 +397,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             if !old_curwin.is_null() {
                 let need_hide = curbuf_is_changed() && cur_buf().b_nwindows <= 1;
                 if !need_hide || buf_hide(curbuf.get()) {
-                    let mut cs: cleanup_T = unsafe { core::mem::zeroed() };
+                    let mut cs: Cleanup = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
                     unsafe {
                         win_close(curwin.get(), !need_hide && !buf_hide(curbuf.get()), false)

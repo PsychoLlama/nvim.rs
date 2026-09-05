@@ -1,7 +1,7 @@
 //! What the rest of the editor calls the evaluator through.
 //!
 //! Every entry point here brackets one evaluation: it sets up an
-//! `evalarg_T`, runs `eval0`, converts the result to whatever the caller
+//! `EvalArg`, runs `eval0`, converts the result to whatever the caller
 //! wanted, and clears the typval on both the success and the error path.
 //! The bracket is the whole content of the file — twenty-four times, with
 //! the differences in what is counted up around it (`emsg_skip`,
@@ -47,10 +47,10 @@ use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::types::{
-    Arena, Dict, Failed, List, NUL, Object, OptionSetFlags, Partial, ScriptCtx, String_0, TypVal,
-    VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, Vv, evalarg_T, exarg_T, funccal_entry_T, funcexe_T, garray_T, hashtab_T, ptrdiff_t,
-    save_v_event_T, size_t, ssize_t, typval_vval_union, uint8_t, win_T,
+    Arena, Dict, EvalArg, Failed, FuncCallEntry, FuncExe, List, NUL, Object, OptionSetFlags,
+    Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, exarg_T, garray_T, hashtab_T,
+    ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t, win_T,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -62,8 +62,8 @@ const UNSET_TV: TypVal = TypVal {
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// A freshly declared `evalarg_T`, before `fill_evalarg_from_eap`.
-const UNSET_EVALARG: evalarg_T = evalarg_T {
+/// A freshly declared `EvalArg`, before `fill_evalarg_from_eap`.
+const UNSET_EVALARG: EvalArg = EvalArg {
     eval_flags: 0,
     eval_getline: None,
     eval_cookie: null_mut(),
@@ -74,7 +74,7 @@ const UNSET_EVALARG: evalarg_T = evalarg_T {
 const NUMBUFLEN: usize = 65;
 
 /// One expression's evaluation state, owned by the frame that declared it.
-type Ev = Live<evalarg_T>;
+type Ev = Live<EvalArg>;
 
 /// An empty growable array.
 const UNSET_GA: garray_T = garray_T {
@@ -90,7 +90,7 @@ const UNSET_GA: garray_T = garray_T {
 ///
 /// # Safety
 /// `sve` must be valid.
-pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut Dict {
+pub unsafe fn get_v_event(sve: *mut SaveVEvent) -> *mut Dict {
     // SAFETY: `v:event` is a live dictionary from startup to exit.
     let v_event = unsafe { get_vim_var_dict(Vv::Event) };
     // SAFETY: the caller's promise about `sve`, and `v_event` as above.
@@ -112,7 +112,7 @@ pub unsafe fn get_v_event(sve: *mut save_v_event_T) -> *mut Dict {
 ///
 /// # Safety
 /// `v_event` and `sve` must be a pair `get_v_event` produced.
-pub unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut save_v_event_T) {
+pub unsafe fn restore_v_event(v_event: *mut Dict, sve: *mut SaveVEvent) {
     // SAFETY: the caller's promise -- the pair `get_v_event` produced.
     unsafe { tv_dict_free_contents(v_event) };
     // `tv_dict_free_contents` already left `v:event` with a fresh empty
@@ -136,14 +136,14 @@ pub unsafe fn eval_init() {
     func_init();
 }
 
-/// Set up an `evalarg_T` for an expression that is part of an Ex command.
+/// Set up an `EvalArg` for an expression that is part of an Ex command.
 ///
 /// The line-getter is carried over only while sourcing a script, which is
 /// what lets an expression there run onto a following line.
 ///
 /// # Safety
 /// `evalarg` must be valid; `eap` null or valid.
-pub unsafe fn fill_evalarg_from_eap(evalarg: *mut evalarg_T, eap: *mut exarg_T, skip: bool) {
+pub unsafe fn fill_evalarg_from_eap(evalarg: *mut EvalArg, eap: *mut exarg_T, skip: bool) {
     // SAFETY: the caller's promise -- `evalarg` outlives the call.
     let mut evalarg = unsafe { Ev::new(evalarg) };
     *evalarg = UNSET_EVALARG;
@@ -269,7 +269,7 @@ pub(crate) unsafe fn eval_expr_partial(
     if s.is_null() || unsafe { *s } as c_int == NUL {
         return Err(Failed);
     }
-    let mut funcexe: funcexe_T = FUNCEXE_INIT;
+    let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
     unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }?;
@@ -299,7 +299,7 @@ pub(crate) unsafe fn eval_expr_func(
     if s.is_null() || unsafe { *s } as c_int == NUL {
         return Err(Failed);
     }
-    let mut funcexe: funcexe_T = FUNCEXE_INIT;
+    let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }?;
     Ok(())
@@ -397,7 +397,7 @@ pub unsafe fn eval_to_string_skip(arg: *mut c_char, eap: *mut exarg_T, skip: boo
 /// # Safety
 /// `pp` must point at the cursor into a NUL-terminated expression;
 /// `evalarg` null or valid.
-pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut evalarg_T) -> Result<(), Failed> {
+pub unsafe fn skip_expr(pp: *mut *mut c_char, evalarg: *mut EvalArg) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a non-null `evalarg` outlives the
     // call.
     let ev = (!evalarg.is_null()).then(|| unsafe { Ev::new(evalarg) });
@@ -511,7 +511,7 @@ pub unsafe fn eval_to_string_safe(
     use_sandbox: bool,
     use_simple_function: bool,
 ) -> *mut c_char {
-    let mut funccal_entry = funccal_entry_T {
+    let mut funccal_entry = FuncCallEntry {
         top_funccal: null_mut(),
         next: null_mut(),
     };
@@ -621,7 +621,7 @@ pub unsafe fn call_vim_function(
         }
         // SAFETY: the caller's promise about `rettv`.
         unsafe { (*rettv).v_type = VAR_UNKNOWN };
-        let mut funcexe: funcexe_T = FUNCEXE_INIT;
+        let mut funcexe: FuncExe = FUNCEXE_INIT;
         funcexe.fe_firstline = cur_win().w_cursor.lnum;
         funcexe.fe_lastline = cur_win().w_cursor.lnum;
         funcexe.fe_evaluate = true;
@@ -747,7 +747,7 @@ pub unsafe fn eval_foldtext(wp: *mut win_T) -> Object {
     let use_sandbox = unsafe { was_set_insecurely(wp, kOptFoldtext, OptionSetFlags::LOCAL) };
     // SAFETY: as above; the window outlives this call.
     let arg = unsafe { Win::new(wp) }.w_onebuf_opt.wo_fdt;
-    let mut funccal_entry = funccal_entry_T {
+    let mut funccal_entry = FuncCallEntry {
         top_funccal: null_mut(),
         next: null_mut(),
     };

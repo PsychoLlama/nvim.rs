@@ -1,6 +1,6 @@
 //! Lambdas, closures and partials -- the anonymous half.
 //!
-//! `get_lambda_tv` parses `{x -> expr}` into a real `ufunc_T` with a
+//! `get_lambda_tv` parses `{x -> expr}` into a real `UserFunc` with a
 //! generated `<lambda>N` name and, if it captured anything, a reference to
 //! the funccall it was made in (`register_closure`).  `make_partial` is the
 //! other way a callable carries state: a bound dictionary, bound arguments,
@@ -23,7 +23,7 @@ use crate::types::{Failed, Refcount};
 ///
 /// # Safety
 /// `fp` is a live function and a funccall is running.
-pub(crate) unsafe fn register_closure(fp: *mut ufunc_T) {
+pub(crate) unsafe fn register_closure(fp: *mut UserFunc) {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let mut f = unsafe { Uf::new(fp) };
     if f.uf_scoped == current_funccal.get() {
@@ -35,7 +35,7 @@ pub(crate) unsafe fn register_closure(fp: *mut ufunc_T) {
     unsafe { (*fc).fc_refcount.retain() };
     unsafe { ga_grow(&raw mut (*fc).fc_ufuncs, 1) };
     let ufuncs = unsafe { &raw mut (*fc).fc_ufuncs };
-    unsafe { *((*ufuncs).ga_data as *mut *mut ufunc_T).offset((*ufuncs).ga_len as isize) = fp };
+    unsafe { *((*ufuncs).ga_data as *mut *mut UserFunc).offset((*ufuncs).ga_len as isize) = fp };
     unsafe { (*ufuncs).ga_len += 1 };
 }
 
@@ -64,13 +64,13 @@ unsafe fn get_lambda_name(into: &mut [c_char; LAMBDA_NAME_LEN]) -> String_0 {
     )
 }
 
-/// Allocate a `ufunc_T` for a function called `name`, whose name lives in the
+/// Allocate a `UserFunc` for a function called `name`, whose name lives in the
 /// flexible member at the end of the allocation.
 ///
 /// # Safety
 /// `name` has `namelen` readable bytes.
-pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut ufunc_T {
-    let fp = unsafe { xcalloc(1, offset_of!(ufunc_T, uf_name) + namelen + 1) } as *mut ufunc_T;
+pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut UserFunc {
+    let fp = unsafe { xcalloc(1, offset_of!(UserFunc, uf_name) + namelen + 1) } as *mut UserFunc;
     // SAFETY: the allocation ends in `namelen + 1` bytes for the name.
     let into = uf_name_ptr(fp) as *mut c_void;
     unsafe { xmemcpyz(into, name as *const c_void, namelen) };
@@ -101,7 +101,7 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut u
 pub unsafe fn get_lambda_tv(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
 ) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
     let evaluate = !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE != 0;
@@ -259,7 +259,7 @@ pub unsafe fn get_lambda_tv(
 pub unsafe fn make_partial(selfdict: *mut Dict, rettv: *mut TypVal) {
     // SAFETY: the caller's promise -- `rettv` holds the funcref just read.
     let mut rv = unsafe { Tv::new(rettv) };
-    let mut fp: *mut ufunc_T = ptr::null_mut();
+    let mut fp: *mut UserFunc = ptr::null_mut();
     let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
     let mut error = 0;
 
@@ -334,7 +334,7 @@ pub unsafe fn make_partial(selfdict: *mut Dict, rettv: *mut TypVal) {
     rv.vval.v_partial = pt;
 }
 
-/// Wrap a Lua reference in a `ufunc_T`, so that Vimscript can call it by
+/// Wrap a Lua reference in a `UserFunc`, so that Vimscript can call it by
 /// name.  Answers that name.
 ///
 /// # Safety

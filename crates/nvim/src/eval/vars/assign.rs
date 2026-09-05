@@ -168,7 +168,7 @@ pub unsafe fn ex_let(eap: *mut exarg_T) {
     expr = unsafe { skipwhite(expr) };
 
     let skipping = (ea.skip != 0).then(Suppress::emsg_skip);
-    let mut evalarg = evalarg_T {
+    let mut evalarg = EvalArg {
         eval_flags: 0,
         eval_getline: None,
         eval_cookie: ptr::null_mut(),

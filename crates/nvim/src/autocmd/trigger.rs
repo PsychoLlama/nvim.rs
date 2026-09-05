@@ -241,7 +241,7 @@ unsafe extern "C" fn deferred_event(argv: *mut *mut ::core::ffi::c_void) {
     // SAFETY: `err` is this frame's own.
     let buf = unsafe { find_buffer_by_handle((*e).buf, &mut err) };
     if !buf.is_null() {
-        let mut save_v_event = save_v_event_T::default();
+        let mut save_v_event = SaveVEvent::default();
         // SAFETY: `save_v_event` is this frame's own storage, and the
         // dictionary is `v:event`, live until `restore_v_event` below.
         let v_event = unsafe { get_v_event(&raw mut save_v_event) };
@@ -371,7 +371,7 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     }
     recursive.set(true);
 
-    let mut save_v_event = save_v_event_T::default();
+    let mut save_v_event = SaveVEvent::default();
     // SAFETY: `save_v_event` is this frame's own storage, and the dictionary
     // `get_v_event` hands back is `v:event`, live until `restore_v_event`.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };

@@ -36,9 +36,9 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA,
-    VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock, evalarg_T, exarg_T, funccal_entry_T, ptrdiff_t,
-    size_t, typval_vval_union,
+    EvalArg, FuncCallEntry, LineNr, NUL, ScriptCtx, TypVal, VAR_FLAVOUR_DEFAULT,
+    VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN, VarFlavour, VarLock, exarg_T,
+    ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::ui::ui_has;
 
@@ -49,8 +49,8 @@ const UNSET_TV: TypVal = TypVal {
     vval: typval_vval_union { v_number: 0 },
 };
 
-/// A freshly declared `evalarg_T`.
-const UNSET_EVALARG: evalarg_T = evalarg_T {
+/// A freshly declared `EvalArg`.
+const UNSET_EVALARG: EvalArg = EvalArg {
     eval_flags: 0,
     eval_getline: None,
     eval_cookie: null_mut(),
@@ -292,7 +292,7 @@ pub unsafe fn var_flavour(varname: *mut c_char) -> VarFlavour {
 /// # Safety
 /// `name` must be NUL-terminated; `vartv`'s ownership moves here.
 pub unsafe fn var_set_global(name: *const c_char, mut vartv: TypVal) {
-    let mut funccall_entry = funccal_entry_T {
+    let mut funccall_entry = FuncCallEntry {
         top_funccal: null_mut(),
         next: null_mut(),
     };

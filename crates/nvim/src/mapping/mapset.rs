@@ -101,7 +101,7 @@ pub unsafe fn f_mapset(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFun
     };
     let mut rhs_lua = LUA_NOREF;
     // SAFETY: as above; `callback_di` is null or one of `d`'s own items, and
-    // `find_func` answers null or a live `ufunc_T`.
+    // `find_func` answers null or a live `UserFunc`.
     unsafe {
         let key = c"callback".count_bytes() as _;
         let callback_di = tv_dict_find(d, c"callback".as_ptr(), key);

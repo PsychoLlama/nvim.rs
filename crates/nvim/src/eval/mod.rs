@@ -32,9 +32,8 @@ use crate::types::TAB;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, Blob, ChannelStreamType, Dict, ExprType, Failed, GRegFlags, LineNr, List, ListWatch,
-    LuaRetMode, MarkGet, MotionType, Object, Partial, TypVal, funcexe_T, lval_T, size_t, timer_T,
-    uint64_t,
+    Array, Blob, ChannelStreamType, Dict, ExprType, Failed, FuncExe, GRegFlags, LVal, LineNr, List,
+    ListWatch, LuaRetMode, MarkGet, MotionType, Object, Partial, Timer, TypVal, size_t, uint64_t,
 };
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
@@ -86,13 +85,13 @@ pub(crate) type Tv = Live<TypVal>;
 
 /// A registered timer. The promise is discharged by the reference count:
 /// nothing here holds one across a call that has not taken a reference.
-pub(crate) type Tm = Live<timer_T>;
+pub(crate) type Tm = Live<Timer>;
 
 /// One `:for` loop's iteration state, owned by the `:endfor` that frees it.
-pub(crate) type Fi = Live<forinfo_T>;
+pub(crate) type Fi = Live<ForInfo>;
 
 /// The left-hand side [`get_lval`] parsed, owned by the caller's frame.
-pub(crate) type Lv = Live<lval_T>;
+pub(crate) type Lv = Live<LVal>;
 
 pub const _ISalnum: c_uint = 8;
 pub const REGSUB_MAGIC: c_uint = 2;
@@ -123,7 +122,7 @@ pub type GlvStatus = c_uint;
 pub const GLV_OK: GlvStatus = 1;
 pub const GLV_FAIL: GlvStatus = 0;
 #[derive(Clone)]
-pub struct forinfo_T {
+pub struct ForInfo {
     pub fi_semicolon: c_int,
     pub fi_varcount: c_int,
     pub fi_lw: ListWatch,
@@ -206,10 +205,10 @@ static last_timer_id: GlobalCell<uint64_t> = GlobalCell::new(1 as uint64_t);
 /// this keeps and the reentrancy rule it answers: a timer's callback runs
 /// Vimscript, which can start and stop timers, so nothing holds a borrow of
 /// this across one.
-static timers: GlobalCell<SlotTable<uint64_t, *mut timer_T>> = GlobalCell::new(SlotTable::new());
+static timers: GlobalCell<SlotTable<uint64_t, *mut Timer>> = GlobalCell::new(SlotTable::new());
 static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
-pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
+pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,
     fe_firstline: 0 as LineNr,
     fe_lastline: 0 as LineNr,

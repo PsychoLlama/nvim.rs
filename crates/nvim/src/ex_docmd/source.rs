@@ -46,8 +46,7 @@ use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
 use crate::types::{
-    Failed, IOSIZE, LineGetter, LineNr, OptInt, Vv, except_T, garray_T, msglist_T, ptrdiff_t,
-    size_t,
+    Exception, Failed, IOSIZE, LineGetter, LineNr, MsgList, OptInt, Vv, garray_T, ptrdiff_t, size_t,
 };
 
 use crate::winlayer::{Buf, Live, Win};
@@ -58,7 +57,7 @@ use crate::winlayer::{Buf, Live, Win};
 type Dbg = Live<dbg_stuff>;
 
 /// The exception `handle_did_throw` is reporting, live until it discards it.
-type Exc = Live<except_T>;
+type Exc = Live<Exception>;
 
 /// The stored lines a `:while`/`:for` body is replayed from, owned by the
 /// frame running the loop.
@@ -248,7 +247,7 @@ pub unsafe fn handle_did_throw() {
     // `discard_current_exception` below.
     let mut exception = unsafe { Exc::new(current_exception.get()) };
     let mut reported: *mut c_char = ptr::null_mut();
-    let mut messages: *mut msglist_T = ptr::null_mut();
+    let mut messages: *mut MsgList = ptr::null_mut();
 
     match exception.type_0 as c_uint {
         0 => {

@@ -16,21 +16,20 @@ pub type ArgvFunc = Option<
         ::core::ffi::c_int,
         *mut TypVal,
         ::core::ffi::c_int,
-        *mut ufunc_T,
+        *mut UserFunc,
     ) -> ::core::ffi::c_int,
 >;
-pub struct funccal_entry {
+pub struct FuncCallEntry {
     pub top_funccal: *mut ::core::ffi::c_void,
-    pub next: *mut funccal_entry_T,
+    pub next: *mut FuncCallEntry,
 }
-pub type funccal_entry_T = funccal_entry;
-pub struct funcdict_T {
+pub struct FuncDict {
     pub fd_dict: *mut Dict,
     pub fd_newkey: *mut ::core::ffi::c_char,
     pub fd_di: *mut DictItem,
 }
 #[derive(Copy, Clone)]
-pub struct funcexe_T {
+pub struct FuncExe {
     pub fe_argv_func: ArgvFunc,
     pub fe_firstline: LineNr,
     pub fe_lastline: LineNr,

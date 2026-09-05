@@ -2,7 +2,7 @@
 //!
 //! `get_lval` walks a name and its subscripts down to the container and key
 //! that `set_var_lval` will write through. The two halves communicate only
-//! through `lval_T`, and which of its fields are set is what says *what
+//! through `LVal`, and which of its fields are set is what says *what
 //! kind* of assignment this is:
 //!
 //! | `ll_tv` | `ll_blob` | `ll_newkey` | `ll_range` | the target |
@@ -61,9 +61,9 @@ use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::strings::vim_strchr;
 use crate::types::{
-    Dict, DictItem, FAIL, Failed, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT,
-    VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, hashtab_T, kListLenUnknown, lval_T, ptrdiff_t,
-    size_t, typval_vval_union, uint8_t,
+    Dict, DictItem, FAIL, Failed, LVal, List, NUL, OK, TypVal, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT,
+    VAR_LIST, VAR_UNKNOWN, VarLock, VarNumber, hashtab_T, kListLenUnknown, ptrdiff_t, size_t,
+    typval_vval_union, uint8_t,
 };
 
 /// A freshly declared typval.
@@ -125,7 +125,7 @@ pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *co
 /// `lp` must be valid with `ll_tv` a Dict; the rest as `get_lval`'s.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn get_lval_dict_item(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     name: *mut c_char,
     key: *mut c_char,
     len: c_int,
@@ -268,7 +268,7 @@ pub(crate) unsafe fn get_lval_dict_item(
 /// # Safety
 /// `lp` must be valid with `ll_tv` a Blob; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_blob(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     var1: *mut TypVal,
     var2: *mut TypVal,
     empty1: bool,
@@ -306,7 +306,7 @@ pub(crate) unsafe fn get_lval_blob(
 /// # Safety
 /// `lp` must be valid with `ll_tv` a List; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_list(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     var1: *mut TypVal,
     var2: *mut TypVal,
     empty1: bool,
@@ -324,8 +324,8 @@ pub(crate) unsafe fn get_lval_list(
     let lp = unsafe { Lv::new(lp) };
     let (rec, n1, n2) = (
         lp.raw(),
-        lp.field_ptr::<c_int>(offset_of!(lval_T, ll_n1)),
-        lp.field_ptr::<c_int>(offset_of!(lval_T, ll_n2)),
+        lp.field_ptr::<c_int>(offset_of!(LVal, ll_n1)),
+        lp.field_ptr::<c_int>(offset_of!(LVal, ll_n2)),
     );
     let first = if empty1 {
         0
@@ -373,7 +373,7 @@ pub(crate) unsafe fn get_lval_list(
 /// NUL-terminated `name`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn get_lval_subscript(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     mut p: *mut c_char,
     name: *mut c_char,
     rettv: *mut TypVal,
@@ -575,7 +575,7 @@ pub(crate) unsafe fn get_lval_subscript(
 pub unsafe fn get_lval(
     name: *mut c_char,
     rettv: *mut TypVal,
-    lp: *mut lval_T,
+    lp: *mut LVal,
     unlet: bool,
     skip: bool,
     flags: c_int,
@@ -585,7 +585,7 @@ pub unsafe fn get_lval(
     // SAFETY: the caller's promise; every field is written before it is read.
     let mut lp = unsafe { Lv::new(lp) };
     // SAFETY: as above -- the whole record is the caller's.
-    unsafe { lp.raw().cast::<u8>().write_bytes(0, size_of::<lval_T>()) };
+    unsafe { lp.raw().cast::<u8>().write_bytes(0, size_of::<LVal>()) };
 
     if skip {
         // Only the name matters; nothing is resolved.
@@ -690,7 +690,7 @@ pub unsafe fn get_lval(
 ///
 /// # Safety
 /// `lp` must be valid.
-pub unsafe fn clear_lval(lp: *mut lval_T) {
+pub unsafe fn clear_lval(lp: *mut LVal) {
     // SAFETY: the caller's promise; both strings are `get_lval`'s own.
     let lp = unsafe { Lv::new(lp) };
     // SAFETY: as above -- both are owned, and null is fine for `xfree`.
@@ -707,7 +707,7 @@ pub unsafe fn clear_lval(lp: *mut lval_T) {
 /// `lp` must come from `get_lval`; `endp` must point into the same writable
 /// string; `rettv` must be valid.
 pub unsafe fn set_var_lval(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     endp: *mut c_char,
     rettv: *mut TypVal,
     copy: bool,
@@ -867,7 +867,7 @@ pub unsafe fn set_var_lval(
 /// # Safety
 /// As `set_var_lval`.
 unsafe fn set_whole_var(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     endp: *mut c_char,
     rettv: *mut TypVal,
     copy: bool,
@@ -938,7 +938,7 @@ unsafe fn set_whole_var(
 ///
 /// # Safety
 /// As `set_var_lval`, with `lp->ll_blob` set.
-unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut TypVal, op: *const c_char) -> bool {
+unsafe fn set_blob_var(lp: *mut LVal, rettv: *mut TypVal, op: *const c_char) -> bool {
     // SAFETY: the caller's promise -- both outlive the call.
     let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {

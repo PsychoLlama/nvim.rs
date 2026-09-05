@@ -181,7 +181,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buf: Buf, dirname_start: *const c_cha
         // Delete the buffer and its swap file. `wipe_buffer` calls
         // `close_buffer`, which may run autocommands, so a pending
         // exception or `:return` has to be parked over the call.
-        let mut cs = cleanup_T {
+        let mut cs = Cleanup {
             pending: 0,
             exception: ptr::null_mut(),
         };

@@ -1,10 +1,10 @@
-//! The funccall_T stack, the function table, and the GC roots.
+//! The FuncCall stack, the function table, and the GC roots.
 //!
 //! Three families that all read the same two globals.  `create_funccal` /
 //! `cleanup_function_call` / `funccal_unref` own the funccall's lifetime --
 //! including the case where a closure outlives the call that made it and
 //! the funccall has to be kept alive with it.  `func_ref`/`func_unref` and
-//! the `func_clear*` group own the `ufunc_T`'s.  The `set_ref_in_*` group
+//! the `func_clear*` group own the `UserFunc`'s.  The `set_ref_in_*` group
 //! is what the garbage collector calls to mark everything reachable from a
 //! call in progress, and `find_var_in_scoped_ht` is how a closure body
 //! reaches the `l:` of the call it captured.
@@ -75,7 +75,7 @@ impl FuncTable {
         unsafe { hash_find(self.0, name) }
     }
 
-    /// Add `key` — a `ufunc_T`'s own `uf_name` — to the table.
+    /// Add `key` — a `UserFunc`'s own `uf_name` — to the table.
     ///
     /// # Safety
     /// `key` must be a NUL-terminated string that outlives the entry.
@@ -86,7 +86,7 @@ impl FuncTable {
 
     /// Point the entry `hi` at a different key: the function it names has
     /// been redefined, so the entry stays and the key it holds moves to the
-    /// new `ufunc_T`'s own inline name.
+    /// new `UserFunc`'s own inline name.
     ///
     /// # Safety
     /// `hi` must be a slot of this table and `key` the same name, in
@@ -121,11 +121,11 @@ pub fn func_tbl_get() -> *mut hashtab_T {
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn fc_ufuncs(fc: *mut funccall_T) -> *mut [*mut ufunc_T] {
+unsafe fn fc_ufuncs(fc: *mut FuncCall) -> *mut [*mut UserFunc] {
     // SAFETY: the caller's promise -- `fc` is a live funccall, so its
     // `fc_ufuncs` garray holds `ga_len` initialised function pointers.
     let ga = unsafe { &raw mut (*fc).fc_ufuncs };
-    let (data, len) = unsafe { ((*ga).ga_data as *mut *mut ufunc_T, (*ga).ga_len as usize) };
+    let (data, len) = unsafe { ((*ga).ga_data as *mut *mut UserFunc, (*ga).ga_len as usize) };
     ptr::slice_from_raw_parts_mut(data, len)
 }
 
@@ -133,16 +133,16 @@ unsafe fn fc_ufuncs(fc: *mut funccall_T) -> *mut [*mut ufunc_T] {
 ///
 /// # Safety
 /// `fc` has been through [`cleanup_function_call`] and is off every list.
-unsafe fn free_funccal(fc: *mut funccall_T) {
+unsafe fn free_funccal(fc: *mut FuncCall) {
     // SAFETY: the caller's promise -- `fc` is a live funccall off every list.
     let frame = unsafe { Fc::new(fc) };
     for i in 0..frame.fc_ufuncs.ga_len as usize {
         // SAFETY: `i` is inside the garray `fc_ufuncs` just measured.
         let fp = unsafe { (*fc_ufuncs(fc))[i] };
-        // When garbage collecting, a funccall_T may be freed before the
+        // When garbage collecting, a FuncCall may be freed before the
         // function that references it, so clear its `uf_scoped`.  The
         // function may have been redefined and now point at another
-        // funccall_T; don't clear it then.
+        // FuncCall; don't clear it then.
         if !fp.is_null() && unsafe { (*fp).uf_scoped } == fc {
             unsafe { (*fp).uf_scoped = ptr::null_mut() };
         }
@@ -162,7 +162,7 @@ unsafe fn free_funccal(fc: *mut funccall_T) {
 ///
 /// # Safety
 /// `fc` is a parked funccall, already unlinked from `previous_funccal`.
-unsafe fn free_funccal_contents(fc: *mut funccall_T) {
+unsafe fn free_funccal_contents(fc: *mut FuncCall) {
     // All l: variables, then all a: variables, then the a:000 items.
     // SAFETY: the caller's promise -- `fc` is a parked funccall, so the two
     // scope hashtables and the `a:000` list are its own and unreferenced.
@@ -180,7 +180,7 @@ unsafe fn free_funccal_contents(fc: *mut funccall_T) {
 ///
 /// # Safety
 /// `fc` is the funccall that has just finished, and is `current_funccal`.
-pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
+pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
     let mut free_fc = true;
     // SAFETY: the caller's promise -- `fc` is the funccall that has just
     // finished, and every scope below is its own.
@@ -196,7 +196,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
     }
 
     // If the a:000 list and the l: and a: dicts are not referenced and no
-    // closure is using them, the funccall_T and what is in it can go.
+    // closure is using them, the FuncCall and what is in it can go.
     if may_free_fc && frame.fc_l_avars.dv_refcount == Refcount::new(DO_NOT_FREE_CNT) {
         unsafe { vars_clear_ext(&raw mut (*fc).fc_l_avars.dv_hashtab, false) };
     } else {
@@ -237,7 +237,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
         made_copy.set(0);
     } else {
         made_copy.set(made_copy.get() + 1);
-        if made_copy.get() >= (4096 * 1024 / size_of::<funccall_T>()) as c_int {
+        if made_copy.get() >= (4096 * 1024 / size_of::<FuncCall>()) as c_int {
             // Four megabytes' worth of copies, which happens when a
             // function that references itself is called repeatedly.  Ask
             // for a collection soon rather than grow without bound.
@@ -252,7 +252,7 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut funccall_T) {
 ///
 /// # Safety
 /// `fc` is null or a live funccall; `fp` is a live function.
-pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force: bool) {
+pub(crate) unsafe fn funccal_unref(fc: *mut FuncCall, fp: *mut UserFunc, force: bool) {
     if fc.is_null() {
         return;
     }
@@ -280,7 +280,7 @@ pub(crate) unsafe fn funccal_unref(fc: *mut funccall_T, fp: *mut ufunc_T, force:
 ///
 /// # Safety
 /// `fp` is a live function.
-pub(crate) unsafe fn func_remove(fp: *mut ufunc_T) -> bool {
+pub(crate) unsafe fn func_remove(fp: *mut UserFunc) -> bool {
     // SAFETY: the caller's promise -- `fp` is a live function, so its
     // inline name is the key it was added under.
     let hi = unsafe { func_table().find(uf_name_ptr(fp)) };
@@ -296,7 +296,7 @@ pub(crate) unsafe fn func_remove(fp: *mut ufunc_T) -> bool {
 ///
 /// # Safety
 /// `fp` is a live function.
-pub(crate) unsafe fn func_clear_items(fp: *mut ufunc_T) {
+pub(crate) unsafe fn func_clear_items(fp: *mut UserFunc) {
     // SAFETY: the caller's promise -- `fp` is a live function, so the three
     // garrays, the Lua reference and the three counters are all its own.
     let mut f = unsafe { Uf::new(fp) };
@@ -311,9 +311,9 @@ pub(crate) unsafe fn func_clear_items(fp: *mut ufunc_T) {
     // Addresses, not reads: `field_ptr` is the object's address plus a
     // constant, so naming the three counters needs no dereference.
     let counters: [*mut *mut c_void; 3] = [
-        f.field_ptr(offset_of!(ufunc_T, uf_tml_count)),
-        f.field_ptr(offset_of!(ufunc_T, uf_tml_total)),
-        f.field_ptr(offset_of!(ufunc_T, uf_tml_self)),
+        f.field_ptr(offset_of!(UserFunc, uf_tml_count)),
+        f.field_ptr(offset_of!(UserFunc, uf_tml_total)),
+        f.field_ptr(offset_of!(UserFunc, uf_tml_self)),
     ];
     for counter in counters {
         unsafe { xfree(*counter) };
@@ -325,7 +325,7 @@ pub(crate) unsafe fn func_clear_items(fp: *mut ufunc_T) {
 ///
 /// # Safety
 /// `fp` is a live function.
-unsafe fn func_clear(fp: *mut ufunc_T, force: bool) {
+unsafe fn func_clear(fp: *mut UserFunc, force: bool) {
     // SAFETY: the caller's promise -- `fp` is a live function.
     let mut f = unsafe { Uf::new(fp) };
     if f.uf_cleared {
@@ -341,7 +341,7 @@ unsafe fn func_clear(fp: *mut ufunc_T, force: bool) {
 ///
 /// # Safety
 /// `fp` has been through [`func_clear`].
-unsafe fn func_free(fp: *mut ufunc_T) {
+unsafe fn func_free(fp: *mut UserFunc) {
     // SAFETY: the caller's promise -- `fp` has been through `func_clear`.
     let mut f = unsafe { Uf::new(fp) };
     // Only remove it when not done already, otherwise we would remove a
@@ -358,7 +358,7 @@ unsafe fn func_free(fp: *mut ufunc_T) {
 ///
 /// # Safety
 /// `fp` is a live function that nothing is running.
-pub(crate) unsafe fn func_clear_free(fp: *mut ufunc_T, force: bool) {
+pub(crate) unsafe fn func_clear_free(fp: *mut UserFunc, force: bool) {
     // SAFETY: the caller's promise, handed straight on to both.
     unsafe { func_clear(fp, force) };
     unsafe { func_free(fp) };
@@ -369,10 +369,10 @@ pub(crate) unsafe fn func_clear_free(fp: *mut ufunc_T, force: bool) {
 ///
 /// # Safety
 /// `fp` is a live function and `rettv` outlives the call.
-pub unsafe fn create_funccal(fp: *mut ufunc_T, rettv: *mut TypVal) -> *mut funccall_T {
+pub unsafe fn create_funccal(fp: *mut UserFunc, rettv: *mut TypVal) -> *mut FuncCall {
     // SAFETY: a fresh, zeroed allocation of the right size, and the
     // caller's promise that `fp` is live and `rettv` outlives the call.
-    let fc = unsafe { xcalloc(1, size_of::<funccall_T>()) } as *mut funccall_T;
+    let fc = unsafe { xcalloc(1, size_of::<FuncCall>()) } as *mut FuncCall;
     let mut frame = unsafe { Fc::new(fc) };
     frame.fc_caller = current_funccal.get();
     current_funccal.set(fc);
@@ -384,14 +384,13 @@ pub unsafe fn create_funccal(fp: *mut ufunc_T, rettv: *mut TypVal) -> *mut funcc
 
 /// The stack of saved call stacks: what `save_funccal` pushes when something
 /// (an autocommand, a callback) has to run outside the call in progress.
-pub(crate) static funccal_stack: GlobalCell<*mut funccal_entry_T> =
-    GlobalCell::new(ptr::null_mut());
+pub(crate) static funccal_stack: GlobalCell<*mut FuncCallEntry> = GlobalCell::new(ptr::null_mut());
 
 /// Put the call stack aside, so that what runs next starts from nothing.
 ///
 /// # Safety
 /// `entry` outlives the matching [`restore_funccal`].
-pub unsafe fn save_funccal(entry: *mut funccal_entry_T) {
+pub unsafe fn save_funccal(entry: *mut FuncCallEntry) {
     // SAFETY: the caller's promise -- `entry` outlives the restore.
     let mut saved = unsafe { Live::new(entry) };
     saved.top_funccal = current_funccal.get() as *mut c_void;
@@ -410,17 +409,17 @@ pub unsafe fn restore_funccal() {
     // SAFETY: `save_funccal`'s caller promised the entry outlives this, and
     // the stack is this module's own.
     let saved = unsafe { Live::new(top) };
-    current_funccal.set(saved.top_funccal as *mut funccall_T);
+    current_funccal.set(saved.top_funccal as *mut FuncCall);
     funccal_stack.set(saved.next);
 }
 
 /// The call in progress, or null.
-pub unsafe fn get_current_funccal() -> *mut funccall_T {
+pub unsafe fn get_current_funccal() -> *mut FuncCall {
     current_funccal.get()
 }
 
 /// Make `fc` the call in progress.
-pub unsafe fn set_current_funccal(fc: *mut funccall_T) {
+pub unsafe fn set_current_funccal(fc: *mut FuncCall) {
     current_funccal.set(fc);
 }
 
@@ -447,7 +446,7 @@ pub unsafe fn func_unref(name: *mut c_char) {
 ///
 /// # Safety
 /// `fp` is null or a live function.
-pub unsafe fn func_ptr_unref(fp: *mut ufunc_T) {
+pub unsafe fn func_ptr_unref(fp: *mut UserFunc) {
     if fp.is_null() {
         return;
     }
@@ -484,7 +483,7 @@ pub unsafe fn func_ref(name: *mut c_char) {
 ///
 /// # Safety
 /// `fp` is null or a live function.
-pub unsafe fn func_ptr_ref(fp: *mut ufunc_T) {
+pub unsafe fn func_ptr_ref(fp: *mut UserFunc) {
     if !fp.is_null() {
         // SAFETY: the caller's promise, and `fp` is not null.
         unsafe { (*fp).uf_refcount.retain() };
@@ -493,12 +492,12 @@ pub unsafe fn func_ptr_ref(fp: *mut ufunc_T) {
 
 /// Whether anything outside `fc` still holds it.
 ///
-/// `l:`, `a:` and `a:000` all live inside the funccall_T, so a reference to
+/// `l:`, `a:` and `a:000` all live inside the FuncCall, so a reference to
 /// any of them is a reference to the whole thing.
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn fc_referenced(fc: *const funccall_T) -> bool {
+unsafe fn fc_referenced(fc: *const FuncCall) -> bool {
     // SAFETY: the caller's promise -- `fc` is a live funccall.
     let frame = unsafe { Fc::new(fc.cast_mut()) };
     frame.fc_l_varlist.lv_refcount != Refcount::new(DO_NOT_FREE_CNT)
@@ -511,7 +510,7 @@ unsafe fn fc_referenced(fc: *const funccall_T) -> bool {
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn can_free_funccal(fc: *mut funccall_T, copyID: c_int) -> bool {
+unsafe fn can_free_funccal(fc: *mut FuncCall, copyID: c_int) -> bool {
     // SAFETY: the caller's promise -- `fc` is a live funccall.
     let frame = unsafe { Fc::new(fc) };
     frame.fc_l_varlist.lv_copyID != copyID
@@ -549,7 +548,7 @@ enum Sweep {
 /// Unlink and free every parked funccall `doomed` accepts; answers whether
 /// any went.
 ///
-/// The C threads a `funccall_T **` through the list so that the head and an
+/// The C threads a `FuncCall **` through the list so that the head and an
 /// interior link are written the same way. The head here is a cell, so the
 /// walk carries the *previous* node instead and writes through whichever of
 /// the two is right.
@@ -568,10 +567,10 @@ enum Sweep {
 /// invariant.
 unsafe fn unlink_parked_funccals(
     stop: Sweep,
-    mut doomed: impl FnMut(*mut funccall_T) -> bool,
+    mut doomed: impl FnMut(*mut FuncCall) -> bool,
 ) -> bool {
     let mut freed = false;
-    let mut prev = ptr::null_mut::<funccall_T>();
+    let mut prev = ptr::null_mut::<FuncCall>();
     loop {
         // The cursor, re-loaded from the list rather than remembered: see
         // the note above.
@@ -606,7 +605,7 @@ unsafe fn unlink_parked_funccals(
 }
 
 /// The funccall the debugger is looking at, which `:backtrace` moves.
-pub unsafe fn get_funccal() -> *mut funccall_T {
+pub unsafe fn get_funccal() -> *mut FuncCall {
     let mut funccal = current_funccal.get();
     // The bound is re-read every step on purpose: the overflow arm below
     // lowers it, and that is what ends the walk.
@@ -857,7 +856,7 @@ pub unsafe fn set_ref_in_previous_funccal(copyID: c_int) -> bool {
 /// # Safety
 /// `fc` is a live funccall.
 unsafe fn scopes_of(
-    fc: *mut funccall_T,
+    fc: *mut FuncCall,
 ) -> (*mut hashtab_T, *mut hashtab_T, *mut crate::types::List) {
     // SAFETY: the caller's promise; a field's address is the object's plus a
     // constant, so none of the three reads it.
@@ -874,7 +873,7 @@ unsafe fn scopes_of(
 ///
 /// # Safety
 /// `fc` is a live funccall.
-unsafe fn set_ref_in_funccal(fc: *mut funccall_T, copyID: c_int) -> bool {
+unsafe fn set_ref_in_funccal(fc: *mut FuncCall, copyID: c_int) -> bool {
     // SAFETY: the caller's promise -- `fc` is a live funccall, so the three
     // scopes and the function are its own.
     let mut frame = unsafe { Fc::new(fc) };
@@ -908,7 +907,7 @@ pub unsafe fn set_ref_in_call_stack(copyID: c_int) -> bool {
 
     let mut entry = funccal_stack.get();
     while !entry.is_null() {
-        let mut fc = unsafe { (*entry).top_funccal } as *mut funccall_T;
+        let mut fc = unsafe { (*entry).top_funccal } as *mut FuncCall;
         while !fc.is_null() {
             if unsafe { set_ref_in_funccal(fc, copyID) } {
                 return true;
@@ -934,7 +933,7 @@ pub unsafe fn set_ref_in_functions(copyID: c_int) -> bool {
             todo -= 1;
             // The key *is* the function's trailing name member, so the
             // function is that many bytes before it.
-            let fp = unsafe { hi.hi_key.sub(offset_of!(ufunc_T, uf_name)) } as *mut ufunc_T;
+            let fp = unsafe { hi.hi_key.sub(offset_of!(UserFunc, uf_name)) } as *mut UserFunc;
             let named = unsafe { func_name_refcount(uf_name_ptr(fp)) };
             if !named && unsafe { set_ref_in_func(ptr::null_mut(), fp, copyID) } {
                 return true;
@@ -962,7 +961,7 @@ pub unsafe fn set_ref_in_func_args(copyID: c_int) -> bool {
 ///
 /// # Safety
 /// `name` is null or NUL-terminated; `fp_in` is null or a live function.
-pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut ufunc_T, copyID: c_int) -> bool {
+pub unsafe fn set_ref_in_func(name: *mut c_char, fp_in: *mut UserFunc, copyID: c_int) -> bool {
     if name.is_null() && fp_in.is_null() {
         return false;
     }

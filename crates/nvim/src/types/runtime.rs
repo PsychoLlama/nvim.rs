@@ -43,14 +43,14 @@ pub enum EstackInfo {
     /// modeline, an exception, `--cmd` arguments, and so on.
     None,
     /// A user function -- the frame's `es_name` is its name.
-    UserFunction(*mut ufunc_T),
+    UserFunction(*mut UserFunc),
     /// The autocommand walk this frame is running.
     Autocommand(*mut AutoPatCmd),
 }
 
 impl EstackInfo {
     /// The user function this frame is running, if it is running one.
-    pub fn user_function(self) -> Option<*mut ufunc_T> {
+    pub fn user_function(self) -> Option<*mut UserFunc> {
         match self {
             EstackInfo::UserFunction(ufunc) => Some(ufunc),
             _ => None,

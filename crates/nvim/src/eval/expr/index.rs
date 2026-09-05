@@ -33,9 +33,9 @@ use crate::message::emsg;
 use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
-    Dict, DictItem, EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
+    Dict, DictItem, EvalArg, EvalFuncData, Failed, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT,
     VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, evalarg_T, ptrdiff_t, size_t, ssize_t, typval_vval_union,
+    VarNumber, ptrdiff_t, size_t, ssize_t, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -49,7 +49,7 @@ const UNSET_TV: TypVal = TypVal {
 ///
 /// # Safety
 /// `evalarg` must be null or valid.
-unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
+unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
     !evalarg.is_null() && unsafe { (*evalarg).eval_flags } & EVAL_EVALUATE as c_int != 0
 }
 
@@ -62,7 +62,7 @@ unsafe fn evaluating(evalarg: *const evalarg_T) -> bool {
 pub(crate) unsafe fn eval_index(
     arg: *mut *mut c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
@@ -466,7 +466,7 @@ pub(crate) unsafe fn string_slice(
 pub(crate) unsafe fn handle_subscript(
     arg: *mut *const c_char,
     rettv: *mut TypVal,
-    evalarg: *mut evalarg_T,
+    evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the

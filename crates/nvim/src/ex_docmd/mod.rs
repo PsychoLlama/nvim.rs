@@ -70,9 +70,9 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArgt, Handle,
-    LineGetter, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues,
-    dobuf_action_values, dobuf_start_values, exarg_T, except_T, garray_T, uint8_t, uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArgt, Exception,
+    Handle, LineGetter, LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues,
+    dobuf_action_values, dobuf_start_values, exarg_T, garray_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -213,7 +213,7 @@ pub const DIALOG_MSG_SIZE: c_uint = 1000;
 pub struct dbg_stuff {
     pub trylevel: c_int,
     pub force_abort: c_int,
-    pub caught_stack: *mut except_T,
+    pub caught_stack: *mut Exception,
     pub vv_exception: *mut c_char,
     pub vv_throwpoint: *mut c_char,
     pub did_emsg: c_int,
@@ -221,7 +221,7 @@ pub struct dbg_stuff {
     pub did_throw: bool,
     pub need_rethrow: c_int,
     pub check_cstack: c_int,
-    pub current_exception: *mut except_T,
+    pub current_exception: *mut Exception,
 }
 pub struct loop_cookie {
     pub lines_gap: *mut garray_T,

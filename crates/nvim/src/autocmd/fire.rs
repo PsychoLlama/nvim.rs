@@ -363,7 +363,7 @@ pub unsafe fn apply_autocmds_group(
         }
 
         // Don't use the caller's function-local variables.
-        let mut funccal_entry = funccal_entry_T {
+        let mut funccal_entry = FuncCallEntry {
             top_funccal: ::core::ptr::null_mut(),
             next: ::core::ptr::null_mut(),
         };

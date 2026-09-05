@@ -75,12 +75,12 @@ pub unsafe fn tv_dict_item_alloc(key: *const ::core::ffi::c_char) -> *mut DictIt
 }
 
 /// Clear `item`'s value and free it, if it was allocated (rather than embedded
-/// in a `funccall_S`'s fixed-variable array or a scope dictionary).
+/// in a `FuncCall`'s fixed-variable array or a scope dictionary).
 ///
 /// # Safety
 /// `item` must be a live item that is **not** in any hashtab — remove it
 /// first, or the hashtab is left pointing at freed memory. An item with
-/// `DI_FLAGS_ALLOC` is dangling afterwards; one embedded in a `funccall_S`
+/// `DI_FLAGS_ALLOC` is dangling afterwards; one embedded in a `FuncCall`
 /// or a scope dictionary is merely emptied.
 pub unsafe fn tv_dict_item_free(item: *mut DictItem) {
     unsafe { tv_clear(&raw mut (*item).di_tv) };
@@ -413,19 +413,19 @@ pub unsafe fn tv_dict_add_allocated_str(
 ///
 /// # Safety
 /// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
-/// and `fp` points at a live `ufunc_T` whose `uf_name` is `uf_namelen`
+/// and `fp` points at a live `UserFunc` whose `uf_name` is `uf_namelen`
 /// readable bytes. Only the name is copied; the funcref counts as a use of
 /// the function.
 pub unsafe fn tv_dict_add_func(
     d: *mut Dict,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
-    fp: *mut ufunc_T,
+    fp: *mut UserFunc,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     let name = unsafe { (&raw mut (*fp).uf_name).cast() };
     // SAFETY: the caller's promise: a live function.
-    let func = unsafe { Live::<ufunc_T>::new(fp) };
+    let func = unsafe { Live::<UserFunc>::new(fp) };
     let namelen = func.uf_namelen;
     let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
     unsafe {

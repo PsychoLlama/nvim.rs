@@ -140,7 +140,7 @@ unsafe fn ex_unletlock(
 /// `lp` is a resolved lvalue, `name_end` points into the command line and
 /// `eap` is live.
 unsafe fn do_unlet_var(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     name_end: *mut c_char,
     eap: *mut exarg_T,
     _deep: c_int,
@@ -332,7 +332,7 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
 /// # Safety
 /// As [`do_unlet_var`].
 unsafe fn do_lock_var(
-    lp: *mut lval_T,
+    lp: *mut LVal,
     _name_end: *mut c_char,
     eap: *mut exarg_T,
     deep: c_int,

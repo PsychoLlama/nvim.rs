@@ -27,7 +27,7 @@ use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{FAIL, Failed, LineNr, OptInt, cleanup_T, exarg_T, except_T, win_T};
+use crate::types::{Cleanup, Exception, FAIL, Failed, LineNr, OptInt, exarg_T, win_T};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
@@ -173,9 +173,9 @@ fn handled_swap_exists() {
 /// Reset the error/interrupt/exception state around closing a window, so
 /// that `aborting()` answers false while it happens.
 fn with_clean_error_state(f: impl FnOnce()) {
-    let mut cs = cleanup_T {
+    let mut cs = Cleanup {
         pending: 0,
-        exception: ptr::null_mut::<except_T>(),
+        exception: ptr::null_mut::<Exception>(),
     };
     // SAFETY: a local the matching `leave_cleanup` below hands back.
     unsafe { enter_cleanup(&raw mut cs) };

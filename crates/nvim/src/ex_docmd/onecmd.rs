@@ -67,12 +67,12 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::profile::{func_line_exec, script_line_exec};
 use crate::runtime::{do_finish, getsourceline, source_finished};
-use crate::types::{CmdAddr, ExArgt, FAIL, IOSIZE, LineGetter, NUL, cstack_T, exarg_T, size_t};
+use crate::types::{CmdAddr, CondStack, ExArgt, FAIL, IOSIZE, LineGetter, NUL, exarg_T, size_t};
 use crate::winlayer::{Buf, Ea, Live, Win};
 
 /// The conditional stack the command is running under, whose caller has
 /// promised it outlives the value.
-type Cs = Live<cstack_T>;
+type Cs = Live<CondStack>;
 use ::libc::strcpy;
 
 /// A zeroed `exarg_T` with the empty range the parsers start from.
@@ -187,7 +187,7 @@ pub(crate) fn skip_cmd(eap: Ea) -> bool {
 pub(crate) unsafe fn do_one_cmd(
     cmdlinep: *mut *mut c_char,
     flags: DoCmdOpts,
-    cstack: *mut cstack_T,
+    cstack: *mut CondStack,
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) -> *mut c_char {
@@ -624,7 +624,7 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 /// inactive, and each is worth a profile sample.
 pub(crate) unsafe fn profile_cmd(
     eap: *const exarg_T,
-    cstack: *mut cstack_T,
+    cstack: *mut CondStack,
     fgetline: LineGetter,
     cookie: *mut c_void,
 ) {

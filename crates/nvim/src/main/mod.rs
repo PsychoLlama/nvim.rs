@@ -14,17 +14,17 @@ use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
-    EStackType, EstackInfo, FILE, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos,
-    MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime,
-    Refcount, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, UV_MUTEX_INIT,
-    UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T,
-    caller_scope, cmdmod_T, estack_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T,
-    garray_T, int16_t, int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t,
-    nvim_stats_s, pos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T,
-    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
-    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
-    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
-    vimmenu_T, win_T, xfmark_T,
+    EStackType, EstackInfo, Exception, FILE, Handle, Hlf, LineNr, Loop, LuaRef, LuaRetMode, MTNode,
+    MTPos, MarkTreeIter, MarkTreeIter_s, MsgList, MultiQueue, NS, Object, OptInt, OptMagic, Proc,
+    ProfTime, Refcount, RgbValue, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax,
+    UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
+    bufref_T, caller_scope, cmdmod_T, estack_T, file_comparison, fmark_T, fmarkv_T, frame_T,
+    garray_T, int16_t, int32_t, int64_t, lpos_T, match_T, nlua_ref_state_t, nvim_stats_s, pos_T,
+    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, tabpage_T, uint8_t, uint32_t,
+    uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
+    xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -570,18 +570,18 @@ pub static debug_did_msg: GlobalCell<bool> = GlobalCell::new(false);
 pub static debug_tick: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static debug_backtrace_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static do_profiling: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static current_exception: GlobalCell<*mut except_T> =
-    GlobalCell::new(::core::ptr::null_mut::<except_T>());
+pub static current_exception: GlobalCell<*mut Exception> =
+    GlobalCell::new(::core::ptr::null_mut::<Exception>());
 pub static did_throw: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_rethrow: GlobalCell<bool> = GlobalCell::new(false);
 pub static check_cstack: GlobalCell<bool> = GlobalCell::new(false);
 pub static trylevel: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static force_abort: GlobalCell<bool> = GlobalCell::new(false);
-pub static msg_list: GlobalCell<*mut *mut msglist_T> =
-    GlobalCell::new(::core::ptr::null_mut::<*mut msglist_T>());
+pub static msg_list: GlobalCell<*mut *mut MsgList> =
+    GlobalCell::new(::core::ptr::null_mut::<*mut MsgList>());
 pub static suppress_errthrow: GlobalCell<bool> = GlobalCell::new(false);
-pub static caught_stack: GlobalCell<*mut except_T> =
-    GlobalCell::new(::core::ptr::null_mut::<except_T>());
+pub static caught_stack: GlobalCell<*mut Exception> =
+    GlobalCell::new(::core::ptr::null_mut::<Exception>());
 pub static may_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
 pub static want_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
 pub static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);

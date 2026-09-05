@@ -425,7 +425,7 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut oparg_T, reg: *mut yankreg_T) {
     }
     recursive.set(true);
 
-    let mut save_v_event = save_v_event_T {
+    let mut save_v_event = SaveVEvent {
         sve_did_save: false,
         sve_hashtab: hashtab_T::new(),
     };

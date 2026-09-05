@@ -1,4 +1,4 @@
-//! Calling a user function: the funccall_T's whole life.
+//! Calling a user function: the FuncCall's whole life.
 //!
 //! `call_user_func` builds the `a:` and `l:` scopes in the funccall's
 //! embedded storage, evaluates the default arguments in order, runs the
@@ -44,7 +44,7 @@ fn verbose_report(body: impl FnOnce()) {
 /// `fp` is a live function, `argvars` holds `argcount` values, and `rettv`
 /// is an uninitialised return value.
 pub unsafe fn call_user_func(
-    fp: *mut ufunc_T,
+    fp: *mut UserFunc,
     argcount: c_int,
     argvars: *mut TypVal,
     rettv: *mut TypVal,
@@ -80,7 +80,7 @@ pub unsafe fn call_user_func(
     f.uf_calls += 1;
     line_breakcheck(); // check for CTRL-C hit
 
-    // Prepare the funccall_T.
+    // Prepare the FuncCall.
     let fc = unsafe { create_funccal(fp, rettv) };
     // SAFETY: `create_funccal` answers the live funccall this call owns.
     let mut frame = unsafe { Fc::new(fc) };
@@ -88,7 +88,7 @@ pub unsafe fn call_user_func(
     // SAFETY: `fp` is live, so its inline name is a NUL-terminated string.
     frame.fc_breakpoint = unsafe { dbg_find_breakpoint(false, uf_name_ptr(fp), 0) };
     frame.fc_dbg_tick = debug_tick.get();
-    let slot = size_of::<*mut ufunc_T>() as c_int;
+    let slot = size_of::<*mut UserFunc>() as c_int;
     unsafe { ga_init(&raw mut (*fc).fc_ufuncs, slot, 1) };
 
     let islambda = unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") };
@@ -97,7 +97,7 @@ pub unsafe fn call_user_func(
     // VAR_SHORT_LEN long.  Handing out slots of it rather than allocating
     // each argument variable saves a lot of time -- and the *address* of
     // a slot is what goes into the hashtab, which is why the array lives
-    // in the funccall_T and cannot be a `Vec`.
+    // in the FuncCall and cannot be a `Vec`.
     let mut fixvar_idx = 0;
     let fixvar_base = unsafe { &raw mut (*fc).fc_fixvar } as *mut funccall_S_fc_fixvar;
     let take_fixvar = |idx: &mut c_int| -> *mut DictItem {
@@ -469,11 +469,11 @@ pub unsafe fn call_user_func(
 /// # Safety
 /// `fp` is a live function and `funcexe` describes the call.
 pub(crate) unsafe fn call_user_func_check(
-    fp: *mut ufunc_T,
+    fp: *mut UserFunc,
     argcount: c_int,
     argvars: *mut TypVal,
     rettv: *mut TypVal,
-    funcexe: *mut funcexe_T,
+    funcexe: *mut FuncExe,
     selfdict: *mut Dict,
 ) -> c_int {
     // SAFETY: the caller's promise -- `fp` is a live function.

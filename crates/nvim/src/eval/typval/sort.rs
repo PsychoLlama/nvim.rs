@@ -52,7 +52,7 @@ pub(crate) unsafe fn item_compare(
     };
 
     let mut res;
-    // SAFETY: the `sortinfo_T` the sort set up.
+    // SAFETY: the `SortInfo` the sort set up.
     let sort_info = unsafe { Si::new(info) };
     if sort_info.item_compare_numbers {
         let v1 = unsafe { tv_get_number(tv1) };
@@ -155,7 +155,7 @@ pub(crate) unsafe fn item_compare2(
     keep_zero: bool,
 ) -> ::core::ffi::c_int {
     let info = sortinfo.get();
-    // SAFETY: the `sortinfo_T` the sort set up.
+    // SAFETY: the `SortInfo` the sort set up.
     let mut sort_info = unsafe { Si::new(info) };
     let partial = sort_info.item_compare_partial;
 
@@ -236,7 +236,7 @@ pub(crate) unsafe extern "C" fn item_compare2_not_keeping_zero(
 
 /// Which comparator `info` selects: the built-in ordering, or the user
 /// function.
-fn sorter(info: *const sortinfo_T, keep_zero: bool) -> ListSorter {
+fn sorter(info: *const SortInfo, keep_zero: bool) -> ListSorter {
     let builtin =
         unsafe { (*info).item_compare_func.is_null() && (*info).item_compare_partial.is_null() };
     Some(match (builtin, keep_zero) {
@@ -260,7 +260,7 @@ fn sort_item(item: *mut ListItem, idx: ::core::ffi::c_int) -> ListSortItem {
 }
 
 /// `sort()` over `l`, in place.
-pub(crate) unsafe fn do_sort(l: *mut List, info: *mut sortinfo_T) {
+pub(crate) unsafe fn do_sort(l: *mut List, info: *mut SortInfo) {
     let len = unsafe { tv_list_len(l) };
 
     // Make an array with each entry pointing to an item in the List.
@@ -272,7 +272,7 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut sortinfo_T) {
         unsafe { *ptrs.add(i) = sort_item(li, i as ::core::ffi::c_int) };
     }
 
-    // SAFETY: the caller's `sortinfo_T`.
+    // SAFETY: the caller's `SortInfo`.
     let mut sort_info = unsafe { Si::new(info) };
     sort_info.item_compare_func_err = false;
     let item_compare_func = sorter(info, false);
@@ -299,7 +299,7 @@ pub(crate) unsafe fn do_sort(l: *mut List, info: *mut sortinfo_T) {
 }
 
 /// `uniq()` over `l`, in place: drop each item equal to the one before it.
-pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut sortinfo_T) {
+pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut SortInfo) {
     let len = unsafe { tv_list_len(l) };
 
     // Upstream allocates this array and never fills it — `uniq` walks the
@@ -307,7 +307,7 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut sortinfo_T) {
     let ptrs = unsafe { xmalloc(len as usize * ::core::mem::size_of::<ListSortItem>()) }
         as *mut ListSortItem;
 
-    // SAFETY: the caller's `sortinfo_T`.
+    // SAFETY: the caller's `SortInfo`.
     let mut sort_info = unsafe { Si::new(info) };
     sort_info.item_compare_func_err = false;
     let compare = sorter(info, true).expect("non-null function pointer");
@@ -351,10 +351,10 @@ pub(crate) unsafe fn do_uniq(l: *mut List, info: *mut sortinfo_T) {
 /// reads that field long after this returns.
 pub(crate) unsafe fn parse_sort_uniq_args(
     argvars: *mut TypVal,
-    info: *mut sortinfo_T,
+    info: *mut SortInfo,
     how: &mut NumBuf,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's stack `sortinfo_T`.
+    // SAFETY: the caller's stack `SortInfo`.
     let mut sort_info = unsafe { Si::new(info) };
     sort_info.item_compare_ic = 0;
     sort_info.item_compare_lc = false;

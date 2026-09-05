@@ -112,7 +112,7 @@ unsafe fn call_function_with(
     {
         let _nesting = enter_recursive(&recursive);
         let mut rettv: TypVal = TV_INITIAL_VALUE;
-        let mut funcexe: funcexe_T = FUNCEXE_INIT;
+        let mut funcexe: FuncExe = FUNCEXE_INIT;
         // SAFETY: there is always a current window.
         let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
         funcexe.fe_firstline = lnum;

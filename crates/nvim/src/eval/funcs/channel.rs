@@ -41,9 +41,9 @@ use crate::runtime::exestack;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, ArenaMem, Array, Blob, CallbackReader, ChannelPart, Error, EvalFuncData, Object,
-    ScriptCtx, String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber,
-    funccal_entry_T, funccall_T, uint64_t,
+    Arena, ArenaMem, Array, Blob, CallbackReader, ChannelPart, Error, EvalFuncData, FuncCall,
+    FuncCallEntry, Object, ScriptCtx, String_0, TypVal, VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING,
+    VarNumber, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -235,7 +235,7 @@ struct ProviderScope {
     autocmd_match: *mut c_char,
     autocmd_fname_full: bool,
     autocmd_bufnr: c_int,
-    funccal: funccal_entry_T,
+    funccal: FuncCallEntry,
 }
 
 impl ProviderScope {
@@ -250,7 +250,7 @@ impl ProviderScope {
             autocmd_match: autocmd_match.get(),
             autocmd_fname_full: autocmd_fname_full.get(),
             autocmd_bufnr: autocmd_bufnr.get(),
-            funccal: funccal_entry_T {
+            funccal: FuncCallEntry {
                 top_funccal: ptr::null_mut(),
                 next: ptr::null_mut(),
             },
@@ -266,7 +266,7 @@ impl ProviderScope {
         autocmd_match.set(unsafe { (*scope).autocmd_match });
         autocmd_fname_full.set(unsafe { (*scope).autocmd_fname_full });
         autocmd_bufnr.set(unsafe { (*scope).autocmd_bufnr });
-        unsafe { set_current_funccal((*scope).funccalp as *mut funccall_T) };
+        unsafe { set_current_funccal((*scope).funccalp as *mut FuncCall) };
         saved
     }
 

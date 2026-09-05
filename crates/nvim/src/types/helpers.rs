@@ -13,9 +13,9 @@ use super::*;
 
 #[derive(Copy, Clone)]
 pub struct TryState {
-    pub current_exception: *mut except_T,
-    pub private_msg_list: *mut msglist_T,
-    pub msg_list: *const *const msglist_T,
+    pub current_exception: *mut Exception,
+    pub private_msg_list: *mut MsgList,
+    pub msg_list: *const *const MsgList,
     pub got_int: ::core::ffi::c_int,
     pub did_throw: bool,
     pub need_rethrow: ::core::ffi::c_int,

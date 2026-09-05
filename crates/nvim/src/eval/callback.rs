@@ -23,9 +23,9 @@ use crate::lua::executor::{
 use crate::main::{e_command_too_recursive, p_mfd};
 use crate::memory::xstrdup;
 use crate::types::{
-    Arena, Callback, CallbackReader, FAIL, HtStack, ListStack, NUL, OK, OptInt, Partial, TypVal,
-    VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv,
-    funcexe_T, typval_vval_union,
+    Arena, Callback, CallbackReader, FAIL, FuncExe, HtStack, ListStack, NUL, OK, OptInt, Partial,
+    TypVal, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN,
+    VarLock, Vv, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -188,7 +188,7 @@ pub unsafe fn callback_call(
         Callback::None => return false,
     }
 
-    let mut funcexe: funcexe_T = FUNCEXE_INIT;
+    let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_firstline = cur_win().w_cursor.lnum;
     funcexe.fe_lastline = cur_win().w_cursor.lnum;
     funcexe.fe_evaluate = true;

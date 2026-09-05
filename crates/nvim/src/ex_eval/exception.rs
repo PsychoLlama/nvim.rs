@@ -1,7 +1,7 @@
 //! The exception object: how an error, an interrupt or a `:throw` becomes a
 //! catchable value, and what happens to it afterwards.
 //!
-//! An exception is an [`except_T`] holding the value a `:catch` pattern is
+//! An exception is an [`Exception`] holding the value a `:catch` pattern is
 //! matched against, the throw point (`v:throwpoint`), a stack trace, and --
 //! for an error exception -- the message list it was built from. Exactly one
 //! can be *being thrown* at a time (`current_exception` plus `did_throw`);
@@ -61,8 +61,8 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::tr_plural;
 use crate::types::{
-    ExceptType, Failed, IOSIZE, List, NUL, Vv, cstack_T, except_T, exception_state_T, int64_t,
-    msglist_T, ptrdiff_t,
+    CondStack, ExceptType, Exception, ExceptionState, Failed, IOSIZE, List, MsgList, NUL, Vv,
+    int64_t, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -175,7 +175,7 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
         plist = unsafe { &raw mut (**plist).next };
     }
 
-    let elem: *mut msglist_T = unsafe { xmalloc(size_of::<msglist_T>()) }.cast();
+    let elem: *mut MsgList = unsafe { xmalloc(size_of::<MsgList>()) }.cast();
     unsafe { (*elem).msg = xstrdup(mesg) };
     unsafe { (*elem).multiline = multiline };
     unsafe { (*elem).next = ptr::null_mut() };
@@ -205,7 +205,7 @@ unsafe fn append_msg(mesg: *const c_char, multiline: bool, concat: bool, severe:
 ///
 /// # Safety
 /// `l` heads a message list this owns.
-unsafe fn free_msglist(l: *mut msglist_T) {
+unsafe fn free_msglist(l: *mut MsgList) {
     // SAFETY: caller contract.
     let mut messages = l;
     while !messages.is_null() {
@@ -233,7 +233,7 @@ pub(crate) unsafe fn free_global_msglist() {
 ///
 /// # Safety
 /// Module contract; `cstack`, when non-null, is the running one.
-pub(crate) unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
+pub(crate) unsafe fn do_errthrow(cstack: *mut CondStack, cmdname: *mut c_char) {
     // Abort every command in nested calls and sourced files immediately.
     if cause_abort.get() {
         cause_abort.set(false);
@@ -262,7 +262,7 @@ pub(crate) unsafe fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
 ///
 /// # Safety
 /// Module contract; `cstack` is the running conditional stack.
-pub(crate) unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
+pub(crate) unsafe fn do_intthrow(cstack: *mut CondStack) -> bool {
     // No interrupt, or no try conditional active and nothing being thrown:
     // do nothing, for the sake of non-EH scripts.
     if !got_int.get() || (trylevel.get() == 0 && !did_throw.get()) {
@@ -315,7 +315,7 @@ pub(crate) unsafe fn get_exception_string(
     }
     unsafe { *should_free = true };
 
-    let mesg = unsafe { (*value.cast::<msglist_T>()).throw_msg };
+    let mesg = unsafe { (*value.cast::<MsgList>()).throw_msg };
     let ret;
 
     let val = if !cmdname.is_null() && unsafe { *cmdname } != NUL as c_char {
@@ -419,7 +419,7 @@ pub(super) unsafe fn throw_exception(
         }
     }
 
-    let excp: *mut except_T = unsafe { xmalloc(size_of::<except_T>()) }.cast();
+    let excp: *mut Exception = unsafe { xmalloc(size_of::<Exception>()) }.cast();
     if type_0 == ET_ERROR {
         // Keep the original messages; the value is prefixed below.
         unsafe { (*excp).messages = value.cast() };
@@ -438,7 +438,7 @@ pub(super) unsafe fn throw_exception(
     unsafe { (*excp).type_0 = type_0 };
     // An error exception throws from where the message was made, which
     // is not where we are now.
-    let entry = value.cast::<msglist_T>();
+    let entry = value.cast::<MsgList>();
     if type_0 == ET_ERROR && !unsafe { (*entry).sfile }.is_null() {
         unsafe { (*excp).throw_name = (*entry).sfile };
         unsafe { (*entry).sfile = ptr::null_mut() };
@@ -502,7 +502,7 @@ unsafe fn verbose_exception(mesg: &CStr, value: *mut c_char) {
 ///
 /// # Safety
 /// Module contract; `excp` is owned and not on the caught stack.
-pub(super) unsafe fn discard_exception(excp: *mut except_T, was_finished: bool) {
+pub(super) unsafe fn discard_exception(excp: *mut Exception, was_finished: bool) {
     if current_exception.get() == excp {
         current_exception.set(ptr::null_mut());
     }
@@ -560,7 +560,7 @@ pub(crate) unsafe fn discard_current_exception() {
 ///
 /// # Safety
 /// Module contract; `excp`, when non-null, is a live exception.
-unsafe fn set_exception_vars(excp: *mut except_T) {
+unsafe fn set_exception_vars(excp: *mut Exception) {
     // Where `v:throwpoint` is rendered; upstream shares `IObuff`.
     let mut throwpoint = [0 as c_char; IOSIZE as usize];
     // SAFETY: caller contract.
@@ -598,7 +598,7 @@ unsafe fn set_exception_vars(excp: *mut except_T) {
 ///
 /// # Safety
 /// Module contract; `excp` is the exception just matched.
-pub(super) unsafe fn catch_exception(excp: *mut except_T) {
+pub(super) unsafe fn catch_exception(excp: *mut Exception) {
     // SAFETY: caller contract.
     unsafe { (*excp).caught = caught_stack.get() };
     caught_stack.set(excp);
@@ -611,7 +611,7 @@ pub(super) unsafe fn catch_exception(excp: *mut except_T) {
 ///
 /// # Safety
 /// Module contract; `excp` is the top of the caught stack.
-pub(super) unsafe fn finish_exception(excp: *mut except_T) {
+pub(super) unsafe fn finish_exception(excp: *mut Exception) {
     // SAFETY: caller contract.
     if excp != caught_stack.get() {
         unsafe { internal_error(c"finish_exception()".as_ptr()) };
@@ -626,7 +626,7 @@ pub(super) unsafe fn finish_exception(excp: *mut except_T) {
 ///
 /// # Safety
 /// Module contract; `estate` is writable.
-pub(crate) unsafe fn exception_state_save(estate: *mut exception_state_T) {
+pub(crate) unsafe fn exception_state_save(estate: *mut ExceptionState) {
     // SAFETY: caller contract.
     unsafe { (*estate).estate_current_exception = current_exception.get() };
     unsafe { (*estate).estate_did_throw = did_throw.get() };
@@ -640,7 +640,7 @@ pub(crate) unsafe fn exception_state_save(estate: *mut exception_state_T) {
 ///
 /// # Safety
 /// Module contract; `estate` was filled by [`exception_state_save`].
-pub(crate) unsafe fn exception_state_restore(estate: *mut exception_state_T) {
+pub(crate) unsafe fn exception_state_restore(estate: *mut ExceptionState) {
     // SAFETY: caller contract.
     if did_throw.get() {
         unsafe { handle_did_throw() };
@@ -710,7 +710,7 @@ unsafe fn report_pending(action: PendingAction, pending: c_int, value: *mut c_vo
             let out = pending_msg.as_mut_ptr();
             unsafe { vim_snprintf(out, IOSIZE as usize, mesg, c"Exception".as_ptr()) };
             mesg = unsafe { concat_str(out, c": %s".as_ptr()) };
-            unsafe { (*value.cast::<except_T>()).value }
+            unsafe { (*value.cast::<Exception>()).value }
         }
         _ if pending & CSTP_ERROR != 0 && pending & CSTP_INTERRUPT != 0 => {
             c"Error and interrupt".as_ptr().cast_mut()

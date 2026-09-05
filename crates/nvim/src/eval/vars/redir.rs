@@ -44,7 +44,7 @@ pub fn assert_error(message: &[u8]) {
 ///
 /// A NULL `redir_lval` means no redirection is running; a NULL `redir_endp`
 /// means one is, but failed, so the teardown should only free.
-static redir_lval: GlobalCell<*mut lval_T> = GlobalCell::new(ptr::null_mut());
+static redir_lval: GlobalCell<*mut LVal> = GlobalCell::new(ptr::null_mut());
 /// The text collected so far, without a terminator: the NUL goes on once, in
 /// [`var_redir_stop`], when the buffer has stopped growing.
 static redir_ga: GlobalCell<Vec<u8>> = GlobalCell::new(Vec::new());
@@ -81,7 +81,7 @@ pub unsafe fn var_redir_start(name: *mut c_char, append: bool) -> Result<(), Fai
     // The name is used again in `var_redir_stop`, so it is copied for as
     // long as the redirection runs.
     redir_varname.set(unsafe { xstrdup(name) });
-    redir_lval.set(unsafe { xcalloc(1, ::core::mem::size_of::<lval_T>()) } as *mut lval_T);
+    redir_lval.set(unsafe { xcalloc(1, ::core::mem::size_of::<LVal>()) } as *mut LVal);
     // The output is collected here until redirection ends.
     redir_ga.with_mut(|text| {
         text.clear();

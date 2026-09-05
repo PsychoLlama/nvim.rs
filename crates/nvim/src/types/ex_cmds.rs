@@ -279,7 +279,7 @@ pub struct exarg {
     pub errmsg: Option<::std::ffi::CString>,
     pub ea_getline: LineGetter,
     pub cookie: *mut ::core::ffi::c_void,
-    pub cstack: *mut cstack_T,
+    pub cstack: *mut CondStack,
 }
 pub type exarg_T = exarg;
 

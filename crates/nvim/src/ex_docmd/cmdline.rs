@@ -59,7 +59,7 @@ use crate::runtime::{
 
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Failed, LineGetter, LineNr, OptInt, cstack_T, eslist_T, estack_T, garray_T, msglist_T, size_t,
+    CondStack, EsList, Failed, LineGetter, LineNr, MsgList, OptInt, estack_T, garray_T, size_t,
 };
 use crate::ui::ui_has;
 
@@ -75,12 +75,12 @@ pub(crate) fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 
-/// A zeroed `cstack_T` with the "no conditional open" index the C's
+/// A zeroed `CondStack` with the "no conditional open" index the C's
 /// `{ .cs_idx = -1 }` sets.
-fn empty_cstack() -> cstack_T {
-    // SAFETY: `cstack_T` is a `repr(C)` aggregate of scalars, arrays and
+fn empty_cstack() -> CondStack {
+    // SAFETY: `CondStack` is a `repr(C)` aggregate of scalars, arrays and
     // pointers; all-zero is a valid value of every one of them.
-    let mut cstack: cstack_T = unsafe { core::mem::zeroed() };
+    let mut cstack: CondStack = unsafe { core::mem::zeroed() };
     cstack.cs_idx = -1;
     cstack
 }
@@ -168,7 +168,7 @@ pub unsafe fn do_cmdline(
     // `do_errthrow` in `do_one_cmd` would join an earlier invocation's
     // messages to a later invocation's command name — which is what
     // happens when a BufWritePost autocommand runs after a write error.
-    let mut private_msg_list: *mut msglist_T = ptr::null_mut();
+    let mut private_msg_list: *mut MsgList = ptr::null_mut();
     let saved_msg_list = msg_list.get();
     msg_list.set(&raw mut private_msg_list);
 
@@ -722,7 +722,7 @@ pub unsafe fn do_cmdline(
 
     msg_list.set(saved_msg_list);
 
-    let mut elem: *mut eslist_T = cstack.cs_emsg_silent_list;
+    let mut elem: *mut EsList = cstack.cs_emsg_silent_list;
     while !elem.is_null() {
         let next = unsafe { (*elem).next };
         xfree(elem as *mut c_void);
@@ -765,7 +765,7 @@ fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr) -> LineNr 
 }
 
 /// `do_errthrow()` as checked code.
-fn do_errthrow(cstack: *mut cstack_T, cmdname: *mut c_char) {
+fn do_errthrow(cstack: *mut CondStack, cmdname: *mut c_char) {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::ex_eval::do_errthrow(cstack, cmdname) }
 }
@@ -808,7 +808,7 @@ fn gettext(__msgid: *const ::core::ffi::c_char) -> *mut ::core::ffi::c_char {
 
 /// `rewind_conditionals()` as checked code.
 fn rewind_conditionals(
-    cstack: *mut cstack_T,
+    cstack: *mut CondStack,
     idx: c_int,
     cond_type: CsFlags,
     cond_level: *mut c_int,

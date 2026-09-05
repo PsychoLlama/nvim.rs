@@ -20,10 +20,10 @@ use crate::runtime::do_source_str;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Dict, DictItem, Error, ExprAST, ExprASTNode, ExprASTNodeType,
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
-    Integer, KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight,
+    FuncExe, Integer, KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, Partial, String_0, TryState,
-    TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, exarg_T, funcexe_T, garray_T,
-    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, uint64_t,
+    TypVal, UVarNumber, VAR_DICT, VAR_FUNC, VAR_PARTIAL, exarg_T, garray_T, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, ptrdiff_t, size_t, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
@@ -116,7 +116,7 @@ pub const KV_INITIAL_VALUE: ApiDict = ApiDict {
     items: ::core::ptr::null_mut::<KeyValuePair>(),
 };
 pub const ARRAY_DICT_INIT: ApiDict = KV_INITIAL_VALUE;
-pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
+pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,
     fe_firstline: 0 as LineNr,
     fe_lastline: 0 as LineNr,

@@ -33,8 +33,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Dict, LineNr, List, OptInt, Refcount, TypVal, VAR_NUMBER, VarLock, VarNumber, buf_T, ptrdiff_t,
-    save_v_event_T, size_t, typval_vval_union,
+    Dict, LineNr, List, OptInt, Refcount, SaveVEvent, TypVal, VAR_NUMBER, VarLock, VarNumber,
+    buf_T, ptrdiff_t, size_t, typval_vval_union,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -398,7 +398,7 @@ pub unsafe fn may_trigger_win_scrolled_resized() {
 
 /// Fire `WinResized` with `v:event.windows` set to the resized windows.
 fn fire_resized(resize: &mut Subject, windows_list: *mut List) {
-    let mut save = save_v_event_T::default();
+    let mut save = SaveVEvent::default();
     // SAFETY: `get_v_event` hands back the dictionary it saved into `save`.
     let v_event = unsafe { get_v_event(&raw mut save) };
     let (key, len) = (c"windows".as_ptr(), 7 as size_t);
@@ -416,7 +416,7 @@ fn fire_resized(resize: &mut Subject, windows_list: *mut List) {
 
 /// Fire `WinScrolled` with `v:event` holding the per-window deltas.
 fn fire_scrolled(scroll: &mut Subject, scroll_dict: *mut Dict) {
-    let mut save = save_v_event_T::default();
+    let mut save = SaveVEvent::default();
     // SAFETY: as [`fire_resized`]; `scroll_dict` is live and is unreferenced
     // once its contents have been copied in.
     let v_event = unsafe { get_v_event(&raw mut save) };

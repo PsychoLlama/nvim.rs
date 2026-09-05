@@ -29,7 +29,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 use std::ffi::CString;
 
-/// Offset of `uf_name` inside `ufunc_T`: the function table's hash keys point
+/// Offset of `uf_name` inside `UserFunc`: the function table's hash keys point
 /// at that inline buffer, so backing up by this recovers the function.  This is
 /// the transpiled `HI2UF`, the same constant profile.rs and userfunc.rs use.
 const UF_NAME_OFFSET: usize = 240;
@@ -272,9 +272,9 @@ unsafe fn get_script_local_funcs(sid: ScriptId) -> *mut List {
     let l = unsafe { tv_list_alloc((*functbl).ht_used as ptrdiff_t) };
 
     for hi in unsafe { tv_ht_iter(functbl) } {
-        // SAFETY: an occupied slot's key is a `ufunc_T`'s inline name buffer,
+        // SAFETY: an occupied slot's key is a `UserFunc`'s inline name buffer,
         // so backing up by that field's offset recovers the function.
-        let fp = unsafe { &*hi.hi_key.byte_sub(UF_NAME_OFFSET).cast::<ufunc_T>() };
+        let fp = unsafe { &*hi.hi_key.byte_sub(UF_NAME_OFFSET).cast::<UserFunc>() };
         if fp.uf_script_ctx.sc_sid != sid {
             continue;
         }

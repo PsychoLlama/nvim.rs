@@ -757,7 +757,7 @@ unsafe fn source_bracket(
     };
 
     // Don't use the calling function's local variables.
-    let mut funccalp_entry = funccal_entry_T {
+    let mut funccalp_entry = FuncCallEntry {
         top_funccal: ptr::null_mut(),
         next: ptr::null_mut(),
     };

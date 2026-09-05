@@ -33,11 +33,11 @@ use crate::os::input::{fast_breakcheck, line_breakcheck};
 use crate::strings::vim_snprintf;
 use crate::types::{
     __compar_fn_t, Arena, Blob, BoolVarValue, Callback, Dict, DictItem, DictWatcher, EvalFuncData,
-    Float, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue,
-    StaticList10, String_0, TypVal, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST,
-    VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
-    VarNumber, buf_T, funcexe_T, garray_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow,
-    kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union, ufunc_T, uint8_t, vimconv_T,
+    Float, FuncExe, LineNr, List, ListItem, ListWatch, LuaRef, Partial, QUEUE, SpecialVarValue,
+    StaticList10, String_0, TypVal, UserFunc, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
+    VAR_LIST, VAR_NO_SCOPE, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock,
+    VarNumber, buf_T, garray_T, hashtab_T, int64_t, kBoolVarTrue, kListLenMayKnow, kSpecialVarNull,
+    ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t, vimconv_T,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
@@ -79,7 +79,7 @@ pub struct Join {
     pub s: String_0,
     pub tofree: *mut ::core::ffi::c_char,
 }
-pub struct sortinfo_T {
+pub struct SortInfo {
     pub item_compare_ic: ::core::ffi::c_int,
     pub item_compare_lc: bool,
     pub item_compare_numeric: bool,
@@ -145,9 +145,9 @@ static e_string_or_function_required_for_argument_nr: &::core::ffi::CStr =
     c"E1256: String or function required for argument %d";
 static e_non_null_dict_required_for_argument_nr: &::core::ffi::CStr =
     c"E1297: Non-NULL Dictionary required for argument %d";
-/// A zeroed `sortinfo_T`, which is what a bare `sortinfo_T info;` declaration
+/// A zeroed `SortInfo`, which is what a bare `SortInfo info;` declaration
 /// is before `parse_sort_uniq_args` fills it in.
-pub const SORTINFO_INIT: sortinfo_T = sortinfo_T {
+pub const SORTINFO_INIT: SortInfo = SortInfo {
     item_compare_ic: 0,
     item_compare_lc: false,
     item_compare_numeric: false,
@@ -183,8 +183,7 @@ pub static tv_empty_string: GlobalCell<*const ::core::ffi::c_char> = GlobalCell:
 /// embeds.  c2rust rendered `ARRAY_SIZE` as a division by the macro's own
 /// `== 0` static assertion; the value it computes is just the length.
 pub const SL_SIZE: usize = 10;
-static sortinfo: GlobalCell<*mut sortinfo_T> =
-    GlobalCell::new(::core::ptr::null_mut::<sortinfo_T>());
+static sortinfo: GlobalCell<*mut SortInfo> = GlobalCell::new(::core::ptr::null_mut::<SortInfo>());
 pub const ITEM_COMPARE_FAIL: ::core::ffi::c_int = 999 as ::core::ffi::c_int;
 pub const TYPVAL_ENCODE_ALLOW_SPECIALS: ::core::ffi::c_int = 0;
 static tv_equal_recurse_limit: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -214,7 +213,7 @@ static str_errors: ConstTable<[*const ::core::ffi::c_char; 11]> = ConstTable::ne
     c"E729: Using a Funcref as a String".as_ptr(),
     c"E976: Using a Blob as a String".as_ptr(),
 ]);
-pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
+pub const FUNCEXE_INIT: FuncExe = FuncExe {
     fe_argv_func: None,
     fe_firstline: 0 as LineNr,
     fe_lastline: 0 as LineNr,

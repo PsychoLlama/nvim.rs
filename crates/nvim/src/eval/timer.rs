@@ -1,6 +1,6 @@
 //! `timer_start()` and what fires when one is due.
 //!
-//! A `timer_T` is reference counted rather than owned by the map, because
+//! A `Timer` is reference counted rather than owned by the map, because
 //! it has to survive its own callback: `timer_due_cb` takes a reference for
 //! the duration of the call, and `timer_stop` may run inside that call and
 //! hand the map's reference to `timer_close_cb`.
@@ -31,8 +31,8 @@ use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::memory::{xfree, xmalloc};
 use crate::registry::SlotTable;
 use crate::types::{
-    Callback, Dict, DictItem, Refcount, TimeWatcher, TypVal, VAR_NUMBER, VAR_UNKNOWN, VarLock,
-    VarNumber, int64_t, ptrdiff_t, size_t, timer_T, typval_vval_union, uint64_t,
+    Callback, Dict, DictItem, Refcount, TimeWatcher, Timer, TypVal, VAR_NUMBER, VAR_UNKNOWN,
+    VarLock, VarNumber, int64_t, ptrdiff_t, size_t, typval_vval_union, uint64_t,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -50,12 +50,12 @@ const UNSET_TV: TypVal = TypVal {
 ///
 /// A snapshot rather than a borrow: each caller below runs the editor
 /// between one timer and the next, and that can register or drop timers.
-fn timer_snapshot() -> Vec<*mut timer_T> {
+fn timer_snapshot() -> Vec<*mut Timer> {
     timers.with(SlotTable::snapshot_values)
 }
 
 /// The timer with this id, or null.
-pub fn find_timer_by_nr(id: VarNumber) -> *mut timer_T {
+pub fn find_timer_by_nr(id: VarNumber) -> *mut Timer {
     timers
         .with(|map| map.get(&(id as uint64_t)))
         .unwrap_or(null_mut())
@@ -65,7 +65,7 @@ pub fn find_timer_by_nr(id: VarNumber) -> *mut timer_T {
 ///
 /// # Safety
 /// `rettv` must hold a List; `timer` must be valid.
-pub unsafe fn add_timer_info(rettv: *mut TypVal, timer: *mut timer_T) {
+pub unsafe fn add_timer_info(rettv: *mut TypVal, timer: *mut Timer) {
     // SAFETY: the caller's promise -- both pointees outlive the call.
     let (rettv, timer) = unsafe { (Tv::new(rettv), Tm::new(timer)) };
     // SAFETY: `tv_dict_alloc` never answers NULL.
@@ -97,7 +97,7 @@ pub unsafe fn add_timer_info(rettv: *mut TypVal, timer: *mut timer_T) {
         unsafe { xfree(di as *mut c_void) };
         return;
     }
-    let cb: *mut Callback = timer.field_ptr(offset_of!(timer_T, callback));
+    let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback and `di` the item just added.
     unsafe { callback_put(cb, &raw mut (*di).di_tv) };
 }
@@ -126,11 +126,11 @@ pub unsafe fn add_timer_info_all(rettv: *mut TypVal) {
 /// The timer is due: run its callback.
 ///
 /// # Safety
-/// Called by the event loop with `data` a live `timer_T`.
+/// Called by the event loop with `data` a live `Timer`.
 pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     // SAFETY: the event loop's promise -- `data` is the live timer this
     // watcher was armed with.
-    let mut timer = unsafe { Tm::new(data as *mut timer_T) };
+    let mut timer = unsafe { Tm::new(data as *mut Timer) };
     let save_did_emsg = did_emsg.get();
     let called_emsg_before = called_emsg.get();
     let save_ex_pressedreturn = get_pressedreturn();
@@ -153,7 +153,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     argv[0].v_type = VAR_NUMBER;
     argv[0].vval.v_number = timer.timer_id as VarNumber;
     let mut rettv = UNSET_TV;
-    let cb: *mut Callback = timer.field_ptr(offset_of!(timer_T, callback));
+    let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback, kept live by the reference
     // above; `argv` and `rettv` are this frame's.
     unsafe { callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv) };
@@ -176,7 +176,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     // A zero timeout does not repeat by itself; it is re-armed here so
     // that it yields to the event loop between runs.
     if !timer.stopped && timer.timeout == 0 {
-        let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(timer_T, tw));
+        let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(Timer, tw));
         // SAFETY: `tw` is the timer's own watcher.
         unsafe { time_watcher_start(tw, Some(timer_due_cb), 0, 0) };
     }
@@ -193,9 +193,9 @@ pub unsafe fn timer_start(
     repeat_count: c_int,
     callback: *const Callback,
 ) -> uint64_t {
-    // SAFETY: `xmalloc` never answers NULL and the block is one `timer_T`;
+    // SAFETY: `xmalloc` never answers NULL and the block is one `Timer`;
     // every field is written below before anything reads one.
-    let mut timer = unsafe { Tm::new(xmalloc(size_of::<timer_T>()) as *mut timer_T) };
+    let mut timer = unsafe { Tm::new(xmalloc(size_of::<Timer>()) as *mut Timer) };
     timer.refcount = Refcount::ONE;
     timer.stopped = false;
     timer.paused = false;
@@ -207,12 +207,12 @@ pub unsafe fn timer_start(
     // SAFETY: the caller's promise about `callback`.
     timer.callback = unsafe { (*callback).clone() };
 
-    let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(timer_T, tw));
+    let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(Timer, tw));
     // SAFETY: the loop lives from startup to exit, `tw` is the timer's own
     // watcher, and the timer is the data it is armed with.
     unsafe { time_watcher_init(main_loop.ptr(), tw, timer.raw() as *mut c_void) };
     // The loop now holds `tw`, so the two writes below go through it rather
-    // than through `DerefMut`, which would borrow the whole `timer_T` and
+    // than through `DerefMut`, which would borrow the whole `Timer` and
     // pop the address the loop is holding — `winlayer::live`'s note.
     // SAFETY: as above -- the loop's queue is live and `tw` is the timer's.
     unsafe { (*tw).events = multiqueue_new_child((*main_loop.ptr()).events) };
@@ -232,14 +232,14 @@ pub unsafe fn timer_start(
 ///
 /// # Safety
 /// `timer` must be valid.
-pub unsafe fn timer_stop(timer: *mut timer_T) {
+pub unsafe fn timer_stop(timer: *mut Timer) {
     // SAFETY: the caller's promise -- a live timer.
     let mut timer = unsafe { Tm::new(timer) };
     if timer.stopped {
         return;
     }
     timer.stopped = true;
-    let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(timer_T, tw));
+    let tw: *mut TimeWatcher = timer.field_ptr(offset_of!(Timer, tw));
     // SAFETY: `tw` is the timer's own watcher.
     unsafe { time_watcher_stop(tw) };
     // SAFETY: as above; `timer_close_cb` takes over the map's reference
@@ -250,13 +250,13 @@ pub unsafe fn timer_stop(timer: *mut timer_T) {
 /// The watcher is closed: drop the map's reference.
 ///
 /// # Safety
-/// Called by the event loop with `data` the `timer_T` being closed.
+/// Called by the event loop with `data` the `Timer` being closed.
 pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
     // SAFETY: the event loop's promise -- `data` is the timer being closed.
-    let timer = unsafe { Tm::new(data as *mut timer_T) };
+    let timer = unsafe { Tm::new(data as *mut Timer) };
     // SAFETY: the watcher's queue is the timer's own child queue.
     unsafe { multiqueue_free(timer.tw.events) };
-    let cb: *mut Callback = timer.field_ptr(offset_of!(timer_T, callback));
+    let cb: *mut Callback = timer.field_ptr(offset_of!(Timer, callback));
     // SAFETY: `cb` is the timer's own callback.
     unsafe { callback_free(cb) };
     let id = timer.timer_id as uint64_t;
@@ -269,7 +269,7 @@ pub(crate) unsafe fn timer_close_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
 ///
 /// # Safety
 /// `timer` must be valid and hold a reference this call takes over.
-pub(crate) unsafe fn timer_decref(timer: *mut timer_T) {
+pub(crate) unsafe fn timer_decref(timer: *mut Timer) {
     // SAFETY: the caller's promise -- a live timer.
     let mut timer = unsafe { Tm::new(timer) };
     if timer.refcount.release() == 0 {
