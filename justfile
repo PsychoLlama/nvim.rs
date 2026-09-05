@@ -98,7 +98,7 @@ benchmark *args: build
 #
 # No baseline is committed: each row's is cut from the binary BASE pins and
 # cached under target/battery/base/<sha>/. A cold run builds that binary once
-# (~1 min) and then runs every row twice, ~13 min; a warm one is ~7 min.
+# (~1 min) and then runs every row twice, ~14 min; a warm one is ~7 min.
 #
 # `label` names the log set under target/battery-logs (default: short HEAD), so
 # two runs can be diffed line for line.
