@@ -213,7 +213,7 @@ impl Scan {
     fn push_command(&mut self, cmd: *mut c_char, owned: bool) {
         // The arrays are `MAX_ARG_CMDS` long, which is what the test guards.
         if self.parm.n_commands >= MAX_ARG_CMDS {
-            unsafe { mainerr(err_extra_cmd.get(), ptr::null(), ptr::null()) };
+            unsafe { mainerr(err_extra_cmd.as_ptr(), ptr::null(), ptr::null()) };
         }
         let at = self.parm.n_commands as usize;
         self.parm.cmds_tofree[at] = owned as c_char;
@@ -225,7 +225,7 @@ impl Scan {
     fn push_pre_command(&mut self, cmd: *mut c_char) {
         // As `push_command`.
         if self.parm.n_pre_commands >= MAX_ARG_CMDS {
-            unsafe { mainerr(err_extra_cmd.get(), ptr::null(), ptr::null()) };
+            unsafe { mainerr(err_extra_cmd.as_ptr(), ptr::null(), ptr::null()) };
         }
         let at = self.parm.n_pre_commands as usize;
         self.parm.pre_commands[at] = cmd;
@@ -236,7 +236,7 @@ impl Scan {
     fn claim_edit_type(&mut self, kind: c_int) {
         // `mainerr` does not return.
         if self.parm.edit_type != EDIT_NONE as c_int {
-            unsafe { mainerr(err_too_many_args.get(), self.arg(), ptr::null()) };
+            unsafe { mainerr(err_too_many_args.as_ptr(), self.arg(), ptr::null()) };
         }
         self.parm.edit_type = kind;
     }
@@ -307,7 +307,7 @@ impl Scan {
         } else if self.tail_starts_with(c"luamod-dev") {
             nlua_disable_preload.set(true);
         } else if self.has_tail() {
-            unsafe { mainerr(err_opt_unknown.get(), self.arg(), ptr::null()) };
+            unsafe { mainerr(err_opt_unknown.as_ptr(), self.arg(), ptr::null()) };
         } else {
             // A bare `--`: only file names from here on.
             self.had_minmin = true;
@@ -326,7 +326,7 @@ impl Scan {
                     self.parm.no_swap_file = 1;
                 } else {
                     if self.parm.edit_type > EDIT_STDIN as c_int {
-                        unsafe { mainerr(err_too_many_args.get(), self.arg(), ptr::null()) };
+                        unsafe { mainerr(err_too_many_args.as_ptr(), self.arg(), ptr::null()) };
                     }
                     self.parm.had_stdin_file = true;
                     self.parm.edit_type = EDIT_STDIN as c_int;
@@ -465,7 +465,7 @@ impl Scan {
             }
             // Each of these takes the next word and nothing else.
             b'S' | b'i' | b'l' | b'u' | b'U' | b'W' => return true,
-            _ => unsafe { mainerr(err_opt_unknown.get(), self.arg(), ptr::null()) },
+            _ => unsafe { mainerr(err_opt_unknown.as_ptr(), self.arg(), ptr::null()) },
         }
         false
     }
@@ -476,12 +476,12 @@ impl Scan {
         // for `-S`, whose argument is optional.
         // Nothing may follow an option that takes a separate word.
         if self.has_tail() {
-            unsafe { mainerr(err_opt_garbage.get(), self.arg(), ptr::null()) };
+            unsafe { mainerr(err_opt_garbage.as_ptr(), self.arg(), ptr::null()) };
         }
 
         self.argc -= 1;
         if self.argc < 1 && c != b'S' {
-            unsafe { mainerr(err_arg_missing.get(), self.arg(), ptr::null()) };
+            unsafe { mainerr(err_arg_missing.as_ptr(), self.arg(), ptr::null()) };
         }
         self.argv = unsafe { self.argv.offset(1) };
         self.argv_idx = -1;
@@ -489,7 +489,7 @@ impl Scan {
         match c {
             b'c' | b'S' => {
                 if self.parm.n_commands >= MAX_ARG_CMDS {
-                    unsafe { mainerr(err_extra_cmd.get(), ptr::null(), ptr::null()) };
+                    unsafe { mainerr(err_extra_cmd.as_ptr(), ptr::null(), ptr::null()) };
                 }
                 if c == b'S' {
                     // `-S` with nothing after it, or with another option
@@ -588,7 +588,7 @@ impl Scan {
 
         // Only one kind of editing at a time.
         if self.parm.edit_type > EDIT_STDIN as c_int {
-            unsafe { mainerr(err_too_many_args.get(), self.arg(), ptr::null()) };
+            unsafe { mainerr(err_too_many_args.as_ptr(), self.arg(), ptr::null()) };
         }
         self.parm.edit_type = EDIT_FILE as c_int;
 

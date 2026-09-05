@@ -203,7 +203,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     // interpreter with none of the editor behind it.
     if argc > 1 && unsafe { strcasecmp(*argv.offset(1), c"-ll".as_ptr()) } == 0 {
         if argc == 2 {
-            unsafe { print_mainerr(err_arg_missing.get(), *argv.offset(1), ptr::null()) };
+            unsafe { print_mainerr(err_arg_missing.as_ptr(), *argv.offset(1), ptr::null()) };
             unsafe { exit(1) };
         }
         unsafe { nlua_run_script(argv, argc, 3) };

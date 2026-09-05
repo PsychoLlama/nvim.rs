@@ -1,33 +1,54 @@
-//! The editor's global state: upstream's `globals.h` has no translation unit
-//! of its own, so the transpiler parked every `EXTERN` declaration here beside
-//! `main()`. What follows is that header — roughly a thousand `GlobalCell`s
-//! read from all over the tree. The startup path lives in the submodules.
+//! Starting and stopping the editor process.
+//!
+//! Upstream's `globals.h` has no translation unit of its own, so the
+//! transpiler parked all ~880 of its `EXTERN` declarations here beside
+//! `main()`. They have since gone to the modules that own them — the window
+//! graph to [`winlayer`], the mode word to [`state`], the message area to
+//! [`message`], and so on — and what is left is the process itself:
+//!
+//! - **What phase the process is in**: `starting` counts down through the
+//!   startup stages and `exiting`/`v_dying`/`ex_exitval` describe the way
+//!   out. These are the two flags the rest of the tree tests to know whether
+//!   there is an editor yet, or still.
+//! - **What it was started as**: the three `*_isatty` answers, `stdin_fd`,
+//!   `full_screen`, `silent_mode`, `readonlymode`, `recoverymode`,
+//!   `embedded_mode`, `headless_mode` and the `ui_client_*` set, which say
+//!   this process is a UI attached to another one rather than an editor.
+//! - **[`MainParams`]**, the parsed command line, and the `EDIT_*`/`WIN_*`
+//!   answers it records.
+//!
+//! The startup path itself lives in the submodules: [`entry`] is `main()` and
+//! the phases under it, `args` the command-line parse, `config` the vimrc
+//! search, `buffers` the initial windows and buffers, `remote` the
+//! `--remote`/`--server` handoff, `usage` the `-h` text and the argument
+//! errors, and `exit` the way back out.
+//!
+//! [`winlayer`]: crate::winlayer::graph
+//! [`state`]: crate::state::mode
+//! [`message`]: crate::message::state
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::global_cell::{GlobalCell, SharedCell};
+use crate::global_cell::GlobalCell;
 use crate::options::{
     kOptArabic, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus, kOptErrorfile, kOptKeymap, kOptRightleft,
     kOptShadafile, kOptShortmess, kOptVerbosefile, kOptWindow,
 };
-use crate::types::{
-    Loop, MultiQueue, Proc, UV_MUTEX_INIT, UV_RWLOCK_INIT, uint64_t, uv__io_t, uv__queue,
-    uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs,
-    uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u,
-    uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
-};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use crate::types::uint64_t;
+use core::ffi::{CStr, c_char, c_int, c_uint};
 
-mod entry;
-pub use self::entry::*;
 mod args;
 mod buffers;
 mod config;
+mod entry;
+mod eventloop;
 mod exit;
 mod remote;
 mod usage;
+
+pub use self::entry::*;
+pub use self::eventloop::main_loop;
 pub use self::exit::*;
 
-pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 #[derive(Clone)] // not `Copy`: it owns several of its strings
 pub struct MainParams {
     pub argc: c_int,
@@ -86,278 +107,17 @@ pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
 pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
-pub static main_loop: SharedCell<Loop> = SharedCell::new(Loop {
-    uv: uv_loop_t {
-        data: ::core::ptr::null_mut::<c_void>(),
-        active_handles: 0,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        active_reqs: uv_loop_s_active_reqs {
-            unused: ::core::ptr::null_mut::<c_void>(),
-        },
-        internal_fields: ::core::ptr::null_mut::<c_void>(),
-        stop_flag: 0,
-        flags: 0,
-        backend_fd: 0,
-        pending_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        watcher_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        watchers: ::core::ptr::null_mut::<*mut uv__io_t>(),
-        nwatchers: 0,
-        nfds: 0,
-        wq: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        wq_mutex: UV_MUTEX_INIT,
-        wq_async: uv_async_t {
-            data: ::core::ptr::null_mut::<c_void>(),
-            loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-            type_0: UV_UNKNOWN_HANDLE,
-            close_cb: None,
-            handle_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            u: uv_async_s_u { fd: 0 },
-            next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-            flags: 0,
-            async_cb: None,
-            queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            pending: 0,
-        },
-        cloexec_lock: UV_RWLOCK_INIT,
-        closing_handles: ::core::ptr::null_mut::<uv_handle_t>(),
-        process_handles: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        prepare_handles: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        check_handles: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        idle_handles: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        async_handles: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        async_unused: None,
-        async_io_watcher: uv__io_t {
-            cb: None,
-            pending_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            watcher_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            pevents: 0,
-            events: 0,
-            fd: 0,
-        },
-        async_wfd: 0,
-        timer_heap: uv_loop_s_timer_heap {
-            min: ::core::ptr::null_mut::<c_void>(),
-            nelts: 0,
-        },
-        timer_counter: 0,
-        time: 0,
-        signal_pipefd: [0; 2],
-        signal_io_watcher: uv__io_t {
-            cb: None,
-            pending_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            watcher_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            pevents: 0,
-            events: 0,
-            fd: 0,
-        },
-        child_watcher: uv_signal_t {
-            data: ::core::ptr::null_mut::<c_void>(),
-            loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-            type_0: UV_UNKNOWN_HANDLE,
-            close_cb: None,
-            handle_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            u: uv_signal_s_u { fd: 0 },
-            next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-            flags: 0,
-            signal_cb: None,
-            signum: 0,
-            tree_entry: uv_signal_s_tree_entry {
-                rbe_left: ::core::ptr::null_mut::<uv_signal_s>(),
-                rbe_right: ::core::ptr::null_mut::<uv_signal_s>(),
-                rbe_parent: ::core::ptr::null_mut::<uv_signal_s>(),
-                rbe_color: 0,
-            },
-            caught_signals: 0,
-            dispatched_signals: 0,
-        },
-        emfile_fd: 0,
-        inotify_read_watcher: uv__io_t {
-            cb: None,
-            pending_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            watcher_queue: uv__queue {
-                next: ::core::ptr::null_mut::<uv__queue>(),
-                prev: ::core::ptr::null_mut::<uv__queue>(),
-            },
-            pevents: 0,
-            events: 0,
-            fd: 0,
-        },
-        inotify_watchers: ::core::ptr::null_mut::<c_void>(),
-        inotify_fd: 0,
-    },
-    events: ::core::ptr::null_mut::<MultiQueue>(),
-    thread_events: ::core::ptr::null_mut::<MultiQueue>(),
-    fast_events: ::core::ptr::null_mut::<MultiQueue>(),
-    children: ::core::ptr::null_mut::<Vec<*mut Proc>>(),
-    children_watcher: uv_signal_t {
-        data: ::core::ptr::null_mut::<c_void>(),
-        loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        u: uv_signal_s_u { fd: 0 },
-        next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-        flags: 0,
-        signal_cb: None,
-        signum: 0,
-        tree_entry: uv_signal_s_tree_entry {
-            rbe_left: ::core::ptr::null_mut::<uv_signal_s>(),
-            rbe_right: ::core::ptr::null_mut::<uv_signal_s>(),
-            rbe_parent: ::core::ptr::null_mut::<uv_signal_s>(),
-            rbe_color: 0,
-        },
-        caught_signals: 0,
-        dispatched_signals: 0,
-    },
-    children_kill_timer: uv_timer_t {
-        data: ::core::ptr::null_mut::<c_void>(),
-        loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        u: uv_timer_s_u { fd: 0 },
-        next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-        flags: 0,
-        timer_cb: None,
-        node: uv_timer_s_node {
-            heap: [::core::ptr::null_mut::<c_void>(); 3],
-        },
-        timeout: 0,
-        repeat: 0,
-        start_id: 0,
-    },
-    poll_timer: uv_timer_t {
-        data: ::core::ptr::null_mut::<c_void>(),
-        loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        u: uv_timer_s_u { fd: 0 },
-        next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-        flags: 0,
-        timer_cb: None,
-        node: uv_timer_s_node {
-            heap: [::core::ptr::null_mut::<c_void>(); 3],
-        },
-        timeout: 0,
-        repeat: 0,
-        start_id: 0,
-    },
-    exit_delay_timer: uv_timer_t {
-        data: ::core::ptr::null_mut::<c_void>(),
-        loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        u: uv_timer_s_u { fd: 0 },
-        next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-        flags: 0,
-        timer_cb: None,
-        node: uv_timer_s_node {
-            heap: [::core::ptr::null_mut::<c_void>(); 3],
-        },
-        timeout: 0,
-        repeat: 0,
-        start_id: 0,
-    },
-    async_0: uv_async_t {
-        data: ::core::ptr::null_mut::<c_void>(),
-        loop_0: ::core::ptr::null_mut::<uv_loop_t>(),
-        type_0: UV_UNKNOWN_HANDLE,
-        close_cb: None,
-        handle_queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        u: uv_async_s_u { fd: 0 },
-        next_closing: ::core::ptr::null_mut::<uv_handle_t>(),
-        flags: 0,
-        async_cb: None,
-        queue: uv__queue {
-            next: ::core::ptr::null_mut::<uv__queue>(),
-            prev: ::core::ptr::null_mut::<uv__queue>(),
-        },
-        pending: 0,
-    },
-    mutex: UV_MUTEX_INIT,
-    recursive: 0,
-    closing: false,
-});
 static argv0: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_mut::<c_char>());
-static err_arg_missing: GlobalCell<*const c_char> =
-    GlobalCell::new(c"Argument missing after".as_ptr());
-static err_opt_garbage: GlobalCell<*const c_char> =
-    GlobalCell::new(c"Garbage after option argument".as_ptr());
-static err_opt_unknown: GlobalCell<*const c_char> =
-    GlobalCell::new(c"Unknown option argument".as_ptr());
-static err_too_many_args: GlobalCell<*const c_char> =
-    GlobalCell::new(c"Too many edit arguments".as_ptr());
-static err_extra_cmd: GlobalCell<*const c_char> = GlobalCell::new(
-    c"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments".as_ptr(),
-);
+// The five wordings `mainerr` prints when the command line does not parse.
+// Nothing writes them, so they are constants rather than cells; they are
+// module-private because argument parsing is the only thing that can fail
+// this early.
+const err_arg_missing: &CStr = c"Argument missing after";
+const err_opt_garbage: &CStr = c"Garbage after option argument";
+const err_opt_unknown: &CStr = c"Unknown option argument";
+const err_too_many_args: &CStr = c"Too many edit arguments";
+const err_extra_cmd: &CStr =
+    c"Too many \"+command\", \"-c command\" or \"--cmd command\" arguments";
 pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
 pub static used_stdin: GlobalCell<bool> = GlobalCell::new(false);
 pub static nvim_testing: GlobalCell<bool> = GlobalCell::new(false);
