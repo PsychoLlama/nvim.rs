@@ -277,7 +277,6 @@ pub static e_backslash: &CStr = c"E10: \\ should be followed by /, ? or &";
 pub static e_cmdwin: &CStr = c"E11: Invalid in command-line window; <CR> executes, CTRL-C quits";
 pub static e_curdir: &CStr =
     c"E12: Command not allowed in secure mode in current dir or tag search";
-pub static e_invalid_buffer_name_str: &CStr = c"E158: Invalid buffer name: %s";
 pub static e_command_too_recursive: &CStr = c"E169: Command too recursive";
 pub static e_buffer_is_not_loaded: &CStr = c"E681: Buffer is not loaded";
 pub static e_endif: &CStr = c"E171: Missing :endif";
@@ -294,7 +293,6 @@ pub static e_invarg: &CStr = c"E474: Invalid argument";
 pub static e_invarg2: &CStr = c"E475: Invalid argument: %s";
 pub static e_invargval: &CStr = c"E475: Invalid value for argument %s";
 pub static e_invargNval: &CStr = c"E475: Invalid value for argument %s: %s";
-pub static e_duparg2: &CStr = c"E983: Duplicate argument: %s";
 pub static e_invexpr2: &CStr = c"E15: Invalid expression: \"%s\"";
 pub static e_invrange: &CStr = c"E16: Invalid range";
 pub static e_invcmd: &CStr = c"E476: Invalid command";
@@ -302,14 +300,9 @@ pub static e_isadir2: &CStr = c"E17: \"%s\" is a directory";
 pub static e_no_spell: &CStr = c"E756: Spell checking is not possible";
 pub static e_invchan: &CStr = c"E900: Invalid channel id";
 pub static e_invchanjob: &CStr = c"E900: Invalid channel id: not a job";
-pub static e_jobspawn: &CStr = c"E903: Process failed to start: %s: \"%s\"";
 pub static e_channotpty: &CStr = c"E904: channel is not a pty";
-pub static e_stdiochan2: &CStr = c"E905: Couldn't open stdio channel: %s";
 pub static e_invstream: &CStr = c"E906: invalid stream for channel";
 pub static e_invstreamrpc: &CStr = c"E906: invalid stream for rpc channel, use 'rpc'";
-pub static e_streamkey: &CStr =
-    c"E5210: dict key '%s' already set for buffered stream in channel %lu";
-pub static e_libcall: &CStr = c"E364: Library call failed for \"%s()\"";
 pub static e_fsync: &CStr = c"E667: Fsync failed: %s";
 pub static e_mkdir: &CStr = c"E739: Cannot create directory %s: %s";
 pub static e_markinval: &CStr = c"E19: Mark has invalid line number";
@@ -319,13 +312,11 @@ pub static e_nesting: &CStr = c"E22: Scripts nested too deep";
 pub static e_noalt: &CStr = c"E23: No alternate file";
 pub static e_noabbr: &CStr = c"E24: No such abbreviation";
 pub static e_nobang: &CStr = c"E477: No ! allowed";
-pub static e_nogroup: &CStr = c"E28: No such highlight group name: %s";
 pub static e_noinstext: &CStr = c"E29: No inserted text yet";
 pub static e_nolastcmd: &CStr = c"E30: No previous command line";
 pub static e_nomap: &CStr = c"E31: No such mapping";
 pub static e_noident: &CStr = c"E349: No identifier under cursor";
 pub static e_nomatch: &CStr = c"E479: No match";
-pub static e_nomatch2: &CStr = c"E480: No match: %s";
 pub static e_noname: &CStr = c"E32: No file name";
 pub static e_nopresub: &CStr = c"E33: No previous substitute regular expression";
 pub static e_noprev: &CStr = c"E34: No previous command";
@@ -334,11 +325,8 @@ pub static e_norange: &CStr = c"E481: No range allowed";
 pub static e_noroom: &CStr = c"E36: Not enough room";
 pub static e_notmp: &CStr = c"E483: Can't get temp file name";
 pub static e_notopen: &CStr = c"E484: Can't open file %s";
-pub static e_notopen_2: &CStr = c"E484: Can't open file %s: %s";
 pub static e_cant_read_file_str: &CStr = c"E485: Can't read file %s";
 pub static e_null: &CStr = c"E38: Null argument";
-pub static e_number_exp: &CStr = c"E39: Number expected";
-pub static e_openerrf: &CStr = c"E40: Can't open errorfile %s";
 pub static e_outofmem: &CStr = c"E41: Out of memory!";
 pub static e_patnotf: &CStr = c"Pattern not found";
 pub static e_patnotf2: &CStr = c"E486: Pattern not found: %s";
@@ -349,18 +337,13 @@ pub static e_loclist: &CStr = c"E776: No location list";
 pub static e_re_damg: &CStr = c"E43: Damaged match string";
 pub static e_re_corr: &CStr = c"E44: Corrupted regexp program";
 pub static e_readonly: &CStr = c"E45: 'readonly' option is set (add ! to override)";
-pub static e_letwrong: &CStr = c"E734: Wrong variable type for %s=";
-pub static e_illvar: &CStr = c"E461: Illegal variable name: %s";
 pub static e_cannot_mod: &CStr = c"E995: Cannot modify existing variable";
 pub static e_cannot_change_readonly_variable_str: &CStr =
     c"E46: Cannot change read-only variable \"%.*s\"";
 pub static e_dictreq: &CStr = c"E715: Dictionary required";
-pub static e_blobidx: &CStr = c"E979: Blob index out of range: %ld";
 pub static e_invalblob: &CStr = c"E978: Invalid operation for Blob";
 pub static e_toomanyarg: &CStr = c"E118: Too many arguments for function: %s";
 pub static e_toofewarg: &CStr = c"E119: Not enough arguments for function: %s";
-pub static e_dictkey: &CStr = c"E716: Key not present in Dictionary: \"%s\"";
-pub static e_dictkey_len: &CStr = c"E716: Key not present in Dictionary: \"%.*s\"";
 pub static e_listreq: &CStr = c"E714: List required";
 pub static e_listblobreq: &CStr = c"E897: List or Blob required";
 pub static e_listblobarg: &CStr = c"E899: Argument of %s must be a List or Blob";
@@ -386,37 +369,26 @@ pub static e_winwidth: &CStr = c"E592: 'winwidth' cannot be smaller than 'winmin
 pub static e_write: &CStr = c"E80: Error while writing";
 pub static e_zerocount: &CStr = c"E939: Positive count required";
 pub static e_usingsid: &CStr = c"E81: Using <SID> not in a script context";
-pub static e_missingparen: &CStr = c"E107: Missing parentheses: %s";
 pub static e_empty_buffer: &CStr = c"E749: Empty buffer";
-pub static e_nobufnr: &CStr = c"E86: Buffer %ld does not exist";
 pub static e_no_write_since_last_change: &CStr = c"E37: No write since last change";
 pub static e_no_write_since_last_change_add_bang_to_override: &CStr =
     c"E37: No write since last change (add ! to override)";
-pub static e_no_write_since_last_change_for_buffer_nr_add_bang_to_override: &CStr =
-    c"E89: No write since last change for buffer %d (add ! to override)";
 pub static e_buffer_nr_not_found: &CStr = c"E92: Buffer %d not found";
 pub static e_unknown_function_str: &CStr = c"E117: Unknown function: %s";
-pub static e_str_not_inside_function: &CStr = c"E193: %s not inside a function";
 pub static e_job_still_running: &CStr = c"E948: Job still running";
 pub static e_job_still_running_add_bang_to_end_the_job: &CStr =
     c"E948: Job still running (add ! to end the job)";
 pub static e_invalpat: &CStr = c"E682: Invalid search pattern or delimiter";
 pub static e_bufloaded: &CStr = c"E139: File is loaded in another buffer";
-pub static e_notset: &CStr = c"E764: Option '%s' is not set";
-pub static e_dirnotf: &CStr = c"E919: Directory not found in '%s': \"%s\"";
 pub static e_au_recursive: &CStr = c"E952: Autocommand caused recursive behavior";
 pub static e_menu_only_exists_in_another_mode: &CStr = c"E328: Menu only exists in another mode";
 pub static e_autocmd_close: &CStr = c"E813: Cannot close autocmd window";
 pub static e_list_index_out_of_range_nr: &CStr = c"E684: List index out of range: %ld";
-pub static e_listarg: &CStr = c"E686: Argument of %s must be a List";
 pub static e_unsupportedoption: &CStr = c"E519: Option not supported";
 pub static e_fnametoolong: &CStr = c"E856: Filename too long";
 pub static e_using_float_as_string: &CStr = c"E806: Using a Float as a String";
 pub static e_cannot_edit_other_buf: &CStr = c"E788: Not allowed to edit another buffer now";
-pub static e_using_number_as_bool_nr: &CStr = c"E1023: Using a Number as a Bool: %d";
-pub static e_not_callable_type_str: &CStr = c"E1085: Not a callable type: %s";
 pub static e_auabort: &CStr = c"E855: Autocommands caused command to abort";
-pub static e_api_error: &CStr = c"E5555: API call: %s";
 pub static e_fast_api_disabled: &CStr = c"E5560: %s must not be called in a fast event context";
 pub static e_floatonly: &CStr = c"E5601: Cannot close window, only floating window would remain";
 pub static e_floatexchange: &CStr = c"E5602: Cannot exchange or rotate float";
@@ -432,29 +404,18 @@ pub static e_cannot_change_value: &CStr = c"E742: Cannot change value";
 pub static e_cannot_change_value_of_str: &CStr = c"E742: Cannot change value of %.*s";
 pub static e_cannot_set_variable_in_sandbox_str: &CStr =
     c"E794: Cannot set variable in the sandbox: \"%.*s\"";
-pub static e_cannot_delete_variable_str: &CStr = c"E795: Cannot delete variable %.*s";
 pub static e_invalwindow: &CStr = c"E957: Invalid window number";
 pub static e_problem_creating_internal_diff: &CStr = c"E960: Problem creating the internal diff";
 pub static e_cannot_define_autocommands_for_all_events: &CStr =
     c"E1155: Cannot define autocommands for ALL events";
-pub static e_cannot_change_arglist_recursively: &CStr =
-    c"E1156: Cannot change the argument list recursively";
 pub static e_resulting_text_too_long: &CStr = c"E1240: Resulting text too long";
 pub static e_line_number_out_of_range: &CStr = c"E1247: Line number out of range";
 pub static e_highlight_group_name_invalid_char: &CStr = c"E5248: Invalid character in group name";
 pub static e_highlight_group_name_too_long: &CStr = c"E1249: Highlight group name too long";
 pub static e_string_required: &CStr = c"E928: String required";
-pub static e_invalid_column_number_nr: &CStr = c"E964: Invalid column number: %ld";
-pub static e_invalid_line_number_nr: &CStr = c"E966: Invalid line number: %ld";
-pub static e_reduce_of_an_empty_str_with_no_initial_value: &CStr =
-    c"E998: Reduce of an empty %s with no initial value";
-pub static e_invalid_value_for_blob_nr: &CStr = c"E1239: Invalid value for blob: 0xlX";
-pub static e_stray_closing_curly_str: &CStr = c"E1278: Stray '}' without a matching '{': %s";
-pub static e_missing_close_curly_str: &CStr = c"E1279: Missing '}': %s";
 pub static e_cannot_change_menus_while_listing: &CStr = c"E1310: Cannot change menus while listing";
 pub static e_not_allowed_to_change_window_layout_in_this_autocmd: &CStr =
     c"E1312: Not allowed to change the window layout in this autocmd";
-pub static e_val_too_large_len: &CStr = c"E1510: Value too large: %.*s";
 pub static e_undobang_cannot_redo_or_move_branch: &CStr =
     c"E5767: Cannot use :undo! to redo or move to a different undo branch";
 pub static e_winfixbuf_cannot_go_to_buffer: &CStr =
@@ -462,8 +423,6 @@ pub static e_winfixbuf_cannot_go_to_buffer: &CStr =
 pub static e_invalid_return_type_from_findfunc: &CStr =
     c"E1514: 'findfunc' did not return a List type";
 pub static e_cannot_switch_to_a_closing_buffer: &CStr = c"E1546: Cannot switch to a closing buffer";
-pub static e_cannot_have_more_than_nr_diff_anchors: &CStr =
-    c"E1549: Cannot have more than %d diff anchors";
 pub static e_failed_to_find_all_diff_anchors: &CStr = c"E1550: Failed to find all diff anchors";
 pub static e_diff_anchors_with_hidden_windows: &CStr =
     c"E1562: Diff anchors cannot be used with hidden diff windows";
@@ -471,8 +430,6 @@ pub static e_leadtab_requires_tab: &CStr =
     c"E1572: 'listchars' field \"leadtab\" requires \"tab\" to be specified";
 pub static e_invalid_format_string_single_percent_s: &CStr =
     c"E1577: Invalid format string, only one \"%s\" is allowed";
-pub static e_cannot_read_from_str_2: &CStr = c"E282: Cannot read from \"%s\"";
-pub static e_unknown_option2: &CStr = c"E355: Unknown option: %s";
 pub static top_bot_msg: &CStr = c"search hit TOP, continuing at BOTTOM";
 pub static bot_top_msg: &CStr = c"search hit BOTTOM, continuing at TOP";
 pub static line_msg: &CStr = c" line ";

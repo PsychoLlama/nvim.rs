@@ -591,7 +591,7 @@ fn locate(start: c_int, dir: c_int, count: c_int, flags: c_int, unload: bool) ->
         if start == DOBUF_FIRST as c_int {
             // don't warn when deleting
             if !unload {
-                // The two `e_nobufnr` sites pass different widths -- an
+                // The two `err_nobufnr` calls pass different widths -- an
                 // `int64_t` here and a plain `int` for the dummy buffer below;
                 // both are kept as upstream writes them.
                 err_nobufnr(count as int64_t);
