@@ -22,7 +22,7 @@ use core::{ptr, slice};
 ///
 /// On the first call set `first` to true to initialize the search, false for
 /// repeating calls. Repeating calls return other files called `ptr[len]`
-/// from the path; only on the first call are `ptr` and `len` used.
+/// from the path; only on the first call are `name` and `len` used.
 ///
 /// If nothing is found on the first call, `FileNameOpts::MESS` issues
 /// `Can't find file "<file>" in path`; on repeating calls,
@@ -37,7 +37,7 @@ use core::{ptr, slice};
 ///
 /// @return  an allocated string for the file name. NULL for error.
 pub(crate) unsafe fn find_file_in_path(
-    ptr: *mut c_char,
+    name: *mut c_char,
     len: size_t,
     options: FileNameOpts,
     first: bool,
@@ -47,7 +47,7 @@ pub(crate) unsafe fn find_file_in_path(
 ) -> *mut c_char {
     unsafe {
         find_file_in_path_option(
-            ptr,
+            name,
             len,
             options,
             first,
@@ -75,7 +75,7 @@ pub(crate) unsafe fn find_file_in_path(
 ///
 /// @return  an allocated string for the file name. NULL for error.
 pub(crate) unsafe fn find_directory_in_path(
-    ptr: *mut c_char,
+    name: *mut c_char,
     len: size_t,
     options: FileNameOpts,
     rel_fname: *mut c_char,
@@ -84,7 +84,7 @@ pub(crate) unsafe fn find_directory_in_path(
 ) -> *mut c_char {
     unsafe {
         find_file_in_path_option(
-            ptr,
+            name,
             len,
             options,
             true,
@@ -103,7 +103,7 @@ pub(crate) unsafe fn find_directory_in_path(
 /// With `FileNameOpts::UNESC` every `"\ "` in the result becomes a plain space, so
 /// that a name escaped for the command line reaches the file system whole.
 unsafe fn prepare_name(
-    ptr: *mut c_char,
+    name: *mut c_char,
     len: size_t,
     options: FileNameOpts,
     file_to_find: *mut *mut c_char,
@@ -111,12 +111,12 @@ unsafe fn prepare_name(
     let mut expanded = [0 as c_char; MAXPATHL as usize];
     // expand_env_esc wants a NUL-terminated name, and the caller's is a
     // slice of a longer line.
-    let save_char = unsafe { *ptr.add(len) };
-    unsafe { *ptr.add(len) = 0 };
+    let save_char = unsafe { *name.add(len) };
+    unsafe { *name.add(len) = 0 };
     let name_buff = expanded.as_mut_ptr();
     let written = unsafe {
         expand_env_esc(
-            ptr,
+            name,
             name_buff,
             MAXPATHL as c_int,
             false,
@@ -124,7 +124,7 @@ unsafe fn prepare_name(
             ptr::null_mut(),
         )
     };
-    unsafe { *ptr.add(len) = save_char };
+    unsafe { *name.add(len) = save_char };
 
     unsafe { xfree((*file_to_find).cast()) };
     let name_buff = unsafe { slice::from_raw_parts(name_buff.cast::<u8>(), written) };
@@ -360,7 +360,7 @@ unsafe fn report_missing(first: bool, find_what: c_int, file_to_find: *const c_c
 /// @param[in,out] file_to_find  modified copy of file name
 /// @param[in,out] search_ctx_arg  state of the search
 pub(crate) unsafe fn find_file_in_path_option(
-    ptr: *mut c_char,
+    name: *mut c_char,
     len: size_t,
     options: FileNameOpts,
     first: bool,
@@ -383,7 +383,7 @@ pub(crate) unsafe fn find_file_in_path_option(
         if len == 0 {
             return ptr::null_mut();
         }
-        unsafe { prepare_name(ptr, len, options, file_to_find) };
+        unsafe { prepare_name(name, len, options, file_to_find) };
     }
     let name = unsafe { *file_to_find };
     let namelen = unsafe { cstr::bytes_at(name) }.len();

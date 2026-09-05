@@ -106,16 +106,16 @@ unsafe fn name_start(line: *mut c_char, col: c_int, options: FileNameOpts) -> *m
     ptr
 }
 
-/// How many bytes of `ptr` belong to the file name that starts there.
+/// How many bytes of `name` belong to the file name that starts there.
 ///
 /// `":"`, `"?"`, `"&"` and `"="` join the name once a `type://` prefix has
 /// been seen, so that `http://google.com:8080?q=this&that=ok` comes out
 /// whole. `"\ "` is an escaped space and counts as two.
-unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
+unsafe fn name_length(name: *const c_char, options: FileNameOpts) -> usize {
     let hyp = options.has(FileNameOpts::HYP);
     // TODO(justinmk): Check for driveletter "x:/" at start, regardless of
     // 'isfname'.
-    let mut len = if unsafe { path_has_drive_letter(ptr, cstr::bytes_at(ptr).len()) } {
+    let mut len = if unsafe { path_has_drive_letter(name, cstr::bytes_at(name).len()) } {
         2
     } else {
         0
@@ -123,17 +123,17 @@ unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
     let mut in_type = true;
     let mut is_url = false;
     loop {
-        let at = |i: usize| unsafe { *ptr.add(i) } as u8;
+        let at = |i: usize| unsafe { *name.add(i) } as u8;
         let escaped_space = at(len) == b'\\' && at(len + 1) == b' ';
         if !(unsafe { vim_isfilec(at(len) as c_int) }
             || escaped_space
-            || (hyp && unsafe { path_is_url(ptr.add(len)) } != 0)
+            || (hyp && unsafe { path_is_url(name.add(len)) } != 0)
             || (is_url && !unsafe { vim_strchr(c":?&=".as_ptr(), at(len) as c_int) }.is_null()))
         {
             break;
         }
         if at(len).is_ascii_alphabetic() {
-            if in_type && unsafe { path_is_url(ptr.add(len + 1)) } != 0 {
+            if in_type && unsafe { path_is_url(name.add(len + 1)) } != 0 {
                 is_url = true;
             }
         } else {
@@ -142,14 +142,14 @@ unsafe fn name_length(ptr: *const c_char, options: FileNameOpts) -> usize {
         if escaped_space {
             len += 1; // skip over the "\" in "\ "
         }
-        len += unsafe { utfc_ptr2len(ptr.add(len)) } as usize;
+        len += unsafe { utfc_ptr2len(name.add(len)) } as usize;
     }
 
     // If there is trailing punctuation, remove it. But don't remove "..",
     // which could be a directory name.
     if len > 2
-        && !unsafe { vim_strchr(c".,:;!".as_ptr(), *ptr.add(len - 1) as u8 as c_int) }.is_null()
-        && unsafe { *ptr.add(len - 2) } != b'.' as c_char
+        && !unsafe { vim_strchr(c".,:;!".as_ptr(), *name.add(len - 1) as u8 as c_int) }.is_null()
+        && unsafe { *name.add(len - 2) } != b'.' as c_char
     {
         len -= 1;
     }
@@ -217,8 +217,8 @@ pub(crate) unsafe fn file_name_in_line(
 }
 
 /// Run `'includeexpr'` over `ptr[len]`, with the name in `v:fname`.
-pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c_char {
-    unsafe { set_vim_var_string(Vv::Fname, ptr, len as ptrdiff_t) };
+pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut c_char {
+    unsafe { set_vim_var_string(Vv::Fname, name, len as ptrdiff_t) };
     // Errors go against the script that set `'includeexpr'`.
     let script_ctx =
         Script::context(unsafe { (*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as usize] });
@@ -242,13 +242,13 @@ pub(crate) unsafe fn eval_includeexpr(ptr: *const c_char, len: size_t) -> *mut c
 ///
 /// @param rel_fname  file we are searching relative to
 pub(crate) unsafe fn find_file_name_in_path(
-    ptr: *mut c_char,
+    name: *mut c_char,
     len: size_t,
     options: FileNameOpts,
     count: c_long,
     rel_fname: *mut c_char,
 ) -> *mut c_char {
-    let mut ptr = ptr;
+    let mut name = name;
     let mut len = len;
     let mut count = count;
     if len == 0 {
@@ -259,24 +259,24 @@ pub(crate) unsafe fn find_file_name_in_path(
     // after "file:/" keeps the slash.
     if options.has(FileNameOpts::HYP)
         && len > 6
-        && unsafe { cstr::starts_with(ptr, b"file:/") }
-        && !vim_ispathsep(unsafe { *ptr.add(6) } as c_int)
+        && unsafe { cstr::starts_with(name, b"file:/") }
+        && !vim_ispathsep(unsafe { *name.add(6) } as c_int)
     {
-        let off = if unsafe { path_has_drive_letter(ptr.add(6), len - 6) } {
+        let off = if unsafe { path_has_drive_letter(name.add(6), len - 6) } {
             6
         } else {
             5
         };
-        ptr = unsafe { ptr.add(off) };
+        name = unsafe { name.add(off) };
         len -= off;
     }
 
     let mut tofree: *mut c_char = ptr::null_mut();
     if options.has(FileNameOpts::INCL) && unsafe { *(*curbuf.get()).b_p_inex } != 0 {
-        tofree = unsafe { eval_includeexpr(ptr, len) };
+        tofree = unsafe { eval_includeexpr(name, len) };
         if !tofree.is_null() {
-            ptr = tofree;
-            len = unsafe { cstr::bytes_at(ptr) }.len();
+            name = tofree;
+            len = unsafe { cstr::bytes_at(name) }.len();
         }
     }
 
@@ -285,9 +285,9 @@ pub(crate) unsafe fn find_file_name_in_path(
         let mut file_to_find: *mut c_char = ptr::null_mut();
         let mut search_ctx: *mut c_char = ptr::null_mut();
         let quiet = options.without(FileNameOpts::MESS);
-        let mut look = |ptr, len, first| unsafe {
+        let mut look = |name, len, first| unsafe {
             find_file_in_path(
-                ptr,
+                name,
                 len,
                 quiet,
                 first,
@@ -296,7 +296,7 @@ pub(crate) unsafe fn find_file_name_in_path(
                 &raw mut search_ctx,
             )
         };
-        file_name = look(ptr, len, true);
+        file_name = look(name, len, true);
 
         // If the file could not be found in a normal way, try applying
         // 'includeexpr' (unless done already).
@@ -304,20 +304,20 @@ pub(crate) unsafe fn find_file_name_in_path(
             && !options.has(FileNameOpts::INCL)
             && unsafe { *(*curbuf.get()).b_p_inex } != 0
         {
-            tofree = unsafe { eval_includeexpr(ptr, len) };
+            tofree = unsafe { eval_includeexpr(name, len) };
             if !tofree.is_null() {
-                ptr = tofree;
-                len = unsafe { cstr::bytes_at(ptr) }.len();
-                file_name = look(ptr, len, true);
+                name = tofree;
+                len = unsafe { cstr::bytes_at(name) }.len();
+                file_name = look(name, len, true);
             }
         }
         if file_name.is_null() && options.has(FileNameOpts::MESS) {
-            let c = unsafe { *ptr.add(len) };
-            unsafe { *ptr.add(len) = 0 };
+            let c = unsafe { *name.add(len) };
+            unsafe { *name.add(len) = 0 };
             // SAFETY: the byte past the name was just replaced by a NUL.
-            let name = unsafe { c_str(ptr) };
-            semsg!("E447: Can't find file \"{name}\" in path");
-            unsafe { *ptr.add(len) = c };
+            let shown = unsafe { c_str(name) };
+            semsg!("E447: Can't find file \"{shown}\" in path");
+            unsafe { *name.add(len) = c };
         }
 
         // Repeat finding the file "count" times. This matters when it
@@ -332,7 +332,7 @@ pub(crate) unsafe fn find_file_name_in_path(
             unsafe { xfree(file_name.cast()) };
             file_name = unsafe {
                 find_file_in_path(
-                    ptr,
+                    name,
                     len,
                     options,
                     false,
@@ -346,7 +346,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         unsafe { xfree(file_to_find.cast()) };
         unsafe { vim_findfile_cleanup(search_ctx.cast()) };
     } else {
-        file_name = unsafe { xstrnsave(ptr, len) };
+        file_name = unsafe { xstrnsave(name, len) };
     }
 
     unsafe { xfree(tofree.cast()) };

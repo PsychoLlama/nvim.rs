@@ -733,12 +733,12 @@ fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
     unsafe { grab_file_name(prenum1, lnum) }
 }
 
-/// `do_ecmd()`: edit file `ptr` in the current window, keeping the alternate.
-fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
+/// `do_ecmd()`: edit file `name` in the current window, keeping the alternate.
+fn edit_file(name: *mut c_char) -> Result<(), Failed> {
     let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<ExArg>(), ptr::null_mut());
     let lnum = newlnum::LASTL as LineNr;
     // SAFETY: a NUL-terminated file name; every other argument is optional.
-    unsafe { do_ecmd(0, ptr, sfname, eap, lnum, EcmdFlags::HIDE, win) }
+    unsafe { do_ecmd(0, name, sfname, eap, lnum, EcmdFlags::HIDE, win) }
 }
 
 /// Clamp `window`'s cursor line into its buffer.

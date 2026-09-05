@@ -806,8 +806,12 @@ impl Scan {
     /// # Safety
     /// `start` must be NUL-terminated, or hold `maxlen` readable bytes.
     #[inline(always)]
-    unsafe fn new(start: *const c_char, ptr: *const c_char, maxlen: c_int) -> Self {
-        Scan { start, ptr, maxlen }
+    unsafe fn new(start: *const c_char, at: *const c_char, maxlen: c_int) -> Self {
+        Scan {
+            start,
+            ptr: at,
+            maxlen,
+        }
     }
 
     #[inline(always)]

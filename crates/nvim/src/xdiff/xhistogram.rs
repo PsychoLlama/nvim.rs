@@ -124,17 +124,17 @@ fn table_hash(side: &XdFile<'_>, line: i64, bits: u32) -> usize {
 }
 
 impl HistIndex {
-    fn next_ptr(&self, ptr: i64) -> i64 {
-        self.next_ptrs[(ptr - self.ptr_shift) as usize]
+    fn next_ptr(&self, index: i64) -> i64 {
+        self.next_ptrs[(index - self.ptr_shift) as usize]
     }
 
-    fn set_next_ptr(&mut self, ptr: i64, to: i64) {
-        self.next_ptrs[(ptr - self.ptr_shift) as usize] = to;
+    fn set_next_ptr(&mut self, index: i64, to: i64) {
+        self.next_ptrs[(index - self.ptr_shift) as usize] = to;
     }
 
-    /// How often line `ptr`'s content occurs in the A range.
-    fn count_at(&self, ptr: i64) -> u32 {
-        let id = self.line_map[(ptr - self.ptr_shift) as usize]
+    /// How often line `index`'s content occurs in the A range.
+    fn count_at(&self, index: i64) -> u32 {
+        let id = self.line_map[(index - self.ptr_shift) as usize]
             .expect("every line of the A range is mapped by scan_a");
         self.pool[id as usize].cnt
     }

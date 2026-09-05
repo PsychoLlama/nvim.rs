@@ -63,7 +63,7 @@ fn is_upper(c: c_int) -> bool {
     }
 }
 
-/// Check the word starting at `ptr` in window `window`.
+/// Check the word starting at `text` in window `window`.
 ///
 /// `attrp` is set to the highlight for a badly spelled word and left alone
 /// otherwise. `capcol`, when not null, is the column at which to check for
@@ -77,13 +77,13 @@ fn is_upper(c: c_int) -> bool {
 /// skip over it.
 pub unsafe fn spell_check(
     window: *mut Window,
-    ptr: *mut c_char,
+    text: *mut c_char,
     attrp: *mut Hlf,
     capcol: *mut c_int,
     docount: bool,
 ) -> size_t {
     // A word never starts at a space or a control character.
-    if unsafe { *ptr } as uint8_t as c_int <= ' ' as c_int {
+    if unsafe { *text } as uint8_t as c_int <= ' ' as c_int {
         return 1;
     }
     // Loading the language files failed.
@@ -104,29 +104,29 @@ pub unsafe fn spell_check(
     // A number is always fine, including hex and binary literals. The
     // word is still checked, so that "3GPP" and "11 julifeest" are
     // caught.
-    if unsafe { *ptr } >= b'0' as c_char && unsafe { *ptr } <= b'9' as c_char {
-        mi.mi_end = if unsafe { *ptr } == b'0' as c_char
-            && (unsafe { *ptr.offset(1) } == b'b' as c_char
-                || unsafe { *ptr.offset(1) } == b'B' as c_char)
+    if unsafe { *text } >= b'0' as c_char && unsafe { *text } <= b'9' as c_char {
+        mi.mi_end = if unsafe { *text } == b'0' as c_char
+            && (unsafe { *text.offset(1) } == b'b' as c_char
+                || unsafe { *text.offset(1) } == b'B' as c_char)
         {
-            unsafe { skipbin(ptr.offset(2)) as *mut c_char }
-        } else if unsafe { *ptr } == b'0' as c_char
-            && (unsafe { *ptr.offset(1) } == b'x' as c_char
-                || unsafe { *ptr.offset(1) } == b'X' as c_char)
+            unsafe { skipbin(text.offset(2)) as *mut c_char }
+        } else if unsafe { *text } == b'0' as c_char
+            && (unsafe { *text.offset(1) } == b'x' as c_char
+                || unsafe { *text.offset(1) } == b'X' as c_char)
         {
-            unsafe { skiphex(ptr.offset(2)) }
+            unsafe { skiphex(text.offset(2)) }
         } else {
-            unsafe { skipdigits(ptr) }
+            unsafe { skipdigits(text) }
         };
-        nrlen = unsafe { mi.mi_end.offset_from(ptr) } as size_t;
+        nrlen = unsafe { mi.mi_end.offset_from(text) } as size_t;
     }
 
     // Find the end of the word: the next non-word character.
-    mi.mi_word = ptr;
-    mi.mi_fend = ptr;
+    mi.mi_word = text;
+    mi.mi_fend = text;
     if unsafe { spell_iswordp(mi.mi_fend, window) } {
         if use_camel_case {
-            mi.mi_fend = unsafe { advance_camelcase_word(ptr, window, &mut is_camel_case) };
+            mi.mi_fend = unsafe { advance_camelcase_word(text, window, &mut is_camel_case) };
         } else {
             loop {
                 mi.mi_fend = unsafe { mi.mi_fend.offset(utfc_ptr2len(mi.mi_fend) as isize) };
@@ -141,8 +141,8 @@ pub unsafe fn spell_check(
             && !unsafe { (*(*window).w_s).b_cap_prog }.is_null()
         {
             // This word should have started with a capital.
-            if !is_upper(unsafe { utf_ptr2char(ptr) }) {
-                wrongcaplen = unsafe { mi.mi_fend.offset_from(ptr) } as size_t;
+            if !is_upper(unsafe { utf_ptr2char(text) }) {
+                wrongcaplen = unsafe { mi.mi_fend.offset_from(text) } as size_t;
             }
         }
     }
@@ -165,9 +165,9 @@ pub unsafe fn spell_check(
         mi.mi_fend = unsafe { mi.mi_fend.offset(utfc_ptr2len(mi.mi_fend) as isize) };
     }
     let fword = &raw mut mi.mi_fword as *mut c_char;
-    let taken = unsafe { mi.mi_fend.offset_from(ptr) } as c_int;
+    let taken = unsafe { mi.mi_fend.offset_from(text) } as c_int;
     let room = MAXWLEN as c_int + 1;
-    let _ = unsafe { super::chartab::spell_casefold(window, ptr, taken, fword, room) };
+    let _ = unsafe { super::chartab::spell_casefold(window, text, taken, fword, room) };
     mi.mi_fwordlen = unsafe { cstr::bytes_at(fword) }.len() as c_int;
 
     if is_camel_case && mi.mi_fwordlen > 0 {
@@ -208,8 +208,8 @@ pub unsafe fn spell_check(
         // Count the word in the first language that accepts it.
         if count_word && mi.mi_result == SP_OK {
             let slang = unsafe { (*mi.mi_lp).lp_slang };
-            let len = unsafe { mi.mi_end.offset_from(ptr) } as c_int;
-            unsafe { count_common_word(slang, ptr, len, 1) };
+            let len = unsafe { mi.mi_end.offset_from(text) } as c_int;
+            unsafe { count_common_word(slang, text, len, 1) };
             count_word = false;
         }
     }
@@ -221,7 +221,7 @@ pub unsafe fn spell_check(
             if mi.mi_result == SP_BAD || mi.mi_result == SP_BANNED {
                 return nrlen;
             }
-        } else if !unsafe { spell_iswordp_nmw(ptr, window) } {
+        } else if !unsafe { spell_iswordp_nmw(text, window) } {
             // Sitting on a non-word character is not an error; step over
             // it and look for a word after it.
             if !capcol.is_null() && !unsafe { (*(*window).w_s).b_cap_prog }.is_null() {
@@ -229,15 +229,15 @@ pub unsafe fn spell_check(
                 let mut regmatch: RegMatch = unsafe { mem::zeroed() };
                 regmatch.regprog = unsafe { (*(*window).w_s).b_cap_prog };
                 regmatch.rm_ic = false;
-                let r = unsafe { vim_regexec(&raw mut regmatch, ptr, 0) };
+                let r = unsafe { vim_regexec(&raw mut regmatch, text, 0) };
                 unsafe { (*(*window).w_s).b_cap_prog = regmatch.regprog };
                 if r {
-                    unsafe { *capcol = regmatch.endp[0].offset_from(ptr) as c_int };
+                    unsafe { *capcol = regmatch.endp[0].offset_from(text) as c_int };
                 }
             }
 
-            return unsafe { utfc_ptr2len(ptr) } as size_t;
-        } else if mi.mi_end == ptr {
+            return unsafe { utfc_ptr2len(text) } as size_t;
+        } else if mi.mi_end == text {
             // Always consume at least one character, in case 'midword'
             // left the word empty.
             mi.mi_end = unsafe { mi.mi_end.offset(utfc_ptr2len(mi.mi_end) as isize) };
@@ -282,7 +282,7 @@ pub unsafe fn spell_check(
         return wrongcaplen;
     }
 
-    unsafe { mi.mi_end.offset_from(ptr) as size_t }
+    unsafe { mi.mi_end.offset_from(text) as size_t }
 }
 
 /// Classify `c` for the camel-case split.

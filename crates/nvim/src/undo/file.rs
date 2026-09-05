@@ -827,10 +827,10 @@ unsafe fn put_optional_field(bi: *mut BufInfo, what: c_int, value: c_int) {
 ///
 /// # Safety
 ///
-/// `bi` is open for writing and `ptr` points at `len` readable bytes.
-pub(crate) unsafe fn undo_write(bi: *mut BufInfo, ptr: *mut uint8_t, len: size_t) -> bool {
+/// `bi` is open for writing and `data` points at `len` readable bytes.
+pub(crate) unsafe fn undo_write(bi: *mut BufInfo, data: *mut uint8_t, len: size_t) -> bool {
     // SAFETY: an open file and `len` readable bytes, by the contract above.
-    unsafe { fwrite(ptr.cast(), len, 1, (*bi).bi_fp) == 1 }
+    unsafe { fwrite(data.cast(), len, 1, (*bi).bi_fp) == 1 }
 }
 
 /// Writes `nr` as a `len`-byte big-endian field. See [`encode_be`].

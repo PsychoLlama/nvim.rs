@@ -154,12 +154,12 @@ fn find_mps_values(target: &mut Target, switchit: bool) {
     }
 }
 
-/// Whether `ptr` begins with `word`.
+/// Whether `text` begins with `word`.
 ///
 /// # Safety
-/// `ptr` must be NUL-terminated.
-unsafe fn starts_with(ptr: *const c_char, word: &str) -> bool {
-    unsafe { cstr::prefix_eq(ptr, word.as_ptr() as *const c_char, word.len() as size_t) }
+/// `text` must be NUL-terminated.
+unsafe fn starts_with(text: *const c_char, word: &str) -> bool {
+    unsafe { cstr::prefix_eq(text, word.as_ptr() as *const c_char, word.len() as size_t) }
 }
 
 /// What the walk is looking for, once `initc` and the text under the

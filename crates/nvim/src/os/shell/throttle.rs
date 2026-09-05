@@ -237,20 +237,20 @@ pub(crate) fn out_data_append_to_screen(output: &[u8], count: &mut usize, fd: c_
 /// screen rather than to the caller.
 ///
 /// # Safety
-/// An `stream_read_cb`: `ptr` must be readable for `count` bytes and `stream`
+/// An `stream_read_cb`: `data` must be readable for `count` bytes and `stream`
 /// live.
 pub(crate) unsafe fn out_data_cb(
     stream: *mut RStream,
-    ptr: *const c_char,
+    data: *const c_char,
     mut count: size_t,
-    _data: *mut c_void,
+    _cookie: *mut c_void,
     eof: bool,
 ) -> size_t {
     if count == 0 {
         return count;
     }
     // SAFETY: the caller's contract.
-    let data = unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), count) };
+    let data = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), count) };
     if out_data_decide_throttle(count) {
         // Above the threshold: save it, and show it later if it turns out to
         // have been the last chunk.

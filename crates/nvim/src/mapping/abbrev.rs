@@ -59,8 +59,8 @@ fn abbr_matches(mp: Mb, word: &[u8]) -> bool {
 /// space in front.
 ///
 /// # Safety
-/// `ptr` must be readable for at least `col` bytes and `curbuf`/`curwin` live.
-pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) -> bool {
+/// `text` must be readable for at least `col` bytes and `curbuf`/`curwin` live.
+pub unsafe fn check_abbr(c: c_int, text: *mut c_char, col: c_int, mincol: c_int) -> bool {
     if typeahead().no_abbr_cnt() != 0 {
         return false; // abbreviations are not recursive
     }
@@ -77,18 +77,18 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     // all of them must not be, but never white space; if it ends in a
     // non-keyword character anything but white space is accepted.
     let mut clen = 1; // length of the word in characters
-    // SAFETY (every region below): the caller's promise — `ptr` is readable
+    // SAFETY (every region below): the caller's promise — `text` is readable
     // for `col` bytes, and `mb_prevptr`/`utfc_ptr2len`/`vim_iswordp` stay
     // inside `ptr..ptr+col` given that.
-    let start = unsafe { ptr.offset(mincol as isize) };
-    let mut p = unsafe { mb_prevptr(ptr, ptr.offset(col as isize)) };
+    let start = unsafe { text.offset(mincol as isize) };
+    let mut p = unsafe { mb_prevptr(text, text.offset(col as isize)) };
     let vim_abbr = !unsafe { vim_iswordp(p) };
     let mut is_id = true;
-    if !vim_abbr && p > ptr {
-        is_id = unsafe { vim_iswordp(mb_prevptr(ptr, p)) };
+    if !vim_abbr && p > text {
+        is_id = unsafe { vim_iswordp(mb_prevptr(text, p)) };
     }
     while p > start {
-        p = unsafe { mb_prevptr(ptr, p) };
+        p = unsafe { mb_prevptr(text, p) };
         let stop = unsafe { ascii_isspace(c_int::from(*p)) }
             || (!vim_abbr && is_id != unsafe { vim_iswordp(p) });
         if stop {
@@ -97,7 +97,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
         }
         clen += 1;
     }
-    let mut scol = unsafe { p.offset_from(ptr) } as c_int;
+    let mut scol = unsafe { p.offset_from(text) } as c_int;
     if scol < mincol {
         scol = mincol;
     }
@@ -106,7 +106,7 @@ pub unsafe fn check_abbr(c: c_int, ptr: *mut c_char, col: c_int, mincol: c_int) 
     }
 
     // SAFETY: `mincol <= scol < col`, so this stays inside the caller's text.
-    let word = unsafe { ptr.offset(scol as isize) };
+    let word = unsafe { text.offset(scol as isize) };
     let len = col - scol;
     // Buffer-local abbreviations first, then the global ones.
     let mut found = None;

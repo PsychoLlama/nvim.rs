@@ -417,9 +417,9 @@ fn is_autocmd_window(win: Option<Win>) -> bool {
 }
 
 /// `xfree`, for the frames and click definitions the family owns.
-fn free<T>(ptr: *mut T) {
+fn free<T>(raw: *mut T) {
     // SAFETY: every caller passes a pointer from the `xmalloc` family, or null.
-    unsafe { xfree(ptr as *mut ::core::ffi::c_void) };
+    unsafe { xfree(raw as *mut ::core::ffi::c_void) };
 }
 
 /// A tab page as the family's entry points take it: null for "the current one".

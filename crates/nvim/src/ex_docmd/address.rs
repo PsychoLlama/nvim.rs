@@ -488,12 +488,12 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// Read one address, including any `+N`/`-N` offsets after it.
 ///
 /// Answers `MAXLNUM` for "there was no address here", which is not the same
-/// as an address that resolved to nothing, and writes null through `ptr` to
+/// as an address that resolved to nothing, and writes null through `cursor` to
 /// report an error (the message goes to `errormsg`).
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn get_address(
     args: *mut ExArg,
-    ptr: *mut *mut c_char,
+    cursor: *mut *mut c_char,
     addr_type: CmdAddr,
     skip: bool,
     silent: bool,
@@ -504,7 +504,7 @@ pub unsafe fn get_address(
     let ea = unsafe { Ea::new(args) };
     // The record a `'m` address answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
-    let mut cmd: *mut c_char = unsafe { skipwhite(*ptr) };
+    let mut cmd: *mut c_char = unsafe { skipwhite(*cursor) };
     let mut lnum: LineNr = MAXLNUM as LineNr;
     let mut pos = Pos {
         lnum: 0,
@@ -758,7 +758,7 @@ pub unsafe fn get_address(
             break;
         }
     }
-    unsafe { *ptr = cmd };
+    unsafe { *cursor = cmd };
     lnum
 }
 

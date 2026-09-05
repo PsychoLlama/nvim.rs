@@ -183,34 +183,34 @@ pub unsafe fn ins_compl_add_infercase(
 }
 
 /// The first character of the next word, stopping at a NUL.
-pub unsafe fn find_word_start(mut ptr: *mut c_char) -> *mut c_char {
-    while unsafe { *ptr } as c_int != NUL
-        && unsafe { *ptr } as c_int != '\n' as c_int
-        && unsafe { mb_get_class(ptr) } <= 1
+pub unsafe fn find_word_start(mut text: *mut c_char) -> *mut c_char {
+    while unsafe { *text } as c_int != NUL
+        && unsafe { *text } as c_int != '\n' as c_int
+        && unsafe { mb_get_class(text) } <= 1
     {
-        ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
+        text = unsafe { text.offset(utfc_ptr2len(text) as isize) };
     }
-    ptr
+    text
 }
 
-/// Just after the word `ptr` points inside of.
-pub unsafe fn find_word_end(mut ptr: *mut c_char) -> *mut c_char {
-    let start_class = unsafe { mb_get_class(ptr) };
+/// Just after the word `text` points inside of.
+pub unsafe fn find_word_end(mut text: *mut c_char) -> *mut c_char {
+    let start_class = unsafe { mb_get_class(text) };
     if start_class > 1 {
-        while unsafe { *ptr } as c_int != NUL {
-            ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
-            if unsafe { mb_get_class(ptr) } != start_class {
+        while unsafe { *text } as c_int != NUL {
+            text = unsafe { text.offset(utfc_ptr2len(text) as isize) };
+            if unsafe { mb_get_class(text) } != start_class {
                 break;
             }
         }
     }
-    ptr
+    text
 }
 
 /// Just after the line, omitting the CR and NL at its end.
-pub unsafe fn find_line_end(ptr: *mut c_char) -> *mut c_char {
-    let mut s = unsafe { ptr.add(cstr::bytes_at(ptr).len()) };
-    while s > ptr && matches!(unsafe { *s.offset(-1) } as c_int, c if c == CAR || c == NL) {
+pub unsafe fn find_line_end(text: *mut c_char) -> *mut c_char {
+    let mut s = unsafe { text.add(cstr::bytes_at(text).len()) };
+    while s > text && matches!(unsafe { *s.offset(-1) } as c_int, c if c == CAR || c == NL) {
         s = unsafe { s.offset(-1) };
     }
     s

@@ -635,7 +635,7 @@ fn do_ecmd(
 /// `find_file_in_path()` as checked code.
 #[allow(clippy::too_many_arguments)]
 fn find_file_in_path(
-    ptr: *mut c_char,
+    name: *mut c_char,
     len: size_t,
     options: FileNameOpts,
     first: bool,
@@ -646,7 +646,7 @@ fn find_file_in_path(
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe {
         crate::file_search::find_file_in_path(
-            ptr,
+            name,
             len,
             options,
             first,

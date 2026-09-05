@@ -205,19 +205,19 @@ pub(crate) struct Menu(*mut VimMenu);
 
 impl Menu {
     /// # Safety
-    /// `ptr` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(ptr: *mut VimMenu) -> Self {
-        Menu(ptr)
+    /// `raw` must satisfy the invariant above.
+    pub(crate) const unsafe fn new(raw: *mut VimMenu) -> Self {
+        Menu(raw)
     }
 
-    /// The node `ptr` names, or `None` for C's `NULL`.
+    /// The node `raw` names, or `None` for C's `NULL`.
     ///
     /// # Safety
-    /// A non-null `ptr` must satisfy the invariant above.
-    pub(crate) unsafe fn opt(ptr: *const VimMenu) -> Option<Self> {
-        (!ptr.is_null()).then(|| {
+    /// A non-null `raw` must satisfy the invariant above.
+    pub(crate) unsafe fn opt(raw: *const VimMenu) -> Option<Self> {
+        (!raw.is_null()).then(|| {
             // SAFETY: the caller's obligation, minus the null case.
-            unsafe { Menu::new(ptr.cast_mut()) }
+            unsafe { Menu::new(raw.cast_mut()) }
         })
     }
 
@@ -388,9 +388,9 @@ pub(crate) struct CText(*mut c_char);
 
 impl CText {
     /// # Safety
-    /// `ptr` must satisfy the invariant above.
-    pub(crate) const unsafe fn new(ptr: *mut c_char) -> Self {
-        CText(ptr)
+    /// `raw` must satisfy the invariant above.
+    pub(crate) const unsafe fn new(raw: *mut c_char) -> Self {
+        CText(raw)
     }
 
     pub(crate) fn raw(self) -> *mut c_char {

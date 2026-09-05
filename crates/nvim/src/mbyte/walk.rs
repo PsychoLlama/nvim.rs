@@ -452,17 +452,17 @@ pub unsafe fn mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
     count
 }
 
-/// `ptr` paired with its codepoint: the start of a character and the
+/// `text` paired with its codepoint: the start of a character and the
 /// character itself. Composing characters are not consulted.
 ///
 /// # Safety
 ///
-/// `ptr` must point into a NUL-terminated string.
+/// `text` must point into a NUL-terminated string.
 #[inline(always)]
-pub unsafe fn utf_ptr2str_char_info(ptr: *mut c_char) -> StrCharInfo {
+pub unsafe fn utf_ptr2str_char_info(text: *mut c_char) -> StrCharInfo {
     StrCharInfo {
-        ptr,
-        chr: unsafe { utf_ptr2char_info(ptr) },
+        ptr: text,
+        chr: unsafe { utf_ptr2char_info(text) },
     }
 }
 

@@ -118,9 +118,9 @@ pub unsafe fn xstrnsave(string: *const c_char, len: size_t) -> *mut c_char {
 }
 
 /// Truncate unescaped trailing spaces and tabs in place.
-pub unsafe fn del_trailing_spaces(ptr: *mut c_char) {
-    let len = unsafe { CStr::from_ptr(ptr) }.to_bytes().len();
-    let s = unsafe { slice::from_raw_parts_mut(ptr as *mut u8, len) };
+pub unsafe fn del_trailing_spaces(text: *mut c_char) {
+    let len = unsafe { CStr::from_ptr(text) }.to_bytes().len();
+    let s = unsafe { slice::from_raw_parts_mut(text as *mut u8, len) };
     let end = trailing_spaces_start(s);
     s[end..].fill(0);
 }

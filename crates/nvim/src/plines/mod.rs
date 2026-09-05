@@ -682,16 +682,16 @@ pub(crate) unsafe fn charsize_fast(
 pub(crate) unsafe fn win_charsize(
     cstype: CharsizeKind,
     vcol: c_int,
-    ptr: *mut c_char,
+    text: *mut c_char,
     chr: int32_t,
     csarg: &mut CharsizeArg,
 ) -> CharSize {
     if cstype == CharsizeKind::Fast {
-        // SAFETY: `csarg` is initialised and `ptr` points into its line.
-        unsafe { charsize_fast(csarg, ptr, vcol, chr) }
+        // SAFETY: `csarg` is initialised and `text` points into its line.
+        unsafe { charsize_fast(csarg, text, vcol, chr) }
     } else {
         // SAFETY: as above.
-        unsafe { charsize_regular(csarg, ptr, vcol, chr) }
+        unsafe { charsize_regular(csarg, text, vcol, chr) }
     }
 }
 

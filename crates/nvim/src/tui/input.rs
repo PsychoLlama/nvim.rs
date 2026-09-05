@@ -459,18 +459,18 @@ unsafe fn shrink_parser_buffer(tk: *mut TermKey) {
     }
 }
 
-/// The bytes at `ptr`, or none at all.
+/// The bytes at `data`, or none at all.
 ///
 /// # Safety
-/// `ptr` must be valid for reads of `len` bytes.
-unsafe fn bytes<'a>(ptr: *const c_char, len: usize) -> &'a [u8] {
+/// `data` must be valid for reads of `len` bytes.
+unsafe fn bytes<'a>(data: *const c_char, len: usize) -> &'a [u8] {
     if len == 0 {
         // A length of zero says nothing about the pointer, and
         // `from_raw_parts` will not take a null one even so.
         return &[];
     }
     // SAFETY: the caller guarantees the pointer and the length.
-    unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len) }
+    unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }
 }
 
 // ----------------------------------------------------------------- whole keys

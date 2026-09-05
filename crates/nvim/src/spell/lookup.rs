@@ -435,7 +435,7 @@ pub(super) unsafe fn find_word(mip: &mut MatchInf, mode: c_int) {
 #[inline]
 unsafe fn compound_part_allowed(
     mip: &mut MatchInf,
-    ptr: *mut c_char,
+    word: *mut c_char,
     wlen: c_int,
     flags: WordFlags,
     word_ends: bool,
@@ -490,18 +490,18 @@ unsafe fn compound_part_allowed(
         return false;
     }
 
-    if unsafe { match_checkcompoundpattern(ptr, wlen, &(*slang).sl_comppat) } {
+    if unsafe { match_checkcompoundpattern(word, wlen, &(*slang).sl_comppat) } {
         return false;
     }
 
     if mode == FIND_COMPOUND {
         // Check the capitalisation of the part being appended.
         let mut p;
-        if !(unsafe { cstr::prefix_eq(ptr, mip.mi_word, mip.mi_compoff as usize) }) {
+        if !(unsafe { cstr::prefix_eq(word, mip.mi_word, mip.mi_compoff as usize) }) {
             // Folding changed the length.
             p = mip.mi_word;
-            let end = unsafe { ptr.offset(mip.mi_compoff as isize) };
-            let mut s = ptr;
+            let end = unsafe { word.offset(mip.mi_compoff as isize) };
+            let mut s = word;
             while s < end {
                 mb_ptr_adv!(s);
                 mb_ptr_adv!(p);
@@ -542,13 +542,13 @@ unsafe fn compound_part_allowed(
 
         if unsafe { (*slang).sl_compsylmax } < MAXWLEN as c_int {
             // Only syllable counting needs the word itself.
-            if ptr == mip.mi_word {
+            if word == mip.mi_word {
                 let win = mip.mi_win;
                 let out = fword.as_mut_ptr();
-                let _ = unsafe { spell_casefold(win, ptr, wlen, out, MAXWLEN as c_int) };
+                let _ = unsafe { spell_casefold(win, word, wlen, out, MAXWLEN as c_int) };
             } else {
                 let to = fword.as_mut_ptr() as *mut ::core::ffi::c_void;
-                let from = ptr as *const ::core::ffi::c_void;
+                let from = word as *const ::core::ffi::c_void;
                 unsafe { xmemcpyz(to, from, endlen as usize) };
             }
         }
@@ -570,20 +570,20 @@ unsafe fn compound_part_allowed(
 /// A rule is a pair: the first part has to match at the end of the word so
 /// far, the second at the start of what follows.
 pub unsafe fn match_checkcompoundpattern(
-    ptr: *mut c_char,
+    word: *mut c_char,
     wlen: c_int,
     pats: &[Box<[u8]>],
 ) -> bool {
     for pair in pats.as_chunks::<2>().0 {
         let (first, second) = (&pair[0], &pair[1]);
         let (len, head, n) = (first.len() as c_int, first.as_ptr().cast(), first.len());
-        // SAFETY: the caller promises `wlen` bytes of `ptr` followed by a
+        // SAFETY: the caller promises `wlen` bytes of `word` followed by a
         // NUL-terminated remainder, which is the whole of what the two
         // compares read; the length test is what keeps the second inside
         // the word so far.
         if len <= wlen
-            && unsafe { cstr::starts_with(ptr.offset(wlen as isize), second) }
-            && unsafe { cstr::prefix_eq(ptr.offset((wlen - len) as isize), head, n) }
+            && unsafe { cstr::starts_with(word.offset(wlen as isize), second) }
+            && unsafe { cstr::prefix_eq(word.offset((wlen - len) as isize), head, n) }
         {
             return true;
         }

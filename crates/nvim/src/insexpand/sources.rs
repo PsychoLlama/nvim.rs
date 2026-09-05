@@ -825,13 +825,13 @@ fn cur_win() -> Win {
 /// `*ptr` and `pat` must be NUL-terminated strings or NULL, and the line must
 /// be writable — a word is terminated in place while it is scored.
 pub(super) unsafe fn fuzzy_match_str_in_line(
-    ptr: *mut *mut c_char,
+    cursor: *mut *mut c_char,
     pat: *const c_char,
     len: *mut c_int,
     current_pos: *mut Pos,
     score: *mut c_int,
 ) -> bool {
-    let line = unsafe { *ptr };
+    let line = unsafe { *cursor };
     if line.is_null() || pat.is_null() {
         return false;
     }
@@ -849,7 +849,7 @@ pub(super) unsafe fn fuzzy_match_str_in_line(
         unsafe { *end = save_end };
         if unsafe { *score } != FUZZY_SCORE_NONE {
             unsafe { *len = end.offset_from(start) as c_int };
-            unsafe { *ptr = start };
+            unsafe { *cursor = start };
             if !current_pos.is_null() {
                 unsafe { (*current_pos).col += end.offset_from(line) as c_int };
             }
@@ -862,7 +862,7 @@ pub(super) unsafe fn fuzzy_match_str_in_line(
             str = unsafe { str.offset(utfc_ptr2len(str) as isize) };
         }
     }
-    unsafe { *ptr = line_end };
+    unsafe { *cursor = line_end };
     false
 }
 

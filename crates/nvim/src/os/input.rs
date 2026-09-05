@@ -572,7 +572,7 @@ fn scan_mouse_pos(s: &[u8]) -> Option<(c_int, c_int, usize)> {
 /// # Safety
 /// `*ptr` must be inside a run ending at `end`.
 unsafe fn handle_mouse_event(
-    ptr: &mut *const c_char,
+    cursor: &mut *const c_char,
     end: *const c_char,
     buf: &mut [u8; MAX_TRANS_SPECIAL],
     bufsize: c_uint,
@@ -597,8 +597,9 @@ unsafe fn handle_mouse_event(
     // find mouse coordinates.
     // SAFETY: the caller's contract puts `*ptr` inside the run ending at
     // `end`.
-    let rest =
-        unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), end.offset_from(*ptr) as usize) };
+    let rest = unsafe {
+        core::slice::from_raw_parts(cursor.cast::<u8>(), end.offset_from(*cursor) as usize)
+    };
     if let Some((col, row, advance)) = scan_mouse_pos(rest) {
         if col >= 0 && row >= 0 {
             // Some terminals report positions off the screen.
@@ -607,7 +608,7 @@ unsafe fn handle_mouse_event(
             mouse_col.set(col.min(Columns.get() - 1));
         }
         // SAFETY: `advance` counts bytes of `rest`, so it stays within `end`.
-        *ptr = unsafe { ptr.add(advance) };
+        *cursor = unsafe { cursor.add(advance) };
     }
 
     let Some(modifiers) = check_multiclick(

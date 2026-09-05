@@ -280,23 +280,23 @@ pub unsafe fn ml_append_buf(
     unsafe { ml_append_flush(buffer, lnum, line, len, flags) }
 }
 
-/// Book `len` bytes at `ptr` as deleted from the current buffer, for the
+/// Book `len` bytes at `text` as deleted from the current buffer, for the
 /// buffer-update callbacks.
 ///
 /// # Safety
-/// Must run on the main thread; `ptr` must be NUL-terminated.
-pub unsafe fn ml_add_deleted_len(ptr: *mut ::core::ffi::c_char, len: ssize_t) {
-    unsafe { ml_add_deleted_len_buf(curbuf.get(), ptr, len) }
+/// Must run on the main thread; `text` must be NUL-terminated.
+pub unsafe fn ml_add_deleted_len(text: *mut ::core::ffi::c_char, len: ssize_t) {
+    unsafe { ml_add_deleted_len_buf(curbuf.get(), text, len) }
 }
 
 /// [`ml_add_deleted_len`] for an arbitrary buffer. `len` of -1 measures the
 /// string.
 ///
 /// # Safety
-/// `buffer` must point at a buffer; `ptr` must be NUL-terminated.
+/// `buffer` must point at a buffer; `text` must be NUL-terminated.
 pub unsafe fn ml_add_deleted_len_buf(
     buffer: *mut Buffer,
-    ptr: *mut ::core::ffi::c_char,
+    text: *mut ::core::ffi::c_char,
     len_arg: ssize_t,
 ) {
     // SAFETY: the caller's buffer, reached through a handle that
@@ -305,7 +305,7 @@ pub unsafe fn ml_add_deleted_len_buf(
     if inhibit_delete_count.get() != 0 {
         return;
     }
-    let maxlen = unsafe { cstr::bytes_at(ptr) }.len() as ssize_t;
+    let maxlen = unsafe { cstr::bytes_at(text) }.len() as ssize_t;
     let len = if len_arg == -1 || len_arg > maxlen {
         maxlen
     } else {
@@ -317,7 +317,7 @@ pub unsafe fn ml_add_deleted_len_buf(
     if b.update_need_codepoints {
         unsafe {
             mb_utflen(
-                ptr,
+                text,
                 len as size_t,
                 &raw mut (*buffer).deleted_codepoints,
                 &raw mut (*buffer).deleted_codeunits,

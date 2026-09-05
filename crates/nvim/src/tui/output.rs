@@ -80,20 +80,20 @@ pub fn out_cstr(tui: &mut TUIData, s: Option<&CStr>) {
     }
 }
 
-/// Stage `len` bytes starting at `ptr`.
+/// Stage `len` bytes starting at `data`.
 ///
 /// For the callers that hold a pointer and a length rather than a slice:
 /// an API `String_0`, the URL builder's buffer, a `strlen`-measured cell.
 ///
 /// # Safety
-/// `ptr` must be valid for reads of `len` bytes.
-pub unsafe fn out_raw(tui: &mut TUIData, ptr: *const c_char, len: usize) {
+/// `data` must be valid for reads of `len` bytes.
+pub unsafe fn out_raw(tui: &mut TUIData, data: *const c_char, len: usize) {
     // SAFETY: the caller guarantees the pointer and the length; a length of
     // zero says nothing about the pointer, so it is answered here.
     let bytes = if len == 0 {
         &[][..]
     } else {
-        unsafe { core::slice::from_raw_parts(ptr.cast::<u8>(), len) }
+        unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }
     };
     out(tui, bytes);
 }

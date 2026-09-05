@@ -352,21 +352,21 @@ pub unsafe fn get_indent_buf(buffer: *mut Buffer, lnum: LineNr) -> c_int {
     }
 }
 
-/// The screen width of the indent at `ptr`, with every tab a fixed
+/// The screen width of the indent at `text`, with every tab a fixed
 /// `byte2cells(TAB)` wide.
 ///
 /// That is the shape 'breakindent' wants: it asks about a line it is not
 /// going to change, so where the tabstops actually sit does not matter.
 ///
 /// # Safety
-/// `ptr` must point at a NUL-terminated string.
-pub unsafe fn indent_size_no_ts(ptr: *const c_char) -> c_int {
+/// `text` must point at a NUL-terminated string.
+pub unsafe fn indent_size_no_ts(text: *const c_char) -> c_int {
     let tab_size = unsafe { byte2cells(TAB) };
     let mut vcol = 0;
-    let mut ptr = ptr;
+    let mut text = text;
     loop {
-        let c = unsafe { *ptr } as u8;
-        ptr = unsafe { ptr.add(1) };
+        let c = unsafe { *text } as u8;
+        text = unsafe { text.add(1) };
         if c == b' ' {
             vcol += 1;
         } else if c_int::from(c) == TAB {
@@ -441,22 +441,22 @@ fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[ColNr]>, ts: OptIn
     }
 }
 
-/// The screen width of the indent at `ptr` under 'tabstop' `ts` and
+/// The screen width of the indent at `text` under 'tabstop' `ts` and
 /// 'vartabstop' `vts`.
 ///
 /// # Safety
-/// `ptr` must point at a NUL-terminated string; `vts` must be a valid
+/// `text` must point at a NUL-terminated string; `vts` must be a valid
 /// tabstop array or null.
-pub unsafe fn indent_size_ts(ptr: *const c_char, ts: OptInt, vts: *mut ColNr) -> c_int {
+pub unsafe fn indent_size_ts(text: *const c_char, ts: OptInt, vts: *mut ColNr) -> c_int {
     debug_assert!(unsafe { char2cells(' ' as c_int) } == 1);
     // `vts[0]` is the count and `vts[1..=count]` the widths.
     let stops = (!vts.is_null() && unsafe { *vts } >= 1)
         .then(|| unsafe { ::core::slice::from_raw_parts(vts.add(1), *vts as usize) });
-    let mut ptr = ptr;
+    let mut text = text;
     indent_width(
         || {
-            let c = unsafe { *ptr } as u8;
-            ptr = unsafe { ptr.add(1) };
+            let c = unsafe { *text } as u8;
+            text = unsafe { text.add(1) };
             c
         },
         stops,

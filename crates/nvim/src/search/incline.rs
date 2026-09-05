@@ -79,13 +79,13 @@ pub(crate) unsafe fn match_is_code(line: *mut c_char, startp: *mut c_char) -> bo
 /// Answers where the match starts, or `None`.
 ///
 /// # Safety
-/// `ptr` must point at `len` readable bytes; `from` must be inside
+/// `text` must point at `len` readable bytes; `from` must be inside
 /// `walk.line`.
 pub(crate) unsafe fn match_on_line(
     line: *mut c_char,
     pats: &mut Patterns,
     from: *mut c_char,
-    ptr: *mut c_char,
+    text: *mut c_char,
     len: size_t,
     whole: bool,
     skip_comments: bool,
@@ -113,9 +113,9 @@ pub(crate) unsafe fn match_on_line(
         // Compare the first "len" characters with "ptr".
         let startp = unsafe { skipwhite(p) };
         let matched = if p_ic.get() != 0 {
-            unsafe { mb_strnicmp(startp, ptr, len) == 0 }
+            unsafe { mb_strnicmp(startp, text, len) == 0 }
         } else {
-            unsafe { cstr::prefix_eq(startp, ptr, len) }
+            unsafe { cstr::prefix_eq(startp, text, len) }
         };
         if matched
             && !(define_matched && whole && unsafe { vim_iswordc(*startp.add(len) as u8 as c_int) })

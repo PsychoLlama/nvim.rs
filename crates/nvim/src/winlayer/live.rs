@@ -118,10 +118,10 @@ impl<T> Eq for Live<T> {}
 
 impl<T> Live<T> {
     /// # Safety
-    /// `ptr` must stay a live `T` for as long as the value is used.
+    /// `raw` must stay a live `T` for as long as the value is used.
     #[inline(always)]
-    pub(crate) const unsafe fn new(ptr: *mut T) -> Self {
-        Self(ptr)
+    pub(crate) const unsafe fn new(raw: *mut T) -> Self {
+        Self(raw)
     }
 
     /// The pointer back, for the callees that still take one.

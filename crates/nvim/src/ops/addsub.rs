@@ -325,22 +325,22 @@ fn finish_addsub(visual: bool, did_change: bool, save_cursor: Pos, save_coladd: 
 /// number's first one.
 ///
 /// # Safety
-/// `ptr` must be a NUL-terminated line and `start_col` a column in it.
-unsafe fn find_number_start(ptr: *mut c_char, start_col: ColNr, fmt: &NrFormats) -> ColNr {
+/// `text` must be a NUL-terminated line and `start_col` a column in it.
+unsafe fn find_number_start(text: *mut c_char, start_col: ColNr, fmt: &NrFormats) -> ColNr {
     // SAFETY: the caller's promise -- every column the walks below reach is
-    // one of `ptr`'s, the terminating NUL included, and the walks stop there.
-    let byte = |c: ColNr| unsafe { *ptr.offset(c as isize) } as c_int;
+    // one of `text`'s, the terminating NUL included, and the walks stop there.
+    let byte = |c: ColNr| unsafe { *text.offset(c as isize) } as c_int;
     // Step back one character, not one byte.
     let back = |c: ColNr| {
         let c = c - 1;
-        c - unsafe { utf_head_off(ptr, ptr.offset(c as isize)) }
+        c - unsafe { utf_head_off(text, text.offset(c as isize)) }
     };
     // `0x`/`0b` at `col`, with a digit of that base after it.
     let prefixed_at = |c: ColNr, upper: u8, lower: u8, digit: fn(c_int) -> bool| {
         c > 0
             && (byte(c) == c_int::from(upper) || byte(c) == c_int::from(lower))
             && byte(c - 1) == '0' as c_int
-            && unsafe { utf_head_off(ptr, ptr.offset(c as isize).offset(-1)) } == 0
+            && unsafe { utf_head_off(text, text.offset(c as isize).offset(-1)) } == 0
             && digit(byte(c + 1))
     };
 
@@ -389,21 +389,21 @@ unsafe fn find_number_start(ptr: *mut c_char, start_col: ColNr, fmt: &NrFormats)
 /// `None` when the selection runs out first.
 ///
 /// # Safety
-/// `ptr` must be a NUL-terminated line and `col` a column in it.
+/// `text` must be a NUL-terminated line and `col` a column in it.
 unsafe fn visual_skip_to_number(
-    ptr: *mut c_char,
+    text: *mut c_char,
     mut col: ColNr,
     mut length: c_int,
     fmt: &NrFormats,
 ) -> Option<(ColNr, c_int)> {
-    // SAFETY: the caller's promise -- `col` stays a column of `ptr`.
-    let byte = |c: ColNr| unsafe { *ptr.offset(c as isize) } as c_int;
+    // SAFETY: the caller's promise -- `col` stays a column of `text`.
+    let byte = |c: ColNr| unsafe { *text.offset(c as isize) } as c_int;
     while byte(col) != NUL
         && length > 0
         && !ascii_isdigit(byte(col))
         && !(fmt.alpha && ascii_isalpha(byte(col)))
     {
-        let mb_len = unsafe { utfc_ptr2len(ptr.offset(col as isize)) };
+        let mb_len = unsafe { utfc_ptr2len(text.offset(col as isize)) };
         col += mb_len;
         length -= mb_len;
     }
@@ -416,18 +416,18 @@ unsafe fn visual_skip_to_number(
 /// selection's start in Visual mode, 0 outside it.
 ///
 /// # Safety
-/// `ptr` must be a NUL-terminated line and `col` a column in it.
-unsafe fn minus_before(ptr: *mut c_char, col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Minus {
-    // SAFETY: the caller's promise -- `col` is a column of `ptr`, and each
+/// `text` must be a NUL-terminated line and `col` a column in it.
+unsafe fn minus_before(text: *mut c_char, col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Minus {
+    // SAFETY: the caller's promise -- `col` is a column of `text`, and each
     // read below is guarded by the bound that keeps it inside the line.
     if !(col > min_col
-        && unsafe { *ptr.offset((col - 1) as isize) } as c_int == '-' as c_int
-        && unsafe { utf_head_off(ptr, ptr.offset(col as isize).offset(-1)) } == 0
+        && unsafe { *text.offset((col - 1) as isize) } as c_int == '-' as c_int
+        && unsafe { utf_head_off(text, text.offset(col as isize).offset(-1)) } == 0
         && !fmt.unsigned)
     {
         return Minus::Absent;
     }
-    if fmt.blank && col >= 2 && !ascii_iswhite(unsafe { *ptr.offset((col - 2) as isize) } as c_int)
+    if fmt.blank && col >= 2 && !ascii_iswhite(unsafe { *text.offset((col - 2) as isize) } as c_int)
     {
         Minus::BlankUnsigned
     } else {

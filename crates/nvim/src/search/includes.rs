@@ -166,9 +166,9 @@ unsafe fn compile(into: &mut RegMatch, pat: *const c_char, ignore_case: bool) ->
 /// Answers `None` when one of them failed, which abandons the search.
 ///
 /// # Safety
-/// `ptr` must point at `len` readable bytes.
+/// `pattern` must point at `len` readable bytes.
 unsafe fn compile_patterns(
-    ptr: *mut c_char,
+    pattern: *mut c_char,
     len: size_t,
     whole: bool,
     kind: c_int,
@@ -190,7 +190,7 @@ unsafe fn compile_patterns(
         // Upstream builds this with "%.*s", which stops at a NUL
         // inside the first `len` bytes; copying them all would put
         // the closing "\>" past the terminator.
-        let bytes = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
+        let bytes = unsafe { core::slice::from_raw_parts(pattern as *const u8, len) };
         let end = bytes.iter().position(|&b| b == 0).unwrap_or(len);
         pat.extend_from_slice(&bytes[..end]);
         if whole {
@@ -798,7 +798,7 @@ unsafe fn goto_match(
 /// Find identifiers or defines in the current file and everything it
 /// includes.
 ///
-/// `ptr`/`len` is the pattern; with `p_ic` and `compl_status_sol()` it
+/// `pattern`/`len` is the pattern; with `p_ic` and `compl_status_sol()` it
 /// must be lowercase. `whole` matches whole words only, `skip_comments`
 /// ignores matches inside comments, `kind` is what is being looked for
 /// (`FIND_ANY`, `FIND_DEFINE` or `CHECK_PATH`), `action` is what to do
@@ -807,11 +807,11 @@ unsafe fn goto_match(
 /// suppresses the messages for `ACTION_EXPAND`.
 ///
 /// # Safety
-/// `ptr` must point at `len` readable bytes, or be null when `kind` is
+/// `pattern` must point at `len` readable bytes, or be null when `kind` is
 /// `CHECK_PATH`.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn find_pattern_in_path(
-    ptr: *mut c_char,
+    pattern: *mut c_char,
     dir: Direction,
     len: size_t,
     whole: bool,
@@ -827,7 +827,7 @@ pub unsafe fn find_pattern_in_path(
     let mut dir = dir;
     let mut count = count;
     let tagpreview = g_do_tagpreview.get();
-    let found = unsafe { compile_patterns(ptr, len, whole, kind) };
+    let found = unsafe { compile_patterns(pattern, len, whole, kind) };
     let Some(mut pats) = found else {
         return;
     };
@@ -860,9 +860,17 @@ pub unsafe fn find_pattern_in_path(
             // Look for a match, possibly several times in one line.
             let mut from = walk.line;
             let mut stop = false;
-            while let Some(startp) =
-                unsafe { match_on_line(walk.line, &mut pats, from, ptr, len, whole, skip_comments) }
-            {
+            while let Some(startp) = unsafe {
+                match_on_line(
+                    walk.line,
+                    &mut pats,
+                    from,
+                    pattern,
+                    len,
+                    whole,
+                    skip_comments,
+                )
+            } {
                 let after = if action == ACTION_EXPAND {
                     unsafe { expand_match(&mut walk, startp, &mut dir) }
                 } else if action == ACTION_SHOW_ALL {

@@ -330,13 +330,13 @@ impl Conv {
         self.restlen = len as c_int;
     }
 
-    /// Put the held-over bytes at `ptr`.
+    /// Put the held-over bytes at `text`.
     ///
     /// `restlen` deliberately stays set: the bytes are laid down before the
     /// read so that the read appends to them, and only counted back in once
     /// the read is done.
-    pub(crate) unsafe fn restore(&self, ptr: *mut c_char) {
-        unsafe { ptr::copy(self.rest.as_ptr(), ptr, self.restlen as usize) };
+    pub(crate) unsafe fn restore(&self, text: *mut c_char) {
+        unsafe { ptr::copy(self.rest.as_ptr(), text, self.restlen as usize) };
     }
 
     /// Convert the bytes in `w` with iconv.
@@ -667,8 +667,8 @@ impl FormatGuess {
     }
 
     /// Guess the end-of-line format from the first bytes of the file.
-    pub(crate) unsafe fn guess(&mut self, ptr: *const c_char, size: ptrdiff_t) -> c_int {
-        let start: *const u8 = ptr.cast();
+    pub(crate) unsafe fn guess(&mut self, data: *const c_char, size: ptrdiff_t) -> c_int {
+        let start: *const u8 = data.cast();
         let end = unsafe { start.offset(size) };
         let mut fileformat = EOL_UNKNOWN;
 

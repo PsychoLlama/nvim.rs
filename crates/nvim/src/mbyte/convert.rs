@@ -340,13 +340,13 @@ pub unsafe fn convert_setup_ext(
 /// As [`string_convert_ext`].
 pub unsafe fn string_convert(
     vcp: *const VimConv,
-    ptr: *mut c_char,
+    text: *mut c_char,
     lenp: *mut size_t,
 ) -> *mut c_char {
-    unsafe { string_convert_ext(vcp, ptr, lenp, core::ptr::null_mut()) }
+    unsafe { string_convert_ext(vcp, text, lenp, core::ptr::null_mut()) }
 }
 
-/// Run `vcp`'s plan over `ptr`, answering a freshly allocated string.
+/// Run `vcp`'s plan over `text`, answering a freshly allocated string.
 ///
 /// `lenp` is the input length in and the output length out; null means "NUL
 /// terminated". `unconvlenp`, when given, receives the length of an
@@ -358,27 +358,27 @@ pub unsafe fn string_convert(
 ///
 /// # Safety
 ///
-/// `ptr` must have `*lenp` readable bytes, or be NUL-terminated when `lenp`
+/// `text` must have `*lenp` readable bytes, or be NUL-terminated when `lenp`
 /// is null. The result is `xmalloc`'d.
 pub unsafe fn string_convert_ext(
     vcp: *const VimConv,
-    ptr: *mut c_char,
+    text: *mut c_char,
     lenp: *mut size_t,
     unconvlenp: *mut size_t,
 ) -> *mut c_char {
     let len = if lenp.is_null() {
-        unsafe { cstr::bytes_at(ptr) }.len()
+        unsafe { cstr::bytes_at(text) }.len()
     } else {
         unsafe { *lenp }
     };
     if len == 0 {
         return unsafe { xstrdup(c"".as_ptr()) };
     }
-    let src = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
+    let src = unsafe { core::slice::from_raw_parts(text as *const u8, len) };
 
     // iconv manages its own buffer and reports its own length.
     if unsafe { (*vcp).vc_type } == CONV_ICONV {
-        return unsafe { iconv_string(vcp, ptr, len, unconvlenp, lenp) };
+        return unsafe { iconv_string(vcp, text, len, unconvlenp, lenp) };
     }
 
     // The worst-case growth of each conversion, which is what upstream
