@@ -301,10 +301,10 @@ impl Walk<'_> {
         if !self.soundfold {
             // Sound-folded words have no flags.
             //
-            // SAFETY: `lp` is the caller's language pointer, valid by the
+            // SAFETY: `langp` is the caller's language pointer, valid by the
             // contract above; `&&` keeps the read out of the common case.
             if flags.has(WordFlags::REGION)
-                && (flags.bits() as u32 >> 16) & unsafe { (*self.lp).lp_region } as u32 == 0
+                && (flags.bits() as u32 >> 16) & unsafe { (*self.langp).lp_region } as u32 == 0
             {
                 newscore += SCORE_REGION;
             }
@@ -444,7 +444,7 @@ impl Walk<'_> {
                 self.stack[level].preword_len > 0,
             )
         };
-        // SAFETY: `su` and `lp` are the caller's, valid by the contract
+        // SAFETY: `su` and `langp` are the caller's, valid by the contract
         // above, and `preword` is terminated as it is handed on.
         if score <= unsafe { (*self.su).su_maxscore } {
             unsafe {
@@ -456,7 +456,7 @@ impl Walk<'_> {
                     score,
                     0,
                     false,
-                    (*self.lp).lp_sallang,
+                    (*self.langp).lp_sallang,
                     false,
                 );
             }
@@ -648,7 +648,7 @@ impl Walk<'_> {
             // A sound-folded match stands for real words, which have
             // to be found and scored separately.
             //
-            // SAFETY: `su` and `lp` are the caller's, valid by the
+            // SAFETY: `su` and `langp` are the caller's, valid by the
             // contract above, and `preword` is this walk's own buffer,
             // NUL-terminated by now.
             unsafe {
@@ -656,7 +656,7 @@ impl Walk<'_> {
                     self.su,
                     self.preword.as_mut_ptr(),
                     self.stack[level].score,
-                    self.lp,
+                    self.langp,
                 );
             }
             return newscore;
@@ -703,7 +703,7 @@ impl Walk<'_> {
         }
 
         let replaced = self.stack[level].bad_idx as c_int - self.repextra;
-        // SAFETY: `su` and `lp` are the caller's and `preword` is
+        // SAFETY: `su` and `langp` are the caller's and `preword` is
         // NUL-terminated as it is handed on.
         unsafe {
             add_suggestion(
@@ -714,7 +714,7 @@ impl Walk<'_> {
                 score,
                 0,
                 false,
-                (*self.lp).lp_sallang,
+                (*self.langp).lp_sallang,
                 false,
             );
         }
@@ -747,7 +747,7 @@ impl Walk<'_> {
                         score + SCORE_ICASE,
                         0,
                         false,
-                        (*self.lp).lp_sallang,
+                        (*self.langp).lp_sallang,
                         false,
                     );
                 }

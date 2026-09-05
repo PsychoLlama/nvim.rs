@@ -197,15 +197,15 @@ fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
 ///
 /// # Safety
 ///
-/// `su` and `lp` must be valid and the language must have a loaded `.sug`.
+/// `su` and `langp` must be valid and the language must have a loaded `.sug`.
 pub(super) unsafe fn add_sound_suggest(
     su: *mut SugInfo,
     goodword: *mut c_char,
     score: c_int,
-    lp: *mut LangP,
+    langp: *mut LangP,
 ) {
-    // SAFETY: `lp` is valid by the contract above.
-    let slang = unsafe { (*lp).lp_slang };
+    // SAFETY: `langp` is valid by the contract above.
+    let slang = unsafe { (*langp).lp_slang };
 
     // The same soundfold turns up many times with different scores and
     // what follows is slow, so only the best score for each is done.
@@ -261,7 +261,7 @@ pub(super) unsafe fn add_sound_suggest(
         // SAFETY: `slang` has a case-folded tree, and the `n`/`i` pair the
         // walk returns is the tree position `emit_word` expects.
         let (mut theword, n, i) = unsafe { word_number_to_letters(slang, orgnr) };
-        unsafe { emit_word(su, lp, slang, &mut theword, n, i, score) };
+        unsafe { emit_word(su, langp, slang, &mut theword, n, i, score) };
     }
 }
 
@@ -347,7 +347,7 @@ unsafe fn word_number_to_letters(
 #[allow(clippy::too_many_arguments)]
 unsafe fn emit_word(
     su: *mut SugInfo,
-    lp: *mut LangP,
+    langp: *mut LangP,
     slang: *mut SpellLang,
     theword: &mut [c_char; MAXWLEN],
     n: usize,
@@ -404,9 +404,9 @@ unsafe fn emit_word(
 
         // A word from another region is worth less.
         //
-        // SAFETY: `lp` is valid by the contract above.
+        // SAFETY: `langp` is valid by the contract above.
         let mut goodscore = if flags.has(WordFlags::REGION)
-            && (flags.bits() as u32 >> 16) & unsafe { (*lp).lp_region } as u32 == 0
+            && (flags.bits() as u32 >> 16) & unsafe { (*langp).lp_region } as u32 == 0
         {
             SCORE_REGION
         } else {

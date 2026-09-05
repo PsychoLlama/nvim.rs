@@ -694,7 +694,7 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
     None
 }
 
-/// Record `lp`'s `MIDWORD` characters in `window`, so that [`spell_iswordp`]
+/// Record `slang`'s `MIDWORD` characters in `window`, so that [`spell_iswordp`]
 /// treats them as part of a word when a word character follows.
 ///
 /// Characters below 256 that take at most two bytes go in the flat
@@ -702,12 +702,12 @@ pub unsafe fn compile_cap_prog(synblock: *mut SynBlock) -> Option<&'static CStr>
 /// `b_spell_ismw_mb` string, which is scanned instead.
 ///
 /// [`spell_iswordp`]: super::chartab::spell_iswordp
-unsafe fn use_midword(lp: *mut SpellLang, window: *mut Window) {
-    if unsafe { (*lp).sl_midword }.is_null() {
+unsafe fn use_midword(slang: *mut SpellLang, window: *mut Window) {
+    if unsafe { (*slang).sl_midword }.is_null() {
         return;
     }
 
-    let mut p = unsafe { (*lp).sl_midword };
+    let mut p = unsafe { (*slang).sl_midword };
     while unsafe { *p } != 0 {
         let c = unsafe { utf_ptr2char(p) };
         let l = unsafe { utfc_ptr2len(p) };

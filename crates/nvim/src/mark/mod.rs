@@ -643,34 +643,35 @@ pub unsafe fn set_last_cursor(win: *mut Window) {
 /// If it points to a tail byte it is move backwards to the head byte.
 ///
 /// `buffer` — Buffer to adjust position in.
-/// `lp` — Position to adjust.
+/// `pos` — Position to adjust.
 ///
 /// # Safety
-/// `buffer` must be a live buffer and `lp` must point at a live, writable
+/// `buffer` must be a live buffer and `pos` must point at a live, writable
 /// position naming a line of it.
-pub unsafe fn mark_mb_adjustpos(buffer: *mut Buffer, lp: *mut Pos) {
+pub unsafe fn mark_mb_adjustpos(buffer: *mut Buffer, pos: *mut Pos) {
     // SAFETY: the caller promised a live position.
-    let mut pos = unsafe { *lp };
-    if pos.col <= 0 && pos.coladd <= 1 {
+    let mut adjusted = unsafe { *pos };
+    if adjusted.col <= 0 && adjusted.coladd <= 1 {
         return;
     }
     // SAFETY: the caller promised a live buffer and a line of it.
-    let p = unsafe { ml_get_buf(buffer, pos.lnum) };
-    if unsafe { *p } == NUL_BYTE || unsafe { ml_get_buf_len(buffer, pos.lnum) } < pos.col {
-        pos.col = 0;
+    let p = unsafe { ml_get_buf(buffer, adjusted.lnum) };
+    if unsafe { *p } == NUL_BYTE || unsafe { ml_get_buf_len(buffer, adjusted.lnum) } < adjusted.col
+    {
+        adjusted.col = 0;
     } else {
-        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
+        adjusted.col -= unsafe { utf_head_off(p, p.offset(adjusted.col as isize)) };
     }
     // A `coladd` of 1 on a printable wide character is the "one cell into
     // it" position virtual editing produces; the head byte has no such
     // offset, so it goes.
-    let at = unsafe { p.offset(pos.col as isize) };
-    if pos.coladd == 1
+    let at = unsafe { p.offset(adjusted.col as isize) };
+    if adjusted.coladd == 1
         && c_int::from(unsafe { *at }) != TAB
         && unsafe { vim_isprintc(utf_ptr2char(at)) }
         && unsafe { ptr2cells(at) } > 1
     {
-        pos.coladd = 0;
+        adjusted.coladd = 0;
     }
-    unsafe { *lp = pos };
+    unsafe { *pos = adjusted };
 }

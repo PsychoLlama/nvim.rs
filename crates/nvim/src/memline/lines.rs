@@ -574,23 +574,23 @@ pub unsafe fn ml_flush_deleted_bytes(
     ret
 }
 
-/// Advance `lp` by one character, crossing line boundaries as needed.
+/// Advance `pos` by one character, crossing line boundaries as needed.
 ///
 /// Returns 1 when it moved to the next line, 2 when it moved onto the NUL at
 /// the end of a line, -1 at the end of the file, and 0 otherwise.
 ///
 /// # Safety
-/// Must run on the main thread; `lp` must be a position in the current
+/// Must run on the main thread; `pos` must be a position in the current
 /// buffer.
-pub unsafe fn inc(lp: &mut Pos) -> ::core::ffi::c_int {
+pub unsafe fn inc(pos: &mut Pos) -> ::core::ffi::c_int {
     // While searching, the position may be set to the end of a line.
-    if lp.col != MAXCOL as ::core::ffi::c_int {
-        let p = unsafe { ml_get_pos(lp) };
+    if pos.col != MAXCOL as ::core::ffi::c_int {
+        let p = unsafe { ml_get_pos(pos) };
         if unsafe { *p } != NUL as ::core::ffi::c_char {
             // Still within the line; move to the next char, which may be
             // the NUL.
             let l = unsafe { utfc_ptr2len(p) };
-            lp.col += l;
+            pos.col += l;
             return if unsafe { *p.offset(l as isize) } != NUL as ::core::ffi::c_char {
                 0
             } else {
@@ -598,11 +598,11 @@ pub unsafe fn inc(lp: &mut Pos) -> ::core::ffi::c_int {
             };
         }
     }
-    if lp.lnum != cur_buf().b_ml.ml_line_count {
+    if pos.lnum != cur_buf().b_ml.ml_line_count {
         // There is a next line.
-        lp.col = 0;
-        lp.lnum += 1;
-        lp.coladd = 0;
+        pos.col = 0;
+        pos.lnum += 1;
+        pos.coladd = 0;
         return 1;
     }
     -1
@@ -612,44 +612,44 @@ pub unsafe fn inc(lp: &mut Pos) -> ::core::ffi::c_int {
 ///
 /// # Safety
 /// As [`inc`].
-pub unsafe fn incl(lp: &mut Pos) -> ::core::ffi::c_int {
-    let mut r = unsafe { inc(lp) };
-    if r >= 1 && lp.col != 0 {
-        r = unsafe { inc(lp) };
+pub unsafe fn incl(pos: &mut Pos) -> ::core::ffi::c_int {
+    let mut r = unsafe { inc(pos) };
+    if r >= 1 && pos.col != 0 {
+        r = unsafe { inc(pos) };
     }
     r
 }
 
-/// Move `lp` back by one character, crossing line boundaries as needed.
+/// Move `pos` back by one character, crossing line boundaries as needed.
 ///
 /// Returns 1 when it moved to the previous line, -1 at the start of the file,
 /// and 0 otherwise.
 ///
 /// # Safety
-/// Must run on the main thread; `lp` must be a position in the current
+/// Must run on the main thread; `pos` must be a position in the current
 /// buffer.
-pub unsafe fn dec(lp: &mut Pos) -> ::core::ffi::c_int {
-    lp.coladd = 0;
-    if lp.col == MAXCOL as ::core::ffi::c_int {
+pub unsafe fn dec(pos: &mut Pos) -> ::core::ffi::c_int {
+    pos.coladd = 0;
+    if pos.col == MAXCOL as ::core::ffi::c_int {
         // Past the end of the line.
-        let p = ml_get(lp.lnum);
-        lp.col = ml_get_len(lp.lnum);
-        lp.col -= unsafe { utf_head_off(p, p.offset(lp.col as isize)) };
+        let p = ml_get(pos.lnum);
+        pos.col = ml_get_len(pos.lnum);
+        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
         return 0;
     }
-    if lp.col > 0 {
+    if pos.col > 0 {
         // Still within the line.
-        lp.col -= 1;
-        let p = ml_get(lp.lnum);
-        lp.col -= unsafe { utf_head_off(p, p.offset(lp.col as isize)) };
+        pos.col -= 1;
+        let p = ml_get(pos.lnum);
+        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
         return 0;
     }
-    if lp.lnum > 1 {
+    if pos.lnum > 1 {
         // There is a previous line.
-        lp.lnum -= 1;
-        let p = ml_get(lp.lnum);
-        lp.col = ml_get_len(lp.lnum);
-        lp.col -= unsafe { utf_head_off(p, p.offset(lp.col as isize)) };
+        pos.lnum -= 1;
+        let p = ml_get(pos.lnum);
+        pos.col = ml_get_len(pos.lnum);
+        pos.col -= unsafe { utf_head_off(p, p.offset(pos.col as isize)) };
         return 1;
     }
     -1 // at the start of the file
@@ -659,10 +659,10 @@ pub unsafe fn dec(lp: &mut Pos) -> ::core::ffi::c_int {
 ///
 /// # Safety
 /// As [`dec`].
-pub unsafe fn decl(lp: &mut Pos) -> ::core::ffi::c_int {
-    let mut r = unsafe { dec(lp) };
-    if r == 1 && lp.col != 0 {
-        r = unsafe { dec(lp) };
+pub unsafe fn decl(pos: &mut Pos) -> ::core::ffi::c_int {
+    let mut r = unsafe { dec(pos) };
+    if r == 1 && pos.col != 0 {
+        r = unsafe { dec(pos) };
     }
     r
 }

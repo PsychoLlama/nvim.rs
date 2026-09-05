@@ -116,17 +116,17 @@ pub(crate) unsafe fn to_name_end(arg: *const c_char, use_namespace: bool) -> *co
 }
 
 /// Resolve one `.key` or `[key]` subscript against the Dictionary in
-/// `lp->ll_tv`. `key` is the text for a `.key`; for a `[key]` it is taken
+/// `lval->ll_tv`. `key` is the text for a `.key`; for a `[key]` it is taken
 /// from `var1` and `len` is -1.
 ///
 /// Answers `GLV_STOP` when the key does not exist yet and may be added —
 /// `ll_newkey` then holds it — and `GLV_FAIL` when it may not.
 ///
 /// # Safety
-/// `lp` must be valid with `ll_tv` a Dict; the rest as `get_lval`'s.
+/// `lval` must be valid with `ll_tv` a Dict; the rest as `get_lval`'s.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn get_lval_dict_item(
-    lp: *mut LVal,
+    lval: *mut LVal,
     name: *mut c_char,
     key: *mut c_char,
     len: c_int,
@@ -139,9 +139,9 @@ pub(crate) unsafe fn get_lval_dict_item(
     let mut numbuf = NumBuf::new();
     let quiet = flags & GLV_QUIET as c_int != 0;
     // SAFETY: the caller's promise; `key_end` holds a cursor into `name`.
-    let (mut lp, p) = unsafe { (Lv::new(lp), *key_end) };
+    let (mut lval, p) = unsafe { (Lv::new(lval), *key_end) };
     // SAFETY: the caller's promise: `ll_tv` holds a Dict, so `v_dict` is live.
-    let mut container = unsafe { Tv::new(lp.ll_tv) };
+    let mut container = unsafe { Tv::new(lval.ll_tv) };
     // "[key]": the key is `var1`'s string, which is a Number or String.
     let key = if len == -1 {
         // SAFETY: `var1` is the caller's, and `numbuf` outlives the string rendered into it.
@@ -149,7 +149,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     } else {
         key
     };
-    lp.ll_list = null_mut::<List>();
+    lval.ll_list = null_mut::<List>();
 
     // A null Dict is an empty Dict; allocate one now.
     // SAFETY: as above.
@@ -160,12 +160,12 @@ pub(crate) unsafe fn get_lval_dict_item(
         unsafe { (*container.dict_or_null()).dv_refcount.retain() };
     }
     // SAFETY: as above.
-    lp.ll_dict = container.dict_or_null();
+    lval.ll_dict = container.dict_or_null();
     // SAFETY: `ll_dict` is a live Dict, and `key` is NUL-terminated or `len` bytes long.
-    lp.ll_di = unsafe { tv_dict_find(lp.ll_dict, key, len as ptrdiff_t) };
+    lval.ll_di = unsafe { tv_dict_find(lval.ll_dict, key, len as ptrdiff_t) };
     // The one field this needs, read through the pointer.
     // SAFETY: `ll_dict` is the live Dict just resolved.
-    let dv_scope = unsafe { (*lp.ll_dict).dv_scope };
+    let dv_scope = unsafe { (*lval.ll_dict).dv_scope };
 
     // Assigning into a scope dictionary: check that the name is a valid
     // variable name, and a valid *function* name too unless the scope is
@@ -184,7 +184,7 @@ pub(crate) unsafe fn get_lval_dict_item(
             unsafe { *key.offset(len as isize) = NUL as c_char };
         }
         // SAFETY: `result` is the caller's, and `key` is NUL-terminated either way now.
-        let existing = lp.ll_di.is_null();
+        let existing = lval.ll_di.is_null();
         let wrong = (dv_scope == VAR_DEF_SCOPE
             && unsafe { tv_is_func(*result) }
             && unsafe { var_wrong_func_name(key, existing) })
@@ -199,8 +199,8 @@ pub(crate) unsafe fn get_lval_dict_item(
     }
 
     // SAFETY: a non-null `ll_di` is a live dictionary item.
-    let lua_key = !lp.ll_di.is_null()
-        && unsafe { tv_is_luafunc(&raw mut (*lp.ll_di).di_tv) }
+    let lua_key = !lval.ll_di.is_null()
+        && unsafe { tv_is_luafunc(&raw mut (*lval.ll_di).di_tv) }
         && len == -1
         && result.is_null();
     if lua_key {
@@ -211,13 +211,13 @@ pub(crate) unsafe fn get_lval_dict_item(
         return GLV_FAIL;
     }
 
-    if lp.ll_di.is_null() {
+    if lval.ll_di.is_null() {
         // A "v:" or "a:" variable cannot be added.
         // SAFETY: naming a live Dict's hashtab reads nothing.
-        let ht = unsafe { &raw mut (*lp.ll_dict).dv_hashtab };
+        let ht = unsafe { &raw mut (*lval.ll_dict).dv_hashtab };
         // SAFETY: the function-call stack is the editor's own.
         let args_ht = unsafe { get_funccal_args_ht() };
-        if lp.ll_dict == get_vimvar_dict() || ht == args_ht {
+        if lval.ll_dict == get_vimvar_dict() || ht == args_ht {
             // SAFETY: the format takes one NUL-terminated string.
             let name = unsafe { c_str(name) };
             semsg!("E461: Illegal variable name: {name}");
@@ -236,7 +236,7 @@ pub(crate) unsafe fn get_lval_dict_item(
             return GLV_FAIL;
         }
         // SAFETY: `key` is NUL-terminated when `len` is -1, and `len` bytes long otherwise.
-        lp.ll_newkey = if len == -1 {
+        lval.ll_newkey = if len == -1 {
             unsafe { xstrdup(key) }
         } else {
             unsafe { xmemdupz(key as *const c_void, len as size_t) as *mut c_char }
@@ -248,7 +248,7 @@ pub(crate) unsafe fn get_lval_dict_item(
 
     // An existing item: check it may be changed.
     // SAFETY: `ll_di` is a live item, and `p` and `name` are cursors into the one string.
-    let di_flags = unsafe { (*lp.ll_di).di_flags } as c_int;
+    let di_flags = unsafe { (*lval.ll_di).di_flags } as c_int;
     // SAFETY: as above.
     let name_len = unsafe { p.offset_from(name) } as size_t;
     let refused = flags & GLV_READ_ONLY as c_int == 0
@@ -259,55 +259,55 @@ pub(crate) unsafe fn get_lval_dict_item(
     }
 
     // SAFETY: `ll_di` is a live item, whose typval is the target.
-    lp.ll_tv = unsafe { &raw mut (*lp.ll_di).di_tv };
+    lval.ll_tv = unsafe { &raw mut (*lval.ll_di).di_tv };
     GLV_OK
 }
 
-/// Resolve a `[n]` or `[n:m]` subscript against the Blob in `lp->ll_tv`.
+/// Resolve a `[n]` or `[n:m]` subscript against the Blob in `lval.ll_tv`.
 /// Leaves `ll_tv` null, which is what tells `set_var_lval` this is a Blob.
 ///
 /// # Safety
-/// `lp` must be valid with `ll_tv` a Blob; `var1`/`var2` valid.
+/// `lval` must be valid with `ll_tv` a Blob; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_blob(
-    lp: *mut LVal,
+    lval: *mut LVal,
     var1: *mut TypVal,
     var2: *mut TypVal,
     empty1: bool,
     quiet: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise: `ll_tv` holds a Blob, so `v_blob` is live.
-    let mut lp = unsafe { Lv::new(lp) };
+    let mut lval = unsafe { Lv::new(lval) };
     // SAFETY: as above.
-    let bloblen = unsafe { tv_blob_len(Tv::new(lp.ll_tv).blob_or_null()) };
-    lp.ll_n1 = if empty1 {
+    let bloblen = unsafe { tv_blob_len(Tv::new(lval.ll_tv).blob_or_null()) };
+    lval.ll_n1 = if empty1 {
         0
     } else {
         // SAFETY: `var1` is the caller's index expression.
         unsafe { tv_get_number(var1) as c_int }
     };
-    let n1 = lp.ll_n1 as VarNumber;
+    let n1 = lval.ll_n1 as VarNumber;
     // SAFETY: the index is checked against the length measured above.
     unsafe { tv_blob_check_index(bloblen, n1, quiet) }?;
-    if lp.ll_range && !lp.ll_empty2 {
+    if lval.ll_range && !lval.ll_empty2 {
         // SAFETY: `var2` is the caller's second index expression.
-        lp.ll_n2 = unsafe { tv_get_number(var2) as c_int };
-        let n2 = lp.ll_n2 as VarNumber;
+        lval.ll_n2 = unsafe { tv_get_number(var2) as c_int };
+        let n2 = lval.ll_n2 as VarNumber;
         // SAFETY: as above.
         unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }?;
     }
     // SAFETY: as above -- the typval still holds the Blob.
-    lp.ll_blob = unsafe { Tv::new(lp.ll_tv).blob_or_null() };
-    lp.ll_tv = null_mut();
+    lval.ll_blob = unsafe { Tv::new(lval.ll_tv).blob_or_null() };
+    lval.ll_tv = null_mut();
     Ok(())
 }
 
-/// Resolve a `[n]` or `[n:m]` subscript against the List in `lp->ll_tv`,
+/// Resolve a `[n]` or `[n:m]` subscript against the List in `lval.ll_tv`,
 /// leaving `ll_tv` on the item it selected.
 ///
 /// # Safety
-/// `lp` must be valid with `ll_tv` a List; `var1`/`var2` valid.
+/// `lval` must be valid with `ll_tv` a List; `var1`/`var2` valid.
 pub(crate) unsafe fn get_lval_list(
-    lp: *mut LVal,
+    lval: *mut LVal,
     var1: *mut TypVal,
     var2: *mut TypVal,
     empty1: bool,
@@ -320,13 +320,13 @@ pub(crate) unsafe fn get_lval_list(
     // than through `DerefMut`, which would borrow the whole record and pop
     // them — `winlayer::live`'s note, and the bug it names in
     // `set_buflocal_cpt_callbacks`.
-    // SAFETY: the caller's promise: `lp` outlives the call with `ll_tv`
+    // SAFETY: the caller's promise: `lval` outlives the call with `ll_tv`
     // holding a List.
-    let lp = unsafe { Lv::new(lp) };
+    let lval = unsafe { Lv::new(lval) };
     let (rec, n1, n2) = (
-        lp.raw(),
-        lp.field_ptr::<c_int>(offset_of!(LVal, ll_n1)),
-        lp.field_ptr::<c_int>(offset_of!(LVal, ll_n2)),
+        lval.raw(),
+        lval.field_ptr::<c_int>(offset_of!(LVal, ll_n1)),
+        lval.field_ptr::<c_int>(offset_of!(LVal, ll_n2)),
     );
     let first = if empty1 {
         0
@@ -341,7 +341,7 @@ pub(crate) unsafe fn get_lval_list(
         (*rec).ll_dict = null_mut::<Dict>();
         (*rec).ll_list = Tv::new((*rec).ll_tv).list_or_null();
     };
-    // SAFETY: `ll_list` is the typval's List and `n1` is `lp`'s own field.
+    // SAFETY: `ll_list` is the typval's List and `n1` is `lval`'s own field.
     let (list, li) = unsafe {
         let list = (*rec).ll_list;
         let li = tv_list_check_range_index_one(list, n1, quiet);
@@ -355,7 +355,7 @@ pub(crate) unsafe fn get_lval_list(
     let ranged = unsafe { (*rec).ll_range && !(*rec).ll_empty2 };
     if ranged {
         // SAFETY: `var2` is the caller's second index expression, and both
-        // indexes are `lp`'s own fields.
+        // indexes are `lval`'s own fields.
         unsafe { *n2 = tv_get_number(var2) as c_int };
         // SAFETY: `li` is the item index one selected.
         unsafe { tv_list_check_range_index_two(list, n1, li, n2, quiet) }?;
@@ -365,16 +365,16 @@ pub(crate) unsafe fn get_lval_list(
     Ok(())
 }
 
-/// Walk every `[idx]` and `.key` following the name, descending `lp->ll_tv`
+/// Walk every `[idx]` and `.key` following the name, descending `lval.ll_tv`
 /// one container at a time. Answers the cursor after the last subscript, or
 /// null on an error.
 ///
 /// # Safety
-/// `lp` must be valid with `ll_tv` set; `p` must point into the
+/// `lval` must be valid with `ll_tv` set; `p` must point into the
 /// NUL-terminated `name`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn get_lval_subscript(
-    lp: *mut LVal,
+    lval: *mut LVal,
     mut p: *mut c_char,
     name: *mut c_char,
     result: *mut TypVal,
@@ -386,14 +386,14 @@ pub(crate) unsafe fn get_lval_subscript(
     let mut evalarg = EVALARG_EVALUATE;
     let quiet = flags & GLV_QUIET as c_int != 0;
     // SAFETY, for every region in this body: the caller's promise is that
-    // `lp` outlives the call with `ll_tv` on a live typval, and that `p` is
+    // `lval` outlives the call with `ll_tv` on a live typval, and that `p` is
     // a cursor into the NUL-terminated `name` — which the walk below keeps
     // true, because it never steps past a byte it has not first seen is not
     // the terminator. Each union member read is the one the `v_type` just
     // tested names; `var1`, `var2`, `evalarg` and `p` are this frame's; and
     // every message named is a NUL-terminated literal or one of the shared
     // `e_*` texts. The notes below add only what is local to a site.
-    let mut lp = unsafe { Lv::new(lp) };
+    let mut lval = unsafe { Lv::new(lval) };
     // The two index expressions. They are cleared and reset at the end
     // of every pass, so an early `return` below never leaks one.
     let mut var1 = UNSET_TV;
@@ -411,7 +411,7 @@ pub(crate) unsafe fn get_lval_subscript(
             if !subscript {
                 break;
             }
-            let mut container = unsafe { Tv::new(lp.ll_tv) };
+            let mut container = unsafe { Tv::new(lval.ll_tv) };
             if c == b'.' as c_char && container.v_type != VAR_DICT {
                 if !quiet {
                     // SAFETY: a shared message, whose format takes one // NUL-terminated string.
@@ -432,12 +432,12 @@ pub(crate) unsafe fn get_lval_subscript(
 
             // A null List or Blob works like an empty one; allocate now.
             if container.v_type == VAR_LIST && container.list_or_null().is_null() {
-                unsafe { tv_list_alloc_ret(lp.ll_tv, kListLenUnknown as ptrdiff_t) };
+                unsafe { tv_list_alloc_ret(lval.ll_tv, kListLenUnknown as ptrdiff_t) };
             } else if container.v_type == VAR_BLOB && container.blob_or_null().is_null() {
-                unsafe { tv_blob_alloc_ret(lp.ll_tv) };
+                unsafe { tv_blob_alloc_ret(lval.ll_tv) };
             }
 
-            if lp.ll_range {
+            if lval.ll_range {
                 if !quiet {
                     emsg_static(c"E708: [:] must come last");
                 }
@@ -502,9 +502,9 @@ pub(crate) unsafe fn get_lval_subscript(
                     }
                     p = unsafe { skipwhite(p.add(1)) };
                     if unsafe { *p } == b']' as c_char {
-                        lp.ll_empty2 = true;
+                        lval.ll_empty2 = true;
                     } else {
-                        lp.ll_empty2 = false;
+                        lval.ll_empty2 = false;
                         let ev = unsafe { eval1(&raw mut p, &raw mut var2, &raw mut evalarg) };
                         if ev.is_err() {
                             break 'done;
@@ -513,9 +513,9 @@ pub(crate) unsafe fn get_lval_subscript(
                             break 'done;
                         }
                     }
-                    lp.ll_range = true;
+                    lval.ll_range = true;
                 } else {
-                    lp.ll_range = false;
+                    lval.ll_range = false;
                 }
 
                 if unsafe { *p } != b']' as c_char {
@@ -527,9 +527,9 @@ pub(crate) unsafe fn get_lval_subscript(
                 p = unsafe { p.add(1) };
             }
 
-            container = unsafe { Tv::new(lp.ll_tv) };
+            container = unsafe { Tv::new(lval.ll_tv) };
             if container.v_type == VAR_DICT {
-                let (rec, end, idx) = (lp.raw(), &raw mut p, &raw mut var1);
+                let (rec, end, idx) = (lval.raw(), &raw mut p, &raw mut var1);
                 let status = unsafe {
                     get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, result)
                 };
@@ -542,14 +542,14 @@ pub(crate) unsafe fn get_lval_subscript(
                 }
             } else if container.v_type == VAR_BLOB {
                 let (a, b) = (&raw mut var1, &raw mut var2);
-                if unsafe { get_lval_blob(lp.raw(), a, b, empty1, quiet) }.is_err() {
+                if unsafe { get_lval_blob(lval.raw(), a, b, empty1, quiet) }.is_err() {
                     break 'done;
                 }
                 // A Blob byte is never a container, so this is the end.
                 break;
             } else {
                 let (a, b) = (&raw mut var1, &raw mut var2);
-                if unsafe { get_lval_list(lp.raw(), a, b, empty1, flags, quiet) }.is_err() {
+                if unsafe { get_lval_list(lval.raw(), a, b, empty1, flags, quiet) }.is_err() {
                     break 'done;
                 }
             }
@@ -567,16 +567,16 @@ pub(crate) unsafe fn get_lval_subscript(
     if rc == OK { p } else { null_mut() }
 }
 
-/// Resolve the left-hand side of an assignment or an `:unlet` into `lp`,
+/// Resolve the left-hand side of an assignment or an `:unlet` into `lval`,
 /// and answer the cursor after it.
 ///
 /// # Safety
-/// `name` must be a writable, NUL-terminated string; `lp` must be valid;
+/// `name` must be a writable, NUL-terminated string; `lval` must be valid;
 /// `result` null or the value about to be assigned.
 pub unsafe fn get_lval(
     name: *mut c_char,
     result: *mut TypVal,
-    lp: *mut LVal,
+    lval: *mut LVal,
     unlet: bool,
     skip: bool,
     flags: c_int,
@@ -584,13 +584,13 @@ pub unsafe fn get_lval(
 ) -> *mut c_char {
     let quiet = flags & GLV_QUIET as c_int != 0;
     // SAFETY: the caller's promise; every field is written before it is read.
-    let mut lp = unsafe { Lv::new(lp) };
+    let mut lval = unsafe { Lv::new(lval) };
     // SAFETY: as above -- the whole record is the caller's.
-    unsafe { lp.raw().cast::<u8>().write_bytes(0, size_of::<LVal>()) };
+    unsafe { lval.raw().cast::<u8>().write_bytes(0, size_of::<LVal>()) };
 
     if skip {
         // Only the name matters; nothing is resolved.
-        lp.ll_name = name;
+        lval.ll_name = name;
         let fne = FNE_INCL_BR | fne_flags;
         // SAFETY: `name` is NUL-terminated and the walk wants no braces.
         return unsafe { find_name_end(name, null_mut(), null_mut(), fne) } as *mut c_char;
@@ -623,9 +623,9 @@ pub unsafe fn get_lval(
             return null_mut();
         }
         // SAFETY: all four cursors are into the one writable string.
-        lp.ll_exp_name = unsafe { make_expanded_name(name, expr_start, expr_end, p) };
-        lp.ll_name = lp.ll_exp_name;
-        if lp.ll_exp_name.is_null() {
+        lval.ll_exp_name = unsafe { make_expanded_name(name, expr_start, expr_end, p) };
+        lval.ll_name = lval.ll_exp_name;
+        if lval.ll_exp_name.is_null() {
             if !aborting() && !quiet {
                 emsg_severe.set(true);
                 // SAFETY: the format takes one NUL-terminated string.
@@ -633,21 +633,21 @@ pub unsafe fn get_lval(
                 semsg!("E475: Invalid argument: {name}");
                 return null_mut();
             }
-            lp.ll_name_len = 0 as size_t;
+            lval.ll_name_len = 0 as size_t;
         } else {
             // SAFETY: the expansion is NUL-terminated.
-            lp.ll_name_len = unsafe { cstr::bytes_at(lp.ll_name) }.len();
+            lval.ll_name_len = unsafe { cstr::bytes_at(lval.ll_name) }.len();
         }
     } else {
-        lp.ll_name = name;
+        lval.ll_name = name;
         // SAFETY: `p` and the name are cursors into the one string.
-        lp.ll_name_len = unsafe { p.offset_from(lp.ll_name) } as size_t;
+        lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) } as size_t;
     }
 
     // Nothing is subscripted: the name is the whole left-hand side.
     // SAFETY: `p` is a cursor into the NUL-terminated `name`.
     let after = unsafe { *p };
-    if (after != b'[' as c_char && after != b'.' as c_char) || lp.ll_name.is_null() {
+    if (after != b'[' as c_char && after != b'.' as c_char) || lval.ll_name.is_null() {
         return p;
     }
 
@@ -659,10 +659,10 @@ pub unsafe fn get_lval(
     };
     let no_autoload = flags & GLV_NO_AUTOLOAD as c_int != 0;
     // SAFETY: the name is NUL-terminated and `ht` is this frame's.
-    let v = unsafe { find_var(lp.ll_name, lp.ll_name_len, htp, no_autoload) };
+    let v = unsafe { find_var(lval.ll_name, lval.ll_name_len, htp, no_autoload) };
     if v.is_null() {
         if !quiet {
-            let (n, s) = (lp.ll_name_len as c_int, lp.ll_name);
+            let (n, s) = (lval.ll_name_len as c_int, lval.ll_name);
             // SAFETY: as above.
             let s = unsafe { c_str_len(s, n as usize) };
             semsg!("E121: Undefined variable: {s}");
@@ -671,33 +671,33 @@ pub unsafe fn get_lval(
     }
 
     // SAFETY: `v` is the live dictionary item the name resolved to.
-    lp.ll_tv = unsafe { &raw mut (*v).di_tv };
+    lval.ll_tv = unsafe { &raw mut (*v).di_tv };
     // SAFETY: `ll_tv` is that item's typval.
-    if unsafe { tv_is_luafunc(lp.ll_tv) } {
+    if unsafe { tv_is_luafunc(lval.ll_tv) } {
         return p;
     }
 
-    // SAFETY: `lp` has `ll_tv` set, `p` points into `name`, and `ht` and `v` are this frame's.
-    p = unsafe { get_lval_subscript(lp.raw(), p, name, result, ht, v, unlet, flags) };
+    // SAFETY: `lval` has `ll_tv` set, `p` points into `name`, and `ht` and `v` are this frame's.
+    p = unsafe { get_lval_subscript(lval.raw(), p, name, result, ht, v, unlet, flags) };
     if p.is_null() {
         return null_mut();
     }
     // SAFETY: `p` and the name are cursors into the one string.
-    lp.ll_name_len = unsafe { p.offset_from(lp.ll_name) } as size_t;
+    lval.ll_name_len = unsafe { p.offset_from(lval.ll_name) } as size_t;
     p
 }
 
-/// Release what `get_lval` allocated into `lp`.
+/// Release what `get_lval` allocated into `lval`.
 ///
 /// # Safety
-/// `lp` must be valid.
-pub unsafe fn clear_lval(lp: *mut LVal) {
+/// `lval` must be valid.
+pub unsafe fn clear_lval(lval: *mut LVal) {
     // SAFETY: the caller's promise; both strings are `get_lval`'s own.
-    let lp = unsafe { Lv::new(lp) };
+    let lval = unsafe { Lv::new(lval) };
     // SAFETY: as above -- both are owned, and null is fine for `xfree`.
-    unsafe { xfree(lp.ll_exp_name as *mut c_void) };
+    unsafe { xfree(lval.ll_exp_name as *mut c_void) };
     // SAFETY: as above.
-    unsafe { xfree(lp.ll_newkey as *mut c_void) };
+    unsafe { xfree(lval.ll_newkey as *mut c_void) };
 }
 
 /// Perform the assignment `get_lval` resolved. `endp` is the cursor after
@@ -705,10 +705,10 @@ pub unsafe fn clear_lval(lp: *mut LVal) {
 /// name the variable.
 ///
 /// # Safety
-/// `lp` must come from `get_lval`; `endp` must point into the same writable
+/// `lval` must come from `get_lval`; `endp` must point into the same writable
 /// string; `result` must be valid.
 pub unsafe fn set_var_lval(
-    lp: *mut LVal,
+    lval: *mut LVal,
     endp: *mut c_char,
     result: *mut TypVal,
     copy: bool,
@@ -716,35 +716,35 @@ pub unsafe fn set_var_lval(
     op: *const c_char,
 ) {
     // SAFETY, for every region in this body and in the two helpers below:
-    // the caller's promise is that `lp` is the record `get_lval` filled in
+    // the caller's promise is that `lval` is the record `get_lval` filled in
     // and outlives the call, that `result` is the value being assigned, and
     // that `endp` points into the same writable NUL-terminated string. Each
     // union member read is the one the `v_type` just tested names; a
     // non-null `op` is NUL-terminated; `oldtv` and `tv` are frame locals;
     // and every message named is a literal or a shared `e_*` text. The
     // notes below add only what is local to a site.
-    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(result)) };
-    if lp.ll_tv.is_null() {
+    let (mut lval, value) = unsafe { (Lv::new(lval), Tv::new(result)) };
+    if lval.ll_tv.is_null() {
         // SAFETY: as above; `endp` points into the same writable string.
-        unsafe { set_whole_var(lp.raw(), endp, result, copy, is_const, op) };
+        unsafe { set_whole_var(lval.raw(), endp, result, copy, is_const, op) };
         return;
     }
 
     // A locked container refuses the write; the lock to test is the
     // Dict's own when a key is being added to it.
     // SAFETY: a pending new key means `ll_tv` holds the Dict it goes into.
-    let target = unsafe { Tv::new(lp.ll_tv) };
-    let lock = if lp.ll_newkey.is_null() {
+    let target = unsafe { Tv::new(lval.ll_tv) };
+    let lock = if lval.ll_newkey.is_null() {
         target.v_lock
     } else {
         // SAFETY: as above -- the Dict the key is being added to.
         unsafe { (*target.dict_or_null()).dv_lock }
     };
-    if unsafe { value_check_lock(lock, lp.ll_name, TV_CSTRING as size_t) } {
+    if unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING as size_t) } {
         return;
     }
 
-    if lp.ll_range {
+    if lval.ll_range {
         if is_const {
             emsg_static(c"E996: Cannot lock a range");
             return;
@@ -762,8 +762,8 @@ pub unsafe fn set_var_lval(
             return;
         }
         let src = value.list_or_null();
-        let (list, n1, n2) = (lp.ll_list, lp.ll_n1, lp.ll_n2);
-        let (empty2, name) = (lp.ll_empty2, lp.ll_name);
+        let (list, n1, n2) = (lval.ll_list, lval.ll_n1, lval.ll_n2);
+        let (empty2, name) = (lval.ll_empty2, lval.ll_name);
         // SAFETY: as above.
         let _ = unsafe { tv_list_assign_range(list, src, n1, n2, empty2, op, name) };
         return;
@@ -774,7 +774,7 @@ pub unsafe fn set_var_lval(
     // notification below tells the two cases apart — see the module
     // docs. It must never be the same typval as the new value.
     let mut oldtv = UNSET_TV;
-    let dict = lp.ll_dict;
+    let dict = lval.ll_dict;
     let watched = unsafe { tv_dict_is_watched(dict) };
 
     if is_const {
@@ -788,53 +788,53 @@ pub unsafe fn set_var_lval(
     // item, which permanently re-types the variable and, for
     // `v:oldfiles`, crashes the next reader (docket O-B14-10). A new key
     // cannot happen here: `get_lval` refuses to add one to `v:`.
-    if dict == get_vimvar_dict() && lp.ll_newkey.is_null() {
+    if dict == get_vimvar_dict() && lval.ll_newkey.is_null() {
         // SAFETY: `ll_di` is the existing item, and `result` the caller's.
-        unsafe { set_vvar_item(lp.ll_di, result, copy, op) };
+        unsafe { set_vvar_item(lval.ll_di, result, copy, op) };
         return;
     }
 
     'notify: {
-        if !lp.ll_newkey.is_null() {
+        if !lval.ll_newkey.is_null() {
             // The key has to be added to the Dictionary first.
             if !op.is_null() && unsafe { *op } != b'=' as c_char {
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
-                let ll_newkey = unsafe { c_str(lp.ll_newkey) };
+                let ll_newkey = unsafe { c_str(lval.ll_newkey) };
                 semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
                 return;
             }
             // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
-            let target = unsafe { Tv::new(lp.ll_tv).dict_or_null() };
-            if unsafe { tv_dict_wrong_func_name(target, result, lp.ll_newkey) } != 0 {
+            let target = unsafe { Tv::new(lval.ll_tv).dict_or_null() };
+            if unsafe { tv_dict_wrong_func_name(target, result, lval.ll_newkey) } != 0 {
                 return;
             }
-            let di = unsafe { tv_dict_item_alloc(lp.ll_newkey) };
+            let di = unsafe { tv_dict_item_alloc(lval.ll_newkey) };
             if unsafe { tv_dict_add(target, di) }.is_err() {
                 unsafe { xfree(di as *mut c_void) };
                 return;
             }
             // SAFETY: `di` belongs to the Dict; its typval is the target.
-            lp.ll_tv = unsafe { &raw mut (*di).di_tv };
+            lval.ll_tv = unsafe { &raw mut (*di).di_tv };
         } else {
             if watched {
                 // SAFETY: `oldtv` is this frame's separate record of the old value.
-                unsafe { tv_copy(lp.ll_tv, &raw mut oldtv) };
+                unsafe { tv_copy(lval.ll_tv, &raw mut oldtv) };
             }
             if !op.is_null() && unsafe { *op } != b'=' as c_char {
                 // `+=` and friends modify in place; there is nothing to
                 // assign afterwards.
                 // SAFETY: `ll_tv` is the live target and `result` the caller's value.
-                let _ = unsafe { eexe_mod_op(lp.ll_tv, result, op) };
+                let _ = unsafe { eexe_mod_op(lval.ll_tv, result, op) };
                 break 'notify;
             }
-            unsafe { tv_clear(lp.ll_tv) };
+            unsafe { tv_clear(lval.ll_tv) };
         }
 
         if copy {
-            unsafe { tv_copy(result, lp.ll_tv) };
+            unsafe { tv_copy(result, lval.ll_tv) };
         } else {
             // SAFETY: the value moves out of `result`, which is reset after it.
-            let mut target = unsafe { Tv::new(lp.ll_tv) };
+            let mut target = unsafe { Tv::new(lval.ll_tv) };
             // SAFETY: as above.
             *target = unsafe { *result };
             target.v_lock = VarLock::Unlocked;
@@ -848,16 +848,16 @@ pub unsafe fn set_var_lval(
     }
     if oldtv.v_type == VAR_UNKNOWN {
         // Nothing was saved, so this is the new-key case.
-        debug_assert!(!lp.ll_newkey.is_null());
+        debug_assert!(!lval.ll_newkey.is_null());
         // SAFETY: the watched Dict, its new key, and the value just written.
-        unsafe { tv_dict_watcher_notify(dict, lp.ll_newkey, lp.ll_tv, null_mut()) };
+        unsafe { tv_dict_watcher_notify(dict, lval.ll_newkey, lval.ll_tv, null_mut()) };
     } else {
-        let di = lp.ll_di;
+        let di = lval.ll_di;
         // SAFETY: the key is inline, so naming its address reads nothing.
         let key = unsafe { &raw mut (*di).di_key } as *mut c_char;
         debug_assert!(!key.is_null());
         // SAFETY: the watched Dict, its key, the new value and the old copy.
-        unsafe { tv_dict_watcher_notify(dict, key, lp.ll_tv, &raw mut oldtv) };
+        unsafe { tv_dict_watcher_notify(dict, key, lval.ll_tv, &raw mut oldtv) };
         clear_local(&mut oldtv);
     }
 }
@@ -868,14 +868,14 @@ pub unsafe fn set_var_lval(
 /// # Safety
 /// As `set_var_lval`.
 unsafe fn set_whole_var(
-    lp: *mut LVal,
+    lval: *mut LVal,
     endp: *mut c_char,
     result: *mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
 ) {
-    let lp = unsafe { Lv::new(lp) };
+    let lval = unsafe { Lv::new(lval) };
     // Terminate the left-hand side in place: the messages below name the
     // variable and would otherwise print the rest of the command too.
     // SAFETY: the caller's promise -- `endp` points into the same writable NUL-terminated string.
@@ -883,13 +883,13 @@ unsafe fn set_whole_var(
     // SAFETY: as above -- the byte is put back before returning.
     unsafe { *endp = NUL as c_char };
 
-    if !lp.ll_blob.is_null() {
+    if !lval.ll_blob.is_null() {
         // Upstream's three early returns here leave the left-hand side
         // terminated in place rather than putting `cc` back. Preserved:
         // anything that reads the command line after a rejected Blob
         // assignment sees the truncated form.
-        // SAFETY: `lp` has `ll_blob` set, and `result` is the caller's.
-        if !unsafe { set_blob_var(lp.raw(), result, op) } {
+        // SAFETY: `lval` has `ll_blob` set, and `result` is the caller's.
+        if !unsafe { set_blob_var(lval.raw(), result, op) } {
             return;
         }
     } else if !op.is_null() && unsafe { *op } != b'=' as c_char {
@@ -901,7 +901,7 @@ unsafe fn set_whole_var(
         }
         let mut tv = UNSET_TV;
         let mut di: *mut DictItem = null_mut();
-        let (name, name_len) = (lp.ll_name, lp.ll_name_len);
+        let (name, name_len) = (lval.ll_name, lval.ll_name_len);
         // SAFETY: the name is the one `get_lval` resolved, and `tv` and `di` are this frame's.
         let (tvp, dip) = (&raw mut tv, &raw mut di);
         let found = unsafe { eval_variable(name, name_len as c_int, tvp, dip, true, false) };
@@ -925,7 +925,7 @@ unsafe fn set_whole_var(
             clear_local(&mut tv);
         }
     } else {
-        let (name, name_len) = (lp.ll_name, lp.ll_name_len);
+        let (name, name_len) = (lval.ll_name, lval.ll_name_len);
         // SAFETY: the name is the one `get_lval` resolved, and `result` is the caller's value.
         unsafe { set_var_const(name, name_len, result, copy, is_const) };
     }
@@ -933,15 +933,15 @@ unsafe fn set_whole_var(
     unsafe { *endp = cc };
 }
 
-/// Write a byte or a byte range into the Blob `lp` resolved. Answers
+/// Write a byte or a byte range into the Blob `lval` resolved. Answers
 /// whether the caller should put the terminated left-hand side back — the
 /// three refusal paths say no, which is upstream's.
 ///
 /// # Safety
-/// As `set_var_lval`, with `lp->ll_blob` set.
-unsafe fn set_blob_var(lp: *mut LVal, result: *mut TypVal, op: *const c_char) -> bool {
+/// As `set_var_lval`, with `lval->ll_blob` set.
+unsafe fn set_blob_var(lval: *mut LVal, result: *mut TypVal, op: *const c_char) -> bool {
     // SAFETY: the caller's promise -- both outlive the call.
-    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(result)) };
+    let (mut lval, value) = unsafe { (Lv::new(lval), Tv::new(result)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let op = unsafe { c_str(op) };
@@ -949,18 +949,22 @@ unsafe fn set_blob_var(lp: *mut LVal, result: *mut TypVal, op: *const c_char) ->
         return false;
     }
     // SAFETY: the caller's promise: `ll_blob` is live, the name resolved.
-    let lock = unsafe { (*lp.ll_blob).bv_lock };
+    let lock = unsafe { (*lval.ll_blob).bv_lock };
     // SAFETY: as above.
-    let locked = unsafe { value_check_lock(lock, lp.ll_name, TV_CSTRING as size_t) };
+    let locked = unsafe { value_check_lock(lock, lval.ll_name, TV_CSTRING as size_t) };
     if locked {
         return false;
     }
 
-    if lp.ll_range && value.v_type == VAR_BLOB {
-        if lp.ll_empty2 {
-            lp.ll_n2 = unsafe { tv_blob_len(lp.ll_blob) } - 1;
+    if lval.ll_range && value.v_type == VAR_BLOB {
+        if lval.ll_empty2 {
+            lval.ll_n2 = unsafe { tv_blob_len(lval.ll_blob) } - 1;
         }
-        let (blob, n1, n2) = (lp.ll_blob, lp.ll_n1 as VarNumber, lp.ll_n2 as VarNumber);
+        let (blob, n1, n2) = (
+            lval.ll_blob,
+            lval.ll_n1 as VarNumber,
+            lval.ll_n2 as VarNumber,
+        );
         // SAFETY: as above; `result` holds the Blob being assigned.
         if unsafe { tv_blob_set_range(blob, n1, n2, result) }.is_err() {
             return false;
@@ -978,7 +982,7 @@ unsafe fn set_blob_var(lp: *mut LVal, result: *mut TypVal, op: *const c_char) ->
             semsg!("E1239: Invalid value for blob: 0xlX");
         } else {
             // SAFETY: `ll_blob` is the live Blob and `ll_n1` a byte of it.
-            unsafe { tv_blob_set_append(lp.ll_blob, lp.ll_n1, val as uint8_t) };
+            unsafe { tv_blob_set_append(lval.ll_blob, lval.ll_n1, val as uint8_t) };
         }
     }
     true

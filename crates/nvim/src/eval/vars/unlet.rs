@@ -134,22 +134,22 @@ unsafe fn ex_unletlock(
     ea.nextcmd = unsafe { check_nextcmd(arg) };
 }
 
-/// `:unlet`'s callback: delete what `lp` names.
+/// `:unlet`'s callback: delete what `lval` names.
 ///
 /// # Safety
-/// `lp` is a resolved lvalue, `name_end` points into the command line and
+/// `lval` is a resolved lvalue, `name_end` points into the command line and
 /// `args` is live.
 unsafe fn do_unlet_var(
-    lp: *mut LVal,
+    lval: *mut LVal,
     name_end: *mut c_char,
     args: *mut ExArg,
     _deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
-    let lp = unsafe { Lv::new(lp) };
+    let lval = unsafe { Lv::new(lval) };
     let ea = unsafe { Ea::new(args) };
-    if lp.ll_tv.is_null() {
+    if lval.ll_tv.is_null() {
         // A whole variable: an environment variable, a plain name or an
         // expanded one.  Terminate the name in place, so that the error
         // does not quote the rest of the command.
@@ -157,11 +157,11 @@ unsafe fn do_unlet_var(
         // lvalue's name is NUL-terminated there.
         let cc = unsafe { *name_end };
         unsafe { *name_end = NUL as c_char };
-        let ret = if unsafe { *lp.ll_name } == b'$' as c_char {
-            unsafe { vim_unsetenv_ext(lp.ll_name.add(1)) };
+        let ret = if unsafe { *lval.ll_name } == b'$' as c_char {
+            unsafe { vim_unsetenv_ext(lval.ll_name.add(1)) };
             Ok(())
         } else {
-            unsafe { do_unlet(lp.ll_name, lp.ll_name_len, ea.forceit != 0) }
+            unsafe { do_unlet(lval.ll_name, lval.ll_name_len, ea.forceit != 0) }
         };
         unsafe { *name_end = cc };
         return ret;
@@ -173,31 +173,31 @@ unsafe fn do_unlet_var(
     // the first already answered true.
     // SAFETY: a resolved lvalue's list and dictionary are live or NULL.
     let mut locked = false;
-    if !lp.ll_list.is_null() {
-        let lock = unsafe { tv_list_locked(lp.ll_list) };
-        locked = unsafe { value_check_lock(lock, lp.ll_name, lp.ll_name_len) };
+    if !lval.ll_list.is_null() {
+        let lock = unsafe { tv_list_locked(lval.ll_list) };
+        locked = unsafe { value_check_lock(lock, lval.ll_name, lval.ll_name_len) };
     }
-    if !locked && !lp.ll_dict.is_null() {
-        let lock = unsafe { (*lp.ll_dict).dv_lock };
-        locked = unsafe { value_check_lock(lock, lp.ll_name, lp.ll_name_len) };
+    if !locked && !lval.ll_dict.is_null() {
+        let lock = unsafe { (*lval.ll_dict).dv_lock };
+        locked = unsafe { value_check_lock(lock, lval.ll_name, lval.ll_name_len) };
     }
     if locked {
         return Err(Failed);
     }
 
-    if lp.ll_range {
-        let (n1, n2, to_end) = (lp.ll_n1, lp.ll_n2, !lp.ll_empty2);
+    if lval.ll_range {
+        let (n1, n2, to_end) = (lval.ll_n1, lval.ll_n2, !lval.ll_empty2);
         // SAFETY: a resolved lvalue's list and the item it starts at.
-        unsafe { tv_list_unlet_range(lp.ll_list, lp.ll_li, n1, to_end, n2) };
-    } else if !lp.ll_list.is_null() {
+        unsafe { tv_list_unlet_range(lval.ll_list, lval.ll_li, n1, to_end, n2) };
+    } else if !lval.ll_list.is_null() {
         // One List item.
-        unsafe { tv_list_item_remove(lp.ll_list, lp.ll_li) };
+        unsafe { tv_list_item_remove(lval.ll_list, lval.ll_li) };
     } else {
         // One Dict item.
-        let d = lp.ll_dict;
+        let d = lval.ll_dict;
         debug_assert!(!d.is_null());
         // SAFETY: a resolved lvalue's item of that dictionary.
-        let di = unsafe { Di::new(lp.ll_di) };
+        let di = unsafe { Di::new(lval.ll_di) };
         let watched = unsafe { tv_dict_is_watched(d) };
 
         let mut oldtv = TV_INITIAL_VALUE;
@@ -326,25 +326,25 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
     Err(Failed)
 }
 
-/// `:lockvar`'s and `:unlockvar`'s callback: lock or unlock what `lp` names,
+/// `:lockvar`'s and `:unlockvar`'s callback: lock or unlock what `lval` names,
 /// to `deep` levels.
 ///
 /// # Safety
 /// As [`do_unlet_var`].
 unsafe fn do_lock_var(
-    lp: *mut LVal,
+    lval: *mut LVal,
     _name_end: *mut c_char,
     args: *mut ExArg,
     deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
-    let mut lp = unsafe { Lv::new(lp) };
+    let mut lval = unsafe { Lv::new(lval) };
     let ea = unsafe { Ea::new(args) };
     let lock = ea.cmdidx == CmdIdx::lockvar;
-    let name = lp.ll_name;
+    let name = lval.ll_name;
 
-    if lp.ll_tv.is_null() {
+    if lval.ll_tv.is_null() {
         // A whole variable.
         // SAFETY: a resolved lvalue's name is NUL-terminated.
         if unsafe { *name } == b'$' as c_char {
@@ -356,7 +356,7 @@ unsafe fn do_lock_var(
         }
         let nil = ptr::null_mut();
         // SAFETY: a resolved lvalue's name and its measured length.
-        let di = unsafe { find_var(name, lp.ll_name_len, nil, true) };
+        let di = unsafe { find_var(name, lval.ll_name_len, nil, true) };
         if di.is_null() {
             return Err(Failed);
         }
@@ -385,22 +385,22 @@ unsafe fn do_lock_var(
             unsafe { tv_item_lock(tv, deep, lock, false) };
         }
     } else if deep != 0 {
-        if lp.ll_range {
+        if lval.ll_range {
             // A range of List items.
-            let mut li = lp.ll_li;
-            while !li.is_null() && (lp.ll_empty2 || lp.ll_n2 >= lp.ll_n1) {
+            let mut li = lval.ll_li;
+            while !li.is_null() && (lval.ll_empty2 || lval.ll_n2 >= lval.ll_n1) {
                 // SAFETY: a resolved lvalue's items, walked to the end.
                 unsafe { tv_item_lock(&raw mut (*li).li_tv, deep, lock, false) };
                 li = unsafe { (*li).li_next };
-                lp.ll_n1 += 1;
+                lval.ll_n1 += 1;
             }
-        } else if !lp.ll_list.is_null() {
+        } else if !lval.ll_list.is_null() {
             // One List item.
             // SAFETY: a resolved lvalue's own item.
-            unsafe { tv_item_lock(&raw mut (*lp.ll_li).li_tv, deep, lock, false) };
+            unsafe { tv_item_lock(&raw mut (*lval.ll_li).li_tv, deep, lock, false) };
         } else {
             // One Dict item.
-            unsafe { tv_item_lock(&raw mut (*lp.ll_di).di_tv, deep, lock, false) };
+            unsafe { tv_item_lock(&raw mut (*lval.ll_di).di_tv, deep, lock, false) };
         }
     }
     Ok(())

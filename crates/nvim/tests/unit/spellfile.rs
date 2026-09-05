@@ -142,10 +142,10 @@ fn tree_words(byts: &[u8], idxs: &[i32]) -> Vec<String> {
 ///
 /// # Safety
 ///
-/// `lp` must be a language `spell_load_file` answered.
-unsafe fn fold_words(lp: *const SpellLang) -> Vec<String> {
+/// `slang` must be a language `spell_load_file` answered.
+unsafe fn fold_words(slang: *const SpellLang) -> Vec<String> {
     // SAFETY: the caller promises the language.
-    let (byts, idxs) = unsafe { (*lp).sl_fold_tree.as_slices() };
+    let (byts, idxs) = unsafe { (*slang).sl_fold_tree.as_slices() };
     tree_words(byts, idxs)
 }
 

@@ -85,85 +85,90 @@ pub unsafe fn slang_alloc(lang: *mut c_char) -> *mut SpellLang {
 }
 
 /// Free a language and everything it owns.
-pub unsafe fn slang_free(lp: *mut SpellLang) {
-    unsafe { xfree((*lp).sl_name as *mut c_void) };
-    unsafe { xfree((*lp).sl_fname as *mut c_void) };
-    unsafe { slang_clear(lp) };
-    unsafe { xfree(lp as *mut c_void) };
+pub unsafe fn slang_free(slang: *mut SpellLang) {
+    unsafe { xfree((*slang).sl_name as *mut c_void) };
+    unsafe { xfree((*slang).sl_fname as *mut c_void) };
+    unsafe { slang_clear(slang) };
+    unsafe { xfree(slang as *mut c_void) };
 }
 
 /// Empty a language so its file can be read again, leaving the struct
 /// itself usable and its name and chain link intact.
-pub unsafe fn slang_clear(lp: *mut SpellLang) {
+pub unsafe fn slang_clear(slang: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
     unsafe {
-        (*lp).sl_fold_tree = WordTree::default();
-        (*lp).sl_keep_tree = WordTree::default();
-        (*lp).sl_prefix_tree = WordTree::default();
+        (*slang).sl_fold_tree = WordTree::default();
+        (*slang).sl_keep_tree = WordTree::default();
+        (*slang).sl_prefix_tree = WordTree::default();
     }
 
     // SAFETY: the caller's language. Assigning drops what was there.
     unsafe {
-        (*lp).sl_rep = Vec::new();
-        (*lp).sl_repsal = Vec::new();
+        (*slang).sl_rep = Vec::new();
+        (*slang).sl_repsal = Vec::new();
     }
 
     // SAFETY: the caller's language. Assigning drops what was there.
     unsafe {
-        (*lp).sl_sal = Vec::new();
-        (*lp).sl_sofo_map = Vec::new();
+        (*slang).sl_sal = Vec::new();
+        (*slang).sl_sofo_map = Vec::new();
     }
 
-    for i in 0..unsafe { (*lp).sl_prefixcnt } {
-        unsafe { vim_regfree(*(*lp).sl_prefprog.offset(i as isize)) };
+    for i in 0..unsafe { (*slang).sl_prefixcnt } {
+        unsafe { vim_regfree(*(*slang).sl_prefprog.offset(i as isize)) };
     }
-    unsafe { (*lp).sl_prefixcnt = 0 };
-    unsafe { xfree_clear(&raw mut (*lp).sl_prefprog) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_info) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_midword) };
+    unsafe { (*slang).sl_prefixcnt = 0 };
+    unsafe { xfree_clear(&raw mut (*slang).sl_prefprog) };
+    unsafe { xfree_clear(&raw mut (*slang).sl_info) };
+    unsafe { xfree_clear(&raw mut (*slang).sl_midword) };
 
-    unsafe { vim_regfree((*lp).sl_compprog) };
-    unsafe { (*lp).sl_compprog = core::ptr::null_mut::<RegProg>() };
-    unsafe { xfree_clear(&raw mut (*lp).sl_comprules) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_compstartflags) };
-    unsafe { xfree_clear(&raw mut (*lp).sl_compallflags) };
+    unsafe { vim_regfree((*slang).sl_compprog) };
+    unsafe { (*slang).sl_compprog = core::ptr::null_mut::<RegProg>() };
+    unsafe { xfree_clear(&raw mut (*slang).sl_comprules) };
+    unsafe { xfree_clear(&raw mut (*slang).sl_compstartflags) };
+    unsafe { xfree_clear(&raw mut (*slang).sl_compallflags) };
 
-    unsafe { xfree_clear(&raw mut (*lp).sl_syllable) };
-    unsafe { (*lp).sl_syl_items = Vec::new() };
+    unsafe { xfree_clear(&raw mut (*slang).sl_syllable) };
+    unsafe { (*slang).sl_syl_items = Vec::new() };
 
-    unsafe { (*lp).sl_comppat = Vec::new() };
+    unsafe { (*slang).sl_comppat = Vec::new() };
 
-    unsafe { hash_clear_all(&raw mut (*lp).sl_wordcount, WC_KEY_OFF as u32) };
+    unsafe { hash_clear_all(&raw mut (*slang).sl_wordcount, WC_KEY_OFF as u32) };
     // SAFETY: the caller's language.
-    hash_reset(unsafe { &mut (*lp).sl_wordcount });
+    hash_reset(unsafe { &mut (*slang).sl_wordcount });
 
-    unsafe { hash_clear_all(&raw mut (*lp).sl_map_hash, 0) };
+    unsafe { hash_clear_all(&raw mut (*slang).sl_map_hash, 0) };
 
-    unsafe { slang_clear_sug(lp) };
+    unsafe { slang_clear_sug(slang) };
 
-    unsafe { (*lp).sl_compmax = MAXWLEN as c_int };
-    unsafe { (*lp).sl_compminlen = 0 };
-    unsafe { (*lp).sl_compsylmax = MAXWLEN as c_int };
-    unsafe { (*lp).sl_regions[0] = NUL as c_char };
+    unsafe { (*slang).sl_compmax = MAXWLEN as c_int };
+    unsafe { (*slang).sl_compminlen = 0 };
+    unsafe { (*slang).sl_compsylmax = MAXWLEN as c_int };
+    unsafe { (*slang).sl_regions[0] = NUL as c_char };
 }
 
 /// Drop what the `.sug` file contributed, so it can be read again.
-pub unsafe fn slang_clear_sug(lp: *mut SpellLang) {
+pub unsafe fn slang_clear_sug(slang: *mut SpellLang) {
     // SAFETY: the caller's language. Assigning drops the old tree.
-    unsafe { (*lp).sl_sound_tree = WordTree::default() };
-    unsafe { close_spellbuf((*lp).sl_sugbuf) };
-    unsafe { (*lp).sl_sugbuf = core::ptr::null_mut() };
-    unsafe { (*lp).sl_sugloaded = false };
-    unsafe { (*lp).sl_sugtime = 0 };
+    unsafe { (*slang).sl_sound_tree = WordTree::default() };
+    unsafe { close_spellbuf((*slang).sl_sugbuf) };
+    unsafe { (*slang).sl_sugbuf = core::ptr::null_mut() };
+    unsafe { (*slang).sl_sugloaded = false };
+    unsafe { (*slang).sl_sugtime = 0 };
 }
 
-/// Note that `word` is a `COMMON` word of `lp`, or bump its count if it is
+/// Note that `word` is a `COMMON` word of `slang`, or bump its count if it is
 /// already known.
 ///
 /// `len` is the word's length, or -1 when it is NUL terminated. `count` is
 /// 1 to count one use and 10 to seed a word the `.spl` file declared
 /// common. The count saturates rather than wrapping.
-pub unsafe fn count_common_word(lp: *mut SpellLang, word: *mut c_char, len: c_int, count: uint8_t) {
+pub unsafe fn count_common_word(
+    slang: *mut SpellLang,
+    word: *mut c_char,
+    len: c_int,
+    count: uint8_t,
+) {
     let mut buf = [0 as c_char; MAXWLEN];
     let p = if len == -1 {
         word
@@ -177,14 +182,14 @@ pub unsafe fn count_common_word(lp: *mut SpellLang, word: *mut c_char, len: c_in
 
     let hash: HashValue = unsafe { hash_hash(p) };
     let p_len = unsafe { cstr::bytes_at(p) }.len();
-    let hi = unsafe { hash_lookup(&raw mut (*lp).sl_wordcount, p, p_len, hash) };
+    let hi = unsafe { hash_lookup(&raw mut (*slang).sl_wordcount, p, p_len, hash) };
     if !hi.is_kept() {
         let wc = unsafe { xmalloc(WC_KEY_OFF as size_t + p_len + 1) } as *mut WordCount;
         let key = unsafe { &raw mut (*wc).wc_word }.cast::<c_char>();
         let into = key.cast::<u8>();
         unsafe { into.copy_from_nonoverlapping(p.cast(), p_len + 1) };
         unsafe { (*wc).wc_count = count as uint16_t };
-        unsafe { hash_add_item(&raw mut (*lp).sl_wordcount, hi, key, hash) };
+        unsafe { hash_add_item(&raw mut (*slang).sl_wordcount, hi, key, hash) };
     } else {
         let wc = unsafe { hi.hi_key.offset(-(WC_KEY_OFF as isize)) } as *mut WordCount;
         // The C adds and then checks for the wrap, which is a saturate

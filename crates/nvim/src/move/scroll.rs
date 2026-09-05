@@ -596,57 +596,57 @@ pub unsafe fn scrollup_clamp() {
     }
 }
 
-/// Add one line above `lp.lnum`: a filler line, a closed fold or a (wrapped)
-/// text line. Uses and sets `lp.fill`, and answers the height of the added
-/// line in `lp.height`. Lines above the first one are incredibly high --
+/// Add one line above `line.lnum`: a filler line, a closed fold or a (wrapped)
+/// text line. Uses and sets `line.fill`, and answers the height of the added
+/// line in `line.height`. Lines above the first one are incredibly high --
 /// `MAXCOL`. `winheight` limits a line's height to the window's.
-pub(super) fn topline_back_winheight(win: Win, lp: &mut LineOff, winheight: bool) {
-    if lp.fill < win.fill_above(lp.lnum) {
+pub(super) fn topline_back_winheight(win: Win, line: &mut LineOff, winheight: bool) {
+    if line.fill < win.fill_above(line.lnum) {
         // Add a filler line.
-        lp.fill += 1;
-        lp.height = 1;
+        line.fill += 1;
+        line.height = 1;
     } else {
-        lp.lnum -= 1;
-        lp.fill = 0;
-        if lp.lnum < 1 {
-            lp.height = MAXCOL as c_int;
-        } else if let Some(first) = win.fold_first(lp.lnum) {
+        line.lnum -= 1;
+        line.fill = 0;
+        if line.lnum < 1 {
+            line.height = MAXCOL as c_int;
+        } else if let Some(first) = win.fold_first(line.lnum) {
             // Add a closed fold, unless it is concealed.
-            lp.lnum = first;
-            lp.height = !win.conceals_line(lp.lnum - 1, false) as c_int;
+            line.lnum = first;
+            line.height = !win.conceals_line(line.lnum - 1, false) as c_int;
         } else {
-            lp.height = win.plines_nofill(lp.lnum, winheight);
+            line.height = win.plines_nofill(line.lnum, winheight);
         }
     }
 }
 
 /// [`topline_back_winheight`], capping a line's height at the window's.
-pub(super) fn topline_back(win: Win, lp: &mut LineOff) {
-    topline_back_winheight(win, lp, true);
+pub(super) fn topline_back(win: Win, line: &mut LineOff) {
+    topline_back_winheight(win, line, true);
 }
 
-/// Add one line below `lp.lnum`, as [`topline_back_winheight`] adds one above.
+/// Add one line below `line.lnum`, as [`topline_back_winheight`] adds one above.
 /// Lines below the last one are incredibly high.
-pub(super) fn botline_forw(win: Win, lp: &mut LineOff) {
-    if lp.fill < win.fill_above(lp.lnum + 1) {
+pub(super) fn botline_forw(win: Win, line: &mut LineOff) {
+    if line.fill < win.fill_above(line.lnum + 1) {
         // Add a filler line.
-        lp.fill += 1;
-        lp.height = 1;
+        line.fill += 1;
+        line.height = 1;
     } else {
-        lp.lnum += 1;
-        lp.fill = 0;
+        line.lnum += 1;
+        line.fill = 0;
         debug_assert!(!win.buffer().raw().is_null(), "wp->w_buffer != 0");
-        if lp.lnum > win.buffer().line_count() {
-            lp.height = MAXCOL as c_int;
+        if line.lnum > win.buffer().line_count() {
+            line.height = MAXCOL as c_int;
             return;
         }
-        let (folded, _, last) = win.fold_span(lp.lnum);
+        let (folded, _, last) = win.fold_span(line.lnum);
         if folded {
             // Add a closed fold, unless it is concealed.
-            lp.lnum = last;
-            lp.height = !win.conceals_line(lp.lnum - 1, false) as c_int;
+            line.lnum = last;
+            line.height = !win.conceals_line(line.lnum - 1, false) as c_int;
         } else {
-            lp.height = win.plines_nofill(lp.lnum, true);
+            line.height = win.plines_nofill(line.lnum, true);
         }
     }
 }

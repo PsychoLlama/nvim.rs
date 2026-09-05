@@ -241,7 +241,7 @@ const _: () = assert!(size_of::<Frame>() == 32);
 pub(crate) struct Walk<'a> {
     /// The suggestion list being filled, and the language being searched.
     pub su: *mut SugInfo,
-    pub lp: *mut LangP,
+    pub langp: *mut LangP,
     pub slang: *mut SpellLang,
     /// Walking the sound-fold tree rather than the case-folded one. Word
     /// flags, case, banned words, splitting and `similar_chars` all do not
@@ -300,16 +300,16 @@ pub(crate) struct Walk<'a> {
 ///
 /// # Safety
 ///
-/// `su` and `lp` must be valid, `lp`'s language must have its trees
+/// `su` and `langp` must be valid, `langp`'s language must have its trees
 /// loaded, and `fword` must be a NUL-terminated buffer of `MAXWLEN` bytes.
 pub(super) unsafe fn suggest_trie_walk(
     su: *mut SugInfo,
-    lp: *mut LangP,
+    langp: *mut LangP,
     fword: *mut c_char,
     soundfold: bool,
 ) {
     // SAFETY: the caller guarantees the pointers and the loaded trees.
-    let mut walk = unsafe { Walk::new(su, lp, fword, soundfold) };
+    let mut walk = unsafe { Walk::new(su, langp, fword, soundfold) };
     unsafe { walk.run() };
 }
 
@@ -321,7 +321,7 @@ impl Walk<'_> {
     /// As [`suggest_trie_walk`].
     unsafe fn new(
         su: *mut SugInfo,
-        lp: *mut LangP,
+        langp: *mut LangP,
         fword: *mut c_char,
         soundfold: bool,
     ) -> Walk<'static> {
@@ -331,9 +331,9 @@ impl Walk<'_> {
         // checked rather than argued about.
         let fword = unsafe { core::slice::from_raw_parts_mut(fword.cast::<u8>(), MAXWLEN) };
         // SAFETY: the caller guarantees the pointers, so the language
-        // beside `lp` is one of the loaded ones. It stays loaded for as
+        // beside `langp` is one of the loaded ones. It stays loaded for as
         // long as the walk, which is what the borrows below stand on.
-        let slang = unsafe { (*lp).lp_slang };
+        let slang = unsafe { (*langp).lp_slang };
         // The sound-fold tree has no prefixes.
         let lang = unsafe { &*slang };
         let words = if soundfold {
@@ -344,7 +344,7 @@ impl Walk<'_> {
         let (word_tree, prefix_tree) = (words.view(), lang.sl_prefix_tree.view());
         let mut walk = Walk {
             su,
-            lp,
+            langp,
             slang,
             soundfold,
             word_tree,

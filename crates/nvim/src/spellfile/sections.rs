@@ -45,17 +45,21 @@ use super::{
 use crate::regexp::{RE_MAGIC, RE_STRICT, RE_STRING};
 
 /// `SN_REGION`: two letters per region, at most [`MAXREGIONS`] of them.
-pub(super) fn read_region_section(spl: &mut Spl, lp: &mut SpellLang, len: c_int) -> SplResult<()> {
+pub(super) fn read_region_section(
+    spl: &mut Spl,
+    slang: &mut SpellLang,
+    len: c_int,
+) -> SplResult<()> {
     // `sl_regions` holds MAXREGIONS * 2 letters plus a terminator.
     if len > MAXREGIONS as c_int * 2 {
         return Err(SpellReadError::Format);
     }
     let len = len as usize;
     let bytes = spl.read_nonnul_bytes(len)?;
-    for (slot, &b) in lp.sl_regions.iter_mut().zip(bytes.iter()) {
+    for (slot, &b) in slang.sl_regions.iter_mut().zip(bytes.iter()) {
         *slot = b.cast_signed();
     }
-    lp.sl_regions[len] = NUL as c_char;
+    slang.sl_regions[len] = NUL as c_char;
     Ok(())
 }
 
@@ -78,8 +82,8 @@ pub(super) fn read_charflags_section(spl: &mut Spl) -> SplResult<()> {
 ///
 /// # Safety
 ///
-/// `lp` must be a language whose `sl_prefprog` is free to be replaced.
-pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, lp: &mut SpellLang) -> SplResult<()> {
+/// `slang` must be a language whose `sl_prefprog` is free to be replaced.
+pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
     // Both counts below take the end of the file as `-1` and let the range
     // test reject it: a truncated `SN_PREFCOND` is a *format* error, which
     // `test_spellfile.vim` pins.
@@ -108,8 +112,8 @@ pub(super) unsafe fn read_prefcond_section(spl: &mut Spl, lp: &mut SpellLang) ->
         *slot = unsafe { vim_regcomp(pat.as_mut_ptr().cast::<c_char>(), RE_MAGIC | RE_STRING) };
     }
 
-    lp.sl_prefixcnt = cnt as c_int;
-    lp.sl_prefprog = Box::into_raw(progs.into_boxed_slice()).cast::<*mut RegProg>();
+    slang.sl_prefixcnt = cnt as c_int;
+    slang.sl_prefprog = Box::into_raw(progs.into_boxed_slice()).cast::<*mut RegProg>();
     Ok(())
 }
 
@@ -255,10 +259,10 @@ pub(super) fn read_sal_section(spl: &mut Spl, slang: &mut SpellLang) -> SplResul
 ///
 /// # Safety
 ///
-/// `lp` must be a language whose `sl_wordcount` table is initialised.
+/// `slang` must be a language whose `sl_wordcount` table is initialised.
 pub(super) unsafe fn read_words_section(
     spl: &mut Spl,
-    lp: &mut SpellLang,
+    slang: &mut SpellLang,
     len: c_int,
 ) -> SplResult<()> {
     let mut done = 0;
@@ -279,7 +283,7 @@ pub(super) unsafe fn read_words_section(
         done += word.len() as c_int + 1;
         word.push(NUL as u8);
         // SAFETY: `word` is NUL-terminated and outlives the call.
-        unsafe { count_common_word(lp, word.as_mut_ptr().cast::<c_char>(), -1, 10) };
+        unsafe { count_common_word(slang, word.as_mut_ptr().cast::<c_char>(), -1, 10) };
     }
     Ok(())
 }
@@ -473,7 +477,7 @@ pub(super) unsafe fn read_compound(
 ///
 /// Characters below 256 map directly through `sl_sal_first`. Above that,
 /// the low byte selects a list of from/to pairs, terminated by a zero.
-fn set_sofo(lp: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
+fn set_sofo(slang: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
     let (from, to) = (bytes2wide(from), bytes2wide(to));
     // The two strings must describe the same number of characters.
     if from.len() != to.len() {
@@ -501,7 +505,7 @@ fn set_sofo(lp: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
         .collect();
     let mut filled = [0usize; 256];
 
-    let first = &mut lp.sl_sal_first;
+    let first = &mut slang.sl_sal_first;
     first.fill(0);
     for (&c, &to_c) in from.iter().zip(to.iter()).take(from.len() - 1) {
         if c >= 256 {
@@ -515,17 +519,17 @@ fn set_sofo(lp: &mut SpellLang, from: &[u8], to: &[u8]) -> SplResult<()> {
             first[c as usize] = to_c as SalFirst;
         }
     }
-    lp.sl_sofo_map = map;
+    slang.sl_sofo_map = map;
     Ok(())
 }
 
 /// Index the `SAL` rules by the low byte of their first character, and
 /// gather the rules that share one so the search can stop at the first
 /// mismatch.
-fn set_sal_first(lp: &mut SpellLang) {
-    lp.sl_sal_first.fill(-1);
-    let rules = &mut lp.sl_sal;
-    let sfirst = &mut lp.sl_sal_first;
+fn set_sal_first(slang: &mut SpellLang) {
+    slang.sl_sal_first.fill(-1);
+    let rules = &mut slang.sl_sal;
+    let sfirst = &mut slang.sl_sal_first;
 
     let mut i = 0;
     while i < rules.len() {
@@ -571,17 +575,17 @@ fn bytes2wide(bytes: &[u8]) -> Box<[c_int]> {
 ///
 /// # Safety
 ///
-/// `lp`'s `sl_map_hash` must be an initialised table; every key added to it
+/// `slang`'s `sl_map_hash` must be an initialised table; every key added to it
 /// is an allocation the table then owns.
-pub(super) unsafe fn set_map_str(lp: &mut SpellLang, map: &[u8]) {
+pub(super) unsafe fn set_map_str(slang: &mut SpellLang, map: &[u8]) {
     if map.is_empty() {
-        lp.sl_has_map = false;
+        slang.sl_has_map = false;
         return;
     }
-    lp.sl_has_map = true;
+    slang.sl_has_map = true;
 
-    lp.sl_map_array.fill(0);
-    hash_reset(&mut lp.sl_map_hash);
+    slang.sl_map_array.fill(0);
+    hash_reset(&mut slang.sl_map_hash);
 
     // The first character of a group represents the whole group.
     let mut headc = 0;
@@ -597,7 +601,7 @@ pub(super) unsafe fn set_map_str(lp: &mut SpellLang, map: &[u8]) {
             headc = c;
         }
         if c < 256 {
-            lp.sl_map_array[c as usize] = headc;
+            slang.sl_map_array[c as usize] = headc;
             continue;
         }
 
@@ -611,12 +615,12 @@ pub(super) unsafe fn set_map_str(lp: &mut SpellLang, map: &[u8]) {
         // when it is kept, and this frame frees when it is not.
         unsafe {
             let hash: HashValue = hash_hash(b);
-            let hi = hash_lookup(&raw mut lp.sl_map_hash, b, cstr::bytes_at(b).len(), hash);
+            let hi = hash_lookup(&raw mut slang.sl_map_hash, b, cstr::bytes_at(b).len(), hash);
             if hi.is_kept() {
                 emsg(gettext(e_duplicate_char_in_map_entry));
                 xfree(b.cast());
             } else {
-                hash_add_item(&raw mut lp.sl_map_hash, hi, b, hash);
+                hash_add_item(&raw mut slang.sl_map_hash, hi, b, hash);
             }
         }
     }

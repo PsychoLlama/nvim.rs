@@ -39,9 +39,9 @@ impl Walk<'_> {
         // sound-fold tree, when the score would be too high anyway, or
         // when a REP item or a swap has already changed the text here.
         //
-        // SAFETY: `lp` and `su` are the caller's, valid by the contract
+        // SAFETY: `langp` and `su` are the caller's, valid by the contract
         // above.
-        if (unsafe { (*self.lp).lp_replang }.is_null() && !self.soundfold)
+        if (unsafe { (*self.langp).lp_replang }.is_null() && !self.soundfold)
             || self.stack[level].score + SCORE_REP >= unsafe { (*self.su).su_maxscore }
             || self.stack[level].bad_idx < self.stack[level].change_from
         {
@@ -57,7 +57,7 @@ impl Walk<'_> {
         self.stack[level].child = if self.soundfold {
             unsafe { (*self.slang).sl_repsal_first[first_byte] }
         } else {
-            unsafe { (*(*self.lp).lp_replang).sl_rep_first[first_byte] }
+            unsafe { (*(*self.langp).lp_replang).sl_rep_first[first_byte] }
         };
 
         if self.stack[level].child < 0 {
@@ -171,7 +171,7 @@ impl Walk<'_> {
         if self.soundfold {
             unsafe { &(*self.slang).sl_repsal }
         } else {
-            unsafe { &(*(*self.lp).lp_replang).sl_rep }
+            unsafe { &(*(*self.langp).lp_replang).sl_rep }
         }
     }
 }

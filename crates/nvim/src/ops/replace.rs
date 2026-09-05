@@ -24,28 +24,28 @@ use super::*;
 use crate::ex_docmd::cmdmod_has;
 use crate::types::{Failed, NUL};
 
-/// Overwrite the single byte at `lp` with `c`.
+/// Overwrite the single byte at `pos` with `c`.
 ///
 /// Only for a one-byte character replacing a one-byte character; anything else
 /// changes the line's length and has to go through [`replace_character`].
 ///
 /// # Safety
-/// `lp` must name a line of the current buffer.
-pub(crate) unsafe fn pbyte(mut lp: Pos, c: c_int) {
+/// `pos` must name a line of the current buffer.
+pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
-    // SAFETY: the caller's promise -- `lp` names a line of the current
+    // SAFETY: the caller's promise -- `pos` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
-    let p = unsafe { ml_get_buf_mut(curbuf.get(), lp.lnum) };
+    let p = unsafe { ml_get_buf_mut(curbuf.get(), pos.lnum) };
     let len = cur_buf().b_ml.cached_len();
 
     // Safety check: the caller's column may be past the line.
-    if lp.col >= len {
-        lp.col = if len > 1 { len - 2 } else { 0 };
+    if pos.col >= len {
+        pos.col = if len > 1 { len - 2 } else { 0 };
     }
-    unsafe { *p.offset(lp.col as isize) = c as c_char };
+    unsafe { *p.offset(pos.col as isize) = c as c_char };
     if curbuf_splice_pending.get() == 0 {
-        let row = lp.lnum as c_int - 1;
-        unsafe { extmark_splice_cols(curbuf.get(), row, lp.col, 1, 1, kExtmarkUndo) };
+        let row = pos.lnum as c_int - 1;
+        unsafe { extmark_splice_cols(curbuf.get(), row, pos.col, 1, 1, kExtmarkUndo) };
     }
 }
 

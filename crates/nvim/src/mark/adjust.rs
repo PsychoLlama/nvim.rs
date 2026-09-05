@@ -65,29 +65,29 @@ struct LineShift {
 
 impl LineShift {
     /// `ONE_ADJUST`: a deleted mark is invalidated.
-    fn line(self, lp: &mut LineNr) {
-        if *lp >= self.line1 && *lp <= self.line2 {
-            *lp = if self.amount == MAXLNUM.cast_signed() {
+    fn line(self, lnum: &mut LineNr) {
+        if *lnum >= self.line1 && *lnum <= self.line2 {
+            *lnum = if self.amount == MAXLNUM.cast_signed() {
                 0
             } else {
-                *lp + self.amount
+                *lnum + self.amount
             };
-        } else if self.amount_after != 0 && *lp > self.line2 {
-            *lp += self.amount_after;
+        } else if self.amount_after != 0 && *lnum > self.line2 {
+            *lnum += self.amount_after;
         }
     }
 
     /// `ONE_ADJUST_NODEL`: a deleted mark lands on the first deleted line
     /// rather than being invalidated.
-    fn line_nodel(self, lp: &mut LineNr) {
-        if *lp >= self.line1 && *lp <= self.line2 {
-            *lp = if self.amount == MAXLNUM.cast_signed() {
+    fn line_nodel(self, lnum: &mut LineNr) {
+        if *lnum >= self.line1 && *lnum <= self.line2 {
+            *lnum = if self.amount == MAXLNUM.cast_signed() {
                 self.line1
             } else {
-                *lp + self.amount
+                *lnum + self.amount
             };
-        } else if self.amount_after != 0 && *lp > self.line2 {
-            *lp += self.amount_after;
+        } else if self.amount_after != 0 && *lnum > self.line2 {
+            *lnum += self.amount_after;
         }
     }
 
