@@ -11,9 +11,11 @@ name resolution.
 Usage:
 
     scripts/ra-rename.py TABLE [--dry-run] [--fold] [--root DIR]
+    scripts/ra-rename.py TABLE --params [--report FILE] [--dry-run] [--root DIR]
 
 `TABLE` is a file of `old_name new_name [declared_in]` lines; `#` starts a
-comment and blank lines are skipped. The script finds each `old_name`'s own
+comment and blank lines are skipped. Under `--params` the third field is a
+regex the parameter's declared *type* must match instead (see below). The script finds each `old_name`'s own
 declaration under `crates/nvim/src` (`struct`/`enum`/`union`/`type`), asks
 rust-analyzer to rename the symbol at that position, and applies the returned
 `WorkspaceEdit` to disk. `--dry-run` prints the edit counts per file and writes
@@ -24,6 +26,42 @@ rather than a coin flip over which one the rename starts from. `declared_in`
 is how a collision batch says which one it means: a path the declaring file
 must end with (`eval/list/mod.rs`), needed exactly when the tree already holds
 two of a name -- which is the situation a collision rename exists to end.
+
+## `--params` renames a *parameter*, once per signature that binds it
+
+Phase 27's other half is the transpiler's parameter abbreviations -- `wp`,
+`rettv`, `argvars`, `eap` -- and those are not one symbol but hundreds of
+unrelated locals that happen to share a spelling. `--params` finds them the
+way the ratchet counts them: mask the file, walk the `fn` *definitions*, and
+match the binding inside the parameter list, so `old_buf` and a local of the
+same name are not touched. `mut old` and the `_old` an unused parameter is
+spelled with are both bindings; `_old` renames to `_new`, keeping the mark.
+
+One spelling can mean two things, and then the type is what tells them apart:
+`buf` is a buffer object in `buf: *mut Buffer` and an idiomatic byte buffer in
+`buf: &mut [u8]`, and only the first is one of the transpiler's names. A row's
+third field is a regex the declared type must match, so
+`buf buffer \b(?:Buffer|BufferRef|BufferHandle|Buf)\b` renames the 627 that
+name a buffer and leaves the 171 that name bytes -- the same split the
+ratchet's `abbrev_params` counts.
+
+Each position is then an ordinary LSP rename, which is what makes this worth
+driving through rust-analyzer rather than `sed`: it follows the name into
+closures, into `Foo { buf }` field-init shorthand (which it rewrites to
+`Foo { buf: buffer }` rather than breaking it), and into the macro bodies it
+can see.
+
+**The pre-scan is the safety net the compiler does not provide.** Renaming a
+parameter to a name the body already binds -- `let result`, a closure's
+`|result|`, `Some(result)` -- compiles, because the new local simply shadows
+the parameter from its `let` onwards, and every use below it silently changes
+meaning. So the body and the rest of the signature are searched for the target
+name first, and a signature that already holds it is *skipped* into
+`--report`'s file rather than renamed. Occurrences after a `.` or a `::` are
+field accesses and path segments, not bindings, and do not skip. The scan is
+deliberately blunt in the other direction -- a struct-literal key `result:` or
+a call to a function of that name skips too -- because a skip costs a line in
+a report and a wrong rename costs a silent behaviour change.
 
 `--fold` is for an alias over a C tag struct -- `pub type qf_info_T = qf_info_S;`.
 Two renames are needed, because the LSP renames the *alias*, not the tag it
@@ -95,8 +133,18 @@ import sys
 import threading
 from pathlib import Path
 
+# `--params` reuses the ratchet's masker and its `fn` span logic, so the
+# parameters this renames are exactly the ones `abbrev_params` counts.
+import ratchet
+
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "crates" / "nvim" / "src"
+
+# Where a parameter rename looks, and the two subtrees the exit clause carves
+# out of it -- ports whose parameter names are the upstream project's, same as
+# the ratchet's `ABBREV_PARAM_EXEMPT`.
+PARAM_ROOTS = ("crates/nvim/src", "crates/nvim/tests")
+PARAM_EXEMPT = ("crates/nvim/src/lua/", "crates/nvim/src/vterm/")
 
 # The declaration of a type, at the start of a line so a mention inside an
 # expression or a doc comment is not mistaken for one.
@@ -387,6 +435,16 @@ def drop_self_alias(path, name):
     return bool(count)
 
 
+def report_skips(skipped, path):
+    """Write the signatures the pre-scan refused to rename."""
+    print(f"skipped {len(skipped)} signatures (the body already binds the name)")
+    body = "\n".join(skipped) + ("\n" if skipped else "")
+    if path:
+        Path(path).write_text(body)
+    else:
+        sys.stderr.write(body)
+
+
 def report(changes, label):
     total = sum(len(bucket) for bucket in changes.values())
     print(f"{label}: {total} edits in {len(changes)} files")
@@ -424,12 +482,221 @@ def plan(rows, root, fold):
         tag = None
         if fold:
             tag = alias_target(path, line, old)
-            positions.append(declaration(tag, root))
-        positions.append((path, line, column))
+            positions.append((*declaration(tag, root), new))
+        positions.append((path, line, column, new))
         entries.append(
             {"old": old, "new": new, "tag": tag, "alias": path, "positions": positions}
         )
     return entries
+
+
+def fn_definitions(masked):
+    """(name, parameter-list start, parameter-list end, body end) per `fn`.
+
+    Offsets into the masked text, for `--params`. Only *definitions*, by the
+    ratchet's own rule: a `fn` with no parameter list after the name is a
+    function-pointer type or a trait bound, not a definition. A `fn` with no
+    body (a trait method's declaration) reports its body as empty.
+    """
+    for match in ratchet.FN_NAME.finditer(masked):
+        i = match.end()
+        while i < len(masked) and masked[i].isspace():
+            i += 1
+        if i < len(masked) and masked[i] == "<":  # generic parameters
+            i = ratchet.balanced(masked, i, "<", ">")
+        while i < len(masked) and masked[i].isspace():
+            i += 1
+        if i >= len(masked) or masked[i] != "(":
+            continue
+        start = i
+        end = ratchet.balanced(masked, i, "(", ")")
+        yield match.group(1), start, end, body_end(masked, end)
+
+
+def body_end(masked, after_params):
+    """The index just past a `fn`'s body, or `after_params` when it has none.
+
+    Walks the return type and any `where` clause at bracket depth zero. `->`
+    is stepped over whole so its `>` does not read as a closing bracket.
+    """
+    i, depth = after_params, 0
+    while i < len(masked):
+        if masked[i : i + 2] == "->":
+            i += 2
+            continue
+        char = masked[i]
+        if char in "<([":
+            depth += 1
+        elif char in ">)]":
+            depth -= 1
+        elif depth <= 0 and char == "{":
+            return ratchet.balanced(masked, i, "{", "}")
+        elif depth <= 0 and char == ";":
+            return after_params
+        i += 1
+    return after_params
+
+
+def line_column(text, offset):
+    """(0-based line, 0-based column) of a byte offset. ASCII identifiers."""
+    line = text.count("\n", 0, offset)
+    return line, offset - (text.rfind("\n", 0, offset) + 1)
+
+
+def binds(name):
+    """A parameter binding of `name`, with `mut` and the unused-`_` spelling.
+
+    The `\b` in front is what keeps this off `old_buf` and `bufp`: a name with
+    a qualifier already says what the abbreviation does not.
+    """
+    return re.compile(rf"\b(?:mut\s+)?(_?{re.escape(name)})\s*:")
+
+
+# The pattern of a `let` statement, from the `let` up to the binding this scan
+# found: only names, `mut`, and the punctuation a tuple or reference pattern
+# spells. What it proves is that the mention is a *binding* in a `let`, which
+# is the one shape whose scope starts at a place this scanner can find.
+LET_PATTERN = re.compile(r"\s*let\s+(?:mut\s+)?[\w(),\s&]*$")
+
+
+def statement_end(masked, at, end):
+    """The index just past the statement *starting* at the offset `at`.
+
+    `at` must be the statement's first character, not a position inside it:
+    the walk counts brackets from zero, so a group opened before `at` would
+    close it early.
+    """
+    depth = 0
+    i = at
+    while i < end:
+        char = masked[i]
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                return i
+            depth -= 1
+        elif char == ";" and depth == 0:
+            return i + 1
+        i += 1
+    return end
+
+
+def mentions(masked, start, end, name):
+    """Every mention of `name` in a span that could be a binding of it.
+
+    A mention after a `.` is a field or a method and after a `::` a path
+    segment; neither can shadow a parameter, so neither counts.
+    """
+    for match in re.finditer(rf"\b{re.escape(name)}\b", masked[start:end]):
+        before = masked[start : start + match.start()].rstrip()
+        if before.endswith(".") or before.endswith(":"):
+            continue
+        after = masked[start + match.end() :]
+        if after.startswith("::") or after.startswith("!"):
+            continue
+        yield start + match.start()
+
+
+def conflicting(masked, start, end, old, new):
+    """The mention of `new` that makes renaming `old` to it unsafe, or `None`.
+
+    A `let` that binds `new` is only a conflict when `old` is still *used*
+    after that statement: `let (args, rettv) = frame!(argvars, rettv);` shadows
+    the parameter on the very line that consumes it for the last time, and
+    renaming `argvars` to `args` there is the idiomatic raw-to-safe shadow, not
+    a hazard. Every other shape of mention -- a closure parameter, a `for`
+    binding, a call, a struct-literal key -- is a conflict outright, because
+    the scope it opens is not one a regex can bound.
+    """
+    for at in mentions(masked, start, end, new):
+        line_start = masked.rfind("\n", 0, at) + 1
+        line_stop = masked.find("\n", at)
+        line = masked[line_start : line_stop if line_stop != -1 else len(masked)]
+        pattern = LET_PATTERN.match(masked[line_start:at])
+        if not pattern:
+            return at, line
+        late = re.compile(rf"\b{re.escape(old)}\b").search(
+            masked, statement_end(masked, line_start + pattern.start(), end), end
+        )
+        # Past this `let`, every mention of `new` *is* the local it bound, so
+        # the scan is finished either way: the only question was whether `old`
+        # outlives the shadow.
+        return (late.start(), line) if late else None
+    return None
+
+
+def param_files(root):
+    for where in PARAM_ROOTS:
+        for path in sorted((root / where).rglob("*.rs")):
+            relative = path.relative_to(root).as_posix()
+            if not any(relative.startswith(skip) for skip in PARAM_EXEMPT):
+                yield path, relative
+
+
+def declared_type(masked, at, end):
+    """The type a parameter's `:` at `at` introduces, up to the next `,`."""
+    depth, i = 0, at
+    while i < end:
+        char = masked[i]
+        if char in "([<{":
+            depth += 1
+        elif char in ")]>}":
+            if depth == 0:
+                break
+            depth -= 1
+        elif char == "," and depth == 0:
+            break
+        i += 1
+    return masked[at:i]
+
+
+def param_positions(old, new, root, type_filter=None):
+    """Every `fn` parameter binding `old`, split into renames and skips.
+
+    A rename is `(path, line, column, new_name)`; a skip is a line of report
+    text naming the signature and the mention that blocked it. `type_filter`
+    is a regex the declared type must match, which is how one spelling that
+    means two things -- `buf` the buffer object, `buf` the byte buffer -- is
+    renamed on one of them only.
+    """
+    needle = binds(old)
+    kind = re.compile(type_filter) if type_filter else None
+    positions, skipped = [], []
+    for path, relative in param_files(root):
+        masked = ratchet.mask(path.read_text())
+        for name, start, end, stop in fn_definitions(masked):
+            for match in needle.finditer(masked, start, end):
+                bound = match.group(1)
+                if kind and not kind.search(declared_type(masked, match.end(), end)):
+                    continue
+                target = f"_{new}" if bound.startswith("_") else new
+                line, column = line_column(masked, match.start(1))
+                clash = conflicting(masked, start, max(stop, end), bound, target)
+                if clash is None:
+                    positions.append((path, line, column, target))
+                    continue
+                at, text = clash
+                clash_line, _ = line_column(masked, at)
+                skipped.append(
+                    f"{relative}:{line + 1}  fn {name}({bound}) -> {target}"
+                    f"  blocked at :{clash_line + 1}  {text.strip()}"
+                )
+    return positions, skipped
+
+
+def plan_params(rows, root):
+    """`plan`'s counterpart for `--params`: one entry per name, many positions."""
+    entries, skipped = [], []
+    for old, new, type_filter in rows:
+        positions, skips = param_positions(old, new, root, type_filter)
+        if not positions:
+            sys.exit(f"ra-rename: no parameter named `{old}` under {PARAM_ROOTS}")
+        entries.append(
+            {"old": old, "new": new, "tag": None, "alias": None, "positions": positions}
+        )
+        skipped.extend(skips)
+    return entries, skipped
 
 
 def main():
@@ -443,11 +710,27 @@ def main():
         action="store_true",
         help="rename the aliased tag too and drop the `type X = X;` it leaves",
     )
+    parser.add_argument(
+        "--params",
+        action="store_true",
+        help="rename a `fn` parameter everywhere it is bound, not a type",
+    )
+    parser.add_argument(
+        "--report",
+        help="where --params writes the signatures it skipped (default: stderr)",
+    )
     parser.add_argument("--root", default=str(ROOT), help="workspace root")
     args = parser.parse_args()
+    if args.params and args.fold:
+        parser.error("--params and --fold rename different things")
 
     root = Path(args.root).resolve()
-    entries = plan(read_table(args.table), root, args.fold)
+    rows = read_table(args.table)
+    if args.params:
+        entries, skipped = plan_params(rows, root)
+        report_skips(skipped, args.report)
+    else:
+        entries = plan(rows, root, args.fold)
 
     for entry in entries:
         entry["changes"] = {}
@@ -457,8 +740,8 @@ def main():
             client.initialize()
             for entry in entries:
                 where = f"{entry['old']} -> {entry['new']} (cfg {profile})"
-                for path, line, column in entry["positions"]:
-                    edit = client.rename(path, line, column, entry["new"]) or {}
+                for path, line, column, name in entry["positions"]:
+                    edit = client.rename(path, line, column, name) or {}
                     collect(edit, entry["changes"], where)
         finally:
             client.shutdown()
@@ -477,6 +760,9 @@ def main():
 
     apply(changes)
     for entry in entries:
+        if args.params:
+            print(f"{entry['old']} -> {entry['new']}: applied")
+            continue
         if args.fold and not drop_self_alias(entry["alias"], entry["new"]):
             sys.exit(
                 f"ra-rename: no `type {entry['new']} = {entry['new']};` left in "
