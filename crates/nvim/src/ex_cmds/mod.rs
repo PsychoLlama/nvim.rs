@@ -199,7 +199,7 @@ pub fn check_secure() -> bool {
     }
     false
 }
-pub unsafe fn prepare_tagpreview(mut undo_sync: bool) -> bool {
+pub unsafe fn prepare_tagpreview(undo_sync: bool) -> bool {
     // SAFETY: every region below reads the live window list and the live
     // current window, or calls a window-layout function that does; both are
     // the editor's own and live from startup to exit.

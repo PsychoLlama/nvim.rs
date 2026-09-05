@@ -117,7 +117,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     KEYSET_OPTIDX_set_extmark__end_row,
                 ) || did_end_line as ::core::ffi::c_int != 0
                 {
-                    let mut val: Integer = opts.end_row;
+                    let val: Integer = opts.end_row;
                     if !(val >= 0 as Integer
                         && !(val > b.line_count() as Integer && strict as ::core::ffi::c_int != 0))
                     {
@@ -165,7 +165,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 if i >= arr.size {
                                     break 's_293;
                                 }
-                                let mut hl_id: ::core::ffi::c_int = unsafe {
+                                let hl_id: ::core::ffi::c_int = unsafe {
                                     object_to_hl_id(
                                         *arr.items.add(i),
                                         c"hl_group item".as_ptr(),
@@ -257,7 +257,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_text_pos,
                 ) {
-                    let mut str: String_0 = opts.virt_text_pos;
+                    let str: String_0 = opts.virt_text_pos;
                     if unsafe { strequal(c"eol".as_ptr(), str.data()) } {
                         virt_text.pos = kVPosEndOfLine;
                     } else if unsafe { strequal(c"overlay".as_ptr(), str.data()) } {
@@ -301,7 +301,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__hl_mode,
                 ) {
-                    let mut str_0: String_0 = opts.hl_mode;
+                    let str_0: String_0 = opts.hl_mode;
                     if unsafe { strequal(c"replace".as_ptr(), str_0.data()) } {
                         virt_text.hl_mode = kHlModeReplace as ::core::ffi::c_int as uint8_t;
                     } else if unsafe { strequal(c"combine".as_ptr(), str_0.data()) } {
@@ -331,7 +331,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__virt_lines_overflow,
                 ) {
-                    let mut str_1: String_0 = opts.virt_lines_overflow;
+                    let str_1: String_0 = opts.virt_lines_overflow;
                     if unsafe { strequal(c"scroll".as_ptr(), str_1.data()) } {
                         virt_lines_flags |= kVLScroll as ::core::ffi::c_int;
                     } else if !unsafe { strequal(c"trunc".as_ptr(), str_1.data()) } && true {
@@ -345,7 +345,7 @@ pub unsafe fn nvim_buf_set_extmark(
                         opts.is_set__set_extmark_,
                         KEYSET_OPTIDX_set_extmark__virt_lines,
                     ) {
-                        let mut a: Array = opts.virt_lines;
+                        let a: Array = opts.virt_lines;
                         let mut j: size_t = 0 as size_t;
                         loop {
                             if j >= a.size {
@@ -362,7 +362,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             let mut dummig: ::core::ffi::c_int = 0;
                             let (slot, dummy_width) = (&mut error, &raw mut dummig);
                             // SAFETY: the array the caller's item names.
-                            let mut jtem: VirtText =
+                            let jtem: VirtText =
                                 unsafe { parse_virt_text(item, slot, dummy_width) };
                             // `kv_push`, whose growth step c2rust expanded inline.
                             let lines = virt_lines.data.lines_mut();
@@ -519,8 +519,8 @@ pub unsafe fn nvim_buf_set_extmark(
                             && !unsafe { DecorStateRef::current() }.win.is_null()
                             && unsafe { (*DecorStateRef::current().win).w_buffer } == b.raw()
                         {
-                            let mut r: ::core::ffi::c_int = line as ::core::ffi::c_int;
-                            let mut c: ::core::ffi::c_int = col as ::core::ffi::c_int;
+                            let r: ::core::ffi::c_int = line as ::core::ffi::c_int;
+                            let c: ::core::ffi::c_int = col as ::core::ffi::c_int;
                             if line2 == -1 as ::core::ffi::c_int {
                                 line2 = r;
                                 col2 = c as colnr_T;
@@ -625,7 +625,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 };
                                 let mut i_0: size_t = arr_0.size.wrapping_sub(1 as size_t);
                                 while i_0 > 0 as size_t {
-                                    let mut hl_id_0: ::core::ffi::c_int = unsafe {
+                                    let hl_id_0: ::core::ffi::c_int = unsafe {
                                         object_to_hl_id(
                                             *arr_0.items.add(i_0),
                                             c"hl_group item".as_ptr(),

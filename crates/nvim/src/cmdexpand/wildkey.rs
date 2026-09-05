@@ -38,7 +38,7 @@ pub(crate) unsafe fn wildmenu_translate_key(
 ) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let mut c = key;
     if cmdline_pum_active() || did_wild_list || wild_menu_showing.get() != 0 {
         if c == Key::Left.code() {
@@ -141,7 +141,7 @@ unsafe fn wildmenu_process_key_menunames(cclp: Cc, key: c_int, xp: *mut expand_T
 unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let buf = cclp.text();
     let at = |k: c_int| unsafe { *buf.offset(k as isize) };
     // Where the pattern being completed starts.
@@ -237,7 +237,7 @@ unsafe fn wildmenu_process_key_filenames(cclp: Cc, key: c_int, xp: *mut expand_T
 pub(crate) unsafe fn wildmenu_process_key(cclp: Cc, key: c_int, xp: *mut expand_T) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // Special translations for 'wildmenu'.
     match xp.xp_context {
         ExpandContext::Menunames => unsafe { wildmenu_process_key_menunames(cclp, key, xp.raw()) },

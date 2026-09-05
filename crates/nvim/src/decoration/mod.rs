@@ -231,7 +231,7 @@ pub(crate) fn mt_decor_virt(mark: MTKey) -> *mut DecorVirtText {
 /// was opted into.
 ///
 #[inline]
-pub fn ns_in_win(ns_id: uint32_t, mut wp: Win) -> bool {
+pub fn ns_in_win(ns_id: uint32_t, wp: Win) -> bool {
     if !ns_is_local(ns_id) {
         return true;
     }

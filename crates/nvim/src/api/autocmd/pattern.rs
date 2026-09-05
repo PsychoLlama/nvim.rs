@@ -14,10 +14,10 @@ use crate::api::private::validate::err_expected;
 use crate::kvec::InitVec;
 
 pub(crate) unsafe fn unpack_string_or_array(
-    mut v: Object,
-    mut k: *mut ::core::ffi::c_char,
-    mut required: bool,
-    mut arena: *mut Arena,
+    v: Object,
+    k: *mut ::core::ffi::c_char,
+    required: bool,
+    arena: *mut Arena,
     err: &mut Error,
 ) -> Array {
     if matches!(v, Object::String(_)) {
@@ -56,11 +56,11 @@ pub(crate) unsafe fn unpack_string_or_array(
 }
 
 pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
-    mut pattern: Object,
-    mut has_buf: bool,
-    mut buf: Buffer,
-    mut fallback: *mut ::core::ffi::c_char,
-    mut arena: *mut Arena,
+    pattern: Object,
+    has_buf: bool,
+    buf: Buffer,
+    fallback: *mut ::core::ffi::c_char,
+    arena: *mut Arena,
     err: &mut Error,
 ) -> Array {
     let mut patterns: ArrayBuilder = ArrayBuilder {
@@ -144,7 +144,7 @@ pub(crate) unsafe fn get_patterns_from_pattern_or_buf(
             };
         }
     } else if has_buf {
-        let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
+        let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, err) };
         if err.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
             return Array {
                 size: 0 as size_t,

@@ -106,7 +106,6 @@ pub unsafe fn free_tabpage(tp: *mut tabpage_T) {
 
 /// Free `tp` and everything hanging off it.
 pub(crate) fn free_tab(tp: TabPage) {
-    let mut tp = tp;
     // The allocation, out of the registry from here on. `tp` is still the
     // address to work through; `owned` is only who gives the memory back.
     // Every tab page reaching here was registered by `alloc_tabpage`.
@@ -569,7 +568,7 @@ fn check_tabpage_windows(old_curtab: TabPage) {
 }
 
 /// Re-place a floating window under its own configuration.
-fn config_float(mut wp: Win) {
+fn config_float(wp: Win) {
     let (raw, config) = (wp.raw(), wp.w_config.clone());
     // SAFETY: a live window and its own configuration.
     unsafe { win_config_float(Win::new(raw), config) };

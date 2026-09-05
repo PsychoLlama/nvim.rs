@@ -9,11 +9,7 @@
 
 use super::*;
 
-unsafe fn build_meta(
-    mut L: *mut lua_State,
-    mut tname: *const ::core::ffi::c_char,
-    mut meta: *const luaL_Reg,
-) {
+unsafe fn build_meta(L: *mut lua_State, tname: *const ::core::ffi::c_char, meta: *const luaL_Reg) {
     unsafe {
         if luaL_newmetatable(L, tname) != 0 {
             luaL_register(L, ::core::ptr::null::<::core::ffi::c_char>(), meta);
@@ -24,7 +20,7 @@ unsafe fn build_meta(
     }
 }
 
-unsafe fn tslua_init(mut L: *mut lua_State) {
+unsafe fn tslua_init(L: *mut lua_State) {
     unsafe {
         build_meta(L, TS_META_PARSER.as_ptr(), parser_meta.as_ptr());
         build_meta(L, TS_META_TREE.as_ptr(), tree_meta.as_ptr());
@@ -47,9 +43,7 @@ unsafe fn tslua_init(mut L: *mut lua_State) {
     }
 }
 
-unsafe extern "C-unwind" fn tslua_get_language_version(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tslua_get_language_version(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushnumber(L, TREE_SITTER_LANGUAGE_VERSION as lua_Number);
         1 as ::core::ffi::c_int
@@ -57,7 +51,7 @@ unsafe extern "C-unwind" fn tslua_get_language_version(
 }
 
 unsafe extern "C-unwind" fn tslua_get_minimum_language_version(
-    mut L: *mut lua_State,
+    L: *mut lua_State,
 ) -> ::core::ffi::c_int {
     unsafe {
         lua_pushnumber(L, TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as lua_Number);

@@ -398,7 +398,7 @@ pub(crate) unsafe fn copy_cpt_callbacks(
 ///
 /// Safe: [`Buf`] is the live buffer whose own callback array this rebuilds --
 /// which is also what retires upstream's NULL check.
-pub fn set_buflocal_cpt_callbacks(mut buf: Buf) {
+pub fn set_buflocal_cpt_callbacks(buf: Buf) {
     if cpt_cb().count() == 0 {
         return;
     }

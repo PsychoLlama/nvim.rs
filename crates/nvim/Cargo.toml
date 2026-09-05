@@ -74,6 +74,14 @@ unsafe_op_in_unsafe_fn = "allow"
 unreachable_pub = "deny"
 unused_qualifications = "deny"
 
+# c2rust wrote `mut` on every binding it emitted, whether or not the value was
+# ever reassigned — 956 findings in 169 files at the point the allow came off.
+# `cargo fix` cleared all of them mechanically (the fix is textual and cannot
+# change behaviour: a binding that is never reassigned reads the same either
+# way). Denied here rather than in lib.rs so it also governs the bin/test/bench
+# roots, which were already clean.
+unused_mut = "deny"
+
 # `just lint` runs clippy with correctness at its deny default; suspicious/
 # complexity/perf/style warn and burn down through the ratchet
 # (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,

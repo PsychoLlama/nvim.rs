@@ -74,7 +74,7 @@ pub unsafe fn nvim_get_context(
     }
     let mut ctx: Context = CONTEXT_INIT;
     unsafe { ctx_save(&raw mut ctx, int_types) };
-    let mut dict: Dict = unsafe { ctx_to_dict(&raw mut ctx, arena) };
+    let dict: Dict = unsafe { ctx_to_dict(&raw mut ctx, arena) };
     unsafe { ctx_free(&raw mut ctx) };
     dict.reported(error)
 }
@@ -82,7 +82,7 @@ pub unsafe fn nvim_get_context(
 pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut ctx: Context = CONTEXT_INIT;
-    let mut save_did_emsg: ::core::ffi::c_int = did_emsg.get();
+    let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
     did_emsg.set(0);
     unsafe { ctx_from_dict(dict, &raw mut ctx, &mut error) };
     if !error.is_set() {
@@ -96,12 +96,12 @@ pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
 
 pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {
     let mut rv: Dict = arena_dict(arena, 2 as size_t);
-    let mut modestr: *mut ::core::ffi::c_char =
+    let modestr: *mut ::core::ffi::c_char =
         unsafe { arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) } as *mut ::core::ffi::c_char;
     // The name is copied into the arena because the `Dict` borrows it;
     // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
     unsafe { modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t) };
-    let mut blocked: bool = input_blocking();
+    let blocked: bool = input_blocking();
     unsafe { dict_put(&mut rv, c"mode", Object::string(cstr_as_string(modestr))) };
     unsafe { dict_put(&mut rv, c"blocking", Object::boolean(blocked)) };
     rv

@@ -252,7 +252,7 @@ pub(crate) unsafe fn did_set_cmdheight(args: &mut optset_T) -> Option<&CStr> {
 /// 'diff': joining or leaving the diff set redoes the folds.
 pub(crate) unsafe fn did_set_diff(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
-    let mut win = unsafe { Frame::read(args) }.win;
+    let win = unsafe { Frame::read(args) }.win;
     diff_buf_adjust(win);
     if foldmethod_is_diff(win) {
         fold_update_all(win);
@@ -295,7 +295,7 @@ pub(crate) unsafe fn did_set_foldminlines(args: &mut optset_T) -> Option<&CStr> 
 /// 'foldnestmax': only the two computed fold methods have nesting to cap.
 pub(crate) unsafe fn did_set_foldnestmax(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
-    let mut win = unsafe { Frame::read(args) }.win;
+    let win = unsafe { Frame::read(args) }.win;
     if foldmethod_is_syntax(win) || foldmethod_is_indent(win) {
         fold_update_all(win);
     }
@@ -557,7 +557,7 @@ pub(crate) unsafe fn did_set_smoothscroll(args: &mut optset_T) -> Option<&CStr> 
 /// 'spell': switching it on is what loads the word lists.
 pub(crate) unsafe fn did_set_spell(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
-    let mut win = unsafe { Frame::read(args) }.win;
+    let win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_spell != 0 {
         return unsafe { parse_spelllang(win.raw()) };
     }

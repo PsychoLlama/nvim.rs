@@ -167,7 +167,7 @@ fn extend(mut args: Args<'_>, rettv: &mut typval_T, arg_errmsg: &CStr, is_new: b
 /// a cleared result.
 pub unsafe fn f_extend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, rettv) = frame!(argvars, rettv);
+    let (args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extend() argument", false);
 }
 
@@ -178,7 +178,7 @@ pub unsafe fn f_extend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// As [`f_extend`].
 pub unsafe fn f_extendnew(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, rettv) = frame!(argvars, rettv);
+    let (args, rettv) = frame!(argvars, rettv);
     extend(args, rettv, c"extendnew() argument", true);
 }
 

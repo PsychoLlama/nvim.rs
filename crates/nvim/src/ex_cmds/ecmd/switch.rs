@@ -93,7 +93,7 @@ pub(super) unsafe fn switch_to_other_buffer(
 
     let buf;
     if fnum != 0 {
-        buf = find_buf(fnum).map_or(ptr::null_mut(), |mut b| b.raw());
+        buf = find_buf(fnum).map_or(ptr::null_mut(), |b| b.raw());
     } else if flags.has(EcmdFlags::ADDBUF | EcmdFlags::ALTBUF) {
         // Default the line number to zero to avoid that a wininfo item is
         // added for the current window.  Add BLN_NOCURWIN for the same reason.

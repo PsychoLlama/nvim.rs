@@ -784,7 +784,7 @@ pub unsafe fn ex_ni(eap: *mut exarg_T) {
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
 pub(crate) unsafe fn ex_script_ni(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if eap.skip == 0 {
         unsafe { ex_ni(eap.raw()) };
     } else {

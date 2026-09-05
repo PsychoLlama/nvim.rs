@@ -18,7 +18,7 @@ use crate::winlayer::Buf;
 
 pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Result<Integer, Error> {
     let mut slot = Error::none();
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
+    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut slot) };
     if b.is_null() {
         return (0 as Integer).reported(slot);
     }
@@ -50,7 +50,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
         cb = unsafe { (*opts).on_input };
         unsafe { (*opts).on_input = LUA_NOREF as LuaRef };
     }
-    let mut chan: *mut Channel = unsafe { channel_alloc(kChannelStreamInternal) };
+    let chan: *mut Channel = unsafe { channel_alloc(kChannelStreamInternal) };
     unsafe { (*channel_internal(chan)).cb = cb };
     unsafe { (*channel_internal(chan)).closed = false };
     // SAFETY: `curwin` names a live window for the editor's whole run.
@@ -61,7 +61,7 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
             win_col_off(curwin.get()),
         )
     };
-    let mut topts: TerminalOptions = TerminalOptions {
+    let topts: TerminalOptions = TerminalOptions {
         data: chan as *mut ::core::ffi::c_void,
         width: (view_width - col_off).max(0) as uint16_t,
         height: view_height as uint16_t,
@@ -116,12 +116,12 @@ pub unsafe fn nvim_open_term(buf: Buffer, opts: *mut KeyDict_open_term) -> Resul
 fn term_read_pause(mut _pause: bool, mut _data: *mut ::core::ffi::c_void) {}
 
 unsafe fn term_write(
-    mut buf: *const ::core::ffi::c_char,
-    mut size: size_t,
-    mut data: *mut ::core::ffi::c_void,
+    buf: *const ::core::ffi::c_char,
+    size: size_t,
+    data: *mut ::core::ffi::c_void,
 ) {
-    let mut chan: *mut Channel = data as *mut Channel;
-    let mut cb: LuaRef = unsafe { (*channel_internal(chan)).cb };
+    let chan: *mut Channel = data as *mut Channel;
+    let cb: LuaRef = unsafe { (*channel_internal(chan)).cb };
     if cb == LUA_NOREF {
         return;
     }
@@ -153,8 +153,8 @@ fn term_resize(mut _width: uint16_t, mut _height: uint16_t, mut _data: *mut ::co
 
 fn term_resume(mut _data: *mut ::core::ffi::c_void) {}
 
-unsafe fn term_close(mut data: *mut ::core::ffi::c_void) {
-    let mut chan: *mut Channel = data as *mut Channel;
+unsafe fn term_close(data: *mut ::core::ffi::c_void) {
+    let chan: *mut Channel = data as *mut Channel;
     unsafe { terminal_destroy(&raw mut (*chan).term) };
     unsafe { api_free_luaref((*channel_internal(chan)).cb) };
     unsafe { (*channel_internal(chan)).cb = LUA_NOREF as LuaRef };

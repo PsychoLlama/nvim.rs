@@ -34,7 +34,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 /// Which way a `[` or `]` command searches.
 unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if ca.cmdchar == ']' as c_int {
         FORWARD as c_int
     } else {
@@ -46,7 +46,7 @@ unsafe fn direction(cap: *mut cmdarg_T) -> c_int {
 /// `Direction` constants.
 unsafe fn match_direction(cap: *mut cmdarg_T) -> c_int {
     // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if ca.cmdchar == '[' as c_int {
         FM_BACKWARD as c_int
     } else {
@@ -194,7 +194,7 @@ unsafe fn nv_bracket_block(cap: *mut cmdarg_T, old_pos: *const pos_T) {
 /// tests -- CTRL-D, `d` and `D` all end in the same four bits.
 unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut found: *mut c_char = ptr::null_mut();
     let len =
         unsafe { find_ident_under_cursor(&raw mut found, FIND_IDENT as c_int, ptr::null_mut()) };
@@ -244,7 +244,7 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
 /// mark in this buffer.
 unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
     let mut here = fmark_T::UNSET;
@@ -275,7 +275,7 @@ unsafe fn nv_bracket_mark(cap: *mut cmdarg_T) {
 /// `[s`, `[r`, `[S`, `]s`, `]r` and `]S`: jump to a misspelled word.
 unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     setpcmark();
     let what = match u8::try_from(ca.nchar) {
         Ok(b's') => SMT_ALL as smt_T,
@@ -296,7 +296,7 @@ unsafe fn nv_bracket_spell(cap: *mut cmdarg_T) {
 /// `[` and `]`, whose second character says what kind of jump this is.
 pub(crate) unsafe fn nv_brackets(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = false;
     let old_pos = cur_win().w_cursor;

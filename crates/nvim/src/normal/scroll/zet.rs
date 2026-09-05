@@ -111,7 +111,7 @@ pub(crate) unsafe fn nv_z_get_count(cap: *mut cmdarg_T, nchar_arg: *mut c_int) -
 /// running its tail.
 pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<(), Failed> {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // `zu` is the undo prefix: `zug` takes back what `zg` added.
     let mut undo = false;
     if nchar == 'u' as c_int {
@@ -177,8 +177,8 @@ pub(crate) unsafe fn nv_zg_zw(cap: *mut cmdarg_T, mut nchar: c_int) -> Result<()
 /// Scroll sideways by `count1` columns, which 'wrap' makes meaningless.
 unsafe fn scroll_sideways(cap: *mut cmdarg_T, right: bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
-    let mut win = cur_win();
+    let ca = unsafe { CmdArg::new(cap) };
+    let win = cur_win();
     if win.w_onebuf_opt.wo_wrap != 0 {
         return;
     }

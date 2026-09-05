@@ -160,7 +160,7 @@ pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
 /// from.
 pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     match eap.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             // Not the cursor line but the *last* line when the cursor is

@@ -38,7 +38,7 @@ pub(crate) unsafe fn expand_files_and_dirs(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let mut pat = pat;
     let mut flags = flags;
     let free_pat = xp.xp_backslash != BackslashEscape::NONE;
@@ -246,7 +246,7 @@ pub(crate) unsafe fn get_healthcheck_names(_xp: *mut expand_T, idx: c_int) -> *m
 pub(crate) unsafe fn get_lsp_arg(xp: *mut expand_T, idx: c_int) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     static names: GlobalCell<Object> = GlobalCell::new(Object::Nil);
     static last_xp_line: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
     static last_gen: GlobalCell<c_uint> = GlobalCell::new(0);
@@ -340,7 +340,7 @@ pub(crate) unsafe fn expand_other(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // Find the context in the table and call expand_generic() with the
     // right function to do the expansion.
     let Some(&(_, func, ic, escaped)) = GENERATORS

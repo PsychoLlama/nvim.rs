@@ -452,7 +452,7 @@ pub(crate) unsafe fn command_line_execute(
     unsafe { command_line_handle_key(s) }
 }
 
-pub(crate) unsafe fn may_trigger_cursormovedc(mut s: Cls) {
+pub(crate) unsafe fn may_trigger_cursormovedc(s: Cls) {
     let mut cc = Cc::current();
     if cc.cmdpos != s.prev_cmdpos {
         trigger_cmd_autocmd(s.cmdline_type, AutoEvent::CursorMovedC);
@@ -504,8 +504,8 @@ pub(crate) unsafe fn do_autocmd_cmdlinechanged(firstc: ::core::ffi::c_int) {
 
 /// A key changed the command line: show the `'inccommand'` preview or the
 /// `'incsearch'` highlighting, and fire `CmdlineChanged`.
-pub(crate) unsafe fn command_line_changed(mut s: Cls) -> ::core::ffi::c_int {
-    let mut cc = Cc::current();
+pub(crate) unsafe fn command_line_changed(s: Cls) -> ::core::ffi::c_int {
+    let cc = Cc::current();
     let prev_cmdpreview = cmdpreview.get();
     let preview_shown = s.firstc == ':' as ::core::ffi::c_int
         && current_sctx.get().sc_sid == 0 // only if interactive

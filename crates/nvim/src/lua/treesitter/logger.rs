@@ -9,12 +9,12 @@
 
 use super::*;
 
-pub(crate) unsafe fn logger_gc(mut logger: TSLogger) {
+pub(crate) unsafe fn logger_gc(logger: TSLogger) {
     unsafe {
         if logger.log.is_none() {
             return;
         }
-        let mut opts: *mut TSLuaLoggerOpts = logger.payload as *mut TSLuaLoggerOpts;
+        let opts: *mut TSLuaLoggerOpts = logger.payload as *mut TSLuaLoggerOpts;
         luaL_unref(
             (*opts).lstate,
             LUA_REGISTRYINDEX,
@@ -25,12 +25,12 @@ pub(crate) unsafe fn logger_gc(mut logger: TSLogger) {
 }
 
 unsafe extern "C" fn logger_cb(
-    mut payload: *mut ::core::ffi::c_void,
-    mut logtype: TSLogType,
-    mut s: *const ::core::ffi::c_char,
+    payload: *mut ::core::ffi::c_void,
+    logtype: TSLogType,
+    s: *const ::core::ffi::c_char,
 ) {
     unsafe {
-        let mut opts: *mut TSLuaLoggerOpts = payload as *mut TSLuaLoggerOpts;
+        let opts: *mut TSLuaLoggerOpts = payload as *mut TSLuaLoggerOpts;
         if !(*opts).lex
             && logtype as ::core::ffi::c_uint
                 == TSLogTypeLex as ::core::ffi::c_int as ::core::ffi::c_uint
@@ -40,7 +40,7 @@ unsafe extern "C" fn logger_cb(
         {
             return;
         }
-        let mut lstate: *mut lua_State = (*opts).lstate;
+        let lstate: *mut lua_State = (*opts).lstate;
         lua_rawgeti(lstate, LUA_REGISTRYINDEX, (*opts).cb as ::core::ffi::c_int);
         lua_pushstring(
             lstate,
@@ -65,11 +65,9 @@ unsafe extern "C" fn logger_cb(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn parser_set_logger(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn parser_set_logger(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
+        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
         luaL_argcheck(
             L,
             lua_type(L, 2 as ::core::ffi::c_int) == 1 as ::core::ffi::c_int,
@@ -88,17 +86,17 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_logger(
             4 as ::core::ffi::c_int,
             c"function expected".as_ptr(),
         );
-        let mut opts: *mut TSLuaLoggerOpts =
+        let opts: *mut TSLuaLoggerOpts =
             xmalloc(::core::mem::size_of::<TSLuaLoggerOpts>()) as *mut TSLuaLoggerOpts;
         lua_pushvalue(L, 4 as ::core::ffi::c_int);
-        let mut ref_0: LuaRef = luaL_ref(L, LUA_REGISTRYINDEX);
+        let ref_0: LuaRef = luaL_ref(L, LUA_REGISTRYINDEX);
         *opts = TSLuaLoggerOpts {
             cb: ref_0,
             lstate: L,
             lex: lua_toboolean(L, 2 as ::core::ffi::c_int) != 0,
             parse: lua_toboolean(L, 3 as ::core::ffi::c_int) != 0,
         };
-        let mut logger: TSLogger = TSLogger {
+        let logger: TSLogger = TSLogger {
             payload: opts as *mut ::core::ffi::c_void,
             log: Some(
                 logger_cb
@@ -114,14 +112,12 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_logger(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn parser_get_logger(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn parser_get_logger(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        let mut logger: TSLogger = ts_parser_logger(p);
+        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
+        let logger: TSLogger = ts_parser_logger(p);
         if logger.log.is_some() {
-            let mut opts: *mut TSLuaLoggerOpts = logger.payload as *mut TSLuaLoggerOpts;
+            let opts: *mut TSLuaLoggerOpts = logger.payload as *mut TSLuaLoggerOpts;
             lua_rawgeti(L, LUA_REGISTRYINDEX, (*opts).cb as ::core::ffi::c_int);
         } else {
             lua_pushnil(L);

@@ -103,7 +103,7 @@ pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
     // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
     // Everything below works on that region and on the cursor line, which is
     // what `u_save`, `do_addsub` and `changed_lines` each ask for.
-    let mut oap = unsafe { Op::new(oap) };
+    let oap = unsafe { Op::new(oap) };
     // 'foldexpr' may be re-evaluated part way through, and it must not see
     // the buffer mid-operation.
     let folds_frozen = Suppress::fold_update();

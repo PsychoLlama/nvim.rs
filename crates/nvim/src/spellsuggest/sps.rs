@@ -111,7 +111,7 @@ pub(crate) unsafe fn spell_check_sps() -> Result<(), Failed> {
 /// # Safety
 ///
 /// `su` must be valid and `expr` NUL-terminated.
-pub(super) unsafe fn spell_suggest_expr(mut su: Sug, expr: *mut c_char) {
+pub(super) unsafe fn spell_suggest_expr(su: Sug, expr: *mut c_char) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller guarantees the pointers; the list the expression
     // returns is owned here until it is unreferenced.
@@ -153,7 +153,7 @@ pub(super) unsafe fn spell_suggest_expr(mut su: Sug, expr: *mut c_char) {
 /// # Safety
 ///
 /// `su` must be valid and `fname` NUL-terminated.
-pub(super) unsafe fn spell_suggest_file(mut su: Sug, fname: *mut c_char) {
+pub(super) unsafe fn spell_suggest_file(su: Sug, fname: *mut c_char) {
     // SAFETY: the caller guarantees the pointers; `line` is what
     // `vim_fgets` is told its size is, and the good word is terminated
     // inside it before it is used.

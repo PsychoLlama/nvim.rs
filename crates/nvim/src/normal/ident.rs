@@ -375,7 +375,7 @@ pub(crate) unsafe fn find_decl(
 
     // Where the enclosing block starts, which is as far back as a local
     // declaration may be.
-    let mut par_pos;
+    let par_pos;
     let mut incll = false;
     // SAFETY: `incll` is this frame's own out-parameter.
     let in_block =
@@ -749,7 +749,7 @@ unsafe fn append_escaped(
 /// under the cursor.
 pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let (typed, nchar) = unsafe { ((*cap).cmdchar, (*cap).nchar) };
     // The `g` forms carry the real command in `nchar`.
@@ -929,7 +929,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
 /// `CTRL-T`: back up the tag stack.
 pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument.
     if check_clear_op_quit(ca.op()) {
         return;
@@ -942,7 +942,7 @@ pub(crate) unsafe fn nv_tagpop(cap: *mut cmdarg_T) {
 /// `gf`, `gF` and `[f`: edit the file named under the cursor.
 pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     // SAFETY: `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // SAFETY (throughout): `cap` is the caller's live command argument, and
     // the current window and buffer are live.
     if unsafe { check_text_or_curbuf_locked((*cap).oap) } || !check_can_set_curbuf_disabled() {

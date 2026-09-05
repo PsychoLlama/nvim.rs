@@ -7,7 +7,6 @@
 // the lint only listens at the crate root, not on the `mod` item itself.
 #![allow(special_module_name)]
 #![allow(unused_assignments)]
-#![allow(unused_mut)]
 // The crate root cannot carry `forbid(unsafe_code)` — `forbid` reaches the
 // whole subtree and cannot be lifted by a module, and the tree is still tens
 // of thousands of unchecked lines deep. `deny(unsafe_op_in_unsafe_fn)` is the

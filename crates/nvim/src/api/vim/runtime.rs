@@ -101,12 +101,12 @@ pub unsafe fn nvim_get_runtime_file(
 }
 
 unsafe fn find_runtime_cb(
-    mut num_fnames: ::core::ffi::c_int,
-    mut fnames: *mut *mut ::core::ffi::c_char,
-    mut all: bool,
-    mut c: *mut ::core::ffi::c_void,
+    num_fnames: ::core::ffi::c_int,
+    fnames: *mut *mut ::core::ffi::c_char,
+    all: bool,
+    c: *mut ::core::ffi::c_void,
 ) -> bool {
-    let mut cookie: *mut RuntimeCookie = c as *mut RuntimeCookie;
+    let cookie: *mut RuntimeCookie = c as *mut RuntimeCookie;
     let mut i: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     while i < num_fnames {
         // SAFETY: `fnames` names `num_fnames` C strings, and `cookie` is the

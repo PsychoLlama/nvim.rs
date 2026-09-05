@@ -148,7 +148,7 @@ fn regcomp(pat: &[u8], flags: c_int) -> *mut regprog_T {
     unsafe { vim_regcomp(pat.as_ptr().cast::<c_char>(), flags) }
 }
 
-fn is_diff_mode(mut buf: Buf) -> bool {
+fn is_diff_mode(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     diff_mode_buf(buf)
 }
@@ -169,23 +169,23 @@ fn current_last() -> Option<Buf> {
     last_buffer()
 }
 
-fn fire_buf_event(event: AutoEvent, mut buf: Buf) -> bool {
+fn fire_buf_event(event: AutoEvent, buf: Buf) -> bool {
     let raw = buf.raw();
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) }
 }
 
-fn copy_options_into(mut buf: Buf, flags: c_int) {
+fn copy_options_into(buf: Buf, flags: c_int) {
     // SAFETY: a live buffer.
     unsafe { buf_copy_options(buf.raw(), flags) };
 }
 
-fn check_cursor_column(mut win: Win) {
+fn check_cursor_column(win: Win) {
     // SAFETY: a live window.
     check_cursor_col(win);
 }
 
-fn check_cursor_line(mut win: Win) {
+fn check_cursor_line(win: Win) {
     // SAFETY: a live window.
     check_cursor_lnum(win);
 }
@@ -496,7 +496,7 @@ fn announce_new_buffer(buf: Buf, flags: c_int) -> bool {
 /// Whether the current buffer is empty, unnamed, unmodified and shown in
 /// only one window -- which means it can be reused.
 pub unsafe fn curbuf_reusable() -> bool {
-    let Some(mut buf) = current_buf() else {
+    let Some(buf) = current_buf() else {
         return false;
     };
     // SAFETY: a live buffer, in each of the three.
@@ -603,7 +603,7 @@ pub unsafe fn buflist_getfile(
     options: c_int,
     forceit: c_int,
 ) -> Result<(), Failed> {
-    let Some(mut buf) = find_buf(n) else {
+    let Some(buf) = find_buf(n) else {
         if options & GETF_ALT as c_int != 0 && n == 0 {
             err(tr_raw(e_noalt.as_ptr()));
         } else {
@@ -667,7 +667,7 @@ pub unsafe fn buflist_getfile(
 
 /// The `'switchbuf'` half of [`buflist_getfile`]: go to a window already
 /// showing `buf`, or make one. Answers false when the split failed.
-fn goto_existing_window(mut buf: Buf) -> bool {
+fn goto_existing_window(buf: Buf) -> bool {
     // SAFETY: a live buffer; the answer is a live window or null.
     let wp = unsafe { swbuf_goto_win_with_buf(buf.raw()) };
     let splits = (kOptSwbFlagVsplit as c_int

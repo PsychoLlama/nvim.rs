@@ -77,7 +77,7 @@ unsafe fn replace_character(c: c_int) {
 /// buffer.
 pub(crate) unsafe fn op_replace(oap: *mut oparg_T, mut c: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
-    let mut oap = unsafe { Op::new(oap) };
+    let oap = unsafe { Op::new(oap) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) || oap.empty {
         return Ok(());
     }

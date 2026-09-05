@@ -681,7 +681,7 @@ pub unsafe fn set_cmd_context(
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
-    let mut ccline = Cc::current();
+    let ccline = Cc::current();
     let mut old_char = NUL as c_char;
 
     // Avoid a UMR warning from Purify, only save the character if it has

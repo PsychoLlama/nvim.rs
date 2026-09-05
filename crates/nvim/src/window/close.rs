@@ -45,7 +45,6 @@ pub unsafe fn entering_window(win: *mut win_T) {
 /// the window is entered again. Only matters for a prompt buffer, and never in
 /// the autocommand window, which is only borrowed for the moment.
 pub(crate) fn leave_window(win: Win) {
-    let mut win = win;
     if !is_prompt(win) || is_autocmd_window(Some(win)) {
         return;
     }
@@ -180,7 +179,7 @@ fn close_all(buf: Buf, keep_curwin: bool) {
 }
 
 /// Whether `wp` or the buffer it shows is pinned against closing.
-fn locked(mut wp: Win) -> bool {
+fn locked(wp: Win) -> bool {
     wp.w_locked || wp.buffer().b_locked > 0
 }
 
@@ -445,13 +444,13 @@ fn buf_is_valid(buf: *mut buf_T) -> bool {
 }
 
 /// Whether `buf` may be abandoned, saying why it may not.
-fn may_abandon(mut buf: Buf, forceit: bool) -> bool {
+fn may_abandon(buf: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.
     unsafe { can_abandon(buf.raw(), forceit) }
 }
 
 /// Put up the "Save changes?" dialogue for `buf`, and act on the answer.
-fn ask_about_changes(mut buf: Buf) {
+fn ask_about_changes(buf: Buf) {
     // SAFETY: a live buffer.
     unsafe { dialog_changed(buf.raw(), false) };
 }

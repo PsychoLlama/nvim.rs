@@ -407,14 +407,14 @@ pub(crate) fn last_buf() -> Option<Buf> {
 ///
 /// **Everything the caller holds may be stale afterwards** -- take a
 /// [`BufRef`] first.
-pub(crate) fn fire(event: AutoEvent, mut buf: Buf) -> bool {
+pub(crate) fn fire(event: AutoEvent, buf: Buf) -> bool {
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buf.raw()) }
 }
 
 /// `apply_autocmds(event, buf->b_fname, buf->b_fname, false, buf)`, the form
 /// the unload/delete/wipe events take.
-pub(crate) fn fire_named(event: AutoEvent, mut buf: Buf) -> bool {
+pub(crate) fn fire_named(event: AutoEvent, buf: Buf) -> bool {
     let (name, raw) = (buf.b_fname, buf.raw());
     // SAFETY: a live buffer and its own file name.
     unsafe { apply_autocmds(event, name, name, false, raw) }
@@ -422,7 +422,7 @@ pub(crate) fn fire_named(event: AutoEvent, mut buf: Buf) -> bool {
 
 /// `apply_autocmds_retval()`: as [`fire`], but the event may turn `retval`
 /// into `FAIL`.
-pub(crate) fn fire_retval<T>(event: AutoEvent, mut buf: Buf, retval: &mut Result<T, Failed>) {
+pub(crate) fn fire_retval<T>(event: AutoEvent, buf: Buf, retval: &mut Result<T, Failed>) {
     let (none, raw) = (ptr::null_mut(), buf.raw());
     let mut status = if retval.is_ok() { OK } else { FAIL };
     // SAFETY: a live buffer and a local to report through.
@@ -479,29 +479,29 @@ pub(crate) fn end_visual() {
 /// `close_windows()`: close every window showing `buf`.
 ///
 /// Fires `WinClosed`/`BufWinLeave`; everything held may be stale afterwards.
-pub(crate) fn close_all_windows(mut buf: Buf, keep_curwin: bool) {
+pub(crate) fn close_all_windows(buf: Buf, keep_curwin: bool) {
     // SAFETY: a live buffer.
     unsafe { close_windows(buf.raw(), keep_curwin) };
 }
 
 /// Re-check `'colorcolumn'` after `'textwidth'` changed under the window.
-pub(crate) fn recheck_colorcolumn(mut win: Win) {
+pub(crate) fn recheck_colorcolumn(win: Win) {
     // SAFETY: a live window; a null pattern means "the option's own value".
     unsafe { check_colorcolumn(ptr::null_mut(), win.raw()) };
 }
 
-pub(crate) fn clear_window_folds(mut win: Win) {
+pub(crate) fn clear_window_folds(win: Win) {
     // SAFETY: a live window.
     clear_folding(win);
 }
 
-pub(crate) fn invalidate_window_folds(mut win: Win) {
+pub(crate) fn invalidate_window_folds(win: Win) {
     // SAFETY: a live window.
     fold_update_all(win);
 }
 
 /// Drop the window's own syntax state (`:ownsyntax`).
-pub(crate) fn reset_syntax(mut win: Win) {
+pub(crate) fn reset_syntax(win: Win) {
     // SAFETY: a live window.
     unsafe { reset_synblock(win.raw()) };
 }
@@ -513,7 +513,7 @@ pub(crate) fn set_pcmark() {
 }
 
 /// Whether `buf` has unsaved changes.
-pub(crate) fn is_changed(mut buf: Buf) -> bool {
+pub(crate) fn is_changed(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     buf_is_changed(buf)
 }
@@ -528,7 +528,7 @@ pub(crate) fn edit_file(
     eap: *mut exarg_T,
     newlnum: linenr_T,
     flags: EcmdFlags,
-    mut win: Win,
+    win: Win,
 ) -> Result<(), Failed> {
     let raw = win.raw();
     // SAFETY: a live window, and the caller's own arguments passed on.

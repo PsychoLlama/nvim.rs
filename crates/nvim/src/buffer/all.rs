@@ -92,12 +92,12 @@ fn enter_win(win: *mut win_T) {
     unsafe { win_enter(win, false) };
 }
 
-fn close_win(mut win: Win, free_buf: bool) -> c_int {
+fn close_win(win: Win, free_buf: bool) -> c_int {
     // SAFETY: a live window.
     unsafe { win_close(win.raw(), free_buf, false) }
 }
 
-fn move_win_after(mut win: Win, mut after: Win) {
+fn move_win_after(win: Win, after: Win) {
     // SAFETY: two live windows.
     unsafe { win_move_after(win.raw(), after.raw()) };
 }
@@ -106,7 +106,7 @@ fn split_below_room() -> Result<(), Failed> {
     win_split(0, WSP_ROOM as c_int | WSP_BELOW as c_int)
 }
 
-fn is_locked(mut win: Win) -> bool {
+fn is_locked(win: Win) -> bool {
     // SAFETY: a live window.
     unsafe { win_locked(win.raw()) != 0 }
 }
@@ -120,7 +120,7 @@ fn is_valid(win: *mut win_T) -> bool {
     win_valid(win)
 }
 
-fn is_aucmd(mut win: Win) -> bool {
+fn is_aucmd(win: Win) -> bool {
     // SAFETY: a live window.
     is_aucmd_win(win.raw())
 }
@@ -137,17 +137,17 @@ fn global_stl_rows() -> c_int {
     global_stl_height()
 }
 
-fn buf_changed(mut buf: Buf) -> bool {
+fn buf_changed(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     buf_is_changed(buf)
 }
 
-fn buf_hidden(mut buf: Buf) -> bool {
+fn buf_hidden(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     unsafe { buf_hide(buf.raw()) }
 }
 
-fn auto_write(mut buf: Buf) -> Result<(), Failed> {
+fn auto_write(buf: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer; `false` is upstream's `forceit`.
     unsafe { autowrite(buf.raw(), false) }
 }
@@ -158,7 +158,7 @@ fn get_key() {
 }
 
 /// Make `buf` the current buffer, as `:buffer` does.
-fn goto_buf(mut buf: Buf) {
+fn goto_buf(buf: Buf) {
     let update_jumplist = jop_flags.get() & kOptJopFlagClean as c_int as u32 == 0;
     // SAFETY: a live buffer.
     unsafe { set_curbuf(buf, DOBUF_GOTO as c_int, update_jumplist) };

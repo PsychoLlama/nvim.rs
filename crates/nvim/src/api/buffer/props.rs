@@ -20,7 +20,7 @@ pub unsafe fn nvim_buf_get_var(
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return Object::Nil.reported(error);
     }
@@ -42,7 +42,7 @@ pub unsafe fn nvim_buf_get_keymap(
     arena: *mut Arena,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return Array {
             size: 0 as size_t,
@@ -74,7 +74,7 @@ pub unsafe fn nvim_buf_del_keymap(
     lhs: String_0,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut rhs: String_0 =
+    let rhs: String_0 =
         String_0::from_raw_parts(c"".as_ptr() as *mut ::core::ffi::c_char, 0 as size_t);
     let no_opts = ::core::ptr::null_mut::<KeyDict_keymap>();
     // SAFETY: `error` is this call's own error slot; the mapping is deleted, so
@@ -85,7 +85,7 @@ pub unsafe fn nvim_buf_del_keymap(
 
 pub unsafe fn nvim_buf_set_var(buf: Buffer, name: String_0, value: Object) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -99,7 +99,7 @@ pub unsafe fn nvim_buf_set_var(buf: Buffer, name: String_0, value: Object) -> Re
 
 pub unsafe fn nvim_buf_del_var(buf: Buffer, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -113,9 +113,9 @@ pub unsafe fn nvim_buf_del_var(buf: Buffer, name: String_0) -> Result<(), Error>
 
 pub unsafe fn nvim_buf_get_name(buf: Buffer) -> Result<String_0, Error> {
     let mut error = Error::none();
-    let mut rv: String_0 =
+    let rv: String_0 =
         String_0::from_raw_parts(::core::ptr::null_mut::<::core::ffi::c_char>(), 0 as size_t);
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() || unsafe { (*b).b_ffname }.is_null() {
         return rv.reported(error);
     }
@@ -124,7 +124,7 @@ pub unsafe fn nvim_buf_get_name(buf: Buffer) -> Result<String_0, Error> {
 
 pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -166,19 +166,19 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
 
 pub unsafe fn nvim_buf_is_loaded(buf: Buffer) -> Boolean {
     let mut stub: Error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut stub) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut stub) };
     stub.clear();
     !b.is_null() && !unsafe { (*b).b_ml.ml_mfp }.is_null()
 }
 
 pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
-    let mut force: bool = unsafe { (*opts).force };
-    let mut unload: bool = unsafe { (*opts).unload };
+    let force: bool = unsafe { (*opts).force };
+    let unload: bool = unsafe { (*opts).unload };
     let result: Result<(), Failed> = do_buffer(
         if unload as ::core::ffi::c_int != 0 {
             DOBUF_UNLOAD as ::core::ffi::c_int
@@ -200,7 +200,7 @@ pub unsafe fn nvim_buf_delete(buf: Buffer, opts: *mut KeyDict_buf_delete) -> Res
 
 pub unsafe fn nvim_buf_is_valid(buf: Buffer) -> Boolean {
     let mut stub: Error = Error::none();
-    let mut ret: Boolean = !unsafe { find_buffer_by_handle(buf, &mut stub) }.is_null();
+    let ret: Boolean = !unsafe { find_buffer_by_handle(buf, &mut stub) }.is_null();
     stub.clear();
     ret
 }

@@ -527,7 +527,7 @@ impl Jump {
             && switchbuf & (kOptSwbFlagUseopen | kOptSwbFlagUsetab) as c_uint != 0
         {
             let existing = unsafe { buflist_findname_exp(self.fname()) };
-            if let Some(mut existing) = existing
+            if let Some(existing) = existing
                 && !unsafe { swbuf_goto_win_with_buf(existing.raw()) }.is_null()
             {
                 self.reused_window = true;

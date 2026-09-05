@@ -43,7 +43,7 @@ use ::libc::{fclose, strcasecmp};
 
 /// `:colorscheme` — with no argument, report `g:colors_name`.
 pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) != NUL {
         if unsafe { load_colors(eap.arg) }.is_err() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -71,7 +71,7 @@ pub(crate) unsafe fn ex_colorscheme(eap: *mut exarg_T) {
 
 /// `:highlight`, and the greeting `:hi!` prints on its own.
 pub(crate) unsafe fn ex_highlight(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) == NUL && byte_at(eap.cmd, 2) == '!' as c_int {
         msg(gettext(c"Greetings, Vim user!".as_ptr()), 0);
     }
@@ -84,7 +84,7 @@ pub(crate) unsafe fn ex_highlight(eap: *mut exarg_T) {
 /// Only one destination at a time: every form closes whatever was open
 /// first.
 pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut arg = eap.arg;
     if unsafe { strcasecmp(eap.arg, c"END".as_ptr() as *mut c_char) } == 0 {
         close_redir();
@@ -155,7 +155,7 @@ pub(crate) unsafe fn ex_redir(eap: *mut exarg_T) {
 /// `:redraw` — draw now, with 'lazyredraw' and the redraw suppression
 /// counter out of the way.
 pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if cmdpreview.get() {
         return;
     }
@@ -183,7 +183,7 @@ pub(crate) unsafe fn ex_redraw(eap: *mut exarg_T) {
 /// `:redrawstatus` — the status lines only, unless a full redraw is
 /// needed to show them.
 pub(crate) unsafe fn ex_redrawstatus(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if cmdpreview.get() {
         return;
     }
@@ -251,7 +251,7 @@ pub(crate) fn close_redir() {
 
 /// `:digraphs` — define digraphs, or list them.
 pub(crate) unsafe fn ex_digraphs(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) != NUL {
         putdigraph(unsafe { core::ffi::CStr::from_ptr(eap.arg) }.to_bytes());
     } else {

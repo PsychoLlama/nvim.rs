@@ -47,7 +47,6 @@ pub unsafe fn win_close(win: *mut win_T, free_buf: bool, force: bool) -> c_int {
 ///
 /// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
 pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
-    let mut win = win;
     let prev_curtab = curtab.get();
     let win_frame = if win.w_floating {
         ptr::null_mut::<frame_T>()
@@ -402,7 +401,7 @@ pub(crate) fn trigger_winnewpre() {
 }
 
 /// `WinClosed`, named after the window's own handle. Never re-entered.
-fn fire_winclosed(mut win: Win) {
+fn fire_winclosed(win: Win) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
     if RECURSIVE.get() || !event_wanted(AutoEvent::WinClosed) {
         return;
@@ -466,8 +465,6 @@ pub unsafe fn win_close_othertab(
 /// `false` when the window was not closed as a direct result of this call
 /// (through autocommands, say).
 pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool) -> bool {
-    let mut win = win;
-    let mut tp = tp;
     debug_assert!(!tp.is_current(), "tp != curtab");
     let mut did_decrement = false;
     let mut bufref = BufRef::of_opt(None);
@@ -527,7 +524,7 @@ pub(crate) fn close_othertab(win: Win, free_buf: bool, tp: TabPage, force: bool)
         }
 
         bufref = BufRef::of_opt(win.buffer_or_none());
-        if let Some(mut buf) = win.buffer_or_none() {
+        if let Some(buf) = win.buffer_or_none() {
             // Close the link to the buffer.
             let action = if free_buf { DOBUF_UNLOAD as c_int } else { 0 };
             did_decrement = close_buffer(Some(win), buf, action, false, true);

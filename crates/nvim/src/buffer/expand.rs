@@ -104,7 +104,7 @@ fn fuzzy_score(name: *const c_char, pat: *const c_char) -> c_int {
     name.map_or(0, |name| fuzzy_match_str(name, pat))
 }
 
-fn diff_mode(mut buf: Buf) -> bool {
+fn diff_mode(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     diff_mode_buf(buf)
 }
@@ -371,7 +371,7 @@ pub(crate) fn find_buf(nr: c_int) -> Option<Buf> {
 /// The name of buffer `n`, shortened with `home_replace`, freshly allocated;
 /// null when there is no such buffer.
 pub fn buflist_nr2name(n: c_int, fullname: c_int, helptail: c_int) -> *mut c_char {
-    let Some(mut buf) = find_buf(n) else {
+    let Some(buf) = find_buf(n) else {
         return ptr::null_mut();
     };
     let name = if fullname != 0 {

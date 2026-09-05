@@ -72,7 +72,7 @@ fn read_file(
 }
 
 /// Open the memline (and the swap file) for `buf`.
-fn open_memline(mut buf: Buf) -> Result<(), Failed> {
+fn open_memline(buf: Buf) -> Result<(), Failed> {
     // SAFETY: a live buffer.
     unsafe { ml_open(buf.raw()) }
 }
@@ -93,12 +93,12 @@ fn save_fileformat(buf: Buf) {
     save_file_ff(buf);
 }
 
-fn init_chartab(mut buf: Buf) {
+fn init_chartab(buf: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `global` flag.
     unsafe { buf_init_chartab(buf.raw(), false) };
 }
 
-fn parse_cindent_options(mut buf: Buf) {
+fn parse_cindent_options(buf: Buf) {
     // SAFETY: a live buffer.
     unsafe { parse_cino(buf) };
 }
@@ -109,13 +109,13 @@ fn collect_local_additions() {
     unsafe { get_local_additions() };
 }
 
-fn empty_buffer(mut buf: Buf) -> bool {
+fn empty_buffer(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     unsafe { buf_is_empty(buf.raw()) }
 }
 
 /// `b:changedtick`.
-fn changedtick(mut buf: Buf) -> varnumber_T {
+fn changedtick(buf: Buf) -> varnumber_T {
     // SAFETY: a live buffer.
     buf_get_changedtick(buf)
 }
@@ -143,14 +143,14 @@ fn set_option_false(id: c_int) {
 }
 
 /// Whether lines `a` and `b` of the two buffers differ.
-fn lines_differ(mut buf: Buf, lnum: linenr_T) -> bool {
+fn lines_differ(buf: Buf, lnum: linenr_T) -> bool {
     // SAFETY: two live buffers and a line number inside both, the caller
     // having compared the line counts.
     unsafe { !(cstr::eq(ml_get_buf(buf.raw(), lnum), ml_get(lnum))) }
 }
 
 /// Line `lnum` of `buf` as bytes, its terminating NUL excluded.
-fn line_bytes<'a>(mut buf: Buf, lnum: linenr_T) -> &'a [u8] {
+fn line_bytes<'a>(buf: Buf, lnum: linenr_T) -> &'a [u8] {
     // SAFETY: a live buffer and a line of it; `ml_get_buf` answers that many
     // readable bytes, and the line stays put until the memline is touched.
     unsafe {
@@ -165,7 +165,7 @@ fn line_bytes<'a>(mut buf: Buf, lnum: linenr_T) -> &'a [u8] {
 /// what makes this a scope rather than two calls: only a panic can skip the
 /// restore, and a panic already abandons the editor state upstream's `longjmp`
 /// would have unwound.
-fn in_buffer<R>(mut buf: Buf, f: impl FnOnce() -> R) -> R {
+fn in_buffer<R>(buf: Buf, f: impl FnOnce() -> R) -> R {
     let mut aco = aco_save_T::default();
     // SAFETY: a local to save into, and a live buffer.
     unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
@@ -366,7 +366,7 @@ fn open_buffer_inner(
     }
 
     // Can now sync this buffer in ml_sync_all().
-    let mut buf = cur_buf();
+    let buf = cur_buf();
     if dirty(buf) == Some(MfDirty::YesNoSync) {
         set_dirty(buf, MfDirty::Yes);
     }
@@ -471,13 +471,13 @@ fn no_memfile(old_tw: OptInt) -> Result<(), Failed> {
 }
 
 /// The memfile's dirty state, `None` when the buffer has no memfile.
-fn dirty(mut buf: Buf) -> Option<MfDirty> {
+fn dirty(buf: Buf) -> Option<MfDirty> {
     let mfp = buf.b_ml.ml_mfp;
     // SAFETY: a live buffer's memfile is live.
     (!mfp.is_null()).then(|| unsafe { (*mfp).mf_dirty })
 }
 
-fn set_dirty(mut buf: Buf, state: MfDirty) {
+fn set_dirty(buf: Buf, state: MfDirty) {
     let mfp = buf.b_ml.ml_mfp;
     if !mfp.is_null() {
         // SAFETY: a live buffer's memfile is live.

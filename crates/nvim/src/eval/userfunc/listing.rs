@@ -65,7 +65,7 @@ pub(crate) unsafe fn list_functions(regmatch: *mut regmatch_T) {
 /// `eap` is a live `:function` command whose argument starts with `/`.
 pub(crate) unsafe fn list_functions_matching_pat(eap: *mut exarg_T) -> *mut c_char {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(eap) };
     let mut p = unsafe { skip_regexp(ea.arg.add(1), b'/' as c_int, 1) };
     if ea.skip == 0 {
         let mut regmatch = REGMATCH_INIT;

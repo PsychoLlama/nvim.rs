@@ -258,7 +258,7 @@ pub(crate) unsafe fn msg_puts_display(
     // where the un-stored text starts, `sb_col` the column it started at.
     let mut sb_str = str;
     let mut sb_col = msg_col.get();
-    let mut store = |sb_str: &mut *const c_char, upto, sb_col: &mut c_int, finish| {
+    let store = |sb_str: &mut *const c_char, upto, sb_col: &mut c_int, finish| {
         if p_more.get() != 0 && !recurse {
             unsafe { store_sb_text(sb_str, upto, hl_id, sb_col, finish) };
         }

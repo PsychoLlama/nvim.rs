@@ -194,12 +194,12 @@ pub unsafe fn nvim_get_autocmds(
             }
             's_659: {
                 if let Object::Integer(handle) | Object::Buffer(handle) = buf {
-                    let mut b: *mut buf_T =
+                    let b: *mut buf_T =
                         unsafe { find_buffer_by_handle(handle as Buffer, &mut error) };
                     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
                         break '_cleanup;
                     }
-                    let mut pat: String_0 =
+                    let pat: String_0 =
                         unsafe { arena_printf(arena, c"<buffer=%d>".as_ptr(), (*b).handle) };
                     buffers = arena_array(arena, 1 as size_t);
                     unsafe { array_add(&mut buffers, Object::string(pat)) };
@@ -223,7 +223,7 @@ pub unsafe fn nvim_get_autocmds(
                             error = err_expected(c"buffer", want, Some(got));
                             break '_cleanup;
                         };
-                        let mut b_0: *mut buf_T =
+                        let b_0: *mut buf_T =
                             unsafe { find_buffer_by_handle(handle as Buffer, &mut error) };
                         if error.kind() as ::core::ffi::c_int
                             != kErrorTypeNone as ::core::ffi::c_int
@@ -260,7 +260,7 @@ pub unsafe fn nvim_get_autocmds(
             }
             for event in AutoEvent::all() {
                 if !(check_event as ::core::ffi::c_int != 0 && !event_set[event.index()]) {
-                    let mut acs: *mut AutoCmdVec = au_get_autocmds_for_event(event);
+                    let acs: *mut AutoCmdVec = au_get_autocmds_for_event(event);
                     let mut i: size_t = 0 as size_t;
                     while i < unsafe { (*acs).size } {
                         // SAFETY: `i` is below `(*acs).size`.
@@ -287,7 +287,7 @@ pub unsafe fn nvim_get_autocmds(
                                         );
                                         let mut pat_0: *mut ::core::ffi::c_char =
                                             pattern_filters[j as usize];
-                                        let mut patlen: ::core::ffi::c_int =
+                                        let patlen: ::core::ffi::c_int =
                                             unsafe { cstr::bytes_at(pat_0) }.len()
                                                 as ::core::ffi::c_int;
                                         let mut pattern_buflocal: [::core::ffi::c_char; 25] =
@@ -361,8 +361,7 @@ pub unsafe fn nvim_get_autocmds(
                                     let d_command = Object::string(String_0::NULL);
                                     // SAFETY: the collection is this call's own.
                                     unsafe { dict_put(&mut autocmd_info, c"command", d_command) };
-                                    let mut cb: *mut Callback =
-                                        unsafe { &raw mut (*ac).handler_fn };
+                                    let cb: *mut Callback = unsafe { &raw mut (*ac).handler_fn };
                                     // SAFETY: `cb` is this command's callback.
                                     match unsafe { &*cb } {
                                         Callback::Lua(luaref) => {

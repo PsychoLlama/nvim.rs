@@ -454,7 +454,7 @@ unsafe fn redo_down_to(dest: &UndoDest) -> bool {
             break;
         };
         // SAFETY: a live buffer, and nothing here frees a header.
-        let mut uhp = unsafe { take_marked_branch(buf, fork, dest.marks.mark) };
+        let uhp = unsafe { take_marked_branch(buf, fork, dest.marks.mark) };
 
         buf.b_u_curhead = uhp.link();
         if uhp.uh_walk != dest.marks.mark {

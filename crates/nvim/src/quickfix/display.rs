@@ -89,7 +89,7 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
         unsafe { vim_snprintf(heading, size, fmt, qf_idx, module) };
     } else {
         let buf = if qfp.qf_fnum != 0 {
-            find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |mut b| b.raw())
+            find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |b| b.raw())
         } else {
             ptr::null_mut()
         };
@@ -187,7 +187,7 @@ unsafe fn qf_list_entry(qfp: *mut qfline_T, qf_idx: c_int, cursel: bool) {
 pub unsafe fn qf_list(eap: *mut exarg_T) {
     // SAFETY: the caller's promise -- a live `exarg_T`.
     let eap = unsafe { Ea::new(eap) };
-    let Some(mut qi) = qf_cmd_stack(eap, true) else {
+    let Some(qi) = qf_cmd_stack(eap, true) else {
         return;
     };
     if qf_is_empty(qi) || qfl_is_empty(qf_current_list(qi)) {
@@ -336,7 +336,7 @@ pub(crate) unsafe fn qf_range_text(out: &mut Vec<u8>, qfp: *const qfline_T) {
 /// string.
 unsafe fn qf_msg(qi: *mut qf_info_T, which: c_int, lead: *const c_char) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
-    let mut qi = unsafe { Qi::new(qi) };
+    let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     let qfl = qf_nth_list(qi, which);
     let mut buf: [c_char; IOSIZE as usize] = [0; IOSIZE as usize];

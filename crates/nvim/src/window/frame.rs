@@ -111,7 +111,7 @@ fn remove(
         set_vsep(prev, false);
     }
     frame_remove(frp_close);
-    let mut altfr = alt.frame;
+    let altfr = alt.frame;
     if alt.dir == 'v' as c_int {
         let taller = altfr.fr_height + frp_close.fr_height;
         new_height(altfr, taller, Some(altfr) == frp_close.next(), false, false);

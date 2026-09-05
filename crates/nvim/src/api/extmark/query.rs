@@ -14,11 +14,7 @@ use crate::api::private::helpers::{Reported, array_add, dict_put};
 use crate::api::private::validate::{err_bad_number, err_expected};
 use crate::winlayer::Live;
 
-pub unsafe fn virt_text_to_array(
-    mut vt: VirtText,
-    mut hl_name: bool,
-    mut arena: *mut Arena,
-) -> Array {
+pub unsafe fn virt_text_to_array(vt: VirtText, hl_name: bool, arena: *mut Arena) -> Array {
     let mut chunks: Array = arena_array(arena, vt.size);
     let mut i: size_t = 0 as size_t;
     while i < vt.size {
@@ -38,14 +34,14 @@ pub unsafe fn virt_text_to_array(
             },
         );
         while i < j {
-            let mut hl_id: ::core::ffi::c_int = unsafe { (*vt.items.add(i)).hl_id };
+            let hl_id: ::core::ffi::c_int = unsafe { (*vt.items.add(i)).hl_id };
             if hl_id >= 0 as ::core::ffi::c_int {
                 unsafe { array_add(&mut hl_array, hl_group_name(hl_id, hl_name)) };
             }
             i = i.wrapping_add(1);
         }
-        let mut text: *mut ::core::ffi::c_char = unsafe { (*vt.items.add(i)).text };
-        let mut hl_id_0: ::core::ffi::c_int = unsafe { (*vt.items.add(i)).hl_id };
+        let text: *mut ::core::ffi::c_char = unsafe { (*vt.items.add(i)).text };
+        let hl_id_0: ::core::ffi::c_int = unsafe { (*vt.items.add(i)).hl_id };
         let mut chunk: Array = arena_array(arena, 2 as size_t);
         unsafe { array_add(&mut chunk, Object::string(cstr_as_string(text))) };
         if hl_array.size > 0 as size_t {
@@ -63,13 +59,13 @@ pub unsafe fn virt_text_to_array(
 }
 
 unsafe fn extmark_to_array(
-    mut extmark: MTPair,
-    mut id: bool,
-    mut add_dict: bool,
-    mut hl_name: bool,
-    mut arena: *mut Arena,
+    extmark: MTPair,
+    id: bool,
+    add_dict: bool,
+    hl_name: bool,
+    arena: *mut Arena,
 ) -> Array {
-    let mut start: MTKey = extmark.start;
+    let start: MTKey = extmark.start;
     let mut rv: Array = arena_array(arena, 4 as size_t);
     if id {
         unsafe { array_add(&mut rv, Object::integer(start.id as Integer)) };
@@ -127,8 +123,8 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_extmark>::new(opts) };
     let mut error = Error::none();
-    let mut rv: Array = ARRAY_DICT_INIT;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let rv: Array = ARRAY_DICT_INIT;
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -136,8 +132,8 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
         error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
     }
-    let mut details: bool = opts.details;
-    let mut hl_name: bool = if has_key(
+    let details: bool = opts.details;
+    let hl_name: bool = if has_key(
         opts.is_set__get_extmark_,
         KEYSET_OPTIDX_get_extmark__hl_name,
     ) {
@@ -145,7 +141,7 @@ pub unsafe fn nvim_buf_get_extmark_by_id(
     } else {
         1
     } != 0;
-    let mut extmark: MTPair = unsafe { extmark_from_id(b, ns_id as uint32_t, id as uint32_t) };
+    let extmark: MTPair = unsafe { extmark_from_id(b, ns_id as uint32_t, id as uint32_t) };
     if extmark.start.pos.row < 0 as int32_t {
         return rv.reported(error);
     }
@@ -164,7 +160,7 @@ pub unsafe fn nvim_buf_get_extmarks(
     let opts = unsafe { Live::<KeyDict_get_extmarks>::new(opts) };
     let mut error = Error::none();
     let mut rv: Array = ARRAY_DICT_INIT;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -172,8 +168,8 @@ pub unsafe fn nvim_buf_get_extmarks(
         error = err_bad_number(c"ns_id", ns_id);
         return rv.reported(error);
     }
-    let mut details: bool = opts.details;
-    let mut hl_name: bool = if has_key(
+    let details: bool = opts.details;
+    let hl_name: bool = if has_key(
         opts.is_set__get_extmarks_,
         KEYSET_OPTIDX_get_extmarks__hl_name,
     ) {
@@ -227,8 +223,8 @@ pub unsafe fn nvim_buf_get_extmarks(
     } {
         return rv.reported(error);
     }
-    let mut rv_limit: size_t = limit as size_t;
-    let mut reverse: bool = l_row > u_row || l_row == u_row && l_col > u_col;
+    let rv_limit: size_t = limit as size_t;
+    let reverse: bool = l_row > u_row || l_row == u_row && l_col > u_col;
     if reverse {
         limit = INT64_MAX as Integer;
         ::core::mem::swap(&mut l_row, &mut u_row);
@@ -288,11 +284,11 @@ pub unsafe fn nvim_buf_get_extmarks(
 }
 
 unsafe fn extmark_get_index_from_obj(
-    mut buf: *mut buf_T,
-    mut ns_id: Integer,
-    mut obj: Object,
-    mut row: *mut ::core::ffi::c_int,
-    mut col: *mut colnr_T,
+    buf: *mut buf_T,
+    ns_id: Integer,
+    obj: Object,
+    row: *mut ::core::ffi::c_int,
+    col: *mut colnr_T,
     err: &mut Error,
 ) -> bool {
     if let Object::Integer(id) = obj {
@@ -308,8 +304,7 @@ unsafe fn extmark_get_index_from_obj(
             *err = err_bad_number(c"mark id", id);
             return false;
         }
-        let mut extmark: MTPair =
-            unsafe { extmark_from_id(buf, ns_id as uint32_t, id as uint32_t) };
+        let extmark: MTPair = unsafe { extmark_from_id(buf, ns_id as uint32_t, id as uint32_t) };
         if !(extmark.start.pos.row >= 0 as int32_t) {
             *err = err_bad_number(c"mark id (not found)", id);
             return false;
@@ -361,7 +356,7 @@ pub unsafe fn nvim__buf_debug_extmarks(
     dot: Boolean,
 ) -> Result<String_0, Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return String_0::NULL.reported(error);
     }

@@ -186,7 +186,7 @@ pub unsafe fn nvim__inspect_cell(
     if grid == pum_grid_ref().handle as Integer {
         g = pum_grid_ref();
     } else if grid > 1 as Integer {
-        let mut wp: *mut win_T = unsafe { get_win_by_grid_handle(grid as handle_T) };
+        let wp: *mut win_T = unsafe { get_win_by_grid_handle(grid as handle_T) };
         if !(!wp.is_null() && unsafe { (*wp).w_grid_alloc.is_allocated() }) {
             let name = c"grid handle".as_ptr();
             // SAFETY: `error` is this frame's own slot and `name` a literal.
@@ -204,11 +204,11 @@ pub unsafe fn nvim__inspect_cell(
     }
     ret = arena_array(arena, 3 as size_t);
     let off: size_t = g.cell_offset(row as ::core::ffi::c_int, col as ::core::ffi::c_int);
-    let mut sc_buf: *mut ::core::ffi::c_char =
+    let sc_buf: *mut ::core::ffi::c_char =
         unsafe { arena_alloc(arena, MAX_SCHAR_SIZE as size_t, false) } as *mut ::core::ffi::c_char;
     unsafe { schar_get(sc_buf, g.char_at(off)) };
     unsafe { array_add(&mut ret, Object::string(cstr_as_string(sc_buf))) };
-    let mut attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
+    let attr: ::core::ffi::c_int = g.attr_at(off) as ::core::ffi::c_int;
     // SAFETY: `arena` and `error` are this frame's own.
     let hl = unsafe { Object::dict(hl_get_attr_by_id(attr as Integer, true, arena, &mut error)) };
     // SAFETY: `ret` has room for the three items the arena sized it for.

@@ -231,7 +231,7 @@ unsafe fn fill_pos_array(
     pos_list: *mut list_T,
 ) -> Option<(linenr_T, linenr_T)> {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut m = unsafe { Mi::new(m) };
+    let m = unsafe { Mi::new(m) };
     // SAFETY: the caller's match and list.
     let mut toplnum: linenr_T = 0;
     let mut botlnum: linenr_T = 0;
@@ -401,7 +401,7 @@ pub(crate) unsafe fn clear_matches(wp: *mut win_T) {
 /// `wp` must be live.
 unsafe fn get_match(wp: *mut win_T, id: c_int) -> *mut matchitem_T {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
     let mut cur = wp.w_match_head;
     while !cur.is_null() && unsafe { (*cur).mit_id } != id {

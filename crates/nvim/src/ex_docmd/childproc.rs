@@ -29,7 +29,7 @@ use crate::winlayer::Ea;
 /// argument therefore has to survive being read as a vimscript string
 /// literal, which is what the `"` and `\` escaping is for.
 pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     const CMD_LEN: usize = 1024;
     let mut ex_cmd: [c_char; CMD_LEN] = [0; CMD_LEN];
     let mut len: size_t = 0;
@@ -128,7 +128,7 @@ pub(crate) unsafe fn ex_terminal(eap: *mut exarg_T) {
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
 pub(crate) unsafe fn ex_lsp(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut err = Error::none();
     let mut items: [Object; 1] = [Object::String(unsafe { cstr_as_string(eap.arg) })];
     let args = Array {

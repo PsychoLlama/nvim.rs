@@ -103,7 +103,7 @@ impl Target {
         let mut canvas = if floating { own() } else { screen_canvas() };
         let mut col = 0;
 
-        let Some(mut win) = win else {
+        let Some(win) = win else {
             // 'tabline', always on the first row of the screen.
             let target = Target {
                 canvas,

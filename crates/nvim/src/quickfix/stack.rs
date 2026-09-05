@@ -325,7 +325,7 @@ pub(crate) unsafe fn qf_get_list(qi: *mut qf_info_T, idx: c_int) -> *mut qf_list
 #[inline]
 pub(crate) unsafe fn qf_get_curlist(qi: *mut qf_info_T) -> *mut qf_list_T {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
-    let mut qi = unsafe { Qi::new(qi) };
+    let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     unsafe { qf_get_list(qi.raw(), qi.qf_curlist) }
 }
@@ -413,7 +413,7 @@ unsafe fn wipe_qf_buffer(qi: *mut qf_info_T) {
 /// `qi` must be a live stack.
 unsafe fn qf_free_list_stack_items(qi: *mut qf_info_T) {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
-    let mut qi = unsafe { Qi::new(qi) };
+    let qi = unsafe { Qi::new(qi) };
     // SAFETY: forwarded from the caller.
     for i in 0..qi.qf_listcount {
         unsafe { qf_free(qf_get_list(qi.raw(), i)) };
@@ -643,7 +643,7 @@ pub(crate) unsafe fn qf_cmd_get_stack(eap: *mut exarg_T, print_emsg: bool) -> *m
 /// `qi` must be a live stack.
 pub(crate) unsafe fn qf_id2nr(qi: *const qf_info_T, qfid: ::core::ffi::c_uint) -> c_int {
     // SAFETY: the caller's promise -- a live `qf_info_T`.
-    let mut qi = unsafe { Qi::new(qi.cast_mut()) };
+    let qi = unsafe { Qi::new(qi.cast_mut()) };
     // SAFETY: forwarded from the caller.
     let count = qi.qf_listcount as usize;
     // SAFETY: as above; the borrow is dropped before the caller can touch
@@ -691,7 +691,7 @@ pub fn copy_loclist_stack(from: Win, mut to: Win) {
     }
     // SAFETY: `qi` is `from`'s own live stack, just tested for null, and
     // `copy` is the one just allocated; every index below is one both hold.
-    let mut qi = unsafe { Qi::new(qi) };
+    let qi = unsafe { Qi::new(qi) };
     let mut copy = unsafe {
         Qi::new(qf_alloc_stack(
             QFLT_LOCATION,

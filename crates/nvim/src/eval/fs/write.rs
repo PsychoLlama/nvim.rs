@@ -202,7 +202,7 @@ fn err_writing(error: c_int) {
 /// False when an item has no string form -- which reports on its own and is
 /// the one exit that does not report a write error.
 fn write_list(out: &mut Out, list: *const list_T, binary: bool) -> bool {
-    let mut error;
+    let error;
     'failed: {
         for li in items(list) {
             let mut numbuf = NumBuf::new();
@@ -260,7 +260,7 @@ fn write_list(out: &mut Out, list: *const list_T, binary: bool) -> bool {
 /// # Safety
 /// `data` is readable for `len` bytes.
 unsafe fn write_data(out: &mut Out, data: *const c_char, len: usize) -> bool {
-    let mut error;
+    let error;
     'failed: {
         if len > 0 {
             // SAFETY: the caller's contract.

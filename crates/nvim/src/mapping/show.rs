@@ -212,7 +212,7 @@ const CONTEXT_ARG_BUFFER: usize = 0;
 pub unsafe fn set_context_in_map_cmd(
     xp: *mut expand_T,
     mut cmd: *mut c_char,
-    mut arg: *mut c_char,
+    arg: *mut c_char,
     forceit: bool,
     isabbrev: bool,
     isunmap: bool,

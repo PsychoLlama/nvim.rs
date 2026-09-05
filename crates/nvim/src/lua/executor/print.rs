@@ -56,7 +56,7 @@ unsafe extern "C" fn nlua_print_event(argv: *mut *mut c_void) {
         };
         // One chunk, so one allocation: upstream's `kv_push` onto an empty
         // `HlMessage`.
-        let mut msg = HlMessage {
+        let msg = HlMessage {
             size: 1,
             capacity: 8,
             items: xrealloc(ptr::null_mut(), size_of::<HlMessageChunk>() * 8)

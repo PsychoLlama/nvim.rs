@@ -76,7 +76,7 @@ fn valid_win(win: *mut win_T) -> Option<Win> {
 
 /// Whether `buf` may stay loaded when it is no longer shown -- `'hidden'`,
 /// `'bufhidden'` or a `:hide` modifier.
-fn may_hide(mut buf: Buf) -> bool {
+fn may_hide(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     unsafe { buf_hide(buf.raw()) }
 }
@@ -101,12 +101,12 @@ fn restore_winopts(buf: Buf) {
 }
 
 /// Copy the buffer-local option values into `buf`.
-fn copy_options_into(mut buf: Buf, flags: c_int) {
+fn copy_options_into(buf: Buf, flags: c_int) {
     // SAFETY: a live buffer.
     unsafe { buf_copy_options(buf.raw(), flags) };
 }
 
-fn diff_add(mut buf: Buf) {
+fn diff_add(buf: Buf) {
     // SAFETY: a live buffer.
     diff_buf_add(buf);
 }
@@ -136,7 +136,7 @@ fn restore_position() {
 }
 
 /// Re-check the argument-list index after the buffer changed.
-fn recheck_arg_idx(mut win: Win) {
+fn recheck_arg_idx(win: Win) {
     // SAFETY: a live window.
     check_arg_idx(win);
 }
@@ -148,7 +148,7 @@ fn rebuild_title() {
 }
 
 /// Scroll so that the cursor line sits in the middle of the window.
-fn scroll_halfway(mut win: Win) {
+fn scroll_halfway(win: Win) {
     // SAFETY: a live window.
     scroll_cursor_halfway(win, false, false);
 }
@@ -159,14 +159,14 @@ fn init_keymap() {
 }
 
 /// Work out the spell-checking languages for `win`.
-fn set_spelllang(mut win: Win) {
+fn set_spelllang(win: Win) {
     // SAFETY: a live window with a syntax block.
     unsafe { parse_spelllang(win.raw()) };
 }
 
 /// Whether the window's `'spelllang'` is set. It lives in the syntax block
 /// the window shares with its buffer.
-fn has_spelllang(mut win: Win) -> bool {
+fn has_spelllang(win: Win) -> bool {
     // SAFETY: a live window's syntax block is live, and `'spelllang'` a
     // NUL-terminated option value.
     unsafe { *(*win.w_s).b_p_spl as c_int != NUL }
@@ -178,7 +178,7 @@ fn resize_terminal(term: *mut Terminal) {
 }
 
 /// Whether the job behind terminal buffer `buf` is still running.
-fn job_running(mut buf: Buf) -> bool {
+fn job_running(buf: Buf) -> bool {
     // SAFETY: reads the buffer's `'channel'` and looks it up.
     unsafe { channel_job_running(buf.b_p_channel as uint64_t) }
 }
@@ -465,7 +465,7 @@ fn do_autochdir_now() {
 // ---------------------------------------------------------------------------
 // "No write since last change"
 
-pub fn no_write_message_buf(mut buf: Buf) {
+pub fn no_write_message_buf(buf: Buf) {
     if !buf.terminal.is_null() && job_running(buf) {
         err_static(e_job_still_running_add_bang_to_end_the_job);
     } else {

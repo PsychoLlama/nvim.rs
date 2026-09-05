@@ -114,7 +114,7 @@ pub(crate) fn ml_check_b0_strings(b0: &ZeroBlock) -> bool {
 pub(crate) unsafe fn ml_upd_block0(buf: *mut buf_T, what: upd_block0_T) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null() {
         return;
@@ -224,7 +224,7 @@ pub(crate) unsafe fn set_b0_dir_flag(b0p: *mut ZeroBlock, buf: *mut buf_T) {
 pub(crate) unsafe fn add_b0_fenc(b0p: *mut ZeroBlock, buf: *mut buf_T) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     let size = B0_FNAME_SIZE_NOCRYPT as usize;
     let fenc = b.b_p_fenc;
     let n = unsafe { cstr::bytes_at(fenc) }.len();
@@ -568,7 +568,7 @@ pub(crate) fn b0_read_number(src: &[c_char; 4]) -> c_long {
 pub unsafe fn ml_setflags(buf: *mut buf_T) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     let mfp = b.b_ml.ml_mfp;
     if mfp.is_null() {
         return;

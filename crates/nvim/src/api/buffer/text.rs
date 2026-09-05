@@ -43,7 +43,7 @@ pub unsafe fn nvim_buf_set_text(
         unsafe { array_add(&mut scratch, put_value) };
         replacement = scratch;
     }
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
+    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -60,7 +60,7 @@ pub unsafe fn nvim_buf_set_text(
     }
     let mut str_at_start: *mut ::core::ffi::c_char =
         unsafe { ml_get_buf(b, start_row as linenr_T) };
-    let mut len_at_start: colnr_T = unsafe { ml_get_buf_len(b, start_row as linenr_T) };
+    let len_at_start: colnr_T = unsafe { ml_get_buf_len(b, start_row as linenr_T) };
     str_at_start = unsafe { arena_memdupz(arena, str_at_start, len_at_start as size_t) };
     start_col = if start_col < 0 as Integer {
         len_at_start as Integer + start_col + 1 as Integer
@@ -72,7 +72,7 @@ pub unsafe fn nvim_buf_set_text(
         return ().reported(error);
     }
     let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as linenr_T) };
-    let mut len_at_end: colnr_T = unsafe { ml_get_buf_len(b, end_row as linenr_T) };
+    let len_at_end: colnr_T = unsafe { ml_get_buf_len(b, end_row as linenr_T) };
     str_at_end = unsafe { arena_memdupz(arena, str_at_end, len_at_end as size_t) };
     end_col = if end_col < 0 as Integer {
         len_at_end as Integer + end_col + 1 as Integer
@@ -88,10 +88,10 @@ pub unsafe fn nvim_buf_set_text(
         error = Error::validation(why);
         return ().reported(error);
     }
-    let mut disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
+    let disallow_nl: bool = channel_id != VIML_INTERNAL_CALL;
     // SAFETY: `replacement` is the caller's array.
     unsafe { check_string_array(replacement, c"replacement string", disallow_nl) }?;
-    let mut new_len: size_t = replacement.size;
+    let new_len: size_t = replacement.size;
     let mut new_byte: bcount_t = 0 as bcount_t;
     let mut old_byte: bcount_t = 0 as bcount_t;
     if start_row == end_row {
@@ -102,7 +102,7 @@ pub unsafe fn nvim_buf_set_text(
             as bcount_t;
         let mut i: int64_t = 1 as int64_t;
         while i < end_row - start_row {
-            let mut lnum: int64_t = start_row as int64_t + i;
+            let lnum: int64_t = start_row as int64_t + i;
             old_byte += (unsafe { ml_get_buf_len(b, lnum as linenr_T) } + 1 as ::core::ffi::c_int)
                 as bcount_t;
             i += 1;
@@ -122,11 +122,11 @@ pub unsafe fn nvim_buf_set_text(
         .as_string()
         .expect(only_strings);
     let mut firstlen: size_t = (start_col as size_t).wrapping_add(first_item.len());
-    let mut last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
+    let last_part_len: size_t = (len_at_end as size_t).wrapping_sub(end_col as size_t);
     if replacement.size == 1 as size_t {
         firstlen = firstlen.wrapping_add(last_part_len);
     }
-    let mut first: *mut ::core::ffi::c_char = unsafe { arena_allocz(arena, firstlen) };
+    let first: *mut ::core::ffi::c_char = unsafe { arena_allocz(arena, firstlen) };
     let mut last: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     // `memchrsub` turns embedded NULs back into the newlines they stand for.
     let nul = NUL as ::core::ffi::c_char;
@@ -168,7 +168,7 @@ pub unsafe fn nvim_buf_set_text(
         let into = after.cast::<u8>();
         unsafe { into.copy_from_nonoverlapping(tail.cast(), last_part_len) };
     }
-    let mut lines: *mut *mut ::core::ffi::c_char = unsafe {
+    let lines: *mut *mut ::core::ffi::c_char = unsafe {
         arena_alloc(
             arena,
             new_len.wrapping_mul(::core::mem::size_of::<*mut ::core::ffi::c_char>()),
@@ -220,8 +220,8 @@ pub unsafe fn nvim_buf_set_text(
             error = Error::exception(why);
         } else {
             let mut extra: ptrdiff_t = 0 as ptrdiff_t;
-            let mut old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
-            let mut to_delete: size_t = if new_len < old_len {
+            let old_len: size_t = (end_row - start_row + 1 as Integer) as size_t;
+            let to_delete: size_t = if new_len < old_len {
                 old_len.wrapping_sub(new_len)
             } else {
                 0 as size_t
@@ -239,10 +239,10 @@ pub unsafe fn nvim_buf_set_text(
             if to_delete > 0 as size_t {
                 extra -= to_delete as ptrdiff_t;
             }
-            let mut to_replace: size_t = if old_len < new_len { old_len } else { new_len };
+            let to_replace: size_t = if old_len < new_len { old_len } else { new_len };
             let mut i_2: size_t = 0 as size_t;
             while i_2 < to_replace {
-                let mut lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
+                let lnum_0: int64_t = start_row as int64_t + i_2 as int64_t;
                 if !(lnum_0 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     let why = c"Index out of bounds";
                     error = Error::validation(why);
@@ -261,7 +261,7 @@ pub unsafe fn nvim_buf_set_text(
             }
             let mut i_3: size_t = to_replace;
             while i_3 < new_len {
-                let mut lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
+                let lnum_1: int64_t = start_row as int64_t + i_3 as int64_t - 1 as int64_t;
                 if !(lnum_1 < MAXLNUM as ::core::ffi::c_int as int64_t) {
                     let why = c"Index out of bounds";
                     error = Error::validation(why);
@@ -279,13 +279,13 @@ pub unsafe fn nvim_buf_set_text(
                     i_3 = i_3.wrapping_add(1);
                 }
             }
-            let mut col_extent: colnr_T = (end_col
+            let col_extent: colnr_T = (end_col
                 - (if end_row == start_row {
                     start_col
                 } else {
                     0 as Integer
                 })) as colnr_T;
-            let mut adjust: linenr_T = if end_row >= start_row {
+            let adjust: linenr_T = if end_row >= start_row {
                 MAXLNUM as ::core::ffi::c_int as linenr_T
             } else {
                 0 as linenr_T
@@ -371,12 +371,7 @@ pub unsafe fn nvim_buf_set_text(
     ().reported(error)
 }
 
-pub(crate) unsafe fn fix_cursor(
-    win: *mut win_T,
-    mut lo: linenr_T,
-    mut hi: linenr_T,
-    mut extra: linenr_T,
-) {
+pub(crate) unsafe fn fix_cursor(win: *mut win_T, lo: linenr_T, hi: linenr_T, extra: linenr_T) {
     // SAFETY: the caller's promise -- `win` is a live window.
     let mut win = unsafe { Win::new(win) };
     if win.w_cursor.lnum >= lo {
@@ -397,13 +392,13 @@ pub(crate) unsafe fn fix_cursor(
 unsafe fn fix_pos_col(
     buf: *mut buf_T,
     pos: *mut pos_T,
-    mut start_row: linenr_T,
-    mut start_col: colnr_T,
-    mut end_row: linenr_T,
-    mut end_col: colnr_T,
-    mut new_rows: linenr_T,
-    mut new_cols_at_end_row: colnr_T,
-    mut mode_col_adj: colnr_T,
+    start_row: linenr_T,
+    start_col: colnr_T,
+    end_row: linenr_T,
+    end_col: colnr_T,
+    new_rows: linenr_T,
+    new_cols_at_end_row: colnr_T,
+    mode_col_adj: colnr_T,
 ) {
     // SAFETY: the caller's promise -- `pos` is a live position, and nothing
     // below can move it.
@@ -411,31 +406,31 @@ unsafe fn fix_pos_col(
     if pos.lnum < start_row {
         return;
     }
-    let mut old_rows: linenr_T = end_row - start_row + 1 as linenr_T;
-    let mut lnum_shift: linenr_T = new_rows - old_rows;
+    let old_rows: linenr_T = end_row - start_row + 1 as linenr_T;
+    let lnum_shift: linenr_T = new_rows - old_rows;
     if pos.lnum > end_row {
         pos.lnum += lnum_shift;
         return;
     }
-    let mut end_row_change_start: colnr_T = if new_rows == 1 as linenr_T {
+    let end_row_change_start: colnr_T = if new_rows == 1 as linenr_T {
         start_col
     } else {
         0 as colnr_T
     };
-    let mut end_row_change_end: colnr_T = end_row_change_start + new_cols_at_end_row;
+    let end_row_change_end: colnr_T = end_row_change_start + new_cols_at_end_row;
     if pos.lnum == end_row && pos.col + mode_col_adj > end_col {
         pos.lnum += lnum_shift;
         pos.col += end_row_change_end - end_col;
         return;
     }
-    let mut old_coladd: colnr_T = pos.coladd;
+    let old_coladd: colnr_T = pos.coladd;
     let coladd = pos.coladd;
     pos.col += coladd;
     pos.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    let mut new_end_row: linenr_T = start_row + new_rows - 1 as linenr_T;
+    let new_end_row: linenr_T = start_row + new_rows - 1 as linenr_T;
     if pos.lnum > new_end_row {
         pos.lnum = new_end_row;
-        let mut len: colnr_T = unsafe { ml_get_buf_len(buf, new_end_row) };
+        let len: colnr_T = unsafe { ml_get_buf_len(buf, new_end_row) };
         if pos.col < len {
             pos.col = len;
         }
@@ -452,15 +447,15 @@ unsafe fn fix_pos_col(
 }
 
 unsafe fn fix_cursor_cols(
-    mut win: *mut win_T,
-    mut start_row: linenr_T,
-    mut start_col: colnr_T,
-    mut end_row: linenr_T,
-    mut end_col: colnr_T,
-    mut new_rows: linenr_T,
-    mut new_cols_at_end_row: colnr_T,
+    win: *mut win_T,
+    start_row: linenr_T,
+    start_col: colnr_T,
+    end_row: linenr_T,
+    end_col: colnr_T,
+    new_rows: linenr_T,
+    new_cols_at_end_row: colnr_T,
 ) {
-    let mut mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
+    let mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
         0 as colnr_T
     } else {
         1 as colnr_T

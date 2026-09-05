@@ -10,10 +10,10 @@
 use super::*;
 
 pub(crate) unsafe fn push_ranges(
-    mut L: *mut lua_State,
-    mut ranges: *const TSRange,
+    L: *mut lua_State,
+    ranges: *const TSRange,
     length: size_t,
-    mut include_bytes: bool,
+    include_bytes: bool,
 ) {
     unsafe {
         lua_createtable(L, length as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
@@ -61,7 +61,7 @@ pub(crate) unsafe fn push_ranges(
     }
 }
 
-unsafe fn range_err(mut L: *mut lua_State) {
+unsafe fn range_err(L: *mut lua_State) {
     unsafe {
         luaL_error(
             L,
@@ -70,10 +70,10 @@ unsafe fn range_err(mut L: *mut lua_State) {
     }
 }
 
-unsafe fn lua_checkuint32(mut L: *mut lua_State, mut index: ::core::ffi::c_int) -> uint32_t {
+unsafe fn lua_checkuint32(L: *mut lua_State, index: ::core::ffi::c_int) -> uint32_t {
     unsafe {
-        let mut value: lua_Number = luaL_checknumber(L, index);
-        let mut converted: uint32_t = value as uint32_t;
+        let value: lua_Number = luaL_checknumber(L, index);
+        let converted: uint32_t = value as uint32_t;
         if value < 0 as ::core::ffi::c_int as lua_Number
             || value > UINT32_MAX as lua_Number
             || converted as lua_Number != value
@@ -84,7 +84,7 @@ unsafe fn lua_checkuint32(mut L: *mut lua_State, mut index: ::core::ffi::c_int) 
     }
 }
 
-unsafe fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
+unsafe fn range_from_lua(L: *mut lua_State, range: *mut TSRange) {
     unsafe {
         let mut node: TSNode = TSNode {
             context: [0; 4],
@@ -96,22 +96,22 @@ unsafe fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
                 range_err(L);
             }
             lua_rawgeti(L, -1 as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
-            let mut start_row: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
+            let start_row: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             lua_rawgeti(L, -1 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
-            let mut start_col: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
+            let start_col: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             lua_rawgeti(L, -1 as ::core::ffi::c_int, 3 as ::core::ffi::c_int);
-            let mut start_byte: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
+            let start_byte: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             lua_rawgeti(L, -1 as ::core::ffi::c_int, 4 as ::core::ffi::c_int);
-            let mut end_row: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
+            let end_row: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             lua_rawgeti(L, -1 as ::core::ffi::c_int, 5 as ::core::ffi::c_int);
-            let mut end_col: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
+            let end_col: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             lua_rawgeti(L, -1 as ::core::ffi::c_int, 6 as ::core::ffi::c_int);
-            let mut end_byte: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
+            let end_byte: uint32_t = lua_checkuint32(L, -1 as ::core::ffi::c_int);
             lua_settop(L, -1 as ::core::ffi::c_int - 1 as ::core::ffi::c_int);
             *range = TSRange {
                 start_point: TSPoint {
@@ -138,9 +138,7 @@ unsafe fn range_from_lua(mut L: *mut lua_State, mut range: *mut TSRange) {
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         if lua_gettop(L) < 2 as ::core::ffi::c_int {
             return luaL_error(
@@ -148,15 +146,15 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(
                 c"not enough args to parser:set_included_ranges()".as_ptr(),
             );
         }
-        let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
+        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
         luaL_argcheck(
             L,
             lua_type(L, 2 as ::core::ffi::c_int) == 5 as ::core::ffi::c_int,
             2 as ::core::ffi::c_int,
             c"table expected.".as_ptr(),
         );
-        let mut tbl_len: size_t = lua_objlen(L, 2 as ::core::ffi::c_int);
-        let mut ranges: *mut TSRange =
+        let tbl_len: size_t = lua_objlen(L, 2 as ::core::ffi::c_int);
+        let ranges: *mut TSRange =
             xmalloc(::core::mem::size_of::<TSRange>().wrapping_mul(tbl_len)) as *mut TSRange;
         let mut index: size_t = 0 as size_t;
         while index < tbl_len {
@@ -175,15 +173,13 @@ pub(crate) unsafe extern "C-unwind" fn parser_set_ranges(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn parser_get_ranges(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn parser_get_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
-        let mut include_bytes: bool = lua_gettop(L) >= 2 as ::core::ffi::c_int
+        let p: *mut TSParser = parser_check(L, 1 as ::core::ffi::c_int);
+        let include_bytes: bool = lua_gettop(L) >= 2 as ::core::ffi::c_int
             && lua_toboolean(L, 2 as ::core::ffi::c_int) != 0;
         let mut len: uint32_t = 0;
-        let mut ranges: *const TSRange = ts_parser_included_ranges(p, &raw mut len);
+        let ranges: *const TSRange = ts_parser_included_ranges(p, &raw mut len);
         push_ranges(L, ranges, len as size_t, include_bytes);
         1 as ::core::ffi::c_int
     }

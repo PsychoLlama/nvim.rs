@@ -477,7 +477,7 @@ pub(crate) unsafe fn call_user_func_check(
     selfdict: *mut dict_T,
 ) -> c_int {
     // SAFETY: the caller's promise -- `fp` is a live function.
-    let mut f = unsafe { Uf::new(fp) };
+    let f = unsafe { Uf::new(fp) };
     if f.uf_flags.has(FuncFlags::LUAREF) {
         return unsafe { typval_exec_lua_callable(f.uf_luaref, argcount, argvars, rettv) };
     }

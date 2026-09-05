@@ -265,7 +265,6 @@ pub(crate) fn enter(wp: Win, undo_sync: bool) {
 /// `WEE_CURWIN_INVALID` means `curwin` has just been closed and must not be
 /// read.
 pub(crate) fn enter_ext(wp: Win, flags: c_int) {
-    let mut wp = wp;
     let curwin_invalid = flags & WEE_CURWIN_INVALID as c_int != 0;
     if wp.is_current() && !curwin_invalid {
         return; // nothing to do

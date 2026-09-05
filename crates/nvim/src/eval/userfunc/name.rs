@@ -248,7 +248,7 @@ pub(crate) unsafe fn builtin_function(name: *const c_char, len: c_int) -> bool {
 /// `fp` is a live function.
 pub unsafe fn printable_func_name(fp: *mut ufunc_T) -> *mut c_char {
     // SAFETY: the caller's promise -- `fp` is a live function.
-    let mut f = unsafe { Uf::new(fp) };
+    let f = unsafe { Uf::new(fp) };
     if !f.uf_name_exp.is_null() {
         f.uf_name_exp
     } else {

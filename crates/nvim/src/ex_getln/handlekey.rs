@@ -39,7 +39,7 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
     }
 
     if cc.cmdpos > 0 {
-        let mut j = cc.cmdpos;
+        let j = cc.cmdpos;
         let mut p = unsafe { mb_prevptr(cc.text(), cc.at(j)) };
 
         if s.c == Ctrl_W {
@@ -89,7 +89,7 @@ pub(crate) unsafe fn command_line_erase_chars(mut s: Cls) -> KeyOutcome {
 
 /// Handle CTRL-^: toggle the use of the language `:lmap` mappings and/or the
 /// Input Method.
-pub(crate) unsafe fn command_line_toggle_langmap(mut s: Cls) {
+pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
     let b_im_ptr = if unsafe { buf_valid(s.b_im_ptr_buf) } {
         s.b_im_ptr
     } else {
@@ -575,11 +575,11 @@ unsafe fn command_line_dispatch_key(mut s: Cls) -> Option<::core::ffi::c_int> {
     }
 }
 
-pub(crate) unsafe fn command_line_handle_key(mut s: Cls) -> ::core::ffi::c_int {
+pub(crate) unsafe fn command_line_handle_key(s: Cls) -> ::core::ffi::c_int {
     // One character, its own buffer: `put_on_cmdline` reaches the message
     // machinery, which writes upstream's shared `IObuff`.
     let mut ch = [0 as ::core::ffi::c_char; MB_MAXCHAR + 1];
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     // For a one-key prompt, avoid putting ESC and Ctrl-C onto the cmdline.
     // For all other keys, just put it onto the cmdline and exit — which is
     // the C's `goto end`.

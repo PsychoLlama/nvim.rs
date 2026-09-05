@@ -28,7 +28,7 @@ pub fn cmdpreview_get_ns() -> ::core::ffi::c_int {
 /// Answers NULL if the buffer could not be made ready.
 pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
     let mut cmdpreview_buf = if cmdpreview_bufnr.get() != 0 {
-        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |mut b| b.raw())
+        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
         ::core::ptr::null_mut::<buf_T>()
     };
@@ -40,7 +40,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut buf_T {
         let Ok(bufnr) = created else {
             return ::core::ptr::null_mut::<buf_T>();
         };
-        cmdpreview_buf = find_buf(bufnr).map_or(::core::ptr::null_mut(), |mut b| b.raw());
+        cmdpreview_buf = find_buf(bufnr).map_or(::core::ptr::null_mut(), |b| b.raw());
     }
 
     // The preview buffer cannot preview itself.
@@ -117,7 +117,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut buf_T) -> *mut win
 /// Close any open command preview windows.
 pub(crate) unsafe fn cmdpreview_close_win() {
     let buf = if cmdpreview_bufnr.get() != 0 {
-        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |mut b| b.raw())
+        find_buf(cmdpreview_bufnr.get()).map_or(::core::ptr::null_mut(), |b| b.raw())
     } else {
         ::core::ptr::null_mut::<buf_T>()
     };
@@ -264,7 +264,7 @@ pub(crate) fn cmdpreview_restore_state(mut cpinfo: Cp) {
     let mut i: size_t = 0;
     while i < cpinfo.buf_info.size {
         // SAFETY: `buf_info` holds `size` initialised entries.
-        let mut cp_bufinfo: CpBufInfo = unsafe { *cpinfo.buf_info.items.add(i) };
+        let cp_bufinfo: CpBufInfo = unsafe { *cpinfo.buf_info.items.add(i) };
         // SAFETY: the buffer was live when `cmdpreview_prepare` recorded it,
         // and autocommands were blocked throughout the preview.
         let mut buf = unsafe { Buf::new(cp_bufinfo.buf) };

@@ -33,7 +33,7 @@ pub unsafe fn nvim_set_hl(
     val: *mut KeyDict_highlight,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
+    let hl_id: ::core::ffi::c_int = unsafe { syn_check_group(name.data(), name.len()) };
     if !(hl_id != 0 as ::core::ffi::c_int) {
         // SAFETY: the caller's highlight name is NUL-terminated.
         error = err_bad_value(c"highlight name", unsafe { name.as_cstr() });
@@ -47,7 +47,7 @@ pub unsafe fn nvim_set_hl(
         error = Error::validation(c"Invalid key: 'url'");
         return ().reported(error);
     }
-    let mut update: bool = has_key(
+    let update: bool = has_key(
         unsafe { (*val).is_set__highlight_ },
         KEYSET_OPTIDX_highlight__update,
     ) && unsafe { (*val).update } as ::core::ffi::c_int != 0;
@@ -69,8 +69,7 @@ pub unsafe fn nvim_set_hl(
         base_attrs = attrs;
         base = Some(&base_attrs);
     }
-    let mut attrs: HlAttrs =
-        unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, &mut error) };
+    let attrs: HlAttrs = unsafe { dict2hlattrs(&*val, true, Some(&mut link_id), base, &mut error) };
     if !(error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int) {
         let _sctx = api_set_sctx(channel_id);
         unsafe { ns_hl_def(ns_id as NS, hl_id, attrs, link_id, Some(&*val)) };
@@ -84,7 +83,7 @@ pub unsafe fn nvim_get_hl_ns(opts: *mut KeyDict_get_ns) -> Result<Integer, Error
         unsafe { (*opts).is_set__get_ns_ },
         KEYSET_OPTIDX_get_ns__winid,
     ) {
-        let mut win: *mut win_T = unsafe { find_window_by_handle((*opts).winid, &mut error) };
+        let win: *mut win_T = unsafe { find_window_by_handle((*opts).winid, &mut error) };
         if win.is_null() {
             return (0 as Integer).reported(error);
         }

@@ -201,12 +201,12 @@ fn clone_folds(from: *mut garray_T, to: *mut garray_T) {
     unsafe { clone_fold_list(from, to) };
 }
 
-fn clear_window_folds(mut win: Win) {
+fn clear_window_folds(win: Win) {
     // SAFETY: a live window.
     clear_folding(win);
 }
 
-fn didset_options(mut win: Win) {
+fn didset_options(win: Win) {
     // SAFETY: a live window; `false` is upstream's `valid_cursor`.
     unsafe { didset_window_options(win.raw(), false) };
 }

@@ -156,7 +156,7 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
 /// are a tab page instead.
 pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -175,7 +175,7 @@ pub(crate) unsafe fn nv_page(cap: *mut cmdarg_T) {
 /// the screen for as long as it can.
 pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op(ca.op()) {
         unsafe { scroll_redraw(ca.arg, ca.count1 as linenr_T) };
     }
@@ -184,7 +184,7 @@ pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
 /// `CTRL-D` and `CTRL-U`: half a page.
 pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op(ca.op()) {
         let dir = if ca.cmdchar == Ctrl_D {
             FORWARD as c_int
@@ -199,7 +199,7 @@ pub(crate) unsafe fn nv_halfpage(cap: *mut cmdarg_T) {
 /// `ZZ`, `ZQ` and `ZR`: the two-key ways out.
 pub(crate) unsafe fn nv_exit_command(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if check_clear_op_quit(ca.op()) {
         return;
     }

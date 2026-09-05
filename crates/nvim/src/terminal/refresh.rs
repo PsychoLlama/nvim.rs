@@ -159,7 +159,7 @@ pub(super) fn refresh_before_destroy(term: Term) {
 }
 
 /// Mirror everything `term` has accumulated into its buffer.
-pub(crate) fn refresh_terminal(mut term: Term) {
+pub(crate) fn refresh_terminal(term: Term) {
     let Some(buf) = term.buf() else {
         return;
     };

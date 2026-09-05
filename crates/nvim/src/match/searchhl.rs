@@ -106,7 +106,7 @@ impl ShlWalk {
 /// `wp` and `search_hl` must be live.
 pub(crate) unsafe fn init_search_hl(wp: *mut win_T, search_hl: *mut match_T) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     let mut search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window and search state.
     let mut cur = wp.w_match_head;
@@ -343,8 +343,8 @@ unsafe fn next_search_hl(
 /// `wp` and `search_hl` must be live.
 pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: linenr_T) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
-    let mut search_hl = unsafe { Shl::new(search_hl) };
+    let wp = unsafe { Win::new(wp) };
+    let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window and search state.
     let mut walk = unsafe { ShlWalk::new(wp.raw(), search_hl.raw(), Order::SearchFirst) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
@@ -392,7 +392,7 @@ pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, 
 /// `wp` and `shl` must be live.
 unsafe fn check_cur_search_hl(wp: *mut win_T, shl: *mut match_T) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     let mut shl = unsafe { Shl::new(shl) };
     // SAFETY: the caller's window and match state.
     let linecount = shl.rm.endpos[0].lnum - shl.rm.startpos[0].lnum;
@@ -423,9 +423,9 @@ pub(crate) unsafe fn prepare_search_hl_line(
     search_attr_from_match: *mut bool,
 ) -> bool {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut search_hl = unsafe { Shl::new(search_hl) };
+    let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window, line and out-parameters.
     let mut area_highlighting = false;
     let mut walk = unsafe { ShlWalk::new(wp.raw(), search_hl.raw(), Order::SearchFirst) };
@@ -508,9 +508,9 @@ pub(crate) unsafe fn update_search_hl(
     search_attr_from_match: *mut bool,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut search_hl = unsafe { Shl::new(search_hl) };
+    let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window, line and out-parameters.
     let mut walk = unsafe { ShlWalk::new(wp.raw(), search_hl.raw(), Order::ByPriority) };
     while let Some((mut shl, cur)) = unsafe { walk.next() } {
@@ -619,9 +619,9 @@ pub(crate) unsafe fn get_prevcol_hl_flag(
     curcol: colnr_T,
 ) -> bool {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut search_hl = unsafe { Shl::new(search_hl) };
+    let search_hl = unsafe { Shl::new(search_hl) };
     // SAFETY: the caller's window and search state.
     // Not really at that column when text to the left is being skipped.
     let skip = if wp.w_onebuf_opt.wo_wrap != 0 {

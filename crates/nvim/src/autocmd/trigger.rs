@@ -119,7 +119,7 @@ pub unsafe fn ex_doautoall(eap: *mut exarg_T) {
 
     let mut retval = Ok(());
     let mut next = first_buffer();
-    while let Some(mut buf) = next {
+    while let Some(buf) = next {
         // Loaded buffers only, and the current one is done last. The step
         // is at the bottom, on a buffer `bufref` has just proved this pass
         // did not delete -- which is why this is not `buffers()`.

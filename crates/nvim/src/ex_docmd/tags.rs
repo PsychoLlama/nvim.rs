@@ -105,14 +105,14 @@ pub(crate) unsafe fn ex_findpat(eap: *mut exarg_T) {
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
 pub(crate) unsafe fn ex_ptag(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     g_do_tagpreview.set(p_pvh.get() as c_int);
     unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name.add(1)) };
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
 pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     // `-1` means "split, and let the tag code choose the size".
     postponed_split.set(-1);
     postponed_split_flags.set(cmdmod_split());
@@ -124,7 +124,7 @@ pub(crate) unsafe fn ex_stag(eap: *mut exarg_T) {
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
 pub(crate) unsafe fn ex_tag(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name) };
 }
 

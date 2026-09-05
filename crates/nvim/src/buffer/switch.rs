@@ -88,15 +88,15 @@ fn leave_cleanup_now(cs: &mut cleanup_T) {
     // SAFETY: the state `enter_cleanup` has just saved.
     unsafe { leave_cleanup(cs) };
 }
-fn close_win(mut win: Win, free_buf: bool, force: bool) -> c_int {
+fn close_win(win: Win, free_buf: bool, force: bool) -> c_int {
     // SAFETY: a live window.
     unsafe { win_close(win.raw(), free_buf, force) }
 }
-fn window_locked(mut win: Win) -> bool {
+fn window_locked(win: Win) -> bool {
     // SAFETY: a live window.
     unsafe { win_locked(win.raw()) != 0 }
 }
-fn is_last_window(mut win: Win) -> bool {
+fn is_last_window(win: Win) -> bool {
     // SAFETY: a live window.
     unsafe { last_window(win.raw()) }
 }
@@ -110,32 +110,32 @@ fn split_window() -> Result<(), Failed> {
 
 /// Jump to a window of this tab page already showing `buf`, if `'switchbuf'`
 /// says to; the answer is whether one was found.
-fn window_showing(mut buf: Buf) -> bool {
+fn window_showing(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     !unsafe { swbuf_goto_win_with_buf(buf.raw()) }.is_null()
 }
 fn may_change_buffer(forceit: bool) -> bool {
     check_can_set_curbuf_forceit(forceit as c_int)
 }
-fn forget_jumps(mut win: Win, fnum: c_int) {
+fn forget_jumps(win: Win, fnum: c_int) {
     // SAFETY: a live window.
     unsafe { mark_jumplist_forget_file(win.raw(), fnum) };
 }
-fn may_abandon(mut buf: Buf, forceit: bool) -> bool {
+fn may_abandon(buf: Buf, forceit: bool) -> bool {
     // SAFETY: a live buffer.
     unsafe { can_abandon(buf.raw(), forceit) }
 }
 
 /// The "save changes?" dialog. Re-enters, and may free the buffer.
-fn ask_about_changes(mut buf: Buf) {
+fn ask_about_changes(buf: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `checkall`.
     unsafe { dialog_changed(buf.raw(), false) };
 }
-fn ask_about_terminal(mut buf: Buf) -> bool {
+fn ask_about_terminal(buf: Buf) -> bool {
     // SAFETY: a live buffer with a live terminal.
     unsafe { dialog_close_terminal(buf.raw()) }
 }
-fn terminal_alive(mut buf: Buf) -> bool {
+fn terminal_alive(buf: Buf) -> bool {
     // SAFETY: a live terminal, the caller having ruled out null.
     unsafe { terminal_running(buf.terminal) }
 }
@@ -961,7 +961,7 @@ fn walk_neighbours(unloaded: &mut Option<Buf>) -> Option<Buf> {
 }
 
 /// `semsg(fmt, buf->b_fname)`.
-fn err_fname(mut buf: Buf) {
+fn err_fname(buf: Buf) {
     // SAFETY: a buffer's own name, NUL-terminated.
     let name = unsafe { c_str(buf.b_fname) };
     semsg!("E89: {name} will be killed (add ! to override)");

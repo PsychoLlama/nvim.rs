@@ -212,7 +212,7 @@ pub unsafe fn expand_argopt(
     num_matches: *mut c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the completion context is the caller's, live for the call.
-    let mut x = unsafe { Xp::new(xp) };
+    let x = unsafe { Xp::new(xp) };
     // Past an `=`: complete the value, by whichever option name ends
     // right before it.
     if x.xp_pattern > x.xp_line && byte_at(x.xp_pattern, -1) == '=' as c_int {

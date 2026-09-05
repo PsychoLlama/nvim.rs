@@ -133,7 +133,7 @@ unsafe fn cbuffer_process_args(eap: *mut exarg_T) -> Option<Buf> {
     let buf = if unsafe { *eap.arg } as c_int == NUL {
         curbuf.get()
     } else if unsafe { *skipwhite(skipdigits(eap.arg)) } as c_int == NUL {
-        find_buf(unsafe { atoi(eap.arg) }).map_or(ptr::null_mut(), |mut b| b.raw())
+        find_buf(unsafe { atoi(eap.arg) }).map_or(ptr::null_mut(), |b| b.raw())
     } else {
         ptr::null_mut()
     };

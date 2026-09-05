@@ -174,7 +174,7 @@ pub unsafe fn op_delete(oap: *mut oparg_T) -> Result<(), NotDeleted> {
 /// inside one line. Only the *last* one written reaches the clipboard and the
 /// autocommand, which is upstream's behaviour and the reason `reg` is carried
 /// rather than each branch handling its own.
-fn save_deleted_text(mut oap: Op) -> bool {
+fn save_deleted_text(oap: Op) -> bool {
     // SAFETY: a live `oparg_T` of the current buffer, and every register
     // written is one `get_yank_register`/`get_y_register` just handed back.
     let mut reg: *mut yankreg_T = ::core::ptr::null_mut();

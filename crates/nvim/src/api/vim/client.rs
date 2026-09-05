@@ -82,7 +82,7 @@ pub unsafe fn nvim_set_client_info(
 
 pub unsafe fn nvim__chan_set_detach(channel_id: uint64_t, detach: Boolean) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut chan: *mut Channel = find_channel(channel_id);
+    let chan: *mut Channel = find_channel(channel_id);
     if chan.is_null() {
         let msg = e_invchan.as_ptr();
         // SAFETY: the message the caller handed over, live for this call.

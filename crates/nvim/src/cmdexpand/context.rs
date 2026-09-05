@@ -35,7 +35,7 @@ pub unsafe fn set_expand_context(xp: *mut expand_T) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
-    let mut ccline = Cc::current();
+    let ccline = Cc::current();
 
     // Handle search commands: '/' or '?'.
     if (ccline.cmdfirstc == '/' as c_int || ccline.cmdfirstc == '?' as c_int)
@@ -642,7 +642,7 @@ pub(crate) unsafe fn set_context_with_pattern(xp: *mut expand_T) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
     let mut xp = unsafe { Xp::new(xp) };
-    let mut ccline = Cc::current();
+    let ccline = Cc::current();
 
     let no_emsg = Suppress::emsg();
     let mut skiplen = 0;

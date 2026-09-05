@@ -67,7 +67,7 @@ pub(crate) unsafe fn get_syntax_attr(
 /// Whether spell checking is done outside every syntax item: only when there is
 /// no `@Spell` cluster, or when `:syntax spell toplevel` was used.
 fn default_can_spell() -> bool {
-    let mut block = syn_block();
+    let block = syn_block();
     if block.b_syn_spell == SYNSPL_DEFAULT {
         block.b_spell_cluster_id == 0
     } else {
@@ -583,7 +583,7 @@ fn pick_current_attr(cur_si: Option<Item>) -> Option<Item> {
 /// Whether spell checking should be done in the item the attribute walk left
 /// in `sip`.
 fn item_can_spell(sip: Item) -> bool {
-    let mut block = syn_block();
+    let block = syn_block();
     let mut sps = sp_syn { inc_tag: 0, id: 0 };
     // The two cluster ids are looked up as bare groups: no `containedin=`.
     let no_cont_in = ::core::ptr::null_mut();

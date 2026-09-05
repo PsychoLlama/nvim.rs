@@ -622,7 +622,7 @@ unsafe fn spell_suggest_intern(mut su: Sug, interactive: bool) {
 /// # Safety
 ///
 /// `su` must have been filled by [`spell_find_suggest`].
-unsafe fn spell_find_cleanup(mut su: Sug) {
+unsafe fn spell_find_cleanup(su: Sug) {
     // SAFETY: the caller guarantees `su`; each suggestion owns its word, so
     // emptying the lists frees them, and the banned table owns its keys.
     let sug = unsafe { &mut *su.raw() };
@@ -676,7 +676,7 @@ unsafe fn suggest_try_special(mut su: Sug) {
 ///
 /// `su` must be valid and the current window must have its languages
 /// loaded.
-unsafe fn suggest_try_change(mut su: Sug) {
+unsafe fn suggest_try_change(su: Sug) {
     // SAFETY: the caller guarantees `su` and the window's spell state;
     // `fword` is `MAXWLEN` and every write into it is told so.
     // The walk rewrites the case-folded bad word in place (for `REP`

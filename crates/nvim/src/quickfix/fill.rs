@@ -171,7 +171,7 @@ unsafe fn qf_buf_add_line(
             unsafe { push_cstr(out, qfp.qf_module) };
         } else {
             let errbuf = if qfp.qf_fnum != 0 {
-                find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |mut b| b.raw())
+                find_buf(qfp.qf_fnum).map_or(ptr::null_mut(), |b| b.raw())
             } else {
                 ptr::null_mut()
             };

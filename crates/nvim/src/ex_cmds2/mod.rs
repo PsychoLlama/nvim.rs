@@ -547,7 +547,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     // SAFETY: module contract.
     let mut culprit = ptr::null_mut::<buf_T>();
     for nr in unsafe { changed_check_order() } {
-        let buf = find_buf(nr).map_or(ptr::null_mut(), |mut b| b.raw());
+        let buf = find_buf(nr).map_or(ptr::null_mut(), |b| b.raw());
         if buf.is_null()
             || hidden && unsafe { (*buf).b_nwindows } != 0
             || !buf_is_changed(unsafe { Buf::new(buf) })
@@ -830,7 +830,7 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
     // window if there is one, editing in the current window if its
     // buffer can be abandoned, and otherwise opening a new window.
     let buf = find_buf(unsafe { *((*(*curwin.get()).w_alist).al_ga.as_mut_ptr()) }.ae_fnum)
-        .map_or(ptr::null_mut(), |mut b| b.raw());
+        .map_or(ptr::null_mut(), |b| b.raw());
     for (tp, wp) in tab_windows() {
         if unsafe { (*wp).w_buffer } != buf {
             continue;

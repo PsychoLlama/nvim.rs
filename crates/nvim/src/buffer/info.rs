@@ -99,7 +99,7 @@ fn has_flag(arg: *const c_char, c: u8) -> bool {
     !unsafe { vim_strchr(arg, c as c_int) }.is_null()
 }
 
-fn buf_changed(mut buf: Buf) -> bool {
+fn buf_changed(buf: Buf) -> bool {
     // SAFETY: a live buffer.
     buf_is_changed(buf)
 }
@@ -110,7 +110,7 @@ fn job_running(buf: Buf) -> bool {
     !buf.terminal.is_null() && unsafe { terminal_running(buf.terminal) }
 }
 
-fn special_name(mut buf: Buf) -> *mut c_char {
+fn special_name(buf: Buf) -> *mut c_char {
     // SAFETY: a live buffer.
     unsafe { buf_spname(buf.raw()) }
 }
@@ -161,7 +161,7 @@ pub unsafe fn buflist_list(eap: *mut exarg_T) {
 /// the same second tie, and a stable Rust sort would order the tie
 /// differently.
 fn sorted_by_last_used() -> Vec<*mut buf_T> {
-    let mut list: Vec<*mut buf_T> = buffers().map(|mut buf| buf.raw()).collect();
+    let mut list: Vec<*mut buf_T> = buffers().map(|buf| buf.raw()).collect();
     let (base, n, width) = (
         list.as_mut_ptr().cast::<c_void>(),
         list.len(),
@@ -241,7 +241,7 @@ fn skip(buf: Buf, arg: *const c_char, forceit: c_int) -> bool {
 }
 
 /// Put the name to show for `buf` into `name`.
-fn fill_name(mut buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
+fn fill_name(buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
     let special = special_name(buf);
     if !special.is_null() {
         // SAFETY: a NUL-terminated name into `MAXPATHL` writable bytes.
@@ -255,7 +255,7 @@ fn fill_name(mut buf: Buf, name: &mut [c_char; MAXPATHL as usize]) {
 
 /// Print one buffer's line: the number, the flag column, the name padded to
 /// column 40, and the line number or the time it was last used.
-fn show(mut buf: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
+fn show(buf: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
     let changed_char = if buf.b_flags.has(BufFlags::READERR) {
         b'x'
     } else if buf_changed(buf) {
@@ -374,7 +374,7 @@ fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: linenr_T) {
 /// cursor is and how far through the file that is.
 pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
     let mut out = Msg::new();
-    let mut buf = current_buf();
+    let buf = current_buf();
 
     if fullname > 1 {
         // 2 CTRL-G: include the buffer number.
@@ -442,7 +442,7 @@ pub unsafe fn fileinfo(fullname: c_int, shorthelp: c_int, dont_truncate: bool) {
         },
     ]);
 
-    let mut win = current_win();
+    let win = current_win();
     let lines = buf.b_ml.ml_line_count;
     let cursor = win.w_cursor.lnum;
     if buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
@@ -569,7 +569,7 @@ impl Msg {
         self.len += unsafe { col_print(dst, room, col, vcol) } as usize;
     }
 
-    fn put_arg_number(&mut self, mut win: Win) {
+    fn put_arg_number(&mut self, win: Win) {
         let (dst, room) = self.tail();
         // SAFETY: a live window, and the buffer's own tail.
         unsafe { append_arg_number(win, dst, room) };
@@ -687,7 +687,7 @@ fn build_stl(dst: &mut [c_char; IOSIZE as usize], fmt: *mut c_char, opt: OptInde
 /// The default icon text: the buffer's name, truncated to 100 bytes at a
 /// character boundary.
 fn fill_icon(dst: &mut [c_char; IOSIZE as usize]) {
-    let mut buf = current_buf();
+    let buf = current_buf();
     let mut name = special_name(buf);
     if name.is_null() {
         // SAFETY: a NUL-terminated file name, or null, which `path_tail`

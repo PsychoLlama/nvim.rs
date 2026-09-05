@@ -211,7 +211,7 @@ pub unsafe fn pum_set_info(selected: c_int, info: *mut c_char) -> *mut win_T {
     RedrawingDisabled.set(RedrawingDisabled.get() + 1);
     no_u_sync.set(no_u_sync.get() + 1);
 
-    let mut wp = if let Some(wp) = win_float_find_preview() {
+    let wp = if let Some(wp) = win_float_find_preview() {
         wp
     } else if let Some(mut fresh) = win_float_create_preview(false, true) {
         fresh.w_topline = 1;

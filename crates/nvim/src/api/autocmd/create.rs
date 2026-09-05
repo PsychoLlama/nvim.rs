@@ -38,7 +38,7 @@ pub unsafe fn nvim_create_autocmd(
     let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut handler_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut handler_fn: Callback = Callback::None;
-    let mut event_array: Array = unsafe {
+    let event_array: Array = unsafe {
         unpack_string_or_array(
             event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
@@ -211,7 +211,7 @@ pub unsafe fn nvim_create_autocmd(
         }
     }
     if !handler_cmd.is_null() {
-        let mut ptr_: *mut *mut ::core::ffi::c_void =
+        let ptr_: *mut *mut ::core::ffi::c_void =
             &raw mut handler_cmd as *mut *mut ::core::ffi::c_void;
         unsafe { xfree(*ptr_) };
         unsafe { *ptr_ = NULL_0 };
@@ -242,7 +242,7 @@ pub unsafe fn nvim_clear_autocmds(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_clear_autocmds>::new(opts) };
     let mut error = Error::none();
-    let mut event_array: Array = unsafe {
+    let event_array: Array = unsafe {
         unpack_string_or_array(
             opts.event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
@@ -254,14 +254,14 @@ pub unsafe fn nvim_clear_autocmds(
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
-    let mut has_buf: bool = has_key(
+    let has_buf: bool = has_key(
         opts.is_set__clear_autocmds_,
         KEYSET_OPTIDX_clear_autocmds__buf,
     ) || has_key(
         opts.is_set__clear_autocmds_,
         KEYSET_OPTIDX_clear_autocmds__buffer,
     );
-    let mut buf: ::core::ffi::c_int = if opts.is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
+    let buf: ::core::ffi::c_int = if opts.is_set__clear_autocmds_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_clear_autocmds__buf
         != 0 as ::core::ffi::c_ulonglong
     {
@@ -279,12 +279,11 @@ pub unsafe fn nvim_clear_autocmds(
         error = err_conflict(c"pattern", c"buf");
         return ().reported(error);
     }
-    let mut au_group: ::core::ffi::c_int =
-        unsafe { get_augroup_from_object(opts.group, &mut error) };
+    let au_group: ::core::ffi::c_int = unsafe { get_augroup_from_object(opts.group, &mut error) };
     if au_group == AUGROUP_ERROR as ::core::ffi::c_int {
         return ().reported(error);
     }
-    let mut patterns: Array = unsafe {
+    let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(
             opts.pattern,
             has_buf,
@@ -302,7 +301,7 @@ pub unsafe fn nvim_clear_autocmds(
             let mut pat_object_index: size_t = 0 as size_t;
             while pat_object_index < patterns.size {
                 let pat_object: Object = unsafe { *patterns.items.add(pat_object_index) };
-                let mut pat: *mut ::core::ffi::c_char = pat_object
+                let pat: *mut ::core::ffi::c_char = pat_object
                     .as_string()
                     .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
                     .data();
@@ -327,7 +326,7 @@ pub unsafe fn nvim_clear_autocmds(
             let mut pat_object_index_0: size_t = 0 as size_t;
             while pat_object_index_0 < patterns.size {
                 let pat_object_0: Object = unsafe { *patterns.items.add(pat_object_index_0) };
-                let mut pat_0: *mut ::core::ffi::c_char = pat_object_0
+                let pat_0: *mut ::core::ffi::c_char = pat_object_0
                     .as_string()
                     .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
                     .data();
@@ -343,9 +342,9 @@ pub unsafe fn nvim_clear_autocmds(
 }
 
 unsafe fn clear_autocmd(
-    mut event: AutoEvent,
-    mut pat: *mut ::core::ffi::c_char,
-    mut au_group: ::core::ffi::c_int,
+    event: AutoEvent,
+    pat: *mut ::core::ffi::c_char,
+    au_group: ::core::ffi::c_int,
     err: &mut Error,
 ) -> bool {
     if unsafe { do_autocmd_event(event, pat, false, 0, c"".as_ptr(), true, au_group) }.is_err() {

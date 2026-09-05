@@ -65,7 +65,7 @@ impl Cc {
     /// every caller takes it inside the expression that reads it rather than
     /// binding it across a call. That is also why the lifetime is free: the
     /// handle is a pointer, so a borrow it carried would say nothing true.
-    pub(crate) fn bytes<'a>(mut self) -> &'a [::core::ffi::c_char] {
+    pub(crate) fn bytes<'a>(self) -> &'a [::core::ffi::c_char] {
         let text = self.cmdbuff.bytes();
         // SAFETY: the borrow is the caller's obligation, stated above.
         unsafe { ::core::slice::from_raw_parts(text.as_ptr(), text.len()) }

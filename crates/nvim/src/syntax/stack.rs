@@ -213,7 +213,7 @@ unsafe fn syn_stack_apply_changes_block(mut block: SynBlock, buf: *mut buf_T) {
 /// the ones carrying the oldest display tick go. Freeing the oldest rather than
 /// the closest is what keeps the lines the user is actually looking at cached.
 pub(crate) fn syn_stack_cleanup() -> bool {
-    let mut block = syn_block();
+    let block = syn_block();
     if block.b_sst_first.is_null() {
         return false;
     }
@@ -303,7 +303,7 @@ pub(crate) fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
 /// The current state must be valid for the *start* of that line. Answers the
 /// entry it went into, or null when there was nothing to store or no room.
 pub(crate) fn store_current_state() -> *mut synstate_T {
-    let mut block = syn_block();
+    let block = syn_block();
     let mut sp = syn_stack_find_entry(current_lnum.get());
 
     // A state that contains a start or end pattern continuing from the
@@ -407,7 +407,7 @@ unsafe fn fill_entry(sp: *mut synstate_T) {
     let bp = unsafe { entry_states(sp, size) };
     let mut i = 0;
     while i < size {
-        let mut si = unsafe { state_at(i) };
+        let si = unsafe { state_at(i) };
         let b = unsafe { bp.offset(i as isize) };
         unsafe { (*b).bs_idx = si.si_idx };
         unsafe { (*b).bs_flags = si.si_flags };
@@ -486,7 +486,7 @@ pub(crate) unsafe fn syn_stack_equal(sp: *mut synstate_T) -> bool {
     while i > 0 {
         i -= 1;
         let b = unsafe { bp.offset(i as isize) };
-        let mut si = unsafe { state_at(i) };
+        let si = unsafe { state_at(i) };
         // A different pattern index means a different state.
         if unsafe { (*b).bs_idx } != si.si_idx {
             return false;

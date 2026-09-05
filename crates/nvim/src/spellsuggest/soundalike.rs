@@ -167,7 +167,7 @@ fn bytes2offset(bytes: &[u8], pos: &mut usize) -> c_int {
     // A missing byte only happens on a damaged file; reading it as zero
     // keeps the walk inside the line where the C would have run on into
     // whatever followed it.
-    let mut next = |pos: &mut usize| -> c_int {
+    let next = |pos: &mut usize| -> c_int {
         let b = bytes.get(*pos).copied().unwrap_or(0) as c_int;
         *pos += 1;
         b - 1

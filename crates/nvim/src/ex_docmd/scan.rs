@@ -186,7 +186,7 @@ pub(crate) fn get_flags(mut ea: Ea) {
 
 /// Step over a `:vimgrep` pattern, whose delimiters are not the ones the
 /// rest of the argument scan knows about.
-pub(crate) fn skip_grep_pat(mut ea: Ea) -> *mut c_char {
+pub(crate) fn skip_grep_pat(ea: Ea) -> *mut c_char {
     let cmdidx = ea.cmdidx;
     let is_grep = cmdidx == CmdIdx::vimgrep
         || cmdidx == CmdIdx::lvimgrep

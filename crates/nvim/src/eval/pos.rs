@@ -337,7 +337,7 @@ pub unsafe fn list2fpos(
         } else {
             unsafe { *fnump }
         };
-        let Some(mut buf) = find_buf(handle).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
+        let Some(buf) = find_buf(handle).filter(|b| !b.b_ml.ml_mfp.is_null()) else {
             return Err(Failed);
         };
         let lnum = if posp.lnum == 0 {

@@ -53,7 +53,7 @@ fn current_match_is_distinct() -> bool {
 pub(crate) unsafe fn nv_search(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let mut ca = unsafe { CmdArg::new(cap) };
-    let mut op = ca.op();
+    let op = ca.op();
     let save_cursor = cur_win().w_cursor;
     // `g?` is rot13; `?` after it is the operator, not a search.
     if ca.cmdchar == '?' as c_int && op.op_type == OpType::Rot13 {
@@ -116,7 +116,7 @@ pub(crate) unsafe fn normal_search(
     wrapped: *mut c_int,
 ) -> c_int {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // SAFETY: `cap` is the caller's live command argument, `pat` is null or a
     // pattern `patlen` bytes long, and `wrapped` is null or an out-parameter.
     let mut sia: searchit_arg_T = unsafe { core::mem::zeroed() };
@@ -161,7 +161,7 @@ pub(crate) unsafe fn normal_search(
 /// `m`: set a mark.
 pub(crate) unsafe fn nv_mark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -177,7 +177,7 @@ pub(crate) unsafe fn nv_mark_move_to(
     fm: *mut fmark_T,
 ) -> MarkMoveRes {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // SAFETY: `cap` is the caller's live command argument and `fm` is null or
     // a mark `mark_move_to` may read.
     let res = unsafe { mark_move_to(fm, flags) };
@@ -215,7 +215,7 @@ fn view_flag() -> MarkMove {
 /// consumed the "typed" flag.
 unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if ca.op().op_type == OpType::Nop
         && moved
         && fdo_flags.get() & kOptFdoFlagMark as c_int as c_uint != 0
@@ -228,7 +228,7 @@ unsafe fn may_open_fold(cap: *mut cmdarg_T, moved: bool, old_key_typed: bool) {
 /// `'` and `` ` ``, and their `g` forms.
 pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // A mark used as an operator's motion must not restore the view.
     let mut flags = if ca.op().op_type != OpType::Nop {
         0
@@ -270,7 +270,7 @@ pub(crate) unsafe fn nv_gomark(cap: *mut cmdarg_T) {
 /// list.
 pub(crate) unsafe fn nv_pcmark(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut flags = view_flag();
     let mut move_res: MarkMoveRes = 0;
     let old_key_typed = KeyTyped.get();

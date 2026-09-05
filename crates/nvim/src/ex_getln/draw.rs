@@ -30,7 +30,7 @@ pub(crate) fn cmd_startcol() -> ::core::ffi::c_int {
 
 /// The screen column for a byte position on the command line.
 pub unsafe fn cmd_screencol(bytepos: ::core::ffi::c_int) -> ::core::ffi::c_int {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let mut col = cmd_startcol();
 
     // The maximum column. A weird 'columns'/'lines' can overflow the

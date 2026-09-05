@@ -308,7 +308,7 @@ pub(crate) unsafe fn get_visual_text(
     lenp: *mut size_t,
 ) -> bool {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if !visual_mode().is_line() {
         // SAFETY: adjusts the current window's cursor or `VIsual`.
         unadjust_for_sel();
@@ -453,7 +453,7 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
 /// why the charwise and blockwise cases are spelled out.
 unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     set_visual_anchor(cur_win().w_cursor);
     set_visual_active(true);
     VIsual_reselect.set(1);
@@ -638,7 +638,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
 /// where it started.
 pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let vi = unsafe { &raw mut (*curbuf.get()).b_visual };
     if unsafe { (*vi).vi_start.lnum } == 0
         || unsafe { (*vi).vi_start.lnum } > cur_buf().b_ml.ml_line_count
@@ -691,7 +691,7 @@ pub(crate) unsafe fn nv_gv_cmd(cap: *mut cmdarg_T) {
 /// operator about to run sees what the highlight showed.
 pub(crate) unsafe fn adjust_for_sel(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if visual_active()
         && ca.op().inclusive
         && sel_exclusive()
@@ -783,7 +783,7 @@ pub(crate) unsafe fn nv_object(cap: *mut cmdarg_T) {
     let mps_save = cur_buf().b_p_mps;
     cur_buf().b_p_mps = c"(:),{:},[:],<:>".as_ptr().cast_mut();
 
-    let mut op = ca.op();
+    let op = ca.op();
     let n = ca.count1;
     let found = match u8::try_from(ca.nchar).unwrap_or(0) {
         b'w' => unsafe { current_word(op.raw(), n, include, false).is_ok() },

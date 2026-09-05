@@ -96,34 +96,34 @@ fn is_only_window(win: *mut win_T) -> bool {
 }
 
 /// Make `win` in `tp` current again, without firing autocommands.
-fn goto_win(mut tp: TabPage, mut win: Win) {
+fn goto_win(tp: TabPage, win: Win) {
     // SAFETY: a live tab page and a live window.
     unsafe { goto_tabpage_win(tp.raw(), win.raw()) };
 }
 
 /// Remember `win`'s cursor as the buffer's last position.
-fn remember_last_cursor(mut win: Win) {
+fn remember_last_cursor(win: Win) {
     // SAFETY: a live window.
     unsafe { set_last_cursor(win.raw()) };
 }
 
 /// Forget every mark and jump-list entry naming buffer `fnum` in `win`.
-fn forget_file(mut win: Win, fnum: c_int) {
+fn forget_file(win: Win, fnum: c_int) {
     // SAFETY: a live window.
     unsafe { mark_forget_file(win.raw(), fnum) };
 }
 
-fn detach_updates(mut buf: Buf) {
+fn detach_updates(buf: Buf) {
     // SAFETY: a live buffer; `false` is upstream's `send_closing`.
     unsafe { buf_updates_unload(buf.raw(), false) };
 }
 
-fn free_update_callbacks(mut buf: Buf) {
+fn free_update_callbacks(buf: Buf) {
     // SAFETY: a live buffer.
     unsafe { buf_free_callbacks(buf.raw()) };
 }
 
-fn diff_forget(mut buf: Buf) {
+fn diff_forget(buf: Buf) {
     // SAFETY: a live buffer.
     diff_buf_delete(buf);
 }
@@ -133,12 +133,12 @@ fn diff_hidden_off() -> bool {
     diffopt_hiddenoff()
 }
 
-fn free_extmarks(mut buf: Buf) {
+fn free_extmarks(buf: Buf) {
     // SAFETY: a live buffer.
     unsafe { extmark_free_all(buf.raw()) };
 }
 
-fn free_user_commands(mut buf: Buf) {
+fn free_user_commands(buf: Buf) {
     // SAFETY: a live buffer. `uc_clear` leaves the table empty and usable,
     // which is what the buffers that outlive this -- `:bdel`'s, and the
     // `curbuf` `buflist_new` reuses -- need.
@@ -151,7 +151,7 @@ fn free_garray(ga: &mut garray_T) {
 }
 
 /// Drop every buffer-local mapping (`abbrev` picks the abbreviation table).
-fn clear_mappings(mut buf: Buf, abbrev: bool) {
+fn clear_mappings(buf: Buf, abbrev: bool) {
     // SAFETY: a live buffer.
     unsafe { map_clear_mode(buf, MAP_ALL_MODES, true, abbrev) };
 }
@@ -173,7 +173,7 @@ fn drop_mark(mark: fmark_T) {
 
 /// Move every mark in `buf` up by `count` lines from line 1 -- what an
 /// emptied buffer needs so a reload starts from a clean slate.
-fn forget_lines(mut buf: Buf, count: linenr_T) {
+fn forget_lines(buf: Buf, count: linenr_T) {
     let (raw, last) = (buf.raw(), MAXLNUM as linenr_T);
     // SAFETY: a live buffer.
     unsafe {
@@ -190,7 +190,7 @@ fn forget_lines(mut buf: Buf, count: linenr_T) {
     };
 }
 
-fn free_undo(mut buf: Buf) {
+fn free_undo(buf: Buf) {
     // SAFETY: a live buffer.
     u_clearallandblockfree(buf);
 }
@@ -201,7 +201,7 @@ fn clear_syntax(syn: &mut synblock_T) {
 }
 
 /// Close the memline and delete the swap file.
-fn close_memline(mut buf: Buf) {
+fn close_memline(buf: Buf) {
     // SAFETY: a live buffer; `true` is upstream's `del_file`.
     unsafe { ml_close(buf.raw(), 1) };
 }
@@ -247,12 +247,12 @@ fn rescue_changedtick(mut buf: Buf) {
     let _ = unsafe { tv_dict_add(vars, tv_dict_item_copy(di)) };
 }
 
-fn release_vars(mut buf: Buf) {
+fn release_vars(buf: Buf) {
     // SAFETY: a live buffer's variable dictionary.
     unsafe { unref_var_dict(buf.b_vars) };
 }
 
-fn forget_autocmds(mut buf: Buf) {
+fn forget_autocmds(buf: Buf) {
     // SAFETY: a live buffer.
     unsafe { aubuflocal_remove(buf) };
 }
@@ -286,7 +286,7 @@ struct Disposition {
 impl Disposition {
     /// The `action` the caller asked for, forced further by `'bufhidden'` --
     /// and forced all the way for a terminal buffer, which can only be wiped.
-    fn of(mut buf: Buf, action: c_int) -> Self {
+    fn of(buf: Buf, action: c_int) -> Self {
         let mut it = Disposition {
             unload: action != 0,
             del: action == DOBUF_DEL as c_int || action == DOBUF_WIPE as c_int,
@@ -331,7 +331,7 @@ impl Disposition {
 ///
 /// A buffer is locked while it is halfway through a command that relies on
 /// it, and cannot be unloaded from under a redraw that is showing it.
-pub(crate) fn can_unload_buffer(mut buf: Buf) -> bool {
+pub(crate) fn can_unload_buffer(buf: Buf) -> bool {
     let mut can_unload = buf.b_locked == 0;
 
     if can_unload && updating_screen.get() {
@@ -420,7 +420,7 @@ fn close_buffer_inner(
     }
 
     // check no autocommands closed the window
-    if let Some(mut wp) = valid_win(win) {
+    if let Some(wp) = valid_win(win) {
         // Set b_last_cursor when closing the last window for the buffer.
         // Remember the last cursor position and window options of the buffer.
         // This used to be only for the current window, but then options like

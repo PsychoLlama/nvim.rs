@@ -118,7 +118,7 @@ pub unsafe fn do_pending_operator(cap: *mut cmdarg_T, old_col: c_int, gui_yank: 
     // SAFETY: the caller's promise -- a live `cmdarg_T` whose `oap` is a live
     // `oparg_T`. The two wrappers carry that promise on from here, so every
     // field access below is the compiler's business rather than a note.
-    let mut cap = unsafe { Cmd::new(cap) };
+    let cap = unsafe { Cmd::new(cap) };
     let mut oap = unsafe { Op::new(cap.oap) };
     let lbr_saved = cur_win().w_onebuf_opt.wo_lbr;
     let old_cursor = cur_win().w_cursor;
@@ -635,13 +635,7 @@ fn adjust_region_end(cap: Cmd, mut oap: Op) {
 /// 'linebreak' as it was before the dispatcher turned it off -- the arms that
 /// give control away (Insert mode, 'operatorfunc', an external filter) have to
 /// put it back first, because the user is about to look at the screen.
-fn run_operator(
-    mut cap: Cmd,
-    mut oap: Op,
-    empty_region_error: bool,
-    gui_yank: bool,
-    lbr_saved: c_int,
-) {
+fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool, lbr_saved: c_int) {
     /// Refuse an empty region: beep and drop the half-recorded `.`.
     fn refuse() {
         // SAFETY: neither touches anything but editor-wide state.

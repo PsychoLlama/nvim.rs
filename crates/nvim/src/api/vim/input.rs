@@ -87,7 +87,7 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
         unsafe { xfree(keys_esc as *mut ::core::ffi::c_void) };
     }
     if execute {
-        let mut save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
+        let save_msg_scroll: ::core::ffi::c_int = msg_scroll.get();
         msg_scroll.set(0);
         let busy = (!dangerous).then(|| Depth::of(&ex_normal_busy));
         unsafe { exec_normal(true, lowlevel) };
@@ -160,7 +160,7 @@ pub unsafe fn nvim_input_mouse(
             modmask = ModMask::NONE;
             let mut i: size_t = 0 as size_t;
             while i < modifier.len() {
-                let mut byte: ::core::ffi::c_char = unsafe { *modifier.data().add(i) };
+                let byte: ::core::ffi::c_char = unsafe { *modifier.data().add(i) };
                 if byte as ::core::ffi::c_int != '-' as ::core::ffi::c_int {
                     let mod_0 = name_to_mod_mask(byte as ::core::ffi::c_int);
                     if mod_0.is_empty() {

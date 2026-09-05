@@ -340,7 +340,7 @@ unsafe fn clamp_skipcol(mut wp: Win) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn find_changed_lines(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
+unsafe fn find_changed_lines(win: Win, buf: *mut buf_T, rg: &mut Regions) {
     // SAFETY: the caller's window and buffer.
     // What `redraw_win_range_later` asked for.
     rg.mod_top = win.w_redraw_top;
@@ -423,7 +423,7 @@ unsafe fn find_changed_lines(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
 ///
 /// # Safety
 /// `wp` must be a live window.
-unsafe fn widen_over_folds(mut win: Win, rg: &mut Regions) {
+unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
     // SAFETY: the caller's window and its `w_lines` array.
     // The line below the last valid entry above `mod_top`, and the first
     // valid entry at or below `mod_bot`.
@@ -470,7 +470,7 @@ unsafe fn widen_over_folds(mut win: Win, rg: &mut Regions) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn plan_scroll(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
+unsafe fn plan_scroll(win: Win, buf: *mut buf_T, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and its `w_lines` array.
     // `w_lines[0].wl_lnum` can be below `w_topline` when the top line is
     // concealed, which would read as a scroll that did not happen. Compare
@@ -676,7 +676,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 ///
 /// # Safety
 /// `wp` must be a live window and `buf` its buffer.
-unsafe fn plan_visual_area(mut win: Win, buf: *mut buf_T, rg: &mut Regions) {
+unsafe fn plan_visual_area(win: Win, buf: *mut buf_T, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
     let shown = visual_selection().filter(|_| buf == unsafe { (*curwin.get()).w_buffer });
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
@@ -807,7 +807,7 @@ unsafe fn visual_line_range(
 ///
 /// # Safety
 /// `wp` must be a live window and `sel` a blockwise selection in its buffer.
-unsafe fn visual_block_columns(mut win: Win, sel: VisualSelection) -> (colnr_T, colnr_T) {
+unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (colnr_T, colnr_T) {
     // A copy of the anchor: `getvcols` only reads it.
     let mut anchor = sel.anchor;
     // SAFETY: the caller's window.

@@ -79,7 +79,7 @@ use crate::winlayer::{Buf, Ea, Win, windows};
 
 /// `:print`, `:number` and `:list`.
 pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
         emsg(gettext(e_empty_buffer.as_ptr()));
     } else {
@@ -103,7 +103,7 @@ pub(crate) unsafe fn ex_print(eap: *mut exarg_T) {
 
 /// `:goto` — the range is a byte offset, not a line number.
 pub(crate) unsafe fn ex_goto(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     unsafe { goto_byte(eap.line2 as c_int) };
 }
 
@@ -175,7 +175,7 @@ pub(crate) unsafe fn ex_equal(eap: *mut exarg_T) {
 
 /// `:sleep` — the count is in seconds unless it is followed by `m`.
 pub(crate) unsafe fn ex_sleep(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if cursor_valid(cur_win()) != 0 {
         unsafe { setcursor_mayforce(curwin.get(), true) };
     }
@@ -217,7 +217,7 @@ pub unsafe fn do_sleep(msec: int64_t, hide_cursor: bool) {
 /// `:delete`, `:yank`, `:<` and `:>` — the four normal-mode operators that
 /// have an Ex spelling.
 pub(crate) unsafe fn ex_operators(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut oa: oparg_T = unsafe { core::mem::zeroed() };
     clear_oparg(&raw mut oa);
     oa.regname = eap.regname;
@@ -348,7 +348,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
 
 /// Print the current line, if the command carried an `l`, `p` or `#` flag.
 pub unsafe fn ex_may_print(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if eap.flags != 0 {
         print_line(
             cur_win().w_cursor.lnum,
@@ -426,7 +426,7 @@ pub(crate) unsafe fn ex_join(eap: *mut exarg_T) {
 /// out of it until it is empty. `prev_len` is what tells "empty" from
 /// "there was already typeahead before this".
 pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let prev_len = typeahead().len();
     cur_win().w_cursor.lnum = eap.line2;
     check_cursor_col(cur_win());
@@ -462,7 +462,7 @@ pub(crate) unsafe fn ex_at(eap: *mut exarg_T) {
 /// N rather than moving to it, so it can only go backwards along the
 /// current branch.
 pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if eap.addr_count != 1 {
         if eap.forceit != 0 {
             u_undo_and_forget(1, true);
@@ -514,7 +514,7 @@ pub(crate) unsafe fn ex_redo(_eap: *mut exarg_T) {
 /// `:earlier` and `:later` — a count of changes, of seconds (`s`, `m`,
 /// `h`, `d`) or of file writes (`f`).
 pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut count = 0;
     let mut sec = false;
     let mut file = false;
@@ -574,7 +574,7 @@ pub(crate) unsafe fn ex_later(eap: *mut exarg_T) {
 
 /// `:mark` and `:k`.
 pub(crate) unsafe fn ex_mark(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) == NUL {
         emsg(gettext(e_argreq.as_ptr()));
         return;
@@ -760,7 +760,7 @@ unsafe fn escape_k_special(src: *mut c_char) -> *mut c_char {
 
 /// `:startinsert`, `:startreplace` and `:startgreplace`.
 pub(crate) unsafe fn ex_startinsert(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if eap.forceit != 0 {
         if cur_win().w_cursor.lnum == 0 {
             cur_win().w_cursor.lnum = 1;
@@ -835,7 +835,7 @@ pub(crate) unsafe fn ex_fold(eap: *mut exarg_T) {
 
 /// `:foldopen` and `:foldclose`.
 pub(crate) unsafe fn ex_foldopen(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     unsafe {
         op_fold_range(
             range_start(eap),

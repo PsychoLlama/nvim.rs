@@ -28,11 +28,9 @@ unsafe fn lang_loaded(name: *const ::core::ffi::c_char) -> bool {
     langs.with(|loaded| loaded.contains_key(unsafe { lang_key(name) }))
 }
 
-pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn tslua_has_language(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut lang_name: *const ::core::ffi::c_char = luaL_checklstring(
+        let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
             L,
             1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
@@ -43,16 +41,16 @@ pub(crate) unsafe extern "C-unwind" fn tslua_has_language(
 }
 
 pub(crate) unsafe extern "C-unwind" fn tslua_add_language_from_object(
-    mut L: *mut lua_State,
+    L: *mut lua_State,
 ) -> ::core::ffi::c_int {
     unsafe { add_language(L, false) }
 }
 
 unsafe fn load_language_from_object(
-    mut L: *mut lua_State,
-    mut path: *const ::core::ffi::c_char,
-    mut lang_name: *const ::core::ffi::c_char,
-    mut symbol: *const ::core::ffi::c_char,
+    L: *mut lua_State,
+    path: *const ::core::ffi::c_char,
+    lang_name: *const ::core::ffi::c_char,
+    symbol: *const ::core::ffi::c_char,
 ) -> *const TSLanguage {
     let mut dlerror = [0 as ::core::ffi::c_char; 1025];
     unsafe {
@@ -100,7 +98,7 @@ unsafe fn load_language_from_object(
                 dlerror.as_ptr(),
             );
         }
-        let mut lang: *mut TSLanguage = lang_parser.expect("non-null function pointer")();
+        let lang: *mut TSLanguage = lang_parser.expect("non-null function pointer")();
         if lang.is_null() {
             uv_dlclose(&raw mut lib);
             luaL_error(
@@ -114,7 +112,7 @@ unsafe fn load_language_from_object(
 }
 
 unsafe fn load_language_from_wasm(
-    mut L: *mut lua_State,
+    L: *mut lua_State,
     mut _path: *const ::core::ffi::c_char,
     mut _lang_name: *const ::core::ffi::c_char,
 ) -> *const TSLanguage {
@@ -124,14 +122,14 @@ unsafe fn load_language_from_wasm(
     }
 }
 
-unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi::c_int {
+unsafe fn add_language(L: *mut lua_State, is_wasm: bool) -> ::core::ffi::c_int {
     unsafe {
-        let mut path: *const ::core::ffi::c_char = luaL_checklstring(
+        let path: *const ::core::ffi::c_char = luaL_checklstring(
             L,
             1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
         );
-        let mut lang_name: *const ::core::ffi::c_char = luaL_checklstring(
+        let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
             L,
             2 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
@@ -151,12 +149,12 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
             lua_pushboolean(L, 1);
             return 1 as ::core::ffi::c_int;
         }
-        let mut lang: *const TSLanguage = if is_wasm as ::core::ffi::c_int != 0 {
+        let lang: *const TSLanguage = if is_wasm as ::core::ffi::c_int != 0 {
             load_language_from_wasm(L, path, lang_name)
         } else {
             load_language_from_object(L, path, lang_name, symbol_name)
         };
-        let mut lang_version: uint32_t = ts_language_abi_version(lang);
+        let lang_version: uint32_t = ts_language_abi_version(lang);
         if lang_version < TREE_SITTER_MIN_COMPATIBLE_LANGUAGE_VERSION as uint32_t
             || lang_version > TREE_SITTER_LANGUAGE_VERSION as uint32_t
         {
@@ -176,11 +174,9 @@ unsafe fn add_language(mut L: *mut lua_State, mut is_wasm: bool) -> ::core::ffi:
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut lang_name: *const ::core::ffi::c_char = luaL_checklstring(
+        let lang_name: *const ::core::ffi::c_char = luaL_checklstring(
             L,
             1 as ::core::ffi::c_int,
             ::core::ptr::null_mut::<size_t>(),
@@ -195,12 +191,9 @@ pub(crate) unsafe extern "C-unwind" fn tslua_remove_lang(
     }
 }
 
-pub(crate) unsafe fn lang_check(
-    mut L: *mut lua_State,
-    mut index: ::core::ffi::c_int,
-) -> *mut TSLanguage {
+pub(crate) unsafe fn lang_check(L: *mut lua_State, index: ::core::ffi::c_int) -> *mut TSLanguage {
     unsafe {
-        let mut lang_name: *const ::core::ffi::c_char =
+        let lang_name: *const ::core::ffi::c_char =
             luaL_checklstring(L, index, ::core::ptr::null_mut::<size_t>());
         let lang = langs
             .with(|loaded| loaded.get(lang_key(lang_name)).copied())
@@ -212,13 +205,11 @@ pub(crate) unsafe fn lang_check(
     }
 }
 
-pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
-    mut L: *mut lua_State,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
+        let lang: *mut TSLanguage = lang_check(L, 1 as ::core::ffi::c_int);
         lua_createtable(L, 0 as ::core::ffi::c_int, 2 as ::core::ffi::c_int);
-        let mut nsymbols: uint32_t = ts_language_symbol_count(lang);
+        let nsymbols: uint32_t = ts_language_symbol_count(lang);
         debug_assert!(nsymbols < 2147483647 as uint32_t, "nsymbols < INT_MAX");
         lua_createtable(
             L,
@@ -227,13 +218,12 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
         );
         let mut i: uint32_t = 0 as uint32_t;
         while i < nsymbols {
-            let mut t: TSSymbolType = ts_language_symbol_type(lang, i as TSSymbol);
+            let t: TSSymbolType = ts_language_symbol_type(lang, i as TSSymbol);
             if t as ::core::ffi::c_uint
                 != TSSymbolTypeAuxiliary as ::core::ffi::c_int as ::core::ffi::c_uint
             {
-                let mut name: *const ::core::ffi::c_char =
-                    ts_language_symbol_name(lang, i as TSSymbol);
-                let mut named: bool = t as ::core::ffi::c_uint
+                let name: *const ::core::ffi::c_char = ts_language_symbol_name(lang, i as TSSymbol);
+                let named: bool = t as ::core::ffi::c_uint
                     != TSSymbolTypeAnonymous as ::core::ffi::c_int as ::core::ffi::c_uint;
                 lua_pushboolean(L, named as ::core::ffi::c_int);
                 if !named {
@@ -256,7 +246,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
             i = i.wrapping_add(1);
         }
         lua_setfield(L, -2 as ::core::ffi::c_int, c"symbols".as_ptr());
-        let mut nfields: uint32_t = ts_language_field_count(lang);
+        let nfields: uint32_t = ts_language_field_count(lang);
         lua_createtable(L, nfields as ::core::ffi::c_int, 1 as ::core::ffi::c_int);
         let mut i_0: uint32_t = 1 as uint32_t;
         while i_0 <= nfields {
@@ -269,7 +259,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
         lua_setfield(L, -2 as ::core::ffi::c_int, c"_wasm".as_ptr());
         lua_pushinteger(L, ts_language_abi_version(lang) as lua_Integer);
         lua_setfield(L, -2 as ::core::ffi::c_int, c"abi_version".as_ptr());
-        let mut meta: *const TSLanguageMetadata = ts_language_metadata(lang);
+        let meta: *const TSLanguageMetadata = ts_language_metadata(lang);
         if !meta.is_null() {
             lua_createtable(L, 0 as ::core::ffi::c_int, 3 as ::core::ffi::c_int);
             lua_pushinteger(L, (*meta).major_version as lua_Integer);
@@ -283,7 +273,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
         lua_pushinteger(L, ts_language_state_count(lang) as lua_Integer);
         lua_setfield(L, -2 as ::core::ffi::c_int, c"state_count".as_ptr());
         let mut nsupertypes: uint32_t = 0;
-        let mut supertypes: *const TSSymbol = ts_language_supertypes(lang, &raw mut nsupertypes);
+        let supertypes: *const TSSymbol = ts_language_supertypes(lang, &raw mut nsupertypes);
         lua_createtable(
             L,
             0 as ::core::ffi::c_int,
@@ -293,7 +283,7 @@ pub(crate) unsafe extern "C-unwind" fn tslua_inspect_lang(
         while i_1 < nsupertypes {
             let supertype: TSSymbol = *supertypes.add(i_1 as usize);
             let mut nsubtypes: uint32_t = 0;
-            let mut subtypes: *const TSSymbol =
+            let subtypes: *const TSSymbol =
                 ts_language_subtypes(lang, supertype, &raw mut nsubtypes);
             lua_createtable(L, nsubtypes as ::core::ffi::c_int, 0 as ::core::ffi::c_int);
             let mut j: uint32_t = 1 as uint32_t;

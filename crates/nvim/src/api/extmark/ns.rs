@@ -111,7 +111,7 @@ pub fn describe_ns(ns_id: NS, unknown: *const ::core::ffi::c_char) -> *const ::c
     })
 }
 
-pub fn ns_initialized(mut ns: uint32_t) -> bool {
+pub fn ns_initialized(ns: uint32_t) -> bool {
     if ns < 1 as uint32_t {
         return false;
     }
@@ -139,8 +139,8 @@ pub unsafe fn nvim__ns_set(ns_id: Integer, opts: *mut KeyDict_ns_opts) -> Result
             // integer takes -1, which no window carries, so the lookup below
             // refuses it -- the transpile read its bytes as an integer.
             let item = unsafe { *(*opts).wins.items.add(i) };
-            let mut win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
-            let mut wp: *mut win_T = unsafe { find_window_by_handle(win as Window, &mut error) };
+            let win: Integer = item.as_handle().or_else(|| item.as_integer()).unwrap_or(-1);
+            let wp: *mut win_T = unsafe { find_window_by_handle(win as Window, &mut error) };
             if wp.is_null() {
                 return ().reported(error);
             }

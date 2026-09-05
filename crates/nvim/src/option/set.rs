@@ -149,7 +149,7 @@ fn apply_optionset_autocmd(
     // The command spellings are not exclusive: `:setlocal` on a
     // global-local option arrives with both scope bits clear only for a
     // bare `:set`, and a modeline overrides whatever came before it.
-    let mut command = |name: &CStr| {
+    let command = |name: &CStr| {
         unsafe {
             set_vim_var_string(
                 Vv::OptionCommand,

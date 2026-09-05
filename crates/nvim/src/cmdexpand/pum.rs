@@ -28,7 +28,7 @@ pub(crate) unsafe fn cmdline_pum_create(
 ) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     debug_assert!(numMatches >= 0);
     // Add all the completion matches.
     compl_match_array
@@ -138,7 +138,7 @@ pub(crate) fn cmdline_compl_use_pum(need_wildmenu: bool) -> bool {
 pub(crate) unsafe fn skip_wildmenu_char(xp: *mut expand_T, s: *mut c_char) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let ctx = xp.xp_context;
     if (unsafe { rem_backslash(s) }
         && ctx != ExpandContext::Help
@@ -168,7 +168,7 @@ pub(crate) unsafe fn skip_wildmenu_char(xp: *mut expand_T, s: *mut c_char) -> c_
 pub(crate) unsafe fn wildmenu_match_len(xp: *mut expand_T, s: *mut c_char) -> c_int {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let ctx = xp.xp_context;
     let emenu = ctx == ExpandContext::Menus || ctx == ExpandContext::Menunames;
 
@@ -202,7 +202,7 @@ pub(crate) unsafe fn redraw_wildmenu(
 ) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // Where the listing starts, remembered across redraws so that paging
     // through the matches does not jump.
     static first_match: GlobalCell<c_int> = GlobalCell::new(0);

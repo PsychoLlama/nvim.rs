@@ -173,7 +173,7 @@ fn resolve(args: Args<'_>, rettv: &mut typval_T) -> Option<Region> {
     let (region_type, block_width) = unsafe { parse_type(spec) }?;
 
     let findbuf = if fnum1 != 0 {
-        find_buf(fnum1).map_or(ptr::null_mut(), |mut b| b.raw())
+        find_buf(fnum1).map_or(ptr::null_mut(), |b| b.raw())
     } else {
         curbuf.get()
     };

@@ -25,10 +25,10 @@ pub unsafe fn find_buffer(avar: *mut typval_T) -> *mut buf_T {
     // is `v_string`, a NUL-terminated string or NULL.
     match unsafe { (*avar).v_type } {
         VAR_NUMBER => find_buf(number_as_int(unsafe { (*avar).number_or_zero() }))
-            .map_or(ptr::null_mut(), |mut b| b.raw()),
+            .map_or(ptr::null_mut(), |b| b.raw()),
         VAR_STRING if !unsafe { (*avar).string_or_null() }.is_null() => {
             let name = unsafe { (*avar).string_or_null() };
-            if let Some(mut found) = unsafe { buflist_findname_exp(name) } {
+            if let Some(found) = unsafe { buflist_findname_exp(name) } {
                 return found.raw();
             }
             // A buffer with no file of its own — a URL, or a scratch

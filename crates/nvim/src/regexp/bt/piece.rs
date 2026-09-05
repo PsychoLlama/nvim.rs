@@ -212,7 +212,7 @@ pub(crate) fn regconcat(rex: Rex, flagp: &mut c_int) -> *mut uint8_t {
     *flagp = WORST;
 
     loop {
-        let mut set_magic = |magic| {
+        let set_magic = |magic| {
             reg_magic.set(magic);
             skipchr_keepstart();
             // The switch changes what the next byte means, so the lookahead
@@ -341,7 +341,7 @@ pub(crate) fn reg(rex: Rex, paren: c_int, flagp: &mut c_int) -> *mut uint8_t {
     } else {
         regtail(ret, br);
     }
-    let mut take_flags = |flagp: &mut c_int, flags: c_int| {
+    let take_flags = |flagp: &mut c_int, flags: c_int| {
         if flags & HASWIDTH == 0 {
             *flagp &= !HASWIDTH;
         }

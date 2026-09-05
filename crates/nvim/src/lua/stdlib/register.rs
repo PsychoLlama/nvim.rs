@@ -173,7 +173,7 @@ pub unsafe fn nlua_state_add_stdlib(lstate: *mut lua_State, is_thread: bool) {
 pub unsafe extern "C-unwind" fn nlua_push_errstr(
     lstate: *mut lua_State,
     fmt: *const c_char,
-    mut args: ...
+    args: ...
 ) {
     unsafe {
         luaL_where(lstate, 1);

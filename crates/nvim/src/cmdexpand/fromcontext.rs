@@ -60,7 +60,7 @@ pub(crate) unsafe fn expand_from_context(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let mut pat = pat;
     let flags = map_wildopts_to_ewflags(options);
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) }
@@ -250,7 +250,7 @@ pub unsafe fn expand_generic(
 ) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let get_item = func.expect("expand_generic needs a generator");
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
     unsafe { *matches = ptr::null_mut() };

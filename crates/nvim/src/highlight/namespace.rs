@@ -545,7 +545,7 @@ pub unsafe fn update_ns_hl(ns_id: c_int) {
 /// `wp` is a live window; main thread only.
 pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
     if ns_hl_fast.get() < 0 {
@@ -574,7 +574,7 @@ pub unsafe fn win_bg_attr(wp: *mut win_T) -> c_int {
 #[inline]
 pub unsafe fn win_hl_attr(wp: *mut win_T, hlf: c_int) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
-    let mut wp = unsafe { Win::new(wp) };
+    let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window. `w_ns_hl_attr` may still be null if
     // highlights are checked before the first redraw.
     let table = if !wp.w_ns_hl_attr.is_null() && ns_hl_fast.get() < 0 {

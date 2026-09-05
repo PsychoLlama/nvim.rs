@@ -334,7 +334,7 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
 pub unsafe fn ex_cd(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let new_dir = eap.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.

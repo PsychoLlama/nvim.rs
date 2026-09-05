@@ -83,7 +83,7 @@ pub(crate) fn syn_cmd_list(eap: &mut exarg_T, syncing: c_int) {
 
 /// The `:syntax sync` half of the listing: how this buffer synchronises.
 fn list_sync_items() {
-    let mut block = cur_syn_block();
+    let block = cur_syn_block();
     if block.b_syn_sync_flags & SF_CCOMMENT != 0 {
         unsafe { msg_puts(gettext(c"syncing on C-style comments").as_ptr()) };
         syn_lines_msg();
@@ -119,7 +119,7 @@ fn list_sync_items() {
 
 /// "; minimal 5, maximal 10 lines before top line".
 fn syn_lines_msg() {
-    let mut block = cur_syn_block();
+    let block = cur_syn_block();
     if block.b_syn_sync_maxlines <= 0 && block.b_syn_sync_minlines <= 0 {
         return;
     }

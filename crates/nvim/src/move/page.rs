@@ -70,7 +70,7 @@ struct Saved {
 /// The current window must be valid.
 pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
     // SAFETY: `curwin` is set from startup to exit.
-    let mut win = unsafe { Win::current() };
+    let win = unsafe { Win::current() };
     let saved = Saved {
         buflen: win.buffer().line_count(),
         cursor: win.w_cursor,

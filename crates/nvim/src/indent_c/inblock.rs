@@ -173,7 +173,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
 
     // Not an "else" or a "while-of-do" (or the match failed).  Set the
     // amount for the case where the search below finds nothing.
-    let mut added_to_amount = 0;
+    let added_to_amount = 0;
     let mut lookfor_cpp_namespace = false;
     if start_brace == BRACE_IN_COL0 {
         // A brace *really* at the left margin: use the imaginary

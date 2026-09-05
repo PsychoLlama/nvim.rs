@@ -850,7 +850,7 @@ pub(crate) unsafe fn read_command_char() -> c_int {
 /// is waiting for the motion to finish.
 pub(crate) unsafe fn may_fold_open(cap: *mut cmdarg_T, fdo_flag: c_uint) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if fdo_flags.get() & fdo_flag != 0 && KeyTyped.get() && ca.op().op_type == OpType::Nop {
         unsafe { fold_open_cursor() };
     }

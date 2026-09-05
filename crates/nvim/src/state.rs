@@ -98,7 +98,7 @@ pub unsafe fn state_enter(s: *mut VimState) {
                 check_end_reg_executing(true);
                 may_sync_undo();
             }
-            let mut keyname_buf;
+            let keyname_buf;
             let keyname = if key == Key::Event.code() {
                 c"K_EVENT".as_ptr()
             } else {

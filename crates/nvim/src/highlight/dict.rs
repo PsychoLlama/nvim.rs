@@ -356,7 +356,7 @@ pub unsafe fn dict2hlattrs(
     let mut cterm_mask = base.map_or(HlAttrFlags::NONE, |b| b.cterm_ae_attr);
     let mut cterm_mask_provided = false;
 
-    let mut flag = |set: bool, on: bool, bit: HlAttrFlags, mask: &mut HlAttrFlags| {
+    let flag = |set: bool, on: bool, bit: HlAttrFlags, mask: &mut HlAttrFlags| {
         if set {
             apply_flag(mask, on, bit);
         }

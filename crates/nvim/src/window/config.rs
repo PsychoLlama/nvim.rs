@@ -340,7 +340,6 @@ fn anchor_to_window(
     if parent.w_pos_changed && parent.w_grid_alloc.is_allocated() && win_valid(parent.raw()) {
         ext_win_position(parent, validate);
     }
-    let mut parent = parent;
     let (mut row_off, mut col_off) = (0, 0);
     // SAFETY: a live window and its own grid.
     unsafe { win_grid_alloc(parent.raw()) };

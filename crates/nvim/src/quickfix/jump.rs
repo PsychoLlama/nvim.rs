@@ -451,7 +451,7 @@ pub unsafe fn qf_jump(qi: *mut qf_info_T, dir: c_int, errornr: c_int, forceit: c
 ///
 /// `qi` must be null (meaning the quickfix stack) or a live stack.
 pub(crate) unsafe fn qf_jump_newwin(
-    mut qi: *mut qf_info_T,
+    qi: *mut qf_info_T,
     dir: c_int,
     errornr: c_int,
     forceit: c_int,

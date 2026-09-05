@@ -21,8 +21,8 @@ pub unsafe fn nvim_create_augroup(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_augroup>::new(opts) };
     let mut error = Error::none();
-    let mut augroup_name_0: *mut ::core::ffi::c_char = name.data();
-    let mut clear_autocmds: bool = if opts.is_set__create_augroup_ as ::core::ffi::c_ulonglong
+    let augroup_name_0: *mut ::core::ffi::c_char = name.data();
+    let clear_autocmds: bool = if opts.is_set__create_augroup_ as ::core::ffi::c_ulonglong
         & (1 as ::core::ffi::c_ulonglong) << KEYSET_OPTIDX_create_augroup__clear
         != 0 as ::core::ffi::c_ulonglong
     {
@@ -61,7 +61,7 @@ pub unsafe fn nvim_del_augroup_by_id(id: Integer) -> Result<(), Error> {
         did_emsg: 0,
     };
     unsafe { try_enter(&raw mut tstate) };
-    let mut name: *mut ::core::ffi::c_char = if id == 0 as Integer {
+    let name: *mut ::core::ffi::c_char = if id == 0 as Integer {
         ::core::ptr::null_mut::<::core::ffi::c_char>()
     } else {
         augroup_name(id as ::core::ffi::c_int)
@@ -88,10 +88,7 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
     ().reported(error)
 }
 
-pub(crate) unsafe fn get_augroup_from_object(
-    mut group: Object,
-    err: &mut Error,
-) -> ::core::ffi::c_int {
+pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> ::core::ffi::c_int {
     let mut au_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
     let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     match group {

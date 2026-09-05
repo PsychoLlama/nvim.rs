@@ -37,7 +37,7 @@ use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 /// Drop the cached display information one window holds about the lines a
 /// change covered, and shift what is below it by `xtra`.
 fn changed_lines_invalidate_win(
-    mut wp: Win,
+    wp: Win,
     lnum: linenr_T,
     col: colnr_T,
     mut lnume: linenr_T,

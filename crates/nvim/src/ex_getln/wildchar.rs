@@ -24,7 +24,7 @@ pub(crate) fn wim_has(idx: ::core::ffi::c_int, flag: OptWimFlags) -> bool {
 
 /// One `'wildchar'` press: run the current `'wildmode'` stage.
 pub(crate) unsafe fn command_line_wildchar_complete(s: *mut CommandLineState) -> KeyOutcome {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let res;
     let mut options = WildOpts::NO_BEEP;
     let escape = unsafe { (*s).firstc } != '@' as ::core::ffi::c_int;

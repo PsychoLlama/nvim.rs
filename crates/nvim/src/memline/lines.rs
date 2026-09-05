@@ -164,7 +164,7 @@ pub unsafe fn ml_get_pos_len(pos: *mut pos_T) -> colnr_T {
 pub unsafe fn ml_get_buf_len(buf: *mut buf_T, lnum: linenr_T) -> colnr_T {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     if unsafe { *ml_get_buf(buf, lnum) } == NUL as ::core::ffi::c_char {
         return 0;
     }
@@ -208,7 +208,7 @@ unsafe fn ml_append_flush(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     if lnum > b.b_ml.ml_line_count {
         return Err(Failed); // lnum out of range
     }
@@ -272,7 +272,7 @@ pub unsafe fn ml_append_buf(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     if b.b_ml.ml_mfp.is_null() {
         return Err(Failed);
     }
@@ -301,7 +301,7 @@ pub unsafe fn ml_add_deleted_len_buf(
 ) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     if inhibit_delete_count.get() != 0 {
         return;
     }

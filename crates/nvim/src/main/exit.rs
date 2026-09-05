@@ -162,7 +162,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
 
         // `BufUnload` for every loaded buffer.
         let mut cur = first_buffer();
-        while let Some(mut buf) = cur {
+        while let Some(buf) = cur {
             if !buf.b_ml.ml_mfp.is_null() {
                 let bufref = BufRef::of(buf);
                 let (name, raw) = (buf.b_fname, buf.raw());

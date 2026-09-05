@@ -39,7 +39,7 @@ pub(crate) unsafe fn list_func_head(
     force: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `fp` is a live function.
-    let mut f = unsafe { Uf::new(fp) };
+    let f = unsafe { Uf::new(fp) };
     let prev_ht_changed = func_table().changed();
 
     unsafe { msg_start() };

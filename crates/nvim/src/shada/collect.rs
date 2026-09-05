@@ -333,7 +333,7 @@ unsafe fn jump_target(
         // Not in a loaded buffer: the entry carries the name itself.
         return (!fm.fname.is_null()).then_some(fm.fname as *const c_char);
     }
-    let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
+    let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |b| b.raw());
     if buf.is_null()
         || unsafe { ignore_buf(buf, removable_bufs) }
         || unsafe { (*buf).b_ffname.is_null() }

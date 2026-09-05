@@ -15,7 +15,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
     // The record `mark_get` answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut res: bool = false;
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return (res as Boolean).reported(error);
     }
@@ -26,7 +26,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         error = err_bad_value(c"mark name (must be a single char)", name);
         return (res as Boolean).reported(error);
     }
-    let mut fm: *mut fmark_T = unsafe {
+    let fm: *mut fmark_T = unsafe {
         mark_get(
             b,
             curwin.get(),
@@ -56,7 +56,7 @@ pub unsafe fn nvim_buf_set_mark(
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
     let mut res: bool = false;
-    let mut b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
+    let b: *mut buf_T = unsafe { api_buf_ensure_loaded(buf, &mut error) };
     if b.is_null() {
         return (res as Boolean).reported(error);
     }
@@ -84,7 +84,7 @@ pub unsafe fn nvim_buf_get_mark(
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return rv.reported(error);
     }
@@ -101,7 +101,7 @@ pub unsafe fn nvim_buf_get_mark(
         col: 0,
         coladd: 0,
     };
-    let mut mark: ::core::ffi::c_char = unsafe { *name.data() };
+    let mark: ::core::ffi::c_char = unsafe { *name.data() };
     fm = unsafe {
         mark_get(
             b,

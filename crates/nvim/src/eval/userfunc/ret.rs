@@ -107,7 +107,7 @@ unsafe fn ex_call_inner(
     evalarg: *mut evalarg_T,
 ) -> bool {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(eap) };
     // The subscript after `:call f()` is evaluated for real whatever the
     // caller's `evalarg` says, so it gets one of its own.
     let mut subscript_evalarg = EVALARG_EVALUATE;
@@ -271,7 +271,7 @@ pub unsafe fn add_defer(name: *mut c_char, argcount_arg: c_int, argvars: *mut ty
 /// `funccal` is a live funccall.
 pub(crate) unsafe fn handle_defer_one(funccal: *mut funccall_T) {
     // SAFETY: the caller's promise -- `funccal` is a live funccall.
-    let mut frame = unsafe { Fc::new(funccal) };
+    let frame = unsafe { Fc::new(funccal) };
     let mut idx = frame.fc_defer.ga_len - 1;
     while idx >= 0 {
         let dr = unsafe { (frame.fc_defer.ga_data as *mut defer_T).offset(idx as isize) };
@@ -450,7 +450,7 @@ pub unsafe fn do_return(
     rettv: *mut c_void,
 ) -> bool {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(eap) };
     let mut rettv = rettv;
     let cstack = ea.cstack;
 

@@ -122,7 +122,7 @@ pub unsafe extern "C" fn vim_snprintf_add(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,
-    mut args: ...
+    args: ...
 ) -> c_int {
     let len = unsafe { cstr::bytes_at(str) }.len();
     let space = str_m.saturating_sub(len);
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn vim_snprintf(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,
-    mut args: ...
+    args: ...
 ) -> c_int {
     unsafe { vim_vsnprintf(str, str_m, fmt, args.clone()) }
 }
@@ -149,7 +149,7 @@ pub unsafe extern "C" fn vim_snprintf_safelen(
     str: *mut c_char,
     str_m: size_t,
     fmt: *const c_char,
-    mut args: ...
+    args: ...
 ) -> size_t {
     if str_m == 0 {
         return 0;
@@ -206,7 +206,7 @@ const TMP_LEN: c_int = 350;
 pub unsafe extern "C" fn arena_printf(
     arena: *mut Arena,
     fmt: *const c_char,
-    mut args: ...
+    args: ...
 ) -> String_0 {
     let mut remaining: size_t = 0;
     let mut buf = ptr::null_mut::<c_char>();

@@ -30,7 +30,7 @@ pub(crate) unsafe fn showmatches_oneline(
 ) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // `msg_outtrans` runs the message machinery, which is why the shortened
     // name it is handed is this frame's and not the shared `NameBuff`.
     let mut shown = [0 as c_char; MAXPATHL as usize];
@@ -129,9 +129,9 @@ pub unsafe fn showmatches(
 ) -> Expanded {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let mut shown = [0 as c_char; MAXPATHL as usize];
-    let mut ccline = Cc::current();
+    let ccline = Cc::current();
     let mut numMatches = 0;
     let mut matches = ptr::null_mut();
     let showtail;
@@ -309,7 +309,7 @@ pub(crate) unsafe fn showmatches_gettail(s: *mut c_char, eager: bool) -> *mut c_
 pub(crate) unsafe fn expand_showtail(xp: *mut expand_T) -> bool {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // When not completing file names a "/" may mean something different.
     if xp.xp_context != ExpandContext::Files
         && xp.xp_context != ExpandContext::ShellCmd

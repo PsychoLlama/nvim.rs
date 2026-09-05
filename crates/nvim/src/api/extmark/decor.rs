@@ -20,7 +20,7 @@ pub unsafe fn nvim_buf_del_extmark(
     id: Integer,
 ) -> Result<Boolean, Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return false.reported(error);
     }
@@ -38,7 +38,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     mut line_end: Integer,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
+    let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
         return ().reported(error);
     }
@@ -66,11 +66,11 @@ pub unsafe fn nvim_set_decoration_provider(
     ns_id: Integer,
     opts: *mut KeyDict_set_decoration_provider,
 ) {
-    let mut p: *mut DecorProvider = unsafe { get_decor_provider(ns_id as NS, true) };
+    let p: *mut DecorProvider = unsafe { get_decor_provider(ns_id as NS, true) };
     debug_assert!(!p.is_null(), "p != NULL");
     unsafe { decor_provider_clear(p) };
     unsafe { redraw_all_later(UPD_NOT_VALID) };
-    let mut cbs: [DecorProviderCallback; 10] = [
+    let cbs: [DecorProviderCallback; 10] = [
         DecorProviderCallback {
             name: c"on_start".as_ptr(),
             source: unsafe { &raw mut (*opts).on_start },
@@ -127,7 +127,7 @@ pub unsafe fn nvim_set_decoration_provider(
         && !cbs[i as usize].dest.is_null()
         && !cbs[i as usize].name.is_null()
     {
-        let mut v: *mut LuaRef = cbs[i as usize].source;
+        let v: *mut LuaRef = cbs[i as usize].source;
         if unsafe { *v } > 0 as ::core::ffi::c_int {
             unsafe { *cbs[i as usize].dest = *v };
             unsafe { *v = LUA_NOREF as LuaRef };
@@ -140,9 +140,9 @@ pub unsafe fn nvim_set_decoration_provider(
 }
 
 pub unsafe fn parse_virt_text(
-    mut chunks: Array,
+    chunks: Array,
     err: &mut Error,
-    mut width: *mut ::core::ffi::c_int,
+    width: *mut ::core::ffi::c_int,
 ) -> VirtText {
     let mut virt_text: VirtText = VirtText {
         size: 0 as size_t,
@@ -174,7 +174,7 @@ pub unsafe fn parse_virt_text(
             let mut hl_id: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
             's_146: {
                 if chunk.size == 2 as size_t {
-                    let mut hl: Object =
+                    let hl: Object =
                         unsafe { *chunk.items.offset(1 as ::core::ffi::c_int as isize) };
                     if let Object::Array(arr) = hl {
                         let mut j: size_t = 0 as size_t;

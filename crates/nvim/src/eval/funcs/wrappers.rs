@@ -500,7 +500,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
     // owns and outlives the match.
     if unsafe { (*tv).v_type } == VAR_NUMBER {
         return find_buf(unsafe { (*tv).number_or_zero() } as c_int)
-            .map_or(ptr::null_mut(), |mut b| b.raw());
+            .map_or(ptr::null_mut(), |b| b.raw());
     }
     if unsafe { (*tv).v_type } != VAR_STRING {
         return ptr::null_mut();
@@ -529,7 +529,7 @@ pub unsafe fn tv_get_buf(tv: *mut typval_T, curtab_only: c_int) -> *mut buf_T {
 
     // A name no buffer matches may still be a *file* name we know.
     match found {
-        Some(mut buf) => buf.raw(),
+        Some(buf) => buf.raw(),
         None => unsafe { find_buffer(tv) },
     }
 }

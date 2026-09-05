@@ -288,7 +288,7 @@ impl LineSetup {
         // the cursor keeps the ordering out of the unsafe region.
         // SAFETY: the caller's window.
         let cursor = unsafe { (*curwin.get()).w_cursor };
-        let (mut top, mut bot) = if ltoreq(cursor, sel.anchor) {
+        let (mut top, bot) = if ltoreq(cursor, sel.anchor) {
             (cursor, sel.anchor)
         } else {
             (sel.anchor, cursor)

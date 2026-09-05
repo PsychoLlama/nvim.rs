@@ -60,7 +60,7 @@ const POUND_BYTE: u8 = 0xa3;
 /// Also called from `move.rs` for a mouse click landing left of the text.
 pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut win = cur_win();
     let to_first_non_blank = ca.nchar == '^' as c_int;
     ca.op().motion_type = kMTCharWise;
@@ -116,7 +116,7 @@ pub(crate) unsafe fn nv_g_home_m_cmd(cap: *mut cmdarg_T) {
 /// `g_`: the last non-blank of the line, `count1 - 1` lines down.
 pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut win = cur_win();
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
@@ -142,7 +142,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
 /// `g$` and `g<End>`: the end of the *screen* line.
 pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut win = cur_win();
     let mut op = ca.op();
     let col_off = unsafe { win_col_off(win.raw()) };
@@ -227,7 +227,7 @@ unsafe fn nv_g_select(cap: *mut cmdarg_T) {
 /// when 'wrap' is off.
 unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut op = ca.op();
     let moved = if cur_win().w_onebuf_opt.wo_wrap == 0 {
         op.motion_type = kMTLineWise;

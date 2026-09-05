@@ -526,7 +526,7 @@ unsafe fn terminal_check(state: *mut VimState) -> c_int {
     s.term.refcount.retain();
     // SAFETY: reads the editor's own event table.
     let observed = has_event(AutoEvent::TextChangedT);
-    let mut buf = current_buf();
+    let buf = current_buf();
     // SAFETY: a live buffer's own change counter.
     if observed && buf.b_last_changedtick_i != buf_get_changedtick(buf) {
         let none = ::core::ptr::null_mut();

@@ -22,7 +22,7 @@ use core::ffi::{c_char, c_int, c_void};
 pub(crate) unsafe fn cmdline_fuzzy_completion_supported(xp: *const expand_T) -> bool {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp.cast_mut()) };
+    let xp = unsafe { Xp::new(xp.cast_mut()) };
     let context = xp.xp_context;
     match context {
         ExpandContext::BoolSettings
@@ -173,7 +173,7 @@ pub(crate) unsafe fn escape_matches(
 ) {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // May change home directory back to "~".
     if options.has(WildOpts::HOME_REPLACE) {
         unsafe { tilde_replace(str, matches.len() as c_int, matches.as_mut_ptr()) };

@@ -314,7 +314,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
     count: ::core::ffi::c_int,
     mut s: Is,
 ) {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let mut skiplen = 0;
     let mut patlen = 0;
     let mut search_delim = 0;
@@ -489,7 +489,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
 pub(crate) unsafe fn may_add_char_to_search(
     firstc: ::core::ffi::c_int,
     c: &mut ::core::ffi::c_int,
-    mut s: Is,
+    s: Is,
 ) -> Result<(), Failed> {
     let mut skiplen = 0;
     let mut patlen = 0;
@@ -602,7 +602,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
     mut s: Is,
     next_match: bool,
 ) -> Result<(), Failed> {
-    let mut cc = Cc::current();
+    let cc = Cc::current();
     let mut skiplen = 0;
     let mut patlen = 0;
     let mut search_delim = 0;

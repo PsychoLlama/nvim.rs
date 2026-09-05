@@ -759,7 +759,7 @@ unsafe fn trim_float(c: &Conversion, tmp: &mut [c_char; TMP], mut len: size_t) -
             len = unsafe { delete_byte(tp.add(1), len) };
         }
         // Leading zeros of the exponent, past its sign.
-        let mut i = if unsafe { *tp.add(1) as u8 } == b'-' {
+        let i = if unsafe { *tp.add(1) as u8 } == b'-' {
             2
         } else {
             1

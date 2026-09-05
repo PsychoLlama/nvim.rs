@@ -110,7 +110,7 @@ pub unsafe fn get_user_input(
     let mut xp_name_buf: [::core::ffi::c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     // Its *address* is the "argument absent" answer below, so it has to be
     // a distinct object from the `""` literal `defstr` starts as.
-    let mut def: [::core::ffi::c_char; 1] = [0];
+    let def: [::core::ffi::c_char; 1] = [0];
 
     if unsafe { (*argvars.offset(0)).v_type } == VAR_DICT {
         if unsafe { (*argvars.offset(1)).v_type } != VAR_UNKNOWN {

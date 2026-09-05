@@ -273,7 +273,7 @@ unsafe fn diff_write(
     mut end: linenr_T,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's input side.
-    let mut din = unsafe { Live::<diffin_T>::new(din) };
+    let din = unsafe { Live::<diffin_T>::new(din) };
     if din.din_fname.is_null() {
         let image = din.field_ptr(offset_of!(diffin_T, din_mmfile));
         // SAFETY: the caller's buffer, and `din`'s own image field.

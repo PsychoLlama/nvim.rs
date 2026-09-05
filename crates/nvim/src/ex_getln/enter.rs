@@ -549,7 +549,7 @@ pub(crate) unsafe fn command_line_check(state: *mut VimState) -> ::core::ffi::c_
     // SAFETY: `state_enter` hands back the `VimState` header of the
     // `CommandLineState` it was given, live for the whole of the loop.
     let mut s = unsafe { Cls::new(state.cast::<CommandLineState>()) };
-    let mut cc = Cc::current();
+    let cc = Cc::current();
 
     s.prev_cmdpos = cc.cmdpos;
     unsafe { xfree(s.prev_cmdbuff as *mut ::core::ffi::c_void) };

@@ -128,8 +128,7 @@ pub unsafe fn spell_add_word(
 
         // Refuse to write the file behind the user's back if they are
         // editing it and have unsaved changes.
-        buf = unsafe { buflist_findname_exp(fnamebuf) }
-            .map_or(core::ptr::null_mut(), |mut b| b.raw());
+        buf = unsafe { buflist_findname_exp(fnamebuf) }.map_or(core::ptr::null_mut(), |b| b.raw());
         if !buf.is_null() && unsafe { (*buf).b_ml.ml_mfp }.is_null() {
             buf = core::ptr::null_mut();
         }

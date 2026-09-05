@@ -519,7 +519,7 @@ fn do_mousescroll_horiz(mut win: Win, leftcol: colnr_T) -> bool {
 fn mouse_check_grid() -> (Option<colnr_T>, c_int) {
     let mut pos = MousePos::current();
     // XXX: this doesn't change `pos.grid` if it is 1, even with multigrid.
-    let mut win = match find_win_inner(&mut pos) {
+    let win = match find_win_inner(&mut pos) {
         Some(win) if win.is_current() && win.w_redr_type == 0 => win,
         _ => return (None, 0),
     };

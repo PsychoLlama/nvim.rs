@@ -108,7 +108,7 @@ pub unsafe fn buflist_name_nr(
     fname: *mut *mut c_char,
     lnum: *mut linenr_T,
 ) -> Result<(), Failed> {
-    let Some(mut buf) = find_buf(fnum) else {
+    let Some(buf) = find_buf(fnum) else {
         return Err(Failed);
     };
     if buf.b_fname.is_null() {
@@ -169,7 +169,7 @@ pub unsafe fn setfname(
         } else {
             buflist_findname_file_id(ffname, &file_id, file_id_valid)
         };
-        if let Some(mut o) = obuf.filter(|&o| o != buf) {
+        if let Some(o) = obuf.filter(|&o| o != buf) {
             let obuf = o.raw();
             // During startup a window may use a buffer that is not loaded yet.
             let in_use = tab_windows().any(|win| win.w_buffer == obuf);
@@ -230,7 +230,7 @@ pub unsafe fn buf_name_changed(b: Buf) {
         // SAFETY: a live buffer with a memline.
         unsafe { ml_setname(b.raw()) };
     }
-    let mut cur = current_win();
+    let cur = current_win();
     if cur.w_buffer == b.raw() {
         // Check the file name against the argument list.
         // SAFETY: a live window.

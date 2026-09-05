@@ -407,7 +407,7 @@ impl Writing {
             debug_assert!(!fm.fname.is_null(), "shada: a mark with no buffer or file");
             return (!unsafe { shada_removable(fm.fname) }).then_some(fm.fname);
         }
-        let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |mut b| b.raw());
+        let buf = find_buf(fm.fmark.fnum).map_or(core::ptr::null_mut(), |b| b.raw());
         if buf.is_null()
             || unsafe { (*buf).b_ffname.is_null() }
             || self.removable_bufs.contains(&buf.cast_const())

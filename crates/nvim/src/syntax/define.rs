@@ -439,7 +439,7 @@ pub(crate) unsafe fn get_syn_pattern(arg: *mut c_char, ci: &mut synpat_T) -> *mu
         return ::core::ptr::null_mut();
     }
 
-    let mut end = unsafe { skip_regexp(arg.add(1), *arg as c_int, 1) };
+    let end = unsafe { skip_regexp(arg.add(1), *arg as c_int, 1) };
     if unsafe { *end } as c_int != unsafe { *arg } as c_int {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let arg = unsafe { c_str(arg) };

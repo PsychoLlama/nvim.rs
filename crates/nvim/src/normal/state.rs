@@ -308,7 +308,7 @@ pub(crate) unsafe fn normal_handle_special_visual_command(s: *mut NormalState) -
 /// while an operator or Visual mode is waiting for them.
 pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state and `s.idx` is a valid row.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+    let ns = unsafe { NormalStateRef::new(s) };
     let flags = nv_cmds[ns.idx as usize].cmd_flags as c_int;
     let pending_op = ns.oa.op_type != OpType::Nop;
     let cmdchar = ns.ca.cmdchar;
@@ -327,7 +327,7 @@ pub(crate) unsafe fn normal_need_additional_char(s: *mut NormalState) -> bool {
 /// back before the next key is read.
 pub(crate) unsafe fn normal_need_redraw_mode_message(s: *mut NormalState) -> bool {
     // SAFETY (throughout): `s` is the caller's live state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+    let ns = unsafe { NormalStateRef::new(s) };
     let showing_mode = p_smd.get() != 0
         && msg_silent.get() == 0
         && (restart_edit.get() != 0
@@ -534,7 +534,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
     // which is what we handed to `state_enter`.
     let s = state as *mut NormalState;
     // SAFETY: `state` is the caller's live normal-mode state.
-    let mut ns = unsafe { NormalStateRef::new(s) };
+    let ns = unsafe { NormalStateRef::new(s) };
     normal_check_stuff_buffer();
     unsafe { normal_check_interrupt(ns.raw()) };
     if did_throw.get() && ex_normal_busy.get() == 0 {
@@ -604,7 +604,7 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
 /// in `v:count1` and as itself in `v:count`.
 pub(crate) unsafe fn set_vcount_ca(cap: *mut cmdarg_T, set_prevcount: &mut bool) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let mut count = ca.count0 as int64_t;
     if ca.opcount != 0 {
         count = ca.opcount as int64_t * if count == 0 { 1 } else { count };

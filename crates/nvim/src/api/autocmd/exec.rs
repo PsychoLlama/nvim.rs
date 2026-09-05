@@ -24,7 +24,7 @@ pub unsafe fn nvim_exec_autocmds(
     let mut modeline: bool = true;
     let mut b: *mut buf_T = curbuf.get();
     let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
-    let mut event_array: Array = unsafe {
+    let event_array: Array = unsafe {
         unpack_string_or_array(
             event,
             c"event".as_ptr() as *mut ::core::ffi::c_char,
@@ -68,14 +68,14 @@ pub unsafe fn nvim_exec_autocmds(
             }
         }
     }
-    let mut has_buf: bool = has_key(
+    let has_buf: bool = has_key(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__buf,
     ) || has_key(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__buffer,
     );
-    let mut buf: Buffer = if has_key(
+    let buf: Buffer = if has_key(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__buf,
     ) {
@@ -99,7 +99,7 @@ pub unsafe fn nvim_exec_autocmds(
             return ().reported(error);
         }
     }
-    let mut patterns: Array = unsafe {
+    let patterns: Array = unsafe {
         get_patterns_from_pattern_or_buf(
             opts.pattern,
             has_buf,
@@ -141,7 +141,7 @@ pub unsafe fn nvim_exec_autocmds(
         let mut pat_index: size_t = 0 as size_t;
         while pat_index < patterns.size {
             let pat: Object = unsafe { *patterns.items.add(pat_index) };
-            let mut fname: *mut ::core::ffi::c_char = if !has_buf {
+            let fname: *mut ::core::ffi::c_char = if !has_buf {
                 pat.as_string()
                     .expect("`get_patterns_from_pattern_or_buf` answers Strings only")
                     .data()

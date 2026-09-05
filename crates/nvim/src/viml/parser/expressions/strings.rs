@@ -389,7 +389,7 @@ pub(super) unsafe fn parse_quoted_string(
     };
     // SAFETY: `pstate` is the caller's, and every group name is a static
     // NUL-terminated string.
-    let mut highlight = |start: ParserPosition, len: size_t, group: &'static CStr| unsafe {
+    let highlight = |start: ParserPosition, len: size_t, group: &'static CStr| unsafe {
         viml_parser_highlight(pstate, start, len, group.as_ptr());
     };
 

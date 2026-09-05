@@ -121,7 +121,7 @@ fn run_ecmd_cmd(eap: Ea) {
 
 /// `:bmodified`.
 pub(crate) unsafe fn ex_bmodified(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     goto_buffer(
         eap.raw(),
         DOBUF_MOD as c_int,
@@ -133,7 +133,7 @@ pub(crate) unsafe fn ex_bmodified(eap: *mut exarg_T) {
 
 /// `:bnext`.
 pub(crate) unsafe fn ex_bnext(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     goto_buffer(
         eap.raw(),
         DOBUF_CURRENT as c_int,
@@ -145,7 +145,7 @@ pub(crate) unsafe fn ex_bnext(eap: *mut exarg_T) {
 
 /// `:bprevious` and `:bNext`.
 pub(crate) unsafe fn ex_bprevious(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     goto_buffer(
         eap.raw(),
         DOBUF_CURRENT as c_int,
@@ -174,7 +174,7 @@ pub(crate) unsafe fn ex_preserve(_eap: *mut exarg_T) {
 
 /// `:recover` — read the buffer back out of a swap file.
 pub(crate) unsafe fn ex_recover(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     // The flag changes what the swap-file machinery does with what it
     // finds, and is read from several modules.
     recoverymode.set(true);
@@ -272,7 +272,7 @@ unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T)
 
 /// `:edit`, `:enew`, `:view`, `:badd`, `:balt`.
 pub(crate) unsafe fn ex_edit(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let ffname = if eap.cmdidx == CmdIdx::enew {
         ptr::null_mut()
     } else {
@@ -521,7 +521,7 @@ pub(crate) unsafe fn ex_bang(eap: *mut exarg_T) {
 /// `:wundo` — write the undo tree to a file, tagged with a hash of the
 /// buffer text so that reading it back into a different buffer is refused.
 pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut hash: [uint8_t; 32] = [0; 32];
     unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
     unsafe {
@@ -536,7 +536,7 @@ pub(crate) unsafe fn ex_wundo(eap: *mut exarg_T) {
 
 /// `:rundo`.
 pub(crate) unsafe fn ex_rundo(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut hash: [uint8_t; 32] = [0; 32];
     unsafe { u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t) };
     unsafe { u_read_undo(eap.arg, &raw mut hash as *mut uint8_t, ptr::null()) };
@@ -544,7 +544,7 @@ pub(crate) unsafe fn ex_rundo(eap: *mut exarg_T) {
 
 /// `:checkpath` — every file 'path' reaches from the includes of this one.
 pub(crate) unsafe fn ex_checkpath(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     unsafe {
         find_pattern_in_path(
             ptr::null_mut(),
@@ -569,7 +569,7 @@ pub(crate) unsafe fn ex_checkpath(eap: *mut exarg_T) {
 
 /// `:rshada`, `:wshada` and their `viminfo` spellings.
 pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     // An empty 'shada' would mean "save nothing", which is not what an
     // explicit command means.
     let save_shada = p_shada.get();
@@ -586,7 +586,7 @@ pub(crate) unsafe fn ex_shada(eap: *mut exarg_T) {
 
 /// `:fclose` — close a floating window by its handle.
 pub(crate) unsafe fn ex_fclose(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     unsafe { win_float_remove(eap.forceit != 0, eap.line1 as c_int) };
 }
 

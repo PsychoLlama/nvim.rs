@@ -331,7 +331,7 @@ pub unsafe fn ml_open(buf: *mut buf_T) -> Result<(), Failed> {
 unsafe fn ml_open_blocks(buf: *mut buf_T, mfp: *mut memfile_T, hp: &mut *mut bhdr_T) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
-    let mut b = unsafe { Buf::new(buf) };
+    let b = unsafe { Buf::new(buf) };
     // Block zero: the header that says what the rest of the file means.
     *hp = unsafe { mf_new(mfp, false, 1) };
     if unsafe { (**hp).bh_bnum } != 0 {

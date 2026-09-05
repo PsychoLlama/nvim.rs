@@ -238,7 +238,7 @@ unsafe fn scan_for_sync_point(
             if !had_sync_point || state_len() == 0 {
                 break;
             }
-            let mut cur_si = unsafe { state_top() };
+            let cur_si = unsafe { state_top() };
             if cur_si.si_m_endpos.lnum > start_lnum {
                 // Ignore a match that reaches past where we started.
                 current_lnum.set(end_lnum);

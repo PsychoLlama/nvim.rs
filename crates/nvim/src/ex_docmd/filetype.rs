@@ -56,7 +56,7 @@ pub(crate) unsafe fn ex_autocmd(eap: *mut exarg_T) {
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
 pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut arg = eap.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
@@ -68,7 +68,7 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut exarg_T) {
 
 /// `:filetype [plugin] [indent] on|off|detect`.
 pub(crate) unsafe fn ex_filetype(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if byte(eap.arg) == NUL {
         unsafe { report_filetype_state() };
         return;
@@ -193,7 +193,7 @@ pub unsafe fn filetype_maybe_enable() {
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
 pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     if cur_buf().b_did_filetype {
         return;
     }
@@ -214,7 +214,7 @@ pub(crate) unsafe fn ex_setfiletype(eap: *mut exarg_T) {
 /// `:checkhealth` — hand the window modifiers and the argument to
 /// `vim.health._check`.
 pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let mut env = env_buf();
     let mut err = Error::none();
     let mut items: [Object; 2] = unsafe { core::mem::zeroed() };

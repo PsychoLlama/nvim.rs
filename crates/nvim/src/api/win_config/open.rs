@@ -304,7 +304,7 @@ pub(crate) fn win_split_dir(win: Win) -> WinSplit {
     }
 }
 
-pub(crate) fn win_split_flags(mut split: WinSplit, mut toplevel: bool) -> ::core::ffi::c_int {
+pub(crate) fn win_split_flags(split: WinSplit, toplevel: bool) -> ::core::ffi::c_int {
     let mut flags: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
     if split as ::core::ffi::c_uint == kWinSplitAbove as ::core::ffi::c_int as ::core::ffi::c_uint
         || split as ::core::ffi::c_uint

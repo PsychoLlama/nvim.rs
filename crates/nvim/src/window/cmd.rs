@@ -740,7 +740,7 @@ fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
 }
 
 /// Clamp `wp`'s cursor line into its buffer.
-fn revalidate_cursor_lnum(mut wp: Win) {
+fn revalidate_cursor_lnum(wp: Win) {
     // SAFETY: a live window.
     check_cursor_lnum(wp);
 }

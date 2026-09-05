@@ -69,8 +69,6 @@ pub(crate) unsafe fn readfile(
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    let mut fname = fname;
-    let mut sfname = sfname;
     let mut retval = Err(Failed);
     let how = How {
         newfile: flags & READ_NEW as c_int != 0,

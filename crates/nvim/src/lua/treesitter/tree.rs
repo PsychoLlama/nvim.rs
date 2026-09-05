@@ -20,13 +20,13 @@ pub(crate) static tree_meta: ConstTable<[luaL_Reg; 7]> = luaL_reg_table![
     c"copy" => tree_copy,
 ];
 
-pub(crate) unsafe fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
+pub(crate) unsafe fn push_tree(L: *mut lua_State, tree: *const TSTree) {
     unsafe {
         if tree.is_null() {
             lua_pushnil(L);
             return;
         }
-        let mut ud: *mut TSLuaTree =
+        let ud: *mut TSLuaTree =
             lua_newuserdata(L, ::core::mem::size_of::<TSLuaTree>()) as *mut TSLuaTree;
         (*ud).tree = tree;
         lua_getfield(L, LUA_REGISTRYINDEX, TS_META_TREE.as_ptr());
@@ -34,39 +34,39 @@ pub(crate) unsafe fn push_tree(mut L: *mut lua_State, mut tree: *const TSTree) {
     }
 }
 
-unsafe extern "C-unwind" fn tree_copy(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_copy(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut ud: *mut TSLuaTree =
+        let ud: *mut TSLuaTree =
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
-        let mut copy: *mut TSTree = ts_tree_copy((*ud).tree);
+        let copy: *mut TSTree = ts_tree_copy((*ud).tree);
         push_tree(L, copy);
         1 as ::core::ffi::c_int
     }
 }
 
-unsafe extern "C-unwind" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_edit(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         if lua_gettop(L) < 10 as ::core::ffi::c_int {
             lua_pushstring(L, c"not enough args to tree:edit()".as_ptr());
             return lua_error(L);
         }
-        let mut ud: *mut TSLuaTree =
+        let ud: *mut TSLuaTree =
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
-        let mut start_byte: uint32_t =
+        let start_byte: uint32_t =
             luaL_checkinteger(L, 2 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t;
-        let mut old_end_byte: uint32_t =
+        let old_end_byte: uint32_t =
             luaL_checkinteger(L, 3 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t;
-        let mut new_end_byte: uint32_t =
+        let new_end_byte: uint32_t =
             luaL_checkinteger(L, 4 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t;
-        let mut start_point: TSPoint = TSPoint {
+        let start_point: TSPoint = TSPoint {
             row: luaL_checkinteger(L, 5 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
             column: luaL_checkinteger(L, 6 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
         };
-        let mut old_end_point: TSPoint = TSPoint {
+        let old_end_point: TSPoint = TSPoint {
             row: luaL_checkinteger(L, 7 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
             column: luaL_checkinteger(L, 8 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
         };
-        let mut new_end_point: TSPoint = TSPoint {
+        let new_end_point: TSPoint = TSPoint {
             row: luaL_checkinteger(L, 9 as ::core::ffi::c_int) as ::core::ffi::c_int as uint32_t,
             column: luaL_checkinteger(L, 10 as ::core::ffi::c_int) as ::core::ffi::c_int
                 as uint32_t,
@@ -79,50 +79,50 @@ unsafe extern "C-unwind" fn tree_edit(mut L: *mut lua_State) -> ::core::ffi::c_i
             old_end_point,
             new_end_point,
         };
-        let mut new_tree: *mut TSTree = ts_tree_copy((*ud).tree);
+        let new_tree: *mut TSTree = ts_tree_copy((*ud).tree);
         ts_tree_edit(new_tree, &raw mut edit);
         push_tree(L, new_tree);
         1 as ::core::ffi::c_int
     }
 }
 
-unsafe extern "C-unwind" fn tree_get_ranges(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_get_ranges(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut ud: *mut TSLuaTree =
+        let ud: *mut TSLuaTree =
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
-        let mut include_bytes: bool = lua_gettop(L) >= 2 as ::core::ffi::c_int
+        let include_bytes: bool = lua_gettop(L) >= 2 as ::core::ffi::c_int
             && lua_toboolean(L, 2 as ::core::ffi::c_int) != 0;
         let mut len: uint32_t = 0;
-        let mut ranges: *mut TSRange = ts_tree_included_ranges((*ud).tree, &raw mut len);
+        let ranges: *mut TSRange = ts_tree_included_ranges((*ud).tree, &raw mut len);
         push_ranges(L, ranges, len as size_t, include_bytes);
         xfree(ranges as *mut ::core::ffi::c_void);
         1 as ::core::ffi::c_int
     }
 }
 
-unsafe extern "C-unwind" fn tree_gc(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_gc(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut ud: *mut TSLuaTree =
+        let ud: *mut TSLuaTree =
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
-        let mut tree: *mut TSTree = (*ud).tree as *mut TSTree;
+        let tree: *mut TSTree = (*ud).tree as *mut TSTree;
         ts_tree_delete(tree);
         0 as ::core::ffi::c_int
     }
 }
 
-unsafe extern "C-unwind" fn tree_tostring(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_tostring(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
         lua_pushstring(L, c"<tree>".as_ptr());
         1 as ::core::ffi::c_int
     }
 }
 
-unsafe extern "C-unwind" fn tree_root(mut L: *mut lua_State) -> ::core::ffi::c_int {
+unsafe extern "C-unwind" fn tree_root(L: *mut lua_State) -> ::core::ffi::c_int {
     unsafe {
-        let mut ud: *mut TSLuaTree =
+        let ud: *mut TSLuaTree =
             luaL_checkudata(L, 1 as ::core::ffi::c_int, TS_META_TREE.as_ptr()) as *mut TSLuaTree;
-        let mut root: TSNode = ts_tree_root_node((*ud).tree);
-        let mut node_ud: *mut TSNode =
+        let root: TSNode = ts_tree_root_node((*ud).tree);
+        let node_ud: *mut TSNode =
             lua_newuserdata(L, ::core::mem::size_of::<TSNode>()) as *mut TSNode;
         *node_ud = root;
         lua_getfield(L, LUA_REGISTRYINDEX, TS_META_NODE.as_ptr());

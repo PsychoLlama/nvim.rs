@@ -28,7 +28,7 @@ const NO_PATTERN: *mut c_char = ptr::null_mut();
 unsafe fn orig_or_empty(xp: *const expand_T) -> *const c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp.cast_mut()) };
+    let xp = unsafe { Xp::new(xp.cast_mut()) };
     // SAFETY: the caller's promise.
     let orig = xp.xp_orig;
     if orig.is_null() {
@@ -53,7 +53,7 @@ const fn first_selected(options: WildOpts) -> c_int {
 unsafe fn matches_of(xp: *const expand_T) -> &'static [*mut c_char] {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp.cast_mut()) };
+    let xp = unsafe { Xp::new(xp.cast_mut()) };
     debug_assert!(xp.xp_numfiles > 0);
     // `.max(0)`: -1 means "nothing expanded", and building a slice of
     // `usize::MAX` entries out of that would be instant UB where the C
@@ -360,7 +360,7 @@ unsafe fn expand_one_start(
 ) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     // `field_ptr`, not `&raw mut xp.xp_files`: two addresses off one
     // `Deref` would pop each other, and `expand_from_context` writes both.
     let files = xp.field_ptr(core::mem::offset_of!(expand_T, xp_files));
@@ -434,7 +434,7 @@ unsafe fn expand_one_start(
 unsafe fn longest_common_match(xp: *mut expand_T, options: WildOpts) -> *mut c_char {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let files = unsafe { matches_of(xp.raw()) };
     let first = files[0];
     // 'fileignorecase' folds case, but only where the matches are names

@@ -451,7 +451,7 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         // SAFETY: `rettv` is the caller's return value, a dictionary this
         // function itself allocated above.
         let dict = unsafe { (*rettv).vval.v_dict };
-        let mut add = |key: &CStr, value: c_int| {
+        let add = |key: &CStr, value: c_int| {
             let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as varnumber_T);
             // SAFETY: adding a number under a static key.
             let _ = unsafe { tv_dict_add_nr(dict, k, klen, v) };

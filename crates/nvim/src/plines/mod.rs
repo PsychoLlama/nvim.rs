@@ -89,7 +89,7 @@ impl Win {
 
 impl Buf {
     /// Cells a tab starting at virtual column `col` takes here.
-    fn tab_width(mut self, col: colnr_T) -> c_int {
+    fn tab_width(self, col: colnr_T) -> c_int {
         let (ts, vts): (OptInt, *const colnr_T) = (self.b_p_ts, self.b_p_vts_array);
         // SAFETY: a live buffer, whose 'vartabstop' array is its own.
         unsafe { tabstop_padding(col, ts, vts) }

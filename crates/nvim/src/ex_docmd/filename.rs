@@ -70,7 +70,7 @@ pub unsafe fn replace_makeprg(
     mut arg: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
-    let mut eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(eap) };
     let idx = eap.cmdidx;
     let is_grep = idx == CmdIdx::grep
         || idx == CmdIdx::lgrep
@@ -125,7 +125,7 @@ pub(crate) unsafe fn expand_filename(
     // Where the environment variables in a file argument are expanded;
     // upstream shares `NameBuff`.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
-    let mut ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(eap) };
     // A `:vimgrep` pattern is not a file name, so the scan starts after
     // it.
     let mut p = skip_grep_pat(ea);

@@ -54,14 +54,14 @@ pub(crate) unsafe fn nv_nop(_cap: *mut cmdarg_T) {}
 /// A key that is not a command: beep and drop whatever was pending.
 pub(crate) unsafe fn nv_error(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     clear_op_beep(ca.op());
 }
 
 /// `<Help>`: open the help window.
 pub(crate) unsafe fn nv_help(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op_quit(ca.op()) {
         unsafe { ex_help(ptr::null_mut()) };
     }
@@ -71,7 +71,7 @@ pub(crate) unsafe fn nv_help(cap: *mut cmdarg_T) {
 /// from a mapping.
 pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     let is_cmdkey = ca.cmdchar == Key::Command.code();
     let is_lua = ca.cmdchar == Key::Lua.code();
     // A plain `:` during a selection is the `:` *operator*, which puts the
@@ -131,7 +131,7 @@ pub(crate) unsafe fn nv_colon(cap: *mut cmdarg_T) {
 /// Select mode when a selection is up.
 pub(crate) unsafe fn nv_ctrlg(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if visual_active() {
         set_visual_select(!visual_select());
         unsafe { may_trigger_modechanged() };
@@ -157,7 +157,7 @@ pub(crate) unsafe fn nv_ctrlh(cap: *mut cmdarg_T) {
 /// that timed out try again.
 pub(crate) unsafe fn nv_clear(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if check_clear_op(ca.op()) {
         return;
     }
@@ -194,7 +194,7 @@ pub(crate) unsafe fn nv_ctrlo(cap: *mut cmdarg_T) {
 /// `CTRL-^`: edit the alternate file.
 pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op_quit(ca.op()) {
         let flags = GETF_SETMARK as c_int | GETF_ALT as c_int;
         let _ = unsafe { buflist_getfile(ca.count0, 0 as linenr_T, flags, 0) };
@@ -219,7 +219,7 @@ pub(crate) unsafe fn nv_window(cap: *mut cmdarg_T) {
 /// happen.
 pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     clear_op(ca.op());
     if visual_active() {
         end_visual_mode();
@@ -231,7 +231,7 @@ pub(crate) unsafe fn nv_suspend(cap: *mut cmdarg_T) {
 /// "back to Normal mode".
 pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     if ca.nchar != Ctrl_N && ca.nchar != Ctrl_G {
         clear_op_beep(ca.op());
         return;
@@ -254,7 +254,7 @@ pub(crate) unsafe fn nv_normal(cap: *mut cmdarg_T) {
 /// that offers the "how do I quit" hint.
 pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     // Nothing was pending, so the key had no work to do and is worth a
     // beep or a hint.
     let no_reason =
@@ -297,7 +297,7 @@ pub(crate) unsafe fn nv_esc(cap: *mut cmdarg_T) {
 /// The key the terminal sends to repeat a bracketed paste.
 pub(crate) unsafe fn nv_paste(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
-    let mut ca = unsafe { CmdArg::new(cap) };
+    let ca = unsafe { CmdArg::new(cap) };
     unsafe { paste_repeat(ca.count1) };
 }
 

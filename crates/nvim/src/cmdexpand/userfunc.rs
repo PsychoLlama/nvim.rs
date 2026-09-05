@@ -251,7 +251,7 @@ pub(crate) unsafe fn call_user_expand_func(
 ) -> *mut c_void {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let mut args = [typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,
@@ -296,7 +296,7 @@ pub(crate) unsafe fn expand_user_defined(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let fuzzy = unsafe { cmdline_fuzzy_complete(pat) };
     unsafe { *matches = ptr::null_mut() };
     unsafe { *numMatches = 0 };
@@ -409,7 +409,7 @@ pub(crate) unsafe fn expand_user_list(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     unsafe { *matches = ptr::null_mut() };
     unsafe { *numMatches = 0 };
     let retlist = unsafe { call_user_expand_func(call_func_retlist, xp.raw()) } as *mut list_T;
@@ -429,7 +429,7 @@ pub(crate) unsafe fn expand_user_lua(
 ) -> Result<(), Failed> {
     // SAFETY: the caller's contract -- `xp` is the live expansion
     // context, which outlives this call.
-    let mut xp = unsafe { Xp::new(xp) };
+    let xp = unsafe { Xp::new(xp) };
     let mut rettv = typval_T {
         v_type: VAR_UNKNOWN,
         v_lock: VarLock::Unlocked,

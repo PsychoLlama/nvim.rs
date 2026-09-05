@@ -314,7 +314,7 @@ pub unsafe fn ex_delmarks(eap: *mut exarg_T) {
                     // where it still exists, so an autocommand sees the file
                     // the mark was in.
                     let owner =
-                        find_buf(slot.fmark().fnum()).map_or(buf.raw(), |mut owner| owner.raw());
+                        find_buf(slot.fmark().fnum()).map_or(buf.raw(), |owner| owner.raw());
                     // SAFETY: `gone` is on this stack and `owner` is a live
                     // buffer.
                     unsafe { do_markset_autocmd(mark_name(c), &raw mut gone, owner) };
