@@ -37,6 +37,7 @@
 use crate::ascii::{
     ascii_isdigit, ascii_isspace, ascii_iswhite, ascii_iswhite_nl_or_nul, ascii_isxdigit,
 };
+use crate::autocmd::state::{did_cursorhold, last_cursormoved, last_cursormoved_win};
 use crate::autocmd::{apply_autocmds, aucmd_prepbuf, aucmd_restbuf, has_event};
 use crate::buffer::{
     buf_get_changedtick, buf_is_empty, buf_is_prompt, buf_is_quickfix, buf_meta_total, current_buf,
@@ -113,8 +114,7 @@ use crate::keycodes::{
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
 use crate::main::{
-    did_check_timestamps, did_cursorhold, last_cursormoved, last_cursormoved_win,
-    need_check_timestamps, pum_want, spell_redraw_lnum, u_sync_once,
+    did_check_timestamps, need_check_timestamps, pum_want, spell_redraw_lnum, u_sync_once,
 };
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};

@@ -34,6 +34,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::cstr;
 use crate::types::AutoEvent;
 use crate::types::CAR;

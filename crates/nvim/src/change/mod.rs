@@ -20,6 +20,7 @@
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::apply_autocmds;
+use crate::autocmd::state::{autocmd_busy, last_cursormoved, last_cursormoved_win};
 use crate::buffer::{
     buf_inc_changedtick, buf_is_dontwrite, buf_is_prompt, buf_meta_total, current_buf,
 };
@@ -48,10 +49,7 @@ use crate::indent::{
 };
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
-use crate::main::{
-    autocmd_busy, curbuf_splice_pending, highlight_match, last_cursormoved, last_cursormoved_win,
-    silent_mode,
-};
+use crate::main::{curbuf_splice_pending, highlight_match, silent_mode};
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
     mb_adjust_cursor, utf_char2bytes, utf_composinglike, utf_head_off, utf_iscomposing_first,

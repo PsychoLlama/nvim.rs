@@ -20,7 +20,9 @@
 mod all;
 mod command;
 mod eval;
+pub(crate) mod state;
 
+use crate::arglist::state::{arg_had_last, global_alist, max_alist_id};
 use crate::ascii::ascii_isspace;
 use crate::autocmd::is_aucmd_win;
 use crate::buffer::{
@@ -39,7 +41,6 @@ use crate::ex_getln::gotocmdline;
 use crate::fileio::file_pat_to_reg_pat;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::{arg_had_last, global_alist, max_alist_id};
 use crate::mark::{setmark, setpcmark};
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::normal::reset_VIsual_and_resel;

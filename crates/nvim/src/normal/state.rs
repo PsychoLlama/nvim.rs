@@ -20,9 +20,11 @@ use crate::winlayer::{Buf, Win};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
 
+use crate::autocmd::state::{last_cursormoved, last_cursormoved_win};
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::buffer::{buf_get_changedtick, fileinfo};
 use crate::diff::ex_diffupdate;
+use crate::diff::state::diff_need_scrollbind;
 use crate::drawscreen::state::{
     clear_cmdline, do_redraw, must_redraw, redraw_cmdline, redraw_mode, skip_redraw,
 };
@@ -40,10 +42,7 @@ use crate::fileio::check_timestamps;
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::state::{KeyTyped, got_int, mod_mask, reg_executing, reg_recording};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
-use crate::main::{
-    did_check_timestamps, diff_need_scrollbind, last_cursormoved, last_cursormoved_win,
-    may_garbage_collect, need_check_timestamps, time_fd,
-};
+use crate::main::{did_check_timestamps, may_garbage_collect, need_check_timestamps, time_fd};
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::{
     did_emsg, did_wait_return, emsg_on_display, emsg_silent, in_assert_fails, keep_msg,

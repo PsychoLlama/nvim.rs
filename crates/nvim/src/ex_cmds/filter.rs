@@ -19,6 +19,7 @@ use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use super::{cur_buf, cur_win};
 use crate::types::AutoEvent;
 
+use crate::autocmd::state::autocmd_busy;
 use crate::bufwrite::{WriteRequest, buf_write};
 use crate::change::{appended_lines_mark, del_lines};
 use crate::charset::skipwhite;
@@ -36,7 +37,7 @@ use crate::getchar::{append_to_redobuff, append_to_redobuff_literally};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::highlight_group::HLF_N;
-use crate::main::{autocmd_busy, did_check_timestamps, need_check_timestamps, silent_mode};
+use crate::main::{did_check_timestamps, need_check_timestamps, silent_mode};
 use crate::mark::mark_adjust;
 use crate::memline::ml_get;
 use crate::memory::{xfree, xmalloc};

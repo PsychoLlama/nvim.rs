@@ -35,6 +35,7 @@ use crate::types::AutoEvent;
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use crate::buffer::state::swap_exists_action;
 use crate::buffer::{
     BufFlags, BufRef, buf_clear_file, buf_freeall, do_autochdir, do_modelines, fileinfo,
     handle_swap_exists, maketitle, open_buffer, otherfile, set_buflisted, setaltfname,
@@ -54,7 +55,7 @@ use crate::ex_eval::{aborting, should_abort_err};
 use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
-use crate::main::{exiting, keep_help_flag, swap_exists_action};
+use crate::main::{exiting, keep_help_flag};
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};
 use crate::message::msg_check_for_delay;

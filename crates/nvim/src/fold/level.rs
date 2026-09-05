@@ -14,12 +14,12 @@
 
 use crate::charset::skipwhite;
 use crate::diff::diff_infold;
+use crate::diff::state::diff_context;
 use crate::drawscreen::redraw_win_range_later;
 use crate::eval::eval_foldexpr;
 use crate::eval::vars::set_vim_var_nr;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::indent::{get_indent_buf, get_sw_value};
-use crate::main::diff_context;
 use crate::memline::ml_get_buf;
 use crate::r#move::changed_window_setting;
 use crate::os::input::line_breakcheck;

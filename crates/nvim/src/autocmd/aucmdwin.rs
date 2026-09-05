@@ -17,13 +17,31 @@
 
 use super::*;
 use crate::buffer::BufRef;
+use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
-use crate::main::AucmdWinVec;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
+use crate::types::{AucmdWin, size_t};
 use crate::winlayer::{Buf, Win, first_window, last_window, tabs, windows, windows_in_tab};
 
 /// The stack of autocommand windows, one slot per nesting level.
 ///
+/// The autocommand-window stack itself: a grow-only vector of slots, each
+/// either free or holding the window an `aucmd_prepbuf` is running in.
+///
+/// A hand-rolled vector rather than a `Vec` because [`AucmdWins`] hands out
+/// raw slot pointers that stay valid across the autocommands run in them.
+pub(crate) struct AucmdWinVec {
+    pub size: size_t,
+    pub capacity: size_t,
+    pub items: *mut AucmdWin,
+}
+
+pub(crate) static aucmd_win_vec: GlobalCell<AucmdWinVec> = GlobalCell::new(AucmdWinVec {
+    size: 0 as size_t,
+    capacity: 0 as size_t,
+    items: ::core::ptr::null_mut::<AucmdWin>(),
+});
+
 /// A `Copy` handle rather than a borrow: `win_alloc_aucmd_win` writes back
 /// into a slot while [`aucmd_prepbuf`] is still choosing one, and the
 /// autocommands then run with a slot marked in use, so nothing here can hold

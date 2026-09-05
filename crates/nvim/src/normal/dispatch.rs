@@ -13,6 +13,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::autocmd::state::did_cursorhold;
 use crate::charset::vim_isprintc;
 use crate::digraph::get_digraph;
 use crate::drawscreen::showmode;
@@ -31,7 +32,6 @@ use crate::getchar::{
 use crate::guard::{Allow, Keys, Suppress};
 use crate::keycodes::ModMask;
 use crate::keycodes::{Ctrl_BSL, Ctrl_G, Ctrl_K, Ctrl_N, Ctrl_W, Key, simplify_mod_mask};
-use crate::main::did_cursorhold;
 use crate::mapping::langmap_adjust_mb;
 use crate::mark::checkpcmark;
 use crate::mbyte::{

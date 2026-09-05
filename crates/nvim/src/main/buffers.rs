@@ -20,6 +20,10 @@ use core::ptr;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::arglist::alist_name;
+use crate::arglist::state::arg_had_last;
+use crate::buffer::state::{
+    BLN_LISTED, SEA_DIALOG, SEA_NONE, SEA_QUIT, swap_exists_action, swap_exists_did_quit,
+};
 use crate::buffer::{
     buf_is_empty, buflist_new, do_modelines, handle_swap_exists, open_buffer, set_buflisted,
     set_curbuf, setfname,
@@ -33,9 +37,8 @@ use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
-    BLN_LISTED, EDIT_QF, MainParams, READ_NEW, READ_STDIN, SEA_DIALOG, SEA_NONE, SEA_QUIT,
-    SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, arg_had_last, kOptErrorfile, kOptShortmess, recoverymode,
-    swap_exists_action, swap_exists_did_quit, time_msg_at,
+    EDIT_QF, MainParams, READ_NEW, READ_STDIN, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile,
+    kOptShortmess, recoverymode, time_msg_at,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};

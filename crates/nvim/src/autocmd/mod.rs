@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::types::AutoEvent;
 use core::cmp::Ordering;
 use core::ffi::CStr;
@@ -10,6 +11,11 @@ use crate::api::private::helpers::{
     find_buffer_by_handle,
 };
 use crate::ascii::ascii_iswhite;
+use crate::autocmd::state::{
+    autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
+    autocmd_no_enter, autocmd_no_leave, deferred_events, did_cursorhold, last_cursormoved,
+    last_cursormoved_win,
+};
 use crate::buffer::{buf_is_prompt, current_buf, do_modelines, find_buf};
 use crate::charset::{skipdigits, skipwhite};
 use crate::cursor::{check_cursor, check_pos};
@@ -33,11 +39,7 @@ use crate::hashtab::hash_init;
 use crate::highlight_group::{HLF_8, HLF_E, HLF_T};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{
-    aucmd_win_vec, autocmd_bufnr, autocmd_busy, autocmd_fname, autocmd_fname_full, autocmd_match,
-    autocmd_no_enter, autocmd_no_leave, current_sctx, deferred_events, did_cursorhold,
-    do_profiling, globaldir, last_cursormoved, last_cursormoved_win, main_loop, starting,
-};
+use crate::main::{current_sctx, do_profiling, globaldir, main_loop, starting};
 use crate::memory::{xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, msg_col};
 use crate::message::{e_argreq, e_cannot_define_autocommands_for_all_events};
@@ -64,10 +66,10 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AcoSave, AucmdWin, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, Buffer, BufferHandle, Callback,
-    EStackType, Error, Event, ExArg, Expand, FuncCallEntry, Integer, LuaRetMode, Object, OptVal,
-    ProfTime, SaveRedo, SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, int64_t,
-    size_t, uint64_t,
+    AcoSave, AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, Buffer, BufferHandle, Callback, EStackType,
+    Error, Event, ExArg, Expand, FuncCallEntry, Integer, LuaRetMode, Object, OptVal, ProfTime,
+    SaveRedo, SaveVEvent, ScriptCtx, String_0, Timestamp, VarNumber, Vv, Window, int64_t, size_t,
+    uint64_t,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;

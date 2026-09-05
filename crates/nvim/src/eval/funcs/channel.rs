@@ -10,6 +10,7 @@ use super::{
 };
 use crate::api::private::converter::{object_to_vim, vim_to_object};
 use crate::api::private::helpers::{arena_array, cstr_as_string};
+use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
 };
@@ -24,10 +25,7 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
-use crate::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx,
-    provider_call_nesting, provider_caller_scope,
-};
+use crate::main::{current_sctx, provider_call_nesting, provider_caller_scope};
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::e_invarg;
 use crate::message::on_print_cb;

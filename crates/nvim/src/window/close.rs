@@ -20,6 +20,7 @@ use core::ptr;
 
 use super::*;
 
+use crate::autocmd::state::autocmd_busy;
 use crate::buffer::{BufRef, buf_is_prompt, buf_valid, close_buffer, is_changed, reset_syntax};
 use crate::drawscreen::UPD_NOT_VALID;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed};
@@ -27,7 +28,6 @@ use crate::ex_cmds2::{can_abandon, dialog_changed};
 use crate::ex_docmd::cmdmod_has;
 use crate::guard::Suppress;
 use crate::keycodes::Ctrl_C;
-use crate::main::autocmd_busy;
 use crate::message::{e_cmdwin, e_floatonly};
 use crate::r#move::WinValid;
 use crate::option::vars::{p_confirm, p_write};

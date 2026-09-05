@@ -11,6 +11,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::{offset_of, size_of};
 use core::ptr::null_mut;
 
+use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::buf_is_prompt;
 use crate::change::appended_lines_mark;
 use crate::channel::{callback_reader_free, channel_proc, find_channel};
@@ -29,10 +30,7 @@ use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
 use crate::lua::executor::nlua_is_deferred_safe;
-use crate::main::{
-    autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx,
-    provider_call_nesting, provider_caller_scope,
-};
+use crate::main::{current_sctx, provider_call_nesting, provider_caller_scope};
 use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};

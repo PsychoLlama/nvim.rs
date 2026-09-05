@@ -111,18 +111,19 @@
     clippy::ptr_as_ptr
 )]
 
+use crate::autocmd::state::{autocmd_no_enter, autocmd_no_leave};
 use crate::drawscreen::state::RedrawingDisabled;
 use crate::getchar::state::{allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
 use crate::global_cell::GlobalCell;
 use crate::main::{
-    autocmd_no_enter, autocmd_no_leave, cmdline_star, curbuf_splice_pending, current_sctx,
-    disable_fold_update, inhibit_delete_count, no_check_timestamps, no_u_sync,
-    tabpage_move_disallowed,
+    cmdline_star, curbuf_splice_pending, current_sctx, disable_fold_update, inhibit_delete_count,
+    no_check_timestamps, no_u_sync,
 };
 use crate::message::state::{
     emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,
 };
 use crate::types::{ScriptCtx, ScriptId};
+use crate::window::state::tabpage_move_disallowed;
 use core::ffi::c_int;
 
 /// The four "for the duration of this, don't let anything touch the editor"

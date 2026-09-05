@@ -31,6 +31,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::autocmd::{
     apply_autocmds, aucmd_prepbuf, aucmd_restbuf, augroup_exists, block_autocmds, unblock_autocmds,
@@ -55,11 +56,11 @@ use crate::fold::{
     fold_update, fold_update_all, foldmethod_is_diff, foldmethod_is_manual, new_fold_level,
 };
 
+use crate::diff::state::{diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw};
 use crate::getchar::state::KeyTyped;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::{HLF_ADD, HLF_CHD, HLF_NONE, HLF_TXA, HLF_TXD};
 use crate::linematch::linematch_nbuffers;
-use crate::main::{diff_context, diff_foldcolumn, diff_need_scrollbind, need_diff_redraw};
 use crate::mark::{mark_adjust, setpcmark};
 use crate::mbyte::{
     mb_get_class_tab, mb_stricmp, utf_char2bytes, utf_char2len, utf_fold, utf_head_off,

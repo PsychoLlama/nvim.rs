@@ -67,7 +67,7 @@ use crate::main::{
     cmdline_star, cmdline_was_last_drawn, cmdpreview, current_sctx, highlight_match,
     magic_overruled, mouse_col, mouse_row, no_hlsearch, pum_want, redrawing_cmdline,
     search_first_line, search_last_line, search_match_endcol, search_match_lines,
-    skip_win_fix_cursor, wild_menu_showing,
+    wild_menu_showing,
 };
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
@@ -167,6 +167,7 @@ use crate::undo::{u_blockfree, u_clearall, u_sync, u_undo_and_forget};
 use crate::usercmd::{cmdcomplete_type_to_str, parse_compl_arg};
 use crate::viml::parser::expressions::{viml_pexpr_free_ast, viml_pexpr_parse};
 use crate::viml::parser::parser::{parser_simple_get_line, viml_parser_destroy, viml_parser_init};
+use crate::window::state::skip_win_fix_cursor;
 use crate::window::{
     WSP_BOT, close_windows, global_stl_height, last_window, lastwin_nofloating, win_close,
     win_enter, win_goto, win_size_restore, win_size_save, win_split, win_valid,

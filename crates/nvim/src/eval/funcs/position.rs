@@ -15,7 +15,6 @@ use crate::eval::typval::{
 };
 use crate::eval::window::{find_win_by_nr_or_id, win_and_tab_by_id};
 use crate::eval::{buf_byteidx_to_charidx, buf_charidx_to_byteidx, list2fpos, var2fpos};
-use crate::main::skip_update_topline;
 use crate::mark::setmark_pos;
 use crate::mbyte::{mb_adjust_cursor, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf, ml_get_buf_len};
@@ -37,6 +36,7 @@ use crate::types::{
     Buffer, ColNr, Direction, EvalFuncData, List, NUL, Pos, TypVal, VAR_LIST, VAR_NUMBER,
     VAR_STRING, VarNumber, Window,
 };
+use crate::window::state::skip_update_topline;
 use crate::winlayer::Win;
 use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int};

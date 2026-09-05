@@ -21,6 +21,7 @@ use crate::types::AutoEvent;
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use crate::autocmd::state::au_new_curbuf;
 use crate::buffer::current_buf;
 use crate::buffer::{
     BufRef, buf_valid, buflist_altfpos, buflist_findfmark, buflist_new, close_buffer, find_buf,
@@ -30,7 +31,6 @@ use crate::ex_cmds::{BCO_ENTER, BLN_CURBUF, BLN_LISTED, BLN_NOCURWIN, DOBUF_UNLO
 use crate::ex_docmd::cmdmod_has;
 use crate::ex_eval::aborting;
 use crate::fileio::{buf_check_timestamp, set_file_options, set_forced_fenc};
-use crate::main::au_new_curbuf;
 use crate::message::e_cannot_switch_to_a_closing_buffer;
 use crate::message::emsg;
 use crate::option::buf_copy_options;

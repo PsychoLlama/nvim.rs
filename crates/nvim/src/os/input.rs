@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::autocmd::state::did_cursorhold;
 use crate::autocmd::{apply_autocmds, trigger_cursorhold};
 use crate::event::libuv::uv_guess_handle;
 use crate::event::r#loop::{loop_poll_events, process_events_until};
@@ -33,8 +34,8 @@ use crate::keycodes::{
 };
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
-    ch_before_blocking_events, did_cursorhold, do_profiling, getout, main_loop, mouse_col,
-    mouse_grid, mouse_row, preserve_exit, silent_mode, used_stdin,
+    ch_before_blocking_events, do_profiling, getout, main_loop, mouse_col, mouse_grid, mouse_row,
+    preserve_exit, silent_mode, used_stdin,
 };
 use crate::message_fmt::c_str;
 use crate::option::vars::{p_mouset, p_ut};

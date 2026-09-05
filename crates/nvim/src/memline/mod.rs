@@ -15,6 +15,7 @@ use core::mem::offset_of;
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::autocmd::{apply_autocmds, has_autocmd};
+use crate::buffer::state::swap_exists_action;
 use crate::buffer::{BufFlags, buf_inc_changedtick, buf_spname, open_buffer, setfname};
 use crate::change::{changed_internal, unchanged};
 use crate::cursor::{check_cursor, coladvance};
@@ -34,7 +35,6 @@ use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
 use crate::main::{
     did_check_timestamps, getout, inhibit_delete_count, need_check_timestamps, recoverymode,
-    swap_exists_action,
 };
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};

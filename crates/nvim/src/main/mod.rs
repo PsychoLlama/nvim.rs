@@ -12,15 +12,15 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, ArgList, Array, AucmdWin, BlnFlags, BufferRef, Channel, ColNr, DecorState,
-    EStack, EStackType, EstackInfo, FILE, FileComparison, FileMark, FileMarkView, Handle, LineNr,
-    Loop, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MultiQueue, NluaRefState,
-    Object, OptMagic, Pos, Proc, ProfTime, Refcount, RegExtMatch, ScreenGrid, ScriptCtx,
-    StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, VimMenu, Window, XDGVarType,
-    XFileMark, caller_scope, int16_t, int32_t, int64_t, nvim_stats_s, size_t, uint32_t, uint64_t,
-    uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
-    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
-    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
+    AdditionalData, Array, Channel, ColNr, DecorState, EStack, EStackType, EstackInfo, FILE,
+    FileComparison, FileMark, FileMarkView, Handle, LineNr, Loop, LuaRetMode, MTNode, MTPos,
+    MarkTreeIter, MarkTreeIterLevel, MultiQueue, NluaRefState, Object, OptMagic, Pos, Proc,
+    ProfTime, RegExtMatch, ScreenGrid, ScriptCtx, StlClickDefinition, StlSyntax, UV_MUTEX_INIT,
+    UV_RWLOCK_INIT, VimMenu, Window, XDGVarType, XFileMark, caller_scope, int16_t, int32_t,
+    int64_t, nvim_stats_s, size_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u,
+    uv_async_t, uv_handle_t, uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap,
+    uv_loop_t, uv_signal_s, uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node,
+    uv_timer_s_u, uv_timer_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -68,12 +68,6 @@ pub(crate) const UV_UNKNOWN_HANDLE: uv_handle_type = 0;
 pub const OPTION_MAGIC_OFF: OptMagic = 2;
 pub const OPTION_MAGIC_ON: OptMagic = 1;
 pub(crate) const OPTION_MAGIC_NOT_SET: OptMagic = 0;
-pub struct AucmdWinVec {
-    pub size: size_t,
-    pub capacity: size_t,
-    pub items: *mut AucmdWin,
-}
-pub(crate) const BLN_LISTED: BlnFlags = 2;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
 pub(crate) const READ_STDIN: c_uint = 4;
 pub(crate) const READ_NEW: c_uint = 1;
@@ -150,31 +144,6 @@ pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, Handle>> =
 pub(crate) static namespace_localscope: GlobalCell<IdSet<uint32_t>> = GlobalCell::new(id_set());
 pub static next_namespace_id: GlobalCell<Handle> = GlobalCell::new(1 as Handle);
 pub(crate) const PATHSEP: c_int = '/' as c_int;
-pub static last_cursormoved_win: GlobalCell<*mut Window> =
-    GlobalCell::new(::core::ptr::null_mut::<Window>());
-pub static last_cursormoved: GlobalCell<Pos> = GlobalCell::new(Pos {
-    lnum: 0 as LineNr,
-    col: 0 as ColNr,
-    coladd: 0 as ColNr,
-});
-pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
-pub static autocmd_no_enter: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static autocmd_no_leave: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static au_new_curbuf: GlobalCell<BufferRef> = GlobalCell::new(BufferRef::new());
-pub static autocmd_fname: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static autocmd_fname_full: GlobalCell<bool> = GlobalCell::new(false);
-pub static autocmd_bufnr: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static autocmd_match: GlobalCell<*mut c_char> =
-    GlobalCell::new(::core::ptr::null_mut::<c_char>());
-pub static did_cursorhold: GlobalCell<bool> = GlobalCell::new(true);
-pub static aucmd_win_vec: GlobalCell<AucmdWinVec> = GlobalCell::new(AucmdWinVec {
-    size: 0 as size_t,
-    capacity: 0 as size_t,
-    items: ::core::ptr::null_mut::<AucmdWin>(),
-});
-pub static deferred_events: GlobalCell<*mut MultiQueue> =
-    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 pub static msg_loclist: GlobalCell<*mut c_char> =
     GlobalCell::new(c"[Location List]".as_ptr() as *mut c_char);
 pub static msg_qflist: GlobalCell<*mut c_char> =
@@ -217,10 +186,6 @@ pub static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
     spell: Some(false),
     itr_valid: false,
 });
-pub static diff_context: GlobalCell<c_int> = GlobalCell::new(6 as c_int);
-pub static diff_foldcolumn: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
-pub static diff_need_scrollbind: GlobalCell<bool> = GlobalCell::new(false);
-pub static need_diff_redraw: GlobalCell<bool> = GlobalCell::new(false);
 // TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
 // left 0, which is a valid pointer-sentinel value and would corrupt any
 // caller comparing against it (the unit tests do, via FFI).
@@ -287,13 +252,6 @@ pub static mouse_dragging: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static root_menu: GlobalCell<*mut VimMenu> =
     GlobalCell::new(::core::ptr::null_mut::<VimMenu>());
 pub static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
-pub static global_alist: GlobalCell<ArgList> = GlobalCell::new(ArgList {
-    al_ga: Vec::new(),
-    al_refcount: Refcount::ZERO,
-    id: 0,
-});
-pub static max_alist_id: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static arg_had_last: GlobalCell<bool> = GlobalCell::new(false);
 #[unsafe(no_mangle)]
 pub static starting: GlobalCell<c_int> = GlobalCell::new(2 as c_int);
 pub static exiting: GlobalCell<bool> = GlobalCell::new(false);
@@ -311,11 +269,6 @@ pub static debug_mode: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdpreview: GlobalCell<bool> = GlobalCell::new(false);
 pub static no_u_sync: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static u_sync_once: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub(crate) const SEA_NONE: c_int = 0 as c_int;
-pub(crate) const SEA_DIALOG: c_int = 1 as c_int;
-pub(crate) const SEA_QUIT: c_int = 2 as c_int;
-pub static swap_exists_action: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static swap_exists_did_quit: GlobalCell<bool> = GlobalCell::new(false);
 pub static readonlymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static recoverymode: GlobalCell<bool> = GlobalCell::new(false);
 pub static must_redraw_pum: GlobalCell<bool> = GlobalCell::new(false);
@@ -352,9 +305,6 @@ pub static headless_mode: GlobalCell<bool> = GlobalCell::new(false);
 /// so it stays the empty string a non-Windows build always answered.
 pub static windowsVersion: [c_char; 20] = [0 as c_char; 20];
 pub static magic_overruled: GlobalCell<OptMagic> = GlobalCell::new(OPTION_MAGIC_NOT_SET);
-pub static skip_win_fix_cursor: GlobalCell<bool> = GlobalCell::new(false);
-pub static skip_win_fix_scroll: GlobalCell<bool> = GlobalCell::new(false);
-pub static skip_update_topline: GlobalCell<bool> = GlobalCell::new(false);
 pub static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 pub static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) const LUA_GLOBALSINDEX: c_int = -10002 as c_int;
@@ -673,12 +623,5 @@ pub static ui_client_error_exit: GlobalCell<c_int> = GlobalCell::new(-1 as c_int
 pub static ui_client_exit_status: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static ui_client_attached: GlobalCell<bool> = GlobalCell::new(false);
 pub static ui_client_forward_stdin: GlobalCell<bool> = GlobalCell::new(false);
-pub static tabpage_move_disallowed: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
-pub static float_anchor_str: GlobalCell<[*const c_char; 4]> = GlobalCell::new([
-    c"NW".as_ptr(),
-    c"NE".as_ptr(),
-    c"SW".as_ptr(),
-    c"SE".as_ptr(),
-]);
 pub(crate) const WRITEBIN: &CStr = c"wb";
 pub(crate) const APPENDBIN: &CStr = c"ab";

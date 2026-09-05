@@ -17,6 +17,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use crate::arglist::arg_all;
+use crate::autocmd::state::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match};
 use crate::buffer::find_buf;
 use crate::charset::{backslash_halve, getdigits_int, skipwhite};
 use crate::cmdexpand::{expand_init, expand_one};
@@ -37,7 +38,7 @@ use crate::ex_docmd::{
     e_no_script_file_name_to_substitute_for_script, e_no_source_file_name_to_substitute_for_sfile,
 };
 use crate::file_search::{FileNameOpts, file_name_at_cursor};
-use crate::main::{autocmd_bufnr, autocmd_fname, autocmd_fname_full, autocmd_match, current_sctx};
+use crate::main::current_sctx;
 use crate::memory::{xmemdupz, xstrdup, xstrlcpy};
 use crate::message::e_usingsid;
 use crate::option::vars::{p_gp, p_mp, p_wic};

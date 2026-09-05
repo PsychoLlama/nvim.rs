@@ -44,6 +44,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::ex_cmds::EcmdFlags;
 use crate::types::AutoEvent;
 use crate::types::NL;

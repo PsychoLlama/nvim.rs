@@ -19,10 +19,11 @@ use crate::buffer::buf_is_empty;
 use crate::drawscreen::state::dollar_vcol;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
 use crate::grid::default_grid_ref;
-use crate::main::{mouse_dragging, skip_update_topline};
+use crate::main::mouse_dragging;
 use crate::option::vars::p_sj;
 use crate::option::{ScrollMargin, ScrollOff};
 use crate::types::{LineNr, OptInt, int64_t};
+use crate::window::state::skip_update_topline;
 use crate::winlayer::{Win, tab_windows};
 
 /// [`Win::update_topline`], for the callers still holding a raw window.

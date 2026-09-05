@@ -23,12 +23,12 @@ use crate::event::libuv::uv_strerror;
 
 use crate::ex_docmd::lookup::checkforcmd;
 
+use crate::arglist::state::arg_had_last;
 use crate::ex_docmd::window::current_tab_nr;
 use crate::ex_docmd::{
     BAD_DROP, BAD_KEEP, DIALOG_MSG_SIZE, FORCE_BIN, FORCE_NOBIN, VIM_QUESTION, VIM_YES, cmdmod_has,
     dollar_command, quitmore,
 };
-use crate::main::arg_had_last;
 use crate::mbyte::{get_encoding_name, utf8len_tab};
 use crate::memory::{xmalloc, xstrdup};
 use crate::message::vim_dialog_yesno;

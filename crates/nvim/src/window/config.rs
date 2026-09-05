@@ -27,7 +27,6 @@ use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::fold::deepest_fold_nesting;
 use crate::grid::{default_grid_ref, grid_adjust, win_grid_alloc};
 use crate::guard::Suppress;
-use crate::main::float_anchor_str;
 use crate::r#move::textpos2screenpos;
 use crate::option::vars::{p_acd, p_ch};
 use crate::os::cshim::gettext_ptr;
@@ -47,6 +46,7 @@ use crate::ui::{
     ui_call_win_viewport, ui_check_cursor_grid, ui_has,
 };
 use crate::ui_compositor::{ui_comp_layers_adjust, ui_comp_put_grid, ui_comp_remove_grid};
+use crate::window::state::float_anchor_str;
 use crate::winfloat::WIN_CONFIG_INIT;
 use crate::winlayer::{Buf, Win};
 

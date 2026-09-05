@@ -63,7 +63,8 @@ use crate::narrow::number_as_int;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr};
 
-use crate::main::{swap_exists_action, u_sync_once};
+use crate::buffer::state::swap_exists_action;
+use crate::main::u_sync_once;
 use crate::memline::{ml_append, ml_delete_flags, ml_get, ml_replace, ml_replace_buf};
 use crate::memory::{strnequal, xfree, xstrdup};
 use crate::message::state::did_emsg;

@@ -15,13 +15,13 @@ use core::ptr;
 
 use super::*;
 use crate::autocmd::is_aucmd_win;
+use crate::buffer::state::{swap_exists_action, swap_exists_did_quit};
 use crate::ex_cmds2::autowrite;
 use crate::ex_docmd::state::cmdmod;
 use crate::ex_eval::{aborting, enter_cleanup, leave_cleanup};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::guard::Suppress;
-use crate::main::{swap_exists_action, swap_exists_did_quit};
 use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::option::vars::{jop_flags, p_ch, p_ea, p_tpm};

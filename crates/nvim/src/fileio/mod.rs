@@ -2,10 +2,12 @@
 
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isspace;
+use crate::autocmd::state::autocmd_busy;
 use crate::autocmd::{
     apply_autocmds, apply_autocmds_exarg, aucmd_prepbuf, aucmd_restbuf, augroup_exists,
     do_doautocmd,
 };
+use crate::buffer::state::swap_exists_action;
 use crate::buffer::{
     BufFlags, buf_contents_changed, buf_is_dontwrite, buf_is_empty, buf_is_nofilename,
     buf_is_normal, buflist_new, current_buf, do_modelines, setfname, wipe_buffer,
@@ -30,8 +32,8 @@ use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
 use crate::main::{
-    autocmd_busy, did_check_timestamps, exiting, need_check_timestamps, no_check_timestamps,
-    readonlymode, recoverymode, stdin_fd, swap_exists_action, vim_ignored,
+    did_check_timestamps, exiting, need_check_timestamps, no_check_timestamps, readonlymode,
+    recoverymode, stdin_fd, vim_ignored,
 };
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,

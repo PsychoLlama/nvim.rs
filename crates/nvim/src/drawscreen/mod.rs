@@ -17,6 +17,7 @@ use crate::decoration_provider::{
     decor_providers_start,
 };
 use crate::diff::diff_redraw;
+use crate::diff::state::need_diff_redraw;
 use crate::digraph::keymap_str;
 use crate::drawline::win_line;
 use crate::drawscreen::state::{
@@ -47,8 +48,8 @@ use crate::highlight_group::{
 };
 use crate::insexpand::ins_compl_show_pum;
 use crate::main::{
-    cmdline_was_last_drawn, exiting, must_redraw_pum, need_diff_redraw, no_hlsearch, starting,
-    stl_syntax, tab_page_click_defs, tab_page_click_defs_size,
+    cmdline_was_last_drawn, exiting, must_redraw_pum, no_hlsearch, starting, stl_syntax,
+    tab_page_click_defs, tab_page_click_defs_size,
 };
 use crate::r#match::{init_search_hl, prepare_search_hl};
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};

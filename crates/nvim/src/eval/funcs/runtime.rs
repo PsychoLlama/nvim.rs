@@ -10,6 +10,7 @@ use super::{MENU_ALL_MODES, kRetNilBool};
 use crate::api::private::converter::object_to_vim;
 use crate::api::private::helpers::api_metadata;
 use crate::ascii::ascii_isdigit;
+use crate::autocmd::state::autocmd_busy;
 use crate::charset::skipwhite;
 use crate::cmdexpand::cmdline_pum_active;
 use crate::cstr;
@@ -22,9 +23,7 @@ use crate::global_cell::GlobalCell;
 use crate::indent::{get_sw_value, get_sw_value_col};
 use crate::insexpand::ins_compl_active;
 use crate::lua::executor::nlua_exec;
-use crate::main::{
-    autocmd_busy, starting, stdin_isatty, stdout_isatty, wild_menu_showing, windowsVersion,
-};
+use crate::main::{starting, stdin_isatty, stdout_isatty, wild_menu_showing, windowsVersion};
 use crate::memline::ml_get;
 use crate::memory::handoff::owned_cstr;
 use crate::memory::xstrdup;
