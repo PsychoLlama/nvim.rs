@@ -435,11 +435,11 @@ unsafe fn digits_then(
 ///
 /// # Safety
 ///
-/// `eap` must be a live excommand.
-pub unsafe fn ex_mkspell(eap: *mut ExArg) {
+/// `args` must be a live excommand.
+pub unsafe fn ex_mkspell(args: *mut ExArg) {
     // SAFETY: the caller promises the excommand; `get_arglist_exp` fills in
     // the count and the vector, which `free_wild` then releases.
-    let mut arg = unsafe { (*eap).arg };
+    let mut arg = unsafe { (*args).arg };
     let mut ascii = false;
     if unsafe { cstr::starts_with(arg, b"-ascii") } {
         ascii = true;
@@ -451,7 +451,7 @@ pub unsafe fn ex_mkspell(eap: *mut ExArg) {
     if unsafe { get_arglist_exp(arg, &raw mut fcount, &raw mut fnames, false) }.is_err() {
         return;
     }
-    unsafe { mkspell(fcount, fnames, ascii, (*eap).forceit != 0, false) };
+    unsafe { mkspell(fcount, fnames, ascii, (*args).forceit != 0, false) };
     unsafe { free_wild(fcount, fnames) };
 }
 
@@ -773,11 +773,11 @@ pub(super) fn spell_message_fmt(spin: &SpellInfo, args: core::fmt::Arguments<'_>
 ///
 /// # Safety
 ///
-/// `eap` must be a live excommand.
-pub unsafe fn ex_spell(eap: *mut ExArg) {
+/// `args` must be a live excommand.
+pub unsafe fn ex_spell(args: *mut ExArg) {
     // SAFETY: the caller promises the excommand.
     let (cmdidx, forceit, line2, arg) =
-        unsafe { ((*eap).cmdidx, (*eap).forceit, (*eap).line2, (*eap).arg) };
+        unsafe { ((*args).cmdidx, (*args).forceit, (*args).line2, (*args).arg) };
 
     let kind = if cmdidx == CmdIdx::spellwrong {
         SPELL_ADD_BAD

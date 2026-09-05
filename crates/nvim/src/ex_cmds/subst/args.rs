@@ -80,12 +80,12 @@ struct Parsed {
 /// # Safety
 /// Main thread; `eap.arg` and `eap.cmd` must be live.
 unsafe fn read_pattern(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     cmdpreview_ns: c_int,
     keeppatterns: bool,
 ) -> Option<Parsed> {
-    let mut cmd = eap.arg;
-    let mut which_pat = if eap.cmdidx == CmdIdx::tilde {
+    let mut cmd = args.arg;
+    let mut which_pat = if args.cmdidx == CmdIdx::tilde {
         RE_LAST as c_int // use last used regexp
     } else {
         RE_SUBST as c_int // use last substitute regexp
@@ -96,14 +96,14 @@ unsafe fn read_pattern(
     // as a separator.
     // SAFETY: the argument is NUL-terminated.
     let fresh = unsafe {
-        *eap.cmd as u8 == b's'
+        *args.cmd as u8 == b's'
             && *cmd as c_int != NUL
             && !ascii_iswhite(*cmd as c_int)
             && vim_strchr(c"0123456789cegriIp|\"".as_ptr(), *cmd as u8 as c_int).is_null()
     };
     if !fresh {
         // Use the previous pattern and substitution.
-        if eap.skip != 0 {
+        if args.skip != 0 {
             return Some(Parsed {
                 pat: ptr::null_mut(),
                 patlen: 0 as size_t,
@@ -173,7 +173,7 @@ unsafe fn read_pattern(
                 cmd,
                 delimiter,
                 magic_isset() as c_int,
-                &raw mut eap.arg,
+                &raw mut args.arg,
                 ptr::null_mut(),
                 ptr::null_mut(),
             )
@@ -197,7 +197,7 @@ unsafe fn read_pattern(
     };
 
     // SAFETY: `sub.0` is a live copy of the replacement.
-    if eap.skip == 0 && !keeppatterns && cmdpreview_ns <= 0 as c_int {
+    if args.skip == 0 && !keeppatterns && cmdpreview_ns <= 0 as c_int {
         unsafe {
             sub_set_replacement(SubReplacementString {
                 sub: xstrdup(sub.0),
@@ -225,7 +225,7 @@ unsafe fn read_pattern(
 ///
 /// # Safety
 /// Main thread; `cmd` must point into the live argument.
-unsafe fn read_count(eap: &mut ExArg, cmd: &mut *mut c_char) -> bool {
+unsafe fn read_count(args: &mut ExArg, cmd: &mut *mut c_char) -> bool {
     // SAFETY: caller's contract.
     if !ascii_isdigit(unsafe { **cmd } as c_int) {
         return true;
@@ -233,7 +233,7 @@ unsafe fn read_count(eap: &mut ExArg, cmd: &mut *mut c_char) -> bool {
     let count_arg: *const c_char = *cmd;
     // SAFETY: as above; `getdigits_int` advances `cmd` past the digits.
     let i = unsafe { getdigits_int(cmd, false, INT_MAX) };
-    let skip = eap.skip != 0;
+    let skip = args.skip != 0;
     if i <= 0 as c_int && !skip && subflags.with(|flags| flags.do_error) {
         emsg(gettext(e_zerocount));
         return false;
@@ -245,9 +245,9 @@ unsafe fn read_count(eap: &mut ExArg, cmd: &mut *mut c_char) -> bool {
         semsg!("E1510: Value too large: {count_arg}");
         return false;
     }
-    eap.line1 = eap.line2;
-    eap.line2 += i as LineNr - 1 as LineNr;
-    eap.line2 = eap.line2.min(cur_buf().b_ml.ml_line_count);
+    args.line1 = args.line2;
+    args.line2 += i as LineNr - 1 as LineNr;
+    args.line2 = args.line2.min(cur_buf().b_ml.ml_line_count);
     true
 }
 
@@ -258,12 +258,12 @@ unsafe fn read_count(eap: &mut ExArg, cmd: &mut *mut c_char) -> bool {
 /// # Safety
 /// Main thread; `eap.arg` and `eap.cmd` must be live.
 pub(super) unsafe fn parse_sub(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     cmdpreview_ns: c_int,
     keeppatterns: bool,
 ) -> Option<SubSetup> {
     // SAFETY: caller's contract.
-    let parsed = unsafe { read_pattern(eap, cmdpreview_ns, keeppatterns) }?;
+    let parsed = unsafe { read_pattern(args, cmdpreview_ns, keeppatterns) }?;
     let Parsed {
         pat,
         patlen,
@@ -278,7 +278,7 @@ pub(super) unsafe fn parse_sub(
         // SAFETY: three live C strings.
         let joined = unsafe {
             sub_joining_lines(
-                eap,
+                args,
                 pat,
                 patlen,
                 sub.0,
@@ -302,7 +302,7 @@ pub(super) unsafe fn parse_sub(
     // SAFETY: `cmd` points into the live argument.
     cmd = unsafe { skipwhite(cmd) };
     // SAFETY: as above.
-    if !unsafe { read_count(eap, &mut cmd) } {
+    if !unsafe { read_count(args, &mut cmd) } {
         return None;
     }
 
@@ -312,15 +312,15 @@ pub(super) unsafe fn parse_sub(
     if unsafe { *cmd } as c_int != NUL && unsafe { *cmd } as c_int != '"' as c_int {
         // Not end-of-line or comment.
         // SAFETY: as above.
-        eap.nextcmd = unsafe { check_nextcmd(cmd) };
-        if eap.nextcmd.is_null() {
+        args.nextcmd = unsafe { check_nextcmd(cmd) };
+        if args.nextcmd.is_null() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let cmd = unsafe { c_str(cmd) };
             semsg!("E488: Trailing characters: {cmd}");
             return None;
         }
     }
-    if eap.skip != 0 {
+    if args.skip != 0 {
         // Not executing commands, only parsing.
         return None;
     }

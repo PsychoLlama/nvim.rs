@@ -397,10 +397,10 @@ pub(crate) unsafe fn ses_do_win(window: *mut Window) -> bool {
 /// `:loadview [nr]`.
 ///
 /// # Safety
-/// `eap` is the current Ex command.
-pub(crate) unsafe fn ex_loadview(eap: *mut ExArg) {
+/// `args` is the current Ex command.
+pub(crate) unsafe fn ex_loadview(args: *mut ExArg) {
     // SAFETY: caller contract; `fname` is owned and NUL-terminated.
-    let fname = unsafe { get_view_file(*(*eap).arg) };
+    let fname = unsafe { get_view_file(*(*args).arg) };
     if fname.is_null() {
         return;
     }
@@ -483,10 +483,10 @@ unsafe fn get_view_file(c: c_char) -> *mut c_char {
 /// endings are LF, and file names are written with `/`.
 ///
 /// # Safety
-/// `eap` is the current Ex command with a NUL-terminated argument.
-pub(crate) unsafe fn ex_mkrc(eap: *mut ExArg) {
+/// `args` is the current Ex command with a NUL-terminated argument.
+pub(crate) unsafe fn ex_mkrc(args: *mut ExArg) {
     // SAFETY: caller contract.
-    let cmdidx = unsafe { (*eap).cmdidx };
+    let cmdidx = unsafe { (*args).cmdidx };
     // `:mkview` and `:mksession` write a *state*; the other two write only
     // mappings and options.
     let view_session = cmdidx == CmdIdx::mksession || cmdidx == CmdIdx::mkview;
@@ -499,12 +499,12 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut ExArg) {
     let mut view_file = ptr::null_mut::<c_char>();
     // SAFETY: caller contract; `eap.arg` is NUL-terminated.
     let fname = unsafe {
-        let arg = (*eap).arg;
+        let arg = (*args).arg;
         if cmdidx == CmdIdx::mkview
             && (*arg == NUL as c_char
                 || (ascii_isdigit(*arg as c_int) && *arg.offset(1) == NUL as c_char))
         {
-            (*eap).forceit = 1;
+            (*args).forceit = 1;
             view_file = get_view_file(*arg);
             if view_file.is_null() {
                 return;
@@ -527,10 +527,10 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut ExArg) {
     let using_vdir = !view_file.is_null();
 
     // SAFETY: `fname` is NUL-terminated, and `fd` is used only while open.
-    let fd = unsafe { open_exfile(fname, (*eap).forceit, c"wb".as_ptr().cast_mut()) };
+    let fd = unsafe { open_exfile(fname, (*args).forceit, c"wb".as_ptr().cast_mut()) };
     if !fd.is_null() {
         let out = unsafe { SessionFile::new(fd) };
-        let failed = unsafe { write_rc(out, eap, fname, view_session, using_vdir) };
+        let failed = unsafe { write_rc(out, args, fname, view_session, using_vdir) };
         // `fclose` answers nonzero on a write error the buffering hid,
         // and must run whether or not anything failed above.
         let close_failed = unsafe { fclose(fd) } != 0;
@@ -561,17 +561,17 @@ pub(crate) unsafe fn ex_mkrc(eap: *mut ExArg) {
 /// failed. The trailing modeline is written either way, as upstream does.
 ///
 /// # Safety
-/// `eap` is the current Ex command and `fname` the name `out` was opened
+/// `args` is the current Ex command and `fname` the name `out` was opened
 /// under.
 unsafe fn write_rc(
     out: SessionFile,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     fname: *mut c_char,
     view_session: bool,
     using_vdir: bool,
 ) -> bool {
     // SAFETY: caller contract.
-    let cmdidx = unsafe { (*eap).cmdidx };
+    let cmdidx = unsafe { (*args).cmdidx };
     let opts = if cmdidx == CmdIdx::mkview {
         SessionOpts::View
     } else {

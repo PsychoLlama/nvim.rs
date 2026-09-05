@@ -56,7 +56,7 @@ fn undolist_row(uh: &UndoHeader, changes: c_int) -> CString {
 /// # Safety
 ///
 /// A live current buffer.
-pub unsafe fn ex_undolist(_eap: *mut ExArg) {
+pub unsafe fn ex_undolist(_args: *mut ExArg) {
     // SAFETY: a live current buffer, by the contract above.
     let buf = unsafe { Buf::current() };
     // A leaf is a header nothing branches off downwards, and the whole tree

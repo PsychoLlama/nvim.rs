@@ -29,34 +29,38 @@ use std::ffi::CString;
 /// `:source` with `fname`, or without it when `fname` is empty.
 ///
 /// # Safety
-/// `fname` is NUL-terminated; `eap` is null or the running command.
-unsafe fn cmd_source(fname: *mut c_char, eap: *mut ExArg) {
+/// `fname` is NUL-terminated; `args` is null or the running command.
+unsafe fn cmd_source(fname: *mut c_char, args: *mut ExArg) {
     // SAFETY: the caller's contract on both arguments.
     let (named, addr_count, forceit) = unsafe {
         (
             *fname as c_int != NUL,
-            if !eap.is_null() { (*eap).addr_count } else { 0 },
-            !eap.is_null() && (*eap).forceit != 0,
+            if !args.is_null() {
+                (*args).addr_count
+            } else {
+                0
+            },
+            !args.is_null() && (*args).forceit != 0,
         )
     };
-    if named && !eap.is_null() && addr_count > 0 {
+    if named && !args.is_null() && addr_count > 0 {
         // A range only makes sense when the lines come from a buffer.
         emsg(gettext(e_norange));
         return;
     }
     // SAFETY: as above; every callee below takes the command or the name.
-    if !eap.is_null() && !named {
+    if !args.is_null() && !named {
         if forceit {
             emsg(gettext(e_argreq));
         } else {
-            unsafe { cmd_source_buffer(eap, false) };
+            unsafe { cmd_source_buffer(args, false) };
         }
-    } else if !eap.is_null() && forceit {
+    } else if !args.is_null() && forceit {
         // `:source!` feeds the file to the editor as typed keys.
         let busy = global_busy.get() != 0
             || listcmd_busy.get()
-            || !unsafe { (*eap).nextcmd }.is_null()
-            || unsafe { (*(*eap).cstack).cs_idx } >= 0;
+            || !unsafe { (*args).nextcmd }.is_null()
+            || unsafe { (*(*args).cstack).cs_idx } >= 0;
         unsafe { openscript(fname, busy) };
     } else if unsafe { do_source(fname, false, DOSO_NONE, ptr::null_mut()) } == FAIL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -68,18 +72,18 @@ unsafe fn cmd_source(fname: *mut c_char, eap: *mut ExArg) {
 /// `:source`.
 ///
 /// # Safety
-/// `eap` is the running command.
-pub unsafe fn ex_source(eap: *mut ExArg) {
+/// `args` is the running command.
+pub unsafe fn ex_source(args: *mut ExArg) {
     // SAFETY: the caller's contract.
-    unsafe { cmd_source((*eap).arg, eap) };
+    unsafe { cmd_source((*args).arg, args) };
 }
 
 /// `:options`, which is `:source` of the option window script with the
 /// command modifiers passed along in the environment.
 ///
 /// # Safety
-/// Called as an Ex command implementation; `eap` is unused.
-pub unsafe fn ex_options(_eap: *mut ExArg) {
+/// Called as an Ex command implementation; `args` is unused.
+pub unsafe fn ex_options(_args: *mut ExArg) {
     let mut buf = [0 as c_char; 500];
     let mut multi_mods = false;
     cmdmod.with(|cmod| {
@@ -197,24 +201,24 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut
     si
 }
 
-/// Collect `eap`'s range of the current buffer into `sp`, and answer the name
+/// Collect `args`'s range of the current buffer into `sp`, and answer the name
 /// to show for those lines: the buffer's own file name, or a synthetic
 /// `:source buffer=N` when it has none.
 ///
 /// # Safety
-/// `sp` is a cookie under construction and `eap` carries the range.
+/// `sp` is a cookie under construction and `args` carries the range.
 unsafe fn do_source_buffer_init(
     sp: &mut SourceCookie,
-    eap: *const ExArg,
+    args: *const ExArg,
     ex_lua: bool,
 ) -> *mut c_char {
     let buf = curbuf.get();
     if buf.is_null() {
         return ptr::null_mut();
     }
-    // SAFETY: `buf` is the current buffer and `eap` the caller's command.
+    // SAFETY: `buf` is the current buffer and `args` the caller's command.
     let (ffname, handle, line1, line2) =
-        unsafe { ((*buf).b_ffname, (*buf).handle, (*eap).line1, (*eap).line2) };
+        unsafe { ((*buf).b_ffname, (*buf).handle, (*args).line1, (*args).line2) };
     let fname = if ffname.is_null() {
         let mut name = [0 as c_char; IOSIZE as usize];
         let fmt = if ex_lua {
@@ -266,9 +270,9 @@ unsafe fn do_source_str_init(sp: &mut SourceCookie, mut str: *const c_char) {
 /// Source the current buffer's lines, as Vimscript or (with `ex_lua`) as Lua.
 ///
 /// # Safety
-/// `eap` carries the range to run.
-pub unsafe fn cmd_source_buffer(eap: *const ExArg, ex_lua: bool) {
-    let req = SourceRequest::new(ptr::null_mut(), ptr::null(), eap, ex_lua);
+/// `args` carries the range to run.
+pub unsafe fn cmd_source_buffer(args: *const ExArg, ex_lua: bool) {
+    let req = SourceRequest::new(ptr::null_mut(), ptr::null(), args, ex_lua);
     // SAFETY: the caller's contract.
     unsafe { do_source_ext(&req) };
 }
@@ -342,7 +346,7 @@ struct SourceRequest {
 impl SourceRequest {
     /// The request `fname`/`str` describe, with the init-file fields at their
     /// defaults; [`do_source`] is the only caller that sets those.
-    fn new(fname: *mut c_char, str: *const c_char, eap: *const ExArg, ex_lua: bool) -> Self {
+    fn new(fname: *mut c_char, str: *const c_char, args: *const ExArg, ex_lua: bool) -> Self {
         let origin = if fname.is_null() {
             debug_assert!(str.is_null(), "str == NULL");
             Origin::Buffer
@@ -358,7 +362,7 @@ impl SourceRequest {
             check_other: false,
             is_vimrc: DOSO_NONE,
             ret_sid: ptr::null_mut(),
-            eap,
+            eap: args,
             ex_lua,
         }
     }
@@ -572,17 +576,17 @@ unsafe fn curbuf_is_lua() -> bool {
             && unsafe { path_with_extension((*buf).b_fname, c"lua".as_ptr()) })
 }
 
-/// Whether treesitter parses `eap`'s range of the current buffer as Lua --
+/// Whether treesitter parses `args`'s range of the current buffer as Lua --
 /// which is what makes a fenced Lua block inside a help file `:source`able.
 ///
 /// # Safety
-/// `eap` is null or the running command.
-unsafe fn range_is_lua(eap: *const ExArg) -> bool {
-    if eap.is_null() {
+/// `args` is null or the running command.
+unsafe fn range_is_lua(args: *const ExArg) -> bool {
+    if args.is_null() {
         return false;
     }
     // SAFETY: the caller's command, and the current buffer.
-    let (handle, line1, line2) = unsafe { ((*curbuf.get()).handle, (*eap).line1, (*eap).line2) };
+    let (handle, line1, line2) = unsafe { ((*curbuf.get()).handle, (*args).line1, (*args).line2) };
     let mut items = [
         integer_obj(handle as Integer),
         integer_obj(line1 as Integer),

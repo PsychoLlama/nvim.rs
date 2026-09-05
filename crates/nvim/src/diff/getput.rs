@@ -104,9 +104,9 @@ pub unsafe fn nv_diffgetput(put: bool, count: size_t) {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffgetput(eap: *mut ExArg) {
+pub unsafe fn ex_diffgetput(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<ExArg>::new(eap) };
+    let mut eap = unsafe { Live::<ExArg>::new(args) };
     let tp = cur_tab();
     let idx_cur = diff_slot(cur_buf(), tp);
     if idx_cur == DB_COUNT {

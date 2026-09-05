@@ -77,13 +77,13 @@ pub unsafe fn getargcmd(argp: *mut *mut c_char) -> *mut c_char {
 
 /// Read the value of `++bad=`: `keep`, `drop`, or one single-byte
 /// replacement character.
-pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut eap: Ea) -> Result<(), Failed> {
+pub(crate) unsafe fn get_bad_opt(p: *const c_char, mut args: Ea) -> Result<(), Failed> {
     if strcasecmp(p as *mut c_char, c"keep".as_ptr() as *mut c_char) == 0 {
-        eap.bad_char = BAD_KEEP;
+        args.bad_char = BAD_KEEP;
     } else if strcasecmp(p as *mut c_char, c"drop".as_ptr() as *mut c_char) == 0 {
-        eap.bad_char = BAD_DROP;
+        args.bad_char = BAD_DROP;
     } else if utf8len_tab[ubyte(p) as usize] == 1 && byte_at(p, 1) == NUL {
-        eap.bad_char = ubyte(p) as c_int;
+        args.bad_char = ubyte(p) as c_int;
     } else {
         return Err(Failed);
     }
@@ -107,8 +107,8 @@ pub(crate) fn get_bad_name(_xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// rather than as pointers, because the command line is reallocated by the
 /// `%`/`#` expansion that runs later; `do_ecmd` and the write path resolve
 /// them against the line they end up with.
-pub unsafe fn getargopt(eap: *mut ExArg) -> Result<(), Failed> {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn getargopt(args: *mut ExArg) -> Result<(), Failed> {
+    let mut ea = unsafe { Ea::new(args) };
     let mut arg = unsafe { ea.arg.add(2) };
     let mut bad_char_idx: c_int = 0;
 

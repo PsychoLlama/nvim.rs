@@ -43,12 +43,12 @@ fn filemess_note(fname: *mut c_char, note: &'static CStr) {
 /// `for_file` picks the `File*` form, which names a file rather than a buffer.
 ///
 /// # Safety
-/// `sfname` must be null or the name the read uses, and `eap` the caller's
+/// `sfname` must be null or the name the read uses, and `args` the caller's
 /// command or null.
 unsafe fn read_autocmd(
     event: AutoEvent,
     sfname: *mut c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     for_file: bool,
 ) -> bool {
     let (iofile, buf) = if for_file {
@@ -56,8 +56,8 @@ unsafe fn read_autocmd(
     } else {
         (ptr::null_mut(), curbuf.get())
     };
-    // SAFETY: the current buffer is live and `eap` is the caller's command.
-    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, eap) }
+    // SAFETY: the current buffer is live and `args` is the caller's command.
+    unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, args) }
 }
 
 /// The file, open and ready to read.
@@ -82,7 +82,7 @@ pub(crate) unsafe fn open_source(
     fname: *mut c_char,
     sfname: *mut c_char,
     from: LineNr,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     how: How,
     silent: bool,
     msg_save: c_int,
@@ -140,7 +140,7 @@ pub(crate) unsafe fn open_source(
         cur_buf().b_op_start.col = 0;
 
         if how.newfile {
-            if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, eap, false) } {
+            if unsafe { read_autocmd(AutoEvent::BufReadCmd, sfname, args, false) } {
                 retval = if aborting() {
                     Err(Failed)
                 } else {
@@ -155,7 +155,7 @@ pub(crate) unsafe fn open_source(
                 }
                 return Err(retval);
             }
-        } else if unsafe { read_autocmd(AutoEvent::FileReadCmd, sfname, eap, true) } {
+        } else if unsafe { read_autocmd(AutoEvent::FileReadCmd, sfname, args, true) } {
             retval = if aborting() {
                 Err(Failed)
             } else {
@@ -227,7 +227,7 @@ pub(crate) unsafe fn open_source(
     }
 
     // Set the default or forced 'fileformat' and 'binary'.
-    unsafe { set_file_options(set_options, eap) };
+    unsafe { set_file_options(set_options, args) };
 
     // When opening a new file take the readonly flag from the file.
     // The default is r/w and can be set to r/o below; don't reset it
@@ -312,11 +312,11 @@ pub(crate) unsafe fn open_source(
             // edited before and deleted. Get the old marks.
             unsafe { check_marks_read() };
             // Set the forced 'fileencoding'.
-            if !eap.is_null() {
-                unsafe { set_forced_fenc(eap) };
+            if !args.is_null() {
+                unsafe { set_forced_fenc(args) };
             }
             let event = AutoEvent::BufNewFile;
-            unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), eap) };
+            unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), args) };
             // Remember the current fileformat.
             save_file_ff(unsafe { Buf::current() });
 
@@ -430,13 +430,13 @@ pub(crate) unsafe fn open_source(
         // if no output was done.
         msg_scroll.set(true as c_int);
         if how.filtering {
-            unsafe { read_autocmd(AutoEvent::FilterReadPre, sfname, eap, false) };
+            unsafe { read_autocmd(AutoEvent::FilterReadPre, sfname, args, false) };
         } else if how.stdin {
-            unsafe { read_autocmd(AutoEvent::StdinReadPre, sfname, eap, false) };
+            unsafe { read_autocmd(AutoEvent::StdinReadPre, sfname, args, false) };
         } else if how.newfile {
-            unsafe { read_autocmd(AutoEvent::BufReadPre, sfname, eap, false) };
+            unsafe { read_autocmd(AutoEvent::BufReadPre, sfname, args, false) };
         } else {
-            unsafe { read_autocmd(AutoEvent::FileReadPre, sfname, eap, true) };
+            unsafe { read_autocmd(AutoEvent::FileReadPre, sfname, args, true) };
         }
 
         // The autocommands may have changed 'fileformats'.

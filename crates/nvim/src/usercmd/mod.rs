@@ -213,14 +213,14 @@ pub(crate) unsafe fn ucmd_name(cmd: &UserCmd) -> &[u8] {
 /// Module contract; `eap` must be the command being looked up, and `full`,
 /// `xp` and `complp` null or writable.
 pub(crate) unsafe fn find_ucmd(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     p: *mut c_char,
     full: *mut c_int,
     xp: *mut Expand,
     complp: *mut ExpandContext,
 ) -> *mut c_char {
     // SAFETY: caller contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     // SAFETY: caller contract; `p` points into the same line as `eap.cmd`.
     let typed = unsafe { slice::from_raw_parts(eap.cmd.cast::<u8>(), p.offset_from(eap.cmd) as _) };
 
@@ -524,8 +524,8 @@ unsafe fn free_new_command(
 /// `:command` -- define one, or list them.
 ///
 /// # Safety
-/// Module contract; `eap` must be the command being executed.
-pub(crate) unsafe fn ex_command(eap: *mut ExArg) {
+/// Module contract; `args` must be the command being executed.
+pub(crate) unsafe fn ex_command(args: *mut ExArg) {
     let mut argt = ExArgt::NONE;
     let mut def: c_int = -1;
     let mut flags: c_int = 0;
@@ -534,7 +534,7 @@ pub(crate) unsafe fn ex_command(eap: *mut ExArg) {
     let mut addr_type_arg: CmdAddr = CmdAddr::NoRange;
 
     // SAFETY: caller contract.
-    let (arg, forceit) = unsafe { ((*eap).arg, (*eap).forceit != 0) };
+    let (arg, forceit) = unsafe { ((*args).arg, (*args).forceit != 0) };
     // SAFETY: caller contract; `arg` is NUL-terminated.
     let has_attr = unsafe { *arg } == b'-' as c_char;
     let mut p = arg;
@@ -632,7 +632,7 @@ pub(crate) unsafe fn ex_command(eap: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_comclear(_eap: *mut ExArg) {
+pub(crate) unsafe fn ex_comclear(_args: *mut ExArg) {
     // SAFETY: module contract.
     unsafe { uc_clear(Table::Global) };
     if !curbuf.get().is_null() {
@@ -679,11 +679,11 @@ pub(crate) unsafe fn uc_clear(table: Table) {
 /// `:delcommand` -- remove one user command.
 ///
 /// # Safety
-/// Module contract; `eap` must be the command being executed.
-pub(crate) unsafe fn ex_delcommand(eap: *mut ExArg) {
+/// Module contract; `args` must be the command being executed.
+pub(crate) unsafe fn ex_delcommand(args: *mut ExArg) {
     // SAFETY: caller contract; `eap.arg` is NUL-terminated.
     let (mut arg, buffer_only) = unsafe {
-        let arg = (*eap).arg.cast_const();
+        let arg = (*args).arg.cast_const();
         let local = CStr::from_ptr(arg).to_bytes().starts_with(b"-buffer")
             && ascii_iswhite(*arg.add(7) as c_int);
         (arg, local)

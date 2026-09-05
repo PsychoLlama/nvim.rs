@@ -162,8 +162,8 @@ pub(crate) fn shift_cmd_args(mut ea: Ea) {
 /// command, and walking 78 enum values is that many calls to the
 /// derived `PartialEq` at `-O0`, which is what the test suites build.
 #[rustfmt::skip]
-pub(crate) fn skip_cmd(eap: Ea) -> bool {
-    eap.skip != 0 && !matches!(eap.cmdidx,
+pub(crate) fn skip_cmd(args: Ea) -> bool {
+    args.skip != 0 && !matches!(args.cmdidx,
         CmdIdx::r#while | CmdIdx::endwhile | CmdIdx::r#for | CmdIdx::endfor |
         CmdIdx::r#if | CmdIdx::elseif | CmdIdx::r#else | CmdIdx::endif | CmdIdx::r#try |
         CmdIdx::catch | CmdIdx::finally | CmdIdx::endtry | CmdIdx::function |
@@ -630,7 +630,7 @@ fn quitmore_is_pending(fgetline: LineGetter, cookie: *mut c_void) -> bool {
 /// `:finally` all execute even though the surrounding construct is
 /// inactive, and each is worth a profile sample.
 pub(crate) unsafe fn profile_cmd(
-    eap: *const ExArg,
+    args: *const ExArg,
     cstack: *mut CondStack,
     fgetline: LineGetter,
     cookie: *mut c_void,
@@ -638,7 +638,7 @@ pub(crate) unsafe fn profile_cmd(
     // SAFETY: the caller's conditional stack, live for the command.
     let cs = unsafe { Cs::new(cstack) };
     if do_profiling.get() != PROF_YES
-        || !(unsafe { (*eap).skip } == 0
+        || !(unsafe { (*args).skip } == 0
             || cs.cs_idx == 0
             || (cs.cs_idx > 0 && cs.cs_flags[cs.cs_idx as usize - 1].has(CsFlags::ACTIVE)))
     {
@@ -646,7 +646,7 @@ pub(crate) unsafe fn profile_cmd(
     }
     let mut skip = did_emsg.get() != 0 || got_int.get() || did_throw.get();
     let idx = cs.cs_idx;
-    match unsafe { (*eap).cmdidx } {
+    match unsafe { (*args).cmdidx } {
         CmdIdx::catch => {
             skip = !skip
                 && !(idx >= 0
@@ -661,7 +661,7 @@ pub(crate) unsafe fn profile_cmd(
         // The four block-enders are the only commands left that keep the
         // caller's `skip`; everything else takes it.
         CmdIdx::endif | CmdIdx::endfor | CmdIdx::endtry | CmdIdx::endwhile => {}
-        _ => skip = unsafe { (*eap).skip } != 0,
+        _ => skip = unsafe { (*args).skip } != 0,
     }
     if skip {
         return;
@@ -706,8 +706,8 @@ unsafe fn refuses_here(ea: &ExArg) -> Option<CString> {
 /// range, or Ex mode, means print. `exmode_plus + 1` is the empty string Ex
 /// mode substitutes for a bare `+`; it is recognised by *address*, not by
 /// content.
-pub(crate) unsafe fn ex_range_without_command(eap: *mut ExArg) -> Option<CString> {
-    let mut ea = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_range_without_command(args: *mut ExArg) -> Option<CString> {
+    let mut ea = unsafe { Ea::new(args) };
     let mut errormsg: Option<CString> = None;
     if byte(ea.cmd) == '|' as c_int
         || (exmode_active.get() && !ptr::eq(ea.cmd, unsafe { exmode_plus.as_ptr().add(1) }))
@@ -780,8 +780,8 @@ const E_NOT_IN_THIS_BUILD: &CStr = c"E319: The command is not available in this 
 ///
 /// Keeps the raw signature: it is a `cmd_func` in the command table, and
 /// `is_cmd_ni` recognises a command by comparing against its address.
-pub unsafe fn ex_ni(eap: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(eap) };
+pub unsafe fn ex_ni(args: *mut ExArg) {
+    let mut eap = unsafe { Ea::new(args) };
     if eap.skip == 0 {
         eap.errmsg = Some(ex_msg(E_NOT_IN_THIS_BUILD.as_ptr()));
     }
@@ -790,8 +790,8 @@ pub unsafe fn ex_ni(eap: *mut ExArg) {
 /// The same, for a command whose argument may be a here-document
 /// (`:perl <<EOF`) — the body has to be consumed even when the command
 /// cannot run, or its lines would be read as commands.
-pub(crate) unsafe fn ex_script_ni(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_script_ni(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     if eap.skip == 0 {
         unsafe { ex_ni(eap.raw()) };
     } else {
@@ -831,9 +831,9 @@ fn getline_equal(fgetline: LineGetter, cookie: *mut c_void, func: LineGetter) ->
 }
 
 /// `invalid_range()` as checked code.
-fn invalid_range(eap: *mut ExArg) -> Option<CString> {
+fn invalid_range(args: *mut ExArg) -> Option<CString> {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ex_docmd::address::invalid_range(eap) }
+    unsafe { crate::ex_docmd::address::invalid_range(args) }
 }
 
 /// `skipwhite()` as checked code.

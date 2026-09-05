@@ -128,10 +128,10 @@ pub unsafe fn apply_autocmds_exarg(
     fname_io: *mut ::core::ffi::c_char,
     force: bool,
     buffer: *mut Buffer,
-    eap: *mut ExArg,
+    args: *mut ExArg,
 ) -> bool {
     // SAFETY: every pointer is the caller's, handed straight on;
-    // `apply_autocmds_group` asks of them exactly what this does, `eap`
+    // `apply_autocmds_group` asks of them exactly what this does, `args`
     // included -- it only reads its `forceit` and its command argument.
     unsafe {
         apply_autocmds_group(
@@ -141,7 +141,7 @@ pub unsafe fn apply_autocmds_exarg(
             force,
             AUGROUP_ALL,
             buffer,
-            eap,
+            args,
             ::core::ptr::null_mut(),
         )
     }
@@ -194,7 +194,7 @@ pub unsafe fn apply_autocmds_group(
     force: bool,
     group: ::core::ffi::c_int,
     buffer: *mut Buffer,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     data: *mut Object,
 ) -> bool {
     static nesting: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
@@ -425,11 +425,11 @@ pub unsafe fn apply_autocmds_group(
 
             // `v:cmdarg`/`v:cmdbang`, only when a pattern matched.
             let save_cmdbang = unsafe { get_vim_var_nr(Vv::Cmdbang) };
-            let save_cmdarg = if eap.is_null() {
+            let save_cmdarg = if args.is_null() {
                 ::core::ptr::null_mut()
             } else {
-                let saved = unsafe { set_cmdarg(eap, ::core::ptr::null_mut()) };
-                unsafe { set_vim_var_nr(Vv::Cmdbang, (*eap).forceit as VarNumber) };
+                let saved = unsafe { set_cmdarg(args, ::core::ptr::null_mut()) };
+                unsafe { set_vim_var_nr(Vv::Cmdbang, (*args).forceit as VarNumber) };
                 saved
             };
             retval = true;
@@ -464,7 +464,7 @@ pub unsafe fn apply_autocmds_group(
                 reset_lnums();
             }
 
-            if !eap.is_null() {
+            if !args.is_null() {
                 unsafe { set_cmdarg(::core::ptr::null_mut(), save_cmdarg) };
                 unsafe { set_vim_var_nr(Vv::Cmdbang, save_cmdbang) };
             }

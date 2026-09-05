@@ -430,11 +430,11 @@ pub unsafe fn f_histnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
 
 /// ":history" command: list history entries, optionally filtered by
 /// history name ("cmd", ":", "all", ...) and a number range.
-pub unsafe fn ex_history(eap: *mut ExArg) {
+pub unsafe fn ex_history(args: *mut ExArg) {
     // SAFETY: caller contract; the message kind is a static string.
     let arg = unsafe {
         msg_ext_set_kind(c"list_cmd".as_ptr());
-        (*eap).arg
+        (*args).arg
     };
     if get_hislen() == 0 {
         msg(gettext(c"'history' option is zero"), 0);

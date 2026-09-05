@@ -62,10 +62,10 @@ pub(crate) unsafe fn list_functions(regmatch: *mut RegMatch) {
 /// answer the end of it.
 ///
 /// # Safety
-/// `eap` is a live `:function` command whose argument starts with `/`.
-pub(crate) unsafe fn list_functions_matching_pat(eap: *mut ExArg) -> *mut c_char {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let ea = unsafe { Ea::new(eap) };
+/// `args` is a live `:function` command whose argument starts with `/`.
+pub(crate) unsafe fn list_functions_matching_pat(args: *mut ExArg) -> *mut c_char {
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let ea = unsafe { Ea::new(args) };
     let mut p = unsafe { skip_regexp(ea.arg.add(1), b'/' as c_int, 1) };
     if ea.skip == 0 {
         let mut regmatch = REGMATCH_INIT;
@@ -90,15 +90,15 @@ pub(crate) unsafe fn list_functions_matching_pat(eap: *mut ExArg) -> *mut c_char
 /// Answers the function, so that the caller can go on to redefine it.
 ///
 /// # Safety
-/// `eap` is a live `:function` command, `name` the translated name and `p`
+/// `args` is a live `:function` command, `name` the translated name and `p`
 /// the rest of the command line.
 pub(crate) unsafe fn list_one_function(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     name: *mut c_char,
     p: *mut c_char,
 ) -> *mut UserFunc {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let mut ea = unsafe { Ea::new(args) };
     if ends_excmd(unsafe { *skipwhite(p) } as c_int) == 0 {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let p = unsafe { c_str(p) };
@@ -275,10 +275,10 @@ pub unsafe fn get_user_func_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
 /// `:delfunction`.
 ///
 /// # Safety
-/// `eap` is a live `:delfunction` command.
-pub unsafe fn ex_delfunction(eap: *mut ExArg) {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+/// `args` is a live `:delfunction` command.
+pub unsafe fn ex_delfunction(args: *mut ExArg) {
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let mut ea = unsafe { Ea::new(args) };
     let mut fudi = FUNCDICT_INIT;
     let mut p = ea.arg;
     let name =

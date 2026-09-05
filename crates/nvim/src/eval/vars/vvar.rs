@@ -388,18 +388,18 @@ pub unsafe fn v_throwpoint(oldval: *mut c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` is NULL or a live command; `oldarg` is NULL or an owned string.
-pub unsafe fn set_cmdarg(eap: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
+pub unsafe fn set_cmdarg(args: *mut ExArg, oldarg: *mut c_char) -> *mut c_char {
     let mut tv = vimvar_val(Vv::Cmdarg);
     // SAFETY: `v:cmdarg` is declared a String.
     let oldval = tv.string_or_null();
 
     'error: {
-        if eap.is_null() {
+        if args.is_null() {
             break 'error;
         }
         // SAFETY: the caller's obligation -- a live command, which outlives
         // this frame because the `do_cmdline` that owns it does.
-        let eap = unsafe { Ea::new(eap) };
+        let eap = unsafe { Ea::new(args) };
         let mut len: size_t = 0;
         if eap.force_bin == FORCE_BIN {
             len += 6; // " ++bin"

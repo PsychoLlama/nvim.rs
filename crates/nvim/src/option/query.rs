@@ -288,15 +288,15 @@ pub(crate) fn get_fileformat(buffer: Buf) -> c_int {
 ///
 /// # Safety
 ///
-/// `eap`, when non-null, must be a live command.
-pub(crate) unsafe fn get_fileformat_force(buffer: Buf, eap: *const ExArg) -> c_int {
+/// `args`, when non-null, must be a live command.
+pub(crate) unsafe fn get_fileformat_force(buffer: Buf, args: *const ExArg) -> c_int {
     // SAFETY: the caller's command, where they gave one. Reading both
     // fields together is the same answer: they are plain fields of a live
     // `ExArg`, and only their values decide anything below.
-    let (force_ff, force_bin) = if eap.is_null() {
+    let (force_ff, force_bin) = if args.is_null() {
         (0, 0)
     } else {
-        unsafe { ((*eap).force_ff, (*eap).force_bin) }
+        unsafe { ((*args).force_ff, (*args).force_bin) }
     };
     let c = if force_ff != 0 {
         force_ff

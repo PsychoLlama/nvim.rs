@@ -20,9 +20,9 @@ use crate::winlayer::{Buf, Win};
 // The Ex commands.
 
 /// `:args`, `:arglocal` and `:argglobal`.
-pub unsafe fn ex_args(eap: *mut ExArg) {
+pub unsafe fn ex_args(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract.
     let cmdidx = eap.cmdidx;
     if cmdidx != CmdIdx::args {
@@ -98,9 +98,9 @@ fn copy_global_arglist() {
 }
 
 /// `:previous`, `:sprevious`, `:Next` and `:sNext`.
-pub unsafe fn ex_previous(eap: *mut ExArg) {
+pub unsafe fn ex_previous(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the count is the command's range.
     let back = cur_arg_idx() - eap.line2 as c_int;
     // If already past the last one, go to the last one.
@@ -114,21 +114,21 @@ pub unsafe fn ex_previous(eap: *mut ExArg) {
 }
 
 /// `:rewind`, `:first`, `:sfirst` and `:srewind`.
-pub unsafe fn ex_rewind(eap: *mut ExArg) {
+pub unsafe fn ex_rewind(args: *mut ExArg) {
     // SAFETY: caller contract.
-    unsafe { do_argfile(eap, 0) };
+    unsafe { do_argfile(args, 0) };
 }
 
 /// `:last` and `:slast`.
-pub unsafe fn ex_last(eap: *mut ExArg) {
+pub unsafe fn ex_last(args: *mut ExArg) {
     // SAFETY: caller contract.
-    unsafe { do_argfile(eap, argcount() - 1) };
+    unsafe { do_argfile(args, argcount() - 1) };
 }
 
 /// `:argument` and `:sargument`.
-pub unsafe fn ex_argument(eap: *mut ExArg) {
+pub unsafe fn ex_argument(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the argument number is the command's range.
     let argn = if eap.addr_count > 0 {
         eap.line2 as c_int - 1
@@ -181,9 +181,9 @@ unsafe fn can_leave_curbuf(argn: c_int, forceit: bool) -> bool {
 
 /// Edit argument `argn`. A `:s…` command splits a window first; `:tab` opens
 /// a tab page.
-pub unsafe fn do_argfile(eap: *mut ExArg, argn: c_int) {
+pub unsafe fn do_argfile(args: *mut ExArg, argn: c_int) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract.
     // SAFETY: `cmd` points at the command's own text, which is not empty.
     let is_split_cmd = unsafe { *eap.cmd } as c_int == 's' as c_int;
@@ -251,9 +251,9 @@ pub unsafe fn do_argfile(eap: *mut ExArg, argn: c_int) {
 }
 
 /// `:next` and the commands that behave like it.
-pub unsafe fn ex_next(eap: *mut ExArg) {
+pub unsafe fn ex_next(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the argument is NUL-terminated.
     let forceit = eap.forceit != 0;
     let is_snext = eap.cmdidx == CmdIdx::snext;
@@ -285,7 +285,7 @@ pub unsafe fn ex_next(eap: *mut ExArg) {
 }
 
 /// `:argdedupe` — drop every later argument naming the same file.
-pub unsafe fn ex_argdedupe(_eap: *mut ExArg) {
+pub unsafe fn ex_argdedupe(_args: *mut ExArg) {
     let mut i = 0;
     while i < argcount() {
         // Expand each argument to a full path, to catch different paths
@@ -321,9 +321,9 @@ pub unsafe fn ex_argdedupe(_eap: *mut ExArg) {
 }
 
 /// `:argedit` — add the file to the list and edit it.
-pub unsafe fn ex_argedit(eap: *mut ExArg) {
+pub unsafe fn ex_argedit(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the insertion point is the command's range.
     let mut argn = if eap.addr_count != 0 {
         eap.line2 as c_int
@@ -353,9 +353,9 @@ pub unsafe fn ex_argedit(eap: *mut ExArg) {
 }
 
 /// `:argadd` — add the files to the list without editing them.
-pub unsafe fn ex_argadd(eap: *mut ExArg) {
+pub unsafe fn ex_argadd(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the insertion point is the command's range.
     let after = if eap.addr_count > 0 {
         eap.line2 as c_int
@@ -369,9 +369,9 @@ pub unsafe fn ex_argadd(eap: *mut ExArg) {
 
 /// `:argdelete` — by range (`:2,3argdelete`, or bare for the current entry)
 /// or by file pattern.
-pub unsafe fn ex_argdelete(eap: *mut ExArg) {
+pub unsafe fn ex_argdelete(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     if arglist_is_locked() {
         return;
     }
@@ -388,9 +388,9 @@ pub unsafe fn ex_argdelete(eap: *mut ExArg) {
 
 /// The range half of `:argdelete`. Without a range it deletes the current
 /// entry; a range reaching past the end is clamped to it.
-unsafe fn delete_arg_range(eap: *mut ExArg) {
+unsafe fn delete_arg_range(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let mut eap = unsafe { Ea::new(eap) };
+    let mut eap = unsafe { Ea::new(args) };
     // SAFETY: caller contract; the argument is NUL-terminated.
     let (addr_count, has_arg) = unsafe { (eap.addr_count, *eap.arg as c_int != NUL) };
     if addr_count == 0 {

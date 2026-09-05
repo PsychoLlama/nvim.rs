@@ -109,11 +109,11 @@ pub unsafe fn do_doautocmd(
 /// ([`aucmd_prepbuf`]), because commands expect `curwin->w_buffer ==
 /// curbuf`.  An autocommand that deletes the buffer under us stops the
 /// sweep, which is what the `bufref` is for.
-pub unsafe fn ex_doautoall(eap: *mut ExArg) {
+pub unsafe fn ex_doautoall(args: *mut ExArg) {
     let mut aco = AcoSave::default();
     // SAFETY: a live command block, by the contract above, and
     // `check_nomodeline` only advances `arg` inside its own argument.
-    let mut arg = unsafe { (*eap).arg };
+    let mut arg = unsafe { (*args).arg };
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
 
@@ -173,7 +173,7 @@ pub unsafe fn aucmd_defer(
     fname_io: *mut ::core::ffi::c_char,
     group: ::core::ffi::c_int,
     buffer: Buf,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     data: *mut Object,
 ) {
     // SAFETY: `fname`/`fname_io` are the caller's NUL-terminated names or
@@ -196,7 +196,7 @@ pub unsafe fn aucmd_defer(
     // The *handle* is stored, not the pointer: the buffer may be gone by the
     // time the queued event runs, and `deferred_event` looks it up again.
     unsafe { (*evdata).buf = buffer.handle as BufferHandle };
-    unsafe { (*evdata).eap = eap };
+    unsafe { (*evdata).eap = args };
     // SAFETY: `data` is the caller's object or NULL; the copy is owned by
     // the event from here on.
     unsafe {

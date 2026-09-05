@@ -153,8 +153,8 @@ impl BreakList {
     /// The list a `:breakadd`-family command names: the `:profile` and
     /// `:profdel` spellings drive the profiling list, everything else the
     /// debugger's.
-    fn of(eap: &ExArg) -> Self {
-        let profiling = eap.cmdidx == CmdIdx::profile || eap.cmdidx == CmdIdx::profdel;
+    fn of(args: &ExArg) -> Self {
+        let profiling = args.cmdidx == CmdIdx::profile || args.cmdidx == CmdIdx::profdel;
         if profiling {
             Self::Profiling
         } else {
@@ -224,11 +224,11 @@ static debug_skipped_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_m
 /// Called from `do_one_cmd` before every command.
 ///
 /// # Safety
-/// `eap` must be the live `ExArg`.
-pub unsafe fn dbg_check_breakpoint(eap: *mut ExArg) {
+/// `args` must be the live `ExArg`.
+pub unsafe fn dbg_check_breakpoint(args: *mut ExArg) {
     debug_skipped.set(false);
     // SAFETY: caller contract.
-    let skip = unsafe { (*eap).skip != 0 };
+    let skip = unsafe { (*args).skip != 0 };
     let name = debug_breakpoint_name.get();
 
     if name.is_null() {
@@ -241,7 +241,7 @@ pub unsafe fn dbg_check_breakpoint(eap: *mut ExArg) {
             return;
         }
         // SAFETY: caller contract.
-        unsafe { do_debug((*eap).cmd) };
+        unsafe { do_debug((*args).cmd) };
         return;
     }
 
@@ -272,7 +272,7 @@ pub unsafe fn dbg_check_breakpoint(eap: *mut ExArg) {
         debug_breakpoint_lnum.get() as int64_t
     );
     debug_breakpoint_name.set(ptr::null_mut());
-    unsafe { do_debug((*eap).cmd) };
+    unsafe { do_debug((*args).cmd) };
 }
 
 /// Enter debug mode after all, for a command that [`dbg_check_breakpoint`]
@@ -280,7 +280,7 @@ pub unsafe fn dbg_check_breakpoint(eap: *mut ExArg) {
 ///
 /// # Safety
 /// As [`dbg_check_breakpoint`].
-pub unsafe fn dbg_check_skipped(eap: *mut ExArg) -> bool {
+pub unsafe fn dbg_check_skipped(args: *mut ExArg) -> bool {
     if !debug_skipped.get() {
         return false;
     }
@@ -290,9 +290,9 @@ pub unsafe fn dbg_check_skipped(eap: *mut ExArg) -> bool {
     got_int.set(false);
     debug_breakpoint_name.set(debug_skipped_name.get());
     // SAFETY: caller contract; `eap.skip` is true on entry, and is put back.
-    unsafe { (*eap).skip = 0 };
-    unsafe { dbg_check_breakpoint(eap) };
-    unsafe { (*eap).skip = 1 };
+    unsafe { (*args).skip = 0 };
+    unsafe { dbg_check_breakpoint(args) };
+    unsafe { (*args).skip = 1 };
     got_int.set(got_int.get() | prev_got_int);
     true
 }
@@ -449,10 +449,10 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
 /// `:breakadd`, and `:profile func`/`:profile file`.
 ///
 /// # Safety
-/// `eap` must be the live `ExArg`.
-pub unsafe fn ex_breakadd(eap: *mut ExArg) {
+/// `args` must be the live `ExArg`.
+pub unsafe fn ex_breakadd(args: *mut ExArg) {
     // SAFETY: caller contract.
-    let (list, arg, forceit) = unsafe { (BreakList::of(&*eap), (*eap).arg, (*eap).forceit) };
+    let (list, arg, forceit) = unsafe { (BreakList::of(&*args), (*args).arg, (*args).forceit) };
     // SAFETY: `arg` is the NUL-terminated argument.
     let Ok(mut bp) = (unsafe { dbg_parsearg(arg, list) }) else {
         return;
@@ -514,10 +514,10 @@ fn update_has_expr_breakpoint() {
 /// `:breakdel` and `:profdel`.
 ///
 /// # Safety
-/// `eap` must be the live `ExArg`.
-pub unsafe fn ex_breakdel(eap: *mut ExArg) {
+/// `args` must be the live `ExArg`.
+pub unsafe fn ex_breakdel(args: *mut ExArg) {
     // SAFETY: caller contract.
-    let (list, arg, cmdidx) = unsafe { (BreakList::of(&*eap), (*eap).arg, (*eap).cmdidx) };
+    let (list, arg, cmdidx) = unsafe { (BreakList::of(&*args), (*args).arg, (*args).cmdidx) };
     // SAFETY: `arg` is NUL-terminated.
     let first = unsafe { *arg as c_int };
 
@@ -605,8 +605,8 @@ pub unsafe fn ex_breakdel(eap: *mut ExArg) {
 /// `:breaklist`.
 ///
 /// # Safety
-/// `eap` is unused, but the signature is the Ex-command one.
-pub unsafe fn ex_breaklist(_eap: *mut ExArg) {
+/// `args` is unused, but the signature is the Ex-command one.
+pub unsafe fn ex_breaklist(_args: *mut ExArg) {
     let list = BreakList::Debug;
     if list.is_empty() {
         smsg!(0, "No breakpoints defined");

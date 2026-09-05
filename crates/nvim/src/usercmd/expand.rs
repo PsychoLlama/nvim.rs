@@ -535,7 +535,7 @@ unsafe fn uc_check_code(
     len: size_t,
     buf: *mut c_char,
     cmd: &UserCmd,
-    eap: &ExArg,
+    args: &ExArg,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
 ) -> size_t {
@@ -551,20 +551,20 @@ unsafe fn uc_check_code(
 
     match Code::parse(name) {
         // SAFETY: module contract.
-        Code::Args => unsafe { expand_args(&mut out, eap, quote, split_buf, split_len) },
+        Code::Args => unsafe { expand_args(&mut out, args, quote, split_buf, split_len) },
         Code::Bang => {
-            let body: &[u8] = if eap.forceit != 0 { b"!" } else { b"" };
+            let body: &[u8] = if args.forceit != 0 { b"!" } else { b"" };
             // SAFETY: caller contract.
             unsafe { out.quoted(quotes(b'"'), body) };
             out.len
         }
         code @ (Code::Line1 | Code::Line2 | Code::Range | Code::Count) => {
             let num: int64_t = match code {
-                Code::Line1 => eap.line1 as int64_t,
-                Code::Line2 => eap.line2 as int64_t,
-                Code::Range => eap.addr_count as int64_t,
+                Code::Line1 => args.line1 as int64_t,
+                Code::Line2 => args.line2 as int64_t,
+                Code::Range => args.addr_count as int64_t,
                 // `<count>` is the range's end, or the command's default.
-                _ if eap.addr_count > 0 => eap.line2 as int64_t,
+                _ if args.addr_count > 0 => args.line2 as int64_t,
                 _ => cmd.uc_def,
             };
             let mut text = Scratch::new();
@@ -576,8 +576,8 @@ unsafe fn uc_check_code(
         // SAFETY: caller contract.
         Code::Mods => cmdmod.with(|cmod| unsafe { uc_mods(buf, cmod, quote != Quote::None) }),
         Code::Register => {
-            let register = [eap.regname as u8];
-            let body: &[u8] = if eap.regname != 0 { &register } else { b"" };
+            let register = [args.regname as u8];
+            let body: &[u8] = if args.regname != 0 { &register } else { b"" };
             // SAFETY: caller contract.
             unsafe { out.quoted(quotes(b'\''), body) };
             out.len
@@ -602,13 +602,13 @@ unsafe fn uc_check_code(
 /// Module contract; `split_buf`/`split_len` are [`do_ucmd`]'s cache.
 unsafe fn expand_args(
     out: &mut Replacement,
-    eap: &ExArg,
+    args: &ExArg,
     quote: Quote,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
 ) -> size_t {
     // SAFETY: module contract.
-    let arg = unsafe { CStr::from_ptr(eap.arg).to_bytes() };
+    let arg = unsafe { CStr::from_ptr(args.arg).to_bytes() };
     if arg.is_empty() {
         if quote == Quote::One {
             // SAFETY: caller contract.
@@ -618,7 +618,7 @@ unsafe fn expand_args(
     }
     // A command declared to take a single argument does not split it, so
     // that `:Cmd %` works when `%` stands for "a b c".
-    let quote = if eap.argt.has(ExArgt::NOSPC) && quote == Quote::Split {
+    let quote = if args.argt.has(ExArgt::NOSPC) && quote == Quote::Split {
         Quote::One
     } else {
         quote
@@ -640,7 +640,8 @@ unsafe fn expand_args(
         Quote::Split => {
             if unsafe { *split_buf }.is_null() {
                 unsafe {
-                    *split_buf = uc_split_args(eap.arg, eap.args, eap.arglens, eap.argc, split_len)
+                    *split_buf =
+                        uc_split_args(args.arg, args.args, args.arglens, args.argc, split_len)
                 };
             }
             unsafe { out.put(slice::from_raw_parts((*split_buf).cast::<u8>(), *split_len)) };
@@ -655,11 +656,11 @@ unsafe fn expand_args(
 /// command can have.
 ///
 /// # Safety
-/// Module contract; `eap` must be the command being executed.
-pub(crate) unsafe fn do_ucmd(eap: *mut ExArg, preview: bool) -> c_int {
+/// Module contract; `args` must be the command being executed.
+pub(crate) unsafe fn do_ucmd(args: *mut ExArg, preview: bool) -> c_int {
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
     // SAFETY: module contract; `useridx` was set by `find_ucmd`.
-    let (cmdidx, useridx) = unsafe { ((*eap).cmdidx, (*eap).useridx as usize) };
+    let (cmdidx, useridx) = unsafe { ((*args).cmdidx, (*args).useridx as usize) };
     let scope = if cmdidx == CmdIdx::USER {
         Scope::Global
     } else {
@@ -671,16 +672,16 @@ pub(crate) unsafe fn do_ucmd(eap: *mut ExArg, preview: bool) -> c_int {
     if preview {
         debug_assert!(cmd.uc_preview_luaref > 0, "cmd->uc_preview_luaref > 0");
         // SAFETY: module contract.
-        return unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), eap, true) };
+        return unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), args, true) };
     }
     if cmd.uc_luaref > 0 {
         // SAFETY: module contract.
-        unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), eap, false) };
+        unsafe { nlua_do_ucmd(ptr::from_ref(cmd).cast_mut(), args, false) };
         return 0;
     }
 
     // SAFETY: module contract.
-    let buf = unsafe { expand_replacement(cmd, &*eap) };
+    let buf = unsafe { expand_replacement(cmd, &*args) };
 
     // The command body runs with the defining script's id, unless it asked
     // to keep the caller's.
@@ -692,7 +693,7 @@ pub(crate) unsafe fn do_ucmd(eap: *mut ExArg, preview: bool) -> c_int {
     let opts = DoCmdOpts::VERBOSE | DoCmdOpts::NOWAIT | DoCmdOpts::KEYTYPED;
     // SAFETY: module contract; `buf` is the expanded body this frame owns.
     unsafe {
-        let (getline, cookie) = ((*eap).ea_getline, (*eap).cookie);
+        let (getline, cookie) = ((*args).ea_getline, (*args).cookie);
         let _ = do_cmdline(buf, getline, cookie, opts);
     };
     drop(script_ctx);
@@ -705,14 +706,14 @@ pub(crate) unsafe fn do_ucmd(eap: *mut ExArg, preview: bool) -> c_int {
 ///
 /// # Safety
 /// Module contract.
-unsafe fn expand_replacement(cmd: &UserCmd, eap: &ExArg) -> *mut c_char {
+unsafe fn expand_replacement(cmd: &UserCmd, args: &ExArg) -> *mut c_char {
     let mut split_len: size_t = 0;
     let mut split_buf: *mut c_char = ptr::null_mut();
     // First round: measure with a null destination. Second: fill it.
     let mut buf: *mut c_char = ptr::null_mut();
     loop {
         // SAFETY: module contract.
-        let pass = unsafe { expand_pass(cmd, eap, buf, &raw mut split_buf, &raw mut split_len) };
+        let pass = unsafe { expand_pass(cmd, args, buf, &raw mut split_buf, &raw mut split_len) };
         // SAFETY: `tail` points into `uc_rep`, which is NUL-terminated.
         let tail_len = unsafe { cstr::bytes_at(pass.tail) }.len();
         if buf.is_null() {
@@ -746,7 +747,7 @@ struct Pass {
 /// Module contract.
 unsafe fn expand_pass(
     cmd: &UserCmd,
-    eap: &ExArg,
+    args: &ExArg,
     buf: *mut c_char,
     split_buf: *mut *mut c_char,
     split_len: *mut size_t,
@@ -783,7 +784,7 @@ unsafe fn expand_pass(
         // SAFETY: module contract; `start..end` is one `<...>` of the body.
         let code_len = unsafe { end.offset_from(start) } as size_t;
         // SAFETY: as above; `q` has room for whatever the code expands to.
-        let mut len = unsafe { uc_check_code(start, code_len, q, cmd, eap, split_buf, split_len) };
+        let mut len = unsafe { uc_check_code(start, code_len, q, cmd, args, split_buf, split_len) };
         if len == !0 {
             // Not a code: carry on after the '<'.
             p = unsafe { start.add(1) };

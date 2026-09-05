@@ -30,17 +30,17 @@ pub const MAX_FUNC_NESTING: c_int = 50;
 /// the index in the array stays the line number.
 ///
 /// # Safety
-/// `eap` is a live `:function` command, `newlines` an initialised `char *`
+/// `args` is a live `:function` command, `newlines` an initialised `char *`
 /// garray, and `line_to_free` owns whatever the last read handed back.
 pub(crate) unsafe fn get_function_body(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     newlines: *mut GArray,
     line_arg_in: *mut c_char,
     line_to_free: *mut *mut c_char,
     show_block: bool,
 ) -> c_int {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let mut ea = unsafe { Ea::new(args) };
     let mut saved_wait_return = need_wait_return.get();
     let mut line_arg = line_arg_in;
     let mut indent = 2;

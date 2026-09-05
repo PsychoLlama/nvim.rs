@@ -104,8 +104,8 @@ pub(crate) fn one_letter_cmd(p: *const c_char, idx: *mut CmdIdx) -> bool {
 /// `eap->cmdidx` comes back as `CmdIdx::SIZE` for a name nothing matched, and
 /// as a *negative* index for a user command. `full`, when given, is set
 /// when the name was spelled out in full rather than abbreviated.
-pub unsafe fn find_ex_command(eap: *mut ExArg, full: *mut c_int) -> *mut c_char {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn find_ex_command(args: *mut ExArg, full: *mut c_int) -> *mut c_char {
+    let mut ea = unsafe { Ea::new(args) };
     let mut p = ea.cmd;
     if one_letter_cmd(p, ea.cmdidx_ptr()) {
         if !full.is_null() {
@@ -181,7 +181,7 @@ pub unsafe fn find_ex_command(eap: *mut ExArg, full: *mut c_int) -> *mut c_char 
         while (ubyte(p)).is_ascii_alphanumeric() {
             p = unsafe { p.add(1) };
         }
-        p = unsafe { find_ucmd(eap, p, full, ptr::null_mut(), ptr::null_mut()) };
+        p = unsafe { find_ucmd(args, p, full, ptr::null_mut(), ptr::null_mut()) };
     }
     if p == ea.cmd {
         ea.cmdidx = CmdIdx::SIZE;

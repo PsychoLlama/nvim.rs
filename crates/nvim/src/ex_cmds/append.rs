@@ -64,9 +64,9 @@ static append_indent: GlobalCell<c_int> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_append(eap: *mut ExArg) {
+pub unsafe fn ex_append(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     let mut did_undo = false;
     let (cmdidx, forceit, line2) = (eap.cmdidx, eap.forceit, eap.line2);
     let mut lnum = line2;
@@ -222,8 +222,8 @@ unsafe fn toggle_autoindent() {
 ///
 /// # Safety
 /// `eap.arg`, `eap.nextcmd` and `eap.cstack` must be live.
-unsafe fn next_append_line(eap: &mut ExArg, indent: c_int) -> Option<Line> {
-    let arg = eap.arg;
+unsafe fn next_append_line(args: &mut ExArg, indent: c_int) -> Option<Line> {
+    let arg = args.arg;
     // SAFETY: caller's contract.
     if unsafe { *arg } == '|' as c_char {
         // Get the text after the trailing bar.
@@ -232,10 +232,10 @@ unsafe fn next_append_line(eap: &mut ExArg, indent: c_int) -> Option<Line> {
         return Some(Line(line));
     }
 
-    let Some(getline) = eap.ea_getline else {
+    let Some(getline) = args.ea_getline else {
         // No getline() function: use the lines that follow.  This ends
         // when there is no more.
-        let next = eap.nextcmd;
+        let next = args.nextcmd;
         if next.is_null() {
             return None;
         }
@@ -253,7 +253,7 @@ unsafe fn next_append_line(eap: &mut ExArg, indent: c_int) -> Option<Line> {
             };
             (line, rest)
         };
-        eap.nextcmd = rest;
+        args.nextcmd = rest;
         return Some(Line(line));
     };
 
@@ -261,13 +261,13 @@ unsafe fn next_append_line(eap: &mut ExArg, indent: c_int) -> Option<Line> {
     // when getline() returns.
     let save_state = State.replace(MODE_CMDLINE);
     // SAFETY: caller's contract -- the condition stack is the command's.
-    let first = if unsafe { (*eap.cstack).cs_looplevel } > 0 {
+    let first = if unsafe { (*args.cstack).cs_looplevel } > 0 {
         -1
     } else {
         NUL
     };
     // SAFETY: the cookie is the one the getter was handed with.
-    let line = unsafe { getline(first, eap.cookie, indent, true) };
+    let line = unsafe { getline(first, args.cookie, indent, true) };
     State.set(save_state);
     Some(Line(line))
 }
@@ -276,9 +276,9 @@ unsafe fn next_append_line(eap: &mut ExArg, indent: c_int) -> Option<Line> {
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_change(eap: *mut ExArg) {
+pub unsafe fn ex_change(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
     // SAFETY: the range is inside the current buffer.
     if line2 >= line1 && u_save(line1 - 1, line2 + 1).is_err() {
@@ -322,9 +322,9 @@ pub unsafe fn ex_change(eap: *mut ExArg) {
 ///
 /// # Safety
 /// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_z(eap: *mut ExArg) {
+pub unsafe fn ex_z(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &*eap };
+    let eap = unsafe { &*args };
     let (arg, forceit, addr_count, flags, lnum) =
         (eap.arg, eap.forceit, eap.addr_count, eap.flags, eap.line2);
     // SAFETY: the window layout and 'scroll' are live.

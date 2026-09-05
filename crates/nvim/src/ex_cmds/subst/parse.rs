@@ -107,7 +107,7 @@ pub unsafe fn sub_set_replacement(sub: SubReplacementString) {
 /// # Safety
 /// Main thread; `sub` and `cmd` must be live and `pat` live or null.
 pub(crate) unsafe fn sub_joining_lines(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     pat: *mut c_char,
     patlen: size_t,
     sub: *const c_char,
@@ -128,23 +128,23 @@ pub(crate) unsafe fn sub_joining_lines(
     if !joins {
         return false;
     }
-    if eap.skip != 0 {
+    if args.skip != 0 {
         return true;
     }
 
-    cur_win().w_cursor.lnum = eap.line1;
+    cur_win().w_cursor.lnum = args.line1;
     // SAFETY: caller's contract -- `cmd` is a live string.
-    eap.flags = match unsafe { *cmd } as u8 {
+    args.flags = match unsafe { *cmd } as u8 {
         b'l' => EXFLAG_LIST,
         b'#' => EXFLAG_NR,
         b'p' => EXFLAG_PRINT,
-        _ => eap.flags,
+        _ => args.flags,
     };
     // The number of lines joined is the number of lines in the range, plus
     // one more if this is not the end of the file.
-    let joined_lines_count = eap.line2 - eap.line1
+    let joined_lines_count = args.line2 - args.line1
         + 1 as LineNr
-        + LineNr::from(eap.line2 < cur_buf().b_ml.ml_line_count);
+        + LineNr::from(args.line2 < cur_buf().b_ml.ml_line_count);
     if joined_lines_count > 1 as LineNr {
         // SAFETY: the range is inside the buffer; message state is ready.
         let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
@@ -152,7 +152,7 @@ pub(crate) unsafe fn sub_joining_lines(
         sub_nlines.set(1 as LineNr);
         unsafe { do_sub_msg(false) };
         // SAFETY: the command block is the one borrowed here.
-        unsafe { ex_may_print(&raw mut *eap) };
+        unsafe { ex_may_print(&raw mut *args) };
     }
 
     if save {

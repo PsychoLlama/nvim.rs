@@ -108,12 +108,12 @@ struct GlobalPat {
 /// ways it can be malformed.
 ///
 /// The closing delimiter is replaced by a NUL in place, so the pattern that
-/// comes back borrows `eap`'s argument.
+/// comes back borrows `args`'s argument.
 ///
 /// # Safety
 /// `eap.arg` must be a live, writable Ex-command argument.
-unsafe fn global_pattern(eap: &mut ExArg) -> Option<GlobalPat> {
-    let arg = eap.arg;
+unsafe fn global_pattern(args: &mut ExArg) -> Option<GlobalPat> {
+    let arg = args.arg;
     // SAFETY: an Ex-command argument is NUL-terminated, and nothing below
     // rewrites it before the last read of this borrow.
     let bytes = unsafe { CStr::from_ptr(arg) }.to_bytes();
@@ -157,7 +157,7 @@ unsafe fn global_pattern(eap: &mut ExArg) -> Option<GlobalPat> {
             pat,
             delim as c_int,
             magic_isset() as c_int,
-            &raw mut eap.arg,
+            &raw mut args.arg,
             ptr::null_mut(),
             ptr::null_mut(),
         )
@@ -185,8 +185,8 @@ unsafe fn global_pattern(eap: &mut ExArg) -> Option<GlobalPat> {
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program, and the range must
 /// be lines of the current buffer.
-unsafe fn global_mark(eap: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int {
-    let (mut lnum, line2) = (eap.line1, eap.line2);
+unsafe fn global_mark(args: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int {
+    let (mut lnum, line2) = (args.line1, args.line2);
     let mut ndone = 0 as c_int;
     while lnum <= line2 && !got_int.get() {
         // SAFETY: caller's contract.
@@ -221,9 +221,9 @@ unsafe fn global_mark(eap: &ExArg, regmatch: *mut RegMMatch, kind: u8) -> c_int 
 ///
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
-pub unsafe fn ex_global(eap: *mut ExArg) {
+pub unsafe fn ex_global(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     // When nesting, the command works on one line.  That allows for
     // ":g/found/v/notfound/command".
     if global_busy.get() != 0 && (eap.line1 != 1 || eap.line2 != cur_buf().b_ml.ml_line_count) {

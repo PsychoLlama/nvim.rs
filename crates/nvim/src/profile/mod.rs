@@ -209,8 +209,8 @@ pub(crate) fn profile_msg(tm: ProfTime) -> [c_char; 50] {
 /// `:profile cmd args`. In the ex_docmd command table.
 ///
 /// # Safety
-/// `eap` is the live ex command being executed.
-pub unsafe fn ex_profile(eap: *mut ExArg) {
+/// `args` is the live ex command being executed.
+pub unsafe fn ex_profile(args: *mut ExArg) {
     /// Time at which `:profile pause` stopped the clock.
     static PAUSE_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 
@@ -218,7 +218,7 @@ pub unsafe fn ex_profile(eap: *mut ExArg) {
     // walkers stay inside it and the two views borrow from it for the length
     // of this call.
     let (subcmd, full, e) = unsafe {
-        let arg = (*eap).arg;
+        let arg = (*args).arg;
         let end = skiptowhite(arg);
         let len = end.offset_from(arg) as usize;
         (
@@ -263,7 +263,7 @@ pub unsafe fn ex_profile(eap: *mut ExArg) {
     } else {
         // The rest ("func", "file") is parsed like ":breakadd".
         // SAFETY: the caller's ex command.
-        unsafe { ex_breakadd(eap) };
+        unsafe { ex_breakadd(args) };
     }
 }
 

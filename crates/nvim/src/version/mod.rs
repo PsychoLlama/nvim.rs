@@ -178,10 +178,10 @@ pub(crate) fn has_vim_patch(n: c_int, major_minor_version: c_int) -> bool {
 /// silently ignored rather than printing anything.
 ///
 /// # Safety
-/// `eap` is a live `ExArg`.
-pub(crate) unsafe fn ex_version(eap: *mut ExArg) {
+/// `args` is a live `ExArg`.
+pub(crate) unsafe fn ex_version(args: *mut ExArg) {
     // SAFETY: the caller's obligation; `arg` is NUL-terminated.
-    if unsafe { *(*eap).arg } != 0 {
+    if unsafe { *(*args).arg } != 0 {
         return;
     }
     // Start the banner below the ":version" the user typed. The message
@@ -592,7 +592,7 @@ unsafe fn do_intro_line(row: c_int, mesg: &CStr, colon: bool, is_logo: bool) {
 ///
 /// # Safety
 /// The editor's globals must be live.
-pub(crate) unsafe fn ex_intro(_eap: *mut ExArg) {
+pub(crate) unsafe fn ex_intro(_args: *mut ExArg) {
     // SAFETY: the caller's obligation.
     unsafe { screenclear() };
     unsafe { intro_message(true) };

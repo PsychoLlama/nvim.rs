@@ -735,9 +735,9 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 /// `cmdpreview_may_show` for what they mean.
 ///
 /// # Safety
-/// Main thread; `eap` must be the live Ex-command argument.
+/// Main thread; `args` must be the live Ex-command argument.
 pub(crate) unsafe fn do_sub(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     timeout: ProfTime,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,
@@ -752,7 +752,7 @@ pub(crate) unsafe fn do_sub(
     let (old_cursor, old_line_count) = (cur_win().w_cursor, cur_buf().b_ml.ml_line_count);
 
     // SAFETY: caller's contract.
-    let Some(setup) = (unsafe { parse_sub(eap, cmdpreview_ns, keeppatterns) }) else {
+    let Some(setup) = (unsafe { parse_sub(args, cmdpreview_ns, keeppatterns) }) else {
         return 0 as c_int;
     };
     let SubSetup {
@@ -765,7 +765,7 @@ pub(crate) unsafe fn do_sub(
         save_do_ask,
     } = setup;
 
-    let (line1, line2) = (eap.line1, eap.line2);
+    let (line1, line2) = (args.line1, args.line2);
     let args = SubArgs {
         range: (line1, line2),
         timeout,

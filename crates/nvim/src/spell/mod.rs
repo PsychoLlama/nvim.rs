@@ -288,7 +288,7 @@ pub static repl_to: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_
 
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
-pub unsafe fn ex_spellrepall(_eap: *mut ExArg) {
+pub unsafe fn ex_spellrepall(_args: *mut ExArg) {
     let pos: Pos = unsafe { (*curwin.get()).w_cursor };
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.

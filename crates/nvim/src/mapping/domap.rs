@@ -643,57 +643,57 @@ unsafe fn do_exmap(eap: *mut ExArg, isabbrev: bool) {
 /// `:abbreviate` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-pub unsafe fn ex_abbreviate(eap: *mut ExArg) {
-    // SAFETY (this body): the caller's promise -- `eap` is a live `ExArg`.
-    unsafe { do_exmap(eap, true) } // almost the same as mapping
+/// `args` must be a live `ExArg`.
+pub unsafe fn ex_abbreviate(args: *mut ExArg) {
+    // SAFETY (this body): the caller's promise -- `args` is a live `ExArg`.
+    unsafe { do_exmap(args, true) } // almost the same as mapping
 }
 
 /// `:map` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-pub unsafe fn ex_map(eap: *mut ExArg) {
+/// `args` must be a live `ExArg`.
+pub unsafe fn ex_map(args: *mut ExArg) {
     // In a secure mode we print the mappings, for security reasons.
     if secure.get() != 0 {
         secure.set(2);
-        // SAFETY: the caller's promise — `eap` is live, so `cmd` is its own
+        // SAFETY: the caller's promise — `args` is live, so `cmd` is its own
         // NUL-terminated command name.
         unsafe {
-            msg_outtrans((*eap).cmd, 0, false);
+            msg_outtrans((*args).cmd, 0, false);
             msg_putchar(c_int::from(b'\n'));
         }
     }
     // SAFETY: as above.
-    unsafe { do_exmap(eap, false) };
+    unsafe { do_exmap(args, false) };
 }
 
 /// `:unmap` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-pub unsafe fn ex_unmap(eap: *mut ExArg) {
+/// `args` must be a live `ExArg`.
+pub unsafe fn ex_unmap(args: *mut ExArg) {
     // SAFETY (this body): as [`ex_abbreviate`].
-    unsafe { do_exmap(eap, false) }
+    unsafe { do_exmap(args, false) }
 }
 
 /// `:mapclear` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-pub unsafe fn ex_mapclear(eap: *mut ExArg) {
-    // SAFETY: the caller's promise — `eap` is a live `ExArg`, so `cmd` and
+/// `args` must be a live `ExArg`.
+pub unsafe fn ex_mapclear(args: *mut ExArg) {
+    // SAFETY: the caller's promise — `args` is a live `ExArg`, so `cmd` and
     // `arg` are its own NUL-terminated strings.
-    unsafe { do_mapclear((*eap).cmd, (*eap).arg, (*eap).forceit != 0, false) }
+    unsafe { do_mapclear((*args).cmd, (*args).arg, (*args).forceit != 0, false) }
 }
 
 /// `:abclear` and friends.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-pub unsafe fn ex_abclear(eap: *mut ExArg) {
+/// `args` must be a live `ExArg`.
+pub unsafe fn ex_abclear(args: *mut ExArg) {
     // SAFETY: as [`ex_mapclear`].
-    unsafe { do_mapclear((*eap).cmd, (*eap).arg, true, true) }
+    unsafe { do_mapclear((*args).cmd, (*args).arg, true, true) }
 }
 
 /// The buffer the editor is working in.

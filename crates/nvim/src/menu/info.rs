@@ -43,11 +43,11 @@ static TRANSLATIONS: GlobalCell<Vec<Translation>> = GlobalCell::new(Vec::new());
 /// `:menutranslate from to`, and `:menutranslate clear`.
 ///
 /// # Safety
-/// `eap` must name the live `ExArg` of the command.
-pub(crate) unsafe fn ex_menutranslate(eap: *mut ExArg) {
+/// `args` must name the live `ExArg` of the command.
+pub(crate) unsafe fn ex_menutranslate(args: *mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line, which
     // this takes apart in place.
-    let arg = unsafe { CText::new((*eap).arg) };
+    let arg = unsafe { CText::new((*args).arg) };
 
     if arg.starts_with(b"clear") && ends_of_command(skip_white(arg.at(5))) {
         TRANSLATIONS.with_mut(Vec::clear);

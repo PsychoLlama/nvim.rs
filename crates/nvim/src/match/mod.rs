@@ -416,23 +416,23 @@ unsafe fn get_match(window: *mut Window, id: c_int) -> *mut MatchItem {
 /// it has to parse the pattern either way.
 ///
 /// # Safety
-/// `eap` must be a live Ex-command argument block with a writable `arg`.
-pub(crate) unsafe fn ex_match(eap: *mut ExArg) {
+/// `args` must be a live Ex-command argument block with a writable `arg`.
+pub(crate) unsafe fn ex_match(args: *mut ExArg) {
     // SAFETY: the caller's command.
     // The command's count is the match id: `:match`, `:2match`, `:3match`.
-    if unsafe { (*eap).line2 } > 3 {
+    if unsafe { (*args).line2 } > 3 {
         emsg(e_invcmd);
         return;
     }
-    let id = unsafe { (*eap).line2 } as c_int;
-    let skip = unsafe { (*eap).skip } != 0;
+    let id = unsafe { (*args).line2 } as c_int;
+    let skip = unsafe { (*args).skip } != 0;
 
     // Whatever happens next, the old pattern for this id goes.
     if !skip {
         unsafe { match_delete(curwin.get(), id, false) };
     }
 
-    let arg = unsafe { (*eap).arg };
+    let arg = unsafe { (*args).arg };
     let end;
     if ends_excmd(unsafe { *arg } as c_int) != 0 {
         // `:match` on its own: just clear.
@@ -466,7 +466,7 @@ pub(crate) unsafe fn ex_match(eap: *mut ExArg) {
                 && ends_excmd(unsafe { *skipwhite(end.offset(1)) } as c_int) == 0
             {
                 unsafe { xfree(g.cast()) };
-                unsafe { (*eap).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end)) };
+                unsafe { (*args).errmsg = Some(ex_errmsg(e_trailing_arg.as_ptr(), end)) };
                 return;
             }
             if unsafe { *end } != unsafe { *p } {
@@ -492,5 +492,5 @@ pub(crate) unsafe fn ex_match(eap: *mut ExArg) {
             unsafe { *end = c as c_char };
         }
     }
-    unsafe { (*eap).nextcmd = find_nextcmd(end) };
+    unsafe { (*args).nextcmd = find_nextcmd(end) };
 }

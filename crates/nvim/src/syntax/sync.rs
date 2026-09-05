@@ -397,10 +397,10 @@ const SYNC_COUNTS: [(&CStr, SyncCount); 4] = [
 
 /// `:syntax sync {settings}`, `:syntax sync match|region|clear ..`, and with no
 /// argument the sync listing.
-pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
-    let mut arg_start = eap.arg;
+pub(crate) fn syn_cmd_sync(args: &mut ExArg, _syncing: c_int) {
+    let mut arg_start = args.arg;
     if ends_excmd(unsafe { *arg_start } as c_int) != 0 {
-        syn_cmd_list(eap, 1);
+        syn_cmd_list(args, 1);
         return;
     }
 
@@ -423,12 +423,12 @@ pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
         let word = &key[..key.len() - 1];
 
         if word == b"CCOMMENT" {
-            if eap.skip == 0 {
+            if args.skip == 0 {
                 cur_syn_block().b_syn_sync_flags |= SF_CCOMMENT;
             }
             if ends_excmd(unsafe { *next_arg } as c_int) == 0 {
                 arg_end = unsafe { skiptowhite(next_arg) };
-                if eap.skip == 0 {
+                if args.skip == 0 {
                     unsafe {
                         cur_syn_block().b_syn_sync_id =
                             syn_check_group(next_arg, arg_end.offset_from(next_arg) as size_t)
@@ -436,7 +436,7 @@ pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
                     };
                 }
                 next_arg = unsafe { skipwhite(arg_end) };
-            } else if eap.skip == 0 {
+            } else if args.skip == 0 {
                 unsafe {
                     cur_syn_block().b_syn_sync_id = syn_name2id(c"Comment".as_ptr()) as int16_t
                 };
@@ -451,7 +451,7 @@ pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
             // SAFETY: `key` is NUL-terminated and `digits_at` is inside it.
             let mut digits = unsafe { key.as_mut_ptr().add(count.digits_at) }.cast::<c_char>();
             let n = unsafe { getdigits_int32(&raw mut digits, false, 0) };
-            if eap.skip == 0 {
+            if args.skip == 0 {
                 let mut block = cur_syn_block();
                 match count.field {
                     SyncField::MinLines => block.b_syn_sync_minlines = n,
@@ -460,12 +460,12 @@ pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
                 }
             }
         } else if word == b"FROMSTART" {
-            if eap.skip == 0 {
+            if args.skip == 0 {
                 cur_syn_block().b_syn_sync_minlines = MAXLNUM as LineNr;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
         } else if word == b"LINECONT" {
-            match unsafe { sync_linecont(eap, next_arg) } {
+            match unsafe { sync_linecont(args, next_arg) } {
                 Err(LineContError::Illegal) => {
                     illegal = true;
                     break;
@@ -479,13 +479,13 @@ pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
         } else {
             // Everything else is a subcommand of its own, run in syncing
             // mode; it consumes the rest of the line either way.
-            eap.arg = next_arg;
+            args.arg = next_arg;
             if word == b"MATCH" {
-                syn_cmd_match(eap, 1);
+                syn_cmd_match(args, 1);
             } else if word == b"REGION" {
-                syn_cmd_region(eap, 1);
+                syn_cmd_region(args, 1);
             } else if word == b"CLEAR" {
-                syn_cmd_clear(eap, 1);
+                syn_cmd_clear(args, 1);
             } else {
                 illegal = true;
             }
@@ -500,7 +500,7 @@ pub(crate) fn syn_cmd_sync(eap: &mut ExArg, _syncing: c_int) {
         let arg_start = unsafe { c_str(arg_start) };
         semsg!("E404: Illegal arguments: {arg_start}");
     } else if !finished {
-        eap.nextcmd = unsafe { check_nextcmd(arg_start) };
+        args.nextcmd = unsafe { check_nextcmd(arg_start) };
         redraw_curbuf_later(UPD_SOME_VALID);
         syn_stack_free_all(cur_syn_block()); // Need to recompute all syntax.
     }
@@ -526,7 +526,7 @@ enum LineContError {
 /// means the next one continues it.
 ///
 /// Answers what follows the pattern.
-unsafe fn sync_linecont(eap: &ExArg, next_arg: *mut c_char) -> Result<*mut c_char, LineContError> {
+unsafe fn sync_linecont(args: &ExArg, next_arg: *mut c_char) -> Result<*mut c_char, LineContError> {
     if unsafe { *next_arg } as c_int == NUL {
         return Err(LineContError::Illegal); // missing pattern
     }
@@ -541,7 +541,7 @@ unsafe fn sync_linecont(eap: &ExArg, next_arg: *mut c_char) -> Result<*mut c_cha
         return Err(LineContError::Illegal); // end delimiter not found
     }
 
-    if eap.skip == 0 {
+    if args.skip == 0 {
         let mut block = cur_syn_block();
         // Store the pattern and its compiled program. 'cpoptions' is
         // emptied first, to avoid the 'l' flag.

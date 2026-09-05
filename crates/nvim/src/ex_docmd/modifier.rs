@@ -115,12 +115,12 @@ pub fn cmd_has_expr_args(cmdidx: CmdIdx) -> bool {
 /// `skip_only` is `nvim_parse_cmd`'s mode: recognise everything, allocate
 /// and evaluate nothing.
 pub(crate) unsafe fn parse_command_modifiers(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     errormsg: &mut Option<CString>,
     cm: &mut CmdMod,
     skip_only: bool,
 ) -> Result<(), Failed> {
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     let orig_cmd = ea.cmd;
     let mut cmd_start: *mut c_char = ptr::null_mut();
     let mut use_plus_cmd = false;
@@ -317,7 +317,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                     if !skip_only {
                         let tabnr = unsafe {
                             get_address(
-                                eap,
+                                args,
                                 ea.cmd_ptr(),
                                 CmdAddr::Tabs,
                                 ea.skip != 0,
@@ -662,7 +662,7 @@ impl CmdModScope {
         scope
     }
 
-    /// Read the run of modifiers at the head of `eap`'s command line into
+    /// Read the run of modifiers at the head of `args`'s command line into
     /// the cell, which stays *cleared* for the whole parse — an error
     /// raised while the modifiers are still being read is no longer inside
     /// the enclosing `:silent` or `:filter`, which is what the C's opening
@@ -672,12 +672,12 @@ impl CmdModScope {
     /// As [`parse_command_modifiers`].
     pub(crate) unsafe fn parse(
         &self,
-        eap: *mut ExArg,
+        args: *mut ExArg,
         errormsg: &mut Option<CString>,
     ) -> Result<(), Failed> {
         let mut parsed = CmdMod::default();
         // SAFETY: the caller's contract.
-        let read = unsafe { parse_command_modifiers(eap, errormsg, &mut parsed, false) };
+        let read = unsafe { parse_command_modifiers(args, errormsg, &mut parsed, false) };
         cmdmod.set(parsed);
         read
     }

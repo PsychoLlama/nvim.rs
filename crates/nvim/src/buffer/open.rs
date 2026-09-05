@@ -64,12 +64,12 @@ fn read_file(
     lnum: LineNr,
     from: LineNr,
     to: LineNr,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
-    // SAFETY: two NUL-terminated names or nulls, and the caller's own `eap`.
-    unsafe { readfile(ffname, fname, lnum, from, to, eap, flags, silent) }
+    // SAFETY: two NUL-terminated names or nulls, and the caller's own `args`.
+    unsafe { readfile(ffname, fname, lnum, from, to, args, flags, silent) }
 }
 
 /// Open the memline (and the swap file) for `buffer`.
@@ -127,11 +127,11 @@ fn bail_out(n: c_int) {
     unsafe { getout(n) };
 }
 
-/// Fill in `eap` with the file format and encoding of `buffer`, as the reload
+/// Fill in `args` with the file format and encoding of `buffer`, as the reload
 /// paths need.
-fn prepare_exarg(eap: &mut ExArg, buffer: Buf) {
+fn prepare_exarg(args: &mut ExArg, buffer: Buf) {
     // SAFETY: a local to fill in.
-    unsafe { prep_exarg(eap, buffer) };
+    unsafe { prep_exarg(args, buffer) };
 }
 
 fn set_option_string(id: c_int, value: &'static CStr) {
@@ -204,7 +204,7 @@ pub fn get_highest_fnum() -> c_int {
 /// This is the retry `'fileformat'`/`'fileencoding'` guessed wrong needs: the
 /// bytes are already in the buffer, so re-reading them with the corrected
 /// options costs no file access.
-fn read_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> Result<Loaded, Failed> {
+fn read_buffer(read_stdin: bool, args: *mut ExArg, flags: c_int) -> Result<Loaded, Failed> {
     let silent = shortmess(ShmFlag::FILEINFO);
 
     let line_count = cur_buf().line_count();
@@ -219,7 +219,7 @@ fn read_buffer(read_stdin: bool, eap: *mut ExArg, flags: c_int) -> Result<Loaded
         line_count,
         0,
         last,
-        eap,
+        args,
         flags | READ_BUFFER as c_int,
         silent,
     );
@@ -268,23 +268,23 @@ pub fn buf_ensure_loaded(buffer: Buf) -> bool {
 
 /// Open the current buffer: open the memfile and read the file into memory.
 ///
-/// With `read_stdin` the text comes from standard input instead; `eap` forces
+/// With `read_stdin` the text comes from standard input instead; `args` forces
 /// `'fileformat'`/`'fileencoding'` and `flags_arg` is passed on to
 /// `readfile()`.
 ///
 /// # Safety
-/// `curbuf` and `curwin` must be set, and `eap` be null or a live `ExArg`.
+/// `curbuf` and `curwin` must be set, and `args` be null or a live `ExArg`.
 pub unsafe fn open_buffer(
     read_stdin: bool,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     flags_arg: c_int,
 ) -> Result<Loaded, Failed> {
-    open_buffer_inner(read_stdin, eap, flags_arg)
+    open_buffer_inner(read_stdin, args, flags_arg)
 }
 
 fn open_buffer_inner(
     read_stdin: bool,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     flags_arg: c_int,
 ) -> Result<Loaded, Failed> {
     let mut flags = flags_arg;
@@ -337,13 +337,13 @@ fn open_buffer_inner(
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
         let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as LineNr);
         let read = flags | READ_NEW as c_int | fifo;
-        retval = read_file(ffname, fname, 0, 0, last, eap, read, silent);
+        retval = read_file(ffname, fname, 0, 0, last, args, read, silent);
         if read_fifo {
             cur_buf().b_p_bin = save_bin;
             if retval == Ok(Loaded::Read) {
                 // don't add READ_FIFO here, otherwise we won't be able to
                 // detect the encoding
-                retval = read_buffer(false, eap, flags);
+                retval = read_buffer(false, args, flags);
             }
         }
         // Help buffer: populate *local-additions* in help.txt
@@ -362,7 +362,7 @@ fn open_buffer_inner(
         retval = read_file(none, none, 0, 0, last, ptr::null_mut(), read, silent);
         cur_buf().b_p_bin = save_bin;
         if retval == Ok(Loaded::Read) {
-            retval = read_buffer(true, eap, flags);
+            retval = read_buffer(true, args, flags);
         }
     }
 

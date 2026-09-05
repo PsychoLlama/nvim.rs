@@ -163,21 +163,21 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 /// continuation, handing it back to the Ex command line when there is one.
 ///
 /// # Safety
-/// `evalarg` may be null; `eap` may be null.
-pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, eap: *mut ExArg) {
+/// `evalarg` may be null; `args` may be null.
+pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, args: *mut ExArg) {
     // SAFETY: the caller's promise -- `evalarg` is null or valid.
     if evalarg.is_null() || unsafe { (*evalarg).eval_tofree }.is_null() {
         return;
     }
     // SAFETY: as above, and `evalarg` is not null.
     let mut ev = unsafe { Live::new(evalarg) };
-    if eap.is_null() {
+    if args.is_null() {
         // SAFETY: `eval_tofree` is the line this `evalarg` owns.
         unsafe { xfree(ev.eval_tofree.cast()) };
     } else {
-        // SAFETY: the caller's promise -- `eap` is not null here, and its
+        // SAFETY: the caller's promise -- `args` is not null here, and its
         // `cmdlinep` names the command line being run.
-        let mut ea = unsafe { Ea::new(eap) };
+        let mut ea = unsafe { Ea::new(args) };
         // SAFETY: `cmdline_tofree` is the line the command owns.
         unsafe { xfree(ea.cmdline_tofree.cast()) };
         // SAFETY: as above -- `cmdlinep` is a live `*mut c_char`.
@@ -190,11 +190,11 @@ pub(crate) unsafe fn clear_evalarg(evalarg: *mut EvalArg, eap: *mut ExArg) {
 /// Evaluate a whole expression, which must be all that is left of the line.
 ///
 /// # Safety
-/// `arg` must be a NUL-terminated expression; `eap` may be null.
+/// `arg` must be a NUL-terminated expression; `args` may be null.
 pub unsafe fn eval0(
     arg: *mut c_char,
     result: *mut TypVal,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     let did_emsg_before = did_emsg.get();
@@ -227,18 +227,18 @@ pub unsafe fn eval0(
                 semsg!("E15: Invalid expression: \"{whole}\"");
             }
         }
-        if !eap.is_null() && !p.is_null() {
-            // SAFETY: `p` is inside the expression; `eap` is not null.
+        if !args.is_null() && !p.is_null() {
+            // SAFETY: `p` is inside the expression; `args` is not null.
             let nextcmd = unsafe { check_nextcmd(p) };
             if !nextcmd.is_null() && unsafe { *nextcmd } != b'|' as c_char {
-                unsafe { (*eap).nextcmd = nextcmd };
+                unsafe { (*args).nextcmd = nextcmd };
             }
         }
         return Err(Failed);
     }
-    if !eap.is_null() {
+    if !args.is_null() {
         // SAFETY: as above.
-        unsafe { (*eap).nextcmd = check_nextcmd(p) };
+        unsafe { (*args).nextcmd = check_nextcmd(p) };
     }
     ret
 }
@@ -289,12 +289,12 @@ pub(crate) unsafe fn may_call_simple_func(
 pub(crate) unsafe fn eval0_simple_funccal(
     arg: *mut c_char,
     result: *mut TypVal,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, handed straight on to both.
     match unsafe { may_call_simple_func(arg, result) }? {
-        Parsed::NotThis => unsafe { eval0(arg, result, eap, evalarg) },
+        Parsed::NotThis => unsafe { eval0(arg, result, args, evalarg) },
         Parsed::Done => Ok(()),
     }
 }
@@ -392,7 +392,7 @@ pub(crate) unsafe fn eval1(
     }
 
     if evalarg.is_null() {
-        // SAFETY: the substitute is this frame's own, and there is no `eap`.
+        // SAFETY: the substitute is this frame's own, and there is no `args`.
         unsafe { clear_evalarg(&raw mut local_evalarg, null_mut()) };
     } else {
         used.eval_flags = orig_flags;
@@ -473,7 +473,7 @@ unsafe fn eval_logical(
     }
 
     if evalarg.is_null() {
-        // SAFETY: the substitute is this frame's own, and there is no `eap`.
+        // SAFETY: the substitute is this frame's own, and there is no `args`.
         unsafe { clear_evalarg(&raw mut local_evalarg, null_mut()) };
     } else {
         used.eval_flags = orig_flags;

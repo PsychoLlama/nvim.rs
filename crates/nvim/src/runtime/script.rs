@@ -103,12 +103,12 @@ pub unsafe fn find_script_by_name(name: *mut c_char) -> c_int {
 // `:scriptnames`.
 
 /// `":scriptnames"`, and `":script {id}"` which edits the script instead.
-pub unsafe fn ex_scriptnames(eap: *mut ExArg) {
-    // SAFETY: `eap` is the command's own argument block.
-    let (by_number, has_arg) = unsafe { ((*eap).addr_count > 0, *(*eap).arg != NUL as c_char) };
+pub unsafe fn ex_scriptnames(args: *mut ExArg) {
+    // SAFETY: `args` is the command's own argument block.
+    let (by_number, has_arg) = unsafe { ((*args).addr_count > 0, *(*args).arg != NUL as c_char) };
     if by_number || has_arg {
         // SAFETY: same block; `edit_script` only reads it and `do_exedit`.
-        unsafe { edit_script(eap, by_number) };
+        unsafe { edit_script(args, by_number) };
         return;
     }
 
@@ -156,21 +156,21 @@ pub unsafe fn ex_scriptnames(eap: *mut ExArg) {
 ///
 /// # Safety
 ///
-/// `eap` must be the live `:script` command block.
-unsafe fn edit_script(eap: *mut ExArg, by_number: bool) {
+/// `args` must be the live `:script` command block.
+unsafe fn edit_script(args: *mut ExArg, by_number: bool) {
     let mut path = [0 as c_char; MAXPATHL as usize];
     if by_number {
-        if !script_id_valid(unsafe { (*eap).line2 } as c_int) {
+        if !script_id_valid(unsafe { (*args).line2 } as c_int) {
             emsg(gettext(e_invarg));
             return;
         }
-        unsafe { (*eap).arg = (*script_item((*eap).line2 as ScriptId)).sn_name };
+        unsafe { (*args).arg = (*script_item((*args).line2 as ScriptId)).sn_name };
     } else {
         let namebuff = path.as_mut_ptr();
-        unsafe { expand_env((*eap).arg, namebuff, MAXPATHL) };
-        unsafe { (*eap).arg = namebuff };
+        unsafe { expand_env((*args).arg, namebuff, MAXPATHL) };
+        unsafe { (*args).arg = namebuff };
     }
-    unsafe { do_exedit(eap, ptr::null_mut()) };
+    unsafe { do_exedit(args, ptr::null_mut()) };
 }
 
 /// A script's name, for `":verbose set"` -- the text appended to "Last set
@@ -733,12 +733,12 @@ fn escaped_newline(line: &[u8]) -> bool {
 // Leaving a script.
 
 /// Are we sourcing a script, from a file or a buffer or a string?
-pub unsafe fn sourcing_a_script(eap: *mut ExArg) -> c_int {
-    // SAFETY: `eap` is the running command's block.
+pub unsafe fn sourcing_a_script(args: *mut ExArg) -> c_int {
+    // SAFETY: `args` is the running command's block.
     let same = unsafe {
         getline_equal(
-            (*eap).ea_getline,
-            (*eap).cookie,
+            (*args).ea_getline,
+            (*args).cookie,
             Some(getsourceline as LineGetterFn),
         )
     };
@@ -746,32 +746,32 @@ pub unsafe fn sourcing_a_script(eap: *mut ExArg) -> c_int {
 }
 
 /// `":scriptencoding"`: set encoding conversion for a sourced script.
-pub unsafe fn ex_scriptencoding(eap: *mut ExArg) {
-    // SAFETY: `eap` is the running command's block.
-    if unsafe { sourcing_a_script(eap) } == 0 {
+pub unsafe fn ex_scriptencoding(args: *mut ExArg) {
+    // SAFETY: `args` is the running command's block.
+    if unsafe { sourcing_a_script(args) } == 0 {
         emsg(gettext(
             c"E167: :scriptencoding used outside of a sourced file",
         ));
         return;
     }
-    let name = if unsafe { *(*eap).arg } != NUL as c_char {
-        unsafe { enc_canonize((*eap).arg) }
+    let name = if unsafe { *(*args).arg } != NUL as c_char {
+        unsafe { enc_canonize((*args).arg) }
     } else {
-        unsafe { (*eap).arg }
+        unsafe { (*args).arg }
     };
     // Set up for conversion from the specified encoding to 'encoding'.
-    let sp = unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie) }.cast::<SourceCookie>();
+    let sp = unsafe { getline_cookie((*args).ea_getline, (*args).cookie) }.cast::<SourceCookie>();
     let _ = unsafe { convert_setup(&raw mut (*sp).conv, name, p_enc.get()) };
-    if name != unsafe { (*eap).arg } {
+    if name != unsafe { (*args).arg } {
         unsafe { xfree(name.cast::<c_void>()) };
     }
 }
 
 /// `":finish"`: mark a sourced file as finished.
-pub unsafe fn ex_finish(eap: *mut ExArg) {
-    // SAFETY: `eap` is the running command's block.
-    if unsafe { sourcing_a_script(eap) } != 0 {
-        unsafe { do_finish(eap, false) };
+pub unsafe fn ex_finish(args: *mut ExArg) {
+    // SAFETY: `args` is the running command's block.
+    if unsafe { sourcing_a_script(args) } != 0 {
+        unsafe { do_finish(args, false) };
     } else {
         emsg(gettext(c"E168: :finish used outside of a sourced file"));
     }
@@ -781,32 +781,32 @@ pub unsafe fn ex_finish(eap: *mut ExArg) {
 ///
 /// Also called for a pending finish at the `":endtry"` or after returning from
 /// an extra `do_cmdline()`; `reanimate` says which.
-pub unsafe fn do_finish(eap: *mut ExArg, reanimate: bool) {
-    // SAFETY: `eap` is the running command's block, and its cookie is a
+pub unsafe fn do_finish(args: *mut ExArg, reanimate: bool) {
+    // SAFETY: `args` is the running command's block, and its cookie is a
     // `SourceCookie` because `ex_finish` checked before calling.
     if reanimate {
-        unsafe { (*source_cookie(eap)).finished = false };
+        unsafe { (*source_cookie(args)).finished = false };
     }
     // Clean up (and deactivate) conditionals, but stop when a try
     // conditional not in its finally clause -- which then is to be executed
     // next -- is found.  In that case make the `":finish"` pending for
     // execution at the `":endtry"`.  Otherwise, finish normally.
-    let idx = unsafe { cleanup_conditionals((*eap).cstack, CsFlags::NONE, true) };
+    let idx = unsafe { cleanup_conditionals((*args).cstack, CsFlags::NONE, true) };
     if idx >= 0 {
-        unsafe { (*(*eap).cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char };
+        unsafe { (*(*args).cstack).cs_pending[idx as usize] = CSTP_FINISH as c_char };
         unsafe { report_make_pending(CSTP_FINISH, NULL_0) };
     } else {
-        unsafe { (*source_cookie(eap)).finished = true };
+        unsafe { (*source_cookie(args)).finished = true };
     }
 }
 
-/// The cookie of the script `eap` is running under.
+/// The cookie of the script `args` is running under.
 ///
 /// # Safety
 ///
-/// `eap`'s reader must be [`getsourceline`].
-unsafe fn source_cookie(eap: *mut ExArg) -> *mut SourceCookie {
-    unsafe { getline_cookie((*eap).ea_getline, (*eap).cookie).cast::<SourceCookie>() }
+/// `args`'s reader must be [`getsourceline`].
+unsafe fn source_cookie(args: *mut ExArg) -> *mut SourceCookie {
+    unsafe { getline_cookie((*args).ea_getline, (*args).cookie).cast::<SourceCookie>() }
 }
 
 /// Did a sourced file have the `":finish"` command?  If so, don't give an error

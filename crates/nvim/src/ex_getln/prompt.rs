@@ -29,28 +29,28 @@ const NUMBUFLEN: usize = 65;
 /// `lenp` receives the length without the trailing NUL (zero while skipping).
 /// Answers an allocated string, or NULL when skipping and on error; it shows
 /// no messages of its own.
-pub unsafe fn script_get(eap: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
+pub unsafe fn script_get(args: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi::c_char {
     let mut numbuf = NumBuf::new();
-    let mut cmd = unsafe { (*eap).arg };
+    let mut cmd = unsafe { (*args).arg };
     if unsafe { *cmd.offset(0) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
         || unsafe { *cmd.offset(1) } as ::core::ffi::c_int != '<' as ::core::ffi::c_int
-        || unsafe { (*eap).ea_getline }.is_none()
+        || unsafe { (*args).ea_getline }.is_none()
     {
-        unsafe { *lenp = cstr::bytes_at((*eap).arg).len() };
-        if unsafe { (*eap).skip } != 0 {
+        unsafe { *lenp = cstr::bytes_at((*args).arg).len() };
+        if unsafe { (*args).skip } != 0 {
             return ::core::ptr::null_mut();
         }
-        return unsafe { xmemdupz((*eap).arg as *const ::core::ffi::c_void, *lenp) }
+        return unsafe { xmemdupz((*args).arg as *const ::core::ffi::c_void, *lenp) }
             as *mut ::core::ffi::c_char;
     }
     cmd = unsafe { cmd.offset(2) };
 
-    let l = unsafe { heredoc_get(eap, cmd, true) };
+    let l = unsafe { heredoc_get(args, cmd, true) };
     if l.is_null() {
         return ::core::ptr::null_mut::<::core::ffi::c_char>();
     }
 
-    let skip = unsafe { (*eap).skip } != 0;
+    let skip = unsafe { (*args).skip } != 0;
     let mut text = Vec::<u8>::new();
     let mut li: *const ListItem = unsafe { (*l).lv_first };
     while !li.is_null() {

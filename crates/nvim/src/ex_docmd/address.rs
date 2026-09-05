@@ -116,9 +116,9 @@ const WINCMD_BUFFERS: &[u8] = b"^\x1e";
 const WINCMD_WINDOWS: &[u8] = b"qcowWx\x11\x03\x0f\x17\x18";
 const WINCMD_NONE: &[u8] = b"zPtbp=\x1a\x14\x02\x10\x0d";
 
-pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut eap: Ea) {
+pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut args: Ea) {
     let c = ubyte(arg);
-    eap.addr_type = if WINCMD_OTHER.contains(&c) {
+    args.addr_type = if WINCMD_OTHER.contains(&c) {
         CmdAddr::Other
     } else if WINCMD_BUFFERS.contains(&c) {
         CmdAddr::Buffers
@@ -134,8 +134,8 @@ pub(crate) unsafe fn get_wincmd_addr_type(arg: *const c_char, mut eap: Ea) {
 
 /// Take the address kind from the command table, with the three exceptions
 /// the table cannot express.
-pub unsafe fn set_cmd_addr_type(eap: *mut ExArg, p: *mut c_char) {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn set_cmd_addr_type(args: *mut ExArg, p: *mut c_char) {
+    let mut ea = unsafe { Ea::new(args) };
     if is_user_cmd(ea.cmdidx) {
         return;
     }
@@ -155,8 +155,8 @@ pub unsafe fn set_cmd_addr_type(eap: *mut ExArg, p: *mut c_char) {
 
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
 /// from.
-pub unsafe fn get_cmd_default_range(eap: *mut ExArg) -> LineNr {
-    let eap = unsafe { Ea::new(eap) };
+pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
+    let eap = unsafe { Ea::new(args) };
     match eap.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
             // Not the cursor line but the *last* line when the cursor is
@@ -182,8 +182,8 @@ pub unsafe fn get_cmd_default_range(eap: *mut ExArg) -> LineNr {
 }
 
 /// The range an `ExArgt::DFLALL` command means by "no range": everything.
-pub unsafe fn set_cmd_dflall_range(eap: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn set_cmd_dflall_range(args: *mut ExArg) {
+    let mut ea = unsafe { Ea::new(args) };
     ea.line1 = 1;
     match ea.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
@@ -215,7 +215,7 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut ExArg) {
             }
         }
         CmdAddr::QuickfixValid => {
-            ea.line2 = qf_get_valid_size(eap) as LineNr;
+            ea.line2 = qf_get_valid_size(args) as LineNr;
             if ea.line2 == 0 {
                 ea.line2 = 1;
             }
@@ -265,14 +265,14 @@ pub(crate) fn find_excmd_after_range(mut ea: Ea) -> *mut c_char {
 /// the second is resolved, which is what makes `:.;+3` mean "three lines
 /// from here" however the first address was spelled.
 pub unsafe fn parse_cmd_address(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     errormsg: &mut Option<CString>,
     silent: bool,
 ) -> c_int {
     // The records `:*` reads the Visual marks into: they are never adjusted
     // and have no store, so each is computed into a record of its own.
     let (mut first, mut last) = (FileMark::UNSET, FileMark::UNSET);
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     let mut address_count = 1;
     let mut lnum: LineNr;
     let mut need_check_cursor = false;
@@ -281,11 +281,11 @@ pub unsafe fn parse_cmd_address(
     'theend: {
         loop {
             ea.line1 = ea.line2;
-            ea.line2 = unsafe { get_cmd_default_range(eap) };
+            ea.line2 = unsafe { get_cmd_default_range(args) };
             ea.cmd = skipwhite(ea.cmd);
             lnum = unsafe {
                 get_address(
-                    eap,
+                    args,
                     ea.cmd_ptr(),
                     ea.addr_type,
                     ea.skip != 0,
@@ -370,30 +370,30 @@ pub unsafe fn parse_cmd_address(
 
 /// Fill in the range `%` means for this address kind. Answers false when
 /// the kind has no "all", having reported why.
-fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
-    match eap.addr_type {
+fn whole_range(mut args: Ea, errormsg: &mut Option<CString>) -> bool {
+    match args.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
-            eap.line1 = 1;
-            eap.line2 = cur_buf().b_ml.ml_line_count;
+            args.line1 = 1;
+            args.line2 = cur_buf().b_ml.ml_line_count;
         }
         CmdAddr::LoadedBuffers => {
             let (first, last) = loaded_buffer_range();
-            eap.line1 = first;
-            eap.line2 = last;
+            args.line1 = first;
+            args.line2 = last;
         }
         CmdAddr::Buffers => {
-            eap.line1 = head().handle as LineNr;
-            eap.line2 = tail().handle as LineNr;
+            args.line1 = head().handle as LineNr;
+            args.line2 = tail().handle as LineNr;
         }
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
             // pages; a builtin one would not know what to do with it.
-            if !is_user_cmd(eap.cmdidx) {
+            if !is_user_cmd(args.cmdidx) {
                 *errormsg = Some(ex_msg(e_invrange.as_ptr()));
                 return false;
             }
-            eap.line1 = 1;
-            eap.line2 = if eap.addr_type == CmdAddr::Windows {
+            args.line1 = 1;
+            args.line2 = if args.addr_type == CmdAddr::Windows {
                 current_win_nr(ptr::null()) as LineNr
             } else {
                 current_tab_nr(ptr::null_mut()) as LineNr
@@ -406,20 +406,20 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
         CmdAddr::Arguments => {
             let len = arglist_len();
             if len == 0 {
-                eap.line2 = 0;
-                eap.line1 = 0;
+                args.line2 = 0;
+                args.line1 = 0;
             } else {
-                eap.line1 = 1;
-                eap.line2 = len as LineNr;
+                args.line1 = 1;
+                args.line2 = len as LineNr;
             }
         }
         CmdAddr::QuickfixValid => {
             // SAFETY: the caller's promise -- a live command.
-            let valid = qf_get_valid_size(eap.raw()) as LineNr;
-            eap.line1 = 1;
-            eap.line2 = valid;
-            if eap.line2 == 0 {
-                eap.line2 = 1;
+            let valid = qf_get_valid_size(args.raw()) as LineNr;
+            args.line1 = 1;
+            args.line2 = valid;
+            if args.line2 == 0 {
+                args.line2 = 1;
             }
         }
         // `NoRange` reaches here for a user command and is accepted
@@ -492,7 +492,7 @@ pub(crate) fn addr_error(addr_type: CmdAddr) -> CString {
 /// report an error (the message goes to `errormsg`).
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn get_address(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     ptr: *mut *mut c_char,
     addr_type: CmdAddr,
     skip: bool,
@@ -501,7 +501,7 @@ pub unsafe fn get_address(
     address_count: c_int,
     errormsg: &mut Option<CString>,
 ) -> LineNr {
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     // The record a `'m` address answers into; see `mark_get`.
     let mut slot = FileMark::UNSET;
     let mut cmd: *mut c_char = unsafe { skipwhite(*ptr) };
@@ -781,15 +781,15 @@ enum Addr {
 }
 
 /// What `.` means for this address kind.
-fn dot_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
+fn dot_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => cur_win().w_cursor.lnum,
         CmdAddr::Windows => current_win_nr(curwin.get()) as LineNr,
         CmdAddr::Arguments => (cur_win().w_arg_idx + 1) as LineNr,
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(curtab.get()) as LineNr,
-        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as LineNr,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as LineNr,
+        CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -798,7 +798,7 @@ fn dot_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
 }
 
 /// What `$` means for this address kind.
-fn last_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
+fn last_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => cur_buf().b_ml.ml_line_count,
         CmdAddr::Windows => current_win_nr(ptr::null()) as LineNr,
@@ -807,8 +807,8 @@ fn last_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
         CmdAddr::Buffers => tail().handle as LineNr,
         CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as LineNr,
         // An empty quickfix list still has a last entry, numbered 1.
-        CmdAddr::Quickfix => (unsafe { qf_get_size(eap.raw()) } as LineNr).max(1),
-        CmdAddr::QuickfixValid => (qf_get_valid_size(eap.raw()) as LineNr).max(1),
+        CmdAddr::Quickfix => (unsafe { qf_get_size(args.raw()) } as LineNr).max(1),
+        CmdAddr::QuickfixValid => (qf_get_valid_size(args.raw()) as LineNr).max(1),
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -818,18 +818,18 @@ fn last_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
 
 /// What a bare `+N`/`-N` counts from. Unlike `.`, the three cursor-less
 /// kinds answer a number here rather than an error.
-fn offset_base(eap: Ea, addr_type: CmdAddr) -> Addr {
+fn offset_base(args: Ea, addr_type: CmdAddr) -> Addr {
     match addr_type {
         CmdAddr::TabsRelative => Addr::At(1),
         CmdAddr::NoRange | CmdAddr::Unsigned => Addr::At(0),
-        _ => dot_lnum(eap, addr_type),
+        _ => dot_lnum(args, addr_type),
     }
 }
 
 /// Is the range this command was given out of bounds? Answers the message
 /// to report, or null.
-pub(crate) unsafe fn invalid_range(eap: *mut ExArg) -> Option<CString> {
-    let ea = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn invalid_range(args: *mut ExArg) -> Option<CString> {
+    let ea = unsafe { Ea::new(args) };
     let invrange = || Some(ex_msg(e_invrange.as_ptr()));
     if ea.line1 < 0 || ea.line2 < 0 || ea.line1 > ea.line2 {
         return invrange();
@@ -903,7 +903,8 @@ pub(crate) unsafe fn invalid_range(eap: *mut ExArg) -> Option<CString> {
             }
         }
         CmdAddr::QuickfixValid
-            if ((ea.line2 != 1 && ea.line2 as size_t > qf_get_valid_size(eap)) || ea.line2 < 0) =>
+            if ((ea.line2 != 1 && ea.line2 as size_t > qf_get_valid_size(args))
+                || ea.line2 < 0) =>
         {
             return invrange();
         }
@@ -951,21 +952,21 @@ fn mark_get_visual(buffer: *mut Buffer, fmp: *mut FileMark, name: c_int) -> *mut
 }
 
 /// `qf_get_cur_idx()` as checked code.
-fn qf_get_cur_idx(eap: *mut ExArg) -> size_t {
+fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::quickfix::qf_get_cur_idx(eap) }
+    unsafe { crate::quickfix::qf_get_cur_idx(args) }
 }
 
 /// `qf_get_cur_valid_idx()` as checked code.
-fn qf_get_cur_valid_idx(eap: *mut ExArg) -> c_int {
+fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::quickfix::qf_get_cur_valid_idx(eap) }
+    unsafe { crate::quickfix::qf_get_cur_valid_idx(args) }
 }
 
 /// `qf_get_valid_size()` as checked code.
-fn qf_get_valid_size(eap: *mut ExArg) -> size_t {
+fn qf_get_valid_size(args: *mut ExArg) -> size_t {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::quickfix::qf_get_valid_size(eap) }
+    unsafe { crate::quickfix::qf_get_valid_size(args) }
 }
 
 /// `skipwhite()` as checked code.

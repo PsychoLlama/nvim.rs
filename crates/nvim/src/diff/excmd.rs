@@ -58,9 +58,9 @@ fn emsg_gettext(msg: *const c_char) {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffpatch(eap: *mut ExArg) {
+pub unsafe fn ex_diffpatch(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<ExArg>::new(eap) };
+    let mut eap = unsafe { Live::<ExArg>::new(args) };
     let old_curwin: *mut Window = curwin.get();
     let mut newname: *mut c_char = ptr::null_mut();
     let mut esc_name: *mut c_char = ptr::null_mut();
@@ -223,9 +223,9 @@ fn remove_suffixed(buf: *mut c_char, name: *mut c_char, suffix: *const c_char) {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffsplit(eap: *mut ExArg) {
+pub unsafe fn ex_diffsplit(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let mut eap = unsafe { Live::<ExArg>::new(eap) };
+    let mut eap = unsafe { Live::<ExArg>::new(args) };
     let old_curwin: *mut Window = curwin.get();
     let old_curbuf = BufRef::of_opt(current_buf());
     // SAFETY: the current window is live, in both calls.
@@ -265,7 +265,7 @@ pub unsafe fn ex_diffsplit(eap: *mut ExArg) {
 ///
 /// # Safety
 /// The editor must be running.
-pub unsafe fn ex_diffthis(_eap: *mut ExArg) {
+pub unsafe fn ex_diffthis(_args: *mut ExArg) {
     // SAFETY: the current window is live.
     diff_win_options(cur_win(), true);
 }
@@ -398,9 +398,9 @@ fn strdup_of(p: *const c_char) -> *mut c_char {
 ///
 /// # Safety
 /// `eap` must be a live command.
-pub unsafe fn ex_diffoff(eap: *mut ExArg) {
+pub unsafe fn ex_diffoff(args: *mut ExArg) {
     // SAFETY: the caller's command.
-    let eap = unsafe { Live::<ExArg>::new(eap) };
+    let eap = unsafe { Live::<ExArg>::new(args) };
     let mut diffwin = false;
     // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`: always the `firstwin` list.
     for mut wp in windows() {

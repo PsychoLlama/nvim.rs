@@ -45,12 +45,12 @@ type Range = Option<(LineNr, LineNr)>;
 /// # Safety
 /// `menu` must name a live node; `eap` must be null (the window toolbar) or
 /// name a live `ExArg`.
-pub(crate) unsafe fn execute_menu(eap: *const ExArg, menu: *mut VimMenu, mode_idx: c_int) {
+pub(crate) unsafe fn execute_menu(args: *const ExArg, menu: *mut VimMenu, mode_idx: c_int) {
     // SAFETY: the caller's obligation. The range is copied out rather than
     // borrowed, because running the rhs re-enters the editor.
     let (menu, from_command, range) = unsafe {
         let menu = Menu::new(menu);
-        match eap.as_ref() {
+        match args.as_ref() {
             None => (menu, false, None),
             Some(eap) => (
                 menu,
@@ -226,10 +226,10 @@ fn menu_getbyname(path_name: &CStr) -> Option<Menu> {
 /// `:emenu` -- find the menu a descriptor like `File.New` names and run it.
 ///
 /// # Safety
-/// `eap` must name the live `ExArg` of the command.
-pub(crate) unsafe fn ex_emenu(eap: *mut ExArg) {
+/// `args` must name the live `ExArg` of the command.
+pub(crate) unsafe fn ex_emenu(args: *mut ExArg) {
     // SAFETY: the caller's obligation; `arg` names the command line.
-    let arg = unsafe { CText::new((*eap).arg) };
+    let arg = unsafe { CText::new((*args).arg) };
 
     // An optional leading mode letter, e.g. ":emenu i File.New".
     let mut mode_idx = MENU_INDEX_INVALID;
@@ -256,7 +256,7 @@ pub(crate) unsafe fn ex_emenu(eap: *mut ExArg) {
         return;
     };
     // SAFETY: a live node, and the command's own `ExArg`.
-    unsafe { execute_menu(eap, menu.raw(), mode_idx) };
+    unsafe { execute_menu(args, menu.raw(), mode_idx) };
 }
 
 /// Find the sub-menu `path_name` names -- what `:popup` and the window

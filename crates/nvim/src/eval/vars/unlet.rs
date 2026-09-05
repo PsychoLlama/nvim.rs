@@ -20,26 +20,26 @@ use crate::types::{Failed, NUL};
 /// `:unlet`.
 ///
 /// # Safety
-/// `eap` is a live `:unlet` command.
-pub unsafe fn ex_unlet(eap: *mut ExArg) {
+/// `args` is a live `:unlet` command.
+pub unsafe fn ex_unlet(args: *mut ExArg) {
     // `:unlet!` means "do not complain", which reaches `get_lval` as
     // GLV_QUIET and `do_unlet` as `forceit`.
     // SAFETY: the caller's obligation -- a live command, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     let glv_flags = if ea.forceit != 0 { GLV_QUIET } else { 0 };
     let arg = ea.arg;
-    unsafe { ex_unletlock(eap, arg, 0, glv_flags, do_unlet_var) };
+    unsafe { ex_unletlock(args, arg, 0, glv_flags, do_unlet_var) };
 }
 
 /// `:lockvar` and `:unlockvar`.
 ///
 /// # Safety
-/// `eap` is a live `:lockvar`/`:unlockvar` command.
-pub unsafe fn ex_lockvar(eap: *mut ExArg) {
+/// `args` is a live `:lockvar`/`:unlockvar` command.
+pub unsafe fn ex_lockvar(args: *mut ExArg) {
     // SAFETY: the caller's obligation -- a live command whose argument text
     // is NUL-terminated.
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     let mut arg = ea.arg;
     // Two levels by default: the variable and what it directly holds.
     // `!` is everything, and an explicit count says how deep.
@@ -50,7 +50,7 @@ pub unsafe fn ex_lockvar(eap: *mut ExArg) {
         deep = unsafe { getdigits_int(&raw mut arg, false, -1) };
         arg = unsafe { skipwhite(arg) };
     }
-    unsafe { ex_unletlock(eap, arg, deep, 0, do_lock_var) };
+    unsafe { ex_unletlock(args, arg, deep, 0, do_lock_var) };
 }
 
 /// The argument walk `:unlet`, `:lockvar` and `:unlockvar` share, calling
@@ -60,9 +60,9 @@ pub unsafe fn ex_lockvar(eap: *mut ExArg) {
 /// arguments are still checked, but `error` suppresses every later callback.
 ///
 /// # Safety
-/// `eap` is a live command and `argstart` a NUL-terminated string.
+/// `args` is a live command and `argstart` a NUL-terminated string.
 unsafe fn ex_unletlock(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     argstart: *mut c_char,
     deep: c_int,
     glv_flags: c_int,
@@ -70,7 +70,7 @@ unsafe fn ex_unletlock(
 ) {
     // SAFETY: the caller's obligation -- a live command and a NUL-terminated
     // argument text, which `arg` and `name_end` both stay inside.
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     let mut arg = argstart;
     let mut name_end;
     let mut error = false;
@@ -90,7 +90,7 @@ unsafe fn ex_unletlock(
                 semsg!("E475: Invalid argument: {arg0}");
                 return;
             }
-            if !error && ea.skip == 0 && unsafe { callback(lvp, arg, eap, deep) }.is_err() {
+            if !error && ea.skip == 0 && unsafe { callback(lvp, arg, args, deep) }.is_err() {
                 error = true;
             }
             name_end = arg;
@@ -118,7 +118,7 @@ unsafe fn ex_unletlock(
                 break;
             }
 
-            if !error && ea.skip == 0 && unsafe { callback(lvp, name_end, eap, deep) }.is_err() {
+            if !error && ea.skip == 0 && unsafe { callback(lvp, name_end, args, deep) }.is_err() {
                 error = true;
             }
             if ea.skip == 0 {
@@ -138,17 +138,17 @@ unsafe fn ex_unletlock(
 ///
 /// # Safety
 /// `lp` is a resolved lvalue, `name_end` points into the command line and
-/// `eap` is live.
+/// `args` is live.
 unsafe fn do_unlet_var(
     lp: *mut LVal,
     name_end: *mut c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     _deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
     let lp = unsafe { Lv::new(lp) };
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     if lp.ll_tv.is_null() {
         // A whole variable: an environment variable, a plain name or an
         // expanded one.  Terminate the name in place, so that the error
@@ -334,13 +334,13 @@ pub unsafe fn do_unlet(name: *const c_char, name_len: size_t, forceit: bool) -> 
 unsafe fn do_lock_var(
     lp: *mut LVal,
     _name_end: *mut c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     deep: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's obligation -- a resolved lvalue and a live
     // command, both of which outlive this call.
     let mut lp = unsafe { Lv::new(lp) };
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     let lock = ea.cmdidx == CmdIdx::lockvar;
     let name = lp.ll_name;
 

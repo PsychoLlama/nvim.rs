@@ -152,48 +152,48 @@ fn tab_windows() -> impl Iterator<Item = (*mut Tabpage, *mut Window)> {
 // and lets the remote plugin host do the work.
 
 /// `:ruby`
-pub(crate) unsafe fn ex_ruby(eap: *mut ExArg) {
-    unsafe { script_host_execute(c"ruby", eap) }
+pub(crate) unsafe fn ex_ruby(args: *mut ExArg) {
+    unsafe { script_host_execute(c"ruby", args) }
 }
 
 /// `:rubyfile`
-pub(crate) unsafe fn ex_rubyfile(eap: *mut ExArg) {
-    unsafe { script_host_execute_file(c"ruby", eap) }
+pub(crate) unsafe fn ex_rubyfile(args: *mut ExArg) {
+    unsafe { script_host_execute_file(c"ruby", args) }
 }
 
 /// `:rubydo`
-pub(crate) unsafe fn ex_rubydo(eap: *mut ExArg) {
-    unsafe { script_host_do_range(c"ruby", eap) }
+pub(crate) unsafe fn ex_rubydo(args: *mut ExArg) {
+    unsafe { script_host_do_range(c"ruby", args) }
 }
 
 /// `:python3`
-pub(crate) unsafe fn ex_python3(eap: *mut ExArg) {
-    unsafe { script_host_execute(c"python3", eap) }
+pub(crate) unsafe fn ex_python3(args: *mut ExArg) {
+    unsafe { script_host_execute(c"python3", args) }
 }
 
 /// `:py3file`
-pub(crate) unsafe fn ex_py3file(eap: *mut ExArg) {
-    unsafe { script_host_execute_file(c"python3", eap) }
+pub(crate) unsafe fn ex_py3file(args: *mut ExArg) {
+    unsafe { script_host_execute_file(c"python3", args) }
 }
 
 /// `:pydo3`
-pub(crate) unsafe fn ex_pydo3(eap: *mut ExArg) {
-    unsafe { script_host_do_range(c"python3", eap) }
+pub(crate) unsafe fn ex_pydo3(args: *mut ExArg) {
+    unsafe { script_host_do_range(c"python3", args) }
 }
 
 /// `:perl`
-pub(crate) unsafe fn ex_perl(eap: *mut ExArg) {
-    unsafe { script_host_execute(c"perl", eap) }
+pub(crate) unsafe fn ex_perl(args: *mut ExArg) {
+    unsafe { script_host_execute(c"perl", args) }
 }
 
 /// `:perlfile`
-pub(crate) unsafe fn ex_perlfile(eap: *mut ExArg) {
-    unsafe { script_host_execute_file(c"perl", eap) }
+pub(crate) unsafe fn ex_perlfile(args: *mut ExArg) {
+    unsafe { script_host_execute_file(c"perl", args) }
 }
 
 /// `:perldo`
-pub(crate) unsafe fn ex_perldo(eap: *mut ExArg) {
-    unsafe { script_host_do_range(c"perl", eap) }
+pub(crate) unsafe fn ex_perldo(args: *mut ExArg) {
+    unsafe { script_host_do_range(c"perl", args) }
 }
 
 /// Hand the command's own text to the provider, with the range.
@@ -708,13 +708,13 @@ pub(crate) unsafe fn buf_write_all(buffer: *mut Buffer, forceit: bool) -> Result
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_compiler(eap: *mut ExArg) {
+pub(crate) unsafe fn ex_compiler(args: *mut ExArg) {
     let mut numbuf = NumBuf::new();
     const CURRENT_COMPILER: &CStr = c"g:current_compiler";
     const B_CURRENT_COMPILER: &CStr = c"b:current_compiler";
 
     // SAFETY: module contract; `eap->arg` is NUL-terminated.
-    if unsafe { *(*eap).arg } == NUL as c_char {
+    if unsafe { *(*args).arg } == NUL as c_char {
         // List all compiler scripts.
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.vim')".as_ptr()) };
         let _ = unsafe { do_cmdline_cmd(c"echo globpath(&rtp, 'compiler/*.lua')".as_ptr()) };
@@ -726,7 +726,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut ExArg) {
     // function. Save the old value, then set "b:current_compiler" from
     // whatever the plugin leaves behind and put the old value back.
     let mut old_cur_comp = ptr::null_mut();
-    if unsafe { (*eap).forceit } != 0 {
+    if unsafe { (*args).forceit } != 0 {
         // ":compiler! {name}" sets global options.
         let cmd = c"command -nargs=* -keepscript CompilerSet set <args>".as_ptr();
         let _ = unsafe { do_cmdline_cmd(cmd) };
@@ -746,13 +746,13 @@ pub(crate) unsafe fn ex_compiler(eap: *mut ExArg) {
     );
     let _ = unsafe { do_unlet(name, len, true) };
 
-    let mut pattern = Vec::with_capacity(unsafe { cstr::bytes_at((*eap).arg) }.len() + 12);
+    let mut pattern = Vec::with_capacity(unsafe { cstr::bytes_at((*args).arg) }.len() + 12);
     pattern.extend_from_slice(b"compiler/");
-    pattern.extend_from_slice(unsafe { CStr::from_ptr((*eap).arg) }.to_bytes());
+    pattern.extend_from_slice(unsafe { CStr::from_ptr((*args).arg) }.to_bytes());
     pattern.extend_from_slice(b".*\0");
     if unsafe { source_runtime_vim_lua(pattern.as_mut_ptr().cast(), RuntimeOpts::ALL) }.is_err() {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str((*eap).arg) };
+        let arg = unsafe { c_str((*args).arg) };
         semsg!("E666: Compiler not supported: {arg}");
     }
 
@@ -765,7 +765,7 @@ pub(crate) unsafe fn ex_compiler(eap: *mut ExArg) {
     }
 
     // Restore "current_compiler" for ":compiler {name}".
-    if unsafe { (*eap).forceit } == 0 {
+    if unsafe { (*args).forceit } == 0 {
         if old_cur_comp.is_null() {
             let _ = unsafe {
                 do_unlet(
@@ -785,14 +785,14 @@ pub(crate) unsafe fn ex_compiler(eap: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_checktime(eap: *mut ExArg) {
+pub(crate) unsafe fn ex_checktime(args: *mut ExArg) {
     let _checked = Allow::timestamp_checks();
     // SAFETY: module contract.
-    if unsafe { (*eap).addr_count } == 0 {
+    if unsafe { (*args).addr_count } == 0 {
         // The default is all buffers.
         unsafe { check_timestamps(0) };
     } else {
-        if let Some(buf) = find_buf(unsafe { (*eap).line2 } as c_int) {
+        if let Some(buf) = find_buf(unsafe { (*args).line2 } as c_int) {
             // Cannot happen?
             unsafe { buf_check_timestamp(buf) };
         }
@@ -804,13 +804,13 @@ pub(crate) unsafe fn ex_checktime(eap: *mut ExArg) {
 ///
 /// # Safety
 /// Module contract.
-pub(crate) unsafe fn ex_drop(eap: *mut ExArg) {
+pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // SAFETY: module contract.
     // Check whether the first argument is already being edited in a
     // window and jump there if so. Checking all of them would be
     // complicated and mostly only one file is dropped. Wildcards are
     // ignored too, since a file name containing one is very unlikely.
-    unsafe { set_arglist((*eap).arg) };
+    unsafe { set_arglist((*args).arg) };
 
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
@@ -823,9 +823,9 @@ pub(crate) unsafe fn ex_drop(eap: *mut ExArg) {
         // ":tab drop file ...": open a tab for each argument not yet
         // edited in a window. Like ":tab all" but without closing
         // windows or tabs.
-        unsafe { ex_all(eap) };
+        unsafe { ex_all(args) };
         cmdmod.with_mut(|m| m.cmod_tab = 0);
-        unsafe { ex_rewind(eap) };
+        unsafe { ex_rewind(args) };
         return;
     }
 
@@ -848,14 +848,14 @@ pub(crate) unsafe fn ex_drop(eap: *mut ExArg) {
             unsafe { (*curbuf.get()).b_p_ar = save_ar };
         }
         if unsafe { (*curbuf.get()).b_ml.ml_flags }.has(MlFlags::EMPTY) {
-            unsafe { ex_rewind(eap) };
+            unsafe { ex_rewind(args) };
         }
         // Execute [+cmd]. No need to execute [++opts]: those only apply
         // to newly loaded buffers.
-        if !unsafe { (*eap).do_ecmd_cmd }.is_null() {
-            let did_set_swapcommand = unsafe { set_swapcommand((*eap).do_ecmd_cmd, 0 as LineNr) };
+        if !unsafe { (*args).do_ecmd_cmd }.is_null() {
+            let did_set_swapcommand = unsafe { set_swapcommand((*args).do_ecmd_cmd, 0 as LineNr) };
             let verbose = DoCmdOpts::VERBOSE;
-            let _ = unsafe { do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), verbose) };
+            let _ = unsafe { do_cmdline((*args).do_ecmd_cmd, None, ptr::null_mut(), verbose) };
             if did_set_swapcommand {
                 unsafe { set_vim_var_string(Vv::Swapcommand, ptr::null(), -1 as ptrdiff_t) };
             }
@@ -874,10 +874,10 @@ pub(crate) unsafe fn ex_drop(eap: *mut ExArg) {
 
     // Fake a ":sfirst" or ":first" to edit the first argument.
     if split {
-        unsafe { (*eap).cmdidx = CmdIdx::sfirst };
-        unsafe { *(*eap).cmd = b's' as c_char };
+        unsafe { (*args).cmdidx = CmdIdx::sfirst };
+        unsafe { *(*args).cmd = b's' as c_char };
     } else {
-        unsafe { (*eap).cmdidx = CmdIdx::first };
+        unsafe { (*args).cmdidx = CmdIdx::first };
     }
-    unsafe { ex_rewind(eap) };
+    unsafe { ex_rewind(args) };
 }

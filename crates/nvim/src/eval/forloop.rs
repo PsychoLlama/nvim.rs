@@ -46,12 +46,12 @@ const UNSET_TV: TypVal = TypVal {
 /// run.
 ///
 /// # Safety
-/// `arg` must be NUL-terminated; `errp` and `evalarg` valid; `eap` null or
+/// `arg` must be NUL-terminated; `errp` and `evalarg` valid; `args` null or
 /// valid.
 pub unsafe fn eval_for_line(
     arg: *const c_char,
     errp: *mut bool,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     evalarg: *mut EvalArg,
 ) -> *mut c_void {
     // SAFETY: `xcalloc` never answers NULL and hands back one zeroed
@@ -87,9 +87,9 @@ pub unsafe fn eval_for_line(
     // SAFETY: as above -- two bytes into a NUL-terminated string.
     let expr = unsafe { skipwhite(expr.add(2)) };
     let mut tv = UNSET_TV;
-    // SAFETY: `expr` is NUL-terminated, `tv` is this frame's, and `eap` and
+    // SAFETY: `expr` is NUL-terminated, `tv` is this frame's, and `args` and
     // `evalarg` are the caller's.
-    if unsafe { eval0(expr as *mut c_char, &raw mut tv, eap, evalarg) }.is_ok() {
+    if unsafe { eval0(expr as *mut c_char, &raw mut tv, args, evalarg) }.is_ok() {
         // SAFETY: the caller's promise about `errp`.
         unsafe { *errp = false };
         if !skip {

@@ -29,9 +29,9 @@ struct At {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cc(eap: *mut ExArg) {
+pub unsafe fn ex_cc(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     let Some(qi) = qf_cmd_stack(eap, true) else {
         return;
     };
@@ -76,9 +76,9 @@ pub unsafe fn ex_cc(eap: *mut ExArg) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cnext(eap: *mut ExArg) {
+pub unsafe fn ex_cnext(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     let Some(qi) = qf_cmd_stack(eap, true) else {
         return;
     };
@@ -375,9 +375,9 @@ unsafe fn nth_adjacent_entry(
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cbelow(eap: *mut ExArg) {
+pub unsafe fn ex_cbelow(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     if eap.addr_count > 0 && eap.line2 <= 0 {
         qf_emsg(e_invrange.as_ptr());

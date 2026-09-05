@@ -138,9 +138,9 @@ pub unsafe fn rename_buffer(new_fname: *mut c_char) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_file(eap: *mut ExArg) {
+pub unsafe fn ex_file(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     // SAFETY: `eap.arg` is the command's NUL-terminated argument.
     let no_arg = unsafe { *eap.arg } as c_int == NUL;
 
@@ -170,9 +170,9 @@ pub unsafe fn ex_file(eap: *mut ExArg) {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_update(eap: *mut ExArg) {
+pub unsafe fn ex_update(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     // SAFETY: `curbuf` is live.
     if curbuf_is_changed()
         || (!buf_is_nofilename(current_buf())
@@ -187,9 +187,9 @@ pub unsafe fn ex_update(eap: *mut ExArg) {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_write(eap: *mut ExArg) {
+pub unsafe fn ex_write(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     if eap.cmdidx == CmdIdx::saveas {
         // :saveas does not take a range, uses all lines.
         eap.line1 = 1;
@@ -225,9 +225,9 @@ unsafe fn check_writable(fname: *const c_char) -> Result<(), Failed> {
 ///
 /// # Safety
 /// `fname` must be live.
-unsafe fn handle_mkdir_p_arg(eap: &ExArg, fname: *mut c_char) -> Result<(), Failed> {
+unsafe fn handle_mkdir_p_arg(args: &ExArg, fname: *mut c_char) -> Result<(), Failed> {
     // SAFETY: caller's contract.
-    if eap.mkdir_p != 0 && unsafe { os_file_mkdir(fname, 0o755 as int32_t) } < 0 {
+    if args.mkdir_p != 0 && unsafe { os_file_mkdir(fname, 0o755 as int32_t) } < 0 {
         return Err(Failed);
     }
     Ok(())
@@ -239,22 +239,22 @@ unsafe fn handle_mkdir_p_arg(eap: &ExArg, fname: *mut c_char) -> Result<(), Fail
 /// Answers `Err` for failure.
 ///
 /// # Safety
-/// `eap` must be the live Ex-command argument.
-pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
+/// `args` must be the live Ex-command argument.
+pub unsafe fn do_write(args: &mut ExArg) -> Result<(), Failed> {
     // check 'write' option
     if unsafe { not_writing() } {
         return Err(Failed);
     }
 
     let mut fname = ptr::null_mut(); // init to shut up gcc
-    let mut ffname = eap.arg;
+    let mut ffname = args.arg;
     // When out-of-memory, keep the unexpanded file name, because we MUST be
     // able to write the file in this situation.
     let free_fname;
 
     // SAFETY: `ffname` is the command's NUL-terminated argument.
     let other = if unsafe { *ffname } as c_int == NUL {
-        if eap.cmdidx == CmdIdx::saveas {
+        if args.cmdidx == CmdIdx::saveas {
             emsg(gettext(e_argreq));
             return Err(Failed);
         }
@@ -276,7 +276,7 @@ pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
         // SAFETY: the names are live, 'cpoptions' is a live option string, and
         // both lookups hand back a live buffer or NULL.
         alt_buf = unsafe {
-            if cpo_has(CpoFlag::ALTWRITE) || eap.cmdidx == CmdIdx::saveas {
+            if cpo_has(CpoFlag::ALTWRITE) || args.cmdidx == CmdIdx::saveas {
                 setaltfname(ffname, fname, 1)
             } else {
                 buflist_findname(ffname)
@@ -294,20 +294,20 @@ pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
 
     if !other {
         // SAFETY: `curbuf` is the current buffer.
-        if unsafe { cannot_write_curbuf(eap) } {
+        if unsafe { cannot_write_curbuf(args) } {
             return Err(Failed);
         }
         (ffname, fname) = (cur_buf().b_ffname, cur_buf().b_fname);
         // SAFETY: main thread, message state.
-        if !unsafe { confirm_partial_write(eap) } {
+        if !unsafe { confirm_partial_write(args) } {
             return Err(Failed);
         }
     }
 
     // SAFETY: the names are live.
-    unsafe { check_overwrite(eap, cur_buf(), fname, ffname, other) }?;
+    unsafe { check_overwrite(args, cur_buf(), fname, ffname, other) }?;
 
-    if eap.cmdidx == CmdIdx::saveas
+    if args.cmdidx == CmdIdx::saveas
         && let Some(alt_buf) = alt_buf
     {
         match saveas_exchange_names(alt_buf) {
@@ -317,16 +317,16 @@ pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
     }
 
     // SAFETY: `fname` is live.
-    unsafe { handle_mkdir_p_arg(eap, fname) }?;
+    unsafe { handle_mkdir_p_arg(args, fname) }?;
 
     let name_was_missing = cur_buf().b_ffname.is_null();
     let request = WriteRequest {
-        append: eap.append != 0,
-        forceit: eap.forceit != 0,
+        append: args.append != 0,
+        forceit: args.forceit != 0,
         reset_changed: true,
         filtering: false,
     };
-    let (line1, line2) = (eap.line1, eap.line2);
+    let (line1, line2) = (args.line1, args.line2);
     // SAFETY: the names and the range are the ones checked above, and the
     // command block is the one borrowed here.
     let retval = unsafe {
@@ -336,19 +336,19 @@ pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
             fname,
             line1,
             line2,
-            &raw mut *eap,
+            &raw mut *args,
             request,
         )
     };
 
     // After ":saveas fname" reset 'readonly'.
-    if eap.cmdidx == CmdIdx::saveas && retval.is_ok() {
+    if args.cmdidx == CmdIdx::saveas && retval.is_ok() {
         cur_buf().b_p_ro = 0;
         redraw_tabline.set(true);
     }
     // Change directories when the 'acd' option is set and the file name
     // got changed or set.
-    if eap.cmdidx == CmdIdx::saveas || name_was_missing {
+    if args.cmdidx == CmdIdx::saveas || name_was_missing {
         do_autochdir();
     }
     retval
@@ -360,8 +360,8 @@ pub unsafe fn do_write(eap: &mut ExArg) -> Result<(), Failed> {
 ///
 /// # Safety
 /// Main thread, message state; `eap.forceit` may be set by the dialog.
-unsafe fn cannot_write_curbuf(eap: &mut ExArg) -> bool {
-    let forceit = &raw mut eap.forceit;
+unsafe fn cannot_write_curbuf(args: &mut ExArg) -> bool {
+    let forceit = &raw mut args.forceit;
     // SAFETY: `curbuf` is the live current buffer, and `forceit` is the
     // borrowed command's own field. The whole chain is one region so the
     // short-circuiting is untouched -- a block cannot lead a `||` chain in
@@ -378,10 +378,10 @@ unsafe fn cannot_write_curbuf(eap: &mut ExArg) -> bool {
 ///
 /// # Safety
 /// Main thread, message state; `eap.forceit` may be set by the dialog.
-unsafe fn confirm_partial_write(eap: &mut ExArg) -> bool {
-    if (eap.line1 == 1 && eap.line2 == cur_buf().b_ml.ml_line_count)
-        || eap.forceit != 0
-        || eap.append != 0
+unsafe fn confirm_partial_write(args: &mut ExArg) -> bool {
+    if (args.line1 == 1 && args.line2 == cur_buf().b_ml.ml_line_count)
+        || args.forceit != 0
+        || args.append != 0
         || p_wa.get() != 0
     {
         return true;
@@ -401,7 +401,7 @@ unsafe fn confirm_partial_write(eap: &mut ExArg) -> bool {
     {
         return false;
     }
-    eap.forceit = 1;
+    args.forceit = 1;
     true
 }
 
@@ -477,7 +477,7 @@ fn saveas_exchange_names(mut alt_buf: Buf) -> Option<*mut c_char> {
 /// # Safety
 /// The two names must be live.
 pub unsafe fn check_overwrite(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     buffer: Buf,
     fname: *mut c_char,
     ffname: *mut c_char,
@@ -495,7 +495,7 @@ pub unsafe fn check_overwrite(
         return Ok(());
     }
 
-    if eap.forceit == 0 && eap.append == 0 {
+    if args.forceit == 0 && args.append == 0 {
         // SAFETY: as above; one `%s` for one string.
         if unsafe { os_isdir(ffname) } {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -518,7 +518,7 @@ pub unsafe fn check_overwrite(
         } {
             return Err(Failed);
         }
-        eap.forceit = 1;
+        args.forceit = 1;
     }
 
     if !other || emsg_silent.get() != 0 {
@@ -552,7 +552,7 @@ pub unsafe fn check_overwrite(
     } {
         return Err(Failed);
     }
-    eap.forceit = 1;
+    args.forceit = 1;
     Ok(())
 }
 
@@ -586,9 +586,9 @@ fn swap_dir() -> Vec<u8> {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_wnext(eap: *mut ExArg) {
+pub unsafe fn ex_wnext(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     let step = eap.line2 as c_int;
     // SAFETY: the command name is at least two bytes long.
     let forwards = unsafe { *eap.cmd.add(1) } as c_int == 'n' as c_int;
@@ -609,9 +609,9 @@ pub unsafe fn ex_wnext(eap: *mut ExArg) {
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn do_wqall(eap: *mut ExArg) {
+pub unsafe fn do_wqall(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     let mut error = 0;
     let save_forceit = eap.forceit;
     let save_exiting = exiting.get();
@@ -668,7 +668,7 @@ enum WriteAll {
 /// # Safety
 /// Main thread; `buffer` must be a live buffer.
 unsafe fn write_one_buffer(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     buffer: Buf,
     save_forceit: c_int,
     error: &mut c_int,
@@ -677,7 +677,7 @@ unsafe fn write_one_buffer(
     // TODO(zeertzjq): channel_job_running always returns false for
     // nvim_open_term() terminals.  Use terminal_running() instead?
     if exiting.get()
-        && eap.forceit == 0
+        && args.forceit == 0
         && !buffer.terminal.is_null()
         && unsafe { channel_job_running(buffer.b_p_channel as u64) }
     {
@@ -700,14 +700,14 @@ unsafe fn write_one_buffer(
     if buffer.b_ffname.is_null() {
         semsg!("E141: No file name for buffer {}", buffer.handle as int64_t);
         *error += 1;
-    } else if unsafe { check_readonly(&raw mut eap.forceit, buffer) }
-        || unsafe { check_overwrite(eap, buffer, buffer.b_fname, buffer.b_ffname, false) }.is_err()
+    } else if unsafe { check_readonly(&raw mut args.forceit, buffer) }
+        || unsafe { check_overwrite(args, buffer, buffer.b_fname, buffer.b_ffname, false) }.is_err()
     {
         *error += 1;
     } else {
         let bufref = BufRef::of(buffer);
-        if unsafe { handle_mkdir_p_arg(eap, buffer.b_fname) }.is_err()
-            || unsafe { buf_write_all(buffer.raw(), eap.forceit != 0) }.is_err()
+        if unsafe { handle_mkdir_p_arg(args, buffer.b_fname) }.is_err()
+            || unsafe { buf_write_all(buffer.raw(), args.forceit != 0) }.is_err()
         {
             *error += 1;
         }
@@ -715,7 +715,7 @@ unsafe fn write_one_buffer(
         deleted = !bufref.valid();
     }
     // check_overwrite() may set it
-    eap.forceit = save_forceit;
+    args.forceit = save_forceit;
     if deleted {
         WriteAll::Restart
     } else {

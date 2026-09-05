@@ -67,10 +67,10 @@ fn ends_args(c: c_char) -> bool {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe fn ex_echo(eap: *mut ExArg) {
+pub unsafe fn ex_echo(args: *mut ExArg) {
     // SAFETY: the caller's promise -- the `ExArg` outlives the command,
     // which the `do_cmdline` frame that owns it discharges.
-    let mut eap = unsafe { Ea::new(eap) };
+    let mut eap = unsafe { Ea::new(args) };
     let mut arg: *mut c_char = eap.arg;
     let mut rettv = UNSET_TV;
     let mut atstart = true;
@@ -163,10 +163,10 @@ pub unsafe fn ex_echo(eap: *mut ExArg) {
 /// `:echohl`.
 ///
 /// # Safety
-/// `eap` must be valid.
-pub unsafe fn ex_echohl(eap: *mut ExArg) {
+/// `args` must be valid.
+pub unsafe fn ex_echohl(args: *mut ExArg) {
     // SAFETY: the caller's promise -- the argument is NUL-terminated.
-    echo_hl_id.set(unsafe { syn_name2id((*eap).arg) });
+    echo_hl_id.set(unsafe { syn_name2id((*args).arg) });
 }
 
 /// The highlight group `:echohl` last named.
@@ -180,10 +180,10 @@ pub fn get_echo_hl_id() -> c_int {
 ///
 /// # Safety
 /// `eap` must be valid.
-pub unsafe fn ex_execute(eap: *mut ExArg) {
+pub unsafe fn ex_execute(args: *mut ExArg) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise -- the `ExArg` outlives the command.
-    let mut eap = unsafe { Ea::new(eap) };
+    let mut eap = unsafe { Ea::new(args) };
     let mut arg: *mut c_char = eap.arg;
     let mut rettv = UNSET_TV;
     let mut ret = Ok(());

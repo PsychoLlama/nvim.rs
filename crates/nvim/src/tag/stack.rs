@@ -226,7 +226,7 @@ pub unsafe fn tagstack_clear_entry(item: &mut Taggy) {
 ///
 /// # Safety
 /// Must be called with a live `curwin`.
-pub unsafe fn do_tags(_eap: *mut ExArg) {
+pub unsafe fn do_tags(_args: *mut ExArg) {
     let mut row = [0 as c_char; IOSIZE as usize];
     // SAFETY: `curwin` is live and nothing else is holding its tag stack;
     // `fm_getname` answers an allocation we free again below.

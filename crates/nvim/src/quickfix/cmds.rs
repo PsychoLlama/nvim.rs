@@ -39,9 +39,9 @@ fn cfile_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cfile(eap: *mut ExArg) {
+pub unsafe fn ex_cfile(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     let mut qi = qf_global();
 
     let au_name = cfile_get_auname(eap.cmdidx);
@@ -126,9 +126,9 @@ fn cbuffer_get_auname(cmdidx: CmdIdx) -> Option<&'static CStr> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-unsafe fn cbuffer_process_args(eap: *mut ExArg) -> Option<Buf> {
+unsafe fn cbuffer_process_args(args: *mut ExArg) -> Option<Buf> {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let mut eap = unsafe { Ea::new(eap) };
+    let mut eap = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     let buf = if unsafe { *eap.arg } as c_int == NUL {
         curbuf.get()
@@ -288,9 +288,9 @@ unsafe fn trigger_cexpr_autocmd(cmdidx: CmdIdx) -> bool {
 /// # Safety
 ///
 /// `eap` must be a live command and `tv` a live value.
-unsafe fn cexpr_core(eap: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> {
+unsafe fn cexpr_core(args: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap.cast_mut()) };
+    let eap = unsafe { Ea::new(args.cast_mut()) };
     // SAFETY: forwarded from the caller.
     // The stack is asked for first, and so allocated for the current
     // window if it had none, even when the value turns out to be
@@ -357,9 +357,9 @@ unsafe fn cexpr_core(eap: *const ExArg, tv: *mut TypVal) -> Result<(), Failed> {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_cexpr(eap: *mut ExArg) {
+pub unsafe fn ex_cexpr(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     if !unsafe { trigger_cexpr_autocmd(eap.cmdidx) } {
         return;

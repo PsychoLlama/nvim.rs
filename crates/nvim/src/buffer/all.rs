@@ -189,9 +189,9 @@ fn with_clean_error_state(f: impl FnOnce()) {
 // :ball
 
 /// Open a window for every listed buffer, closing the superfluous ones.
-pub unsafe fn ex_buffer_all(eap: *mut ExArg) {
+pub unsafe fn ex_buffer_all(args: *mut ExArg) {
     // SAFETY: the caller's promise -- the command being executed.
-    let eap = unsafe { &*eap };
+    let eap = unsafe { &*args };
     let mut split_ret = Ok(());
     let mut open_wins = 0;
     let had_tab = cmdmod.with(|m| m.cmod_tab);

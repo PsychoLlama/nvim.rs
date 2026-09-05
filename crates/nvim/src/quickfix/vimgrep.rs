@@ -122,9 +122,9 @@ impl Search {
     /// # Safety
     ///
     /// `eap` must be a live command.
-    unsafe fn parse(eap: *mut ExArg) -> Option<(Search, Files)> {
+    unsafe fn parse(args: *mut ExArg) -> Option<(Search, Files)> {
         // SAFETY: the caller's promise -- a live `ExArg`.
-        let eap = unsafe { Ea::new(eap) };
+        let eap = unsafe { Ea::new(args) };
         // SAFETY: forwarded from the caller.
         let mut search = Search {
             spat: ptr::null_mut(),
@@ -616,9 +616,9 @@ unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_vimgrep(eap: *mut ExArg) {
+pub unsafe fn ex_vimgrep(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     if !check_can_set_curbuf_forceit(eap.forceit) {
         return;

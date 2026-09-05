@@ -75,7 +75,7 @@ pub unsafe fn set_expand_context(xp: *mut Expand) {
 /// Returns a pointer to the text after the command, or NULL for failure.
 pub(crate) unsafe fn set_cmd_index(
     cmd: *const c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     xp: *mut Expand,
     complp: *mut ExpandContext,
 ) -> *const c_char {
@@ -116,7 +116,7 @@ pub(crate) unsafe fn set_cmd_index(
         && unsafe { *cmd } as c_int == 'k' as c_int
         && unsafe { *cmd.add(1) } as c_int != 'e' as c_int
     {
-        unsafe { (*eap).cmdidx = CmdIdx::k };
+        unsafe { (*args).cmdidx = CmdIdx::k };
         p = unsafe { cmd.add(1) };
     } else {
         p = skip_alpha(cmd);
@@ -143,12 +143,12 @@ pub(crate) unsafe fn set_cmd_index(
             return ptr::null();
         }
 
-        unsafe { (*eap).cmdidx = excmd_get_cmdidx(cmd, len) };
+        unsafe { (*args).cmdidx = excmd_get_cmdidx(cmd, len) };
 
         // User defined commands support alphanumeric characters.  Also
         // when doing fuzzy expansion for non-shell commands.
         if (unsafe { *cmd } as u8).is_ascii_uppercase()
-            || (fuzzy && unsafe { (*eap).cmdidx } != CmdIdx::bang && unsafe { *p } as c_int != NUL)
+            || (fuzzy && unsafe { (*args).cmdidx } != CmdIdx::bang && unsafe { *p } as c_int != NUL)
         {
             p = skip_alnum(p);
         }
@@ -160,21 +160,21 @@ pub(crate) unsafe fn set_cmd_index(
         return ptr::null();
     }
 
-    if unsafe { (*eap).cmdidx } == CmdIdx::SIZE {
+    if unsafe { (*args).cmdidx } == CmdIdx::SIZE {
         if unsafe { *cmd } as c_int == 's' as c_int
             && !unsafe { vim_strchr(c"cgriI".as_ptr(), *cmd.add(1) as u8 as c_int) }.is_null()
         {
-            unsafe { (*eap).cmdidx = CmdIdx::substitute };
+            unsafe { (*args).cmdidx = CmdIdx::substitute };
             p = unsafe { cmd.add(1) };
         } else if (unsafe { *cmd } as u8).is_ascii_uppercase() {
-            unsafe { (*eap).cmd = cmd as *mut c_char };
-            p = unsafe { find_ucmd(eap, p as *mut c_char, ptr::null_mut(), xp.raw(), complp) };
+            unsafe { (*args).cmd = cmd as *mut c_char };
+            p = unsafe { find_ucmd(args, p as *mut c_char, ptr::null_mut(), xp.raw(), complp) };
             if p.is_null() {
-                unsafe { (*eap).cmdidx = CmdIdx::SIZE }; // Ambiguous user command.
+                unsafe { (*args).cmdidx = CmdIdx::SIZE }; // Ambiguous user command.
             }
         }
     }
-    if unsafe { (*eap).cmdidx } == CmdIdx::SIZE {
+    if unsafe { (*args).cmdidx } == CmdIdx::SIZE {
         // Not still touching the command and it was an illegal one.
         xp.xp_context = ExpandContext::Unsuccessful;
         return ptr::null();
@@ -186,7 +186,7 @@ pub(crate) unsafe fn set_cmd_index(
 /// Set the completion context for a command argument with wild card
 /// characters.
 pub(crate) unsafe fn set_context_for_wildcard_arg(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     arg: *const c_char,
     usefilter: bool,
     xp: *mut Expand,
@@ -246,7 +246,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
     // `:terminal` run one; so does an explicitly shell-flavoured context.
     // SAFETY: the caller's argument block, when there is one.
     let runs_a_shell =
-        !eap.is_null() && matches!(unsafe { (*eap).cmdidx }, CmdIdx::bang | CmdIdx::terminal);
+        !args.is_null() && matches!(unsafe { (*args).cmdidx }, CmdIdx::bang | CmdIdx::terminal);
     if usefilter || runs_a_shell || unsafe { *complp } == ExpandContext::ShellCmdLine {
         xp.xp_shell = true;
         // When still after the command name expand executables.

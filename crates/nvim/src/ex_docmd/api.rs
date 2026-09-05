@@ -71,7 +71,7 @@ use crate::winlayer::{Buf, Ea, Win};
 /// command through `execute_cmd`.
 pub unsafe fn parse_cmdline(
     cmdline: *mut *mut c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     cmdinfo: *mut CmdParseInfo,
     errormsg: &mut Option<CString>,
 ) -> bool {
@@ -81,8 +81,8 @@ pub unsafe fn parse_cmdline(
 
     let into = cmdinfo.cast::<u8>();
     unsafe { into.write_bytes(0, size_of::<CmdParseInfo>()) };
-    unsafe { *eap = fresh_exarg() };
-    let mut ea = unsafe { Ea::new(eap) };
+    unsafe { *args = fresh_exarg() };
+    let mut ea = unsafe { Ea::new(args) };
     ea.cmd = unsafe { *cmdline };
     ea.cmdlinep = cmdline;
 
@@ -93,7 +93,7 @@ pub unsafe fn parse_cmdline(
         // going, so that the error is reported against the command
         // rather than against the line.
         let result =
-            unsafe { parse_command_modifiers(eap, errormsg, &mut (*cmdinfo).cmdmod, false) };
+            unsafe { parse_command_modifiers(args, errormsg, &mut (*cmdinfo).cmdmod, false) };
         let after_modifier = ea.cmd;
         if result.is_err() && after_modifier == orig_cmd {
             break 'end;
@@ -106,8 +106,8 @@ pub unsafe fn parse_cmdline(
             break 'end;
         }
 
-        unsafe { set_cmd_addr_type(eap, p) };
-        if unsafe { parse_cmd_address(eap, errormsg, true) } == FAIL {
+        unsafe { set_cmd_addr_type(args, p) };
+        if unsafe { parse_cmd_address(args, errormsg, true) } == FAIL {
             break 'end;
         }
 
@@ -162,7 +162,7 @@ pub unsafe fn parse_cmdline(
         }
 
         if ea.argt.has(ExArgt::TRLBAR) {
-            unsafe { separate_nextcmd(eap) };
+            unsafe { separate_nextcmd(args) };
         } else if cmd_has_expr_args(ea.cmdidx) {
             // A command whose argument is an expression has no
             // `ExArgt::TRLBAR`, because a `|` inside the expression is not a
@@ -195,11 +195,11 @@ pub unsafe fn parse_cmdline(
             break 'end;
         }
         if ea.argt.has(ExArgt::DFLALL) && ea.addr_count == 0 {
-            unsafe { set_cmd_dflall_range(eap) };
+            unsafe { set_cmd_dflall_range(args) };
         }
 
-        unsafe { parse_register(eap) };
-        if unsafe { parse_count(eap, errormsg, false) }.is_err() {
+        unsafe { parse_register(args) };
+        if unsafe { parse_count(args, errormsg, false) }.is_err() {
             break 'end;
         }
 
@@ -233,13 +233,13 @@ pub unsafe fn parse_cmdline(
 /// before it is validation, everything after it is error reporting.
 pub(crate) unsafe fn execute_cmd0(
     retv: *mut c_int,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     errormsg: &mut Option<CString>,
     preview: bool,
 ) -> Result<(), Failed> {
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     if ea.argt.has(ExArgt::XFILE) {
-        unsafe { expand_filename(eap, ea.cmdlinep, errormsg) }?;
+        unsafe { expand_filename(args, ea.cmdlinep, errormsg) }?;
     }
 
     // A buffer name may stand in for a buffer number, but not alongside
@@ -299,7 +299,7 @@ pub(crate) unsafe fn execute_cmd0(
     }
 
     if is_user_cmd(ea.cmdidx) {
-        unsafe { *retv = do_ucmd(eap, preview) };
+        unsafe { *retv = do_ucmd(args, preview) };
     } else {
         ea.errmsg = None;
         if preview {
@@ -307,7 +307,7 @@ pub(crate) unsafe fn execute_cmd0(
                 *retv = cmdnames[ea.cmdidx.index()]
                     .cmd_preview_func
                     .expect("a command with ExArgt::PREVIEW has a preview callback")(
-                    eap,
+                    args,
                     cmdpreview_get_ns(),
                     cmdpreview_get_bufnr(),
                 )
@@ -316,7 +316,7 @@ pub(crate) unsafe fn execute_cmd0(
             unsafe {
                 cmdnames[ea.cmdidx.index()]
                     .cmd_func
-                    .expect("every command in the table has a handler")(eap)
+                    .expect("every command in the table has a handler")(args)
             };
         }
         if ea.errmsg.is_some() {
@@ -334,8 +334,8 @@ pub(crate) unsafe fn execute_cmd0(
 /// checks about where a command may run (a locked buffer, the command-line
 /// window, a non-'modifiable' buffer) are, because they are about the
 /// editor's state rather than about the text.
-pub unsafe fn execute_cmd(eap: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn execute_cmd(args: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: bool) -> c_int {
+    let mut ea = unsafe { Ea::new(args) };
     let mut retv: c_int = 0;
     if do_cmdline_start().is_err() {
         emsg(gettext(e_command_too_recursive).as_ptr());
@@ -384,7 +384,7 @@ pub unsafe fn execute_cmd(eap: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: 
 
         correct_range(ea);
         if ea.cmdidx == CmdIdx::SIZE && ea.addr_count > 0 {
-            errormsg = unsafe { ex_range_without_command(eap) };
+            errormsg = unsafe { ex_range_without_command(args) };
             break 'end;
         }
 
@@ -398,7 +398,7 @@ pub unsafe fn execute_cmd(eap: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: 
             has_folding(cur_win(), ea.line2, None, Some(&mut ea.line2));
         }
 
-        if unsafe { parse_count(eap, &mut errormsg, true) }.is_err() {
+        if unsafe { parse_count(args, &mut errormsg, true) }.is_err() {
             break 'end;
         }
 
@@ -408,7 +408,7 @@ pub unsafe fn execute_cmd(eap: *mut ExArg, cmdinfo: *mut CmdParseInfo, preview: 
         cstack.cs_idx = -1;
         ea.cstack = &raw mut cstack;
 
-        let _ = unsafe { execute_cmd0(&raw mut retv, eap, &mut errormsg, preview) };
+        let _ = unsafe { execute_cmd0(&raw mut retv, args, &mut errormsg, preview) };
     }
 
     if let Some(msg) = &errormsg

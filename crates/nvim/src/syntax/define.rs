@@ -37,12 +37,12 @@ pub(crate) fn syn_incl_toplevel(id: c_int, flags: &mut SynFlags) {
 }
 
 /// `:syntax include [@{cluster}] {file}`.
-pub(crate) fn syn_cmd_include(eap: &mut ExArg, _syncing: c_int) {
-    let mut arg = eap.arg;
+pub(crate) fn syn_cmd_include(args: &mut ExArg, _syncing: c_int) {
+    let mut arg = args.arg;
     let mut sgl_id = 1;
 
-    eap.nextcmd = unsafe { find_nextcmd(arg) };
-    if eap.skip != 0 {
+    args.nextcmd = unsafe { find_nextcmd(arg) };
+    if args.skip != 0 {
         return;
     }
 
@@ -59,21 +59,21 @@ pub(crate) fn syn_cmd_include(eap: &mut ExArg, _syncing: c_int) {
             return;
         }
         // `separate_nextcmd` and `expand_filename` depend on this.
-        eap.arg = rest;
+        args.arg = rest;
     }
 
     // Everything left, up to the next command, is the file to include.
-    eap.argt |= ExArgt::XFILE | ExArgt::NOSPC;
-    unsafe { separate_nextcmd(eap) };
+    args.argt |= ExArgt::XFILE | ExArgt::NOSPC;
+    unsafe { separate_nextcmd(args) };
 
     // An absolute path, "$VIM/.." or "<sfile>.." is `:source`d, which needs
     // the name expanded first; everything else goes through `:runtime!`.
-    let source = unsafe { *eap.arg } as c_int == '<' as c_int
-        || unsafe { *eap.arg } as c_int == '$' as c_int
-        || unsafe { path_is_absolute(eap.arg) };
+    let source = unsafe { *args.arg } as c_int == '<' as c_int
+        || unsafe { *args.arg } as c_int == '$' as c_int
+        || unsafe { path_is_absolute(args.arg) };
     if source {
         let mut errormsg = None;
-        if unsafe { expand_filename(eap, syn_cmdlinep.get(), &mut errormsg) }.is_err() {
+        if unsafe { expand_filename(args, syn_cmdlinep.get(), &mut errormsg) }.is_err() {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }
@@ -95,16 +95,16 @@ pub(crate) fn syn_cmd_include(eap: &mut ExArg, _syncing: c_int) {
     cur_syn_block().b_syn_topgrp = sgl_id;
 
     // SAFETY: the caller's command.
-    let arg = eap.arg;
+    let arg = args.arg;
     let failed = if source {
         // SAFETY: sourcing the file the user named.
         unsafe { do_source(arg, false, DOSO_NONE as c_int, ::core::ptr::null_mut()) == FAIL }
     } else {
-        unsafe { source_runtime(eap.arg, RuntimeOpts::ALL) }.is_err()
+        unsafe { source_runtime(args.arg, RuntimeOpts::ALL) }.is_err()
     };
     if failed {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str(eap.arg) };
+        let arg = unsafe { c_str(args.arg) };
         semsg!("E484: Can't open file {arg}");
     }
 
@@ -132,8 +132,8 @@ fn item_opt(takes_sync_idx: bool) -> SynOptArg {
 
 /// `:syntax match {group} [{options}] {pattern} [{options}]`, and
 /// `:syntax sync match {group} [[grouphere|groupthere] {group}] ..`.
-pub(crate) fn syn_cmd_match(eap: &mut ExArg, syncing: c_int) {
-    let arg = eap.arg;
+pub(crate) fn syn_cmd_match(args: &mut ExArg, syncing: c_int) {
+    let arg = args.arg;
     let mut group_name_end = ::core::ptr::null_mut::<c_char>();
     let mut conceal_char: c_int = NUL;
 
@@ -143,19 +143,19 @@ pub(crate) fn syn_cmd_match(eap: &mut ExArg, syncing: c_int) {
     let mut opt = item_opt(syncing != 0);
 
     // Options before the pattern, the pattern, then options after it.
-    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, eap.skip) };
+    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, args.skip) };
     let mut item = EMPTY_SYNPAT;
     rest = unsafe { get_syn_pattern(rest, &mut item) };
     if vim_regcomp_had_eol() != 0 && !opt.flags.has(SynFlags::EXCLUDENL) {
         opt.flags |= SynFlags::HAS_EOL;
     }
-    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, eap.skip) };
+    rest = unsafe { get_syn_options(rest, &mut opt, &mut conceal_char, args.skip) };
 
     let mut stored = false;
     if !rest.is_null() {
         // Check for a trailing command and illegal trailing arguments.
-        eap.nextcmd = unsafe { check_nextcmd(rest) };
-        if ends_excmd(unsafe { *rest } as c_int) == 0 || eap.skip != 0 {
+        args.nextcmd = unsafe { check_nextcmd(rest) };
+        if ends_excmd(unsafe { *rest } as c_int) == 0 || args.skip != 0 {
             rest = ::core::ptr::null_mut();
         } else {
             let syn_id = unsafe { syn_check_group(arg, group_name_end.offset_from(arg) as size_t) };
@@ -237,7 +237,7 @@ fn region_item(key: &[u8]) -> Option<c_int> {
 }
 
 /// Read the options, patterns and `matchgroup=`s of a `:syntax region`.
-fn parse_region_args(eap: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
+fn parse_region_args(args: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
     let mut out = RegionArgs {
         pats: [Vec::new(), Vec::new(), Vec::new()],
         opt: item_opt(false),
@@ -250,7 +250,7 @@ fn parse_region_args(eap: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
 
     while !rest.is_null() && ends_excmd(unsafe { *rest } as c_int) == 0 {
         // Options may appear anywhere between the patterns.
-        rest = unsafe { get_syn_options(rest, &mut out.opt, &mut out.conceal_char, eap.skip) };
+        rest = unsafe { get_syn_options(rest, &mut out.opt, &mut out.conceal_char, args.skip) };
         if rest.is_null() || ends_excmd(unsafe { *rest } as c_int) != 0 {
             break;
         }
@@ -277,7 +277,7 @@ fn parse_region_args(eap: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
         if unsafe { *rest } as c_int != '=' as c_int {
             rest = ::core::ptr::null_mut();
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
-            let arg = unsafe { c_str(eap.arg) };
+            let arg = unsafe { c_str(args.arg) };
             semsg!("E398: Missing '=': {arg}");
             break;
         }
@@ -290,7 +290,7 @@ fn parse_region_args(eap: &mut ExArg, mut rest: *mut c_char) -> RegionArgs {
         if item == ITEM_MATCHGROUP {
             let p = unsafe { skiptowhite(rest) };
             if (unsafe { p.offset_from(rest) } == 4 && unsafe { cstr::starts_with(rest, b"NONE") })
-                || eap.skip != 0
+                || args.skip != 0
             {
                 matchgroup_id = 0;
             } else {

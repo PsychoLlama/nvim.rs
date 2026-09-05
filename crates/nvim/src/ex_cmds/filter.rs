@@ -90,15 +90,15 @@ fn prevcmd_is_set() -> bool {
 /// then remembers.
 ///
 /// # Safety
-/// `eap` must be the live Ex-command argument.
+/// `args` must be the live Ex-command argument.
 pub unsafe fn do_bang(
     addr_count: c_int,
-    eap: &mut ExArg,
+    args: &mut ExArg,
     forceit: bool,
     do_in: bool,
     do_out: bool,
 ) {
-    let (arg, line1, line2) = (eap.arg, eap.line1, eap.line2);
+    let (arg, line1, line2) = (args.arg, args.line1, args.line2);
     let scroll_save = msg_scroll.get();
     // Disallow shell commands in secure mode.
     // SAFETY: main thread, message state.
@@ -200,7 +200,7 @@ pub unsafe fn do_bang(
         } else {
             // SAFETY: `cmd` is a live string; the autocommand runs with the
             // current buffer.
-            unsafe { do_filter(line1, line2, eap, cmd, do_in, do_out) };
+            unsafe { do_filter(line1, line2, args, cmd, do_in, do_out) };
             buf_autocmd(AutoEvent::ShellFilterPost, cur_buf());
         }
     }
@@ -261,12 +261,12 @@ impl Drop for TempFile {
 /// Either side travels through a pipe unless 'shelltemp' asks for files.
 ///
 /// # Safety
-/// `eap` and `cmd` must be live, and the range must be lines of the current
+/// `args` and `cmd` must be live, and the range must be lines of the current
 /// buffer.
 unsafe fn do_filter(
     line1: LineNr,
     line2: LineNr,
-    eap: &mut ExArg,
+    args: &mut ExArg,
     cmd: *mut c_char,
     do_in: bool,
     do_out: bool,
@@ -352,7 +352,7 @@ unsafe fn do_filter(
         // Vi also doesn't do this and the messages are not very informative.
         no_prompt = Some(Suppress::wait_return()); // don't wait_return() while busy
         if itmp.is_some()
-            // SAFETY: `eap` is live and the range is the current buffer's.
+            // SAFETY: `args` is live and the range is the current buffer's.
             && unsafe {
                 buf_write(
                     cur_buf().raw(),
@@ -360,7 +360,7 @@ unsafe fn do_filter(
                     ptr::null_mut(),
                     line1,
                     line2,
-                    &raw mut *eap,
+                    &raw mut *args,
                     WriteRequest::filter(),
                 )
             }.is_err()
@@ -424,7 +424,7 @@ unsafe fn do_filter(
             }
 
             if otmp.is_some() {
-                // SAFETY: `otmp` is a live file name and `eap` the caller's.
+                // SAFETY: `otmp` is a live file name and `args` the caller's.
                 let read = unsafe {
                     readfile(
                         TempFile::name(&otmp),
@@ -432,7 +432,7 @@ unsafe fn do_filter(
                         line2,
                         0,
                         MAXLNUM as LineNr,
-                        &raw mut *eap,
+                        &raw mut *args,
                         READ_FILTER as c_int,
                         false,
                     )

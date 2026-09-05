@@ -43,8 +43,8 @@ use crate::winlayer::{Buf, Ea};
 ///
 /// Both are refused in a 'secure' context — a modeline or an untrusted
 /// config — because an autocommand can run anything later.
-pub(crate) unsafe fn ex_autocmd(eap: *mut ExArg) {
-    let mut eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_autocmd(args: *mut ExArg) {
+    let mut eap = unsafe { Ea::new(args) };
     if secure.get() != 0 {
         // 2 means "an error was already reported for this".
         secure.set(2);
@@ -58,8 +58,8 @@ pub(crate) unsafe fn ex_autocmd(eap: *mut ExArg) {
 
 /// `:doautocmd` — and the modelines that a `<nomodeline>` argument
 /// suppresses.
-pub(crate) unsafe fn ex_doautocmd(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_doautocmd(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     let mut arg = eap.arg;
     let call_do_modelines = unsafe { check_nomodeline(&raw mut arg) };
     let mut did_aucmd = false;
@@ -70,8 +70,8 @@ pub(crate) unsafe fn ex_doautocmd(eap: *mut ExArg) {
 }
 
 /// `:filetype [plugin] [indent] on|off|detect`.
-pub(crate) unsafe fn ex_filetype(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_filetype(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     if byte(eap.arg) == NUL {
         unsafe { report_filetype_state() };
         return;
@@ -195,8 +195,8 @@ pub unsafe fn filetype_maybe_enable() {
 /// A `FALLBACK ` prefix means "only if nothing better is found later", and
 /// is spelled by leaving `b_did_filetype` clear so that a later
 /// `:setfiletype` still applies.
-pub(crate) unsafe fn ex_setfiletype(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_setfiletype(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     if cur_buf().b_did_filetype {
         return;
     }

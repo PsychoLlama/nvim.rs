@@ -273,14 +273,14 @@ impl WriteRequest {
 ///
 /// This function must NOT use `NameBuff`: `autowrite()` calls it.
 ///
-/// `eap` may be null; it carries a forced `'ff'`/`'fenc'`.
+/// `args` may be null; it carries a forced `'ff'`/`'fenc'`.
 pub unsafe fn buf_write(
     buffer: *mut Buffer,
     fname: *mut ::core::ffi::c_char,
     sfname: *mut ::core::ffi::c_char,
     start: LineNr,
     end: LineNr,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     req: WriteRequest,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise, taken once for the whole body.
@@ -365,7 +365,7 @@ pub unsafe fn buf_write(
         sfname,
         ffname,
     };
-    let pre = unsafe { buf_write_do_autocmds(buf, &mut names, start, &mut end, eap, mode, orig) };
+    let pre = unsafe { buf_write_do_autocmds(buf, &mut names, start, &mut end, args, mode, orig) };
     // The autocommands may have renamed the buffer out from under them.
     let WriteNames {
         fname,
@@ -522,9 +522,9 @@ pub unsafe fn buf_write(
                 wfname = fname;
 
                 // A forced 'fileencoding' from a "++opt=val" argument.
-                let fenc = if !eap.is_null() && unsafe { (*eap).force_enc } != 0 {
+                let fenc = if !args.is_null() && unsafe { (*args).force_enc } != 0 {
                     fenc_tofree =
-                        unsafe { enc_canonize((*eap).cmd.offset((*eap).force_enc as isize)) };
+                        unsafe { enc_canonize((*args).cmd.offset((*args).force_enc as isize)) };
                     fenc_tofree
                 } else {
                     b.b_p_fenc
@@ -607,8 +607,8 @@ pub unsafe fn buf_write(
                     err = None;
 
                     // use "++bin", "++nobin" or 'binary'
-                    let write_bin = if !eap.is_null() && unsafe { (*eap).force_bin } != 0 {
-                        unsafe { (*eap).force_bin == FORCE_BIN }
+                    let write_bin = if !args.is_null() && unsafe { (*args).force_bin } != 0 {
+                        unsafe { (*args).force_bin == FORCE_BIN }
                     } else {
                         b.b_p_bin != 0
                     };
@@ -645,7 +645,7 @@ pub unsafe fn buf_write(
 
                     writer.clear();
                     writer.flags = wb_flags;
-                    fileformat = unsafe { get_fileformat_force(b, eap) };
+                    fileformat = unsafe { get_fileformat_force(b, args) };
                     let hash = write_undo_file.then_some(&mut sha_ctx);
                     let lines = (start, end);
                     written = unsafe {
@@ -822,7 +822,7 @@ pub unsafe fn buf_write(
     }
 
     if !should_abort_err(retval) {
-        unsafe { buf_write_do_post_autocmds(buf, fname, eap, mode) };
+        unsafe { buf_write_do_post_autocmds(buf, fname, args, mode) };
         if aborting() {
             retval = Err(Failed); // autocmds may abort script processing
         }

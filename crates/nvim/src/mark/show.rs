@@ -46,10 +46,10 @@ use crate::highlight_group::HLF_D;
 /// print the marks
 ///
 /// # Safety
-/// `eap` must be a live `ExArg` and the editor's globals must be live.
-pub unsafe fn ex_marks(eap: *mut ExArg) {
+/// `args` must be a live `ExArg` and the editor's globals must be live.
+pub unsafe fn ex_marks(args: *mut ExArg) {
     // SAFETY: the caller promised a live command.
-    let mut arg = unsafe { (*eap).arg };
+    let mut arg = unsafe { (*args).arg };
     // An empty argument is the same as none: `:marks` with a trailing space
     // must not filter everything out.
     // SAFETY: `arg` is a NUL-terminated string or null.
@@ -209,11 +209,11 @@ pub(super) unsafe fn show_one_mark(
 /// ":delmarks[!] [marks]"
 ///
 /// # Safety
-/// `eap` must be a live `ExArg` and the editor's globals must be live.
-pub unsafe fn ex_delmarks(eap: *mut ExArg) {
+/// `args` must be a live `ExArg` and the editor's globals must be live.
+pub unsafe fn ex_delmarks(args: *mut ExArg) {
     // SAFETY: the caller promised a live command whose `arg` is a
     // NUL-terminated string.
-    let (arg, forceit) = unsafe { ((*eap).arg, (*eap).forceit != 0) };
+    let (arg, forceit) = unsafe { ((*args).arg, (*args).forceit != 0) };
     // SAFETY: `curbuf` is live from startup to exit.
     let mut buf = unsafe { Buf::current() };
     // SAFETY: `arg` is a NUL-terminated string.

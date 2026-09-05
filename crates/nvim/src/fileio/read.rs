@@ -54,7 +54,7 @@ pub(crate) struct How {
 /// Read the lines of `fname` into the current buffer, after line `from`.
 ///
 /// The caller must check that `fname` is not NULL unless `READ_STDIN` is
-/// used. `eap` may be NULL. When not recovering, `lines_to_skip` is 0 and
+/// used. `args` may be NULL. When not recovering, `lines_to_skip` is 0 and
 /// `lines_to_read` is `MAXLNUM`.
 ///
 /// Answers [`Loaded::Skipped`] for a directory or a `BufReadCmd` that did
@@ -65,7 +65,7 @@ pub(crate) unsafe fn readfile(
     from: LineNr,
     lines_to_skip: LineNr,
     lines_to_read: LineNr,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     flags: c_int,
     silent: bool,
 ) -> Result<Loaded, Failed> {
@@ -80,7 +80,7 @@ pub(crate) unsafe fn readfile(
         nofile: flags & READ_NOFILE as c_int != 0,
         keep_undo: flags & READ_KEEP_UNDO as c_int != 0,
         set_options: flags & (READ_NEW | READ_BUFFER) as c_int != 0
-            || (!eap.is_null() && unsafe { (*eap).read_edit } != 0),
+            || (!args.is_null() && unsafe { (*args).read_edit } != 0),
     };
     let set_options = how.set_options;
 
@@ -154,7 +154,7 @@ pub(crate) unsafe fn readfile(
             mut fd,
             perm,
             mut guess,
-        } = match unsafe { open_source(fname, sfname, from, eap, how, silent, msg_save) } {
+        } = match unsafe { open_source(fname, sfname, from, args, how, silent, msg_save) } {
             Ok(opened) => opened,
             Err(early) => {
                 retval = early;
@@ -183,18 +183,18 @@ pub(crate) unsafe fn readfile(
         linecnt = cur_buf().b_ml.ml_line_count;
 
         // The "++bad=" argument.
-        if !eap.is_null() && unsafe { (*eap).bad_char } != 0 {
-            conv.bad_char = unsafe { (*eap).bad_char };
+        if !args.is_null() && unsafe { (*args).bad_char } != 0 {
+            conv.bad_char = unsafe { (*args).bad_char };
             if set_options {
-                cur_buf().b_bad_char = unsafe { (*eap).bad_char };
+                cur_buf().b_bad_char = unsafe { (*args).bad_char };
             }
         } else {
             cur_buf().b_bad_char = 0;
         }
 
         // Decide which 'fileencoding' to use, or to start with.
-        if !eap.is_null() && unsafe { (*eap).force_enc } != 0 {
-            fenc = unsafe { enc_canonize((*eap).cmd.offset((*eap).force_enc as isize)) };
+        if !args.is_null() && unsafe { (*args).force_enc } != 0 {
+            fenc = unsafe { enc_canonize((*args).cmd.offset((*args).force_enc as isize)) };
             fenc_alloced = true;
             keep_dest_enc = true;
         } else if cur_buf().b_p_bin != 0 {
@@ -255,8 +255,8 @@ pub(crate) unsafe fn readfile(
             if keep_fileformat {
                 keep_fileformat = false;
             } else {
-                if !eap.is_null() && unsafe { (*eap).force_ff } != 0 {
-                    fileformat = unsafe { get_fileformat_force(cur_buf(), eap) };
+                if !args.is_null() && unsafe { (*args).force_ff } != 0 {
+                    fileformat = unsafe { get_fileformat_force(cur_buf(), args) };
                     guess.try_unix = 0;
                     guess.try_dos = false;
                     guess.try_mac = 0;
@@ -276,7 +276,7 @@ pub(crate) unsafe fn readfile(
                 // Try the next entry in 'fileencodings'.
                 advance_fenc = false;
 
-                if !eap.is_null() && unsafe { (*eap).force_enc } != 0 {
+                if !args.is_null() && unsafe { (*args).force_enc } != 0 {
                     // The conversion given with "++enc=" wasn't possible;
                     // read without conversion.
                     notconverted = true;
@@ -878,7 +878,7 @@ pub(crate) unsafe fn readfile(
         if !how.stdin
             && !how.fifo
             && (!how.buffer || !sfname.is_null())
-            && !unsafe { run_read_autocmds(sfname, eap, how, set_options) }
+            && !unsafe { run_read_autocmds(sfname, args, how, set_options) }
         {
             // Autocommands may abort script processing. Note that this
             // skips the swap-file sync below, as upstream does.

@@ -41,10 +41,10 @@ const EVALARG_INIT: EvalArg = EvalArg {
 /// `:return [expr]`.
 ///
 /// # Safety
-/// `eap` is a live `:return` command.
-pub unsafe fn ex_return(eap: *mut ExArg) {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+/// `args` is a live `:return` command.
+pub unsafe fn ex_return(args: *mut ExArg) {
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let mut ea = unsafe { Ea::new(args) };
     let arg = ea.arg;
     let mut rettv = TV_INITIAL_VALUE;
     let mut returning = false;
@@ -63,10 +63,10 @@ pub unsafe fn ex_return(eap: *mut ExArg) {
     if unsafe { *arg } != NUL as c_char
         && unsafe { *arg } != b'|' as c_char
         && unsafe { *arg } != b'\n' as c_char
-        && unsafe { eval0(arg, &raw mut rettv, eap, &raw mut evalarg) }.is_ok()
+        && unsafe { eval0(arg, &raw mut rettv, args, &raw mut evalarg) }.is_ok()
     {
         if ea.skip == 0 {
-            returning = unsafe { do_return(eap, false, true, (&raw mut rettv) as *mut c_void) };
+            returning = unsafe { do_return(args, false, true, (&raw mut rettv) as *mut c_void) };
         } else {
             unsafe { tv_clear(&raw mut rettv) };
         }
@@ -77,7 +77,7 @@ pub unsafe fn ex_return(eap: *mut ExArg) {
         // Return unless the expression evaluation was cancelled by an
         // aborting error, an interrupt or an exception.
         if !aborting() {
-            returning = unsafe { do_return(eap, false, true, ptr::null_mut()) };
+            returning = unsafe { do_return(args, false, true, ptr::null_mut()) };
         }
     }
 
@@ -90,24 +90,24 @@ pub unsafe fn ex_return(eap: *mut ExArg) {
     }
 
     drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, eap) };
+    unsafe { clear_evalarg(&raw mut evalarg, args) };
 }
 
 /// Make the call `:call` asks for, once per line of its range.
 ///
 /// # Safety
-/// `eap` is a live `:call`, `name` the resolved function name, and
+/// `args` is a live `:call`, `name` the resolved function name, and
 /// `startarg` the `(` its arguments start at.
 unsafe fn ex_call_inner(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     name: *mut c_char,
     arg: *mut *mut c_char,
     startarg: *mut c_char,
     funcexe_init: *const FuncExe,
     evalarg: *mut EvalArg,
 ) -> bool {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let ea = unsafe { Ea::new(eap) };
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let ea = unsafe { Ea::new(args) };
     // The subscript after `:call f()` is evaluated for real whatever the
     // caller's `evalarg` says, so it gets one of its own.
     let mut subscript_evalarg = EVALARG_EVALUATE;
@@ -334,26 +334,26 @@ pub unsafe fn invoke_all_defer() {
 /// `:call` and `:defer`.
 ///
 /// # Safety
-/// `eap` is a live `:call`/`:defer` command.
-pub unsafe fn ex_call(eap: *mut ExArg) {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let mut ea = unsafe { Ea::new(eap) };
+/// `args` is a live `:call`/`:defer` command.
+pub unsafe fn ex_call(args: *mut ExArg) {
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let mut ea = unsafe { Ea::new(args) };
     let mut arg = ea.arg;
     let mut fudi = FUNCDICT_INIT;
     let mut partial: *mut Partial = ptr::null_mut();
     let mut evalarg = EVALARG_INIT;
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, ea.skip != 0) };
+    unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, ea.skip != 0) };
 
     if ea.skip != 0 {
         // Trailing arguments are still evaluated, so that errors in them
         // are reported -- but nothing is called.
         let mut rettv = TV_INITIAL_VALUE;
         let skipping = Suppress::emsg_skip();
-        if unsafe { eval0(ea.arg, &raw mut rettv, eap, &raw mut evalarg) }.is_ok() {
+        if unsafe { eval0(ea.arg, &raw mut rettv, args, &raw mut evalarg) }.is_ok() {
             unsafe { tv_clear(&raw mut rettv) };
         }
         drop(skipping);
-        unsafe { clear_evalarg(&raw mut evalarg, eap) };
+        unsafe { clear_evalarg(&raw mut evalarg, args) };
         return;
     }
 
@@ -412,7 +412,7 @@ pub unsafe fn ex_call(eap: *mut ExArg) {
             funcexe.fe_evaluate = true;
             let (argp, exe) = (&raw mut arg, &raw mut funcexe);
             let ev = &raw mut evalarg;
-            unsafe { ex_call_inner(eap, name, argp, startarg, exe, ev) }
+            unsafe { ex_call_inner(args, name, argp, startarg, exe, ev) }
         };
 
         // When inside a `:try` the trailing text is still checked, so
@@ -430,7 +430,7 @@ pub unsafe fn ex_call(eap: *mut ExArg) {
                 ea.nextcmd = unsafe { check_nextcmd(arg) };
             }
         }
-        unsafe { clear_evalarg(&raw mut evalarg, eap) };
+        unsafe { clear_evalarg(&raw mut evalarg, args) };
     }
 
     unsafe { tv_dict_unref(fudi.fd_dict) };
@@ -441,16 +441,16 @@ pub unsafe fn ex_call(eap: *mut ExArg) {
 /// than being made pending by a `:finally`.
 ///
 /// # Safety
-/// `eap` is a live command with a condition stack, and `rettv` is null or a
+/// `args` is a live command with a condition stack, and `rettv` is null or a
 /// `TypVal`.
 pub unsafe fn do_return(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     reanimate: bool,
     is_cmd: bool,
     result: *mut c_void,
 ) -> bool {
-    // SAFETY: the caller's promise -- `eap` is the Ex command being run.
-    let ea = unsafe { Ea::new(eap) };
+    // SAFETY: the caller's promise -- `args` is the Ex command being run.
+    let ea = unsafe { Ea::new(args) };
     let mut rettv = result;
     let cstack = ea.cstack;
 

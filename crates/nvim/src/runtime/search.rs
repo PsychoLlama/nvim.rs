@@ -70,11 +70,11 @@ unsafe fn get_runtime_cmd_flags(argp: *mut *mut c_char, where_len: size_t) -> Ru
 }
 
 /// `:runtime[!] [where] {name}`.
-pub unsafe fn ex_runtime(eap: *mut ExArg) {
-    // SAFETY: `eap` is the live command being executed; `arg` is its
+pub unsafe fn ex_runtime(args: *mut ExArg) {
+    // SAFETY: `args` is the live command being executed; `arg` is its
     // NUL-terminated argument text.
-    let mut arg = unsafe { (*eap).arg };
-    let mut flags = if unsafe { (*eap).forceit } != 0 {
+    let mut arg = unsafe { (*args).arg };
+    let mut flags = if unsafe { (*args).forceit } != 0 {
         RuntimeOpts::ALL
     } else {
         RuntimeOpts::NONE

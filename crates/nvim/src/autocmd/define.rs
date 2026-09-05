@@ -23,7 +23,7 @@ const CALLBACK_INIT: Callback = Callback::None;
 /// `:autocmd [group] {event} {pat} [++once] [++nested] {cmd}`, and every
 /// shorter spelling of it: listing, deleting, and `:autocmd *`.
 pub unsafe fn do_autocmd(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     arg_in: *mut ::core::ffi::c_char,
     forceit: ::core::ffi::c_int,
 ) {
@@ -35,7 +35,7 @@ pub unsafe fn do_autocmd(
     let mut once = false;
 
     let group = if unsafe { *arg } == b'|' as ::core::ffi::c_char {
-        unsafe { (*eap).nextcmd = arg.add(1) };
+        unsafe { (*args).nextcmd = arg.add(1) };
         arg = c"".as_ptr().cast_mut();
         AUGROUP_ALL
     } else {
@@ -50,7 +50,7 @@ pub unsafe fn do_autocmd(
 
     pat = unsafe { skipwhite(pat) };
     if unsafe { *pat } == b'|' as ::core::ffi::c_char {
-        unsafe { (*eap).nextcmd = pat.add(1) };
+        unsafe { (*args).nextcmd = pat.add(1) };
         pat = c"".as_ptr().cast_mut();
         cmd = c"".as_ptr().cast_mut();
     } else {

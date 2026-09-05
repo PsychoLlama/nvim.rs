@@ -72,7 +72,7 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
-pub unsafe fn ex_spellinfo(_eap: *mut ExArg) {
+pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
     if unsafe { no_spell_checking(curwin.get()) } {
         return;
     }
@@ -104,7 +104,7 @@ pub unsafe fn ex_spellinfo(_eap: *mut ExArg) {
 /// `:spelldump` — open a new window holding every word of the current
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
-pub unsafe fn ex_spelldump(eap: *mut ExArg) {
+pub unsafe fn ex_spelldump(args: *mut ExArg) {
     if unsafe { no_spell_checking(curwin.get()) } {
         return;
     }
@@ -122,7 +122,7 @@ pub unsafe fn ex_spelldump(eap: *mut ExArg) {
         return;
     }
 
-    let dumpflags = if unsafe { (*eap).forceit } != 0 {
+    let dumpflags = if unsafe { (*args).forceit } != 0 {
         DUMPFLAG_COUNT
     } else {
         0

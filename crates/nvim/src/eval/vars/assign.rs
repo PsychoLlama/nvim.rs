@@ -62,11 +62,11 @@ unsafe fn ends_target(endchars: *const c_char, p: *const c_char) -> bool {
 /// `:let`, `:const` and (with no `=`) the listing forms.
 ///
 /// # Safety
-/// `eap` is a live `:let`/`:const` command.
-pub unsafe fn ex_let(eap: *mut ExArg) {
+/// `args` is a live `:let`/`:const` command.
+pub unsafe fn ex_let(args: *mut ExArg) {
     // SAFETY: the caller's obligation -- a live `:let`, which the
     // `do_cmdline` frame that owns the `ExArg` outlives.
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     let is_const = ea.cmdidx == CmdIdx::r#const;
     let mut arg = ea.arg;
     let mut var_count = 0;
@@ -96,7 +96,7 @@ pub unsafe fn ex_let(eap: *mut ExArg) {
             emsg_static(e_invarg);
         } else if ends_excmd(c_int::from(head.cast_signed())) == 0 {
             // ":let var1 var2"
-            arg = unsafe { list_arg_vars(eap, arg, &raw mut first) } as *mut c_char;
+            arg = unsafe { list_arg_vars(args, arg, &raw mut first) } as *mut c_char;
         } else if ea.skip == 0 {
             // ":let" on its own.
             const SCOPES: [ScopeLister; 7] = [
@@ -135,7 +135,7 @@ pub unsafe fn ex_let(eap: *mut ExArg) {
     {
         // A here-document.
         // SAFETY: a live command and the text past the "=<<".
-        let l = unsafe { heredoc_get(eap, expr.add(3), false) };
+        let l = unsafe { heredoc_get(args, expr.add(3), false) };
         if !l.is_null() {
             // SAFETY: a live local and the list just built.
             unsafe { tv_list_set_ret(&raw mut rettv, l) };
@@ -177,10 +177,10 @@ pub unsafe fn ex_let(eap: *mut ExArg) {
     let skip = ea.skip != 0;
     // SAFETY: a live command, a live local `evalarg`, and `expr` inside the
     // command's own argument text.
-    unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, skip) };
-    let eval_res = unsafe { eval0(expr, &raw mut rettv, eap, &raw mut evalarg) };
+    unsafe { fill_evalarg_from_eap(&raw mut evalarg, args, skip) };
+    let eval_res = unsafe { eval0(expr, &raw mut rettv, args, &raw mut evalarg) };
     drop(skipping);
-    unsafe { clear_evalarg(&raw mut evalarg, eap) };
+    unsafe { clear_evalarg(&raw mut evalarg, args) };
 
     if ea.skip == 0 && eval_res.is_ok() {
         assign(&raw mut rettv, op.as_ptr());

@@ -122,14 +122,14 @@ fn clamp_cursor(window: Win) {
     check_cursor(window);
 }
 
-/// The stack `eap`'s command names, or none when there is not one.
+/// The stack `args`'s command names, or none when there is not one.
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-unsafe fn stack_of(eap: *mut ExArg, print_emsg: bool) -> Option<Qi> {
+/// `args` must be a live command.
+unsafe fn stack_of(args: *mut ExArg, print_emsg: bool) -> Option<Qi> {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(eap, print_emsg) };
+    let qi = unsafe { qf_cmd_get_stack(args, print_emsg) };
     (!qi.is_null()).then_some(unsafe { Qi::new(qi) })
 }
 
@@ -335,16 +335,16 @@ pub(crate) fn qf_update_win_titlevar(qi: Qi) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn ex_copen(eap: *mut ExArg) {
+/// `args` must be a live command.
+pub unsafe fn ex_copen(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(eap, true) }) else {
+    let Some(qi) = (unsafe { stack_of(args, true) }) else {
         return;
     };
     incr_quickfix_busy();
 
     // SAFETY: the caller's promise -- a live command.
-    let (addr_count, line2) = unsafe { ((*eap).addr_count, (*eap).line2) };
+    let (addr_count, line2) = unsafe { ((*args).addr_count, (*args).line2) };
     let height = if addr_count != 0 {
         line2 as c_int
     } else {
@@ -382,10 +382,10 @@ pub unsafe fn ex_copen(eap: *mut ExArg) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn ex_cwindow(eap: *mut ExArg) {
+/// `args` must be a live command.
+pub unsafe fn ex_cwindow(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(eap, true) }) else {
+    let Some(qi) = (unsafe { stack_of(args, true) }) else {
         return;
     };
     let qfl = qi.curlist();
@@ -393,11 +393,11 @@ pub unsafe fn ex_cwindow(eap: *mut ExArg) {
     if qi.is_empty() || qfl.qf_nonevalid || qfl.is_empty() {
         if win.is_some() {
             // SAFETY: the caller's promise -- a live command.
-            unsafe { ex_cclose(eap) };
+            unsafe { ex_cclose(args) };
         }
     } else if win.is_none() {
         // SAFETY: the caller's promise -- a live command.
-        unsafe { ex_copen(eap) };
+        unsafe { ex_copen(args) };
     }
 }
 
@@ -405,10 +405,10 @@ pub unsafe fn ex_cwindow(eap: *mut ExArg) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn ex_cclose(eap: *mut ExArg) {
+/// `args` must be a live command.
+pub unsafe fn ex_cclose(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(eap, false) }) else {
+    let Some(qi) = (unsafe { stack_of(args, false) }) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {
@@ -440,10 +440,10 @@ fn win_goto_line(mut win: Win, lnum: LineNr) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn ex_cbottom(eap: *mut ExArg) {
+/// `args` must be a live command.
+pub unsafe fn ex_cbottom(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
-    let Some(qi) = (unsafe { stack_of(eap, true) }) else {
+    let Some(qi) = (unsafe { stack_of(args, true) }) else {
         return;
     };
     if let Some(win) = qf_find_win(qi) {

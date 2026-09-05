@@ -67,11 +67,11 @@ use ::libc::{strcat, strcpy, strpbrk, strrchr};
 /// Answers where the argument now starts, which is the whole new line for
 /// a program that had no `$*`.
 pub unsafe fn replace_makeprg(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     mut arg: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     let idx = eap.cmdidx;
     let is_grep = idx == CmdIdx::grep
         || idx == CmdIdx::lgrep
@@ -116,7 +116,7 @@ pub unsafe fn replace_makeprg(
 /// Expand every `%`, `#`, `` `cmd` `` and `<…>` in a command's file
 /// argument, then expand wildcards if the command takes exactly one name.
 pub(crate) unsafe fn expand_filename(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     cmdlinep: *mut *mut c_char,
     errormsgp: &mut Option<CString>,
 ) -> Result<(), Failed> {
@@ -126,7 +126,7 @@ pub(crate) unsafe fn expand_filename(
     // Where the environment variables in a file argument are expanded;
     // upstream shares `NameBuff`.
     let mut expanded = [0 as c_char; MAXPATHL as usize];
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     // A `:vimgrep` pattern is not a file name, so the scan starts after
     // it.
     let mut p = skip_grep_pat(ea);
@@ -214,7 +214,7 @@ pub(crate) unsafe fn expand_filename(
             repl = escaped_repl;
         }
 
-        p = repl_cmdline(eap, p, srclen, repl, cmdlinep);
+        p = repl_cmdline(args, p, srclen, repl, cmdlinep);
         xfree(repl as *mut c_void);
     }
 
@@ -233,7 +233,7 @@ pub(crate) unsafe fn expand_filename(
             let out = expanded.as_mut_ptr();
             unsafe { expand_env_esc(ea.arg, out, MAXPATHL, true, true, ptr::null_mut()) };
             has_wildcards = path_has_wildcard(out);
-            repl_cmdline(eap, ea.arg, len_of(ea.arg), out, cmdlinep);
+            repl_cmdline(args, ea.arg, len_of(ea.arg), out, cmdlinep);
         }
     }
     if !has_wildcards {
@@ -260,7 +260,7 @@ pub(crate) unsafe fn expand_filename(
     if expanded.is_null() {
         return Err(Failed);
     }
-    repl_cmdline(eap, ea.arg, len_of(ea.arg), expanded, cmdlinep);
+    repl_cmdline(args, ea.arg, len_of(ea.arg), expanded, cmdlinep);
     xfree(expanded as *mut c_void);
     Ok(())
 }
@@ -273,13 +273,13 @@ pub(crate) unsafe fn expand_filename(
 /// Answers where the text after the replacement now lives, which is where
 /// the caller's scan resumes.
 pub(crate) fn repl_cmdline(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     src: *mut c_char,
     srclen: size_t,
     repl: *mut c_char,
     cmdlinep: *mut *mut c_char,
 ) -> *mut c_char {
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     let len = len_of(repl);
     // The tail after the replacement, the replacement itself, a
     // terminator, and — because `nextcmd` is stored past the end — the

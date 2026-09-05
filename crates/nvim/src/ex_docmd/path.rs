@@ -335,8 +335,8 @@ pub unsafe fn changedir_func(new_dir: *mut c_char, scope: CdScope) -> bool {
 }
 
 /// `:cd`, `:lcd`, `:tcd` and their `…chdir` spellings.
-pub unsafe fn ex_cd(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub unsafe fn ex_cd(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     let new_dir = eap.arg;
     // Without 'cdhome', a bare `:cd` reports the directory instead of
     // changing it — Vi's behaviour.
@@ -360,7 +360,7 @@ pub unsafe fn ex_cd(eap: *mut ExArg) {
 }
 
 /// `:pwd` — and with 'verbose' set, which scope the directory came from.
-pub(crate) unsafe fn ex_pwd(_eap: *mut ExArg) {
+pub(crate) unsafe fn ex_pwd(_args: *mut ExArg) {
     let mut dir = [0 as c_char; MAXPATHL as usize];
     if os_dirname(dir.as_mut_ptr(), MAXPATHL as size_t).is_err() {
         emsg(gettext(c"E187: Unknown".as_ptr()));

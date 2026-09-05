@@ -325,9 +325,9 @@ pub unsafe fn skip_vimgrep_pat(
 ///
 /// # Safety
 /// `eap` must be the live Ex-command argument.
-pub unsafe fn ex_oldfiles(eap: *mut ExArg) {
+pub unsafe fn ex_oldfiles(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     // SAFETY: `v:oldfiles` is the editor's own list, live or NULL.
     let list = unsafe { get_vim_var_list(Vv::Oldfiles) };
     if list.is_null() {

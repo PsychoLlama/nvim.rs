@@ -427,10 +427,10 @@ pub(crate) fn qf_get_entry(
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn qf_get_size(eap: *mut ExArg) -> size_t {
+/// `args` must be a live command.
+pub unsafe fn qf_get_size(args: *mut ExArg) -> size_t {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    let qi = unsafe { qf_cmd_get_stack(args, false) };
     if qi.is_null() {
         return 0;
     }
@@ -442,15 +442,15 @@ pub unsafe fn qf_get_size(eap: *mut ExArg) -> size_t {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn qf_get_valid_size(eap: *mut ExArg) -> size_t {
+/// `args` must be a live command.
+pub unsafe fn qf_get_valid_size(args: *mut ExArg) -> size_t {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    let qi = unsafe { qf_cmd_get_stack(args, false) };
     if qi.is_null() {
         return 0;
     }
     let per_entry =
-        unsafe { (*eap).cmdidx } == CmdIdx::cdo || unsafe { (*eap).cmdidx } == CmdIdx::ldo;
+        unsafe { (*args).cmdidx } == CmdIdx::cdo || unsafe { (*args).cmdidx } == CmdIdx::ldo;
     let qfl = unsafe { qf_get_curlist(qi) };
     let mut prev_fnum = 0;
     let mut size: size_t = 0;
@@ -475,10 +475,10 @@ pub unsafe fn qf_get_valid_size(eap: *mut ExArg) -> size_t {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn qf_get_cur_idx(eap: *mut ExArg) -> size_t {
+/// `args` must be a live command.
+pub unsafe fn qf_get_cur_idx(args: *mut ExArg) -> size_t {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    let qi = unsafe { qf_cmd_get_stack(args, false) };
     if qi.is_null() {
         return 0;
     }
@@ -490,10 +490,10 @@ pub unsafe fn qf_get_cur_idx(eap: *mut ExArg) -> size_t {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command.
-pub unsafe fn qf_get_cur_valid_idx(eap: *mut ExArg) -> c_int {
+/// `args` must be a live command.
+pub unsafe fn qf_get_cur_valid_idx(args: *mut ExArg) -> c_int {
     // SAFETY: forwarded from the caller.
-    let qi = unsafe { qf_cmd_get_stack(eap, false) };
+    let qi = unsafe { qf_cmd_get_stack(args, false) };
     if qi.is_null() {
         return 1;
     }
@@ -502,7 +502,7 @@ pub unsafe fn qf_get_cur_valid_idx(eap: *mut ExArg) -> c_int {
         return 1;
     }
     let per_file =
-        unsafe { (*eap).cmdidx } == CmdIdx::cfdo || unsafe { (*eap).cmdidx } == CmdIdx::lfdo;
+        unsafe { (*args).cmdidx } == CmdIdx::cfdo || unsafe { (*args).cmdidx } == CmdIdx::lfdo;
     let mut prev_fnum = 0;
     let mut eidx = 0;
     let mut i = 1;

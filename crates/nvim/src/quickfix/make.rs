@@ -98,9 +98,9 @@ unsafe fn make_get_fullcmd(makecmd: *const c_char, fname: *const c_char) -> *mut
 /// # Safety
 ///
 /// `eap` must be a live command.
-pub unsafe fn ex_make(eap: *mut ExArg) {
+pub unsafe fn ex_make(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live `ExArg`.
-    let eap = unsafe { Ea::new(eap) };
+    let eap = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     // Redirect ":grep" to ":vimgrep" if 'grepprg' is "internal".
     if unsafe { grep_internal(eap.cmdidx) } {

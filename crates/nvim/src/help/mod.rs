@@ -117,32 +117,32 @@ const fn cstr_optval(value: &'static CStr) -> OptVal {
 /// instead of taking a subject.
 ///
 /// # Safety
-/// `eap` is null or the current Ex command; its `arg` is a writable,
+/// `args` is null or the current Ex command; its `arg` is a writable,
 /// NUL-terminated command line, which this truncates at the first `\n`,
 /// `\r`, or `|` that starts a following command.
-pub(crate) unsafe fn ex_help(eap: *mut ExArg) {
+pub(crate) unsafe fn ex_help(args: *mut ExArg) {
     let old_key_typed = KeyTyped.get();
 
     // SAFETY: caller contract; the command line is writable.
     let mut arg = unsafe {
-        if eap.is_null() {
+        if args.is_null() {
             c"".as_ptr().cast_mut()
         } else {
-            split_off_next_cmd(eap);
-            if (*eap).skip != 0 {
+            split_off_next_cmd(args);
+            if (*args).skip != 0 {
                 return;
             }
-            trim_trailing_blanks((*eap).arg)
+            trim_trailing_blanks((*args).arg)
         }
     };
 
-    // SAFETY: `arg` is NUL-terminated, and writable whenever `eap` is set --
+    // SAFETY: `arg` is NUL-terminated, and writable whenever `args` is set --
     // which is the only case where `check_help_lang` can find a `@xx` to
     // strip.
     let lang = unsafe { check_help_lang(arg) };
 
     // SAFETY: caller contract.
-    let helpbang = unsafe { !eap.is_null() && (*eap).forceit != 0 && *arg == NUL as c_char };
+    let helpbang = unsafe { !args.is_null() && (*args).forceit != 0 && *arg == NUL as c_char };
     if unsafe { *arg == NUL as c_char } && !helpbang {
         arg = c"help.txt".as_ptr().cast_mut();
     }
@@ -162,7 +162,7 @@ pub(crate) unsafe fn ex_help(eap: *mut ExArg) {
     let mut num_matches: c_int = 0;
     let mut matches: *mut *mut c_char = ptr::null_mut();
     // SAFETY: `arg` is NUL-terminated; the two out-parameters are ours.
-    let forceit = !eap.is_null() && unsafe { (*eap).forceit } != 0;
+    let forceit = !args.is_null() && unsafe { (*args).forceit } != 0;
     let (out_n, out_m) = (&raw mut num_matches, &raw mut matches);
     let n = unsafe { find_help_tags(arg, out_n, out_m, forceit) };
 
@@ -240,10 +240,10 @@ pub(crate) unsafe fn ex_help(eap: *mut ExArg) {
 /// text. Terminate the argument there and point `nextcmd` at the rest.
 ///
 /// # Safety
-/// `eap`'s `arg` is a writable NUL-terminated command line.
-unsafe fn split_off_next_cmd(eap: *mut ExArg) {
+/// `args`'s `arg` is a writable NUL-terminated command line.
+unsafe fn split_off_next_cmd(args: *mut ExArg) {
     // SAFETY: caller contract.
-    let mut arg = unsafe { (*eap).arg };
+    let mut arg = unsafe { (*args).arg };
     while unsafe { *arg } != NUL as c_char {
         if unsafe { *arg } == b'\n' as c_char
             || unsafe { *arg } == b'\r' as c_char
@@ -253,7 +253,7 @@ unsafe fn split_off_next_cmd(eap: *mut ExArg) {
         {
             unsafe { *arg = NUL as c_char };
             arg = unsafe { arg.offset(1) };
-            unsafe { (*eap).nextcmd = arg };
+            unsafe { (*args).nextcmd = arg };
             return;
         }
         arg = unsafe { arg.offset(1) };
@@ -394,20 +394,20 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
 /// `:helpclose`: close the first help window in the current tab page.
 ///
 /// # Safety
-/// `eap` is the current Ex command.
-pub(crate) unsafe fn ex_helpclose(eap: *mut ExArg) {
+/// `args` is the current Ex command.
+pub(crate) unsafe fn ex_helpclose(args: *mut ExArg) {
     let Some(win) = windows().find(|wp| buf_is_help(wp.buffer_or_none())) else {
         return;
     };
     // SAFETY: caller contract; a live window.
-    unsafe { win_close(win.raw(), false, (*eap).forceit != 0) };
+    unsafe { win_close(win.raw(), false, (*args).forceit != 0) };
 }
 
 /// `:exusage`.
 ///
 /// # Safety
-/// `eap` is unused, but the signature is the Ex-command one.
-pub(crate) unsafe fn ex_exusage(_eap: *mut ExArg) {
+/// `args` is unused, but the signature is the Ex-command one.
+pub(crate) unsafe fn ex_exusage(_args: *mut ExArg) {
     // SAFETY: a static command line.
     let _ = unsafe { do_cmdline_cmd(c"help ex-cmd-index".as_ptr()) };
 }
@@ -416,7 +416,7 @@ pub(crate) unsafe fn ex_exusage(_eap: *mut ExArg) {
 ///
 /// # Safety
 /// As [`ex_exusage`].
-pub(crate) unsafe fn ex_viusage(_eap: *mut ExArg) {
+pub(crate) unsafe fn ex_viusage(_args: *mut ExArg) {
     // SAFETY: a static command line.
     let _ = unsafe { do_cmdline_cmd(c"help normal-index".as_ptr()) };
 }

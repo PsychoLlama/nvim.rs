@@ -30,8 +30,8 @@ use crate::winlayer::Ea;
 /// attaches a terminal to a buffer, and it is a vimscript function. The
 /// argument therefore has to survive being read as a vimscript string
 /// literal, which is what the `"` and `\` escaping is for.
-pub(crate) unsafe fn ex_terminal(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_terminal(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     const CMD_LEN: usize = 1024;
     let mut ex_cmd: [c_char; CMD_LEN] = [0; CMD_LEN];
     let mut len: size_t = 0;
@@ -129,8 +129,8 @@ pub(crate) unsafe fn ex_terminal(eap: *mut ExArg) {
 }
 
 /// `:lsp` — a Lua entry point that takes the whole argument as one string.
-pub(crate) unsafe fn ex_lsp(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_lsp(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     let mut err = Error::none();
     let mut items: [Object; 1] = [Object::String(unsafe { cstr_as_string(eap.arg) })];
     let args = Array {

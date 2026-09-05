@@ -525,14 +525,14 @@ pub(crate) fn edit_file(
     fnum: c_int,
     ffname: *mut c_char,
     sfname: *mut c_char,
-    eap: *mut ExArg,
+    args: *mut ExArg,
     newlnum: LineNr,
     flags: EcmdFlags,
     win: Win,
 ) -> Result<(), Failed> {
     let raw = win.raw();
     // SAFETY: a live window, and the caller's own arguments passed on.
-    unsafe { do_ecmd(fnum, ffname, sfname, eap, newlnum, flags, raw) }
+    unsafe { do_ecmd(fnum, ffname, sfname, args, newlnum, flags, raw) }
 }
 
 fn layout_lock() {

@@ -566,12 +566,12 @@ pub const __S_IFMT: ::core::ffi::c_int = 0o170000 as ::core::ffi::c_int;
 pub const NAME_MAX: ::core::ffi::c_int = 255 as ::core::ffi::c_int;
 pub const __INT_MAX__: ::core::ffi::c_int = 2147483647 as ::core::ffi::c_int;
 
-/// Fill `eap` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
+/// Fill `args` so that `'fileencoding'`, `'fileformat'` and `'binary'` are
 /// forced to what buffer `buffer` already has. Used when calling `readfile` to
 /// re-read a buffer that is already open.
-pub unsafe fn prep_exarg(eap: *mut ExArg, buffer: Buf) {
+pub unsafe fn prep_exarg(args: *mut ExArg, buffer: Buf) {
     // SAFETY: the caller's command, live for the call.
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     // SAFETY: the buffer's own NUL-terminated 'fileencoding'.
     let cmd_len = 15 + unsafe { cstr::bytes_at(buffer.b_p_fenc) }.len();
     ea.cmd = unsafe { xmalloc(cmd_len) }.cast();
@@ -591,12 +591,12 @@ pub unsafe fn prep_exarg(eap: *mut ExArg, buffer: Buf) {
 }
 
 /// Set the default or forced `'fileformat'` and `'binary'`.
-pub unsafe fn set_file_options(set_options: bool, eap: *mut ExArg) {
+pub unsafe fn set_file_options(set_options: bool, args: *mut ExArg) {
     // Set the default 'fileformat'.
     if set_options {
-        if !eap.is_null() && unsafe { (*eap).force_ff } != 0 {
+        if !args.is_null() && unsafe { (*args).force_ff } != 0 {
             set_fileformat(
-                unsafe { get_fileformat_force(cur_buf(), eap) },
+                unsafe { get_fileformat_force(cur_buf(), args) },
                 OptionSetFlags::LOCAL,
             );
         } else if unsafe { *p_ffs.get() } != 0 {
@@ -605,18 +605,18 @@ pub unsafe fn set_file_options(set_options: bool, eap: *mut ExArg) {
     }
 
     // Set or reset 'binary'.
-    if !eap.is_null() && unsafe { (*eap).force_bin } != 0 {
+    if !args.is_null() && unsafe { (*args).force_bin } != 0 {
         let oldval = cur_buf().b_p_bin;
-        cur_buf().b_p_bin = (unsafe { (*eap).force_bin } == FORCE_BIN) as c_int;
+        cur_buf().b_p_bin = (unsafe { (*args).force_bin } == FORCE_BIN) as c_int;
         let bin = cur_buf().b_p_bin != 0;
         set_options_bin(oldval != 0, bin, OptionSetFlags::LOCAL);
     }
 }
 
 /// Set the forced `'fileencoding'` from a `++enc=` argument.
-pub unsafe fn set_forced_fenc(eap: *mut ExArg) {
+pub unsafe fn set_forced_fenc(args: *mut ExArg) {
     // SAFETY: the caller's command, live for the call.
-    let ea = unsafe { Ea::new(eap) };
+    let ea = unsafe { Ea::new(args) };
     if ea.force_enc == 0 {
         return;
     }

@@ -37,8 +37,8 @@ use crate::winlayer::Ea;
 /// The third letter of the name says what to do with what is found, and
 /// the first says whether the search is for a *definition* or for any
 /// occurrence.
-pub(crate) unsafe fn ex_findpat(eap: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_findpat(args: *mut ExArg) {
+    let mut ea = unsafe { Ea::new(args) };
     let name = cmdnames[ea.cmdidx.index()].cmd_name;
     let action = match ubyte_at(name, 2) {
         // `:isearch`/`:dsearch` show the first match; `:psearch` goes
@@ -105,15 +105,15 @@ pub(crate) unsafe fn ex_findpat(eap: *mut ExArg) {
 }
 
 /// `:ptag` and friends — the same as `:tag`, in the preview window.
-pub(crate) unsafe fn ex_ptag(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_ptag(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     g_do_tagpreview.set(p_pvh.get() as c_int);
     unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name.add(1)) };
 }
 
 /// `:stag` and friends — the same as `:tag`, in a new window.
-pub(crate) unsafe fn ex_stag(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_stag(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     // `-1` means "split, and let the tag code choose the size".
     postponed_split.set(-1);
     postponed_split_flags.set(cmdmod_split());
@@ -124,8 +124,8 @@ pub(crate) unsafe fn ex_stag(eap: *mut ExArg) {
 }
 
 /// `:tag`, `:tnext`, `:tselect`, `:tjump`, `:tprevious`, `:tpop`, …
-pub(crate) unsafe fn ex_tag(eap: *mut ExArg) {
-    let eap = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn ex_tag(args: *mut ExArg) {
+    let eap = unsafe { Ea::new(args) };
     unsafe { ex_tag_cmd(eap, cmdnames[eap.cmdidx.index()].cmd_name) };
 }
 
@@ -135,7 +135,7 @@ pub(crate) unsafe fn ex_tag(eap: *mut ExArg) {
 /// `ex_ptag` and `ex_stag` pass the name one byte in, so that `:ptnext`
 /// and `:stselect` read the same letter `:tnext` and `:tselect` do. A
 /// leading `l` overrides everything: it is the location-list form.
-unsafe fn ex_tag_cmd(eap: Ea, name: *const c_char) {
+unsafe fn ex_tag_cmd(args: Ea, name: *const c_char) {
     let mut cmd = match ubyte_at(name, 1) {
         b'j' => DT_JUMP,
         b's' => DT_SELECT,
@@ -151,14 +151,14 @@ unsafe fn ex_tag_cmd(eap: Ea, name: *const c_char) {
     }
     unsafe {
         do_tag(
-            eap.arg,
+            args.arg,
             cmd,
-            if eap.addr_count > 0 {
-                eap.line2 as c_int
+            if args.addr_count > 0 {
+                args.line2 as c_int
             } else {
                 1
             },
-            eap.forceit,
+            args.forceit,
             true,
         )
     };

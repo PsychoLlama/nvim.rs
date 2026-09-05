@@ -373,10 +373,10 @@ pub(crate) unsafe fn show_sub(
 /// The `:substitute` command.
 ///
 /// # Safety
-/// Main thread; `eap` must be the live Ex-command argument.
-pub unsafe fn ex_substitute(eap: *mut ExArg) {
+/// Main thread; `args` must be the live Ex-command argument.
+pub unsafe fn ex_substitute(args: *mut ExArg) {
     // SAFETY: caller's contract.
-    unsafe { do_sub(&mut *eap, profile_zero(), 0 as c_int, 0 as Handle) };
+    unsafe { do_sub(&mut *args, profile_zero(), 0 as c_int, 0 as Handle) };
 }
 
 /// The `:substitute` command's `'inccommand'` preview callback.
@@ -384,12 +384,12 @@ pub unsafe fn ex_substitute(eap: *mut ExArg) {
 /// # Safety
 /// Main thread; `eap` must be the live Ex-command argument.
 pub unsafe fn ex_substitute_preview(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: Handle,
 ) -> c_int {
     // SAFETY: caller's contract.
-    let eap = unsafe { &mut *eap };
+    let eap = unsafe { &mut *args };
     // Only preview once the pattern delimiter has been typed.
     // SAFETY: the argument is NUL-terminated.
     let first = unsafe { *eap.arg } as u8;

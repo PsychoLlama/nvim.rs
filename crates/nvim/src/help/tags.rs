@@ -50,18 +50,18 @@ use super::flag::kEqualFiles;
 /// 'runtimepath'.
 ///
 /// # Safety
-/// `eap` is the current Ex command with a writable NUL-terminated argument.
-pub(crate) unsafe fn ex_helptags(eap: *mut ExArg) {
+/// `args` is the current Ex command with a writable NUL-terminated argument.
+pub(crate) unsafe fn ex_helptags(args: *mut ExArg) {
     let mut add_help_tags = false;
     // SAFETY: caller contract.
-    if unsafe { cstr::starts_with((*eap).arg, b"++t") }
-        && ascii_iswhite(unsafe { *(*eap).arg.offset(3) } as c_int)
+    if unsafe { cstr::starts_with((*args).arg, b"++t") }
+        && ascii_iswhite(unsafe { *(*args).arg.offset(3) } as c_int)
     {
         add_help_tags = true;
-        unsafe { (*eap).arg = skipwhite((*eap).arg.offset(3)) };
+        unsafe { (*args).arg = skipwhite((*args).arg.offset(3)) };
     }
 
-    if unsafe { cstr::eq_bytes((*eap).arg, b"ALL") } {
+    if unsafe { cstr::eq_bytes((*args).arg, b"ALL") } {
         let (rtp, none, doc) = (p_rtp.get(), c"".as_ptr(), c"doc".as_ptr().cast_mut());
         let opts = RuntimeOpts::ALL | RuntimeOpts::DIR;
         let flag = (&raw mut add_help_tags).cast::<c_void>();
@@ -74,14 +74,14 @@ pub(crate) unsafe fn ex_helptags(eap: *mut ExArg) {
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
     unsafe { expand_init(&raw mut xpc) };
     xpc.xp_context = ExpandContext::Directories;
-    let arg = unsafe { (*eap).arg };
+    let arg = unsafe { (*args).arg };
     let opts = WildOpts::LIST_NOTFOUND | WildOpts::SILENT;
     let (orig, mode) = (ptr::null_mut(), WildMode::ExpandFree);
     // SAFETY: `xpc` was just initialised and `arg` is the command's own.
     let dirname = unsafe { expand_one(&raw mut xpc, arg, orig, opts, mode) };
     if dirname.is_null() || !unsafe { os_isdir(dirname) } {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
-        let arg = unsafe { c_str((*eap).arg) };
+        let arg = unsafe { c_str((*args).arg) };
         semsg!("E150: Not a directory: {arg}");
     } else {
         unsafe { do_helptags(dirname, add_help_tags, false) };

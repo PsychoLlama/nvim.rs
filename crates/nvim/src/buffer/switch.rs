@@ -204,14 +204,14 @@ fn confirming() -> bool {
 /// Go to another buffer, handling the result of the ATTENTION dialog.
 ///
 /// # Safety
-/// `eap` must be a live `ExArg`.
-pub unsafe fn goto_buffer(eap: *mut ExArg, start: c_int, dir: c_int, count: c_int) {
+/// `args` must be a live `ExArg`.
+pub unsafe fn goto_buffer(args: *mut ExArg, start: c_int, dir: c_int, count: c_int) {
     let save_sea = swap_exists_action.get();
     // SAFETY: the caller's promise -- a live command, whose `cmd` is a
     // NUL-terminated pointer into the command line.
-    let (cmdidx, split) = unsafe { ((*eap).cmdidx, *(*eap).cmd as c_int == 's' as c_int) };
+    let (cmdidx, split) = unsafe { ((*args).cmdidx, *(*args).cmd as c_int == 's' as c_int) };
     // SAFETY: as above.
-    let forceit = unsafe { (*eap).forceit != 0 };
+    let forceit = unsafe { (*args).forceit != 0 };
 
     let skip_help_buf = matches!(
         cmdidx,

@@ -331,8 +331,8 @@ unsafe fn diff_write(
 /// segments' block lists are shifted back into place and chained together.
 ///
 /// # Safety
-/// `dio` must be a live diff run, and `eap` null or a live command.
-unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, eap: *mut ExArg) {
+/// `dio` must be a live diff run, and `args` null or a live command.
+unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, args: *mut ExArg) {
     // SAFETY: the caller's diff run.
     let mut dio = unsafe { Live::<DiffIo>::new(dio) };
     let orig_in: *mut DiffIn = dio.field_ptr(offset_of!(DiffIo, dio_orig));
@@ -361,7 +361,7 @@ unsafe fn diff_try_update(dio: *mut DiffIo, idx_orig: c_int, eap: *mut ExArg) {
 
         // `:diffupdate!` re-reads any buffer that changed on disk first.
         // SAFETY: the caller's command, when there is one.
-        let forceit = !eap.is_null() && unsafe { (*eap).forceit } != 0;
+        let forceit = !args.is_null() && unsafe { (*args).forceit } != 0;
         if forceit {
             for idx in idx_orig..DB_COUNT as usize {
                 let buf = tp.tp_diffbuf[idx];
@@ -510,8 +510,8 @@ pub unsafe fn diff_internal() -> c_int {
 /// `:diffupdate`, and every implicit recompute.
 ///
 /// # Safety
-/// `eap` must be null or a live command.
-pub unsafe fn ex_diffupdate(eap: *mut ExArg) {
+/// `args` must be null or a live command.
+pub unsafe fn ex_diffupdate(args: *mut ExArg) {
     // A recompute asked for from inside `:diffget`/`:diffput` is deferred
     // to that command's tail, where `diff_need_update` is read.
     if diff_busy.get() {
@@ -541,8 +541,8 @@ pub unsafe fn ex_diffupdate(eap: *mut ExArg) {
             },
             dio_internal: internal,
         };
-        // SAFETY: `diffio` is a local, and `eap` is the caller's command.
-        unsafe { diff_try_update(&raw mut diffio, idx_orig, eap) };
+        // SAFETY: `diffio` is a local, and `args` is the caller's command.
+        unsafe { diff_try_update(&raw mut diffio, idx_orig, args) };
         cur_win().w_valid_cursor.lnum = 0;
     }
 

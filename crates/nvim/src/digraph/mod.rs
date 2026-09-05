@@ -711,14 +711,14 @@ fn source_keymap_file(keymap: &[u8], enc: Option<&[u8]>) -> bool {
 ///
 /// # Safety
 ///
-/// `eap` must be a valid command block (ex-command contract).
-pub unsafe fn ex_loadkeymap(eap: *mut ExArg) {
+/// `args` must be a valid command block (ex-command contract).
+pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     // SAFETY: caller contract; the getter and its cookie are the sourcing
     // machinery's, and `getline_equal` only compares them.
     let sourced = unsafe {
         getline_equal(
-            (*eap).ea_getline,
-            (*eap).cookie,
+            (*args).ea_getline,
+            (*args).cookie,
             Some(getsourceline as unsafe fn(c_int, *mut c_void, c_int, bool) -> *mut c_char),
         )
     };
@@ -738,7 +738,7 @@ pub unsafe fn ex_loadkeymap(eap: *mut ExArg) {
     p_cpo.set(c"C".as_ptr() as *mut c_char);
     // SAFETY: caller contract; the line getter was just checked to be the
     // sourcing one, and `buf`'s entry list was just emptied.
-    unsafe { read_keymap_entries(eap, buf) };
+    unsafe { read_keymap_entries(args, buf) };
     // SAFETY: the entries just read own two NUL-terminated strings each.
     unsafe { apply_keymap_entries(buf) };
     p_cpo.set(save_cpo);
@@ -754,14 +754,15 @@ pub unsafe fn ex_loadkeymap(eap: *mut ExArg) {
 ///
 /// # Safety
 ///
-/// `eap` must be a live command block whose line getter is the sourcing one,
+/// `args` must be a live command block whose line getter is the sourcing one,
 /// and `buffer` a valid buffer.
-unsafe fn read_keymap_entries(eap: *mut ExArg, buffer: *mut Buffer) {
+unsafe fn read_keymap_entries(args: *mut ExArg, buffer: *mut Buffer) {
     loop {
         // SAFETY: caller contract; the getter answers an owned heap line or
         // null at end of file.
-        let line =
-            unsafe { (*eap).ea_getline.expect("non-null line getter")(0, (*eap).cookie, 0, true) };
+        let line = unsafe {
+            (*args).ea_getline.expect("non-null line getter")(0, (*args).cookie, 0, true)
+        };
         if line.is_null() {
             break;
         }

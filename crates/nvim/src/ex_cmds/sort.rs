@@ -285,17 +285,17 @@ fn shared_flag(byte: u8, order: &mut StringOrder, use_match: &mut bool) -> Flag 
 /// `arg` must be the command's NUL-terminated argument and `at` must index
 /// one of its bytes.
 unsafe fn flag_fallback(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     at: usize,
     byte: u8,
     regmatch: &mut RegMatch,
     keep_nextcmd: bool,
 ) -> Option<Fallback> {
-    let arg = eap.arg;
+    let arg = args.arg;
     // SAFETY: caller's contract.
     let next = unsafe { check_nextcmd(arg.add(at)) };
-    if !next.is_null() && !(keep_nextcmd && !eap.nextcmd.is_null()) {
-        eap.nextcmd = next;
+    if !next.is_null() && !(keep_nextcmd && !args.nextcmd.is_null()) {
+        args.nextcmd = next;
         return Some(Fallback::NextCmd);
     }
     if is_alpha(byte) || !regmatch.regprog.is_null() {
@@ -314,11 +314,11 @@ unsafe fn flag_fallback(
 /// # Safety
 /// `eap.arg` must be the command's NUL-terminated argument.
 unsafe fn parse_sort_flags(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     spec: &mut SortSpec,
     regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
-    let arg = eap.arg;
+    let arg = args.arg;
     let mut order = StringOrder::BYTES;
     // Only one of 'n', 'b', 'o', 'f' and 'x' is allowed.
     let mut formats = 0;
@@ -350,7 +350,7 @@ unsafe fn parse_sort_flags(
                 Flag::Shared => {}
                 Flag::End => break,
                 // SAFETY: `at` indexes the argument's own bytes.
-                Flag::Other => match unsafe { flag_fallback(eap, at, byte, regmatch, false) }? {
+                Flag::Other => match unsafe { flag_fallback(args, at, byte, regmatch, false) }? {
                     Fallback::NextCmd => break,
                     Fallback::Pattern(end) => at = end,
                 },
@@ -374,12 +374,12 @@ unsafe fn parse_sort_flags(
 /// # Safety
 /// `eap.arg` must be the command's NUL-terminated argument.
 unsafe fn parse_uniq_flags(
-    eap: &mut ExArg,
+    args: &mut ExArg,
     mode: &mut UniqMode,
     use_match: &mut bool,
     regmatch: &mut RegMatch,
 ) -> Option<StringOrder> {
-    let arg = eap.arg;
+    let arg = args.arg;
     let mut order = StringOrder::BYTES;
     let mut at = 0;
 
@@ -397,7 +397,7 @@ unsafe fn parse_uniq_flags(
                 Flag::Shared => {}
                 Flag::End => break,
                 // SAFETY: `at` indexes the argument's own bytes.
-                Flag::Other => match unsafe { flag_fallback(eap, at, byte, regmatch, true) }? {
+                Flag::Other => match unsafe { flag_fallback(args, at, byte, regmatch, true) }? {
                     Fallback::NextCmd => break,
                     Fallback::Pattern(end) => at = end,
                 },
@@ -637,19 +637,19 @@ unsafe fn append_sorted(
 /// `:sort`.
 ///
 /// # Safety
-/// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_sort(eap: *mut ExArg) {
+/// `args` must be a live Ex command whose range is inside the current buffer.
+pub unsafe fn ex_sort(args: *mut ExArg) {
     // SAFETY: caller's contract.  The dispatcher's `ExArg` outlives the
     // command and is reached through no other pointer while it runs.
-    unsafe { sort_range(&mut *eap) };
+    unsafe { sort_range(&mut *args) };
 }
 
 /// `:sort`, with the command's argument block borrowed.
 ///
 /// # Safety
-/// `eap`'s range must be inside the current buffer.
-unsafe fn sort_range(eap: &mut ExArg) {
-    let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
+/// `args`'s range must be inside the current buffer.
+unsafe fn sort_range(args: &mut ExArg) {
+    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
 
     // Sorting one line is really quick!
     if line2 - line1 < 1 {
@@ -666,7 +666,7 @@ unsafe fn sort_range(eap: &mut ExArg) {
 
     'sortend: {
         // SAFETY: `eap.arg` is the command's own argument.
-        let Some(order) = (unsafe { parse_sort_flags(eap, &mut spec, &mut regmatch) }) else {
+        let Some(order) = (unsafe { parse_sort_flags(args, &mut spec, &mut regmatch) }) else {
             break 'sortend;
         };
         // SAFETY: the range is inside the current buffer and the scan
@@ -835,18 +835,18 @@ impl UniqScan {
 /// `:uniq`.
 ///
 /// # Safety
-/// `eap` must be a live Ex command whose range is inside the current buffer.
-pub unsafe fn ex_uniq(eap: *mut ExArg) {
+/// `args` must be a live Ex command whose range is inside the current buffer.
+pub unsafe fn ex_uniq(args: *mut ExArg) {
     // SAFETY: caller's contract, as [`ex_sort`].
-    unsafe { uniq_range(&mut *eap) };
+    unsafe { uniq_range(&mut *args) };
 }
 
 /// `:uniq`, with the command's argument block borrowed.
 ///
 /// # Safety
-/// `eap`'s range must be inside the current buffer.
-unsafe fn uniq_range(eap: &mut ExArg) {
-    let (forceit, line1, line2) = (eap.forceit, eap.line1, eap.line2);
+/// `args`'s range must be inside the current buffer.
+unsafe fn uniq_range(args: &mut ExArg) {
+    let (forceit, line1, line2) = (args.forceit, args.line1, args.line2);
     let mut count = line2 - line1 + 1;
 
     // Uniq one line is really quick!
@@ -871,7 +871,7 @@ unsafe fn uniq_range(eap: &mut ExArg) {
     'uniqend: {
         // SAFETY: `eap.arg` is the command's own argument.
         let Some(order) =
-            (unsafe { parse_uniq_flags(eap, &mut mode, &mut use_match, &mut regmatch) })
+            (unsafe { parse_uniq_flags(args, &mut mode, &mut use_match, &mut regmatch) })
         else {
             break 'uniqend;
         };

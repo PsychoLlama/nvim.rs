@@ -55,8 +55,8 @@ pub(crate) unsafe fn skip_colon_white(p: *const c_char, skipleadingwhite: bool) 
 /// command accepts one, a user command (a negative `cmdidx`) does not take
 /// `=`, and a digit belongs to the *count* rather than to a register when
 /// the command takes both.
-pub(crate) unsafe fn parse_register(eap: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(eap) };
+pub(crate) unsafe fn parse_register(args: *mut ExArg) {
+    let mut ea = unsafe { Ea::new(args) };
     let is_user_command = is_user_cmd(ea.cmdidx);
     if !ea.argt.has(ExArgt::REGSTR)
         || byte(ea.arg) == NUL
@@ -86,8 +86,8 @@ pub(crate) unsafe fn parse_register(eap: *mut ExArg) {
 
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
-pub unsafe fn set_cmd_count(eap: *mut ExArg, count: LineNr, validate: bool) {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn set_cmd_count(args: *mut ExArg, count: LineNr, validate: bool) {
+    let mut ea = unsafe { Ea::new(args) };
     if ea.addr_type != CmdAddr::Lines {
         ea.line2 = count;
         if ea.addr_count == 0 {
@@ -115,11 +115,11 @@ pub unsafe fn set_cmd_count(eap: *mut ExArg, count: LineNr, validate: bool) {
 /// Take the count a command such as `:delete 3` may carry, and fold it into
 /// the range.
 pub(crate) unsafe fn parse_count(
-    eap: *mut ExArg,
+    args: *mut ExArg,
     errormsg: &mut Option<CString>,
     validate: bool,
 ) -> Result<(), Failed> {
-    let mut ea = unsafe { Ea::new(eap) };
+    let mut ea = unsafe { Ea::new(args) };
     if !ea.argt.has(ExArgt::COUNT) || !ascii_isdigit(byte(ea.arg)) {
         return Ok(());
     }
@@ -151,14 +151,14 @@ pub(crate) unsafe fn parse_count(
         *errormsg = Some(unsafe { ex_msg(e_zerocount.as_ptr()) });
         return Err(Failed);
     }
-    unsafe { set_cmd_count(eap, n, validate) };
+    unsafe { set_cmd_count(args, n, validate) };
     Ok(())
 }
 
 /// Take the `!` a command may carry. `:substitute` and its two magic
 /// spellings are the exception: there a `!` belongs to the pattern.
-pub(crate) unsafe fn parse_bang(eap: Ea, p: *mut *mut c_char) -> bool {
-    let cmdidx = eap.cmdidx;
+pub(crate) unsafe fn parse_bang(args: Ea, p: *mut *mut c_char) -> bool {
+    let cmdidx = args.cmdidx;
     if byte(unsafe { *p }) == '!' as c_int
         && cmdidx != CmdIdx::substitute
         && cmdidx != CmdIdx::smagic
@@ -214,8 +214,8 @@ pub(crate) fn skip_grep_pat(ea: Ea) -> *mut c_char {
 ///
 /// A backslash before one of them escapes it — but only while 'cpoptions'
 /// does not contain `b`, or the command does not take CTRL-V escapes.
-pub unsafe fn separate_nextcmd(eap: *mut ExArg) {
-    let mut ea = unsafe { Ea::new(eap) };
+pub unsafe fn separate_nextcmd(args: *mut ExArg) {
+    let mut ea = unsafe { Ea::new(args) };
     let mut p = skip_grep_pat(ea);
     while unsafe { *p } != 0 {
         if byte(p) == Ctrl_V {
