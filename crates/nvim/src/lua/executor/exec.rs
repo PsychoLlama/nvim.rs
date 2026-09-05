@@ -30,8 +30,8 @@ use crate::message_fmt::c_str_len;
 use crate::os::cshim::gettext;
 use crate::types::{
     Arena, Array, Error, ErrorType, IOSIZE, LuaRef, LuaRetMode, Object, String_0, VAR_NUMBER,
-    VAR_UNKNOWN, expand_T, kErrorTypeException, kErrorTypeValidation, lua_Integer, lua_State,
-    size_t, typval_T, varnumber_T,
+    VAR_UNKNOWN, VarNumber, expand_T, kErrorTypeException, kErrorTypeValidation, lua_Integer,
+    lua_State, size_t, typval_T,
 };
 
 /// `luaeval("expr")` becomes this chunk with the expression appended and a
@@ -170,7 +170,7 @@ pub(crate) unsafe fn nlua_typval_exec(
         if check_secure() {
             if !ret_tv.is_null() {
                 (*ret_tv).v_type = VAR_NUMBER;
-                (*ret_tv).vval.v_number = 0 as varnumber_T;
+                (*ret_tv).vval.v_number = 0 as VarNumber;
             }
             return;
         }

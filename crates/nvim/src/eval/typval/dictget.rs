@@ -28,8 +28,8 @@ pub(crate) unsafe fn tv_blob2items(argvars: *mut typval_T, rettv: *mut typval_T)
     for i in 0..unsafe { tv_blob_len(blob) } {
         let l2 = unsafe { tv_list_alloc(2) };
         unsafe { tv_list_append_list((*rettv).list_or_null(), l2) };
-        unsafe { tv_list_append_number(l2, i as varnumber_T) };
-        unsafe { tv_list_append_number(l2, tv_blob_get(blob, i) as varnumber_T) };
+        unsafe { tv_list_append_number(l2, i as VarNumber) };
+        unsafe { tv_list_append_number(l2, tv_blob_get(blob, i) as VarNumber) };
     }
 }
 
@@ -58,7 +58,7 @@ pub(crate) unsafe fn tv_list2items(argvars: *mut typval_T, rettv: *mut typval_T)
     for (idx, li) in tv_list_iter(unsafe { l.as_ref() }).enumerate() {
         let l2 = unsafe { tv_list_alloc(2) };
         unsafe { tv_list_append_list((*rettv).list_or_null(), l2) };
-        unsafe { tv_list_append_number(l2, idx as varnumber_T) };
+        unsafe { tv_list_append_number(l2, idx as VarNumber) };
         unsafe { tv_list_append_tv(l2, &raw mut (*li).li_tv) };
     }
 }
@@ -78,7 +78,7 @@ pub(crate) unsafe fn tv_string2items(argvars: *mut typval_T, rettv: *mut typval_
         return; // null string behaves like an empty string
     }
 
-    let mut idx: varnumber_T = 0;
+    let mut idx: VarNumber = 0;
     while unsafe { *p } as ::core::ffi::c_int != NUL {
         let len = unsafe { utfc_ptr2len(p) };
         if len == 0 {
@@ -154,7 +154,7 @@ pub unsafe fn tv_dict_get_tv(
 /// `d` is null or points at a live dictionary, and `key` must be a
 /// NUL-terminated string. Coercing the value can raise an error, so the
 /// caller must be on the editor's main thread.
-pub unsafe fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> varnumber_T {
+pub unsafe fn tv_dict_get_number(d: *const dict_T, key: *const ::core::ffi::c_char) -> VarNumber {
     unsafe { tv_dict_get_number_def(d, key, 0) }
 }
 
@@ -168,10 +168,10 @@ pub unsafe fn tv_dict_get_number_def(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     def: ::core::ffi::c_int,
-) -> varnumber_T {
+) -> VarNumber {
     let di = unsafe { tv_dict_find(d, key, -1) };
     if di.is_null() {
-        return def as varnumber_T;
+        return def as VarNumber;
     }
     unsafe { tv_get_number(&raw mut (*di).di_tv) }
 }
@@ -185,10 +185,10 @@ pub unsafe fn tv_dict_get_bool(
     d: *const dict_T,
     key: *const ::core::ffi::c_char,
     def: ::core::ffi::c_int,
-) -> varnumber_T {
+) -> VarNumber {
     let di = unsafe { tv_dict_find(d, key, -1) };
     if di.is_null() {
-        return def as varnumber_T;
+        return def as VarNumber;
     }
     unsafe { tv_get_bool(&raw mut (*di).di_tv) }
 }
@@ -457,7 +457,7 @@ pub unsafe fn f_has_key(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     }
     let key = unsafe { numbuf.string(argvars.add(1)) };
     let found = !unsafe { tv_dict_find(d, key, -1) }.is_null();
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(found) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(found) };
 }
 
 impl NumBuf {

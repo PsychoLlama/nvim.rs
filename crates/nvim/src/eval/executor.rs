@@ -24,8 +24,8 @@ use crate::eval::{Tv, grow_string_tv, num_divide, num_modulus};
 use crate::garray::ga_grow;
 use crate::strings::concat_str;
 use crate::types::{
-    Failed, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL,
-    VAR_STRING, VAR_UNKNOWN, blob_T, float_T, listitem_T, typval_T, uint8_t, varnumber_T,
+    Failed, Float, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, blob_T, listitem_T, typval_T, uint8_t,
 };
 use ::libc::abort;
 use core::ffi::{CStr, c_char};
@@ -42,7 +42,7 @@ fn is_arithmetic(op: u8) -> bool {
 /// Fold `rhs` into `lhs` with a float operator. `%` and `.` never reach here;
 /// any other unrecognised operator leaves `lhs` alone, as upstream's `switch`
 /// with no default did.
-fn float_op(lhs: float_T, op: u8, rhs: float_T) -> float_T {
+fn float_op(lhs: Float, op: u8, rhs: Float) -> Float {
     match op {
         b'+' => lhs + rhs,
         b'-' => lhs - rhs,
@@ -127,13 +127,13 @@ unsafe fn tv_op_number(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Resu
     // `tv1`, which is what makes the aliasing case safe.
     let (mut lhs, rhs) = unsafe { (Tv::new(tv1), Tv::new(tv2.cast_mut())) };
     // SAFETY: as above.
-    let n: varnumber_T = unsafe { tv_get_number(tv1) };
+    let n: VarNumber = unsafe { tv_get_number(tv1) };
     if rhs.v_type == VAR_FLOAT {
         if op == b'%' {
             return Err(Failed);
         }
         // SAFETY: `VAR_FLOAT` says `v_float` is the union's live arm.
-        let f = float_op(n as float_T, op, rhs.float_or_zero());
+        let f = float_op(n as Float, op, rhs.float_or_zero());
         // SAFETY: `tv1` is the caller's initialised typval.
         unsafe { tv_clear(tv1) };
         lhs.v_type = VAR_FLOAT;
@@ -205,7 +205,7 @@ unsafe fn tv_op_float(tv1: *mut typval_T, tv2: *const typval_T, op: u8) -> Resul
     } else {
         // A string operand goes through the usual "leading number" parse.
         // SAFETY: `tv2` is initialised.
-        unsafe { tv_get_number(tv2) as float_T }
+        unsafe { tv_get_number(tv2) as Float }
     };
     lhs.vval.v_float = float_op(lhs.float_or_zero(), op, f);
     Ok(())

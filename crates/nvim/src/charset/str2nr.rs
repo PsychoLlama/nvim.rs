@@ -12,7 +12,7 @@
 use core::ffi::c_int;
 
 use super::{Scan, is_bdigit, is_digit, is_odigit, is_xdigit};
-use crate::types::{uvarnumber_T, varnumber_T};
+use crate::types::{UVarNumber, VarNumber};
 
 crate::flag_set! {
     /// Bases `vim_str2nr` may recognise, plus the two behaviour flags.
@@ -44,8 +44,8 @@ crate::flag_set! {
     const OCT_ANY = Self::OCT.bits() | Self::OOCT.bits();
 }
 
-const VARNUMBER_MAX: uvarnumber_T = 9223372036854775807;
-const VARNUMBER_MIN: varnumber_T = -9223372036854775808;
+const VARNUMBER_MAX: UVarNumber = 9223372036854775807;
+const VARNUMBER_MIN: VarNumber = -9223372036854775808;
 
 /// A base `vim_str2nr` can parse in, together with the prefix letter it
 /// reports through its `prep` out-argument.
@@ -59,7 +59,7 @@ pub enum Radix {
 
 impl Radix {
     /// The multiplier per digit.
-    pub fn base(self) -> uvarnumber_T {
+    pub fn base(self) -> UVarNumber {
         match self {
             Radix::Binary => 2,
             Radix::Octal => 8,
@@ -91,11 +91,11 @@ impl Radix {
     }
 
     /// The value of `byte` as a digit in this radix, if it is one.
-    pub fn digit(self, byte: u8) -> Option<uvarnumber_T> {
+    pub fn digit(self, byte: u8) -> Option<UVarNumber> {
         let value = match byte {
-            b'0'..=b'9' => uvarnumber_T::from(byte - b'0'),
-            b'a'..=b'f' => uvarnumber_T::from(byte - b'a') + 10,
-            b'A'..=b'F' => uvarnumber_T::from(byte - b'A') + 10,
+            b'0'..=b'9' => UVarNumber::from(byte - b'0'),
+            b'a'..=b'f' => UVarNumber::from(byte - b'a') + 10,
+            b'A'..=b'F' => UVarNumber::from(byte - b'A') + 10,
             _ => return None,
         };
         (value < self.base()).then_some(value)
@@ -110,19 +110,15 @@ impl Radix {
 /// saturates one digit later than a decimal one would. Preserved, because
 /// the saturated value is `UVARNUMBER_MAX` either way and `overflow` is
 /// reported in both.
-pub fn accumulate(
-    accumulated: uvarnumber_T,
-    digit: uvarnumber_T,
-    radix: Radix,
-) -> (uvarnumber_T, bool) {
+pub fn accumulate(accumulated: UVarNumber, digit: UVarNumber, radix: Radix) -> (UVarNumber, bool) {
     let base = radix.base();
-    let fits = accumulated < uvarnumber_T::MAX / base
-        || (accumulated == uvarnumber_T::MAX / base
-            && (radix != Radix::Decimal || digit <= uvarnumber_T::MAX % 10));
+    let fits = accumulated < UVarNumber::MAX / base
+        || (accumulated == UVarNumber::MAX / base
+            && (radix != Radix::Decimal || digit <= UVarNumber::MAX % 10));
     if fits {
         (base * accumulated + digit, false)
     } else {
-        (uvarnumber_T::MAX, true)
+        (UVarNumber::MAX, true)
     }
 }
 
@@ -132,17 +128,17 @@ pub fn accumulate(
 /// A negative magnitude past `VARNUMBER_MAX` clamps to `VARNUMBER_MIN`; a
 /// positive one clamps to `VARNUMBER_MAX`. Note that `-VARNUMBER_MIN` itself
 /// is over the bound and therefore clamps rather than round-tripping.
-pub fn signed(magnitude: uvarnumber_T, negative: bool) -> (varnumber_T, bool) {
+pub fn signed(magnitude: UVarNumber, negative: bool) -> (VarNumber, bool) {
     if magnitude > VARNUMBER_MAX {
         if negative {
             (VARNUMBER_MIN, true)
         } else {
-            (VARNUMBER_MAX as varnumber_T, true)
+            (VARNUMBER_MAX as VarNumber, true)
         }
     } else if negative {
-        (-(magnitude as varnumber_T), false)
+        (-(magnitude as VarNumber), false)
     } else {
-        (magnitude as varnumber_T, false)
+        (magnitude as VarNumber, false)
     }
 }
 
@@ -170,7 +166,7 @@ fn forced_radix(what_without_force: Str2NrBases) -> Option<Radix> {
 /// accumulating them saturated.
 pub(super) struct Scanned {
     pub pre: c_int,
-    pub magnitude: uvarnumber_T,
+    pub magnitude: UVarNumber,
     pub overflowed: bool,
 }
 
@@ -248,7 +244,7 @@ pub(super) fn scan(scan: &mut Scan, what: Str2NrBases) -> Option<Scanned> {
     // Accumulate the digits. A quote is only a separator between digits, so
     // it never ends the number by itself.
     let after_prefix = scan.consumed();
-    let mut magnitude: uvarnumber_T = 0;
+    let mut magnitude: UVarNumber = 0;
     let mut overflowed = false;
     while scan.within(0) {
         if what.has(Str2NrBases::QUOTE) && scan.consumed() > after_prefix && scan.at(0) == b'\'' {
@@ -300,18 +296,15 @@ mod tests {
         assert_eq!(accumulate(0xf, 0xf, Radix::Hexadecimal), (0xff, false));
 
         // u64::MAX is 18446744073709551615: the last digit that fits is 5.
-        let near = uvarnumber_T::MAX / 10;
+        let near = UVarNumber::MAX / 10;
         assert_eq!(
             accumulate(near, 5, Radix::Decimal),
-            (uvarnumber_T::MAX, false)
+            (UVarNumber::MAX, false)
         );
-        assert_eq!(
-            accumulate(near, 6, Radix::Decimal),
-            (uvarnumber_T::MAX, true)
-        );
+        assert_eq!(accumulate(near, 6, Radix::Decimal), (UVarNumber::MAX, true));
         assert_eq!(
             accumulate(near + 1, 0, Radix::Decimal),
-            (uvarnumber_T::MAX, true)
+            (UVarNumber::MAX, true)
         );
     }
 
@@ -320,10 +313,10 @@ mod tests {
         // The C's macro leaves the `% 10` test in place for every base, so a
         // hex literal at exactly MAX/16 accepts any digit and wraps the top
         // bits away rather than saturating. Pinned as it stands.
-        let near = uvarnumber_T::MAX / 16;
+        let near = UVarNumber::MAX / 16;
         assert_eq!(
             accumulate(near, 15, Radix::Hexadecimal),
-            (uvarnumber_T::MAX, false)
+            (UVarNumber::MAX, false)
         );
     }
 
@@ -333,11 +326,11 @@ mod tests {
         assert_eq!(signed(42, true), (-42, false));
         assert_eq!(
             signed(VARNUMBER_MAX, false),
-            (VARNUMBER_MAX as varnumber_T, false)
+            (VARNUMBER_MAX as VarNumber, false)
         );
         assert_eq!(
             signed(VARNUMBER_MAX + 1, false),
-            (VARNUMBER_MAX as varnumber_T, true)
+            (VARNUMBER_MAX as VarNumber, true)
         );
         // -(2^63) is representable, but the magnitude is not, so it clamps.
         assert_eq!(signed(VARNUMBER_MAX + 1, true), (VARNUMBER_MIN, true));

@@ -406,7 +406,7 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
         }
         kExprNodeInteger => {
             // The lexer's value is unsigned; the wire's is not.
-            let value = data.integer().value.min(Integer::MAX as uvarnumber_T);
+            let value = data.integer().value.min(Integer::MAX as UVarNumber);
             put(ret_node, c"ivalue", Object::integer(value as Integer));
         }
         kExprNodeAssignment => {

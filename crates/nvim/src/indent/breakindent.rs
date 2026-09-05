@@ -150,7 +150,7 @@ struct BreakindentKey {
     fnum: c_int,
     ts: OptInt,
     vts: *mut ColNr,
-    tick: varnumber_T,
+    tick: VarNumber,
     /// 'breakindentopt' "list".
     listopt: c_int,
     /// In 'list' mode with no "tab" in 'listchars', a TAB shows as `^I`.

@@ -168,9 +168,9 @@ pub(crate) unsafe fn concat_continued_line(
 ///
 /// # Safety
 /// `name` is owned memory or null; `sid_out` is null or writable.
-pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut scid_T) -> *mut scriptitem_T {
+pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut ScriptId) -> *mut scriptitem_T {
     /// The highest script ID handed out so far.
-    static last_current_SID: GlobalCell<scid_T> = GlobalCell::new(0);
+    static last_current_SID: GlobalCell<ScriptId> = GlobalCell::new(0);
 
     let sid = last_current_SID.get() + 1;
     last_current_SID.set(sid);
@@ -186,7 +186,7 @@ pub unsafe fn new_script_item(name: *mut c_char, sid_out: *mut scid_T) -> *mut s
         let item = Box::into_raw(Box::new(scriptitem_T::new()));
         let added = script_items.with_mut(|items| {
             items.push(item);
-            items.len() as scid_T
+            items.len() as ScriptId
         });
         // SAFETY: the slot was pushed just above, so `added` is live.
         unsafe { new_script_vars(added) };

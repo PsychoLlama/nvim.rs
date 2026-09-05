@@ -134,7 +134,7 @@ pub unsafe fn call_user_func(
     if has_args {
         // Set a:0 to the number of arguments past the declared ones.
         let v = take_fixvar(&mut fixvar_idx);
-        let extra = (argcount - f.uf_args.ga_len).max(0) as varnumber_T;
+        let extra = (argcount - f.uf_args.ga_len).max(0) as VarNumber;
         unsafe { add_nr_var(avars, v, c"0".as_ptr() as *mut c_char, extra) };
     }
     frame.fc_l_avars.dv_lock = VarLock::Fixed;
@@ -154,9 +154,9 @@ pub unsafe fn call_user_func(
         let avars = unsafe { &raw mut (*fc).fc_l_avars };
         let (first, last) = (c"firstline".as_ptr(), c"lastline".as_ptr());
         let v = take_fixvar(&mut fixvar_idx);
-        unsafe { add_nr_var(avars, v, first as *mut c_char, firstline as varnumber_T) };
+        unsafe { add_nr_var(avars, v, first as *mut c_char, firstline as VarNumber) };
         let v = take_fixvar(&mut fixvar_idx);
-        unsafe { add_nr_var(avars, v, last as *mut c_char, lastline as varnumber_T) };
+        unsafe { add_nr_var(avars, v, last as *mut c_char, lastline as VarNumber) };
     }
 
     // Set the argument variables.  The order is important here: the

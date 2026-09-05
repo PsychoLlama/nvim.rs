@@ -181,7 +181,7 @@ pub unsafe fn get_list_range(
     num2: *mut ::core::ffi::c_int,
 ) -> Result<(), Failed> {
     let mut len: ::core::ffi::c_int = 0;
-    let mut num: varnumber_T = 0;
+    let mut num: VarNumber = 0;
     let mut first = false;
 
     unsafe { *str = skipwhite(*str) };
@@ -195,14 +195,14 @@ pub unsafe fn get_list_range(
                 &raw mut len,
                 Str2NrBases::NONE,
                 &raw mut num,
-                ::core::ptr::null_mut::<uvarnumber_T>(),
+                ::core::ptr::null_mut::<UVarNumber>(),
                 0,
                 false,
                 ::core::ptr::null_mut::<bool>(),
             )
         };
         unsafe { *str = (*str).offset(len as isize) };
-        if num > INT_MAX as varnumber_T {
+        if num > INT_MAX as VarNumber {
             return Err(Failed);
         }
         unsafe { *num1 = num as ::core::ffi::c_int };
@@ -220,7 +220,7 @@ pub unsafe fn get_list_range(
                 &raw mut len,
                 Str2NrBases::NONE,
                 &raw mut num,
-                ::core::ptr::null_mut::<uvarnumber_T>(),
+                ::core::ptr::null_mut::<UVarNumber>(),
                 0,
                 false,
                 ::core::ptr::null_mut::<bool>(),
@@ -228,7 +228,7 @@ pub unsafe fn get_list_range(
         };
         if len > 0 {
             unsafe { *str = skipwhite((*str).offset(len as isize)) };
-            if num > INT_MAX as varnumber_T {
+            if num > INT_MAX as VarNumber {
                 return Err(Failed);
             }
             unsafe { *num2 = num as ::core::ffi::c_int };

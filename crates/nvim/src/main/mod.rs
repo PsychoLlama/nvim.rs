@@ -14,12 +14,12 @@ use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
     AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
-    EstackInfo, FILE, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter,
+    EStackType, EstackInfo, FILE, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter,
     MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime, Refcount, RgbValue,
     ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark,
     XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, estack_T,
-    etype_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T,
-    int16_t, int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
+    except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t,
+    int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
     reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
     uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
     uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
@@ -85,9 +85,9 @@ pub(crate) const BLN_LISTED: bln_values = 2;
 pub(crate) const kXDGConfigDirs: XDGVarType = 5;
 pub(crate) const READ_STDIN: c_uint = 4;
 pub(crate) const READ_NEW: c_uint = 1;
-pub(crate) const ETYPE_ENV: etype_T = 7;
-pub(crate) const ETYPE_ARGS: etype_T = 6;
-pub(crate) const ETYPE_TOP: etype_T = 0;
+pub(crate) const ETYPE_ENV: EStackType = 7;
+pub(crate) const ETYPE_ARGS: EStackType = 6;
+pub(crate) const ETYPE_TOP: EStackType = 0;
 pub(crate) const kRetObject: LuaRetMode = 0;
 #[derive(Clone)] // not `Copy`: it owns several of its strings
 pub struct mparm_T {

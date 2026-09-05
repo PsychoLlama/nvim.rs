@@ -20,7 +20,7 @@ use crate::winlayer::Buf;
 ///
 /// Module-private on purpose: a *public* safe fn taking a raw pointer trips
 /// `clippy::not_unsafe_ptr_arg_deref`, which is denied tree-wide.
-fn dict_add_nr(dict: *mut dict_T, key: &CStr, val: varnumber_T) {
+fn dict_add_nr(dict: *mut dict_T, key: &CStr, val: VarNumber) {
     // SAFETY: a dictionary this module just allocated, and a NUL-terminated
     // key with its own length.
     let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), val) };
@@ -106,7 +106,7 @@ fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
     while let Some(uh) = buf.header(link) {
         // SAFETY: a fresh dictionary.
         let dict: *mut dict_T = unsafe { tv_dict_alloc() };
-        dict_add_nr(dict, c"seq", varnumber_T::from(uh.uh_seq));
+        dict_add_nr(dict, c"seq", VarNumber::from(uh.uh_seq));
         dict_add_nr(dict, c"time", uh.uh_time);
         if uh.link() == buf.b_u_newhead {
             dict_add_nr(dict, c"newhead", 1);
@@ -115,7 +115,7 @@ fn eval_tree(buf: Buf, first: UndoLink) -> *mut list_T {
             dict_add_nr(dict, c"curhead", 1);
         }
         if uh.uh_save_nr > 0 {
-            dict_add_nr(dict, c"save", varnumber_T::from(uh.uh_save_nr));
+            dict_add_nr(dict, c"save", VarNumber::from(uh.uh_save_nr));
         }
         if uh.uh_alt_next.is_some() {
             dict_add_list(dict, c"alt", eval_tree(buf, uh.uh_alt_next));
@@ -176,12 +176,12 @@ pub unsafe fn f_undotree(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let buf = unsafe { Buf::from_raw(raw) };
     let Some(buf) = buf else { return };
 
-    dict_add_nr(dict, c"synced", varnumber_T::from(buf.b_u_synced));
-    dict_add_nr(dict, c"seq_last", varnumber_T::from(buf.b_u_seq_last));
-    dict_add_nr(dict, c"save_last", varnumber_T::from(buf.b_u_save_nr_last));
-    dict_add_nr(dict, c"seq_cur", varnumber_T::from(buf.b_u_seq_cur));
+    dict_add_nr(dict, c"synced", VarNumber::from(buf.b_u_synced));
+    dict_add_nr(dict, c"seq_last", VarNumber::from(buf.b_u_seq_last));
+    dict_add_nr(dict, c"save_last", VarNumber::from(buf.b_u_save_nr_last));
+    dict_add_nr(dict, c"seq_cur", VarNumber::from(buf.b_u_seq_cur));
     dict_add_nr(dict, c"time_cur", buf.b_u_time_cur);
-    dict_add_nr(dict, c"save_cur", varnumber_T::from(buf.b_u_save_nr_cur));
+    dict_add_nr(dict, c"save_cur", VarNumber::from(buf.b_u_save_nr_cur));
     dict_add_list(dict, c"entries", eval_tree(buf, buf.b_u_oldhead));
 }
 

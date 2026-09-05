@@ -43,7 +43,7 @@ use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::{
     EvalFuncData, NUL, Refcount, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t, varnumber_T,
+    VarNumber, VarType, funcdict_T, garray_T, list_T, listitem_T, partial_T, typval_T, uint8_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -347,7 +347,7 @@ pub unsafe fn f_exists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         b'#' => unsafe { au_exists(p.add(1)) as c_int },
         _ => unsafe { var_exists(p) as c_int },
     };
-    rettv.vval.v_number = found as varnumber_T;
+    rettv.vval.v_number = found as VarNumber;
 }
 
 /// `function()` and `funcref()`.
@@ -615,7 +615,7 @@ fn libcall_common(args: Args, rettv: &mut typval_T, out_type: VarType) {
         Some(LibcallResult::Str(s)) => {
             rettv.vval.v_string = s.map_or(ptr::null_mut(), CString::into_raw);
         }
-        Some(LibcallResult::Int(n)) => rettv.vval.v_number = n as varnumber_T,
+        Some(LibcallResult::Int(n)) => rettv.vval.v_number = n as VarNumber,
     }
 }
 

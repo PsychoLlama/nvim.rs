@@ -48,9 +48,9 @@ use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
 use crate::types::{
     Arena, Failed, NUL, Object, OptionSetFlags, String_0, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, Vv, dict_T, evalarg_T, exarg_T, funccal_entry_T,
-    funcexe_T, garray_T, hashtab_T, list_T, partial_T, ptrdiff_t, save_v_event_T, sctx_T, size_t,
-    ssize_t, typval_T, typval_vval_union, uint8_t, varnumber_T, win_T,
+    VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, dict_T, evalarg_T, exarg_T,
+    funccal_entry_T, funcexe_T, garray_T, hashtab_T, list_T, partial_T, ptrdiff_t, save_v_event_T,
+    sctx_T, size_t, ssize_t, typval_T, typval_vval_union, uint8_t, win_T,
 };
 use crate::winlayer::{Ea, Live};
 use ::libc::atol;
@@ -528,7 +528,7 @@ pub unsafe fn eval_to_string_safe(
 ///
 /// # Safety
 /// `expr` must be a NUL-terminated expression.
-pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> varnumber_T {
+pub unsafe fn eval_to_number(expr: *mut c_char, use_simple_function: bool) -> VarNumber {
     let mut evalarg = EVALARG_EVALUATE;
     let mut rettv = UNSET_TV;
     let mut p = unsafe { skipwhite(expr) };
@@ -691,7 +691,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
     // SAFETY: an option string is NUL-terminated.
     let arg = unsafe { skipwhite(wp.w_onebuf_opt.wo_fde) };
     current_sctx.set(wp.w_onebuf_opt.wo_script_ctx[kWinOptFoldexpr as usize]);
-    let retval: varnumber_T = {
+    let retval: VarNumber = {
         let _no_emsg = Suppress::emsg();
         let _sandboxed = use_sandbox.then(Lock::sandbox);
         let _locked = Lock::text();
@@ -699,7 +699,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
         unsafe { *cp = NUL };
 
         let mut tv = UNSET_TV;
-        let mut retval: varnumber_T = 0;
+        let mut retval: VarNumber = 0;
         if unsafe { eval0_simple_funccal(arg, &raw mut tv, null_mut(), &raw mut evalarg) }.is_ok() {
             if tv.v_type == VAR_NUMBER {
                 retval = tv.number_or_zero();
@@ -722,7 +722,7 @@ pub unsafe fn eval_foldexpr(wp: *mut win_T, cp: *mut c_int) -> c_int {
                     s = unsafe { s.add(1) };
                 }
                 // SAFETY: `s` is inside the NUL-terminated string.
-                retval = unsafe { atol(s) } as varnumber_T;
+                retval = unsafe { atol(s) } as VarNumber;
             }
             clear_local(&mut tv);
         }

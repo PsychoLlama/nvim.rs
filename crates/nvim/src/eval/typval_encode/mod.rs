@@ -25,7 +25,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::MaybeUninit;
 
 use crate::types::{
-    blob_T, dict_T, float_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t, typval_T,
+    Float, blob_T, dict_T, int64_t, list_T, listitem_T, partial_T, ptrdiff_t, size_t, typval_T,
 };
 
 // The walk itself; this half is the contract it runs against.
@@ -297,7 +297,7 @@ pub(crate) trait TypvalSink {
     /// # Safety
     /// `tv` points at the value the walk is standing on, live and unaliased
     /// for the call.
-    unsafe fn conv_float(&mut self, tv: *mut typval_T, flt: float_T) -> Flow;
+    unsafe fn conv_float(&mut self, tv: *mut typval_T, flt: Float) -> Flow;
 
     /// A `VAR_STRING`, or the `_VAL` of a special string.  `buf` may be NULL.
     ///

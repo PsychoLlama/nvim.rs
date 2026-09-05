@@ -130,7 +130,7 @@ pub(crate) use trycmd::{
 /// Constants the transpiler copied in from the headers this module includes.
 pub(crate) mod flag {
     use super::c_int;
-    use crate::types::{estack_arg_T, except_type_T};
+    use crate::types::{EStackArg, ExceptType};
 
     /// How deep `:if`/`:while`/`:for`/`:try` may nest.
     pub(crate) const CSTACK_LEN: c_int = 50;
@@ -148,9 +148,9 @@ pub(crate) mod flag {
     pub(crate) const CSTP_FINISH: c_int = 32;
 
     /// `except_T.type_0`.
-    pub(crate) const ET_USER: except_type_T = 0;
-    pub(crate) const ET_ERROR: except_type_T = 1;
-    pub(crate) const ET_INTERRUPT: except_type_T = 2;
+    pub(crate) const ET_USER: ExceptType = 0;
+    pub(crate) const ET_ERROR: ExceptType = 1;
+    pub(crate) const ET_INTERRUPT: ExceptType = 2;
 
     /// Whether an error under an active try conditional becomes a catchable
     /// exception rather than terminating the script after the finally
@@ -158,7 +158,7 @@ pub(crate) mod flag {
     /// `THROW_TEST` builds, which this tree does not have.
     pub(crate) const THROW_ON_ERROR: bool = true;
 
-    pub(crate) const ESTACK_NONE: estack_arg_T = 0;
+    pub(crate) const ESTACK_NONE: EStackArg = 0;
 }
 
 const E_MULTIPLE_ELSE: &CStr = c"E583: Multiple :else";

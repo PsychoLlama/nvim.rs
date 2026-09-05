@@ -82,9 +82,9 @@ use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     CheckItem, ColNr, Directory, FAIL, FILE, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OK,
-    OptInt, OptVal, OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, exarg_T, garray_T,
-    iconv_t, int64_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t,
-    uintmax_t, uv_gid_t, uv_uid_t,
+    OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag, aco_save_T, bln_values, buf_T, exarg_T,
+    garray_T, iconv_t, int64_t, ptrdiff_t, regmatch_T, regprog_T, size_t, ssize_t, time_t,
+    uint64_t, uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -616,7 +616,7 @@ pub unsafe fn set_forced_fenc(eap: *mut exarg_T) {
         kOptFileencoding,
         OptVal::String(unsafe { cstr_as_string(fenc) }),
         OptionSetFlags::LOCAL,
-        0 as scid_T,
+        0 as ScriptId,
     );
     unsafe { xfree(fenc.cast()) };
 }

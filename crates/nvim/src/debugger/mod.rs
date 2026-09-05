@@ -58,15 +58,15 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, ColNr, Failed, LineNr, MAXPATHL, NUL, buf_T, estack_arg_T, exarg_T, int32_t, int64_t,
+    Callback, ColNr, EStackArg, Failed, LineNr, MAXPATHL, NUL, buf_T, exarg_T, int32_t, int64_t,
     regprog_T, size_t, tasave_T, typval_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-pub const ESTACK_NONE: estack_arg_T = 0;
-pub const EXPR_IS: crate::types::exprtype_T = 9;
+pub const ESTACK_NONE: EStackArg = 0;
+pub const EXPR_IS: crate::types::ExprType = 9;
 pub const NULL: *mut c_void = ptr::null_mut::<c_void>();
 pub const KS_EXTRA: c_int = 253;
 

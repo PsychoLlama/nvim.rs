@@ -192,7 +192,7 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut dict_
     if let Some(accel) = menu.actext() {
         dict_add_str(dict, c"accel", accel);
     }
-    dict_add_nr(dict, c"priority", varnumber_T::from(menu.priority));
+    dict_add_nr(dict, c"priority", VarNumber::from(menu.priority));
     dict_add_str(dict, c"modes", menu_mode_str(menu.modes));
     dict_add_str(dict, c"shortcut", &char_as_text(menu.mnemonic));
 

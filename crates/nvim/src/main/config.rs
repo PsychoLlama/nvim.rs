@@ -31,7 +31,7 @@ use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_
 use crate::path::path_full_compare;
 use crate::quickfix::qf_jump;
 use crate::runtime::{do_source, estack_pop, estack_push};
-use crate::types::{FAIL, OK, lua_State, qf_info_T, scid_T, size_t};
+use crate::types::{FAIL, OK, ScriptId, lua_State, qf_info_T, size_t};
 use ::libc::fprintf;
 
 /// The parameter block `main` filled in, which outlives every call here.
@@ -55,7 +55,7 @@ pub(crate) unsafe fn exe_pre_commands(parmp: *mut mparm_T) {
         gettext(c"pre-vimrc command line").as_ptr().cast_mut(),
         0,
     );
-    current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as scid_T));
+    current_sctx.set(current_sctx.get().with_sid(SID_CMDARG as ScriptId));
     for i in 0..count {
         let _ = unsafe { do_cmdline_cmd(*cmds.offset(i as isize)) };
     }
@@ -78,7 +78,12 @@ pub(crate) unsafe fn exe_commands(parmp: *mut mparm_T) {
 
     // NB: not translated, unlike the pre-vimrc one above.
     estack_push(ETYPE_ARGS, c"command line".as_ptr() as *mut c_char, 0);
-    current_sctx.set(current_sctx.get().with_sid(SID_CARG as scid_T).with_seq(0));
+    current_sctx.set(
+        current_sctx
+            .get()
+            .with_sid(SID_CARG as ScriptId)
+            .with_seq(0),
+    );
     for i in 0..parm.n_commands {
         let cmd = parm.commands[i as usize];
         let _ = unsafe { do_cmdline_cmd(cmd) };

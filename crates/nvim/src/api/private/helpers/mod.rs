@@ -35,9 +35,9 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, ColNr, Dict, Error, HlMessage, Integer, LineNr, NUL, String_0, Tabpage, TryState,
-    Window, buf_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException, msglist_T,
-    pos_T, scid_T, tabpage_T, uint64_t, win_T,
+    Buffer, ColNr, Dict, Error, ExceptType, HlMessage, Integer, LineNr, NUL, ScriptId, String_0,
+    Tabpage, TryState, Window, buf_T, fmarkv_T, handle_T, int64_t, kErrorTypeException, msglist_T,
+    pos_T, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
 
@@ -54,7 +54,7 @@ pub(crate) use self::value::*;
 pub use self::value::api_free_object;
 pub(crate) use self::vimdict::*;
 
-const ET_ERROR: except_type_T = 1;
+const ET_ERROR: ExceptType = 1;
 
 /// `dictitem_T.di_flags`: the key cannot be changed, cannot be changed right
 /// now, and cannot be removed.
@@ -67,8 +67,8 @@ const CAR: c_char = b'\r' as c_char;
 
 /// `current_sctx.sc_sid` for a call that came from Lua, and for one that came
 /// from an RPC client.
-const SID_LUA: scid_T = -8;
-const SID_API_CLIENT: scid_T = -9;
+const SID_LUA: ScriptId = -8;
+const SID_API_CLIENT: ScriptId = -9;
 
 /// Channel ids with the top bit set are not channels at all: they mark a call
 /// nvim made of itself, from Vimscript or from Lua.

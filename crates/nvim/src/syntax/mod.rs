@@ -85,9 +85,9 @@ use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    ColNr, LineNr, OptInt, ProfTime, buf_T, bufstate_T, exarg_T, expand_T, hashtab_T, int16_t,
-    lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T,
-    synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
+    ColNr, LineNr, OptInt, ProfTime, VarNumber, buf_T, bufstate_T, exarg_T, expand_T, hashtab_T,
+    int16_t, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T,
+    synblock_T, synstate_T, uint8_t, uint64_t, win_T,
 };
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};

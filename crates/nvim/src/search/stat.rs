@@ -88,7 +88,7 @@ impl Counted {
     /// Reads the current buffer and the remembered pattern.
     unsafe fn still_holds(&self, cursor_pos: pos_T) -> bool {
         let live = last_used_pattern();
-        self.chgtick as varnumber_T == buf_get_changedtick(cur_buf())
+        self.chgtick as VarNumber == buf_get_changedtick(cur_buf())
             // The null test suppresses clang's "NULL passed as
             // nonnull parameter" on `strncmp`.
             && !self.pat.is_null()
@@ -452,7 +452,7 @@ pub unsafe fn f_searchcount(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         // function itself allocated above.
         let dict = unsafe { (*rettv).vval.v_dict };
         let add = |key: &CStr, value: c_int| {
-            let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as varnumber_T);
+            let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as VarNumber);
             // SAFETY: adding a number under a static key.
             let _ = unsafe { tv_dict_add_nr(dict, k, klen, v) };
         };

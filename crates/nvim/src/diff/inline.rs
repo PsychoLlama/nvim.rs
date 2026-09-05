@@ -321,7 +321,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T)
 /// several, so the cache is bypassed and `diffline` is walked per column.
 pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
-    static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
+    static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
     static fnum: GlobalCell<c_int> = GlobalCell::new(0);
     static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);
     static change_start: GlobalCell<c_int> = GlobalCell::new(0);
@@ -416,7 +416,7 @@ pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
             }
         }
     }
-    let id = hlID.get() as varnumber_T;
+    let id = hlID.get() as VarNumber;
     // SAFETY: the caller's result cell.
     unsafe { (*rettv).vval.v_number = id };
 }

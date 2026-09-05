@@ -32,8 +32,8 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    ColNr, Direction, EvalFuncData, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, list_T, pos_T,
-    typval_T, varnumber_T, win_T,
+    ColNr, Direction, EvalFuncData, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, buf_T,
+    list_T, pos_T, typval_T, win_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -59,7 +59,7 @@ pub unsafe fn f_byte2line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     rettv.vval.v_number = if boff < 0 {
         -1
     } else {
-        unsafe { ml_find_line_or_offset(curbuf.get(), 0, &raw mut boff, false) as varnumber_T }
+        unsafe { ml_find_line_or_offset(curbuf.get(), 0, &raw mut boff, false) as VarNumber }
     };
 }
 
@@ -73,7 +73,7 @@ pub unsafe fn f_line2byte(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     rettv.vval.v_number = if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } + 1 {
         -1
     } else {
-        unsafe { ml_find_line_or_offset(curbuf.get(), lnum, ptr::null_mut(), false) as varnumber_T }
+        unsafe { ml_find_line_or_offset(curbuf.get(), lnum, ptr::null_mut(), false) as VarNumber }
     };
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
@@ -138,7 +138,7 @@ fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
             col += unsafe { virtualedit_tail(wp, bp, &raw mut fp) };
         }
     }
-    rettv.vval.v_number = col as varnumber_T;
+    rettv.vval.v_number = col as VarNumber;
 }
 
 /// With 'virtualedit' on, a cursor sitting past the last character of the
@@ -223,10 +223,10 @@ pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     }
     if args.has(1) && arg_bool(args.get(1)) != 0 {
         let l = list_alloc_ret(rettv, 2);
-        unsafe { tv_list_append_number(l, vcol_start as varnumber_T) };
-        unsafe { tv_list_append_number(l, vcol_end as varnumber_T) };
+        unsafe { tv_list_append_number(l, vcol_start as VarNumber) };
+        unsafe { tv_list_append_number(l, vcol_end as VarNumber) };
     } else {
-        rettv.vval.v_number = vcol_end as varnumber_T;
+        rettv.vval.v_number = vcol_end as VarNumber;
     }
 }
 
@@ -262,7 +262,7 @@ pub unsafe fn f_line(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
             }
         }
     };
-    rettv.vval.v_number = fp.map_or(0, |fp| fp.lnum as varnumber_T);
+    rettv.vval.v_number = fp.map_or(0, |fp| fp.lnum as VarNumber);
 }
 
 /// `getpos({expr})`.
@@ -322,7 +322,7 @@ fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: b
     };
 
     let l = list_alloc_ret(rettv, 4 + isize::from(getcurpos));
-    unsafe { tv_list_append_number(l, if fnum != -1 { fnum as varnumber_T } else { 0 }) };
+    unsafe { tv_list_append_number(l, if fnum != -1 { fnum as VarNumber } else { 0 }) };
     let (lnum, col, coladd) = fp.map_or((0, 0, 0), |fp| {
         // MAXCOL is passed through rather than made one-based.
         let col = if fp.col == END_OF_LINE {
@@ -331,9 +331,9 @@ fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: b
             fp.col + 1
         };
         (
-            fp.lnum as varnumber_T,
-            col as varnumber_T,
-            fp.coladd as varnumber_T,
+            fp.lnum as VarNumber,
+            col as VarNumber,
+            fp.coladd as VarNumber,
         )
     });
     unsafe { tv_list_append_number(l, lnum) };
@@ -365,9 +365,9 @@ unsafe fn append_curswant(l: *mut list_T, wp: *mut win_T) {
     let curswant = if wp.is_null() {
         0
     } else if unsafe { (*wp).w_curswant } == END_OF_LINE {
-        MAXCOL as varnumber_T
+        MAXCOL as VarNumber
     } else {
-        (unsafe { (*wp).w_curswant }) as varnumber_T + 1
+        (unsafe { (*wp).w_curswant }) as VarNumber + 1
     };
     unsafe { tv_list_append_number(l, curswant) };
     // Only restored when 'curswant' was due to be recomputed anyway:
@@ -528,9 +528,9 @@ pub unsafe fn f_getcharsearch(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
     unsafe { tv_dict_alloc_ret(rettv) };
     let dict = unsafe { (*rettv).dict_or_null() };
     let _ = unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
-    let forward = last_csearch_forward() as varnumber_T;
+    let forward = last_csearch_forward() as VarNumber;
     let _ = unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
-    let until = last_csearch_until() as varnumber_T;
+    let until = last_csearch_until() as VarNumber;
     let _ = unsafe { tv_dict_add_nr(dict, c"until".as_ptr(), 5, until) };
 }
 

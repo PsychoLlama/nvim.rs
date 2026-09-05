@@ -24,7 +24,7 @@ use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
 use crate::semsg;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, dict_T, int64_t, pos_T, size_t, typval_T, varnumber_T, win_T,
+    ColNr, EvalFuncData, LineNr, VarNumber, dict_T, int64_t, pos_T, size_t, typval_T, win_T,
 };
 use crate::winlayer::{Pos, Win};
 
@@ -376,7 +376,7 @@ unsafe fn alloc_dict_ret(rettv: *mut typval_T) -> *mut dict_T {
 ///
 /// # Safety
 /// `argvars` must hold at least `n + 1` values.
-unsafe fn arg_number(argvars: *mut typval_T, n: isize) -> varnumber_T {
+unsafe fn arg_number(argvars: *mut typval_T, n: isize) -> VarNumber {
     unsafe { tv_get_number(argvars.offset(n)) }
 }
 
@@ -391,7 +391,7 @@ unsafe fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: c_int) {
             dict,
             bytes.as_ptr().cast::<c_char>(),
             bytes.len() as size_t,
-            value as varnumber_T,
+            value as VarNumber,
         )
     };
 }
@@ -451,5 +451,5 @@ pub unsafe fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // SAFETY: a live window and a line of its buffer.
     let col = unsafe { virtcol2col(win, lnum, screencol) };
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*rettv).vval.v_number = col as varnumber_T };
+    unsafe { (*rettv).vval.v_number = col as VarNumber };
 }

@@ -303,10 +303,10 @@ unsafe fn statuscol_state(
         HLF_N
     };
     // SAFETY: three plain number variables of the editor's own.
-    unsafe { set_vim_var_nr(Vv::Lnum, lnum as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
     let rel = unsafe { labs(get_cursor_rel_lnum(win, lnum) as ::core::ffi::c_long) };
-    unsafe { set_vim_var_nr(Vv::Relnum, rel as varnumber_T) };
-    unsafe { set_vim_var_nr(Vv::Virtnum, 0 as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Relnum, rel as VarNumber) };
+    unsafe { set_vim_var_nr(Vv::Virtnum, 0 as VarNumber) };
     (stc_hl_id, if on_cursorline { HLF_CLS } else { HLF_SC })
 }
 

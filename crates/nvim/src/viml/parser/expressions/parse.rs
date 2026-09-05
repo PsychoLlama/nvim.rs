@@ -72,12 +72,12 @@ impl LexExprToken {
     }
 
     /// A float literal's value. Only meaningful when `number().is_float`.
-    pub(super) fn number_float(&self) -> float_T {
+    pub(super) fn number_float(&self) -> Float {
         unsafe { self.data.num.val.floating }
     }
 
     /// An integer literal's value. Only meaningful when `!number().is_float`.
-    pub(super) fn number_integer(&self) -> uvarnumber_T {
+    pub(super) fn number_integer(&self) -> UVarNumber {
         unsafe { self.data.num.val.integer }
     }
 

@@ -16,7 +16,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::strings::vim_vsnprintf_typval;
 use crate::types::{
-    Callback, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, typval_T, varnumber_T,
+    Callback, EvalFuncData, NUL, VAR_DICT, VAR_FUNC, VAR_NUMBER, VAR_STRING, VarNumber, typval_T,
 };
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -128,7 +128,7 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             if !di.is_null() {
                 let locked = unsafe { (*di).di_flags } as c_int & DI_FLAGS_LOCK as c_int != 0
                     || unsafe { tv_islocked(&raw mut (*di).di_tv) };
-                rettv.vval.v_number = locked as varnumber_T;
+                rettv.vval.v_number = locked as VarNumber;
             }
         } else if lv.ll_range {
             semsg!("E786: Range not allowed");
@@ -137,9 +137,9 @@ pub unsafe fn f_islocked(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             let ll_newkey = unsafe { c_str(lv.ll_newkey) };
             semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
         } else if !lv.ll_list.is_null() {
-            rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as varnumber_T;
+            rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as VarNumber;
         } else {
-            rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as varnumber_T;
+            rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as VarNumber;
         }
     }
     unsafe { clear_lval(&raw mut lv) };

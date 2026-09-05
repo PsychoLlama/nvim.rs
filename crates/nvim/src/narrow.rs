@@ -38,7 +38,7 @@ use core::ffi::c_int;
 /// `(int)` casts do: the low 32 bits, wrapping.
 ///
 /// The name says `number` because that is what the Vimscript side calls the
-/// type; the API's `Integer` and the `varnumber_T` a builtin is handed are the
+/// type; the API's `Integer` and the `VarNumber` a builtin is handed are the
 /// same `i64`, and they narrow the same way.
 pub(crate) const fn number_as_int(n: i64) -> c_int {
     n as c_int
@@ -93,7 +93,7 @@ pub(crate) fn float_as_i64(n: f64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::varnumber_T;
+    use crate::types::VarNumber;
 
     #[test]
     fn a_number_narrows_to_an_int_by_wrapping() {
@@ -107,8 +107,8 @@ mod tests {
         assert_eq!(number_as_int(0x1_0000_0000), 0);
         assert_eq!(number_as_int(0x1_0000_0001), 1);
         // And the sign wraps rather than saturating.
-        assert_eq!(number_as_int(varnumber_T::from(c_int::MAX) + 1), c_int::MIN);
-        assert_eq!(number_as_int(varnumber_T::MAX), -1);
+        assert_eq!(number_as_int(VarNumber::from(c_int::MAX) + 1), c_int::MIN);
+        assert_eq!(number_as_int(VarNumber::MAX), -1);
     }
 
     #[test]

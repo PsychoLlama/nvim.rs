@@ -38,8 +38,8 @@ use crate::options::{kOptAleph, kOptInvalid};
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::os::env::{expand_env_save, vim_getenv};
 use crate::types::{
-    Failed, NUL, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, blob_T, float_T, size_t, typval_T, typval_vval_union, uint8_t, varnumber_T,
+    Failed, Float, NUL, OptIndex, OptVal, OptionSetFlags, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, blob_T, size_t, typval_T, typval_vval_union, uint8_t,
 };
 use ::libc::{strtod, toupper};
 
@@ -259,7 +259,7 @@ pub(crate) unsafe fn eval_number(
     }
 
     if get_float {
-        let mut f: float_T = 0.;
+        let mut f: Float = 0.;
         // SAFETY: the cursor is on the first digit of the literal.
         let used = unsafe { string2float(cur.get(), &raw mut f) };
         cur.bump(used as usize);
@@ -307,7 +307,7 @@ pub(crate) unsafe fn eval_number(
         cur.set(bp.raw());
     } else {
         let mut len: c_int = 0;
-        let mut n: varnumber_T = 0;
+        let mut n: VarNumber = 0;
         let (text, lenp, np) = (cur.get(), &raw mut len, &raw mut n);
         let all = Str2NrBases::ALL;
         // SAFETY: the cursor is on the first digit and the two
@@ -727,7 +727,7 @@ pub(crate) unsafe fn eval_interp_string(
 ///
 /// # Safety
 /// `text` must be NUL-terminated and `ret_value` valid.
-pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut float_T) -> size_t {
+pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut Float) -> size_t {
     for (name, len, value) in [
         (c"inf", 3, f64::INFINITY),
         (c"-inf", 4, f64::NEG_INFINITY),
@@ -737,13 +737,13 @@ pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut float_T) 
         // SAFETY: the caller's promise -- `text` is NUL-terminated, `name`
         // is a literal, and `ret_value` is valid.
         if unsafe { strncasecmp(lhs, rhs, len as size_t) } == 0 {
-            unsafe { *ret_value = value as float_T };
+            unsafe { *ret_value = value as Float };
             return len as size_t;
         }
     }
     let mut s: *mut c_char = null_mut();
     // SAFETY: as above; `strtod` leaves `s` inside `text`.
-    unsafe { *ret_value = strtod(text, &raw mut s) as float_T };
+    unsafe { *ret_value = strtod(text, &raw mut s) as Float };
     unsafe { s.offset_from(text) as size_t }
 }
 

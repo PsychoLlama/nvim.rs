@@ -176,7 +176,7 @@ pub(crate) unsafe fn cmdline_event_dict(
             dict,
             c"cmdlevel".as_ptr(),
             c"cmdlevel".count_bytes(),
-            Cc::current().level as varnumber_T,
+            Cc::current().level as VarNumber,
         )
     };
     unsafe { tv_dict_set_keys_readonly(dict) };

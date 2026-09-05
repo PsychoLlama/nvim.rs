@@ -400,7 +400,7 @@ pub struct evalarg_T {
     pub eval_cookie: *mut ::core::ffi::c_void,
     pub eval_tofree: *mut ::core::ffi::c_char,
 }
-pub type exprtype_T = ::core::ffi::c_uint;
+pub type ExprType = ::core::ffi::c_uint;
 pub struct lval_T {
     pub ll_name: *const ::core::ffi::c_char,
     pub ll_name_len: size_t,
@@ -434,10 +434,10 @@ pub struct timer_T {
     pub paused: bool,
     pub callback: Callback,
 }
-pub type var_flavour_T = ::core::ffi::c_uint;
+pub type VarFlavour = ::core::ffi::c_uint;
 /// Which persistence a global variable qualifies for, from the case of its
 /// name: all-lowercase is session-only, `Mixed` reaches ShaDa, ALLCAPS
 /// neither.
-pub const VAR_FLAVOUR_DEFAULT: var_flavour_T = 1;
-pub const VAR_FLAVOUR_SESSION: var_flavour_T = 2;
-pub const VAR_FLAVOUR_SHADA: var_flavour_T = 4;
+pub const VAR_FLAVOUR_DEFAULT: VarFlavour = 1;
+pub const VAR_FLAVOUR_SESSION: VarFlavour = 2;
+pub const VAR_FLAVOUR_SHADA: VarFlavour = 4;

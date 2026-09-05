@@ -148,7 +148,7 @@ pub unsafe fn callback_call_retnr(
     callback: *mut Callback,
     argcount: c_int,
     argvars: *mut typval_T,
-) -> varnumber_T {
+) -> VarNumber {
     let mut rettv = TV_INITIAL_VALUE;
     if !unsafe { callback_call(callback, argcount, argvars, &raw mut rettv) } {
         return -2;

@@ -16,7 +16,7 @@ use crate::types::NUL;
 
 /// `tv` as a number, raising an error and answering 0 for a value that has no
 /// numeric form.
-pub unsafe fn tv_get_number(tv: *const typval_T) -> varnumber_T {
+pub unsafe fn tv_get_number(tv: *const typval_T) -> VarNumber {
     let mut error = false;
     unsafe { tv_get_number_chk(tv, &raw mut error) }
 }
@@ -26,7 +26,7 @@ pub unsafe fn tv_get_number(tv: *const typval_T) -> varnumber_T {
 ///
 /// With a NULL `ret_error` the failure answer is -1 rather than 0, which is
 /// what makes `tv_get_bool` usable as a tri-state.
-pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
+pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> VarNumber {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     match val.v_type {
@@ -42,7 +42,7 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
             }
             return n;
         }
-        VAR_BOOL => return varnumber_T::from(val.as_bool() == Some(kBoolVarTrue)),
+        VAR_BOOL => return VarNumber::from(val.as_bool() == Some(kBoolVarTrue)),
         VAR_SPECIAL => return 0,
         VAR_FUNC | VAR_PARTIAL | VAR_LIST | VAR_DICT | VAR_BLOB | VAR_FLOAT => {
             unsafe { emsg(gettext_ptr(num_errors[(*tv).v_type as usize])) };
@@ -63,12 +63,12 @@ pub unsafe fn tv_get_number_chk(tv: *const typval_T, ret_error: *mut bool) -> va
 }
 
 /// `tv` as a boolean number: -1 when it has no numeric form.
-pub unsafe fn tv_get_bool(tv: *const typval_T) -> varnumber_T {
+pub unsafe fn tv_get_bool(tv: *const typval_T) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) }
 }
 
 /// `tv` as a boolean number, setting `*ret_error` when it has no numeric form.
-pub unsafe fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varnumber_T {
+pub unsafe fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> VarNumber {
     unsafe { tv_get_number_chk(tv, ret_error) }
 }
 
@@ -105,11 +105,11 @@ pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> LineNr 
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no
 /// float form.
-pub unsafe fn tv_get_float(tv: *const typval_T) -> float_T {
+pub unsafe fn tv_get_float(tv: *const typval_T) -> Float {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let message = match val.v_type {
-        VAR_NUMBER => return val.number_or_zero() as float_T,
+        VAR_NUMBER => return val.number_or_zero() as Float,
         VAR_FLOAT => return val.float_or_zero(),
         VAR_PARTIAL | VAR_FUNC => c"E891: Using a Funcref as a Float",
         VAR_STRING => c"E892: Using a String as a Float",

@@ -42,8 +42,8 @@ use crate::state::virtual_active;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, cmdarg_T, pos_T, size_t,
-    tabpage_T, typval_T, varnumber_T, win_T,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, VarNumber, cmdarg_T, pos_T,
+    size_t, tabpage_T, typval_T, win_T,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
 use crate::window::{
@@ -610,19 +610,19 @@ pub(crate) unsafe fn f_getmousepos(
         tv_dict_alloc_ret(rettv);
         (*rettv).vval.v_dict
     };
-    let add = |key: &CStr, value: varnumber_T| {
+    let add = |key: &CStr, value: VarNumber| {
         // SAFETY: the dict just allocated, and a NUL-terminated literal key.
         let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.to_bytes().len() as size_t, value) };
     };
-    add(c"screenrow", mouse_row.get() as varnumber_T + 1);
-    add(c"screencol", mouse_col.get() as varnumber_T + 1);
+    add(c"screenrow", mouse_row.get() as VarNumber + 1);
+    add(c"screencol", mouse_col.get() as VarNumber + 1);
 
     let mut pos = MousePos::current();
-    let mut winid: varnumber_T = 0;
-    let mut winrow: varnumber_T = 0;
-    let mut wincol: varnumber_T = 0;
+    let mut winid: VarNumber = 0;
+    let mut winrow: VarNumber = 0;
+    let mut wincol: VarNumber = 0;
     let mut lnum: LineNr = 0;
-    let mut column: varnumber_T = 0;
+    let mut column: VarNumber = 0;
     let mut coladd: ColNr = 0;
 
     if let Some(win) = find_win_inner(&mut pos) {
@@ -633,19 +633,19 @@ pub(crate) unsafe fn f_getmousepos(
         // not necessary for a top border since `row` starts at -1 in that
         // case.
         if pos.row < height + win.w_border_adj[2] {
-            winid = win.handle as varnumber_T;
+            winid = win.handle as VarNumber;
             // Adjust by 1 for a top/left border.  Summed in the answer's own
             // width rather than in the C's `int`: `nvim_input_mouse` accepts
             // a column up to INT_MAX, and the C's sum then overflows -- which
             // the C wraps on and a checked build of this port traps on.  Both
-            // fields are `varnumber_T` at the end of it either way.
-            winrow = pos.row as varnumber_T + 1 + win.w_winrow_off as varnumber_T;
-            wincol = pos.col as varnumber_T + 1 + win.w_wincol_off as varnumber_T;
+            // fields are `VarNumber` at the end of it either way.
+            winrow = pos.row as VarNumber + 1 + win.w_winrow_off as VarNumber;
+            wincol = pos.col as VarNumber + 1 + win.w_wincol_off as VarNumber;
             if pos.row >= 0 && pos.row < win.w_height && pos.col >= 0 && pos.col < win.w_width {
                 (lnum, _) = comp_pos(win, &mut pos.row, &mut pos.col);
                 let col;
                 (col, coladd) = vcol_to_col(win, lnum, pos.col);
-                column = col as varnumber_T + 1;
+                column = col as VarNumber + 1;
             }
         }
     }
@@ -653,7 +653,7 @@ pub(crate) unsafe fn f_getmousepos(
     add(c"winid", winid);
     add(c"winrow", winrow);
     add(c"wincol", wincol);
-    add(c"line", lnum as varnumber_T);
+    add(c"line", lnum as VarNumber);
     add(c"column", column);
-    add(c"coladd", coladd as varnumber_T);
+    add(c"coladd", coladd as VarNumber);
 }

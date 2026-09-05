@@ -337,7 +337,7 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
             kOptFoldmethod,
             foldmethod,
             scope,
-            0 as scid_T,
+            0 as ScriptId,
             kOptScopeWin,
             wp.raw().cast::<c_void>(),
         )

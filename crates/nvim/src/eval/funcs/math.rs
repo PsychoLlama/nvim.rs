@@ -14,7 +14,7 @@ use crate::message_fmt::c_str;
 use crate::os::env::os_get_pid;
 use crate::os::time::os_hrtime;
 use crate::semsg;
-use crate::types::{EvalFuncData, VAR_FLOAT, VAR_LIST, VAR_NUMBER, float_T, typval_T, varnumber_T};
+use crate::types::{EvalFuncData, Float, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VarNumber, typval_T};
 use core::ffi::{c_char, c_double, c_int, c_void};
 use core::ptr;
 
@@ -66,7 +66,7 @@ pub unsafe fn f_invert(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// Argument `i` as a Number, reporting its own error and reading as 0 when
 /// it cannot be coerced. The bitwise builtins' shared coercion.
-fn number(args: Args<'_>, i: usize) -> varnumber_T {
+fn number(args: Args<'_>, i: usize) -> VarNumber {
     arg_number_chk(args.get(i), None)
 }
 
@@ -109,64 +109,64 @@ fn float2(args: Args<'_>, rettv: &mut typval_T, op: impl FnOnce(c_double, c_doub
 // costs nothing here: vim reads the value and nothing else, and reports a
 // domain error as the NaN the value already is.
 
-pub fn acos(x: float_T) -> float_T {
+pub fn acos(x: Float) -> Float {
     x.acos()
 }
-pub fn asin(x: float_T) -> float_T {
+pub fn asin(x: Float) -> Float {
     x.asin()
 }
-pub fn atan(x: float_T) -> float_T {
+pub fn atan(x: Float) -> Float {
     x.atan()
 }
-pub fn ceil(x: float_T) -> float_T {
+pub fn ceil(x: Float) -> Float {
     x.ceil()
 }
-pub fn cos(x: float_T) -> float_T {
+pub fn cos(x: Float) -> Float {
     x.cos()
 }
-pub fn cosh(x: float_T) -> float_T {
+pub fn cosh(x: Float) -> Float {
     x.cosh()
 }
-pub fn exp(x: float_T) -> float_T {
+pub fn exp(x: Float) -> Float {
     x.exp()
 }
-pub fn floor(x: float_T) -> float_T {
+pub fn floor(x: Float) -> Float {
     x.floor()
 }
 /// C's `log` is the natural logarithm, which Rust spells `ln`.
-pub fn log(x: float_T) -> float_T {
+pub fn log(x: Float) -> Float {
     x.ln()
 }
-pub fn log10(x: float_T) -> float_T {
+pub fn log10(x: Float) -> Float {
     x.log10()
 }
 /// Half away from zero, matching C's `round` rather than Rust's `round_ties_even`.
-pub fn round(x: float_T) -> float_T {
+pub fn round(x: Float) -> Float {
     x.round()
 }
-pub fn sin(x: float_T) -> float_T {
+pub fn sin(x: Float) -> Float {
     x.sin()
 }
-pub fn sinh(x: float_T) -> float_T {
+pub fn sinh(x: Float) -> Float {
     x.sinh()
 }
-pub fn sqrt(x: float_T) -> float_T {
+pub fn sqrt(x: Float) -> Float {
     x.sqrt()
 }
-pub fn tan(x: float_T) -> float_T {
+pub fn tan(x: Float) -> Float {
     x.tan()
 }
-pub fn tanh(x: float_T) -> float_T {
+pub fn tanh(x: Float) -> Float {
     x.tanh()
 }
-pub fn trunc(x: float_T) -> float_T {
+pub fn trunc(x: Float) -> Float {
     x.trunc()
 }
 
 /// Argument `i` coerced to Float, reporting E808 if it is neither a Float
 /// nor a Number.
-fn float_arg(args: Args<'_>, i: usize) -> Option<float_T> {
-    let mut f: float_T = 0.0;
+fn float_arg(args: Args<'_>, i: usize) -> Option<Float> {
+    let mut f: Float = 0.0;
     // SAFETY: `args.ptr(i)` is a live typval and `f` is a live local.
     unsafe { tv_get_float_chk(args.ptr(i), &raw mut f) }.then_some(f)
 }
@@ -181,11 +181,11 @@ pub unsafe fn f_float2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // The epsilon nudge is upstream's: it keeps a value that rounds to the
     // limit on the saturating side of the cast.
     rettv.vval.v_number = if f <= -(VARNUMBER_MAX as c_double) + c_double::EPSILON {
-        -(VARNUMBER_MAX as varnumber_T)
+        -(VARNUMBER_MAX as VarNumber)
     } else if f >= VARNUMBER_MAX as c_double - c_double::EPSILON {
-        VARNUMBER_MAX as varnumber_T
+        VARNUMBER_MAX as VarNumber
     } else {
-        f as varnumber_T
+        f as VarNumber
     };
 }
 
@@ -203,7 +203,7 @@ pub unsafe fn f_isinf(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 /// `isnan({expr})`.
 pub unsafe fn f_isnan(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = args.get(0).as_float().is_some_and(c_double::is_nan) as varnumber_T;
+    rettv.vval.v_number = args.get(0).as_float().is_some_and(c_double::is_nan) as VarNumber;
 }
 
 /// Draw 32 bits of entropy for the generator's seed. Falls back to the
@@ -290,12 +290,12 @@ pub unsafe fn f_rand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         ];
         let result = xoshiro128starstar(&mut state);
         for (item, word) in seed.iter().zip(state) {
-            unsafe { (**item).vval.v_number = word as varnumber_T };
+            unsafe { (**item).vval.v_number = word as VarNumber };
         }
         result
     };
     rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = result as varnumber_T;
+    rettv.vval.v_number = result as VarNumber;
 }
 
 /// The four state words of a seed list, or `None` if the value is not a
@@ -344,7 +344,7 @@ pub unsafe fn f_srand(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     };
     for _ in 0..4 {
         // SAFETY: the list was just allocated into `rettv`.
-        unsafe { tv_list_append_number(rettv.list_or_null(), splitmix32(&mut x) as varnumber_T) };
+        unsafe { tv_list_append_number(rettv.list_or_null(), splitmix32(&mut x) as VarNumber) };
     }
 }
 
@@ -375,7 +375,7 @@ pub unsafe fn f_range(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         semsg!("E726: Stride is zero");
         return;
     }
-    // Wrapping throughout: these are C `varnumber_T` expressions, the
+    // Wrapping throughout: these are C `VarNumber` expressions, the
     // extremes are reachable from vimscript, and upstream wraps rather than
     // trapping.
     let past_end = if stride > 0 {

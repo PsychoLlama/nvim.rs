@@ -36,7 +36,7 @@ use crate::os::signal::signal_reject_deadly;
 use crate::profile::{profile_dump, time_finish};
 use crate::shada::shada_write_file;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-use crate::types::{NUL, VAR_NUMBER, Vv, varnumber_T};
+use crate::types::{NUL, VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
 use ::libc::{exit, fprintf, tcdrain};
@@ -117,7 +117,7 @@ pub unsafe fn getout(mut exitval: c_int) -> ! {
     // SAFETY: walks the tab pages, windows and buffers, each of which the
     // autocommands below may free -- hence the `bufref` liveness checks.
     unsafe { set_vim_var_type(Vv::Exiting, VAR_NUMBER) };
-    unsafe { set_vim_var_nr(Vv::Exiting, exitval as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Exiting, exitval as VarNumber) };
 
     // `:restart` and friends set a reason of their own first.
     if unsafe { *get_vim_var_str(Vv::Exitreason) } as c_int == NUL {

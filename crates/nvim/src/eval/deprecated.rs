@@ -34,8 +34,8 @@ use crate::semsg;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     Callback, CallbackReader, ChannelPart, EvalFuncData, VAR_DICT, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T, uint64_t,
-    varnumber_T,
+    VAR_STRING, VAR_UNKNOWN, VarNumber, garray_T, kBoolVarTrue, list_T, listitem_T, typval_T,
+    uint64_t,
 };
 use crate::winlayer::buffers;
 
@@ -219,7 +219,7 @@ pub unsafe fn f_rpcstop(argvars: *mut typval_T, rettv: *mut typval_T, fptr: Eval
         let mut error: *const c_char = core::ptr::null();
         // SAFETY: `error` is written whenever the close fails.
         let closed = unsafe { channel_close(id, kChannelPartRpc, &raw mut error) };
-        ret.vval.v_number = closed as varnumber_T;
+        ret.vval.v_number = closed as VarNumber;
         if !closed {
             // SAFETY: the failed close named its reason.
             unsafe { emsg_ptr(error) };
@@ -240,7 +240,7 @@ pub unsafe fn f_last_buffer_nr(_argvars: *mut typval_T, rettv: *mut typval_T, _f
         n = n.max(buf.handle());
     }
     // SAFETY: the caller's promise about `rettv`.
-    unsafe { (*rettv).vval.v_number = n as varnumber_T };
+    unsafe { (*rettv).vval.v_number = n as VarNumber };
 }
 
 /// `termopen(cmd[, opts])`: `jobstart()` with `term` forced on.

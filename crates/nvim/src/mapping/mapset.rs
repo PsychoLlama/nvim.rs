@@ -150,7 +150,7 @@ pub unsafe fn f_mapset(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: Eva
         ..MapArguments::default()
     };
 
-    let sid = number(c"sid") as scid_T;
+    let sid = number(c"sid") as ScriptId;
     let lnum = number(c"lnum") as LineNr;
     let buffer = number(c"buffer") != 0;
     // The dict's "mode" is not used past get_map_mode_string.

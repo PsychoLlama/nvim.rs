@@ -37,10 +37,10 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, LineNr, MsgpackRpcRequestHandler, NUL,
-    Object, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T,
-    expand_T, float_T, kBoolVarTrue, list_T, ptrdiff_t, typval_T, typval_vval_union, varnumber_T,
-    win_T,
+    Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, Float, LineNr,
+    MsgpackRpcRequestHandler, NUL, Object, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, blob_T, buf_T, expand_T, kBoolVarTrue, list_T, ptrdiff_t,
+    typval_T, typval_vval_union, win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
@@ -66,7 +66,7 @@ const EMPTY_TV: typval_T = typval_T {
 // guarantee spelled in its signature.
 
 /// Argument `tv` as a Number, reporting for a value that has none.
-pub(crate) fn arg_number(tv: &typval_T) -> varnumber_T {
+pub(crate) fn arg_number(tv: &typval_T) -> VarNumber {
     // SAFETY: a reference is a live, initialised value, which is the whole
     // of what the coercion asks for.
     unsafe { tv_get_number(tv) }
@@ -76,20 +76,20 @@ pub(crate) fn arg_number(tv: &typval_T) -> varnumber_T {
 ///
 /// With an `error` the failure answer is 0 and the flag is set; without one
 /// it is -1, which is what makes the reading usable as a tri-state.
-pub(crate) fn arg_number_chk(tv: &typval_T, error: Option<&mut bool>) -> varnumber_T {
+pub(crate) fn arg_number_chk(tv: &typval_T, error: Option<&mut bool>) -> VarNumber {
     let error = error.map_or(ptr::null_mut(), ptr::from_mut);
     // SAFETY: as [`arg_number`]; `error` is null or a live `bool`.
     unsafe { tv_get_number_chk(tv, error) }
 }
 
 /// Argument `tv` as a boolean Number: -1 when it has no numeric form.
-pub(crate) fn arg_bool(tv: &typval_T) -> varnumber_T {
+pub(crate) fn arg_bool(tv: &typval_T) -> VarNumber {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_bool(tv) }
 }
 
 /// Argument `tv` as a boolean Number, setting `error` when it has none.
-pub(crate) fn arg_bool_chk(tv: &typval_T, error: &mut bool) -> varnumber_T {
+pub(crate) fn arg_bool_chk(tv: &typval_T, error: &mut bool) -> VarNumber {
     // SAFETY: as [`arg_number_chk`].
     unsafe { tv_get_bool_chk(tv, error) }
 }
@@ -406,12 +406,12 @@ pub(crate) unsafe fn non_zero_arg(argvars: *mut typval_T) -> bool {
 ///
 /// # Safety
 /// `tv` is a live typval.
-pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) -> bool {
+pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut Float) -> bool {
     // SAFETY: the caller's obligation; each union read is guarded by the
     // type tag that names it.
     match unsafe { (*tv).v_type } {
         VAR_FLOAT => unsafe { *ret_f = (*tv).float_or_zero() },
-        VAR_NUMBER => unsafe { *ret_f = (*tv).number_or_zero() as float_T },
+        VAR_NUMBER => unsafe { *ret_f = (*tv).number_or_zero() as Float },
         _ => {
             let msg = c"E808: Number or Float required";
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -428,7 +428,7 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const typval_T, ret_f: *mut float_T) 
 pub unsafe fn float_op_wrapper(argvars: *mut typval_T, rettv: *mut typval_T, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
-    let mut f: float_T = 0.0;
+    let mut f: Float = 0.0;
     unsafe { (*rettv).v_type = VAR_FLOAT };
     let value = if unsafe { tv_get_float_chk(argvars, &raw mut f) } {
         let EvalFuncData::Float(op) = fptr else {

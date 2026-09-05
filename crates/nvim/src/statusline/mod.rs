@@ -56,8 +56,8 @@ use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
     AlignTextPos, Array, Dict, GridView, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
-    StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv, WinSplit, WinStyle, hlf_T,
-    schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
+    StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv, WinSplit,
+    WinStyle, hlf_T, schar_T, size_t, statuscol_T, stl_hlrec_t, win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -659,9 +659,9 @@ pub unsafe fn build_statuscol_str(
 
     if relnum >= 0 {
         // SAFETY: both are plain number variables of the editor's own.
-        unsafe { set_vim_var_nr(Vv::Lnum, lnum as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
         // SAFETY: as above.
-        unsafe { set_vim_var_nr(Vv::Relnum, relnum as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Relnum, relnum as VarNumber) };
     }
 
     let job = StlJob {

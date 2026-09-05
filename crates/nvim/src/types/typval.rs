@@ -460,11 +460,11 @@ pub struct partial_S {
     pub pt_dict: *mut dict_T,
 }
 pub type partial_T = partial_S;
-pub type scid_T = ::core::ffi::c_int;
+pub type ScriptId = ::core::ffi::c_int;
 #[derive(Copy, Clone, PartialEq)]
 #[repr(C)]
 pub struct sctx_T {
-    pub sc_sid: scid_T,
+    pub sc_sid: ScriptId,
     pub sc_seq: ::core::ffi::c_int,
     pub sc_lnum: LineNr,
     pub sc_chan: uint64_t,
@@ -486,7 +486,7 @@ impl sctx_T {
     /// A `Copy` cell's field write is a read-modify-write, and spelling it
     /// as one expression keeps the "which field" out of the caller's
     /// bookkeeping -- `pos_T::with_col`'s shape.
-    pub fn with_sid(self, sc_sid: scid_T) -> Self {
+    pub fn with_sid(self, sc_sid: ScriptId) -> Self {
         sctx_T { sc_sid, ..self }
     }
 
@@ -521,10 +521,10 @@ pub struct typval_T {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union typval_vval_union {
-    pub v_number: varnumber_T,
+    pub v_number: VarNumber,
     pub v_bool: BoolVarValue,
     pub v_special: SpecialVarValue,
-    pub v_float: float_T,
+    pub v_float: Float,
     pub v_string: *mut ::core::ffi::c_char,
     pub v_list: *mut list_T,
     pub v_dict: *mut dict_T,
@@ -563,5 +563,5 @@ pub struct ufunc_S {
     pub uf_name: [::core::ffi::c_char; 0],
 }
 pub type ufunc_T = ufunc_S;
-pub type uvarnumber_T = uint64_t;
-pub type varnumber_T = int64_t;
+pub type UVarNumber = uint64_t;
+pub type VarNumber = int64_t;

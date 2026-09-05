@@ -38,8 +38,8 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::strings::xstrnsave;
 use crate::types::{
     AdditionalData, CmdModFlags, EvalFuncData, Failed, HistoryType, IOSIZE, OptInt, Timestamp,
-    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, exarg_T, expand_T, regmatch_T, size_t, typval_T,
-    varnumber_T,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarNumber, exarg_T, expand_T, regmatch_T, size_t,
+    typval_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -379,7 +379,7 @@ pub unsafe fn f_histdel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         }
     };
     // SAFETY: eval-function contract.
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(n) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(n) };
 }
 
 /// "histget()" function
@@ -424,7 +424,7 @@ pub unsafe fn f_histnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         get_history_idx(histype)
     };
     // SAFETY: eval-function contract.
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(n) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(n) };
 }
 
 /// ":history" command: list history entries, optionally filtered by

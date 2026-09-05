@@ -39,9 +39,7 @@ use crate::memory::{xmalloc, xrealloc};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, snprintf, strncasecmp};
 use crate::strings::vim_strchr;
-use crate::types::{
-    CpoFlag, MB_MAXBYTES, NUL, key_extra, scid_T, size_t, uvarnumber_T, varnumber_T,
-};
+use crate::types::{CpoFlag, MB_MAXBYTES, NUL, ScriptId, UVarNumber, VarNumber, key_extra, size_t};
 
 mod codes;
 pub use self::codes::*;
@@ -160,13 +158,13 @@ fn starts_with(p: Cursor, lit: &CStr) -> bool {
 ///
 /// # Safety
 /// `p` must point at a NUL-terminated string.
-unsafe fn number_at(p: Cursor) -> (uvarnumber_T, c_int) {
-    let mut number: uvarnumber_T = 0;
+unsafe fn number_at(p: Cursor) -> (UVarNumber, c_int) {
+    let mut number: UVarNumber = 0;
     let mut len: c_int = 0;
     // Bound out here so the call itself fits on one line; nine arguments
     // spread over nine lines would be nine unchecked lines.
     let (start, prep, lenp) = (p.raw(), ptr::null_mut(), &raw mut len);
-    let (nptr, unptr) = (ptr::null_mut::<varnumber_T>(), &raw mut number);
+    let (nptr, unptr) = (ptr::null_mut::<VarNumber>(), &raw mut number);
     let (overflow, all) = (ptr::null_mut(), Str2NrBases::ALL);
     // SAFETY: the caller's promise, and every out-parameter is a live local
     // or null. Upstream passes null for `unptr` at the one call site that
@@ -669,7 +667,7 @@ pub unsafe fn replace_termcodes(
     from: *const c_char,
     from_len: size_t,
     bufp: *mut *mut c_char,
-    sid_arg: scid_T,
+    sid_arg: ScriptId,
     flags: c_int,
     did_simplify: *mut bool,
     cpo_val: *const c_char,

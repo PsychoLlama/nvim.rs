@@ -55,9 +55,9 @@ fn first_char_len(line: &[u8]) -> size_t {
 
 /// `vim_str2nr` over a slice: the unsigned value, the prefix letter it
 /// recognised and how many bytes it consumed.
-fn str2nr(bytes: &[u8], what: Str2NrBases) -> (uvarnumber_T, c_int, size_t) {
+fn str2nr(bytes: &[u8], what: Str2NrBases) -> (UVarNumber, c_int, size_t) {
     debug_assert!(!bytes.is_empty(), "vim_str2nr reads the first byte eagerly");
-    let mut value: uvarnumber_T = 0;
+    let mut value: UVarNumber = 0;
     let mut prefix: c_int = 0;
     let mut len: c_int = 0;
     // SAFETY: `maxlen` is the slice's own length, so the scan stays inside it.
@@ -96,18 +96,13 @@ fn blank_token(start: ParserPosition) -> LexExprToken {
 ///
 /// `base` must not be zero.
 #[inline(always)]
-fn scale_number(
-    num: float_T,
-    base: uint8_t,
-    exponent: uvarnumber_T,
-    exponent_negative: bool,
-) -> float_T {
+fn scale_number(num: Float, base: uint8_t, exponent: UVarNumber, exponent_negative: bool) -> Float {
     if num == 0.0 || exponent == 0 {
         return num;
     }
     debug_assert!(base != 0, "base");
     let mut exp = exponent;
-    let mut p_base = float_T::from(base);
+    let mut p_base = Float::from(base);
     let mut ret = num;
     while exp != 0 {
         if exp & 1 != 0 {
@@ -228,26 +223,26 @@ fn scan_number(ret: &mut LexExprToken, line: &[u8], flags: c_int) {
         // instead: accumulate the digits ignoring the decimal point, then use
         // the point's position to scale the result when applying the
         // exponent.
-        let mut significand: float_T = 0.0;
+        let mut significand: Float = 0.0;
         let frac_size = frac_end - frac_start;
         for (i, &byte) in line[..frac_end].iter().enumerate() {
             if i == frac_start - 1 {
                 continue; // the decimal point
             }
-            significand = significand * 10.0 + float_T::from(byte - b'0');
+            significand = significand * 10.0 + Float::from(byte - b'0');
         }
-        let mut exp_part: uvarnumber_T = if exp_start != 0 {
+        let mut exp_part: UVarNumber = if exp_start != 0 {
             str2nr(&line[exp_start..ret.len], Str2NrBases::NONE).0
         } else {
             0
         };
         if exp_negative {
-            exp_part = exp_part.wrapping_add(frac_size as uvarnumber_T);
-        } else if exp_part < frac_size as uvarnumber_T {
+            exp_part = exp_part.wrapping_add(frac_size as UVarNumber);
+        } else if exp_part < frac_size as UVarNumber {
             exp_negative = true;
-            exp_part = (frac_size as uvarnumber_T).wrapping_sub(exp_part);
+            exp_part = (frac_size as UVarNumber).wrapping_sub(exp_part);
         } else {
-            exp_part = exp_part.wrapping_sub(frac_size as uvarnumber_T);
+            exp_part = exp_part.wrapping_sub(frac_size as UVarNumber);
         }
         ret.data.num.val.floating = scale_number(significand, 10, exp_part, exp_negative);
     } else {

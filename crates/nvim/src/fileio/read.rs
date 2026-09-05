@@ -764,7 +764,7 @@ pub(crate) unsafe fn readfile(
                 kOptFileencoding,
                 OptVal::String(unsafe { cstr_as_string(fenc) }),
                 OptionSetFlags::LOCAL,
-                0 as scid_T,
+                0 as ScriptId,
             );
         }
         if fenc_alloced {

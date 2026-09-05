@@ -19,8 +19,8 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
-    EvalFuncData, NUL, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T, typval_T,
-    varnumber_T,
+    EvalFuncData, NUL, VarNumber, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, pos_T,
+    typval_T,
 };
 use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int};
@@ -29,7 +29,7 @@ use core::ptr;
 /// `changenr()` — the sequence number of the change the undo tree is at.
 pub unsafe fn f_changenr(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as varnumber_T };
+    unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as VarNumber };
 }
 
 /// Add one `{lnum, col, coladd}` entry to `l`, skipping a cleared mark.
@@ -41,9 +41,9 @@ unsafe fn append_mark(l: *mut list_T, mark: pos_T) -> *mut dict_T {
     // immediately, so it is not leaked.
     let d = unsafe { tv_dict_alloc() };
     unsafe { tv_list_append_dict(l, d) };
-    let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as varnumber_T) };
-    let _ = unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as varnumber_T) };
-    let _ = unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, mark.lnum as VarNumber) };
+    let _ = unsafe { tv_dict_add_nr(d, c"col".as_ptr(), 3, mark.col as VarNumber) };
+    let _ = unsafe { tv_dict_add_nr(d, c"coladd".as_ptr(), 6, mark.coladd as VarNumber) };
     d
 }
 
@@ -83,7 +83,7 @@ pub unsafe fn f_getchangelist(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
                 (*wip).wi_changelistidx
             })
     };
-    unsafe { tv_list_append_number(out, index as varnumber_T) };
+    unsafe { tv_list_append_number(out, index as VarNumber) };
 
     for i in 0..unsafe { (*buf).b_changelistlen } {
         let mark = unsafe { (*buf).b_changelist[i as usize].mark };
@@ -106,14 +106,14 @@ pub unsafe fn f_getjumplist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     unsafe { cleanup_jumplist(wp, true) };
     let l = unsafe { tv_list_alloc((*wp).w_jumplistlen as isize) };
     unsafe { tv_list_append_list(out, l) };
-    unsafe { tv_list_append_number(out, (*wp).w_jumplistidx as varnumber_T) };
+    unsafe { tv_list_append_number(out, (*wp).w_jumplistidx as VarNumber) };
     for i in 0..unsafe { (*wp).w_jumplistlen } {
         let entry = unsafe { &(*wp).w_jumplist[i as usize] };
         if entry.fmark.mark.lnum == 0 {
             continue;
         }
         let d = unsafe { append_mark(l, entry.fmark.mark) };
-        let _ = unsafe { tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, entry.fmark.fnum as varnumber_T) };
+        let _ = unsafe { tv_dict_add_nr(d, c"bufnr".as_ptr(), 5, entry.fmark.fnum as VarNumber) };
         // A jump into a file that is no longer loaded keeps its name.
         if !entry.fname.is_null() {
             let _ = unsafe { tv_dict_add_str(d, c"filename".as_ptr(), 8, entry.fname) };

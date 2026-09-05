@@ -22,8 +22,8 @@ use crate::memory::xfree;
 use crate::message::internal_error;
 use crate::types::{
     VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, dict_T, dictitem_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, list_T, partial_T, ptrdiff_t, size_t, typval_T, varnumber_T,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, dict_T, dictitem_T, int64_t, kBoolVarFalse,
+    kBoolVarTrue, kSpecialVarNull, list_T, partial_T, ptrdiff_t, size_t, typval_T,
 };
 
 /// Apply a hook's verdict inside `convert_one_value`, where "stop" is
@@ -362,22 +362,22 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             // SAFETY: the four items of a list this long, walked forwards
             // from the head as upstream does.
             let sign_li = unsafe { Li::new(tv_list_first(val_list)) };
-            let sign: varnumber_T = sign_li.number();
+            let sign: VarNumber = sign_li.number();
             if sign_li.v_type() != VAR_NUMBER || sign == 0 {
                 return Ok(None);
             }
             let highest_bits_li = unsafe { Li::new(sign_li.li_next) };
-            let highest_bits: varnumber_T = highest_bits_li.number();
+            let highest_bits: VarNumber = highest_bits_li.number();
             if highest_bits_li.v_type() != VAR_NUMBER || highest_bits < 0 {
                 return Ok(None);
             }
             let high_bits_li = unsafe { Li::new(highest_bits_li.li_next) };
-            let high_bits: varnumber_T = high_bits_li.number();
+            let high_bits: VarNumber = high_bits_li.number();
             if high_bits_li.v_type() != VAR_NUMBER || high_bits < 0 {
                 return Ok(None);
             }
             let low_bits_li = unsafe { Li::new(tv_list_last(val_list)) };
-            let low_bits: varnumber_T = low_bits_li.number();
+            let low_bits: VarNumber = low_bits_li.number();
             if low_bits_li.v_type() != VAR_NUMBER || low_bits < 0 {
                 return Ok(None);
             }
@@ -498,8 +498,8 @@ unsafe fn convert_special_dict<S: TypvalSink>(
             let last = unsafe { Li::new(tv_list_last(val_list)) };
             let ext_type = first.number();
             if first.v_type() != VAR_NUMBER
-                || ext_type > i8::MAX as varnumber_T
-                || ext_type < i8::MIN as varnumber_T
+                || ext_type > i8::MAX as VarNumber
+                || ext_type < i8::MIN as VarNumber
                 || last.v_type() != VAR_LIST
             {
                 return Ok(None);

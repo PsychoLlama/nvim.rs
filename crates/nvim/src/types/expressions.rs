@@ -211,11 +211,11 @@ pub struct ExprFigureGuesses {
 }
 #[derive(Copy, Clone)]
 pub struct ExprNodeFloat {
-    pub value: float_T,
+    pub value: Float,
 }
 #[derive(Copy, Clone)]
 pub struct ExprNodeInteger {
-    pub value: uvarnumber_T,
+    pub value: UVarNumber,
 }
 #[derive(Copy, Clone)]
 pub struct ExprNodeOption {

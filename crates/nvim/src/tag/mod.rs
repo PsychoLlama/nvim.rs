@@ -66,10 +66,10 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, ColNr, FILE, FileOffset, LineNr, OptInt, OptMagic, Timestamp, dict_T,
-    dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values,
-    int64_t, list_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T,
-    typval_vval_union, varnumber_T, vimconv_T,
+    AdditionalData, Callback, ColNr, FILE, FileOffset, LineNr, OptInt, OptMagic, Timestamp,
+    VarNumber, dict_T, dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T,
+    getf_retvalues, getf_values, int64_t, list_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t,
+    taggy_T, typval_T, typval_vval_union, vimconv_T,
 };
 use crate::ui::ui_has;
 use crate::window::{

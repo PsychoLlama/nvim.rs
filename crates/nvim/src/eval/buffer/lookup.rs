@@ -59,7 +59,7 @@ pub unsafe fn f_bufadd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     } else {
         name
     };
-    rettv.vval.v_number = varnumber_T::from(unsafe { buflist_add(name, 0) });
+    rettv.vval.v_number = VarNumber::from(unsafe { buflist_add(name, 0) });
 }
 
 /// `bufexists({buf})`.
@@ -67,7 +67,7 @@ pub unsafe fn f_bufexists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     let buf = unsafe { find_buffer(args.ptr(0)) };
-    rettv.vval.v_number = varnumber_T::from(!buf.is_null());
+    rettv.vval.v_number = VarNumber::from(!buf.is_null());
 }
 
 /// `buflisted({buf})`.
@@ -76,7 +76,7 @@ pub unsafe fn f_buflisted(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
     let listed = unsafe { Buf::from_raw(find_buffer(args.ptr(0))) }.is_some_and(|b| b.b_p_bl != 0);
-    rettv.vval.v_number = varnumber_T::from(listed);
+    rettv.vval.v_number = VarNumber::from(listed);
 }
 
 /// `bufload({buf})` — read the file in if the buffer is not loaded yet.
@@ -103,7 +103,7 @@ pub unsafe fn f_bufloaded(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // buffer or NULL.
     let loaded = unsafe { Buf::from_raw(find_buffer(args.ptr(0))) }
         .is_some_and(|b| !b.b_ml.ml_mfp.is_null());
-    rettv.vval.v_number = varnumber_T::from(loaded);
+    rettv.vval.v_number = VarNumber::from(loaded);
 }
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
@@ -155,7 +155,7 @@ pub unsafe fn f_bufnr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         }
     }
     if let Some(buf) = unsafe { Buf::from_raw(buf) } {
-        rettv.vval.v_number = varnumber_T::from(buf.handle);
+        rettv.vval.v_number = VarNumber::from(buf.handle);
     }
 }
 
@@ -181,7 +181,7 @@ unsafe fn buf_win_common(args: Args<'_>, rettv: &mut typval_T, get_nr: bool) {
         ptr::eq(wp.w_buffer, buf) && (!get_nr || wp.has_winnr(tp))
     });
     rettv.vval.v_number = match found {
-        Some(wp) => varnumber_T::from(if get_nr { winnr } else { wp.handle }),
+        Some(wp) => VarNumber::from(if get_nr { winnr } else { wp.handle }),
         None => -1,
     };
 }

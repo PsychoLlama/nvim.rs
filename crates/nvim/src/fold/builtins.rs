@@ -41,11 +41,11 @@ pub(super) unsafe fn foldclosed_both(argvars: *mut typval_T, rettv: *mut typval_
         let win = unsafe { Win::current() };
         let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
         if closed {
-            rv.vval.v_number = (if end { last } else { first }) as varnumber_T;
+            rv.vval.v_number = (if end { last } else { first }) as VarNumber;
             return;
         }
     }
-    rv.vval.v_number = -1 as varnumber_T;
+    rv.vval.v_number = -1 as VarNumber;
 }
 
 /// "foldclosed()" function
@@ -75,7 +75,7 @@ pub unsafe fn f_foldlevel(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (mut rv, lnum) = unsafe { (Tv::new(rettv), tv_get_lnum(argvars)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         // SAFETY: `lnum` is inside the current buffer.
-        rv.vval.v_number = unsafe { fold_level(lnum) } as varnumber_T;
+        rv.vval.v_number = unsafe { fold_level(lnum) } as VarNumber;
     }
 }
 

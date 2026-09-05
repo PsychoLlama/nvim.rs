@@ -31,8 +31,8 @@ use crate::main::{called_emsg, did_emsg, did_throw, main_loop};
 use crate::memory::{xfree, xmalloc};
 use crate::registry::SlotTable;
 use crate::types::{
-    Callback, Refcount, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, int64_t,
-    ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    Callback, Refcount, TimeWatcher, VAR_NUMBER, VAR_UNKNOWN, VarLock, VarNumber, dict_T,
+    dictitem_T, int64_t, ptrdiff_t, size_t, timer_T, typval_T, typval_vval_union, uint64_t,
 };
 
 /// How many consecutive errors a timer's callback may raise before the
@@ -55,7 +55,7 @@ fn timer_snapshot() -> Vec<*mut timer_T> {
 }
 
 /// The timer with this id, or null.
-pub fn find_timer_by_nr(id: varnumber_T) -> *mut timer_T {
+pub fn find_timer_by_nr(id: VarNumber) -> *mut timer_T {
     timers
         .with(|map| map.get(&(id as uint64_t)))
         .unwrap_or(null_mut())
@@ -76,11 +76,11 @@ pub unsafe fn add_timer_info(rettv: *mut typval_T, timer: *mut timer_T) {
     unsafe { tv_list_append_dict(rettv.list_or_null(), dict) };
 
     for (key, value) in [
-        (c"id", timer.timer_id as varnumber_T),
-        (c"time", timer.timeout as varnumber_T),
-        (c"paused", timer.paused as varnumber_T),
+        (c"id", timer.timer_id as VarNumber),
+        (c"time", timer.timeout as VarNumber),
+        (c"paused", timer.paused as VarNumber),
         // A negative repeat count means "for ever", reported as -1.
-        (c"repeat", timer.repeat_count.max(-1) as varnumber_T),
+        (c"repeat", timer.repeat_count.max(-1) as VarNumber),
     ] {
         let len = key.count_bytes() as size_t;
         // SAFETY: `dict` is the dictionary just appended, and `key` is a
@@ -151,7 +151,7 @@ pub unsafe fn timer_due_cb(_tw: *mut TimeWatcher, data: *mut c_void) {
 
     let mut argv = [UNSET_TV; 2];
     argv[0].v_type = VAR_NUMBER;
-    argv[0].vval.v_number = timer.timer_id as varnumber_T;
+    argv[0].vval.v_number = timer.timer_id as VarNumber;
     let mut rettv = UNSET_TV;
     let cb: *mut Callback = timer.field_ptr(offset_of!(timer_T, callback));
     // SAFETY: `cb` is the timer's own callback, kept live by the reference

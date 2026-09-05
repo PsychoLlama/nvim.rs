@@ -14,7 +14,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{
     Context, Error, EvalFuncData, Object, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    typval_T, varnumber_T,
+    VarNumber, typval_T,
 };
 use core::ffi::{CStr, c_int};
 use core::ptr;
@@ -169,5 +169,5 @@ pub unsafe fn f_ctxsize(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let (_args, rettv) = frame!(_argvars, rettv);
     rettv.v_type = VAR_NUMBER;
     // SAFETY: reads the context stack's length; main thread only.
-    rettv.vval.v_number = unsafe { ctx_size() } as varnumber_T;
+    rettv.vval.v_number = unsafe { ctx_size() } as VarNumber;
 }

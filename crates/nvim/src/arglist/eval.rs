@@ -21,8 +21,7 @@ unsafe fn selected_arglist(arg: *mut typval_T) -> Option<*mut alist_T> {
     if unsafe { (*arg).v_type } == VAR_UNKNOWN {
         return Some(win_alist(cur_win()));
     }
-    if unsafe { (*arg).v_type } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as varnumber_T
-    {
+    if unsafe { (*arg).v_type } == VAR_NUMBER && unsafe { tv_get_number(arg) } == -1 as VarNumber {
         return Some(global_arglist());
     }
     unsafe { find_win_by_nr_or_id(arg) }.map(win_alist)
@@ -37,7 +36,7 @@ pub unsafe fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
     let count = unsafe { selected_arglist(argvars) }.map_or(-1, alist_count);
-    unsafe { (*rettv).vval.v_number = count as varnumber_T };
+    unsafe { (*rettv).vval.v_number = count as VarNumber };
 }
 
 /// "argidx()" function
@@ -47,7 +46,7 @@ pub unsafe fn f_argc(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 /// Standard eval-function contract.
 pub unsafe fn f_argidx(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
-    unsafe { (*rettv).vval.v_number = cur_win().w_arg_idx as varnumber_T };
+    unsafe { (*rettv).vval.v_number = cur_win().w_arg_idx as VarNumber };
 }
 
 /// "arglistid()" function
@@ -64,9 +63,9 @@ pub unsafe fn f_arglistid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
             // SAFETY: a window the registry answered with, so it is live,
             // and every window has an argument list.
             let id = unsafe { (*win_alist(wp)).id };
-            id as varnumber_T
+            id as VarNumber
         }
-        None => -1 as varnumber_T,
+        None => -1 as VarNumber,
     };
     // SAFETY: the caller's return slot.
     unsafe { (*rettv).vval.v_number = id };

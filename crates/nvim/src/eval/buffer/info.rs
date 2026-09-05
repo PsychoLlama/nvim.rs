@@ -22,7 +22,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     // the caller's list, so it is not leaked, and it stays alive for every
     // entry the closure adds.
     let dict = unsafe { tv_dict_alloc() };
-    let nr = |key: &CStr, value: varnumber_T| {
+    let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
@@ -36,7 +36,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
         let _ = unsafe { tv_dict_add_list(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
-    nr(c"bufnr", varnumber_T::from(buf.handle));
+    nr(c"bufnr", VarNumber::from(buf.handle));
     str(
         c"name",
         if buf.b_ffname.is_null() {
@@ -54,19 +54,19 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
         // SAFETY: the answer is a live mark.
         unsafe { buflist_findlnum(buf) }
     };
-    nr(c"lnum", varnumber_T::from(lnum));
-    nr(c"linecount", varnumber_T::from(buf.line_count()));
-    nr(c"loaded", varnumber_T::from(!buf.b_ml.ml_mfp.is_null()));
-    nr(c"listed", varnumber_T::from(buf.b_p_bl));
+    nr(c"lnum", VarNumber::from(lnum));
+    nr(c"linecount", VarNumber::from(buf.line_count()));
+    nr(c"loaded", VarNumber::from(!buf.b_ml.ml_mfp.is_null()));
+    nr(c"listed", VarNumber::from(buf.b_p_bl));
     // SAFETY: a live buffer.
-    nr(c"changed", varnumber_T::from(buf_is_changed(buf)));
+    nr(c"changed", VarNumber::from(buf_is_changed(buf)));
     // SAFETY: a live buffer.
     nr(c"changedtick", buf_get_changedtick(buf));
     nr(
         c"hidden",
-        varnumber_T::from(!buf.b_ml.ml_mfp.is_null() && buf.b_nwindows == 0),
+        VarNumber::from(!buf.b_ml.ml_mfp.is_null() && buf.b_nwindows == 0),
     );
-    nr(c"command", varnumber_T::from(buf.raw() == cmdwin_buf.get()));
+    nr(c"command", VarNumber::from(buf.raw() == cmdwin_buf.get()));
     // SAFETY: a live dictionary and the buffer's own variable dictionary.
     let vars = c"variables";
     let _ = unsafe { tv_dict_add_dict(dict, vars.as_ptr(), vars.count_bytes(), buf.b_vars) };
@@ -76,7 +76,7 @@ unsafe fn get_buffer_info(buf: Buf) -> *mut dict_T {
     let windows = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
     let append = |handle: handle_T| {
         // SAFETY: a live list.
-        unsafe { tv_list_append_number(windows, varnumber_T::from(handle)) };
+        unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
     };
     for wp in tab_windows().filter(|wp| wp.w_buffer == buf.raw()) {
         append(wp.handle);

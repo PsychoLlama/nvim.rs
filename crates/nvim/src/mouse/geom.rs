@@ -16,7 +16,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
 use crate::main::{mouse_col, mouse_grid, mouse_row};
-use crate::types::{ColNr, varnumber_T};
+use crate::types::{ColNr, VarNumber};
 
 /// Where a mouse event landed: a grid handle, and a row and column within it.
 ///
@@ -82,7 +82,7 @@ pub(crate) fn key_extra(c: c_int) -> c_int {
 ///
 /// The bits are cumulative -- `ModMask::FOUR_CLICK` *is* 2CLICK|3CLICK -- so the
 /// wider counts have to be tested first.
-pub(crate) fn click_count(mod_mask: ModMask) -> varnumber_T {
+pub(crate) fn click_count(mod_mask: ModMask) -> VarNumber {
     match mod_mask.masked(ModMask::MULTI_CLICK) {
         ModMask::FOUR_CLICK => 4,
         ModMask::THREE_CLICK => 3,

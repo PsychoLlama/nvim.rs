@@ -52,7 +52,7 @@ use crate::options::{
 use crate::optionstr::check_illegal_path_names;
 use crate::os::cshim::{gettext, gettext_owned, snprintf};
 use crate::types::{
-    IOSIZE, NUL, OptIndex, OptVal, OptionSetFlags, String_0, Vv, optset_T, ptrdiff_t, scid_T,
+    IOSIZE, NUL, OptIndex, OptVal, OptionSetFlags, ScriptId, String_0, Vv, optset_T, ptrdiff_t,
     sctx_T, size_t, uint32_t, vimoption_T,
 };
 use crate::ui::ui_call_option_set;
@@ -370,7 +370,7 @@ pub(crate) unsafe fn did_set_option(
     old_value: OptVal,
     new_value: OptVal,
     opt_flags: OptionSetFlags,
-    set_sid: scid_T,
+    set_sid: ScriptId,
     direct: bool,
     value_replaced: bool,
     errbuf: *mut c_char,
@@ -545,7 +545,7 @@ pub(crate) unsafe fn set_option(
     opt_idx: OptIndex,
     mut value: OptVal,
     opt_flags: OptionSetFlags,
-    set_sid: scid_T,
+    set_sid: ScriptId,
     direct: bool,
     value_replaced: bool,
     errbuf: *mut c_char,
@@ -668,7 +668,7 @@ pub(crate) fn set_option_direct(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
-    set_sid: scid_T,
+    set_sid: ScriptId,
 ) {
     if is_option_hidden(opt_idx) {
         return;

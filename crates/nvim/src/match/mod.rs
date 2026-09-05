@@ -46,9 +46,9 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, VAR_LIST, VAR_NUMBER, dict_T, dictitem_T, exarg_T, int64_t,
-    list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T, uint8_t,
-    varnumber_T, win_T,
+    ColNr, EvalFuncData, LineNr, VAR_LIST, VAR_NUMBER, VarNumber, dict_T, dictitem_T, exarg_T,
+    int64_t, list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T,
+    uint8_t, win_T,
 };
 use crate::winlayer::{Live, Win};
 

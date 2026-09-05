@@ -54,7 +54,7 @@ use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_HITRETURN, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL,
     MODE_TERMINAL,
 };
-use crate::types::{dict_T, kListLenMayKnow, list_T, ptrdiff_t, varnumber_T, vimmenu_T};
+use crate::types::{VarNumber, dict_T, kListLenMayKnow, list_T, ptrdiff_t, vimmenu_T};
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -544,7 +544,7 @@ pub(crate) fn dict_add_allocated_str(dict: *mut dict_T, key: &CStr, value: *mut 
     let _ = unsafe { tv_dict_add_allocated_str(dict, key.as_ptr(), key.count_bytes(), value) };
 }
 
-pub(crate) fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: varnumber_T) {
+pub(crate) fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: VarNumber) {
     // SAFETY: see the section note.
     let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
 }

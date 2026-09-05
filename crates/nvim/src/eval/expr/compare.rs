@@ -23,8 +23,8 @@ use crate::mbyte::mb_strcmp_ic;
 use crate::message::emsg;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::types::{
-    Failed, NUL, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
-    dict_T, exprtype_T, float_T, typval_T, varnumber_T,
+    ExprType, Failed, Float, NUL, VAR_BLOB, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
+    VAR_PARTIAL, VarNumber, dict_T, typval_T,
 };
 
 /// The scratch a Number or Float is rendered into for a String comparison.
@@ -46,7 +46,7 @@ fn isalnum_locale(c: u8) -> bool {
 /// there is a second one.
 ///
 /// Safe because [`Cur`] carries the promise that its bytes are readable.
-pub(crate) fn comparison_at(cur: Cur) -> (exprtype_T, c_int) {
+pub(crate) fn comparison_at(cur: Cur) -> (ExprType, c_int) {
     let next = || cur.at(1);
     match cur.byte() {
         b'=' => match next() {
@@ -175,23 +175,23 @@ pub(crate) unsafe fn func_equal(tv1: *mut typval_T, tv2: *mut typval_T, ic: bool
 /// `typ1` must be a valid typval the caller has given up ownership of.
 unsafe fn compare_container(
     typ1: *mut typval_T,
-    op: exprtype_T,
+    op: ExprType,
     same_type: bool,
     identical: impl FnOnce() -> bool,
     equal: impl FnOnce() -> bool,
     wrong_type: &'static CStr,
     wrong_op: &'static CStr,
-) -> Option<varnumber_T> {
+) -> Option<VarNumber> {
     if op == EXPR_IS || op == EXPR_ISNOT {
         let same = same_type && identical();
-        Some(varnumber_T::from(same == (op == EXPR_IS)))
+        Some(VarNumber::from(same == (op == EXPR_IS)))
     } else if !same_type || (op != EXPR_EQUAL && op != EXPR_NEQUAL) {
         let message = if !same_type { wrong_type } else { wrong_op };
         emsg(gettext(message));
         unsafe { tv_clear(typ1) };
         None
     } else {
-        Some(varnumber_T::from(equal() == (op == EXPR_EQUAL)))
+        Some(VarNumber::from(equal() == (op == EXPR_EQUAL)))
     }
 }
 
@@ -199,8 +199,8 @@ unsafe fn compare_container(
 ///
 /// `EXPR_UNKNOWN` and the two pattern operators answer false; the callers
 /// that can see a pattern operator handle it themselves.
-fn from_ordering(op: exprtype_T, i: c_int) -> varnumber_T {
-    varnumber_T::from(match op {
+fn from_ordering(op: ExprType, i: c_int) -> VarNumber {
+    VarNumber::from(match op {
         EXPR_IS | EXPR_EQUAL => i == 0,
         EXPR_ISNOT | EXPR_NEQUAL => i != 0,
         EXPR_GREATER => i > 0,
@@ -219,16 +219,16 @@ fn from_ordering(op: exprtype_T, i: c_int) -> varnumber_T {
 pub(crate) unsafe fn typval_compare(
     typ1: *mut typval_T,
     typ2: *mut typval_T,
-    op: exprtype_T,
+    op: ExprType,
     ic: bool,
 ) -> Result<(), Failed> {
     let type_is = op == EXPR_IS || op == EXPR_ISNOT;
     let (t1, t2) = (unsafe { (*typ1).v_type }, unsafe { (*typ2).v_type });
     let same_type = t1 == t2;
 
-    let answer: varnumber_T = if type_is && !same_type {
+    let answer: VarNumber = if type_is && !same_type {
         // `is` between two different types is simply false.
-        varnumber_T::from(op == EXPR_ISNOT)
+        VarNumber::from(op == EXPR_ISNOT)
     } else if t1 == VAR_BLOB || t2 == VAR_BLOB {
         // SAFETY: `same_type` has held before either closure runs, so the
         // union member each reads is the one the tag names.
@@ -285,13 +285,13 @@ pub(crate) unsafe fn typval_compare(
         } else {
             false
         };
-        varnumber_T::from(equal != (op == EXPR_NEQUAL || op == EXPR_ISNOT))
+        VarNumber::from(equal != (op == EXPR_NEQUAL || op == EXPR_ISNOT))
     } else if (t1 == VAR_FLOAT || t2 == VAR_FLOAT) && op != EXPR_MATCH && op != EXPR_NOMATCH {
-        let f1: float_T = unsafe { tv_get_float(typ1) };
-        let f2: float_T = unsafe { tv_get_float(typ2) };
+        let f1: Float = unsafe { tv_get_float(typ1) };
+        let f2: Float = unsafe { tv_get_float(typ2) };
         // Not `from_ordering`: NaN is unordered, so every operator has to
         // ask the float comparison itself.
-        varnumber_T::from(match op {
+        VarNumber::from(match op {
             EXPR_IS | EXPR_EQUAL => f1 == f2,
             EXPR_ISNOT | EXPR_NEQUAL => f1 != f2,
             EXPR_GREATER => f1 > f2,
@@ -313,7 +313,7 @@ pub(crate) unsafe fn typval_compare(
         let s2 = unsafe { tv_get_string_buf(typ2, buf2.as_mut_ptr()) };
         if op == EXPR_MATCH || op == EXPR_NOMATCH {
             // The pattern is the right-hand side and the subject the left.
-            varnumber_T::from(unsafe { pattern_match(s2, s1, ic) } == (op == EXPR_MATCH))
+            VarNumber::from(unsafe { pattern_match(s2, s1, ic) } == (op == EXPR_MATCH))
         } else {
             from_ordering(op, unsafe { mb_strcmp_ic(ic, s1, s2) })
         }

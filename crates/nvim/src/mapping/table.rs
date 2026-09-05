@@ -308,7 +308,7 @@ pub(crate) unsafe fn map_add(
     noremap: c_int,
     mode: c_int,
     is_abbr: bool,
-    sid: scid_T,
+    sid: ScriptId,
     lnum: LineNr,
     simplified: bool,
 ) -> *mut mapblock_T {

@@ -38,7 +38,7 @@ use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg;
 use crate::types::{
-    ColNr, ExtmarkOp, LineNr, NUL, bcount_t, exarg_T, float_T, regmatch_T, size_t, varnumber_T,
+    ColNr, ExtmarkOp, Float, LineNr, NUL, VarNumber, bcount_t, exarg_T, regmatch_T, size_t,
 };
 use crate::undo::u_save;
 use ::libc::{strcasecmp, strcoll, strtod};
@@ -110,9 +110,9 @@ enum SortKey {
     Text(Key),
     /// The integer parsed out of that range.  A line without one sorts before
     /// every line with one, which is what `Option`'s order says.
-    Number(Option<varnumber_T>),
+    Number(Option<VarNumber>),
     /// The float parsed out of that range.
-    Float(float_T),
+    Float(Float),
 }
 
 /// One line of the range as `:sort` sees it.
@@ -462,7 +462,7 @@ unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec)
         }
         // An empty key sorts before any number.
         SortKey::Float(if at == from.len() {
-            -float_T::MAX
+            -Float::MAX
         } else {
             // SAFETY: `from` is followed by a NUL, written above or the
             // line's own.
@@ -485,7 +485,7 @@ unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec)
             // A line without a number sorts before any number.
             SortKey::Number(None)
         } else {
-            let mut value: varnumber_T = 0;
+            let mut value: VarNumber = 0;
             // SAFETY: as above.
             unsafe {
                 vim_str2nr(

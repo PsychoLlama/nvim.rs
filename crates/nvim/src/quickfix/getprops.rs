@@ -22,7 +22,7 @@ use core::ptr;
 /// # Safety
 ///
 /// `dict` must be a live dictionary.
-unsafe fn add_nr(dict: *mut dict_T, key: &str, value: varnumber_T) -> Result<(), KeyTaken> {
+unsafe fn add_nr(dict: *mut dict_T, key: &str, value: VarNumber) -> Result<(), KeyTaken> {
     // SAFETY: the caller's dictionary; the key is `key.len()` bytes long.
     Ok(unsafe { tv_dict_add_nr(dict, key.as_ptr().cast(), key.len(), value) }?)
 }
@@ -105,20 +105,20 @@ unsafe fn get_qfline_items(qfp: *mut qfline_T, list: *mut list_T) {
     // The type is one character, or NUL for "none".
     let kind = [unsafe { (*qfp).qf_type }, 0];
 
-    if unsafe { add_nr(dict, "bufnr", bufnum as varnumber_T) }.is_err()
-        || unsafe { add_nr(dict, "lnum", (*qfp).qf_lnum as varnumber_T) }.is_err()
-        || unsafe { add_nr(dict, "end_lnum", (*qfp).qf_end_lnum as varnumber_T) }.is_err()
-        || unsafe { add_nr(dict, "col", (*qfp).qf_col as varnumber_T) }.is_err()
-        || unsafe { add_nr(dict, "end_col", (*qfp).qf_end_col as varnumber_T) }.is_err()
-        || unsafe { add_nr(dict, "vcol", (*qfp).qf_viscol as varnumber_T) }.is_err()
-        || unsafe { add_nr(dict, "nr", (*qfp).qf_nr as varnumber_T) }.is_err()
+    if unsafe { add_nr(dict, "bufnr", bufnum as VarNumber) }.is_err()
+        || unsafe { add_nr(dict, "lnum", (*qfp).qf_lnum as VarNumber) }.is_err()
+        || unsafe { add_nr(dict, "end_lnum", (*qfp).qf_end_lnum as VarNumber) }.is_err()
+        || unsafe { add_nr(dict, "col", (*qfp).qf_col as VarNumber) }.is_err()
+        || unsafe { add_nr(dict, "end_col", (*qfp).qf_end_col as VarNumber) }.is_err()
+        || unsafe { add_nr(dict, "vcol", (*qfp).qf_viscol as VarNumber) }.is_err()
+        || unsafe { add_nr(dict, "nr", (*qfp).qf_nr as VarNumber) }.is_err()
         || unsafe { add_str(dict, "module", (*qfp).qf_module) }.is_err()
         || unsafe { add_str(dict, "pattern", (*qfp).qf_pattern) }.is_err()
         || unsafe { add_str(dict, "text", (*qfp).qf_text) }.is_err()
         || unsafe { add_str(dict, "type", kind.as_ptr()) }.is_err()
         || (unsafe { (*qfp).qf_user_data.v_type } != VAR_UNKNOWN
             && unsafe { add_tv(dict, "user_data", &raw mut (*qfp).qf_user_data) }.is_err())
-        || unsafe { add_nr(dict, "valid", (*qfp).qf_valid as varnumber_T) }.is_err()
+        || unsafe { add_nr(dict, "valid", (*qfp).qf_valid as VarNumber) }.is_err()
     {
         // Only a NULL dict_item would cause this, which cannot happen.
         unsafe { abort() };
@@ -269,7 +269,7 @@ unsafe fn qf_getprop_qfbufnr(qi: *const qf_info_T, retdict: *mut dict_T) -> Resu
     if !qi.is_null() && find_buf(unsafe { (*qi).qf_bufnr }).is_some() {
         bufnum = unsafe { (*qi).qf_bufnr };
     }
-    unsafe { add_nr(retdict, "qfbufnr", bufnum as varnumber_T) }
+    unsafe { add_nr(retdict, "qfbufnr", bufnum as VarNumber) }
 }
 
 /// The `what` keys, in the order the flag set numbers them. `filewinid` is
@@ -393,7 +393,7 @@ unsafe fn qf_getprop_defaults(
         unsafe { add_nr(retdict, "nr", 0) }?;
     }
     if wanted(GetListProps::WINID) {
-        unsafe { add_nr(retdict, "winid", qf_winid(qi) as varnumber_T) }?;
+        unsafe { add_nr(retdict, "winid", qf_winid(qi) as VarNumber) }?;
     }
     if wanted(GetListProps::CONTEXT) {
         unsafe { add_str(retdict, "context", ptr::null()) }?;
@@ -438,7 +438,7 @@ unsafe fn qf_getprop_filewinid(
         .and_then(|_| qf_find_win_with_loclist(qi))
         .map_or(0, |ll_wp| ll_wp.handle);
     // SAFETY: forwarded from the caller -- a live dictionary.
-    unsafe { add_nr(retdict, "filewinid", winid as varnumber_T) }
+    unsafe { add_nr(retdict, "filewinid", winid as VarNumber) }
 }
 
 /// The entries of the list, or of just entry `eidx`.
@@ -494,7 +494,7 @@ unsafe fn qf_getprop_idx(
             eidx = 0;
         }
     }
-    unsafe { add_nr(retdict, "idx", eidx as varnumber_T) }
+    unsafe { add_nr(retdict, "idx", eidx as VarNumber) }
 }
 
 /// The list's `'quickfixtextfunc'` callback, or the empty string.
@@ -576,10 +576,10 @@ pub(crate) unsafe fn qf_get_properties(
         unsafe { add_str(retdict, "title", (*qfl).qf_title) }?;
     }
     if wanted(GetListProps::NR) {
-        unsafe { add_nr(retdict, "nr", (qf_idx + 1) as varnumber_T) }?;
+        unsafe { add_nr(retdict, "nr", (qf_idx + 1) as VarNumber) }?;
     }
     if wanted(GetListProps::WINID) {
-        unsafe { add_nr(retdict, "winid", qf_winid(qi) as varnumber_T) }?;
+        unsafe { add_nr(retdict, "winid", qf_winid(qi) as VarNumber) }?;
     }
     if wanted(GetListProps::ITEMS) {
         unsafe { qf_getprop_items(qi, qf_idx, eidx, retdict) };
@@ -588,16 +588,16 @@ pub(crate) unsafe fn qf_get_properties(
         unsafe { qf_getprop_ctx(qfl, retdict) }?;
     }
     if wanted(GetListProps::ID) {
-        unsafe { add_nr(retdict, "id", (*qfl).qf_id as varnumber_T) }?;
+        unsafe { add_nr(retdict, "id", (*qfl).qf_id as VarNumber) }?;
     }
     if wanted(GetListProps::IDX) {
         unsafe { qf_getprop_idx(qfl, eidx, retdict) }?;
     }
     if wanted(GetListProps::SIZE) {
-        unsafe { add_nr(retdict, "size", (*qfl).qf_count as varnumber_T) }?;
+        unsafe { add_nr(retdict, "size", (*qfl).qf_count as VarNumber) }?;
     }
     if wanted(GetListProps::TICK) {
-        unsafe { add_nr(retdict, "changedtick", (*qfl).qf_changedtick as varnumber_T) }?;
+        unsafe { add_nr(retdict, "changedtick", (*qfl).qf_changedtick as VarNumber) }?;
     }
     if wp.is_some() && wanted(GetListProps::FILEWINID) {
         unsafe { qf_getprop_filewinid(wp, qi, retdict) }?;

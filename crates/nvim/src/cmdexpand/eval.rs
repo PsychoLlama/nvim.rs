@@ -230,10 +230,10 @@ pub unsafe fn f_cmdcomplete_info(
 
     let mut ret = add_str("cmdline_orig", cmdline_orig.get());
     if ret.is_ok() {
-        ret = add_nr("pum_visible", pum_visible() as varnumber_T);
+        ret = add_nr("pum_visible", pum_visible() as VarNumber);
     }
     if ret.is_ok() {
-        ret = add_nr("selected", unsafe { (*xpc).xp_selected } as varnumber_T);
+        ret = add_nr("selected", unsafe { (*xpc).xp_selected } as VarNumber);
     }
     if ret.is_ok() {
         let li = unsafe { tv_list_alloc((*xpc).xp_numfiles as ptrdiff_t) };

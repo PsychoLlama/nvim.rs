@@ -91,9 +91,9 @@ use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
     ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Integer, LineNr, OptInt,
-    ProfTime, VirtText, VirtTextChunk, Window, buf_T, foldinfo_T, frame_T, handle_T, hlf_T,
-    int64_t, match_T, pos_T, regmmatch_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
-    varnumber_T, win_T,
+    ProfTime, VarNumber, VirtText, VirtTextChunk, Window, buf_T, foldinfo_T, frame_T, handle_T,
+    hlf_T, int64_t, match_T, pos_T, regmmatch_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
+    win_T,
 };
 use crate::ui::{
     ui_call_grid_clear, ui_call_grid_resize, ui_call_msg_clear, ui_call_win_extmark, ui_flush,

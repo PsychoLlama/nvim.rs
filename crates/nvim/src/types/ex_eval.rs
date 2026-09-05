@@ -64,7 +64,7 @@ pub struct eslist_elem {
     pub next: *mut eslist_T,
 }
 pub type except_T = vim_exception;
-pub type except_type_T = ::core::ffi::c_uint;
+pub type ExceptType = ::core::ffi::c_uint;
 pub struct exception_state_S {
     pub estate_current_exception: *mut except_T,
     pub estate_did_throw: bool,
@@ -83,7 +83,7 @@ pub struct msglist {
 }
 pub type msglist_T = msglist;
 pub struct vim_exception {
-    pub type_0: except_type_T,
+    pub type_0: ExceptType,
     pub value: *mut ::core::ffi::c_char,
     pub messages: *mut msglist_T,
     pub throw_name: *mut ::core::ffi::c_char,

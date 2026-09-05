@@ -8,7 +8,7 @@ use neovim::charset::{
     Str2NrBases, skip, skipbin, skipdigits, skiphex, skiptodigit, skiptowhite, skiptowhite_esc,
     skipwhite, vim_str2nr,
 };
-use neovim::types::typval::{uvarnumber_T, varnumber_T};
+use neovim::types::typval::{UVarNumber, VarNumber};
 
 use crate::support::cstr;
 
@@ -29,12 +29,12 @@ const QUOTE: c_int = Str2NrBases::QUOTE.bits();
 #[derive(Clone, Copy)]
 struct Exp {
     len: Option<c_int>,
-    num: Option<varnumber_T>,
-    unum: Option<uvarnumber_T>,
+    num: Option<VarNumber>,
+    unum: Option<UVarNumber>,
     pre: Option<c_int>,
 }
 
-fn all(len: c_int, num: varnumber_T, unum: uvarnumber_T, pre: c_int) -> Exp {
+fn all(len: c_int, num: VarNumber, unum: UVarNumber, pre: c_int) -> Exp {
     Exp {
         len: Some(len),
         num: Some(num),
@@ -97,13 +97,13 @@ fn run(s: &str, what: c_int, exp: Exp, maxlen: c_int, strict: bool, masks: std::
     for mask in masks.take(1 << present.len()) {
         // Sentinels prove vim_str2nr wrote the slot.
         let mut len: c_int = -42;
-        let mut num: varnumber_T = -42;
-        let mut unum: uvarnumber_T = 4242;
+        let mut num: VarNumber = -42;
+        let mut unum: UVarNumber = 4242;
         let mut pre: c_int = -42;
 
         let mut p_len: *mut c_int = ptr::null_mut();
-        let mut p_num: *mut varnumber_T = ptr::null_mut();
-        let mut p_unum: *mut uvarnumber_T = ptr::null_mut();
+        let mut p_num: *mut VarNumber = ptr::null_mut();
+        let mut p_unum: *mut UVarNumber = ptr::null_mut();
         let mut p_pre: *mut c_int = ptr::null_mut();
 
         let passed: Vec<usize> = present

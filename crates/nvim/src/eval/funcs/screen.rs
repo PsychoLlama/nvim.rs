@@ -24,7 +24,7 @@ use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{
-    ColNr, EvalFuncData, NUL, VAR_STRING, kListLenMayKnow, schar_T, typval_T, varnumber_T,
+    ColNr, EvalFuncData, NUL, VAR_STRING, VarNumber, kListLenMayKnow, schar_T, typval_T,
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
@@ -109,7 +109,7 @@ pub unsafe fn f_screenattr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         cell.grid.attr_at(offset) as c_int
     } else {
         -1
-    } as varnumber_T;
+    } as VarNumber;
 }
 
 /// `screenchar({row}, {col})` — the first codepoint in the cell, or -1 off
@@ -122,7 +122,7 @@ pub unsafe fn f_screenchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         unsafe { schar_get_first_codepoint(cell.schar()) }
     } else {
         -1
-    } as varnumber_T;
+    } as VarNumber;
 }
 
 /// `screenchars({row}, {col})` — every codepoint in the cell, including the
@@ -140,7 +140,7 @@ pub unsafe fn f_screenchars(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     // reports one codepoint.
     let mut i = 0usize;
     loop {
-        unsafe { tv_list_append_number(list, utf_ptr2char(buf.as_ptr().add(i)) as varnumber_T) };
+        unsafe { tv_list_append_number(list, utf_ptr2char(buf.as_ptr().add(i)) as VarNumber) };
         i += unsafe { utf_ptr2len(buf.as_ptr().add(i)) } as usize;
         if buf[i] as c_int == NUL {
             break;
@@ -151,13 +151,13 @@ pub unsafe fn f_screenchars(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 /// `screencol()` — the cursor's screen column, one-based.
 pub unsafe fn f_screencol(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = (ui_current_col() + 1) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = (ui_current_col() + 1) as VarNumber };
 }
 
 /// `screenrow()` — the cursor's screen row, one-based.
 pub unsafe fn f_screenrow(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = (ui_current_row() + 1) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = (ui_current_row() + 1) as VarNumber };
 }
 
 /// `screenstring({row}, {col})` — the cell's whole text, or "" off the grid.
@@ -177,8 +177,7 @@ pub unsafe fn f_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live.
-    rettv.vval.v_number =
-        unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
+    rettv.vval.v_number = unsafe { syn_name2id(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
 }
 
 /// `hlexists({name})` — whether the group is defined.
@@ -187,7 +186,7 @@ pub unsafe fn f_hlexists(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY throughout: the frame is live.
     rettv.vval.v_number =
-        unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
+        unsafe { highlight_exists(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
 }
 
 /// What a `synIDattr()` `{what}` argument selects.
@@ -308,7 +307,7 @@ pub unsafe fn f_syn_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     {
         id = unsafe { syn_get_id(curwin.get(), lnum, col, trans, ptr::null_mut(), 0) };
     }
-    rettv.vval.v_number = id as varnumber_T;
+    rettv.vval.v_number = id as VarNumber;
 }
 
 /// `synIDtrans({id})` — the id the group's `:hi link` chain ends at.
@@ -320,7 +319,7 @@ pub unsafe fn f_syn_id_trans(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         unsafe { syn_get_final_id(id) }
     } else {
         0
-    } as varnumber_T;
+    } as VarNumber;
 }
 
 /// `synconcealed({lnum}, {col})` — `[concealed, replacement, group]`.
@@ -369,10 +368,10 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     }
 
     let list = list_alloc_ret(rettv, 3);
-    let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as varnumber_T;
+    let concealed = syntax_flags.has(SynFlags::CONCEAL) as c_int as VarNumber;
     unsafe { tv_list_append_number(list, concealed) };
     unsafe { tv_list_append_string(list, text.as_ptr(), -1) };
-    unsafe { tv_list_append_number(list, matchid as varnumber_T) };
+    unsafe { tv_list_append_number(list, matchid as VarNumber) };
 }
 
 /// `synstack({lnum}, {col})` — every syntax id in effect at a position,
@@ -401,7 +400,7 @@ pub unsafe fn f_synstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             if id < 0 {
                 break;
             }
-            unsafe { tv_list_append_number(list, id as varnumber_T) };
+            unsafe { tv_list_append_number(list, id as VarNumber) };
         }
     }
 }

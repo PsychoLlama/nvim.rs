@@ -25,7 +25,7 @@ pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: LineNr) {
     // The last change id we parsed at. A change may have invalidated the
     // current state, so this is checked as if it were part of the identity
     // of the buffer.
-    static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
+    static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
 
     current_sub_char.set(NUL);
     if syn_block().raw() != unsafe { (*wp).w_s }

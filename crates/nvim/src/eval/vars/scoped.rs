@@ -250,7 +250,7 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
         OptVal::Boolean(word) => {
             if numbool {
                 rettv.v_type = VAR_NUMBER;
-                rettv.vval.v_number = word as varnumber_T;
+                rettv.vval.v_number = word as VarNumber;
             } else if let Some(boolean) = value.as_boolean() {
                 // An unset global-local boolean has no Vimscript
                 // spelling and stays the `v:null` this started as.
@@ -260,7 +260,7 @@ pub unsafe fn optval_as_tv(value: OptVal, numbool: bool) -> typval_T {
         }
         OptVal::Number(number) => {
             rettv.v_type = VAR_NUMBER;
-            rettv.vval.v_number = number as varnumber_T;
+            rettv.vval.v_number = number as VarNumber;
         }
         OptVal::String(string) => {
             rettv.v_type = VAR_STRING;

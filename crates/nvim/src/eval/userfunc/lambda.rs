@@ -39,7 +39,7 @@ pub(crate) unsafe fn register_closure(fp: *mut ufunc_T) {
     unsafe { (*ufuncs).ga_len += 1 };
 }
 
-/// `"<lambda>"` plus `NUMBUFLEN`, the widest a `varnumber_T` prints.
+/// `"<lambda>"` plus `NUMBUFLEN`, the widest a `VarNumber` prints.
 const LAMBDA_NAME_LEN: usize = 8 + 65;
 
 /// The name of the next lambda, in `into` — the caller's, so that two

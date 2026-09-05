@@ -87,9 +87,9 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
     Callback, CharsizeArg, CmdModFlags, ColNr, ExtmarkOp, LineNr, MotionType, OpType, OptInt,
-    StrCharInfo, VAR_STRING, VAR_UNKNOWN, VarLock, bcount_t, block_def, cmdarg_T, dict_T, int32_t,
-    int64_t, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union, uvarnumber_T,
-    varnumber_T, yankreg_T,
+    StrCharInfo, UVarNumber, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, bcount_t, block_def,
+    cmdarg_T, dict_T, int32_t, int64_t, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T,
+    typval_vval_union, yankreg_T,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};

@@ -21,8 +21,8 @@ use crate::eval::string2float;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::memory::xmalloc;
 use crate::types::{
-    NUL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarLock, typval_T, typval_vval_union, uvarnumber_T,
-    varnumber_T,
+    NUL, UVarNumber, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, typval_T,
+    typval_vval_union,
 };
 use ::libc::abort;
 
@@ -47,10 +47,10 @@ const E685_INTEGER: &CStr = c"E685: internal error: while converting number \"%.
 
 /// The UTF-16 surrogate range, which JSON's `\u` escapes use to spell a code
 /// point above U+FFFF as two escapes.
-const SURROGATE_HI_START: uvarnumber_T = 0xd800;
-const SURROGATE_HI_END: uvarnumber_T = 0xdbff;
-const SURROGATE_LO_START: uvarnumber_T = 0xdc00;
-const SURROGATE_LO_END: uvarnumber_T = 0xdfff;
+const SURROGATE_HI_START: UVarNumber = 0xd800;
+const SURROGATE_HI_END: UVarNumber = 0xdbff;
+const SURROGATE_LO_START: UVarNumber = 0xdc00;
+const SURROGATE_LO_END: UVarNumber = 0xdfff;
 const SURROGATE_FIRST_CHAR: c_int = 0x10000;
 
 /// Scan a double-quoted JSON string and store it.
@@ -185,7 +185,7 @@ pub(crate) unsafe fn parse_json_string(dec: &mut Decoder, at: &mut usize) -> boo
                 buf[t + 4] as c_char,
             ];
             t += 4;
-            let mut ch: uvarnumber_T = 0;
+            let mut ch: UVarNumber = 0;
             let (prep, len) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
             let (nptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());
             let what = Str2NrBases::HEX | Str2NrBases::FORCE;
@@ -326,7 +326,7 @@ pub(crate) unsafe fn parse_json_number(dec: &mut Decoder, at: &mut usize) -> boo
         }
         tv.v_type = VAR_FLOAT;
     } else {
-        let mut nr: varnumber_T = 0;
+        let mut nr: VarNumber = 0;
         let mut got: c_int = 0;
         let prep = ::core::ptr::null_mut();
         let (unptr, overflow) = (::core::ptr::null_mut(), ::core::ptr::null_mut());

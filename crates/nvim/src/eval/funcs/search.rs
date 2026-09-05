@@ -31,8 +31,8 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, VAR_UNKNOWN, int64_t,
-    pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
+    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, VAR_UNKNOWN, VarNumber,
+    int64_t, pos_T, searchit_arg_T, size_t, typval_T,
 };
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
@@ -312,7 +312,7 @@ pub unsafe fn f_search(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let (args, rettv) = frame!(argvars, rettv);
     let mut flags = 0;
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as varnumber_T;
+    rettv.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as VarNumber;
 }
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
@@ -333,10 +333,10 @@ pub unsafe fn f_searchpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     } else {
         (0, 0)
     };
-    unsafe { tv_list_append_number(list, lnum as varnumber_T) };
-    unsafe { tv_list_append_number(list, col as varnumber_T) };
+    unsafe { tv_list_append_number(list, lnum as VarNumber) };
+    unsafe { tv_list_append_number(list, col as VarNumber) };
     if flags & SP_SUBPAT != 0 {
-        unsafe { tv_list_append_number(list, n as varnumber_T) };
+        unsafe { tv_list_append_number(list, n as VarNumber) };
     }
 }
 
@@ -366,7 +366,7 @@ pub unsafe fn f_searchdecl(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         let len = unsafe { cstr::bytes_at(name) }.len();
         let keep = SEARCH_KEEP as c_int;
         let found = unsafe { find_decl(word, len, locally, thisblock, keep) };
-        rettv.vval.v_number = (found as c_int == FAIL) as varnumber_T;
+        rettv.vval.v_number = (found as c_int == FAIL) as VarNumber;
     }
 }
 
@@ -459,7 +459,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
 pub unsafe fn f_searchpair(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { searchpair_cmn(args, None) } as varnumber_T;
+    rettv.vval.v_number = unsafe { searchpair_cmn(args, None) } as VarNumber;
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
@@ -477,8 +477,8 @@ pub unsafe fn f_searchpairpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
         lnum = match_pos.lnum as c_int;
         col = match_pos.col as c_int;
     }
-    unsafe { tv_list_append_number(list, lnum as varnumber_T) };
-    unsafe { tv_list_append_number(list, col as varnumber_T) };
+    unsafe { tv_list_append_number(list, lnum as VarNumber) };
+    unsafe { tv_list_append_number(list, col as VarNumber) };
 }
 
 /// The alternation `do_searchpair` hands to `searchit`, NUL-terminated.

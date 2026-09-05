@@ -38,8 +38,8 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, ColNr, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv,
-    kListLenMayKnow, typval_T, varnumber_T,
+    Arena, Array, ColNr, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, VarNumber, Vv,
+    kListLenMayKnow, typval_T,
 };
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
@@ -288,7 +288,7 @@ pub unsafe fn f_has(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
             unsafe { set_vim_var_nr(Vv::ShellError, saved) };
             answer
         }
-    } as varnumber_T;
+    } as VarNumber;
 }
 
 /// `api_info()` — the whole API metadata dict.
@@ -302,13 +302,13 @@ pub unsafe fn f_api_info(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
 /// buffer since it was last loaded.
 pub unsafe fn f_did_filetype(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_did_filetype as varnumber_T };
+    unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_did_filetype as VarNumber };
 }
 
 /// `eventhandler()` — whether we are inside a `vgetc()` from an event.
 pub unsafe fn f_eventhandler(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = vgetc_busy.get() as varnumber_T };
+    unsafe { (*rettv).vval.v_number = vgetc_busy.get() as VarNumber };
 }
 
 /// `foreground()` — a no-op; nvim has no window to raise.
@@ -324,7 +324,7 @@ pub unsafe fn f_getfontname(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// `getpid()`
 pub unsafe fn f_getpid(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY: `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = os_get_pid() as varnumber_T };
+    unsafe { (*rettv).vval.v_number = os_get_pid() as VarNumber };
 }
 
 /// `hostname()`
@@ -444,7 +444,7 @@ pub unsafe fn f_nextnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         }
         lnum += 1;
     }
-    rettv.vval.v_number = lnum as varnumber_T;
+    rettv.vval.v_number = lnum as VarNumber;
 }
 
 /// `prevnonblank({lnum})` — the last line at or before `{lnum}` that is not
@@ -460,7 +460,7 @@ pub unsafe fn f_prevnonblank(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
             lnum -= 1;
         }
     }
-    rettv.vval.v_number = lnum as varnumber_T;
+    rettv.vval.v_number = lnum as VarNumber;
 }
 
 /// `pum_getpos()` — where the popup menu is, or an empty dict.
@@ -492,10 +492,10 @@ pub unsafe fn f_shiftwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
         if col < 0 {
             return;
         }
-        rettv.vval.v_number = unsafe { get_sw_value_col(curbuf.get(), col, false) } as varnumber_T;
+        rettv.vval.v_number = unsafe { get_sw_value_col(curbuf.get(), col, false) } as VarNumber;
         return;
     }
-    rettv.vval.v_number = unsafe { get_sw_value(curbuf.get()) } as varnumber_T;
+    rettv.vval.v_number = unsafe { get_sw_value(curbuf.get()) } as VarNumber;
 }
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in
@@ -519,7 +519,7 @@ pub unsafe fn f_tabpagebuflist(argvars: *mut typval_T, rettv: *mut typval_T, _fp
     // `firstwin` rather than in the tab page record, which is only
     // updated on the way out.
     for wp in windows_in_tab(tab) {
-        unsafe { tv_list_append_number(list, (*wp.w_buffer).handle as varnumber_T) };
+        unsafe { tv_list_append_number(list, (*wp.w_buffer).handle as VarNumber) };
     }
 }
 

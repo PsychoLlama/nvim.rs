@@ -32,8 +32,8 @@ use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfre
 use crate::semsg;
 use crate::types::{
     Callback, ColNr, EvalFuncData, LineNr, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, listitem_T,
-    regmatch_T, regprog_T, typval_T, typval_vval_union, varnumber_T,
+    VAR_UNKNOWN, VarLock, VarNumber, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T,
+    listitem_T, regmatch_T, regprog_T, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -279,11 +279,11 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                 let text = unsafe { xmemdupz(regmatch.startp[0].cast(), rd) };
                 unsafe { (*li1).li_tv.vval.v_string = text as *mut c_char };
                 let start = unsafe { regmatch.startp[0].offset_from(expr) };
-                unsafe { (*li3).li_tv.vval.v_number = start as varnumber_T };
+                unsafe { (*li3).li_tv.vval.v_number = start as VarNumber };
                 let end = unsafe { regmatch.endp[0].offset_from(expr) };
-                unsafe { (*li4).li_tv.vval.v_number = end as varnumber_T };
+                unsafe { (*li4).li_tv.vval.v_number = end as VarNumber };
                 if !l.is_null() {
-                    unsafe { (*li2).li_tv.vval.v_number = idx as varnumber_T };
+                    unsafe { (*li2).li_tv.vval.v_number = idx as VarNumber };
                 }
             }
             kSomeMatchList => {
@@ -311,7 +311,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
             }
             _ => {
                 if !l.is_null() {
-                    rettv.vval.v_number = idx as varnumber_T;
+                    rettv.vval.v_number = idx as VarNumber;
                 } else {
                     let edge = if kind == kSomeMatch {
                         regmatch.startp[0]
@@ -322,7 +322,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                     // `{count}` moved `str` forward.
                     rettv.vval.v_number = (unsafe { edge.offset_from(str) }
                         + unsafe { str.offset_from(expr) })
-                        as varnumber_T;
+                        as VarNumber;
                 }
             }
         }
@@ -362,12 +362,12 @@ unsafe fn get_matches_in_str(
         // A buffer's matches are keyed by line number, a List's by the
         // index of the item they came from.
         if matchbuf {
-            let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, idx as varnumber_T) };
+            let _ = unsafe { tv_dict_add_nr(d, c"lnum".as_ptr(), 4, idx as VarNumber) };
         } else {
-            let _ = unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as varnumber_T) };
+            let _ = unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as VarNumber) };
         }
         let (start, end) = unsafe { ((*rmp).startp[0], (*rmp).endp[0]) };
-        let byteidx = unsafe { start.offset_from(str) } as ColNr as varnumber_T;
+        let byteidx = unsafe { start.offset_from(str) } as ColNr as VarNumber;
         let _ = unsafe { tv_dict_add_nr(d, c"byteidx".as_ptr(), 7, byteidx) };
         let matchlen = unsafe { end.offset_from(start) } as c_int;
         let _ = unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
@@ -703,7 +703,7 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
                     // in the match, i.e. all but the word separators.
                     let placed = matched_char_count(pattern, request.matchseq);
                     for at in matches.iter().take(placed) {
-                        unsafe { tv_list_append_number(positions, *at as varnumber_T) };
+                        unsafe { tv_list_append_number(positions, *at as VarNumber) };
                     }
                     positions
                 });
@@ -751,7 +751,7 @@ unsafe fn fuzzy_match_in_list(list: *mut list_T, request: &Request, fmatchlist: 
         }
         let scores = unsafe { nested_list(fmatchlist, -1) };
         for item in &found {
-            unsafe { tv_list_append_number(scores, item.score as varnumber_T) };
+            unsafe { tv_list_append_number(scores, item.score as VarNumber) };
         }
     }
 }

@@ -32,8 +32,8 @@ use crate::types::TAB;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, ChannelStreamType, Failed, GRegFlags, LineNr, LuaRetMode, MarkGet, MotionType, Object,
-    blob_T, dict_T, exprtype_T, funcexe_T, list_T, listwatch_T, lval_T, partial_T, size_t, timer_T,
+    Array, ChannelStreamType, ExprType, Failed, GRegFlags, LineNr, LuaRetMode, MarkGet, MotionType,
+    Object, blob_T, dict_T, funcexe_T, list_T, listwatch_T, lval_T, partial_T, size_t, timer_T,
     typval_T, uint64_t,
 };
 use crate::winlayer::Live;
@@ -102,26 +102,26 @@ pub const kChannelStreamProc: ChannelStreamType = 0;
 pub const GLV_READ_ONLY: c_uint = 16;
 pub const GLV_NO_AUTOLOAD: c_uint = 4;
 pub const GLV_QUIET: c_uint = 2;
-pub const EXPR_ISNOT: exprtype_T = 10;
-pub const EXPR_IS: exprtype_T = 9;
-pub const EXPR_NOMATCH: exprtype_T = 8;
-pub const EXPR_MATCH: exprtype_T = 7;
-pub const EXPR_SEQUAL: exprtype_T = 6;
-pub const EXPR_SMALLER: exprtype_T = 5;
-pub const EXPR_GEQUAL: exprtype_T = 4;
-pub const EXPR_GREATER: exprtype_T = 3;
-pub const EXPR_NEQUAL: exprtype_T = 2;
-pub const EXPR_EQUAL: exprtype_T = 1;
-pub const EXPR_UNKNOWN: exprtype_T = 0;
+pub const EXPR_ISNOT: ExprType = 10;
+pub const EXPR_IS: ExprType = 9;
+pub const EXPR_NOMATCH: ExprType = 8;
+pub const EXPR_MATCH: ExprType = 7;
+pub const EXPR_SEQUAL: ExprType = 6;
+pub const EXPR_SMALLER: ExprType = 5;
+pub const EXPR_GEQUAL: ExprType = 4;
+pub const EXPR_GREATER: ExprType = 3;
+pub const EXPR_NEQUAL: ExprType = 2;
+pub const EXPR_EQUAL: ExprType = 1;
+pub const EXPR_UNKNOWN: ExprType = 0;
 pub const EVAL_EVALUATE: c_uint = 1;
 pub const kGRegExprSrc: GRegFlags = 2;
 pub const FSK_IN_STRING: c_uint = 4;
 pub const FSK_KEYCODE: c_uint = 1;
 pub const FSK_SIMPLIFY: c_uint = 8;
-pub const GLV_STOP: glv_status_T = 2;
-pub type glv_status_T = c_uint;
-pub const GLV_OK: glv_status_T = 1;
-pub const GLV_FAIL: glv_status_T = 0;
+pub const GLV_STOP: GlvStatus = 2;
+pub type GlvStatus = c_uint;
+pub const GLV_OK: GlvStatus = 1;
+pub const GLV_FAIL: GlvStatus = 0;
 #[derive(Clone)]
 pub struct forinfo_T {
     pub fi_semicolon: c_int,

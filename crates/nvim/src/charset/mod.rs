@@ -38,8 +38,8 @@ use crate::options::kOptDyFlagUhex;
 use crate::os::cshim::strtoimax;
 use crate::path::path_has_wildcard;
 use crate::types::{
-    Failed, NUL, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t, uint64_t, uvarnumber_T,
-    varnumber_T,
+    Failed, NUL, UVarNumber, VarNumber, buf_T, int32_t, intmax_t, intptr_t, size_t, uint8_t,
+    uint64_t,
 };
 use ::libc::{__errno_location, abort};
 
@@ -852,8 +852,8 @@ pub unsafe fn vim_str2nr(
     prep: *mut c_int,
     len: *mut c_int,
     what: Str2NrBases,
-    nptr: *mut varnumber_T,
-    unptr: *mut uvarnumber_T,
+    nptr: *mut VarNumber,
+    unptr: *mut UVarNumber,
     maxlen: c_int,
     strict: bool,
     overflow: *mut bool,

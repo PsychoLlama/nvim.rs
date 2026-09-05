@@ -25,7 +25,7 @@ use crate::message::{
     msg_puts_title,
 };
 use crate::message_fmt::msg_cstr;
-use crate::types::{dict_T, list_T, varnumber_T};
+use crate::types::{VarNumber, dict_T, list_T};
 
 /// Enable or disable the (sub)menus `name` reaches, recursively.
 ///
@@ -200,8 +200,8 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
 
     let dict = dict_alloc();
     dict_add_str(dict, c"name", menu.dname());
-    dict_add_nr(dict, c"priority", varnumber_T::from(menu.priority));
-    dict_add_nr(dict, c"hidden", varnumber_T::from(is_hidden(menu.dname())));
+    dict_add_nr(dict, c"priority", VarNumber::from(menu.priority));
+    dict_add_nr(dict, c"hidden", VarNumber::from(is_hidden(menu.dname())));
     if menu.mnemonic != 0 {
         dict_add_str(dict, c"shortcut", &char_as_text(menu.mnemonic));
     }
@@ -224,11 +224,11 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
                 }
                 let mapping = dict_alloc();
                 dict_add_allocated_str(mapping, c"rhs", special_text(menu.strings[bit]));
-                dict_add_nr(mapping, c"silent", varnumber_T::from(menu.silent[bit]));
+                dict_add_nr(mapping, c"silent", VarNumber::from(menu.silent[bit]));
                 dict_add_nr(
                     mapping,
                     c"enabled",
-                    varnumber_T::from(menu.enabled & (1 << bit) != 0),
+                    VarNumber::from(menu.enabled & (1 << bit) != 0),
                 );
                 // `noremap` holds 0, REMAP_NONE (-1) or REMAP_SCRIPT (-2),
                 // and these two report it as *bit tests* on values that
@@ -239,12 +239,12 @@ fn menu_get_recursive(menu: Menu, modes: c_int) -> *mut dict_T {
                 dict_add_nr(
                     mapping,
                     c"noremap",
-                    varnumber_T::from(menu.noremap[bit] & REMAP_NONE != 0),
+                    VarNumber::from(menu.noremap[bit] & REMAP_NONE != 0),
                 );
                 dict_add_nr(
                     mapping,
                     c"sid",
-                    varnumber_T::from(menu.noremap[bit] & REMAP_SCRIPT != 0),
+                    VarNumber::from(menu.noremap[bit] & REMAP_SCRIPT != 0),
                 );
                 // One byte of the mode letters, so `tl` files under `t`.
                 dict_add_dict(commands, &mode.to_bytes()[..1], mapping);

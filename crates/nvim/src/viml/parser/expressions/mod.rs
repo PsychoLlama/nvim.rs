@@ -48,8 +48,8 @@ use crate::types::{
     ExprCaseCompareStrategy, ExprComparisonType, ExprFigureGuesses, ExprNodeAssignment,
     ExprNodeComparison, ExprNodeData, ExprNodeEnvironment, ExprNodeFigure, ExprNodeFloat,
     ExprNodeInteger, ExprNodeOption, ExprNodeRegister, ExprNodeStr, ExprNodeTernary,
-    ExprNodeVariable, ExprOptScope, ExprParserFlags, ExprVarScope, ParserLine, ParserPosition,
-    ParserState, float_T, size_t, uint8_t, uvarnumber_T,
+    ExprNodeVariable, ExprOptScope, ExprParserFlags, ExprVarScope, Float, ParserLine,
+    ParserPosition, ParserState, UVarNumber, size_t, uint8_t,
 };
 use crate::viml::parser::parser::{
     highlight_vec, viml_parser_advance, viml_parser_get_remaining_line, viml_parser_highlight,
@@ -164,8 +164,8 @@ pub struct LexExprTokenNumber {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union LexExprTokenNumberValue {
-    pub floating: float_T,
-    pub integer: uvarnumber_T,
+    pub floating: Float,
+    pub integer: UVarNumber,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]

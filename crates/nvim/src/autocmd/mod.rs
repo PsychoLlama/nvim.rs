@@ -60,10 +60,10 @@ use crate::state::{MODE_INSERT, MODE_NORMAL_BUSY, get_mode, get_real_state};
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::builders::{ArrayBuf, DictBuf};
 use crate::types::{
-    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, Error, Event,
-    Integer, LuaRetMode, Object, OptVal, ProfTime, String_0, Timestamp, Vv, aco_save_T, aucmdwin_T,
-    buf_T, etype_T, exarg_T, expand_T, funccal_entry_T, int64_t, save_redo_T, save_v_event_T,
-    sctx_T, size_t, uint64_t, varnumber_T, win_T,
+    AutoCmd, AutoCmdVec, AutoPat, AutoPatCmd, AutoPatCmd_S, Buffer, Callback, EStackType, Error,
+    Event, Integer, LuaRetMode, Object, OptVal, ProfTime, String_0, Timestamp, VarNumber, Vv,
+    aco_save_T, aucmdwin_T, buf_T, exarg_T, expand_T, funccal_entry_T, int64_t, save_redo_T,
+    save_v_event_T, sctx_T, size_t, uint64_t, win_T,
 };
 use crate::ui::ui_call_win_hide;
 use crate::ui_compositor::ui_comp_remove_grid;
@@ -111,7 +111,7 @@ pub const AUGROUP_ALL: ::core::ffi::c_int = -3;
 pub const AUGROUP_ERROR: ::core::ffi::c_int = -2;
 pub const AUGROUP_DEFAULT: ::core::ffi::c_int = -1;
 pub const BUFLOCAL_PAT_LEN: ::core::ffi::c_uint = 25;
-pub const ETYPE_AUCMD: etype_T = 3;
+pub const ETYPE_AUCMD: EStackType = 3;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

@@ -294,7 +294,7 @@ pub unsafe fn f_charclass(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     {
         return;
     }
-    unsafe { (*rettv).vval.v_number = mb_get_class((*argvars).vval.v_string) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = mb_get_class((*argvars).vval.v_string) as VarNumber };
 }
 
 #[cfg(test)]

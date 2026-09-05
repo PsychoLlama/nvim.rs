@@ -29,8 +29,8 @@ use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
     ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Dict, Error, KeyValuePair, NUL, Object,
-    String_0, Vv, exarg_T, key_value_pair, listitem_T, ptrdiff_t, size_t, uint16_t, uint64_t,
-    varnumber_T,
+    String_0, VarNumber, Vv, exarg_T, key_value_pair, listitem_T, ptrdiff_t, size_t, uint16_t,
+    uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::winlayer::Ea;
@@ -159,7 +159,7 @@ pub(crate) unsafe fn ex_restart(eap: *mut exarg_T) {
     // The stderr fd is inherited, so forwarding still works after this
     // server exits.
     on_err.fwd_err = true;
-    let mut exit_status: varnumber_T = 0;
+    let mut exit_status: VarNumber = 0;
     let channel = unsafe {
         channel_job_start(
             argv,

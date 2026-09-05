@@ -45,7 +45,7 @@ pub unsafe fn get_expr_indent() -> c_int {
     let (save_pos, save_curswant, save_set_curswant) =
         unsafe { ((*win).w_cursor, (*win).w_curswant, (*win).w_set_curswant) };
     // SAFETY: as above.
-    unsafe { set_vim_var_nr(Vv::Lnum, save_pos.lnum as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Lnum, save_pos.lnum as VarNumber) };
 
     let mut indent = {
         let _sandboxed = use_sandbox.then(Lock::sandbox);
@@ -454,7 +454,7 @@ pub unsafe fn f_indent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let lnum = unsafe { tv_get_lnum(argvars) };
     unsafe {
         (*rettv).vval.v_number = if (1..=(*curbuf.get()).b_ml.ml_line_count).contains(&lnum) {
-            get_indent_lnum(lnum) as varnumber_T
+            get_indent_lnum(lnum) as VarNumber
         } else {
             -1
         };
@@ -473,7 +473,7 @@ pub unsafe fn f_lispindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     unsafe {
         (*rettv).vval.v_number = if (1..=(*curbuf.get()).b_ml.ml_line_count).contains(&lnum) {
             (*win).w_cursor.lnum = lnum;
-            let amount = get_lisp_indent() as varnumber_T;
+            let amount = get_lisp_indent() as VarNumber;
             (*win).w_cursor = pos;
             amount
         } else {

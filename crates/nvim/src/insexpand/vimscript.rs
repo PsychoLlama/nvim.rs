@@ -339,7 +339,7 @@ pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: E
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
 pub unsafe fn f_complete_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     unsafe {
-        (*rettv).vval.v_number = ins_compl_add_tv(argvars, kDirectionNotSet, false) as varnumber_T
+        (*rettv).vval.v_number = ins_compl_add_tv(argvars, kDirectionNotSet, false) as VarNumber
     };
 }
 
@@ -347,7 +347,7 @@ pub unsafe fn f_complete_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 pub unsafe fn f_complete_check(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let _redraw = Allow::redraw();
     unsafe { ins_compl_check_keys(0, true) };
-    unsafe { (*rettv).vval.v_number = ins_compl_interrupted() as varnumber_T };
+    unsafe { (*rettv).vval.v_number = ins_compl_interrupted() as VarNumber };
 }
 
 /// Fill `di` with one match, as `complete_info()` reports it.
@@ -386,7 +386,7 @@ pub(crate) unsafe fn fill_complete_info_dict(
 /// Fill `retdict` with whatever of `complete_info()` `what_list` asked for.
 pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dict_T) {
     let mut numbuf = NumBuf::new();
-    let add_nr = |key: &str, val: varnumber_T| unsafe {
+    let add_nr = |key: &str, val: VarNumber| unsafe {
         tv_dict_add_nr(retdict, key.as_ptr().cast(), key.len(), val)
     };
 
@@ -423,7 +423,7 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
     }
 
     if ret.is_ok() && what_flag & CI_WHAT_PUM_VISIBLE != 0 {
-        ret = add_nr("pum_visible", pum_visible() as varnumber_T);
+        ret = add_nr("pum_visible", pum_visible() as VarNumber);
     }
 
     if ret.is_ok() && what_flag & CI_WHAT_PREINSERTED_TEXT != 0 {
@@ -491,10 +491,10 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut list_T, retdict: *mut dic
         }
     }
     if ret.is_ok() && what_flag & CI_WHAT_SELECTED != 0 {
-        ret = add_nr("selected", selected_idx as varnumber_T);
+        ret = add_nr("selected", selected_idx as VarNumber);
         if let Some(wp) = win_float_find_preview() {
-            let _ = add_nr("preview_winid", wp.handle as varnumber_T);
-            let _ = add_nr("preview_bufnr", wp.buffer().handle as varnumber_T);
+            let _ = add_nr("preview_winid", wp.handle as VarNumber);
+            let _ = add_nr("preview_bufnr", wp.buffer().handle as VarNumber);
         }
     }
     if ret.is_ok() && selected_idx != -1 && has_completed {

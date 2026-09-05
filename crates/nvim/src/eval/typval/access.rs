@@ -122,7 +122,7 @@ pub(crate) fn bv_ga(b: *mut blob_T) -> *mut garray_T {
 ///
 /// Reading a union field is `unsafe` in Rust because a member the union does
 /// not currently hold may have an invalid bit pattern for its type.
-/// `typval_vval_union` has none: its nine members are a `varnumber_T`, two
+/// `typval_vval_union` has none: its nine members are a `VarNumber`, two
 /// `c_uint` tags, an `f64` and five raw pointers, and *every* bit pattern is
 /// a valid value of each. So the read itself is defined however the `v_type`
 /// tag reads. What it is not is *meaningful* — a `v_list` read out of a
@@ -172,10 +172,10 @@ macro_rules! union_readers {
 }
 
 union_readers! {
-    VAR_NUMBER,  v_number,  varnumber_T,               as_number,    number_or_zero = 0;
+    VAR_NUMBER,  v_number,  VarNumber,               as_number,    number_or_zero = 0;
     VAR_BOOL,    v_bool,    BoolVarValue,              as_bool;
     VAR_SPECIAL, v_special, SpecialVarValue,           as_special;
-    VAR_FLOAT,   v_float,   float_T,                   as_float,     float_or_zero = 0.0;
+    VAR_FLOAT,   v_float,   Float,                   as_float,     float_or_zero = 0.0;
     VAR_STRING,  v_string,  *mut ::core::ffi::c_char,  as_string,    string_or_null = ::core::ptr::null_mut();
     VAR_FUNC,    v_string,  *mut ::core::ffi::c_char,  as_func_name, func_name_or_null = ::core::ptr::null_mut();
     VAR_LIST,    v_list,    *mut list_T,               as_list,      list_or_null = ::core::ptr::null_mut();
@@ -225,7 +225,7 @@ impl Li {
 
     /// `li_tv.vval.v_number`; see [`typval_T::as_number`].
     #[inline(always)]
-    pub(crate) fn number(self) -> varnumber_T {
+    pub(crate) fn number(self) -> VarNumber {
         self.tv().number_or_zero()
     }
 
@@ -259,7 +259,7 @@ pub(crate) fn tr(msg: &'static ::core::ffi::CStr) -> *const ::core::ffi::c_char 
 impl typval_T {
     /// A `VAR_NUMBER`.
     #[inline(always)]
-    pub(crate) const fn number(v_number: varnumber_T) -> Self {
+    pub(crate) const fn number(v_number: VarNumber) -> Self {
         Self {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
@@ -289,7 +289,7 @@ impl typval_T {
 
     /// A `VAR_FLOAT`.
     #[inline(always)]
-    pub(crate) const fn float(v_float: float_T) -> Self {
+    pub(crate) const fn float(v_float: Float) -> Self {
         Self {
             v_type: VAR_FLOAT,
             v_lock: VarLock::Unlocked,
@@ -748,7 +748,7 @@ mod tests {
     /// A typval carrying `bits` in its union under `tag`, without going near
     /// a constructor: the point is to prove the *tag* gates the read, so the
     /// payload has to be one no honest constructor would pair with it.
-    fn tagged(v_type: VarType, bits: varnumber_T) -> typval_T {
+    fn tagged(v_type: VarType, bits: VarNumber) -> typval_T {
         typval_T {
             v_type,
             v_lock: VarLock::Unlocked,
@@ -791,7 +791,7 @@ mod tests {
         assert_eq!(tv.as_list(), Some(l));
         assert_eq!(tv.list_or_null(), l);
         // The same bits under any other tag are not a list.
-        assert_eq!(tagged(VAR_DICT, l as varnumber_T).as_list(), None);
+        assert_eq!(tagged(VAR_DICT, l as VarNumber).as_list(), None);
     }
 
     #[test]

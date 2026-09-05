@@ -615,8 +615,8 @@
 {"path":"neovim::types::uint32_t","kind":"type","file":"crates/nvim/src/types/libc.rs","tests":["crates/nvim/tests/unit/map.rs"]}
 {"path":"neovim::types::vimconv_T","kind":"struct","file":"crates/nvim/src/types/mbyte.rs","tests":["crates/nvim/tests/unit/typval_dict.rs","crates/nvim/tests/unit/typval_list.rs"]}
 {"path":"neovim::types::win_T","kind":"type","file":"crates/nvim/src/types/types.rs","tests":["crates/nvim/tests/unit/typval_value.rs","crates/nvim/tests/unit/window.rs"]}
-{"path":"neovim::types::typval::uvarnumber_T","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/strings.rs"]}
-{"path":"neovim::types::typval::varnumber_T","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs"]}
+{"path":"neovim::types::typval::UVarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs","crates/nvim/tests/unit/strings.rs"]}
+{"path":"neovim::types::typval::VarNumber","kind":"type","file":"crates/nvim/src/types/typval.rs","tests":["crates/nvim/tests/unit/charset.rs"]}
 {"path":"neovim::undo::UNDO_HASH_SIZE","kind":"const","file":"crates/nvim/src/undo/mod.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::undo::u_compute_hash","kind":"fn","file":"crates/nvim/src/undo/file.rs","tests":["crates/nvim/tests/unit/undo.rs"]}
 {"path":"neovim::undo::u_get_undo_file_name","kind":"fn","file":"crates/nvim/src/undo/file.rs","tests":["crates/nvim/tests/unit/undo.rs"]}

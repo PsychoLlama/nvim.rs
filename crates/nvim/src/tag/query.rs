@@ -179,7 +179,7 @@ unsafe fn describe_match(list: *mut list_T, entry: *mut c_char) -> bool {
                 dict,
                 static_key.as_ptr(),
                 static_key.count_bytes(),
-                is_static as varnumber_T,
+                is_static as VarNumber,
             )
         }
         .is_ok();

@@ -65,8 +65,8 @@ use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
     Arena, Buffer, ColNr, Error, Event, ExtmarkOp, HlAttrs, LineNr, MarkAdjustMode, Object, OptVal,
     OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, dict_T,
-    exarg_T, handle_T, int16_t, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
+    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, VarNumber, aco_save_T, buf_T,
+    dict_T, exarg_T, handle_T, int16_t, pos_T, save_v_event_T, size_t, uint8_t, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -497,7 +497,7 @@ pub(crate) unsafe fn terminal_close(termpp: *mut *mut Terminal, status: c_int) {
     // SAFETY: paired with the `restore_v_event` below.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
     // SAFETY: `dict` is `v:event`, which takes a number under a fixed key.
-    let _ = unsafe { tv_dict_add_nr(dict, c"status".as_ptr(), 6, status as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"status".as_ptr(), 6, status as VarNumber) };
     // SAFETY: as above.
     unsafe { tv_dict_set_keys_readonly(dict) };
     let mut payload = DictBuf::<1>::new();

@@ -23,9 +23,9 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, MultiQueue, ProfTime, TimeWatcher, VAR_FLOAT, VAR_LIST, VAR_NUMBER,
-    VAR_STRING, VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, time_t, typval_T,
-    typval_vval_union, varnumber_T,
+    Callback, EvalFuncData, Float, MultiQueue, ProfTime, TimeWatcher, VAR_FLOAT, VAR_LIST,
+    VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, int32_t, kListLenUnknown, time_t,
+    typval_T, typval_vval_union,
 };
 use crate::ui::ui_flush;
 use ::libc::time;
@@ -132,7 +132,7 @@ pub unsafe fn f_wait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 pub unsafe fn f_localtime(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (_args, rettv) = frame!(_argvars, rettv);
     // SAFETY: `time(NULL)` writes nothing.
-    rettv.vval.v_number = unsafe { time(ptr::null_mut::<time_t>()) } as varnumber_T;
+    rettv.vval.v_number = unsafe { time(ptr::null_mut::<time_t>()) } as VarNumber;
 }
 
 /// A `ProfTime` split into the pair of 32-bit halves `reltime()` reports.
@@ -201,8 +201,8 @@ pub unsafe fn f_reltime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     };
     let (high, low) = proftime_halves(res);
     list_alloc_ret(rettv, 2);
-    unsafe { tv_list_append_number(rettv.list_or_null(), high as varnumber_T) };
-    unsafe { tv_list_append_number(rettv.list_or_null(), low as varnumber_T) };
+    unsafe { tv_list_append_number(rettv.list_or_null(), high as VarNumber) };
+    unsafe { tv_list_append_number(rettv.list_or_null(), low as VarNumber) };
 }
 
 /// `reltimestr({time})` — the elapsed time as seconds with six decimals.
@@ -224,7 +224,7 @@ pub unsafe fn f_reltimefloat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     rettv.vval.v_float = 0.0;
     // SAFETY: reads the argument through the frame.
     if let Some(tm) = unsafe { list2proftime(args.ptr(0)) } {
-        rettv.vval.v_float = (profile_signed(tm) as f64 / 1_000_000_000.0) as float_T;
+        rettv.vval.v_float = (profile_signed(tm) as f64 / 1_000_000_000.0) as Float;
     }
 }
 
@@ -307,7 +307,7 @@ pub unsafe fn f_timer_start(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         return;
     }
     rettv.vval.v_number =
-        unsafe { timer_start(arg_number(args.get(0)), repeat, &raw mut callback) } as varnumber_T;
+        unsafe { timer_start(arg_number(args.get(0)), repeat, &raw mut callback) } as VarNumber;
 }
 
 /// `timer_stop({id})`.

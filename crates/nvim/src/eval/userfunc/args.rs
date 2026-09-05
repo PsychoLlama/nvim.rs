@@ -301,7 +301,7 @@ pub(crate) unsafe fn add_nr_var(
     dp: *mut dict_T,
     v: *mut dictitem_T,
     name: *mut c_char,
-    nr: varnumber_T,
+    nr: VarNumber,
 ) {
     // SAFETY: the caller's promise -- `v` is a `dictitem_T` with room for
     // `name` in its inline key, and `dp` is the dictionary it joins.

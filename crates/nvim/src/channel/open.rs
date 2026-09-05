@@ -32,8 +32,8 @@ use crate::terminal::{terminal_close, terminal_set_state};
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Callback, CallbackReader, Channel, ChannelStdinMode, LuaRef, Proc, SocketWatcher, dict_T,
-    uint16_t, uint64_t, varnumber_T,
+    Callback, CallbackReader, Channel, ChannelStdinMode, LuaRef, Proc, SocketWatcher, VarNumber,
+    dict_T, uint16_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 use ::libc::{dup2, fcntl};
@@ -75,7 +75,7 @@ pub unsafe fn channel_job_start(
     pty_width: uint16_t,
     pty_height: uint16_t,
     env: *mut dict_T,
-    status_out: *mut varnumber_T,
+    status_out: *mut VarNumber,
 ) -> *mut Channel {
     /// A detached child has no controlling terminal to hand a pty to.
     const PTY_DETACHED: &CStr = c"terminal/pty job cannot be detached";
@@ -150,12 +150,12 @@ pub unsafe fn channel_job_start(
     }
     if status != 0 {
         unsafe { channel_destroy_early(chan) };
-        unsafe { *status_out = (*proc).status as varnumber_T };
+        unsafe { *status_out = (*proc).status as VarNumber };
         return ptr::null_mut();
     }
 
     unsafe { start_job_streams(chan, rpc, has_in, has_out, has_err) };
-    unsafe { *status_out = (*chan).id as varnumber_T };
+    unsafe { *status_out = (*chan).id as VarNumber };
     chan
 }
 

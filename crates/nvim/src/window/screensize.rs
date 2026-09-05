@@ -33,8 +33,8 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    LineNr, OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, list_T, ptrdiff_t,
-    save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    LineNr, OptInt, Refcount, VAR_NUMBER, VarLock, VarNumber, buf_T, dict_T, list_T, ptrdiff_t,
+    save_v_event_T, size_t, typval_T, typval_vval_union,
 };
 use crate::winfloat::win_reconfig_floats;
 use crate::winlayer::{Win, windows};
@@ -156,7 +156,7 @@ fn win_info_dict(deltas: [c_int; 6]) -> *mut dict_T {
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
-                v_number: value as varnumber_T,
+                v_number: value as VarNumber,
             },
         };
         let (name, len) = (key.as_ptr().cast::<c_char>(), key.len() as size_t);
@@ -233,7 +233,7 @@ fn scan_windows(what: &mut Scan) {
                         v_type: VAR_NUMBER,
                         v_lock: VarLock::Unlocked,
                         vval: typval_vval_union {
-                            v_number: wp.handle as varnumber_T,
+                            v_number: wp.handle as VarNumber,
                         },
                     };
                     // SAFETY: a live list, which takes ownership of `tv`.

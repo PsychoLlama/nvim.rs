@@ -65,9 +65,9 @@ use crate::os::cshim::gettext;
 use crate::strings::reverse_text;
 use crate::tr_c;
 use crate::types::{
-    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, VarType, Vv,
-    blob_T, dict_T, dictitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, uint8_t, varnumber_T, vimconv_T,
+    EvalFuncData, VAR_BLOB, VAR_DICT, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
+    VarType, Vv, blob_T, dict_T, dictitem_T, int64_t, list_T, listitem_T, ptrdiff_t, size_t,
+    typval_T, typval_vval_union, uint8_t, vimconv_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -670,7 +670,7 @@ pub(crate) fn clear_tv(tv: &mut typval_T) {
 
 /// `tv` as a Number, setting `error` (and reporting one) if it is not.
 #[inline(always)]
-pub(crate) fn number_of(tv: &mut typval_T, error: &mut bool) -> varnumber_T {
+pub(crate) fn number_of(tv: &mut typval_T, error: &mut bool) -> VarNumber {
     // SAFETY: a live typval.
     unsafe { tv_get_number_chk(tv, error) }
 }
@@ -680,10 +680,10 @@ pub(crate) fn number_of(tv: &mut typval_T, error: &mut bool) -> varnumber_T {
 /// `VAR_BOOL` answers too: upstream reads `v_number` for both, the boolean
 /// living in the same word, and the callers accept either tag.
 #[inline(always)]
-pub(crate) fn number_arm(tv: &typval_T) -> varnumber_T {
+pub(crate) fn number_arm(tv: &typval_T) -> VarNumber {
     match (tv.as_number(), tv.as_bool()) {
         (Some(n), _) => n,
-        (_, Some(b)) => varnumber_T::from(b),
+        (_, Some(b)) => VarNumber::from(b),
         _ => 0,
     }
 }
@@ -826,7 +826,7 @@ pub(crate) fn set_vim_var_tv(idx: Vv, tv: TvRef) {
 /// Set `v:key` to the Number `n`.  Its type is set separately, once per
 /// walk, because `set_vim_var_nr` does not set one.
 #[inline(always)]
-pub(crate) fn set_key_nr(n: varnumber_T) {
+pub(crate) fn set_key_nr(n: VarNumber) {
     // SAFETY: `Vv::Key` names a `v:` variable.
     unsafe { set_vim_var_nr(Vv::Key, n) };
 }

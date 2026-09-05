@@ -27,7 +27,7 @@ pub type DoInRuntimepathCB = Option<DoInRuntimepathCBFn>;
 pub struct estack_T {
     pub es_lnum: LineNr,
     pub es_name: *mut ::core::ffi::c_char,
-    pub es_type: etype_T,
+    pub es_type: EStackType,
     pub es_info: EstackInfo,
 }
 
@@ -65,8 +65,8 @@ impl EstackInfo {
         }
     }
 }
-pub type estack_arg_T = ::core::ffi::c_uint;
-pub type etype_T = ::core::ffi::c_uint;
+pub type EStackArg = ::core::ffi::c_uint;
+pub type EStackType = ::core::ffi::c_uint;
 /// Per-line counters of a profiled script, the element type of
 /// [`scriptitem_T::sn_prl_ga`].
 #[derive(Copy, Clone, Default)]

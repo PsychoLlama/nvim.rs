@@ -29,8 +29,8 @@ use crate::memory::{xfree, xstrdup};
 use crate::message::{emsg, msg_reset_scroll};
 use crate::os::cshim::{gettext, strstr};
 use crate::types::{
-    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, Vv, list_T, typval_T,
-    typval_vval_union, varnumber_T,
+    EvalFuncData, VAR_LIST, VAR_NUMBER, VAR_STRING, VarLock, VarNumber, Vv, list_T, typval_T,
+    typval_vval_union,
 };
 
 use super::report::{fill_assert_error, ga_concat_lit, prepare_assert_error, report_assert_error};
@@ -176,7 +176,7 @@ unsafe fn check_error_position(argvars: *mut typval_T) -> FailsCheck {
         return FailsCheck::BadArg(E_ASSERT_FAILS_FOURTH_ARGUMENT);
     }
     let want_lnum = unsafe { (*arg(argvars, 3)).vval.v_number };
-    if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as varnumber_T {
+    if want_lnum >= 0 && want_lnum != emsg_assert_fails_lnum.get() as VarNumber {
         return FailsCheck::Mismatch(FailsMismatch {
             expected_str: ptr::null(),
             index: 3,
@@ -217,7 +217,7 @@ unsafe fn report_fails_mismatch(
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
-                v_number: emsg_assert_fails_lnum.get() as varnumber_T,
+                v_number: emsg_assert_fails_lnum.get() as VarNumber,
             },
         },
         4 => typval_T {

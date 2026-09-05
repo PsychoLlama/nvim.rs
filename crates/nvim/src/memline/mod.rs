@@ -74,9 +74,9 @@ use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     BlockNr, CmdModFlags, ColNr, Failed, FileInfo, FileOffset, LineNr, NUL, OptVal, String_0,
-    Timestamp, bhdr_T, buf_T, dict_T, file_comparison, flush_buffers_T, infoptr_T, int16_t,
-    int64_t, list_T, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
-    uv_uid_t, varnumber_T,
+    Timestamp, VarNumber, bhdr_T, buf_T, dict_T, file_comparison, flush_buffers_T, infoptr_T,
+    int16_t, int64_t, list_T, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t,
+    uint64_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;

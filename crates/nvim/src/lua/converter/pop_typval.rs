@@ -33,9 +33,9 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::{
     LuaRef, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VarLock,
-    kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
+    VarNumber, kBoolVarFalse, kBoolVarTrue, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeNil, kSpecialVarNull, lua_Number, lua_State, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, varnumber_T,
+    typval_vval_union,
 };
 use ::libc::abort;
 
@@ -196,13 +196,13 @@ pub unsafe fn nlua_pop_typval(lstate: *mut lua_State, ret_tv: *mut typval_T) -> 
                         let n = lua_tonumber(lstate, -1);
                         if n > VARNUMBER_MAX as lua_Number
                             || n < VARNUMBER_MIN as lua_Number
-                            || (n as varnumber_T) as lua_Number != n
+                            || (n as VarNumber) as lua_Number != n
                         {
                             (*cur.tv).v_type = VAR_FLOAT;
                             (*cur.tv).vval.v_float = n;
                         } else {
                             (*cur.tv).v_type = VAR_NUMBER;
-                            (*cur.tv).vval.v_number = n as varnumber_T;
+                            (*cur.tv).vval.v_number = n as VarNumber;
                         }
                     }
                     LUA_TTABLE => {

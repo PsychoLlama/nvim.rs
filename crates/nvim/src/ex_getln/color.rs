@@ -280,7 +280,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
             break 'body Label::End;
         }
 
-        let mut prev_end: varnumber_T = 0;
+        let mut prev_end: VarNumber = 0;
         let mut i: ::core::ffi::c_int = 0;
         let mut li: *const listitem_T = unsafe { (*tv.vval.v_list).lv_first };
         while !li.is_null() {
@@ -301,7 +301,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
                 unsafe { tv_get_number_chk(&raw mut (*tv_list_first(l)).li_tv, &raw mut error) };
             if error {
                 break 'body Label::Error;
-            } else if !(prev_end <= start && start < colored_ccline.len() as varnumber_T) {
+            } else if !(prev_end <= start && start < colored_ccline.len() as VarNumber) {
                 let end = colored_ccline.len();
                 print_errmsg!("E5403: Chunk {i} start {start} not in range [{prev_end}, {end})");
                 break 'body Label::Error;
@@ -331,11 +331,11 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
             };
             if error {
                 break 'body Label::Error;
-            } else if !(start < end && end <= colored_ccline.len() as varnumber_T) {
+            } else if !(start < end && end <= colored_ccline.len() as VarNumber) {
                 let limit = colored_ccline.len();
                 print_errmsg!("E5404: Chunk {i} end {end} not in range ({start}, {limit}]");
                 break 'body Label::Error;
-            } else if end < colored_ccline.len() as varnumber_T
+            } else if end < colored_ccline.len() as VarNumber
                 && utf8len_tab_zero
                     [unsafe { *colored_ccline.at(end as ::core::ffi::c_int) } as uint8_t as usize]
                     == 0
@@ -360,7 +360,7 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
             li = unsafe { (*li).li_next };
         }
 
-        if prev_end < colored_ccline.len() as varnumber_T {
+        if prev_end < colored_ccline.len() as VarNumber {
             let coloured = CmdlineColorChunk {
                 start: prev_end as ::core::ffi::c_int,
                 end: colored_ccline.len(),

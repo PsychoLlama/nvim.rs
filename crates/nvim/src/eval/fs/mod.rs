@@ -50,8 +50,8 @@ use crate::os::fs::{
 use crate::path::vim_ispathsep;
 use crate::strings::concat_str;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, FileInfo, VAR_NUMBER, VAR_STRING, int32_t, list_T, ptrdiff_t,
-    size_t, ssize_t, typval_T, uint64_t, uv_stat_t, uv_timespec_t, varnumber_T, xp_prefix_T,
+    Direction, EvalFuncData, FAIL, FileInfo, VAR_NUMBER, VAR_STRING, VarNumber, int32_t, list_T,
+    ptrdiff_t, size_t, ssize_t, typval_T, uint64_t, uv_stat_t, uv_timespec_t, xp_prefix_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::ManuallyDrop;
@@ -117,7 +117,7 @@ pub(crate) fn str_arg_chk<'a>(args: Args<'_>, i: usize, buf: &'a mut NumBuf) -> 
 
 /// Argument `i` as a Number, setting `error` -- and reporting one -- for a
 /// type that has no number form.
-pub(crate) fn nr_arg(args: Args<'_>, i: usize, error: &mut bool) -> varnumber_T {
+pub(crate) fn nr_arg(args: Args<'_>, i: usize, error: &mut bool) -> VarNumber {
     // SAFETY: a live typval; the callee reports through `error` rather than
     // by returning a failure.
     unsafe { tv_get_number_chk(args.ptr(i), error) }
@@ -385,7 +385,7 @@ pub unsafe fn f_executable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     if !is_string_arg(args, 0) {
         return;
     }
-    rettv.vval.v_number = can_exe(str_arg(args, 0, &mut numbuf)) as varnumber_T;
+    rettv.vval.v_number = can_exe(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `exepath({expr})`: the full path of the executable, or the empty string.
@@ -410,7 +410,7 @@ pub unsafe fn f_filereadable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let (args, rettv) = frame!(argvars, rettv);
     let p = str_arg(args, 0, &mut numbuf);
     let readable = !p.to_bytes().is_empty() && !is_dir(p) && is_readable(p);
-    rettv.vval.v_number = readable as varnumber_T;
+    rettv.vval.v_number = readable as VarNumber;
 }
 
 /// `filewritable({file})`: 0 for not writable, 1 for a writable file, 2 for
@@ -421,7 +421,7 @@ pub unsafe fn f_filereadable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 pub unsafe fn f_filewritable(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = writability(str_arg(args, 0, &mut numbuf)) as varnumber_T;
+    rettv.vval.v_number = writability(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `getfperm({fname})`: the permissions as `rwxrwxrwx`, or the empty string
@@ -457,17 +457,17 @@ pub unsafe fn f_getfsize(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let fname = str_arg(args, 0, &mut numbuf);
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = match stat(fname) {
-        None => -1 as varnumber_T,
+        None => -1 as VarNumber,
         Some(info) => {
             let filesize = size(&info);
-            let answer = filesize as varnumber_T;
+            let answer = filesize as VarNumber;
             if is_dir(fname) {
-                0 as varnumber_T
+                0 as VarNumber
             } else if answer as uint64_t == filesize {
                 answer
             } else {
                 // Too big for a Number.
-                -2 as varnumber_T
+                -2 as VarNumber
             }
         }
     };
@@ -481,7 +481,7 @@ pub unsafe fn f_getftime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     let mtime = stat(str_arg(args, 0, &mut numbuf)).map(|info| info.stat.st_mtim.tv_sec);
-    rettv.vval.v_number = mtime.map_or(-1 as varnumber_T, |t| t as varnumber_T);
+    rettv.vval.v_number = mtime.map_or(-1 as VarNumber, |t| t as VarNumber);
 }
 
 /// `getftype({fname})`: what kind of thing the name refers to -- of the
@@ -517,7 +517,7 @@ pub unsafe fn f_getftype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 pub unsafe fn f_isdirectory(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = is_dir(str_arg(args, 0, &mut numbuf)) as varnumber_T;
+    rettv.vval.v_number = is_dir(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `browse({save}, {title}, {initdir}, {default})`: a stub -- there is no

@@ -22,8 +22,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::strings::concat_str;
 use crate::types::{
-    VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, float_T, typval_T,
-    typval_vval_union, varnumber_T,
+    Float, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, blob_T, typval_T,
+    typval_vval_union,
 };
 
 /// The length of the scratch buffer `tv_get_string_buf` may render a Number
@@ -36,17 +36,17 @@ const NUMBUFLEN: usize = 65;
 /// numerator — and `VARNUMBER_MIN` for `0 / 0`, which upstream describes as
 /// "similar to NaN". `VARNUMBER_MIN / -1` would be a positive number that
 /// does not fit, and traps on x86; it answers `VARNUMBER_MAX`.
-pub(crate) fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
+pub(crate) fn num_divide(n1: VarNumber, n2: VarNumber) -> VarNumber {
     if n2 == 0 {
         if n1 == 0 {
-            VARNUMBER_MIN as varnumber_T
+            VARNUMBER_MIN as VarNumber
         } else if n1 < 0 {
-            -(VARNUMBER_MAX as varnumber_T)
+            -(VARNUMBER_MAX as VarNumber)
         } else {
-            VARNUMBER_MAX as varnumber_T
+            VARNUMBER_MAX as VarNumber
         }
-    } else if n1 == VARNUMBER_MIN as varnumber_T && n2 == -1 {
-        VARNUMBER_MAX as varnumber_T
+    } else if n1 == VARNUMBER_MIN as VarNumber && n2 == -1 {
+        VARNUMBER_MAX as VarNumber
     } else {
         n1 / n2
     }
@@ -58,7 +58,7 @@ pub(crate) fn num_divide(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
 /// debug build in Rust, so it goes through `wrapping_rem`. Upstream has no
 /// guard for it — `num_divide`'s companion case is guarded and this one is
 /// not.
-pub(crate) fn num_modulus(n1: varnumber_T, n2: varnumber_T) -> varnumber_T {
+pub(crate) fn num_modulus(n1: VarNumber, n2: VarNumber) -> VarNumber {
     if n2 == 0 { 0 } else { n1.wrapping_rem(n2) }
 }
 
@@ -189,10 +189,10 @@ pub(crate) unsafe fn eval_concat_str(tv1: *mut typval_T, tv2: *mut typval_T) -> 
 /// Both operands must be valid typvals the caller has given up ownership of.
 pub(crate) unsafe fn eval_addsub_number(tv1: *mut typval_T, tv2: *mut typval_T, op: u8) -> bool {
     let mut error = false;
-    let mut n1: varnumber_T = 0;
-    let mut n2: varnumber_T = 0;
-    let mut f1: float_T = 0.0;
-    let mut f2: float_T = 0.0;
+    let mut n1: VarNumber = 0;
+    let mut n2: VarNumber = 0;
+    let mut f1: Float = 0.0;
+    let mut f2: Float = 0.0;
 
     // SAFETY: the caller's promise -- both operands are valid typvals.
     let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
@@ -211,7 +211,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut typval_T, tv2: *mut typval_T, 
             return false;
         }
         if two.v_type == VAR_FLOAT {
-            f1 = n1 as float_T;
+            f1 = n1 as Float;
         }
     }
     if two.v_type == VAR_FLOAT {
@@ -225,7 +225,7 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut typval_T, tv2: *mut typval_T, 
             return false;
         }
         if one.v_type == VAR_FLOAT {
-            f2 = n2 as float_T;
+            f2 = n2 as Float;
         }
     }
     unsafe { tv_clear(tv1) };
@@ -254,10 +254,10 @@ pub(crate) unsafe fn eval_addsub_number(tv1: *mut typval_T, tv2: *mut typval_T, 
 /// Both operands must be valid typvals the caller has given up ownership of.
 pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T, op: u8) -> bool {
     let mut error = false;
-    let mut n1: varnumber_T = 0;
-    let mut n2: varnumber_T = 0;
-    let mut f1: float_T = 0.0;
-    let mut f2: float_T = 0.0;
+    let mut n1: VarNumber = 0;
+    let mut n2: VarNumber = 0;
+    let mut f1: Float = 0.0;
+    let mut f2: Float = 0.0;
     // SAFETY: the caller's promise -- both operands are valid typvals.
     let (mut one, two) = unsafe { (Tv::new(tv1), Tv::new(tv2)) };
     let mut use_float = one.v_type == VAR_FLOAT;
@@ -279,7 +279,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T,
 
     if two.v_type == VAR_FLOAT {
         if !use_float {
-            f1 = n1 as float_T;
+            f1 = n1 as Float;
             use_float = true;
         }
         // SAFETY: as above, for the right operand.
@@ -291,7 +291,7 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T,
             return false;
         }
         if use_float {
-            f2 = n2 as float_T;
+            f2 = n2 as Float;
         }
     }
 
@@ -302,11 +302,11 @@ pub(crate) unsafe fn eval_multdiv_number(tv1: *mut typval_T, tv2: *mut typval_T,
                 // A Float divided by zero answers an infinity of the
                 // numerator's sign, and NaN for 0.0 / 0.0.
                 if f1 == 0.0 {
-                    float_T::NAN
+                    Float::NAN
                 } else if f1 > 0.0 {
-                    float_T::INFINITY
+                    Float::INFINITY
                 } else {
-                    float_T::NEG_INFINITY
+                    Float::NEG_INFINITY
                 }
             }
             b'/' => f1 / f2,

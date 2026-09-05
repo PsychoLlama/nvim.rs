@@ -274,7 +274,7 @@ pub(crate) unsafe fn call_user_expand_func(
     args[3].v_type = VAR_UNKNOWN;
     args[0].vval.v_string = pat;
     args[1].vval.v_string = xp.xp_line;
-    args[2].vval.v_number = xp.xp_col as varnumber_T;
+    args[2].vval.v_number = xp.xp_col as VarNumber;
 
     current_sctx.set(xp.xp_script_ctx);
 

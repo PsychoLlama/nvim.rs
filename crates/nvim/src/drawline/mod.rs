@@ -73,9 +73,9 @@ use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
     CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, GridView, HlMode, LineNr, NS, NUL,
-    RgbValue, SignTextAttrs, VirtLines, VirtText, WinExtmark, buf_T, diffline_T, foldinfo_T, hlf_T,
-    pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t, statuscol_T, uint8_t,
-    uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    RgbValue, SignTextAttrs, VarNumber, VirtLines, VirtText, WinExtmark, buf_T, diffline_T,
+    foldinfo_T, hlf_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t,
+    statuscol_T, uint8_t, uint32_t, uint64_t, virt_line, win_T,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;

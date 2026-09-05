@@ -49,9 +49,9 @@ use crate::eval::vars::{
     var_check_lock, var_check_ro, var_wrong_func_name,
 };
 use crate::eval::{
-    FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, TV_CSTRING,
-    e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1, find_name_end,
-    glv_status_T, make_expanded_name, tv_init, tv_is_luafunc,
+    FNE_INCL_BR, GLV_FAIL, GLV_NO_AUTOLOAD, GLV_OK, GLV_QUIET, GLV_READ_ONLY, GLV_STOP, GlvStatus,
+    TV_CSTRING, e_cannot_slice_dictionary, e_missbrac, eval_isnamec, eval_isnamec1, eval1,
+    find_name_end, make_expanded_name, tv_init, tv_is_luafunc,
 };
 use crate::eval::{Lv, Tv};
 use crate::ex_docmd::ends_excmd;
@@ -62,8 +62,8 @@ use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::strings::vim_strchr;
 use crate::types::{
     FAIL, Failed, NUL, OK, VAR_BLOB, VAR_DEF_SCOPE, VAR_DICT, VAR_LIST, VAR_UNKNOWN, VarLock,
-    dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t, typval_T,
-    typval_vval_union, uint8_t, varnumber_T,
+    VarNumber, dict_T, dictitem_T, hashtab_T, kListLenUnknown, list_T, lval_T, ptrdiff_t, size_t,
+    typval_T, typval_vval_union, uint8_t,
 };
 
 /// A freshly declared typval.
@@ -134,7 +134,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     flags: c_int,
     unlet: bool,
     rettv: *mut typval_T,
-) -> glv_status_T {
+) -> GlvStatus {
     let mut numbuf = NumBuf::new();
     let quiet = flags & GLV_QUIET as c_int != 0;
     // SAFETY: the caller's promise; `key_end` holds a cursor into `name`.
@@ -284,13 +284,13 @@ pub(crate) unsafe fn get_lval_blob(
         // SAFETY: `var1` is the caller's index expression.
         unsafe { tv_get_number(var1) as c_int }
     };
-    let n1 = lp.ll_n1 as varnumber_T;
+    let n1 = lp.ll_n1 as VarNumber;
     // SAFETY: the index is checked against the length measured above.
     unsafe { tv_blob_check_index(bloblen, n1, quiet) }?;
     if lp.ll_range && !lp.ll_empty2 {
         // SAFETY: `var2` is the caller's second index expression.
         lp.ll_n2 = unsafe { tv_get_number(var2) as c_int };
-        let n2 = lp.ll_n2 as varnumber_T;
+        let n2 = lp.ll_n2 as VarNumber;
         // SAFETY: as above.
         unsafe { tv_blob_check_range(bloblen, n1, n2, quiet) }?;
     }
@@ -959,7 +959,7 @@ unsafe fn set_blob_var(lp: *mut lval_T, rettv: *mut typval_T, op: *const c_char)
         if lp.ll_empty2 {
             lp.ll_n2 = unsafe { tv_blob_len(lp.ll_blob) } - 1;
         }
-        let (blob, n1, n2) = (lp.ll_blob, lp.ll_n1 as varnumber_T, lp.ll_n2 as varnumber_T);
+        let (blob, n1, n2) = (lp.ll_blob, lp.ll_n1 as VarNumber, lp.ll_n2 as VarNumber);
         // SAFETY: as above; `rettv` holds the Blob being assigned.
         if unsafe { tv_blob_set_range(blob, n1, n2, rettv) }.is_err() {
             return false;

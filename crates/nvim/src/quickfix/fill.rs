@@ -269,17 +269,14 @@ unsafe fn call_qftf_func(
     RECURSIVE.set(true);
 
     let dict = unsafe { tv_dict_alloc_lock(VarLock::Fixed) };
-    let add = |key: &CStr, value: varnumber_T| {
+    let add = |key: &CStr, value: VarNumber| {
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
-    add(
-        c"quickfix",
-        varnumber_T::from(qfl.qfl_type == QFLT_QUICKFIX),
-    );
-    add(c"winid", qf_winid as varnumber_T);
-    add(c"id", qfl.qf_id as varnumber_T);
-    add(c"start_idx", start_idx as varnumber_T);
-    add(c"end_idx", end_idx as varnumber_T);
+    add(c"quickfix", VarNumber::from(qfl.qfl_type == QFLT_QUICKFIX));
+    add(c"winid", qf_winid as VarNumber);
+    add(c"id", qfl.qf_id as VarNumber);
+    add(c"start_idx", start_idx as VarNumber);
+    add(c"end_idx", end_idx as VarNumber);
     unsafe { (*dict).dv_refcount.retain() };
 
     let mut args = [typval_T {

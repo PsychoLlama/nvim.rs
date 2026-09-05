@@ -70,9 +70,9 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter, LineNr, LuaRetMode,
-    MarkGet, MotionType, OptMagic, RemapValues, dobuf_action_values, dobuf_start_values,
-    estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, uint8_t, uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, EStackArg, EStackType, ExArgt, LineGetter,
+    LineNr, LuaRetMode, MarkGet, MotionType, OptMagic, RemapValues, dobuf_action_values,
+    dobuf_start_values, exarg_T, except_T, garray_T, handle_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -234,7 +234,7 @@ pub struct wcmd_T {
     pub line: *mut c_char,
     pub lnum: LineNr,
 }
-pub const ETYPE_EXCEPT: etype_T = 5;
+pub const ETYPE_EXCEPT: EStackType = 5;
 pub const DT_LTAG: c_uint = 11;
 pub const DT_TAG: c_uint = 1;
 pub const DT_LAST: c_uint = 6;
@@ -252,9 +252,9 @@ pub const ACTION_SHOW_ALL: c_uint = 4;
 pub const ACTION_SHOW: c_uint = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const CHECK_PATH: c_uint = 3;
-pub const ESTACK_SCRIPT: estack_arg_T = 3;
-pub const ESTACK_STACK: estack_arg_T = 2;
-pub const ESTACK_SFILE: estack_arg_T = 1;
+pub const ESTACK_SCRIPT: EStackArg = 3;
+pub const ESTACK_STACK: EStackArg = 2;
+pub const ESTACK_SFILE: EStackArg = 1;
 pub const FIND_STRING: c_uint = 2;
 pub const FIND_EVAL: c_uint = 4;
 pub const FIND_IDENT: c_uint = 1;

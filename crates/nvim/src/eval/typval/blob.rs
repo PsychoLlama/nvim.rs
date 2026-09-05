@@ -66,29 +66,29 @@ pub unsafe fn tv_blob_equal(b1: *const blob_T, b2: *const blob_T) -> bool {
 pub(crate) unsafe fn tv_blob_slice(
     _blob: *const blob_T,
     len: ::core::ffi::c_int,
-    mut n1: varnumber_T,
-    mut n2: varnumber_T,
+    mut n1: VarNumber,
+    mut n2: VarNumber,
     exclusive: bool,
     rettv: *mut typval_T,
 ) -> Result<(), Failed> {
     // The resulting variable is a sub-blob.  If the indexes
     // are out of range the result is empty.
     if n1 < 0 {
-        n1 += varnumber_T::from(len);
+        n1 += VarNumber::from(len);
         if n1 < 0 {
             n1 = 0;
         }
     }
     if n2 < 0 {
-        n2 += varnumber_T::from(len);
-    } else if n2 >= varnumber_T::from(len) {
-        n2 = varnumber_T::from(len - if exclusive { 0 } else { 1 });
+        n2 += VarNumber::from(len);
+    } else if n2 >= VarNumber::from(len) {
+        n2 = VarNumber::from(len - if exclusive { 0 } else { 1 });
     }
     if exclusive {
         n2 -= 1;
     }
 
-    if n1 >= varnumber_T::from(len) || n2 < 0 || n1 > n2 {
+    if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
         unsafe { tv_clear(rettv) };
         unsafe { (*rettv).v_type = VAR_BLOB };
         unsafe { (*rettv).vval.v_blob = ::core::ptr::null_mut() };
@@ -117,15 +117,15 @@ pub(crate) unsafe fn tv_blob_slice(
 pub(crate) unsafe fn tv_blob_index(
     _blob: *const blob_T,
     len: ::core::ffi::c_int,
-    mut idx: varnumber_T,
+    mut idx: VarNumber,
     rettv: *mut typval_T,
 ) -> Result<(), Failed> {
     // The resulting variable is a byte value.
     // If the index is too big or negative that is an error.
     if idx < 0 {
-        idx += varnumber_T::from(len);
+        idx += VarNumber::from(len);
     }
-    if idx >= varnumber_T::from(len) || idx < 0 {
+    if idx >= VarNumber::from(len) || idx < 0 {
         semsg!("E979: Blob index out of range: {}", idx);
         return Err(Failed);
     }
@@ -133,7 +133,7 @@ pub(crate) unsafe fn tv_blob_index(
     let v = unsafe { tv_blob_get((*rettv).blob_or_null(), idx as ::core::ffi::c_int) };
     unsafe { tv_clear(rettv) };
     unsafe { (*rettv).v_type = VAR_NUMBER };
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(v) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(v) };
     Ok(())
 }
 
@@ -141,8 +141,8 @@ pub(crate) unsafe fn tv_blob_index(
 pub unsafe fn tv_blob_slice_or_index(
     blob: *const blob_T,
     is_range: bool,
-    n1: varnumber_T,
-    n2: varnumber_T,
+    n1: VarNumber,
+    n2: VarNumber,
     exclusive: bool,
     rettv: *mut typval_T,
 ) -> Result<(), Failed> {
@@ -158,10 +158,10 @@ pub unsafe fn tv_blob_slice_or_index(
 /// the end (which an assignment may append to).
 pub unsafe fn tv_blob_check_index(
     bloblen: ::core::ffi::c_int,
-    n1: varnumber_T,
+    n1: VarNumber,
     quiet: bool,
 ) -> Result<(), Failed> {
-    if n1 < 0 || n1 > varnumber_T::from(bloblen) {
+    if n1 < 0 || n1 > VarNumber::from(bloblen) {
         if !quiet {
             semsg!("E979: Blob index out of range: {}", n1);
         }
@@ -173,11 +173,11 @@ pub unsafe fn tv_blob_check_index(
 /// Whether `n1..=n2` is a range of a `bloblen`-byte blob.
 pub unsafe fn tv_blob_check_range(
     bloblen: ::core::ffi::c_int,
-    n1: varnumber_T,
-    n2: varnumber_T,
+    n1: VarNumber,
+    n2: VarNumber,
     quiet: bool,
 ) -> Result<(), Failed> {
-    if n2 < 0 || n2 >= varnumber_T::from(bloblen) || n2 < n1 {
+    if n2 < 0 || n2 >= VarNumber::from(bloblen) || n2 < n1 {
         if !quiet {
             semsg!("E979: Blob index out of range: {}", n2);
         }
@@ -189,11 +189,11 @@ pub unsafe fn tv_blob_check_range(
 /// `dest[n1 : n2] = src`: copy `src`'s blob over that range of `dest`.
 pub unsafe fn tv_blob_set_range(
     dest: *mut blob_T,
-    n1: varnumber_T,
-    n2: varnumber_T,
+    n1: VarNumber,
+    n2: VarNumber,
     src: *mut typval_T,
 ) -> Result<(), Failed> {
-    if n2 - n1 + 1 != varnumber_T::from(unsafe { tv_blob_len((*src).blob_or_null()) }) {
+    if n2 - n1 + 1 != VarNumber::from(unsafe { tv_blob_len((*src).blob_or_null()) }) {
         let msg = tr(c"E972: Blob value does not have the right number of bytes");
         unsafe { emsg_ptr(msg) };
         return Err(Failed);
@@ -261,7 +261,7 @@ pub unsafe fn tv_blob_remove(
     if unsafe { (*argvars.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         let p = blob.bv_ga.ga_data.cast::<uint8_t>();
-        unsafe { (*rettv).vval.v_number = varnumber_T::from(*p.offset(idx as isize)) };
+        unsafe { (*rettv).vval.v_number = VarNumber::from(*p.offset(idx as isize)) };
         let at = unsafe { p.offset(idx as isize) };
         let after = unsafe { at.add(1) };
         let into = at.cast::<u8>();
@@ -316,7 +316,7 @@ pub unsafe fn f_blob2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let blob = unsafe { (*argvars).blob_or_null() };
     let l = unsafe { (*rettv).list_or_null() };
     for i in 0..unsafe { tv_blob_len(blob) } {
-        unsafe { tv_list_append_number(l, varnumber_T::from(tv_blob_get(blob, i))) };
+        unsafe { tv_list_append_number(l, VarNumber::from(tv_blob_get(blob, i))) };
     }
 }
 

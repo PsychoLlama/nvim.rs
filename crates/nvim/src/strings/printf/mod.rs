@@ -25,7 +25,7 @@ use crate::memory::{arena_alloc, arena_alloc_block};
 use crate::message::emsg;
 use crate::os::cshim::{gettext, vsnprintf};
 use crate::types::{
-    Arena, String_0, VAR_FLOAT, VAR_NUMBER, VAR_STRING, float_T, size_t, typval_T, varnumber_T,
+    Arena, Float, String_0, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VarNumber, size_t, typval_T,
 };
 
 // The carve of the transpiled module; see each child's docs.
@@ -55,7 +55,7 @@ unsafe fn next_arg(tvs: *mut typval_T, idxp: &mut c_int) -> Option<*mut typval_T
 }
 
 /// The next argument as a number; 0 if it is not one.
-pub(crate) unsafe fn tv_nr(tvs: *mut typval_T, idxp: &mut c_int) -> varnumber_T {
+pub(crate) unsafe fn tv_nr(tvs: *mut typval_T, idxp: &mut c_int) -> VarNumber {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0;
     };
@@ -103,13 +103,13 @@ pub(crate) unsafe fn tv_ptr(tvs: *const typval_T, idxp: &mut c_int) -> *const c_
 
 /// The next argument as a float; a Number is widened, anything else is
 /// `E807` and zero.
-pub(crate) unsafe fn tv_float(tvs: *mut typval_T, idxp: &mut c_int) -> float_T {
+pub(crate) unsafe fn tv_float(tvs: *mut typval_T, idxp: &mut c_int) -> Float {
     let Some(tv) = (unsafe { next_arg(tvs, idxp) }) else {
         return 0.0;
     };
     match unsafe { (*tv).v_type } {
         VAR_FLOAT => unsafe { (*tv).vval.v_float },
-        VAR_NUMBER => unsafe { (*tv).vval.v_number as float_T },
+        VAR_NUMBER => unsafe { (*tv).vval.v_number as Float },
         _ => {
             emsg(gettext(E_EXPECTED_FLOAT));
             0.0

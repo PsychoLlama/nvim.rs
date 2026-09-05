@@ -287,10 +287,10 @@ pub unsafe fn swapfile_dict(fname: *const c_char, d: *mut dict_T) {
                     B0_FNAME_SIZE_ORG as c_int,
                 )
             };
-            unsafe { dict_add_nr(d, c"pid", swapfile_proc_running(&b0, fname) as varnumber_T) };
-            unsafe { dict_add_nr(d, c"mtime", b0_read_number(&b0.b0_mtime) as varnumber_T) };
-            unsafe { dict_add_nr(d, c"dirty", b0.dirty() as varnumber_T) };
-            unsafe { dict_add_nr(d, c"inode", b0_read_number(&b0.b0_ino) as varnumber_T) };
+            unsafe { dict_add_nr(d, c"pid", swapfile_proc_running(&b0, fname) as VarNumber) };
+            unsafe { dict_add_nr(d, c"mtime", b0_read_number(&b0.b0_mtime) as VarNumber) };
+            unsafe { dict_add_nr(d, c"dirty", b0.dirty() as VarNumber) };
+            unsafe { dict_add_nr(d, c"inode", b0_read_number(&b0.b0_ino) as VarNumber) };
         }
     }
 }
@@ -301,7 +301,7 @@ unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char, len: c_in
     let _ = unsafe { tv_dict_add_str_len(d, key.as_ptr(), key.count_bytes(), val, len) };
 }
 
-unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
+unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 

@@ -27,7 +27,7 @@ use crate::os::cshim::gettext;
 use crate::path::fix_fname;
 use crate::runtime::{find_script_by_name, new_script_item, script_is_lua};
 use crate::types::{
-    CmdModFlags, ExArgt, LineNr, OptInt, exarg_T, handle_T, lua_Integer, scid_T, sctx_T, size_t,
+    CmdModFlags, ExArgt, LineNr, OptInt, ScriptId, exarg_T, handle_T, lua_Integer, sctx_T, size_t,
     ucmd_T,
 };
 use crate::usercmd::{uc_mods, uc_split_args_iter};
@@ -95,7 +95,7 @@ pub unsafe fn nlua_set_sctx(current: *mut sctx_T) {
                 let si = new_script_item(source_path, &raw mut sid);
                 (*si).sn_lua = true;
             }
-            (*current).sc_sid = sid as scid_T;
+            (*current).sc_sid = sid as ScriptId;
             (*current).sc_seq = -1;
             (*current).sc_lnum = (*info).currentline as LineNr;
         }

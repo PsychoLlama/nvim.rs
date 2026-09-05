@@ -156,7 +156,7 @@ pub(crate) unsafe fn set_maparg_rhs(
     orig_rhs: *const c_char,
     orig_rhs_len: size_t,
     rhs_lua: LuaRef,
-    sid: scid_T,
+    sid: ScriptId,
     cpo_val: *const c_char,
     args: &mut MapArguments,
 ) {

@@ -39,9 +39,8 @@ use crate::mpack::mpack_core::{
 };
 use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::types::{
-    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
+    VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarNumber, kBoolVarFalse, kBoolVarTrue, kListLenMayKnow,
     kSpecialVarNull, list_T, mpack_node_t, mpack_parser_t, ptrdiff_t, size_t, typval_T,
-    varnumber_T,
 };
 use crate::winlayer::Live;
 use ::libc::abort;
@@ -51,13 +50,13 @@ type Nd = Live<mpack_node_t>;
 
 const MPACK_OK: c_int = 0;
 
-/// The largest `varnumber_T`, past which a msgpack unsigned integer needs a
+/// The largest `VarNumber`, past which a msgpack unsigned integer needs a
 /// special dictionary to survive the trip into Vimscript.
 const VARNUMBER_MAX: u64 = i64::MAX as u64;
 
 /// A msgpack unsigned integer as a `typval_T`.
 ///
-/// Anything a `varnumber_T` can hold is a plain number.  What it cannot is
+/// Anything a `VarNumber` can hold is a plain number.  What it cannot is
 /// split across a four-element `{_TYPE: integer, _VAL: [sign, hi, mid, lo]}`
 /// list — one sign, then 2 + 31 + 31 bits — which is the same shape the
 /// msgpack encoder reads back.
@@ -66,7 +65,7 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 /// `rettv` is writable and holds no value that needs clearing.
 unsafe fn positive_integer_to_special_typval(rettv: *mut typval_T, val: u64) {
     if val <= VARNUMBER_MAX {
-        unsafe { *rettv = typval_T::number(val as varnumber_T) };
+        unsafe { *rettv = typval_T::number(val as VarNumber) };
         return;
     }
     let list = unsafe { tv_list_alloc(4) };
@@ -74,9 +73,9 @@ unsafe fn positive_integer_to_special_typval(rettv: *mut typval_T, val: u64) {
     let val_tv = typval_T::list(list);
     unsafe { create_special_dict(rettv, kMPInteger, val_tv) };
     unsafe { tv_list_append_number(list, 1) };
-    unsafe { tv_list_append_number(list, ((val >> 62) & 0x3) as varnumber_T) };
-    unsafe { tv_list_append_number(list, ((val >> 31) & 0x7fff_ffff) as varnumber_T) };
-    unsafe { tv_list_append_number(list, (val & 0x7fff_ffff) as varnumber_T) };
+    unsafe { tv_list_append_number(list, ((val >> 62) & 0x3) as VarNumber) };
+    unsafe { tv_list_append_number(list, ((val >> 31) & 0x7fff_ffff) as VarNumber) };
+    unsafe { tv_list_append_number(list, (val & 0x7fff_ffff) as VarNumber) };
 }
 
 /// A node has opened: work out where its value belongs, and decode it if the
@@ -277,7 +276,7 @@ unsafe extern "C-unwind" fn typval_parse_exit(
         MPACK_TOKEN_EXT => {
             let list = unsafe { tv_list_alloc(2) };
             unsafe { tv_list_ref(list) };
-            unsafe { tv_list_append_number(list, (*node).tok.data.ext_type as varnumber_T) };
+            unsafe { tv_list_append_number(list, (*node).tok.data.ext_type as VarNumber) };
             let ext_val_list = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
             unsafe { tv_list_append_list(list, ext_val_list) };
             let val_tv = typval_T::list(list);

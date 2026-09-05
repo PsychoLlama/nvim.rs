@@ -167,7 +167,7 @@ pub unsafe fn tv_list_append_allocated_string(l: *mut list_T, str: *mut ::core::
 ///
 /// # Safety
 /// `l` must point at a live list.
-pub unsafe fn tv_list_append_number(l: *mut list_T, n: varnumber_T) {
+pub unsafe fn tv_list_append_number(l: *mut list_T, n: VarNumber) {
     unsafe { tv_list_append_owned_tv(l, typval_T::number(n)) };
 }
 
@@ -484,7 +484,7 @@ pub unsafe fn tv_list_find_nr(
     l: *mut list_T,
     n: ::core::ffi::c_int,
     ret_error: *mut bool,
-) -> varnumber_T {
+) -> VarNumber {
     let li = unsafe { tv_list_find(l, n) };
     if li.is_null() {
         if let Some(ret_error) = unsafe { ret_error.as_mut() } {

@@ -61,7 +61,7 @@ use crate::runtime::{estack_sfile, sourcing_lnum, stacktrace_create};
 use crate::strings::{concat_str, vim_snprintf, vim_snprintf_safelen, xstrnsave};
 use crate::tr_plural;
 use crate::types::{
-    Failed, IOSIZE, NUL, Vv, cstack_T, except_T, except_type_T, exception_state_T, int64_t, list_T,
+    ExceptType, Failed, IOSIZE, NUL, Vv, cstack_T, except_T, exception_state_T, int64_t, list_T,
     msglist_T, ptrdiff_t,
 };
 use ::libc::{strcat, strcpy};
@@ -304,7 +304,7 @@ pub(crate) unsafe fn do_intthrow(cstack: *mut cstack_T) -> bool {
 /// NUL-terminated string otherwise; `should_free` is writable.
 pub(crate) unsafe fn get_exception_string(
     value: *mut c_void,
-    type_0: except_type_T,
+    type_0: ExceptType,
     cmdname: *mut c_char,
     should_free: *mut bool,
 ) -> *mut c_char {
@@ -399,7 +399,7 @@ unsafe fn error_number_at(p: *const c_char) -> bool {
 /// [`get_exception_string`] describes.
 pub(super) unsafe fn throw_exception(
     value: *mut c_void,
-    type_0: except_type_T,
+    type_0: ExceptType,
     cmdname: *mut c_char,
 ) -> Result<(), Failed> {
     // SAFETY: caller contract.

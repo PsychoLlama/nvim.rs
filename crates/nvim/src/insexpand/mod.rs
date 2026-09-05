@@ -108,10 +108,10 @@ use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
     Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Direction, EvalFuncData, ExpandContext,
-    ExtmarkOp, LineNr, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T, dict_T,
-    expand_T, extmark_undo_vec_t, garray_T, hashtab_T, list_T, optset_T, pos_T, ptrdiff_t,
+    ExtmarkOp, LineNr, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, VarNumber, Vv, buf_T,
+    dict_T, expand_T, extmark_undo_vec_t, garray_T, hashtab_T, list_T, optset_T, pos_T, ptrdiff_t,
     pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union, uint8_t,
-    uint64_t, varnumber_T, win_T, xp_prefix_T,
+    uint64_t, win_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;

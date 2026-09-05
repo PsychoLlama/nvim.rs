@@ -43,8 +43,8 @@ use crate::options::{
 use crate::os::cshim::gettext_ptr;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{
-    Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, exarg_T, scid_T, size_t,
-    uint8_t, uint32_t, uvarnumber_T, win_T,
+    Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber, exarg_T,
+    size_t, uint8_t, uint32_t, win_T,
 };
 
 use super::{
@@ -388,7 +388,7 @@ unsafe fn take_number(
             &raw mut len,
             Str2NrBases::ALL,
             &raw mut number,
-            ptr::null_mut::<uvarnumber_T>(),
+            ptr::null_mut::<UVarNumber>(),
             0,
             true,
             ptr::null_mut::<bool>(),
@@ -527,7 +527,7 @@ unsafe fn do_one_set_option(
             opt_idx,
             newval,
             opt_flags,
-            0 as scid_T,
+            0 as ScriptId,
             false,
             // `+=`/`^=`/`-=` amend the value; only a plain assignment
             // replaces it, which is what clears the insecure mark.

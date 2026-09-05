@@ -30,7 +30,7 @@ use crate::eval::typval_encode::{ConvPath, ConvType, Flow, TypvalSink, encode_ty
 use crate::message::{emsg, internal_error};
 use crate::os::cshim::gettext;
 use crate::strings::vim_snprintf_safelen;
-use crate::types::{blob_T, dict_T, float_T, int64_t, ptrdiff_t, size_t, typval_T};
+use crate::types::{Float, blob_T, dict_T, int64_t, ptrdiff_t, size_t, typval_T};
 
 /// `NUMBUFLEN`: the scratch buffer every `printf`-formatted number goes
 /// through.
@@ -146,7 +146,7 @@ impl<const ECHO: bool> TypvalSink for TextSink<'_, ECHO> {
 
     /// NaN and infinity have no Vimscript literal, so they come out as the
     /// `str2float()` call that rebuilds them.
-    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: float_T) -> Flow {
+    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: Float) -> Flow {
         match flt.classify() {
             ::core::num::FpCategory::Nan => self.gap.extend_from_slice(b"str2float('nan')"),
             ::core::num::FpCategory::Infinite => {

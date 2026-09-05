@@ -68,7 +68,7 @@
 # of INT_MAX, `f_getmousepos` computed `col + 1 + w_wincol_off` in `int`,
 # the C wraps on the overflow and a checked build of the port trapped on
 # it.  That was the port's own defect and B19-11 fixed it by summing in
-# `varnumber_T`, which is the width both fields have anyway.  ANY
+# `VarNumber`, which is the width both fields have anyway.  ANY
 # ABORTED ROW IS NOW A REGRESSION.
 #
 # ALL THREE KEPT SIDES STILL ABORT ON THAT ONE ROW, and that is the

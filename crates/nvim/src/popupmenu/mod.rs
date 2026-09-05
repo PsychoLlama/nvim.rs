@@ -57,9 +57,9 @@ use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     AlignTextPos, Array, Buffer, Error, Float, Integer, LineNr, Object, OptInt, OptVal, String_0,
-    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T, exarg_T, float_T,
+    VarNumber, VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T, exarg_T,
     handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, lpos_T, pumitem_T, sattr_T, schar_T, size_t,
-    tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
+    tabpage_T, uint32_t, vimmenu_T, win_T,
 };
 use crate::ui::{
     ui_call_grid_destroy, ui_call_grid_resize, ui_call_option_set, ui_call_popupmenu_hide,
@@ -571,10 +571,9 @@ pub unsafe fn pum_set_event_info(dict: *mut dict_T) {
         c = f64::from(pum_col.get());
     }
     for (key, value) in [(c"height", h), (c"width", w), (c"row", r), (c"col", c)] {
-        let _ =
-            unsafe { tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as float_T) };
+        let _ = unsafe { tv_dict_add_float(dict, key.as_ptr(), key.count_bytes(), value as Float) };
     }
-    let _ = unsafe { tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"size".as_ptr(), 4, pum_size.get() as VarNumber) };
     let _ = unsafe {
         tv_dict_add_bool(
             dict,

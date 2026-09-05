@@ -51,7 +51,7 @@ pub(crate) const TYPE_IDX_VALUE: bool = true;
 pub(crate) const VAL_IDX_VALUE: bool = false;
 
 /// The largest and smallest integers an api `Integer` and a Vimscript
-/// `varnumber_T` hold — both are `int64_t`.
+/// `VarNumber` hold — both are `int64_t`.
 pub(crate) const API_INTEGER_MAX: i64 = i64::MAX;
 pub(crate) const API_INTEGER_MIN: i64 = i64::MIN;
 pub(crate) const VARNUMBER_MAX: i64 = i64::MAX;

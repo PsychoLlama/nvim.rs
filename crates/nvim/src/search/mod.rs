@@ -81,9 +81,8 @@ use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
     ColNr, Direction, EvalFuncData, FILE, LineNr, MotionType, ProfTime, SearchOffset,
-    SearchPattern, cmdarg_T, dict_T, file_comparison, int64_t, list_T, lpos_T, magic_T, oparg_T,
-    pos_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t, typval_T, varnumber_T,
-    win_T,
+    SearchPattern, VarNumber, cmdarg_T, dict_T, file_comparison, int64_t, list_T, lpos_T, magic_T,
+    oparg_T, pos_T, ptrdiff_t, regmatch_T, regmmatch_T, searchit_arg_T, size_t, typval_T, win_T,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};

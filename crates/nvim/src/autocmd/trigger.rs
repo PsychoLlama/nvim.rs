@@ -375,10 +375,10 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
     // SAFETY: `save_v_event` is this frame's own storage, and the dictionary
     // `get_v_event` hands back is `v:event`, live until `restore_v_event`.
     let dict = unsafe { get_v_event(&raw mut save_v_event) };
-    debug_assert!(chanid < varnumber_T::MAX as uint64_t);
+    debug_assert!(chanid < VarNumber::MAX as uint64_t);
     // SAFETY: `dict` is that dictionary and the key is a NUL-terminated
     // literal of the length given.
-    let _ = unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"chan".as_ptr(), 4, chanid as VarNumber) };
     // SAFETY: as above.
     unsafe { tv_dict_set_keys_readonly(dict) };
 

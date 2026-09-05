@@ -19,7 +19,7 @@ use crate::msgpack_rpc::packer::{
 };
 use crate::os::cshim::gettext;
 use crate::types::{
-    Integer, PackerBuffer, String_0, blob_T, dict_T, float_T, int64_t, size_t, typval_T,
+    Float, Integer, PackerBuffer, String_0, blob_T, dict_T, int64_t, size_t, typval_T,
 };
 
 /// The two errors this sink can raise, both through
@@ -66,7 +66,7 @@ impl TypvalSink for MsgpackSink<'_> {
         mpack_uint64(&mut self.packer.ptr, num);
     }
 
-    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: float_T) -> Flow {
+    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: Float) -> Flow {
         mpack_float8(&mut self.packer.ptr, flt);
         Flow::Go
     }

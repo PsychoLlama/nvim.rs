@@ -54,7 +54,7 @@ pub(crate) fn script_count() -> c_int {
 ///
 /// Null for an id outside `1..=`[`script_count`], which upstream's macro
 /// would read past the end for; debug builds fail the assertion instead.
-pub(crate) fn script_item(sid: scid_T) -> *mut scriptitem_T {
+pub(crate) fn script_item(sid: ScriptId) -> *mut scriptitem_T {
     debug_assert!(script_id_valid(sid), "script id out of range");
     let idx = usize::try_from(sid - 1).ok();
     script_items.with(|items| {
@@ -69,7 +69,7 @@ pub(crate) fn script_id_valid(sid: c_int) -> bool {
 }
 
 /// Was script `sid` written in Lua?
-pub unsafe fn script_is_lua(sid: scid_T) -> bool {
+pub unsafe fn script_is_lua(sid: ScriptId) -> bool {
     if sid == SID_LUA {
         return true;
     }
@@ -118,7 +118,7 @@ pub unsafe fn ex_scriptnames(eap: *mut exarg_T) {
     // are this frame's rather than the shared scratch upstream reuses.
     let mut shortname = [0 as c_char; MAXPATHL as usize];
     let mut row = [0 as c_char; IOSIZE as usize];
-    let mut sid: scid_T = 1;
+    let mut sid: ScriptId = 1;
     while sid <= script_count() && !got_int.get() {
         // SAFETY: `sid` is in range, and the registry is re-read every round
         // because the output below can pause for the user.
@@ -164,7 +164,7 @@ unsafe fn edit_script(eap: *mut exarg_T, by_number: bool) {
             emsg(gettext(e_invarg));
             return;
         }
-        unsafe { (*eap).arg = (*script_item((*eap).line2 as scid_T)).sn_name };
+        unsafe { (*eap).arg = (*script_item((*eap).line2 as ScriptId)).sn_name };
     } else {
         let namebuff = path.as_mut_ptr();
         unsafe { expand_env((*eap).arg, namebuff, MAXPATHL) };
@@ -265,7 +265,7 @@ fn getline_is_source(fgetline: LineGetter) -> bool {
 /// # Safety
 ///
 /// The global function table must be walkable, which it is outside a rehash.
-unsafe fn get_script_local_funcs(sid: scid_T) -> *mut list_T {
+unsafe fn get_script_local_funcs(sid: ScriptId) -> *mut list_T {
     let functbl = func_tbl_get();
     // SAFETY: the process-wide function table, which outlives this walk, and
     // a fresh list with at most one entry per function.
@@ -294,7 +294,7 @@ enum ScriptQuery {
     /// No argument, or one that named neither key: every script, names only.
     All,
     /// `{'sid': n}`: that one script, with its variables and functions too.
-    Sid(varnumber_T),
+    Sid(VarNumber),
     /// `{'name': pat}`: the scripts whose path matches the caller's `regmatch`.
     Matching,
     /// The argument was rejected; an error is already pending.
@@ -390,7 +390,7 @@ unsafe fn script_query(
 ///
 /// `l` must be a live list, and `query` must still own its compiled pattern.
 unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut regmatch_T) {
-    let total = varnumber_T::from(script_count());
+    let total = VarNumber::from(script_count());
     // A `sid` query asks about exactly one script, and answers nothing at all
     // when that script does not exist.
     let (first, last) = match *query {
@@ -400,7 +400,7 @@ unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut reg
 
     for sid in first..=last {
         // SAFETY: `sid` is in range, and nothing in the body sources a script.
-        let si = script_item(sid as scid_T);
+        let si = script_item(sid as ScriptId);
         // SAFETY: a registry slot always holds a live `scriptitem_T`.
         let name = unsafe { (*si).sn_name };
         if name.is_null() {
@@ -426,7 +426,7 @@ unsafe fn report_scripts(l: *mut list_T, query: &ScriptQuery, regmatch: &mut reg
             let vars = unsafe { tv_dict_copy(ptr::null(), sv_dict, true, get_copy_id()) };
             let (key, klen) = (c"variables".as_ptr(), c"variables".count_bytes());
             let _ = unsafe { tv_dict_add_dict(d, key, klen, vars) };
-            let funcs = unsafe { get_script_local_funcs(sid as scid_T) };
+            let funcs = unsafe { get_script_local_funcs(sid as ScriptId) };
             let (key, klen) = (c"functions".as_ptr(), c"functions".count_bytes());
             let _ = unsafe { tv_dict_add_list(d, key, klen, funcs) };
         }
@@ -450,7 +450,7 @@ unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
-unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
+unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 

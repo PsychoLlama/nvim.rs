@@ -33,7 +33,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::plines::linetabsize_col;
 use crate::types::{
-    EvalFuncData, VAR_STRING, kListLenUnknown, ptrdiff_t, size_t, typval_T, varnumber_T,
+    EvalFuncData, VAR_STRING, VarNumber, kListLenUnknown, ptrdiff_t, size_t, typval_T,
 };
 
 /// The scratch buffer `tv_get_string_buf_chk` renders a Number into.
@@ -46,7 +46,7 @@ pub unsafe fn f_str2list(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     unsafe { tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t) };
     let mut p = unsafe { numbuf.string(argvars) };
     while unsafe { *p } != 0 {
-        unsafe { tv_list_append_number((*rettv).vval.v_list, utf_ptr2char(p) as varnumber_T) };
+        unsafe { tv_list_append_number((*rettv).vval.v_list, utf_ptr2char(p) as VarNumber) };
         p = unsafe { p.offset(utf_ptr2len(p) as isize) };
     }
 }
@@ -85,7 +85,7 @@ pub unsafe fn f_str2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         _ => Str2NrBases::NONE,
     };
 
-    let mut n: varnumber_T = 0;
+    let mut n: VarNumber = 0;
     // Only the number and the base matter here: every other output --
     // the prefix length, the digit count, the unsigned value and the
     // overflow flag -- is one `vim_str2nr` may skip.
@@ -126,7 +126,7 @@ pub unsafe fn f_stridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let pos = unsafe { strstr(haystack, needle) };
     if !pos.is_null() {
         // Reported against the whole string, not against the start.
-        unsafe { (*rettv).vval.v_number = pos.offset_from(haystack_start) as varnumber_T };
+        unsafe { (*rettv).vval.v_number = pos.offset_from(haystack_start) as VarNumber };
     }
 }
 
@@ -172,7 +172,7 @@ pub unsafe fn f_strridx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     };
 
     if !lastmatch.is_null() {
-        unsafe { (*rettv).vval.v_number = lastmatch.offset_from(haystack) as varnumber_T };
+        unsafe { (*rettv).vval.v_number = lastmatch.offset_from(haystack) as VarNumber };
     }
 }
 
@@ -185,7 +185,7 @@ pub unsafe fn f_string(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 /// "strlen()" function: the length in bytes.
 pub unsafe fn f_strlen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = cstr::bytes_at(numbuf.string(argvars)).len() as varnumber_T };
+    unsafe { (*rettv).vval.v_number = cstr::bytes_at(numbuf.string(argvars)).len() as VarNumber };
 }
 
 /// The character count `strchars()` and `strcharlen()` share.
@@ -200,7 +200,7 @@ unsafe fn strchar_common(argvars: *mut typval_T, rettv: *mut typval_T, skipcc: b
         mb_cptr2char_adv
     };
     let mut s = unsafe { numbuf.string(argvars) };
-    let mut len: varnumber_T = 0;
+    let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         unsafe { next_char(&raw mut s) };
         len += 1;
@@ -237,15 +237,13 @@ pub unsafe fn f_strdisplaywidth(argvars: *mut typval_T, rettv: *mut typval_T, _f
     } else {
         0
     };
-    unsafe {
-        (*rettv).vval.v_number = (linetabsize_col(col, s as *mut c_char) - col) as varnumber_T
-    };
+    unsafe { (*rettv).vval.v_number = (linetabsize_col(col, s as *mut c_char) - col) as VarNumber };
 }
 
 /// "strwidth()" function: screen cells, with a tab counting as one.
 pub unsafe fn f_strwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = mb_string2cells(numbuf.string(argvars)) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = mb_string2cells(numbuf.string(argvars)) as VarNumber };
 }
 
 /// "strtrans()" function: unprintable characters as `^X`/`<xx>`.

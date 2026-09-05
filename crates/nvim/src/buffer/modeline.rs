@@ -27,7 +27,7 @@ use crate::main::{current_sctx, p_mls, secure};
 use crate::memline::{ml_get, ml_get_len};
 use crate::option::do_set;
 use crate::runtime::{estack_pop, estack_push};
-use crate::types::{Failed, LineNr, OptionSetFlags, intmax_t, scid_T};
+use crate::types::{Failed, LineNr, OptionSetFlags, ScriptId, intmax_t};
 use crate::version::min_vim_version;
 use crate::winlayer::Buf;
 
@@ -303,7 +303,7 @@ fn set_one(text: &mut [u8], s: usize, lnum: LineNr, flags: OptionSetFlags) -> Re
     let secure_save = secure.get();
     let save_current_sctx = current_sctx.get();
     current_sctx.with_mut(|sctx| {
-        sctx.sc_sid = SID_MODELINE as scid_T;
+        sctx.sc_sid = SID_MODELINE as ScriptId;
         sctx.sc_seq = 0;
         sctx.sc_lnum = lnum;
     });

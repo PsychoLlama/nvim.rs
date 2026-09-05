@@ -291,8 +291,8 @@ unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
     // SAFETY: the dict is live, and the entry's strings are
     // NUL-terminated.
     unsafe { add_str(retdict, c"tagname", tag.tagname) };
-    unsafe { add_nr(retdict, c"matchnr", (tag.cur_match + 1) as varnumber_T) };
-    unsafe { add_nr(retdict, c"bufnr", tag.cur_fnum as varnumber_T) };
+    unsafe { add_nr(retdict, c"matchnr", (tag.cur_match + 1) as VarNumber) };
+    unsafe { add_nr(retdict, c"bufnr", tag.cur_fnum as VarNumber) };
     if !tag.user_data.is_null() {
         unsafe { add_str(retdict, c"user_data", tag.user_data) };
     }
@@ -301,21 +301,21 @@ unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
     let _ = unsafe { tv_dict_add_list(retdict, c"from".as_ptr(), c"from".count_bytes(), pos) };
     let mark = &tag.fmark;
     let str_m = if mark.fnum != -1 {
-        mark.fnum as varnumber_T
+        mark.fnum as VarNumber
     } else {
         0
     };
     unsafe { tv_list_append_number(pos, str_m) };
-    unsafe { tv_list_append_number(pos, mark.mark.lnum as varnumber_T) };
+    unsafe { tv_list_append_number(pos, mark.mark.lnum as VarNumber) };
     // Columns are counted from one outside, except for the "past the
     // end of the line" sentinel, which is passed through.
     let n2 = if mark.mark.col == MAXCOL as ColNr {
-        MAXCOL as varnumber_T
+        MAXCOL as VarNumber
     } else {
-        (mark.mark.col + 1) as varnumber_T
+        (mark.mark.col + 1) as VarNumber
     };
     unsafe { tv_list_append_number(pos, n2) };
-    unsafe { tv_list_append_number(pos, mark.mark.coladd as varnumber_T) };
+    unsafe { tv_list_append_number(pos, mark.mark.coladd as VarNumber) };
 }
 
 /// `gettagstack()` — describe the tag stack of `wp` into `retdict`.
@@ -325,8 +325,8 @@ unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
 pub unsafe fn get_tagstack(wp: Win, retdict: *mut dict_T) {
     // SAFETY: the dict is live, and nothing else holds the window's stack.
     let mut stack = unsafe { TagStack::of(wp) };
-    unsafe { add_nr(retdict, c"length", stack.len() as varnumber_T) };
-    unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as varnumber_T) };
+    unsafe { add_nr(retdict, c"length", stack.len() as VarNumber) };
+    unsafe { add_nr(retdict, c"curidx", (stack.curidx() + 1) as VarNumber) };
 
     let items = unsafe { tv_list_alloc(2) };
     let _ = unsafe { tv_dict_add_list(retdict, c"items".as_ptr(), c"items".count_bytes(), items) };
@@ -401,7 +401,7 @@ unsafe fn find(d: *const dict_T, key: &CStr) -> Option<*mut dictitem_T> {
 ///
 /// # Safety
 /// `d` must be live.
-unsafe fn add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
+unsafe fn add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
     // SAFETY: the dict is live and the key is NUL-terminated.
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }

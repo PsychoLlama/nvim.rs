@@ -61,9 +61,9 @@ use crate::strings::vim_strchr;
 use crate::types::{
     CONV_9_TO_UTF8, CONV_ICONV, CONV_NONE, CONV_NONE_INIT, CONV_TO_LATIN1, CONV_TO_LATIN9,
     CONV_TO_UTF8, CharBoundsOff, CharInfo, ColNr, EvalFuncData, GraphemeState, IOSIZE, MB_MAXCHAR,
-    NUL, StrCharInfo, VAR_LIST, VAR_NUMBER, VAR_STRING, expand_T, iconv_t, int8_t, int32_t, list_T,
-    ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint64_t, uintptr_t, utf8proc_int32_t,
-    varnumber_T, vimconv_T, win_T,
+    NUL, StrCharInfo, VAR_LIST, VAR_NUMBER, VAR_STRING, VarNumber, expand_T, iconv_t, int8_t,
+    int32_t, list_T, ptrdiff_t, schar_T, size_t, ssize_t, typval_T, uint8_t, uint64_t, uintptr_t,
+    utf8proc_int32_t, vimconv_T, win_T,
 };
 use crate::utf8proc::{
     UTF8PROC_BOUNDCLASS_CONTROL, UTF8PROC_BOUNDCLASS_CR, UTF8PROC_BOUNDCLASS_EXTENDED_PICTOGRAPHIC,

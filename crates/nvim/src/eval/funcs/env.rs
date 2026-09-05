@@ -37,8 +37,8 @@ use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
     CmdAddr, EvalFuncData, ExArgt, ExpandContext, NUL, OK, OptInt, VAR_DICT, VAR_LIST, VAR_SPECIAL,
-    VAR_STRING, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow, kListLenUnknown,
-    kSpecialVarNull, list_T, typval_T, varnumber_T,
+    VAR_STRING, VarNumber, XDGVarType, exarg_T, expand_T, kBoolVarFalse, kListLenShouldKnow,
+    kListLenUnknown, kSpecialVarNull, list_T, typval_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -256,7 +256,7 @@ pub unsafe fn f_setfperm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             mode |= 1 << (8 - i);
         }
     }
-    rettv.vval.v_number = (unsafe { os_setperm(fname, mode) } == OK) as varnumber_T;
+    rettv.vval.v_number = (unsafe { os_setperm(fname, mode) } == OK) as VarNumber;
 }
 
 /// The `config_dirs`/`data_dirs` answer: every directory in the XDG search

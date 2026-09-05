@@ -63,9 +63,9 @@ use crate::types::{
     HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
     KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, MarkGet, MotionType,
     OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
-    SubReplacementString, Timestamp, VAR_UNKNOWN, VarLock, bln_values, buf_T, dictitem_T, fmark_T,
-    fmarkv_T, int64_t, list_T, pos_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union,
-    uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T,
+    SubReplacementString, Timestamp, VAR_UNKNOWN, VarFlavour, VarLock, bln_values, buf_T,
+    dictitem_T, fmark_T, fmarkv_T, int64_t, list_T, pos_T, ptrdiff_t, size_t, ssize_t, typval_T,
+    typval_vval_union, uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, xfmark_T,
     yankreg_T,
 };
 use crate::version::LONG_VERSION;

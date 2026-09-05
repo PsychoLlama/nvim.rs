@@ -428,7 +428,7 @@ pub unsafe fn apply_autocmds_group(
                 ::core::ptr::null_mut()
             } else {
                 let saved = unsafe { set_cmdarg(eap, ::core::ptr::null_mut()) };
-                unsafe { set_vim_var_nr(Vv::Cmdbang, (*eap).forceit as varnumber_T) };
+                unsafe { set_vim_var_nr(Vv::Cmdbang, (*eap).forceit as VarNumber) };
                 saved
             };
             retval = true;

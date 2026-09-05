@@ -145,7 +145,7 @@ pub unsafe fn get_vim_var_tv(idx: Vv) -> *mut typval_T {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn get_vim_var_nr(idx: Vv) -> varnumber_T {
+pub unsafe fn get_vim_var_nr(idx: Vv) -> VarNumber {
     // SAFETY: the caller's obligation -- the declared type is the Number arm.
     vimvar_val(idx).number_or_zero()
 }
@@ -212,7 +212,7 @@ pub unsafe fn set_vim_var_type(idx: Vv, type_0: VarType) {
 ///
 /// # Safety
 /// As [`get_vim_var_tv`].
-pub unsafe fn set_vim_var_nr(idx: Vv, val: varnumber_T) {
+pub unsafe fn set_vim_var_nr(idx: Vv, val: VarNumber) {
     let mut tv = vimvar_val(idx);
     clear_vimvar(idx);
     tv.vval.v_number = val;
@@ -507,8 +507,8 @@ pub unsafe fn set_vcount(count: int64_t, count1: int64_t, set_prevcount: bool) {
         prev.vval.v_number = old;
     }
     let (mut count_tv, mut count1_tv) = (vimvar_val(Vv::Count), vimvar_val(Vv::Count1));
-    count_tv.vval.v_number = count as varnumber_T;
-    count1_tv.vval.v_number = count1 as varnumber_T;
+    count_tv.vval.v_number = count as VarNumber;
+    count1_tv.vval.v_number = count1 as VarNumber;
 }
 
 /// The type enforcement a write to a `v:` variable passes.

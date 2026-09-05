@@ -355,5 +355,5 @@ pub unsafe fn comp_col() {
     sc_col.set((Columns.get() - sc_width).max(1));
     ru_col.set((Columns.get() - ru_width).max(1));
 
-    unsafe { set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Echospace, (sc_col.get() - 1) as VarNumber) };
 }

@@ -41,9 +41,9 @@ use crate::os::fs::{os_dirname, os_fileinfo_link, os_mkdir_recurse, os_remove, o
 use crate::path::{full_name_save, path_tail, path_tail_with_sep};
 use crate::tr_c;
 use crate::types::{
-    CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VarLock, kCdScopeGlobal,
-    kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, tabpage_T, typval_T,
-    typval_vval_union, uint64_t, varnumber_T, win_T,
+    CdScope, EvalFuncData, MAXPATHL, OK, VAR_NUMBER, VAR_STRING, VarLock, VarNumber,
+    kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow, size_t, tabpage_T, typval_T,
+    typval_vval_union, uint64_t, win_T,
 };
 use crate::window::find_tabpage;
 use crate::winlayer::{TabPage, Win};
@@ -257,7 +257,7 @@ impl Scope {
 }
 
 /// The Number argument `tv` holds.
-fn number_of(tv: &typval_T) -> varnumber_T {
+fn number_of(tv: &typval_T) -> VarNumber {
     tv.number_or_zero()
 }
 
@@ -324,7 +324,7 @@ pub unsafe fn f_chdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
 pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1 as varnumber_T;
+    rettv.vval.v_number = -1 as VarNumber;
     if secure() {
         return;
     }
@@ -341,12 +341,12 @@ pub unsafe fn f_delete(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         c""
     };
     let name = name.as_ptr();
-    let done = |ret: c_int| -> varnumber_T { if ret == 0 { 0 } else { -1 } };
+    let done = |ret: c_int| -> VarNumber { if ret == 0 { 0 } else { -1 } };
     rettv.vval.v_number = match flags.to_bytes() {
         // SAFETY: `name` is NUL-terminated; each callee only reads it.
         b"" => done(unsafe { os_remove(name) }),
         b"d" => done(unsafe { os_rmdir(name) }),
-        b"rf" => varnumber_T::from(unsafe { delete_recursive(name) }),
+        b"rf" => VarNumber::from(unsafe { delete_recursive(name) }),
         _ => {
             err1(e_invexpr2, flags.as_ptr());
             return;
@@ -383,7 +383,7 @@ pub unsafe fn f_filecopy(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             str_arg(args, 1, &mut numbuf3).as_ptr(),
         );
         // SAFETY: both are NUL-terminated.
-        rettv.vval.v_number = (unsafe { vim_copyfile(from, to) } == OK) as varnumber_T;
+        rettv.vval.v_number = (unsafe { vim_copyfile(from, to) } == OK) as VarNumber;
     }
 }
 
@@ -435,7 +435,7 @@ pub unsafe fn f_getcwd(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 pub unsafe fn f_haslocaldir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
     rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0 as varnumber_T;
+    rettv.vval.v_number = 0 as VarNumber;
     let Some(s) = Scope::read(args, true) else {
         return;
     };
@@ -443,11 +443,11 @@ pub unsafe fn f_haslocaldir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     rettv.vval.v_number = match s.scope {
         kCdScopeWindow => {
             debug_assert!(!s.win.is_null(), "win");
-            !win_localdir(s.win).is_null() as varnumber_T
+            !win_localdir(s.win).is_null() as VarNumber
         }
         kCdScopeTabpage => {
             debug_assert!(!s.tp.is_null(), "tp");
-            !tab_localdir(s.tp).is_null() as varnumber_T
+            !tab_localdir(s.tp).is_null() as VarNumber
         }
         kCdScopeInvalid => {
             // We should never get here: the read above defaulted it.
@@ -455,7 +455,7 @@ pub unsafe fn f_haslocaldir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
             unsafe { abort() };
         }
         // The global scope never has a local directory.
-        _ => 0 as varnumber_T,
+        _ => 0 as VarNumber,
     };
 }
 
@@ -472,7 +472,7 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
     let mut prot: c_int = 0o755;
     // Held in a local and written back at each exit, so that the answer is
     // only ever written into the union, never read back out of it.
-    let mut result = FAIL as varnumber_T;
+    let mut result = FAIL as VarNumber;
     rettv.vval.v_number = result;
     if secure() {
         return;
@@ -519,20 +519,20 @@ pub unsafe fn f_mkdir(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
             if ret != 0 {
                 err2(e_mkdir, failed_dir, strerror(ret));
                 drop(Owned(failed_dir));
-                rettv.vval.v_number = FAIL as varnumber_T;
+                rettv.vval.v_number = FAIL as VarNumber;
                 return;
             }
-            result = OK as varnumber_T;
+            result = OK as VarNumber;
         }
     }
-    if result == FAIL as varnumber_T {
+    if result == FAIL as VarNumber {
         // SAFETY: `dir` is NUL-terminated; the callee reports its own error.
-        result = varnumber_T::from(unsafe { vim_mkdir_emsg(dir, prot) }.is_ok());
+        result = VarNumber::from(unsafe { vim_mkdir_emsg(dir, prot) }.is_ok());
     }
     rettv.vval.v_number = result;
 
     // The "D" and "R" flags: deferred deletion of the created directory.
-    if result == OK as varnumber_T && created.is_null() && (defer || defer_recurse) {
+    if result == OK as VarNumber && created.is_null() && (defer || defer_recurse) {
         // SAFETY: `dir` is NUL-terminated; the answer is nvim's heap.
         created = unsafe { full_name_save(dir, false) };
     }
@@ -576,7 +576,7 @@ pub unsafe fn f_rename(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
     if secure() {
-        rettv.vval.v_number = -1 as varnumber_T;
+        rettv.vval.v_number = -1 as VarNumber;
         return;
     }
     let mut buf = NumBuf::new();
@@ -585,7 +585,7 @@ pub unsafe fn f_rename(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
         path_arg(args, 1, &mut buf).as_ptr(),
     );
     // SAFETY: both are NUL-terminated.
-    rettv.vval.v_number = unsafe { vim_rename(from, to) } as varnumber_T;
+    rettv.vval.v_number = unsafe { vim_rename(from, to) } as VarNumber;
 }
 
 /// `tempname()`: a fresh name in the session's own temporary directory.

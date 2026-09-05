@@ -37,8 +37,8 @@ use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
 use crate::tr_c;
 use crate::types::{
-    EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, blob_T, list_T,
-    listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union, varnumber_T,
+    EvalFuncData, FileDescriptor, VAR_BLOB, VAR_LIST, VAR_STRING, VarLock, VarNumber, blob_T,
+    list_T, listitem_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -406,7 +406,7 @@ impl Flags {
 /// a cleared result.
 pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1 as varnumber_T;
+    rettv.vval.v_number = -1 as VarNumber;
     if secure() || !writable(args) {
         return;
     }
@@ -449,7 +449,7 @@ pub unsafe fn f_writefile(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         _ => write_list(&mut out, list_of(args.get(0)), flags.binary),
     };
     if write_ok {
-        rettv.vval.v_number = 0 as varnumber_T;
+        rettv.vval.v_number = 0 as VarNumber;
     }
     let error = out.close(flags.do_fsync);
     if error != 0 {

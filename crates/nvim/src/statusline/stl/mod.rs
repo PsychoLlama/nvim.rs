@@ -81,8 +81,8 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    ColNr, LineNr, MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VarLock, Vv, int64_t, schar_T,
-    size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, varnumber_T, win_T,
+    ColNr, LineNr, MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VarLock, VarNumber, Vv, int64_t,
+    schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
@@ -451,7 +451,7 @@ fn take_cstring(str: *mut c_char) -> Option<Vec<u8>> {
 }
 
 /// `v:lnum`, `v:relnum` and `v:virtnum`, which `'statuscolumn'` items read.
-pub(super) fn vim_var(idx: Vv) -> varnumber_T {
+pub(super) fn vim_var(idx: Vv) -> VarNumber {
     // SAFETY: the index is a compile-time [`Vv`] variant.
     unsafe { get_vim_var_nr(idx) }
 }
@@ -720,7 +720,7 @@ pub unsafe fn build_stl_str_hl(
             v_type: VAR_NUMBER,
             v_lock: VarLock::Unlocked,
             vval: typval_vval_union {
-                v_number: win.handle as varnumber_T,
+                v_number: win.handle as VarNumber,
             },
         };
         let name = c"g:statusline_winid";

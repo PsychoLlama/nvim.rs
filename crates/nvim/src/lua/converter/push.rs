@@ -31,7 +31,7 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    LuaRef, blob_T, dict_T, float_T, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
+    Float, LuaRef, blob_T, dict_T, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
     typval_T,
 };
 
@@ -149,7 +149,7 @@ impl TypvalSink for LuaSink {
         self.pushnumber(num as lua_Number);
     }
 
-    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: float_T) -> Flow {
+    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: Float) -> Flow {
         self.pushnumber(flt);
         Flow::Go
     }

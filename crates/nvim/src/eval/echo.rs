@@ -37,8 +37,8 @@ use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
     LineNr, NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING,
-    VAR_UNKNOWN, VarLock, evalarg_T, exarg_T, funccal_entry_T, ptrdiff_t, sctx_T, size_t, typval_T,
-    typval_vval_union, var_flavour_T,
+    VAR_UNKNOWN, VarFlavour, VarLock, evalarg_T, exarg_T, funccal_entry_T, ptrdiff_t, sctx_T,
+    size_t, typval_T, typval_vval_union,
 };
 use crate::ui::ui_has;
 
@@ -264,7 +264,7 @@ pub unsafe fn ex_execute(eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `varname` must be NUL-terminated.
-pub unsafe fn var_flavour(varname: *mut c_char) -> var_flavour_T {
+pub unsafe fn var_flavour(varname: *mut c_char) -> VarFlavour {
     // SAFETY: the caller's promise -- `varname` is NUL-terminated, so its
     // first byte is readable.
     let first = unsafe { *varname };

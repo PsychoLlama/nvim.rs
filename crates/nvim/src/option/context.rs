@@ -16,7 +16,7 @@ use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{restore_win_noblock, switch_win_noblock};
 use crate::main::{curbuf, curwin};
 use crate::types::{
-    Error, OptIndex, OptScope, OptVal, OptionSetFlags, aco_save_T, buf_T, kErrorTypeNone, scid_T,
+    Error, OptIndex, OptScope, OptVal, OptionSetFlags, ScriptId, aco_save_T, buf_T, kErrorTypeNone,
     switchwin_T, win_T,
 };
 use crate::window::win_find_tabpage;
@@ -41,7 +41,7 @@ pub(crate) unsafe fn set_option_direct_for(
     opt_idx: OptIndex,
     value: OptVal,
     opt_flags: OptionSetFlags,
-    set_sid: scid_T,
+    set_sid: ScriptId,
     scope: OptScope,
     from: *mut c_void,
 ) {

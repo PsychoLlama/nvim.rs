@@ -19,7 +19,7 @@ pub struct AdditionalData {
 }
 /// A one-argument float operation, as `float_op_wrapper` calls it. The
 /// implementations are `eval::funcs::math`'s, wrapping `f64`'s methods.
-pub type FloatFunc = Option<fn(float_T) -> float_T>;
+pub type FloatFunc = Option<fn(Float) -> Float>;
 /// The payload one row of the builtin-function table carries.
 ///
 /// There is no tag beside it: which arm a row holds follows from the row's
@@ -61,7 +61,7 @@ pub type NS = handle_T;
 pub type OptInt = int64_t;
 pub type Terminal = terminal;
 pub type buf_T = file_buffer;
-pub type float_T = ::core::ffi::c_double;
+pub type Float = ::core::ffi::c_double;
 pub type handle_T = ::core::ffi::c_int;
 pub type ProfTime = uint64_t;
 pub type regprog_T = regprog;

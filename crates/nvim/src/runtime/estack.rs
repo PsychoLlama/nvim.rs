@@ -28,7 +28,7 @@ use std::ffi::CString;
 
 /// A stack entry with no `es_info` payload yet; the pushers that have one fill
 /// it in through the returned pointer.
-fn entry_for(es_type: etype_T, name: *mut c_char, lnum: LineNr) -> estack_T {
+fn entry_for(es_type: EStackType, name: *mut c_char, lnum: LineNr) -> estack_T {
     estack_T {
         es_lnum: lnum,
         es_name: name,
@@ -54,7 +54,7 @@ pub fn estack_init() {
 /// The `es_info` payload, where the frame has one, is filled in afterwards
 /// through [`with_innermost`]; upstream hands the caller a pointer to the new
 /// slot instead, and no caller here wanted one.
-pub fn estack_push(es_type: etype_T, name: *mut c_char, lnum: LineNr) {
+pub fn estack_push(es_type: EStackType, name: *mut c_char, lnum: LineNr) {
     push_entry(entry_for(es_type, name, lnum));
 }
 
@@ -158,7 +158,7 @@ pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
 ///
 /// `which` is `ESTACK_SFILE` for `<sfile>`, `ESTACK_STACK` for `<stack>` or
 /// `ESTACK_SCRIPT` for `<script>`.
-pub unsafe fn estack_sfile(which: estack_arg_T) -> *mut c_char {
+pub unsafe fn estack_sfile(which: EStackArg) -> *mut c_char {
     // Nothing reached from inside the borrow pushes onto the stack, which is
     // what makes holding it across these calls sound -- and `with` is now the
     // thing that would catch it if that ever stopped being true.
@@ -228,14 +228,14 @@ unsafe fn defining_script(stack: &[estack_T]) -> *mut c_char {
 /// # Safety
 ///
 /// Every frame's `es_name`, when non-null, must be NUL-terminated.
-unsafe fn render_stack(stack: &[estack_T], which: estack_arg_T) -> *mut c_char {
+unsafe fn render_stack(stack: &[estack_T], which: EStackArg) -> *mut c_char {
     let mut text = Vec::<u8>::new();
     // Whether any frame contributed: a stack of unnamed frames answers null,
     // which is not the same answer as an empty string.
     let mut named = false;
 
     let innermost = stack.len() - 1;
-    let mut last_type: etype_T = ETYPE_SCRIPT;
+    let mut last_type: EStackType = ETYPE_SCRIPT;
     for (idx, entry) in stack.iter().enumerate() {
         if entry.es_name.is_null() {
             continue;
@@ -281,7 +281,7 @@ unsafe fn dict_add_str(d: *mut dict_T, key: &CStr, val: *const c_char) {
     let _ = unsafe { tv_dict_add_str(d, key.as_ptr(), key.count_bytes(), val) };
 }
 
-unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: varnumber_T) {
+unsafe fn dict_add_nr(d: *mut dict_T, key: &CStr, nr: VarNumber) {
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr(), key.count_bytes(), nr) };
 }
 
@@ -311,7 +311,7 @@ unsafe fn stacktrace_push_item(
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };
     }
-    unsafe { dict_add_nr(d, c"lnum", lnum as varnumber_T) };
+    unsafe { dict_add_nr(d, c"lnum", lnum as VarNumber) };
     unsafe { dict_add_str(d, c"filepath", filepath) };
     unsafe { tv_list_append_tv(l, &raw mut tv) };
 }

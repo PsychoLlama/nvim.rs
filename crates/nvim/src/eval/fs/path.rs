@@ -32,7 +32,7 @@ use crate::path::{
     add_pathsep, after_pathsep, path_is_absolute, path_next_component, path_tail,
     path_tail_with_sep, shorten_dir_len, simplify_filename,
 };
-use crate::types::{EvalFuncData, MAXPATHL, VAR_STRING, size_t, typval_T, varnumber_T};
+use crate::types::{EvalFuncData, MAXPATHL, VAR_STRING, VarNumber, size_t, typval_T};
 use ::libc::readlink;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -191,7 +191,7 @@ pub unsafe fn f_glob2regpat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 pub unsafe fn f_isabsolutepath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as varnumber_T;
+    rettv.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `pathshorten({path} [, {len}])`: every component but the last one cut

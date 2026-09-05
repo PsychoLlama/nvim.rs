@@ -109,7 +109,7 @@ unsafe fn getchar_opts(argvars: *mut typval_T, allow_number: bool) -> Option<Get
 ///
 /// # Safety
 /// `argvars` must be a valid argument vector.
-unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_T {
+unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> VarNumber {
     let mut error = false;
     loop {
         if cursor == CursorFlag::Msg || (cursor == CursorFlag::Default && msg_col.get() > 0) {
@@ -121,7 +121,7 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
         let blocking = unsafe { (*argvars).v_type } == VAR_UNKNOWN
             || (unsafe { (*argvars).v_type } == VAR_NUMBER
                 && unsafe { (*argvars).vval.v_number } == -1);
-        let n: varnumber_T = if blocking {
+        let n: VarNumber = if blocking {
             // getchar(): blocking wait.
             // TODO(bfredl): deduplicate the shared logic with state_enter?
             if !char_avail() {
@@ -141,17 +141,17 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
                     continue;
                 }
             }
-            safe_vgetc() as varnumber_T
+            safe_vgetc() as VarNumber
         } else if unsafe { tv_get_number_chk(argvars, &raw mut error) } == 1 {
             // getchar(1): only check whether a character is available.
-            vpeekc_any() as varnumber_T
+            vpeekc_any() as VarNumber
         } else if error || vpeekc_any() == NUL {
             // An illegal argument, or getchar(0) with nothing there.
             0
         } else {
             // getchar(0) with something there. Note that `vpeekc_any`
             // answers K_SPECIAL for K_IGNORE.
-            safe_vgetc() as varnumber_T
+            safe_vgetc() as VarNumber
         };
 
         let n = n as c_int;
@@ -160,7 +160,7 @@ unsafe fn getchar_read(argvars: *mut typval_T, cursor: CursorFlag) -> varnumber_
             && n != Key::VerScrollbar.code()
             && n != Key::HorScrollbar.code()
         {
-            return n as varnumber_T;
+            return n as VarNumber;
         }
     }
 }
@@ -190,10 +190,10 @@ unsafe fn set_mouse_vars() {
     let winnr = windows().take_while(|wp| wp.raw() != win.raw()).count() + 1;
     // SAFETY (this body): `curwin` is set from startup to exit, and the vim
     // variables set here are the editor's own.
-    unsafe { set_vim_var_nr(Vv::MouseWin, winnr as varnumber_T) };
-    unsafe { set_vim_var_nr(Vv::MouseWinid, win.handle as varnumber_T) };
-    unsafe { set_vim_var_nr(Vv::MouseLnum, lnum as varnumber_T) };
-    unsafe { set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::MouseWin, winnr as VarNumber) };
+    unsafe { set_vim_var_nr(Vv::MouseWinid, win.handle as VarNumber) };
+    unsafe { set_vim_var_nr(Vv::MouseLnum, lnum as VarNumber) };
+    unsafe { set_vim_var_nr(Vv::MouseCol, (pos.col + 1) as VarNumber) };
 }
 
 /// `getchar()` and `getcharstr()`.
@@ -292,5 +292,5 @@ pub unsafe fn f_getcharstr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 /// `rettv` must be a valid return slot.
 pub unsafe fn f_getcharmod(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_getchar`].
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(mod_mask.get().bits()) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(mod_mask.get().bits()) };
 }

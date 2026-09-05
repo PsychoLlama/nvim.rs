@@ -34,8 +34,8 @@ use crate::message_fmt::{c_str, c_str_len};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::types::{
     EvalFuncData, Failed, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER,
-    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, dict_T, dictitem_T, evalarg_T,
-    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, varnumber_T,
+    VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, dict_T, dictitem_T,
+    evalarg_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union,
 };
 
 /// A freshly declared typval.
@@ -227,8 +227,8 @@ pub(crate) unsafe fn eval_index_inner(
 ) -> Result<(), Failed> {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let mut n1: varnumber_T = 0;
-    let mut n2: varnumber_T = 0;
+    let mut n1: VarNumber = 0;
+    let mut n2: VarNumber = 0;
     // SAFETY: the caller's promise -- `rettv` is the value being indexed,
     // and `var1`/`var2` are null or valid typvals.
     let mut rv = unsafe { Tv::new(rettv) };
@@ -254,7 +254,7 @@ pub(crate) unsafe fn eval_index_inner(
             // SAFETY: `numbuf` is this frame's own scratch, and the String
             // it answers is NUL-terminated with `n1`/`n2` inside it.
             let s = unsafe { numbuf.string(rettv) };
-            let len = unsafe { cstr::bytes_at(s) }.len() as c_int as varnumber_T;
+            let len = unsafe { cstr::bytes_at(s) }.len() as c_int as VarNumber;
             let v = if exclusive {
                 // slice(): character indexes, second one excluded.
                 if is_range {
@@ -353,7 +353,7 @@ pub(crate) unsafe fn eval_index_inner(
 ///
 /// # Safety
 /// `str` must be null or NUL-terminated.
-pub(crate) unsafe fn char_from_string(str: *const c_char, index: varnumber_T) -> *mut c_char {
+pub(crate) unsafe fn char_from_string(str: *const c_char, index: VarNumber) -> *mut c_char {
     if str.is_null() {
         return null_mut();
     }
@@ -369,7 +369,7 @@ pub(crate) unsafe fn char_from_string(str: *const c_char, index: varnumber_T) ->
             nbyte += unsafe { utfc_ptr2len(str.add(nbyte as usize)) } as size_t;
             clen += 1;
         }
-        nchar = clen as varnumber_T + index;
+        nchar = clen as VarNumber + index;
         if nchar < 0 {
             return null_mut();
         }
@@ -396,11 +396,7 @@ pub(crate) unsafe fn char_from_string(str: *const c_char, index: varnumber_T) ->
 ///
 /// # Safety
 /// `str` must hold `str_len` readable bytes.
-pub(crate) unsafe fn char_idx2byte(
-    str: *const c_char,
-    str_len: size_t,
-    idx: varnumber_T,
-) -> ssize_t {
+pub(crate) unsafe fn char_idx2byte(str: *const c_char, str_len: size_t, idx: VarNumber) -> ssize_t {
     let mut nchar = idx;
     let mut nbyte: size_t = 0;
     if nchar >= 0 {
@@ -429,8 +425,8 @@ pub(crate) unsafe fn char_idx2byte(
 /// `str` must be null or NUL-terminated.
 pub(crate) unsafe fn string_slice(
     str: *const c_char,
-    first: varnumber_T,
-    last: varnumber_T,
+    first: VarNumber,
+    last: VarNumber,
     exclusive: bool,
 ) -> *mut c_char {
     if str.is_null() {

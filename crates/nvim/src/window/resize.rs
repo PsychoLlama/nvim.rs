@@ -42,7 +42,7 @@ use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{
-    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, StlClickDefinition, Window, scid_T, size_t,
+    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, ScriptId, StlClickDefinition, Window, size_t,
     tabpage_T, win_T,
 };
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
@@ -465,7 +465,7 @@ pub(crate) fn comp_scroll(wp: Win) {
     wp.w_onebuf_opt.wo_scr = default_scroll(wp);
     if wp.w_onebuf_opt.wo_scr != old {
         let ctx = &mut wp.w_onebuf_opt.wo_script_ctx[kWinOptScroll as usize];
-        ctx.sc_sid = SID_WINLAYOUT as scid_T;
+        ctx.sc_sid = SID_WINLAYOUT as ScriptId;
         ctx.sc_lnum = 0 as LineNr;
     }
 }

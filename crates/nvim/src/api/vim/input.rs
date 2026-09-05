@@ -214,7 +214,7 @@ pub unsafe fn nvim_replace_termcodes(
     let (no_flag, cpo) = (::core::ptr::null_mut::<bool>(), p_cpo.get());
     // SAFETY: `str` is the caller's, `ptr` this frame's own out-parameter,
     // and `'cpoptions'` a live NUL-terminated string.
-    unsafe { replace_termcodes(text, len, out, 0 as scid_T, flags, no_flag, cpo) };
+    unsafe { replace_termcodes(text, len, out, 0 as ScriptId, flags, no_flag, cpo) };
     // SAFETY: `replace_termcodes` left an owned C string in `ptr`.
     unsafe { cstr_as_string(ptr) }
 }

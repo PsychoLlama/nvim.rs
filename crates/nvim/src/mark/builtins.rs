@@ -57,22 +57,22 @@ pub(super) unsafe fn add_mark(
     let d = unsafe { tv_dict_alloc() };
     unsafe { tv_list_append_dict(l, d) };
     let lpos = unsafe { tv_list_alloc(kListLenMayKnow as ptrdiff_t) };
-    unsafe { tv_list_append_number(lpos, varnumber_T::from(bufnr)) };
-    unsafe { tv_list_append_number(lpos, varnumber_T::from(pos.lnum)) };
+    unsafe { tv_list_append_number(lpos, VarNumber::from(bufnr)) };
+    unsafe { tv_list_append_number(lpos, VarNumber::from(pos.lnum)) };
     // 1-BASED, unlike `:marks` and unlike the store. `MAXCOL` — which is
     // what a linewise `'>` carries — is passed through rather than
     // incremented, so it stays recognisable.
     unsafe {
         tv_list_append_number(
             lpos,
-            varnumber_T::from(if pos.col < MAXCOL {
+            VarNumber::from(if pos.col < MAXCOL {
                 pos.col + 1
             } else {
                 MAXCOL
             }),
         )
     };
-    unsafe { tv_list_append_number(lpos, varnumber_T::from(pos.coladd)) };
+    unsafe { tv_list_append_number(lpos, VarNumber::from(pos.coladd)) };
     if unsafe { tv_dict_add_str(d, c"mark".as_ptr(), c"mark".count_bytes(), mname) }.is_err()
         || unsafe { tv_dict_add_list(d, c"pos".as_ptr(), c"pos".count_bytes(), lpos) }.is_err()
         || (!fname.is_null()

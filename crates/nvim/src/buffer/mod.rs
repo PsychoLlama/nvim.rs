@@ -67,9 +67,9 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, CdCause, ExtmarkOp, FAIL, Failed, LineNr, MarkAdjustMode, MarkTree, MetaIndex,
-    OK, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
-    dobuf_action_values, dobuf_start_values, etype_T, exarg_T, getf_values, uint32_t, varnumber_T,
+    AlignTextPos, CdCause, EStackType, ExtmarkOp, FAIL, Failed, LineNr, MarkAdjustMode, MarkTree,
+    MetaIndex, OK, UndoObjectType, VarNumber, WinSplit, WinStyle, bfa_values, bln_values, buf_T,
+    bufref_T, dobuf_action_values, dobuf_start_values, exarg_T, getf_values, uint32_t,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -144,7 +144,7 @@ pub const BFA_KEEP_UNDO: bfa_values = 4;
 pub const BFA_WIPE: bfa_values = 2;
 pub const BFA_DEL: bfa_values = 1;
 pub const READ_NOWINENTER: ::core::ffi::c_uint = 128;
-pub const ETYPE_MODELINE: etype_T = 4;
+pub const ETYPE_MODELINE: EStackType = 4;
 pub const READ_BUFFER: ::core::ffi::c_uint = 8;
 pub const READ_STDIN: ::core::ffi::c_uint = 4;
 pub const READ_NEW: ::core::ffi::c_uint = 1;
@@ -202,7 +202,7 @@ pub const NMARKS: ::core::ffi::c_int =
     'z' as ::core::ffi::c_int - 'a' as ::core::ffi::c_int + 1 as ::core::ffi::c_int;
 pub const MH_TOMBSTONE: ::core::ffi::c_uint = UINT32_MAX;
 #[inline(always)]
-pub fn buf_get_changedtick(buf: Buf) -> varnumber_T {
+pub fn buf_get_changedtick(buf: Buf) -> VarNumber {
     // SAFETY: `b:changedtick`'s dict item is always a `VAR_NUMBER`, which is
     // the only variant this union is ever given here.
     unsafe { buf.changedtick_di.di_tv.vval.v_number }

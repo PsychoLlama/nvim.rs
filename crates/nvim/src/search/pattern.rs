@@ -578,7 +578,7 @@ pub fn set_search_direction(cdir: c_int) {
 /// Publish the search direction as `v:searchforward`.
 pub(crate) fn set_vv_searchforward() {
     // SAFETY: setting a `v:` variable to a number.
-    let forward = (spat(RE_SEARCH).off.dir as c_int == '/' as c_int) as varnumber_T;
+    let forward = (spat(RE_SEARCH).off.dir as c_int == '/' as c_int) as VarNumber;
     unsafe { set_vim_var_nr(Vv::Searchforward, forward) };
 }
 

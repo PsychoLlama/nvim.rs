@@ -31,7 +31,7 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, listitem_T, tasave_T, typval_T, varnumber_T,
+    EvalFuncData, FAIL, NUL, VAR_LIST, VAR_STRING, VarNumber, listitem_T, tasave_T, typval_T,
 };
 use crate::ui::ui_has;
 use crate::winlayer::Buf;
@@ -98,7 +98,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     if !error {
         rettv.vval.v_number =
             unsafe { do_dialog(kind, ptr::null(), message, buttons, default, ptr::null(), 0) }
-                as varnumber_T;
+                as VarNumber;
     }
 }
 
@@ -106,7 +106,7 @@ pub unsafe fn f_confirm(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
 /// debugger is attached. Answers FAIL; there is no success value.
 pub unsafe fn f_debugbreak(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = FAIL as varnumber_T;
+    rettv.vval.v_number = FAIL as VarNumber;
     // SAFETY throughout: the frame is live.
     let pid = arg_number(args.get(0)) as c_int;
     if pid == 0 {
@@ -203,7 +203,7 @@ pub unsafe fn f_inputlist(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     if mouse_used {
         selected = unsafe { tv_list_len(list) } - (cmdline_row.get() - mouse_row.get());
     }
-    rettv.vval.v_number = selected as varnumber_T;
+    rettv.vval.v_number = selected as VarNumber;
 }
 
 /// The typeahead states `inputsave()` has stacked up.

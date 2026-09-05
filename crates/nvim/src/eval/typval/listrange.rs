@@ -203,8 +203,8 @@ pub unsafe fn tv_list_flatten(
 /// A fresh list holding copies of `ol[n1..=n2]`.
 pub(crate) unsafe fn tv_list_slice(
     ol: *mut list_T,
-    mut n1: varnumber_T,
-    n2: varnumber_T,
+    mut n1: VarNumber,
+    n2: VarNumber,
 ) -> *mut list_T {
     let l = unsafe { tv_list_alloc((n2 - n1 + 1) as ptrdiff_t) };
     let mut item = unsafe { tv_list_find(ol, n1 as ::core::ffi::c_int) };
@@ -223,8 +223,8 @@ pub(crate) unsafe fn tv_list_slice(
 pub unsafe fn tv_list_slice_or_index(
     _list: *mut list_T,
     range: bool,
-    n1_arg: varnumber_T,
-    n2_arg: varnumber_T,
+    n1_arg: VarNumber,
+    n2_arg: VarNumber,
     exclusive: bool,
     rettv: *mut typval_T,
     verbose: bool,
@@ -234,9 +234,9 @@ pub unsafe fn tv_list_slice_or_index(
     let mut n2 = n2_arg;
 
     if n1 < 0 {
-        n1 += varnumber_T::from(len);
+        n1 += VarNumber::from(len);
     }
-    if n1 < 0 || n1 >= varnumber_T::from(len) {
+    if n1 < 0 || n1 >= VarNumber::from(len) {
         // For a range we allow invalid values and return an empty list.
         // A list index out of range is an error.
         if !range {
@@ -245,14 +245,14 @@ pub unsafe fn tv_list_slice_or_index(
             }
             return Err(Failed);
         }
-        n1 = varnumber_T::from(len);
+        n1 = VarNumber::from(len);
     }
 
     if range {
         if n2 < 0 {
-            n2 += varnumber_T::from(len);
-        } else if n2 >= varnumber_T::from(len) {
-            n2 = varnumber_T::from(len - if exclusive { 0 } else { 1 });
+            n2 += VarNumber::from(len);
+        } else if n2 >= VarNumber::from(len) {
+            n2 = VarNumber::from(len - if exclusive { 0 } else { 1 });
         }
         if exclusive {
             n2 -= 1;

@@ -84,7 +84,7 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    CallbackReader, IOSIZE, LineNr, NUL, OptInt, Vv, int64_t, list_T, qf_info_T, varnumber_T,
+    CallbackReader, IOSIZE, LineNr, NUL, OptInt, VarNumber, Vv, int64_t, list_T, qf_info_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -378,7 +378,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
         unsafe { syn_maybe_enable() };
     }
 
-    unsafe { set_vim_var_nr(Vv::VimDidInit, 1 as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::VimDidInit, 1 as VarNumber) };
     unsafe { load_plugins() };
     unsafe { set_window_layout(&raw mut params) };
 
@@ -466,7 +466,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     no_wait_return.set(0);
     do_autochdir();
 
-    unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber) };
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::VimEnter;
     unsafe { apply_autocmds(event, no_fname, no_fname_io, false, curbuf.get()) };

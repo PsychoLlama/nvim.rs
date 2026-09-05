@@ -136,9 +136,7 @@ pub unsafe fn f_getcmdline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
 
 /// `getcmdpos()` function.
 pub unsafe fn f_getcmdpos(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    unsafe {
-        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as varnumber_T)
-    };
+    unsafe { (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdpos + 1) as VarNumber) };
 }
 
 /// `getcmdprompt()` function.
@@ -158,7 +156,7 @@ pub unsafe fn f_getcmdscreenpos(
     _fptr: EvalFuncData,
 ) {
     unsafe {
-        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as varnumber_T)
+        (*rettv).vval.v_number = get_ccline_ptr().map_or(0, |p| (p.cmdspos + 1) as VarNumber)
     };
 }
 
@@ -242,8 +240,7 @@ pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 
     // tv_get_string() so that a NULL string reads as an empty one.
     unsafe {
-        (*rettv).vval.v_number =
-            set_cmdline_str(numbuf.string(argvars.offset(0)), pos) as varnumber_T
+        (*rettv).vval.v_number = set_cmdline_str(numbuf.string(argvars.offset(0)), pos) as VarNumber
     };
 }
 
@@ -251,7 +248,7 @@ pub unsafe fn f_setcmdline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
 pub unsafe fn f_setcmdpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let pos = unsafe { tv_get_number(argvars.offset(0)) } as ::core::ffi::c_int - 1;
     if pos >= 0 {
-        unsafe { (*rettv).vval.v_number = set_cmdline_pos(pos) as varnumber_T };
+        unsafe { (*rettv).vval.v_number = set_cmdline_pos(pos) as VarNumber };
     }
 }
 

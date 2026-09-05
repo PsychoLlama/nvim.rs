@@ -39,8 +39,8 @@ use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
     Callback, CallbackReader, Channel, ColNr, FAIL, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, buf_T, caller_scope, dict_T, estack_T, funccal_entry_T, funcexe_T,
-    list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    VAR_UNKNOWN, VarLock, VarNumber, buf_T, caller_scope, dict_T, estack_T, funccal_entry_T,
+    funcexe_T, list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live};
@@ -364,7 +364,7 @@ pub unsafe fn eval_has_provider(feat: *const c_char, throw_if_fast: bool) -> boo
 
     // 2 is the "working" value; 1 means the provider declined.
     // SAFETY: `VAR_NUMBER` says `v_number` is the union's live member.
-    let mut ok = tv.v_type == VAR_NUMBER && tv.number_or_zero() == 2 as varnumber_T;
+    let mut ok = tv.v_type == VAR_NUMBER && tv.number_or_zero() == 2 as VarNumber;
     if ok {
         // SAFETY: as above.
         unsafe { provider_fn(bp, nm, c"provider#%s#Call") };

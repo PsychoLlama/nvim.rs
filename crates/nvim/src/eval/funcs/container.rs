@@ -31,8 +31,8 @@ use crate::types::{
     BoolVarValue, EvalFuncData, NUL, Refcount, VAR_BLOB, VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC,
     VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_SPECIAL, VAR_STRING, VAR_TYPE_BLOB, VAR_TYPE_BOOL,
     VAR_TYPE_DICT, VAR_TYPE_FLOAT, VAR_TYPE_FUNC, VAR_TYPE_LIST, VAR_TYPE_NUMBER, VAR_TYPE_SPECIAL,
-    VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, Vv, blob_T, kBoolVarTrue, kSpecialVarNull, list_T,
-    listitem_T, partial_T, typval_T, typval_vval_union, varnumber_T,
+    VAR_TYPE_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, blob_T, kBoolVarTrue, kSpecialVarNull,
+    list_T, listitem_T, partial_T, typval_T, typval_vval_union,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -94,7 +94,7 @@ pub unsafe fn f_empty(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalF
         }
         _ => true,
     };
-    rettv.vval.v_number = empty as varnumber_T;
+    rettv.vval.v_number = empty as VarNumber;
 }
 
 /// `flatten({list} [, {maxdepth}])` — in place.
@@ -213,7 +213,7 @@ fn get_from_blob(args: Args<'_>, rettv: &mut typval_T) -> *mut typval_T {
         rettv.vval.v_number = -1;
         return ptr::null_mut();
     }
-    rettv.vval.v_number = unsafe { tv_blob_get(blob, idx) } as varnumber_T;
+    rettv.vval.v_number = unsafe { tv_blob_get(blob, idx) } as VarNumber;
     // The value is already in place; copying it onto itself is a no-op
     // and is what upstream does.
     rettv
@@ -351,8 +351,8 @@ unsafe fn func_arity(pt: *mut partial_T, rettv: &mut typval_T) {
     } else {
         required -= unsafe { (*pt).pt_argc };
     }
-    let _ = unsafe { tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as varnumber_T) };
-    let _ = unsafe { tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as varnumber_T) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"required".as_ptr(), 8, required as VarNumber) };
+    let _ = unsafe { tv_dict_add_nr(dict, c"optional".as_ptr(), 8, optional as VarNumber) };
     let _ = unsafe { tv_dict_add_bool(dict, c"varargs".as_ptr(), 7, varargs as BoolVarValue) };
 }
 
@@ -392,12 +392,12 @@ fn index_blob(args: Args<'_>, rettv: &mut typval_T) {
     for idx in start..unsafe { tv_blob_len(b) } {
         let mut tv = NIL;
         tv.v_type = VAR_NUMBER;
-        tv.vval.v_number = unsafe { tv_blob_get(b, idx) } as varnumber_T;
+        tv.vval.v_number = unsafe { tv_blob_get(b, idx) } as VarNumber;
         // The Blob branch never reads argument 3, so a Blob search is
         // always case-sensitive however 'ic' was spelled. Upstream is
         // the same; the flag only reaches the List branch.
         if unsafe { tv_equal(&raw mut tv, args.ptr(1), false) } {
-            rettv.vval.v_number = idx as varnumber_T;
+            rettv.vval.v_number = idx as VarNumber;
             return;
         }
     }
@@ -431,7 +431,7 @@ fn index_list(args: Args<'_>, rettv: &mut typval_T) {
     }
     while !item.is_null() {
         if unsafe { tv_equal(&raw mut (*item).li_tv, args.ptr(1), ic) } {
-            rettv.vval.v_number = idx as varnumber_T;
+            rettv.vval.v_number = idx as VarNumber;
             return;
         }
         item = unsafe { (*item).li_next };
@@ -515,22 +515,22 @@ unsafe fn indexof_matches(expr: *mut typval_T) -> bool {
 
 /// # Safety
 /// `b` is a Blob pointer or null and `expr` is a live predicate typval.
-unsafe fn indexof_blob(b: *mut blob_T, startidx: varnumber_T, expr: *mut typval_T) -> varnumber_T {
+unsafe fn indexof_blob(b: *mut blob_T, startidx: VarNumber, expr: *mut typval_T) -> VarNumber {
     if b.is_null() {
         return -1;
     }
     // SAFETY throughout: the caller's obligation.
     let start = if startidx < 0 {
-        (unsafe { tv_blob_len(b) } as varnumber_T + startidx).max(0)
+        (unsafe { tv_blob_len(b) } as VarNumber + startidx).max(0)
     } else {
         startidx
     };
     unsafe { set_vim_var_type(Vv::Key, VAR_NUMBER) };
     unsafe { set_vim_var_type(Vv::Val, VAR_NUMBER) };
     let called_emsg_start = called_emsg.get();
-    for idx in start..unsafe { tv_blob_len(b) } as varnumber_T {
+    for idx in start..unsafe { tv_blob_len(b) } as VarNumber {
         unsafe { set_vim_var_nr(Vv::Key, idx) };
-        unsafe { set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Val, tv_blob_get(b, idx as c_int) as VarNumber) };
         if unsafe { indexof_matches(expr) } {
             return idx;
         }
@@ -544,19 +544,19 @@ unsafe fn indexof_blob(b: *mut blob_T, startidx: varnumber_T, expr: *mut typval_
 
 /// # Safety
 /// `l` is a List pointer or null and `expr` is a live predicate typval.
-unsafe fn indexof_list(l: *mut list_T, startidx: varnumber_T, expr: *mut typval_T) -> varnumber_T {
+unsafe fn indexof_list(l: *mut list_T, startidx: VarNumber, expr: *mut typval_T) -> VarNumber {
     if l.is_null() {
         return -1;
     }
     // SAFETY throughout: the caller's obligation.
-    let mut idx: varnumber_T = 0;
+    let mut idx: VarNumber = 0;
     let mut item: *mut listitem_T;
     // A zero start index is taken literally rather than run through
     // `tv_list_uidx`, so it does not have to be a valid index.
     if startidx == 0 {
         item = unsafe { tv_list_first(l) };
     } else {
-        idx = unsafe { tv_list_uidx(l, startidx as c_int) } as varnumber_T;
+        idx = unsafe { tv_list_uidx(l, startidx as c_int) } as VarNumber;
         if idx == -1 {
             item = ptr::null_mut();
         } else {
@@ -593,11 +593,11 @@ pub unsafe fn f_len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
     rettv.vval.v_number = match tv.v_type {
         VAR_STRING | VAR_NUMBER => {
             let s = arg_string(&mut numbuf, args.get(0));
-            unsafe { cstr::bytes_at(s).len() as varnumber_T }
+            unsafe { cstr::bytes_at(s).len() as VarNumber }
         }
-        VAR_BLOB => unsafe { tv_blob_len(tv.blob_or_null()) as varnumber_T },
-        VAR_LIST => unsafe { tv_list_len(tv.list_or_null()) as varnumber_T },
-        VAR_DICT => unsafe { tv_dict_len(tv.dict_or_null()) as varnumber_T },
+        VAR_BLOB => unsafe { tv_blob_len(tv.blob_or_null()) as VarNumber },
+        VAR_LIST => unsafe { tv_list_len(tv.list_or_null()) as VarNumber },
+        VAR_DICT => unsafe { tv_dict_len(tv.dict_or_null()) as VarNumber },
         // The remaining tags are Unknown, Funcref, Partial, Float,
         // Bool and Special; `VarType` has no twelfth value.
         _ => {
@@ -627,5 +627,5 @@ pub unsafe fn f_type(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
         }
         _ => -1,
     };
-    rettv.vval.v_number = n as varnumber_T;
+    rettv.vval.v_number = n as VarNumber;
 }

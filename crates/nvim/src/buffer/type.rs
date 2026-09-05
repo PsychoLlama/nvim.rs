@@ -32,7 +32,7 @@ use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
-    CmdModFlags, LineNr, VAR_NUMBER, VarLock, buf_T, dictitem_T, ptrdiff_t, typval_T, varnumber_T,
+    CmdModFlags, LineNr, VAR_NUMBER, VarLock, VarNumber, buf_T, dictitem_T, ptrdiff_t, typval_T,
 };
 use crate::winlayer::Buf;
 
@@ -250,11 +250,11 @@ pub unsafe fn buf_is_empty(buf: *mut buf_T) -> bool {
 
 pub unsafe fn buf_inc_changedtick(buf: *mut buf_T) {
     // SAFETY: the caller's promise -- a live buffer.
-    unsafe { buf_set_changedtick(buf, buf_get_changedtick(Buf::new(buf)) + 1 as varnumber_T) };
+    unsafe { buf_set_changedtick(buf, buf_get_changedtick(Buf::new(buf)) + 1 as VarNumber) };
 }
 
 /// Set `b:changedtick`, telling any `b:` watcher about the change.
-pub unsafe fn buf_set_changedtick(buf: *mut buf_T, changedtick: varnumber_T) {
+pub unsafe fn buf_set_changedtick(buf: *mut buf_T, changedtick: VarNumber) {
     // SAFETY: the caller's promise -- a live buffer.
     let mut b = unsafe { Buf::new(buf) };
     let mut old_val: typval_T = b.changedtick_di.di_tv;

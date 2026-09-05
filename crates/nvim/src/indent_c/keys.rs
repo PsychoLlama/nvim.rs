@@ -384,7 +384,7 @@ pub unsafe fn f_cindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         cur_win().w_cursor.lnum = lnum;
         // SAFETY: the cursor now sits on a line of the current buffer, and it
         // is put back on the next line.
-        let amount = varnumber_T::from(unsafe { get_c_indent() });
+        let amount = VarNumber::from(unsafe { get_c_indent() });
         cur_win().w_cursor = pos;
         amount
     } else {

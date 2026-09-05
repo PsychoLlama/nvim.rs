@@ -87,12 +87,12 @@ use crate::registry::{IdMap, IdSet, id_map, id_set};
 use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
-    Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
-    EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LineNr, LuaRetMode, Object,
-    OptVal, ProfTime, String_0, UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T,
-    estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, int64_t, kBoolVarFalse,
-    list_T, optset_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, typval_T,
-    typval_vval_union, ufunc_T, uv_mutex_t, varnumber_T, vimconv_T,
+    Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, EStackArg,
+    EStackType, Error, EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LineNr,
+    LuaRetMode, Object, OptVal, ProfTime, ScriptId, String_0, UV_MUTEX_INIT, VAR_DICT, VarLock,
+    VarNumber, XDGVarType, dict_T, estack_T, exarg_T, expand_T, funccal_entry_T, garray_T, int64_t,
+    kBoolVarFalse, list_T, optset_T, ptrdiff_t, regmatch_T, scriptitem_T, sctx_T, size_t, typval_T,
+    typval_vval_union, ufunc_T, uv_mutex_t, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
@@ -129,13 +129,13 @@ pub const kXDGDataHome: XDGVarType = 1;
 pub const kXDGConfigHome: XDGVarType = 0;
 pub const kXDGNone: XDGVarType = -1;
 /// `do_cmdline` flags.
-pub const ETYPE_AUCMD: etype_T = 3;
-pub const ETYPE_UFUNC: etype_T = 2;
-pub const ETYPE_SCRIPT: etype_T = 1;
-pub const ETYPE_TOP: etype_T = 0;
-pub const ESTACK_SCRIPT: estack_arg_T = 3;
-pub const ESTACK_STACK: estack_arg_T = 2;
-pub const ESTACK_SFILE: estack_arg_T = 1;
+pub const ETYPE_AUCMD: EStackType = 3;
+pub const ETYPE_UFUNC: EStackType = 2;
+pub const ETYPE_SCRIPT: EStackType = 1;
+pub const ETYPE_TOP: EStackType = 0;
+pub const ESTACK_SCRIPT: EStackArg = 3;
+pub const ESTACK_STACK: EStackArg = 2;
+pub const ESTACK_SFILE: EStackArg = 1;
 pub const kRetNilBool: LuaRetMode = 1;
 pub const kRetObject: LuaRetMode = 0;
 /// `gen_expand_wildcards` flags: what a wildcard expansion may return.

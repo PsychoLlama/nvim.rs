@@ -57,7 +57,7 @@ pub unsafe fn ex_cfile(eap: *mut exarg_T) {
             kOptErrorfile,
             OptVal::String(unsafe { cstr_as_string(eap.arg) }),
             OptionSetFlags::NONE,
-            0 as scid_T,
+            0 as ScriptId,
         );
     }
 

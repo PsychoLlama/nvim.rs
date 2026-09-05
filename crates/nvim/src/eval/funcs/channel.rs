@@ -42,8 +42,8 @@ use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
     Arena, ArenaMem, Array, CallbackReader, ChannelPart, Error, EvalFuncData, Object, String_0,
-    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, blob_T, funccal_entry_T, funccall_T, sctx_T,
-    typval_T, uint64_t, varnumber_T,
+    VAR_BLOB, VAR_DICT, VAR_NUMBER, VAR_STRING, VarNumber, blob_T, funccal_entry_T, funccall_T,
+    sctx_T, typval_T, uint64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -126,7 +126,7 @@ pub unsafe fn f_chanclose(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
             part,
             &raw mut error,
         )
-    } as varnumber_T;
+    } as VarNumber;
     if rettv.number_or_zero() == 0 {
         unsafe { emsg_ptr(error) };
     }
@@ -172,7 +172,7 @@ pub unsafe fn f_chansend(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let len = input_len as usize;
     let err = &raw mut error;
     let sent = unsafe { channel_send(id, input, len, true, err) };
-    rettv.vval.v_number = sent as varnumber_T;
+    rettv.vval.v_number = sent as VarNumber;
     if !error.is_null() {
         unsafe { emsg_ptr(error) };
     }
@@ -501,7 +501,7 @@ pub unsafe fn f_serverstop(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     // v:_null_string stops nothing.
     if !args.get(0).string_or_null().is_null() {
         rettv.vval.v_number =
-            unsafe { server_stop(args.get(0).string_or_null(), false) } as varnumber_T;
+            unsafe { server_stop(args.get(0).string_or_null(), false) } as VarNumber;
     }
 }
 
@@ -557,7 +557,7 @@ pub unsafe fn f_sockconnect(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
         let error = unsafe { c_str(error) };
         semsg!("connection failed: {error}");
     }
-    rettv.vval.v_number = id as varnumber_T;
+    rettv.vval.v_number = id as VarNumber;
     rettv.v_type = VAR_NUMBER;
 }
 
@@ -593,6 +593,6 @@ pub unsafe fn f_stdioopen(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
         let error = unsafe { c_str(error) };
         semsg!("E905: Couldn't open stdio channel: {error}");
     }
-    rettv.vval.v_number = id as varnumber_T;
+    rettv.vval.v_number = id as VarNumber;
     rettv.v_type = VAR_NUMBER;
 }

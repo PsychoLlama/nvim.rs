@@ -45,8 +45,8 @@ use crate::types::channel::{kChannelStdinNull, kChannelStdinPipe};
 use crate::types::{
     Arena, Callback, CallbackReader, Channel, ChannelStdinMode, Error, EvalFuncData, IOSIZE,
     Integer, MAXPATHL, NUL, Object, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_UNKNOWN, VarLock,
-    Vv, buf_T, dict_T, dictitem_T, list_T, listitem_T, typval_T, typval_vval_union, uint16_t,
-    uint64_t, varnumber_T,
+    VarNumber, Vv, buf_T, dict_T, dictitem_T, list_T, listitem_T, typval_T, typval_vval_union,
+    uint16_t, uint64_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
@@ -86,7 +86,7 @@ pub unsafe fn f_jobpid(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     if data.is_null() {
         return;
     }
-    rettv.vval.v_number = unsafe { (*channel_proc(data)).pid } as varnumber_T;
+    rettv.vval.v_number = unsafe { (*channel_proc(data)).pid } as VarNumber;
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
@@ -253,7 +253,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         // Hand the parked events back before reporting.
         unsafe { multiqueue_process_events((*chan).events) };
         unsafe { multiqueue_replace_parent((*chan).events, (*main_loop.ptr()).events) };
-        unsafe { tv_list_append_number(rv, (*channel_proc(chan)).status as varnumber_T) };
+        unsafe { tv_list_append_number(rv, (*channel_proc(chan)).status as VarNumber) };
         unsafe { channel_decref(chan) };
     }
 

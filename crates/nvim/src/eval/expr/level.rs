@@ -41,9 +41,9 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, strstr};
 use crate::register::get_reg_contents;
 use crate::types::{
-    Failed, NUL, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, Vv, dictitem_T, evalarg_T, exarg_T, float_T, kBoolVarFalse, kBoolVarTrue,
-    size_t, typval_T, typval_vval_union, varnumber_T,
+    Failed, Float, NUL, VAR_BLOB, VAR_BOOL, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_PARTIAL,
+    VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Vv, dictitem_T, evalarg_T, exarg_T, kBoolVarFalse,
+    kBoolVarTrue, size_t, typval_T, typval_vval_union,
 };
 
 /// A freshly declared typval, which is what every level starts a second
@@ -467,7 +467,7 @@ unsafe fn eval_logical(
         }
         if evaluate {
             rv.v_type = VAR_NUMBER;
-            rv.vval.v_number = varnumber_T::from(result);
+            rv.vval.v_number = VarNumber::from(result);
         }
     }
 
@@ -830,8 +830,8 @@ pub(crate) unsafe fn eval7_leader(
     let mut end_leader = unsafe { *end_leaderp };
     let mut ret = Ok(());
     let mut error = false;
-    let mut val: varnumber_T = 0;
-    let mut f: float_T = 0.0;
+    let mut val: VarNumber = 0;
+    let mut f: Float = 0.0;
 
     if rv.v_type == VAR_FLOAT {
         // SAFETY: the tag says the union holds a Float.
@@ -860,13 +860,13 @@ pub(crate) unsafe fn eval7_leader(
                         // `!` see a Number. The tag is overwritten below,
                         // so `!1.5` still answers a Number.
                         rv.v_type = VAR_BOOL;
-                        val = varnumber_T::from(if f == 0.0 {
+                        val = VarNumber::from(if f == 0.0 {
                             kBoolVarTrue
                         } else {
                             kBoolVarFalse
                         });
                     } else {
-                        val = varnumber_T::from(val == 0);
+                        val = VarNumber::from(val == 0);
                     }
                 }
                 // Vimscript arithmetic wraps, so negating VARNUMBER_MIN

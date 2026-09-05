@@ -63,9 +63,9 @@ pub unsafe fn evalvars_init() {
     }
 
     let vim_version = min_vim_version();
-    let versionlong = (vim_version * 10000 + highest_patch()) as varnumber_T;
+    let versionlong = (vim_version * 10000 + highest_patch()) as VarNumber;
     // SAFETY: `Vv` names a row of the `v:` table, so neither call can fail.
-    unsafe { set_vim_var_nr(Vv::Version, vim_version as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Version, vim_version as VarNumber) };
     unsafe { set_vim_var_nr(Vv::Versionlong, versionlong) };
 
     // `v:msgpack_types`: eight empty, locked lists, compared by identity
@@ -104,25 +104,25 @@ pub unsafe fn evalvars_init() {
     // The `v:` variables that start out at a constant Number, the `v:t_*`
     // type codes `type()` answers with among them. Nothing here reads
     // another row, so the table's order is the source's only.
-    let numbersize = (::core::mem::size_of::<varnumber_T>() * 8) as varnumber_T;
+    let numbersize = (::core::mem::size_of::<VarNumber>() * 8) as VarNumber;
     for (idx, n) in [
-        (Vv::Stderr, CHAN_STDERR as varnumber_T),
+        (Vv::Stderr, CHAN_STDERR as VarNumber),
         (Vv::Searchforward, 1),
         (Vv::Hlsearch, 1),
         (Vv::Count1, 1),
-        (Vv::TNumber, VAR_TYPE_NUMBER as varnumber_T),
-        (Vv::TString, VAR_TYPE_STRING as varnumber_T),
-        (Vv::TFunc, VAR_TYPE_FUNC as varnumber_T),
-        (Vv::TList, VAR_TYPE_LIST as varnumber_T),
-        (Vv::TDict, VAR_TYPE_DICT as varnumber_T),
-        (Vv::TFloat, VAR_TYPE_FLOAT as varnumber_T),
-        (Vv::TBool, VAR_TYPE_BOOL as varnumber_T),
-        (Vv::TBlob, VAR_TYPE_BLOB as varnumber_T),
-        (Vv::Numbermax, VARNUMBER_MAX as varnumber_T),
-        (Vv::Numbermin, VARNUMBER_MIN as varnumber_T),
+        (Vv::TNumber, VAR_TYPE_NUMBER as VarNumber),
+        (Vv::TString, VAR_TYPE_STRING as VarNumber),
+        (Vv::TFunc, VAR_TYPE_FUNC as VarNumber),
+        (Vv::TList, VAR_TYPE_LIST as VarNumber),
+        (Vv::TDict, VAR_TYPE_DICT as VarNumber),
+        (Vv::TFloat, VAR_TYPE_FLOAT as VarNumber),
+        (Vv::TBool, VAR_TYPE_BOOL as VarNumber),
+        (Vv::TBlob, VAR_TYPE_BLOB as VarNumber),
+        (Vv::Numbermax, VARNUMBER_MAX as VarNumber),
+        (Vv::Numbermin, VARNUMBER_MIN as VarNumber),
         (Vv::Numbersize, numbersize),
-        (Vv::Maxcol, MAXCOL as varnumber_T),
-        (Vv::Echospace, (sc_col.get() - 1) as varnumber_T),
+        (Vv::Maxcol, MAXCOL as VarNumber),
+        (Vv::Echospace, (sc_col.get() - 1) as VarNumber),
     ] {
         // SAFETY: `Vv` names a row of the `v:` table.
         unsafe { set_vim_var_nr(idx, n) };
@@ -260,7 +260,7 @@ pub(crate) fn msgpack_type_list(type_: MessagePackType) -> *mut list_T {
 ///
 /// # Safety
 /// `id` is a live script id whose `sn_vars` has not been set.
-pub unsafe fn new_script_vars(id: scid_T) {
+pub unsafe fn new_script_vars(id: ScriptId) {
     let sv = unsafe { xcalloc(1, ::core::mem::size_of::<scriptvar_T>()) } as *mut scriptvar_T;
     unsafe { init_var_dict(&raw mut (*sv).sv_dict, &raw mut (*sv).sv_var, VAR_SCOPE) };
     unsafe { (*script_item(id)).sn_vars = sv };

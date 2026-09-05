@@ -6,7 +6,7 @@ use neovim::strings::{
     reverse_text, strcase_save, vim_snprintf, vim_strchr, vim_strnsave_unquoted,
     vim_strsave_escaped,
 };
-use neovim::types::typval::uvarnumber_T;
+use neovim::types::typval::UVarNumber;
 
 use crate::support::{cstr, internalize, take_bytes};
 
@@ -181,7 +181,7 @@ macro_rules! snp {
     }};
 }
 
-fn uv(n: u64) -> uvarnumber_T {
+fn uv(n: u64) -> UVarNumber {
     n
 }
 

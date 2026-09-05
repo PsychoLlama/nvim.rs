@@ -92,8 +92,8 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, ColNr, Dict, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE, Integer,
-    KeyDict_echo_opts, MessageData, Object, OptInt, ShmFlag, String_0, Vv, estack_T, estack_arg_T,
+    Arena, Array, ColNr, Dict, EStackArg, Event, FILE, GridView, HlMessage, HlMessageChunk, IOSIZE,
+    Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ShmFlag, String_0, Vv, estack_T,
     exarg_T, flush_buffers_T, int64_t, ptrdiff_t, sattr_T, schar_T, size_t, ssize_t, typval_T,
     typval_vval_union, uint64_t,
 };
@@ -169,7 +169,7 @@ pub const SB_CLEAR_CMDLINE_DONE: sb_clear_T = 3;
 pub const SB_CLEAR_CMDLINE_BUSY: sb_clear_T = 2;
 pub const SB_CLEAR_ALL: sb_clear_T = 1;
 pub const SB_CLEAR_NONE: sb_clear_T = 0;
-pub const ESTACK_NONE: estack_arg_T = 0;
+pub const ESTACK_NONE: EStackArg = 0;
 pub const FLUSH_MINIMAL: flush_buffers_T = 0;
 /// A dialog's button list: `&` marks the next character as its hotkey, and
 /// a newline separates buttons.

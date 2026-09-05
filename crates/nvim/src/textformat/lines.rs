@@ -43,7 +43,7 @@ use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
     CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
-    NUL, OptionSetFlags, Vv, oparg_T, ptrdiff_t, size_t, varnumber_T,
+    NUL, OptionSetFlags, VarNumber, Vv, oparg_T, ptrdiff_t, size_t,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
@@ -145,8 +145,8 @@ pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int 
     let use_sandbox =
         unsafe { was_set_insecurely(curwin.get(), kOptFormatexpr, OptionSetFlags::LOCAL) };
 
-    unsafe { set_vim_var_nr(Vv::Lnum, lnum as varnumber_T) };
-    unsafe { set_vim_var_nr(Vv::Count, count as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
+    unsafe { set_vim_var_nr(Vv::Count, count as VarNumber) };
     unsafe { set_vim_var_char(c) };
 
     // Copy it: the option can be changed while it is running.

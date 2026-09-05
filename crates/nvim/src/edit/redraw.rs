@@ -75,7 +75,7 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // The autocommand may change the buffer *and* the window, so `curbuf`
     // is saved around it; and if it changed the text, the insert's undo
     // block has to be closed the way `ins_apply_autocmds` does it.
-    let fire_text_changed = |event: AutoEvent, tick: *mut varnumber_T| {
+    let fire_text_changed = |event: AutoEvent, tick: *mut VarNumber| {
         let mut aco = aco_save_T::default();
         let before = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 

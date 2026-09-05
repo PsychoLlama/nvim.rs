@@ -53,8 +53,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Failed, IOSIZE, LineNr, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, Vv, ptrdiff_t,
-    scid_T, size_t,
+    Failed, IOSIZE, LineNr, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, Vv,
+    ptrdiff_t, size_t,
 };
 use crate::winlayer::Live;
 use ::libc::{atoi, fprintf, strcasecmp};
@@ -761,7 +761,7 @@ fn env_script() -> SavedSctx {
     Script::context(
         current_sctx
             .get()
-            .with_sid(SID_ENV as scid_T)
+            .with_sid(SID_ENV as ScriptId)
             .with_seq(0)
             .with_lnum(0),
     )

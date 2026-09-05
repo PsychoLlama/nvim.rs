@@ -39,19 +39,19 @@ use crate::types::{IOSIZE, NUL};
 /// `line` must be NUL-terminated.
 unsafe fn line_count_info(
     line: *mut c_char,
-    wc: &mut varnumber_T,
-    cc: &mut varnumber_T,
-    limit: varnumber_T,
+    wc: &mut VarNumber,
+    cc: &mut VarNumber,
+    limit: VarNumber,
     eol_size: c_int,
-) -> varnumber_T {
+) -> VarNumber {
     // SAFETY: the caller's promise -- the walk stops at the line's NUL, so
     // every index it takes is inside the line.
-    let byte = |i: varnumber_T| unsafe { *line.offset(i as isize) } as c_int;
+    let byte = |i: VarNumber| unsafe { *line.offset(i as isize) } as c_int;
     let mut words = 0;
     let mut chars = 0;
     let mut is_word = false;
 
-    let mut i: varnumber_T = 0;
+    let mut i: VarNumber = 0;
     while i < limit && byte(i) != NUL {
         if is_word {
             if ascii_isspace(byte(i)) {
@@ -62,7 +62,7 @@ unsafe fn line_count_info(
             is_word = true;
         }
         chars += 1;
-        i += varnumber_T::from(unsafe { utfc_ptr2len(line.offset(i as isize)) });
+        i += VarNumber::from(unsafe { utfc_ptr2len(line.offset(i as isize)) });
     }
 
     if is_word {
@@ -72,8 +72,8 @@ unsafe fn line_count_info(
 
     // The end of the line was reached before `limit`: count the break.
     if i < limit && byte(i) == NUL {
-        i += varnumber_T::from(eol_size);
-        chars += varnumber_T::from(eol_size);
+        i += VarNumber::from(eol_size);
+        chars += VarNumber::from(eol_size);
     }
     *cc += chars;
     i
@@ -87,17 +87,17 @@ unsafe fn line_count_info(
 #[derive(Default)]
 struct PosCounts {
     /// Bytes in the buffer.
-    bytes: varnumber_T,
+    bytes: VarNumber,
     /// Characters in the buffer.
-    chars: varnumber_T,
+    chars: VarNumber,
     /// Words in the buffer.
-    words: varnumber_T,
+    words: VarNumber,
     /// Bytes up to the cursor, or in the selection.
-    bytes_cursor: varnumber_T,
+    bytes_cursor: VarNumber,
     /// Characters up to the cursor, or in the selection.
-    chars_cursor: varnumber_T,
+    chars_cursor: VarNumber,
     /// Words up to the cursor, or in the selection.
-    words_cursor: varnumber_T,
+    words_cursor: VarNumber,
 }
 
 /// The Visual selection, as the counting walk needs to see it.
@@ -125,7 +125,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
     let mut report = [0 as c_char; IOSIZE as usize];
     let visual = visual_selection();
     let mut counts = PosCounts::default();
-    let mut bom_count: varnumber_T = 0;
+    let mut bom_count: VarNumber = 0;
 
     // SAFETY: `report` is `IOSIZE` bytes and every write to it is bounded by
     // that; the message strings are the editor's own.
@@ -146,7 +146,7 @@ pub unsafe fn cursor_pos_info(dict: *mut dict_T) {
             report_counts(&mut report, &counts, selection.as_ref());
         }
 
-        bom_count = varnumber_T::from(unsafe { bomb_size() });
+        bom_count = VarNumber::from(unsafe { bomb_size() });
         if dict.is_null() && bom_count > 0 {
             let len = unsafe { cstr::bytes_at(report.as_ptr()) }.len();
             let at = unsafe { report.as_mut_ptr().add(len) };
@@ -237,7 +237,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
         1
     };
     let mut bd = block_def::ZERO;
-    let mut last_check: varnumber_T = 100_000;
+    let mut last_check: VarNumber = 100_000;
 
     for lnum in 1..=cur_buf().line_count() {
         if counts.bytes > last_check {
@@ -257,7 +257,7 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
             // ones up to this line, plus this line up to the cursor.
             counts.words_cursor += counts.words;
             counts.chars_cursor += counts.chars;
-            let upto = varnumber_T::from(cur_win().w_cursor.col) + 1;
+            let upto = VarNumber::from(cur_win().w_cursor.col) + 1;
             let PosCounts {
                 words_cursor: wc,
                 chars_cursor: cc,
@@ -270,13 +270,13 @@ fn count_buffer(counts: &mut PosCounts, mut selection: Option<&mut Selection>) -
 
         let PosCounts { words, chars, .. } = counts;
         let line = ml_get(lnum);
-        let all = varnumber_T::from(MAXCOL);
+        let all = VarNumber::from(MAXCOL);
         counts.bytes += unsafe { line_count_info(line, words, chars, all, eol_size) };
     }
 
     // The last line has no EOL, so it was counted one byte too long.
     if cur_buf().b_p_eol == 0 && (cur_buf().b_p_bin != 0 || cur_buf().b_p_fixeol == 0) {
-        counts.bytes -= varnumber_T::from(eol_size);
+        counts.bytes -= VarNumber::from(eol_size);
     }
     true
 }
@@ -323,7 +323,7 @@ fn count_selected_line(
         chars_cursor: cc,
         ..
     } = counts;
-    let taken = unsafe { line_count_info(s, wc, cc, varnumber_T::from(len), eol_size) };
+    let taken = unsafe { line_count_info(s, wc, cc, VarNumber::from(len), eol_size) };
     counts.bytes_cursor += taken;
     // The last line has no EOL, and the selection reaches its end.
     if lnum == cur_buf().line_count()
@@ -331,7 +331,7 @@ fn count_selected_line(
         && (cur_buf().b_p_bin != 0 || cur_buf().b_p_fixeol == 0)
         && (unsafe { cstr::bytes_at(s) }.len() as c_int) < len
     {
-        counts.bytes_cursor -= varnumber_T::from(eol_size);
+        counts.bytes_cursor -= VarNumber::from(eol_size);
     }
 }
 
@@ -440,11 +440,11 @@ fn report_counts(
 unsafe fn store_counts(
     dict: *mut dict_T,
     counts: &PosCounts,
-    bom_count: varnumber_T,
+    bom_count: VarNumber,
     visual_active: bool,
 ) {
     // SAFETY: the caller's promise -- a live dictionary.
-    let add = |key: &::core::ffi::CStr, value: varnumber_T| {
+    let add = |key: &::core::ffi::CStr, value: VarNumber| {
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
     add(c"words", counts.words);

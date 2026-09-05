@@ -42,7 +42,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const ::core::ffi::c_char) {
 ///
 /// # Safety
 /// `d` must be a live dictionary.
-unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
+unsafe fn put_nr(d: *mut dict_T, key: &str, nr: VarNumber) {
     // SAFETY: the caller's dictionary.
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
@@ -151,7 +151,7 @@ unsafe fn each_dict(
                 emsg(gettext(e_dictreq));
                 -1
             };
-            tv_list_append_number(retlist, varnumber_T::from(retval));
+            tv_list_append_number(retlist, VarNumber::from(retval));
         }
     };
 }
@@ -197,7 +197,7 @@ pub(crate) unsafe fn sign_get_info_dict(sp: Sign) -> *mut dict_T {
         unsafe { put_str(d, "text", buf.as_ptr()) };
     }
     if sp.sn_priority > 0 {
-        unsafe { put_nr(d, "priority", varnumber_T::from(sp.sn_priority)) };
+        unsafe { put_nr(d, "priority", VarNumber::from(sp.sn_priority)) };
     }
     let ids = [sp.sn_line_hl, sp.sn_text_hl, sp.sn_cul_hl, sp.sn_num_hl];
     for (key, id) in HL_KEYS.iter().zip(ids) {
@@ -217,10 +217,10 @@ pub(crate) unsafe fn sign_get_placed_info_dict(mark: MTKey) -> *mut dict_T {
     let d = unsafe { tv_dict_alloc() };
     let sh = unsafe { Sh::new(decor_find_sign(mt_decor(mark))) };
     unsafe { put_str(d, "name", sign_get_name(sh.raw())) };
-    unsafe { put_nr(d, "id", varnumber_T::from(mark.id.cast_signed())) };
+    unsafe { put_nr(d, "id", VarNumber::from(mark.id.cast_signed())) };
     unsafe { put_str(d, "group", describe_ns(mark.ns.cast_signed(), c"".as_ptr())) };
-    unsafe { put_nr(d, "lnum", varnumber_T::from(mark.pos.row + 1)) };
-    unsafe { put_nr(d, "priority", varnumber_T::from(sh.priority)) };
+    unsafe { put_nr(d, "lnum", VarNumber::from(mark.pos.row + 1)) };
+    unsafe { put_nr(d, "priority", VarNumber::from(sh.priority)) };
     d
 }
 
@@ -260,7 +260,7 @@ unsafe fn sign_get_placed_in_buf(
     let l = unsafe {
         let d = tv_dict_alloc();
         tv_list_append_dict(retlist, d);
-        put_nr(d, "bufnr", varnumber_T::from(cbuf.handle));
+        put_nr(d, "bufnr", VarNumber::from(cbuf.handle));
         let l = tv_list_alloc(kListLenMayKnow as ptrdiff_t);
         let _ = tv_dict_add_list(d, "signs".as_ptr().cast(), "signs".len(), l);
         l
@@ -404,7 +404,7 @@ pub(crate) unsafe fn f_sign_define(
     // SAFETY: the tag says the dictionary arm is live.
     let d = unsafe { dict_arg(args, 1) };
     // SAFETY: the name and dictionary just read out of the frame.
-    rettv.vval.v_number = varnumber_T::from(unsafe { sign_define_from_dict(name, d) });
+    rettv.vval.v_number = VarNumber::from(unsafe { sign_define_from_dict(name, d) });
 }
 
 /// `sign_getdefined()`.
@@ -528,7 +528,7 @@ pub(crate) unsafe fn f_sign_jump(
     }
 
     // SAFETY: a live buffer and a group name the argument owns.
-    rettv.vval.v_number = varnumber_T::from(unsafe { sign_jump(id, group, buf) });
+    rettv.vval.v_number = VarNumber::from(unsafe { sign_jump(id, group, buf) });
 }
 
 /// The named key's value, or the positional typval when there is one.
@@ -650,7 +650,7 @@ pub(crate) unsafe fn f_sign_place(
     // SAFETY: the frame's argument slots and the dictionary just read.
     let id =
         unsafe { sign_place_from_dict(args.ptr(0), args.ptr(1), args.ptr(2), args.ptr(3), dict) };
-    rettv.vval.v_number = varnumber_T::from(id);
+    rettv.vval.v_number = VarNumber::from(id);
 }
 
 /// `sign_placelist()`.
@@ -771,7 +771,7 @@ pub(crate) unsafe fn f_sign_unplace(
     // SAFETY: the check above says the dictionary arm is live if it is set.
     let dict = unsafe { dict_arg(args, 1) };
     // SAFETY: the frame's first argument and the dictionary just read.
-    rettv.vval.v_number = varnumber_T::from(unsafe { sign_unplace_from_dict(args.ptr(0), dict) });
+    rettv.vval.v_number = VarNumber::from(unsafe { sign_unplace_from_dict(args.ptr(0), dict) });
 }
 
 /// `sign_unplacelist()`.

@@ -26,7 +26,7 @@ use crate::eval::typval::{
 };
 use crate::mbyte::{mb_cptr2char_adv, mb_ptr2char_adv, utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::memory::xmemdupz;
-use crate::types::{EvalFuncData, VAR_STRING, int64_t, size_t, typval_T, varnumber_T};
+use crate::types::{EvalFuncData, VAR_STRING, VarNumber, int64_t, size_t, typval_T};
 
 /// The character-length rule a `countcc`/`comp` flag selects: composing
 /// characters counted separately, or folded into their base.
@@ -119,7 +119,7 @@ unsafe fn byteidx_common(argvars: *mut typval_T, rettv: *mut typval_T, comp: boo
         }
         idx -= 1;
     }
-    unsafe { (*rettv).vval.v_number = t.offset_from(str) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = t.offset_from(str) as VarNumber };
 }
 
 /// "byteidx()" function
@@ -177,7 +177,7 @@ pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             } else {
                 p == unsafe { str.offset(idx as isize) }
             } {
-                unsafe { (*rettv).vval.v_number = len as varnumber_T };
+                unsafe { (*rettv).vval.v_number = len as VarNumber };
             }
             return;
         }
@@ -191,7 +191,7 @@ pub unsafe fn f_charidx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         len += 1;
     }
 
-    unsafe { (*rettv).vval.v_number = (len - 1).max(0) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = (len - 1).max(0) as VarNumber };
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
@@ -213,7 +213,7 @@ pub unsafe fn f_strgetchar(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let mut byteidx: size_t = 0;
     while charidx >= 0 && byteidx < len {
         if charidx == 0 {
-            unsafe { (*rettv).vval.v_number = utf_ptr2char(str.add(byteidx)) as varnumber_T };
+            unsafe { (*rettv).vval.v_number = utf_ptr2char(str.add(byteidx)) as VarNumber };
             break;
         }
         charidx -= 1;
@@ -240,10 +240,10 @@ pub unsafe fn f_strutf16len(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     };
 
     let mut s = unsafe { numbuf.string(argvars) };
-    let mut len: varnumber_T = 0;
+    let mut len: VarNumber = 0;
     while unsafe { *s } != 0 {
         // Anything over U+FFFF is a surrogate pair: two units.
-        len += 1 + varnumber_T::from(unsafe { next_char(&raw mut s) } > 0xffff);
+        len += 1 + VarNumber::from(unsafe { next_char(&raw mut s) } > 0xffff);
     }
     unsafe { (*rettv).vval.v_number = len };
 }
@@ -322,7 +322,7 @@ pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     let mut numbuf = NumBuf::new();
     let mut error = false;
     let p = unsafe { numbuf.string(argvars) };
-    let slen = unsafe { cstr::bytes_at(p).len() as varnumber_T };
+    let slen = unsafe { cstr::bytes_at(p).len() as VarNumber };
 
     let mut n = unsafe { tv_get_number_chk(argvars.add(1), &raw mut error) };
     let mut len = if error {
@@ -353,7 +353,7 @@ pub unsafe fn f_strpart(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
             off += unsafe { utfc_ptr2len(p.offset(off as isize)) as int64_t };
             len -= 1;
         }
-        len = (off - n as int64_t) as varnumber_T;
+        len = (off - n as int64_t) as VarNumber;
     }
 
     unsafe { (*rettv).v_type = VAR_STRING };
@@ -410,7 +410,7 @@ pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
             } else {
                 p == unsafe { str.offset(idx as isize) }
             } {
-                unsafe { (*rettv).vval.v_number = len as varnumber_T };
+                unsafe { (*rettv).vval.v_number = len as VarNumber };
             }
             return;
         }
@@ -426,5 +426,5 @@ pub unsafe fn f_utf16idx(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         len += 1;
     }
 
-    unsafe { (*rettv).vval.v_number = utf16idx as varnumber_T };
+    unsafe { (*rettv).vval.v_number = utf16idx as VarNumber };
 }

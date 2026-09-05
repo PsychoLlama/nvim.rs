@@ -24,7 +24,7 @@ use crate::event::multiqueue::multiqueue_put_event;
 use crate::terminal::terminal_receive;
 use crate::types::{
     CallbackReader, Channel, RStream, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock,
-    kListLenMayKnow, list_T, size_t, typval_T, typval_vval_union, varnumber_T,
+    VarNumber, kListLenMayKnow, list_T, size_t, typval_T, typval_vval_union,
 };
 
 use super::{channel_decref, channel_incref};
@@ -244,10 +244,10 @@ unsafe fn channel_callback_call(chan: *mut Channel, reader: *mut CallbackReader)
 
     // SAFETY: the caller's live channel and reader. The list built for a
     // reader is owned by `argv[1]` until it is unreferenced below.
-    argv[0].vval.v_number = unsafe { (*chan).id } as varnumber_T;
+    argv[0].vval.v_number = unsafe { (*chan).id } as VarNumber;
     let cb = if reader.is_null() {
         argv[1].v_type = VAR_NUMBER as _;
-        argv[1].vval.v_number = unsafe { (*chan).exit_status } as varnumber_T;
+        argv[1].vval.v_number = unsafe { (*chan).exit_status } as VarNumber;
         argv[2].vval.v_string = c"exit".as_ptr() as *mut c_char;
         unsafe { &raw mut (*chan).on_exit }
     } else {

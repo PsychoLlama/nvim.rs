@@ -21,7 +21,7 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::types::{
     EvalFuncData, NUL, VAR_BLOB, VAR_DICT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_PARTIAL, VAR_STRING,
-    VAR_UNKNOWN, VarLock, blob_T, dictitem_T, typval_T, typval_vval_union, varnumber_T,
+    VAR_UNKNOWN, VarLock, VarNumber, blob_T, dictitem_T, typval_T, typval_vval_union,
 };
 use core::ffi::{c_char, c_int, c_void};
 
@@ -52,7 +52,7 @@ unsafe fn owned_str(p: *const c_char, len: c_int) -> typval_T {
 }
 
 /// A Number typval.
-const fn number_tv(n: varnumber_T) -> typval_T {
+const fn number_tv(n: VarNumber) -> typval_T {
     typval_T {
         v_type: VAR_NUMBER,
         v_lock: VarLock::Unlocked,
@@ -71,8 +71,8 @@ unsafe fn max_min(tv: *const typval_T, rettv: &mut typval_T, domax: bool) {
     rettv.vval.v_number = 0;
     // Seeded at the far end so the first item always wins. An empty
     // container returns the 0 written above instead.
-    let mut n: varnumber_T = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
-    let better = |i: varnumber_T, n: varnumber_T| if domax { i > n } else { i < n };
+    let mut n: VarNumber = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
+    let better = |i: VarNumber, n: VarNumber| if domax { i > n } else { i < n };
     let tv = unsafe { &*tv };
     match tv.v_type {
         VAR_LIST => {
@@ -295,11 +295,11 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut typval_T, rettv: &mut typval_T)
             semsg!("E998: Reduce of an empty {} with no initial value", "Blob");
             return;
         }
-        (number_tv(unsafe { tv_blob_get(b, 0) } as varnumber_T), 1)
+        (number_tv(unsafe { tv_blob_get(b, 0) } as VarNumber), 1)
     };
     unsafe { tv_copy(&raw const initial, rettv) };
     while i < unsafe { tv_blob_len(b) } {
-        let item = number_tv(unsafe { tv_blob_get(b, i) } as varnumber_T);
+        let item = number_tv(unsafe { tv_blob_get(b, i) } as VarNumber);
         // SAFETY: as the String walk above; `i` is inside the Blob.
         if !unsafe { fold_step(expr, rettv, item, BLOB_CLEANUP, called_emsg_start) } {
             return;

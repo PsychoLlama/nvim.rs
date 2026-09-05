@@ -238,7 +238,7 @@ pub(crate) unsafe fn var_shada_iter(
     iter: Option<usize>,
     name: *mut *const c_char,
     rettv: *mut typval_T,
-    flavour: var_flavour_T,
+    flavour: VarFlavour,
 ) -> Option<usize> {
     let globvarht = get_globvar_ht();
     let count = unsafe { (*globvarht).size() };

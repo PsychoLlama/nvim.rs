@@ -119,7 +119,7 @@ use crate::main::{
     no_mapping, no_u_sync, no_wait_return, no_zero_mapping, sandbox, tabpage_move_disallowed,
     textlock,
 };
-use crate::types::{scid_T, sctx_T};
+use crate::types::{ScriptId, sctx_T};
 use core::ffi::c_int;
 
 /// A counter held one higher for the lifetime of the guard.
@@ -640,7 +640,7 @@ impl Script {
 
     /// [`Script::context`] changing only the script id, leaving the
     /// sequence number and the line where they were.
-    pub(crate) fn sid(sid: scid_T) -> SavedSctx {
+    pub(crate) fn sid(sid: ScriptId) -> SavedSctx {
         Self::context(current_sctx.get().with_sid(sid))
     }
 

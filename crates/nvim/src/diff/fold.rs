@@ -295,7 +295,7 @@ pub unsafe fn f_diff_filler(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     //
     // SAFETY: the caller's cells, and the current window is live.
     let fill = diff_check_fill(cur_win(), unsafe { tv_get_lnum(argvars) });
-    unsafe { (*rettv).vval.v_number = fill as varnumber_T };
+    unsafe { (*rettv).vval.v_number = fill as VarNumber };
 }
 
 /// The window the editor is working in.

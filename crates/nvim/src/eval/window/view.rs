@@ -98,8 +98,8 @@ pub unsafe fn f_win_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fpt
     let list = unsafe { tv_list_alloc_ret(rettv, 2) };
     let wp = arg_win(args, 0);
     let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
-    unsafe { tv_list_append_number(list, varnumber_T::from(row)) };
-    unsafe { tv_list_append_number(list, varnumber_T::from(col)) };
+    unsafe { tv_list_append_number(list, VarNumber::from(row)) };
+    unsafe { tv_list_append_number(list, VarNumber::from(col)) };
 }
 
 /// The `{options}` dictionary `win_splitmove()` takes: the split flags and the
@@ -186,7 +186,7 @@ pub unsafe fn f_wincol(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     // SAFETY: `curwin` is set and `rettv` is the cleared return value.
     let win = cur_win();
     validate_cursor(win);
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(win.w_wcol + 1) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(win.w_wcol + 1) };
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
@@ -194,7 +194,7 @@ pub unsafe fn f_winline(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // SAFETY: `curwin` is set and `rettv` is the cleared return value.
     let win = cur_win();
     validate_cursor(win);
-    unsafe { (*rettv).vval.v_number = varnumber_T::from(win.w_wrow + 1) };
+    unsafe { (*rettv).vval.v_number = VarNumber::from(win.w_wrow + 1) };
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
@@ -202,7 +202,7 @@ pub unsafe fn f_winheight(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    rettv.vval.v_number = wp.map_or(-1, |wp| varnumber_T::from(wp.w_view_height));
+    rettv.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
@@ -210,7 +210,7 @@ pub unsafe fn f_winwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     let (args, rettv) = frame!(argvars, rettv);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    rettv.vval.v_number = wp.map_or(-1, |wp| varnumber_T::from(wp.w_view_width));
+    rettv.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width));
 }
 
 /// `winrestcmd()` — the `:resize` commands that rebuild the current tab page's
@@ -322,22 +322,22 @@ pub unsafe fn f_winsaveview(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     unsafe { tv_dict_alloc_ret(rettv) };
     let dict = unsafe { (*rettv).dict_or_null() };
     let win = cur_win();
-    let nr = |key: &CStr, value: varnumber_T| {
+    let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
-    nr(c"lnum", varnumber_T::from(win.w_cursor.lnum));
-    nr(c"col", varnumber_T::from(win.w_cursor.col));
-    nr(c"coladd", varnumber_T::from(win.w_cursor.coladd));
+    nr(c"lnum", VarNumber::from(win.w_cursor.lnum));
+    nr(c"col", VarNumber::from(win.w_cursor.col));
+    nr(c"coladd", VarNumber::from(win.w_cursor.coladd));
     // 'curswant' is only up to date once the cursor move has been resolved.
     // SAFETY: `curwin` is set.
     unsafe { update_curswant() };
-    nr(c"curswant", varnumber_T::from(win.w_curswant));
-    nr(c"topline", varnumber_T::from(win.w_topline));
-    nr(c"topfill", varnumber_T::from(win.w_topfill));
-    nr(c"leftcol", varnumber_T::from(win.w_leftcol));
-    nr(c"skipcol", varnumber_T::from(win.w_skipcol));
+    nr(c"curswant", VarNumber::from(win.w_curswant));
+    nr(c"topline", VarNumber::from(win.w_topline));
+    nr(c"topfill", VarNumber::from(win.w_topfill));
+    nr(c"leftcol", VarNumber::from(win.w_leftcol));
+    nr(c"skipcol", VarNumber::from(win.w_skipcol));
 }
 
 #[cfg(test)]

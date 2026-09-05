@@ -20,9 +20,9 @@ use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::CmdIdx;
 use crate::types::TAB;
 use crate::types::{
-    CONV_NONE, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, RepItem, SPL_FNAME_TMPL, SpellAddType,
-    XDGVarType, buf_T, etype_T, exarg_T, file_comparison, hashtab_T, regprog_T, size_t, spelltab_T,
-    time_t, vimconv_T,
+    CONV_NONE, EStackType, FAIL, Failed, MAXPATHL, NUL, OK, OptInt, RepItem, SPL_FNAME_TMPL,
+    SpellAddType, XDGVarType, buf_T, exarg_T, file_comparison, hashtab_T, regprog_T, size_t,
+    spelltab_T, time_t, vimconv_T,
 };
 use crate::ui::ui_flush;
 use core::ffi::CStr;
@@ -54,7 +54,7 @@ use wordtree::{
 };
 use write::write_vim_spell;
 pub const _ISdigit: ::core::ffi::c_uint = 2048;
-pub const ETYPE_SPELL: etype_T = 9;
+pub const ETYPE_SPELL: EStackType = 9;
 pub const kXDGDataHome: XDGVarType = 1;
 pub const kEqualFiles: file_comparison = 1;
 pub use crate::spell::MAXWLEN;

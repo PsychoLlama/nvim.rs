@@ -541,8 +541,8 @@ unsafe fn ex_let_option(
                     b'+' => cur_n + new_n,
                     b'-' => cur_n - new_n,
                     b'*' => cur_n * new_n,
-                    b'/' => num_divide(cur_n as varnumber_T, new_n as varnumber_T) as OptInt,
-                    b'%' => num_modulus(cur_n as varnumber_T, new_n as varnumber_T) as OptInt,
+                    b'/' => num_divide(cur_n as VarNumber, new_n as VarNumber) as OptInt,
+                    b'%' => num_modulus(cur_n as VarNumber, new_n as VarNumber) as OptInt,
                     // No other operator reaches here: `.` was refused
                     // above for a non-String option.
                     _ => new_n,

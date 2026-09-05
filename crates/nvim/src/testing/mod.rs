@@ -37,9 +37,9 @@ use crate::os::cshim::{gettext, strstr};
 use crate::os::fs::os_fopen;
 use crate::strings::{vim_snprintf, vim_snprintf_safelen};
 use crate::types::{
-    BoolVarValue, EvalFuncData, FILE, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT, VAR_NUMBER,
-    VAR_UNKNOWN, VarType, Vv, estack_arg_T, float_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    ptrdiff_t, size_t, typval_T, varnumber_T,
+    BoolVarValue, EStackArg, EvalFuncData, FILE, Float, IOSIZE, READBIN, VAR_BOOL, VAR_FLOAT,
+    VAR_NUMBER, VAR_UNKNOWN, VarNumber, VarType, Vv, int64_t, kBoolVarFalse, kBoolVarTrue,
+    ptrdiff_t, size_t, typval_T,
 };
 use ::libc::{fclose, fgetc};
 
@@ -57,7 +57,7 @@ enum AssertType {
 }
 
 /// `ESTACK_NONE`: `estack_sfile()` wants no `<sfile>`-style expansion.
-const ESTACK_NONE: estack_arg_T = 0;
+const ESTACK_NONE: EStackArg = 0;
 /// `NUMBUFLEN`: the scratch buffer the `tv_get_string_buf_chk` family wants,
 /// and what a formatted number goes into.
 const NUMBUFLEN: usize = 65;
@@ -436,7 +436,7 @@ unsafe fn assert_inrange(argvars: *mut typval_T) -> c_int {
     if (0..3).any(|i| unsafe { arg_type(argvars, i) } == VAR_FLOAT) {
         let lower = unsafe { tv_get_float(arg(argvars, 0)) };
         let upper = unsafe { tv_get_float(arg(argvars, 1)) };
-        let actual: float_T = unsafe { tv_get_float(arg(argvars, 2)) };
+        let actual: Float = unsafe { tv_get_float(arg(argvars, 2)) };
         // Written as upstream does, so a NaN — which compares false both
         // ways — is in range rather than out of it.
         if !(actual < lower || actual > upper) {
@@ -455,7 +455,7 @@ unsafe fn assert_inrange(argvars: *mut typval_T) -> c_int {
         let mut error = false;
         let lower = unsafe { tv_get_number_chk(arg(argvars, 0), &raw mut error) };
         let upper = unsafe { tv_get_number_chk(arg(argvars, 1), &raw mut error) };
-        let actual: varnumber_T = unsafe { tv_get_number_chk(arg(argvars, 2), &raw mut error) };
+        let actual: VarNumber = unsafe { tv_get_number_chk(arg(argvars, 2), &raw mut error) };
         if error || !(actual < lower || actual > upper) {
             return 0;
         }
@@ -496,7 +496,7 @@ pub(crate) unsafe fn f_assert_beeps(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_beeps(argvars, false) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = assert_beeps(argvars, false) as VarNumber };
 }
 
 /// `assert_nobeep(cmd)`.
@@ -506,7 +506,7 @@ pub(crate) unsafe fn f_assert_nobeep(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_beeps(argvars, true) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = assert_beeps(argvars, true) as VarNumber };
 }
 
 /// `assert_equal(expected, actual[, msg])`.
@@ -517,7 +517,7 @@ pub(crate) unsafe fn f_assert_equal(
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::Equal) as varnumber_T
+        (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::Equal) as VarNumber
     };
 }
 
@@ -529,7 +529,7 @@ pub(crate) unsafe fn f_assert_notequal(
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::NotEqual) as varnumber_T
+        (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::NotEqual) as VarNumber
     };
 }
 
@@ -540,7 +540,7 @@ pub(crate) unsafe fn f_assert_equalfile(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_equalfile(argvars) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = assert_equalfile(argvars) as VarNumber };
 }
 
 /// `assert_exception(string[, msg])`.
@@ -582,7 +582,7 @@ pub(crate) unsafe fn f_assert_false(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_bool(argvars, false) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = assert_bool(argvars, false) as VarNumber };
 }
 
 /// `assert_true(actual[, msg])`.
@@ -592,7 +592,7 @@ pub(crate) unsafe fn f_assert_true(
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_bool(argvars, true) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = assert_bool(argvars, true) as VarNumber };
 }
 
 /// `assert_inrange(lower, upper, actual[, msg])`.
@@ -609,7 +609,7 @@ pub(crate) unsafe fn f_assert_inrange(
     {
         return;
     }
-    unsafe { (*rettv).vval.v_number = assert_inrange(argvars) as varnumber_T };
+    unsafe { (*rettv).vval.v_number = assert_inrange(argvars) as VarNumber };
 }
 
 /// `assert_match(pattern, actual[, msg])`.
@@ -620,7 +620,7 @@ pub(crate) unsafe fn f_assert_match(
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_match_common(argvars, AssertType::Match) as varnumber_T
+        (*rettv).vval.v_number = assert_match_common(argvars, AssertType::Match) as VarNumber
     };
 }
 
@@ -632,7 +632,7 @@ pub(crate) unsafe fn f_assert_notmatch(
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_match_common(argvars, AssertType::NotMatch) as varnumber_T
+        (*rettv).vval.v_number = assert_match_common(argvars, AssertType::NotMatch) as VarNumber
     };
 }
 

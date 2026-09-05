@@ -686,7 +686,7 @@ pub(super) unsafe fn foldlevel_expr(line: FLine) {
     // The current window is restored below.
     curwin.set(line.win().raw());
     curbuf.set(line.win().w_buffer);
-    unsafe { set_vim_var_nr(Vv::Lnum, lnum as varnumber_T) };
+    unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
     line.set_start(0);
     line.set_had_end(line.end());
     line.set_end(MAX_LEVEL + 1);

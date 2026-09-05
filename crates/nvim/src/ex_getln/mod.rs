@@ -140,11 +140,11 @@ use crate::types::{
     ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
     HistoryType, Integer, LineNr, MotionType, Object, OptInt, OptMagic, OptVal, ParserHighlight,
     ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime, RemapValues, String_0,
-    TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, cstack_T, dict_T,
-    dobuf_action_values, dobuf_start_values, exarg_T, except_T, expand_T, handle_T, hashtab_T,
-    list_T, listitem_T, magic_T, msglist_T, oparg_T, optset_T, pos_T, ptrdiff_t, save_v_event_T,
-    sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t,
-    uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    TryState, UVarNumber, UndoLink, UndoObjectType, VarNumber, VimState, aco_save_T, buf_T,
+    cmdmod_T, cstack_T, dict_T, dobuf_action_values, dobuf_start_values, exarg_T, except_T,
+    expand_T, handle_T, hashtab_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optset_T,
+    pos_T, ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
+    typval_vval_union, uint8_t, uint32_t, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -353,7 +353,7 @@ pub struct CpBufInfo {
     pub save_b_changed: ::core::ffi::c_int,
     pub save_b_op_start: pos_T,
     pub save_b_op_end: pos_T,
-    pub save_changedtick: varnumber_T,
+    pub save_changedtick: VarNumber,
     pub undo_info: CpUndoInfo,
 }
 #[derive(Copy, Clone)]

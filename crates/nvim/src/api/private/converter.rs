@@ -36,8 +36,8 @@ use crate::memory::xstrdup;
 use crate::types::{
     Arena, Array, BoolVarValue, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN,
-    VarLock, blob_T, dict_T, dictitem_T, float_T, int64_t, kBoolVarFalse, kBoolVarTrue,
-    kSpecialVarNull, list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
+    VarLock, blob_T, dict_T, dictitem_T, int64_t, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
+    list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
 };
 use crate::winlayer::Live;
 
@@ -143,7 +143,7 @@ impl TypvalSink for ObjectSink {
         self.stack.push(Object::Integer(num as Integer));
     }
 
-    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: float_T) -> Flow {
+    unsafe fn conv_float(&mut self, _tv: *mut typval_T, flt: Float) -> Flow {
         self.stack.push(Object::Float(flt as Float));
         Flow::Go
     }
@@ -375,7 +375,7 @@ pub unsafe fn object_to_vim_take_luaref(obj: *mut Object, tv: *mut typval_T, tak
         }
         Object::Float(float) => {
             tv.v_type = VAR_FLOAT;
-            tv.vval.v_float = float as float_T;
+            tv.vval.v_float = float as Float;
         }
         Object::String(str) => {
             // SAFETY: the string names `len` readable bytes.

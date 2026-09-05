@@ -41,8 +41,8 @@ use crate::garray::{ga_clear_strings, ga_concat_strings, ga_init};
 use crate::main::{p_path, p_wic};
 use crate::memory::xfree;
 use crate::types::{
-    BackslashEscape, EvalFuncData, ExpandContext, VAR_LIST, VAR_STRING, VAR_UNKNOWN, Vv, expand_T,
-    garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T, varnumber_T,
+    BackslashEscape, EvalFuncData, ExpandContext, VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, Vv,
+    expand_T, garray_T, kListLenUnknown, pos_T, ptrdiff_t, sctx_T, size_t, typval_T,
 };
 use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -433,7 +433,7 @@ pub unsafe fn f_globpath(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
 /// # Safety
 /// `context` is the `typval_T` `f_readdir` handed `readdir_core`, and `name`
 /// a NUL-terminated entry name.
-unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> varnumber_T {
+unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNumber {
     // SAFETY: the caller's contract.
     let expr = unsafe { &mut *context.cast::<typval_T>() };
     if expr.v_type == VAR_UNKNOWN {

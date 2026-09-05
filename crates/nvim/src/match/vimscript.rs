@@ -35,7 +35,7 @@ unsafe fn put_str(d: *mut dict_T, key: &str, val: *const c_char) {
 ///
 /// # Safety
 /// `d` must be live.
-unsafe fn put_nr(d: *mut dict_T, key: &str, nr: varnumber_T) {
+unsafe fn put_nr(d: *mut dict_T, key: &str, nr: VarNumber) {
     // SAFETY: the caller's dictionary.
     let _ = unsafe { tv_dict_add_nr(d, key.as_ptr().cast(), key.len(), nr) };
 }
@@ -129,10 +129,10 @@ pub(crate) unsafe fn f_getmatches(
                 // A column of zero means the whole line, and is reported
                 // as a one-element list.
                 let sub = unsafe { tv_list_alloc(1 + if (*llpos).col > 0 { 2 } else { 0 }) };
-                unsafe { tv_list_append_number(sub, (*llpos).lnum as varnumber_T) };
+                unsafe { tv_list_append_number(sub, (*llpos).lnum as VarNumber) };
                 if unsafe { (*llpos).col } > 0 {
-                    unsafe { tv_list_append_number(sub, (*llpos).col as varnumber_T) };
-                    unsafe { tv_list_append_number(sub, (*llpos).len as varnumber_T) };
+                    unsafe { tv_list_append_number(sub, (*llpos).col as VarNumber) };
+                    unsafe { tv_list_append_number(sub, (*llpos).len as VarNumber) };
                 }
                 let key = format!("pos{}", i + 1);
                 let _ = unsafe { tv_dict_add_list(dict, key.as_ptr().cast(), key.len(), sub) };
@@ -141,8 +141,8 @@ pub(crate) unsafe fn f_getmatches(
             unsafe { put_str(dict, "pattern", (*cur).mit_pattern) };
         }
         unsafe { put_str(dict, "group", syn_id2name((*cur).mit_hlg_id)) };
-        unsafe { put_nr(dict, "priority", (*cur).mit_priority as varnumber_T) };
-        unsafe { put_nr(dict, "id", (*cur).mit_id as varnumber_T) };
+        unsafe { put_nr(dict, "priority", (*cur).mit_priority as VarNumber) };
+        unsafe { put_nr(dict, "id", (*cur).mit_id as VarNumber) };
 
         if unsafe { (*cur).mit_conceal_char } != 0 {
             let mut buf = [0 as c_char; MB_MAXCHAR + 1];
@@ -354,7 +354,7 @@ pub(crate) unsafe fn f_matchadd(argvars: *mut typval_T, rettv: *mut typval_T, _f
     unsafe {
         let no_pos = ::core::ptr::null_mut();
         (*rettv).vval.v_number =
-            match_add(win, grp, pat, prio, id, no_pos, conceal_char) as varnumber_T
+            match_add(win, grp, pat, prio, id, no_pos, conceal_char) as VarNumber
     };
 }
 
@@ -397,7 +397,7 @@ pub(crate) unsafe fn f_matchaddpos(
 
     unsafe {
         (*rettv).vval.v_number =
-            match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as varnumber_T
+            match_add(win, group, ::core::ptr::null(), prio, id, l, conceal_char) as VarNumber
     };
 }
 
@@ -440,7 +440,7 @@ pub(crate) unsafe fn f_matchdelete(
         (*rettv).vval.v_number = if win.is_null() {
             -1
         } else {
-            match_delete(win, tv_get_number(argvars) as c_int, true) as varnumber_T
+            match_delete(win, tv_get_number(argvars) as c_int, true) as VarNumber
         };
     }
 }

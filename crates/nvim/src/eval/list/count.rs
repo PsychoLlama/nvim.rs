@@ -19,7 +19,7 @@ use super::{
 };
 use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
-use crate::types::{EvalFuncData, int64_t, typval_T, uint8_t, varnumber_T};
+use crate::types::{EvalFuncData, VarNumber, int64_t, typval_T, uint8_t};
 
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 ///
@@ -58,7 +58,7 @@ pub unsafe fn f_add(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFun
 /// The `ic` walk steps a whole character at a time, because folding is
 /// per character and a byte-wise scan would find matches inside a multibyte
 /// sequence.
-fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> varnumber_T {
+fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> VarNumber {
     if needle.is_empty() {
         return 0;
     }
@@ -92,7 +92,7 @@ fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> varnumber_T {
 }
 
 /// How many items of `l` from index `idx` on equal `needle`.
-fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> varnumber_T {
+fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> VarNumber {
     if l.len() == 0 {
         return 0;
     }
@@ -113,7 +113,7 @@ fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> varnumb
 }
 
 /// How many values of `d` equal `needle`.
-fn count_dict(d: Dict, needle: &mut typval_T, ic: bool) -> varnumber_T {
+fn count_dict(d: Dict, needle: &mut typval_T, ic: bool) -> VarNumber {
     if d.is_null() {
         return 0;
     }

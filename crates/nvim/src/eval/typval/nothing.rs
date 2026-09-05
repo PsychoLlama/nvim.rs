@@ -43,7 +43,7 @@ use crate::eval::typval_encode::{
 };
 use crate::memory::xfree;
 use crate::types::{
-    blob_T, dict_T, float_T, int64_t, kBoolVarFalse, kSpecialVarNull, size_t, typval_T,
+    Float, blob_T, dict_T, int64_t, kBoolVarFalse, kSpecialVarNull, size_t, typval_T,
 };
 
 /// A sink with no state: everything it does, it does to the value it is
@@ -77,7 +77,7 @@ impl TypvalSink for NothingSink {
         val.v_lock = VarLock::Unlocked;
     }
 
-    unsafe fn conv_float(&mut self, tv: *mut typval_T, _flt: float_T) -> Flow {
+    unsafe fn conv_float(&mut self, tv: *mut typval_T, _flt: Float) -> Flow {
         // SAFETY: the walk's live typval.
         let mut val = unsafe { Tv::new(tv) };
         val.vval.v_float = 0.0;

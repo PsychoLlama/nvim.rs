@@ -80,8 +80,8 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, Failed, LineNr, MAXPATHL, NUL, Vv, buf_T, exarg_T, ptrdiff_t, size_t, ssize_t,
-    tabpage_T, uint64_t, varnumber_T, win_T,
+    CmdModFlags, Failed, LineNr, MAXPATHL, NUL, VarNumber, Vv, buf_T, exarg_T, ptrdiff_t, size_t,
+    ssize_t, tabpage_T, uint64_t, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
@@ -207,8 +207,8 @@ unsafe fn script_host_execute(name: &CStr, eap: *mut exarg_T) {
     }
     let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
     unsafe { tv_list_append_allocated_string(args, script) };
-    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as varnumber_T) };
-    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as varnumber_T) };
+    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as VarNumber) };
+    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as VarNumber) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
@@ -233,8 +233,8 @@ unsafe fn script_host_execute_file(name: &CStr, eap: *mut exarg_T) {
 
     let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
     unsafe { tv_list_append_string(args, buffer.as_ptr(), -1 as ssize_t) };
-    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as varnumber_T) };
-    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as varnumber_T) };
+    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as VarNumber) };
+    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as VarNumber) };
     unsafe {
         eval_call_provider(
             name.as_ptr().cast_mut(),
@@ -255,8 +255,8 @@ unsafe fn script_host_do_range(name: &CStr, eap: *mut exarg_T) {
         return;
     }
     let args = unsafe { tv_list_alloc(3 as ptrdiff_t) };
-    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as varnumber_T) };
-    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as varnumber_T) };
+    unsafe { tv_list_append_number(args, (*eap).line1 as c_int as VarNumber) };
+    unsafe { tv_list_append_number(args, (*eap).line2 as c_int as VarNumber) };
     unsafe { tv_list_append_string(args, (*eap).arg, -1 as ssize_t) };
     unsafe {
         eval_call_provider(

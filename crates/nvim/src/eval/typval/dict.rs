@@ -314,7 +314,7 @@ pub unsafe fn tv_dict_add_nr(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
-    nr: varnumber_T,
+    nr: VarNumber,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::number(nr) };
@@ -330,7 +330,7 @@ pub unsafe fn tv_dict_add_float(
     d: *mut dict_T,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
-    nr: float_T,
+    nr: Float,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
     unsafe { (*item).di_tv = typval_T::float(nr) };

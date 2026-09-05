@@ -35,8 +35,8 @@ const FIRST_EMOJI_BLOCK: c_int = 0x1f000;
 /// `width` cells wide.
 #[derive(Copy, Clone)]
 struct CellWidthRange {
-    first: varnumber_T,
-    last: varnumber_T,
+    first: VarNumber,
+    last: VarNumber,
     width: c_int,
 }
 
@@ -49,7 +49,7 @@ static CELL_WIDTHS: GlobalCell<Vec<CellWidthRange>> = GlobalCell::new(Vec::new()
 
 /// The width `setcellwidths()` was told to give `c`, or 0 for "not overridden".
 fn cw_value(c: c_int) -> c_int {
-    let c = c as varnumber_T;
+    let c = c as VarNumber;
     CELL_WIDTHS.with(|table| {
         table
             .binary_search_by(|r| {
@@ -332,7 +332,7 @@ unsafe fn parse_cell_widths(l: *const list_T) -> Option<Vec<CellWidthRange>> {
 ///
 /// `li_l` must be a live list.
 unsafe fn parse_cell_width_row(li_l: *const list_T, item: c_int) -> Option<CellWidthRange> {
-    let mut numbers = [0 as varnumber_T; 3];
+    let mut numbers = [0 as VarNumber; 3];
     let mut seen = 0;
     let mut lili = unsafe { tv_list_first(li_l) };
     while !lili.is_null() {
@@ -384,7 +384,7 @@ pub unsafe fn f_getcellwidths(_argvars: *mut typval_T, rettv: *mut typval_T, _fp
         let entry = unsafe { tv_list_alloc(3) };
         unsafe { tv_list_append_number(entry, row.first) };
         unsafe { tv_list_append_number(entry, row.last) };
-        unsafe { tv_list_append_number(entry, row.width as varnumber_T) };
+        unsafe { tv_list_append_number(entry, row.width as VarNumber) };
         unsafe { tv_list_append_list((*rettv).vval.v_list, entry) };
     }
 }

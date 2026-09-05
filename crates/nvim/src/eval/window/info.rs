@@ -27,30 +27,30 @@ unsafe fn get_win_info(wp: Win, tpnr: c_int, winnr: c_int) -> *mut dict_T {
     validate_botline_win(wp);
     let (dict, textoff) = unsafe { (tv_dict_alloc(), win_col_off(wp.raw())) };
     let (quickfix, terminal) = (buf_is_quickfix(Some(buf)), buf_is_terminal(Some(buf)));
-    let nr = |key: &CStr, value: varnumber_T| {
+    let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.
         let _ = unsafe { tv_dict_add_nr(dict, key.as_ptr(), key.count_bytes(), value) };
     };
 
-    nr(c"tabnr", varnumber_T::from(tpnr));
-    nr(c"winnr", varnumber_T::from(winnr));
-    nr(c"winid", varnumber_T::from(wp.handle));
-    nr(c"height", varnumber_T::from(wp.w_view_height));
-    nr(c"status_height", varnumber_T::from(wp.w_status_height));
-    nr(c"winrow", varnumber_T::from(wp.w_winrow + 1));
-    nr(c"topline", varnumber_T::from(wp.w_topline));
-    nr(c"botline", varnumber_T::from(wp.w_botline - 1));
-    nr(c"leftcol", varnumber_T::from(wp.w_leftcol));
-    nr(c"winbar", varnumber_T::from(wp.w_winbar_height));
-    nr(c"width", varnumber_T::from(wp.w_view_width));
-    nr(c"bufnr", varnumber_T::from(buf.handle));
-    nr(c"wincol", varnumber_T::from(wp.w_wincol + 1));
-    nr(c"textoff", varnumber_T::from(textoff));
-    nr(c"terminal", varnumber_T::from(terminal));
-    nr(c"quickfix", varnumber_T::from(quickfix));
+    nr(c"tabnr", VarNumber::from(tpnr));
+    nr(c"winnr", VarNumber::from(winnr));
+    nr(c"winid", VarNumber::from(wp.handle));
+    nr(c"height", VarNumber::from(wp.w_view_height));
+    nr(c"status_height", VarNumber::from(wp.w_status_height));
+    nr(c"winrow", VarNumber::from(wp.w_winrow + 1));
+    nr(c"topline", VarNumber::from(wp.w_topline));
+    nr(c"botline", VarNumber::from(wp.w_botline - 1));
+    nr(c"leftcol", VarNumber::from(wp.w_leftcol));
+    nr(c"winbar", VarNumber::from(wp.w_winbar_height));
+    nr(c"width", VarNumber::from(wp.w_view_width));
+    nr(c"bufnr", VarNumber::from(buf.handle));
+    nr(c"wincol", VarNumber::from(wp.w_wincol + 1));
+    nr(c"textoff", VarNumber::from(textoff));
+    nr(c"terminal", VarNumber::from(terminal));
+    nr(c"quickfix", VarNumber::from(quickfix));
     nr(
         c"loclist",
-        varnumber_T::from(quickfix && !wp.w_llist_ref.is_null()),
+        VarNumber::from(quickfix && !wp.w_llist_ref.is_null()),
     );
     // SAFETY: a live dictionary and the window's own variable dictionary.
     let vars = c"variables";
@@ -68,13 +68,13 @@ unsafe fn get_tabpage_info(tp: TabPage, tp_idx: c_int) -> *mut dict_T {
     // The keys go in in upstream's order: a dictionary's iteration order is
     // its hash table's, which insertion order can still perturb.
     let (nrkey, hint) = (c"tabnr", kListLenMayKnow as ptrdiff_t);
-    let nr = varnumber_T::from(tp_idx);
+    let nr = VarNumber::from(tp_idx);
     let dict = unsafe { tv_dict_alloc() };
     let _ = unsafe { tv_dict_add_nr(dict, nrkey.as_ptr(), nrkey.count_bytes(), nr) };
     let windows = unsafe { tv_list_alloc(hint) };
     let append = |handle: handle_T| {
         // SAFETY: a live list.
-        unsafe { tv_list_append_number(windows, varnumber_T::from(handle)) };
+        unsafe { tv_list_append_number(windows, VarNumber::from(handle)) };
     };
     for wp in windows_in_tab(tp) {
         append(wp.handle);
@@ -185,7 +185,7 @@ unsafe fn get_framelayout(fr: Frame, l: *mut list_T, outer: bool) {
         if let Some(wp) = fr.win() {
             word(c"leaf");
             // SAFETY: a live list.
-            unsafe { tv_list_append_number(fr_list, varnumber_T::from(wp.handle)) };
+            unsafe { tv_list_append_number(fr_list, VarNumber::from(wp.handle)) };
         }
         return;
     }

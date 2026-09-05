@@ -54,7 +54,7 @@ impl Argv {
     }
 
     /// Argument `n` as a number, or `None` when the call did not give one.
-    pub(crate) fn number(&self, n: usize) -> Option<varnumber_T> {
+    pub(crate) fn number(&self, n: usize) -> Option<VarNumber> {
         // SAFETY: `get` answers a slot of the caller's live vector.
         self.get(n).map(|at| unsafe { tv_get_number(at) })
     }
@@ -82,7 +82,7 @@ pub unsafe fn f_hasmapto(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     // writable answer slot.
     unsafe {
         let found = map_to_exists(name, mode, abbr);
-        (*rettv).vval.v_number = varnumber_T::from(found);
+        (*rettv).vval.v_number = VarNumber::from(found);
     }
 }
 

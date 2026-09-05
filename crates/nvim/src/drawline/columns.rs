@@ -611,7 +611,7 @@ impl WinLineVars {
             }
         }
 
-        unsafe { set_vim_var_nr(Vv::Virtnum, virtnum as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Virtnum, virtnum as VarNumber) };
         let width = unsafe { build_statuscol_str(wp.raw(), lnum, relnum, buf.as_mut_ptr(), stcp) };
         let was_reset = unsafe { *wp.w_onebuf_opt.wo_stc } == NUL as ::core::ffi::c_char;
         if was_reset

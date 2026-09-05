@@ -552,7 +552,7 @@ unsafe fn replace_number(
     // `pre` is the base marker: 'x'/'X' hex, 'b'/'B' binary, '0' octal, 0
     // decimal.
     let mut pre: c_int = 0;
-    let mut n: uvarnumber_T = 0;
+    let mut n: UVarNumber = 0;
     let mut overflow = false;
     let bases = Str2NrBases::BIN.when(fmt.bin)
         | Str2NrBases::OCT.when(fmt.oct)
@@ -574,7 +574,7 @@ unsafe fn replace_number(
 
     if (fmt.unsigned || blank_unsigned) && negative {
         // Stick at 0 going down and at 2^64 - 1 going up.
-        n = if subtract { 0 } else { uvarnumber_T::MAX };
+        n = if subtract { 0 } else { UVarNumber::MAX };
         negative = false;
     }
 
@@ -629,19 +629,19 @@ unsafe fn replace_number(
 /// do. `overflow` means the *original* did not fit in 64 bits, and then
 /// nothing is added at all.
 fn add_or_subtract(
-    mut n: uvarnumber_T,
+    mut n: UVarNumber,
     prenum1: LineNr,
     subtract: bool,
     mut negative: bool,
     overflow: bool,
     prefixed: bool,
-) -> (uvarnumber_T, bool) {
+) -> (UVarNumber, bool) {
     let oldn = n;
     if !overflow {
         n = if subtract {
-            n.wrapping_sub(prenum1 as uvarnumber_T)
+            n.wrapping_sub(prenum1 as UVarNumber)
         } else {
-            n.wrapping_add(prenum1 as uvarnumber_T)
+            n.wrapping_add(prenum1 as UVarNumber)
         };
     }
 
@@ -672,7 +672,7 @@ fn add_or_subtract(
 /// The cursor must be where the old number was deleted from.
 #[allow(clippy::too_many_arguments)]
 unsafe fn render_number(
-    n: uvarnumber_T,
+    n: UVarNumber,
     pre: c_int,
     mut length: c_int,
     firstdigit: c_int,
@@ -747,9 +747,9 @@ unsafe fn render_number(
 ///
 /// Truncates rather than overflowing `out`, which is why it is not a
 /// `vim_snprintf` call like the other three bases.
-fn format_binary(n: uvarnumber_T, out: &mut [c_char; NUMBUFLEN as usize]) -> c_int {
+fn format_binary(n: UVarNumber, out: &mut [c_char; NUMBUFLEN as usize]) -> c_int {
     // Skip the leading zeros.
-    let mut bits = 8 * ::core::mem::size_of::<uvarnumber_T>();
+    let mut bits = 8 * ::core::mem::size_of::<UVarNumber>();
     while bits > 0 && (n >> (bits - 1)) & 0x1 == 0 {
         bits -= 1;
     }

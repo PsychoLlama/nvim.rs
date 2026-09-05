@@ -28,8 +28,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, VAR_DICT, block_def, buf_T,
-    kListLenMayKnow, oparg_T, pos_T, typval_T, varnumber_T,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, VAR_DICT, VarNumber, block_def,
+    buf_T, kListLenMayKnow, oparg_T, pos_T, typval_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -491,10 +491,10 @@ fn add_regionpos_range(rettv: &mut typval_T, p1: pos_T, p2: pos_T) {
     for p in [p1, p2] {
         let l = unsafe { tv_list_alloc(4) };
         unsafe { tv_list_append_list(pair, l) };
-        unsafe { tv_list_append_number(l, (*curbuf.get()).handle as varnumber_T) };
-        unsafe { tv_list_append_number(l, p.lnum as varnumber_T) };
-        unsafe { tv_list_append_number(l, p.col as varnumber_T) };
-        unsafe { tv_list_append_number(l, p.coladd as varnumber_T) };
+        unsafe { tv_list_append_number(l, (*curbuf.get()).handle as VarNumber) };
+        unsafe { tv_list_append_number(l, p.lnum as VarNumber) };
+        unsafe { tv_list_append_number(l, p.col as VarNumber) };
+        unsafe { tv_list_append_number(l, p.coladd as VarNumber) };
     }
 }
 

@@ -32,8 +32,8 @@ use crate::os::env::{os_setenv, vim_getenv};
 use crate::path::{full_name_save, path_tail};
 use crate::strings::vim_strchr;
 use crate::types::{
-    BsFlag, Callback, CpoFlag, Failed, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, VAR_STRING,
-    dict_T, exarg_T, int64_t, scid_T, size_t, typval_T, uint8_t,
+    BsFlag, Callback, CpoFlag, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId, ShmFlag,
+    VAR_STRING, dict_T, exarg_T, int64_t, size_t, typval_T, uint8_t,
 };
 
 use super::{
@@ -339,7 +339,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
             kOptFileformat,
             OptVal::String(unsafe { cstr_as_string(name.as_ptr().cast_mut()) }),
             opt_flags,
-            0 as scid_T,
+            0 as ScriptId,
         );
     }
     unsafe { redraw_buf_status_later(curbuf.get()) };

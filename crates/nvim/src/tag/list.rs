@@ -400,7 +400,7 @@ pub(crate) unsafe fn add_llist_tags(
                 dict,
                 c"lnum".as_ptr(),
                 c"lnum".count_bytes(),
-                lnum as varnumber_T,
+                lnum as VarNumber,
             )
         };
         if let Some(pattern) = &pattern {

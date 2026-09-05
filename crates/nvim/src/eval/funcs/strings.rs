@@ -39,8 +39,9 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, ColNr, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, garray_T, hlf_T,
-    kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
+    CONV_NONE, ColNr, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, VarNumber, blob_T,
+    garray_T, hlf_T, kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T,
+    vimconv_T,
 };
 use ::libc::{mktime, strftime, time};
 use core::ffi::{CStr, VaList, c_char, c_int, c_void};
@@ -78,7 +79,7 @@ pub unsafe fn f_char2nr(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         return;
     }
     rettv.vval.v_number =
-        unsafe { utf_ptr2char(arg_string(&mut numbuf, args.get(0))) } as varnumber_T;
+        unsafe { utf_ptr2char(arg_string(&mut numbuf, args.get(0))) } as VarNumber;
 }
 
 /// `escape({string}, {chars})` — backslash every byte listed in `chars`.
@@ -152,7 +153,7 @@ pub unsafe fn f_nr2char(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
         emsg(gettext(msg));
         return;
     }
-    if num > c_int::MAX as varnumber_T {
+    if num > c_int::MAX as VarNumber {
         semsg!(
             "E5071: Character number must not be greater than INT_MAX ({})",
             c_int::MAX
@@ -211,12 +212,12 @@ pub unsafe fn f_repeat(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
 
 /// # Safety
 /// Argument 0 is a live List typval and `rettv` is the cleared return value.
-unsafe fn repeat_list(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
+unsafe fn repeat_list(args: Args<'_>, rettv: &mut typval_T, n: VarNumber) {
     // SAFETY: the caller's obligation.
     let src = args.get(0).list_or_null();
     // The length hint is upstream's; a non-positive count contributes
     // nothing rather than a negative capacity.
-    let hint = varnumber_T::from(n > 0) * n * varnumber_T::from(unsafe { tv_list_len(src) });
+    let hint = VarNumber::from(n > 0) * n * VarNumber::from(unsafe { tv_list_len(src) });
     let out = list_alloc_ret(rettv, hint as isize);
     for _ in 0..n.max(0) {
         unsafe { tv_list_extend(out, src, ptr::null_mut()) };
@@ -225,7 +226,7 @@ unsafe fn repeat_list(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
 
 /// # Safety
 /// Argument 0 is a live Blob typval and `rettv` is the cleared return value.
-unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
+unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: VarNumber) {
     // SAFETY throughout: the caller's obligation.
     blob_alloc_ret(rettv);
     let src: *mut blob_T = args.get(0).blob_or_null();
@@ -235,7 +236,7 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
     let slen = unsafe { (*src).bv_ga.ga_len };
     // Upstream computes the total in `int`; a product that does not fit
     // reads as non-positive and the repeat is dropped.
-    let len = (slen as varnumber_T * n) as c_int;
+    let len = (slen as VarNumber * n) as c_int;
     if len <= 0 {
         return;
     }
@@ -249,8 +250,8 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
         return;
     }
     for i in 0..len / slen {
-        let from = (i * slen) as varnumber_T;
-        let to = ((i + 1) * slen - 1) as varnumber_T;
+        let from = (i * slen) as VarNumber;
+        let to = ((i + 1) * slen - 1) as VarNumber;
         // SAFETY: `out` has room for `len` bytes and the source is a live
         // Blob typval.
         let _ = unsafe { tv_blob_set_range(out, from, to, args.ptr(0)) };
@@ -259,7 +260,7 @@ unsafe fn repeat_blob(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
 
 /// # Safety
 /// Argument 0 is a live typval and `rettv` is the cleared return value.
-unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: varnumber_T) {
+unsafe fn repeat_string(args: Args<'_>, rettv: &mut typval_T, n: VarNumber) {
     let mut numbuf = NumBuf::new();
     rettv.v_type = VAR_STRING;
     rettv.vval.v_string = ptr::null_mut();
@@ -636,7 +637,7 @@ pub unsafe fn f_strptime(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
         )
         .is_null();
     rettv.vval.v_number = match parsed {
-        true => unsafe { mktime(&raw mut tmval) as varnumber_T },
+        true => unsafe { mktime(&raw mut tmval) as VarNumber },
         false => -1,
     };
     if rettv.number_or_zero() == -1 {

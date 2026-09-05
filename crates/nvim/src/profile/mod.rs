@@ -41,8 +41,8 @@ use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
-    ExpandContext, LineNr, ProfTime, Vv, exarg_T, expand_T, funccall_T, int64_t, scriptitem_T,
-    sn_prl_T, ufunc_T, varnumber_T,
+    ExpandContext, LineNr, ProfTime, VarNumber, Vv, exarg_T, expand_T, funccall_T, int64_t,
+    scriptitem_T, sn_prl_T, ufunc_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -222,7 +222,7 @@ pub unsafe fn ex_profile(eap: *mut exarg_T) {
         do_profiling.set(PROF_YES);
         PROF_WAIT_TIME.set(profile_zero());
         // SAFETY: a v: variable set to a number.
-        unsafe { set_vim_var_nr(Vv::Profiling, 1 as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Profiling, 1 as VarNumber) };
     } else if do_profiling.get() == PROF_NONE {
         emsg(gettext(c"E750: First use \":profile start {fname}\""));
     } else if full == b"stop" {
@@ -230,7 +230,7 @@ pub unsafe fn ex_profile(eap: *mut exarg_T) {
         do_profiling.set(PROF_NONE);
         // SAFETY: a v: variable set to a number, then the profiling tables,
         // which are live for as long as the editor is.
-        unsafe { set_vim_var_nr(Vv::Profiling, 0 as varnumber_T) };
+        unsafe { set_vim_var_nr(Vv::Profiling, 0 as VarNumber) };
         unsafe { profile_reset() };
     } else if full == b"pause" {
         if do_profiling.get() == PROF_YES {

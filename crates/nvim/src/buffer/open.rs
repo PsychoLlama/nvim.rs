@@ -44,7 +44,7 @@ use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::types::{
     ColNr, CpoFlag, Failed, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0,
-    StringBuilder, aco_save_T, exarg_T, handle_T, int64_t, size_t, varnumber_T,
+    StringBuilder, VarNumber, aco_save_T, exarg_T, handle_T, int64_t, size_t,
 };
 use crate::winlayer::buffers;
 
@@ -115,7 +115,7 @@ fn empty_buffer(buf: Buf) -> bool {
 }
 
 /// `b:changedtick`.
-fn changedtick(buf: Buf) -> varnumber_T {
+fn changedtick(buf: Buf) -> VarNumber {
     // SAFETY: a live buffer.
     buf_get_changedtick(buf)
 }

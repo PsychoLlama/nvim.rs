@@ -37,7 +37,7 @@ use crate::runtime::{RuntimeOpts, getsourceline, source_runtime};
 use crate::state::MODE_LANGMAP;
 use crate::types::{
     BoolVarValue, EvalFuncData, KeymapEntry, NUL, OptInt, VAR_BOOL, VAR_LIST, VAR_STRING,
-    VAR_UNKNOWN, buf_T, exarg_T, int16_t, list_T, typval_T, varnumber_T, win_T,
+    VAR_UNKNOWN, VarNumber, buf_T, exarg_T, int16_t, list_T, typval_T, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -577,7 +577,7 @@ pub unsafe fn f_digraph_getlist(argvars: *mut typval_T, rettv: *mut typval_T, _f
     }
     // SAFETY: caller contract; the optional argument was just type-checked.
     let list_all =
-        unsafe { (*argvars).v_type != VAR_UNKNOWN && tv_get_bool(argvars) != 0 as varnumber_T };
+        unsafe { (*argvars).v_type != VAR_UNKNOWN && tv_get_bool(argvars) != 0 as VarNumber };
     // SAFETY: caller contract.
     unsafe { digraph_getlist_common(list_all, rettv) };
 }

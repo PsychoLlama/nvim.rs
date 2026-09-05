@@ -21,9 +21,9 @@ use crate::types::{
     Arena, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
     KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight, ParserHighlightChunk,
-    ParserLine, ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL,
-    dict_T, dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, partial_T, ptrdiff_t, size_t, typval_T, uint64_t, uvarnumber_T,
+    ParserLine, ParserPosition, ParserState, String_0, TryState, UVarNumber, VAR_DICT, VAR_FUNC,
+    VAR_PARTIAL, dict_T, dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException,
+    kErrorTypeNone, kErrorTypeValidation, partial_T, ptrdiff_t, size_t, typval_T, uint64_t,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
