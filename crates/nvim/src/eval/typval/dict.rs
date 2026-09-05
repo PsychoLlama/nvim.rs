@@ -409,23 +409,23 @@ pub unsafe fn tv_dict_add_allocated_str(
     unsafe { add_or_free(d, item) }
 }
 
-/// Add a funcref to `fp` to `d` under `key`.
+/// Add a funcref to `func` to `d` under `key`.
 ///
 /// # Safety
 /// `d` points at a live dictionary, `key` is readable for `key_len` bytes,
-/// and `fp` points at a live `UserFunc` whose `uf_name` is `uf_namelen`
+/// and `func` points at a live `UserFunc` whose `uf_name` is `uf_namelen`
 /// readable bytes. Only the name is copied; the funcref counts as a use of
 /// the function.
 pub unsafe fn tv_dict_add_func(
     d: *mut Dict,
     key: *const ::core::ffi::c_char,
     key_len: size_t,
-    fp: *mut UserFunc,
+    func: *mut UserFunc,
 ) -> Result<(), Failed> {
     let item = unsafe { tv_dict_item_alloc_len(key, key_len) };
-    let name = unsafe { (&raw mut (*fp).uf_name).cast() };
+    let name = unsafe { (&raw mut (*func).uf_name).cast() };
     // SAFETY: the caller's promise: a live function.
-    let func = unsafe { Live::<UserFunc>::new(fp) };
+    let func = unsafe { Live::<UserFunc>::new(func) };
     let namelen = func.uf_namelen;
     let owned = unsafe { xmemdupz(name, namelen) } as *mut ::core::ffi::c_char;
     unsafe {

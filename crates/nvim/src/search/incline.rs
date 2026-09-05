@@ -143,14 +143,14 @@ pub(crate) unsafe fn match_on_line(
 /// continues onto.
 ///
 /// # Safety
-/// `line` must be NUL-terminated, `lnum` writable, and `fp` null or an
+/// `line` must be NUL-terminated, `lnum` writable, and `stream` null or an
 /// open stream positioned just after `line`.
 pub(crate) unsafe fn show_pat_in_path(
     line: *mut c_char,
     kind: c_int,
     did_show: bool,
     action: c_int,
-    fp: *mut FILE,
+    stream: *mut FILE,
     lnum: *mut LineNr,
     count: c_int,
 ) {
@@ -171,7 +171,7 @@ pub(crate) unsafe fn show_pat_in_path(
         // `p` ends up on the last character of the line, which is
         // what decides whether a definition continues.
         let mut p = unsafe { line.add(linelen).offset(-1) };
-        if !fp.is_null() {
+        if !stream.is_null() {
             // These lines came from fgets(), so strip the newline.
             if p >= line && unsafe { *p } as c_int == '\n' as c_int {
                 p = unsafe { p.offset(-1) };
@@ -201,8 +201,8 @@ pub(crate) unsafe fn show_pat_in_path(
             break;
         }
 
-        if !fp.is_null() {
-            if unsafe { vim_fgets(line, LSIZE as c_int, fp) } {
+        if !stream.is_null() {
+            if unsafe { vim_fgets(line, LSIZE as c_int, stream) } {
                 break; // end of file
             }
             linelen = unsafe { cstr::bytes_at(line) }.len();

@@ -38,13 +38,13 @@ fn verbose_report(body: impl FnOnce()) {
     unsafe { verbose_leave_scroll() };
 }
 
-/// Call the user function `fp`.
+/// Call the user function `func`.
 ///
 /// # Safety
-/// `fp` is a live function, `args` holds `argcount` values, and `result`
+/// `func` is a live function, `args` holds `argcount` values, and `result`
 /// is an uninitialised return value.
 pub unsafe fn call_user_func(
-    fp: *mut UserFunc,
+    func: *mut UserFunc,
     argcount: c_int,
     args: *mut TypVal,
     result: *mut TypVal,
@@ -52,8 +52,8 @@ pub unsafe fn call_user_func(
     lastline: LineNr,
     selfdict: *mut Dict,
 ) {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let mut f = unsafe { Uf::new(fp) };
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let mut f = unsafe { Uf::new(func) };
     // SAFETY: the caller's promise -- `result` is the return value being built.
     let mut rv = unsafe { Tv::new(result) };
     let mut evalarg = EVALARG_EVALUATE;
@@ -81,17 +81,17 @@ pub unsafe fn call_user_func(
     line_breakcheck(); // check for CTRL-C hit
 
     // Prepare the FuncCall.
-    let fc = unsafe { create_funccal(fp, result) };
+    let fc = unsafe { create_funccal(func, result) };
     // SAFETY: `create_funccal` answers the live funccall this call owns.
     let mut frame = unsafe { Fc::new(fc) };
     frame.fc_level = ex_nesting_level.get();
-    // SAFETY: `fp` is live, so its inline name is a NUL-terminated string.
-    frame.fc_breakpoint = unsafe { dbg_find_breakpoint(false, uf_name_ptr(fp), 0) };
+    // SAFETY: `func` is live, so its inline name is a NUL-terminated string.
+    frame.fc_breakpoint = unsafe { dbg_find_breakpoint(false, uf_name_ptr(func), 0) };
     frame.fc_dbg_tick = debug_tick.get();
     let slot = size_of::<*mut UserFunc>() as c_int;
     unsafe { ga_init(&raw mut (*fc).fc_ufuncs, slot, 1) };
 
-    let islambda = unsafe { cstr::starts_with(uf_name_ptr(fp), b"<lambda>") };
+    let islambda = unsafe { cstr::starts_with(uf_name_ptr(func), b"<lambda>") };
 
     // `fc_fixvar` is an array of FIXVAR_CNT variables with names up to
     // VAR_SHORT_LEN long.  Handing out slots of it rather than allocating
@@ -265,7 +265,7 @@ pub unsafe fn call_user_func(
 
     let sandboxed = (f.uf_flags.has(FuncFlags::SANDBOX)).then(Lock::sandbox);
 
-    unsafe { estack_push_ufunc(fp, 1) };
+    unsafe { estack_push_ufunc(func, 1) };
     if p_verbose.get() >= 12 {
         verbose_report(|| {
             let called = sourcing_entry().es_name;
@@ -313,10 +313,10 @@ pub unsafe fn call_user_func(
     let mut started_profiling = false;
     if do_profiling_yes
         && f.uf_profiling == 0
-        && unsafe { has_profiling(false, uf_name_ptr(fp), ptr::null_mut()) }
+        && unsafe { has_profiling(false, uf_name_ptr(func), ptr::null_mut()) }
     {
         started_profiling = true;
-        unsafe { func_do_profile(fp) };
+        unsafe { func_do_profile(func) };
     }
     let func_or_func_caller_profiling = do_profiling_yes
         && (f.uf_profiling != 0
@@ -453,7 +453,7 @@ pub unsafe fn call_user_func(
     f.uf_calls -= 1;
     // Free the function when it was deleted while it was running.
     if f.uf_calls <= 0 && f.uf_refcount <= Refcount::ZERO {
-        unsafe { func_clear_free(fp, false) };
+        unsafe { func_clear_free(func, false) };
     }
 
     if did_save_redo {
@@ -467,17 +467,17 @@ pub unsafe fn call_user_func(
 /// answered as an `FCERR_*` code rather than a call.
 ///
 /// # Safety
-/// `fp` is a live function and `funcexe` describes the call.
+/// `func` is a live function and `funcexe` describes the call.
 pub(crate) unsafe fn call_user_func_check(
-    fp: *mut UserFunc,
+    func: *mut UserFunc,
     argcount: c_int,
     args: *mut TypVal,
     result: *mut TypVal,
     funcexe: *mut FuncExe,
     selfdict: *mut Dict,
 ) -> c_int {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let f = unsafe { Uf::new(fp) };
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let f = unsafe { Uf::new(func) };
     if f.uf_flags.has(FuncFlags::LUAREF) {
         return unsafe { typval_exec_lua_callable(f.uf_luaref, argcount, args, result) };
     }
@@ -485,7 +485,7 @@ pub(crate) unsafe fn call_user_func_check(
     if f.uf_flags.has(FuncFlags::RANGE) && !unsafe { (*funcexe).fe_doesrange }.is_null() {
         unsafe { *(*funcexe).fe_doesrange = true };
     }
-    let error = unsafe { check_user_func_argcount(fp, argcount) };
+    let error = unsafe { check_user_func_argcount(func, argcount) };
     if error != FCERR_UNKNOWN {
         return error;
     }
@@ -500,7 +500,7 @@ pub(crate) unsafe fn call_user_func_check(
     } else {
         ptr::null_mut()
     };
-    unsafe { call_user_func(fp, argcount, args, result, first, last, dict) };
+    unsafe { call_user_func(func, argcount, args, result, first, last, dict) };
     FCERR_NONE
 }
 

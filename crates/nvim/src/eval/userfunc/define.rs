@@ -32,14 +32,14 @@ pub(crate) unsafe fn function_list_modified(prev_ht_changed: c_int) -> c_int {
 /// a listing and of a `:verbose` report.
 ///
 /// # Safety
-/// `fp` is a live function.
+/// `func` is a live function.
 pub(crate) unsafe fn list_func_head(
-    fp: *mut UserFunc,
+    func: *mut UserFunc,
     indent: bool,
     force: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let f = unsafe { Uf::new(fp) };
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let f = unsafe { Uf::new(func) };
     let prev_ht_changed = func_table().changed();
 
     unsafe { msg_start() };
@@ -59,7 +59,7 @@ pub(crate) unsafe fn list_func_head(
         c"function ".as_ptr()
     };
     unsafe { msg_puts(intro) };
-    unsafe { msg_puts(printable_func_name(fp)) };
+    unsafe { msg_puts(printable_func_name(func)) };
     unsafe { msg_putchar(b'(' as c_int) };
 
     let args = ga_strings(&f.uf_args);

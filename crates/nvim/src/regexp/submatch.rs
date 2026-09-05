@@ -109,13 +109,13 @@ pub(crate) unsafe fn fill_submatch_list(
     _argc: c_int,
     argv: *mut TypVal,
     argskip: c_int,
-    fp: *mut UserFunc,
+    func: *mut UserFunc,
 ) -> c_int {
     // SAFETY: `argv` has at least `argskip + 1` slots and `argv[argskip]`
     // holds the `StaticList10` the caller keeps alive across the call;
     // `rsm` describes a live string match.
     let listarg = unsafe { argv.offset(argskip as isize) };
-    if unsafe { (*fp).uf_varargs } == 0 && unsafe { (*fp).uf_args.ga_len } <= argskip {
+    if unsafe { (*func).uf_varargs } == 0 && unsafe { (*func).uf_args.ga_len } <= argskip {
         return argskip;
     }
 

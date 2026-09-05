@@ -103,10 +103,10 @@ unsafe fn owner_matches(file_name: *const c_char, orig_name: *const c_char) -> b
 ///
 /// # Safety
 ///
-/// `fp` is open for reading on `file_name`, there is a live current buffer,
+/// `stream` is open for reading on `file_name`, there is a live current buffer,
 /// and `hash` points at [`UNDO_HASH_SIZE`] readable bytes.
 unsafe fn read_undo_file(
-    fp: *mut FILE,
+    stream: *mut FILE,
     file_name: *const c_char,
     automatic: bool,
     hash: *const uint8_t,
@@ -114,12 +114,12 @@ unsafe fn read_undo_file(
     // SAFETY: an open file and a live current buffer, by the contract above.
     let mut bi = BufInfo {
         bi_buf: unsafe { Buf::current() },
-        bi_fp: fp,
+        bi_fp: stream,
     };
     let bi = &raw mut bi;
 
     let mut magic = [0u8; UF_START_MAGIC.len()];
-    if unsafe { fread(magic.as_mut_ptr().cast(), magic.len(), 1, fp) } != 1
+    if unsafe { fread(magic.as_mut_ptr().cast(), magic.len(), 1, stream) } != 1
         || magic != UF_START_MAGIC
     {
         // SAFETY: the message macros expand to a `vim_snprintf` over // the format literal above and the editor's message buffers.
@@ -127,7 +127,7 @@ unsafe fn read_undo_file(
         semsg!("E823: Not an undo file: {file_name}");
         return;
     }
-    if unsafe { get2c(fp) } != UF_VERSION {
+    if unsafe { get2c(stream) } != UF_VERSION {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let file_name = unsafe { c_str(file_name) };
         semsg!("E824: Incompatible undo file: {file_name}");

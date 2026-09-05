@@ -49,11 +49,11 @@ pub fn profile_dump() {
 /// `"name()"` with a newline, decoding the `<SNR>` mangling.
 ///
 /// # Safety
-/// `fp` is a live function-table entry.
-unsafe fn write_func_name(fd: &mut dyn Write, fp: *mut UserFunc) -> io::Result<()> {
+/// `func` is a live function-table entry.
+unsafe fn write_func_name(fd: &mut dyn Write, func: *mut UserFunc) -> io::Result<()> {
     // SAFETY: `uf_name` is the flexible NUL-terminated name at the end of the
-    // entry, alive for as long as `fp` is.
-    let name = unsafe { CStr::from_ptr(&raw const (*fp).uf_name as *const c_char).to_bytes() };
+    // entry, alive for as long as `func` is.
+    let name = unsafe { CStr::from_ptr(&raw const (*func).uf_name as *const c_char).to_bytes() };
     if name.first().copied() == Some(K_SPECIAL as u8) {
         write!(fd, "<SNR>")?;
         fd.write_all(name.get(3..).unwrap_or_default())?;
@@ -116,13 +116,13 @@ unsafe fn prof_sort_list(
 /// Where a function was defined, as the report's `Defined:` line.
 ///
 /// # Safety
-/// `fp` is a live function-table entry with a non-zero `uf_script_ctx`.
-unsafe fn write_func_origin(fd: &mut dyn Write, fp: &UserFunc) -> io::Result<()> {
+/// `func` is a live function-table entry with a non-zero `uf_script_ctx`.
+unsafe fn write_func_origin(fd: &mut dyn Write, func: &UserFunc) -> io::Result<()> {
     // SAFETY: `get_scriptname` answers an owned, NUL-terminated name.
-    let p = unsafe { get_scriptname(fp.uf_script_ctx, true) };
+    let p = unsafe { get_scriptname(func.uf_script_ctx, true) };
     write!(fd, "    Defined: ")?;
     fd.write_all(p.to_bytes())?;
-    writeln!(fd, ":{}", fp.uf_script_ctx.sc_lnum)?;
+    writeln!(fd, ":{}", func.uf_script_ctx.sc_lnum)?;
     Ok(())
 }
 

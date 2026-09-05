@@ -663,14 +663,14 @@ pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr)
     unsafe { debuggy_find(file, fname, after, BreakList::Debug, ptr::null_mut()) }
 }
 
-/// Whether profiling is on for a function or sourced file, and through `fp`
+/// Whether profiling is on for a function or sourced file, and through `found`
 /// whether it was defined with `!`.
 ///
 /// # Safety
-/// `fname` must be NUL-terminated; `fp` null or writable.
-pub unsafe fn has_profiling(file: bool, fname: *mut c_char, fp: *mut bool) -> bool {
+/// `fname` must be NUL-terminated; `found` null or writable.
+pub unsafe fn has_profiling(file: bool, fname: *mut c_char, found: *mut bool) -> bool {
     // SAFETY: caller contract.
-    unsafe { debuggy_find(file, fname, 0 as LineNr, BreakList::Profiling, fp) != 0 as LineNr }
+    unsafe { debuggy_find(file, fname, 0 as LineNr, BreakList::Profiling, found) != 0 as LineNr }
 }
 
 /// The shared body of [`dbg_find_breakpoint`] and [`has_profiling`]: the
@@ -684,7 +684,7 @@ unsafe fn debuggy_find(
     fname: *mut c_char,
     after: LineNr,
     list: BreakList,
-    fp: *mut bool,
+    found: *mut bool,
 ) -> LineNr {
     if list.is_empty() {
         return 0 as LineNr;
@@ -731,8 +731,8 @@ unsafe fn debuggy_find(
             // is NUL-terminated.
             if unsafe { vim_regexec_prog(&raw mut (*bp).dbg_prog, false, name, 0 as ColNr) } {
                 lnum = unsafe { (*bp).dbg_lnum };
-                if !fp.is_null() {
-                    unsafe { *fp = (*bp).dbg_forceit != 0 };
+                if !found.is_null() {
+                    unsafe { *found = (*bp).dbg_forceit != 0 };
                 }
             }
             got_int.set(got_int.get() | prev_got_int);

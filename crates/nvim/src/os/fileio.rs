@@ -84,13 +84,13 @@ fn as_u64(n: usize) -> u64 {
 
 /// Unconsumed input, or pending output: the live `read_pos..write_pos`
 /// region of the block.
-fn buffered_len(fp: &FileDescriptor) -> usize {
-    fp.write_pos.addr() - fp.read_pos.addr()
+fn buffered_len(file: &FileDescriptor) -> usize {
+    file.write_pos.addr() - file.read_pos.addr()
 }
 
 /// Room left in the block after `write_pos`.
-fn free_space(fp: &FileDescriptor) -> usize {
-    fp.buffer.addr() + ARENA_BLOCK_SIZE - fp.write_pos.addr()
+fn free_space(file: &FileDescriptor) -> usize {
+    file.buffer.addr() + ARENA_BLOCK_SIZE - file.write_pos.addr()
 }
 
 /// Translate [`FileOpenFlags`] into `open(2)` flags.
@@ -194,12 +194,12 @@ pub unsafe fn file_open_fd(ret_fp: *mut FileDescriptor, fd: c_int, flags: c_int)
 /// # Safety
 ///
 /// As [`file_open_fd`].
-pub unsafe fn file_open_stdin(fp: *mut FileDescriptor) -> c_int {
+pub unsafe fn file_open_stdin(file: *mut FileDescriptor) -> c_int {
     // SAFETY: the caller's storage; `os_open_stdin_fd` answers a descriptor
     // nothing else owns, and `uv_strerror` a static string.
     unsafe {
         let flags = (kFileReadOnly | kFileNonBlocking).cast_signed();
-        let error = file_open_fd(fp, os_open_stdin_fd(), flags);
+        let error = file_open_fd(file, os_open_stdin_fd(), flags);
         if error != 0 {
             let (at, why) = (c"file_open_stdin", c_str(uv_strerror(error)));
             logmsg!(LOGLVL_ERR, at, 129, "failed to open stdin: {why}");
@@ -235,20 +235,20 @@ pub unsafe fn file_open_buffer(ret_fp: *mut FileDescriptor, data: *mut c_char, l
 ///
 /// # Safety
 ///
-/// `fp` points to a live `FileDescriptor`, which this call spends.
-pub unsafe fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> c_int {
+/// `file` points to a live `FileDescriptor`, which this call spends.
+pub unsafe fn file_close(file: *mut FileDescriptor, do_fsync: bool) -> c_int {
     // SAFETY: the caller's descriptor, and the arena block it owns.
     unsafe {
-        if (*fp).fd < 0 {
+        if (*file).fd < 0 {
             return 0;
         }
         let flush_error = if do_fsync {
-            file_fsync(fp)
+            file_fsync(file)
         } else {
-            file_flush(fp)
+            file_flush(file)
         };
-        let close_error = os_close((*fp).fd);
-        free_block((*fp).buffer.cast::<core::ffi::c_void>());
+        let close_error = os_close((*file).fd);
+        free_block((*file).buffer.cast::<core::ffi::c_void>());
         if close_error != 0 {
             return close_error;
         }
@@ -263,18 +263,18 @@ pub unsafe fn file_close(fp: *mut FileDescriptor, do_fsync: bool) -> c_int {
 ///
 /// # Safety
 ///
-/// `fp` points to a live `FileDescriptor`.
-pub unsafe fn file_fsync(fp: *mut FileDescriptor) -> c_int {
+/// `file` points to a live `FileDescriptor`.
+pub unsafe fn file_fsync(file: *mut FileDescriptor) -> c_int {
     // SAFETY: the caller's descriptor.
     unsafe {
-        if !(*fp).wr {
+        if !(*file).wr {
             return 0;
         }
-        let flush_error = file_flush(fp);
+        let flush_error = file_flush(file);
         if flush_error != 0 {
             return flush_error;
         }
-        let fsync_error = os_fsync((*fp).fd);
+        let fsync_error = os_fsync((*file).fd);
         if fsync_error != UV_EINVAL && fsync_error != UV_EROFS && fsync_error != UV_ENOTSUP {
             return fsync_error;
         }
@@ -286,21 +286,21 @@ pub unsafe fn file_fsync(fp: *mut FileDescriptor) -> c_int {
 ///
 /// # Safety
 ///
-/// `fp` points to a live `FileDescriptor`.
-pub unsafe fn file_flush(fp: *mut FileDescriptor) -> c_int {
+/// `file` points to a live `FileDescriptor`.
+pub unsafe fn file_flush(file: *mut FileDescriptor) -> c_int {
     // SAFETY: the caller's descriptor; `read_pos..write_pos` is the pending
     // output inside its own block.
-    let fp = unsafe { &mut *fp };
-    if !fp.wr {
+    let file = unsafe { &mut *file };
+    if !file.wr {
         return 0;
     }
-    let to_write = buffered_len(fp);
+    let to_write = buffered_len(file);
     if to_write == 0 {
         return 0;
     }
-    let wres = unsafe { os_write(fp.fd, fp.read_pos, to_write, fp.non_blocking) };
-    fp.write_pos = fp.buffer;
-    fp.read_pos = fp.buffer;
+    let wres = unsafe { os_write(file.fd, file.read_pos, to_write, file.non_blocking) };
+    file.write_pos = file.buffer;
+    file.read_pos = file.buffer;
     if wres == as_signed(to_write) {
         return 0;
     }
@@ -324,14 +324,18 @@ fn read_count(n: ptrdiff_t) -> usize {
 ///
 /// # Safety
 ///
-/// `fp` points to a live read-side `FileDescriptor` and `ret_buf` is
+/// `file` points to a live read-side `FileDescriptor` and `ret_buf` is
 /// writable for `size` bytes.
-pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: size_t) -> ptrdiff_t {
+pub unsafe fn file_read(
+    file: *mut FileDescriptor,
+    ret_buf: *mut c_char,
+    size: size_t,
+) -> ptrdiff_t {
     // SAFETY: the caller's descriptor and output buffer. The block's three
     // positions stay inside the block, and `os_readv` only writes what the
     // iovecs describe.
-    let fp = unsafe { &mut *fp };
-    debug_assert!(!fp.wr);
+    let file = unsafe { &mut *file };
+    debug_assert!(!file.wr);
     let out: &mut [u8] = if size == 0 {
         &mut []
     } else {
@@ -339,27 +343,27 @@ pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: siz
     };
 
     // Serve what the block already holds.
-    let from_buffer = buffered_len(fp).min(size);
+    let from_buffer = buffered_len(file).min(size);
     if from_buffer != 0 {
-        let held = unsafe { slice::from_raw_parts(fp.read_pos.cast::<u8>(), from_buffer) };
+        let held = unsafe { slice::from_raw_parts(file.read_pos.cast::<u8>(), from_buffer) };
         out[..from_buffer].copy_from_slice(held);
     }
     let mut read_remaining = size - from_buffer;
     if read_remaining == 0 {
-        fp.bytes_read += as_u64(from_buffer);
-        fp.read_pos = unsafe { fp.read_pos.add(from_buffer) };
+        file.bytes_read += as_u64(from_buffer);
+        file.read_pos = unsafe { file.read_pos.add(from_buffer) };
         return as_signed(from_buffer);
     }
 
     // The block is spent; restart it from the beginning.
-    fp.write_pos = fp.buffer;
-    fp.read_pos = fp.buffer;
+    file.write_pos = file.buffer;
+    file.read_pos = file.buffer;
 
     let mut filled = from_buffer;
     let mut called_read = false;
     while read_remaining != 0 {
         // At most one os_readv call on a non-blocking file.
-        if fp.eof || (called_read && fp.non_blocking) {
+        if file.eof || (called_read && file.non_blocking) {
             break;
         }
         // Fill the caller's buffer and the block in the same syscall; a
@@ -371,17 +375,17 @@ pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: siz
                 iov_len: read_remaining,
             },
             iovec {
-                iov_base: fp.write_pos.cast::<core::ffi::c_void>(),
+                iov_base: file.write_pos.cast::<core::ffi::c_void>(),
                 iov_len: ARENA_BLOCK_SIZE,
             },
         ];
         let r_ret = unsafe {
             os_readv(
-                fp.fd,
-                &raw mut fp.eof,
+                file.fd,
+                &raw mut file.eof,
                 iov.as_mut_ptr(),
                 iov.len(),
-                fp.non_blocking,
+                file.non_blocking,
             )
         };
         if r_ret < 0 {
@@ -389,7 +393,7 @@ pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: siz
         }
         let read = read_count(r_ret);
         if read > read_remaining {
-            fp.write_pos = unsafe { fp.write_pos.add(read - read_remaining) };
+            file.write_pos = unsafe { file.write_pos.add(read - read_remaining) };
             read_remaining = 0;
         } else {
             filled += read;
@@ -398,7 +402,7 @@ pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: siz
         called_read = true;
     }
 
-    fp.bytes_read += as_u64(size - read_remaining);
+    file.bytes_read += as_u64(size - read_remaining);
     as_signed(size - read_remaining)
 }
 
@@ -407,17 +411,17 @@ pub unsafe fn file_read(fp: *mut FileDescriptor, ret_buf: *mut c_char, size: siz
 ///
 /// # Safety
 ///
-/// `fp` points to a live read-side `FileDescriptor`.
-pub unsafe fn file_try_read_buffered(fp: *mut FileDescriptor, size: size_t) -> *mut c_char {
+/// `file` points to a live read-side `FileDescriptor`.
+pub unsafe fn file_try_read_buffered(file: *mut FileDescriptor, size: size_t) -> *mut c_char {
     // SAFETY: the caller's descriptor; the advance stays inside the live
     // region the test above just measured.
-    let fp = unsafe { &mut *fp };
-    if buffered_len(fp) < size {
+    let file = unsafe { &mut *file };
+    if buffered_len(file) < size {
         return ptr::null_mut();
     }
-    let ret = fp.read_pos;
-    fp.read_pos = unsafe { fp.read_pos.add(size) };
-    fp.bytes_read += as_u64(size);
+    let ret = file.read_pos;
+    file.read_pos = unsafe { file.read_pos.add(size) };
+    file.bytes_read += as_u64(size);
     ret
 }
 
@@ -426,23 +430,23 @@ pub unsafe fn file_try_read_buffered(fp: *mut FileDescriptor, size: size_t) -> *
 ///
 /// # Safety
 ///
-/// `fp` points to a live write-side `FileDescriptor`, and `buf` is readable
+/// `file` points to a live write-side `FileDescriptor`, and `buf` is readable
 /// for `size` bytes and does not point into the descriptor's own block.
-pub unsafe fn file_write(fp: *mut FileDescriptor, buf: *const c_char, size: size_t) -> ptrdiff_t {
+pub unsafe fn file_write(file: *mut FileDescriptor, buf: *const c_char, size: size_t) -> ptrdiff_t {
     // SAFETY: the caller's descriptor and input. The copy below only runs
     // once `size` is known to fit the space left after `write_pos`.
-    let fp = unsafe { &mut *fp };
-    debug_assert!(fp.wr);
+    let file = unsafe { &mut *file };
+    debug_assert!(file.wr);
     // The `<` (rather than `<=`) is upstream's: a write that exactly fills
     // the block flushes instead of filling it.
-    if size >= free_space(fp) {
-        let status = unsafe { file_flush(&raw mut *fp) };
+    if size >= free_space(file) {
+        let status = unsafe { file_flush(&raw mut *file) };
         if status < 0 {
             return ptrdiff_t::try_from(status).expect("a libuv error code fits a pointer");
         }
         if size >= ARENA_BLOCK_SIZE {
             // Too big to buffer; hand it straight to the file.
-            let wres = unsafe { os_write(fp.fd, buf, size, fp.non_blocking) };
+            let wres = unsafe { os_write(file.fd, buf, size, file.non_blocking) };
             if wres != as_signed(size) && wres >= 0 {
                 return ptrdiff_t::try_from(UV_EIO).expect("a libuv error code fits a pointer");
             }
@@ -450,9 +454,9 @@ pub unsafe fn file_write(fp: *mut FileDescriptor, buf: *const c_char, size: size
         }
     }
     if size != 0 {
-        unsafe { ptr::copy_nonoverlapping(buf.cast::<u8>(), fp.write_pos.cast::<u8>(), size) };
+        unsafe { ptr::copy_nonoverlapping(buf.cast::<u8>(), file.write_pos.cast::<u8>(), size) };
     }
-    fp.write_pos = unsafe { fp.write_pos.add(size) };
+    file.write_pos = unsafe { file.write_pos.add(size) };
     as_signed(size)
 }
 
@@ -461,37 +465,37 @@ pub unsafe fn file_write(fp: *mut FileDescriptor, buf: *const c_char, size: size
 ///
 /// # Safety
 ///
-/// `fp` points to a live read-side `FileDescriptor`.
-pub unsafe fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
+/// `file` points to a live read-side `FileDescriptor`.
+pub unsafe fn file_skip(file: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
     // SAFETY: the caller's descriptor; every position below is bounded by
     // the block's own `ARENA_BLOCK_SIZE` bytes.
-    let fp = unsafe { &mut *fp };
-    debug_assert!(!fp.wr);
-    let from_buffer = buffered_len(fp).min(size);
+    let file = unsafe { &mut *file };
+    debug_assert!(!file.wr);
+    let from_buffer = buffered_len(file).min(size);
     let mut skip_remaining = size - from_buffer;
     if skip_remaining == 0 {
-        fp.read_pos = unsafe { fp.read_pos.add(from_buffer) };
-        fp.bytes_read += as_u64(from_buffer);
+        file.read_pos = unsafe { file.read_pos.add(from_buffer) };
+        file.bytes_read += as_u64(from_buffer);
         return as_signed(from_buffer);
     }
 
     // The block is spent; restart it from the beginning.
-    fp.write_pos = fp.buffer;
-    fp.read_pos = fp.buffer;
+    file.write_pos = file.buffer;
+    file.read_pos = file.buffer;
 
     let mut called_read = false;
     while skip_remaining > 0 {
         // At most one os_read call on a non-blocking file.
-        if fp.eof || (called_read && fp.non_blocking) {
+        if file.eof || (called_read && file.non_blocking) {
             break;
         }
         let r_ret = unsafe {
             os_read(
-                fp.fd,
-                &raw mut fp.eof,
-                fp.buffer,
+                file.fd,
+                &raw mut file.eof,
+                file.buffer,
                 ARENA_BLOCK_SIZE,
-                fp.non_blocking,
+                file.non_blocking,
             )
         };
         if r_ret < 0 {
@@ -500,16 +504,16 @@ pub unsafe fn file_skip(fp: *mut FileDescriptor, size: size_t) -> ptrdiff_t {
         let read = read_count(r_ret);
         if read > skip_remaining {
             // Overshot: keep the excess buffered for the next read.
-            fp.read_pos = unsafe { fp.buffer.add(skip_remaining) };
-            fp.write_pos = unsafe { fp.buffer.add(read) };
-            fp.bytes_read += as_u64(size);
+            file.read_pos = unsafe { file.buffer.add(skip_remaining) };
+            file.write_pos = unsafe { file.buffer.add(read) };
+            file.bytes_read += as_u64(size);
             return as_signed(size);
         }
         skip_remaining -= read;
         called_read = true;
     }
 
-    fp.bytes_read += as_u64(size - skip_remaining);
+    file.bytes_read += as_u64(size - skip_remaining);
     as_signed(size - skip_remaining)
 }
 

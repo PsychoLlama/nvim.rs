@@ -273,11 +273,11 @@ pub unsafe fn utfc_next_impl(cur: StrCharInfo) -> StrCharInfo {
 ///
 /// `*fp` must point at a NUL-terminated string and `*to` must have room for
 /// the character.
-pub unsafe fn mb_copy_char(fp: *mut *const c_char, to: *mut *mut c_char) {
-    let l = unsafe { utfc_ptr2len(*fp) } as size_t;
-    unsafe { (*to).cast::<u8>().copy_from((*fp).cast(), l) };
+pub unsafe fn mb_copy_char(from: *mut *const c_char, to: *mut *mut c_char) {
+    let l = unsafe { utfc_ptr2len(*from) } as size_t;
+    unsafe { (*to).cast::<u8>().copy_from((*from).cast(), l) };
     unsafe { *to = (*to).add(l) };
-    unsafe { *fp = (*fp).add(l) };
+    unsafe { *from = (*from).add(l) };
 }
 
 /// How many bytes forward from `p` the next character starts, when `p` is in

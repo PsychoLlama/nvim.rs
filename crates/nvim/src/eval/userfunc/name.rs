@@ -193,20 +193,20 @@ unsafe fn func_is_global(ufunc: *const UserFunc) -> bool {
     unsafe { *((&raw const (*ufunc).uf_name) as *const c_char) as u8 as c_int != K_SPECIAL }
 }
 
-/// Write `fp`'s printable name into `buf`, answering how much was written
+/// Write `func`'s printable name into `buf`, answering how much was written
 /// (capped at `bufsize - 1`).
 ///
 /// # Safety
-/// `fp` is a live function and `buf` has `bufsize` writable bytes.
+/// `func` is a live function and `buf` has `bufsize` writable bytes.
 pub(crate) unsafe fn cat_func_name(
     buf: *mut c_char,
     bufsize: size_t,
-    fp: *const UserFunc,
+    func: *const UserFunc,
 ) -> c_int {
-    let uflen = unsafe { (*fp).uf_namelen };
+    let uflen = unsafe { (*func).uf_namelen };
     debug_assert!(uflen > 0);
-    let name = unsafe { &raw const (*fp).uf_name } as *const c_char;
-    let len = if !unsafe { func_is_global(fp) } && uflen > 3 {
+    let name = unsafe { &raw const (*func).uf_name } as *const c_char;
+    let len = if !unsafe { func_is_global(func) } && uflen > 3 {
         unsafe { snprintf(buf, bufsize, c"<SNR>%s".as_ptr(), name.add(3)) }
     } else {
         unsafe { snprintf(buf, bufsize, c"%s".as_ptr(), name) }
@@ -249,14 +249,14 @@ pub(crate) unsafe fn builtin_function(name: *const c_char, len: c_int) -> bool {
 /// The name to show a user: the unmangled `<SNR>123_name` when there is one.
 ///
 /// # Safety
-/// `fp` is a live function.
-pub unsafe fn printable_func_name(fp: *mut UserFunc) -> *mut c_char {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let f = unsafe { Uf::new(fp) };
+/// `func` is a live function.
+pub unsafe fn printable_func_name(func: *mut UserFunc) -> *mut c_char {
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let f = unsafe { Uf::new(func) };
     if !f.uf_name_exp.is_null() {
         f.uf_name_exp
     } else {
-        uf_name_ptr(fp)
+        uf_name_ptr(func)
     }
 }
 

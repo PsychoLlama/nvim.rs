@@ -380,7 +380,7 @@ pub(crate) unsafe fn msg_add_lines(
 /// of it thrown away.
 ///
 /// @return  true for EOF or error
-pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut FILE) -> bool {
+pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, stream: *mut FILE) -> bool {
     debug_assert!(size > 0);
     // The last-but-one byte tells us whether the line fitted: `fgets`
     // leaves it alone if the line was shorter than the buffer.
@@ -390,10 +390,10 @@ pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut FILE) -> bool {
     let mut retval;
     loop {
         unsafe { *__errno_location() = 0 };
-        retval = unsafe { fgets(buf, size, fp) };
+        retval = unsafe { fgets(buf, size, stream) };
         if !(retval.is_null()
             && unsafe { *__errno_location() } == EINTR
-            && unsafe { ferror(fp) } != 0)
+            && unsafe { ferror(stream) } != 0)
         {
             break;
         }
@@ -410,9 +410,9 @@ pub unsafe fn vim_fgets(buf: *mut c_char, size: c_int, fp: *mut FILE) -> bool {
         loop {
             tbuf[tlast] = 0;
             unsafe { *__errno_location() = 0 };
-            retval = unsafe { fgets(tbuf.as_mut_ptr(), tbuf.len() as c_int, fp) };
+            retval = unsafe { fgets(tbuf.as_mut_ptr(), tbuf.len() as c_int, stream) };
             if retval.is_null()
-                && (unsafe { feof(fp) } != 0 || unsafe { *__errno_location() } != EINTR)
+                && (unsafe { feof(stream) } != 0 || unsafe { *__errno_location() } != EINTR)
             {
                 break;
             }

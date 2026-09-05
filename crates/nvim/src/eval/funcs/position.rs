@@ -149,19 +149,19 @@ fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
 /// is past the whole character, and only for the cursor itself.
 ///
 /// Upstream tests `fp == &wp->w_cursor` for "the cursor itself", but
-/// `var2fpos` — the only source of `fp` here — always answers a position of
+/// `var2fpos` — the only source of `pos` here — always answers a position of
 /// its own, so the test never holds and the adjustment never applies. That
-/// is preserved: `fp` is still an address so the comparison keeps its
+/// is preserved: `pos` is still an address so the comparison keeps its
 /// (always false) answer. See F-P22-36.
 ///
 /// # Safety
-/// `window`, `bp` and `fp` are live, and `fp` is a position in `bp`.
-unsafe fn virtualedit_tail(window: *mut Window, buffer: *mut Buffer, fp: *mut Pos) -> ColNr {
+/// `window`, `bp` and `pos` are live, and `pos` is a position in `bp`.
+unsafe fn virtualedit_tail(window: *mut Window, buffer: *mut Buffer, pos: *mut Pos) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = unsafe { Win::new(window) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
     // and is only walked forward by one character.
-    if !virtual_active(win) || fp != &raw mut win.w_cursor {
+    if !virtual_active(win) || pos != &raw mut win.w_cursor {
         return 0;
     }
     let p = unsafe { ml_get_buf(buffer, win.w_cursor.lnum).offset(win.w_cursor.col as isize) };

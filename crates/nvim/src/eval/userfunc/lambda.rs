@@ -18,24 +18,24 @@ use core::ptr;
 use super::*;
 use crate::types::{Failed, Refcount};
 
-/// Give `fp` the funccall that is running as its scope, so that the locals it
+/// Give `func` the funccall that is running as its scope, so that the locals it
 /// closed over stay alive for as long as it does.
 ///
 /// # Safety
-/// `fp` is a live function and a funccall is running.
-pub(crate) unsafe fn register_closure(fp: *mut UserFunc) {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let mut f = unsafe { Uf::new(fp) };
+/// `func` is a live function and a funccall is running.
+pub(crate) unsafe fn register_closure(func: *mut UserFunc) {
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let mut f = unsafe { Uf::new(func) };
     if f.uf_scoped == current_funccal.get() {
         return; // no change
     }
-    unsafe { funccal_unref(f.uf_scoped, fp, false) };
+    unsafe { funccal_unref(f.uf_scoped, func, false) };
     let fc = current_funccal.get();
     f.uf_scoped = fc;
     unsafe { (*fc).fc_refcount.retain() };
     unsafe { ga_grow(&raw mut (*fc).fc_ufuncs, 1) };
     let ufuncs = unsafe { &raw mut (*fc).fc_ufuncs };
-    unsafe { *((*ufuncs).ga_data as *mut *mut UserFunc).offset((*ufuncs).ga_len as isize) = fp };
+    unsafe { *((*ufuncs).ga_data as *mut *mut UserFunc).offset((*ufuncs).ga_len as isize) = func };
     unsafe { (*ufuncs).ga_len += 1 };
 }
 

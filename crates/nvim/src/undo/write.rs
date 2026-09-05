@@ -220,14 +220,14 @@ unsafe fn match_group(fd: c_int, file_name: *mut c_char, perm: c_int, buffer: Bu
 /// # Safety
 ///
 /// `bi` is open on `buffer`'s undo file, `buffer` points at a live buffer, `hash`
-/// at [`UNDO_HASH_SIZE`] readable bytes, and `fd`/`fp` are the same open
+/// at [`UNDO_HASH_SIZE`] readable bytes, and `fd`/`stream` are the same open
 /// file as `bi`.
 unsafe fn write_tree(
     bi: *mut BufInfo,
     buffer: Buf,
     hash: *mut uint8_t,
     fd: c_int,
-    fp: *mut FILE,
+    stream: *mut FILE,
 ) -> bool {
     // SAFETY: an open undo file, and `hash` readable for [`UNDO_HASH_SIZE`]
     // bytes, both by the contract above.
@@ -255,9 +255,9 @@ unsafe fn write_tree(
     } else {
         p_fs.get()
     };
-    // SAFETY: `fp` and `fd` are the same open file as `bi`, by the contract
+    // SAFETY: `stream` and `fd` are the same open file as `bi`, by the contract
     // above.
-    if fsync_wanted != 0 && unsafe { fflush(fp) } == 0 && unsafe { os_fsync(fd) } != 0 {
+    if fsync_wanted != 0 && unsafe { fflush(stream) } == 0 && unsafe { os_fsync(fd) } != 0 {
         write_ok = false;
     }
     write_ok

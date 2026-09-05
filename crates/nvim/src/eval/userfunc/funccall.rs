@@ -247,12 +247,12 @@ pub(crate) unsafe fn cleanup_function_call(fc: *mut FuncCall) {
     }
 }
 
-/// Drop a reference to `fc` and free it when the last one goes.  `fp` is
+/// Drop a reference to `fc` and free it when the last one goes.  `func` is
 /// detached from it either way.
 ///
 /// # Safety
-/// `fc` is null or a live funccall; `fp` is a live function.
-pub(crate) unsafe fn funccal_unref(fc: *mut FuncCall, fp: *mut UserFunc, force: bool) {
+/// `fc` is null or a live funccall; `func` is a live function.
+pub(crate) unsafe fn funccal_unref(fc: *mut FuncCall, func: *mut UserFunc, force: bool) {
     if fc.is_null() {
         return;
     }
@@ -269,7 +269,7 @@ pub(crate) unsafe fn funccal_unref(fc: *mut FuncCall, fp: *mut UserFunc, force: 
     }
     // SAFETY: as above -- the closure array is this funccall's own.
     for slot in unsafe { (*fc_ufuncs(fc)).iter_mut() } {
-        if *slot == fp {
+        if *slot == func {
             *slot = ptr::null_mut();
         }
     }
@@ -279,11 +279,11 @@ pub(crate) unsafe fn funccal_unref(fc: *mut FuncCall, fp: *mut UserFunc, force: 
 /// there: a function deleted while it still had references is already gone.
 ///
 /// # Safety
-/// `fp` is a live function.
-pub(crate) unsafe fn func_remove(fp: *mut UserFunc) -> bool {
-    // SAFETY: the caller's promise -- `fp` is a live function, so its
+/// `func` is a live function.
+pub(crate) unsafe fn func_remove(func: *mut UserFunc) -> bool {
+    // SAFETY: the caller's promise -- `func` is a live function, so its
     // inline name is the key it was added under.
-    let hi = unsafe { func_table().find(uf_name_ptr(fp)) };
+    let hi = unsafe { func_table().find(uf_name_ptr(func)) };
     if !hi.is_kept() {
         return false;
     }
@@ -291,18 +291,18 @@ pub(crate) unsafe fn func_remove(fp: *mut UserFunc) -> bool {
     true
 }
 
-/// Free everything hanging off `fp` -- its argument names, its defaults, its
+/// Free everything hanging off `func` -- its argument names, its defaults, its
 /// body, its Lua reference and its profiling counters.
 ///
 /// # Safety
-/// `fp` is a live function.
-pub(crate) unsafe fn func_clear_items(fp: *mut UserFunc) {
-    // SAFETY: the caller's promise -- `fp` is a live function, so the three
+/// `func` is a live function.
+pub(crate) unsafe fn func_clear_items(func: *mut UserFunc) {
+    // SAFETY: the caller's promise -- `func` is a live function, so the three
     // garrays, the Lua reference and the three counters are all its own.
-    let mut f = unsafe { Uf::new(fp) };
-    unsafe { ga_clear_strings(&raw mut (*fp).uf_args) };
-    unsafe { ga_clear_strings(&raw mut (*fp).uf_def_args) };
-    unsafe { ga_clear_strings(&raw mut (*fp).uf_lines) };
+    let mut f = unsafe { Uf::new(func) };
+    unsafe { ga_clear_strings(&raw mut (*func).uf_args) };
+    unsafe { ga_clear_strings(&raw mut (*func).uf_def_args) };
+    unsafe { ga_clear_strings(&raw mut (*func).uf_lines) };
 
     if f.uf_flags.has(FuncFlags::LUAREF) {
         unsafe { api_free_luaref(f.uf_luaref) };
@@ -321,63 +321,63 @@ pub(crate) unsafe fn func_clear_items(fp: *mut UserFunc) {
     }
 }
 
-/// Free everything `fp` holds, once.
+/// Free everything `func` holds, once.
 ///
 /// # Safety
-/// `fp` is a live function.
-unsafe fn func_clear(fp: *mut UserFunc, force: bool) {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let mut f = unsafe { Uf::new(fp) };
+/// `func` is a live function.
+unsafe fn func_clear(func: *mut UserFunc, force: bool) {
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let mut f = unsafe { Uf::new(func) };
     if f.uf_cleared {
         return;
     }
     f.uf_cleared = true;
-    unsafe { func_clear_items(fp) };
+    unsafe { func_clear_items(func) };
     // Drop the reference on the scope this function closed over.
-    unsafe { funccal_unref(f.uf_scoped, fp, force) };
+    unsafe { funccal_unref(f.uf_scoped, func, force) };
 }
 
-/// Free `fp` itself, having already cleared what it holds.
+/// Free `func` itself, having already cleared what it holds.
 ///
 /// # Safety
-/// `fp` has been through [`func_clear`].
-unsafe fn func_free(fp: *mut UserFunc) {
-    // SAFETY: the caller's promise -- `fp` has been through `func_clear`.
-    let mut f = unsafe { Uf::new(fp) };
+/// `func` has been through [`func_clear`].
+unsafe fn func_free(func: *mut UserFunc) {
+    // SAFETY: the caller's promise -- `func` has been through `func_clear`.
+    let mut f = unsafe { Uf::new(func) };
     // Only remove it when not done already, otherwise we would remove a
     // newer version of the function.
     if !f.uf_flags.has(FuncFlags::DELETED | FuncFlags::REMOVED) {
-        unsafe { func_remove(fp) };
+        unsafe { func_remove(func) };
     }
     unsafe { xfree(f.uf_name_exp as *mut c_void) };
     f.uf_name_exp = ptr::null_mut();
-    unsafe { xfree(fp as *mut c_void) };
+    unsafe { xfree(func as *mut c_void) };
 }
 
 /// Free a function and everything it holds.
 ///
 /// # Safety
-/// `fp` is a live function that nothing is running.
-pub(crate) unsafe fn func_clear_free(fp: *mut UserFunc, force: bool) {
+/// `func` is a live function that nothing is running.
+pub(crate) unsafe fn func_clear_free(func: *mut UserFunc, force: bool) {
     // SAFETY: the caller's promise, handed straight on to both.
-    unsafe { func_clear(fp, force) };
-    unsafe { func_free(fp) };
+    unsafe { func_clear(func, force) };
+    unsafe { func_free(func) };
 }
 
-/// Start a call of `fp`: allocate its funccall, make it the current one, and
+/// Start a call of `func`: allocate its funccall, make it the current one, and
 /// take a reference to the function for as long as it lives.
 ///
 /// # Safety
-/// `fp` is a live function and `result` outlives the call.
-pub unsafe fn create_funccal(fp: *mut UserFunc, result: *mut TypVal) -> *mut FuncCall {
+/// `func` is a live function and `result` outlives the call.
+pub unsafe fn create_funccal(func: *mut UserFunc, result: *mut TypVal) -> *mut FuncCall {
     // SAFETY: a fresh, zeroed allocation of the right size, and the
-    // caller's promise that `fp` is live and `result` outlives the call.
+    // caller's promise that `func` is live and `result` outlives the call.
     let fc = unsafe { xcalloc(1, size_of::<FuncCall>()) } as *mut FuncCall;
     let mut frame = unsafe { Fc::new(fc) };
     frame.fc_caller = current_funccal.get();
     current_funccal.set(fc);
-    frame.fc_func = fp;
-    unsafe { func_ptr_ref(fp) };
+    frame.fc_func = func;
+    unsafe { func_ptr_ref(func) };
     frame.fc_rettv = result;
     fc
 }
@@ -445,18 +445,18 @@ pub unsafe fn func_unref(name: *mut c_char) {
 /// Drop a reference and free the function when the last one goes.
 ///
 /// # Safety
-/// `fp` is null or a live function.
-pub unsafe fn func_ptr_unref(fp: *mut UserFunc) {
-    if fp.is_null() {
+/// `func` is null or a live function.
+pub unsafe fn func_ptr_unref(func: *mut UserFunc) {
+    if func.is_null() {
         return;
     }
-    // SAFETY: the caller's promise, and `fp` is not null.
-    let mut f = unsafe { Uf::new(fp) };
+    // SAFETY: the caller's promise, and `func` is not null.
+    let mut f = unsafe { Uf::new(func) };
     f.uf_refcount.release();
     // Only delete it when it is not running; otherwise that is done when
     // `uf_calls` reaches zero.
     if f.uf_refcount <= Refcount::ZERO && f.uf_calls == 0 {
-        unsafe { func_clear_free(fp, false) };
+        unsafe { func_clear_free(func, false) };
     }
 }
 
@@ -482,11 +482,11 @@ pub unsafe fn func_ref(name: *mut c_char) {
 /// Count a reference held by pointer.
 ///
 /// # Safety
-/// `fp` is null or a live function.
-pub unsafe fn func_ptr_ref(fp: *mut UserFunc) {
-    if !fp.is_null() {
-        // SAFETY: the caller's promise, and `fp` is not null.
-        unsafe { (*fp).uf_refcount.retain() };
+/// `func` is null or a live function.
+pub unsafe fn func_ptr_ref(func: *mut UserFunc) {
+    if !func.is_null() {
+        // SAFETY: the caller's promise, and `func` is not null.
+        unsafe { (*func).uf_refcount.retain() };
     }
 }
 

@@ -404,35 +404,35 @@ pub unsafe fn prof_def_func() -> bool {
     sid > 0 && unsafe { (*script_item(sid)).sn_pr_force }
 }
 
-/// Start profiling function `fp`, allocating its per-line counters on
+/// Start profiling function `func`, allocating its per-line counters on
 /// first use.
 ///
 /// # Safety
-/// `fp` is a live function-table entry.
-pub unsafe fn func_do_profile(fp: *mut UserFunc) {
+/// `func` is a live function-table entry.
+pub unsafe fn func_do_profile(func: *mut UserFunc) {
     // SAFETY: the caller's function.
-    let fp = unsafe { &mut *fp };
+    let func = unsafe { &mut *func };
     // Avoid allocating zero bytes.
-    let len = (fp.uf_lines.ga_len as usize).max(1);
-    if fp.uf_prof_initialized == 0 {
-        fp.uf_tm_count = 0;
-        fp.uf_tm_self = profile_zero();
-        fp.uf_tm_total = profile_zero();
+    let len = (func.uf_lines.ga_len as usize).max(1);
+    if func.uf_prof_initialized == 0 {
+        func.uf_tm_count = 0;
+        func.uf_tm_self = profile_zero();
+        func.uf_tm_total = profile_zero();
         // SAFETY: `xcalloc` returns an owned zeroed array of `len` elements,
         // which is what the three per-line counters are read as everywhere.
-        if fp.uf_tml_count.is_null() {
-            fp.uf_tml_count = unsafe { xcalloc(len, size_of::<c_int>()) } as *mut c_int;
+        if func.uf_tml_count.is_null() {
+            func.uf_tml_count = unsafe { xcalloc(len, size_of::<c_int>()) } as *mut c_int;
         }
-        if fp.uf_tml_total.is_null() {
-            fp.uf_tml_total = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
+        if func.uf_tml_total.is_null() {
+            func.uf_tml_total = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
         }
-        if fp.uf_tml_self.is_null() {
-            fp.uf_tml_self = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
+        if func.uf_tml_self.is_null() {
+            func.uf_tml_self = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
         }
-        fp.uf_tml_idx = -1;
-        fp.uf_prof_initialized = 1;
+        func.uf_tml_idx = -1;
+        func.uf_prof_initialized = 1;
     }
-    fp.uf_profiling = 1;
+    func.uf_profiling = 1;
 }
 
 /// Prepare for entering a child (another script/function/shell command)
@@ -502,13 +502,13 @@ pub unsafe fn func_line_start(cookie: *mut c_void) {
     }
 }
 
-/// The `idx`'th source line of `fp`, or null for a continuation line.
+/// The `idx`'th source line of `func`, or null for a continuation line.
 ///
 /// # Safety
-/// `idx` is below `fp.uf_lines.ga_len`.
-unsafe fn func_line(fp: &UserFunc, idx: isize) -> *mut c_char {
+/// `idx` is below `func.uf_lines.ga_len`.
+unsafe fn func_line(func: &UserFunc, idx: isize) -> *mut c_char {
     // SAFETY: the caller's bound; the array holds `ga_len` line pointers.
-    unsafe { *(fp.uf_lines.ga_data as *mut *mut c_char).offset(idx) }
+    unsafe { *(func.uf_lines.ga_data as *mut *mut c_char).offset(idx) }
 }
 
 /// Called when actually executing a function line.

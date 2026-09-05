@@ -287,11 +287,11 @@ unsafe fn dict_add_nr(d: *mut Dict, key: &CStr, nr: VarNumber) {
 
 /// Append one `getstacktrace()` frame to `l`.
 ///
-/// Exactly one of `fp` (a user function) and `event` (an autocommand event
+/// Exactly one of `func` (a user function) and `event` (an autocommand event
 /// name) is set; a script frame has neither.
 unsafe fn stacktrace_push_item(
     l: *mut List,
-    fp: *mut UserFunc,
+    func: *mut UserFunc,
     event: *const c_char,
     lnum: LineNr,
     filepath: *mut c_char,
@@ -305,8 +305,8 @@ unsafe fn stacktrace_push_item(
         v_lock: VarLock::Locked,
         vval: typval_vval_union { v_dict: d },
     };
-    if !fp.is_null() {
-        let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), fp) };
+    if !func.is_null() {
+        let _ = unsafe { tv_dict_add_func(d, c"funcref".as_ptr(), c"funcref".count_bytes(), func) };
     }
     if !event.is_null() {
         unsafe { dict_add_str(d, c"event", event) };

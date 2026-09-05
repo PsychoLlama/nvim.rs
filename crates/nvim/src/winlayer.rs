@@ -637,20 +637,20 @@ impl Buf {
 
 impl FrameRef {
     /// # Safety
-    /// `fp` must stay a live frame for as long as the value is used.
+    /// `raw` must stay a live frame for as long as the value is used.
     #[inline(always)]
-    pub const unsafe fn new(fp: *mut Frame) -> Self {
-        Self(fp)
+    pub const unsafe fn new(raw: *mut Frame) -> Self {
+        Self(raw)
     }
 
-    /// The frame `fp` names, `None` for null.
+    /// The frame `raw` names, `None` for null.
     ///
     /// # Safety
-    /// `fp` must be null, or stay a live frame for as long as the value is
+    /// `raw` must be null, or stay a live frame for as long as the value is
     /// used.
     #[inline(always)]
-    pub const unsafe fn from_raw(fp: *mut Frame) -> Option<Self> {
-        if fp.is_null() { None } else { Some(Self(fp)) }
+    pub const unsafe fn from_raw(raw: *mut Frame) -> Option<Self> {
+        if raw.is_null() { None } else { Some(Self(raw)) }
     }
 
     #[inline(always)]

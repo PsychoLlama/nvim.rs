@@ -273,8 +273,8 @@ pub(crate) const FUNCDICT_INIT: FuncDict = FuncDict {
 /// Safe: a field's address is the object's plus a constant, so saying where
 /// the name is reads nothing. Whether there is a name *there* is the
 /// caller's business, as it is for every other pointer it holds.
-pub(crate) fn uf_name_ptr(fp: *mut UserFunc) -> *mut c_char {
-    fp.wrapping_byte_add(offset_of!(UserFunc, uf_name)).cast()
+pub(crate) fn uf_name_ptr(func: *mut UserFunc) -> *mut c_char {
+    func.wrapping_byte_add(offset_of!(UserFunc, uf_name)).cast()
 }
 
 /// The innermost entry of the `:source`/function call stack: what C's

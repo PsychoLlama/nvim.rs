@@ -45,22 +45,22 @@ fn shada_file_error2(fmt: &'static CStr, what: *const c_char, why: *const c_char
 }
 
 /// Whether the reader has nothing more to give.
-pub(crate) unsafe fn file_eof(fp: *const FileDescriptor) -> bool {
-    unsafe { (*fp).eof && (*fp).read_pos == (*fp).write_pos }
+pub(crate) unsafe fn file_eof(file: *const FileDescriptor) -> bool {
+    unsafe { (*file).eof && (*file).read_pos == (*file).write_pos }
 }
 
 /// The descriptor behind a file, for the calls that want the number.
-pub(crate) unsafe fn file_fd(fp: *const FileDescriptor) -> c_int {
-    unsafe { (*fp).fd }
+pub(crate) unsafe fn file_fd(file: *const FileDescriptor) -> c_int {
+    unsafe { (*file).fd }
 }
 
 /// How many bytes can still be written into the file's own buffer.
-pub(crate) unsafe fn file_space(fp: *mut FileDescriptor) -> size_t {
+pub(crate) unsafe fn file_space(file: *mut FileDescriptor) -> size_t {
     unsafe {
-        (*fp)
+        (*file)
             .buffer
             .add(ARENA_BLOCK_SIZE as usize)
-            .offset_from_unsigned((*fp).write_pos)
+            .offset_from_unsigned((*file).write_pos)
     }
 }
 

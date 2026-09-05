@@ -310,14 +310,14 @@ pub(crate) unsafe fn add_nr_var(dp: *mut Dict, v: *mut DictItem, name: *mut c_ch
     item.di_tv.vval.v_number = nr;
 }
 
-/// Whether `argcount` arguments can be given to `fp`: `FCERR_UNKNOWN` when
+/// Whether `argcount` arguments can be given to `func`: `FCERR_UNKNOWN` when
 /// they can, one of `FCERR_TOOFEW`/`FCERR_TOOMANY` when they cannot.
 ///
 /// # Safety
-/// `fp` is a live function.
-pub(crate) unsafe fn check_user_func_argcount(fp: *mut UserFunc, argcount: c_int) -> c_int {
-    // SAFETY: the caller's promise -- `fp` is a live function.
-    let f = unsafe { Uf::new(fp) };
+/// `func` is a live function.
+pub(crate) unsafe fn check_user_func_argcount(func: *mut UserFunc, argcount: c_int) -> c_int {
+    // SAFETY: the caller's promise -- `func` is a live function.
+    let f = unsafe { Uf::new(func) };
     let regular_args = f.uf_args.ga_len;
     if argcount < regular_args - f.uf_def_args.ga_len {
         FCERR_TOOFEW
