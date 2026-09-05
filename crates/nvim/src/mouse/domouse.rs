@@ -40,11 +40,11 @@ use crate::getchar::{
     vpeekc, vungetc,
 };
 use crate::global_cell::GlobalCell;
-use crate::main::{
-    mouse_col, mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row,
-};
 use crate::memline::{gchar_pos, inc};
 use crate::message::state::msg_silent;
+use crate::mouse::state::{
+    mouse_col, mouse_dragging, mouse_grid, mouse_past_bottom, mouse_past_eol, mouse_row,
+};
 use crate::r#move::scroll_redraw;
 use crate::normal::{
     VisualMode, clearop, clearopbeep, end_visual_mode, may_start_select, prep_redo,

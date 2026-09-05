@@ -61,7 +61,6 @@ use crate::highlight_group::{
     syn_check_group, syn_id2attr, syn_list_header, syn_name2id, syn_name2id_len,
 };
 use crate::indent_c::find_start_comment;
-use crate::main::{re_extmatch_in, re_extmatch_out, reg_do_extmatch};
 use crate::mbyte::{mb_strcmp_ic, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_buf, ml_get_buf_len, ml_get_len};
 use crate::memory::{xcalloc, xfree, xmalloc, xmemcpyz, xstrdup};
@@ -79,6 +78,7 @@ use crate::pos::MAXLNUM;
 use crate::profile::{
     profile_add, profile_cmp, profile_divide, profile_end, profile_msg, profile_start, profile_zero,
 };
+use crate::regexp::state::{re_extmatch_in, re_extmatch_out, reg_do_extmatch};
 use crate::regexp::{
     ref_extmatch, skip_regexp, unref_extmatch, vim_regcomp, vim_regcomp_had_eol, vim_regexec,
     vim_regexec_multi, vim_regfree,

@@ -113,9 +113,7 @@ use crate::keycodes::{
     Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
-use crate::main::{
-    did_check_timestamps, need_check_timestamps, pum_want, spell_redraw_lnum, u_sync_once,
-};
+use crate::main::{did_check_timestamps, need_check_timestamps};
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};
 use crate::mbyte::{
@@ -155,12 +153,14 @@ use crate::plines::{
     charsize_nowrap, getvcol, getvcol_nolist, init_charsize_arg, linetabsize_str, win_charsize,
     win_chartabsize,
 };
+use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_visible};
 use crate::pos::{MAXCOL, equalpos};
 use crate::register::{
     do_put, get_expr_register, get_yank_register, insert_reg, is_literal_register, valid_yank_reg,
 };
 use crate::search::{BACKWARD, FORWARD};
+use crate::spell::spell_redraw_lnum;
 use crate::state::mode::{
     Insstart, Insstart_orig, State, ai_col, arrow_used, can_si, can_si_back, did_ai, did_si,
     edit_submode_extra, end_comment_pending, force_restart_edit, ins_at_eol, km_startsel,
@@ -187,6 +187,7 @@ use crate::types::{
     String_0, VarNumber, VimState, Vv, int32_t, int64_t, ptrdiff_t, size_t, uint8_t,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
+use crate::undo::u_sync_once;
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
 use crate::window::{goto_tabpage, may_trigger_win_scrolled_resized};
 use crate::winlayer::graph::{cmdwin_result, cmdwin_type, curbuf, curwin};

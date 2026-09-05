@@ -26,8 +26,8 @@ use super::{
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{getdigits_int, hex2nr};
 use crate::global_cell::GlobalCell;
-use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
+use crate::regexp::state::rc_did_emsg;
 use crate::strings::xstrnsave;
 use crate::types::Failed;
 

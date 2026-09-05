@@ -5,6 +5,7 @@ use crate::api::vim::nvim_paste;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{ptr2cells, skipwhite};
 use crate::cursor::get_cursor_line_ptr;
+use crate::debugger::state::debug_did_msg;
 use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_cmdline};
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
@@ -18,6 +19,7 @@ use crate::event::multiqueue::multiqueue_empty;
 use crate::ex_cmds::check_secure;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::update_topline_cursor;
+use crate::ex_getln::state::cmdline_star;
 use crate::ex_getln::{cmdline_in_use, putcmdline, redrawcmd, redrawcmdline, unputcmdline};
 use crate::getchar::state::{
     KeyStuffed, KeyTyped, allow_keys, ctrl_c_interrupts, got_int, ignore_script, langmap_mapchar,
@@ -32,8 +34,7 @@ use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
 use crate::main::{
-    cmdline_star, debug_did_msg, did_outofmem_msg, did_swapwrite_msg, main_loop,
-    may_garbage_collect, mouse_col, mouse_grid, mouse_row, want_garbage_collect,
+    did_outofmem_msg, did_swapwrite_msg, main_loop, may_garbage_collect, want_garbage_collect,
 };
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
@@ -52,6 +53,7 @@ use crate::message::state::{
 };
 use crate::message::{e_nesting, e_toocompl};
 use crate::message::{emsg, iemsg, internal_error};
+use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, comp_pos, find_win_inner, is_mouse_key};
 use crate::r#move::{validate_cursor, win_col_off};
 use crate::normal::{add_to_showcmd, normal_cmd, pop_showcmd, push_showcmd};

@@ -15,7 +15,7 @@ use super::escape::{percent_atom, z_atom};
 use super::literal::{class_shorthand, is_class_shorthand, literal_run, previous_substitute};
 use super::op::BtOp;
 use super::piece::reg;
-use crate::main::rc_did_emsg;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, MAGIC_ALL, MAGIC_ON, NL, REG_PAREN, Rex, SIMPLE, SPSTART, WORST,
     getchr, had_eol, magic, magic_prefix, one_exactly, prev_at_start, reg_magic, reg_string,

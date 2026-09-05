@@ -19,12 +19,12 @@ use super::compile::{
     regoptail, regtail,
 };
 use super::op::BtOp;
-use crate::main::rc_did_emsg;
 use crate::mbyte::utf_ptr2char;
 use crate::memory::xfree;
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, MAGIC_ALL, MAGIC_NONE, MAGIC_OFF,
     MAGIC_ON, NOT_MULTI, NSUBEXP, REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, REGMAGIC,

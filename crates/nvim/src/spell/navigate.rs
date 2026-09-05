@@ -33,12 +33,12 @@ use core::ffi::{c_char, c_int};
 use core::mem;
 
 use crate::charset::{getwhitecols, skipwhite};
+use crate::decoration::decor_state;
 use crate::decoration::{
     DecorStateRef, decor_redraw_col, decor_redraw_line, decor_redraw_reset, decor_state_free,
 };
 use crate::decoration_provider::decor_providers_invoke_spell;
 use crate::getchar::state::got_int;
-use crate::main::decor_state;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::give_warning;

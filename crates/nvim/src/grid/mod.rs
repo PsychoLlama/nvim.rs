@@ -41,7 +41,7 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::state::hl_attr_active;
 use crate::highlight::{hl_apply_winblend, hl_combine_attr};
 use crate::log::LOGLVL_DBG;
-use crate::main::{default_grid, full_screen};
+use crate::main::full_screen;
 use crate::map::mh_clear;
 use crate::map_glyph_cache::mh_put_glyph;
 use crate::mbyte::{
@@ -87,6 +87,8 @@ pub use schar::{
     schar_cells, schar_from_ascii, schar_from_buf, schar_from_char, schar_from_str, schar_get,
     schar_get_adv, schar_get_ascii, schar_get_first_codepoint, schar_high, schar_len,
 };
+
+pub(crate) static default_grid: GlobalCell<ScreenGrid> = GlobalCell::new(ScreenGrid::empty());
 
 const kMHExisting: MHPutStatus = 0;
 const kBorderTextTitle: BorderTextType = 0;

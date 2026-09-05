@@ -38,14 +38,14 @@ use crate::drawscreen::{redraw_buf_line_later, redraw_buf_range_later};
 use crate::extmark::extmark_set;
 use crate::global_cell::GlobalCell;
 use crate::grid::{schar_from_char, schar_get_first_codepoint, schar_high};
-use crate::main::decor_state;
 use crate::marktree::key::MtFlags;
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
     Buffer, ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority,
-    DecorRangeKind, DecorSignHighlight, DecorVirtText, HlMode, LPos, LineNr, MTKey, MetaIndex,
-    VirtLines, VirtText, VirtTextChunk, VirtTextPos, uint8_t, uint16_t, uint32_t, virt_line,
+    DecorRangeKind, DecorSignHighlight, DecorState, DecorVirtText, HlMode, LPos, LineNr, MTKey,
+    MTNode, MTPos, MarkTreeIter, MarkTreeIterLevel, MetaIndex, VirtLines, VirtText, VirtTextChunk,
+    VirtTextPos, Window, int32_t, uint8_t, uint16_t, uint32_t, virt_line,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
@@ -62,6 +62,39 @@ pub use self::handles::*;
 pub use self::query::*;
 pub use self::signs::*;
 pub use self::state::*;
+
+pub(crate) static decor_state: GlobalCell<DecorState> = GlobalCell::new(DecorState {
+    itr: [MarkTreeIter {
+        pos: MTPos {
+            row: 0 as int32_t,
+            col: 0,
+        },
+        lvl: 0,
+        x: ::core::ptr::null_mut::<MTNode>(),
+        i: 0,
+        s: [MarkTreeIterLevel { oldcol: 0, i: 0 }; 20],
+        intersect_idx: 0,
+        intersect_pos: MTPos { row: 0, col: 0 },
+        intersect_pos_x: MTPos { row: 0, col: 0 },
+    }],
+    slots: Vec::new(),
+    ranges_i: Vec::new(),
+    current_end: 0,
+    future_begin: 0,
+    free_slot_i: 0,
+    new_range_ordering: 0,
+    win: ::core::ptr::null_mut::<Window>(),
+    top_row: 0,
+    row: 0,
+    col_last: 0,
+    current: 0,
+    eol_col: 0,
+    conceal: 0,
+    conceal_char: 0,
+    conceal_attr: 0,
+    spell: Some(false),
+    itr_valid: false,
+});
 
 // ---------------------------------------------------------------------------
 // The one state, named

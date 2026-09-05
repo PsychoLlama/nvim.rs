@@ -39,13 +39,14 @@ use crate::ex_docmd::state::{ex_no_reprint, ex_normal_busy, exec_from_reg};
 use crate::getchar::state::{got_int, pending_end_reg_executing, reg_executing};
 use crate::keycodes::{Ctrl_C, Ctrl_O, K_SPECIAL, KE_FILLER};
 use crate::lua::executor::ex_lua;
-use crate::main::{magic_overruled, main_loop};
+use crate::main::main_loop;
 use crate::mark::{checkpcmark, setmark, setpcmark};
 use crate::message::state::{msg_didout, msg_scroll};
 use crate::message::{
     e_argreq, e_empty_buffer, e_invrange, e_secure, e_undobang_cannot_redo_or_move_branch,
 };
 use crate::option::vars::p_mmd;
+use crate::search::state::magic_overruled;
 use crate::state::mode::{
     State, did_syncbind, finish_op, force_restart_edit, opcount, restart_edit, stop_insert_mode,
     virtual_op,

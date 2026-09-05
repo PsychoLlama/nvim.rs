@@ -45,13 +45,13 @@ use super::{
     DecorStateRef, Range, Sh, Virt, decor_sh_from_inline, kSHConceal, kSHHlEol, kSHIsSign,
     kSHSpellOff, kSHSpellOn, kSHUIWatched, kSHUIWatchedOverlay, ns_in_win, slot_range,
 };
+use crate::decoration::decor_state;
 use crate::decoration::{
     clear_virttext, kDecorKindHighlight, kDecorKindUIWatched, kDecorKindVirtLines,
     kDecorKindVirtText, kVPosEndOfLine, kVPosInline, kVPosOverlay,
 };
 use crate::highlight::{hl_add_url, hl_combine_attr};
 use crate::highlight_group::syn_id2attr;
-use crate::main::decor_state;
 use crate::marktree::cursor::tree_of;
 use crate::marktree::key::{MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_invalid};
 use crate::marktree::{

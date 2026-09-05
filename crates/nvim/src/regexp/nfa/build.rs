@@ -18,8 +18,8 @@ use core::ffi::c_int;
 
 use super::run::failure_chance;
 use super::sub::match_follows;
-use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{NfaRegProg, NfaState, istate, nstate, state_ptr};
 use crate::semsg;
 use crate::types::MB_MAXBYTES;

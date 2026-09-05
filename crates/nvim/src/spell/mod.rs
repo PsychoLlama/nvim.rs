@@ -38,9 +38,9 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use crate::change::inserted_bytes;
 use crate::cursor::{get_cursor_line_len, get_cursor_line_ptr};
 use crate::ex_cmds::do_sub_msg;
+use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::{sub_nlines, sub_nsubs};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
@@ -90,6 +90,8 @@ pub use slang::{
 pub use soundfold::{eval_soundfold, spell_soundfold};
 pub(crate) use wordtree::Tree;
 pub use wordtree::WordTree;
+
+pub(crate) static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 
 pub const kEqualFiles: FileComparison = 1;
 

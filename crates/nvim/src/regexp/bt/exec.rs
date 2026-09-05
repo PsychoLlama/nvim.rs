@@ -19,13 +19,13 @@ use super::compile::BtProg;
 use super::matcher::regmatch;
 use super::state::{BT_STATE, capture_slot};
 use crate::getchar::state::got_int;
-use crate::main::re_extmatch_out;
 use crate::mbyte::{mb_tolower, utf_fold, utf_ptr2char, utfc_ptr2len};
 use crate::memory::xfree;
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
 use crate::profile::profile_passed_limit;
+use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     MatchPos, NSUBEXP, RF_ICASE, RF_ICOMBINE, RF_NOICASE, RS_MCLOSE, RS_MOPEN, Rex,
     cleanup_subexpr, cleanup_zsubexpr, cstrchr, cstrncmp, init_regexec, init_regexec_multi,

@@ -37,7 +37,6 @@ use crate::ex_docmd::{cmdmod_has, do_exedit};
 use crate::getchar::state::got_int;
 use crate::guard::{sandbox, secure};
 use crate::input::prompt_for_input;
-use crate::main::g_do_tagpreview;
 use crate::memory::xfree;
 use crate::message::state::{msg_scroll, quit_more};
 use crate::message::{e_curdir, e_interr, e_invarg, e_noprevre, e_sandbox};
@@ -52,6 +51,7 @@ use crate::os::env::expand_env_save;
 use crate::os::input::os_breakcheck;
 use crate::pos::MAXLNUM;
 use crate::regexp::{RE_MAGIC, skip_regexp};
+use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::CAR;
 use crate::types::CmdIdx;
@@ -88,7 +88,13 @@ pub use self::subst::*;
 pub use self::text::*;
 pub use self::write::*;
 
+use crate::global_cell::GlobalCell;
 use crate::regexp::re_multiline;
+use core::ffi::c_int;
+
+pub(crate) static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
+pub(crate) static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
+
 pub const _ISalpha: ::core::ffi::c_uint = 1024;
 pub const kExtmarkMove: UndoObjectType = 1;
 pub const kExtmarkSplice: UndoObjectType = 0;

@@ -19,7 +19,7 @@ use crate::buffer::buf_is_prompt;
 use crate::drawscreen::redraw_statuslines;
 use crate::edit::{set_can_cindent, start_arrow, undisplay_dollar};
 use crate::getchar::state::mod_mask;
-use crate::main::{mouse_col, mouse_row};
+use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::pagescroll;
 use crate::normal::nv_scroll_line;
 use crate::ops::clear_oparg;

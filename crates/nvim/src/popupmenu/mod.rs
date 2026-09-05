@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::types::CAR;
 use crate::types::ESC;
 use crate::types::NL;
@@ -35,15 +36,12 @@ use crate::highlight_group::{
 use crate::insexpand::{
     compl_match_curr_select, get_cot_flags, ins_compl_active, ins_compl_leader,
 };
-use crate::main::{
-    PumWant, g_do_tagpreview, mouse_col, mouse_grid, mouse_row, must_redraw_pum, no_u_sync,
-    pum_grid, pum_want,
-};
 use crate::mbyte::{mb_string2cells, mb_strnicmp, utf_ptr2cells, utfc_ptr2len};
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc};
 use crate::menu::{execute_menu, get_menu_mode_flag, menu_find};
 use crate::message::e_menu_only_exists_in_another_mode;
 use crate::message::emsg;
+use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::mouse::{MousePos, find_win_outer};
 use crate::r#move::{update_topline, validate_cheight, validate_cursor, validate_cursor_col};
 use crate::option::set_option_value_give_err;
@@ -54,9 +52,11 @@ use crate::options::{
 };
 use crate::os::cshim::{gettext, strchr};
 use crate::plines::{plines_m_win, win_linetabsize};
+use crate::popupmenu::state::{PumWant, must_redraw_pum, pum_grid, pum_want};
 use crate::state::MODE_CMDLINE;
 use crate::state::mode::State;
 use crate::strings::reverse_text;
+use crate::tag::state::g_do_tagpreview;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
     AlignTextPos, Array, BufferHandle, Dict, Error, ExArg, Float, Handle, Hlf, Integer, LPos,
@@ -71,6 +71,7 @@ use crate::ui::{
     ui_has, ui_pum_get_height, ui_pum_get_pos,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
+use crate::undo::no_u_sync;
 use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };

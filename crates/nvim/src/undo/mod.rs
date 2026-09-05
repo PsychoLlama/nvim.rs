@@ -39,7 +39,6 @@ use crate::getchar::beep_flush;
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::global_cell::GlobalCell;
 use crate::guard::{sandbox, textlock};
-use crate::main::no_u_sync;
 use crate::mark::{free_fmark, mark_adjust, setpcmark};
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::MlFlags;
@@ -120,6 +119,9 @@ pub use file::{u_compute_hash, u_get_undo_file_name};
 pub use read::u_read_undo;
 pub use tree::{u_blockfree, u_clearall, u_clearallandblockfree, u_clearline, u_undoline};
 pub use write::u_write_undo;
+
+pub(crate) static no_u_sync: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static u_sync_once: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// The length of an undo file's buffer hash, in bytes: a SHA-256 digest.
 pub const UNDO_HASH_SIZE: c_int = 32;

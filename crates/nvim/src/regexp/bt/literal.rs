@@ -8,11 +8,11 @@ use core::ffi::c_int;
 
 use super::compile::{regc, regmbc, regnode, regnode_nl, use_multibytecode};
 use super::op::BtOp;
-use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len};
 use crate::message::e_nopresub;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     GRAPHEME_STATE_INIT, HASWIDTH, NOT_MULTI, SIMPLE, getchr, magic, one_exactly, peekchr,
     re_multi_type, reg_prev_sub, regparse, skipchr, ungetchr, unmagic,

@@ -21,9 +21,9 @@ use crate::ex_cmds::{
     kSubIgnoreCase, kSubMatchCase,
 };
 use crate::ex_cmds::{cur_buf, cur_win};
+use crate::ex_cmds::{sub_nlines, sub_nsubs};
 use crate::ex_docmd::ex_may_print;
 use crate::global_cell::GlobalCell;
-use crate::main::{sub_nlines, sub_nsubs};
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xcalloc, xfree, xrealloc};
 use crate::message::emsg;

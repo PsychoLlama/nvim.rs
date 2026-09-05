@@ -12,7 +12,7 @@ use core::ffi::c_int;
 
 use super::atom::nfa_regatom as regatom;
 use super::{Parsed, Rejected, postfix};
-use crate::main::rc_did_emsg;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     MAGIC_ALL, MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAX_LIMIT, NOT_MULTI, NSUBEXP, ParseState, RE_AUTO,
     REG_NOPAREN, REG_NPAREN, REG_PAREN, REG_ZPAREN, RF_ICASE, RF_ICOMBINE, RF_NOICASE, Rex, curchr,

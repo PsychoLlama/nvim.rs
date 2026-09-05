@@ -45,7 +45,7 @@ use crate::decoration::{
     SignCountHalf, buf_decor_remove, buf_put_decor, buf_signcols_count_range, decor_free,
     decor_redraw, decor_state_invalidate, decor_type_flags,
 };
-use crate::main::curbuf_splice_pending;
+use crate::global_cell::GlobalCell;
 use crate::marktree::{
     marktree_clear, marktree_del_itr, marktree_get_alt, marktree_get_altpos, marktree_itr_current,
     marktree_itr_get, marktree_itr_get_ext, marktree_itr_get_overlap, marktree_itr_next,
@@ -74,6 +74,8 @@ pub use self::del::*;
 pub use self::get::*;
 pub use self::set::*;
 pub use self::undo::*;
+
+pub(crate) static curbuf_splice_pending: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 pub const kExtmarkSavePos: UndoObjectType = 3;
 pub const kExtmarkMove: UndoObjectType = 1;

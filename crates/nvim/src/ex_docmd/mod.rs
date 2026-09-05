@@ -43,7 +43,6 @@ use crate::help::{ex_exusage, ex_help, ex_helpclose, ex_helptags, ex_viusage};
 use crate::indent::ex_retab;
 use crate::lua::executor::{ex_lua, ex_luado, ex_luafile};
 use crate::lua::secure::ex_trust;
-use crate::main::searchcmdlen;
 use crate::mapping::{ex_abbreviate, ex_abclear, ex_map, ex_mapclear, ex_unmap};
 use crate::mark::{ex_changes, ex_clearjumps, ex_delmarks, ex_jumps, ex_marks};
 use crate::r#match::ex_match;
@@ -64,6 +63,7 @@ use crate::runtime::{
     ex_finish, ex_options, ex_packadd, ex_packloadall, ex_runtime, ex_scriptencoding,
     ex_scriptnames, ex_source,
 };
+use crate::search::state::searchcmdlen;
 use crate::sign::ex_sign;
 use crate::spell::{ex_spelldump, ex_spellinfo, ex_spellrepall};
 use crate::spellfile::{ex_mkspell, ex_spell};

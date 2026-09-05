@@ -55,7 +55,7 @@ use crate::ex_eval::{aborting, should_abort_err};
 use crate::fold::fold_update_all;
 use crate::guard::Suppress;
 use crate::help::prepare_help_buffer;
-use crate::main::{exiting, keep_help_flag};
+use crate::main::exiting;
 use crate::mark::set_last_cursor;
 use crate::memory::{xfree, xmalloc};
 use crate::message::msg_check_for_delay;
@@ -70,6 +70,7 @@ use crate::pos::equalpos;
 use crate::spell::parse_spelllang;
 use crate::state::mode::exmode_active;
 use crate::strings::vim_snprintf_safelen;
+use crate::tag::state::keep_help_flag;
 use crate::terminal::terminal_check_size;
 use crate::types::{
     ExArg, Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, Window, ptrdiff_t,

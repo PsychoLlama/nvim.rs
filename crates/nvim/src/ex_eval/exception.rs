@@ -42,6 +42,7 @@ use super::flag::{
 use super::{cause_abort, message};
 use crate::ascii::ascii_isdigit;
 use crate::cstr;
+use crate::debugger::state::debug_break_level;
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::typval::{tv_list_ref, tv_list_unref};
 use crate::eval::userfunc::get_return_cmd;
@@ -53,7 +54,6 @@ use crate::ex_eval::state::{
 };
 use crate::getchar::state::got_int;
 use crate::guard::{Allow, Suppress};
-use crate::main::debug_break_level;
 use crate::memory::{xfree, xmalloc, xrealloc, xstrdup};
 use crate::message::state::{did_emsg, emsg_silent, msg_row, msg_scroll};
 use crate::message::{e_interr, e_outofmem};

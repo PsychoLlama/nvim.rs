@@ -31,6 +31,7 @@ use crate::api::private::helpers::{
 use crate::autocmd::{apply_autocmds, has_autocmd};
 use crate::charset::{skip_to_newline, skiptowhite, skiptowhite_esc, skipwhite, skipwhite_len};
 use crate::cmdexpand::globpath;
+use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::eval::typval::{
     tv_check_for_opt_dict_arg, tv_dict_add_bool, tv_dict_add_dict, tv_dict_add_func,
@@ -52,9 +53,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
-use crate::main::{
-    current_sctx, debug_break_level, debug_tick, did_source_packages, do_profiling, time_fd,
-};
+use crate::main::{current_sctx, did_source_packages, do_profiling, time_fd};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{strequal, try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};

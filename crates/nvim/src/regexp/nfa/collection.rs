@@ -13,8 +13,8 @@ use core::ffi::{c_char, c_int};
 
 use super::equi_class::nfa_emit_equi_class;
 use super::{cursor, postfix};
-use crate::main::rc_did_emsg;
 use crate::mbyte::utf_char2len;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     CharClass, INT_MAX, MAGIC_OFF, NL, REGEXP_ABBR, REGEXP_INRANGE, backslash_abbr, coll_get_char,
     pat_byte, pat_char, pat_charlen, reg_cpo_lit, reg_magic, reg_strict, reg_string, wants_nfa,

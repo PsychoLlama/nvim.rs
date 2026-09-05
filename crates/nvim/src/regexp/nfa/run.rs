@@ -14,13 +14,13 @@ use core::ffi::{c_char, c_int, c_ushort};
 use super::matcher::nfa_regmatch;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::main::re_extmatch_in;
 use crate::mbyte::{
     mb_islower, mb_isupper, utf_char2len, utf_fold, utf_head_off, utf_iscomposing_legacy,
     utf_ptr2char, utf_ptr2len,
 };
 use crate::os::cshim::__ctype_b_loc;
 use crate::profile::profile_passed_limit;
+use crate::regexp::state::re_extmatch_in;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, ESC, MatchPos, NFA_TOO_EXPENSIVE, NfaPim,
     NfaRegProg, NfaState, RA_MATCH, RegSub, RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr,

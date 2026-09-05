@@ -30,6 +30,7 @@ use crate::edit::{beginline, display_dollar, edit};
 use crate::eval::typval::{tv_clear, tv_dict_add_nr};
 use crate::eval::{callback_call, set_ref_in_callback};
 use crate::ex_docmd::state::repeat_cmdline;
+use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_splice, extmark_splice_cols};
 use crate::fold::{delete_fold, fold_create, fold_open_cursor, op_fold_range};
 use crate::getchar::state::{KeyTyped, bangredo, got_int, repeat_luaref};
@@ -46,7 +47,6 @@ use crate::indent::{
 };
 use crate::indent_c::get_c_indent;
 use crate::keycodes::Ctrl_V;
-use crate::main::{curbuf_splice_pending, mouse_dragging};
 use crate::mark::mark_col_adjust;
 use crate::mbyte::{
     bomb_size, mb_islower, mb_isupper, mb_tolower, mb_toupper, utf_char2bytes, utf_char2cells,
@@ -62,6 +62,7 @@ use crate::message::state::{msg_scroll, no_lines_msg};
 use crate::message::{e_invarg, e_modifiable};
 use crate::message::{emsg, msg, msg_keep, msg_start, msgmore};
 use crate::mouse::setmouse;
+use crate::mouse::state::mouse_dragging;
 use crate::r#move::validate_virtcol;
 use crate::normal::{
     clearop, clearopbeep, may_clear_cmdline, prep_redo, prep_redo_num2, restore_visual_mode,

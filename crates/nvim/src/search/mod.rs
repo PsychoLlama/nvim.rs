@@ -42,10 +42,6 @@ use crate::insexpand::{
     compl_status_adding, compl_status_sol, ctrl_x_mode_not_default, find_word_end, find_word_start,
     ins_compl_add_infercase, ins_compl_check_keys, ins_compl_interrupted, ins_compl_len,
 };
-use crate::main::{
-    g_do_tagpreview, no_hlsearch, no_smartcase, rc_did_emsg, search_match_endcol,
-    search_match_lines, searchcmdlen,
-};
 use crate::mark::setpcmark;
 use crate::mbyte::{
     mb_isupper, mb_strcmp_ic, mb_strnicmp, utf_char2bytes, utf_head_off, utf_iscomposing_first,
@@ -79,10 +75,15 @@ use crate::path::path_full_compare;
 use crate::plines::getvcol;
 use crate::pos::{clearpos, equalpos, lt, ltoreq};
 use crate::profile::{profile_passed_limit, profile_setlimit};
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{skip_regexp_ex, vim_regcomp, vim_regexec, vim_regexec_multi, vim_regfree};
+use crate::search::state::{
+    no_hlsearch, no_smartcase, search_match_endcol, search_match_lines, searchcmdlen,
+};
 use crate::state::MODE_SHOWMATCH;
 use crate::state::mode::State;
 use crate::strings::{reverse_text, vim_snprintf, vim_strchr, xstrnsave};
+use crate::tag::state::g_do_tagpreview;
 use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
@@ -155,3 +156,4 @@ pub const SEARCH_STAT_DEF_TIMEOUT: ::core::ffi::c_int = 40;
 pub const SEARCH_STAT_BUF_LEN: ::core::ffi::c_int = 16;
 pub const LSIZE: ::core::ffi::c_uint = 512;
 pub const NULL_0: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();
+pub(crate) mod state;

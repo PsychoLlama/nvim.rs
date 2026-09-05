@@ -19,6 +19,7 @@ use crate::arglist::global_arglist;
 use crate::autocmd::{apply_autocmds, autocmd_init};
 use crate::buffer::do_autochdir;
 use crate::channel::{channel_from_stdio, channel_init, channel_teardown};
+use crate::debugger::state::debug_break_level;
 use crate::diff::diff_win_options;
 use crate::drawscreen::state::{RedrawingDisabled, cmdline_row};
 use crate::drawscreen::{
@@ -55,10 +56,10 @@ use crate::main::exit::{getout, os_exit};
 use crate::main::remote::remote_request;
 use crate::main::usage::{mainerr, print_mainerr};
 use crate::main::{
-    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, debug_break_level,
-    embedded_mode, err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed,
-    kOptCbFlagUnnamedplus, main_loop, recoverymode, silent_mode, starting, stderr_isatty,
-    stdin_isatty, stdout_isatty, time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
+    APPENDBIN, EDIT_QF, EDIT_STDIN, MainParams, NO_BUFFERS, WRITEBIN, argv0, embedded_mode,
+    err_arg_missing, full_screen, headless_mode, kOptCbFlagUnnamed, kOptCbFlagUnnamedplus,
+    main_loop, recoverymode, silent_mode, starting, stderr_isatty, stdin_isatty, stdout_isatty,
+    time_msg_at, ui_client_channel_id, ui_client_forward_stdin,
 };
 use crate::mark::setpcmark;
 use crate::memline::recover_names;

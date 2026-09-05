@@ -19,6 +19,7 @@ use super::exec::{Sub, SubArgs, save_undo_once};
 use super::{sub_grow_buf, subflags};
 use crate::change::{appended_lines, changed_bytes, deleted_lines};
 use crate::cstr;
+use crate::ex_cmds::sub_nsubs;
 use crate::ex_cmds::{
     CAR, LineData, REGSUB_BACKSLASH, REGSUB_COPY, REGSUB_MAGIC, kExtmarkNOOP, kExtmarkUndo,
 };
@@ -26,7 +27,6 @@ use crate::ex_cmds::{cur_buf, cur_win};
 use crate::ex_eval::aborting;
 use crate::extmark::extmark_splice;
 use crate::guard::Lock;
-use crate::main::sub_nsubs;
 use crate::mark::mark_adjust;
 use crate::mbyte::utfc_ptr2len;
 use crate::memline::{ml_append, ml_delete, ml_get, ml_replace};

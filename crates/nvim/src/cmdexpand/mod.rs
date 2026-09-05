@@ -1,4 +1,5 @@
 #![deny(unsafe_op_in_unsafe_fn)]
+pub(crate) mod state;
 use crate::arglist::get_arglist_name;
 use crate::types::TAB;
 
@@ -10,6 +11,7 @@ use crate::charset::{
     backslash_halve_save, ptr2cells, rem_backslash, skipdigits, skiptowhite, skipwhite, transchar,
     transchar_byte, vim_is_ident_char, vim_isfilec_or_wc, vim_strsize,
 };
+use crate::cmdexpand::state::{save_p_ls, save_p_wmh, wild_menu_showing};
 use crate::cmdhist::get_history_arg;
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{redraw_statuslines, update_screen, win_redraw_last_status};
@@ -48,10 +50,7 @@ use crate::insexpand::find_word_end;
 use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
-use crate::main::{
-    current_sctx, pum_want, save_p_ls, save_p_wmh, search_first_line, search_last_line,
-    wild_menu_showing,
-};
+use crate::main::current_sctx;
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len};
@@ -80,6 +79,7 @@ use crate::path::{
     after_pathsep, expand_wildcards, expand_wildcards_eval, free_wild, match_suffix,
     path_is_absolute, path_tail, vim_ispathsep,
 };
+use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_clear, pum_display, pum_get_height, pum_undisplay, pum_visible};
 use crate::pos::ltoreq;
 use crate::profile::{get_profile_name, set_context_in_profile_cmd};
@@ -91,6 +91,7 @@ use crate::runtime::{
     RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_id_valid,
     script_item, set_context_in_runtime_cmd,
 };
+use crate::search::state::{search_first_line, search_last_line};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_NFMSG, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
     ignorecase, pat_has_uppercase, searchit,

@@ -20,7 +20,6 @@ use crate::ex_cmds::{sub_get_replacement, sub_set_replacement};
 use crate::ex_docmd::set_no_hlsearch;
 use crate::fileio::{modname, vim_rename};
 use crate::global_cell::GlobalCell;
-use crate::main::no_hlsearch;
 use crate::mark::{
     cleanup_jumplist, free_fmark, free_xfmark, mark_buffer_iter, mark_get, mark_global_iter,
     mark_jumplist_iter, mark_set_global, mark_set_local, set_last_cursor, setpcmark,
@@ -52,6 +51,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::regtilde;
 use crate::register::{op_global_reg_iter, op_reg_get, op_reg_index, op_reg_set};
 use crate::registry::{IdMap, IdSet, SlotTable, id_map, id_set};
+use crate::search::state::no_hlsearch;
 use crate::search::{
     get_search_pattern, get_substitute_pattern, search_was_last_used, set_last_used_pattern,
     set_search_pattern, set_substitute_pattern,

@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::api::extmark::nvim_create_namespace;
 use crate::api::private::helpers::{
     api_free_array, arena_array, cstr_as_string, try_enter, try_leave,
@@ -16,6 +17,7 @@ use crate::buffer::{
 use crate::charset::{
     ptr2cells, skipwhite, vim_is_ident_char, vim_isprintc, vim_iswordc, vim_str2nr,
 };
+use crate::cmdexpand::state::wild_menu_showing;
 use crate::cmdexpand::{
     clear_cmdline_orig, cmdline_pum_active, cmdline_pum_cleanup, cmdline_pum_remove,
     expand_cleanup, expand_init, expand_one, nextwild, set_expand_context, showmatches,
@@ -53,6 +55,7 @@ use crate::ex_docmd::{
     parse_command_modifiers, set_no_hlsearch, skip_range, undo_cmdmod,
 };
 use crate::ex_eval::aborting;
+use crate::ex_getln::state::{cmdline_star, cmdline_was_last_drawn, cmdpreview, redrawing_cmdline};
 use crate::extmark::extmark_clear;
 use crate::getchar::state::{KeyStuffed, KeyTyped, got_int, mod_mask};
 use crate::getchar::{
@@ -63,12 +66,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
-use crate::main::{
-    cmdline_star, cmdline_was_last_drawn, cmdpreview, current_sctx, highlight_match,
-    magic_overruled, mouse_col, mouse_row, no_hlsearch, pum_want, redrawing_cmdline,
-    search_first_line, search_last_line, search_match_endcol, search_match_lines,
-    wild_menu_showing,
-};
+use crate::main::current_sctx;
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -95,6 +93,7 @@ use crate::message::{
     sb_text_restart_cmdline, sb_text_start_cmdline,
 };
 use crate::mouse::setmouse;
+use crate::mouse::state::{mouse_col, mouse_row};
 use crate::r#move::{
     changed_cline_bef_curs, changed_line_abv_curs, invalidate_botline_win, update_topline,
     validate_cursor,
@@ -116,6 +115,7 @@ use crate::os::cshim::{gettext, strncasecmp, strncmp};
 use crate::os::env::home_replace_save;
 use crate::os::input::line_breakcheck;
 use crate::path::vim_ispathsep;
+use crate::popupmenu::state::pum_want;
 use crate::popupmenu::{pum_check_clear, pum_ext_want_done, pum_undisplay};
 use crate::pos::{MAXCOL, MAXLNUM, clearpos, equalpos, lt};
 use crate::profile::profile_setlimit;
@@ -125,6 +125,10 @@ use crate::register::{
     valid_yank_reg,
 };
 use crate::registry::{IdSet, id_set};
+use crate::search::state::{
+    highlight_match, magic_overruled, no_hlsearch, search_first_line, search_last_line,
+    search_match_endcol, search_match_lines,
+};
 use crate::search::{
     BACKWARD, FORWARD, SEARCH_COL, SEARCH_KEEP, SEARCH_NOOF, SEARCH_OPT, SEARCH_PEEK, SEARCH_START,
     do_search, last_search_pattern, last_search_pattern_len, pat_has_uppercase,

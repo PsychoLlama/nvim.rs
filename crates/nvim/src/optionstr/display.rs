@@ -19,9 +19,9 @@ use crate::drawscreen::{
 };
 use crate::eval::vars::{do_unlet, get_var_value};
 use crate::ex_getln::check_opt_wim;
+use crate::ex_getln::state::cmdpreview;
 use crate::highlight_group::init_highlight;
 use crate::indent::briopt_check;
-use crate::main::cmdpreview;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::xstrdup;
 use crate::message::e_unsupportedoption;

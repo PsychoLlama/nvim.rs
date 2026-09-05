@@ -15,7 +15,7 @@ use crate::keycodes::ModMask;
 use core::ffi::{CStr, c_char, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
-use crate::main::{mouse_col, mouse_grid, mouse_row};
+use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::types::{ColNr, VarNumber};
 
 /// Where a mouse event landed: a grid handle, and a row and column within it.

@@ -22,7 +22,6 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::garray::{ga_clear, ga_grow, ga_init};
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
-use crate::main::disable_fold_update;
 use crate::memory::xfree;
 use crate::plines::plines_win_nofold;
 use crate::state::mode::State;
@@ -59,6 +58,8 @@ use crate::state::MODE_INSERT;
 use level::fold_update_computed;
 use list::{FLine, FoldList, FoldRef};
 use open_close::check_closed;
+
+pub(crate) static disable_fold_update: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 pub const VIRTTEXT_EMPTY: VirtText = VirtText {
     size: 0,

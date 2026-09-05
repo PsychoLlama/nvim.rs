@@ -34,10 +34,11 @@ use crate::keycodes::{
 };
 use crate::log::{LOGLVL_DBG, logmsg};
 use crate::main::{
-    ch_before_blocking_events, do_profiling, getout, main_loop, mouse_col, mouse_grid, mouse_row,
-    preserve_exit, silent_mode, used_stdin,
+    ch_before_blocking_events, do_profiling, getout, main_loop, preserve_exit, silent_mode,
+    used_stdin,
 };
 use crate::message_fmt::c_str;
+use crate::mouse::state::{mouse_col, mouse_grid, mouse_row};
 use crate::option::vars::{p_mouset, p_ut};
 use crate::os::cshim::gettext;
 use crate::os::time::os_hrtime;

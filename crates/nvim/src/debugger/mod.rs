@@ -27,9 +27,13 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::ascii::ascii_isdigit;
 use crate::charset::{getdigits_int32, skipwhite};
 use crate::cstr;
+use crate::debugger::state::{
+    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
+};
 use crate::drawscreen::state::cmdline_row;
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::eval::typval::tv_free;
@@ -43,9 +47,6 @@ use crate::getchar::{restore_typeahead, save_typeahead};
 use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::keycodes::{K_SPECIAL, KE_SNR};
-use crate::main::{
-    debug_backtrace_level, debug_break_level, debug_did_msg, debug_mode, debug_tick,
-};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::msg_starthere;
 use crate::message::state::{

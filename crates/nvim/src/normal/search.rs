@@ -19,7 +19,6 @@ use crate::fold::fold_open_cursor;
 use crate::getchar::state::{KeyTyped, mod_mask};
 use crate::highlight::win_hl_attr;
 use crate::highlight_group::{HLF_L, HLF_LC};
-use crate::main::no_hlsearch;
 use crate::mark::{get_changelist, get_jumplist, mark_get, mark_move_to, setmark};
 use crate::message::emsg;
 use crate::normal::{
@@ -32,6 +31,7 @@ use crate::option::vars::{fdo_flags, jop_flags, p_hls};
 use crate::options::{kOptFdoFlagMark, kOptFdoFlagSearch, kOptJopFlagView};
 use crate::os::cshim::gettext;
 use crate::pos::equalpos;
+use crate::search::state::no_hlsearch;
 use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search};
 use crate::state::virtual_active;
 use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg, size_t};

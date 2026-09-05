@@ -39,6 +39,7 @@ use crate::ex_eval::{
 
 use crate::ex_getln::{getexline, ui_ext_cmdline_block_leave};
 
+use crate::debugger::state::{debug_break_level, debug_tick};
 use crate::ex_docmd::state::{
     did_emsg_syntax, ex_nesting_level, last_cmdline, new_last_cmdline, repeat_cmdline,
 };
@@ -49,7 +50,7 @@ use crate::ex_eval::state::{
 use crate::garray::{ga_clear, ga_init};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::guard::{Bump, Depth, Suppress};
-use crate::main::{debug_break_level, debug_tick, do_profiling};
+use crate::main::do_profiling;
 use crate::message::state::{did_emsg, msg_didany, msg_didout, msg_scroll, need_wait_return};
 use crate::message::{e_command_too_recursive, e_endfor, e_endif, e_endtry, e_endwhile};
 use crate::option::vars::p_verbose;

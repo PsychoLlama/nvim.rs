@@ -24,6 +24,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -33,12 +34,13 @@ use crate::eval::typval::{tv_dict_add_nr, tv_dict_alloc_ret};
 use crate::ex_docmd::{tabpage_close, tabpage_close_other};
 use crate::global_cell::GlobalCell;
 use crate::grid::grid_adjust;
-use crate::main::{mouse_col, mouse_row, tab_page_click_defs};
 use crate::mbyte::{mb_get_class, utf_head_off, utf8len_tab, utfc_ptr2len};
+use crate::mouse::state::{mouse_col, mouse_row};
 use crate::normal::sel_exclusive;
 use crate::plines::{getvcols, win_chartabsize};
 use crate::search::BACKWARD;
 use crate::state::virtual_active;
+use crate::statusline::state::tab_page_click_defs;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{

@@ -39,7 +39,6 @@ use crate::highlight_group::{
 };
 use crate::indent::{get_breakindent_win, tabstop_padding};
 use crate::insexpand::{ins_compl_col_range_attr, ins_compl_lnum_in_range, ins_compl_win_active};
-use crate::main::{highlight_match, search_match_endcol, search_match_lines, spell_redraw_lnum};
 use crate::r#match::{
     get_prevcol_hl_flag, get_search_match_hl, prepare_search_hl_line, update_search_hl,
 };
@@ -62,6 +61,8 @@ use crate::plines::{getvcol, getvvcol, init_charsize_arg, win_charsize};
 use crate::pos::{MAXCOL, ltoreq};
 use crate::quickfix::{is_qf_buffer, qf_current_entry};
 use crate::search::FORWARD;
+use crate::search::state::{highlight_match, search_match_endcol, search_match_lines};
+use crate::spell::spell_redraw_lnum;
 use crate::spell::{check_need_cap, spell_cat_line, spell_check, spell_move_to, spell_to_word_end};
 use crate::state::mode::State;
 use crate::state::{MODE_INSERT, virtual_active};

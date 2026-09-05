@@ -50,7 +50,7 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::{current_sctx, no_hlsearch};
+use crate::main::current_sctx;
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,
@@ -81,6 +81,7 @@ use crate::runtime::{
     new_script_item, script_autoload, script_count, script_id_valid, script_item,
 };
 use crate::search::set_search_direction;
+use crate::search::state::no_hlsearch;
 use crate::strings::{concat_str, vim_strchr};
 use crate::types::{
     AcoSave, BoolVarValue, Buffer, Dict, DictItem, EvalArg, EvalFuncData, ExArg, Expand, Failed,

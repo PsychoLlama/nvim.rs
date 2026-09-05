@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::global_cell::GlobalCell;
 use crate::types::CAR;
 use crate::types::ESC;

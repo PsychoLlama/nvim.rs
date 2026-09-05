@@ -18,11 +18,11 @@ use super::parse::re2post;
 use super::postfix;
 use super::run::{find_match_text, skip_to_start};
 use super::sub::{clear_sub, slots};
-use crate::main::re_extmatch_out;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::e_null;
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
+use crate::regexp::state::re_extmatch_out;
 use crate::regexp::{
     NFA_TOO_EXPENSIVE, NSUBEXP, NfaRegProg, NfaState, REX_SET, RF_ICASE, RF_ICOMBINE, RF_NOICASE,
     RegSubs, Rex, cleanup_subexpr, cleanup_zsubexpr, init_regexec, init_regexec_multi,

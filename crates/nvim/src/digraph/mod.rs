@@ -20,13 +20,13 @@ use crate::eval::typval::{
 };
 use crate::ex_docmd::{do_cmdline_cmd, getline_equal};
 use crate::ex_getln::putcmdline;
+use crate::ex_getln::state::cmdline_star;
 use crate::getchar::plain_vgetc;
 use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Keys, Suppress};
 use crate::highlight_group::{HLF_8, HLF_CM};
 use crate::keycodes::Key;
-use crate::main::cmdline_star;
 use crate::mapping::do_map;
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_iscomposing_first};
 use crate::memory::{xfree, xmemdupz};

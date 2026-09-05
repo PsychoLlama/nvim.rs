@@ -40,10 +40,10 @@ use crate::os::fs::os_dirname;
 use crate::path::{path_fnamecmp, path_shorten_fname, vim_ispathsep_nocolon};
 use crate::plines::linetabsize_eol;
 use crate::tag::tagstack_clear_entry;
-use crate::types::AutoEvent;
 use crate::types::Failed;
 use crate::types::TAB;
 use crate::types::*;
+use crate::types::{AdditionalData, AutoEvent, FileMark, FileMarkView, LineNr, Pos, XFileMark};
 use crate::winlayer::{Buf, Win, windows};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -119,7 +119,28 @@ pub const NMARK_LOCAL_MAX: c_int = 126;
 /// How many positions a window's jumplist remembers.
 pub const JUMPLISTSIZE: c_int = 100;
 
+use crate::global_cell::GlobalCell;
 use crate::quickfix::qf_mark_adjust;
+
+/// An unset entry of [`namedfm`]; a `const` because `XFileMark` is not `Copy`.
+const UNSET_NAMED_MARK: XFileMark = XFileMark {
+    fmark: FileMark {
+        mark: Pos {
+            lnum: 0 as LineNr,
+            col: 0,
+            coladd: 0,
+        },
+        fnum: 0,
+        timestamp: 0,
+        view: FileMarkView {
+            topline_offset: 0,
+            skipcol: 0,
+        },
+        additional_data: ::core::ptr::null_mut::<AdditionalData>(),
+    },
+    fname: ::core::ptr::null_mut::<c_char>(),
+};
+pub(crate) static namedfm: GlobalCell<[XFileMark; 36]> = GlobalCell::new([UNSET_NAMED_MARK; 36]);
 
 /// Set named mark "c" at current cursor position.
 /// Answers `Ok` on success, `Err` if bad name given.

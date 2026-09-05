@@ -25,8 +25,10 @@ use super::*;
 use crate::drawscreen::state::redraw_cmdline;
 use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later};
 use crate::global_cell::GlobalCell;
-use crate::main::{mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row};
 use crate::message::state::msg_silent;
+use crate::mouse::state::{
+    mouse_col, mouse_dragging, mouse_past_bottom, mouse_past_eol, mouse_row,
+};
 use crate::r#move::WinValid;
 use crate::normal::{
     end_visual_mode, may_start_select, set_visual_active, set_visual_anchor, visual_active,

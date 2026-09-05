@@ -46,7 +46,7 @@
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use crate::main::namedfm;
+use crate::mark::namedfm;
 use crate::os::time::os_time;
 use crate::types::{ColNr, FileMark, FileMarkView, LineNr, Pos, Timestamp, XFileMark};
 use crate::winlayer::{Buf, Win};

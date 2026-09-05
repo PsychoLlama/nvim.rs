@@ -25,7 +25,6 @@ use crate::file_search::grab_file_name;
 use crate::fold::fold_open_cursor;
 use crate::getchar::state::KeyTyped;
 use crate::keycodes::Ctrl_RSB;
-use crate::main::{g_tag_at_cursor, no_smartcase};
 use crate::mapping::add_map;
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_get_class, mb_prevptr, utf_head_off, utfc_ptr2len};
@@ -46,11 +45,13 @@ use crate::options::kOptFdoFlagSearch;
 use crate::os::cshim::{gettext, snprintf};
 use crate::pos::clearpos;
 use crate::regexp::RE_LAST;
+use crate::search::state::no_smartcase;
 use crate::search::{BACKWARD, FORWARD, SEARCH_START, findmatchlimit, reset_search_dir, searchit};
 use crate::state::MODE_TERMINAL;
 use crate::state::mode::restart_edit;
 use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
+use crate::tag::state::g_tag_at_cursor;
 use crate::textobject::findpar;
 use crate::types::{
     CmdArg, ColNr, LineNr, NUL, OpArg, OpType, Pos, ShmFlag, int64_t, size_t, uint8_t,

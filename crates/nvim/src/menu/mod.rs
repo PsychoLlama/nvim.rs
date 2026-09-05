@@ -43,7 +43,6 @@ use crate::eval::typval::{
 };
 use crate::global_cell::GlobalCell;
 use crate::guard::Lock;
-use crate::main::root_menu;
 use crate::mbyte::{utf_char2bytes, utfc_ptr2len};
 use crate::memory::{xfree, xmemdupz, xstrdup};
 use crate::message::e_cannot_change_menus_while_listing;
@@ -73,6 +72,10 @@ pub(crate) use self::exec::*;
 pub(crate) use self::info::*;
 pub(crate) use self::name::*;
 pub(crate) use self::tree::*;
+
+pub(crate) static root_menu: GlobalCell<*mut VimMenu> =
+    GlobalCell::new(::core::ptr::null_mut::<VimMenu>());
+pub(crate) static sys_menu: GlobalCell<bool> = GlobalCell::new(false);
 
 /// How deep a menu path may go, and so how many priority components
 /// `:menu 10.20.30 …` can carry.

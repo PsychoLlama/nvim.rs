@@ -34,6 +34,7 @@ use crate::eval::vars::{get_globvar_dict, get_vimvar_dict, set_vim_var_nr};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{changedir_func, exec_normal};
 use crate::ex_eval::aborting;
+use crate::ex_getln::state::cmdpreview;
 use crate::fold::fold_info;
 use crate::getchar::state::{typebuf_was_filled, vgetc_busy};
 use crate::getchar::{ins_typebuf, paste_store};
@@ -54,7 +55,7 @@ use crate::log::LOGLVL_DBG;
 use crate::lua::executor::{
     api_free_luaref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
-use crate::main::{arena_alloc_count, cmdpreview, g_stats, tslua_query_parse_count};
+use crate::main::{arena_alloc_count, g_stats, tslua_query_parse_count};
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};

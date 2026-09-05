@@ -19,8 +19,8 @@ use crate::drawscreen::{UPD_INVERTED, UPD_VALID, redraw_curbuf_later, setcursor,
 use crate::eval::call_vim_function;
 use crate::eval::typval::tv_clear;
 use crate::getchar::state::mod_mask;
-use crate::main::{mouse_grid, mouse_row};
 use crate::menu::show_popupmenu;
+use crate::mouse::state::{mouse_grid, mouse_row};
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::option::vars::p_ch;
 use crate::pos::{lt, ltoreq};

@@ -65,7 +65,6 @@ use crate::eval::vars::{do_unlet, get_vim_var_nr, set_internal_string_var, set_v
 use crate::getchar::state::KeyTyped;
 use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::highlight_group::{HLF_CLF, HLF_FC, syn_name2id_len};
-use crate::main::{msg_loclist, msg_qflist};
 use crate::mbyte::{utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_find_line_or_offset, ml_get_buf_len};
 use crate::memory::{xfree, xmemdupz, xstrlcpy};
@@ -78,6 +77,7 @@ use crate::options::kOptInvalid;
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::os::env::home_replace;
 use crate::path::path_tail;
+use crate::quickfix::{msg_loclist, msg_qflist};
 use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::state::mode::State;

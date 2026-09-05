@@ -18,11 +18,11 @@ use core::ffi::{c_int, c_uint};
 use core::mem::offset_of;
 
 use super::op::BtOp;
-use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_char2bytes, utf_char2len, utf_iscomposing_legacy};
 use crate::memory::{xfree, xmalloc};
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     BtRegProg, JUST_CALC_SIZE, MAGIC_OFF, MAGIC_ON, NOT_MULTI, RE_MAGIC, RE_STRICT, RE_STRING,
     REX_SET, Rex, had_endbrace, had_eol, initchr, num_complex_braces, peekchr, re_has_z,

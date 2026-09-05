@@ -35,7 +35,6 @@ use crate::highlight::win_hl_attr;
 use crate::highlight_group::{
     HLF_L, HLF_LC, syn_check_group, syn_id2attr, syn_id2name, syn_name2id,
 };
-use crate::main::{search_first_line, search_last_line};
 use crate::mbyte::{utf_char2bytes, utf_ptr2char, utfc_ptr2len};
 use crate::memline::ml_get_buf;
 use crate::memory::{xcalloc, xfree, xmemdupz, xstrdup};
@@ -47,6 +46,7 @@ use crate::option::vars::p_rdt;
 use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
+use crate::search::state::{search_first_line, search_last_line};
 use crate::types::{
     ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
     RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, size_t, uint8_t,

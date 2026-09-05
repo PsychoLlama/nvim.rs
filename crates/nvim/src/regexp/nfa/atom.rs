@@ -24,7 +24,7 @@ use super::literal::{
 };
 use super::parse::nfa_reg;
 use super::{Parsed, Rejected, cursor, postfix};
-use crate::main::rc_did_emsg;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     NL, REG_PAREN, RF_HASNL, Rex, getchr, had_eol, magic, prev_at_start, reg_string, regflags,
     unmagic,

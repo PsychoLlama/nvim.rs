@@ -39,7 +39,6 @@ use crate::getchar::{
     reset_redobuff,
 };
 use crate::input::prompt_for_input;
-use crate::main::mouse_row;
 use crate::mbyte::{utf_head_off, utfc_ptr2len};
 use crate::memline::ml_replace;
 use crate::memory::{xfree, xmalloc, xmemcpyz, xstrdup, xstrlcpy};
@@ -48,6 +47,7 @@ use crate::message::state::{cmdmsg_rl, lines_left, msg_col, msg_row, msg_scroll}
 use crate::message::{
     emsg, msg, msg_advance, msg_clr_eos, msg_ext_set_kind, msg_putchar, msg_puts, msg_start,
 };
+use crate::mouse::state::mouse_row;
 use crate::normal::{end_visual_mode, visual_active, visual_anchor};
 use crate::option::vars::p_verbose;
 use crate::options::kOptBoFlagSpell;

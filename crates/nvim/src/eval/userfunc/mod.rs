@@ -8,6 +8,7 @@ use core::{ptr, slice};
 use crate::ascii::{ascii_isident, ascii_iswhite, ascii_iswhite_nl_or_nul};
 use crate::autocmd::apply_autocmds;
 use crate::charset::{getdigits, skiptowhite, skipwhite, vim_strsize};
+use crate::debugger::state::{debug_backtrace_level, debug_tick};
 use crate::debugger::{dbg_breakpoint, dbg_find_breakpoint, has_profiling};
 use crate::drawscreen::state::cmdline_row;
 use crate::eval::EVALARG_EVALUATE;
@@ -53,9 +54,7 @@ use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
-use crate::main::{
-    current_sctx, debug_backtrace_level, debug_tick, do_profiling, want_garbage_collect,
-};
+use crate::main::{current_sctx, do_profiling, want_garbage_collect};
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,

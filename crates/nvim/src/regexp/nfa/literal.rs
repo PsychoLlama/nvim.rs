@@ -11,11 +11,11 @@ use crate::siemsg;
 use core::ffi::{c_char, c_int};
 
 use super::{Parsed, Rejected, cursor, postfix};
-use crate::main::rc_did_emsg;
 use crate::mbyte::{utf_char2len, utf_ptr2char, utf_ptr2len};
 use crate::message::e_nopresub;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     RF_HASNL, Rex, getchr, magic, peekchr, reg_prev_sub, regflags, seen_endbrace, unmagic,
 };

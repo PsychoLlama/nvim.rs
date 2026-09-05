@@ -17,7 +17,7 @@ use core::ffi::c_int;
 
 use super::*;
 use crate::drawscreen::UPD_NOT_VALID;
-use crate::main::mouse_dragging;
+use crate::mouse::state::mouse_dragging;
 use crate::pos::MAXCOL;
 use crate::search::{BACKWARD, FORWARD};
 use crate::types::{ColNr, Direction, LineNr, int64_t};

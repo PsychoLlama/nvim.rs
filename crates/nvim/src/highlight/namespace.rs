@@ -41,10 +41,10 @@ use crate::highlight_group::{
     set_hl_group, syn_check_group, syn_id2name, syn_ns_id2attr,
 };
 use crate::lua::executor::nlua_call_ref;
-use crate::main::must_redraw_pum;
 use crate::option::check_blending;
 use crate::option::vars::p_pb;
 use crate::popupmenu::pum_drawn;
+use crate::popupmenu::state::must_redraw_pum;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
     ColorItem, ColorKey, DecorProvider, Error, FieldHashfn, HlAttrs, HlEntry, KeyDict_highlight,

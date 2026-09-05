@@ -11,8 +11,8 @@ use super::atom::nfa_regatom;
 use super::parse::nfa_reg;
 use super::{Parsed, Rejected, postfix};
 use crate::ascii::ascii_isdigit;
-use crate::main::{rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
+use crate::regexp::state::{rc_did_emsg, reg_do_extmatch};
 use crate::regexp::{
     INT32_MAX, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE, Rex, at_start, getchr, getdecchrs,
     gethexchrs, getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,

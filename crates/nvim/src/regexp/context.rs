@@ -28,7 +28,6 @@ use super::{
 };
 use crate::charset::vim_iswordc_buf;
 use crate::getchar::state::got_int;
-use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_get_class_tab, mb_strnicmp, utf_head_off};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{xcalloc, xfree, xmalloc};
@@ -41,6 +40,7 @@ use crate::os::input::fast_breakcheck;
 use crate::plines::{getvvcol, win_linetabsize};
 use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
+use crate::regexp::state::rc_did_emsg;
 use crate::semsg;
 use crate::types::{
     Buffer, ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,

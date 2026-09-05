@@ -16,9 +16,9 @@ use super::op::BtOp;
 use super::piece::coll_get_char;
 use crate::ascii::{ascii_isdigit, ascii_isxdigit};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::main::rc_did_emsg;
 use crate::mbyte::{mb_islower, mb_isupper, utf_char2len};
 use crate::os::cshim::__ctype_b_loc;
+use crate::regexp::state::rc_did_emsg;
 use crate::regexp::{
     _ISalnum, _ISalpha, _IScntrl, _ISgraph, _ISpunct, CharClass, ESC, HASNL, HASWIDTH, INT_MAX,
     JUST_CALC_SIZE, MAGIC_OFF, REGEXP_ABBR, REGEXP_INRANGE, Rex, SIMPLE, backslash_abbr, pat_byte,

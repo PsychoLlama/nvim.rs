@@ -17,6 +17,7 @@ use core::ptr;
 
 use crate::autocmd::{apply_autocmds, has_event};
 use crate::channel::main_loop_events;
+use crate::debugger::state::debug_mode;
 use crate::drawscreen::state::must_redraw;
 use crate::drawscreen::{setcursor, update_screen};
 use crate::eval::typval::{tv_dict_add_str, tv_dict_set_keys_readonly};
@@ -32,7 +33,6 @@ use crate::getchar::{
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{ctrl_x_mode_not_defined_yet, ins_compl_active};
 use crate::log::{LOGLVL_DBG, logmsg};
-use crate::main::debug_mode;
 use crate::message::state::need_wait_return;
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::normal::{visual_active, visual_mode, visual_select};

@@ -11,7 +11,6 @@ use super::exec::re_num_cmp;
 use super::op::BtOp;
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::charset::{vim_is_ident_char, vim_isfilec, vim_isprintc};
-use crate::main::re_extmatch_in;
 use crate::mark::mark_get;
 use crate::mbyte::{
     mb_get_class_tab, utf_composinglike, utf_iscomposing_legacy, utf_ptr2char, utf_ptr2len,
@@ -19,6 +18,7 @@ use crate::mbyte::{
 };
 use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
+use crate::regexp::state::re_extmatch_in;
 use crate::regexp::{
     ByteClass, RA_CONT, RA_MATCH, RA_NOMATCH, RI_FLAGS, Rex, behind_pos, cleanup_subexpr,
     cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,

@@ -40,6 +40,7 @@ use crate::drawscreen::{
 };
 use crate::edit::{prompt_text, replace_push, replace_push_nul, truncate_spaces};
 use crate::eval::vars::set_vim_var_string;
+use crate::extmark::curbuf_splice_pending;
 use crate::extmark::{extmark_adjust, extmark_splice, extmark_splice_cols};
 use crate::fold::{find_wl_entry, fold_update, has_folding_win};
 use crate::highlight_group::HLF_W;
@@ -49,7 +50,7 @@ use crate::indent::{
 };
 use crate::indent_c::{cin_is_cinword, do_c_expr_indent, in_cinkeys};
 use crate::insexpand::ins_compl_active;
-use crate::main::{curbuf_splice_pending, highlight_match, silent_mode};
+use crate::main::silent_mode;
 use crate::mark::{free_fmark, mark_adjust, mark_col_adjust, mark_view_make};
 use crate::mbyte::{
     mb_adjust_cursor, utf_char2bytes, utf_composinglike, utf_head_off, utf_iscomposing_first,
@@ -77,6 +78,7 @@ use crate::options::kOptVeFlagOnemore;
 use crate::os::time::os_time;
 use crate::plines::{getvcol, linetabsize_eol, win_chartabsize};
 use crate::pos::{MAXCOL, MAXLNUM};
+use crate::search::state::highlight_match;
 use crate::search::{BACKWARD, FORWARD, check_linecomment, findmatch, linewhite, showmatch};
 use crate::spell::spell_check_window;
 use crate::state::mode::{

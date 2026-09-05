@@ -28,6 +28,7 @@ use crate::drawscreen::state::{
 };
 use crate::eval::vars::set_vim_var_nr;
 use crate::ex_docmd::state::global_busy;
+use crate::ex_getln::state::cmdline_was_last_drawn;
 use crate::ex_getln::{cmdline_screen_cleared, compute_cmdrow, redrawcmdline};
 use crate::fold::{fold_info, foldmethod_is_syntax, has_any_folding, has_folding};
 use crate::getchar::char_avail;
@@ -47,10 +48,7 @@ use crate::highlight_group::{
     HLF_AT, HLF_C, HLF_CM, HLF_COUNT, HLF_EOB, HLF_FC, HLF_MSG, HLF_N, HLF_SC, highlight_changed,
 };
 use crate::insexpand::ins_compl_show_pum;
-use crate::main::{
-    cmdline_was_last_drawn, exiting, must_redraw_pum, no_hlsearch, starting, stl_syntax,
-    tab_page_click_defs, tab_page_click_defs_size,
-};
+use crate::main::{exiting, starting};
 use crate::r#match::{init_search_hl, prepare_search_hl};
 use crate::mbyte::{utf_ptr2cells, utf_ptr2char};
 use crate::memline::{ml_get_buf, ml_get_buf_len};
@@ -76,11 +74,13 @@ use crate::option::vars::{
 use crate::option::{get_ve_flags, shortmess};
 use crate::options::{kOptDyFlagLastline, kOptDyFlagTruncate, kOptVeFlagAll, kOptVeFlagBlock};
 use crate::plines::{getvcols, getvvcol, plines_m_win, plines_win, win_get_fill, win_may_fill};
+use crate::popupmenu::state::must_redraw_pum;
 use crate::popupmenu::{pum_check_clear, pum_drawn, pum_invalidate, pum_redraw};
 use crate::pos::MAXLNUM;
 use crate::profile::profile_setlimit;
 use crate::regexp::vim_regfree;
 use crate::search::last_pat_prog;
+use crate::search::state::no_hlsearch;
 use crate::spell::spell_check_window;
 use crate::state::mode::{
     State, edit_submode, edit_submode_extra, edit_submode_highl, edit_submode_pre, exmode_active,
@@ -91,6 +91,7 @@ use crate::state::{
     MODE_NORMAL, MODE_SETWSIZE, MODE_TERMINAL, MODE_VISUAL, REPLACE_FLAG, VREPLACE_FLAG,
     get_real_state,
 };
+use crate::statusline::state::{stl_syntax, tab_page_click_defs, tab_page_click_defs_size};
 use crate::statusline::{
     draw_tabline, redraw_ruler, stl_alloc_click_defs, stl_clear_click_defs, win_redr_status,
     win_redr_winbar,

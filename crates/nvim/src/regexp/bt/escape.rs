@@ -12,8 +12,8 @@ use super::compile::{regc, regmbc, regnext, regnode, regnr, regtail, use_multiby
 use super::op::BtOp;
 use super::piece::reg;
 use crate::ascii::ascii_isdigit;
-use crate::main::{rc_did_emsg, reg_do_extmatch};
 use crate::plines::getvvcol;
+use crate::regexp::state::{rc_did_emsg, reg_do_extmatch};
 use crate::regexp::{
     HASLOOKBH, HASNL, HASWIDTH, INT_MAX, JUST_CALC_SIZE, REG_NPAREN, REG_ZPAREN, REX_SET, REX_USE,
     Rex, SIMPLE, SPSTART, at_start, getchr, getdecchrs, gethexchrs, getoctchrs, magic_prefix,

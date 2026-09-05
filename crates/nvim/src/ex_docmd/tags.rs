@@ -20,13 +20,15 @@ use crate::ex_docmd::{
     DT_NEXT, DT_POP, DT_PREV, DT_SELECT, DT_TAG, FIND_ANY, FIND_DEFINE, cmdmod_split, cmdmod_tab,
     cmdnames, kDirectionNotSet,
 };
-use crate::main::{g_do_tagpreview, postponed_split, postponed_split_flags, postponed_split_tab};
 use crate::message::e_trailing_arg;
 use crate::option::magic_isset;
 use crate::option::vars::p_pvh;
 use crate::regexp::skip_regexp;
 use crate::search::find_pattern_in_path;
 use crate::tag::do_tag;
+use crate::tag::state::{
+    g_do_tagpreview, postponed_split, postponed_split_flags, postponed_split_tab,
+};
 use crate::types::{ExArg, NUL};
 use crate::winlayer::Ea;
 
