@@ -66,7 +66,6 @@ use crate::global_cell::GlobalCell;
 use crate::guard::{allbuf_lock, textlock};
 use crate::highlight_group::{HLF_E, syn_id2attr, syn_name2id};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
-use crate::main::current_sctx;
 use crate::mapping::{add_map, check_abbr, map_to_exists_mode};
 use crate::mark::setpcmark;
 use crate::mbyte::{
@@ -125,6 +124,7 @@ use crate::register::{
     valid_yank_reg,
 };
 use crate::registry::{IdSet, id_set};
+use crate::runtime::state::current_sctx;
 use crate::search::state::{
     highlight_match, magic_overruled, no_hlsearch, search_first_line, search_last_line,
     search_match_endcol, search_match_lines,

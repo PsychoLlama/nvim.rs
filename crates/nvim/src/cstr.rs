@@ -109,6 +109,23 @@ use core::ffi::{CStr, c_char};
 use core::slice;
 use std::ffi::CString;
 
+/// A C string literal as the fixed-size `c_char` array a global holds.
+///
+/// c2rust spelled every `static char foo[] = "…"` as a `transmute` from the
+/// byte string, which is one `unsafe` block per global — 194 of them in
+/// `main/mod.rs` alone before this replaced them. Copying the bytes is
+/// const-evaluable, needs no `unsafe`, and unlike `transmute` it works with
+/// a const generic length.
+pub(crate) const fn c_bytes<const N: usize>(bytes: &[u8; N]) -> [c_char; N] {
+    let mut out = [0 as c_char; N];
+    let mut i = 0;
+    while i < N {
+        out[i] = bytes[i].cast_signed();
+        i += 1;
+    }
+    out
+}
+
 /// [`CStr::from_ptr`], under this module's lifetime convention.
 ///
 /// # Safety

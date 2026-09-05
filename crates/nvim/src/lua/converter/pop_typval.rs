@@ -27,7 +27,7 @@ use crate::lua::ffi::{
     LUA_TUSERDATA, lua_checkstack, lua_getmetatable, lua_gettop, lua_next, lua_pop, lua_pushnil,
     lua_rawequal, lua_rawgeti, lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
-use crate::main::nlua_global_refs;
+use crate::lua::state::nlua_global_refs;
 use crate::memory::xstrdup;
 use crate::message::emsg;
 use crate::os::cshim::gettext;

@@ -23,7 +23,7 @@ use crate::lua::ffi::{
     lua_gettop, lua_next, lua_pop, lua_pushnil, lua_pushvalue, lua_rawequal, lua_rawgeti,
     lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
-use crate::main::nlua_global_refs;
+use crate::lua::state::nlua_global_refs;
 use crate::memory::arena_memdupz;
 use crate::message_fmt::msg_cstr;
 use crate::types::{

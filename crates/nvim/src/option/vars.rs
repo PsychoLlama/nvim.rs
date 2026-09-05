@@ -29,6 +29,9 @@ use crate::global_cell::GlobalCell;
 use crate::types::{BreakAt, OptInt, uint8_t};
 use core::ffi::{c_char, c_int, c_uint};
 
+pub(crate) static fenc_default: GlobalCell<*mut c_char> =
+    GlobalCell::new(::core::ptr::null_mut::<c_char>());
+
 pub(crate) static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
 pub(crate) static p_ambw: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());

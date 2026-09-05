@@ -19,6 +19,7 @@ pub mod proc;
 pub mod pty_proc_unix;
 pub mod shell;
 pub mod signal;
+pub(crate) mod state;
 pub mod stdpaths;
 pub mod time;
 pub mod users;

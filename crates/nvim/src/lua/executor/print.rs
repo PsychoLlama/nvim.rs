@@ -23,10 +23,11 @@ use crate::lua::ffi::{
     lua_setfield, lua_settop, lua_toboolean, lua_tocfunction, lua_tolstring, luaL_checkstring,
     luaL_loadbuffer,
 };
-use crate::main::{main_loop, time_fd};
+use crate::main::main_loop;
 use crate::memory::{xfree, xmalloc, xrealloc};
 use crate::message::{msg_multihl, msg_putchar};
 use crate::os::cshim::{gettext, snprintf};
+use crate::profile::time_fd;
 use crate::profile::{time_msg, time_pop, time_push};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;

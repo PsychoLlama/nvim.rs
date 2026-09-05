@@ -28,7 +28,6 @@ use crate::eval::typval::{NumBuf, tv_blob_len, tv_check_str_or_nr, tv_get_string
 use crate::eval::userfunc::{add_defer, can_add_defer};
 use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
-use crate::main::current_sctx;
 use crate::message::e_invarg2;
 use crate::message::emsg;
 use crate::message_fmt::{c_str, emsg_text};
@@ -37,6 +36,7 @@ use crate::os::cshim::gettext;
 use crate::os::fileio::{file_close, file_flush, file_open, file_write};
 use crate::path::full_name_save;
 use crate::runtime::script_is_lua;
+use crate::runtime::state::current_sctx;
 use crate::tr_c;
 use crate::types::{
     Blob, EvalFuncData, FileDescriptor, List, ListItem, TypVal, VAR_BLOB, VAR_LIST, VAR_STRING,

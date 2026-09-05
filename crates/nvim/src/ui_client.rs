@@ -35,13 +35,14 @@ use crate::global_cell::GlobalCell;
 use crate::highlight::{HLATTRS_INIT, dict2hlattrs};
 use crate::log::{LOGLVL_ERR, LOGLVL_INF, logmsg};
 use crate::main::{
-    main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, time_fd, ui_client_attached,
+    main_loop, os_exit, stderr_isatty, stdin_isatty, stdout_isatty, ui_client_attached,
     ui_client_channel_id, ui_client_error_exit, ui_client_exit_status, ui_client_forward_stdin,
 };
 use crate::memory::{strequal, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message_fmt::{c_str, msg_cstr};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::os::env::{os_env_exists, os_get_pid};
+use crate::profile::time_fd;
 use crate::profile::{time_finish, time_msg};
 use crate::tui::attrs::{tui_add_url, tui_default_colors_set, tui_hl_attr_define};
 use crate::tui::events::{

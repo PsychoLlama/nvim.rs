@@ -35,7 +35,6 @@ use crate::buffer::{buf_is_help, buf_is_nofilename, buf_is_terminal};
 use crate::eval::typval::NumBuf;
 use crate::eval::var_flavour;
 use crate::eval::vars::get_globvar_dict;
-use crate::main::globaldir;
 use crate::memory::xfree;
 use crate::option::vars::{p_shm, p_stal, p_wh, p_wiw};
 use crate::options::{
@@ -44,6 +43,7 @@ use crate::options::{
     kOptSsopFlagTerminal, kOptSsopFlagWinsize,
 };
 use crate::os::env::home_replace_save;
+use crate::os::state::globaldir;
 use crate::strings::vim_strsave_escaped;
 use crate::types::{
     Buffer, DictItem, Frame, NUL, TypVal, VAR_FLAVOUR_SESSION, VAR_FLOAT, VAR_NUMBER, VAR_STRING,

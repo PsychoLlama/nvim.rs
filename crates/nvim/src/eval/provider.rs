@@ -29,22 +29,40 @@ use crate::eval::{FUNCEXE_INIT, Tv, callback_call, kChannelStreamProc};
 use crate::event::proc::proc_is_stopped;
 use crate::ex_cmds::check_secure;
 use crate::getchar::state::got_int;
+use crate::global_cell::GlobalCell;
 use crate::lua::executor::nlua_is_deferred_safe;
-use crate::main::{current_sctx, provider_call_nesting, provider_caller_scope};
 use crate::memline::{ml_append, ml_get_buf};
 use crate::memory::{strchrsub, strequal, xfree, xstrdup};
 use crate::message::{e_invarg, e_invchan, e_invchanjob};
 use crate::option::vars::p_lpl;
 use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
+use crate::runtime::state::{ETYPE_TOP, current_sctx};
 use crate::strings::concat_str;
 use crate::types::{
-    Buffer, Callback, CallbackReader, Channel, ColNr, Dict, EStack, FAIL, FuncCallEntry, FuncExe,
-    List, NUL, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber,
-    caller_scope, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint64_t,
+    Buffer, Callback, CallbackReader, Channel, ColNr, Dict, EStack, EstackInfo, FAIL,
+    FuncCallEntry, FuncExe, List, NUL, ScriptCtx, TypVal, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, VarNumber, caller_scope, ptrdiff_t, size_t, ssize_t, typval_vval_union,
+    uint64_t,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live};
+
+pub(crate) static provider_caller_scope: GlobalCell<caller_scope> = GlobalCell::new(caller_scope {
+    script_ctx: ScriptCtx::NONE,
+    es_entry: EStack {
+        es_lnum: 0,
+        es_name: ::core::ptr::null_mut::<c_char>(),
+        es_type: ETYPE_TOP,
+        es_info: EstackInfo::None,
+    },
+    autocmd_fname: ::core::ptr::null_mut::<c_char>(),
+    autocmd_match: ::core::ptr::null_mut::<c_char>(),
+    autocmd_fname_full: false,
+    autocmd_bufnr: 0,
+    funccalp: ::core::ptr::null_mut::<c_void>(),
+});
+pub(crate) static provider_call_nesting: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 
 /// A freshly declared typval.
 const UNSET_TV: TypVal = TypVal {

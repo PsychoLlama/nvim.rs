@@ -9,11 +9,11 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 
 use crate::eval::userfunc::get_scriptlocal_funcname;
 use crate::insexpand::set_cpt_callbacks;
-use crate::main::{didset_vim, didset_vimruntime};
 use crate::option::copy_option_part;
 use crate::option::vars::{cia_flags, cot_flags, p_cia, p_cot, p_hlg, p_tc, spo_flags, tc_flags};
 use crate::options::{opt_cot_values, opt_spo_values, opt_tc_values};
 use crate::os::env::vim_unsetenv_ext;
+use crate::os::state::{didset_vim, didset_vimruntime};
 use crate::spell::{compile_cap_prog, did_set_spell_option, valid_spellfile, valid_spelllang};
 use crate::spellfile::spell_check_msm;
 use crate::spellsuggest::spell_check_sps;

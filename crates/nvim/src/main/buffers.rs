@@ -33,12 +33,12 @@ use crate::eval::vars::set_vim_var_list;
 use crate::ex_cmds::do_ecmd;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::fileio::readfile;
+use crate::fileio::state::{READ_NEW, READ_STDIN};
 use crate::getchar::state::got_int;
 use crate::getchar::vgetc;
 use crate::main::exit::getout;
 use crate::main::{
-    EDIT_QF, MainParams, READ_NEW, READ_STDIN, SID_CARG, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile,
-    kOptShortmess, recoverymode, time_msg_at,
+    EDIT_QF, MainParams, WIN_HOR, WIN_TABS, WIN_VER, kOptErrorfile, kOptShortmess, recoverymode,
 };
 use crate::memline::ml_recover;
 use crate::memory::{xfree, xstrdup};
@@ -49,7 +49,9 @@ use crate::option::{set_option_direct, set_option_value_give_err};
 use crate::os::cshim::snprintf;
 use crate::os::input::os_breakcheck;
 use crate::path::vim_full_name;
+use crate::profile::time_msg_at;
 use crate::quickfix::qf_init;
+use crate::runtime::state::SID_CARG;
 use crate::strings::vim_snprintf;
 use crate::types::{
     ExArg, Handle, IOSIZE, Integer, LineNr, List, MAXPATHL, OptInt, OptVal, OptionSetFlags,

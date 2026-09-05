@@ -50,10 +50,10 @@ use crate::ex_eval::state::{
 use crate::garray::{ga_clear, ga_init};
 use crate::getchar::state::{KeyTyped, got_int};
 use crate::guard::{Bump, Depth, Suppress};
-use crate::main::do_profiling;
 use crate::message::state::{did_emsg, msg_didany, msg_didout, msg_scroll, need_wait_return};
 use crate::message::{e_command_too_recursive, e_endfor, e_endif, e_endtry, e_endwhile};
 use crate::option::vars::p_verbose;
+use crate::profile::do_profiling;
 
 use crate::message::{msg_start, wait_return};
 

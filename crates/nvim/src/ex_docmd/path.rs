@@ -25,10 +25,11 @@ use crate::file_search::vim_chdir;
 
 use crate::fileio::shorten_fnames;
 use crate::getchar::state::KeyTyped;
-use crate::main::{current_sctx, globaldir, last_chdir_reason};
 use crate::memory::xmalloc;
 use crate::message::{e_failed, e_invalid_return_type_from_findfunc, e_invarg};
 use crate::option::vars::{p_cdh, p_ffu, p_verbose};
+use crate::os::state::{globaldir, last_chdir_reason};
+use crate::runtime::state::current_sctx;
 use crate::winlayer::graph::{curbuf, curtab, curwin};
 
 use crate::message::msg_ptr;

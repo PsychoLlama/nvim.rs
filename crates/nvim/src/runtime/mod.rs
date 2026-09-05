@@ -25,6 +25,7 @@
 //! | `runtime_expand_flags` | [`search`]'s `set_context_in_runtime_cmd` | [`expand`]'s `expand_runtime_cmd` |
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::api::private::helpers::{
     arena_array, arena_dict, arena_string, array_add, cstr_as_string, dict_put,
 };
@@ -53,7 +54,6 @@ use crate::getchar::state::got_int;
 use crate::global_cell::{GlobalCell, SharedCell};
 use crate::keycodes::Ctrl_V;
 use crate::lua::executor::{nlua_exec, nlua_exec_file, nlua_exec_lines, nlua_is_deferred_safe};
-use crate::main::{current_sctx, did_source_packages, do_profiling, time_fd};
 use crate::mbyte::{convert_setup, enc_canonize, string_convert, utf_head_off, utfc_ptr2len};
 use crate::memline::ml_get;
 use crate::memory::{strequal, try_malloc, xfree, xmalloc, xmallocz, xstrdup, xstrlcat, xstrlcpy};
@@ -79,6 +79,7 @@ use crate::path::{
     get_past_head, path_fnamecmp, path_fnamencmp, path_tail, path_with_extension, vim_ispathsep,
     vim_ispathsep_nocolon,
 };
+use crate::profile::{do_profiling, time_fd};
 use crate::profile::{
     prof_child_enter, prof_child_exit, profile_add, profile_end, profile_init, profile_self,
     profile_start, profile_sub_wait, profile_zero, script_line_end, script_line_start, time_msg,
@@ -86,6 +87,7 @@ use crate::profile::{
 };
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec, vim_regfree};
 use crate::registry::{IdMap, IdSet, id_map, id_set};
+use crate::runtime::state::{current_sctx, did_source_packages};
 use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{

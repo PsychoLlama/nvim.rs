@@ -19,7 +19,7 @@ use crate::lua::ffi::{
     lua_checkstack, lua_gettop, lua_next, lua_pop, lua_pushnil, lua_rawequal, lua_rawgeti,
     lua_toboolean, lua_tolstring, lua_tonumber, lua_type,
 };
-use crate::main::nlua_global_refs;
+use crate::lua::state::nlua_global_refs;
 use crate::types::{
     ApiDict, Arena, Array, Error, Integer, Object, String_0, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, lua_Number, lua_State, size_t,

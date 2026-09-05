@@ -115,13 +115,15 @@ use crate::autocmd::state::{autocmd_no_enter, autocmd_no_leave};
 use crate::drawscreen::state::RedrawingDisabled;
 use crate::ex_getln::state::cmdline_star;
 use crate::extmark::curbuf_splice_pending;
+use crate::fileio::state::no_check_timestamps;
 use crate::fold::disable_fold_update;
 use crate::getchar::state::{allow_keys, expr_map_lock, no_mapping, no_zero_mapping};
 use crate::global_cell::GlobalCell;
-use crate::main::{current_sctx, inhibit_delete_count, no_check_timestamps};
+use crate::memline::inhibit_delete_count;
 use crate::message::state::{
     emsg_off, emsg_silent, emsg_skip, msg_listdo_overwrite, msg_silent, no_wait_return,
 };
+use crate::runtime::state::current_sctx;
 use crate::types::{ScriptCtx, ScriptId};
 use crate::undo::no_u_sync;
 use crate::window::state::tabpage_move_disallowed;

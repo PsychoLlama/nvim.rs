@@ -42,7 +42,7 @@ use core::ffi::{c_char, c_void};
 use core::ptr;
 
 use crate::global_cell::GlobalCell;
-use crate::main::arena_alloc_count;
+use crate::memory::arena_alloc_count;
 use crate::memory::{cbytes, copy_bytes, xfree, xmalloc};
 use crate::types::{Arena, ArenaMem, ConsumedBlk};
 

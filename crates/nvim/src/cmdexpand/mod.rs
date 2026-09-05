@@ -50,7 +50,6 @@ use crate::insexpand::find_word_end;
 use crate::lua::executor::{
     nlua_call_user_expand_func, nlua_exec, nlua_expand_get_matches, nlua_expand_pat,
 };
-use crate::main::current_sctx;
 use crate::mapping::{expand_mappings, set_context_in_map_cmd};
 use crate::mbyte::{mb_tolower, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memline::{ml_get, ml_get_len};
@@ -87,6 +86,7 @@ use crate::regexp::{
     RE_LAST, RE_MAGIC, RE_STRING, skip_regexp, vim_regcomp, vim_regexec, vim_regexec_nl,
     vim_regfree,
 };
+use crate::runtime::state::current_sctx;
 use crate::runtime::{
     RuntimeOpts, expand_packadd_dir, expand_runtime_cmd, expand_runtime_dir, script_id_valid,
     script_item, set_context_in_runtime_cmd,

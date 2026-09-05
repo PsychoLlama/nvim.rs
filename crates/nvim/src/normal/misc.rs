@@ -11,6 +11,7 @@ use crate::buffer::{buflist_getfile, fileinfo};
 use crate::cursor::check_cursor_col;
 use crate::drawscreen::state::{clear_cmdline, mode_displayed, redraw_mode};
 use crate::drawscreen::{UPD_CLEAR, UPD_INVERTED, redraw_curbuf_later, redraw_later, showmode};
+use crate::eval::gc::may_garbage_collect;
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{DoCmdOpts, do_cmdline, do_cmdline_cmd};
 use crate::ex_getln::{compute_cmdrow, getexline};
@@ -20,7 +21,6 @@ use crate::getchar::{
     stuff_readbuf_number,
 };
 use crate::help::ex_help;
-use crate::main::may_garbage_collect;
 use crate::memline::ml_get_len;
 use crate::message::state::did_emsg;
 use crate::message::{msg, msg_ext_set_trigger};

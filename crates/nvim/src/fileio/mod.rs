@@ -1,5 +1,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub(crate) mod state;
 use crate::api::private::helpers::cstr_as_string;
 use crate::ascii::ascii_isspace;
 use crate::autocmd::state::autocmd_busy;
@@ -24,6 +25,7 @@ use crate::eval::vars::{eval_charconvert, get_vim_var_str, set_vim_var_string};
 use crate::event::libuv::uv_strerror;
 use crate::ex_docmd::state::{ex_no_reprint, global_busy};
 use crate::ex_eval::aborting;
+use crate::fileio::state::{did_check_timestamps, need_check_timestamps, no_check_timestamps};
 use crate::fold::{fold_update_all, foldmethod_is_manual};
 use crate::garray::{ga_clear_strings, ga_grow, ga_init};
 use crate::getchar::state::got_int;
@@ -31,10 +33,7 @@ use crate::getchar::stuff_empty;
 use crate::global_cell::GlobalCell;
 use crate::guard::allbuf_lock;
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_WRN};
-use crate::main::{
-    did_check_timestamps, exiting, need_check_timestamps, no_check_timestamps, readonlymode,
-    recoverymode, stdin_fd, vim_ignored,
-};
+use crate::main::{exiting, readonlymode, recoverymode, stdin_fd, vim_ignored};
 use crate::mbyte::{
     enc_canon_props, enc_canonize, my_iconv_open, utf_byte2len, utf_char2bytes, utf_char2len,
     utf_head_off, utf_ptr2char, utf_ptr2len_len,

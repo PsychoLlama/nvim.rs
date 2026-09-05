@@ -50,7 +50,6 @@ use crate::hashtab::{
     hash_unlock,
 };
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::current_sctx;
 use crate::mbyte::utf_char2bytes;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemdupz, xstrdup, xstrlcat, xstrlcpy, xstrndup,
@@ -77,6 +76,7 @@ use crate::os::cshim::{__ctype_b_loc, gettext, snprintf};
 use crate::os::env::{vim_getenv, vim_setenv_ext, vim_unsetenv_ext};
 use crate::pos::MAXCOL;
 use crate::register::{get_reg_contents, write_reg_contents};
+use crate::runtime::state::current_sctx;
 use crate::runtime::{
     new_script_item, script_autoload, script_count, script_id_valid, script_item,
 };

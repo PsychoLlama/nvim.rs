@@ -27,9 +27,9 @@
 )]
 
 use super::MODE_NORMAL;
+use crate::cstr::c_bytes;
 use crate::global_cell::GlobalCell;
 use crate::highlight_group::HLF_NONE;
-use crate::main::c_bytes;
 use crate::normal::VisualMode;
 use crate::types::{ColNr, Hlf, LineNr, Pos};
 use core::ffi::{c_char, c_int};

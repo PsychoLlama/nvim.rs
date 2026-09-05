@@ -19,6 +19,10 @@
 use crate::global_cell::GlobalCell;
 use crate::types::{Dict, List};
 
+pub(crate) static may_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static want_garbage_collect: GlobalCell<bool> = GlobalCell::new(false);
+pub(crate) static garbage_collect_at_exit: GlobalCell<bool> = GlobalCell::new(false);
+
 /// Most recently allocated dict.
 pub static gc_first_dict: GlobalCell<*mut Dict> = GlobalCell::new(::core::ptr::null_mut::<Dict>());
 

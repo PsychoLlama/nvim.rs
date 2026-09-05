@@ -16,12 +16,12 @@ use crate::api::private::helpers::{handle_get_buffer, handle_get_window, try_ent
 use crate::autocmd::{aucmd_prepbuf, aucmd_restbuf};
 use crate::eval::window::{win_execute_after, win_execute_before};
 use crate::ex_docmd::CmdModScope;
+use crate::log::g_min_log_level;
 use crate::lua::ffi::{
     LUA_MULTRET, LUA_TSTRING, lua_error, lua_gettop, lua_istable, lua_next, lua_pcall, lua_pop,
     lua_pushnil, lua_pushvalue, lua_toboolean, lua_tostring, lua_type, luaL_argcheck,
     luaL_checkinteger,
 };
-use crate::main::g_min_log_level;
 use crate::types::{
     AcoSave, Buffer, CmdMod, CmdModFlags, Error, Failed, Pos, SwitchWin, WinExecute, Window,
     lua_State,

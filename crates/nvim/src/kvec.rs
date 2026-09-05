@@ -17,7 +17,14 @@ use core::ffi::c_void;
 use core::{ptr, slice};
 
 use crate::memory::{xfree, xmalloc, xrealloc};
-use crate::types::size_t;
+use crate::types::{Array, Object, size_t};
+
+pub(crate) const KV_INITIAL_VALUE: Array = Array {
+    size: 0 as size_t,
+    capacity: 0 as size_t,
+    items: ::core::ptr::null_mut::<Object>(),
+};
+pub(crate) const ARRAY_DICT_INIT: Array = KV_INITIAL_VALUE;
 
 pub struct InitVec<'a, T> {
     size: &'a mut usize,

@@ -31,6 +31,7 @@ use core::{ptr, slice};
 
 use crate::api::private::helpers::{api_free_dict, arena_string, cstr_as_string};
 use crate::api::ui::remote_ui_disconnect;
+use crate::channel::channels;
 use crate::channel::{
     channel_close, channel_decref, channel_incref, channel_info_changed, channel_instream,
     channel_outstream, find_channel,
@@ -42,16 +43,14 @@ use crate::event::proc::exit_on_closed_chan;
 use crate::event::rstream::rstream_start;
 use crate::event::wstream::{wstream_release_wbuffer, wstream_write};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{
-    ch_before_blocking_events, channels, main_loop, ui_client_channel_id, ui_client_error_exit,
-};
+use crate::main::{main_loop, ui_client_channel_id, ui_client_error_exit};
 use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
 use crate::registry::SlotTable;
 use crate::types::{
     ApiDict, Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType,
-    ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
-    kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
+    ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, MultiQueue, Object,
+    Unpacker, WBuffer, kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
 
@@ -97,6 +96,10 @@ use known::*;
 /// The all-nil `Object`, which is what an API call that produced nothing, or
 /// failed, hands back.
 use crate::api_error;
+use crate::global_cell::GlobalCell;
+
+pub(crate) static ch_before_blocking_events: GlobalCell<*mut MultiQueue> =
+    GlobalCell::new(::core::ptr::null_mut::<MultiQueue>());
 
 /// A channel this module is working with, plus the promise that the pointer
 /// behind it stays live for as long as the handle does.

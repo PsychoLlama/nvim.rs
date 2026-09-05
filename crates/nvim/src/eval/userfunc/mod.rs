@@ -17,6 +17,7 @@ use crate::eval::encode::{encode_tv2echo, encode_tv2string};
 use crate::eval::funcs::{
     call_internal_func, call_internal_method, check_internal_func, find_internal_func,
 };
+use crate::eval::gc::want_garbage_collect;
 use crate::eval::typval::{
     GARRAY_EMPTY, TV_INITIAL_VALUE, tv_clear, tv_copy, tv_dict_add, tv_dict_hi2di,
     tv_dict_item_alloc, tv_dict_item_alloc_len, tv_dict_item_key, tv_dict_item_remove,
@@ -54,7 +55,6 @@ use crate::keycodes::K_SPECIAL;
 use crate::lua::executor::{
     api_free_luaref, nlua_set_sctx, nlua_typval_call, typval_exec_lua_callable,
 };
-use crate::main::{current_sctx, do_profiling, want_garbage_collect};
 use crate::mbyte::mb_strnicmp;
 use crate::memory::{
     xcalloc, xfree, xmalloc, xmallocz, xmemcpyz, xmemdupz, xmemrchr, xstrdup, xstrlcpy,
@@ -74,12 +74,14 @@ use crate::option::vars::{p_ic, p_mfd, p_verbose};
 use crate::os::cshim::{gettext, snprintf, strstr};
 use crate::os::input::line_breakcheck;
 use crate::path::path_fnamecmp;
+use crate::profile::do_profiling;
 use crate::profile::{
     func_do_profile, func_line_end, func_line_start, prof_def_func, profile_add, profile_end,
     profile_self, profile_start, profile_sub_wait, profile_zero, script_prof_restore,
     script_prof_save,
 };
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec, vim_regfree};
+use crate::runtime::state::current_sctx;
 use crate::runtime::{
     autoload_name, estack_pop, estack_push_ufunc, get_sourced_lnum, script_autoload,
     script_id_valid,

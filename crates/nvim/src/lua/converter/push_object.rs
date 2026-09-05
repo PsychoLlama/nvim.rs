@@ -15,7 +15,7 @@ use crate::lua::ffi::{
     LUA_NOREF, lua_createtable, lua_pushboolean, lua_pushlstring, lua_pushnil, lua_pushnumber,
     lua_rawset, lua_rawseti, lua_setmetatable,
 };
-use crate::main::nlua_global_refs;
+use crate::lua::state::nlua_global_refs;
 use crate::types::{
     ApiDict, Array, Boolean, Float, Handle, Integer, LuaRef, Object, ObjectType, String_0,
     kObjectTypeFloat, lua_Number, lua_State, size_t,

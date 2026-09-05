@@ -32,6 +32,7 @@ use crate::drawscreen::{
     UPD_INVERTED, redraw_curbuf_later, redraw_statuslines, setcursor, show_cursor_info_later,
     showmode, update_screen,
 };
+use crate::eval::gc::may_garbage_collect;
 use crate::eval::vars::set_vcount;
 use crate::ex_docmd::do_exmode;
 use crate::ex_docmd::state::{ex_normal_busy, global_busy};
@@ -39,10 +40,10 @@ use crate::ex_eval::discard_current_exception;
 use crate::ex_eval::state::did_throw;
 use crate::ex_getln::{curbuf_locked, text_locked, text_locked_msg};
 use crate::fileio::check_timestamps;
+use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fold::{fold_adjust_visual, fold_check_close, fold_open_cursor, has_any_folding};
 use crate::getchar::state::{KeyTyped, got_int, mod_mask, reg_executing, reg_recording};
 use crate::getchar::{char_avail, readbuf1_empty, safe_vgetc, stuff_empty, typeahead, vgetc};
-use crate::main::{did_check_timestamps, may_garbage_collect, need_check_timestamps, time_fd};
 use crate::memory::{xfree, xstrdup};
 use crate::message::state::{
     did_emsg, did_wait_return, emsg_on_display, emsg_silent, in_assert_fails, keep_msg,
@@ -59,6 +60,7 @@ use crate::option::shortmess;
 use crate::option::vars::{fdo_flags, p_smd};
 use crate::options::kOptFdoFlagAll;
 use crate::pos::equalpos;
+use crate::profile::time_fd;
 use crate::profile::{time_finish, time_msg};
 use crate::state::mode::{
     State, exmode_active, finish_op, km_startsel, km_stopsel, opcount, restart_edit,

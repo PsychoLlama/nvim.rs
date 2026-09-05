@@ -51,7 +51,6 @@ use crate::ex_getln::vim_strsave_fnameescape;
 use crate::file_search::vim_chdirfile;
 use crate::fileio::shorten_fnames;
 use crate::global_cell::GlobalCell;
-use crate::main::globaldir;
 use crate::mapping::makemap;
 use crate::mbyte::utfc_ptr2len;
 use crate::memory::{xfree, xmalloc, xmemcpyz};
@@ -67,6 +66,7 @@ use crate::options::{
 use crate::os::cshim::{gettext, putc};
 use crate::os::env::home_replace_save;
 use crate::os::fs::{os_chdir, os_dirname, os_isdir};
+use crate::os::state::globaldir;
 use crate::path::{add_pathsep, vim_full_name, vim_ispathsep};
 use crate::runtime::do_source;
 use crate::search::state::no_hlsearch;

@@ -54,7 +54,8 @@ use std::ffi::CString;
 
 use crate::fileio::{read_eintr, write_eintr};
 use crate::getchar::state::got_int;
-use crate::main::{did_swapwrite_msg, main_loop};
+use crate::global_cell::GlobalCell;
+use crate::main::main_loop;
 use crate::memline::{ml_get_buf, ml_open_file};
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_swapclose;
@@ -70,6 +71,8 @@ use crate::path::full_name_save;
 use crate::types::{BlockNr, Buffer, FileInfo, FileOffset};
 use crate::winlayer::buffers;
 use ::libc::{__errno_location, close, lseek, strerror};
+
+pub(crate) static did_swapwrite_msg: GlobalCell<bool> = GlobalCell::new(false);
 
 /// A swap-file operation that did not complete.
 ///

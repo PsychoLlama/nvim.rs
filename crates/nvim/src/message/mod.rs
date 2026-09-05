@@ -28,6 +28,7 @@ use crate::ex_docmd::state::global_busy;
 use crate::ex_eval::cause_errthrow;
 use crate::ex_getln::state::{cmdline_was_last_drawn, redrawing_cmdline};
 use crate::fileio::check_timestamps;
+use crate::fileio::state::need_check_timestamps;
 use crate::garray::ga_concat_len;
 use crate::getchar::state::{
     KeyTyped, got_int, reg_recording, scriptout, vgetc_busy, vgetc_char, vgetc_mod_mask,
@@ -54,8 +55,8 @@ use crate::input::{get_keystroke, prompt_for_input};
 use crate::keycodes::{K_SPECIAL, get_special_key_name};
 use crate::log::{LOGLVL_DBG, LOGLVL_INF};
 use crate::main::{
-    embedded_mode, ex_exitval, exiting, full_screen, headless_mode, main_loop,
-    need_check_timestamps, nvim_testing, silent_mode,
+    embedded_mode, ex_exitval, exiting, full_screen, headless_mode, main_loop, nvim_testing,
+    silent_mode,
 };
 use crate::mbyte::{
     mb_string2cells, mb_string2cells_len, mb_tolower, mb_unescape, utf_char2bytes, utf_char2cells,

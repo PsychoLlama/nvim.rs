@@ -9,12 +9,12 @@
 use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 
+use neovim::eval::list::kTVCstring;
 use neovim::eval::typval::{
     tv_check_num, tv_check_str, tv_check_str_or_nr, tv_clear, tv_copy, tv_dict_alloc_ret, tv_equal,
     tv_get_float, tv_get_lnum, tv_get_number, tv_get_number_chk, tv_get_string_buf,
     tv_get_string_buf_chk, tv_islocked, tv_item_lock, tv_list_alloc_ret, value_check_lock,
 };
-use neovim::main::kTVCstring;
 use neovim::memory::{xfree, xmalloc};
 use neovim::ops::NUMBUFLEN;
 use neovim::types::{

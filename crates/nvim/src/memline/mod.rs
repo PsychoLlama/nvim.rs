@@ -25,6 +25,7 @@ use crate::eval::typval::{tv_dict_add_nr, tv_dict_add_str_len, tv_list_append_al
 use crate::eval::vars::{get_vim_var_str, set_vim_var_string};
 use crate::event::libuv::{uv_strerror, uv_uptime};
 use crate::ex_docmd::cmdmod_has;
+use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fileio::{
     buf_store_file_info, modname, read_eintr, readfile, vim_deltempdir, vim_rename, vim_tempname,
 };
@@ -33,9 +34,7 @@ use crate::getchar::state::got_int;
 use crate::global_cell::GlobalCell;
 use crate::guard::{Allow, Suppress};
 use crate::input::prompt_for_input;
-use crate::main::{
-    did_check_timestamps, getout, inhibit_delete_count, need_check_timestamps, recoverymode,
-};
+use crate::main::{getout, recoverymode};
 use crate::mark::setpcmark;
 use crate::mbyte::{mb_adjust_cursor, mb_utflen, utf_head_off, utf_ptr2char, utfc_ptr2len};
 use crate::memfile::{
@@ -89,6 +88,7 @@ use crate::version::min_vim_version_name;
 use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, buffers};
 use ::libc::{__errno_location, close, lseek, readlink, strcasecmp};
+use core::ffi::c_int;
 
 // The carve of the transpiled module; see each child's docs.
 mod block0;
@@ -105,6 +105,9 @@ mod offsets;
 pub use self::offsets::*;
 mod lines;
 pub use self::lines::*;
+
+pub(crate) static inhibit_delete_count: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+
 pub const VIM_WARNING: ::core::ffi::c_uint = 2;
 pub const READ_NEW: ::core::ffi::c_uint = 1;
 pub const FLUSH_TYPEAHEAD: FlushBuffers = 1;

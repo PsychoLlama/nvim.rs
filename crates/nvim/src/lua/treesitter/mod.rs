@@ -11,7 +11,7 @@ use crate::lua::ffi::{
     luaL_checkinteger, luaL_checklstring, luaL_checknumber, luaL_checkudata, luaL_error,
     luaL_newmetatable, luaL_ref, luaL_register, luaL_unref,
 };
-use crate::main::tslua_query_parse_count;
+use crate::lua::state::tslua_query_parse_count;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, strequal, xcalloc, xfree, xmalloc, xrealloc, xstrlcpy};
 use crate::os::cshim::{__ctype_b_loc, snprintf, strchr};

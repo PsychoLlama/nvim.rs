@@ -16,11 +16,11 @@
 )]
 
 use crate::buffer::buflist_nr2name;
+use crate::cstr::c_bytes;
 use crate::eval::typval::{
     tv_dict_add_list, tv_dict_add_str, tv_dict_alloc, tv_list_alloc, tv_list_append_dict,
     tv_list_append_number,
 };
-use crate::main::c_bytes;
 use crate::memory::xfree;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};

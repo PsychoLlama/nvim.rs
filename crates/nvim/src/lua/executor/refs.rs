@@ -17,7 +17,7 @@ use crate::lua::ffi::{
     LUA_NOREF, LUA_REGISTRYINDEX, LUA_TFUNCTION, lua_getfield, lua_newuserdata, lua_pop,
     lua_pushstring, lua_pushvalue, lua_rawgeti, lua_touserdata, lua_type, luaL_ref, luaL_unref,
 };
-use crate::main::nlua_global_refs;
+use crate::lua::state::nlua_global_refs;
 use crate::types::{LuaRef, NluaRefState, lua_State};
 
 /// The registry key the per-state reference table is parked under.

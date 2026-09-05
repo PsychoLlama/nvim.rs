@@ -39,7 +39,7 @@
 
 use crate::eval::vars::vim_var_bytes;
 use crate::global_cell::GlobalCell;
-use crate::main::{g_min_log_level, g_stats, ui_client_channel_id};
+use crate::main::ui_client_channel_id;
 use crate::message_fmt::{msg_cstr, to_bytes};
 use crate::msg_schedule_semsg;
 use crate::os::env::{env_get_bounded, env_set, expand_env_into, os_get_pid};
@@ -47,7 +47,7 @@ use crate::os::fs::{MkdirFailure, dir_exists, mkdir_recurse};
 use crate::os::stdpaths::{user_state_subpath, xdg_home};
 use crate::os::time::{os_localtime, tm_zeroed};
 use crate::path::tail_index;
-use crate::types::{Vv, XDGVarType, int32_t};
+use crate::types::{Vv, XDGVarType, int16_t, int32_t, int64_t, nvim_stats_s};
 /// `#[macro_export]` publishes at the crate root; this re-export lets callers
 /// name the macro where the rest of the logging API lives, and brings it into
 /// scope here ahead of its own textual definition.
@@ -60,6 +60,13 @@ use std::io::{self, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
+
+pub static g_min_log_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static g_stats: GlobalCell<nvim_stats_s> = GlobalCell::new(nvim_stats_s {
+    fsync: 0 as int64_t,
+    redraw: 0 as int64_t,
+    log_skip: 0 as int16_t,
+});
 
 /// The levels [`logmsg_line`] takes, and 'verbose' compares against.
 pub const LOGLVL_DBG: c_int = 1;

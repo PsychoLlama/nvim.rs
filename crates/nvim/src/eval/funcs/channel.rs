@@ -15,6 +15,7 @@ use crate::channel::{
     channel_close, channel_connect, channel_from_stdio, channel_send, find_channel,
 };
 use crate::cstr;
+use crate::eval::provider::{provider_call_nesting, provider_caller_scope};
 use crate::eval::save_tv_as_string;
 use crate::eval::typval::{
     NumBuf, tv_blob_len, tv_dict_get_bool, tv_dict_get_callback, tv_dict_get_number,
@@ -25,7 +26,6 @@ use crate::event::libuv::uv_strerror;
 use crate::ex_cmds::check_secure;
 use crate::log::{LOGLVL_ERR, logmsg};
 use crate::lua::executor::nlua_exec;
-use crate::main::{current_sctx, provider_call_nesting, provider_caller_scope};
 use crate::memory::{arena_finish, arena_mem_free, xfree, xmemdup, xstrdup};
 use crate::message::e_invarg;
 use crate::message::on_print_cb;
@@ -37,6 +37,7 @@ use crate::msgpack_rpc::server::{
 };
 use crate::os::cshim::gettext;
 use crate::runtime::exestack;
+use crate::runtime::state::current_sctx;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{

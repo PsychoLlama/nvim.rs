@@ -17,7 +17,7 @@ use crate::highlight::state::{
 };
 use crate::highlight::{HlAttrFlags, hl_get_syn_attr};
 use crate::lua::executor::nlua_set_sctx;
-use crate::main::current_sctx;
+use crate::runtime::state::current_sctx;
 use crate::types::{HlAttrs, KeyDict_highlight, Object};
 use crate::ui::{ui_default_colors_set, ui_mode_info_set};
 

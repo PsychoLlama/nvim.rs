@@ -33,19 +33,34 @@ use crate::debugger::ex_breakadd;
 use crate::eval::userfunc::{func_tbl_get, get_current_funccal};
 use crate::eval::vars::set_vim_var_nr;
 use crate::global_cell::GlobalCell;
-use crate::main::{current_sctx, do_profiling};
 use crate::memory::xcalloc;
 use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
+use crate::runtime::state::current_sctx;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
-    ExArg, Expand, ExpandContext, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
+    ExArg, Expand, ExpandContext, FILE, FuncCall, LineNr, ProfTime, ScriptItem, SnPrl, UserFunc,
     VarNumber, Vv, int64_t,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
+
+/// Record a startup-timing message, if `--startuptime` asked for one.
+///
+/// The C spells this as the `TIME_MSG` macro. Safe: no raw pointer crosses
+/// the boundary, and the `time_fd` test is the whole of it.
+pub(crate) fn time_msg_at(what: &CStr) {
+    if !time_fd.get().is_null() {
+        // SAFETY: `time_fd` is the startup-timing file, opened once by
+        // `init_startuptime` and closed by `time_finish`; `what` outlives the
+        // call and the second argument is the "no elapsed time" null.
+        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<ProfTime>()) };
+    }
+}
+pub(crate) static do_profiling: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
+pub(crate) static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 
 /// `do_profiling` states (a `GlobalCell<c_int>` in main).
 pub const PROF_NONE: c_int = 0;

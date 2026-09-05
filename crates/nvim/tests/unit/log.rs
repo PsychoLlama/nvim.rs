@@ -21,8 +21,8 @@
 use std::ffi::c_int;
 use std::path::{Path, PathBuf};
 
+use neovim::log::g_min_log_level;
 use neovim::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, LOGLVL_WRN, log_init, logmsg_line};
-use neovim::main::g_min_log_level;
 
 use crate::support::Sandbox;
 

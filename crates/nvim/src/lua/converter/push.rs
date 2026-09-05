@@ -29,7 +29,7 @@ use crate::lua::ffi::{
     lua_checkstack, lua_createtable, lua_gettop, lua_pushboolean, lua_pushlstring, lua_pushnil,
     lua_pushnumber, lua_pushvalue, lua_rawset, lua_setmetatable, lua_tonumber,
 };
-use crate::main::nlua_global_refs;
+use crate::lua::state::nlua_global_refs;
 use crate::types::{
     Blob, Dict, Float, LuaRef, TypVal, int64_t, kObjectTypeDict, lua_Number, lua_State, size_t,
 };

@@ -12,10 +12,10 @@
 use super::{profile_start, profile_sub};
 use crate::event::libuv::uv_err_name;
 use crate::global_cell::GlobalCell;
-use crate::main::time_fd;
 use crate::memory::{xfree, xmalloc};
 use crate::message::e_notopen;
 use crate::os::cshim::{gettext, stderr};
+use crate::profile::time_fd;
 use crate::types::ProfTime;
 use ::libc::{fclose, fopen, fprintf, setvbuf};
 use core::ffi::{CStr, c_char, c_int, c_void};

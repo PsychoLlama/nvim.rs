@@ -10,6 +10,7 @@ use crate::drawscreen::state::{cmdline_row, mode_displayed, must_redraw, redraw_
 use crate::drawscreen::{setcursor, showmode, unshowmode, update_screen};
 use crate::edit::{edit_putchar, edit_unputchar};
 use crate::eval::garbage_collect;
+use crate::eval::gc::{may_garbage_collect, want_garbage_collect};
 use crate::eval::typval::{
     tv_check_for_opt_dict_arg, tv_dict_get_bool, tv_dict_has_key, tv_get_number_chk,
 };
@@ -33,9 +34,7 @@ use crate::insexpand::{compl_status_local, ctrl_x_mode_not_default, vim_is_ctrl_
 use crate::keycodes::ModMask;
 use crate::keycodes::{K_SPECIAL, special_to_buf};
 use crate::lua::executor::{nlua_call_ref, nlua_execute_on_key};
-use crate::main::{
-    did_outofmem_msg, did_swapwrite_msg, main_loop, may_garbage_collect, want_garbage_collect,
-};
+use crate::main::main_loop;
 use crate::mapping::{
     Mb, eval_map_expr, get_buf_maphash_list, get_maphash_list, langmap_adjust_mb,
 };
@@ -43,7 +42,9 @@ use crate::mbyte::{
     mb_cptr2char_adv, mb_unescape, utf_char2bytes, utf_head_off, utf_ptr2cells, utf_ptr2char,
     utf_ptr2str_char_info, utf8len_tab, utfc_next, utfc_ptr2len,
 };
+use crate::memfile::did_swapwrite_msg;
 use crate::memline::ml_sync_all;
+use crate::memory::did_outofmem_msg;
 use crate::memory::{
     ARENA_EMPTY, arena_finish, arena_mem_free, strequal, xfree, xmalloc, xmemcpyz, xmemdupz,
 };

@@ -52,14 +52,16 @@ use crate::highlight_group::{
 use crate::insexpand::get_cot_flags;
 use crate::keycodes::{name_to_mod_mask, replace_termcodes, vim_strsave_escape_ks};
 use crate::log::LOGLVL_DBG;
+use crate::log::g_stats;
 use crate::lua::executor::{
     api_free_luaref, nlua_exec, nlua_get_global_ref_count, nlua_is_deferred_safe,
 };
-use crate::main::{arena_alloc_count, g_stats, tslua_query_parse_count};
+use crate::lua::state::tslua_query_parse_count;
 use crate::mapping::{keymap_array, modify_keymap};
 use crate::mark::mark_get_global;
 use crate::mbyte::{mb_string2cells, utfc_ptr2len, utfc_ptr2schar};
 use crate::memline::ml_open;
+use crate::memory::arena_alloc_count;
 use crate::memory::{arena_alloc, arena_strdup, memchrsub, strequal, xfree, xrealloc};
 use crate::message::state::{
     did_emsg, lines_left, msg_didany, msg_no_more, msg_scroll, need_wait_return,

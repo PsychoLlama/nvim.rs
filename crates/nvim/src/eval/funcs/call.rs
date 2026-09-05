@@ -11,6 +11,7 @@ use crate::autocmd::{au_exists, autocmd_supported};
 use crate::charset::skipwhite;
 use crate::cstr;
 use crate::eval::EVALARG_EVALUATE;
+use crate::eval::gc::{garbage_collect_at_exit, want_garbage_collect};
 use crate::eval::typval::{
     NumBuf, tv_check_for_dict_arg, tv_check_for_list_arg, tv_copy, tv_get_string_buf_chk,
     tv_list_first, tv_list_len, tv_list_ref, tv_list_unref,
@@ -29,7 +30,6 @@ use crate::guard::Suppress;
 use crate::lua::executor::{
     nlua_func_exists, nlua_is_table_from_lua, nlua_register_table_as_callable, nlua_typval_eval,
 };
-use crate::main::{garbage_collect_at_exit, want_garbage_collect};
 use crate::memory::{strnequal, xcalloc, xfree, xmalloc, xstrdup};
 use crate::message::emsg;
 use crate::message::state::{

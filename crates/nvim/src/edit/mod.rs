@@ -69,6 +69,7 @@ use crate::eval::{invoke_prompt_interrupt, prompt_invoke_callback};
 use crate::ex_docmd::state::ex_normal_busy;
 use crate::ex_docmd::{do_cmdline, do_cmdline_cmd, expr_map_locked};
 use crate::fileio::check_timestamps;
+use crate::fileio::state::{did_check_timestamps, need_check_timestamps};
 use crate::fold::{
     fold_check_close, fold_open_cursor, fold_update_after_insert, has_folding, has_folding_win,
 };
@@ -113,7 +114,6 @@ use crate::keycodes::{
     Ctrl_K, Ctrl_L, Ctrl_N, Ctrl_O, Ctrl_P, Ctrl_Q, Ctrl_R, Ctrl_RSB, Ctrl_S, Ctrl_T, Ctrl_U,
     Ctrl_V, Ctrl_W, Ctrl_X, Ctrl_Y, K_SPECIAL, add_char2buf, get_special_key_name,
 };
-use crate::main::{did_check_timestamps, need_check_timestamps};
 use crate::mapping::{check_abbr, langmap_adjust_mb, map_to_exists_mode};
 use crate::mark::{free_fmark, mark_view_make};
 use crate::mbyte::{

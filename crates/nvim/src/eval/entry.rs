@@ -41,12 +41,12 @@ use crate::eval::{
 };
 use crate::ex_eval::aborting;
 use crate::garray::{ga_append, ga_init};
-use crate::main::current_sctx;
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::message::state::{called_emsg, did_emsg};
 use crate::option::was_set_insecurely;
 use crate::options::{kOptFoldexpr, kOptFoldtext, kWinOptFoldexpr};
 use crate::runtime::sourcing_a_script;
+use crate::runtime::state::current_sctx;
 use crate::types::{
     Arena, Dict, EvalArg, ExArg, Failed, FuncCallEntry, FuncExe, GArray, HashTab, List, NUL,
     Object, OptionSetFlags, Partial, SaveVEvent, ScriptCtx, String_0, TypVal, VAR_DICT, VAR_FUNC,

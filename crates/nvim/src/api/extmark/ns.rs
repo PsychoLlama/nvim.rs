@@ -18,8 +18,22 @@
 use super::*;
 use crate::api::private::helpers::{Reported, array_add, dict_put_str, has_key, set_key};
 use crate::api::private::validate::err_bad_number;
-use crate::registry::interned_key;
+use crate::global_cell::GlobalCell;
+use crate::registry::{IdSet, SlotTable, id_set, interned_key};
+use crate::types::{Handle, uint32_t};
 use crate::winlayer::{Win, tab_windows};
+
+/// Namespace name -> id, in creation order.
+///
+/// khash, which this was, is insertion-ordered with a swap-remove; nothing
+/// ever removes a namespace, so the order `nvim_get_namespaces` renders and
+/// `describe_ns` searches is creation order. [`SlotTable`] keeps it.
+pub(crate) static namespace_ids: GlobalCell<SlotTable<Box<[u8]>, Handle>> =
+    GlobalCell::new(SlotTable::new());
+/// The namespaces that are window-local rather than visible everywhere.
+/// Membership only; never walked.
+pub(crate) static namespace_localscope: GlobalCell<IdSet<uint32_t>> = GlobalCell::new(id_set());
+pub(crate) static next_namespace_id: GlobalCell<Handle> = GlobalCell::new(1 as Handle);
 
 /// The id `name` is registered under, if any.
 pub(crate) fn namespace_id_for(name: &[u8]) -> Option<Handle> {

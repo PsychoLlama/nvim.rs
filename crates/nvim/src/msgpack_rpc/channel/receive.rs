@@ -24,9 +24,10 @@ use crate::channel::{channel_decref, channel_incref};
 use crate::event::r#loop::one_arg_event;
 use crate::event::multiqueue::{event_create_oneshot, multiqueue_put_event};
 use crate::log::{LOGLVL_DBG, LOGLVL_ERR, LOGLVL_INF, logmsg};
-use crate::main::{ch_before_blocking_events, ui_client_attached};
+use crate::main::ui_client_attached;
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xmalloc};
 use crate::message_fmt::{c_str_len, msg_addr};
+use crate::msgpack_rpc::channel::ch_before_blocking_events;
 use crate::msgpack_rpc::unpacker::unpacker_advance;
 use crate::os::input::input_blocking;
 use crate::types::{

@@ -32,8 +32,9 @@ use crate::event::libuv::{
     uv_fs_lstat, uv_fs_open, uv_fs_realpath, uv_fs_req_cleanup, uv_strerror,
     uv_translate_sys_error,
 };
+use crate::log::g_stats;
 use crate::log::{LOGLVL_ERR, logmsg};
-use crate::main::{g_stats, stdin_fd};
+use crate::main::stdin_fd;
 use crate::memory::{xfree, xmalloc, xstrlcpy};
 use crate::message::{verbose_enter, verbose_leave};
 use crate::message_fmt::c_str;

@@ -16,7 +16,6 @@ use crate::decoration_provider::{decor_provider_clear, get_decor_provider, kDeco
 use crate::drawscreen::{UPD_NOT_VALID, redraw_all_later};
 use crate::extmark::{extmark_clear, extmark_del_id, extmark_from_id, extmark_get, extmark_set};
 use crate::grid::schar_high;
-use crate::main::{namespace_ids, namespace_localscope, next_namespace_id};
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_invalid, mt_invalidate, mt_no_undo, mt_paired, mt_right,
 };
@@ -25,12 +24,11 @@ use crate::mbyte::{mb_string2cells, utfc_ptr2schar};
 use crate::memory::{strequal, xfree, xrealloc};
 use crate::r#move::changed_window_setting;
 use crate::pos::{MAXCOL, MAXLNUM};
-use crate::registry::{IdSet, id_set};
 use crate::sign::init_sign_text;
 use crate::types::{
     ApiDict, Arena, Array, Boolean, Buffer, BufferHandle, ColNr, DecorExt, DecorHighlightInline,
     DecorInline, DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
-    DecorVirtText_data, Error, ExtmarkInfoArray, ExtmarkType, Handle, Integer, KeyDict_get_extmark,
+    DecorVirtText_data, Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark,
     KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
     KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, OptionalKeys, ScreenChar, String_0,
     UndoObjectType, VirtLines, VirtText, VirtTextChunk, Window, WindowHandle, int32_t,

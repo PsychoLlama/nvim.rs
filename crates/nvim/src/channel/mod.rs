@@ -40,7 +40,7 @@ use crate::event::stream::stream_may_close;
 use crate::event::wstream::{wstream_new_buffer, wstream_write};
 use crate::global_cell::GlobalCell;
 use crate::lua::executor::api_free_luaref;
-use crate::main::{channels, exiting, main_loop};
+use crate::main::{exiting, main_loop};
 use crate::memory::{xfree, xmemdup};
 use crate::message::{e_invchan, e_invstream, e_invstreamrpc};
 use crate::msgpack_rpc::channel::call_stack::CallStack;
@@ -105,6 +105,13 @@ pub use reader::{
     on_job_stderr,
 };
 pub use term::channel_terminal_alloc;
+
+/// Every open channel, by id. See [`crate::registry`] for the order this
+/// keeps and the reentrancy rule it answers: a channel's callback runs Lua
+/// and Vimscript, which can open and close channels, so nothing holds a
+/// borrow of this across one.
+pub(crate) static channels: GlobalCell<SlotTable<uint64_t, *mut Channel>> =
+    GlobalCell::new(SlotTable::new());
 
 /// The next dynamically allocated channel id. The first two are reserved.
 static next_chan_id: GlobalCell<uint64_t> = GlobalCell::new((CHAN_STDERR + 1) as uint64_t);

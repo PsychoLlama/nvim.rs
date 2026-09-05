@@ -27,11 +27,11 @@ use crate::drawscreen::comp_col;
 use crate::garray::{ga_grow, ga_init};
 use crate::indent_c::parse_cino;
 use crate::log::{LOGLVL_INF, logmsg};
-use crate::main::{current_sctx, fenc_default};
 use crate::mapping::langmap_init;
 use crate::mbyte::enc_locale;
 use crate::memory::{xfree, xmalloc, xmemdupz, xrealloc, xstrdup};
 use crate::message_fmt::c_str;
+use crate::option::vars::fenc_default;
 use crate::option::vars::{p_ch, p_enc, p_hlg, p_icon, p_rtp, p_sh, p_title, p_window};
 use crate::options::{
     kOptAleph, kOptBackupdir, kOptBackupskip, kOptCdpath, kOptCmdheight, kOptCount, kOptDirectory,
@@ -46,6 +46,7 @@ use crate::os::lang::{get_mess_lang, lang_init};
 use crate::os::stdpaths::stdpaths_user_state_subpath;
 use crate::path::{after_pathsep, invocation_path_tail, path_fnamecmp, vim_ispathlistsep};
 use crate::runtime::runtimepath_default;
+use crate::runtime::state::current_sctx;
 use crate::spell::init_spell_chartab;
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::{

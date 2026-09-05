@@ -17,6 +17,7 @@ use crate::api::private::helpers::cstr_as_string;
 use crate::autocmd::{apply_autocmds, block_autocmds, is_autocmd_blocked, unblock_autocmds};
 use crate::buffer::{BufRef, buf_get_changedtick, buf_set_changedtick, buf_valid};
 use crate::eval::garbage_collect;
+use crate::eval::gc::garbage_collect_at_exit;
 use crate::eval::userfunc::invoke_all_defer;
 use crate::eval::vars::{get_vim_var_str, set_vim_var_nr, set_vim_var_string, set_vim_var_type};
 use crate::event::stream::stream_set_blocking;
@@ -24,8 +25,8 @@ use crate::global_cell::GlobalCell;
 use crate::log::{LOGLVL_INF, logmsg};
 use crate::main::entry::event_teardown;
 use crate::main::{
-    ex_exitval, exiting, garbage_collect_at_exit, stderr_isatty, stdout_isatty,
-    ui_client_channel_id, ui_client_exit_status, used_stdin, v_dying,
+    ex_exitval, exiting, stderr_isatty, stdout_isatty, ui_client_channel_id, ui_client_exit_status,
+    used_stdin, v_dying,
 };
 use crate::memfile::mf_fname;
 use crate::memline::{ml_close_all, ml_close_notmod, ml_sync_all};

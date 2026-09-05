@@ -31,18 +31,19 @@
     clippy::ptr_as_ptr
 )]
 
-use crate::global_cell::SharedCell;
+use crate::global_cell::{GlobalCell, SharedCell};
 use crate::memory::alloc_log::AllocEvent;
 use crate::semsg;
 use core::ffi::{CStr, c_char, c_int, c_long, c_ulong, c_void};
 use core::{ptr, slice};
 
-use crate::main::{did_outofmem_msg, preserve_exit};
+use crate::main::preserve_exit;
 use crate::memfile::mf_release_all;
 use crate::message::clear_sb_text;
 use crate::message::e_outofmem;
 use crate::message::state::emsg_silent;
 use crate::os::cshim::gettext;
+use crate::types::size_t;
 use ::libc::{calloc, free, malloc, realloc};
 
 /// Ask the editor to give memory back: drop the scrollback, release
@@ -751,6 +752,9 @@ pub mod alloc_log;
 pub mod arena;
 pub(crate) mod handoff;
 pub use arena::*;
+
+pub(crate) static arena_alloc_count: GlobalCell<size_t> = GlobalCell::new(0 as size_t);
+pub(crate) static did_outofmem_msg: GlobalCell<bool> = GlobalCell::new(false);
 
 #[cfg(test)]
 mod tests {

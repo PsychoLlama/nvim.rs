@@ -33,6 +33,8 @@ use core::mem::{offset_of, size_of};
 use core::ptr::{null, null_mut};
 
 use crate::autocmd::aucmd_wins;
+use crate::channel::channels;
+use crate::eval::gc::{garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
 use crate::eval::gc::{gc_first_dict, gc_first_list};
 use crate::eval::typval::{
     tv_blob_copy, tv_copy, tv_dict_copy, tv_dict_free_contents, tv_dict_free_dict,
@@ -54,7 +56,6 @@ use crate::eval::{
 use crate::ex_docmd::set_ref_in_findfunc;
 use crate::global_cell::GlobalCell;
 use crate::insexpand::{set_ref_in_cpt_callbacks, set_ref_in_insexpand_funcs};
-use crate::main::{channels, garbage_collect_at_exit, may_garbage_collect, want_garbage_collect};
 use crate::mark::mark_global_iter;
 use crate::mbyte::string_convert;
 use crate::memory::{xfree, xmalloc, xstrdup};

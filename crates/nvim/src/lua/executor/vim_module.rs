@@ -24,7 +24,8 @@ use crate::lua::ffi::{
     lua_setmetatable, lua_toboolean, lua_tointeger, lua_tolstring, lua_tostring, lua_type,
     lua_upvalueindex, luaL_checkinteger, luaL_error, luaL_loadbuffer, luaopen_luv, luv_set_loop,
 };
-use crate::main::{main_loop, nlua_disable_preload};
+use crate::lua::state::nlua_disable_preload;
+use crate::main::main_loop;
 use crate::memory::strequal;
 use crate::os::cshim::stderr;
 use crate::types::ui::kUILinegrid;

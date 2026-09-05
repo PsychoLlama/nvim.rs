@@ -26,7 +26,6 @@ use crate::eval::vars::emsg_static;
 use crate::eval::vars::set_vim_var_nr;
 use crate::eval::{NL, PROF_YES, Tv};
 use crate::ex_cmds::check_secure;
-use crate::main::do_profiling;
 use crate::memline::ml_get_buf;
 use crate::memory::{memchrsub, xcalloc, xfree, xmalloc, xmemdupz, xstrdup};
 use crate::message::e_invarg;
@@ -36,6 +35,7 @@ use crate::option::vars::p_verbose;
 use crate::os::cshim::snprintf;
 use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
+use crate::profile::do_profiling;
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
     EvalFuncData, IOSIZE, List, ListItem, NUL, OptInt, ProfTime, TypVal, VAR_LIST, VAR_NUMBER,

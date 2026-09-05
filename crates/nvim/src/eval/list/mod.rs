@@ -55,6 +55,7 @@ use crate::eval::vars::{
 use crate::eval::{eval_expr_typval, get_copy_id};
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::garray::ga_grow;
+use crate::global_cell::GlobalCell;
 use crate::hashtab::{hash_lock, hash_unlock};
 use crate::mbyte::{mb_strnicmp, utfc_ptr2len};
 use crate::memory::xmemdupz;
@@ -103,6 +104,11 @@ pub(crate) const UNKNOWN_TV: TypVal = TypVal {
 /// A builtin's argument vector is the tree's own [`Args`], shared with every
 /// other `f_*` family, and [`frame`] is how a builtin opens onto it.
 pub(crate) use crate::eval::funcs::args::{Args, frame};
+
+// TV_CSTRING (SIZE_MAX - 1): c2rust dropped the initializer expression and
+// left 0, which is a valid pointer-sentinel value and would corrupt any
+// caller comparing against it (the unit tests do, via FFI).
+pub static kTVCstring: GlobalCell<size_t> = GlobalCell::new(18446744073709551614);
 
 /// A live `TypVal` held as a pointer rather than a borrow.
 ///

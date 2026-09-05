@@ -17,21 +17,24 @@ use core::ptr;
 use crate::ex_docmd::do_cmdline_cmd;
 use crate::lua::executor::{get_global_lstate, nlua_pcall};
 use crate::lua::ffi::{lua_getfield, lua_pushstring, lua_tolstring};
+use crate::lua::state::LUA_GLOBALSINDEX;
 use crate::main::args::execute_env;
-use crate::main::{
-    DOSO_NONE, DOSO_VIMRC, EDIT_QF, ETYPE_ARGS, LUA_GLOBALSINDEX, MainParams, PATHSEP, SID_CARG,
-    SID_CMDARG, SYS_VIMRC_FILE, VIMRC_FILE, current_sctx, kEqualFiles, kXDGConfigDirs, silent_mode,
-    time_msg_at,
-};
+use crate::main::{EDIT_QF, MainParams, SYS_VIMRC_FILE, VIMRC_FILE, silent_mode};
 use crate::memory::{strequal, xfree, xmalloc};
 use crate::message::state::msg_scroll;
 use crate::option::vars::p_exrc;
 use crate::os::cshim::{gettext, stderr};
 use crate::os::env::vim_env_iter;
 use crate::os::fs::os_path_exists;
+use crate::os::state::{kEqualFiles, kXDGConfigDirs};
 use crate::os::stdpaths::{get_appname, stdpaths_get_xdg_var, stdpaths_user_conf_subpath};
+use crate::path::PATHSEP;
 use crate::path::path_full_compare;
+use crate::profile::time_msg_at;
 use crate::quickfix::qf_jump;
+use crate::runtime::state::{
+    DOSO_NONE, DOSO_VIMRC, ETYPE_ARGS, SID_CARG, SID_CMDARG, current_sctx,
+};
 use crate::runtime::{do_source, estack_pop, estack_push};
 use crate::state::mode::exmode_active;
 use crate::types::{FAIL, OK, QfInfo, ScriptId, lua_State, size_t};
