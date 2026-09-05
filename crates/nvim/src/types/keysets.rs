@@ -116,8 +116,8 @@ pub struct KeyDict_cmd {
     pub reg: String_0,
     pub bang: Boolean,
     pub args: Array,
-    pub magic: Dict,
-    pub mods: Dict,
+    pub magic: ApiDict,
+    pub mods: ApiDict,
     pub nargs: Object,
     pub addr: String_0,
     pub nextcmd: String_0,
@@ -134,7 +134,7 @@ pub struct KeyDict_cmd_mods {
     pub silent: Boolean,
     pub emsg_silent: Boolean,
     pub unsilent: Boolean,
-    pub filter: Dict,
+    pub filter: ApiDict,
     pub sandbox: Boolean,
     pub noautocmd: Boolean,
     pub browse: Boolean,
@@ -202,7 +202,7 @@ pub struct KeyDict_echo_opts {
     pub status: String_0,
     pub percent: Integer,
     pub source: String_0,
-    pub data: Dict,
+    pub data: ApiDict,
 }
 #[repr(C)]
 pub struct KeyDict_empty {
@@ -297,7 +297,7 @@ pub struct KeyDict_highlight {
     pub underline: Boolean,
     /// Wire key: `default`.
     pub default_: Boolean,
-    pub cterm: Dict,
+    pub cterm: ApiDict,
     pub foreground: Object,
     pub fg: Object,
     pub background: Object,
@@ -343,7 +343,7 @@ impl KeyDict_highlight {
     /// named and records it in `is_set__highlight_`, so this is the state a
     /// keydict must start in for that mask to mean anything.
     pub const fn new() -> Self {
-        const NO_DICT: Dict = Dict {
+        const NO_DICT: ApiDict = ApiDict {
             size: 0,
             capacity: 0,
             items: core::ptr::null_mut(),

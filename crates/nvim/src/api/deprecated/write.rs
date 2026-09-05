@@ -140,7 +140,7 @@ pub unsafe fn nvim_err_writeln(str: String_0) {
 pub unsafe fn nvim_notify(
     msg_0: String_0,
     log_level: Integer,
-    opts: Dict,
+    opts: ApiDict,
     arena: *mut Arena,
 ) -> Result<Object, Error> {
     let mut error = Error::none();

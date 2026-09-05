@@ -73,6 +73,7 @@ typedef struct __pthread_rwlock_arch_t __pthread_rwlock_arch_t;
 typedef struct termios termios;
 typedef struct winsize winsize;
 typedef struct AdditionalData AdditionalData;
+typedef struct ApiDict ApiDict;
 typedef struct Array Array;
 typedef struct Callback Callback;
 typedef union typval_vval_union typval_vval_union;
@@ -109,7 +110,6 @@ typedef union DecorInlineData DecorInlineData;
 typedef struct DecorRange DecorRange;
 typedef struct DecorRange_data_ui DecorRange_data_ui;
 typedef struct DecorSignHighlight DecorSignHighlight;
-typedef struct Dict Dict;
 typedef struct ExtmarkMove ExtmarkMove;
 typedef struct ExtmarkSavePos ExtmarkSavePos;
 typedef struct ExtmarkSplice ExtmarkSplice;
@@ -633,6 +633,11 @@ struct AdditionalData {
   uint32_t nbytes;
   char data[0];
 };
+struct ApiDict {
+  size_t size;
+  size_t capacity;
+  KeyValuePair *items;
+};
 struct Array {
   size_t size;
   size_t capacity;
@@ -923,11 +928,6 @@ struct DecorSignHighlight {
   uint32_t next;
   const char *url;
 };
-struct Dict {
-  size_t size;
-  size_t capacity;
-  KeyValuePair *items;
-};
 struct ExtmarkMove {
   int start_row;
   int start_col;
@@ -1015,7 +1015,7 @@ struct Object {
     Float float_;
     String string_;
     Array array_;
-    Dict dict_;
+    ApiDict dict_;
     LuaRef luaref_;
     Integer buffer_;
     Integer window_;
@@ -1038,8 +1038,8 @@ struct KeyDict_cmd {
   String reg;
   Boolean bang;
   Array args;
-  Dict magic;
-  Dict mods;
+  ApiDict magic;
+  ApiDict mods;
   Object nargs;
   String addr;
   String nextcmd;
@@ -1054,7 +1054,7 @@ struct KeyDict_cmd_mods {
   Boolean silent;
   Boolean emsg_silent;
   Boolean unsilent;
-  Dict filter;
+  ApiDict filter;
   Boolean sandbox;
   Boolean noautocmd;
   Boolean browse;
@@ -1115,7 +1115,7 @@ struct KeyDict_echo_opts {
   String status;
   Integer percent;
   String source;
-  Dict data;
+  ApiDict data;
 };
 struct KeyDict_empty {
   OptionalKeys is_set__empty_;
@@ -1197,7 +1197,7 @@ struct KeyDict_highlight {
   Boolean underdouble;
   Boolean underline;
   Boolean default_;
-  Dict cterm;
+  ApiDict cterm;
   Object foreground;
   Object fg;
   Object background;

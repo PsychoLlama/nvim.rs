@@ -17,7 +17,7 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    Array, Boolean, Dict, Float, Handle, Integer, LuaRef, Object, ObjectType, String_0,
+    ApiDict, Array, Boolean, Float, Handle, Integer, LuaRef, Object, ObjectType, String_0,
     kObjectTypeFloat, lua_Number, lua_State, size_t,
 };
 
@@ -113,7 +113,7 @@ pub unsafe fn nlua_push_boolean(lstate: *mut lua_State, b: Boolean, _flags: c_in
 ///
 /// # Safety
 /// `lstate` must be a live Lua state and `dict` a live api dictionary.
-pub unsafe fn nlua_push_dict(lstate: *mut lua_State, dict: Dict, flags: c_int) {
+pub unsafe fn nlua_push_dict(lstate: *mut lua_State, dict: ApiDict, flags: c_int) {
     unsafe {
         lua_createtable(lstate, 0, dict.size as c_int);
         if dict.size == 0 {

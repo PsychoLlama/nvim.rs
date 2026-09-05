@@ -49,7 +49,7 @@ use crate::types::ui::{
     kUICmdline, kUIExtCount, kUIHlState, kUILinegrid, kUIMessages, kUIMultigrid, kUIPopupmenu,
 };
 use crate::types::{
-    Boolean, Dict, Error, Float, Handle, Integer, Object, ObjectType, PackerBuffer, RemoteUI,
+    ApiDict, Boolean, Error, Float, Handle, Integer, Object, ObjectType, PackerBuffer, RemoteUI,
     String_0, UIExtension, kErrorTypeException, kObjectTypeBoolean, kObjectTypeInteger,
     kObjectTypeString,
 };
@@ -179,7 +179,7 @@ pub unsafe fn nvim_ui_attach(
     channel_id: u64,
     width: Integer,
     height: Integer,
-    options: Dict,
+    options: ApiDict,
 ) -> Result<(), Error> {
     let mut error = Error::none();
     if find_ui(channel_id).is_some() {

@@ -122,18 +122,18 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
     res.reported(error)
 }
 
-pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<Dict, Error> {
+pub unsafe fn nvim__buf_stats(buf: Buffer, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let b: *mut buf_T = unsafe { find_buffer_by_handle(buf, &mut error) };
     if b.is_null() {
-        return Dict {
+        return ApiDict {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<KeyValuePair>(),
         }
         .reported(error);
     }
-    let mut rv: Dict = arena_dict(arena, 7 as size_t);
+    let mut rv: ApiDict = arena_dict(arena, 7 as size_t);
     // SAFETY: a live pointer the code around it already holds.
     let d_flush_count = unsafe { Object::integer((*b).flush_count as Integer) };
     // SAFETY: the collection is this call's own.

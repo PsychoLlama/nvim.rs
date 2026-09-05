@@ -22,7 +22,7 @@ use crate::memory::{strequal, xfree, xrealloc};
 use crate::os::cshim::stderr;
 use crate::os::env::{env_buf, os_getenv_into};
 use crate::types::{
-    Arena, Array, CallbackReader, Dict, Error, Integer, Object, String_0, size_t, uint64_t,
+    ApiDict, Arena, Array, CallbackReader, Error, Integer, Object, String_0, size_t, uint64_t,
 };
 use ::libc::{fprintf, printf};
 
@@ -71,7 +71,7 @@ unsafe fn bad_reply_type(key: &CStr) -> ! {
 }
 
 /// Read one key of the reply dict, checking its type first.
-unsafe fn field(dict: &Dict, index: size_t) -> (&CStr, &Object) {
+unsafe fn field(dict: &ApiDict, index: size_t) -> (&CStr, &Object) {
     // SAFETY: `index` is below `dict.size`, so the pair is in the items array
     // and its key is a NUL-terminated string.
     let pair = unsafe { &*dict.items.add(index) };

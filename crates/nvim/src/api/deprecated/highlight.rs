@@ -13,13 +13,13 @@ pub unsafe fn nvim_get_hl_by_id(
     hl_id: Integer,
     rgb: Boolean,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     // SAFETY: these take a highlight-group id rather than a pointer.
     let known = unsafe { syn_get_final_id(hl_id as ::core::ffi::c_int) } != 0;
     if !known {
         error = err_bad_number(c"highlight id", hl_id);
-        return Dict::EMPTY.reported(error);
+        return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: as above.
     let attrcode = unsafe { syn_id2attr(hl_id as ::core::ffi::c_int) };
@@ -31,14 +31,14 @@ pub unsafe fn nvim_get_hl_by_name(
     name: String_0,
     rgb: Boolean,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let error;
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {
         // SAFETY: the caller's highlight name is NUL-terminated.
         error = err_bad_value(c"highlight name", unsafe { name.as_cstr() });
-        return Dict::EMPTY.reported(error);
+        return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: `arena` is the caller's.
     unsafe { nvim_get_hl_by_id(id as Integer, rgb, arena) }

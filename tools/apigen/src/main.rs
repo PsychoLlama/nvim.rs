@@ -373,7 +373,7 @@ fn value_type(ty: &syn::Type) -> Option<ApiType> {
         "Float" => ApiType::Float,
         "String_0" => ApiType::String,
         "Array" => ApiType::Array,
-        "Dict" => ApiType::Dict,
+        "ApiDict" => ApiType::Dict,
         "Object" => ApiType::Object,
         "LuaRef" => ApiType::LuaRef,
         "Buffer" => ApiType::Handle("Buffer"),
@@ -436,7 +436,7 @@ fn value_ret(ty: &syn::Type) -> Option<RetType> {
         "Float" => RetType::Float,
         "String_0" => RetType::String,
         "Array" => RetType::Array,
-        "Dict" => RetType::Dict,
+        "ApiDict" => RetType::Dict,
         "Object" => RetType::Object,
         "Buffer" => RetType::Handle("Buffer"),
         "Window" => RetType::Handle("Window"),
@@ -612,7 +612,7 @@ fn key_tag(ty: &str) -> Option<(&'static str, bool)> {
         "Float" => ("TAG_FLOAT", false),
         "String_0" => ("TAG_STRING", false),
         "Array" => ("TAG_ARRAY", false),
-        "Dict" => ("TAG_DICT", false),
+        "ApiDict" => ("TAG_DICT", false),
         "LuaRef" => ("TAG_LUAREF", false),
         "Buffer" => ("TAG_BUFFER", false),
         "Window" => ("TAG_WINDOW", false),
@@ -1340,10 +1340,10 @@ fn as_array(o: Object) -> Option<Array> {
         r#"
 /// An empty Lua table is indistinguishable from an empty list on the wire, so
 /// a Dict parameter accepts one.
-fn as_dict(o: Object) -> Option<Dict> {
+fn as_dict(o: Object) -> Option<ApiDict> {
     match o {
         Object::Dict(d) => Some(d),
-        Object::Array(a) if a.size == 0 => Some(Dict::EMPTY),
+        Object::Array(a) if a.size == 0 => Some(ApiDict::EMPTY),
         _ => None,
     }
 }
@@ -1483,10 +1483,10 @@ const KNOWN: &[(&str, &str, &str)] = &[
 
 /// Names re-exported by `crate::types`, emitted when referenced.
 const TYPE_NAMES: &[&str] = &[
+    "ApiDict",
     "Arena",
     "Array",
     "Boolean",
-    "Dict",
     "Error",
     "ErrorType",
     "FieldHashfn",

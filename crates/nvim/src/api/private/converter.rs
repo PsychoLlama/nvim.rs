@@ -34,7 +34,7 @@ use crate::eval::userfunc::{find_func, register_luafunc};
 use crate::lua::executor::api_new_luaref;
 use crate::memory::xstrdup;
 use crate::types::{
-    Arena, Array, BoolVarValue, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
+    ApiDict, Arena, Array, BoolVarValue, Float, Integer, KeyValuePair, LuaRef, Object, String_0,
     VAR_BOOL, VAR_DICT, VAR_FLOAT, VAR_FUNC, VAR_LIST, VAR_NUMBER, VAR_SPECIAL, VAR_UNKNOWN,
     VarLock, blob_T, dict_T, dictitem_T, int64_t, kBoolVarFalse, kBoolVarTrue, kSpecialVarNull,
     list_T, ptrdiff_t, size_t, typval_T, typval_vval_union,
@@ -114,7 +114,7 @@ impl ObjectSink {
     ///
     /// # Safety
     /// The caller must be inside a dictionary, which every use here is.
-    unsafe fn open_dict(&mut self) -> &mut Dict {
+    unsafe fn open_dict(&mut self) -> &mut ApiDict {
         let Object::Dict(dict) = self.stack.last_mut() else {
             unreachable!("the walk is inside a dictionary");
         };
@@ -219,7 +219,7 @@ impl TypvalSink for ObjectSink {
     }
 
     unsafe fn conv_empty_dict(&mut self, _tv: *mut typval_T, _dictp: Option<*mut *mut dict_T>) {
-        self.stack.push(Object::Dict(Dict::EMPTY));
+        self.stack.push(Object::Dict(ApiDict::EMPTY));
     }
 
     /// Reserve the whole array now; the items fill it in place.

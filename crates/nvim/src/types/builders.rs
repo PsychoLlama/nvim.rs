@@ -1,13 +1,13 @@
 //! Constructing API values.
 //!
-//! [`Object`], [`Array`] and [`Dict`] are C layouts: a tag plus a union, and
+//! [`Object`], [`Array`] and [`ApiDict`] are C layouts: a tag plus a union, and
 //! a pointer/length/capacity triple. Building one literally takes a dozen
 //! lines of struct syntax per element, which is why the transpiled call
 //! sites run to hundreds of lines for a single `nvim_echo`.
 //!
 //! Two pieces here. [`Object`]'s constructors tag the union correctly by
 //! construction. [`ArrayBuf`] and [`DictBuf`] own a fixed-size element
-//! buffer and hand out an [`Array`]/[`Dict`] borrowing it — the safe
+//! buffer and hand out an [`Array`]/[`ApiDict`] borrowing it — the safe
 //! spelling of C's `MAXSIZE_TEMP_ARRAY`, for callees that read the value and
 //! return (`rpc_send_event`, the API dispatchers) rather than take
 //! ownership. Nothing here allocates or frees; strings keep whatever
@@ -23,7 +23,7 @@
 )]
 
 use super::{
-    Array, Buffer, Dict, Float, Integer, KeyValuePair, LuaRef, Object, String_0, Tabpage, Window,
+    ApiDict, Array, Buffer, Float, Integer, KeyValuePair, LuaRef, Object, String_0, Tabpage, Window,
 };
 use core::ffi::{CStr, c_char};
 
@@ -74,7 +74,7 @@ impl Object {
         Self::Array(value)
     }
 
-    pub const fn dict(value: Dict) -> Self {
+    pub const fn dict(value: ApiDict) -> Self {
         Self::Dict(value)
     }
 
@@ -110,7 +110,7 @@ impl Array {
     };
 }
 
-impl Dict {
+impl ApiDict {
     /// No pairs and nothing allocated: C's `ARRAY_DICT_INIT`.
     pub const EMPTY: Self = Self {
         size: 0,
@@ -169,7 +169,7 @@ impl<const N: usize> Default for ArrayBuf<N> {
     }
 }
 
-/// Storage for a [`Dict`] of at most `N` entries. [`ArrayBuf`]'s rules
+/// Storage for an [`ApiDict`] of at most `N` entries. [`ArrayBuf`]'s rules
 /// apply unchanged.
 pub struct DictBuf<const N: usize> {
     items: [KeyValuePair; N],
@@ -204,9 +204,9 @@ impl<const N: usize> DictBuf<N> {
         self
     }
 
-    /// The entries inserted so far, as a [`Dict`] borrowing this buffer.
-    pub fn dict(&mut self) -> Dict {
-        Dict {
+    /// The entries inserted so far, as an [`ApiDict`] borrowing this buffer.
+    pub fn dict(&mut self) -> ApiDict {
+        ApiDict {
             size: self.size,
             capacity: N,
             items: self.items.as_mut_ptr(),

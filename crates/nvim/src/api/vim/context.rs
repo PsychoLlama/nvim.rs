@@ -29,7 +29,7 @@ const FLAGS: [::core::ffi::c_int; 6] = [
 pub unsafe fn nvim_get_context(
     opts: *mut KeyDict_context,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let mut types: Array = Array {
         size: 0 as size_t,
@@ -61,7 +61,7 @@ pub unsafe fn nvim_get_context(
                 } else {
                     // SAFETY: the keyset's strings are NUL-terminated.
                     error = err_bad_value(c"type", unsafe { cstr::at(s) });
-                    return Dict {
+                    return ApiDict {
                         size: 0 as size_t,
                         capacity: 0 as size_t,
                         items: ::core::ptr::null_mut::<KeyValuePair>(),
@@ -74,12 +74,12 @@ pub unsafe fn nvim_get_context(
     }
     let mut ctx: Context = CONTEXT_INIT;
     unsafe { ctx_save(&raw mut ctx, int_types) };
-    let dict: Dict = unsafe { ctx_to_dict(&raw mut ctx, arena) };
+    let dict: ApiDict = unsafe { ctx_to_dict(&raw mut ctx, arena) };
     unsafe { ctx_free(&raw mut ctx) };
     dict.reported(error)
 }
 
-pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
+pub unsafe fn nvim_load_context(dict: ApiDict) -> Result<Object, Error> {
     let mut error = Error::none();
     let mut ctx: Context = CONTEXT_INIT;
     let save_did_emsg: ::core::ffi::c_int = did_emsg.get();
@@ -94,11 +94,11 @@ pub unsafe fn nvim_load_context(dict: Dict) -> Result<Object, Error> {
     Object::Nil.reported(error)
 }
 
-pub unsafe fn nvim_get_mode(arena: *mut Arena) -> Dict {
-    let mut rv: Dict = arena_dict(arena, 2 as size_t);
+pub unsafe fn nvim_get_mode(arena: *mut Arena) -> ApiDict {
+    let mut rv: ApiDict = arena_dict(arena, 2 as size_t);
     let modestr: *mut ::core::ffi::c_char =
         unsafe { arena_alloc(arena, MODE_MAX_LENGTH as size_t, false) } as *mut ::core::ffi::c_char;
-    // The name is copied into the arena because the `Dict` borrows it;
+    // The name is copied into the arena because the `ApiDict` borrows it;
     // `get_mode` answers exactly `MODE_MAX_LENGTH` NUL-padded bytes.
     unsafe { modestr.copy_from_nonoverlapping(get_mode().as_ptr(), MODE_MAX_LENGTH as size_t) };
     let blocked: bool = input_blocking();

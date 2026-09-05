@@ -50,7 +50,8 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Array, Dict, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, Object, RemoteUI, uint32_t,
+    ApiDict, Arena, Array, HlAttrs, HlEntry, HlKind, Integer, KeyValuePair, Object, RemoteUI,
+    uint32_t,
 };
 use crate::ui::ui_call_hl_attr_define;
 use cache::AttrCache;
@@ -730,7 +731,7 @@ unsafe fn name_object(name: *const c_char) -> Object {
 ///
 /// # Safety
 /// `dict.items` must have room for one more entry.
-unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
+unsafe fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
     assert!(dict.size < dict.capacity, "hl_inspect dict overflow");
     // SAFETY: the assert above kept the index inside the arena block.
     unsafe {

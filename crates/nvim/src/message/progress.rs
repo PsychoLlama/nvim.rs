@@ -123,7 +123,7 @@ pub unsafe fn msg_progress(
         status: unsafe { cstr_as_string(status) },
         percent: 0,
         source: static_cstring(c"nvim"),
-        data: Dict {
+        data: ApiDict {
             size: 0,
             capacity: 0,
             items: ptr::null_mut(),

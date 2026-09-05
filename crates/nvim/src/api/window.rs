@@ -29,8 +29,8 @@ use crate::os::cshim::gettext_ptr;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LineNr, LuaRef,
-    Object, String_0, Tabpage, Window, buf_T, int64_t, size_t, switchwin_T, tabpage_T,
+    ApiDict, Arena, Array, Boolean, Buffer, Error, Integer, KeyDict_win_text_height, LineNr,
+    LuaRef, Object, String_0, Tabpage, Window, buf_T, int64_t, size_t, switchwin_T, tabpage_T,
     win_execute_T,
 };
 use crate::window::{
@@ -384,7 +384,7 @@ pub unsafe fn nvim_win_text_height(
     win: Window,
     opts: *mut KeyDict_win_text_height,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     // `opts`' keys, by their index in its `is_set` mask. Function-local so
     // that they cannot collide in the flat namespace `tools/ffigen` renders
     // module-level constants into.
@@ -398,7 +398,7 @@ pub unsafe fn nvim_win_text_height(
     // Upstream asks for two and writes four (`all`, `fill`, `end_row`,
     // `end_vcol`), so every successful call overruns the arena block by two
     // `KeyValuePair`s.  `dict_put`'s capacity assertion is what found it.
-    let mut rv: Dict = arena_dict(arena, 4 as size_t);
+    let mut rv: ApiDict = arena_dict(arena, 4 as size_t);
     let Some(w) = window_by_handle(win, &mut err) else {
         return rv.reported(err);
     };

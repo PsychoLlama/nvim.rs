@@ -26,13 +26,13 @@ pub unsafe fn nvim_get_api_info(channel_id: uint64_t, arena: *mut Arena) -> Arra
 pub unsafe fn nvim_set_client_info(
     channel_id: uint64_t,
     name: String_0,
-    mut version: Dict,
+    mut version: ApiDict,
     type_0: String_0,
-    methods: Dict,
-    attributes: Dict,
+    methods: ApiDict,
+    attributes: ApiDict,
     arena: *mut Arena,
 ) {
-    let mut info: Dict = Dict {
+    let mut info: ApiDict = ApiDict {
         size: 0 as size_t,
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<KeyValuePair>(),
@@ -55,7 +55,7 @@ pub unsafe fn nvim_set_client_info(
         }
     }
     if !has_major {
-        let mut v: Dict = arena_dict(arena, version.size.wrapping_add(1 as size_t));
+        let mut v: ApiDict = arena_dict(arena, version.size.wrapping_add(1 as size_t));
         if version.size != 0 {
             let dst = v.items.cast::<::core::ffi::c_void>();
             let src = version.items.cast::<::core::ffi::c_void>();
@@ -97,9 +97,9 @@ pub unsafe fn nvim_get_chan_info(
     channel_id: uint64_t,
     mut chan: Integer,
     arena: *mut Arena,
-) -> Dict {
+) -> ApiDict {
     if chan < 0 as Integer {
-        return Dict {
+        return ApiDict {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ::core::ptr::null_mut::<KeyValuePair>(),

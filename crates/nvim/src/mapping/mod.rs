@@ -79,10 +79,10 @@ use crate::state::{
 };
 use crate::strings::{sort_strings, vim_snprintf, vim_strchr};
 use crate::types::{
-    Arena, Array, ArrayBuilder, Buffer, Dict, Error, EvalFuncData, FILE, Integer, KeyDict_keymap,
-    LineNr, LuaRef, LuaRetMode, MapCallback, MapRhs, MapStr, Object, RemapValues, ScriptId,
-    String_0, VarNumber, dict_T, exarg_T, expand_T, fuzmatch_str_T, key_value_pair, mapblock_T,
-    optset_T, ptrdiff_t, regmatch_T, size_t, typval_T, typval_vval_union, uint64_t,
+    ApiDict, Arena, Array, ArrayBuilder, Buffer, Error, EvalFuncData, FILE, Integer,
+    KeyDict_keymap, LineNr, LuaRef, LuaRetMode, MapCallback, MapRhs, MapStr, Object, RemapValues,
+    ScriptId, String_0, VarNumber, dict_T, exarg_T, expand_T, fuzmatch_str_T, key_value_pair,
+    mapblock_T, optset_T, ptrdiff_t, regmatch_T, size_t, typval_T, typval_vval_union, uint64_t,
 };
 use crate::winlayer::Live;
 use ::libc::{abort, fprintf, fputc, fputs, strcasecmp};

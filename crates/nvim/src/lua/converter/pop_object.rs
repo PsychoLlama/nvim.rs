@@ -21,14 +21,14 @@ use crate::lua::ffi::{
 };
 use crate::main::nlua_global_refs;
 use crate::types::{
-    Arena, Array, Dict, Error, Integer, Object, String_0, kObjectTypeArray, kObjectTypeDict,
+    ApiDict, Arena, Array, Error, Integer, Object, String_0, kObjectTypeArray, kObjectTypeDict,
     kObjectTypeFloat, kObjectTypeNil, lua_Number, lua_State, size_t,
 };
 use ::libc::abort;
 
 /// One suspended container in the walk.
 ///
-/// Simpler than [`super::pop_typval`]'s frame: an `Array`/`Dict` carries its
+/// Simpler than [`super::pop_typval`]'s frame: an `Array`/`ApiDict` carries its
 /// own capacity, so "how far have we got" needs no field of its own and a
 /// self-reference is impossible — an arena value is a tree by construction.
 #[derive(Copy, Clone)]
@@ -174,7 +174,7 @@ pub unsafe fn nlua_pop_object(
                                 }
                             }
                             kObjectTypeDict => {
-                                *cur.obj = Object::dict(Dict::EMPTY);
+                                *cur.obj = Object::dict(ApiDict::EMPTY);
                                 if keys != 0 {
                                     *cur.obj = Object::dict(arena_dict(arena, keys));
                                     cur.container = true;

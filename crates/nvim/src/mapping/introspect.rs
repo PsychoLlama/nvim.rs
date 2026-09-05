@@ -96,12 +96,12 @@ const MAPARG_DICT_KEYS: size_t = 20;
 /// size with nothing checking that the reservation was big enough.  The
 /// promise is made once, at construction; every [`Filling::put`] after it is
 /// ordinary checked code, which is what makes the twenty appends below safe.
-struct Filling(Dict);
+struct Filling(ApiDict);
 
 impl Filling {
     /// # Safety
     /// `dict`'s storage must have room for [`MAPARG_DICT_KEYS`] entries.
-    unsafe fn new(dict: Dict) -> Self {
+    unsafe fn new(dict: ApiDict) -> Self {
         Self(dict)
     }
 
@@ -120,7 +120,7 @@ impl Filling {
     }
 
     /// The finished dict.
-    fn finish(self) -> Dict {
+    fn finish(self) -> ApiDict {
         self.0
     }
 }
@@ -142,7 +142,7 @@ pub(crate) unsafe fn mapblock_fill_dict(
     abbr: bool,
     compatible: bool,
     arena: *mut Arena,
-) -> Dict {
+) -> ApiDict {
     // SAFETY: the caller's promise — `arena` is live and `mp` a live mapblock,
     // so `m_keys` is its NUL-terminated LHS.  `arena_alloc` answers seven
     // writable bytes, which is the width `map_mode_to_chars` fills.

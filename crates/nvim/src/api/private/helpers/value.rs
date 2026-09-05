@@ -23,7 +23,7 @@ use crate::message::hl_msg_free;
 use crate::msgpack_rpc::unpacker::unpack;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, ArenaMem, Array, ArrayBuilder, Dict, Error, HlMessage, HlMessageChunk, KeyValuePair,
+    ApiDict, Arena, ArenaMem, Array, ArrayBuilder, Error, HlMessage, HlMessageChunk, KeyValuePair,
     Object, ObjectType, String_0, consumed_blk, kObjectTypeArray, kObjectTypeBoolean,
     kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat, kObjectTypeInteger, kObjectTypeLuaRef,
     kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage, kObjectTypeWindow, key_value_pair,
@@ -48,10 +48,10 @@ pub(crate) fn arena_array(arena: *mut Arena, max_size: size_t) -> Array {
 }
 
 /// [`arena_array`] for a dictionary.
-pub(crate) fn arena_dict(arena: *mut Arena, max_size: size_t) -> Dict {
+pub(crate) fn arena_dict(arena: *mut Arena, max_size: size_t) -> ApiDict {
     // SAFETY: as `arena_array`.
     let items = unsafe { arena_alloc(arena, size_of::<KeyValuePair>() * max_size, true) };
-    Dict {
+    ApiDict {
         size: 0,
         capacity: max_size,
         items: items.cast(),
@@ -85,7 +85,7 @@ pub(crate) unsafe fn array_add(array: &mut Array, value: Object) {
 ///
 /// # Safety
 /// As [`array_add`].
-pub(crate) unsafe fn dict_put(dict: &mut Dict, key: &'static CStr, value: Object) {
+pub(crate) unsafe fn dict_put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
     // SAFETY: as `array_add`.
     unsafe { dict_put_str(dict, static_cstring(key), value) };
 }
@@ -95,7 +95,7 @@ pub(crate) unsafe fn dict_put(dict: &mut Dict, key: &'static CStr, value: Object
 ///
 /// # Safety
 /// As [`array_add`]; `key` must outlive the dictionary.
-pub(crate) unsafe fn dict_put_str(dict: &mut Dict, key: String_0, value: Object) {
+pub(crate) unsafe fn dict_put_str(dict: &mut ApiDict, key: String_0, value: Object) {
     debug_assert!(dict.size < dict.capacity, "dict_put past capacity");
     // SAFETY: `size` is below `capacity`, so the slot is inside `items`.
     unsafe { *dict.items.add(dict.size) = KeyValuePair { key, value } };
@@ -180,7 +180,7 @@ pub(crate) unsafe fn api_free_array(value: Array) {
     unsafe { xfree(value.items.cast()) };
 }
 
-pub(crate) unsafe fn api_free_dict(value: Dict) {
+pub(crate) unsafe fn api_free_dict(value: ApiDict) {
     for i in 0..value.size {
         // SAFETY: as `api_free_object`; `i` is below `size`.
         unsafe {
@@ -214,7 +214,7 @@ pub(crate) unsafe fn api_luarefs_free_array(value: Array) {
     }
 }
 
-pub(crate) unsafe fn api_luarefs_free_dict(value: Dict) {
+pub(crate) unsafe fn api_luarefs_free_dict(value: ApiDict) {
     for i in 0..value.size {
         // SAFETY: as `api_luarefs_free_object`; `i` is below `size`.
         unsafe { api_luarefs_free_object((*value.items.add(i)).value) };
@@ -246,7 +246,7 @@ pub(crate) unsafe fn copy_array(array: Array, arena: *mut Arena) -> Array {
     rv
 }
 
-pub(crate) unsafe fn copy_dict(dict: Dict, arena: *mut Arena) -> Dict {
+pub(crate) unsafe fn copy_dict(dict: ApiDict, arena: *mut Arena) -> ApiDict {
     let mut rv = arena_dict(arena, dict.size);
     for i in 0..dict.size {
         // SAFETY: `dict` is live for the call and `rv` is the same size, so

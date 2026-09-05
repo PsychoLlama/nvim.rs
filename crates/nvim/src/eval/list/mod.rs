@@ -14,7 +14,7 @@
 //!
 //! # The safe layer
 //!
-//! [`List`], [`Dict`] and [`Blob`] (and their item types) each wrap one raw
+//! [`ListRef`], [`DictRef`] and [`BlobRef`] (and their item types) each wrap one raw
 //! pointer and have one unsafe accessor -- `get` -- that turns it into a
 //! borrow; everything else is a field read or a one-line forwarder, so the
 //! builtins are ordinary safe Rust.  [`Container::of`] is the one place the
@@ -129,9 +129,9 @@ impl<'a> TvRef<'a> {
 /// [`Container::Other`], which is what the family's type errors report.
 #[derive(Clone, Copy)]
 pub(crate) enum Container {
-    List(List),
-    Dict(Dict),
-    Blob(Blob),
+    List(ListRef),
+    Dict(DictRef),
+    Blob(BlobRef),
     /// A String's bytes, NUL-terminated, or NULL for `v:_null_string`.
     Str(*const c_char),
     Other,
@@ -143,9 +143,9 @@ impl Container {
     pub(crate) fn of(tv: &typval_T) -> Self {
         match tv.v_type {
             // SAFETY: `v_type` is what says which arm of `vval` is live.
-            VAR_LIST => Self::List(List(tv.list_or_null())),
-            VAR_DICT => Self::Dict(Dict(tv.dict_or_null())),
-            VAR_BLOB => Self::Blob(Blob(tv.blob_or_null())),
+            VAR_LIST => Self::List(ListRef(tv.list_or_null())),
+            VAR_DICT => Self::Dict(DictRef(tv.dict_or_null())),
+            VAR_BLOB => Self::Blob(BlobRef(tv.blob_or_null())),
             VAR_STRING => Self::Str(tv.string_or_null()),
             _ => Self::Other,
         }
@@ -161,9 +161,9 @@ impl Container {
 /// NULL is not an error state: `v:_null_list` reaches every builtin here, and
 /// every helper reads it as an empty, `VarLock::Fixed` list.
 #[derive(Clone, Copy)]
-pub(crate) struct List(*mut list_T);
+pub(crate) struct ListRef(*mut list_T);
 
-impl List {
+impl ListRef {
     /// The list itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
     fn get<'a>(self) -> Option<&'a mut list_T> {
@@ -251,7 +251,7 @@ impl List {
 
     /// Splice copies of `other`'s items in before `before`.
     #[inline(always)]
-    pub(crate) fn extend_with(self, other: List, before: Option<Item>) {
+    pub(crate) fn extend_with(self, other: ListRef, before: Option<Item>) {
         // SAFETY: both live or NULL, and `before` is an item of this list.
         unsafe { tv_list_extend(self.0, other.0, Item::raw(before)) };
     }
@@ -266,7 +266,7 @@ impl List {
 
     /// A shallow copy, for `extendnew()`.  NULL when the copy failed.
     #[inline(always)]
-    pub(crate) fn copy(self) -> List {
+    pub(crate) fn copy(self) -> ListRef {
         // SAFETY: live or NULL; no conversion, and a fresh copyID.
         Self(unsafe { tv_list_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copy_id()) })
     }
@@ -280,12 +280,12 @@ impl List {
 
 /// Allocate a fresh list into `rettv`, for `mapnew()`.
 #[inline(always)]
-pub(crate) fn list_alloc_ret(rettv: &mut typval_T) -> List {
+pub(crate) fn list_alloc_ret(rettv: &mut typval_T) -> ListRef {
     // `kListLenUnknown`: no idea how long.  Declared here rather than at
     // module level, where `ffigen` would emit it into the unit cdefs.
     const LEN_UNKNOWN: ptrdiff_t = -1;
     // SAFETY: `rettv` is a cleared result slot.
-    List(unsafe { tv_list_alloc_ret(rettv, LEN_UNKNOWN) })
+    ListRef(unsafe { tv_list_alloc_ret(rettv, LEN_UNKNOWN) })
 }
 
 /// One item of a list.  Never NULL -- absence is `Option<Item>`.
@@ -352,9 +352,9 @@ impl Item {
 
 /// A `dict_T` the evaluator handed us: live, or NULL for `v:_null_dict`.
 #[derive(Clone, Copy)]
-pub(crate) struct Dict(*mut dict_T);
+pub(crate) struct DictRef(*mut dict_T);
 
-impl Dict {
+impl DictRef {
     /// The dict itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
     fn get<'a>(self) -> Option<&'a mut dict_T> {
@@ -407,7 +407,7 @@ impl Dict {
     /// across a callback: the walk is under [`Dict::hash_lock`], so a
     /// removal only leaves a tombstone in a slot already passed.
     #[inline(always)]
-    pub(crate) fn items(self) -> impl Iterator<Item = DictItem> {
+    pub(crate) fn items(self) -> impl Iterator<Item = DictItemRef> {
         // The cursor is derived from the raw dict pointer, not from a
         // borrow of it: a body mutates the table through that same pointer.
         let ht = (!self.is_null()).then(|| unsafe { &raw const (*self.0).dv_hashtab });
@@ -426,7 +426,7 @@ impl Dict {
                     todo -= 1;
                     // SAFETY-free: a live slot's key is a `dictitem_T`'s
                     // `di_key`, and stepping a pointer back is not a read.
-                    return Some(DictItem(
+                    return Some(DictItemRef(
                         key.wrapping_byte_sub(offset_of!(dictitem_T, di_key)).cast(),
                     ));
                 }
@@ -444,21 +444,21 @@ impl Dict {
     }
 
     #[inline(always)]
-    pub(crate) fn remove_item(self, item: DictItem) {
+    pub(crate) fn remove_item(self, item: DictItemRef) {
         // SAFETY: a live dict and one of its own items.
         unsafe { tv_dict_item_remove(self.0, item.0) };
     }
 
     /// Merge `other`'s keys in under `action` (`"keep"`/`"force"`/`"error"`).
     #[inline(always)]
-    pub(crate) fn extend_with(self, other: Dict, action: &CStr) {
+    pub(crate) fn extend_with(self, other: DictRef, action: &CStr) {
         // SAFETY: both live, and `action` is NUL-terminated.
         unsafe { tv_dict_extend(self.0, other.0, action.as_ptr()) };
     }
 
     /// A shallow copy, for `extendnew()`.  NULL when the copy failed.
     #[inline(always)]
-    pub(crate) fn copy(self) -> Dict {
+    pub(crate) fn copy(self) -> DictRef {
         // SAFETY: live; no conversion, and a fresh copyID.
         Self(unsafe { tv_dict_copy(core::ptr::null::<vimconv_T>(), self.0, false, get_copy_id()) })
     }
@@ -471,7 +471,7 @@ impl Dict {
 
     /// Allocate a fresh dict into `rettv`, for `mapnew()`.
     #[inline(always)]
-    pub(crate) fn alloc_ret(rettv: &mut typval_T) -> Dict {
+    pub(crate) fn alloc_ret(rettv: &mut typval_T) -> DictRef {
         // SAFETY: `rettv` is a cleared result slot.
         unsafe { tv_dict_alloc_ret(rettv) };
         Self(rettv.dict_or_null())
@@ -480,13 +480,13 @@ impl Dict {
 
 /// One entry of a dict.  Never NULL.
 #[derive(Clone, Copy)]
-pub(crate) struct DictItem(*mut dictitem_T);
+pub(crate) struct DictItemRef(*mut dictitem_T);
 
-impl DictItem {
+impl DictItemRef {
     /// The entry itself.  The one unsafe step.
     #[inline(always)]
     fn get<'a>(self) -> &'a mut dictitem_T {
-        // SAFETY: a `DictItem` is only ever made from a live dict's own slot.
+        // SAFETY: a `DictItemRef` is only ever made from a live dict's own slot.
         unsafe { &mut *self.0 }
     }
 
@@ -536,9 +536,9 @@ impl DictItem {
 
 /// A `blob_T` the evaluator handed us: live, or NULL for `v:_null_blob`.
 #[derive(Clone, Copy)]
-pub(crate) struct Blob(*mut blob_T);
+pub(crate) struct BlobRef(*mut blob_T);
 
-impl Blob {
+impl BlobRef {
     /// The blob itself, or None when it is NULL.  The one unsafe step.
     #[inline(always)]
     fn get<'a>(self) -> Option<&'a mut blob_T> {
@@ -643,7 +643,7 @@ impl Blob {
 
     /// Copy the blob into `rettv` and answer the copy, for `mapnew()`.
     #[inline(always)]
-    pub(crate) fn copy_to(self, rettv: &mut typval_T) -> Blob {
+    pub(crate) fn copy_to(self, rettv: &mut typval_T) -> BlobRef {
         // SAFETY: a live blob and a cleared result slot.
         unsafe { tv_blob_copy(self.0, rettv) };
         Self(rettv.blob_or_null())

@@ -34,12 +34,12 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::search::FORWARD;
 use crate::state::MODE_INSERT;
 use crate::types::{
-    AlignTextPos, Arena, Array, Boolean, BufUpdateCallbacks, Buffer, ColNr, Dict, Error, ExtmarkOp,
-    Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap, KeyValuePair,
-    LineNr, LuaRef, MarkAdjustMode, MarkGet, Object, String_0, TryState, UndoObjectType, WinSplit,
-    WinStyle, aco_save_T, bcount_t, buf_T, dobuf_action_values, dobuf_start_values, except_T,
-    fmark_T, int64_t, kErrorTypeNone, lua_State, msglist_T, pos_T, ptrdiff_t, size_t, uint64_t,
-    win_T,
+    AlignTextPos, ApiDict, Arena, Array, Boolean, BufUpdateCallbacks, Buffer, ColNr, Error,
+    ExtmarkOp, Integer, KeyDict_buf_attach, KeyDict_buf_delete, KeyDict_empty, KeyDict_keymap,
+    KeyValuePair, LineNr, LuaRef, MarkAdjustMode, MarkGet, Object, String_0, TryState,
+    UndoObjectType, WinSplit, WinStyle, aco_save_T, bcount_t, buf_T, dobuf_action_values,
+    dobuf_start_values, except_T, fmark_T, int64_t, kErrorTypeNone, lua_State, msglist_T, pos_T,
+    ptrdiff_t, size_t, uint64_t, win_T,
 };
 use crate::undo::u_save_buf;
 

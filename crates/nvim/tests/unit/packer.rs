@@ -10,7 +10,7 @@ use std::ffi::c_char;
 
 use neovim::memory::xfree;
 use neovim::msgpack_rpc::packer::{format, mpack_object, packer_string_buffer, packer_take_string};
-use neovim::types::{Array, Dict, KeyValuePair, Object, PackerBuffer, String_0};
+use neovim::types::{ApiDict, Array, KeyValuePair, Object, PackerBuffer, String_0};
 
 #[test]
 fn booleans_are_one_byte() {
@@ -220,7 +220,7 @@ fn array(items: &mut [Object]) -> Object {
 }
 
 fn dict(items: &mut [KeyValuePair]) -> Object {
-    Object::Dict(Dict {
+    Object::Dict(ApiDict {
         size: items.len(),
         capacity: items.len(),
         items: items.as_mut_ptr(),

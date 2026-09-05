@@ -27,7 +27,7 @@ use crate::main::nlua_global_refs;
 use crate::memory::arena_memdupz;
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
+    ApiDict, Arena, Array, Boolean, Error, Float, Handle, Integer, LuaRef, ObjectType, String_0,
     kErrorTypeValidation, kObjectTypeArray, kObjectTypeDict, kObjectTypeFloat, kObjectTypeNil,
     key_value_pair, lua_Number, lua_State, size_t,
 };
@@ -374,7 +374,7 @@ unsafe fn nlua_pop_dict_unchecked(
     ref_0: bool,
     arena: *mut Arena,
     err: &mut Error,
-) -> Dict {
+) -> ApiDict {
     unsafe {
         let mut ret = arena_dict(arena, table_props.string_keys_num);
         if table_props.string_keys_num == 0 {
@@ -403,7 +403,7 @@ unsafe fn nlua_pop_dict_unchecked(
                     api_free_dict(ret);
                 }
                 lua_pop(lstate, 3);
-                return Dict::EMPTY;
+                return ApiDict::EMPTY;
             }
             i = i.wrapping_add(1);
         }
@@ -422,12 +422,12 @@ pub unsafe fn nlua_pop_dict(
     ref_0: bool,
     arena: *mut Arena,
     err: &mut Error,
-) -> Dict {
+) -> ApiDict {
     unsafe {
         let table_props = nlua_check_type(lstate, Some(err), kObjectTypeDict);
         if table_props.type_0 != kObjectTypeDict {
             lua_pop(lstate, 1);
-            return Dict::EMPTY;
+            return ApiDict::EMPTY;
         }
         nlua_pop_dict_unchecked(lstate, table_props, ref_0, arena, err)
     }

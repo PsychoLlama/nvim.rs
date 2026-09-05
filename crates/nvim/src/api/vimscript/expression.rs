@@ -33,11 +33,11 @@ pub unsafe fn nvim_parse_expression(
     flags: String_0,
     hl: Boolean,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     // SAFETY: `flags` is the caller's string and `error` this frame's slot.
     let Some(pflags) = (unsafe { parse_flags(flags, &mut error) }) else {
-        return Dict::EMPTY.reported(error);
+        return ApiDict::EMPTY.reported(error);
     };
 
     let mut parser_lines: [ParserLine; 2] = [
@@ -83,7 +83,7 @@ pub unsafe fn nvim_parse_expression(
 
     // "len" and "ast", plus "error" and "highlight" when they apply.
     let ret_size = 2 + size_t::from(!east.err.msg.is_null()) + size_t::from(hl);
-    let mut ret: Dict = arena_dict(arena, ret_size);
+    let mut ret: ApiDict = arena_dict(arena, ret_size);
     // A multi-line expression stops at the end of the first line.
     let consumed = if pstate.pos.line == 1 {
         parser_lines[0].size
@@ -97,7 +97,7 @@ pub unsafe fn nvim_parse_expression(
     unsafe { dict_put(&mut ret, c"len", Object::integer(consumed as Integer)) };
 
     if !east.err.msg.is_null() {
-        let mut err_dict: Dict = arena_dict(arena, 2);
+        let mut err_dict: ApiDict = arena_dict(arena, 2);
         let arg = String_0::from_raw_parts(east.err.arg.cast_mut(), east.err.arg_len as size_t);
         // SAFETY: the parser's message is NUL-terminated and `arg` names
         // `arg_len` bytes of the expression; both dictionaries are sized.
@@ -228,7 +228,7 @@ unsafe fn convert_ast(arena: *mut Arena, root_p: *mut *mut ExprASTNode, out: *mu
         }
         // SAFETY: as above -- and the slot now holds a dictionary, which is
         // what this addresses in place.
-        let ret_node: *mut Dict = match unsafe { &mut *frame.ret_node_p } {
+        let ret_node: *mut ApiDict = match unsafe { &mut *frame.ret_node_p } {
             Object::Dict(dict) => dict,
             _ => unreachable!("the slot was given a dictionary just above"),
         };
@@ -307,7 +307,7 @@ fn node_dict_size(node: &ExprASTNode) -> size_t {
 /// # Safety
 /// `node` must be a live node of the parser's tree, and `ret_node` its
 /// dictionary, sized by [`node_dict_size`].
-unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut Dict) {
+unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut ApiDict) {
     // SAFETY: the caller's promise -- `node` is live, and nothing below
     // writes through it.
     let node = unsafe { &*node };
@@ -316,7 +316,7 @@ unsafe fn finish_node(arena: *mut Arena, node: *mut ExprASTNode, ret_node: &mut 
     // `ret_node` was sized by `node_dict_size` for exactly the pairs added
     // here, which is the one promise `dict_put` asks for -- stated once
     // rather than at each of the fifteen call sites below.
-    let put = |dict: &mut Dict, key: &'static CStr, value: Object| {
+    let put = |dict: &mut ApiDict, key: &'static CStr, value: Object| {
         // SAFETY: as above.
         unsafe { dict_put(dict, key, value) };
     };

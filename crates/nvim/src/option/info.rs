@@ -13,8 +13,8 @@ use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::main::{curbuf, curwin};
 use crate::options::*;
 use crate::types::{
-    Arena, Dict, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0, buf_T,
-    int64_t, key_value_pair, sctx_T, size_t, win_T,
+    ApiDict, Arena, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags, String_0,
+    buf_T, int64_t, key_value_pair, sctx_T, size_t, win_T,
 };
 
 use crate::api::private::validate::err_bad_value;
@@ -30,7 +30,7 @@ use super::{
 /// # Safety
 ///
 /// `dict` must have been allocated with room for one more pair.
-unsafe fn push(dict: &mut Dict, key: &'static core::ffi::CStr, value: Object) {
+unsafe fn push(dict: &mut ApiDict, key: &'static core::ffi::CStr, value: Object) {
     // SAFETY: the caller reserved the capacity.
     unsafe {
         *dict.items.add(dict.size) = key_value_pair {
@@ -74,14 +74,14 @@ pub(crate) unsafe fn get_vimoption(
     win: *mut win_T,
     arena: *mut Arena,
     err: &mut Error,
-) -> Dict {
+) -> ApiDict {
     // SAFETY: the caller's pointers are live.
     let opt_idx: OptIndex = find_option_len(unsafe { name.as_bytes() });
     if opt_idx == kOptInvalid {
         // SAFETY: the keyset's name is NUL-terminated.
         let name = unsafe { name.as_cstr() };
         *err = err_bad_value(c"option (not found)", name);
-        return Dict {
+        return ApiDict {
             size: 0 as size_t,
             capacity: 0 as size_t,
             items: ptr::null_mut::<KeyValuePair>(),
@@ -95,7 +95,7 @@ pub(crate) unsafe fn get_vimoption(
 /// # Safety
 ///
 /// `arena` must be live.
-pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> Dict {
+pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
     // SAFETY: the arena is live, and it is asked for exactly `kOptCount`
     // pairs before any is pushed.
     let mut retval = arena_dict(arena, kOptCount as size_t);
@@ -162,7 +162,7 @@ pub(crate) unsafe fn vimoption2dict(
     buf: *mut buf_T,
     win: *mut win_T,
     arena: *mut Arena,
-) -> Dict {
+) -> ApiDict {
     let opt = get_option(opt_idx);
     // SAFETY: the caller's pointers are live, and the dictionary is asked
     // for exactly the thirteen slots pushed below.

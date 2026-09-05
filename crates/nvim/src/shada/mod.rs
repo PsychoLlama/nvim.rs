@@ -59,7 +59,7 @@ use crate::search::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, Arena, ColNr, Dict, FileDescriptor, FileInfo,
+    AdditionalData, AdditionalDataBuilder, ApiDict, Arena, ColNr, FileDescriptor, FileInfo,
     HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
     KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, MarkGet, MotionType,
     OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
@@ -176,7 +176,7 @@ pub enum ShadaEntryData {
     /// No entry at all. An empty slot in a merger's arrays, and what a
     /// malformed entry is reduced to.
     Missing,
-    Header(Dict),
+    Header(ApiDict),
     SearchPattern(KeyDict__shada_search_pat),
     SubString(sub_string),
     HistoryEntry(history_item),
@@ -616,7 +616,7 @@ pub const DEFAULT_POS: pos_T = pos_T {
     coladd: 0 as ColNr,
 };
 /// The empty dictionary a header entry starts as.
-const EMPTY_DICT: Dict = Dict {
+const EMPTY_DICT: ApiDict = ApiDict {
     size: 0,
     capacity: 0,
     items: ::core::ptr::null_mut::<KeyValuePair>(),

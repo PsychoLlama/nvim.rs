@@ -35,7 +35,7 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, ColNr, Dict, Error, ExceptType, Handle, HlMessage, Integer, LineNr, NUL, ScriptId,
+    ApiDict, Buffer, ColNr, Error, ExceptType, Handle, HlMessage, Integer, LineNr, NUL, ScriptId,
     String_0, Tabpage, TryState, Window, buf_T, fmarkv_T, int64_t, kErrorTypeException, msglist_T,
     pos_T, tabpage_T, uint64_t, win_T,
 };
@@ -76,7 +76,7 @@ const INTERNAL_CALL_MASK: uint64_t = 1 << (uint64_t::BITS - 1);
 const VIML_INTERNAL_CALL: uint64_t = INTERNAL_CALL_MASK;
 const LUA_INTERNAL_CALL: uint64_t = VIML_INTERNAL_CALL + 1;
 
-const EMPTY_DICT: Dict = Dict {
+const EMPTY_DICT: ApiDict = ApiDict {
     size: 0,
     capacity: 0,
     items: ptr::null_mut(),

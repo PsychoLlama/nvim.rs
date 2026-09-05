@@ -32,7 +32,7 @@ use crate::mpack::object::{mpack_parse, mpack_parser_init};
 use crate::msgpack_rpc::packer::{EXT_BUFFER, EXT_TABPAGE, EXT_WINDOW};
 use crate::narrow::msgpack_uint_as_u32;
 use crate::types::{
-    Arena, Array, Dict, Error, Integer, KeyValuePair, MessageType, Object, String_0, Unpacker,
+    ApiDict, Arena, Array, Error, Integer, KeyValuePair, MessageType, Object, String_0, Unpacker,
     mpack_node_t, mpack_parser_t, mpack_token_t, mpack_uint32_t, mpack_walk_cb, size_t,
 };
 use crate::ui_client::handle_ui_client_redraw;
@@ -163,7 +163,7 @@ fn array_object(items: *mut Object, capacity: size_t) -> Object {
 
 /// A dict `Object` over `capacity` entries that have already been allocated.
 fn dict_object(items: *mut KeyValuePair, capacity: size_t) -> Object {
-    Object::Dict(Dict {
+    Object::Dict(ApiDict {
         size: capacity,
         capacity,
         items,

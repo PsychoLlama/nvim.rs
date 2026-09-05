@@ -27,7 +27,8 @@ use crate::highlight::dict::put;
 use crate::highlight_group::syn_id2name;
 use crate::sign::describe_sign_text;
 use crate::types::{
-    Arena, Array, DecorInline, DecorSignHighlight, DecorVirtText, Dict, Object, uint16_t, uint32_t,
+    ApiDict, Arena, Array, DecorInline, DecorSignHighlight, DecorVirtText, Object, uint16_t,
+    uint32_t,
 };
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -69,7 +70,7 @@ const HL_MODE_STR: [&CStr; 4] = [c"", c"replace", c"combine", c"blend"];
 /// whole `set_extmark` keyset); `decor` must be live, and `arena` valid or
 /// null.
 pub unsafe fn decor_to_dict_legacy(
-    dict: &mut Dict,
+    dict: &mut ApiDict,
     decor: DecorInline,
     hl_name: bool,
     arena: *mut Arena,
@@ -170,7 +171,7 @@ pub unsafe fn decor_to_dict_legacy(
 ///
 /// # Safety
 /// `vt` must be a live virtual *text* item, not a virtual-lines one.
-unsafe fn put_virt_text(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
+unsafe fn put_virt_text(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
     // SAFETY: the caller's virtual text and arena.
     if vt.hl_mode != 0 {
         let mode = HL_MODE_STR[vt.hl_mode as usize];
@@ -210,7 +211,7 @@ unsafe fn put_virt_text(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, aren
 ///
 /// # Safety
 /// `vt` must be a live virtual *lines* item.
-unsafe fn put_virt_lines(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
+unsafe fn put_virt_lines(dict: &mut ApiDict, vt: &DecorVirtText, hl_name: bool, arena: *mut Arena) {
     // SAFETY: the caller's virtual lines and arena.
     let lines = vt.data.lines();
     let mut all_chunks: Array = arena_array(arena, lines.size);
@@ -250,7 +251,12 @@ unsafe fn put_virt_lines(dict: &mut Dict, vt: &DecorVirtText, hl_name: bool, are
 ///
 /// # Safety
 /// `sh` must be a live sign item; `arena` valid or null.
-unsafe fn put_sign(dict: &mut Dict, sh: &mut DecorSignHighlight, hl_name: bool, arena: *mut Arena) {
+unsafe fn put_sign(
+    dict: &mut ApiDict,
+    sh: &mut DecorSignHighlight,
+    hl_name: bool,
+    arena: *mut Arena,
+) {
     // SAFETY: the caller's sign and arena.
     if sh.text[0] != 0 {
         let mut buf = [0 as c_char; SIGN_WIDTH as usize * MAX_SCHAR_SIZE as usize];

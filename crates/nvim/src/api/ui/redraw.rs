@@ -28,7 +28,7 @@ use crate::highlight::{HLATTRS_DICT_SIZE, hl_get_url, hlattrs2dict, syn_attr2ent
 use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free};
 use crate::types::builders::{ArrayBuf, DictBuf, static_cstring};
 use crate::types::ui::{kUIHlState, kUIPopupmenu, kUIWildmenu};
-use crate::types::{Arena, Array, Dict, HlAttrs, Integer, KeyValuePair, Object, RemoteUI};
+use crate::types::{ApiDict, Arena, Array, HlAttrs, Integer, KeyValuePair, Object, RemoteUI};
 use core::ffi::CStr;
 
 /// Announces a highlight attribute id and what it resolves to.
@@ -280,7 +280,7 @@ unsafe fn translate_contents(ui: *mut RemoteUI, contents: Array, arena: *mut Are
             unsafe { hlattrs2dict(&mut dict, None, syn_attr2entry(attr), rgb, false) };
             dict
         } else {
-            Dict::EMPTY
+            ApiDict::EMPTY
         };
         // SAFETY: `new_item` was sized for these two and `new_contents` for
         // every chunk; the pair's second element is its text.

@@ -25,7 +25,7 @@ use crate::highlight_group::{name_to_color, name_to_ctermcolor};
 use crate::message_fmt::msg_cstr;
 use crate::types::builders::static_cstring;
 use crate::types::{
-    Arena, Boolean, Dict, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
+    ApiDict, Arena, Boolean, Error, FieldHashfn, HlAttrs, Integer, KeyDict_highlight,
     KeyDict_highlight_cterm, KeyValuePair, Object, int16_t, int32_t, kErrorTypeException,
     kErrorTypeValidation, size_t,
 };
@@ -89,7 +89,7 @@ fn is_set(dict: &KeyDict_highlight, opt_index: c_int) -> bool {
 ///
 /// # Safety
 /// `dict.items` must point at `dict.capacity` writable entries.
-pub(crate) unsafe fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
+pub(crate) unsafe fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
     assert!(dict.size < dict.capacity, "highlight dict overflow");
     // SAFETY: the assert above kept the index inside the caller's storage.
     unsafe {
@@ -114,8 +114,8 @@ pub unsafe fn hl_get_attr_by_id(
     rgb: Boolean,
     arena: *mut Arena,
     err: &mut Error,
-) -> Dict {
-    let empty = Dict {
+) -> ApiDict {
+    let empty = ApiDict {
         size: 0,
         capacity: 0,
         items: ::core::ptr::null_mut(),
@@ -147,8 +147,8 @@ pub unsafe fn hl_get_attr_by_id(
 /// # Safety
 /// Both dicts must have room for [`HLATTRS_DICT_SIZE`] entries.
 pub unsafe fn hlattrs2dict(
-    hl: &mut Dict,
-    hl_attrs: Option<&mut Dict>,
+    hl: &mut ApiDict,
+    hl_attrs: Option<&mut ApiDict>,
     ae: HlAttrs,
     use_rgb: bool,
     short_keys: bool,
@@ -180,7 +180,7 @@ pub unsafe fn hlattrs2dict(
 ///
 /// # Safety
 /// As [`put`].
-unsafe fn put_flags(hl: &mut Dict, mask: HlAttrFlags) {
+unsafe fn put_flags(hl: &mut ApiDict, mask: HlAttrFlags) {
     // SAFETY: the caller's storage, sized for every key below.
     let flag = |bit: HlAttrFlags| mask.has(bit);
     if flag(HlAttrFlags::INVERSE) {
@@ -232,7 +232,7 @@ unsafe fn put_flags(hl: &mut Dict, mask: HlAttrFlags) {
 /// # Safety
 /// As [`put`].
 unsafe fn put_colors(
-    hl: &mut Dict,
+    hl: &mut ApiDict,
     ae: HlAttrs,
     mask: HlAttrFlags,
     use_rgb: bool,

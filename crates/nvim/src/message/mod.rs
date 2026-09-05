@@ -92,7 +92,7 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::{kUIMessages, kUIMultigrid};
 use crate::types::{
-    Arena, Array, ColNr, Dict, EStackArg, Event, FILE, FlushBuffers, GridView, HlMessage,
+    ApiDict, Arena, Array, ColNr, EStackArg, Event, FILE, FlushBuffers, GridView, HlMessage,
     HlMessageChunk, IOSIZE, Integer, KeyDict_echo_opts, MessageData, Object, OptInt, ScreenAttr,
     ScreenChar, ShmFlag, String_0, Vv, estack_T, exarg_T, int64_t, ptrdiff_t, size_t, ssize_t,
     typval_T, typval_vval_union, uint64_t,

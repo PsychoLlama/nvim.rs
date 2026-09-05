@@ -369,7 +369,7 @@ pub unsafe fn create_user_command(
 pub unsafe fn nvim_get_commands(
     opts: *mut KeyDict_get_commands,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     // SAFETY: `opts` and `arena` are the caller's.
     unsafe { nvim_buf_get_commands(-1, opts, arena) }
 }
@@ -378,14 +378,14 @@ pub unsafe fn nvim_buf_get_commands(
     buf: Buffer,
     opts: *mut KeyDict_get_commands,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let builtin = unsafe { (*opts).builtin };
     if buf == -1 {
         if builtin {
             error = Error::validation(c"builtin=true not implemented");
-            return Dict::EMPTY.reported(error);
+            return ApiDict::EMPTY.reported(error);
         }
         // SAFETY: a null buffer names the global table, and `arena` is the
         // caller's.
@@ -395,7 +395,7 @@ pub unsafe fn nvim_buf_get_commands(
     // SAFETY: `error` is this frame's slot.
     let b = unsafe { find_buffer_by_handle(buf, &mut error) };
     if builtin || b.is_null() {
-        return Dict::EMPTY.reported(error);
+        return ApiDict::EMPTY.reported(error);
     }
     // SAFETY: `b` is a live buffer and `arena` is the caller's.
     unsafe { commands_array(b, arena) }.reported(error)

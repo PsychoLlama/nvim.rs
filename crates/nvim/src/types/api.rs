@@ -53,7 +53,7 @@ pub struct ChangedtickDictItem {
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct Dict {
+pub struct ApiDict {
     pub size: size_t,
     pub capacity: size_t,
     pub items: *mut KeyValuePair,
@@ -149,7 +149,7 @@ pub enum Object {
     Float(Float) = 3,
     String(String_0) = 4,
     Array(Array) = 5,
-    Dict(Dict) = 6,
+    Dict(ApiDict) = 6,
     /// A reference to a Lua value, held in that state's registry. Owned:
     /// whoever frees the object releases it.
     LuaRef(LuaRef) = 7,
@@ -221,7 +221,7 @@ impl Object {
         }
     }
 
-    pub const fn as_dict(self) -> Option<Dict> {
+    pub const fn as_dict(self) -> Option<ApiDict> {
         match self {
             Object::Dict(v) => Some(v),
             _ => None,

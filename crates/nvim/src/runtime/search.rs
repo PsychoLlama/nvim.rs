@@ -467,7 +467,7 @@ fn string_obj(string: String_0) -> Object {
     Object::String(string)
 }
 
-fn dict_obj(dict: Dict) -> Object {
+fn dict_obj(dict: ApiDict) -> Object {
     Object::Dict(dict)
 }
 

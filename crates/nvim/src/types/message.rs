@@ -23,5 +23,5 @@ pub struct msg_data {
     pub percent: Integer,
     pub title: String_0,
     pub status: String_0,
-    pub data: Dict,
+    pub data: ApiDict,
 }

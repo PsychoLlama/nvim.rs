@@ -19,7 +19,9 @@ use crate::tui::terminfo::caps::{
     kTerm_reset_cursor_color, kTerm_reset_cursor_style, kTerm_set_cursor_color,
     kTerm_set_cursor_style,
 };
-use crate::types::{CursorShape, Dict, HlAttrs, Object, RgbValue, TUIData, cursorentry_T, int32_t};
+use crate::types::{
+    ApiDict, CursorShape, HlAttrs, Object, RgbValue, TUIData, cursorentry_T, int32_t,
+};
 use core::ffi::{CStr, c_int};
 
 /// Does the editor want the TUI driving cursor style at all? `'guicursor'`
@@ -82,8 +84,8 @@ unsafe fn decode_shape(shape_str: *const core::ffi::c_char) -> CursorShape {
 /// shape table starts every entry with.
 ///
 /// # Safety
-/// `args` must be a valid `Dict` whose items outlive the call.
-pub unsafe fn decode_cursor_entry(args: Dict) -> cursorentry_T {
+/// `args` must be a valid `ApiDict` whose items outlive the call.
+pub unsafe fn decode_cursor_entry(args: ApiDict) -> cursorentry_T {
     // SAFETY: the caller guarantees the dict and its items are valid.
     unsafe {
         let mut entry = shape_entry(SHAPE_IDX_N);

@@ -35,7 +35,7 @@ use crate::shada::{
     shada_read_string,
 };
 use crate::types::{
-    Arena, Array, Context, Dict, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
+    ApiDict, Arena, Array, Context, Error, KeyDict_exec_opts, KeyValuePair, Object, OptVal,
     OptionSetFlags, String_0, VAR_LIST, VAR_UNKNOWN, VarLock, kErrorTypeNone, key_value_pair,
     size_t, typval_T, typval_vval_union, uint8_t,
 };
@@ -333,7 +333,7 @@ unsafe fn array_to_string(array: Array, err: &mut Error) -> String_0 {
 ///
 /// # Safety
 /// `rv` has room for another entry, and `key` is a NUL-terminated literal.
-unsafe fn put_array(rv: &mut Dict, key: &CStr, array: Array) {
+unsafe fn put_array(rv: &mut ApiDict, key: &CStr, array: Array) {
     // SAFETY: the caller's contract.
     let entry = key_value_pair {
         key: unsafe { cstr_as_string(key.as_ptr()) },
@@ -349,7 +349,7 @@ unsafe fn put_array(rv: &mut Dict, key: &CStr, array: Array) {
 /// # Safety
 /// Main-thread editor call; `ctx` is a live context and `arena` a live
 /// arena.
-pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> Dict {
+pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> ApiDict {
     debug_assert!(!ctx.is_null(), "ctx != NULL");
     // SAFETY: the caller's context and arena; the dict is sized for the five
     // entries put into it.
@@ -369,7 +369,7 @@ pub unsafe fn ctx_to_dict(ctx: *mut Context, arena: *mut Arena) -> Dict {
 ///
 /// # Safety
 /// Main-thread editor call; `ctx` is a live context and `err` a live error.
-pub unsafe fn ctx_from_dict(dict: Dict, ctx: *mut Context, err: &mut Error) -> c_int {
+pub unsafe fn ctx_from_dict(dict: ApiDict, ctx: *mut Context, err: &mut Error) -> c_int {
     debug_assert!(!ctx.is_null(), "ctx != NULL");
     let mut types = 0;
     // SAFETY: the caller's dict, context and error.

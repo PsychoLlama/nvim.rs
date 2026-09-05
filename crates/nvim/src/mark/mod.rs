@@ -80,7 +80,7 @@ pub const BUF_HAS_QF_ENTRY: c_int = 1;
 pub const BUF_HAS_LL_ENTRY: c_int = 2;
 pub const kExtmarkNOOP: ExtmarkOp = 0;
 pub const kMTCharWise: MotionType = 0;
-pub const ARRAY_DICT_INIT: Dict = Dict {
+pub const ARRAY_DICT_INIT: ApiDict = ApiDict {
     size: 0,
     capacity: 0,
     items: ptr::null_mut(),
@@ -207,7 +207,7 @@ unsafe fn do_markset_autocmd(c: c_char, pos: *mut pos_T, buf: *mut buf_T) {
             value: Object::Integer(Integer::from(pos.col)),
         },
     ];
-    let mut payload: Object = Object::Dict(Dict {
+    let mut payload: Object = Object::Dict(ApiDict {
         size: items.len(),
         capacity: items.len(),
         items: items.as_mut_ptr(),

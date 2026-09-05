@@ -105,9 +105,9 @@ impl File {
 
 /// The Blob `readblob()` is filling.
 #[derive(Clone, Copy)]
-struct Blob(*mut blob_T);
+struct BlobRef(*mut blob_T);
 
-impl Blob {
+impl BlobRef {
     /// Make `rettv` a fresh, empty Blob.
     fn alloc(rettv: &mut typval_T) -> Self {
         // SAFETY: `rettv` is the builtin's own cleared result slot.
@@ -282,7 +282,7 @@ impl Carry {
 fn read_blob(
     fd: &File,
     rettv: &mut typval_T,
-    blob: Blob,
+    blob: BlobRef,
     offset: FileOffset,
     size_arg: FileOffset,
 ) -> bool {
@@ -504,7 +504,7 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
     }
 
     let filling = if blob {
-        Ok(Blob::alloc(rettv))
+        Ok(BlobRef::alloc(rettv))
     } else {
         Err(Lines::alloc(rettv))
     };

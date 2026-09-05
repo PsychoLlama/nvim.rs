@@ -60,7 +60,7 @@ use crate::types::channel::kChannelStdinPipe;
 use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
-    Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
+    ApiDict, Arena, Array, Callback, CallbackReader, Error, Event, GridLineEvent, HlAttrs, Integer,
     KeyDict_highlight, Object, ObjectType, ProfTime, TUIData, UIClientHandler, Unpacker, dict_T,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
     uint16_t,
@@ -254,7 +254,7 @@ pub(crate) unsafe fn ui_client_attach(width: c_int, height: c_int, term: *mut c_
 /// # Safety
 ///
 /// The API metadata must be initialised.
-unsafe fn api_version() -> Dict {
+unsafe fn api_version() -> ApiDict {
     // SAFETY: the caller's promise.
     let metadata = unsafe { api_metadata() }
         .as_dict()
@@ -745,7 +745,7 @@ pub(crate) unsafe fn ui_client_event_hl_attr_define(args: Array) {
 /// # Safety
 ///
 /// `d` must be a valid dict.
-unsafe fn dict_to_hlattrs(d: Dict, rgb: bool) -> HlAttrs {
+unsafe fn dict_to_hlattrs(d: ApiDict, rgb: bool) -> HlAttrs {
     let mut err = Error::none();
     // Every field of a keyset is zero when nothing is set: the flags
     // are a bitmask, `kObjectTypeNil` is 0, and the rest are C layouts

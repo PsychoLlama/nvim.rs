@@ -25,7 +25,7 @@ pub unsafe fn nvim__id_array(arr: Array, arena: *mut Arena) -> Array {
     unsafe { copy_array(arr, arena) }
 }
 
-pub unsafe fn nvim__id_dict(dct: Dict, arena: *mut Arena) -> Dict {
+pub unsafe fn nvim__id_dict(dct: ApiDict, arena: *mut Arena) -> ApiDict {
     unsafe { copy_dict(dct, arena) }
 }
 
@@ -38,7 +38,7 @@ pub unsafe fn nvim__id_float(flt: Float) -> Float {
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
+pub unsafe fn nvim__stats(arena: *mut Arena) -> ApiDict {
     let stats = g_stats.get();
     // SAFETY: the Lua state exists from startup to exit.
     let lua_refcount = unsafe { nlua_get_global_ref_count() };
@@ -56,7 +56,7 @@ pub unsafe fn nvim__stats(arena: *mut Arena) -> Dict {
             Object::integer(tslua_query_parse_count.get() as Integer),
         ),
     ];
-    let mut rv: Dict = arena_dict(arena, entries.len());
+    let mut rv: ApiDict = arena_dict(arena, entries.len());
     for (key, value) in entries {
         // SAFETY: `rv` is the dict the arena just sized for these six keys.
         unsafe { dict_put(&mut rv, key, value) };

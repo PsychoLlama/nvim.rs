@@ -28,9 +28,9 @@ use crate::msgpack_rpc::server::{server_start, server_stop};
 use crate::strings::concat_str;
 use crate::types::channel::kChannelStdinPipe;
 use crate::types::{
-    ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Dict, Error, KeyValuePair, NUL, Object,
-    String_0, VarNumber, Vv, exarg_T, key_value_pair, listitem_T, ptrdiff_t, size_t, uint16_t,
-    uint64_t,
+    ApiDict, ArenaMem, Array, Callback, CallbackReader, CmdModFlags, Error, KeyValuePair, NUL,
+    Object, String_0, VarNumber, Vv, exarg_T, key_value_pair, listitem_T, ptrdiff_t, size_t,
+    uint16_t, uint64_t,
 };
 use crate::ui::{ui_active, ui_call_restart, ui_flush};
 use crate::winlayer::Ea;
@@ -56,16 +56,16 @@ fn array_of(items: &mut [Object]) -> Array {
     }
 }
 
-/// A borrowed `Dict` over `items`, full.
-fn dict_of(items: &mut [KeyValuePair]) -> Dict {
-    Dict {
+/// A borrowed `ApiDict` over `items`, full.
+fn dict_of(items: &mut [KeyValuePair]) -> ApiDict {
+    ApiDict {
         size: items.len() as size_t,
         capacity: items.len() as size_t,
         items: items.as_mut_ptr(),
     }
 }
 
-/// A `key = value` entry for a borrowed `Dict`.
+/// A `key = value` entry for a borrowed `ApiDict`.
 fn entry(key: &'static core::ffi::CStr, value: Object) -> KeyValuePair {
     key_value_pair {
         // SAFETY: the key is a `'static` C string literal.

@@ -51,7 +51,7 @@ use crate::registry::SlotTable;
 use crate::terminal::{terminal_close, terminal_receive};
 use crate::types::libc::STDERR_FILENO;
 use crate::types::{
-    CallbackReader, Channel, ChannelPart, ChannelStreamType, Dict, InternalState, Loop, LuaRef,
+    ApiDict, CallbackReader, Channel, ChannelPart, ChannelStreamType, InternalState, Loop, LuaRef,
     MultiQueue, Proc, PtyProc, RStream, RefcountSize, RpcState, Stream, size_t, uint64_t,
 };
 use ::libc::freopen;
@@ -414,10 +414,10 @@ pub(super) unsafe fn channel_destroy_early(chan: *mut Channel) {
     };
 }
 
-/// The empty `Dict`, which is what a channel starts with and what
+/// The empty `ApiDict`, which is what a channel starts with and what
 /// [`channel_info`] answers for an id that is not registered.
-fn empty_dict() -> Dict {
-    Dict {
+fn empty_dict() -> ApiDict {
+    ApiDict {
         size: 0,
         capacity: 0,
         items: ptr::null_mut(),

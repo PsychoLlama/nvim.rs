@@ -55,9 +55,9 @@ use crate::main::hl_attr_active;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
-    ScreenChar, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, VarNumber, Vv,
-    WinSplit, WinStyle, size_t, statuscol_T, stl_hlrec_t, win_T,
+    AlignTextPos, ApiDict, Array, GridView, Hlf, LineNr, MAXPATHL, Object, OptIndex,
+    OptionSetFlags, ScreenChar, StlClickDefinition, StlClickDefinition_type_0, StlClickRecord,
+    VarNumber, Vv, WinSplit, WinStyle, size_t, statuscol_T, stl_hlrec_t, win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -581,7 +581,7 @@ pub(crate) unsafe fn win_opt(wp: *mut win_T) -> Option<Win> {
 /// Safe because every caller in this module sizes the dictionary from the
 /// same expression that decides how many keys it puts; the debug assertion
 /// inside catches a mismatch.
-pub(crate) fn put(dict: &mut Dict, key: &'static CStr, value: Object) {
+pub(crate) fn put(dict: &mut ApiDict, key: &'static CStr, value: Object) {
     // SAFETY: the invariant above.
     unsafe { dict_put(dict, key, value) };
 }

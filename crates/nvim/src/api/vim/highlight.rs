@@ -20,7 +20,7 @@ pub unsafe fn nvim_get_hl(
     ns_id: Integer,
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     unsafe { ns_get_hl_defs(ns_id as NS, opts, arena, &mut error).reported(error) }
 }
@@ -104,8 +104,8 @@ pub unsafe fn nvim_get_color_by_name(name: String_0) -> Integer {
     name_to_color(unsafe { ::core::ffi::CStr::from_ptr(name.data()) }).0 as Integer
 }
 
-pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> Dict {
-    let mut colors: Dict = arena_dict(arena, COLOR_NAMES.len() as size_t);
+pub unsafe fn nvim_get_color_map(arena: *mut Arena) -> ApiDict {
+    let mut colors: ApiDict = arena_dict(arena, COLOR_NAMES.len() as size_t);
     for entry in &COLOR_NAMES {
         let name = String_0::from_cstr(entry.name);
         let color = Object::integer(entry.color as Integer);

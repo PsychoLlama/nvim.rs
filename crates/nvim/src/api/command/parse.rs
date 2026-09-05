@@ -146,7 +146,7 @@ fn addr_type_name(addr_type: CmdAddr) -> &'static CStr {
 ///
 /// Sizing from the same array that is then drained is what makes the puts
 /// sound: `dict_put`'s only requirement is room, and `entries.len()` is it.
-fn dict_of<const N: usize>(arena: *mut Arena, entries: [(&'static CStr, Object); N]) -> Dict {
+fn dict_of<const N: usize>(arena: *mut Arena, entries: [(&'static CStr, Object); N]) -> ApiDict {
     let mut dict = arena_dict(arena, N);
     // SAFETY: the dict was reserved for exactly `N` pairs and this is the
     // only thing that writes to it.
@@ -159,7 +159,7 @@ fn dict_of<const N: usize>(arena: *mut Arena, entries: [(&'static CStr, Object);
 }
 
 /// The `mods` sub-dictionary: every command modifier the line carried.
-unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> Dict {
+unsafe fn parse_mods(cmdmod: &cmdmod_T, arena: *mut Arena) -> ApiDict {
     // SAFETY: `cmod_filter_pat` is null or a NUL-terminated pattern, and the
     // arena copy outlives the Dict.
     let pattern = unsafe { arena_string(arena, cstr_as_string(cmdmod.cmod_filter_pat)) };

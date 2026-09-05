@@ -18,18 +18,18 @@ pub unsafe fn nvim_exec2(
     channel_id: uint64_t,
     src: String_0,
     opts: *mut KeyDict_exec_opts,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     // SAFETY: `src`/`opts` are the caller's and `error` this frame's slot.
     let output: String_0 = unsafe { exec_impl(channel_id, src, opts, &mut error) };
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let wanted = unsafe { (*opts).output };
     if error.is_set() || !wanted {
-        return Dict::EMPTY.reported(error);
+        return ApiDict::EMPTY.reported(error);
     }
     // Heap-allocated rather than arena-allocated: the caller frees this
     // dictionary key by key, so the key is a copy too.
-    let mut result: Dict = arena_dict(ptr::null_mut(), 1);
+    let mut result: ApiDict = arena_dict(ptr::null_mut(), 1);
     // SAFETY: `result` was sized for exactly this pair, and the key is a
     // fresh copy the caller takes over with it.
     unsafe {

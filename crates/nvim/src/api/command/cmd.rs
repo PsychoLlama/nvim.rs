@@ -76,7 +76,7 @@ fn err_expected_at(err: &mut Error, name: &CStr, expected: &CStr, actual: *const
 /// `get_field` must be `K`'s own generated field lookup: the decoder writes
 /// through the offsets it hands back, so pairing it with a different keyset
 /// would write outside `K`.
-fn sub_keyset<K>(dict: Dict, get_field: FieldHashfn, err: &mut Error) -> Option<K> {
+fn sub_keyset<K>(dict: ApiDict, get_field: FieldHashfn, err: &mut Error) -> Option<K> {
     // SAFETY: every keydict is a plain C aggregate whose all-zero state is
     // "no key set" -- which is what the decoder expects to start from -- and
     // `get_field` is `K`'s own lookup, per the contract above.

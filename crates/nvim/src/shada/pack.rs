@@ -196,7 +196,7 @@ pub(crate) unsafe fn shada_pack_entry(
 /// The file header: whatever `shada_write` chose to record about the Nvim
 /// that wrote it. Nvim has never read it back — it is there for anyone
 /// looking at the file by hand.
-unsafe fn pack_header(header: Dict, sbuf: &mut PackerBuffer) {
+unsafe fn pack_header(header: ApiDict, sbuf: &mut PackerBuffer) {
     mpack_map(&mut sbuf.ptr, header.size as uint32_t);
     for i in 0..header.size {
         let item = unsafe { *header.items.add(i) };

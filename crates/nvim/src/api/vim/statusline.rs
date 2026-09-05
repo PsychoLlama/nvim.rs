@@ -50,9 +50,9 @@ pub unsafe fn nvim_eval_statusline(
     str: String_0,
     opts: *mut KeyDict_eval_statusline,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let empty = Dict {
+    let empty = ApiDict {
         size: 0,
         capacity: 0,
         items: ptr::null_mut::<KeyValuePair>(),
@@ -401,7 +401,7 @@ pub unsafe fn nvim__complete_set(
     index: Integer,
     opts: *mut KeyDict_complete_set,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let mut rv = arena_dict(arena, 2);
     // SAFETY: the API dispatcher's own frame.

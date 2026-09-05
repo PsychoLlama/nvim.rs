@@ -14,8 +14,8 @@
 use core::ffi::c_int;
 
 use super::{
-    Container, Dict, List, char_len, check_lock, copy_tv, cstr_of_chk, err, err_not_countable,
-    err_nr, frame, number_of, starts_with_ic, string_bytes,
+    Container, DictRef, ListRef, char_len, check_lock, copy_tv, cstr_of_chk, err,
+    err_not_countable, err_nr, frame, number_of, starts_with_ic, string_bytes,
 };
 use crate::eval::typval::NumBuf;
 use crate::main::{e_invarg, e_list_index_out_of_range_nr, e_listblobreq};
@@ -92,7 +92,7 @@ fn count_string(hay: &[u8], needle: &[u8], ic: bool) -> VarNumber {
 }
 
 /// How many items of `l` from index `idx` on equal `needle`.
-fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> VarNumber {
+fn count_list(l: ListRef, needle: &mut typval_T, idx: int64_t, ic: bool) -> VarNumber {
     if l.len() == 0 {
         return 0;
     }
@@ -113,7 +113,7 @@ fn count_list(l: List, needle: &mut typval_T, idx: int64_t, ic: bool) -> VarNumb
 }
 
 /// How many values of `d` equal `needle`.
-fn count_dict(d: Dict, needle: &mut typval_T, ic: bool) -> VarNumber {
+fn count_dict(d: DictRef, needle: &mut typval_T, ic: bool) -> VarNumber {
     if d.is_null() {
         return 0;
     }

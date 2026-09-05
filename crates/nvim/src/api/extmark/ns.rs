@@ -79,9 +79,9 @@ pub unsafe fn nvim_create_namespace(name: String_0) -> Integer {
 
 /// # Safety
 /// `arena` is null or this call's own arena.
-pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> Dict {
+pub unsafe fn nvim_get_namespaces(arena: *mut Arena) -> ApiDict {
     namespace_ids.with(|ids| {
-        let mut retval: Dict = arena_dict(arena, ids.len() as size_t);
+        let mut retval: ApiDict = arena_dict(arena, ids.len() as size_t);
         for (name, id) in ids.entries() {
             // SAFETY: `ns_key` terminated the key, and `cstr_as_string`
             // re-measures it -- so a name with an interior NUL is answered

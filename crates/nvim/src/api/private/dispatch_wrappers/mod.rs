@@ -152,7 +152,7 @@ use crate::log::logmsg_line;
 use crate::main::{e_textlock, textlock};
 use crate::message_fmt::msg_cstr;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Handle, Integer, KeyDict_buf_attach,
+    ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeyDict_buf_attach,
     KeyDict_buf_delete, KeyDict_clear_autocmds, KeyDict_cmd, KeyDict_cmd_opts,
     KeyDict_complete_set, KeyDict_context, KeyDict_create_augroup, KeyDict_create_autocmd,
     KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline, KeyDict_exec_autocmds,
@@ -254,10 +254,10 @@ fn as_array(o: Object) -> Option<Array> {
 
 /// An empty Lua table is indistinguishable from an empty list on the wire, so
 /// a Dict parameter accepts one.
-fn as_dict(o: Object) -> Option<Dict> {
+fn as_dict(o: Object) -> Option<ApiDict> {
     match o {
         Object::Dict(d) => Some(d),
-        Object::Array(a) if a.size == 0 => Some(Dict::EMPTY),
+        Object::Array(a) if a.size == 0 => Some(ApiDict::EMPTY),
         _ => None,
     }
 }

@@ -37,8 +37,8 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal, OptionSetFlags,
-    String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, uint64_t,
+    ApiDict, Arena, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal,
+    OptionSetFlags, String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -405,7 +405,7 @@ pub unsafe fn nvim_set_option_value(
 ///
 /// # Safety
 /// `arena` must be the caller's, and live for as long as the answer is.
-pub unsafe fn nvim_get_all_options_info(arena: *mut Arena) -> Dict {
+pub unsafe fn nvim_get_all_options_info(arena: *mut Arena) -> ApiDict {
     // SAFETY: `arena` is the caller's, per this function's contract.
     unsafe { get_all_vimoptions(arena) }
 }
@@ -419,11 +419,11 @@ pub unsafe fn nvim_get_option_info2(
     name: String_0,
     opts: *mut KeyDict_option,
     arena: *mut Arena,
-) -> Result<Dict, Error> {
+) -> Result<ApiDict, Error> {
     let mut err = Error::none();
     // SAFETY: as `nvim_get_option_value`.
     let Some(target) = (unsafe { option_target(opts, name.data(), &mut err) }) else {
-        return Dict::EMPTY.reported(err);
+        return ApiDict::EMPTY.reported(err);
     };
     // The metadata is read off a buffer and a window whatever the scope, so
     // the two the caller did not name default to the current ones.

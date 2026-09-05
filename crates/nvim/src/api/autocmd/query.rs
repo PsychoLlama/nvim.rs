@@ -321,7 +321,7 @@ pub unsafe fn nvim_get_autocmds(
                                         break 's_712;
                                     }
                                 }
-                                let mut autocmd_info: Dict = arena_dict(arena, 12 as size_t);
+                                let mut autocmd_info: ApiDict = arena_dict(arena, 12 as size_t);
                                 if unsafe { (*ap).group } != AUGROUP_DEFAULT as ::core::ffi::c_int {
                                     // SAFETY: a live pointer the code around it already holds.
                                     let d_group =

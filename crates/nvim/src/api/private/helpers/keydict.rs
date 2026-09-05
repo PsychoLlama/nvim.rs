@@ -19,7 +19,7 @@ use crate::cstr;
 use crate::lua::executor::api_free_luaref;
 use crate::message_fmt::c_str_len;
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
+    ApiDict, Arena, Array, Boolean, Error, FieldHashfn, Float, Handle, Integer, KeySetLink, LuaRef,
     Object, ObjectType, OptKeySet, OptionalKeys, String_0, kErrorTypeNone, kErrorTypeValidation,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeBuffer, kObjectTypeDict, kObjectTypeFloat,
     kObjectTypeInteger, kObjectTypeLuaRef, kObjectTypeNil, kObjectTypeString, kObjectTypeTabpage,
@@ -59,7 +59,7 @@ pub(crate) unsafe fn api_luarefs_free_keydict(dict: *mut c_void, table: *const K
             match field.type_0 as ObjectType {
                 kObjectTypeNil => api_luarefs_free_object(*mem.cast::<Object>()),
                 kObjectTypeLuaRef => api_free_luaref(*mem.cast::<LuaRef>()),
-                kObjectTypeDict => api_luarefs_free_dict(*mem.cast::<Dict>()),
+                kObjectTypeDict => api_luarefs_free_dict(*mem.cast::<ApiDict>()),
                 _ => {}
             }
         }
@@ -95,7 +95,7 @@ unsafe fn keyset_fields(table: *const KeySetLink) -> impl Iterator<Item = &'stat
 pub(crate) unsafe fn api_dict_to_keydict(
     retval: *mut c_void,
     hashy: FieldHashfn,
-    dict: Dict,
+    dict: ApiDict,
     err: &mut Error,
 ) -> bool {
     for i in 0..dict.size {
@@ -210,8 +210,8 @@ pub(crate) unsafe fn api_dict_to_keydict(
                     wrong_type(kObjectTypeDict);
                     return false;
                 };
-                // SAFETY: the row says a `Dict` lives at `mem`.
-                unsafe { *mem.cast::<Dict>() = pairs };
+                // SAFETY: the row says an `ApiDict` lives at `mem`.
+                unsafe { *mem.cast::<ApiDict>() = pairs };
             }
             kObjectTypeBuffer | kObjectTypeWindow | kObjectTypeTabpage => {
                 // A handle arrives either under its own variant or as a plain
@@ -252,7 +252,7 @@ pub(crate) unsafe fn api_keydict_to_dict(
     table: *const KeySetLink,
     max_size: size_t,
     arena: *mut Arena,
-) -> Dict {
+) -> ApiDict {
     let mut rv = arena_dict(arena, max_size);
     // SAFETY: as `api_dict_to_keydict`; `max_size` is the table's length.
     for field in unsafe { keyset_fields(table) } {
@@ -277,7 +277,7 @@ pub(crate) unsafe fn api_keydict_to_dict(
                 kObjectTypeBoolean => Object::boolean(*mem.cast::<Boolean>()),
                 kObjectTypeString => Object::string(*mem.cast::<String_0>()),
                 kObjectTypeArray => Object::array(*mem.cast::<Array>()),
-                kObjectTypeDict => Object::dict(*mem.cast::<Dict>()),
+                kObjectTypeDict => Object::dict(*mem.cast::<ApiDict>()),
                 kObjectTypeBuffer => Object::buffer(*mem.cast::<Handle>()),
                 kObjectTypeWindow => Object::window(*mem.cast::<Handle>()),
                 kObjectTypeTabpage => Object::tabpage(*mem.cast::<Handle>()),

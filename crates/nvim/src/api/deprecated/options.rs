@@ -14,7 +14,7 @@ use crate::cstr;
 use crate::types::OptionSetFlags;
 use core::ffi::{CStr, c_char, c_void};
 
-pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<Dict, Error> {
+pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
     let (buf, win) = (curbuf.get(), curwin.get());
     // SAFETY: `name` is the caller's, the two globals name the current

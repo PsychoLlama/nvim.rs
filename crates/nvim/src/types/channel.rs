@@ -135,7 +135,7 @@ pub struct RpcState {
     pub next_request_id: uint32_t,
     /// Requests this editor has sent and is still waiting on.
     pub call_stack: CallStack,
-    pub info: Dict,
+    pub info: ApiDict,
     pub client_type: ClientType,
 }
 #[derive(Copy, Clone)]

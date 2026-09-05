@@ -49,8 +49,8 @@ use crate::memory::{arena_finish, arena_mem_free, xcalloc, xfree};
 use crate::msgpack_rpc::unpacker::{unpacker_init, unpacker_teardown};
 use crate::registry::SlotTable;
 use crate::types::{
-    Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType, ClientType,
-    Dict, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
+    ApiDict, Arena, ArenaMem, Array, Channel, ChannelCallFrame, ChannelPart, ChannelStreamType,
+    ClientType, Error, Integer, MessageType, MsgpackRpcRequestHandler, Object, Unpacker, WBuffer,
     kErrorTypeException, kErrorTypeValidation, uint32_t, uint64_t,
 };
 use crate::ui_client::ui_client_attach_to_restarted_server;
@@ -205,7 +205,7 @@ pub unsafe fn rpc_start(channel: *mut Channel) {
     rpc.closed = false;
     rpc.unpacker = unpacker;
     rpc.next_request_id = 1;
-    rpc.info = Dict {
+    rpc.info = ApiDict {
         size: 0,
         capacity: 0,
         items: ptr::null_mut(),
@@ -624,7 +624,7 @@ unsafe extern "C" fn internal_read_event(argv: *mut *mut c_void) {
 ///
 /// # Safety
 /// `info` is a live dict this call takes ownership of.
-pub unsafe fn rpc_set_client_info(id: uint64_t, info: Dict) {
+pub unsafe fn rpc_set_client_info(id: uint64_t, info: ApiDict) {
     // SAFETY: the channel table is live whenever the editor is.
     let mut chan =
         unsafe { find_rpc_channel(id) }.expect("client info for a channel that is not rpc");

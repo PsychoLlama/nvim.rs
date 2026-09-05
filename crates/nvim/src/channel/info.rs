@@ -28,7 +28,7 @@ use crate::os::pty_proc_unix::pty_proc_tty_name;
 use crate::registry::SlotTable;
 use crate::terminal::terminal_buf;
 use crate::types::{
-    Arena, Array, Channel, Dict, IOSIZE, Integer, Object, VAR_DICT, VAR_UNKNOWN, VarLock,
+    ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, VAR_DICT, VAR_UNKNOWN, VarLock,
     key_value_pair, save_v_event_T, typval_T, typval_vval_union, uint64_t,
 };
 
@@ -184,7 +184,7 @@ pub unsafe fn channel_job_running(id: uint64_t) -> bool {
 ///
 /// # Safety
 /// Called from the main thread; `arena` owns the answer's storage.
-pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> Dict {
+pub unsafe fn channel_info(id: uint64_t, arena: *mut Arena) -> ApiDict {
     let chan = find_channel(id);
     if chan.is_null() {
         return empty_dict();

@@ -12,7 +12,7 @@ use crate::api::private::helpers::{arena_dict, cstr_as_string};
 use crate::highlight::dict::put;
 use crate::highlight::{HLATTRS_DICT_SIZE, HlAttrFlags, hlattrs2dict, ns_get_hl, syn_attr2entry};
 use crate::types::{
-    Arena, Dict, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone, size_t,
+    ApiDict, Arena, Error, KeyDict_get_highlight, KeyValuePair, NS, Object, kErrorTypeNone, size_t,
 };
 use crate::ui::ui_rgb_attached;
 
@@ -23,7 +23,7 @@ use super::{
 };
 
 /// The empty dict every "nothing to say" path answers.
-const NO_DICT: Dict = Dict {
+const NO_DICT: ApiDict = ApiDict {
     size: 0,
     capacity: 0,
     items: core::ptr::null_mut::<KeyValuePair>(),
@@ -46,7 +46,7 @@ unsafe fn has_key(opts: *mut KeyDict_get_highlight, bit: c_int) -> bool {
 ///
 /// # Safety
 /// Reaches the group and namespace tables; `arena` is live; main thread only.
-unsafe fn hlgroup2dict(hl: &mut Dict, ns_id: NS, hl_id: c_int, arena: *mut Arena) -> bool {
+unsafe fn hlgroup2dict(hl: &mut ApiDict, ns_id: NS, hl_id: c_int, arena: *mut Arena) -> bool {
     let entry = group(hl_id);
     let mut ns = ns_id;
     // SAFETY: the editor's own tables.
@@ -107,7 +107,7 @@ pub(crate) unsafe fn ns_get_hl_defs(
     opts: *mut KeyDict_get_highlight,
     arena: *mut Arena,
     err: &mut Error,
-) -> Dict {
+) -> ApiDict {
     // SAFETY: the caller's keydict, arena and error slot.
     let link =
         !unsafe { has_key(opts, KEYSET_OPTIDX_get_highlight__link) } || unsafe { (*opts).link };

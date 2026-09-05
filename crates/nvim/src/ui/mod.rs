@@ -70,8 +70,8 @@ use crate::types::ui::{
     kUIMessages, kUIMultigrid, kUITermColors,
 };
 use crate::types::{
-    Arena, Array, Boolean, Dict, Error, Handle, Integer, KeyValuePair, LineFlags, Object, OptVal,
-    OptionSetFlags, RemoteUI, String_0, UIExtension,
+    ApiDict, Arena, Array, Boolean, Error, Handle, Integer, KeyValuePair, LineFlags, Object,
+    OptVal, OptionSetFlags, RemoteUI, String_0, UIExtension,
 };
 use crate::ui_compositor::{
     ui_comp_attach, ui_comp_detach, ui_comp_get_grid_at_coord, ui_comp_init, ui_comp_should_draw,
@@ -781,7 +781,7 @@ pub unsafe fn ui_array(arena: *mut Arena) -> Array {
     /// # Safety
     ///
     /// `info` must have room for another entry.
-    unsafe fn push(info: &mut Dict, key: String_0, value: Object) {
+    unsafe fn push(info: &mut ApiDict, key: String_0, value: Object) {
         unsafe { *info.items.add(info.size) = KeyValuePair { key, value } };
         info.size += 1;
     }

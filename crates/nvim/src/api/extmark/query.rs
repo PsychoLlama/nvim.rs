@@ -73,7 +73,7 @@ unsafe fn extmark_to_array(
     unsafe { array_add(&mut rv, Object::integer(start.pos.row as Integer)) };
     unsafe { array_add(&mut rv, Object::integer(start.pos.col as Integer)) };
     if add_dict {
-        let mut dict: Dict = arena_dict(
+        let mut dict: ApiDict = arena_dict(
             arena,
             ::core::mem::size_of::<[KeySetLink; 36]>()
                 .wrapping_div(::core::mem::size_of::<KeySetLink>())
