@@ -4,24 +4,23 @@
 #
 #   jmarkverify.sh [label]          # default label: cur
 #
-# The baseline lives NEXT TO THIS SCRIPT in jmarkbase/ --
-# never in a session scratchpad, which is the mistake that cost
-# `spellverify` a phase (p19-close).  Its provenance, and the recipe
-# for regenerating it, are in jmarkbase/COMMIT.
+# The baseline is CUT, not committed: it comes from the binary
+# `test/battery/BASE` pins, cached under target/battery/base/<sha>/.
+# The row was first baselined at commit 88faae2d3f (p20-14, re-cut off
+# p20-12's 070c9cfc00 for the new s15 column block).  It lives in the
+# CHECKOUT either way -- never in a session scratchpad, which is the
+# mistake that cost `spellverify` a phase (p19-close).
 #
 # It is the PRE-REWRITE behaviour of mark/: cut at phase 20 slice 12,
 # before S14 touches a line of the batch, which is the whole point of
-# standing this oracle up first.  Regenerate it only when a behaviour
-# change is *intended* and reviewed:
+# standing this oracle up first.
 #
-#   just build      # a mutation harness leaves the binary built from
-#                   # its last mutant; a baseline taken from that
-#                   # compares mutant against mutant forever after
-#   JMARKSWEEP_WORK=/tmp/jmsweep-verify \
-#     test/battery/jmarksweep.sh \
-#       $REPO/target/debug/nvim $REPO/runtime \
-#       test/battery/jmarkbase base
-#   git -C $REPO rev-parse HEAD > test/battery/jmarkbase/COMMIT
+# Regenerate ONLY when a behaviour change is *intended* and reviewed -- and
+# regeneration is now a BASE BUMP, not a re-cut in place.  Write the new
+# commit into `test/battery/BASE`, in a commit of its own whose body says
+# what moved; the cache under target/battery/base/ is keyed by that sha, so
+# every row re-cuts itself against the new binary on the next run.  See
+# README.md.
 #
 # All three artifacts are compared, stderr included: nvim's own messages
 # go to the prompt, which in a headless process is stderr, and s16 is
@@ -38,25 +37,37 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASELINE=${JMARK_BASELINE:-$HERE/jmarkbase}
 OUT=${SWEEP_OUT:-/tmp/jmarksweep-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
 LOG=$OUT/build-$LABEL.log
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+CUT=
+if [[ ${1:-} == --cut ]]; then CUT=$2; OUT=$3; LABEL=base; LOG=/dev/null; fi
+NVIM_BIN=${CUT:-${NVIM:-$REPO/target/debug/nvim}}
 
 mkdir -p "$OUT"
 cd "$REPO"
-if ! just build >"$LOG" 2>&1; then
+if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
   echo "BUILD FAILED -- see $LOG" >&2
   grep -E '^(error|warning)' "$LOG" | head -60 >&2
   exit 1
 fi
 
-NVIM=${NVIM:-$REPO/target/debug/nvim}
 
 rm -f "$OUT/$LABEL.txt" "$OUT/$LABEL.struct" "$OUT/$LABEL.stderr"
-"$HERE/jmarksweep.sh" "$NVIM" "$REPO/runtime" "$OUT" "$LABEL" 2>&1 | tail -1
+"$HERE/jmarksweep.sh" "$NVIM_BIN" "$REPO/runtime" "$OUT" "$LABEL" 2>&1 | tail -1
 
+if [[ -n $CUT ]]; then exit 0; fi
+
+# The baseline is CUT, not committed: `baseline.sh` runs this same sweep
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  The first row to want it pays for the
+# reference build.  See README.md.
+BASELINE=${JMARK_BASELINE:-$("$HERE/baseline.sh" jmark)}
 fail=0
 for part in txt struct stderr; do
   if diff -q "$BASELINE/base.$part" "$OUT/$LABEL.$part" >/dev/null; then

@@ -4,8 +4,9 @@
 #
 #   exverify.sh [label]           # default label: cur
 #
-# The baseline lives next to this script in exbase/, produced at
-# commit cda7f911f3 (the B17 prelude's last rev).  It replaces the phase-14
+# The baseline is CUT, not committed: it comes from the binary
+# `test/battery/BASE` pins, cached under target/battery/base/<sha>/.
+# The row was first baselined at commit cda7f911f3 (the B17 prelude's last rev).  It replaces the phase-14
 # `REF-{parse,excmd}-base.txt` taken at 341d60cfea, against which the current
 # tree differs on exactly nine rows, all of them accounted for:
 #
@@ -29,25 +30,41 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASELINE=${EX_BASELINE:-$HERE/exbase}
 OUT=${SWEEP_OUT:-/tmp/exprobe-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
 LOG=$OUT/build-$LABEL.log
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+CUT=
+if [[ ${1:-} == --cut ]]; then CUT=$2; OUT=$3; LABEL=base; LOG=/dev/null; fi
+NVIM_BIN=${CUT:-$REPO/target/debug/nvim}
 
 mkdir -p "$OUT"
 cd "$REPO"
-if ! just build >"$LOG" 2>&1; then
+if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
   echo "BUILD FAILED -- see $LOG" >&2
   grep -aE '^(error|warning)' "$LOG" | head -60 >&2
   exit 1
 fi
 
+# The baseline is CUT, not committed: `baseline.sh` runs this same probe
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  Cut mode never diffs, so it never resolves a
+# baseline -- and must not, since that would re-enter baseline.sh.
+BASELINE=
+if [[ -z $CUT ]]; then
+  BASELINE=${EX_BASELINE:-$("$HERE/baseline.sh" ex)}
+fi
+
 fail=0
 for probe in parse excmd; do
   rm -f "$OUT/$LABEL-$probe.txt"
-  "$HERE/ex-run.sh" "$REPO/target/debug/nvim" "$REPO/runtime" \
+  "$HERE/ex-run.sh" "$NVIM_BIN" "$REPO/runtime" \
     "$OUT" "$LABEL" "$probe" | tail -1
+  if [[ -n $CUT ]]; then continue; fi
   if diff -q "$BASELINE/base-$probe.txt" "$OUT/$LABEL-$probe.txt" >/dev/null; then
     echo "$probe: IDENTICAL"
   else

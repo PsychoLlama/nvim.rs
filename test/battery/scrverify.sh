@@ -3,8 +3,15 @@
 #
 #   scrverify.sh [label]
 #
-# Builds, sweeps, and diffs all three artifacts against the stored baseline
-# in test/battery/scrbase/. ~70 s including the build.
+# Builds, sweeps, and diffs all three artifacts against a baseline CUT from
+# the binary `test/battery/BASE` pins -- not committed, and cached under
+# target/battery/base/<sha>/. ~70 s including the build, plus one reference
+# build the first time the cache misses.
+#
+# Regenerate ONLY when a behaviour change is *intended* and reviewed -- and
+# regeneration is a BASE BUMP, not a re-cut in place.  Write the new commit
+# into `test/battery/BASE`, in a commit of its own whose body says what
+# moved.  See README.md.
 #
 # RE-BASELINED AT B19-4 (still at 5e23ad6128): 4646/4998/867 -> 4984/5028/1950.
 # Two additions and one flake fix, and the delta is exactly that -- 0 removed
@@ -72,19 +79,33 @@ set -uo pipefail
 
 here=$(dirname "$(realpath "$0")")
 root=${SCRSWEEP_REPO:-$(dirname "$(dirname "$here")")}
-base=$here/scrbase
 label=${1:-head}
 out=${SCRVERIFY_OUT:-$root/target/scrsweep/verify}
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+cut=
+if [[ ${1:-} == --cut ]]; then cut=$2; out=$3; label=base; fi
+nvim_bin=${cut:-$root/target/debug/nvim}
 
 mkdir -p "$out"
 
-echo "== build"
-( cd "$root" && just build ) > "$out/build.log" 2>&1 || {
-  echo "BUILD FAILED — see $out/build.log"; exit 1;
-}
+if [[ -z $cut ]]; then
+  echo "== build"
+  ( cd "$root" && just build ) > "$out/build.log" 2>&1 || {
+    echo "BUILD FAILED — see $out/build.log"; exit 1;
+  }
+fi
 
 echo "== sweep"
-"$here/scrsweep.sh" "$root/target/debug/nvim" "$out" "$label" || exit 1
+"$here/scrsweep.sh" "$nvim_bin" "$out" "$label" || exit 1
+if [[ -n $cut ]]; then exit 0; fi
+
+# The baseline is CUT, not committed: `baseline.sh` runs this same sweep
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  See README.md.
+base=${SCR_BASELINE:-$("$here/baseline.sh" scr)}
 
 rc=0
 for ext in txt attrs vals; do

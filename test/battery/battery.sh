@@ -10,7 +10,13 @@
 #
 # P27-3 moved the whole harness into the checkout as test/battery/, so the
 # only copy of the thirty-two baselines is no longer one developer's home
-# directory.  Read README.md before re-cutting anything.
+# directory.  P27-14 then stopped COMMITTING those baselines -- 276 files
+# and 53 MiB of generated text -- and made the battery a base-vs-head
+# differential: `test/battery/BASE` pins a commit, every row's baseline is
+# cut from THAT binary (with the current tree's scripts and corpora) and
+# cached under target/battery/base/<sha>/.  The first row of a cold run
+# pays for one reference build; after that the cache is a hit.  Read
+# README.md before bumping BASE.
 #
 #   just battery [label]
 #   battery.sh <label>
@@ -255,7 +261,18 @@ run decodesweep "$T/decodeverify.sh"
 run inssweep   "$T/insverify.sh"
 
 echo "=== startup probe (paired)"
-PBASE=${PROBE_BASELINE:-$T/probebase/base.txt}
+# The probe's baseline, like every row's, is CUT from the binary
+# test/battery/BASE pins and cached under target/battery/base/<sha>/ --
+# nothing generated is committed.  P27-14; see README.md.
+PBASE=${PROBE_BASELINE:-}
+if [ -z "$PBASE" ]; then
+  pdir=$("$T/baseline.sh" probe) || {
+    echo "probe: BASELINE CUT FAILED"
+    echo "BATTERY_EXIT=1"
+    exit 1
+  }
+  PBASE=$pdir/base.txt
+fi
 python3 "$T/startprobe.py" "$REPO/target/debug/nvim" \
   "$LOGDIR/$LABEL.p.txt" > "$LOGDIR/$LABEL.probe.log" 2>&1
 prc=$?

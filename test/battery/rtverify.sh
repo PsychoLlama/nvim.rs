@@ -4,21 +4,21 @@
 #
 #   rtverify.sh [label]           # default label: cur
 #
-# The baseline lives next to this script in rtbase/ and was
-# produced at commit 2ecc9b69f7 -- B16-4's runtime.rs carve, the last
+# The baseline is CUT, not committed: it comes from the binary
+# `test/battery/BASE` pins, cached under target/battery/base/<sha>/.
+# The row was first baselined at commit 2ecc9b69f7 -- B16-4's runtime.rs carve, the last
 # revision before any of runtime/'s eight children is rewritten.  It is
 # the *pre-rewrite* behaviour of the whole family: rtp.rs's
 # 'runtimepath' construction, search.rs's :runtime, cache.rs's search
 # path, pack.rs's :packadd, expand.rs's completion, source.rs's :source,
-# estack.rs's <sfile> and script.rs's registry.  Regenerate it only when
-# a behaviour change is *intended* and reviewed:
+# estack.rs's <sfile> and script.rs's registry.
 #
-#   rtsweep.sh <nvim> <runtime> \
-#       test/battery/rtbase base
-#
-# ... and `just build` first: a mutation harness leaves the binary built
-# from its last mutant, and a baseline taken from that compares mutant
-# against mutant forever after.
+# Regenerate ONLY when a behaviour change is *intended* and reviewed -- and
+# regeneration is now a BASE BUMP, not a re-cut in place.  Write the new
+# commit into `test/battery/BASE`, in a commit of its own whose body says
+# what moved; the cache under target/battery/base/ is keyed by that sha, so
+# every row re-cuts itself against the new binary on the next run.  See
+# README.md.
 #
 # All three artifacts are compared, stderr included: s20 runs a block of
 # commands through `-c` in children, which is the only spelling under
@@ -41,24 +41,37 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASELINE=${RT_BASELINE:-$HERE/rtbase}
 OUT=${SWEEP_OUT:-/tmp/rtsweep-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
 LOG=$OUT/build-$LABEL.log
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+CUT=
+if [[ ${1:-} == --cut ]]; then CUT=$2; OUT=$3; LABEL=base; LOG=/dev/null; fi
+NVIM_BIN=${CUT:-$REPO/target/debug/nvim}
 
 mkdir -p "$OUT"
 cd "$REPO"
-if ! just build >"$LOG" 2>&1; then
+if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
   echo "BUILD FAILED -- see $LOG" >&2
   grep -E '^(error|warning)' "$LOG" | head -60 >&2
   exit 1
 fi
 
 rm -f "$OUT/$LABEL.txt" "$OUT/$LABEL.struct" "$OUT/$LABEL.stderr"
-"$HERE/rtsweep.sh" "$REPO/target/debug/nvim" "$REPO/runtime" \
+"$HERE/rtsweep.sh" "$NVIM_BIN" "$REPO/runtime" \
   "$OUT" "$LABEL" 2>&1 | tail -1
 
+if [[ -n $CUT ]]; then exit 0; fi
+
+# The baseline is CUT, not committed: `baseline.sh` runs this same sweep
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  The first row to want it pays for the
+# reference build.  See README.md.
+BASELINE=${RT_BASELINE:-$("$HERE/baseline.sh" rt)}
 fail=0
 for part in txt struct stderr; do
   if diff -q "$BASELINE/base.$part" "$OUT/$LABEL.$part" >/dev/null; then

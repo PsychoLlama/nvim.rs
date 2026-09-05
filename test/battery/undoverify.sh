@@ -4,15 +4,18 @@
 #
 #   undoverify.sh [label]        # default label: cur
 #
-# The baseline lives next to this script in undobase/ (see its
-# COMMIT file for where it was taken) -- deliberately beside the script
-# and not in a session scratchpad, which is what cost 1785449630-spellverify
-# a whole phase.  Regenerate it only when a behaviour change is
-# *intended* and reviewed:
+# The baseline is CUT, not committed: it comes from the binary
+# `test/battery/BASE` pins, cached under target/battery/base/<sha>/.
+# The row was first baselined at commit 96d70c6f79 (p20-3).  It lives in
+# the CHECKOUT either way -- not in a session scratchpad, which is what
+# cost 1785449630-spellverify a whole phase.
 #
-#   UNDOGOLD_WORK=/tmp/ugold-verify \
-#     undogold.sh <nvim> <runtime> \
-#       test/battery/undobase base
+# Regenerate ONLY when a behaviour change is *intended* and reviewed -- and
+# regeneration is now a BASE BUMP, not a re-cut in place.  Write the new
+# commit into `test/battery/BASE`, in a commit of its own whose body says
+# what moved; the cache under target/battery/base/ is keyed by that sha, so
+# every row re-cuts itself against the new binary on the next run.  See
+# README.md.
 #
 # The sweep reuses one work directory path for every run because 'undodir'
 # munges that path into the undo file's *name* and the report prints it.
@@ -26,17 +29,22 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASELINE=${UNDO_BASELINE:-$HERE/undobase}
 OUT=${SWEEP_OUT:-/tmp/undogold-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
 LOG=$OUT/build-$LABEL.log
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+CUT=
+if [[ ${1:-} == --cut ]]; then CUT=$2; OUT=$3; LABEL=base; NVIM=$2; fi
 
 mkdir -p "$OUT"
+cd "$REPO"
 if [[ -n ${NVIM:-} ]]; then
   BIN=$(realpath "$NVIM")
 else
-  cd "$REPO"
   if ! just build >"$LOG" 2>&1; then
     echo "BUILD FAILED -- see $LOG" >&2
     grep -E '^(error|warning)' "$LOG" | head -60 >&2
@@ -50,6 +58,13 @@ rm -rf "${OUT:?}/$LABEL.txt" "$OUT/$LABEL.struct" "$OUT/$LABEL.hashes" \
 "$HERE/undogold.sh" "$BIN" "$REPO/runtime" "$OUT" "$LABEL" \
   2>&1 | tail -2
 
+if [[ -n $CUT ]]; then exit 0; fi
+
+# The baseline is CUT, not committed: `baseline.sh` runs this same sweep
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  The first row to want it pays for the
+# reference build.  See README.md.
+BASELINE=${UNDO_BASELINE:-$("$HERE/baseline.sh" undo)}
 fail=0
 for part in txt struct hashes; do
   if [[ ! -f $BASELINE/base.$part ]]; then

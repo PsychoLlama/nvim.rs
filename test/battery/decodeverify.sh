@@ -42,15 +42,11 @@
 #                    Plus forty malformed framings fed as raw bytes to a
 #                    fresh `--embed` child each, and `nvim__unpack`.
 #
-# Baseline: decodebase/base.{json,msgpack,luajson,lumpack,rpc},
-# produced at 068df58956.  Line counts 269 / 122 / 1622 / 651 / 164.
-# Regenerate only when a behaviour change is *intended* and reviewed:
-#
-#   DECODE_REGEN=1 decodeverify.sh
-#
-# ... and `just build` first -- a mutation harness leaves the binary
-# built from its last mutant, and a baseline taken from that compares
-# mutant against mutant forever after.
+# Baseline: base.{json,msgpack,luajson,lumpack,rpc}, CUT from the binary
+# `test/battery/BASE` pins rather than committed, and cached under
+# target/battery/base/<sha>/.  Line counts 269 / 122 / 1622 / 651 / 164 at
+# the 068df58956 cut.  A deliberate re-cut is a BASE bump in its own
+# commit; see README.md.
 #
 # TAKES ~40 s, almost all of it the rpc corpus's forty child processes.
 # That section is also the only one here with any plausible flake
@@ -59,25 +55,29 @@
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASELINE=${DECODE_BASELINE:-$HERE/decodebase}
 OUT=${SWEEP_OUT:-/tmp/decodesweep-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
-REGEN=${DECODE_REGEN:-}
 LOG=$OUT/build-$LABEL.log
 # Every other sweep bounds its children; this one did not, so a mutant that
 # wedged an rpc child wedged the whole battery row. The rpc corpus is ~30 s
 # of forty children on a good day, so 180 s is generous.
 LIMIT=${DECODE_TIMEOUT:-180}
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+CUT=
+if [[ ${1:-} == --cut ]]; then CUT=$2; OUT=$3; LABEL=base; LOG=/dev/null; fi
 
 mkdir -p "$OUT"
 cd "$REPO" || exit 1
-if ! just build >"$LOG" 2>&1; then
+if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
   echo "BUILD FAILED -- see $LOG" >&2
   grep -E '^(error|warning)' "$LOG" | head -60 >&2
   exit 1
 fi
-NVIM=$REPO/target/debug/nvim
+NVIM=${CUT:-$REPO/target/debug/nvim}
 
 # The corpora are cwd-independent (verified), but run them from a fixed
 # short directory anyway: that is the rule every other sweep follows and
@@ -85,6 +85,15 @@ NVIM=$REPO/target/debug/nvim
 WORK=/tmp/decodesweep-work
 rm -rf "$WORK"; mkdir -p "$WORK"
 cd "$WORK" || exit 1
+
+# The baseline is CUT, not committed: `baseline.sh` runs these same corpora
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  Cut mode never diffs, so it never resolves a
+# baseline -- and must not, since that would re-enter baseline.sh.
+BASELINE=
+if [ -z "$CUT" ]; then
+  BASELINE=${DECODE_BASELINE:-$("$HERE/baseline.sh" decode)}
+fi
 
 fail=0
 for corpus in json msgpack luajson lumpack rpc; do
@@ -107,10 +116,9 @@ for corpus in json msgpack luajson lumpack rpc; do
     fail=1
     continue
   fi
-  if [ -n "$REGEN" ]; then
-    mkdir -p "$BASELINE"
-    cp "$out" "$BASELINE/base.$corpus"
-    echo "$corpus: REGENERATED ($(wc -l <"$out") lines)"
+  # Cut mode stops here: the artifact IS the baseline.
+  if [ -n "$CUT" ]; then
+    echo "$corpus: CUT ($(wc -l <"$out") lines)"
     continue
   fi
   if diff -q "$BASELINE/base.$corpus" "$out" >/dev/null 2>&1; then

@@ -4,8 +4,9 @@
 #
 #   winverify.sh [label]         # default label: cur
 #
-# The baseline lives next to this script in winbase/ and was
-# produced at commit 46c4bf3a3a -- B19's close, the last revision before
+# The baseline is CUT, not committed: it comes from the binary
+# `test/battery/BASE` pins, cached under target/battery/base/<sha>/.
+# The row was first baselined at commit 46c4bf3a3a -- B19's close, the last revision before
 # any of window.rs or winfloat.rs is carved or rewritten.  It is the
 # *pre-rewrite* behaviour of `do_window`'s letter dispatch, `win_split`/
 # `win_split_ins`, `win_equal`/`win_equal_rec`, `frame_new_height`/
@@ -41,15 +42,12 @@
 # clamps (`window/arith.rs`, `window/config.rs`, `winfloat.rs`).  Every
 # other row of every artifact is IDENTICAL on all three sides, which is
 # still the proof that the window family has not moved since P0.
-# Regenerate the baseline only when a behaviour change is *intended*
-# and reviewed:
-#
-#   winsweep.sh <nvim> <runtime> \
-#       test/battery/winbase base
-#
-# ... and `just build` first: a mutation harness leaves the binary built
-# from its last mutant, and a baseline taken from that compares mutant
-# against mutant forever after.
+# Regenerate ONLY when a behaviour change is *intended* and reviewed -- and
+# regeneration is now a BASE BUMP, not a re-cut in place.  Write the new
+# commit into `test/battery/BASE`, in a commit of its own whose body says
+# what moved; the cache under target/battery/base/ is keyed by that sha, so
+# every row re-cuts itself against the new binary on the next run.  See
+# README.md.
 #
 # All three artifacts are compared.  `base.stderr` is EMPTY at the
 # baseline and that is the assertion: the report and the canonical JSON
@@ -117,24 +115,37 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-BASELINE=${WIN_BASELINE:-$HERE/winbase}
 OUT=${SWEEP_OUT:-/tmp/winsweep-out}
 REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 LABEL=${1:-cur}
 LOG=$OUT/build-$LABEL.log
+# Cut mode.  `baseline.sh` re-enters this script as `--cut <nvim> <dir>` to
+# cut the pinned baseline from the reference binary; it shares the ONE sweep
+# call below with the head run, so the two sides of the differential cannot
+# drift apart.  It skips the build and the diff.
+CUT=
+if [[ ${1:-} == --cut ]]; then CUT=$2; OUT=$3; LABEL=base; LOG=/dev/null; fi
+NVIM_BIN=${CUT:-$REPO/target/debug/nvim}
 
 mkdir -p "$OUT"
 cd "$REPO"
-if ! just build >"$LOG" 2>&1; then
+if [[ -z $CUT ]] && ! just build >"$LOG" 2>&1; then
   echo "BUILD FAILED -- see $LOG" >&2
   grep -E '^(error|warning)' "$LOG" | head -60 >&2
   exit 1
 fi
 
 rm -f "$OUT/$LABEL.txt" "$OUT/$LABEL.struct" "$OUT/$LABEL.stderr"
-"$HERE/winsweep.sh" "$REPO/target/debug/nvim" "$REPO/runtime" \
+"$HERE/winsweep.sh" "$NVIM_BIN" "$REPO/runtime" \
   "$OUT" "$LABEL" 2>&1 | tail -1
 
+if [[ -n $CUT ]]; then exit 0; fi
+
+# The baseline is CUT, not committed: `baseline.sh` runs this same sweep
+# against the binary `test/battery/BASE` pins and caches the result under
+# target/battery/base/<sha>/.  The first row to want it pays for the
+# reference build.  See README.md.
+BASELINE=${WIN_BASELINE:-$("$HERE/baseline.sh" win)}
 fail=0
 for part in txt struct stderr; do
   if diff -q "$BASELINE/base.$part" "$OUT/$LABEL.$part" >/dev/null; then
