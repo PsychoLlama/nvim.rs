@@ -813,10 +813,10 @@ pub(crate) fn clear_op(mut op: Op) {
 /// [`clear_op`] through a raw pointer.
 ///
 /// # Safety
-/// `oap` must be a live operator.
-pub(crate) unsafe fn clearop(oap: *mut OpArg) {
+/// `op` must be a live operator.
+pub(crate) unsafe fn clearop(op: *mut OpArg) {
     // SAFETY: the caller promises a live operator.
-    clear_op(unsafe { Op::new(oap) });
+    clear_op(unsafe { Op::new(op) });
 }
 
 /// [`clear_op`], and say so.
@@ -832,10 +832,10 @@ pub(crate) fn clear_op_beep(op: Op) {
 /// [`clear_op_beep`] through a raw pointer.
 ///
 /// # Safety
-/// `oap` must be a live operator.
-pub(crate) unsafe fn clearopbeep(oap: *mut OpArg) {
+/// `op` must be a live operator.
+pub(crate) unsafe fn clearopbeep(op: *mut OpArg) {
     // SAFETY: the caller promises a live operator.
-    clear_op_beep(unsafe { Op::new(oap) });
+    clear_op_beep(unsafe { Op::new(op) });
 }
 
 /// Read one more key for a command that takes several, with mappings and

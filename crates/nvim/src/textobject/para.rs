@@ -251,8 +251,8 @@ fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_i
 /// FAIL.
 ///
 /// # Safety
-/// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_par(oap: *mut OpArg, count: c_int, include: bool, type_0: c_int) -> c_int {
+/// `op` must be a live operator argument, and there must be a current line.
+pub unsafe fn current_par(op: *mut OpArg, count: c_int, include: bool, type_0: c_int) -> c_int {
     if type_0 == 'S' as c_int {
         return FAIL; // not implemented yet
     }
@@ -347,11 +347,11 @@ pub unsafe fn current_par(oap: *mut OpArg, count: c_int, include: bool, type_0: 
             showmode();
         }
     } else {
-        // SAFETY: the caller guarantees `oap` is a live operator argument.
-        let oap = unsafe { &mut *oap };
-        oap.start.lnum = start_lnum;
-        oap.start.col = 0;
-        oap.motion_type = kMTLineWise;
+        // SAFETY: the caller guarantees `op` is a live operator argument.
+        let op = unsafe { &mut *op };
+        op.start.lnum = start_lnum;
+        op.start.col = 0;
+        op.motion_type = kMTLineWise;
     }
     cur_win().w_cursor.lnum = end_lnum;
     cur_win().w_cursor.col = 0;

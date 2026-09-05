@@ -315,11 +315,11 @@ pub unsafe fn ex_spellrepall(_args: *mut ExArg) {
     unsafe { (*curwin.get()).w_cursor.lnum = 0 };
     while !got_int.get() {
         let slash = '/' as c_int;
-        let no_oap = ::core::ptr::null_mut::<OpArg>();
+        let null_op = ::core::ptr::null_mut::<OpArg>();
         let no_arg = ::core::ptr::null_mut::<SearchItArg>();
         let found = unsafe {
             do_search(
-                no_oap,
+                null_op,
                 slash,
                 slash,
                 frompat,

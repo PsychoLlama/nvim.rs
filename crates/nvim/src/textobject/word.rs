@@ -360,9 +360,9 @@ pub unsafe fn bckend_word(mut count: c_int, bigword: bool, eol: bool) -> Result<
 /// direction the cursor sits relative to the Visual start.
 ///
 /// # Safety
-/// `oap` must be a live operator argument, and there must be a current line.
+/// `op` must be a live operator argument, and there must be a current line.
 pub unsafe fn current_word(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     mut count: c_int,
     include: bool,
     bigword: bool,
@@ -424,10 +424,10 @@ pub unsafe fn current_word(
             // SAFETY: on the main thread with a current buffer.
             redraw_curbuf_later(UPD_INVERTED); // update the inversion
         } else {
-            // SAFETY: the caller guarantees `oap` is a live operator argument.
-            let oap = unsafe { &mut *oap };
-            oap.start = start_pos;
-            oap.motion_type = kMTCharWise;
+            // SAFETY: the caller guarantees `op` is a live operator argument.
+            let op = unsafe { &mut *op };
+            op.start = start_pos;
+            op.motion_type = kMTCharWise;
         }
         count -= 1;
     }
@@ -483,8 +483,8 @@ pub unsafe fn current_word(
                 if visual_active() {
                     set_visual_anchor(cur_win().w_cursor);
                 } else {
-                    // SAFETY: `oap` is a live operator argument.
-                    unsafe { (*oap).start = cur_win().w_cursor };
+                    // SAFETY: `op` is a live operator argument.
+                    unsafe { (*op).start = cur_win().w_cursor };
                 }
             }
         }
@@ -505,8 +505,8 @@ pub unsafe fn current_word(
             redraw_cmdline.set(true); // show the mode later
         }
     } else {
-        // SAFETY: the caller guarantees `oap` is a live operator argument.
-        unsafe { (*oap).inclusive = inclusive };
+        // SAFETY: the caller guarantees `op` is a live operator argument.
+        unsafe { (*op).inclusive = inclusive };
     }
     Ok(())
 }

@@ -54,9 +54,9 @@ const NAMED_END_TAG: &::core::ffi::CStr = c"</%.*s>\\c";
 /// what `sol` records.
 ///
 /// # Safety
-/// `oap` must be a live operator argument, and there must be a current line.
+/// `op` must be a live operator argument, and there must be a current line.
 pub unsafe fn current_block(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     mut count: c_int,
     include: bool,
     what: c_int,
@@ -230,16 +230,16 @@ pub unsafe fn current_block(
     } else {
         // SAFETY: the caller passes a live operator argument, and nothing
         // reached from here reads it back through the raw pointer.
-        let oap = unsafe { &mut *oap };
-        oap.start = start_pos;
-        oap.motion_type = kMTCharWise;
-        oap.inclusive = false;
+        let op = unsafe { &mut *op };
+        op.start = start_pos;
+        op.motion_type = kMTCharWise;
+        op.inclusive = false;
         if sol {
             // SAFETY: the cursor is a position in the current buffer.
             unsafe { incl(&mut cur_win().cursor()) };
         } else if ltoreq(start_pos, cur_win().w_cursor) {
             // Include the character under the cursor.
-            oap.inclusive = true;
+            op.inclusive = true;
         } else {
             // The end is before the start -- nothing between `<>`, `[]`
             // and so on -- so operate on no text at all.
@@ -345,8 +345,8 @@ unsafe fn search_tag_pair(spat: *const c_char, epat: *const c_char, dir: c_int) 
 /// cursor left at the end.
 ///
 /// # Safety
-/// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_tagblock(oap: *mut OpArg, count_arg: c_int, include: bool) -> c_int {
+/// `op` must be a live operator argument, and there must be a current line.
+pub unsafe fn current_tagblock(op: *mut OpArg, count_arg: c_int, include: bool) -> c_int {
     let mut count = count_arg;
     let mut do_include = include;
     let save_p_ws = p_ws.get() != 0;
@@ -551,15 +551,15 @@ pub unsafe fn current_tagblock(oap: *mut OpArg, count_arg: c_int, include: bool)
     } else {
         // SAFETY: the caller passes a live operator argument, and nothing
         // reached from here reads it back through the raw pointer.
-        let oap = unsafe { &mut *oap };
-        oap.start = start_pos;
-        oap.motion_type = kMTCharWise;
+        let op = unsafe { &mut *op };
+        op.start = start_pos;
+        op.motion_type = kMTCharWise;
         if lt(end_pos, start_pos) {
             // No text between the tags: operate on an empty area.
             cur_win().w_cursor = start_pos;
-            oap.inclusive = false;
+            op.inclusive = false;
         } else {
-            oap.inclusive = is_inclusive;
+            op.inclusive = is_inclusive;
         }
     }
     retval = OK;

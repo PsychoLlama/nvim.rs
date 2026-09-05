@@ -45,25 +45,25 @@ use crate::types::NUL;
 /// prepares undo.
 ///
 /// # Safety
-/// `oap` and `bdp` must point to live structs; `s` must be `slen` readable
+/// `op` and `bdp` must point to live structs; `s` must be `slen` readable
 /// bytes.
 pub(crate) unsafe fn block_insert(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     s: *const c_char,
     slen: size_t,
     b_insert: bool,
     bdp: *mut BlockDef,
 ) {
     // SAFETY: the caller's promise -- both point to live structs.
-    let (oap, bdp) = unsafe { (&mut *oap, &mut *bdp) };
+    let (op, bdp) = unsafe { (&mut *op, &mut *bdp) };
     let old_state = State.get();
     // Not MODE_REPLACE, whatever the user was in.
     State.set(MODE_INSERT);
 
-    let mut lnum = oap.start.lnum + 1;
-    while lnum <= oap.end.lnum {
+    let mut lnum = op.start.lnum + 1;
+    while lnum <= op.end.lnum {
         // SAFETY: `lnum` walks the region, which is of the current buffer.
-        unsafe { block_prep(&raw mut *oap, &raw mut *bdp, lnum, true) };
+        unsafe { block_prep(&raw mut *op, &raw mut *bdp, lnum, true) };
         if bdp.is_short != 0 && b_insert {
             // `I` on a line that ends before the block starts.
             lnum += 1;
@@ -105,7 +105,7 @@ pub(crate) unsafe fn block_insert(
             // edge, unless `$` made the block open-ended.
             ts_val = bdp.end_char_vcols;
             if bdp.is_MAX == 0 {
-                spaces = oap.end_vcol - bdp.end_vcol + 1;
+                spaces = op.end_vcol - bdp.end_vcol + 1;
             }
             count = spaces;
             offset = bdp.textcol + bdp.textlen;
@@ -180,10 +180,10 @@ pub(crate) unsafe fn block_insert(
             )
         };
 
-        if lnum == oap.end.lnum {
+        if lnum == op.end.lnum {
             // `']` goes to the end of the block, not the end of the insert
             // in the first line.
-            cur_buf().b_op_end.lnum = oap.end.lnum;
+            cur_buf().b_op_end.lnum = op.end.lnum;
             cur_buf().b_op_end.col = offset;
             if cur_buf().b_visual.vi_end.coladd != 0 {
                 cur_buf().b_visual.vi_end.col += cur_buf().b_visual.vi_end.coladd;
@@ -197,8 +197,8 @@ pub(crate) unsafe fn block_insert(
 
     // Only if lines past the first were actually modified, which is the
     // loop's own bound.
-    if oap.start.lnum < oap.end.lnum {
-        let (first, last) = (oap.start.lnum + 1, oap.end.lnum + 1);
+    if op.start.lnum < op.end.lnum {
+        let (first, last) = (op.start.lnum + 1, op.end.lnum + 1);
         // SAFETY: both name lines of the current buffer.
         changed_lines(cur_buf(), first, 0, last, 0, true);
     }
@@ -246,11 +246,11 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// like a partly selected TAB.
 ///
 /// # Safety
-/// `oap` and `bdp` must point to live structs, and `lnum` must be a line of
+/// `op` and `bdp` must point to live structs, and `lnum` must be a line of
 /// the current buffer.
-pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_del: bool) {
+pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_del: bool) {
     // SAFETY: the caller's promise -- both point to live structs.
-    let (oap, bdp) = unsafe { (&mut *oap, &mut *bdp) };
+    let (op, bdp) = unsafe { (&mut *op, &mut *bdp) };
     // Unwanted line breaks would move every column measured below.
     let lbr_saved = reset_lbr();
 
@@ -280,7 +280,7 @@ pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_d
     let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
-    while vcol < oap.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
+    while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
         incr = unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
         vcol += incr;
         if ascii_iswhite(ci.chr.value) {
@@ -297,36 +297,36 @@ pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_d
     let mut pstart = ci.ptr;
     bdp.start_char_vcols = incr;
 
-    if bdp.start_vcol < oap.start_vcol {
+    if bdp.start_vcol < op.start_vcol {
         // The line ends before the block starts.
         bdp.end_vcol = bdp.start_vcol;
         bdp.is_short = 1;
-        if !is_del || oap.op_type == OpType::Append {
-            bdp.endspaces = oap.end_vcol - oap.start_vcol + 1;
+        if !is_del || op.op_type == OpType::Append {
+            bdp.endspaces = op.end_vcol - op.start_vcol + 1;
         }
     } else {
-        bdp.startspaces = bdp.start_vcol - oap.start_vcol;
+        bdp.startspaces = bdp.start_vcol - op.start_vcol;
         if is_del && bdp.startspaces != 0 {
             bdp.startspaces = bdp.start_char_vcols - bdp.startspaces;
         }
         let mut pend = pstart;
         bdp.end_vcol = bdp.start_vcol;
 
-        if bdp.end_vcol > oap.end_vcol {
+        if bdp.end_vcol > op.end_vcol {
             // The whole block is inside one character -- a wide TAB.
             bdp.is_oneChar = 1;
-            if oap.op_type == OpType::Insert {
+            if op.op_type == OpType::Insert {
                 bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
-            } else if oap.op_type == OpType::Append {
-                bdp.startspaces += oap.end_vcol - oap.start_vcol + 1;
+            } else if op.op_type == OpType::Append {
+                bdp.startspaces += op.end_vcol - op.start_vcol + 1;
                 bdp.endspaces = bdp.start_char_vcols - bdp.startspaces;
             } else {
-                bdp.startspaces = oap.end_vcol - oap.start_vcol + 1;
-                if is_del && oap.op_type != OpType::Lshift {
+                bdp.startspaces = op.end_vcol - op.start_vcol + 1;
+                if is_del && op.op_type != OpType::Lshift {
                     // Summing the two into `startspaces` does not work for
                     // a Visual replace, so the TAB is split in two.
-                    bdp.startspaces = bdp.start_char_vcols - (bdp.start_vcol - oap.start_vcol);
-                    bdp.endspaces = bdp.end_vcol - oap.end_vcol - 1;
+                    bdp.startspaces = bdp.start_char_vcols - (bdp.start_vcol - op.start_vcol);
+                    bdp.endspaces = bdp.end_vcol - op.end_vcol - 1;
                 }
             }
         } else {
@@ -335,7 +335,7 @@ pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_d
             ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;
-            while vcol <= oap.end_vcol && unsafe { *ci.ptr } as c_int != NUL {
+            while vcol <= op.end_vcol && unsafe { *ci.ptr } as c_int != NUL {
                 prev_pend = ci.ptr;
                 incr =
                     unsafe { win_charsize(cstype, vcol, ci.ptr, ci.chr.value, &mut csarg) }.width;
@@ -345,18 +345,18 @@ pub unsafe fn block_prep(oap: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_d
             bdp.end_vcol = vcol;
             pend = ci.ptr;
 
-            if bdp.end_vcol <= oap.end_vcol
-                && (!is_del || oap.op_type == OpType::Append || oap.op_type == OpType::Replace)
+            if bdp.end_vcol <= op.end_vcol
+                && (!is_del || op.op_type == OpType::Append || op.op_type == OpType::Replace)
             {
                 // The line ends inside the block. Filling it out to the
                 // block's width is the alternative, and it is deliberately
                 // not done: it leaves trailing white space behind.
                 bdp.is_short = 1;
-                if oap.op_type == OpType::Append || op_virtual() {
-                    bdp.endspaces = oap.end_vcol - bdp.end_vcol + c_int::from(oap.inclusive);
+                if op.op_type == OpType::Append || op_virtual() {
+                    bdp.endspaces = op.end_vcol - bdp.end_vcol + c_int::from(op.inclusive);
                 }
-            } else if bdp.end_vcol > oap.end_vcol {
-                bdp.endspaces = bdp.end_vcol - oap.end_vcol - 1;
+            } else if bdp.end_vcol > op.end_vcol {
+                bdp.endspaces = bdp.end_vcol - op.end_vcol - 1;
                 if !is_del && bdp.endspaces != 0 {
                     bdp.endspaces = incr - bdp.endspaces;
                     if pend != pstart {
@@ -466,33 +466,33 @@ pub unsafe fn charwise_block_prep(
     };
 }
 
-/// Compute `oap`'s `start_vcol`/`end_vcol` and square its corners up.
+/// Compute `op`'s `start_vcol`/`end_vcol` and square its corners up.
 ///
-/// Only does anything for a CTRL-V selection. Afterwards `oap.start` and
-/// `oap.end` are the block's upper-left and lower-right corners as *character*
+/// Only does anything for a CTRL-V selection. Afterwards `op.start` and
+/// `op.end` are the block's upper-left and lower-right corners as *character*
 /// positions, which is what every blockwise operator then works from.
 ///
 /// `initial` is false when replaying, and asks for the 'selection' adjustment
 /// to be skipped. `redo_visual_vcol` is the recorded width a `.` replay uses
 /// instead of measuring the selection again.
-pub(crate) fn get_op_vcol(mut oap: Op, redo_visual_vcol: ColNr, initial: bool) {
-    if !visual_mode().is_block() || (!initial && oap.end.col < cur_win().w_view_width) {
+pub(crate) fn get_op_vcol(mut op: Op, redo_visual_vcol: ColNr, initial: bool) {
+    if !visual_mode().is_block() || (!initial && op.end.col < cur_win().w_view_width) {
         return;
     }
 
-    oap.motion_type = kMTBlockWise;
+    op.motion_type = kMTBlockWise;
     // Do not let the end land on a trail byte.
-    cur_win().buffer().snap_to_char(oap.end());
+    cur_win().buffer().snap_to_char(op.end());
 
-    (oap.start_vcol, oap.end_vcol) = cur_win().virtual_vcol_span(oap.start());
+    (op.start_vcol, op.end_vcol) = cur_win().virtual_vcol_span(op.start());
     if !redo_VIsual_busy.get() {
-        let (start, end) = cur_win().virtual_vcol_span(oap.end());
-        oap.start_vcol = oap.start_vcol.min(start);
-        if end > oap.end_vcol {
-            if initial && sel_exclusive() && start >= 1 && start > oap.end_vcol {
-                oap.end_vcol = start - 1;
+        let (start, end) = cur_win().virtual_vcol_span(op.end());
+        op.start_vcol = op.start_vcol.min(start);
+        if end > op.end_vcol {
+            if initial && sel_exclusive() && start >= 1 && start > op.end_vcol {
+                op.end_vcol = start - 1;
             } else {
-                oap.end_vcol = end;
+                op.end_vcol = end;
             }
         }
     }
@@ -500,26 +500,26 @@ pub(crate) fn get_op_vcol(mut oap: Op, redo_visual_vcol: ColNr, initial: bool) {
     if cur_win().w_curswant == MAXCOL {
         // `$` was used: the block's right edge is the longest line's.
         cur_win().w_cursor.col = MAXCOL;
-        oap.end_vcol = 0;
-        cur_win().w_cursor.lnum = oap.start.lnum;
+        op.end_vcol = 0;
+        cur_win().w_cursor.lnum = op.start.lnum;
         let cursor = cur_win().cursor();
-        while cur_win().w_cursor.lnum <= oap.end.lnum {
+        while cur_win().w_cursor.lnum <= op.end.lnum {
             let (_, end) = cur_win().virtual_vcol_span(cursor);
-            oap.end_vcol = oap.end_vcol.max(end);
+            op.end_vcol = op.end_vcol.max(end);
             cur_win().w_cursor.lnum += 1;
         }
     } else if redo_VIsual_busy.get() {
-        oap.end_vcol = oap.start_vcol + redo_visual_vcol - 1;
+        op.end_vcol = op.start_vcol + redo_visual_vcol - 1;
     }
 
     // Turn the column pair back into the block's two corner *positions*.
-    cur_win().w_cursor.lnum = oap.end.lnum;
-    cur_win().coladvance(oap.end_vcol);
-    oap.end = cur_win().w_cursor;
+    cur_win().w_cursor.lnum = op.end.lnum;
+    cur_win().coladvance(op.end_vcol);
+    op.end = cur_win().w_cursor;
 
-    cur_win().w_cursor = oap.start;
-    cur_win().coladvance(oap.start_vcol);
-    oap.start = cur_win().w_cursor;
+    cur_win().w_cursor = op.start;
+    cur_win().coladvance(op.start_vcol);
+    op.start = cur_win().w_cursor;
 }
 
 /// The buffer the editor is working in.

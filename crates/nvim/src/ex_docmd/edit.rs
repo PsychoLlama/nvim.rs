@@ -902,9 +902,9 @@ fn cur_win() -> Win {
 }
 
 /// `clear_oparg()` as checked code.
-fn clear_oparg(oap: *mut OpArg) {
+fn clear_oparg(op: *mut OpArg) {
     // SAFETY: the pointers are the command line's own, and live for the call.
-    unsafe { crate::ops::clear_oparg(oap) }
+    unsafe { crate::ops::clear_oparg(op) }
 }
 
 /// `emsg()` as checked code.

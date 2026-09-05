@@ -164,7 +164,7 @@ impl Oap {
 /// (1) only if mouse pointer moved since press
 /// (2) only if click is in same buffer
 ///
-/// @param oap        operator argument, can be NULL
+/// @param op        operator argument, can be NULL
 /// @param c          `K_LEFTMOUSE`, etc
 /// @param dir        Direction to 'put' if necessary
 /// @param fixindent  `PUT_FIXINDENT` if fixing indent necessary
@@ -172,9 +172,9 @@ impl Oap {
 /// @return           true if `start_arrow()` should be called for edit mode.
 ///
 /// # Safety
-/// `oap` must be a live operator argument or null.
+/// `op` must be a live operator argument or null.
 pub(crate) unsafe fn do_mouse(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     c: c_int,
     dir: c_int,
     count: c_int,
@@ -182,7 +182,7 @@ pub(crate) unsafe fn do_mouse(
 ) -> bool {
     // SAFETY: the caller's promise.
     // The caller's promise makes every deref below sound.
-    let oap = (!oap.is_null()).then_some(Oap(oap));
+    let op = (!op.is_null()).then_some(Oap(op));
     let (mut which_button, is_click, is_drag) = coalesce_drags(c);
 
     if c == Key::Mousemove.code() {
@@ -195,9 +195,9 @@ pub(crate) unsafe fn do_mouse(
         return answer;
     }
 
-    let regname = oap.map_or(0, |o| o.regname);
+    let regname = op.map_or(0, |o| o.regname);
     if which_button == MOUSE_MIDDLE
-        && let Some(answer) = middle_button_insert(oap, regname, fixindent)
+        && let Some(answer) = middle_button_insert(op, regname, fixindent)
     {
         return answer;
     }
@@ -268,9 +268,9 @@ pub(crate) unsafe fn do_mouse(
 
     // If an operator is pending, ignore all drags and releases until the next
     // mouse click.
-    if let Some(mut oap) = oap.filter(|o| !is_drag && o.pending()) {
+    if let Some(mut op) = op.filter(|o| !is_drag && o.pending()) {
         got_click.set(false);
-        oap.motion_type = kMTCharWise;
+        op.motion_type = kMTCharWise;
     }
 
     // When releasing the button let jump_to_mouse() know.
@@ -285,7 +285,7 @@ pub(crate) unsafe fn do_mouse(
     // Even though we gate *_VIS flags above, we want to make sure the cursor
     // doesn't move in visual mode unless it is set as a mouse option.
     if !visual_active() || mouse_can_visual {
-        let inclusive = oap.map_or(ptr::null_mut(), Oap::inclusive);
+        let inclusive = op.map_or(ptr::null_mut(), Oap::inclusive);
         // SAFETY: `inclusive` is a field of the live operator, or null.
         jump_flags = unsafe { jump_to_mouse(jump_flags, inclusive, which_button) };
     }
@@ -309,8 +309,8 @@ pub(crate) unsafe fn do_mouse(
 
     // When jumping to another window, clear a pending operator.  That's a bit
     // friendlier than beeping and not jumping to that window.
-    if let Some(oap) = oap.filter(|o| win != old_curwin && o.pending()) {
-        oap.clear();
+    if let Some(op) = op.filter(|o| win != old_curwin && o.pending()) {
+        op.clear();
     }
 
     if mod_mask.get().is_empty()
@@ -357,7 +357,7 @@ pub(crate) unsafe fn do_mouse(
 
     dispatch_action(
         Action {
-            oap,
+            op,
             which_button,
             is_click,
             is_drag,
@@ -490,12 +490,12 @@ fn modifier_shortcuts(is_click: bool, which_button: c_int, count: c_int) -> Opti
 ///
 /// Answers `None` only in Normal mode with nothing selected and no operator
 /// pending -- the rest is below `jump_to_mouse()`.
-fn middle_button_insert(oap: Option<Oap>, mut regname: c_int, fixindent: bool) -> Option<bool> {
+fn middle_button_insert(op: Option<Oap>, mut regname: c_int, fixindent: bool) -> Option<bool> {
     if State.get() == MODE_NORMAL {
         // If an operator was pending, we don't know what the user wanted to
         // do.  Go back to normal mode: Clear the operator and beep().
-        if let Some(oap) = oap.filter(|o| o.pending()) {
-            oap.clear_and_beep();
+        if let Some(op) = op.filter(|o| o.pending()) {
+            op.clear_and_beep();
             return Some(false);
         }
         // If visual was active, yank the highlighted text and put it before
@@ -697,7 +697,7 @@ fn click_definition(
 /// belongs: the middle-button paste, the quickfix and tag jumps, the
 /// Shift-click search and the multi-click word or block selection.
 struct Action {
-    oap: Option<Oap>,
+    op: Option<Oap>,
     which_button: c_int,
     is_click: bool,
     is_drag: bool,
@@ -712,7 +712,7 @@ struct Action {
 
 fn dispatch_action(a: Action, win: Win) {
     let Action {
-        oap,
+        op,
         which_button,
         is_click,
         is_drag,
@@ -817,7 +817,7 @@ fn dispatch_action(a: Action, win: Win) {
         && State.get() & (MODE_NORMAL | MODE_INSERT) != 0
         && mouse_can_visual
     {
-        multi_click(win, oap, is_click, is_drag, mods);
+        multi_click(win, op, is_click, is_drag, mods);
         return;
     }
 
@@ -832,7 +832,7 @@ fn dispatch_action(a: Action, win: Win) {
 
 /// A double, triple or quadruple click starts or widens a Visual selection: a
 /// word, a line, or -- for a double click on a bracket -- the block it opens.
-fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mods: ModMask) {
+fn multi_click(mut win: Win, op: Option<Oap>, is_click: bool, is_drag: bool, mods: ModMask) {
     if is_click || !visual_active() {
         if visual_active() {
             orig_cursor.set(visual_anchor());
@@ -857,7 +857,7 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
 
     // A double click selects a word or a block.
     if mods.masked(ModMask::MULTI_CLICK) == ModMask::TWO_CLICK {
-        let matched = is_click && select_matching_block(win, oap);
+        let matched = is_click && select_matching_block(win, op);
         if !matched && (is_click || is_drag) {
             // When not found a match or when dragging: extend to include a
             // word.
@@ -893,7 +893,7 @@ fn multi_click(mut win: Win, oap: Option<Oap>, is_click: bool, is_drag: bool, mo
 /// If the character under the cursor (skipping white space) is not a word
 /// character, try finding a match and select a (), {}, [], #if/#endif, etc.
 /// block.  Answers whether one was found.
-fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
+fn select_matching_block(mut win: Win, op: Option<Oap>) -> bool {
     let mut end_visual = win.w_cursor;
     // SAFETY: a live local position in the current buffer.
     let probe = unsafe { PosRef::new(&raw mut end_visual) };
@@ -901,10 +901,10 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
         advance(probe);
     }
 
-    let Some(mut oap) = oap else {
+    let Some(mut op) = op else {
         return false;
     };
-    oap.motion_type = kMTCharWise;
+    op.motion_type = kMTCharWise;
 
     if !visual_mode().is_char() {
         return false;
@@ -916,12 +916,12 @@ fn select_matching_block(mut win: Win, oap: Option<Oap>) -> bool {
     if !equalpos(win.w_cursor, visual_anchor()) {
         return false;
     }
-    let Some(pos) = oap.findmatch() else {
+    let Some(pos) = op.findmatch() else {
         return false;
     };
 
     win.w_cursor = pos;
-    if oap.motion_type == kMTLineWise {
+    if op.motion_type == kMTLineWise {
         set_visual_mode(VisualMode::LINE);
     } else if sel_exclusive() {
         if lt(win.w_cursor, visual_anchor()) {

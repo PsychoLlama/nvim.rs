@@ -59,13 +59,13 @@ use crate::r#move::{
 /// fold counts as one screen line however tall its text is, so the walk steps
 /// over it rather than through it.
 pub(crate) unsafe fn nv_screengo(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     dir: c_int,
     mut dist: c_int,
     skip_conceal: bool,
 ) -> bool {
-    // SAFETY (throughout): `oap` is the caller's live operator.
-    let mut op = unsafe { Op::new(oap) };
+    // SAFETY (throughout): `op` is the caller's live operator.
+    let mut op = unsafe { Op::new(op) };
     let mut win = cur_win();
     let wp = win;
     // SAFETY: the cursor line is a line of the window's own buffer.
@@ -338,7 +338,7 @@ pub(crate) unsafe fn nv_right(cmd_arg: *mut CmdArg) {
             {
                 // A pending exclusive operator eats the line break by
                 // becoming inclusive instead of moving.
-                // SAFETY: `oap` is live and the cursor line is terminated.
+                // SAFETY: `op` is live and the cursor line is terminated.
                 let eat = unsafe {
                     op.op_type != OpType::Nop
                         && !op.inclusive
@@ -591,7 +591,7 @@ pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
     op.inclusive = true;
     if count0 != 0 {
         if count0 > 100 {
-            // SAFETY: `oap` is the command's live operator.
+            // SAFETY: `op` is the command's live operator.
             clear_op_beep(op);
         } else {
             op.motion_type = kMTLineWise;
@@ -621,7 +621,7 @@ pub(crate) unsafe fn nv_percent(cmd_arg: *mut CmdArg) {
             win.w_cursor.coladd = 0;
             unsafe { adjust_for_sel(cmd_arg) };
         } else {
-            // SAFETY: `oap` is the command's live operator.
+            // SAFETY: `op` is the command's live operator.
             clear_op_beep(op);
         }
     }
@@ -751,9 +751,9 @@ pub(crate) unsafe fn nv_wordcmd(cmd_arg: *mut CmdArg) {
 
 /// Pull the cursor back off the line's terminator, which is not a position an
 /// operator may include -- and say the operator now covers the last character.
-pub(crate) unsafe fn adjust_cursor(oap: *mut OpArg) {
-    // SAFETY (throughout): `oap` is the caller's live operator.
-    let mut op = unsafe { Op::new(oap) };
+pub(crate) unsafe fn adjust_cursor(op: *mut OpArg) {
+    // SAFETY (throughout): `op` is the caller's live operator.
+    let mut op = unsafe { Op::new(op) };
     if cur_win().w_cursor.col > 0
         && gchar_cursor() == NUL
         && (!visual_active() || unsafe { *p_sel.get() } as c_int == 'o' as c_int)

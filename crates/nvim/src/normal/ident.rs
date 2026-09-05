@@ -278,7 +278,7 @@ pub(crate) unsafe fn find_ident_at_pos(
 
 /// `gd` and `gD`: jump to the local or global declaration of the identifier
 /// under the cursor.
-pub(crate) unsafe fn nv_gd(oap: *mut OpArg, nchar: c_int, thisblock: c_int) {
+pub(crate) unsafe fn nv_gd(op: *mut OpArg, nchar: c_int, thisblock: c_int) {
     let mut word: *mut c_char = ptr::null_mut();
     let out = &raw mut word;
     // SAFETY: `out` points at this frame's own `word`.
@@ -288,14 +288,14 @@ pub(crate) unsafe fn nv_gd(oap: *mut OpArg, nchar: c_int, thisblock: c_int) {
     let found =
         len != 0 && unsafe { find_decl(word, len, locally, thisblock != 0, SEARCH_START as c_int) };
     if !found {
-        // SAFETY: `oap` is the caller's live operator.
-        clear_op_beep(unsafe { Op::new(oap) });
+        // SAFETY: `op` is the caller's live operator.
+        clear_op_beep(unsafe { Op::new(op) });
         return;
     }
     if fdo_flags.get() & kOptFdoFlagSearch as c_uint != 0
         && KeyTyped.get()
-        // SAFETY: `oap` is the caller's live operator.
-        && unsafe { (*oap).op_type } == OpType::Nop
+        // SAFETY: `op` is the caller's live operator.
+        && unsafe { (*op).op_type } == OpType::Nop
     {
         // SAFETY: the editor's fold state is live.
         unsafe { fold_open_cursor() };
@@ -432,10 +432,10 @@ pub(crate) unsafe fn find_decl(
             // Refuse a match whose enclosing block closes before the
             // cursor: it is a different scope.
             let travel = (old_pos.lnum - cur_win().w_cursor.lnum + 1) as int64_t;
-            let no_oap = ptr::null_mut();
+            let null_op = ptr::null_mut();
             let brace = '}' as c_int;
             // SAFETY: the current window and buffer are live.
-            let close = unsafe { findmatchlimit(no_oap, brace, FM_FORWARD as c_int, travel) };
+            let close = unsafe { findmatchlimit(null_op, brace, FM_FORWARD as c_int, travel) };
             if let Some(close) = close
                 && close.lnum < old_pos.lnum
             {

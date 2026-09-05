@@ -27,10 +27,10 @@ const BACKWARD: c_int = super::BACKWARD as c_int;
 /// Find the match for the bracket under the cursor.
 ///
 /// # Safety
-/// `oap` must be null or valid; the current window and buffer must be
+/// `op` must be null or valid; the current window and buffer must be
 /// valid.
-pub unsafe fn findmatch(oap: *mut OpArg, initc: c_int) -> Option<Pos> {
-    unsafe { findmatchlimit(oap, initc, 0, 0) }
+pub unsafe fn findmatch(op: *mut OpArg, initc: c_int) -> Option<Pos> {
+    unsafe { findmatchlimit(op, initc, 0, 0) }
 }
 
 /// Find the matching paren or brace, if it is within `maxtravel` lines of
@@ -47,19 +47,19 @@ pub unsafe fn findmatch(oap: *mut OpArg, initc: c_int) -> Option<Pos> {
 /// `'/'`, `'*'` and `'#'` forms) and `FM_BLOCKSTOP` (stop at a `{` or `}`
 /// in column 0).
 ///
-/// `oap` is used only to set `oap->motion_type` for the linewise `#if`
+/// `op` is used only to set `op.motion_type` for the linewise `#if`
 /// case; it may be null.
 ///
 /// # Safety
-/// `oap` must be null or valid; the current window and buffer must be
+/// `op` must be null or valid; the current window and buffer must be
 /// valid.
 pub unsafe fn findmatchlimit(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
 ) -> Option<Pos> {
-    unsafe { find_match(oap, initc, flags, maxtravel) }
+    unsafe { find_match(op, initc, flags, maxtravel) }
 }
 
 // ---------------------------------------------------------------------
@@ -200,10 +200,10 @@ enum Plan {
 /// along the line to the first bracket after the cursor.
 ///
 /// # Safety
-/// `pos` and `linep` must address the current buffer; `oap` must be null
+/// `pos` and `linep` must address the current buffer; `op` must be null
 /// or valid.
 unsafe fn make_plan(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     initc: c_int,
     dir: c_int,
     pos: &mut Pos,
@@ -323,8 +323,8 @@ unsafe fn make_plan(
     }
 
     // Look for a matching #if, #else, #elif or #endif.
-    if !oap.is_null() {
-        unsafe { (*oap).motion_type = kMTLineWise }; // linewise for this case only
+    if !op.is_null() {
+        unsafe { (*op).motion_type = kMTLineWise }; // linewise for this case only
     }
     if initc != '#' as c_int {
         let ptr = unsafe { skipwhite(skipwhite(linep).offset(1)) };
@@ -795,7 +795,7 @@ impl Walk {
 /// # Safety
 /// As [`findmatchlimit`].
 unsafe fn find_match(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     initc: c_int,
     flags: c_int,
     maxtravel: int64_t,
@@ -818,12 +818,12 @@ unsafe fn find_match(
         0
     };
 
-    let mut target =
-        match unsafe { make_plan(oap, initc, dir, &mut pos, linep, cpo_match, cpo_bsl) } {
-            Plan::Nothing => return None,
-            Plan::Hash(hash_dir) => return unsafe { find_hash_match(pos, hash_dir, initc) },
-            Plan::Walk(target) => target,
-        };
+    let mut target = match unsafe { make_plan(op, initc, dir, &mut pos, linep, cpo_match, cpo_bsl) }
+    {
+        Plan::Nothing => return None,
+        Plan::Hash(hash_dir) => return unsafe { find_hash_match(pos, hash_dir, initc) },
+        Plan::Walk(target) => target,
+    };
 
     // This is just guessing: with 'rightleft' set, look for the
     // matching paren or brace in the other direction.

@@ -176,14 +176,14 @@ fn new_state() -> NormalState {
 /// Refuse a command that would change text while the text is locked.
 ///
 /// Beeps and clears the pending operator when there is one to clear.
-pub(crate) unsafe fn check_text_locked(oap: *mut OpArg) -> bool {
-    // SAFETY (throughout): `oap` is null or the caller's operator.
+pub(crate) unsafe fn check_text_locked(op: *mut OpArg) -> bool {
+    // SAFETY (throughout): `op` is null or the caller's operator.
     if !unsafe { text_locked() } {
         return false;
     }
-    if !oap.is_null() {
-        // SAFETY: past the null check, `oap` is the caller's live operator.
-        clear_op_beep(unsafe { Op::new(oap) });
+    if !op.is_null() {
+        // SAFETY: past the null check, `op` is the caller's live operator.
+        clear_op_beep(unsafe { Op::new(op) });
     }
     unsafe { text_locked_msg() };
     true
@@ -191,17 +191,17 @@ pub(crate) unsafe fn check_text_locked(oap: *mut OpArg) -> bool {
 
 /// As [`check_text_locked`], and also refuse while the current buffer is
 /// locked. A locked buffer clears the operator without a beep.
-pub(crate) unsafe fn check_text_or_curbuf_locked(oap: *mut OpArg) -> bool {
-    // SAFETY (throughout): `oap` is null or the caller's operator.
-    if unsafe { check_text_locked(oap) } {
+pub(crate) unsafe fn check_text_or_curbuf_locked(op: *mut OpArg) -> bool {
+    // SAFETY (throughout): `op` is null or the caller's operator.
+    if unsafe { check_text_locked(op) } {
         return true;
     }
     if !unsafe { curbuf_locked() } {
         return false;
     }
-    if !oap.is_null() {
-        // SAFETY: past the null check, `oap` is the caller's live operator.
-        clear_op(unsafe { Op::new(oap) });
+    if !op.is_null() {
+        // SAFETY: past the null check, `op` is the caller's live operator.
+        clear_op(unsafe { Op::new(op) });
     }
     true
 }
@@ -211,15 +211,15 @@ pub(crate) unsafe fn check_text_or_curbuf_locked(oap: *mut OpArg) -> bool {
 ///
 /// Reads the operator the innermost `normal_enter`/`normal_cmd` installed.
 pub(crate) fn op_pending() -> bool {
-    let oap = current_oap.get();
+    let op = current_oap.get();
     // SAFETY: `current_oap` is null or points at a live caller's `OpArg`,
     // and the `&&` chain only reaches the reads past the null check.
-    !(!oap.is_null()
+    !(!op.is_null()
         && !finish_op.get()
-        && unsafe { (*oap).prev_opcount } == 0
-        && unsafe { (*oap).prev_count0 } == 0
-        && unsafe { (*oap).op_type } == OpType::Nop
-        && unsafe { (*oap).regname } == NUL)
+        && unsafe { (*op).prev_opcount } == 0
+        && unsafe { (*op).prev_count0 } == 0
+        && unsafe { (*op).op_type } == OpType::Nop
+        && unsafe { (*op).regname } == NUL)
 }
 
 /// Run normal mode until something asks to leave it.
@@ -627,14 +627,14 @@ pub(crate) unsafe fn set_vcount_ca(cmd_arg: *mut CmdArg, set_prevcount: &mut boo
 /// Run exactly one normal-mode command, from an operator the caller owns.
 ///
 /// This is what `:normal` and the operator-pending machinery re-enter through.
-pub(crate) unsafe fn normal_cmd(oap: *mut OpArg, toplevel: bool) {
+pub(crate) unsafe fn normal_cmd(op: *mut OpArg, toplevel: bool) {
     let mut s = new_state();
     s.toplevel = toplevel;
-    // SAFETY: `oap` is the caller's live operator, and `s` outlives the call.
-    s.oa = unsafe { *oap };
+    // SAFETY: `op` is the caller's live operator, and `s` outlives the call.
+    s.oa = unsafe { *op };
     unsafe { normal_prepare(&raw mut s) };
     unsafe { normal_execute(&raw mut s.state, safe_vgetc()) };
-    unsafe { *oap = s.oa };
+    unsafe { *op = s.oa };
 }
 
 /// The buffer the editor is working in.

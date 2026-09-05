@@ -57,37 +57,37 @@ use crate::winlayer::graph::curwin;
 /// given, adjusted for the lines that were joined and split under it.
 ///
 /// # Safety
-/// `oap` must be a live operator argument over the current buffer.
-pub(crate) unsafe fn op_format(oap: *mut OpArg, keep_cursor: bool) {
+/// `op` must be a live operator argument over the current buffer.
+pub(crate) unsafe fn op_format(op: *mut OpArg, keep_cursor: bool) {
     // SAFETY: the caller's promise -- a live operator argument.
-    let oap = unsafe { Op::new(oap) };
+    let op = unsafe { Op::new(op) };
     let mut old_line_count = cur_buf().b_ml.ml_line_count;
 
     // Put the cursor where the command was given, so `u` can put it back.
-    cur_win().w_cursor = oap.cursor_start;
-    if u_save(oap.start.lnum - 1, oap.end.lnum + 1).is_err() {
+    cur_win().w_cursor = op.cursor_start;
+    if u_save(op.start.lnum - 1, op.end.lnum + 1).is_err() {
         return;
     }
-    cur_win().w_cursor = oap.start;
+    cur_win().w_cursor = op.start;
 
-    if oap.is_VIsual {
+    if op.is_VIsual {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // The `'[` mark goes at the start of the formatted area.
-        cur_buf().b_op_start = oap.start;
+        cur_buf().b_op_start = op.start;
     }
     if keep_cursor {
-        saved_cursor.set(oap.cursor_start);
+        saved_cursor.set(op.cursor_start);
     }
 
-    unsafe { format_lines(oap.line_count, keep_cursor) };
+    unsafe { format_lines(op.line_count, keep_cursor) };
 
     // Leave the cursor on the first non-blank of the last formatted line.
     // If it moved a line back (`Q}` does that), step forward so `.`
     // carries on with the next lines.
-    if oap.end_adjusted && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count {
+    if op.end_adjusted && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count {
         cur_win().w_cursor.lnum += 1;
     }
     beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
@@ -104,7 +104,7 @@ pub(crate) unsafe fn op_format(oap: *mut OpArg, keep_cursor: bool) {
         // Formatting may have made the position invalid.
         check_cursor(unsafe { Win::current() });
     }
-    if oap.is_VIsual {
+    if op.is_VIsual {
         // `FOR_ALL_WINDOWS_IN_TAB(wp, curtab)`. The macro's tab page test is
         // `curtab == curtab` here, so it always takes the `firstwin` arm --
         // which is what [`windows`] walks.
@@ -126,16 +126,16 @@ pub(crate) unsafe fn op_format(oap: *mut OpArg, keep_cursor: bool) {
 /// expression means "I did not handle it", and the internal formatter runs.
 ///
 /// # Safety
-/// `oap` must be a live operator argument over the current buffer.
-pub(crate) unsafe fn op_formatexpr(oap: *mut OpArg) {
+/// `op` must be a live operator argument over the current buffer.
+pub(crate) unsafe fn op_formatexpr(op: *mut OpArg) {
     // SAFETY: the caller's promise -- a live operator argument.
-    let op = unsafe { Op::new(oap) };
-    if op.is_VIsual {
+    let region = unsafe { Op::new(op) };
+    if region.is_VIsual {
         // When nothing changes, the Visual selection still has to go.
         redraw_curbuf_later(UPD_INVERTED);
     }
-    if unsafe { fex_format(op.start.lnum, op.line_count as c_long, NUL) } != 0 {
-        unsafe { op_format(oap, false) };
+    if unsafe { fex_format(region.start.lnum, region.line_count as c_long, NUL) } != 0 {
+        unsafe { op_format(op, false) };
     }
 }
 

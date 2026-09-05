@@ -13,7 +13,7 @@
 //! | `quote` | `i"` `a'` ... | -- |
 //!
 //! Every object here shares one shape: outside Visual mode it fills in the
-//! pending operator's `oap`, and inside it *extends* the selection instead --
+//! pending operator's `op`, and inside it *extends* the selection instead --
 //! which is why each of the five carries a retry or an `extend` path, and why
 //! `'selection'` being exclusive is adjusted for on the way in and undone on
 //! the way out.

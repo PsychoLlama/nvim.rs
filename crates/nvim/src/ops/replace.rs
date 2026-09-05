@@ -73,12 +73,12 @@ unsafe fn replace_character(c: c_int) {
 /// than a line split.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg` describing a region of the current
+/// `op` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_replace(oap: *mut OpArg, mut c: c_int) -> Result<(), Failed> {
+pub(crate) unsafe fn op_replace(op: *mut OpArg, mut c: c_int) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
-    let oap = unsafe { Op::new(oap) };
-    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) || oap.empty {
+    let op = unsafe { Op::new(op) };
+    if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) || op.empty {
         return Ok(());
     }
 
@@ -92,43 +92,43 @@ pub(crate) unsafe fn op_replace(oap: *mut OpArg, mut c: c_int) -> Result<(), Fai
         c = NL;
     }
 
-    unsafe { mb_adjust_opend(oap.raw()) };
+    unsafe { mb_adjust_opend(op.raw()) };
 
-    let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
+    let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     u_save(above, below)?;
 
-    if oap.motion_type == kMTBlockWise {
-        replace_block(oap, c, had_ctrl_v_cr);
+    if op.motion_type == kMTBlockWise {
+        replace_block(op, c, had_ctrl_v_cr);
     } else {
-        replace_chars(oap, c);
+        replace_chars(op, c);
     }
 
-    cur_win().w_cursor = oap.start;
-    let (lnum, col, last) = (oap.start.lnum, oap.start.col, oap.end.lnum + 1);
+    cur_win().w_cursor = op.start;
+    let (lnum, col, last) = (op.start.lnum, op.start.col, op.end.lnum + 1);
     check_cursor(unsafe { Win::current() });
     changed_lines(cur_buf(), lnum, col, last, 0, true);
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = oap.start;
-        cur_buf().b_op_end = oap.end;
+        cur_buf().b_op_start = op.start;
+        cur_buf().b_op_end = op.end;
     }
     Ok(())
 }
 
 /// The blockwise arm: one rebuilt line per line the block reaches.
 ///
-/// `oap` must be blockwise.
-fn replace_block(oap: Op, c: c_int, had_ctrl_v_cr: bool) {
+/// `op` must be blockwise.
+fn replace_block(op: Op, c: c_int, had_ctrl_v_cr: bool) {
     let mut bd = BlockDef::ZERO;
     bd.is_MAX = c_int::from(cur_win().w_curswant == MAXCOL);
-    while cur_win().w_cursor.lnum <= oap.end.lnum {
+    while cur_win().w_cursor.lnum <= op.end.lnum {
         // Make sure the cursor position is valid for `block_prep`.
         cur_win().w_cursor.col = 0;
         // SAFETY: the cursor walks the region, so its line is the buffer's.
         let lnum = cur_win().w_cursor.lnum;
-        unsafe { block_prep(oap.raw(), &raw mut bd, lnum, true) };
+        unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
         if bd.textlen != 0 || (op_virtual() && bd.is_MAX == 0) {
-            replace_block_line(oap, &mut bd, c, had_ctrl_v_cr);
+            replace_block_line(op, &mut bd, c, had_ctrl_v_cr);
         }
         cur_win().w_cursor.lnum += 1;
     }
@@ -141,8 +141,8 @@ fn replace_block(oap: Op, c: c_int, had_ctrl_v_cr: bool) {
 /// replacement repeated, `endspaces` pad, and the text after. With `\r` or
 /// `\n` and no CTRL-V there is no "after": the tail becomes a new line.
 ///
-/// `oap` and `bd` must describe the cursor line, as [`block_prep`] left them.
-fn replace_block_line(mut oap: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bool) {
+/// `op` and `bd` must describe the cursor line, as [`block_prep`] left them.
+fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bool) {
     // Replacing with `\r`/`\n` splits the line rather than overwriting.
     let splits_line = !had_ctrl_v_cr && (c == '\r' as c_int || c == '\n' as c_int);
 
@@ -159,14 +159,14 @@ fn replace_block_line(mut oap: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: b
         };
         // SAFETY: a live current window, and a local position in the cursor's
         // own line.
-        unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), oap.start_vcol) };
+        unsafe { getvpos(Win::current(), PosRef::new(&raw mut vpos), op.start_vcol) };
         bd.startspaces += vpos.coladd;
     }
 
     // How many characters to replace.
-    let mut numc = oap.end_vcol - oap.start_vcol + 1;
+    let mut numc = op.end_vcol - op.start_vcol + 1;
     if bd.is_short != 0 && (!op_virtual() || bd.is_MAX != 0) {
-        numc -= (oap.end_vcol - bd.end_vcol) + 1;
+        numc -= (op.end_vcol - bd.end_vcol) + 1;
     }
     // A double-wide character only fits half as many times.
     if unsafe { utf_char2cells(c) } > 1 {
@@ -238,7 +238,7 @@ fn replace_block_line(mut oap: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: b
         let _ = unsafe { ml_append(cur_win().w_cursor.lnum, after_p, len, false) };
         cur_win().w_cursor.lnum += 1;
         unsafe { appended_lines_mark(cur_win().w_cursor.lnum, 1) };
-        oap.end.lnum += 1;
+        op.end.lnum += 1;
         unsafe { xfree(after_p as *mut c_void) };
     }
     drop(splice);
@@ -265,22 +265,22 @@ fn replace_block_line(mut oap: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: b
 
 /// The charwise and linewise arm: walk the region a character at a time.
 ///
-/// `oap` must be charwise or linewise.
-fn replace_chars(mut oap: Op, c: c_int) {
+/// `op` must be charwise or linewise.
+fn replace_chars(mut op: Op, c: c_int) {
     // SAFETY: the cursor walks the region, so it names a position of the
     // current buffer at every step, which is what each of these asks for.
-    if oap.motion_type == kMTLineWise {
-        oap.start.col = 0;
+    if op.motion_type == kMTLineWise {
+        op.start.col = 0;
         cur_win().w_cursor.col = 0;
-        oap.end.col = ml_get_len(oap.end.lnum);
-        if oap.end.col != 0 {
-            oap.end.col -= 1;
+        op.end.col = ml_get_len(op.end.lnum);
+        if op.end.col != 0 {
+            op.end.col -= 1;
         }
-    } else if !oap.inclusive {
-        unsafe { dec(&mut oap.end) };
+    } else if !op.inclusive {
+        unsafe { dec(&mut op.end) };
     }
 
-    while ltoreq(cur_win().w_cursor, oap.end) {
+    while ltoreq(cur_win().w_cursor, op.end) {
         let mut done = false;
 
         let under_cursor = gchar_cursor();
@@ -291,8 +291,8 @@ fn replace_chars(mut oap: Op, c: c_int) {
             if new_byte_len > 1 || old_byte_len > 1 {
                 // Slow, but it handles a single-byte character replacing a
                 // multi-byte one and the other way around.
-                if cur_win().w_cursor.lnum == oap.end.lnum {
-                    oap.end.col += new_byte_len - old_byte_len;
+                if cur_win().w_cursor.lnum == op.end.lnum {
+                    op.end.col += new_byte_len - old_byte_len;
                 }
                 unsafe { replace_character(c) };
                 done = true;
@@ -301,14 +301,14 @@ fn replace_chars(mut oap: Op, c: c_int) {
                     // Breaking the TAB moves the end, so remember where it
                     // was in columns first.
                     let mut end_vcol = 0;
-                    if cur_win().w_cursor.lnum == oap.end.lnum {
-                        end_vcol = unsafe { getviscol2(oap.end.col, oap.end.coladd) };
+                    if cur_win().w_cursor.lnum == op.end.lnum {
+                        end_vcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
                     }
                     unsafe { coladvance_force(getviscol()) };
-                    if cur_win().w_cursor.lnum == oap.end.lnum {
+                    if cur_win().w_cursor.lnum == op.end.lnum {
                         // SAFETY: a live current window, and the operator's
                         // end position in the cursor's own line.
-                        unsafe { getvpos(Win::current(), oap.end(), end_vcol) };
+                        unsafe { getvpos(Win::current(), op.end(), end_vcol) };
                     }
                 }
                 // With `coladd` set the cursor may now be just past a TAB.
@@ -319,8 +319,8 @@ fn replace_chars(mut oap: Op, c: c_int) {
             }
         }
 
-        if !done && op_virtual() && cur_win().w_cursor.lnum == oap.end.lnum {
-            replace_virtual_tail(oap, c);
+        if !done && op_virtual() && cur_win().w_cursor.lnum == op.end.lnum {
+            replace_virtual_tail(op, c);
         }
 
         // On to the next character; stop at the end of the file.
@@ -336,21 +336,21 @@ fn replace_chars(mut oap: Op, c: c_int) {
 /// character to overwrite; `coladvance_force` fills the line out with spaces
 /// first and those are then replaced.
 ///
-/// The cursor must be on `oap.end.lnum`.
-fn replace_virtual_tail(oap: Op, c: c_int) {
-    let mut virtcols = oap.end.coladd;
-    if cur_win().w_cursor.lnum == oap.start.lnum
-        && oap.start.col == oap.end.col
-        && oap.start.coladd != 0
+/// The cursor must be on `op.end.lnum`.
+fn replace_virtual_tail(op: Op, c: c_int) {
+    let mut virtcols = op.end.coladd;
+    if cur_win().w_cursor.lnum == op.start.lnum
+        && op.start.col == op.end.col
+        && op.start.coladd != 0
     {
-        virtcols -= oap.start.coladd;
+        virtcols -= op.start.coladd;
     }
 
-    // `oap.end` has been trimmed, so it is effectively inclusive: the extra
+    // `op.end` has been trimmed, so it is effectively inclusive: the extra
     // +1 is what keeps the NUL byte from being trampled.
-    // SAFETY: the cursor is on `oap.end.lnum`, a line of the current buffer,
+    // SAFETY: the cursor is on `op.end.lnum`, a line of the current buffer,
     // and `coladvance_force` fills it out to the column being replaced.
-    let endcol = unsafe { getviscol2(oap.end.col, oap.end.coladd) };
+    let endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
     unsafe { coladvance_force(endcol + 1) };
     cur_win().w_cursor.col -= virtcols + 1;
     while virtcols >= 0 {

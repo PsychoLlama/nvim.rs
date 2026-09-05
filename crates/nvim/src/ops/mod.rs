@@ -152,7 +152,7 @@ pub const kMTBlockWise: MotionType = 2;
 
 /// `CmdArg::retval`: normal mode must not act on what the operator left.
 pub const CA_COMMAND_BUSY: ::core::ffi::c_int = 1;
-/// `CmdArg::retval`: leave `oap->end` where the motion put it.
+/// `CmdArg::retval`: leave `op.end` where the motion put it.
 pub const CA_NO_ADJ_OP_END: ::core::ffi::c_int = 2;
 
 /// `r CTRL-V <CR>` and `r CTRL-V <NL>`: the literal byte, not a line split.

@@ -97,13 +97,13 @@ enum Minus {
 /// to the second, and so on.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg` describing a region of the current
+/// `op` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
+pub unsafe fn op_addsub(op: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // Everything below works on that region and on the cursor line, which is
     // what `u_save`, `do_addsub` and `changed_lines` each ask for.
-    let oap = unsafe { Op::new(oap) };
+    let op = unsafe { Op::new(op) };
     // 'foldexpr' may be re-evaluated part way through, and it must not see
     // the buffer mid-operation.
     let folds_frozen = Suppress::fold_update();
@@ -113,7 +113,7 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
         if u_save_cursor().is_err() {
             return;
         }
-        let changed = unsafe { do_addsub(oap.op_type, &raw mut pos, 0, prenum1) };
+        let changed = unsafe { do_addsub(op.op_type, &raw mut pos, 0, prenum1) };
         drop(folds_frozen);
         if changed {
             changed_lines(cur_buf(), pos.lnum, 0, pos.lnum + 1, 0, true);
@@ -121,7 +121,7 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
         return;
     }
 
-    let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
+    let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     if u_save(above, below).is_err() {
         return;
     }
@@ -135,10 +135,10 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
     };
     let mut amount = prenum1;
 
-    let mut pos = oap.start;
-    while pos.lnum <= oap.end.lnum {
-        let length = addsub_line_span(oap, &mut bd, &mut pos);
-        let one_change = unsafe { do_addsub(oap.op_type, &raw mut pos, length, amount) };
+    let mut pos = op.start;
+    while pos.lnum <= op.end.lnum {
+        let length = addsub_line_span(op, &mut bd, &mut pos);
+        let one_change = unsafe { do_addsub(op.op_type, &raw mut pos, length, amount) };
         if one_change {
             if change_cnt == 0 {
                 startpos = cur_buf().b_op_start;
@@ -153,9 +153,9 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
 
     drop(folds_frozen);
     if change_cnt != 0 {
-        let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
+        let (first, last) = (op.start.lnum, op.end.lnum + 1);
         changed_lines(cur_buf(), first, 0, last, 0, true);
-    } else if oap.is_VIsual {
+    } else if op.is_VIsual {
         // Nothing changed, so the selection has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
     }
@@ -176,34 +176,34 @@ pub unsafe fn op_addsub(oap: *mut OpArg, prenum1: LineNr, g_cmd: bool) {
 /// length in bytes.
 ///
 /// `pos.lnum` must be a line of the region.
-fn addsub_line_span(mut oap: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
+fn addsub_line_span(mut op: Op, bd: &mut BlockDef, pos: &mut Pos) -> c_int {
     // SAFETY: every line touched below is one of the region's, so it is a
     // line of the current buffer.
-    if oap.motion_type == kMTBlockWise {
-        unsafe { block_prep(oap.raw(), &raw mut *bd, pos.lnum, false) };
+    if op.motion_type == kMTBlockWise {
+        unsafe { block_prep(op.raw(), &raw mut *bd, pos.lnum, false) };
         pos.col = bd.textcol;
         return bd.textlen;
     }
-    if oap.motion_type == kMTLineWise {
+    if op.motion_type == kMTLineWise {
         cur_win().w_cursor.col = 0;
         pos.col = 0;
         return ml_get_len(pos.lnum);
     }
 
     // Charwise: the first and last lines are clipped to the region.
-    if pos.lnum == oap.start.lnum && !oap.inclusive {
-        unsafe { dec(&mut oap.end) };
+    if pos.lnum == op.start.lnum && !op.inclusive {
+        unsafe { dec(&mut op.end) };
     }
     let mut length = ml_get_len(pos.lnum);
     pos.col = 0;
-    if pos.lnum == oap.start.lnum {
-        pos.col += oap.start.col;
-        length -= oap.start.col;
+    if pos.lnum == op.start.lnum {
+        pos.col += op.start.col;
+        length -= op.start.col;
     }
-    if pos.lnum == oap.end.lnum {
-        length = ml_get_len(oap.end.lnum);
-        oap.end.col = oap.end.col.min(length - 1);
-        length = oap.end.col - pos.col + 1;
+    if pos.lnum == op.end.lnum {
+        length = ml_get_len(op.end.lnum);
+        op.end.col = op.end.col.min(length - 1);
+        length = op.end.col - pos.col + 1;
     }
     length
 }

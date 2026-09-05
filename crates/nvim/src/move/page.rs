@@ -119,13 +119,13 @@ pub unsafe fn pagescroll(dir: Direction, count: c_int, half: bool) -> c_int {
 /// the end of the buffer, and move the cursor by as many screen lines.
 ///
 /// # Safety
-/// `win` must be the current window and `oap` an operator the caller owns.
+/// `win` must be the current window and `op` an operator the caller owns.
 unsafe fn half_page(
     mut win: Win,
     dir: Direction,
     count: c_int,
     saved: Saved,
-    oap: *mut OpArg,
+    op: *mut OpArg,
 ) -> bool {
     // Scroll [count], 'scroll', or the window height in lines.
     let mut count = count;
@@ -162,7 +162,7 @@ unsafe fn half_page(
     // concealed lines as those were not counted in `curscount` either.
     if win.w_onebuf_opt.wo_wrap != 0 {
         // SAFETY: the caller's promise.
-        unsafe { nv_screengo(oap, dir, curscount, true) };
+        unsafe { nv_screengo(op, dir, curscount, true) };
     } else if dir == FORWARD {
         // SAFETY: a live window.
         cursor_down_inner(win, curscount, true);

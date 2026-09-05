@@ -440,7 +440,7 @@ unsafe fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
 ///
 /// `dirc` is `'/'` or `'?'`, or 0 to reuse the direction of the previous
 /// search. A null or empty `pat` reuses the previous pattern. `options`
-/// is a mask of the `SEARCH_*` flags; `oap` and `sia` may be null.
+/// is a mask of the `SEARCH_*` flags; `op` and `sia` may be null.
 ///
 /// Careful: with a line offset of 0 (`spats[0].off.line` set and
 /// `off.off == 0`) this makes the motion linewise without moving the
@@ -451,9 +451,9 @@ unsafe fn add_offset(pos: &mut Pos, off: SearchOffset) -> c_int {
 ///
 /// # Safety
 /// `pat` must be null or NUL-terminated and writable up to its
-/// terminator; `oap` and `sia` must be null or valid.
+/// terminator; `op` and `sia` must be null or valid.
 pub unsafe fn do_search(
-    oap: *mut OpArg,
+    op: *mut OpArg,
     dirc: c_int,
     search_delim: c_int,
     pat: *mut c_char,
@@ -623,8 +623,8 @@ pub unsafe fn do_search(
             }
 
             let off = search_offset();
-            if off.end && !oap.is_null() {
-                unsafe { (*oap).inclusive = true }; // 'e' includes the last character
+            if off.end && !op.is_null() {
+                unsafe { (*op).inclusive = true }; // 'e' includes the last character
             }
             retval = 1; // pattern found
 

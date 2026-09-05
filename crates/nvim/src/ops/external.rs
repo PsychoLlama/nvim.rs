@@ -29,51 +29,51 @@ use crate::types::NUL;
 /// repeated.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg`.
-pub(crate) unsafe fn op_colon(oap: *mut OpArg) {
+/// `op` must point to a live `OpArg`.
+pub(crate) unsafe fn op_colon(op: *mut OpArg) {
     // SAFETY: the caller's promise -- a live `OpArg`. Every string queued
     // below is either a literal of this file's or a NUL-terminated option.
-    let oap = unsafe { Op::new(oap) };
+    let op = unsafe { Op::new(op) };
     stuff_readbuf_char(':' as c_int);
-    if oap.is_VIsual {
+    if op.is_VIsual {
         unsafe { stuff_readbuf(c"'<,'>".as_ptr()) };
     } else {
         // Make the range look nice, so it can be repeated.
-        if oap.start.lnum == cur_win().w_cursor.lnum {
+        if op.start.lnum == cur_win().w_cursor.lnum {
             stuff_readbuf_char('.' as c_int);
         } else {
-            stuff_readbuf_number(oap.start.lnum as c_int);
+            stuff_readbuf_number(op.start.lnum as c_int);
         }
 
         // When using !! on a closed fold the range ".!" works best to
         // operate on: it is made the whole closed fold later.
-        let end_of_start_fold = cur_win().fold_last(oap.start.lnum);
-        if oap.end.lnum != oap.start.lnum && oap.end.lnum != end_of_start_fold {
+        let end_of_start_fold = cur_win().fold_last(op.start.lnum);
+        if op.end.lnum != op.start.lnum && op.end.lnum != end_of_start_fold {
             // Make it a range with the end line.
             stuff_readbuf_char(',' as c_int);
-            if oap.end.lnum == cur_win().w_cursor.lnum {
+            if op.end.lnum == cur_win().w_cursor.lnum {
                 stuff_readbuf_char('.' as c_int);
-            } else if oap.end.lnum == cur_buf().line_count() {
+            } else if op.end.lnum == cur_buf().line_count() {
                 stuff_readbuf_char('$' as c_int);
-            } else if oap.start.lnum == cur_win().w_cursor.lnum
+            } else if op.start.lnum == cur_win().w_cursor.lnum
                 // Not ".+number" for a closed fold: that would count the
                 // folded lines twice.
-                && !cur_win().fold_span(oap.end.lnum).0
+                && !cur_win().fold_span(op.end.lnum).0
             {
                 unsafe { stuff_readbuf(c".+".as_ptr()) };
-                stuff_readbuf_number(oap.line_count as c_int - 1);
+                stuff_readbuf_number(op.line_count as c_int - 1);
             } else {
-                stuff_readbuf_number(oap.end.lnum as c_int);
+                stuff_readbuf_number(op.end.lnum as c_int);
             }
         }
     }
-    if oap.op_type != OpType::Colon {
+    if op.op_type != OpType::Colon {
         unsafe { stuff_readbuf(c"!".as_ptr()) };
     }
-    if oap.op_type == OpType::Indent {
+    if op.op_type == OpType::Indent {
         unsafe { stuff_readbuf(get_equalprg()) };
         unsafe { stuff_readbuf(c"\n".as_ptr()) };
-    } else if oap.op_type == OpType::Format {
+    } else if op.op_type == OpType::Format {
         if unsafe { *cur_buf().b_p_fp } as c_int != NUL {
             unsafe { stuff_readbuf(cur_buf().b_p_fp) };
         } else if unsafe { *p_fp.get() } as c_int != NUL {
@@ -130,12 +130,12 @@ pub unsafe fn set_ref_in_opfunc(copy_id: c_int) -> bool {
 /// pending". `:lockmarks` restores the marks afterwards.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg`.
-pub(crate) unsafe fn op_function(oap: *const OpArg) {
+/// `op` must point to a live `OpArg`.
+pub(crate) unsafe fn op_function(op: *const OpArg) {
     // SAFETY: the caller's promise -- a live `OpArg`. 'operatorfunc' is a
     // NUL-terminated option string, and `b_op_end` is a live position of the
     // current buffer.
-    let oap = unsafe { Op::new(oap.cast_mut()) };
+    let op = unsafe { Op::new(op.cast_mut()) };
     let orig_start: Pos = cur_buf().b_op_start;
     let orig_end: Pos = cur_buf().b_op_end;
 
@@ -145,14 +145,14 @@ pub(crate) unsafe fn op_function(oap: *const OpArg) {
     }
 
     // Set '[ and '] to the text to be operated on.
-    cur_buf().b_op_start = oap.start;
-    cur_buf().b_op_end = oap.end;
-    if oap.motion_type != kMTLineWise && !oap.inclusive {
+    cur_buf().b_op_start = op.start;
+    cur_buf().b_op_end = op.end;
+    if op.motion_type != kMTLineWise && !op.inclusive {
         // Exclude the end position.
         unsafe { decl(&mut cur_buf().b_op_end) };
     }
 
-    let kind = match oap.motion_type {
+    let kind = match op.motion_type {
         kMTLineWise => c"line",
         kMTBlockWise => c"block",
         _ => c"char",

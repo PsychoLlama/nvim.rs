@@ -26,83 +26,83 @@ use super::*;
 /// `g~`, `gu`, `gU`, `g?` over the operator's region.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg` describing a region of the current
+/// `op` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub(crate) unsafe fn op_tilde(oap: *mut OpArg) {
+pub(crate) unsafe fn op_tilde(op: *mut OpArg) {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // `pos` walks that region, so it names a position of the buffer at every
     // step, which is what `swapchars`, `inc` and `ml_get_pos_len` ask for.
-    let mut oap = unsafe { Op::new(oap) };
+    let mut op = unsafe { Op::new(op) };
     let mut did_change = false;
 
-    let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
+    let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     if u_save(above, below).is_err() {
         return;
     }
 
-    let mut pos: Pos = oap.start;
-    if oap.motion_type == kMTBlockWise {
+    let mut pos: Pos = op.start;
+    if op.motion_type == kMTBlockWise {
         let mut bd = BlockDef::ZERO;
-        while pos.lnum <= oap.end.lnum {
-            unsafe { block_prep(oap.raw(), &raw mut bd, pos.lnum, false) };
+        while pos.lnum <= op.end.lnum {
+            unsafe { block_prep(op.raw(), &raw mut bd, pos.lnum, false) };
             pos.col = bd.textcol;
-            did_change |= unsafe { swapchars(oap.op_type, &raw mut pos, bd.textlen) } != 0;
+            did_change |= unsafe { swapchars(op.op_type, &raw mut pos, bd.textlen) } != 0;
             pos.lnum += 1;
         }
         if did_change {
-            let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
+            let (first, last) = (op.start.lnum, op.end.lnum + 1);
             changed_lines(cur_buf(), first, 0, last, 0, true);
         }
     } else {
-        if oap.motion_type == kMTLineWise {
-            oap.start.col = 0;
+        if op.motion_type == kMTLineWise {
+            op.start.col = 0;
             pos.col = 0;
-            oap.end.col = ml_get_len(oap.end.lnum);
-            if oap.end.col != 0 {
-                oap.end.col -= 1;
+            op.end.col = ml_get_len(op.end.lnum);
+            if op.end.col != 0 {
+                op.end.col -= 1;
             }
-        } else if !oap.inclusive {
-            unsafe { dec(&mut oap.end) };
+        } else if !op.inclusive {
+            unsafe { dec(&mut op.end) };
         }
 
-        if pos.lnum == oap.end.lnum {
-            let len = oap.end.col - pos.col + 1;
-            did_change = unsafe { swapchars(oap.op_type, &raw mut pos, len) } != 0;
+        if pos.lnum == op.end.lnum {
+            let len = op.end.col - pos.col + 1;
+            did_change = unsafe { swapchars(op.op_type, &raw mut pos, len) } != 0;
         } else {
             loop {
-                let len = if pos.lnum == oap.end.lnum {
-                    oap.end.col + 1
+                let len = if pos.lnum == op.end.lnum {
+                    op.end.col + 1
                 } else {
                     unsafe { ml_get_pos_len(&raw mut pos) }
                 };
-                did_change |= unsafe { swapchars(oap.op_type, &raw mut pos, len) } != 0;
+                did_change |= unsafe { swapchars(op.op_type, &raw mut pos, len) } != 0;
                 // `inc` answers -1 at the end of the buffer; either exit
                 // leaves `pos` where the walk stopped.
-                if ltoreq(oap.end, pos) || unsafe { inc(&mut pos) } == -1 {
+                if ltoreq(op.end, pos) || unsafe { inc(&mut pos) } == -1 {
                     break;
                 }
             }
         }
         if did_change {
-            let (first, col, last) = (oap.start.lnum, oap.start.col, oap.end.lnum + 1);
+            let (first, col, last) = (op.start.lnum, op.start.col, op.end.lnum + 1);
             changed_lines(cur_buf(), first, col, last, 0, true);
         }
     }
 
-    if !did_change && oap.is_VIsual {
+    if !did_change && op.is_VIsual {
         // No change: the Visual selection still has to come off the screen.
         redraw_curbuf_later(UPD_INVERTED);
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = oap.start;
-        cur_buf().b_op_end = oap.end;
+        cur_buf().b_op_start = op.start;
+        cur_buf().b_op_end = op.end;
     }
 
-    if oap.line_count as OptInt > p_report.get() {
-        let n = oap.line_count as ::core::ffi::c_ulong;
+    if op.line_count as OptInt > p_report.get() {
+        let n = op.line_count as ::core::ffi::c_ulong;
         let fmt = ngettext(c"%ld line changed", c"%ld lines changed", n);
-        let _: bool = report_msg(0, || tr_plural!(fmt, oap.line_count as int64_t));
+        let _: bool = report_msg(0, || tr_plural!(fmt, op.line_count as int64_t));
     }
 }
 

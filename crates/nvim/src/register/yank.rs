@@ -173,11 +173,11 @@ unsafe fn append_to_register(curr: *mut YankReg, reg: *mut YankReg, yank_type: M
 /// The "N lines yanked" message.
 ///
 /// # Safety
-/// `oap` must be the operator that was just applied.
-unsafe fn report_yank(oap: *mut OpArg, yank_type: MotionType, yanklines: size_t) {
+/// `op` must be the operator that was just applied.
+unsafe fn report_yank(op: *mut OpArg, yank_type: MotionType, yanklines: size_t) {
     let mut namebuf: [c_char; 100] = [0; 100];
-    // SAFETY: the caller promises `oap` is the operator just applied.
-    let regname = unsafe { (*oap).regname };
+    // SAFETY: the caller promises `op` is the operator just applied.
+    let regname = unsafe { (*op).regname };
     if regname == NUL {
         namebuf[0] = NUL as c_char;
     } else {
@@ -217,18 +217,18 @@ unsafe fn report_yank(oap: *mut OpArg, yank_type: MotionType, yanklines: size_t)
 /// holds; with `message`, the "N lines yanked" report is given.
 ///
 /// # Safety
-/// `oap` must describe a region of the current buffer and `reg` be a live
+/// `op` must describe a region of the current buffer and `reg` be a live
 /// register.
-pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg, append: bool) {
+pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, append: bool) {
     let mut newreg = EMPTY_YANKREG;
-    // Nothing this function reaches writes through `oap`, so the operator is
+    // Nothing this function reaches writes through `op`, so the operator is
     // read once and worked from.
     //
-    // SAFETY: the caller promises `oap` describes a region of the buffer.
-    let op = unsafe { *oap };
-    let mut yank_type = op.motion_type;
-    let mut yanklines = op.line_count as size_t;
-    let mut yankendlnum = op.end.lnum;
+    // SAFETY: the caller promises `op` describes a region of the buffer.
+    let region = unsafe { *op };
+    let mut yank_type = region.motion_type;
+    let mut yanklines = region.line_count as size_t;
+    let mut yankendlnum = region.end.lnum;
     let mut bd = BlockDef {
         startspaces: 0,
         endspaces: 0,
@@ -260,12 +260,12 @@ pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg,
     // a later line is really a linewise one.
     //
     // SAFETY: 'selection' is a NUL-terminated option string.
-    let sel_old = op.is_VIsual && unsafe { c_int::from(*p_sel.get()) } != 'o' as c_int;
-    if op.motion_type == kMTCharWise
-        && op.start.col == 0
-        && !op.inclusive
+    let sel_old = region.is_VIsual && unsafe { c_int::from(*p_sel.get()) } != 'o' as c_int;
+    if region.motion_type == kMTCharWise
+        && region.start.col == 0
+        && !region.inclusive
         && !sel_old
-        && op.end.col == 0
+        && region.end.col == 0
         && yanklines > 1
     {
         yank_type = kMTLineWise;
@@ -288,24 +288,24 @@ pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg,
         // A `$`-extended block has no fixed width.
         let narrow = cur_win().w_curswant == MAXCOL;
         // SAFETY: `reg` is live.
-        unsafe { (*reg).y_width = op.end_vcol - op.start_vcol };
+        unsafe { (*reg).y_width = region.end_vcol - region.start_vcol };
         if narrow && unsafe { (*reg).y_width } > 0 {
             unsafe { (*reg).y_width -= 1 };
         }
     }
 
     let mut y_idx: size_t = 0;
-    let mut lnum = op.start.lnum;
+    let mut lnum = region.start.lnum;
     while lnum <= yankendlnum {
         // SAFETY: `reg` is live and holds the type just written.
         match unsafe { (*reg).y_type } {
             kMTBlockWise => {
-                // SAFETY: `lnum` is a line of the region `oap` describes, and
+                // SAFETY: `lnum` is a line of the region `op` describes, and
                 // `bd` is this walk's own measurement block.
-                unsafe { block_prep(oap, &raw mut bd, lnum, false) };
+                unsafe { block_prep(op, &raw mut bd, lnum, false) };
                 // SAFETY: `bd` now describes a region of that line, and the
                 // array has a slot for every line of the region.
-                unsafe { yank_copy_line(reg, &raw mut bd, y_idx, op.excl_tr_ws) };
+                unsafe { yank_copy_line(reg, &raw mut bd, y_idx, region.excl_tr_ws) };
             }
             kMTLineWise => {
                 // SAFETY: `lnum` is a line of the current buffer, so `ml_get`
@@ -317,7 +317,15 @@ pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg,
             kMTCharWise => {
                 // SAFETY: `lnum` is a line of the region, and `bd` is this
                 // walk's own block.
-                unsafe { charwise_block_prep(op.start, op.end, &raw mut bd, lnum, op.inclusive) };
+                unsafe {
+                    charwise_block_prep(
+                        region.start,
+                        region.end,
+                        &raw mut bd,
+                        lnum,
+                        region.inclusive,
+                    )
+                };
                 // The region may reach past the end of a short line.
                 //
                 // SAFETY: `textstart` points into that line, NUL-terminated.
@@ -349,19 +357,19 @@ pub unsafe fn op_yank_reg(oap: *mut OpArg, message: bool, mut reg: *mut YankReg,
             yanklines = 0;
         }
         if yanklines > p_report.get() as size_t {
-            // SAFETY: `oap` is still the operator that was just applied.
-            unsafe { report_yank(oap, yank_type, yanklines) };
+            // SAFETY: `op` is still the operator that was just applied.
+            unsafe { report_yank(op, yank_type, yanklines) };
         }
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = op.start;
-        cur_buf().b_op_end = op.end;
+        cur_buf().b_op_start = region.start;
+        cur_buf().b_op_end = region.end;
         if yank_type == kMTLineWise {
             cur_buf().b_op_start.col = 0;
             cur_buf().b_op_end.col = MAXCOL;
         }
-        if yank_type != kMTLineWise && !op.inclusive {
+        if yank_type != kMTLineWise && !region.inclusive {
             // An exclusive region's `']` is the character *before* the end.
             //
             // SAFETY: the mark is a position in the current buffer, and the
@@ -414,9 +422,9 @@ pub unsafe fn format_reg_type(
 /// this again.
 ///
 /// # Safety
-/// `oap` and `reg` must describe the yank that just happened. Runs arbitrary
+/// `op` and `reg` must describe the yank that just happened. Runs arbitrary
 /// autocommands, under `textlock`.
-pub unsafe fn do_autocmd_textyankpost(oap: *mut OpArg, reg: *mut YankReg) {
+pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     static recursive: GlobalCell<bool> = GlobalCell::new(false);
 
     // SAFETY: main thread, reading the autocommand table.
@@ -455,8 +463,8 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut OpArg, reg: *mut YankReg) {
     // SAFETY: `buf` is NUL-terminated, and the key is a literal of length 7.
     let _ = unsafe { tv_dict_add_str(dict, c"regtype".as_ptr(), 7, buf.as_mut_ptr()) };
 
-    // SAFETY: the caller promises `oap` is the yank's operator.
-    let op = unsafe { *oap };
+    // SAFETY: the caller promises `op` is the yank's operator.
+    let op = unsafe { *op };
     buf[0] = op.regname as c_char;
     buf[1] = NUL as c_char;
     // SAFETY: as above.
@@ -494,11 +502,11 @@ pub unsafe fn do_autocmd_textyankpost(oap: *mut OpArg, reg: *mut YankReg) {
 /// Answers false for an invalid register name, having beeped.
 ///
 /// # Safety
-/// `oap` must describe a region of the current buffer. Runs the clipboard
+/// `op` must describe a region of the current buffer. Runs the clipboard
 /// provider and TextYankPost, and so arbitrary Lua.
-pub unsafe fn op_yank(oap: *mut OpArg, message: bool) -> bool {
-    // SAFETY: the caller promises `oap` describes a region of the buffer.
-    let regname = unsafe { (*oap).regname };
+pub unsafe fn op_yank(op: *mut OpArg, message: bool) -> bool {
+    // SAFETY: the caller promises `op` describes a region of the buffer.
+    let regname = unsafe { (*op).regname };
     // SAFETY: main thread, reading the register store.
     if regname != 0 && !unsafe { valid_yank_reg(regname, true) } {
         // SAFETY: as above.
@@ -511,13 +519,13 @@ pub unsafe fn op_yank(oap: *mut OpArg, message: bool) -> bool {
 
     // SAFETY: `regname` is a valid register name, checked above.
     let reg = unsafe { get_yank_register(regname, YREG_YANK) };
-    // SAFETY: `oap` describes a region of the buffer and `reg` is live.
-    unsafe { op_yank_reg(oap, message, reg, is_append_register(regname)) };
+    // SAFETY: `op` describes a region of the buffer and `reg` is live.
+    unsafe { op_yank_reg(op, message, reg, is_append_register(regname)) };
     // SAFETY: `reg` holds what was just yanked; this is what runs the
     // clipboard provider's Lua.
     unsafe { clipboard::set_clipboard(regname, reg) };
-    // SAFETY: `oap` and `reg` describe the yank that just happened.
-    unsafe { do_autocmd_textyankpost(oap, reg) };
+    // SAFETY: `op` and `reg` describe the yank that just happened.
+    unsafe { do_autocmd_textyankpost(op, reg) };
     true
 }
 

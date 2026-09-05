@@ -98,7 +98,7 @@ struct Region {
     inclusive: bool,
     region_type: MotionType,
     /// Only meaningful for a blockwise region.
-    oap: OpArg,
+    op: OpArg,
 }
 
 /// Restores `curbuf` and 'virtualedit' when the builtin returns.
@@ -199,7 +199,7 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
     }
 
     let mut inclusive = true;
-    let mut oap = NO_OPARG;
+    let mut op = NO_OPARG;
     if region_type == kMTCharWise {
         if is_select_exclusive && !equalpos(p1, p2) {
             inclusive = !unadjust_for_sel_inner(&mut p2);
@@ -213,7 +213,7 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
             inclusive = false;
         }
     } else if region_type == kMTBlockWise {
-        oap = block_oparg(p1, p2, is_select_exclusive, block_width);
+        op = block_oparg(p1, p2, is_select_exclusive, block_width);
     }
 
     // Extend the far corner over the rest of a multibyte character.
@@ -226,7 +226,7 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
         p2,
         inclusive,
         region_type,
-        oap,
+        op,
     })
 }
 
@@ -363,7 +363,7 @@ pub unsafe fn f_getregion(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     for lnum in r.p1.lnum..=r.p2.lnum {
         let text = if r.region_type == kMTBlockWise {
             let mut bd = NO_BLOCK;
-            unsafe { block_prep(&raw const r.oap as *mut OpArg, &raw mut bd, lnum, false) };
+            unsafe { block_prep(&raw const r.op as *mut OpArg, &raw mut bd, lnum, false) };
             unsafe { block_def2str(&bd) }
         } else if r.region_type == kMTLineWise || (r.p1.lnum < lnum && lnum < r.p2.lnum) {
             // A whole line: either the region is linewise, or this is
@@ -425,7 +425,7 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (Pos, Pos
     // so `mb_prevptr` stays inside it.
     let mut bd = NO_BLOCK;
     if r.region_type == kMTBlockWise {
-        unsafe { block_prep(&raw const r.oap as *mut OpArg, &raw mut bd, lnum, false) };
+        unsafe { block_prep(&raw const r.op as *mut OpArg, &raw mut bd, lnum, false) };
     } else {
         unsafe { charwise_block_prep(r.p1, r.p2, &raw mut bd, lnum, r.inclusive) };
     }
@@ -434,15 +434,15 @@ unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (Pos, Pos
     if bd.is_oneChar != 0 {
         if r.region_type == kMTBlockWise {
             p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as ColNr + 1;
-            p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.oap.start_vcol);
+            p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.op.start_vcol);
         } else {
             p1.col = r.p1.col + 1;
             p1.coladd = r.p1.coladd;
         }
-    } else if r.region_type == kMTBlockWise && r.oap.start_vcol > bd.start_vcol {
+    } else if r.region_type == kMTBlockWise && r.op.start_vcol > bd.start_vcol {
         // The block starts inside a character that begins before it.
         p1.col = MAXCOL as ColNr;
-        p1.coladd = r.oap.start_vcol - bd.start_vcol;
+        p1.coladd = r.op.start_vcol - bd.start_vcol;
         bd.is_oneChar = 1;
     } else if bd.startspaces > 0 {
         p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as ColNr + 1;

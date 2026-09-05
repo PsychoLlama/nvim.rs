@@ -223,7 +223,7 @@ unsafe fn qf_jump_goto_line(
         // pattern is not there any more.
         let save_cursor = cur_win().w_cursor;
         cur_win().w_cursor.lnum = 0;
-        let oap = ptr::null_mut();
+        let op = ptr::null_mut();
         let dirc = '/' as c_int;
         let search_delim = '/' as c_int;
         let patlen = unsafe { cstr::bytes_at(qf_pattern) }.len();
@@ -232,7 +232,7 @@ unsafe fn qf_jump_goto_line(
         let sia = ptr::null_mut();
         let found = unsafe {
             do_search(
-                oap,
+                op,
                 dirc,
                 search_delim,
                 qf_pattern,
@@ -498,11 +498,11 @@ pub(crate) unsafe fn qf_jump_newwin(
             // `:cnext` moves past it.
             Jumped::Nowhere => {}
             Jumped::Done => {
-                let oap = qi.raw();
+                let op = qi.raw();
                 let count = &mut opened_window;
                 let jumped = unsafe {
                     qf_jump_to_buffer(
-                        oap,
+                        op,
                         qf_index,
                         qf_ptr,
                         forceit,

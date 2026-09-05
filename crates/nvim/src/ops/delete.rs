@@ -67,19 +67,19 @@ impl From<Failed> for NotDeleted {
 /// failure, and neither is a read-only register (which beeps instead).
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg` describing a region of the current
+/// `op` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub unsafe fn op_delete(oap: *mut OpArg) -> Result<(), NotDeleted> {
+pub unsafe fn op_delete(op: *mut OpArg) -> Result<(), NotDeleted> {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // Every line and column touched below is one of that region's.
-    let mut oap = unsafe { Op::new(oap) };
+    let mut op = unsafe { Op::new(op) };
     let old_lcount = cur_buf().line_count();
 
     if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
         return Ok(());
     }
     // Nothing to delete -- but still prepare undo, for `op_change`.
-    if oap.empty {
+    if op.empty {
         u_save_cursor()?;
         return Ok(());
     }
@@ -87,53 +87,53 @@ pub unsafe fn op_delete(oap: *mut OpArg) -> Result<(), NotDeleted> {
         emsg(gettext(e_modifiable));
         return Err(NotDeleted::NotModifiable);
     }
-    if visual_select() && oap.is_VIsual {
+    if visual_select() && op.is_VIsual {
         // The register given with CTRL-R, zero by default.
-        oap.regname = VIsual_select_reg.get();
+        op.regname = VIsual_select_reg.get();
     }
 
-    unsafe { mb_adjust_opend(oap.raw()) };
+    unsafe { mb_adjust_opend(op.raw()) };
 
     // Imitate the strange Vi behaviour: a charwise delete spanning more
     // than one line whose result would be a blank line becomes linewise.
     // Not for `c`, and not in Visual mode.
-    if oap.motion_type == kMTCharWise
-        && !oap.is_VIsual
-        && oap.line_count > 1
-        && oap.motion_force == NUL
-        && oap.op_type == OpType::Delete
+    if op.motion_type == kMTCharWise
+        && !op.is_VIsual
+        && op.line_count > 1
+        && op.motion_force == NUL
+        && op.op_type == OpType::Delete
     {
         let blank = unsafe {
-            let mut ptr = ml_get(oap.end.lnum).offset(oap.end.col as isize);
+            let mut ptr = ml_get(op.end.lnum).offset(op.end.col as isize);
             if *ptr as c_int != NUL {
-                ptr = ptr.offset(oap.inclusive as isize);
+                ptr = ptr.offset(op.inclusive as isize);
             }
             *skipwhite(ptr) as c_int == NUL
         };
         if blank && unsafe { inindent(0) } {
-            oap.motion_type = kMTLineWise;
+            op.motion_type = kMTLineWise;
         }
     }
 
     // Trying to delete (e.g. `D`) in an empty line. For `c` that is fine.
-    let empty_region = oap.motion_type != kMTLineWise
-        && oap.line_count == 1
-        && oap.op_type == OpType::Delete
-        && unsafe { *ml_get(oap.start.lnum) } as c_int == NUL;
+    let empty_region = op.motion_type != kMTLineWise
+        && op.line_count == 1
+        && op.op_type == OpType::Delete
+        && unsafe { *ml_get(op.start.lnum) } as c_int == NUL;
 
     if !empty_region {
         // Yank whatever is about to be deleted. `"_` takes nothing.
-        if oap.regname != '_' as c_int && !save_deleted_text(oap) {
+        if op.regname != '_' as c_int && !save_deleted_text(op) {
             return Ok(());
         }
 
         // `?` converts the undo layer's refusal into this one's.
-        if oap.motion_type == kMTBlockWise {
-            delete_block(oap)?;
-        } else if oap.motion_type == kMTLineWise {
-            delete_whole_lines(oap)?;
+        if op.motion_type == kMTBlockWise {
+            delete_block(op)?;
+        } else if op.motion_type == kMTLineWise {
+            delete_whole_lines(op)?;
         } else {
-            delete_chars(oap)?;
+            delete_chars(op)?;
         }
 
         let n = cur_buf().line_count() as c_int - old_lcount as c_int;
@@ -150,13 +150,13 @@ pub unsafe fn op_delete(oap: *mut OpArg) -> Result<(), NotDeleted> {
     // set as if it had.
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        if oap.motion_type == kMTBlockWise {
-            cur_buf().b_op_end.lnum = oap.end.lnum;
-            cur_buf().b_op_end.col = oap.start.col;
+        if op.motion_type == kMTBlockWise {
+            cur_buf().b_op_end.lnum = op.end.lnum;
+            cur_buf().b_op_end.col = op.start.col;
         } else {
-            cur_buf().b_op_end = oap.start;
+            cur_buf().b_op_end = op.start;
         }
-        cur_buf().b_op_start = oap.start;
+        cur_buf().b_op_start = op.start;
     }
 
     Ok(())
@@ -174,47 +174,47 @@ pub unsafe fn op_delete(oap: *mut OpArg) -> Result<(), NotDeleted> {
 /// inside one line. Only the *last* one written reaches the clipboard and the
 /// autocommand, which is upstream's behaviour and the reason `reg` is carried
 /// rather than each branch handling its own.
-fn save_deleted_text(oap: Op) -> bool {
+fn save_deleted_text(op: Op) -> bool {
     // SAFETY: a live `OpArg` of the current buffer, and every register
     // written is one `get_yank_register`/`get_y_register` just handed back.
     let mut reg: *mut YankReg = ::core::ptr::null_mut();
     let mut did_yank = false;
 
-    if oap.regname != 0 {
-        if !unsafe { valid_yank_reg(oap.regname, true) } {
+    if op.regname != 0 {
+        if !unsafe { valid_yank_reg(op.regname, true) } {
             beep_flush();
             return false;
         }
-        reg = unsafe { get_yank_register(oap.regname, YREG_YANK as c_int) };
+        reg = unsafe { get_yank_register(op.regname, YREG_YANK as c_int) };
         // Yank without a message.
-        let append = is_append_register(oap.regname);
-        unsafe { op_yank_reg(oap.raw(), false, reg, append) };
+        let append = is_append_register(op.regname);
+        unsafe { op_yank_reg(op.raw(), false, reg, append) };
         did_yank = true;
     }
 
     // Into `"1`, shifting the number registers, when the delete contains a
     // line break or a specific operator was used (Vi compatible).
-    if oap.motion_type == kMTLineWise || oap.line_count > 1 || oap.use_reg_one {
-        unsafe { shift_delete_registers(is_append_register(oap.regname)) };
+    if op.motion_type == kMTLineWise || op.line_count > 1 || op.use_reg_one {
+        unsafe { shift_delete_registers(is_append_register(op.regname)) };
         reg = unsafe { get_y_register(1) };
-        unsafe { op_yank_reg(oap.raw(), false, reg, false) };
+        unsafe { op_yank_reg(op.raw(), false, reg, false) };
         did_yank = true;
     }
 
     // Into the small-delete register when no register was named and the
     // delete is within one line.
-    if oap.regname == 0 && oap.motion_type != kMTLineWise && oap.line_count == 1 {
+    if op.regname == 0 && op.motion_type != kMTLineWise && op.line_count == 1 {
         reg = unsafe { get_yank_register('-' as c_int, YREG_YANK as c_int) };
-        unsafe { op_yank_reg(oap.raw(), false, reg, false) };
+        unsafe { op_yank_reg(op.raw(), false, reg, false) };
         did_yank = true;
     }
 
-    if did_yank || oap.regname == 0 {
+    if did_yank || op.regname == 0 {
         if reg.is_null() {
             unsafe { abort() };
         }
-        unsafe { crate::clipboard::set_clipboard(oap.regname, reg as *mut _) };
-        unsafe { do_autocmd_textyankpost(oap.raw(), reg) };
+        unsafe { crate::clipboard::set_clipboard(op.regname, reg as *mut _) };
+        unsafe { do_autocmd_textyankpost(op.raw(), reg) };
     }
     true
 }
@@ -226,17 +226,17 @@ fn save_deleted_text(oap: Op) -> bool {
 /// `startspaces`/`endspaces` are, and why the new line is built rather than
 /// patched.
 ///
-/// `oap` must be blockwise.
-fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
+/// `op` must be blockwise.
+fn delete_block(mut op: Op) -> Result<(), UndoFailed> {
     // SAFETY: every line the walk reaches is one of the region's, so it is a
     // line of the current buffer.
-    let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
+    let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     u_save(above, below)?;
 
     let mut bd = BlockDef::ZERO;
     let mut lnum = cur_win().w_cursor.lnum;
-    while lnum <= oap.end.lnum {
-        unsafe { block_prep(oap.raw(), &raw mut bd, lnum, true) };
+    while lnum <= op.end.lnum {
+        unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
         if bd.textlen != 0 {
             // Adjust the cursor for a TAB replaced by spaces, and 'lbr'.
             if lnum == cur_win().w_cursor.lnum {
@@ -273,9 +273,9 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
 
     let (lnum, col) = (cur_win().w_cursor.lnum, cur_win().w_cursor.col);
     check_cursor_col(unsafe { Win::current() });
-    changed_lines(cur_buf(), lnum, col, oap.end.lnum + 1, 0, true);
+    changed_lines(cur_buf(), lnum, col, op.end.lnum + 1, 0, true);
     // No whole lines were deleted, so `msgmore` must not report any.
-    oap.line_count = 0;
+    op.line_count = 0;
     Ok(())
 }
 
@@ -285,12 +285,12 @@ fn delete_block(mut oap: Op) -> Result<(), UndoFailed> {
 /// the first, so that the insert starts on a line that already exists and
 /// 'autoindent' has an indent to keep.
 ///
-/// `oap` must be linewise.
-fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
+/// `op` must be linewise.
+fn delete_whole_lines(op: Op) -> Result<(), UndoFailed> {
     // SAFETY: the region is the current buffer's, and the cursor stays on a
     // line of it throughout.
-    if oap.op_type != OpType::Change {
-        unsafe { del_lines(oap.line_count, true) };
+    if op.op_type != OpType::Change {
+        unsafe { del_lines(op.line_count, true) };
         beginline(BeginlineOpts::WHITE | BeginlineOpts::FIX);
         // `U` is not possible after `dd`.
         u_clearline(cur_buf());
@@ -299,10 +299,10 @@ fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
 
     // Delete every line but the first, with the cursor moved off it: the
     // line number is remembered because deleting the last line moves it.
-    if oap.line_count > 1 {
+    if op.line_count > 1 {
         let lnum = cur_win().w_cursor.lnum;
         cur_win().w_cursor.lnum += 1;
-        unsafe { del_lines(oap.line_count - 1, true) };
+        unsafe { del_lines(op.line_count - 1, true) };
         cur_win().w_cursor.lnum = lnum;
     }
     u_save_cursor()?;
@@ -317,7 +317,7 @@ fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
     }
     // The rest of the line, leaving the cursor past its last character.
     unsafe { truncate_line(0) };
-    if oap.line_count > 1 {
+    if op.line_count > 1 {
         // `U` is not possible after `2cc`.
         u_clearline(cur_buf());
     }
@@ -326,19 +326,19 @@ fn delete_whole_lines(oap: Op) -> Result<(), UndoFailed> {
 
 /// The charwise arm.
 ///
-/// `oap` must be charwise.
-fn delete_chars(oap: Op) -> Result<(), UndoFailed> {
+/// `op` must be charwise.
+fn delete_chars(op: Op) -> Result<(), UndoFailed> {
     if op_virtual() {
-        break_tabs_at_edges(oap)?;
+        break_tabs_at_edges(op)?;
     }
 
-    if oap.line_count == 1 {
-        delete_chars_one_line(oap)?;
+    if op.line_count == 1 {
+        delete_chars_one_line(op)?;
     } else {
-        delete_chars_across_lines(oap)?;
+        delete_chars_across_lines(op)?;
     }
 
-    if oap.op_type == OpType::Delete {
+    if op.op_type == OpType::Delete {
         // SAFETY: formats the current buffer around the cursor.
         unsafe { auto_format(false, true) };
     }
@@ -348,54 +348,51 @@ fn delete_chars(oap: Op) -> Result<(), UndoFailed> {
 /// 'virtualedit' only: replace a TAB the region starts or ends inside with the
 /// spaces it covers, so that the delete has real byte positions to work with.
 ///
-/// Moves `oap.start`/`oap.end` onto those positions.
+/// Moves `op.start`/`op.end` onto those positions.
 ///
-/// `oap` must be charwise.
-fn break_tabs_at_edges(mut oap: Op) -> Result<(), UndoFailed> {
+/// `op` must be charwise.
+fn break_tabs_at_edges(mut op: Op) -> Result<(), UndoFailed> {
     // SAFETY: both ends name positions of the current buffer, and the cursor
     // is put on one of them before each column is measured.
-    if unsafe { gchar_pos(oap.start().raw()) } == '\t' as c_int {
+    if unsafe { gchar_pos(op.start().raw()) } == '\t' as c_int {
         // Save the first line for undo.
         u_save_cursor()?;
         // Breaking the start TAB moves the end too, so remember where the
         // end was in *columns* first.
         let mut endcol = 0;
-        if oap.line_count == 1 {
-            endcol = unsafe { getviscol2(oap.end.col, oap.end.coladd) };
+        if op.line_count == 1 {
+            endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
         }
-        let startcol = unsafe { getviscol2(oap.start.col, oap.start.coladd) };
+        let startcol = unsafe { getviscol2(op.start.col, op.start.coladd) };
         unsafe { coladvance_force(startcol) };
-        oap.start = cur_win().w_cursor;
-        if oap.line_count == 1 {
+        op.start = cur_win().w_cursor;
+        if op.line_count == 1 {
             cur_win().coladvance(endcol);
-            oap.end.col = cur_win().w_cursor.col;
-            oap.end.coladd = cur_win().w_cursor.coladd;
-            cur_win().w_cursor = oap.start;
+            op.end.col = cur_win().w_cursor.col;
+            op.end.coladd = cur_win().w_cursor.coladd;
+            cur_win().w_cursor = op.start;
         }
     }
 
     // Break the end TAB only when it is inside the region.
-    if unsafe { gchar_pos(oap.end().raw()) } == '\t' as c_int
-        && oap.end.coladd == 0
-        && oap.inclusive
-    {
+    if unsafe { gchar_pos(op.end().raw()) } == '\t' as c_int && op.end.coladd == 0 && op.inclusive {
         // Save the last line for undo.
-        u_save(oap.end.lnum - 1, oap.end.lnum + 1)?;
-        cur_win().w_cursor = oap.end;
-        let endcol = unsafe { getviscol2(oap.end.col, oap.end.coladd) };
+        u_save(op.end.lnum - 1, op.end.lnum + 1)?;
+        cur_win().w_cursor = op.end;
+        let endcol = unsafe { getviscol2(op.end.col, op.end.coladd) };
         unsafe { coladvance_force(endcol) };
-        oap.end = cur_win().w_cursor;
-        cur_win().w_cursor = oap.start;
+        op.end = cur_win().w_cursor;
+        cur_win().w_cursor = op.start;
     }
 
-    unsafe { mb_adjust_opend(oap.raw()) };
+    unsafe { mb_adjust_opend(op.raw()) };
     Ok(())
 }
 
 /// Delete characters within one line.
 ///
-/// `oap` must be charwise, and its region one line.
-fn delete_chars_one_line(oap: Op) -> Result<(), UndoFailed> {
+/// `op` must be charwise, and its region one line.
+fn delete_chars_one_line(op: Op) -> Result<(), UndoFailed> {
     // SAFETY: the region is one line of the current buffer, and the cursor
     // is on it.
     // Save the line for undo.
@@ -404,25 +401,25 @@ fn delete_chars_one_line(oap: Op) -> Result<(), UndoFailed> {
     // 'cpoptions' `$`: show a `$` at the end of the change rather than
     // removing the text now.
     if cpo_has(CpoFlag::DOLLAR)
-        && oap.op_type == OpType::Change
-        && oap.end.lnum == cur_win().w_cursor.lnum
-        && !oap.is_VIsual
+        && op.op_type == OpType::Change
+        && op.end.lnum == cur_win().w_cursor.lnum
+        && !op.is_VIsual
     {
-        unsafe { display_dollar(oap.end.col - c_int::from(!oap.inclusive)) };
+        unsafe { display_dollar(op.end.col - c_int::from(!op.inclusive)) };
     }
 
-    let mut n = oap.end.col - oap.start.col + 1 - c_int::from(!oap.inclusive);
+    let mut n = op.end.col - op.start.col + 1 - c_int::from(!op.inclusive);
 
     if op_virtual() {
         let len = get_cursor_line_len();
-        if oap.end.coladd != 0
-            && oap.end.col >= len - 1
-            && !(oap.start.coladd != 0 && oap.end.col >= len - 1)
+        if op.end.coladd != 0
+            && op.end.col >= len - 1
+            && !(op.start.coladd != 0 && op.end.col >= len - 1)
         {
             n += 1;
         }
         // Delete at least one character, e.g. when on a control character.
-        if n == 0 && oap.start.coladd != oap.end.coladd {
+        if n == 0 && op.start.coladd != op.end.coladd {
             n = 1;
         }
         // Having deleted a character in the line, `coladd` is stale.
@@ -431,7 +428,7 @@ fn delete_chars_one_line(oap: Op) -> Result<(), UndoFailed> {
         }
     }
 
-    let fixpos = oap.op_type == OpType::Delete && !oap.is_VIsual;
+    let fixpos = op.op_type == OpType::Delete && !op.is_VIsual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
     Ok(())
 }
@@ -443,12 +440,12 @@ fn delete_chars_one_line(oap: Op) -> Result<(), UndoFailed> {
 /// `curbuf_splice_pending` so that extmarks and the buffer-update RPC see the
 /// one splice measured up front rather than four.
 ///
-/// `oap` must be charwise and span at least two lines.
-fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
+/// `op` must be charwise and span at least two lines.
+fn delete_chars_across_lines(op: Op) -> Result<(), UndoFailed> {
     // SAFETY: the region is the current buffer's and spans at least two of
     // its lines; the cursor stays inside it through all four edits.
     let above = cur_win().w_cursor.lnum - 1;
-    let past = cur_win().w_cursor.lnum + oap.line_count;
+    let past = cur_win().w_cursor.lnum + op.line_count;
     // Save the deleted and changed lines for undo.
     u_save(above, past)?;
 
@@ -456,52 +453,52 @@ fn delete_chars_across_lines(oap: Op) -> Result<(), UndoFailed> {
     let startpos = cur_win().w_cursor;
     let (lnum, col) = (startpos.lnum, startpos.col);
     let buf = cur_buf();
-    let spanned = get_region_bytecount(buf, lnum, oap.end.lnum, col, oap.end.col);
-    let deleted_bytes = spanned + BCount::from(oap.inclusive);
+    let spanned = get_region_bytecount(buf, lnum, op.end.lnum, col, op.end.col);
+    let deleted_bytes = spanned + BCount::from(op.inclusive);
 
     // From the cursor to the end of the line.
     unsafe { truncate_line(1) };
 
     let curpos = cur_win().w_cursor;
     cur_win().w_cursor.lnum += 1;
-    unsafe { del_lines(oap.line_count - 2, false) };
+    unsafe { del_lines(op.line_count - 2, false) };
 
     // From the start of the last line up to the region's end.
-    let n = oap.end.col + 1 - c_int::from(!oap.inclusive);
+    let n = op.end.col + 1 - c_int::from(!op.inclusive);
     cur_win().w_cursor.col = 0;
-    let fixpos = oap.op_type == OpType::Delete && !oap.is_VIsual;
+    let fixpos = op.op_type == OpType::Delete && !op.is_VIsual;
     let _ = unsafe { del_bytes(n, !op_virtual(), fixpos) };
 
     cur_win().w_cursor = curpos;
     let _ = unsafe { do_join(2, false, false, false, false) };
     drop(splice);
 
-    let rows = oap.line_count as c_int - 1;
+    let rows = op.line_count as c_int - 1;
     let row = startpos.lnum as c_int - 1;
     let buf = curbuf.get();
     unsafe { extmark_splice(buf, row, col, rows, n, deleted_bytes, 0, 0, 0, kExtmarkUndo) };
     Ok(())
 }
 
-/// Pull `oap.end` back onto the *last byte* of the character it lands in, so
+/// Pull `op.end` back onto the *last byte* of the character it lands in, so
 /// that an inclusive delete takes the whole character.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg` whose end names a position in the
+/// `op` must point to a live `OpArg` whose end names a position in the
 /// current buffer.
-pub(crate) unsafe fn mb_adjust_opend(oap: *mut OpArg) {
-    // SAFETY: the caller's promise -- `oap.end` names a position of the
+pub(crate) unsafe fn mb_adjust_opend(op: *mut OpArg) {
+    // SAFETY: the caller's promise -- `op.end` names a position of the
     // current buffer, so its line is live and `end.col` a column of it.
-    let mut oap = unsafe { Op::new(oap) };
-    if !oap.inclusive {
+    let mut op = unsafe { Op::new(op) };
+    if !op.inclusive {
         return;
     }
-    let line: *const c_char = ml_get(oap.end.lnum);
-    let mut ptr = unsafe { line.offset(oap.end.col as isize) };
+    let line: *const c_char = ml_get(op.end.lnum);
+    let mut ptr = unsafe { line.offset(op.end.col as isize) };
     if unsafe { *ptr } as c_int != NUL {
         ptr = unsafe { ptr.offset(-(utf_head_off(line, ptr) as isize)) };
         ptr = unsafe { ptr.offset((utfc_ptr2len(ptr) - 1) as isize) };
-        oap.end.col = unsafe { ptr.offset_from(line) } as ColNr;
+        op.end.col = unsafe { ptr.offset_from(line) } as ColNr;
     }
 }
 

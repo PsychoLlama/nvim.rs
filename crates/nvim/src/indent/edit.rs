@@ -84,17 +84,17 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
     };
 }
 
-/// Reindents `oap`'s lines with `how`, one of the three indent engines.
+/// Reindents `op`'s lines with `how`, one of the three indent engines.
 ///
 /// # Safety
-/// `oap` must be a live operator argument.
-pub unsafe fn op_reindent(oap: *mut OpArg, how: Indenter) {
+/// `op` must be a live operator argument.
+pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     // SAFETY: the caller's operator argument, and the buffer it names is
     // the current one.
     let win = curwin.get();
     let buf = curbuf.get();
     let start_lnum = unsafe { (*win).w_cursor.lnum };
-    let line_count = unsafe { (*oap).line_count };
+    let line_count = unsafe { (*op).line_count };
     if unsafe { (*buf).b_p_ma } == 0 {
         emsg(gettext(e_modifiable));
         return;
@@ -165,13 +165,13 @@ pub unsafe fn op_reindent(oap: *mut OpArg, how: Indenter) {
     // has to reach the last line even when nothing changed, so that the
     // highlight goes away.
     if last_changed != 0 {
-        let end = if unsafe { (*oap).is_VIsual } {
+        let end = if unsafe { (*op).is_VIsual } {
             start_lnum + line_count
         } else {
             last_changed + 1
         };
         changed_lines(unsafe { Buf::new(buf) }, first_changed, 0, end, 0, true);
-    } else if unsafe { (*oap).is_VIsual } {
+    } else if unsafe { (*op).is_VIsual } {
         redraw_curbuf_later(UPD_INVERTED);
     }
     if line_count as OptInt > p_report.get() {
@@ -191,8 +191,8 @@ pub unsafe fn op_reindent(oap: *mut OpArg, how: Indenter) {
     }
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
         // Set the '[ and '] marks.
-        unsafe { (*buf).b_op_start = (*oap).start };
-        unsafe { (*buf).b_op_end = (*oap).end };
+        unsafe { (*buf).b_op_start = (*op).start };
+        unsafe { (*buf).b_op_end = (*op).end };
     }
 }
 

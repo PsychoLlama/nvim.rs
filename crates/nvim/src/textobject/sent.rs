@@ -357,8 +357,8 @@ unsafe fn extend_sentences(mut count: c_int, include: bool, start_pos: Pos, mut 
 /// instead.
 ///
 /// # Safety
-/// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_sent(oap: *mut OpArg, count: c_int, include: bool) -> Result<(), Failed> {
+/// `op` must be a live operator argument, and there must be a current line.
+pub unsafe fn current_sent(op: *mut OpArg, count: c_int, include: bool) -> Result<(), Failed> {
     let mut start_pos = cur_win().w_cursor;
     let mut pos = start_pos;
     // SAFETY, throughout: the caller guarantees a current window whose cursor
@@ -431,11 +431,11 @@ pub unsafe fn current_sent(oap: *mut OpArg, count: c_int, include: bool) -> Resu
         // Include the newline after the sentence, if there is one.
         // SAFETY: the cursor is on a line of the current buffer.
         let inclusive = unsafe { incl(&mut cur_win().cursor()) } == -1;
-        // SAFETY: the caller guarantees `oap` is a live operator argument.
-        let oap = unsafe { &mut *oap };
-        oap.inclusive = inclusive;
-        oap.start = start_pos;
-        oap.motion_type = kMTCharWise;
+        // SAFETY: the caller guarantees `op` is a live operator argument.
+        let op = unsafe { &mut *op };
+        op.inclusive = inclusive;
+        op.start = start_pos;
+        op.motion_type = kMTCharWise;
     }
     Ok(())
 }

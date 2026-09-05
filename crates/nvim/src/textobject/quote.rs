@@ -229,13 +229,8 @@ fn swap_cursor_and_anchor() {
 /// cursor left at the end. Answers whether one was found.
 ///
 /// # Safety
-/// `oap` must be a live operator argument, and there must be a current line.
-pub unsafe fn current_quote(
-    oap: *mut OpArg,
-    count: c_int,
-    include: bool,
-    quotechar: c_int,
-) -> bool {
+/// `op` must be a live operator argument, and there must be a current line.
+pub unsafe fn current_quote(op: *mut OpArg, count: c_int, include: bool, quotechar: c_int) -> bool {
     // SAFETY: the caller guarantees a current line; `get_cursor_line_ptr`
     // hands back the cursor's line, NUL-terminated.
     let line = get_cursor_line_ptr();
@@ -376,10 +371,10 @@ pub unsafe fn current_quote(
             redraw_curbuf_later(UPD_INVERTED);
         }
     } else {
-        // SAFETY: the caller guarantees `oap` is a live operator argument.
-        let oap = unsafe { &mut *oap };
-        oap.start = cur_win().w_cursor;
-        oap.motion_type = kMTCharWise;
+        // SAFETY: the caller guarantees `op` is a live operator argument.
+        let op = unsafe { &mut *op };
+        op.start = cur_win().w_cursor;
+        op.motion_type = kMTCharWise;
     }
 
     // The end position.
@@ -418,8 +413,8 @@ pub unsafe fn current_quote(
             redraw_cmdline.set(true); // show the mode later
         }
     } else {
-        // SAFETY: the caller guarantees `oap` is a live operator argument.
-        unsafe { (*oap).inclusive = inclusive };
+        // SAFETY: the caller guarantees `op` is a live operator argument.
+        unsafe { (*op).inclusive = inclusive };
     }
     true
 }

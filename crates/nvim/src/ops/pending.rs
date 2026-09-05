@@ -93,9 +93,9 @@ impl DerefMut for Cmd {
 /// Zero an `OpArg` between commands.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg`.
-pub unsafe fn clear_oparg(oap: *mut OpArg) {
-    unsafe { *oap = OpArg::ZERO };
+/// `op` must point to a live `OpArg`.
+pub unsafe fn clear_oparg(op: *mut OpArg) {
+    unsafe { *op = OpArg::ZERO };
 }
 
 /// Was the operator reached through a command line rather than a key?
@@ -112,18 +112,18 @@ fn is_ex_cmdchar(cmd_arg: Cmd) -> bool {
 /// must not clear the selection, redraw, or leave a `.` behind.
 ///
 /// # Safety
-/// `cmd_arg` must point to a live `CmdArg` whose `oap` describes a region of the
+/// `cmd_arg` must point to a live `CmdArg` whose `op` describes a region of the
 /// current buffer.
 pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank: bool) {
-    // SAFETY: the caller's promise -- a live `CmdArg` whose `oap` is a live
+    // SAFETY: the caller's promise -- a live `CmdArg` whose `op` is a live
     // `OpArg`. The two wrappers carry that promise on from here, so every
     // field access below is the compiler's business rather than a note.
     let cmd_arg = unsafe { Cmd::new(cmd_arg) };
-    let mut oap = unsafe { Op::new(cmd_arg.oap) };
+    let mut op = unsafe { Op::new(cmd_arg.oap) };
     let lbr_saved = cur_win().w_onebuf_opt.wo_lbr;
     let old_cursor = cur_win().w_cursor;
 
-    if (!finish_op.get() && !visual_active()) || oap.op_type == OpType::Nop {
+    if (!finish_op.get() && !visual_active()) || op.op_type == OpType::Nop {
         restore_lbr(lbr_saved != 0);
         return;
     }
@@ -134,39 +134,39 @@ pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank
 
     // Unwanted line breaks would move every column measured below.
     reset_lbr();
-    oap.is_VIsual = visual_active();
-    apply_motion_force(oap);
-    record_operator_redo(cmd_arg, oap, redo_yank);
+    op.is_VIsual = visual_active();
+    apply_motion_force(op);
+    record_operator_redo(cmd_arg, op, redo_yank);
 
     let mut include_line_break = false;
     if redo_VIsual_busy.get() {
-        resume_redo_visual(cmd_arg, oap);
+        resume_redo_visual(cmd_arg, op);
     } else if visual_active() {
-        include_line_break = start_visual_region(oap, gui_yank);
+        include_line_break = start_visual_region(op, gui_yank);
     }
 
-    order_region(oap);
+    order_region(op);
 
     // Just in case lines were deleted that make the position invalid.
-    check_pos(cur_win().buffer(), &mut oap.end);
-    oap.line_count = oap.end.lnum - oap.start.lnum + 1;
+    check_pos(cur_win().buffer(), &mut op.end);
+    op.line_count = op.end.lnum - op.start.lnum + 1;
     // Set before `VIsual_active` is reset below.
     // SAFETY: a live window.
     let virt = virtual_active(cur_win());
     virtual_op.set(Some(virt));
 
     if visual_active() || redo_VIsual_busy.get() {
-        get_op_vcol(oap, REDO_VISUAL.get().rv_vcol, true);
-        prepare_visual_redo(cmd_arg, oap, gui_yank, redo_yank);
-        finish_visual_region(oap, include_line_break, gui_yank, lbr_saved);
+        get_op_vcol(op, REDO_VISUAL.get().rv_vcol, true);
+        prepare_visual_redo(cmd_arg, op, gui_yank, redo_yank);
+        finish_visual_region(op, include_line_break, gui_yank, lbr_saved);
     }
 
     // Include the trailing byte of a multi-byte character.
-    if oap.inclusive {
-        // SAFETY: `oap.end` is a position of the current buffer.
-        let l = unsafe { utfc_ptr2len(ml_get_pos(oap.end().raw())) };
+    if op.inclusive {
+        // SAFETY: `op.end` is a position of the current buffer.
+        let l = unsafe { utfc_ptr2len(ml_get_pos(op.end().raw())) };
         if l > 1 {
-            oap.end.col += l - 1;
+            op.end.col += l - 1;
         }
     }
     cur_win().w_set_curswant = true;
@@ -176,35 +176,35 @@ pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank
     // SAFETY: the `gchar_pos` reads a live position of the current buffer,
     // and only when the operator is a yank -- the chain is left as it is so
     // that it stays as conditional as upstream wrote it.
-    oap.empty = oap.motion_type != kMTLineWise
-        && (!oap.inclusive
-            || (oap.op_type == OpType::Yank && unsafe { gchar_pos(oap.end().raw()) } == NUL))
-        && equalpos(oap.start, oap.end)
-        && !(op_virtual() && oap.start.coladd != oap.end.coladd);
+    op.empty = op.motion_type != kMTLineWise
+        && (!op.inclusive
+            || (op.op_type == OpType::Yank && unsafe { gchar_pos(op.end().raw()) } == NUL))
+        && equalpos(op.start, op.end)
+        && !(op_virtual() && op.start.coladd != op.end.coladd);
     // For delete, change and yank it is an error to operate on an empty
     // region when 'cpoptions' has `E` (Vi compatible).
-    let empty_region_error = oap.empty && cpo_has(CpoFlag::EMPTYREGION);
+    let empty_region_error = op.empty && cpo_has(CpoFlag::EMPTYREGION);
 
     // Force a redraw for an empty Visual region, an unmodifiable buffer,
     // or a fold: none of those will redraw by themselves.
-    if oap.is_VIsual && (oap.empty || cur_buf().b_p_ma == 0 || oap.op_type == OpType::Fold) {
+    if op.is_VIsual && (op.empty || cur_buf().b_p_ma == 0 || op.op_type == OpType::Fold) {
         restore_lbr(lbr_saved != 0);
         // SAFETY: touches only the current buffer's windows.
         redraw_curbuf_later(UPD_INVERTED);
     }
 
-    adjust_region_end(cmd_arg, oap);
-    run_operator(cmd_arg, oap, empty_region_error, gui_yank, lbr_saved);
+    adjust_region_end(cmd_arg, op);
+    run_operator(cmd_arg, op, empty_region_error, gui_yank, lbr_saved);
 
     virtual_op.set(None);
     if gui_yank {
         cur_win().w_cursor = old_cursor;
     } else if p_sol.get() == 0
-        && oap.motion_type == kMTLineWise
-        && !oap.end_adjusted
-        && (oap.op_type == OpType::Lshift
-            || oap.op_type == OpType::Rshift
-            || oap.op_type == OpType::Delete)
+        && op.motion_type == kMTLineWise
+        && !op.end_adjusted
+        && (op.op_type == OpType::Lshift
+            || op.op_type == OpType::Rshift
+            || op.op_type == OpType::Delete)
     {
         // 'startofline' is off: go back to the column the command started
         // in.
@@ -213,30 +213,30 @@ pub unsafe fn do_pending_operator(cmd_arg: *mut CmdArg, old_col: c_int, gui_yank
         cur_win().coladvance(cur_win().w_curswant);
     }
     // SAFETY: a live `OpArg`.
-    unsafe { clearop(oap.raw()) };
+    unsafe { clearop(op.raw()) };
     motion_force.set(NUL);
 
     restore_lbr(lbr_saved != 0);
 }
 
 /// `v`, `V` or CTRL-V typed between the operator and its motion.
-fn apply_motion_force(mut oap: Op) {
-    if oap.motion_force == 'V' as c_int {
-        oap.motion_type = kMTLineWise;
-    } else if oap.motion_force == 'v' as c_int {
-        if oap.motion_type == kMTLineWise {
+fn apply_motion_force(mut op: Op) {
+    if op.motion_force == 'V' as c_int {
+        op.motion_type = kMTLineWise;
+    } else if op.motion_force == 'v' as c_int {
+        if op.motion_type == kMTLineWise {
             // A linewise motion never set `inclusive`; "exclusive" is the
             // consistent reading, and makes `dvj` behave.
-            oap.inclusive = false;
-        } else if oap.motion_type == kMTCharWise {
-            oap.inclusive = !oap.inclusive;
+            op.inclusive = false;
+        } else if op.motion_type == kMTCharWise {
+            op.inclusive = !op.inclusive;
         }
-        oap.motion_type = kMTCharWise;
-    } else if oap.motion_force == Ctrl_V {
+        op.motion_type = kMTCharWise;
+    } else if op.motion_force == Ctrl_V {
         // Turn a line- or charwise motion into a Visual block.
         if !visual_active() {
             set_visual_active(true);
-            set_visual_anchor(oap.start);
+            set_visual_anchor(op.start);
         }
         set_visual_mode(VisualMode::BLOCK);
         set_visual_select(false);
@@ -249,9 +249,9 @@ fn apply_motion_force(mut oap: Op) {
 /// Yank is only redoable under 'cpoptions' `y`, `zf` never is, and neither is
 /// any of the fold operators; a search or a `:` command has to have its own
 /// text appended so that the repeat really is the same command.
-fn record_operator_redo(cmd_arg: Cmd, oap: Op, redo_yank: bool) {
+fn record_operator_redo(cmd_arg: Cmd, op: Op, redo_yank: bool) {
     let is_fold_op = matches!(
-        oap.op_type,
+        op.op_type,
         OpType::Fold
             | OpType::Foldopen
             | OpType::Foldopenrec
@@ -260,11 +260,11 @@ fn record_operator_redo(cmd_arg: Cmd, oap: Op, redo_yank: bool) {
             | OpType::Folddel
             | OpType::Folddelrec
     );
-    let replayable = (redo_yank || oap.op_type != OpType::Yank)
+    let replayable = (redo_yank || op.op_type != OpType::Yank)
         && (!visual_active()
-            || oap.motion_force != 0
+            || op.motion_force != 0
             // Also redo Operator-pending Visual mode mappings.
-            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == Key::Lua.code()) && oap.op_type != OpType::Colon))
+            || ((is_ex_cmdchar(cmd_arg) || cmd_arg.cmdchar == Key::Lua.code()) && op.op_type != OpType::Colon))
         && cmd_arg.cmdchar != 'D' as c_int
         && !is_fold_op;
     if !replayable {
@@ -272,11 +272,11 @@ fn record_operator_redo(cmd_arg: Cmd, oap: Op, redo_yank: bool) {
     }
 
     prep_redo(
-        oap.regname,
+        op.regname,
         cmd_arg.count0,
-        get_op_char(oap.op_type),
-        get_extra_op_char(oap.op_type),
-        oap.motion_force,
+        get_op_char(op.op_type),
+        get_extra_op_char(op.op_type),
+        op.motion_force,
         cmd_arg.cmdchar,
         cmd_arg.nchar,
     );
@@ -315,9 +315,9 @@ fn record_operator_redo(cmd_arg: Cmd, oap: Op, redo_yank: bool) {
 
 /// `.` replaying a Visual operator: rebuild a region of the recorded size at
 /// the cursor.
-fn resume_redo_visual(mut cmd_arg: Cmd, mut oap: Op) {
+fn resume_redo_visual(mut cmd_arg: Cmd, mut op: Op) {
     let redo = REDO_VISUAL.get();
-    oap.start = cur_win().w_cursor;
+    op.start = cur_win().w_cursor;
     cur_win().w_cursor.lnum += redo.rv_line_count - 1;
     cur_win().w_cursor.lnum = cur_win().w_cursor.lnum.min(cur_buf().line_count());
     set_visual_mode(VisualMode::from_raw(redo.rv_mode));
@@ -350,7 +350,7 @@ fn resume_redo_visual(mut cmd_arg: Cmd, mut oap: Op) {
 /// backed-off end lands on a line break.
 ///
 /// A Visual selection must be active.
-fn start_visual_region(mut oap: Op, gui_yank: bool) -> bool {
+fn start_visual_region(mut op: Op, gui_yank: bool) -> bool {
     let mut include_line_break = false;
 
     if !gui_yank {
@@ -367,7 +367,7 @@ fn start_visual_region(mut oap: Op, gui_yank: bool) -> bool {
     // one. `gH<Del>`, which deletes the last line, is the exception.
     // SAFETY: both lines are the current buffer's -- one holds the cursor,
     // the other the Visual anchor. `unadjust_for_sel` only moves the cursor.
-    if visual_select() && visual_mode().is_line() && oap.op_type != OpType::Delete {
+    if visual_select() && visual_mode().is_line() && op.op_type != OpType::Delete {
         if lt(visual_anchor(), cur_win().w_cursor) {
             set_visual_anchor(visual_anchor().with_col(0));
             cur_win().w_cursor.col = ml_get_len(cur_win().w_cursor.lnum);
@@ -382,54 +382,54 @@ fn start_visual_region(mut oap: Op, gui_yank: bool) -> bool {
         include_line_break = unadjust_for_sel();
     }
 
-    oap.start = visual_anchor();
+    op.start = visual_anchor();
     if visual_mode().is_line() {
-        oap.start.col = 0;
-        oap.start.coladd = 0;
+        op.start.col = 0;
+        op.start.coladd = 0;
     }
     include_line_break
 }
 
-/// Put `oap.start` at the first position of the region and `oap.end` at the
+/// Put `op.start` at the first position of the region and `op.end` at the
 /// last, with the cursor on the start.
 ///
 /// Outside Visual mode a closed fold at either end is swallowed whole, which
 /// is why this is more than a swap.
-fn order_region(mut oap: Op) {
+fn order_region(mut op: Op) {
     let win = cur_win();
-    if lt(oap.start, cur_win().w_cursor) {
+    if lt(op.start, cur_win().w_cursor) {
         if !visual_active() {
-            if let Some(first) = win.fold_first(oap.start.lnum) {
-                oap.start.lnum = first;
-                oap.start.col = 0;
+            if let Some(first) = win.fold_first(op.start.lnum) {
+                op.start.lnum = first;
+                op.start.col = 0;
             }
             let past_start =
-                cur_win().w_cursor.col > 0 || oap.inclusive || oap.motion_type == kMTLineWise;
+                cur_win().w_cursor.col > 0 || op.inclusive || op.motion_type == kMTLineWise;
             if past_start && let Some(last) = win.fold_end(cur_win().w_cursor.lnum) {
                 cur_win().w_cursor.lnum = last;
                 // SAFETY: the cursor line is a line of the buffer.
                 cur_win().w_cursor.col = get_cursor_line_len();
             }
         }
-        oap.end = cur_win().w_cursor;
-        cur_win().w_cursor = oap.start;
+        op.end = cur_win().w_cursor;
+        cur_win().w_cursor = op.start;
         // `w_virtcol` was updated for the old position and is not
         // recomputed automatically when the cursor goes back.
         cur_win().w_valid.clear(WinValid::VIRTCOL);
     } else {
-        if !visual_active() && oap.motion_type == kMTLineWise {
+        if !visual_active() && op.motion_type == kMTLineWise {
             if let Some(first) = win.fold_first(cur_win().w_cursor.lnum) {
                 cur_win().w_cursor.lnum = first;
                 cur_win().w_cursor.col = 0;
             }
-            if let Some(last) = win.fold_end(oap.start.lnum) {
-                oap.start.lnum = last;
+            if let Some(last) = win.fold_end(op.start.lnum) {
+                op.start.lnum = last;
                 // SAFETY: a line of the current buffer.
-                oap.start.col = ml_get_len(last);
+                op.start.col = ml_get_len(last);
             }
         }
-        oap.end = oap.start;
-        oap.start = cur_win().w_cursor;
+        op.end = op.start;
+        op.start = cur_win().w_cursor;
     }
 }
 
@@ -437,31 +437,31 @@ fn order_region(mut oap: Op) {
 /// build one like it.
 ///
 /// A Visual selection must be active or being replayed.
-fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: bool) {
+fn prepare_visual_redo(cmd_arg: Cmd, mut op: Op, gui_yank: bool, redo_yank: bool) {
     if !redo_VIsual_busy.get() && !gui_yank {
         resel_VIsual_mode.set(visual_mode());
         if cur_win().w_curswant == MAXCOL {
             resel_VIsual_vcol.set(MAXCOL);
         } else {
             if !visual_mode().is_block() {
-                oap.end_vcol = cur_win().virtual_vcol_span(oap.end()).1;
+                op.end_vcol = cur_win().virtual_vcol_span(op.end()).1;
             }
-            if visual_mode().is_block() || oap.line_count <= 1 {
+            if visual_mode().is_block() || op.line_count <= 1 {
                 // A block, or a one-line region: the size is a width.
                 if !visual_mode().is_block() {
-                    oap.start_vcol = cur_win().virtual_vcol(oap.start());
+                    op.start_vcol = cur_win().virtual_vcol(op.start());
                 }
-                resel_VIsual_vcol.set(oap.end_vcol - oap.start_vcol + 1);
+                resel_VIsual_vcol.set(op.end_vcol - op.start_vcol + 1);
             } else {
                 // Several lines: the size is the end column.
-                resel_VIsual_vcol.set(oap.end_vcol);
+                resel_VIsual_vcol.set(op.end_vcol);
             }
         }
-        resel_VIsual_line_count.set(oap.line_count);
+        resel_VIsual_line_count.set(op.line_count);
     }
 
     let is_fold_op = matches!(
-        oap.op_type,
+        op.op_type,
         OpType::Fold
             | OpType::Foldopen
             | OpType::Foldopenrec
@@ -472,10 +472,10 @@ fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: boo
     );
     // A yank cannot be redone unless 'cpoptions' has `y`, and neither can
     // `:`.
-    if !((redo_yank || oap.op_type != OpType::Yank)
-        && oap.op_type != OpType::Colon
+    if !((redo_yank || op.op_type != OpType::Yank)
+        && op.op_type != OpType::Colon
         && !is_fold_op
-        && oap.motion_force == NUL)
+        && op.motion_force == NUL)
     {
         return;
     }
@@ -485,20 +485,20 @@ fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: boo
     {
         // `gn`/`gN` carry their own region, so the whole command repeats.
         prep_redo(
-            oap.regname,
+            op.regname,
             cmd_arg.count0,
-            get_op_char(oap.op_type),
-            get_extra_op_char(oap.op_type),
-            oap.motion_force,
+            get_op_char(op.op_type),
+            get_extra_op_char(op.op_type),
+            op.motion_force,
             cmd_arg.cmdchar,
             cmd_arg.nchar,
         );
     } else if !is_ex_cmdchar(cmd_arg) && cmd_arg.cmdchar != Key::Lua.code() {
-        let opchar = get_op_char(oap.op_type);
-        let extra_opchar = get_extra_op_char(oap.op_type);
+        let opchar = get_op_char(op.op_type);
+        let extra_opchar = get_extra_op_char(op.op_type);
         // Only `r` uses `nchar`; for anything else it would be the
         // operator's own second character.
-        let mut nchar = if oap.op_type == OpType::Replace {
+        let mut nchar = if op.op_type == OpType::Replace {
             cmd_arg.nchar
         } else {
             NUL
@@ -513,7 +513,7 @@ fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: boo
         if opchar == 'g' as c_int && extra_opchar == '@' as c_int {
             // `g@` also repeats the count, for 'operatorfunc'.
             prep_redo_num2(
-                oap.regname,
+                op.regname,
                 0,
                 NUL,
                 'v' as c_int,
@@ -524,7 +524,7 @@ fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: boo
             );
         } else {
             prep_redo(
-                oap.regname,
+                op.regname,
                 0,
                 NUL,
                 'v' as c_int,
@@ -551,31 +551,31 @@ fn prepare_visual_redo(cmd_arg: Cmd, mut oap: Op, gui_yank: bool, redo_yank: boo
 /// Visual goes off *now* rather than after the operator so that the screen
 /// update does not show inverted text. `OpType::Yank`, `OpType::Colon`, `OpType::Function`
 /// and `OpType::Filter` do not redraw by themselves, so they get one here.
-fn finish_visual_region(mut oap: Op, include_line_break: bool, gui_yank: bool, lbr_saved: c_int) {
+fn finish_visual_region(mut op: Op, include_line_break: bool, gui_yank: bool, lbr_saved: c_int) {
     // `inclusive` defaults to true; an end on a NUL (an empty line) makes
     // it false, which is what makes `d}P` and `v}dP` behave the same.
-    if oap.motion_force == NUL || oap.motion_type == kMTLineWise {
-        oap.inclusive = true;
+    if op.motion_force == NUL || op.motion_type == kMTLineWise {
+        op.inclusive = true;
     }
     if visual_mode().is_line() {
-        oap.motion_type = kMTLineWise;
+        op.motion_type = kMTLineWise;
     } else if visual_mode().is_char() {
-        oap.motion_type = kMTCharWise;
-        // SAFETY: `oap.end` is a position of the current buffer, and 'sel'
+        op.motion_type = kMTCharWise;
+        // SAFETY: `op.end` is a position of the current buffer, and 'sel'
         // is a NUL-terminated option string.
-        let ends_on_nul = unsafe { *ml_get_pos(oap.end().raw()) } as c_int == NUL;
+        let ends_on_nul = unsafe { *ml_get_pos(op.end().raw()) } as c_int == NUL;
         if ends_on_nul && (include_line_break || !op_virtual()) {
-            oap.inclusive = false;
+            op.inclusive = false;
             // Take the line break too, unless the operator only works on
             // whole lines anyway.
             if unsafe { *p_sel.get() } as c_int != 'o' as c_int
-                && !op_on_lines(oap.op_type)
-                && oap.end.lnum < cur_buf().line_count()
+                && !op_on_lines(op.op_type)
+                && op.end.lnum < cur_buf().line_count()
             {
-                oap.end.lnum += 1;
-                oap.end.col = 0;
-                oap.end.coladd = 0;
-                oap.line_count += 1;
+                op.end.lnum += 1;
+                op.end.col = 0;
+                op.end.coladd = 0;
+                op.line_count += 1;
             }
         }
     }
@@ -587,11 +587,11 @@ fn finish_visual_region(mut oap: Op, include_line_break: bool, gui_yank: bool, l
         setmouse();
         mouse_dragging.set(0);
         may_clear_cmdline();
-        if (oap.op_type == OpType::Yank
-            || oap.op_type == OpType::Colon
-            || oap.op_type == OpType::Function
-            || oap.op_type == OpType::Filter)
-            && oap.motion_force == NUL
+        if (op.op_type == OpType::Yank
+            || op.op_type == OpType::Colon
+            || op.op_type == OpType::Function
+            || op.op_type == OpType::Filter)
+            && op.motion_force == NUL
         {
             restore_lbr(lbr_saved != 0);
             // SAFETY: touches only the current buffer's windows.
@@ -604,32 +604,32 @@ fn finish_visual_region(mut oap: Op, include_line_break: bool, gui_yank: bool, l
 ///
 /// And if the start is on or before that line's first non-blank, the operator
 /// becomes linewise -- strange, but that is what vi does.
-fn adjust_region_end(cmd_arg: Cmd, mut oap: Op) {
+fn adjust_region_end(cmd_arg: Cmd, mut op: Op) {
     // SAFETY: 'sel' is a NUL-terminated option string.
-    if !(oap.motion_type == kMTCharWise
-        && !oap.inclusive
+    if !(op.motion_type == kMTCharWise
+        && !op.inclusive
         && cmd_arg.retval & CA_NO_ADJ_OP_END as c_int == 0
-        && oap.end.col == 0
-        && (!oap.is_VIsual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
-        && oap.line_count > 1)
+        && op.end.col == 0
+        && (!op.is_VIsual || unsafe { *p_sel.get() } as c_int == 'o' as c_int)
+        && op.line_count > 1)
     {
-        oap.end_adjusted = false;
+        op.end_adjusted = false;
         return;
     }
 
     // Remembered, because the cursor column is restored differently after
     // an adjusted region.
-    oap.end_adjusted = true;
-    oap.line_count -= 1;
-    oap.end.lnum -= 1;
+    op.end_adjusted = true;
+    op.line_count -= 1;
+    op.end.lnum -= 1;
     if unsafe { inindent(0) } {
-        oap.motion_type = kMTLineWise;
+        op.motion_type = kMTLineWise;
     } else {
         // SAFETY: a line of the current buffer.
-        oap.end.col = ml_get_len(oap.end.lnum);
-        if oap.end.col != 0 {
-            oap.end.col -= 1;
-            oap.inclusive = true;
+        op.end.col = ml_get_len(op.end.lnum);
+        if op.end.col != 0 {
+            op.end.col -= 1;
+            op.inclusive = true;
         }
     }
 }
@@ -643,7 +643,7 @@ fn adjust_region_end(cmd_arg: Cmd, mut oap: Op) {
 /// put it back first, because the user is about to look at the screen.
 fn run_operator(
     cmd_arg: Cmd,
-    mut oap: Op,
+    mut op: Op,
     empty_region_error: bool,
     gui_yank: bool,
     lbr_saved: c_int,
@@ -657,20 +657,20 @@ fn run_operator(
 
     // SAFETY: every operator below is handed the same live `OpArg` and the
     // current window, which is exactly what each of them asks for.
-    match oap.op_type {
+    match op.op_type {
         OpType::Lshift | OpType::Rshift => {
-            let amount = if oap.is_VIsual { cmd_arg.count1 } else { 1 };
-            unsafe { op_shift(oap.raw(), true, amount) };
+            let amount = if op.is_VIsual { cmd_arg.count1 } else { 1 };
+            unsafe { op_shift(op.raw(), true, amount) };
             unsafe { auto_format(false, true) };
         }
 
         OpType::JoinNs | OpType::Join => {
-            oap.line_count = oap.line_count.max(2);
-            if cur_win().w_cursor.lnum + oap.line_count - 1 > cur_buf().line_count() {
+            op.line_count = op.line_count.max(2);
+            if cur_win().w_cursor.lnum + op.line_count - 1 > cur_buf().line_count() {
                 beep_flush();
             } else {
-                let count = oap.line_count as size_t;
-                let _ = unsafe { do_join(count, oap.op_type == OpType::Join, true, true, true) };
+                let count = op.line_count as size_t;
+                let _ = unsafe { do_join(count, op.op_type == OpType::Join, true, true, true) };
                 unsafe { auto_format(false, true) };
             }
         }
@@ -683,9 +683,9 @@ fn run_operator(
             } else {
                 // Nothing to do about a refusal: the message is out and
                 // the buffer is untouched.
-                let _ = unsafe { op_delete(oap.raw()) };
+                let _ = unsafe { op_delete(op.raw()) };
                 // Save the cursor line for undo if that has not happened.
-                if oap.motion_type == kMTLineWise
+                if op.motion_type == kMTLineWise
                     && has_format_option(FoFlag::AUTO)
                     && u_save_cursor().is_ok()
                 {
@@ -702,8 +702,8 @@ fn run_operator(
             } else {
                 restore_lbr(lbr_saved != 0);
                 // `zy` yanks without the trailing white space.
-                oap.excl_tr_ws = cmd_arg.cmdchar == 'z' as c_int;
-                unsafe { op_yank(oap.raw(), !gui_yank) };
+                op.excl_tr_ws = cmd_arg.cmdchar == 'z' as c_int;
+                unsafe { op_yank(op.raw(), !gui_yank) };
             }
             check_cursor_col(unsafe { Win::current() });
         }
@@ -713,7 +713,7 @@ fn run_operator(
             if empty_region_error {
                 refuse();
             } else {
-                run_change(cmd_arg, oap, lbr_saved);
+                run_change(cmd_arg, op, lbr_saved);
             }
         }
 
@@ -726,39 +726,39 @@ fn run_operator(
                 bangredo.set(true);
             }
             // Falls through to the `:` handling below, as upstream does.
-            indent_or_colon(oap);
+            indent_or_colon(op);
         }
-        OpType::Indent | OpType::Colon => indent_or_colon(oap),
+        OpType::Indent | OpType::Colon => indent_or_colon(op),
 
         OpType::Tilde | OpType::Upper | OpType::Lower | OpType::Rot13 => {
             if empty_region_error {
                 refuse();
             } else {
-                unsafe { op_tilde(oap.raw()) };
+                unsafe { op_tilde(op.raw()) };
             }
             check_cursor_col(unsafe { Win::current() });
         }
 
         OpType::Format => {
             if unsafe { *cur_buf().b_p_fex } as c_int != NUL {
-                unsafe { op_formatexpr(oap.raw()) };
+                unsafe { op_formatexpr(op.raw()) };
             } else if unsafe { *p_fp.get() } as c_int != NUL
                 || unsafe { *cur_buf().b_p_fp } as c_int != NUL
             {
                 // An external program.
-                unsafe { op_colon(oap.raw()) };
+                unsafe { op_colon(op.raw()) };
             } else {
-                unsafe { op_format(oap.raw(), false) };
+                unsafe { op_format(op.raw(), false) };
             }
         }
-        OpType::Format2 => unsafe { op_format(oap.raw(), true) },
+        OpType::Format2 => unsafe { op_format(op.raw(), true) },
 
         OpType::Function => {
             // 'operatorfunc' may run another operator and overwrite the
             // recorded Visual area, so it is put back afterwards.
             let saved = REDO_VISUAL.get();
             restore_lbr(lbr_saved != 0);
-            unsafe { op_function(oap.raw()) };
+            unsafe { op_function(op.raw()) };
             REDO_VISUAL.set(saved);
         }
 
@@ -767,7 +767,7 @@ fn run_operator(
             if empty_region_error {
                 refuse();
             } else {
-                run_block_insert(cmd_arg, oap, lbr_saved);
+                run_block_insert(cmd_arg, op, lbr_saved);
             }
         }
 
@@ -777,28 +777,27 @@ fn run_operator(
                 refuse();
             } else {
                 restore_lbr(lbr_saved != 0);
-                let _ = unsafe { op_replace(oap.raw(), cmd_arg.nchar) };
+                let _ = unsafe { op_replace(op.raw(), cmd_arg.nchar) };
             }
         }
 
         OpType::Fold => {
             VIsual_reselect.set(0);
             // SAFETY: a live current window, and the operator's own range.
-            unsafe { fold_create(Win::current(), oap.start, oap.end) };
+            unsafe { fold_create(Win::current(), op.start, op.end) };
         }
         OpType::Foldopen | OpType::Foldopenrec | OpType::Foldclose | OpType::Foldcloserec => {
             VIsual_reselect.set(0);
-            let opening = oap.op_type == OpType::Foldopen || oap.op_type == OpType::Foldopenrec;
-            let recursive =
-                oap.op_type == OpType::Foldopenrec || oap.op_type == OpType::Foldcloserec;
-            let (start, end, visual) = (oap.start, oap.end, oap.is_VIsual);
+            let opening = op.op_type == OpType::Foldopen || op.op_type == OpType::Foldopenrec;
+            let recursive = op.op_type == OpType::Foldopenrec || op.op_type == OpType::Foldcloserec;
+            let (start, end, visual) = (op.start, op.end, op.is_VIsual);
             let (opening, recursive) = (c_int::from(opening), c_int::from(recursive));
             unsafe { op_fold_range(start, end, opening, recursive, visual) };
         }
         OpType::Folddel | OpType::Folddelrec => {
             VIsual_reselect.set(0);
-            let recursive = c_int::from(oap.op_type == OpType::Folddelrec);
-            let (first, last, visual) = (oap.start.lnum, oap.end.lnum, oap.is_VIsual);
+            let recursive = c_int::from(op.op_type == OpType::Folddelrec);
+            let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_VIsual);
             unsafe { delete_fold(curwin.get(), first, last, recursive, visual) };
         }
 
@@ -812,13 +811,13 @@ fn run_operator(
                 set_visual_active(true);
                 restore_lbr(lbr_saved != 0);
                 let (count, g) = (cmd_arg.count1 as LineNr, REDO_VISUAL.get().rv_arg != 0);
-                unsafe { op_addsub(oap.raw(), count, g) };
+                unsafe { op_addsub(op.raw(), count, g) };
                 set_visual_active(false);
             }
             check_cursor_col(unsafe { Win::current() });
         }
 
-        _ => unsafe { clearopbeep(oap.raw()) },
+        _ => unsafe { clearopbeep(op.raw()) },
     }
 }
 
@@ -826,11 +825,11 @@ fn run_operator(
 ///
 /// With an empty 'equalprg' the indenting is done internally; otherwise the
 /// region is handed to a `:` command line.
-fn indent_or_colon(oap: Op) {
+fn indent_or_colon(op: Op) {
     // SAFETY: a live `OpArg` describing a region of the current buffer, and
     // 'equalprg'/'indentexpr' are NUL-terminated option strings.
-    if oap.op_type != OpType::Indent || unsafe { *get_equalprg() } as c_int != NUL {
-        unsafe { op_colon(oap.raw()) };
+    if op.op_type != OpType::Indent || unsafe { *get_equalprg() } as c_int != NUL {
+        unsafe { op_colon(op.raw()) };
         return;
     }
     if cur_buf().b_p_lisp != 0 {
@@ -839,7 +838,7 @@ fn indent_or_colon(oap: Op) {
         } else {
             get_lisp_indent as unsafe fn() -> c_int
         };
-        unsafe { op_reindent(oap.raw(), Some(indent)) };
+        unsafe { op_reindent(op.raw(), Some(indent)) };
         return;
     }
     let indent = if unsafe { *cur_buf().b_p_inde } as c_int != NUL {
@@ -847,11 +846,11 @@ fn indent_or_colon(oap: Op) {
     } else {
         get_c_indent as unsafe fn() -> c_int
     };
-    unsafe { op_reindent(oap.raw(), Some(indent)) };
+    unsafe { op_reindent(op.raw(), Some(indent)) };
 }
 
 /// The `c` arm: run `op_change`, which enters Insert mode.
-fn run_change(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
+fn run_change(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
     // A new edit command, not a restart. Remembering that is what makes
     // `i_CTRL-O` work with a mapping for Visual mode -- but only when the
     // key was not typed.
@@ -868,7 +867,7 @@ fn run_change(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
     // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
-    if unsafe { op_change(oap.raw()) } != 0 {
+    if unsafe { op_change(op.raw()) } != 0 {
         // `edit()` returned because of a CTRL-O command.
         cmd_arg.retval |= CA_COMMAND_BUSY as c_int;
     }
@@ -878,7 +877,7 @@ fn run_change(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
 }
 
 /// The `I`/`A` arm: run `op_insert`, which enters Insert mode.
-fn run_block_insert(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
+fn run_block_insert(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
     let restart_edit_save = restart_edit.get();
     restart_edit.set(0);
 
@@ -886,7 +885,7 @@ fn run_block_insert(mut cmd_arg: Cmd, oap: Op, lbr_saved: c_int) {
     // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
     cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
 
-    unsafe { op_insert(oap.raw(), cmd_arg.count1) };
+    unsafe { op_insert(op.raw(), cmd_arg.count1) };
 
     // Back off again, so that formatting measures columns correctly.
     reset_lbr();

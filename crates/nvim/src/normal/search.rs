@@ -133,8 +133,8 @@ pub(crate) unsafe fn normal_search(
     cur_win().w_set_curswant = true;
 
     let flags = opt | SEARCH_OPT as c_int | SEARCH_ECHO as c_int | SEARCH_MSG as c_int;
-    let (oap, n, arg) = (op.raw(), ca.count1, &raw mut sia);
-    let i = unsafe { do_search(oap, dir, dir, pat, patlen, n, flags, arg) };
+    let (raw, n, arg) = (op.raw(), ca.count1, &raw mut sia);
+    let i = unsafe { do_search(raw, dir, dir, pat, patlen, n, flags, arg) };
     if !wrapped.is_null() {
         unsafe { *wrapped = sia.sa_wrapped };
     }

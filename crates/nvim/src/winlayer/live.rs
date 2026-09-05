@@ -13,8 +13,8 @@
 //! ```ignore
 //! pub(crate) type Op = Live<OpArg>;   // ops/mod.rs
 //!
-//! let mut oap = unsafe { Op::new(raw) };   // the promise, once
-//! oap.motion_force = 0;                    // ordinary code, everywhere after
+//! let mut op = unsafe { Op::new(raw) };   // the promise, once
+//! op.motion_force = 0;                    // ordinary code, everywhere after
 //! ```
 //!
 //! # What the promise is, and what it is not

@@ -31,47 +31,47 @@ use crate::types::{IOSIZE, NUL};
 /// (`:>`); a blockwise shift ignores it and goes back to where it started.
 ///
 /// # Safety
-/// `oap` must point to a live `OpArg` describing a region of the current
+/// `op` must point to a live `OpArg` describing a region of the current
 /// buffer.
-pub unsafe fn op_shift(oap: *mut OpArg, curs_top: bool, amount: c_int) {
+pub unsafe fn op_shift(op: *mut OpArg, curs_top: bool, amount: c_int) {
     // SAFETY: the caller's promise -- a live `OpArg` of the current buffer.
     // The loop walks the region, so every line it reaches is one of it, and
     // the cursor is on that line throughout.
-    let oap = unsafe { Op::new(oap) };
+    let op = unsafe { Op::new(op) };
     // The "N lines >ed M times" report; upstream shares `IObuff` for it.
     let mut report = [0 as c_char; IOSIZE as usize];
-    let (above, below) = (oap.start.lnum - 1, oap.end.lnum + 1);
+    let (above, below) = (op.start.lnum - 1, op.end.lnum + 1);
     if u_save(above, below).is_err() {
         return;
     }
 
     let mut block_col: ColNr = 0;
-    if oap.motion_type == kMTBlockWise {
+    if op.motion_type == kMTBlockWise {
         block_col = cur_win().w_cursor.col;
     }
 
-    for _ in 0..oap.line_count {
+    for _ in 0..op.line_count {
         let first_char = unsafe { *get_cursor_line_ptr() } as u8 as c_int;
         if first_char == NUL {
             // Empty line: nothing to indent, but the cursor still has to
             // land somewhere legal.
             cur_win().w_cursor.col = 0;
-        } else if oap.motion_type == kMTBlockWise {
-            shift_block(oap, amount);
+        } else if op.motion_type == kMTBlockWise {
+            shift_block(op, amount);
         } else if first_char != '#' as c_int || !unsafe { preprocs_left() } {
             // A line starting with '#' stays put when 'smartindent' or
             // 'cindent' says preprocessor lines keep column 0.
-            let left = oap.op_type == OpType::Lshift;
+            let left = op.op_type == OpType::Lshift;
             unsafe { shift_line(left, p_sr.get() != 0, amount, false) };
         }
         cur_win().w_cursor.lnum += 1;
     }
 
-    if oap.motion_type == kMTBlockWise {
-        cur_win().w_cursor.lnum = oap.start.lnum;
+    if op.motion_type == kMTBlockWise {
+        cur_win().w_cursor.lnum = op.start.lnum;
         cur_win().w_cursor.col = block_col;
     } else if curs_top {
-        cur_win().w_cursor.lnum = oap.start.lnum;
+        cur_win().w_cursor.lnum = op.start.lnum;
         // `shift_line` may have moved the column.
         beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
     } else {
@@ -80,16 +80,16 @@ pub unsafe fn op_shift(oap: *mut OpArg, curs_top: bool, amount: c_int) {
     // The cursor line must not be in a closed fold.
     unsafe { fold_open_cursor() };
 
-    if oap.line_count as OptInt > p_report.get() {
+    if op.line_count as OptInt > p_report.get() {
         // Two plural forms, nested: "line"/"lines" on the line count and
         // "time"/"times" on the shift count, which is why the outer
         // `ngettext` chooses between two already-translated formats.
-        let op = if oap.op_type == OpType::Rshift {
+        let op_char = if op.op_type == OpType::Rshift {
             c">".as_ptr()
         } else {
             c"<".as_ptr()
         };
-        let lines = oap.line_count as c_ulong;
+        let lines = op.line_count as c_ulong;
         let single = ngettext(
             c"%ld line %sed %d time",
             c"%ld line %sed %d times",
@@ -107,8 +107,8 @@ pub unsafe fn op_shift(oap: *mut OpArg, curs_top: bool, amount: c_int) {
                 out,
                 IOSIZE as size_t,
                 fmt.as_ptr(),
-                oap.line_count as int64_t,
-                op,
+                op.line_count as int64_t,
+                op_char,
                 amount,
             )
         };
@@ -116,15 +116,15 @@ pub unsafe fn op_shift(oap: *mut OpArg, curs_top: bool, amount: c_int) {
     }
 
     if !cmdmod_has(CmdModFlags::LOCKMARKS) {
-        cur_buf().b_op_start = oap.start;
-        cur_buf().b_op_end.lnum = oap.end.lnum;
-        cur_buf().b_op_end.col = ml_get_len(oap.end.lnum);
+        cur_buf().b_op_start = op.start;
+        cur_buf().b_op_end.lnum = op.end.lnum;
+        cur_buf().b_op_end.col = ml_get_len(op.end.lnum);
         if cur_buf().b_op_end.col > 0 {
             cur_buf().b_op_end.col -= 1;
         }
     }
 
-    let (first, last) = (oap.start.lnum, oap.end.lnum + 1);
+    let (first, last) = (op.start.lnum, op.end.lnum + 1);
     changed_lines(cur_buf(), first, 0, last, 0, true);
 }
 
@@ -312,11 +312,11 @@ struct ShiftedLine {
 /// Shift one line of a blockwise region, leaving the cursor on the block's
 /// first character.
 ///
-/// `oap` must be blockwise, and the cursor must name the line.
-fn shift_block(oap: Op, amount: c_int) {
+/// `op` must be blockwise, and the cursor must name the line.
+fn shift_block(op: Op, amount: c_int) {
     // SAFETY: the cursor line is a line of the current buffer, and `bd`
     // describes it once `block_prep` has run.
-    let left = oap.op_type == OpType::Lshift;
+    let left = op.op_type == OpType::Lshift;
     let old_state = State.get();
     let old_col = cur_win().w_cursor.col;
     let sw_val = unsafe { get_sw_value_indent(curbuf.get(), left) };
@@ -328,7 +328,7 @@ fn shift_block(oap: Op, amount: c_int) {
 
     let mut bd = BlockDef::ZERO;
     let lnum = cur_win().w_cursor.lnum;
-    unsafe { block_prep(oap.raw(), &raw mut bd, lnum, true) };
+    unsafe { block_prep(op.raw(), &raw mut bd, lnum, true) };
     if bd.is_short != 0 {
         return;
     }
@@ -341,7 +341,7 @@ fn shift_block(oap: Op, amount: c_int) {
     }
 
     let shifted = if left {
-        shift_block_left(oap, &mut bd, total)
+        shift_block_left(op, &mut bd, total)
     } else {
         shift_block_right(&mut bd, total)
     };
@@ -461,7 +461,7 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
 /// gap, and a TAB the destination lands inside becomes `fill` spaces.
 ///
 /// `bd` must describe the cursor line, as [`block_prep`] left it.
-fn shift_block_left(oap: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
+fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     // SAFETY: `bd` describes the cursor line, so `bd.textstart` is inside it
     // and both walks below stop at a character the line really holds.
     let old_p = get_cursor_line_ptr();
@@ -488,7 +488,7 @@ fn shift_block_left(oap: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     }
 
     // Shift by `total`, or by all the white space there is if that is less.
-    let block_space_width = non_white_col - oap.start_vcol;
+    let block_space_width = non_white_col - op.start_vcol;
     let destination_col = non_white_col - block_space_width.min(total);
 
     // How much of the line can be reused unchanged. When `startspaces` is
