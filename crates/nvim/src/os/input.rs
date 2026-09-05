@@ -214,7 +214,7 @@ pub unsafe fn input_get(
             ctrl_c_interrupts.set(false);
         }
 
-        let mut result = InputAvail::Empty;
+        let mut result;
         if ms >= 0 {
             result = inbuf_poll(ms, events);
             if result == InputAvail::Empty {

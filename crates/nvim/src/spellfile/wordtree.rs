@@ -311,7 +311,7 @@ pub(super) unsafe fn store_word(
     let len = unsafe { cstr::bytes_at(word) }.len() as c_int;
     let ct = unsafe { captype(word, word.offset(len as isize)) };
     let mut foldword: [c_char; MAXWLEN] = [0; MAXWLEN];
-    let mut res = Ok(());
+    let mut res;
 
     if !unsafe { valid_spell_word(word, word.offset(len as isize)) } {
         return Err(Failed);

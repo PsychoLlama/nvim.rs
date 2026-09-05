@@ -200,7 +200,7 @@ pub(crate) fn recursive_regmatch(
 
     // A lookbehind has to start earlier in the line and stop where the
     // outer match stands; `endpos` is that stopping point.
-    let mut endpos = MatchPos::NOWHERE;
+    let mut endpos;
     let mut endposp = core::ptr::null_mut::<MatchPos>();
     if matches!(
         NfaOp::try_from(op(state)),

@@ -588,6 +588,9 @@ macro_rules! forward {
                 };
                 index += 1;
             )*
+            // The last repetition's `index += 1` has no reader; this is it,
+            // rather than an `unused_assignments` allow per wrapper.
+            let _ = index;
             unsafe { $sink(&mut *tui.get() $(, payload!($ty, $arg))*) };
         }
     )*};

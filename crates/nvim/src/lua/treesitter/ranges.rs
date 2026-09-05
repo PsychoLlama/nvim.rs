@@ -49,7 +49,6 @@ pub(crate) unsafe fn push_ranges(
             if include_bytes {
                 lua_pushnumber(L, (*ranges.add(i)).end_byte as lua_Number);
                 lua_rawseti(L, -2 as ::core::ffi::c_int, j);
-                j += 1;
             }
             lua_rawseti(
                 L,

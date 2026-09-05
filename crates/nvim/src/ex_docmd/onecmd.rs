@@ -209,7 +209,7 @@ pub(crate) unsafe fn do_one_cmd(
     // guard owns the `:filter` pattern and program of the set it took
     // out until it puts them back.
     let mods = CmdModScope::cleared();
-    let mut after_modifier: *mut c_char = ptr::null_mut();
+    let after_modifier: *mut c_char;
 
     'doend: {
         // "#!anything" is a comment, so that a script can carry a

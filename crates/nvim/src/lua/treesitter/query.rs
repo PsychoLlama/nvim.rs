@@ -89,7 +89,7 @@ unsafe fn query_err_string(
         let mut row: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
         let mut error_line: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
         let mut error_line_len: ::core::ffi::c_int = 0 as ::core::ffi::c_int;
-        let mut end_str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
+        let mut end_str: *const ::core::ffi::c_char;
         loop {
             let src_tmp: *const ::core::ffi::c_char = src.add(line_start as usize);
             end_str = strchr(src_tmp, '\n' as ::core::ffi::c_int);

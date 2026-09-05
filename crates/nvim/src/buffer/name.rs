@@ -325,10 +325,7 @@ pub(crate) unsafe fn otherfile_buf(
         return false;
     }
 
-    let mut own = FileID {
-        inode: 0,
-        device_id: 0,
-    };
+    let mut own;
     let (file_id_p, file_id_valid) = if file_id_p.is_null() {
         let (id, valid) = file_id_of(ffname);
         own = id;

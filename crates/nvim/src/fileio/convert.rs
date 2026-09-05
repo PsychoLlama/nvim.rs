@@ -367,6 +367,10 @@ impl Conv {
             // Deal with a bad byte and continue with the next.
             fromp = unsafe { fromp.add(1) };
             from_size -= 1;
+            // `dstlen` aliases `to_size`, so the next round's `iconv` reads
+            // these writes; `unused_assignments` only sees direct uses of the
+            // local and calls them dead.
+            #[allow(unused_assignments)]
             if self.bad_char == BAD_KEEP {
                 unsafe { *top = *fromp.offset(-1) };
                 top = unsafe { top.add(1) };

@@ -410,14 +410,8 @@ pub unsafe fn buf_write(
     let mut file_info_old = FileInfo::default();
     // ACL copied from the original file to the backup or the new file.
     let mut acl: vim_acl_T = NULL;
-    let mut target = TargetFile {
-        perm: -1,
-        device: false,
-        newfile: false,
-        readonly: false,
-        made_writable: false,
-    };
-    let mut dobackup = false;
+    let mut target;
+    let mut dobackup;
     let mut wfname: *mut ::core::ffi::c_char = core::ptr::null_mut();
 
     'cleanup: {
@@ -585,9 +579,9 @@ pub unsafe fn buf_write(
                 // real. With no conversion this writes for real straight
                 // away.
                 let mut checking_conversion = true;
-                let mut fd = -1;
-                let mut fileformat = 0;
-                let mut written = Written::default();
+                let mut fd;
+                let mut fileformat;
+                let mut written;
                 loop {
                     // No need to check when there is no conversion, or
                     // when a backup exists that a conversion failure can

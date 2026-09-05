@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn coarse_granularity_only_grows_the_bounding_box() {
-        let mut pending = rect(NO_RECT, 0, 0, 0);
+        let mut pending;
         for merge in [VTERM_DAMAGE_SCREEN, VTERM_DAMAGE_SCROLL] {
             pending = rect(NO_RECT, 0, 0, 0);
             assert_eq!(

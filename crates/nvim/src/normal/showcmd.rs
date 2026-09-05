@@ -13,7 +13,6 @@ use crate::memory::xstrlcpy;
 use crate::winlayer::Win;
 
 use crate::api::private::helpers::cstr_as_string;
-use crate::charset::CHAR_DISPLAY_LEN;
 use crate::charset::{transchar, vim_isprintc};
 use crate::cstr;
 use crate::cursor::get_cursor_pos_ptr;
@@ -306,7 +305,7 @@ pub(crate) fn add_to_showcmd(c: c_int) -> bool {
     }
 
     let mut mbyte_buf: [c_char; 7] = [0; 7];
-    let mut display = [0 as c_char; CHAR_DISPLAY_LEN];
+    let mut display;
     // SAFETY: `transchar` answers a NUL-terminated rendering; the multibyte
     // branch writes at most MB_MAXBYTES + 1 into `mbyte_buf`, and both
     // outlive the borrow.

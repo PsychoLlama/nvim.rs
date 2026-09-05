@@ -128,7 +128,6 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
     if b.is_null() {
         return ().reported(error);
     }
-    let mut ren_ret = Ok(());
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -147,7 +146,7 @@ pub unsafe fn nvim_buf_set_name(buf: Buffer, name: String_0) -> Result<(), Error
     }
     let mut aco: aco_save_T = aco_save_T::default();
     unsafe { aucmd_prepbuf(&raw mut aco, b) };
-    ren_ret = unsafe { rename_buffer(name.data()) };
+    let ren_ret = unsafe { rename_buffer(name.data()) };
     unsafe { aucmd_restbuf(&raw mut aco) };
     drop(redraw_off);
     if !is_curbuf {

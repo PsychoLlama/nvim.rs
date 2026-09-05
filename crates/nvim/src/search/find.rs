@@ -419,13 +419,13 @@ pub unsafe fn searchit(
         s.timed_out = unsafe { &raw mut (*extra_arg).sa_timed_out };
     }
 
-    let mut found = 0;
+    let mut found;
     let mut submatch = 0;
     let mut first_match = true;
     let mut break_loop = false;
     // The line the walk stopped on; the "hit TOP" message reads it
     // after every loop has been left.
-    let mut lnum: linenr_T = 0;
+    let mut lnum: linenr_T;
 
     loop {
         // When a match at the start position is not acceptable,

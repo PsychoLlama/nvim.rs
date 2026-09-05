@@ -60,9 +60,7 @@ impl Put {
         }
 
         if self.count == 0 || yanklen == 0 {
-            if visual_active() {
-                lnum = end_lnum;
-            }
+            // Nothing to put.
         } else if self.count > c_int::MAX / yanklen {
             emsg(gettext(e_resulting_text_too_long));
         } else {
@@ -150,9 +148,6 @@ impl Put {
                 if !(visual_active() && lnum <= end_lnum) {
                     break;
                 }
-            }
-            if visual_active() {
-                lnum -= 1; // back to the last Visual line
             }
         }
 

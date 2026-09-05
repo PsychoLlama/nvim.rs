@@ -157,9 +157,6 @@ pub(crate) unsafe fn remote_request(
     let reply = unsafe { nlua_exec(script, ptr::null(), a, kRetObject, no_arena, &mut err) };
 
     unsafe { xfree(args.items as *mut c_void) };
-    args.size = 0;
-    args.capacity = 0;
-    args.items = ptr::null_mut();
 
     if err.is_set() {
         unsafe { fprintf(stderr, c"%s\n".as_ptr(), err.message_or_empty().as_ptr()) };

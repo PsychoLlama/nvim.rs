@@ -118,7 +118,7 @@ pub(crate) unsafe fn readfile(
     // encoding.
     let mut keep_dest_enc = false;
     let mut tmpname: *mut c_char = ptr::null_mut();
-    let mut fenc: *mut c_char = ptr::null_mut();
+    let mut fenc: *mut c_char;
     let mut fenc_alloced = false;
     let mut fenc_next: *mut c_char = ptr::null_mut();
     let mut advance_fenc = false;
@@ -126,8 +126,8 @@ pub(crate) unsafe fn readfile(
     let mut converted = false;
     let mut notconverted = false;
     let mut conv = Conv::new(BAD_REPLACE);
-    let mut linecnt: linenr_T = 0;
-    let mut wasempty = false;
+    let mut linecnt: linenr_T;
+    let wasempty;
 
     // Reset before triggering any autocommands.
     cur_buf().b_au_did_filetype = false;

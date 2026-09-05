@@ -110,7 +110,7 @@ pub unsafe fn os_getenv(name: *const c_char) -> *mut c_char {
         if *name == 0 {
             return ptr::null_mut();
         }
-        let mut e: *mut c_char = ptr::null_mut();
+        let mut e: *mut c_char;
         let mut size: size_t = INIT_SIZE;
         let mut buf: [c_char; INIT_SIZE] = [0; INIT_SIZE];
         let mut r = uv_os_getenv(name, buf.as_mut_ptr(), &raw mut size);

@@ -632,7 +632,6 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
             restore_last_search_pattern();
             return Err(Failed);
         }
-        skiplen = 0;
         patlen = last_search_pattern_len() as ::core::ffi::c_int;
     } else {
         pat = cc.at(skiplen);

@@ -21,7 +21,6 @@ pub unsafe fn nvim_exec_autocmds(
     let opts = unsafe { Live::<KeyDict_exec_autocmds>::new(opts) };
     let mut error = Error::none();
     let mut au_group: ::core::ffi::c_int = AUGROUP_ALL as ::core::ffi::c_int;
-    let mut modeline: bool = true;
     let mut b: *mut buf_T = curbuf.get();
     let mut data: *mut Object = ::core::ptr::null_mut::<Object>();
     let event_array: Array = unsafe {
@@ -36,7 +35,7 @@ pub unsafe fn nvim_exec_autocmds(
     if error.kind() as ::core::ffi::c_int != kErrorTypeNone as ::core::ffi::c_int {
         return ().reported(error);
     }
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let name: *mut ::core::ffi::c_char;
     match opts.group {
         Object::Nil => {}
         Object::String(group) => {
@@ -118,7 +117,7 @@ pub unsafe fn nvim_exec_autocmds(
     ) {
         data = unsafe { &raw mut (*opts.raw()).data };
     }
-    modeline = if has_key(
+    let modeline: bool = if has_key(
         opts.is_set__exec_autocmds_,
         KEYSET_OPTIDX_exec_autocmds__modeline,
     ) {

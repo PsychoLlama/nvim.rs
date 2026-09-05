@@ -55,7 +55,7 @@ pub unsafe fn ml_recover(checkext: bool) {
     recoverymode.set(true);
     let called_from_main = cur_buf().b_ml.ml_mfp.is_null();
 
-    let mut buf: *mut buf_T = core::ptr::null_mut();
+    let buf: *mut buf_T;
     // Who owns what `buf` points at. The recovery buffer is not in the
     // registry, so this frame is its owner; `buf` is only the address the
     // memline code below works through.

@@ -249,7 +249,7 @@ pub unsafe fn do_write(eap: &mut exarg_T) -> Result<(), Failed> {
     let mut ffname = eap.arg;
     // When out-of-memory, keep the unexpanded file name, because we MUST be
     // able to write the file in this situation.
-    let mut free_fname = Owned(ptr::null_mut());
+    let free_fname;
 
     // SAFETY: `ffname` is the command's NUL-terminated argument.
     let other = if unsafe { *ffname } as c_int == NUL {

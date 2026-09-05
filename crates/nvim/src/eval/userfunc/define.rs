@@ -184,7 +184,7 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
     'ret_free: {
         if !paren {
             // ":function func": list that one function.
-            fp = unsafe { list_one_function(eap, name, p) };
+            let _ = unsafe { list_one_function(eap, name, p) };
             break 'ret_free;
         }
 
@@ -536,7 +536,6 @@ pub unsafe fn ex_function(eap: *mut exarg_T) {
             }
             if free_fp {
                 unsafe { xfree(fp as *mut c_void) };
-                fp = ptr::null_mut();
             }
         }
 

@@ -33,14 +33,14 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut error = Error::none();
     // SAFETY: the dispatcher's keyset outlives this call.
     let mut opts = unsafe { Opts::new(opts) };
-    let mut id: uint32_t = 0;
-    let mut line2: ::core::ffi::c_int = 0;
-    let mut did_end_line: bool = false;
-    let mut strict: bool = false;
-    let mut col2: colnr_T = 0;
-    let mut virt_lines_flags: ::core::ffi::c_int = 0;
-    let mut right_gravity: bool = false;
-    let mut len: colnr_T = 0;
+    let mut id: uint32_t;
+    let mut line2: ::core::ffi::c_int;
+    let mut did_end_line: bool;
+    let strict: bool;
+    let mut col2: colnr_T;
+    let mut virt_lines_flags: ::core::ffi::c_int;
+    let right_gravity: bool;
+    let mut len: colnr_T;
     let mut hl: DecorHighlightInline = DECOR_HIGHLIGHT_INLINE_INIT;
     let mut sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
     let mut virt_text: DecorVirtText = DecorVirtText {

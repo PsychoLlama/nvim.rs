@@ -776,7 +776,11 @@ unsafe extern "C-unwind" fn encode(state: *mut lua_State) -> c_int {
         packer.is_bin_fn = LUA_NOREF;
         packer.parser = &raw mut parser;
         mpack_parser_init(packer.parser, 0);
-        parser.data.p = (&raw mut packer).cast();
+        // Written through `packer.parser` rather than through `parser`: the
+        // callbacks read it back out that way, and rustc's liveness — which
+        // stops at a local's last direct use — would call the direct write
+        // dead.
+        (*packer.parser).data.p = (&raw mut packer).cast();
         packer.is_bin = 0;
         packer.L = state;
         packer.root = reference(state, packer.reg);

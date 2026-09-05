@@ -30,9 +30,8 @@ pub unsafe fn nvim_create_augroup(
     } else {
         1
     } != 0;
-    let mut augroup: ::core::ffi::c_int = -1 as ::core::ffi::c_int;
     let _sctx = api_set_sctx(channel_id);
-    augroup = unsafe { augroup_add(augroup_name_0) };
+    let augroup: ::core::ffi::c_int = unsafe { augroup_add(augroup_name_0) };
     if augroup == AUGROUP_ERROR as ::core::ffi::c_int {
         // Unreachable: `augroup_add` only ever answers a positive id.
         // The guard restores on the way out regardless -- upstream's
@@ -89,8 +88,8 @@ pub unsafe fn nvim_del_augroup_by_name(name: String_0) -> Result<(), Error> {
 }
 
 pub(crate) unsafe fn get_augroup_from_object(group: Object, err: &mut Error) -> ::core::ffi::c_int {
-    let mut au_group: ::core::ffi::c_int = AUGROUP_ERROR as ::core::ffi::c_int;
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
+    let au_group: ::core::ffi::c_int;
+    let name: *mut ::core::ffi::c_char;
     match group {
         Object::Nil => return AUGROUP_DEFAULT as ::core::ffi::c_int,
         Object::String(s) => {

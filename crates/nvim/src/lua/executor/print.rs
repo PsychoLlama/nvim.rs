@@ -91,7 +91,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_print(lstate: *mut lua_State) -> c_i
         let nargs = lua_gettop(lstate);
         lua_getglobal(lstate, c"tostring".as_ptr());
 
-        let mut errmsg: *const c_char = ptr::null();
+        let errmsg: *const c_char;
         let mut errmsg_len: size_t = 0;
         let mut msg_text = Vec::<u8>::new();
 

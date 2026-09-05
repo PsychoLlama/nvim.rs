@@ -345,7 +345,8 @@ pub unsafe fn marktree_splice(
                     if !mt_right(unsafe { rawkey(&enditr) }) {
                         swap_keys(b, &itr, &enditr, &mut damage);
                     } else {
-                        past_right = true;
+                        // Past the right edge: `break 'collapse` leaves the
+                        // walk, so the flag the loop guard reads is not set.
                         break 'collapse;
                     }
                 }

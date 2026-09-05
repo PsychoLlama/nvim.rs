@@ -25,7 +25,7 @@ pub(crate) unsafe fn check_external_diff(diffio: *mut diffio_T) -> Result<(), Fa
     let new = unsafe { (*diffio).dio_new.din_fname };
     let out = unsafe { (*diffio).dio_diff.dout_fname };
     let mut io_error = false;
-    let mut ok = false;
+    let mut ok;
     loop {
         ok = false;
         let mut fd = unsafe { os_fopen(orig, c"w".as_ptr()) };

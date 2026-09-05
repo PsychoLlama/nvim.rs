@@ -58,7 +58,7 @@ pub(crate) unsafe fn au_show_for_event(
 
     let mut buflocal_pat = [0 as ::core::ffi::c_char; BUFLOCAL_PAT_LEN as usize];
     let mut last_group = AUGROUP_ERROR;
-    let mut last_group_name: *const ::core::ffi::c_char = ::core::ptr::null();
+    let mut last_group_name: *const ::core::ffi::c_char;
 
     // One pass per pattern in the list.
     loop {

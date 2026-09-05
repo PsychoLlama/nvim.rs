@@ -107,7 +107,6 @@ pub(crate) unsafe fn color_expr_cmdline(
     // C's `kvi_destroy`: only free once the kvec has spilled to the heap.
     if colors.items != colors.init_array.as_mut_ptr() {
         unsafe { xfree(colors.items as *mut ::core::ffi::c_void) };
-        colors.items = ::core::ptr::null_mut::<ParserHighlightChunk>();
     }
 }
 
@@ -257,13 +256,12 @@ pub(crate) unsafe fn color_cmdline(colored_ccline: Cc) -> bool {
         // TRY_WRAP too, because error messages would otherwise overwrite
         // the typed command line.
         getln_interrupted_highlight.set(false);
-        let mut cbcall_ret = true;
         let mut tstate: TryState = TRY_STATE_INIT;
         unsafe { try_enter(&raw mut tstate) };
         err_errmsg = c"E5407: Callback has thrown an exception: %s".as_ptr();
         let saved_msg_col = msg_col.get();
         let silenced = Suppress::messages();
-        cbcall_ret = unsafe { callback_call(&raw mut color_cb, 1, &raw mut arg, &raw mut tv) };
+        let cbcall_ret = unsafe { callback_call(&raw mut color_cb, 1, &raw mut arg, &raw mut tv) };
         drop(silenced);
         msg_col.set(saved_msg_col);
         if got_int.get() {

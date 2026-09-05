@@ -60,12 +60,11 @@ pub unsafe fn nvim_feedkeys(keys: String_0, mode: String_0, escape_ks: Boolean) 
     if keys.len() == 0 as size_t && !execute {
         return;
     }
-    let mut keys_esc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    if escape_ks {
-        keys_esc = unsafe { vim_strsave_escape_ks(keys.data()) };
+    let keys_esc: *mut ::core::ffi::c_char = if escape_ks {
+        unsafe { vim_strsave_escape_ks(keys.data()) }
     } else {
-        keys_esc = keys.data();
-    }
+        keys.data()
+    };
     if lowlevel {
         unsafe { input_enqueue_raw(keys_esc, cstr::bytes_at(keys_esc).len()) };
     } else {
@@ -110,12 +109,11 @@ pub unsafe fn nvim_input_mouse(
     col: Integer,
 ) -> Result<(), Error> {
     let mut error = Error::none();
-    let mut code: ::core::ffi::c_int = 0;
-    let mut modmask = ModMask::NONE;
+    let mut code: ::core::ffi::c_int;
+    let mut modmask;
     may_trigger_vim_suspend_resume(false);
     '_error: {
         if !(button.data().is_null() || action.data().is_null()) {
-            code = 0 as ::core::ffi::c_int;
             if unsafe { strequal(button.data(), c"left".as_ptr()) } {
                 code = KE_LEFTMOUSE as ::core::ffi::c_int;
             } else if unsafe { strequal(button.data(), c"middle".as_ptr()) } {

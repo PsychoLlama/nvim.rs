@@ -28,7 +28,7 @@ use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
 use super::jumplist::*;
-use super::store::{Fmark, GlobalMarks, UNSET_FMARK, UNSET_POS};
+use super::store::{Fmark, GlobalMarks, UNSET_POS};
 use super::*;
 use crate::search::{BACKWARD, FORWARD};
 
@@ -401,7 +401,7 @@ pub unsafe fn mark_move_to(mut fm: *mut fmark_T, flags: MarkMove) -> MarkMoveRes
     // This frame's own, not a `static` as the C has it: the file the switch
     // loads runs autocommands, and one of those jumping to a mark of its own
     // would otherwise overwrite the copy this call is still holding.
-    let mut in_flight = UNSET_FMARK;
+    let mut in_flight;
 
     let mut errormsg = None;
     // SAFETY: the caller promised a live record or null.

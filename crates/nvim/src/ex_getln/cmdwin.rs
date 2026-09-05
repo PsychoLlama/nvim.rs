@@ -110,7 +110,6 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let mut bufref = BufRef::NONE;
     let old_curwin = curwin.get();
     // Uninitialised in the C; `win_size_save` below fills it.
-    let mut winsizes = Vec::new();
     let save_restart_edit = restart_edit.get();
     let save_State = State.get();
     let save_exmode = exmode_active.get();
@@ -126,7 +125,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let old_curbuf = BufRef::of_opt(current_buf());
 
     // Save current window sizes.
-    winsizes = win_size_save();
+    let winsizes = win_size_save();
 
     // When using completion in Insert mode with <C-R>=<C-F> one can open
     // the command line window, but we don't want the popup menu then.

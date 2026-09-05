@@ -278,7 +278,7 @@ pub unsafe fn parse_cmd_address(
     let (mut first, mut last) = (fmark_T::UNSET, fmark_T::UNSET);
     let mut ea = unsafe { Ea::new(eap) };
     let mut address_count = 1;
-    let mut lnum: linenr_T = 0;
+    let mut lnum: linenr_T;
     let mut need_check_cursor = false;
     let mut ret = FAIL;
 

@@ -423,7 +423,7 @@ pub unsafe fn find_special_key(
     // Find the end of the modifier list.
     let mut last_dash = src;
     let mut bp = src.skip(1);
-    let mut len: c_int = 0;
+    let mut len: c_int;
     while bp <= end && (bp.byte() == b'-' as c_char || ascii_isident(c_int::from(bp.byte()))) {
         if bp.byte() == b'-' as c_char {
             last_dash = bp;

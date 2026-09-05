@@ -26,14 +26,10 @@ pub unsafe fn nvim_create_autocmd(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_create_autocmd>::new(opts) };
     let mut error = Error::none();
-    let mut au_group: ::core::ffi::c_int = 0;
-    let mut has_buf: bool = false;
-    let mut buf: Buffer = 0;
-    let mut patterns: Array = Array {
-        size: 0,
-        capacity: 0,
-        items: ::core::ptr::null_mut::<Object>(),
-    };
+    let au_group: ::core::ffi::c_int;
+    let has_buf: bool;
+    let buf: Buffer;
+    let patterns: Array;
     let mut autocmd_id: int64_t = -1 as int64_t;
     let mut desc: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
     let mut handler_cmd: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
@@ -167,7 +163,7 @@ pub unsafe fn nvim_create_autocmd(
                                         break '_cleanup;
                                     };
                                     {
-                                        let mut retval: Result<(), Failed> = Err(Failed);
+                                        let mut retval: Result<(), Failed>;
                                         let mut pat_index: size_t = 0 as size_t;
                                         while pat_index < patterns.size {
                                             let pat: Object =

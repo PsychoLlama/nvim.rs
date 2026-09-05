@@ -99,11 +99,7 @@ pub(crate) unsafe fn open_source(
     let mut perm = 0;
     let mut swap_mode = -1; // protection bits for the swap file
     let mut file_info = FileInfo::default();
-    let mut orig_start = pos_T {
-        lnum: 0,
-        col: 0,
-        coladd: 0,
-    };
+    let mut orig_start;
     let msg_is_a_directory = c"is a directory";
 
     // Remember the initial values of curbuf, curbuf->b_ffname and

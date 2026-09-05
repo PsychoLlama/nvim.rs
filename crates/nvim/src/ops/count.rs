@@ -405,7 +405,12 @@ fn report_counts(
         let cols_fmt = gettext(c"%ld Cols; ").as_ptr();
         unsafe { vim_snprintf(b1, n1, cols_fmt, cols) };
     } else {
-        buf1[0] = NUL as c_char;
+        // `b1` aliases `buf1`, so `vim_snprintf` below reads this write;
+        // `unused_assignments` only sees direct uses of the local.
+        #[allow(unused_assignments)]
+        {
+            buf1[0] = NUL as c_char;
+        }
     }
 
     let sel_lines = int64_t::from(sel.line_count);

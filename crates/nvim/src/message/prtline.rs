@@ -7,7 +7,6 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::*;
-use crate::charset::CHAR_DISPLAY_LEN;
 use crate::cstr;
 use crate::types::{MB_MAXBYTES, NUL};
 use core::ffi::{c_char, c_int};
@@ -76,7 +75,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
     let mut extra_last: schar_T = 0;
     let mut extra_text: *const c_char = ptr::null();
     // The `<xx>` rendering `extra_text` points into while it is drawn.
-    let mut escaped = [0 as c_char; CHAR_DISPLAY_LEN];
+    let mut escaped;
 
     while !got_int.get() {
         let sc: schar_T;

@@ -61,7 +61,7 @@ pub unsafe fn do_dialog(
     let no_prompt = Suppress::wait_return();
 
     let hotkeys = unsafe { msg_show_console_dialog(message, buttons, dfltbutton) };
-    let mut retval = 0;
+    let mut retval;
     loop {
         // Without a UI Nvim waits for input forever.
         if ui_active() == 0 && input_available() == 0 {

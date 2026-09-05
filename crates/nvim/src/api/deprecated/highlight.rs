@@ -32,7 +32,7 @@ pub unsafe fn nvim_get_hl_by_name(
     rgb: Boolean,
     arena: *mut Arena,
 ) -> Result<Dict, Error> {
-    let mut error = Error::none();
+    let error;
     // SAFETY: `name` is the caller's NUL-terminated group name.
     let id = unsafe { syn_name2id(name.data()) };
     if id == 0 {

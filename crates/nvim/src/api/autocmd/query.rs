@@ -22,11 +22,11 @@ pub unsafe fn nvim_get_autocmds(
     // SAFETY: the dispatcher's keyset outlives this call.
     let opts = unsafe { Live::<KeyDict_get_autocmds>::new(opts) };
     let mut error = Error::none();
-    let mut name: *mut ::core::ffi::c_char = ::core::ptr::null_mut::<::core::ffi::c_char>();
-    let mut id: ::core::ffi::c_int = 0;
-    let mut has_buf: bool = false;
-    let mut buf: Object = Object::Nil;
-    let mut pattern_filter_count: ::core::ffi::c_int = 0;
+    let name: *mut ::core::ffi::c_char;
+    let id: ::core::ffi::c_int;
+    let has_buf: bool;
+    let buf: Object;
+    let mut pattern_filter_count: ::core::ffi::c_int;
     let mut autocmd_list: ArrayBuilder = ArrayBuilder {
         size: 0 as size_t,
         capacity: 0 as size_t,

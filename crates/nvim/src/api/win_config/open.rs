@@ -33,7 +33,7 @@ pub unsafe fn nvim_open_win(
     // SAFETY: `error` is this frame's own slot, live for the whole call, and
     // `config` is the caller's keyset.
     let (report, keys) = unsafe { (ErrSlot::new(&mut error), CfgKeys::new(config)) };
-    let mut bufref = BufRef::NONE;
+    let bufref;
     // SAFETY: `error` is this frame's slot; the lookup answers a live buffer or
     // a null.
     let b = unsafe { find_buffer_by_handle(buf, &mut error) };
@@ -65,7 +65,7 @@ pub unsafe fn nvim_open_win(
         // SAFETY: paired with the `unblock_autocmds` at the end.
         unsafe { block_autocmds() };
     }
-    let mut wp: *mut win_T = ::core::ptr::null_mut::<win_T>();
+    let wp: *mut win_T;
     let mut tp: *mut tabpage_T = curtab.get();
     debug_assert!(!curwin.get().is_null(), "curwin != NULL");
     let mut parent: *mut win_T = if keys.win == 0 {

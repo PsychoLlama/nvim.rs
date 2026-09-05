@@ -149,13 +149,13 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
     let mut str: *mut c_char = ptr::null_mut();
     let mut expr: *mut c_char = ptr::null_mut();
     let mut len: i64 = 0;
-    let mut start: i64 = 0;
+    let mut start: i64;
     let mut nth: i64 = 1;
     let mut startcol: colnr_T = 0;
     let mut idx: c_int = 0;
     let mut matched = false;
     // Owns whatever the List walk echoed most recently.
-    let mut tofree = Echoed(ptr::null_mut());
+    let mut tofree;
 
     // Nothing below this point may return early without running the
     // trailing fixup, so the body is one labelled block as the C's

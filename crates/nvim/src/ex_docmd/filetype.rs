@@ -241,7 +241,12 @@ pub(crate) unsafe fn ex_checkhealth(eap: *mut exarg_T) {
         &raw mut mods as *mut c_char,
         mods_len,
     ));
-    items[1] = Object::String(cstr_as_string(eap.arg));
+    // `args.items` aliases `items`, so `nlua_exec` below reads this write.
+    // `unused_assignments` only sees direct uses of the local and calls it dead.
+    #[allow(unused_assignments)]
+    {
+        items[1] = Object::String(cstr_as_string(eap.arg));
+    }
     args.size = 2;
 
     unsafe {

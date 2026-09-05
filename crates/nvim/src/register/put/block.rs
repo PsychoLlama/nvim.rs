@@ -123,7 +123,7 @@ impl Put {
     unsafe fn block_start_col(&self) -> colnr_T {
         // SAFETY: the cursor is on a valid line.
         let c = gchar_cursor();
-        let mut col: colnr_T = 0;
+        let mut col: colnr_T;
         let mut endcol2: colnr_T = 0;
 
         if self.dir == FORWARD && c != NUL {

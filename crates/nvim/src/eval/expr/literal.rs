@@ -664,7 +664,7 @@ pub(crate) unsafe fn eval_interp_string(
     // NUL-terminated expression and `rettv` is valid when `evaluate`. `ga`
     // is this frame's own and is initialised before anything appends to it.
     let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
-    let mut ret = Ok(());
+    let mut ret;
     let mut text = Vec::<u8>::new();
 
     // `*arg` is on the `$`; move it to the first string character.

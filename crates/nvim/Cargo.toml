@@ -82,6 +82,15 @@ unused_qualifications = "deny"
 # roots, which were already clean.
 unused_mut = "deny"
 
+# The same transpiler habit one step further: 121 findings in 67 files where a
+# binding was initialised and then overwritten before anything read it. All but
+# five were dead stores or `let mut x = 0; … x = f();` shapes and are gone. The
+# five that stay carry a local `#[allow]`: the lint is not alias-aware — rustc's
+# liveness stops at a local's last *direct* use, so a write reached only through
+# a raw pointer taken earlier (an `iconv` length, a Lua array behind an
+# `Array.items`) reads as dead when it is the whole point of the statement.
+unused_assignments = "deny"
+
 # `just lint` runs clippy with correctness at its deny default; suspicious/
 # complexity/perf/style warn and burn down through the ratchet
 # (metrics/clippy.json). The opt-in groups (pedantic, restriction, nursery,

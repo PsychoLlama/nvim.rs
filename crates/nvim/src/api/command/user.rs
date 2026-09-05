@@ -109,13 +109,13 @@ pub unsafe fn create_user_command(
 ) {
     // SAFETY: `opts` is the caller's keydict, live for the call.
     let mut opts = unsafe { UserCmdOpts::new(opts) };
-    let mut force: bool = false;
+    let force: bool;
     let mut argt = ExArgt::NONE;
     let mut def: int64_t = -1;
     let mut addr_type_arg = CmdAddr::NoRange;
     let mut context = ExpandContext::Nothing;
     let mut compl_arg: *mut ::core::ffi::c_char = ::core::ptr::null_mut();
-    let mut rep: *const ::core::ffi::c_char = ::core::ptr::null();
+    let rep: *const ::core::ffi::c_char;
     let mut luaref: LuaRef = LUA_NOREF;
     let mut compl_luaref: LuaRef = LUA_NOREF;
     let mut preview_luaref: LuaRef = LUA_NOREF;

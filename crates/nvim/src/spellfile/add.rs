@@ -224,7 +224,7 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
     }
 
     // The offsets of the line just read and of the one after it.
-    let mut fpos: c_int = 0;
+    let mut fpos: c_int;
     let mut fpos_next: c_int = 0;
     while !unsafe { vim_fgets(line.as_mut_ptr(), MAXWLEN as c_int * 2, fd) } {
         fpos = fpos_next;

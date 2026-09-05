@@ -230,7 +230,7 @@ pub unsafe fn nvim_buf_get_extmarks(
         ::core::mem::swap(&mut l_row, &mut u_row);
         ::core::mem::swap(&mut l_col, &mut u_col);
     }
-    let mut marks: ExtmarkInfoArray = unsafe {
+    let marks: ExtmarkInfoArray = unsafe {
         extmark_get(
             b,
             ns_id as uint32_t,
@@ -277,9 +277,6 @@ pub unsafe fn nvim_buf_get_extmarks(
         }
     }
     unsafe { xfree(marks.items as *mut ::core::ffi::c_void) };
-    marks.capacity = 0 as size_t;
-    marks.size = marks.capacity;
-    marks.items = ::core::ptr::null_mut::<MTPair>();
     rv.reported(error)
 }
 

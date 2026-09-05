@@ -280,7 +280,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         }
     }
 
-    let mut file_name: *mut c_char = ptr::null_mut();
+    let mut file_name: *mut c_char;
     if options.has(FileNameOpts::EXP) {
         let mut file_to_find: *mut c_char = ptr::null_mut();
         let mut search_ctx: *mut c_char = ptr::null_mut();

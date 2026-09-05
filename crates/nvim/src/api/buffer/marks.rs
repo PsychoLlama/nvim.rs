@@ -95,14 +95,13 @@ pub unsafe fn nvim_buf_get_mark(
         error = err_bad_value(c"mark name (must be a single char)", name);
         return rv.reported(error);
     }
-    let mut fm: *mut fmark_T = ::core::ptr::null_mut::<fmark_T>();
     let mut pos: pos_T = pos_T {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
     let mark: ::core::ffi::c_char = unsafe { *name.data() };
-    fm = unsafe {
+    let fm: *mut fmark_T = unsafe {
         mark_get(
             b,
             curwin.get(),

@@ -520,7 +520,6 @@ pub(crate) unsafe fn get_next_filename_completion() {
             unsafe { free_wild(num_matches, matches) };
         } else if leader_len > 0 {
             unsafe { free_wild(num_matches, matches) };
-            num_matches = 0;
         }
 
         unsafe { xfree(compl_fuzzy_scores.get().cast::<c_void>()) };

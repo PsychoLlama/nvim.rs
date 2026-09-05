@@ -362,7 +362,7 @@ unsafe fn send_error(
     id: uint32_t,
     err: *mut c_char,
 ) {
-    let mut e = Error::none();
+    let mut e;
     let mut answer = Object::Nil;
     // SAFETY: the message the caller handed over, live for this call.
     e = Error::from_message(kErrorTypeException, unsafe { cstr::at(err) });

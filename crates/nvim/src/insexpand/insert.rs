@@ -364,7 +364,7 @@ pub(crate) unsafe fn find_next_completion_match(
     advance: bool,
     num_matches: *mut c_int,
 ) -> c_int {
-    let mut found_end = false;
+    let mut found_end;
     let mut found_compl: Option<Cm> = None;
     // SAFETY: no precondition left; still an `unsafe fn` for its call sites
     // outside this family.

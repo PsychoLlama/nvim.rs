@@ -11,7 +11,6 @@
 use super::*;
 use crate::api::private::helpers::{Reported, dict_put_str, has_key};
 use crate::api::private::validate::{err_bad_number, err_bad_value};
-use crate::highlight::HlAttrFlags;
 
 pub unsafe fn nvim_get_hl_id_by_name(name: String_0) -> Integer {
     unsafe { syn_check_group(name.data(), name.len()) as Integer }
@@ -52,17 +51,7 @@ pub unsafe fn nvim_set_hl(
         KEYSET_OPTIDX_highlight__update,
     ) && unsafe { (*val).update } as ::core::ffi::c_int != 0;
     let mut base: Option<&HlAttrs> = None;
-    let mut base_attrs: HlAttrs = HlAttrs {
-        rgb_ae_attr: HlAttrFlags::NONE,
-        cterm_ae_attr: HlAttrFlags::NONE,
-        rgb_fg_color: 0,
-        rgb_bg_color: 0,
-        rgb_sp_color: 0,
-        cterm_fg_color: 0,
-        cterm_bg_color: 0,
-        hl_blend: 0,
-        url: 0,
-    };
+    let base_attrs: HlAttrs;
     if update as ::core::ffi::c_int != 0
         && let Some(attrs) = unsafe { hl_ns_get_attrs(ns_id as ::core::ffi::c_int, hl_id, None) }
     {

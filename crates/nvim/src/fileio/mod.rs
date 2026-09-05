@@ -83,8 +83,8 @@ use crate::types::ui::kUIMessages;
 use crate::types::{
     CheckItem, Directory, FAIL, FILE, Failed, FileInfo, IOSIZE, OK, OptInt, OptVal, OptionSetFlags,
     ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T,
-    off_T, pos_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t,
-    uintmax_t, uv_gid_t, uv_uid_t,
+    off_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t, uintmax_t,
+    uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{

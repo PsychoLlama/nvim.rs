@@ -52,7 +52,7 @@ pub mod transchar;
 // The display half was split out for size; its callers are spread over three
 // dozen modules and name it as `charset::*`.
 pub(crate) use display::{
-    CHAR_DISPLAY_LEN, CharDisplay, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
+    CharDisplay, transchar, transchar_buf, transchar_byte, transchar_byte_buf,
 };
 pub use display::{
     byte2cells, char2cells, ptr2cells, rl_mirror_ascii, str_foldcase, trans_characters,

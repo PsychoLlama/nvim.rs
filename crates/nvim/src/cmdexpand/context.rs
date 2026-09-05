@@ -197,7 +197,7 @@ pub(crate) unsafe fn set_context_for_wildcard_arg(
     let mut xp = unsafe { Xp::new(xp) };
     let mut in_quote = false;
     let mut bow: *const c_char = ptr::null(); // Beginning of word.
-    let mut len: size_t = 0;
+    let mut len: size_t;
 
     // Allow spaces within back-quotes to count as part of the argument
     // being expanded.

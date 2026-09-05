@@ -697,7 +697,12 @@ unsafe fn suggest_try_change(su: Sug) {
     // Keep the result no longer than the original text.
     let n = unsafe { cstr::bytes_at(su.su_badptr) }.len();
     if n < MAXWLEN {
-        fword[n] = NUL as c_char;
+        // `fwordp` aliases `fword`, so the trie walk below reads this write;
+        // `unused_assignments` only sees direct uses of the local.
+        #[allow(unused_assignments)]
+        {
+            fword[n] = NUL as c_char;
+        }
     }
 
     for lp in unsafe { window_langs() } {

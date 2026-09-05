@@ -301,7 +301,7 @@ pub unsafe fn nvim_buf_get_text(
     lstate: *mut lua_State,
 ) -> Result<Array, Error> {
     let mut error = Error::none();
-    let mut str: String_0 = String_0::NULL;
+    let mut str: String_0;
     let mut rv: Array = Array {
         size: 0 as size_t,
         capacity: 0 as size_t,

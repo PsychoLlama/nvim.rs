@@ -103,7 +103,7 @@ pub unsafe fn f_call(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFu
 
     // A String name is resolved through the function-name translator,
     // which is what turns `s:`/`<SID>` into the real name.
-    let mut tofree = Owned(ptr::null_mut());
+    let tofree;
     if args.ty(0) == VAR_STRING {
         let mut p = func;
         let name = &raw mut p;

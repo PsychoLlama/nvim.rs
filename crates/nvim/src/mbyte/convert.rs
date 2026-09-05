@@ -123,7 +123,7 @@ unsafe fn iconv_string(
 
     let fail = unsafe { (*vcp).vc_fail };
     let mut result: *mut c_char = core::ptr::null_mut();
-    let mut to: *mut c_char = core::ptr::null_mut();
+    let mut to: *mut c_char;
     let mut len: size_t = 0;
     let mut done: size_t = 0;
     let mut from = str;

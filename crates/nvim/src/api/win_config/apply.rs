@@ -112,11 +112,11 @@ unsafe fn win_config_split(
         if !unsafe { check_split_disallowed_err(win, slot_mut(err)) } {
             return false;
         }
-        let mut to_split_ok = false;
+        let to_split_ok;
         let curwin_moving_tp = win == curwin.get() && !parent.is_null() && win_tp != parent_tp;
         let mut dir: ::core::ffi::c_int = 0;
         let mut unflat_altfr: *mut frame_T = ::core::ptr::null_mut::<frame_T>();
-        let mut altwin_0: *mut win_T = ::core::ptr::null_mut::<win_T>();
+        let altwin_0: *mut win_T;
         '_restore_curwin: {
             if curwin_moving_tp {
                 // SAFETY: the caller's window, still in its tab page.

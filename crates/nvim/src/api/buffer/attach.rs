@@ -90,7 +90,6 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
     if b.is_null() {
         return Object::Nil.reported(error);
     }
-    let mut res: Object = Object::Nil;
     let mut tstate: TryState = TryState {
         current_exception: ::core::ptr::null_mut::<except_T>(),
         private_msg_list: ::core::ptr::null_mut::<msglist_T>(),
@@ -108,7 +107,7 @@ pub unsafe fn nvim_buf_call(buf: Buffer, fun: LuaRef) -> Result<Object, Error> {
         capacity: 0 as size_t,
         items: ::core::ptr::null_mut::<Object>(),
     };
-    res = unsafe {
+    let res: Object = unsafe {
         nlua_call_ref(
             fun,
             ::core::ptr::null::<::core::ffi::c_char>(),

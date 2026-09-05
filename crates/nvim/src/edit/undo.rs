@@ -166,7 +166,7 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut pos_T, esc: c_int, nomove:
         // Auto-format now.  It looks odd to do this when *stopping* an
         // insertion, but appending a line that ends in a space needs it.
         // Only when something was actually inserted, or undo breaks.
-        let mut cc = 0;
+        let mut cc;
         if !ins_need_undo.get() && has_format_option(FoFlag::AUTO) {
             let tpos = cur_win().w_cursor;
 

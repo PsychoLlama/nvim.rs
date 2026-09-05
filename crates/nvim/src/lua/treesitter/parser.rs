@@ -153,17 +153,12 @@ unsafe extern "C-unwind" fn parser_parse(L: *mut lua_State) -> ::core::ffi::c_in
                 ::core::ptr::null::<TSTree>()
             };
         }
-        let mut new_tree: *mut TSTree = ::core::ptr::null_mut::<TSTree>();
+        let new_tree: *mut TSTree;
         let mut len: size_t = 0;
-        let mut str: *const ::core::ffi::c_char = ::core::ptr::null::<::core::ffi::c_char>();
-        let mut bufnr: handle_T = 0;
-        let mut buf: *mut buf_T = ::core::ptr::null_mut::<buf_T>();
-        let mut input: TSInput = TSInput {
-            payload: ::core::ptr::null_mut::<::core::ffi::c_void>(),
-            read: None,
-            encoding: TSInputEncodingUTF8,
-            decode: None,
-        };
+        let str: *const ::core::ffi::c_char;
+        let bufnr: handle_T;
+        let buf: *mut buf_T;
+        let input: TSInput;
         match lua_type(L, 3 as ::core::ffi::c_int) {
             LUA_TSTRING => {
                 str = lua_tolstring(L, 3 as ::core::ffi::c_int, &raw mut len);

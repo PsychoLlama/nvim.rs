@@ -178,7 +178,7 @@ pub unsafe fn f_jobwait(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eva
     if !list.is_null() {
         let mut arg: *const listitem_T = unsafe { (*list).lv_first };
         while !arg.is_null() {
-            let mut chan = ptr::null_mut::<Channel>();
+            let chan;
             if unsafe { (*arg).li_tv.v_type } != VAR_NUMBER
                 || {
                     chan = find_channel(unsafe { (*arg).li_tv.number_or_zero() } as uint64_t);
