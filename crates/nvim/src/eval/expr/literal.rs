@@ -143,19 +143,19 @@ impl Walk {
 /// `&option`, `&l:option`, `&g:option` or `+option`, with the cursor on the
 /// `&` or the `+`. Leaves it after the option name.
 ///
-/// A null `rettv` means "only say whether this names an option"; that is
+/// A null `result` means "only say whether this names an option"; that is
 /// `has("+option")`, which is also the only caller `working` is true for.
 ///
 /// # Safety
 /// `arg` must point at the cursor into a writable, NUL-terminated
-/// expression; `rettv` must be null or valid.
+/// expression; `result` must be null or valid.
 pub(crate) unsafe fn eval_option(
     arg: *mut *const c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
-    // NUL-terminated expression, and `rettv` is null or valid.
+    // NUL-terminated expression, and `result` is null or valid.
     let working = unsafe { **arg } == b'+' as c_char; // has("+option")
     let mut opt_idx: OptIndex = kOptAleph;
     let mut opt_flags: OptionSetFlags = OptionSetFlags::NONE;
@@ -164,7 +164,7 @@ pub(crate) unsafe fn eval_option(
     let (idxp, flagsp) = (&raw mut opt_idx, &raw mut opt_flags);
     let option_end = unsafe { find_option_var_end(arg, idxp, flagsp) } as *mut c_char;
     if option_end.is_null() {
-        if !rettv.is_null() {
+        if !result.is_null() {
             let name = unsafe { *arg };
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
@@ -187,21 +187,21 @@ pub(crate) unsafe fn eval_option(
     let is_tty_opt = is_tty_option(opt_name);
     let ret = if opt_idx == kOptInvalid && !is_tty_opt {
         // Only report it when the result is going to be used.
-        if !rettv.is_null() {
+        if !result.is_null() {
             let name = unsafe { *arg };
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str(name) };
             semsg!("E113: Unknown option: {name}");
         }
         Err(Failed)
-    } else if !rettv.is_null() {
+    } else if !result.is_null() {
         let value: OptVal = if is_tty_opt {
             get_tty_option(opt_name)
         } else {
             get_option_value(opt_idx, opt_flags)
         };
         debug_assert!(!value.is_nil());
-        unsafe { *rettv = optval_as_tv(value, true) };
+        unsafe { *result = optval_as_tv(value, true) };
         Ok(())
     } else if working && !is_tty_opt && is_option_hidden(opt_idx) {
         Err(Failed)
@@ -220,16 +220,16 @@ pub(crate) unsafe fn eval_option(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression;
-/// `rettv` must be valid when `evaluate`.
+/// `result` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_number(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
     want_string: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
-    // NUL-terminated expression and `rettv` is valid when `evaluate`.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    // NUL-terminated expression and `result` is valid when `evaluate`.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let mut p = unsafe { Walk::new(skipdigits(cur.get().add(1))) };
 
     // A Float is accepted only for the exact `1.2`, `1.2e3` shapes: a
@@ -301,8 +301,8 @@ pub(crate) unsafe fn eval_number(
             bp.step(2);
         }
         if !blob.is_null() {
-            // SAFETY: `rettv` is valid whenever a Blob was allocated.
-            unsafe { tv_blob_set_ret(rettv, blob) };
+            // SAFETY: `result` is valid whenever a Blob was allocated.
+            unsafe { tv_blob_set_ret(result, blob) };
         }
         cur.set(bp.raw());
     } else {
@@ -337,18 +337,18 @@ pub(crate) unsafe fn eval_number(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression;
-/// `rettv` must be valid when `evaluate`.
+/// `result` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_string(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
     interpolate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
-    // NUL-terminated expression and `rettv` is valid when `evaluate`. Both
+    // NUL-terminated expression and `result` is valid when `evaluate`. Both
     // walks below stay inside that expression: the measuring pass stops at
     // the NUL and the filling pass repeats it byte for byte.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let arg_end = unsafe { cur.get().add(cstr::bytes_at(cur.get()).len()) } as *const c_char;
     let off = if interpolate { 0 } else { 1 };
     // How much longer the result is than the text it is read from. The
@@ -562,15 +562,15 @@ pub(crate) unsafe fn eval_string(
 /// As `eval_string`.
 pub(crate) unsafe fn eval_lit_string(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
     interpolate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
-    // NUL-terminated expression and `rettv` is valid when `evaluate`. Both
+    // NUL-terminated expression and `result` is valid when `evaluate`. Both
     // walks below stay inside that expression: the measuring pass stops at
     // the NUL and the filling pass repeats it byte for byte.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let off = if interpolate { 0 } else { 1 };
     // How much *shorter* the result is than the text: one byte per
     // doubled quote or brace, less the terminator an interpolated piece
@@ -650,20 +650,20 @@ pub(crate) unsafe fn eval_lit_string(
 /// `$"..."` or `$'...'`, with the cursor on the `$`: alternating literal
 /// pieces and `{expr}` substitutions, joined into one String.
 ///
-/// Answers `Ok` even for a piece that failed — upstream's; `rettv` then
+/// Answers `Ok` even for a piece that failed — upstream's; `result` then
 /// holds whatever was assembled before the error, which may be null.
 ///
 /// # Safety
 /// As `eval_string`.
 pub(crate) unsafe fn eval_interp_string(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a
-    // NUL-terminated expression and `rettv` is valid when `evaluate`. `ga`
+    // NUL-terminated expression and `result` is valid when `evaluate`. `ga`
     // is this frame's own and is initialised before anything appends to it.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let mut ret;
     let mut text = Vec::<u8>::new();
 
@@ -751,15 +751,15 @@ pub(crate) unsafe fn string2float(text: *const c_char, ret_value: *mut Float) ->
 ///
 /// # Safety
 /// `arg` must point at the cursor into a writable, NUL-terminated
-/// expression; `rettv` must be valid when `evaluate`.
+/// expression; `result` must be valid when `evaluate`.
 pub(crate) unsafe fn eval_env_var(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into a writable,
-    // NUL-terminated expression and `rettv` is valid when `evaluate`.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    // NUL-terminated expression and `result` is valid when `evaluate`.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     cur.bump(1);
     let name = cur.get();
     let len = unsafe { get_env_len(cur.raw().cast()) };

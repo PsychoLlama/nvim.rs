@@ -356,8 +356,8 @@ unsafe fn list_number(list: *mut List, index: c_int, current: c_int) -> Option<c
 ///
 /// # Safety
 /// The Vimscript function ABI: `argvars` is the argument array and
-/// `rettv` the return value.
-pub unsafe fn f_searchcount(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `result` the return value.
+pub unsafe fn f_searchcount(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut pos = cur_win().w_cursor;
     let mut pattern = ptr::null_mut::<c_char>();
@@ -367,7 +367,7 @@ pub unsafe fn f_searchcount(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     // already is.
     let mut recompute = true;
 
-    unsafe { tv_dict_alloc_ret(rettv) };
+    unsafe { tv_dict_alloc_ret(result) };
 
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN {
         if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) }.is_err() {
@@ -448,9 +448,9 @@ pub unsafe fn f_searchcount(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         }
 
         let stat = unsafe { update_search_stat(0, pos, pos, recompute, maxcount, timeout) };
-        // SAFETY: `rettv` is the caller's return value, a dictionary this
+        // SAFETY: `result` is the caller's return value, a dictionary this
         // function itself allocated above.
-        let dict = unsafe { (*rettv).vval.v_dict };
+        let dict = unsafe { (*result).vval.v_dict };
         let add = |key: &CStr, value: c_int| {
             let (k, klen, v) = (key.as_ptr(), key.to_bytes().len(), value as VarNumber);
             // SAFETY: adding a number under a static key.

@@ -57,16 +57,16 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 /// `[` or the `.`. Leaves the cursor after the `]` or the key.
 ///
 /// # Safety
-/// `arg` must point at the cursor into a NUL-terminated expression, `rettv`
+/// `arg` must point at the cursor into a NUL-terminated expression, `result`
 /// at the value being subscripted, and `evalarg` must be null or valid.
 pub(crate) unsafe fn eval_index(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` is the value being subscripted and `evalarg` is
+    // expression, `result` is the value being subscripted and `evalarg` is
     // null or valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
@@ -76,7 +76,7 @@ pub(crate) unsafe fn eval_index(
     let mut key: *const c_char = null();
     let mut keylen: ptrdiff_t = -1;
 
-    unsafe { check_can_index(rettv, evaluate, verbose) }?;
+    unsafe { check_can_index(result, evaluate, verbose) }?;
 
     let mut var1 = UNSET_TV;
     let mut var2 = UNSET_TV;
@@ -144,7 +144,7 @@ pub(crate) unsafe fn eval_index(
     }
     let one = if empty1 { null_mut() } else { &raw mut var1 };
     let two = if empty2 { null_mut() } else { &raw mut var2 };
-    let res = unsafe { eval_index_inner(rettv, range, one, two, false, key, keylen, verbose) };
+    let res = unsafe { eval_index_inner(result, range, one, two, false, key, keylen, verbose) };
     if !empty1 {
         unsafe { tv_clear(&raw mut var1) };
     }
@@ -154,16 +154,16 @@ pub(crate) unsafe fn eval_index(
     res
 }
 
-/// Can `rettv` carry an `[index]` or a `[sli:ce]` at all?
+/// Can `result` carry an `[index]` or a `[sli:ce]` at all?
 ///
 /// # Safety
-/// `rettv` must be valid.
+/// `result` must be valid.
 pub(crate) unsafe fn check_can_index(
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let message = match unsafe { (*rettv).v_type } {
+    let message = match unsafe { (*result).v_type } {
         VAR_FUNC | VAR_PARTIAL => e_cannot_index_a_funcref.as_ptr(),
         VAR_FLOAT => e_using_float_as_string.as_ptr(),
         VAR_BOOL | VAR_SPECIAL => e_cannot_index_special_variable.as_ptr(),
@@ -188,11 +188,11 @@ pub(crate) unsafe fn check_can_index(
 ///
 /// # Safety
 /// Called through the builtin table with a terminated argument array.
-pub(crate) unsafe fn f_slice(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_slice(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { check_can_index(argvars, true, false) }.is_err() {
         return;
     }
-    unsafe { tv_copy(argvars, rettv) };
+    unsafe { tv_copy(argvars, result) };
     // SAFETY: the builtin table hands in three argument slots, terminated by
     // a `VAR_UNKNOWN` when the third was not given.
     let (first, last) = unsafe { (argvars.add(1), argvars.add(2)) };
@@ -201,10 +201,10 @@ pub(crate) unsafe fn f_slice(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
     } else {
         last
     };
-    let _ = unsafe { eval_index_inner(rettv, true, first, end, true, null(), 0, false) };
+    let _ = unsafe { eval_index_inner(result, true, first, end, true, null(), 0, false) };
 }
 
-/// Apply an index or a range to `rettv`, in place.
+/// Apply an index or a range to `result`, in place.
 ///
 /// `var1` is the first index and is null for `[:expr]`; `var2` is the second
 /// and is null for `[expr]` and `[expr:]`. `exclusive` is `slice()`'s: the
@@ -212,11 +212,11 @@ pub(crate) unsafe fn f_slice(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
 /// is non-null it is the Dict index instead of `var1`.
 ///
 /// # Safety
-/// `rettv` must be valid; `var1`/`var2` null or valid; `key` null or
+/// `result` must be valid; `var1`/`var2` null or valid; `key` null or
 /// `keylen` readable bytes (or NUL-terminated when `keylen` is negative).
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn eval_index_inner(
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     is_range: bool,
     var1: *mut TypVal,
     var2: *mut TypVal,
@@ -229,9 +229,9 @@ pub(crate) unsafe fn eval_index_inner(
     let mut numbuf2 = NumBuf::new();
     let mut n1: VarNumber = 0;
     let mut n2: VarNumber = 0;
-    // SAFETY: the caller's promise -- `rettv` is the value being indexed,
+    // SAFETY: the caller's promise -- `result` is the value being indexed,
     // and `var1`/`var2` are null or valid typvals.
-    let mut rv = unsafe { Tv::new(rettv) };
+    let mut rv = unsafe { Tv::new(result) };
     if !var1.is_null() && rv.v_type != VAR_DICT {
         n1 = unsafe { tv_get_number(var1) };
     }
@@ -253,7 +253,7 @@ pub(crate) unsafe fn eval_index_inner(
         VAR_NUMBER | VAR_STRING => {
             // SAFETY: `numbuf` is this frame's own scratch, and the String
             // it answers is NUL-terminated with `n1`/`n2` inside it.
-            let s = unsafe { numbuf.string(rettv) };
+            let s = unsafe { numbuf.string(result) };
             let len = unsafe { cstr::bytes_at(s) }.len() as c_int as VarNumber;
             let v = if exclusive {
                 // slice(): character indexes, second one excluded.
@@ -285,14 +285,14 @@ pub(crate) unsafe fn eval_index_inner(
                 let at = s.wrapping_offset(n1 as isize).cast::<c_void>();
                 unsafe { xmemdupz(at, 1) as *mut c_char }
             };
-            unsafe { tv_clear(rettv) };
+            unsafe { tv_clear(result) };
             rv.v_type = VAR_STRING;
             rv.vval.v_string = v;
         }
         VAR_BLOB => {
             // SAFETY: the tag says the union holds a Blob.
             let blob = rv.blob_or_null();
-            let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, rettv) };
+            let _ = unsafe { tv_blob_slice_or_index(blob, is_range, n1, n2, exclusive, result) };
         }
         VAR_LIST => {
             if var1.is_null() {
@@ -304,7 +304,7 @@ pub(crate) unsafe fn eval_index_inner(
             // SAFETY: the tag says the union holds a List.
             let list = rv.list_or_null();
             let sliced = unsafe {
-                tv_list_slice_or_index(list, is_range, n1, n2, exclusive, rettv, verbose)
+                tv_list_slice_or_index(list, is_range, n1, n2, exclusive, result, verbose)
             };
             sliced?;
         }
@@ -335,11 +335,11 @@ pub(crate) unsafe fn eval_index_inner(
             if item.is_null() || unsafe { tv_is_luafunc(&raw mut (*item).di_tv) } {
                 return Err(Failed);
             }
-            // The copy is taken before `rettv` — which owns the Dict the
+            // The copy is taken before `result` — which owns the Dict the
             // item lives in — is cleared.
             let mut tmp = UNSET_TV;
             unsafe { tv_copy(&raw mut (*item).di_tv, &raw mut tmp) };
-            unsafe { tv_clear(rettv) };
+            unsafe { tv_clear(result) };
             *rv = tmp;
         }
         // Not evaluating: skipping over the subscript.
@@ -461,36 +461,36 @@ pub(crate) unsafe fn string_slice(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression whose
-/// preceding byte is readable; `rettv` must be valid; `evalarg` null or
+/// preceding byte is readable; `result` must be valid; `evalarg` null or
 /// valid.
 pub(crate) unsafe fn handle_subscript(
     arg: *mut *const c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` is the operand it follows and `evalarg` is null or
+    // expression, `result` is the operand it follows and `evalarg` is null or
     // valid. All three hold for every call below.
-    let (cur, rv) = unsafe { (Cur::new(arg.cast()), Tv::new(rettv)) };
+    let (cur, rv) = unsafe { (Cur::new(arg.cast()), Tv::new(result)) };
     let evaluate = unsafe { evaluating(evalarg) };
     let mut ret = Ok(());
     let mut selfdict: *mut Dict = null_mut();
     let mut lua_funcname: *const c_char = null();
 
-    if unsafe { tv_is_luafunc(rettv) } {
+    if unsafe { tv_is_luafunc(result) } {
         if !evaluate {
-            unsafe { tv_clear(rettv) };
+            unsafe { tv_clear(result) };
         }
         if cur.byte() != b'.' {
-            unsafe { tv_clear(rettv) };
+            unsafe { tv_clear(result) };
             ret = Err(Failed);
         } else {
             cur.bump(1);
             lua_funcname = cur.get();
             let len = unsafe { check_luafunc_name(cur.get(), true) };
             if len == 0 {
-                unsafe { tv_clear(rettv) };
+                unsafe { tv_clear(result) };
                 ret = Err(Failed);
             }
             cur.bump(len as usize);
@@ -515,13 +515,13 @@ pub(crate) unsafe fn handle_subscript(
         if cur.byte() == b'(' {
             let (raw, lua) = (cur.raw(), lua_funcname);
             ret = unsafe {
-                call_func_rettv(raw, evalarg, rettv, evaluate, selfdict, null_mut(), lua)
+                call_func_rettv(raw, evalarg, result, evaluate, selfdict, null_mut(), lua)
             };
             // Stop evaluating on an immediate abort, an interrupt, or an
             // exception that was thrown and not caught.
             if aborting() {
                 if ret.is_ok() {
-                    unsafe { tv_clear(rettv) };
+                    unsafe { tv_clear(result) };
                 }
                 ret = Err(Failed);
             }
@@ -530,10 +530,10 @@ pub(crate) unsafe fn handle_subscript(
         } else if cur.byte() == b'-' {
             ret = if cur.at(2) == b'{' {
                 // expr->{lambda}()
-                unsafe { eval_lambda(cur.raw(), rettv, evalarg, verbose) }
+                unsafe { eval_lambda(cur.raw(), result, evalarg, verbose) }
             } else {
                 // expr->name()
-                unsafe { eval_method(cur.raw(), rettv, evalarg, verbose) }
+                unsafe { eval_method(cur.raw(), result, evalarg, verbose) }
             };
         } else {
             // `[` or `.`: a Dict being subscripted is the `self` a
@@ -549,8 +549,8 @@ pub(crate) unsafe fn handle_subscript(
             } else {
                 null_mut()
             };
-            if unsafe { eval_index(cur.raw(), rettv, evalarg, verbose) }.is_err() {
-                unsafe { tv_clear(rettv) };
+            if unsafe { eval_index(cur.raw(), result, evalarg, verbose) }.is_err() {
+                unsafe { tv_clear(result) };
                 ret = Err(Failed);
             }
         }
@@ -558,27 +558,27 @@ pub(crate) unsafe fn handle_subscript(
 
     // Turn "dict.Func" into a partial for "Func" bound to "dict".
     if !selfdict.is_null() && tv_is_func(*rv) {
-        unsafe { set_selfdict(rettv, selfdict) };
+        unsafe { set_selfdict(result, selfdict) };
     }
     unsafe { tv_dict_unref(selfdict) };
     ret
 }
 
-/// Bind `selfdict` to the Funcref in `rettv`.
+/// Bind `selfdict` to the Funcref in `result`.
 ///
 /// # Safety
-/// `rettv` must be valid and `selfdict` must be a reference this call takes
+/// `result` must be valid and `selfdict` must be a reference this call takes
 /// over.
-pub(crate) unsafe fn set_selfdict(rettv: *mut TypVal, selfdict: *mut Dict) {
+pub(crate) unsafe fn set_selfdict(result: *mut TypVal, selfdict: *mut Dict) {
     // Not for a partial that was bound explicitly (`pt_auto` clear).
-    // SAFETY: the caller's promise -- `rettv` is valid, and the tag says
+    // SAFETY: the caller's promise -- `result` is valid, and the tag says
     // whether the union holds a live partial.
-    let rv = unsafe { Tv::new(rettv) };
+    let rv = unsafe { Tv::new(result) };
     if rv.v_type == VAR_PARTIAL {
         let pt = unsafe { Live::new(rv.partial_or_null()) };
         if !pt.pt_auto && !pt.pt_dict.is_null() {
             return;
         }
     }
-    unsafe { make_partial(selfdict, rettv) };
+    unsafe { make_partial(selfdict, result) };
 }

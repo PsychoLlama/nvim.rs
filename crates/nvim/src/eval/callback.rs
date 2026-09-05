@@ -134,13 +134,13 @@ const VLUA: &CStr = c"v:lua.";
 /// Call `callback` with `argcount_in` arguments.
 ///
 /// # Safety
-/// `callback` and `rettv` must be valid; `argvars_in` must hold
+/// `callback` and `result` must be valid; `argvars_in` must hold
 /// `argcount_in` typvals.
 pub unsafe fn callback_call(
     callback: *mut Callback,
     argcount_in: c_int,
     argvars_in: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> bool {
     if callback_depth.get() as OptInt > p_mfd.get() {
         // SAFETY: the message is a NUL-terminated literal.
@@ -197,8 +197,8 @@ pub unsafe fn callback_call(
     // The un-bump is the guard's, so that an early exit cannot skip it.
     let depth = Depth::of(&callback_depth);
     // SAFETY: `name` is a NUL-terminated function name, and the caller's
-    // promise covers `argvars_in`, `argcount_in` and `rettv`.
-    let ret = unsafe { call_func(name, -1, rettv, argcount_in, argvars_in, &raw mut funcexe) };
+    // promise covers `argvars_in`, `argcount_in` and `result`.
+    let ret = unsafe { call_func(name, -1, result, argcount_in, argvars_in, &raw mut funcexe) };
     drop(depth);
     ret.is_ok()
 }

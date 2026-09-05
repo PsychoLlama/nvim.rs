@@ -325,9 +325,9 @@ unsafe fn arg_histtype(arg: *const TypVal) -> HistoryType {
 }
 
 /// "histadd()" function
-pub unsafe fn f_histadd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; the result starts out 0.
-    unsafe { (*rettv).vval.v_number = 0 };
+    unsafe { (*result).vval.v_number = 0 };
     // SAFETY: reads the 'secure'/sandbox globals.
     if check_secure() {
         return;
@@ -350,12 +350,12 @@ pub unsafe fn f_histadd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     };
     if added {
         // SAFETY: eval-function contract.
-        unsafe { (*rettv).vval.v_number = 1 };
+        unsafe { (*result).vval.v_number = 1 };
     }
 }
 
 /// "histdel()" function
-pub unsafe fn f_histdel(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histdel(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract; a non-null name is NUL-terminated, and
     // the second argument is only read once its type says it is present.
@@ -380,11 +380,11 @@ pub unsafe fn f_histdel(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
         }
     };
     // SAFETY: eval-function contract.
-    unsafe { (*rettv).vval.v_number = VarNumber::from(n) };
+    unsafe { (*result).vval.v_number = VarNumber::from(n) };
 }
 
 /// "histget()" function
-pub unsafe fn f_histget(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histget(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: eval-function contract.
     let name = unsafe { numbuf.string_chk(argvars) };
@@ -410,13 +410,13 @@ pub unsafe fn f_histget(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     };
     // SAFETY: eval-function contract.
     unsafe {
-        (*rettv).vval.v_string = text;
-        (*rettv).v_type = VAR_STRING;
+        (*result).vval.v_string = text;
+        (*result).v_type = VAR_STRING;
     }
 }
 
 /// "histnr()" function
-pub unsafe fn f_histnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_histnr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract.
     let histype = unsafe { arg_histtype(argvars) };
     let n = if histype == HIST_INVALID {
@@ -425,7 +425,7 @@ pub unsafe fn f_histnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
         get_history_idx(histype)
     };
     // SAFETY: eval-function contract.
-    unsafe { (*rettv).vval.v_number = VarNumber::from(n) };
+    unsafe { (*result).vval.v_number = VarNumber::from(n) };
 }
 
 /// ":history" command: list history entries, optionally filtered by

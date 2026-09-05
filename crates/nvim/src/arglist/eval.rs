@@ -32,11 +32,11 @@ unsafe fn selected_arglist(arg: *mut TypVal) -> Option<*mut ArgList> {
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argc(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_argc(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; a window that does not exist answers
     // -1, as it always has.
     let count = unsafe { selected_arglist(argvars) }.map_or(-1, alist_count);
-    unsafe { (*rettv).vval.v_number = count as VarNumber };
+    unsafe { (*result).vval.v_number = count as VarNumber };
 }
 
 /// "argidx()" function
@@ -44,9 +44,9 @@ pub unsafe fn f_argc(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argidx(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_argidx(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; curwin is valid.
-    unsafe { (*rettv).vval.v_number = cur_win().w_arg_idx as VarNumber };
+    unsafe { (*result).vval.v_number = cur_win().w_arg_idx as VarNumber };
 }
 
 /// "arglistid()" function
@@ -54,7 +54,7 @@ pub unsafe fn f_argidx(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_arglistid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_arglistid(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract -- the caller's argument array, which
     // holds both slots.
     let found = unsafe { find_tabwin(argvars.offset(0), argvars.offset(1)) };
@@ -68,7 +68,7 @@ pub unsafe fn f_arglistid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
         None => -1 as VarNumber,
     };
     // SAFETY: the caller's return slot.
-    unsafe { (*rettv).vval.v_number = id };
+    unsafe { (*result).vval.v_number = id };
 }
 
 /// Return `count` argument entries as a List of file names. A null
@@ -77,17 +77,17 @@ pub unsafe fn f_arglistid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 ///
 /// # Safety
 ///
-/// `rettv` must be a valid return-value slot and `entries` hold `count`
+/// `result` must be a valid return-value slot and `entries` hold `count`
 /// argument list entries, or be null.
-unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, rettv: *mut TypVal) {
+unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, result: *mut TypVal) {
     // SAFETY: caller contract; every entry has a name that outlives the copy
     // `tv_list_append_string` takes.
-    unsafe { tv_list_alloc_ret(rettv, count as ptrdiff_t) };
+    unsafe { tv_list_alloc_ret(result, count as ptrdiff_t) };
     if entries.is_null() {
         return;
     }
     for idx in 0..count {
-        let v_list2 = unsafe { (*rettv).vval.v_list };
+        let v_list2 = unsafe { (*result).vval.v_list };
         let str = unsafe { alist_name(entries.offset(idx as isize)) };
         let len = -1 as ssize_t;
         unsafe { tv_list_append_string(v_list2, str, len) };
@@ -99,26 +99,26 @@ unsafe fn arglist_as_rettv(entries: *mut ArgEntry, count: c_int, rettv: *mut Typ
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_argv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_argv(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: eval-function contract; both arguments are optional and are
     // only read once their type says they are present.
     if unsafe { (*argvars.offset(0)).v_type } == VAR_UNKNOWN {
         // No index: the whole current argument list.
         let (entries, count) = alist_entries(win_alist(cur_win()));
-        unsafe { arglist_as_rettv(entries, count, rettv) };
+        unsafe { arglist_as_rettv(entries, count, result) };
         return;
     }
     // A window that does not exist leaves no list and a count of -1, so
     // every index is out of range.
     let (entries, count) =
         unsafe { selected_arglist(argvars.offset(1)) }.map_or((ptr::null_mut(), -1), alist_entries);
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = ptr::null_mut() };
     let idx = unsafe { tv_get_number_chk(argvars.offset(0), ptr::null_mut()) } as c_int;
     if !entries.is_null() && idx >= 0 && idx < count {
-        unsafe { (*rettv).vval.v_string = xstrdup(alist_name(entries.offset(idx as isize))) };
+        unsafe { (*result).vval.v_string = xstrdup(alist_name(entries.offset(idx as isize))) };
     } else if idx == -1 {
-        unsafe { arglist_as_rettv(entries, count, rettv) };
+        unsafe { arglist_as_rettv(entries, count, result) };
     }
 }
 

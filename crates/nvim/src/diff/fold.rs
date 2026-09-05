@@ -291,15 +291,15 @@ pub(crate) fn diff_fold_update(
 /// `diff_filler(lnum)`.
 ///
 /// # Safety
-/// `argvars` and `rettv` must be the evaluator's live cells.
-pub unsafe fn f_diff_filler(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `argvars` and `result` must be the evaluator's live cells.
+pub unsafe fn f_diff_filler(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // c2rust expanded `MAX(0, ..)` into two calls of an argument that is
     // not free: `diff_check_fill` can trigger a whole recompute, and it
     // already clamps at zero.
     //
     // SAFETY: the caller's cells, and the current window is live.
     let fill = diff_check_fill(cur_win(), unsafe { tv_get_lnum(argvars) });
-    unsafe { (*rettv).vval.v_number = fill as VarNumber };
+    unsafe { (*result).vval.v_number = fill as VarNumber };
 }
 
 /// The window the editor is working in.

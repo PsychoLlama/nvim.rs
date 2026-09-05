@@ -319,7 +319,7 @@ pub unsafe fn diff_find_change(window: Win, lnum: LineNr, diffline: *mut DiffLin
 /// column of a line -- but only under `inline:none`/`inline:simple`, where
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
-pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     static changedtick: GlobalCell<VarNumber> = GlobalCell::new(0);
     static fnum: GlobalCell<c_int> = GlobalCell::new(0);
@@ -418,7 +418,7 @@ pub unsafe fn f_diff_hl_id(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     }
     let id = hlID.get() as VarNumber;
     // SAFETY: the caller's result cell.
-    unsafe { (*rettv).vval.v_number = id };
+    unsafe { (*result).vval.v_number = id };
 }
 
 /// The buffer the editor is working in.

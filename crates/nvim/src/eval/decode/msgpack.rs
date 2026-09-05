@@ -62,16 +62,16 @@ const VARNUMBER_MAX: u64 = i64::MAX as u64;
 /// msgpack encoder reads back.
 ///
 /// # Safety
-/// `rettv` is writable and holds no value that needs clearing.
-unsafe fn positive_integer_to_special_typval(rettv: *mut TypVal, val: u64) {
+/// `result` is writable and holds no value that needs clearing.
+unsafe fn positive_integer_to_special_typval(result: *mut TypVal, val: u64) {
     if val <= VARNUMBER_MAX {
-        unsafe { *rettv = TypVal::number(val as VarNumber) };
+        unsafe { *result = TypVal::number(val as VarNumber) };
         return;
     }
     let list = unsafe { tv_list_alloc(4) };
     unsafe { tv_list_ref(list) };
     let val_tv = TypVal::list(list);
-    unsafe { create_special_dict(rettv, kMPInteger, val_tv) };
+    unsafe { create_special_dict(result, kMPInteger, val_tv) };
     unsafe { tv_list_append_number(list, 1) };
     unsafe { tv_list_append_number(list, ((val >> 62) & 0x3) as VarNumber) };
     unsafe { tv_list_append_number(list, ((val >> 31) & 0x7fff_ffff) as VarNumber) };

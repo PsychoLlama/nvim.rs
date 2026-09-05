@@ -368,17 +368,17 @@ pub(crate) unsafe fn func_clear_free(fp: *mut UserFunc, force: bool) {
 /// take a reference to the function for as long as it lives.
 ///
 /// # Safety
-/// `fp` is a live function and `rettv` outlives the call.
-pub unsafe fn create_funccal(fp: *mut UserFunc, rettv: *mut TypVal) -> *mut FuncCall {
+/// `fp` is a live function and `result` outlives the call.
+pub unsafe fn create_funccal(fp: *mut UserFunc, result: *mut TypVal) -> *mut FuncCall {
     // SAFETY: a fresh, zeroed allocation of the right size, and the
-    // caller's promise that `fp` is live and `rettv` outlives the call.
+    // caller's promise that `fp` is live and `result` outlives the call.
     let fc = unsafe { xcalloc(1, size_of::<FuncCall>()) } as *mut FuncCall;
     let mut frame = unsafe { Fc::new(fc) };
     frame.fc_caller = current_funccal.get();
     current_funccal.set(fc);
     frame.fc_func = fp;
     unsafe { func_ptr_ref(fp) };
-    frame.fc_rettv = rettv;
+    frame.fc_rettv = result;
     fc
 }
 

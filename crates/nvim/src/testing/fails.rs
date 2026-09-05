@@ -282,7 +282,11 @@ unsafe fn finish_assert_fails(save_trylevel: c_int, tofree: *mut c_char, no_prom
 }
 
 /// `assert_fails(cmd [, error [, msg [, lnum [, context]]]])`.
-pub(crate) unsafe fn f_assert_fails(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_fails(
+    argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the evaluator's argument vector and return slot. `do_cmdline_cmd`
     // runs user code that is expected to fail; every flag disturbed for it is
@@ -317,7 +321,7 @@ pub(crate) unsafe fn f_assert_fails(argvars: *mut TypVal, rettv: *mut TypVal, _f
         ga_concat_lit(&mut ga, c"command did not fail: ");
         unsafe { assert_append_cmd_or_arg(&mut ga, argvars, cmd) };
         report_assert_error(&ga);
-        unsafe { (*rettv).vval.v_number = 1 };
+        unsafe { (*result).vval.v_number = 1 };
     } else if unsafe { arg_given(argvars, 1) } {
         let mut check = unsafe { check_reported_error(argvars, &mut tofree) };
         if matches!(check, FailsCheck::Matched) {
@@ -328,7 +332,7 @@ pub(crate) unsafe fn f_assert_fails(argvars: *mut TypVal, rettv: *mut TypVal, _f
             FailsCheck::BadArg(msg) => wrong_arg_msg = Some(msg),
             FailsCheck::Mismatch(mismatch) => {
                 unsafe { report_fails_mismatch(argvars, cmd, &mismatch) };
-                unsafe { (*rettv).vval.v_number = 1 };
+                unsafe { (*result).vval.v_number = 1 };
             }
         }
     }

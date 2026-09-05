@@ -59,9 +59,9 @@ pub unsafe fn tv_blob_equal(b1: *const Blob, b2: *const Blob) -> bool {
     true
 }
 
-/// `blob[n1 : n2]`: store the sub-blob in `rettv`.
+/// `blob[n1 : n2]`: store the sub-blob in `result`.
 ///
-/// `rettv` holds the blob being subscripted on the way in.  Indexes out of
+/// `result` holds the blob being subscripted on the way in.  Indexes out of
 /// range give an empty result rather than an error.
 pub(crate) unsafe fn tv_blob_slice(
     _blob: *const Blob,
@@ -69,7 +69,7 @@ pub(crate) unsafe fn tv_blob_slice(
     mut n1: VarNumber,
     mut n2: VarNumber,
     exclusive: bool,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     // The resulting variable is a sub-blob.  If the indexes
     // are out of range the result is empty.
@@ -89,9 +89,9 @@ pub(crate) unsafe fn tv_blob_slice(
     }
 
     if n1 >= VarNumber::from(len) || n2 < 0 || n1 > n2 {
-        unsafe { tv_clear(rettv) };
-        unsafe { (*rettv).v_type = VAR_BLOB };
-        unsafe { (*rettv).vval.v_blob = ::core::ptr::null_mut() };
+        unsafe { tv_clear(result) };
+        unsafe { (*result).v_type = VAR_BLOB };
+        unsafe { (*result).vval.v_blob = ::core::ptr::null_mut() };
     } else {
         let new_blob = unsafe { tv_blob_alloc() };
         let sublen = (n2 - n1 + 1) as ::core::ffi::c_int;
@@ -100,25 +100,25 @@ pub(crate) unsafe fn tv_blob_slice(
         let n1 = n1 as ::core::ffi::c_int;
         let mut i = n1;
         while i <= n2 as ::core::ffi::c_int {
-            unsafe { tv_blob_set(new_blob, i - n1, tv_blob_get((*rettv).blob_or_null(), i)) };
+            unsafe { tv_blob_set(new_blob, i - n1, tv_blob_get((*result).blob_or_null(), i)) };
             i += 1;
         }
-        unsafe { tv_clear(rettv) };
-        unsafe { tv_blob_set_ret(rettv, new_blob) };
+        unsafe { tv_clear(result) };
+        unsafe { tv_blob_set_ret(result, new_blob) };
     }
 
     Ok(())
 }
 
-/// `blob[idx]`: store the byte in `rettv`.
+/// `blob[idx]`: store the byte in `result`.
 ///
-/// `rettv` holds the blob being subscripted on the way in.  An index out of
+/// `result` holds the blob being subscripted on the way in.  An index out of
 /// range raises `E979`.
 pub(crate) unsafe fn tv_blob_index(
     _blob: *const Blob,
     len: ::core::ffi::c_int,
     mut idx: VarNumber,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     // The resulting variable is a byte value.
     // If the index is too big or negative that is an error.
@@ -130,10 +130,10 @@ pub(crate) unsafe fn tv_blob_index(
         return Err(Failed);
     }
 
-    let v = unsafe { tv_blob_get((*rettv).blob_or_null(), idx as ::core::ffi::c_int) };
-    unsafe { tv_clear(rettv) };
-    unsafe { (*rettv).v_type = VAR_NUMBER };
-    unsafe { (*rettv).vval.v_number = VarNumber::from(v) };
+    let v = unsafe { tv_blob_get((*result).blob_or_null(), idx as ::core::ffi::c_int) };
+    unsafe { tv_clear(result) };
+    unsafe { (*result).v_type = VAR_NUMBER };
+    unsafe { (*result).vval.v_number = VarNumber::from(v) };
     Ok(())
 }
 
@@ -144,13 +144,13 @@ pub unsafe fn tv_blob_slice_or_index(
     n1: VarNumber,
     n2: VarNumber,
     exclusive: bool,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
-    let len = unsafe { tv_blob_len((*rettv).blob_or_null()) };
+    let len = unsafe { tv_blob_len((*result).blob_or_null()) };
     if is_range {
-        unsafe { tv_blob_slice(blob, len, n1, n2, exclusive, rettv) }
+        unsafe { tv_blob_slice(blob, len, n1, n2, exclusive, result) }
     } else {
-        unsafe { tv_blob_index(blob, len, n1, rettv) }
+        unsafe { tv_blob_index(blob, len, n1, result) }
     }
 }
 
@@ -227,10 +227,10 @@ pub unsafe fn tv_blob_set_append(blob: *mut Blob, idx: ::core::ffi::c_int, byte:
 }
 
 /// `remove()` over a blob: take out one byte, or the range `[idx, end]`, and
-/// store what was removed in `rettv`.
+/// store what was removed in `result`.
 pub unsafe fn tv_blob_remove(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let b = unsafe { (*argvars).blob_or_null() };
@@ -261,7 +261,7 @@ pub unsafe fn tv_blob_remove(
     if unsafe { (*argvars.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         let p = blob.bv_ga.ga_data.cast::<uint8_t>();
-        unsafe { (*rettv).vval.v_number = VarNumber::from(*p.offset(idx as isize)) };
+        unsafe { (*result).vval.v_number = VarNumber::from(*p.offset(idx as isize)) };
         let at = unsafe { p.offset(idx as isize) };
         let after = unsafe { at.add(1) };
         let into = at.cast::<u8>();
@@ -296,7 +296,7 @@ pub unsafe fn tv_blob_remove(
     let dst = taken_blob.bv_ga.ga_data;
     let src = unsafe { p.offset(idx as isize) };
     unsafe { dst.cast::<u8>().copy_from(src.cast(), taken as size_t) };
-    unsafe { tv_blob_set_ret(rettv, taken_raw) };
+    unsafe { tv_blob_set_ret(result, taken_raw) };
 
     if len - end - 1 > 0 {
         let at = unsafe { p.offset(idx as isize) };
@@ -308,13 +308,13 @@ pub unsafe fn tv_blob_remove(
 }
 
 /// `blob2list()`: the blob's bytes as a list of numbers.
-pub unsafe fn f_blob2list(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+pub unsafe fn f_blob2list(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
     if unsafe { tv_check_for_blob_arg(argvars, 0) }.is_err() {
         return;
     }
     let blob = unsafe { (*argvars).blob_or_null() };
-    let l = unsafe { (*rettv).list_or_null() };
+    let l = unsafe { (*result).list_or_null() };
     for i in 0..unsafe { tv_blob_len(blob) } {
         unsafe { tv_list_append_number(l, VarNumber::from(tv_blob_get(blob, i))) };
     }
@@ -323,8 +323,8 @@ pub unsafe fn f_blob2list(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 /// `list2blob()`: a list of byte numbers as a blob.
 ///
 /// A value outside `0..=255` raises `E1239` and answers the empty blob.
-pub unsafe fn f_list2blob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let blob = unsafe { tv_blob_alloc_ret(rettv) };
+pub unsafe fn f_list2blob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let blob = unsafe { tv_blob_alloc_ret(result) };
     if unsafe { tv_check_for_list_arg(argvars, 0) }.is_err() {
         return;
     }

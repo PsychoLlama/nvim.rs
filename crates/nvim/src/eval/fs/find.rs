@@ -176,9 +176,9 @@ impl StrArray {
 
 /// Answer a List rather than a String.  Which list is decided later, once
 /// the number of matches is known.
-fn ret_list(rettv: &mut TypVal) {
-    // SAFETY: `rettv` is the builtin's own cleared result slot.
-    unsafe { tv_list_set_ret(rettv, ptr::null_mut()) };
+fn ret_list(result: &mut TypVal) {
+    // SAFETY: `result` is the builtin's own cleared result slot.
+    unsafe { tv_list_set_ret(result, ptr::null_mut()) };
 }
 
 fn free(p: *mut c_char) {
@@ -223,14 +223,14 @@ fn set_val(name: *const c_char) {
 /// The shared body of `finddir()` and `findfile()`: walk 'path' for `count`
 /// matches of a name, answering the last one -- or, for a negative count,
 /// all of them as a List.
-fn findfilendir(args: Args<'_>, rettv: &mut TypVal, find_what: c_int) {
+fn findfilendir(args: Args<'_>, result: &mut TypVal, find_what: c_int) {
     let mut numbuf = NumBuf::new();
     let mut fresult: *mut c_char = ptr::null_mut();
     let mut path = search_path();
     let mut count = 1;
     let mut error = false;
 
-    ret_string(rettv, ptr::null_mut());
+    ret_string(result, ptr::null_mut());
     let fname = str_arg(args, 0, &mut numbuf);
 
     let mut pathbuf = NumBuf::new();
@@ -248,7 +248,7 @@ fn findfilendir(args: Args<'_>, rettv: &mut TypVal, find_what: c_int) {
         }
     }
     if count < 0 {
-        RetList::alloc(rettv, kListLenUnknown as c_int as ptrdiff_t);
+        RetList::alloc(result, kListLenUnknown as c_int as ptrdiff_t);
     }
     if fname.to_bytes().is_empty() || error {
         return;
@@ -282,10 +282,10 @@ fn findfilendir(args: Args<'_>, rettv: &mut TypVal, find_what: c_int) {
             find_file_in_path_option(p, n, quiet, first, path, find_what, rel, sua, f2f, c)
         };
         first = false;
-        if !fresult.is_null() && rettv.v_type == VAR_LIST {
-            RetList::of(rettv).push(fresult);
+        if !fresult.is_null() && result.v_type == VAR_LIST {
+            RetList::of(result).push(fresult);
         }
-        let more = rettv.v_type == VAR_LIST || {
+        let more = result.v_type == VAR_LIST || {
             count -= 1;
             count > 0
         };
@@ -299,28 +299,28 @@ fn findfilendir(args: Args<'_>, rettv: &mut TypVal, find_what: c_int) {
 
     // The List answer appended a copy of each match and only leaves the
     // loop on a NULL, so there is nothing left to hand back there.
-    if rettv.v_type == VAR_STRING {
-        rettv.vval.v_string = fresult;
+    if result.v_type == VAR_STRING {
+        result.vval.v_string = fresult;
     }
 }
 
 /// `finddir({name} [, {path} [, {count}]])`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..3, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 1..3, and `result`
 /// a cleared result.
-pub unsafe fn f_finddir(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    findfilendir(args, rettv, FINDFILE_DIR as c_int);
+pub unsafe fn f_finddir(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    findfilendir(args, result, FINDFILE_DIR as c_int);
 }
 
 /// `findfile({name} [, {path} [, {count}]])`.
 ///
 /// # Safety
 /// As [`f_finddir`].
-pub unsafe fn f_findfile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    findfilendir(args, rettv, FINDFILE_FILE as c_int);
+pub unsafe fn f_findfile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    findfilendir(args, result, FINDFILE_FILE as c_int);
 }
 
 /// `glob({pattern} [, {nosuf} [, {list} [, {alllinks}]]])`.
@@ -330,22 +330,22 @@ pub unsafe fn f_findfile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 /// for a List rather than newline-joined text.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..4, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 1..4, and `result`
 /// a cleared result.
-pub unsafe fn f_glob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_glob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let mut options = WildOpts::SILENT | WildOpts::USE_NL;
     let mut error = false;
 
-    rettv.v_type = VAR_STRING;
+    result.v_type = VAR_STRING;
     if args.has(1) {
         if nr_arg(args, 1, &mut error) != 0 {
             options |= WildOpts::KEEP_ALL;
         }
         if args.has(2) {
             if nr_arg(args, 2, &mut error) != 0 {
-                ret_list(rettv);
+                ret_list(result);
             }
             if args.has(3) && nr_arg(args, 3, &mut error) != 0 {
                 options |= WildOpts::ALLLINKS;
@@ -353,7 +353,7 @@ pub unsafe fn f_glob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
         }
     }
     if error {
-        rettv.vval.v_string = ptr::null_mut();
+        result.vval.v_string = ptr::null_mut();
         return;
     }
 
@@ -362,12 +362,12 @@ pub unsafe fn f_glob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
         options |= WildOpts::ICASE;
     }
     let pat = str_arg(args, 0, &mut numbuf);
-    if rettv.v_type == VAR_STRING {
-        rettv.vval.v_string = xpc.one(pat, options, WildMode::All);
+    if result.v_type == VAR_STRING {
+        result.vval.v_string = xpc.one(pat, options, WildMode::All);
         return;
     }
     xpc.one(pat, options, WildMode::AllKeep);
-    let list = RetList::alloc(rettv, xpc.count() as ptrdiff_t);
+    let list = RetList::alloc(result, xpc.count() as ptrdiff_t);
     for &name in xpc.files() {
         list.push(name);
     }
@@ -378,22 +378,22 @@ pub unsafe fn f_glob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
 /// pattern expanded once under every directory in `{path}`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..5, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 2..5, and `result`
 /// a cleared result.
-pub unsafe fn f_globpath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_globpath(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let mut flags = WildOpts::IGNORE_COMPLETESLASH;
     let mut error = false;
 
-    rettv.v_type = VAR_STRING;
+    result.v_type = VAR_STRING;
     if args.has(2) {
         if nr_arg(args, 2, &mut error) != 0 {
             flags |= WildOpts::KEEP_ALL;
         }
         if args.has(3) {
             if nr_arg(args, 3, &mut error) != 0 {
-                ret_list(rettv);
+                ret_list(result);
             }
             if args.has(4) && nr_arg(args, 4, &mut error) != 0 {
                 flags |= WildOpts::ALLLINKS;
@@ -404,7 +404,7 @@ pub unsafe fn f_globpath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     let mut buf1 = NumBuf::new();
     let file = str_arg_chk(args, 1, &mut buf1);
     let (Some(file), false) = (file, error) else {
-        rettv.vval.v_string = ptr::null_mut();
+        result.vval.v_string = ptr::null_mut();
         return;
     };
 
@@ -414,11 +414,11 @@ pub unsafe fn f_globpath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     // initialised array for it to append the matches to.
     unsafe { globpath(path, file.as_ptr().cast_mut(), found.raw(), flags, false) };
 
-    if rettv.v_type == VAR_STRING {
-        rettv.vval.v_string = found.joined(c"\n");
+    if result.v_type == VAR_STRING {
+        result.vval.v_string = found.joined(c"\n");
         return;
     }
-    let list = RetList::alloc(rettv, found.len() as ptrdiff_t);
+    let list = RetList::alloc(result, found.len() as ptrdiff_t);
     for &name in found.names() {
         list.push(name);
     }
@@ -477,12 +477,12 @@ unsafe fn readdir_checkitem(context: *mut c_void, name: *const c_char) -> VarNum
 /// with `{expr}` deciding which of them to keep.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..2, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 1..2, and `result`
 /// a cleared result.
-pub unsafe fn f_readdir(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_readdir(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (mut args, rettv) = frame!(argvars, rettv);
-    let list = RetList::alloc(rettv, kListLenUnknown as c_int as ptrdiff_t);
+    let (mut args, result) = frame!(argvars, result);
+    let list = RetList::alloc(result, kListLenUnknown as c_int as ptrdiff_t);
     let path = str_arg(args, 0, &mut numbuf).as_ptr();
     let expr: *mut TypVal = args.get_mut(1);
 

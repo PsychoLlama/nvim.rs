@@ -226,11 +226,11 @@ impl ListRef {
         unsafe { tv_list_reverse(self.0) };
     }
 
-    /// Store the list in `rettv`, taking a reference to it.
+    /// Store the list in `result`, taking a reference to it.
     #[inline(always)]
-    pub(crate) fn set_ret(self, rettv: &mut TypVal) {
-        // SAFETY: live or NULL, and `rettv` is a cleared result slot.
-        unsafe { tv_list_set_ret(rettv, self.0) };
+    pub(crate) fn set_ret(self, result: &mut TypVal) {
+        // SAFETY: live or NULL, and `result` is a cleared result slot.
+        unsafe { tv_list_set_ret(result, self.0) };
     }
 
     /// Append a copy of `tv`.
@@ -284,14 +284,14 @@ impl ListRef {
     }
 }
 
-/// Allocate a fresh list into `rettv`, for `mapnew()`.
+/// Allocate a fresh list into `result`, for `mapnew()`.
 #[inline(always)]
-pub(crate) fn list_alloc_ret(rettv: &mut TypVal) -> ListRef {
+pub(crate) fn list_alloc_ret(result: &mut TypVal) -> ListRef {
     // `kListLenUnknown`: no idea how long.  Declared here rather than at
     // module level, where `ffigen` would emit it into the unit cdefs.
     const LEN_UNKNOWN: ptrdiff_t = -1;
-    // SAFETY: `rettv` is a cleared result slot.
-    ListRef(unsafe { tv_list_alloc_ret(rettv, LEN_UNKNOWN) })
+    // SAFETY: `result` is a cleared result slot.
+    ListRef(unsafe { tv_list_alloc_ret(result, LEN_UNKNOWN) })
 }
 
 /// One item of a list.  Never NULL -- absence is `Option<Item>`.
@@ -475,12 +475,12 @@ impl DictRef {
         unsafe { tv_dict_unref(self.0) };
     }
 
-    /// Allocate a fresh dict into `rettv`, for `mapnew()`.
+    /// Allocate a fresh dict into `result`, for `mapnew()`.
     #[inline(always)]
-    pub(crate) fn alloc_ret(rettv: &mut TypVal) -> DictRef {
-        // SAFETY: `rettv` is a cleared result slot.
-        unsafe { tv_dict_alloc_ret(rettv) };
-        Self(rettv.dict_or_null())
+    pub(crate) fn alloc_ret(result: &mut TypVal) -> DictRef {
+        // SAFETY: `result` is a cleared result slot.
+        unsafe { tv_dict_alloc_ret(result) };
+        Self(result.dict_or_null())
     }
 }
 
@@ -640,19 +640,19 @@ impl BlobRef {
         self.insert_byte(self.len(), byte);
     }
 
-    /// Store the blob in `rettv`, taking a reference to it.
+    /// Store the blob in `result`, taking a reference to it.
     #[inline(always)]
-    pub(crate) fn set_ret(self, rettv: &mut TypVal) {
-        // SAFETY: live or NULL, and `rettv` is a cleared result slot.
-        unsafe { tv_blob_set_ret(rettv, self.0) };
+    pub(crate) fn set_ret(self, result: &mut TypVal) {
+        // SAFETY: live or NULL, and `result` is a cleared result slot.
+        unsafe { tv_blob_set_ret(result, self.0) };
     }
 
-    /// Copy the blob into `rettv` and answer the copy, for `mapnew()`.
+    /// Copy the blob into `result` and answer the copy, for `mapnew()`.
     #[inline(always)]
-    pub(crate) fn copy_to(self, rettv: &mut TypVal) -> BlobRef {
+    pub(crate) fn copy_to(self, result: &mut TypVal) -> BlobRef {
         // SAFETY: a live blob and a cleared result slot.
-        unsafe { tv_blob_copy(self.0, rettv) };
-        Self(rettv.blob_or_null())
+        unsafe { tv_blob_copy(self.0, result) };
+        Self(result.blob_or_null())
     }
 }
 
@@ -914,18 +914,18 @@ pub(crate) fn starts_with_ic(hay: &[u8], needle: &[u8]) -> bool {
 /// where the index arithmetic and the `end` argument live.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 2..3, and `result`
 /// a cleared result.
-pub unsafe fn f_remove(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_remove(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let arg_errmsg = c"remove() argument".as_ptr();
     // SAFETY: the caller's contract.
     let mut args = unsafe { Args::new(argvars) };
     match Container::of(args.get_mut(0)) {
         // SAFETY: as above -- these three take the vector itself, and each is
         // reached only for the type it handles.
-        Container::Dict(_) => unsafe { tv_dict_remove(argvars, rettv, arg_errmsg) },
-        Container::Blob(_) => unsafe { tv_blob_remove(argvars, rettv, arg_errmsg) },
-        Container::List(_) => unsafe { tv_list_remove(argvars, rettv, arg_errmsg) },
+        Container::Dict(_) => unsafe { tv_dict_remove(argvars, result, arg_errmsg) },
+        Container::Blob(_) => unsafe { tv_blob_remove(argvars, result, arg_errmsg) },
+        Container::List(_) => unsafe { tv_list_remove(argvars, result, arg_errmsg) },
         _ => err_str(e_listdictblobarg, c"remove()"),
     }
 }
@@ -936,16 +936,16 @@ pub unsafe fn f_remove(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
 /// character by character, by `reverse_text`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
+/// `argvars` is the evaluator's own argument vector, arity 1, and `result` a
 /// cleared result.
-pub unsafe fn f_reverse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_reverse(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract; the check reports E1252 for a type
     // that cannot be reversed.
     if unsafe { tv_check_for_string_or_list_or_blob_arg(argvars, 0) }.is_err() {
         return;
     }
     // SAFETY: the caller's contract.
-    let (mut args, rettv) = frame!(argvars, rettv);
+    let (mut args, result) = frame!(argvars, result);
     match Container::of(args.get_mut(0)) {
         Container::Blob(b) => {
             let len = b.len();
@@ -954,11 +954,11 @@ pub unsafe fn f_reverse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
                 b.set_byte(i, b.byte(len - i - 1));
                 b.set_byte(len - i - 1, tmp);
             }
-            b.set_ret(rettv);
+            b.set_ret(result);
         }
         Container::Str(s) => {
-            rettv.v_type = VAR_STRING;
-            rettv.vval.v_string = if s.is_null() {
+            result.v_type = VAR_STRING;
+            result.vval.v_string = if s.is_null() {
                 core::ptr::null_mut()
             } else {
                 // SAFETY: a live NUL-terminated string; `reverse_text`
@@ -969,7 +969,7 @@ pub unsafe fn f_reverse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
         Container::List(l) => {
             if !check_lock(l.locked(), c"reverse() argument") {
                 l.reverse();
-                l.set_ret(rettv);
+                l.set_ret(result);
             }
         }
         Container::Dict(_) | Container::Other => {}

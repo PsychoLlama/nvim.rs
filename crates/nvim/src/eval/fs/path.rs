@@ -166,14 +166,14 @@ fn simplify(s: *mut c_char) {
 /// `glob2regpat({pattern})`: the wildcard pattern as a regular expression.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1, and `rettv` a
+/// `argvars` is the evaluator's own argument vector, arity 1, and `result` a
 /// cleared result.
-pub unsafe fn f_glob2regpat(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_glob2regpat(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let pat = str_arg_chk(args, 0, &mut numbuf);
     ret_string(
-        rettv,
+        result,
         pat.map_or(ptr::null_mut(), |pat| {
             // SAFETY: `pat` is NUL-terminated, which is what a NULL end
             // pointer promises; a NULL `allow_dirs` asks for none reported.
@@ -188,10 +188,10 @@ pub unsafe fn f_glob2regpat(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_isabsolutepath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_isabsolutepath(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = is_absolute(str_arg(args, 0, &mut numbuf)) as VarNumber;
 }
 
 /// `pathshorten({path} [, {len}])`: every component but the last one cut
@@ -202,9 +202,9 @@ pub unsafe fn f_isabsolutepath(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: 
 ///
 /// # Safety
 /// As [`f_glob2regpat`], arity 1..2.
-pub unsafe fn f_pathshorten(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_pathshorten(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let trim_len = if args.has(1) {
         // SAFETY: a live typval; `tv_get_number` reports its own error and
         // reads as 0 for a type that has no number form.
@@ -212,16 +212,16 @@ pub unsafe fn f_pathshorten(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     } else {
         1
     };
-    rettv.v_type = VAR_STRING;
+    result.v_type = VAR_STRING;
     let Some(p) = str_arg_chk(args, 0, &mut numbuf) else {
-        rettv.vval.v_string = ptr::null_mut();
+        result.vval.v_string = ptr::null_mut();
         return;
     };
     let shortened = Owned::dup(p);
     // SAFETY: a NUL-terminated string this module owns; shortening only ever
     // moves bytes down, so the result stays inside the allocation.
     unsafe { shorten_dir_len(shortened.0, trim_len) };
-    rettv.vval.v_string = shortened.into_raw();
+    result.vval.v_string = shortened.into_raw();
 }
 
 /// `simplify({path})`: `.`, `..` and duplicate separators collapsed, without
@@ -229,26 +229,26 @@ pub unsafe fn f_pathshorten(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_simplify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_simplify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let simplified = Owned::dup(str_arg(args, 0, &mut numbuf)).into_raw();
     simplify(simplified);
-    ret_string(rettv, simplified);
+    ret_string(result, simplified);
 }
 
 /// `resolve({path})`: the symlink chain followed to its end.
 ///
 /// # Safety
 /// As [`f_glob2regpat`].
-pub unsafe fn f_resolve(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_resolve(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    ret_string(rettv, ptr::null_mut());
+    let (args, result) = frame!(argvars, result);
+    ret_string(result, ptr::null_mut());
     if let Some(resolved) = resolve(str_arg(args, 0, &mut numbuf)) {
         let raw = resolved.into_raw();
         simplify(raw);
-        rettv.vval.v_string = raw;
+        result.vval.v_string = raw;
     }
 }
 

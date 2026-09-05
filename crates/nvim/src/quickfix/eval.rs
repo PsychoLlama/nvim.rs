@@ -145,19 +145,19 @@ unsafe fn get_qf_loc_list(
     is_qf: bool,
     window: Option<Win>,
     what_arg: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) {
     // SAFETY: forwarded from the caller.
     if unsafe { (*what_arg).v_type } == VAR_UNKNOWN {
-        unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+        unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
         if is_qf || window.is_some() {
             // No list, or an empty one, is an empty answer, not an error.
-            let _ = unsafe { get_errorlist(ptr::null_mut(), window, -1, 0, (*rettv).vval.v_list) };
+            let _ = unsafe { get_errorlist(ptr::null_mut(), window, -1, 0, (*result).vval.v_list) };
         }
         return;
     }
 
-    unsafe { tv_dict_alloc_ret(rettv) };
+    unsafe { tv_dict_alloc_ret(result) };
     if !is_qf && window.is_none() {
         return;
     }
@@ -168,8 +168,8 @@ unsafe fn get_qf_loc_list(
     let d = unsafe { (*what_arg).vval.v_dict };
     if !d.is_null() {
         // A request that names nothing readable answers the empty
-        // dictionary that is already in `rettv`.
-        let _ = unsafe { qf_get_properties(window, d, (*rettv).vval.v_dict) };
+        // dictionary that is already in `result`.
+        let _ = unsafe { qf_get_properties(window, d, (*result).vval.v_dict) };
     }
 }
 
@@ -178,9 +178,9 @@ unsafe fn get_qf_loc_list(
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_getloclist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getloclist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least two values.
-    unsafe { get_qf_loc_list(false, find_win_by_nr_or_id(argvars), argvars.add(1), rettv) };
+    unsafe { get_qf_loc_list(false, find_win_by_nr_or_id(argvars), argvars.add(1), result) };
 }
 
 /// `getqflist([{what}])`.
@@ -188,19 +188,19 @@ pub unsafe fn f_getloclist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_getqflist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getqflist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least one value.
-    unsafe { get_qf_loc_list(true, None, argvars, rettv) }
+    unsafe { get_qf_loc_list(true, None, argvars, result) }
 }
 
 /// The body of `setqflist()` and `setloclist()`: a list of entries, an
 /// optional action character, and an optional title or `what` dictionary.
-/// Answers through `rettv`, which is −1 for every rejection.
+/// Answers through `result`, which is −1 for every rejection.
 ///
 /// # Safety
 ///
 /// `window` must be null or a live window, and `args` hold three values.
-unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, rettv: *mut TypVal) {
+unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, result: *mut TypVal) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     /// Set while `set_errorlist` runs, because an autocommand it fires may
@@ -209,7 +209,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, rettv: *mut Typ
     static RECURSIVE: GlobalCell<c_int> = GlobalCell::new(0);
 
     // SAFETY: forwarded from the caller.
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
 
     let list_arg = args;
     if unsafe { (*list_arg).v_type } != VAR_LIST {
@@ -270,7 +270,7 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, rettv: *mut Typ
     let _recursing = Depth::of(&RECURSIVE);
     let l = unsafe { (*list_arg).vval.v_list };
     if unsafe { set_errorlist(window, l, action as c_int, title.cast_mut(), what) }.is_ok() {
-        unsafe { (*rettv).vval.v_number = 0 };
+        unsafe { (*result).vval.v_number = 0 };
     }
 }
 
@@ -279,11 +279,11 @@ unsafe fn set_qf_ll_list(window: Option<Win>, args: *mut TypVal, rettv: *mut Typ
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_setloclist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setloclist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least four values.
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
     if let Some(win) = unsafe { find_win_by_nr_or_id(argvars) } {
-        unsafe { set_qf_ll_list(Some(win), argvars.add(1), rettv) };
+        unsafe { set_qf_ll_list(Some(win), argvars.add(1), result) };
     }
 }
 
@@ -292,7 +292,7 @@ pub unsafe fn f_setloclist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 /// # Safety
 ///
 /// Called through the Vimscript function table with its argument array.
-pub unsafe fn f_setqflist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setqflist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's argument array holds at least three values.
-    unsafe { set_qf_ll_list(None, argvars, rettv) }
+    unsafe { set_qf_ll_list(None, argvars, result) }
 }

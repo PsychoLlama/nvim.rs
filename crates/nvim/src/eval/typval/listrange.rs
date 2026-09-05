@@ -214,7 +214,7 @@ pub(crate) unsafe fn tv_list_slice(ol: *mut List, mut n1: VarNumber, n2: VarNumb
 
 /// `list[n1]` or `list[n1 : n2]`, whichever `range` says.
 ///
-/// `rettv` holds the list being subscripted on the way in.  An index out of
+/// `result` holds the list being subscripted on the way in.  An index out of
 /// range is an error; a *range* out of range is merely empty.
 pub unsafe fn tv_list_slice_or_index(
     _list: *mut List,
@@ -222,10 +222,10 @@ pub unsafe fn tv_list_slice_or_index(
     n1_arg: VarNumber,
     n2_arg: VarNumber,
     exclusive: bool,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     verbose: bool,
 ) -> Result<(), Failed> {
-    let len = unsafe { tv_list_len((*rettv).list_or_null()) };
+    let len = unsafe { tv_list_len((*result).list_or_null()) };
     let mut n1 = n1_arg;
     let mut n2 = n2_arg;
 
@@ -256,17 +256,17 @@ pub unsafe fn tv_list_slice_or_index(
         if n2 < 0 || n2 + 1 < n1 {
             n2 = -1;
         }
-        let l = unsafe { tv_list_slice((*rettv).list_or_null(), n1, n2) };
-        unsafe { tv_clear(rettv) };
-        unsafe { tv_list_set_ret(rettv, l) };
+        let l = unsafe { tv_list_slice((*result).list_or_null(), n1, n2) };
+        unsafe { tv_clear(result) };
+        unsafe { tv_list_set_ret(result, l) };
     } else {
         // copy the item to "var1" to avoid that freeing the list makes it
         // invalid.
         let mut var1 = TV_INITIAL_VALUE;
-        let li = unsafe { tv_list_find((*rettv).list_or_null(), n1 as ::core::ffi::c_int) };
+        let li = unsafe { tv_list_find((*result).list_or_null(), n1 as ::core::ffi::c_int) };
         unsafe { tv_copy(&raw mut (*li).li_tv, &raw mut var1) };
-        unsafe { tv_clear(rettv) };
-        unsafe { *rettv = var1 };
+        unsafe { tv_clear(result) };
+        unsafe { *result = var1 };
     }
     Ok(())
 }
@@ -364,7 +364,7 @@ pub unsafe fn tv_list_join(
 }
 
 /// `join()` the builtin.
-pub unsafe fn f_join(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_join(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if unsafe { (*argvars).v_type } != VAR_LIST {
         emsg(gettext(e_listreq));
@@ -376,9 +376,9 @@ pub unsafe fn f_join(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
         unsafe { numbuf.string_chk(argvars.add(1)) }
     };
 
-    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*result).v_type = VAR_STRING };
     if sep.is_null() {
-        unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut() };
+        unsafe { (*result).vval.v_string = ::core::ptr::null_mut() };
         return;
     }
 
@@ -387,13 +387,13 @@ pub unsafe fn f_join(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
     unsafe { ga_init(&raw mut ga, itemsize, 80) };
     let _ = unsafe { tv_list_join(&raw mut ga, (*argvars).list_or_null(), sep) };
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    unsafe { (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
+    unsafe { (*result).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }
 
 /// `list2str()`: a list of codepoints as a string.
-pub unsafe fn f_list2str(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut() };
+pub unsafe fn f_list2str(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = ::core::ptr::null_mut() };
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(argvars) };
     if args.v_type != VAR_LIST {
@@ -415,5 +415,5 @@ pub unsafe fn f_list2str(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
         unsafe { ga_concat_len(&raw mut ga, buf.as_mut_ptr(), buflen) };
     }
     unsafe { ga_append(&raw mut ga, NUL as uint8_t) };
-    unsafe { (*rettv).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
+    unsafe { (*result).vval.v_string = ga.ga_data as *mut ::core::ffi::c_char };
 }

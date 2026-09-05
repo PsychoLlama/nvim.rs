@@ -41,7 +41,7 @@ pub(crate) const kMPInteger: MessagePackType = 2;
 pub(crate) const kMPMap: MessagePackType = 6;
 pub(crate) const kMPExt: MessagePackType = 7;
 
-/// Build `{_TYPE: v:msgpack_types.<type>, _VAL: val}` into `rettv`.
+/// Build `{_TYPE: v:msgpack_types.<type>, _VAL: val}` into `result`.
 ///
 /// `val` is moved into the `_VAL` key — the caller must not clear it — and
 /// the `_TYPE` value is a reference to one of the shared, immutable lists
@@ -49,9 +49,9 @@ pub(crate) const kMPExt: MessagePackType = 7;
 /// with one reference on it.
 ///
 /// # Safety
-/// `rettv` is writable and holds no value that needs clearing.
+/// `result` is writable and holds no value that needs clearing.
 #[inline]
-pub(crate) unsafe fn create_special_dict(rettv: *mut TypVal, type_: MessagePackType, val: TypVal) {
+pub(crate) unsafe fn create_special_dict(result: *mut TypVal, type_: MessagePackType, val: TypVal) {
     let dict = unsafe { tv_dict_alloc() };
 
     let type_di: *mut DictItem =
@@ -70,7 +70,7 @@ pub(crate) unsafe fn create_special_dict(rettv: *mut TypVal, type_: MessagePackT
     let _ = unsafe { tv_dict_add(dict, val_di) };
 
     unsafe { (*dict).dv_refcount.retain() };
-    unsafe { *rettv = TypVal::dict(dict) };
+    unsafe { *result = TypVal::dict(dict) };
 }
 
 /// The special dictionary a map that cannot be a `Dict` decodes to.

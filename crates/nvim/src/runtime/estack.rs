@@ -394,7 +394,7 @@ unsafe fn script_path(sctx: ScriptCtx) -> CString {
 }
 
 /// `getstacktrace()` function
-pub unsafe fn f_getstacktrace(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the caller's return slot.
-    unsafe { tv_list_set_ret(rettv, stacktrace_create()) };
+pub unsafe fn f_getstacktrace(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the caller's return slot.
+    unsafe { tv_list_set_ret(result, stacktrace_create()) };
 }

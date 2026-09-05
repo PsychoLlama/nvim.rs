@@ -79,9 +79,9 @@ unsafe fn code_point(p: *const c_char, char_len: c_int) -> c_int {
 ///
 /// `comp` is the `byteidxcomp()` spelling, which counts a composing
 /// character as one of its own.
-unsafe fn byteidx_common(argvars: *mut TypVal, rettv: *mut TypVal, comp: bool) {
+unsafe fn byteidx_common(argvars: *mut TypVal, result: *mut TypVal, comp: bool) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
 
     let str = unsafe { numbuf.string_chk(argvars) };
     let mut idx = unsafe { tv_get_number_chk(argvars.add(1), ptr::null_mut()) };
@@ -119,23 +119,23 @@ unsafe fn byteidx_common(argvars: *mut TypVal, rettv: *mut TypVal, comp: bool) {
         }
         idx -= 1;
     }
-    unsafe { (*rettv).vval.v_number = t.offset_from(str) as VarNumber };
+    unsafe { (*result).vval.v_number = t.offset_from(str) as VarNumber };
 }
 
 /// "byteidx()" function
-pub unsafe fn f_byteidx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { byteidx_common(argvars, rettv, false) }
+pub unsafe fn f_byteidx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { byteidx_common(argvars, result, false) }
 }
 
 /// "byteidxcomp()" function
-pub unsafe fn f_byteidxcomp(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { byteidx_common(argvars, rettv, true) }
+pub unsafe fn f_byteidxcomp(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { byteidx_common(argvars, result, true) }
 }
 
 /// "charidx()" function: the character index of a byte (or UTF-16) offset.
-pub unsafe fn f_charidx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_charidx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
 
     if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
         || unsafe { tv_check_for_number_arg(argvars, 1) }.is_err()
@@ -177,7 +177,7 @@ pub unsafe fn f_charidx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
             } else {
                 p == unsafe { str.offset(idx as isize) }
             } {
-                unsafe { (*rettv).vval.v_number = len as VarNumber };
+                unsafe { (*result).vval.v_number = len as VarNumber };
             }
             return;
         }
@@ -191,13 +191,13 @@ pub unsafe fn f_charidx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
         len += 1;
     }
 
-    unsafe { (*rettv).vval.v_number = (len - 1).max(0) as VarNumber };
+    unsafe { (*result).vval.v_number = (len - 1).max(0) as VarNumber };
 }
 
 /// "strgetchar()" function: the code point of the `idx`-th character.
-pub unsafe fn f_strgetchar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strgetchar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
 
     let str = unsafe { numbuf.string_chk(argvars) };
     if str.is_null() {
@@ -213,7 +213,7 @@ pub unsafe fn f_strgetchar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     let mut byteidx: size_t = 0;
     while charidx >= 0 && byteidx < len {
         if charidx == 0 {
-            unsafe { (*rettv).vval.v_number = utf_ptr2char(str.add(byteidx)) as VarNumber };
+            unsafe { (*result).vval.v_number = utf_ptr2char(str.add(byteidx)) as VarNumber };
             break;
         }
         charidx -= 1;
@@ -222,9 +222,9 @@ pub unsafe fn f_strgetchar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 }
 
 /// "strutf16len()" function: the string's length in UTF-16 code units.
-pub unsafe fn f_strutf16len(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strutf16len(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
 
     if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
         || unsafe { tv_check_for_opt_bool_arg(argvars, 1) }.is_err()
@@ -245,11 +245,11 @@ pub unsafe fn f_strutf16len(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         // Anything over U+FFFF is a surrogate pair: two units.
         len += 1 + VarNumber::from(unsafe { next_char(&raw mut s) } > 0xffff);
     }
-    unsafe { (*rettv).vval.v_number = len };
+    unsafe { (*result).vval.v_number = len };
 }
 
 /// "strcharpart()" function: a substring measured in characters.
-pub unsafe fn f_strcharpart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strcharpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let p = unsafe { numbuf.string(argvars) };
     let slen = unsafe { cstr::bytes_at(p) }.len();
@@ -310,15 +310,15 @@ pub unsafe fn f_strcharpart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         len = slen as c_int - nbyte;
     }
 
-    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*result).v_type = VAR_STRING };
     let from = unsafe { p.offset(nbyte as isize) } as *const c_void;
     let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
-    unsafe { (*rettv).vval.v_string = part };
+    unsafe { (*result).vval.v_string = part };
 }
 
 /// "strpart()" function: a substring measured in bytes, or -- with the
 /// fourth argument -- in characters starting from a byte offset.
-pub unsafe fn f_strpart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_strpart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut error = false;
     let p = unsafe { numbuf.string(argvars) };
@@ -356,16 +356,16 @@ pub unsafe fn f_strpart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
         len = (off - n as int64_t) as VarNumber;
     }
 
-    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*result).v_type = VAR_STRING };
     let from = unsafe { p.offset(n as isize) } as *const c_void;
     let part = unsafe { xmemdupz(from, len as size_t) } as *mut c_char;
-    unsafe { (*rettv).vval.v_string = part };
+    unsafe { (*result).vval.v_string = part };
 }
 
 /// "utf16idx()" function: the UTF-16 index of a byte (or character) offset.
-pub unsafe fn f_utf16idx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_utf16idx(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
 
     if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
         || unsafe { tv_check_for_opt_number_arg(argvars, 1) }.is_err()
@@ -410,7 +410,7 @@ pub unsafe fn f_utf16idx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
             } else {
                 p == unsafe { str.offset(idx as isize) }
             } {
-                unsafe { (*rettv).vval.v_number = len as VarNumber };
+                unsafe { (*result).vval.v_number = len as VarNumber };
             }
             return;
         }
@@ -426,5 +426,5 @@ pub unsafe fn f_utf16idx(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
         len += 1;
     }
 
-    unsafe { (*rettv).vval.v_number = utf16idx as VarNumber };
+    unsafe { (*result).vval.v_number = utf16idx as VarNumber };
 }

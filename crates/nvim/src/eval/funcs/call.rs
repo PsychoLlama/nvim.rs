@@ -69,9 +69,9 @@ impl Drop for Owned {
 }
 
 /// `call({func}, {arglist} [, {dict}])`
-pub unsafe fn f_call(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_call(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live; every pointer below either belongs to an
     // argument or is one this body allocated and releases.
     if check_arg(args, 1, tv_check_for_list_arg).is_err() {
@@ -128,7 +128,7 @@ pub unsafe fn f_call(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
         Some(args.get(2).dict_or_null())
     };
     if let Some(selfdict) = selfdict {
-        let _ = unsafe { func_call(func, args.ptr(1), partial, selfdict, rettv) };
+        let _ = unsafe { func_call(func, args.ptr(1), partial, selfdict, result) };
     }
 
     if owned {
@@ -137,10 +137,10 @@ pub unsafe fn f_call(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
 }
 
 /// `eval({string})`
-pub unsafe fn f_eval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_eval(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut evalarg = EVALARG_EVALUATE;
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live and `s` walks a string an argument owns.
     let mut s = arg_string_chk(&mut numbuf, args.get(0));
     if !s.is_null() {
@@ -149,7 +149,7 @@ pub unsafe fn f_eval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
     // Kept for the message: `eval1` advances `s` past what it consumed.
     let expr_start = s;
     if s.is_null()
-        || unsafe { eval1(&raw mut s as *mut *mut c_char, rettv, &raw mut evalarg) }.is_err()
+        || unsafe { eval1(&raw mut s as *mut *mut c_char, result, &raw mut evalarg) }.is_err()
     {
         if !expr_start.is_null() && !aborting() {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -157,8 +157,8 @@ pub unsafe fn f_eval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
             semsg!("E15: Invalid expression: \"{expr_start}\"");
         }
         need_clr_eos.set(false);
-        rettv.v_type = VAR_NUMBER;
-        rettv.vval.v_number = 0;
+        result.v_type = VAR_NUMBER;
+        result.vval.v_number = 0;
     } else if unsafe { *s } as c_int != NUL {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let s = unsafe { c_str(s) };
@@ -207,8 +207,8 @@ unsafe fn get_list_line(
 /// puts a window in front of them.
 ///
 /// # Safety
-/// `argvars` is a dispatcher argument array and `rettv` its return value.
-pub unsafe fn execute_common(argvars: *mut TypVal, rettv: *mut TypVal, arg_off: c_int) {
+/// `argvars` is a dispatcher argument array and `result` its return value.
+pub unsafe fn execute_common(argvars: *mut TypVal, result: *mut TypVal, arg_off: c_int) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's obligation, which is `Args::new`'s.
     let args = unsafe { Args::new(argvars) };
@@ -224,7 +224,7 @@ pub unsafe fn execute_common(argvars: *mut TypVal, rettv: *mut TypVal, arg_off: 
     let mut silence = true;
 
     // SAFETY throughout: the frame is live; `capture_local` outlives every command run
-    // below, and `rettv` adopts its allocation at the end.
+    // below, and `result` adopts its allocation at the end.
     if check_secure() {
         return;
     }
@@ -296,22 +296,22 @@ pub unsafe fn execute_common(argvars: *mut TypVal, rettv: *mut TypVal, arg_off: 
     // nested `execute()` restores the pointer, and it is the current
     // one that holds this run's output.
     unsafe { ga_append(capture_ga.get(), NUL as uint8_t) };
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = (*capture_ga.get()).ga_data as *mut c_char };
+    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = (*capture_ga.get()).ga_data as *mut c_char };
     capture_ga.set(save_capture_ga);
 }
 
 /// `execute({command} [, {silent}])`
-pub unsafe fn f_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_execute(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: this is the dispatcher's argument array, which is what
     // `execute_common` needs.
-    unsafe { execute_common(argvars, rettv, 0) };
+    unsafe { execute_common(argvars, result, 0) };
 }
 
 /// `exists({expr})` — the sigil in front of the name picks the namespace.
-pub unsafe fn f_exists(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_exists(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live and `p` walks a string an argument owns.
     let mut p = arg_string(&mut numbuf, args.get(0));
     // Not a bool: the `:` arm answers 2 for an exact command name, and
@@ -348,14 +348,14 @@ pub unsafe fn f_exists(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
         b'#' => unsafe { au_exists(p.add(1)) as c_int },
         _ => unsafe { var_exists(p) as c_int },
     };
-    rettv.vval.v_number = found as VarNumber;
+    result.vval.v_number = found as VarNumber;
 }
 
 /// `function()` and `funcref()`.
 ///
 /// `funcref()` binds the function the name resolves to *now*; `function()`
 /// keeps the name and resolves it at call time.
-fn common_function(args: Args, rettv: &mut TypVal, is_funcref: bool) {
+fn common_function(args: Args, result: &mut TypVal, is_funcref: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY throughout: the frame is live; the partial built below owns every value
@@ -478,8 +478,8 @@ fn common_function(args: Args, rettv: &mut TypVal, is_funcref: bool) {
 
     // Nothing bound and nothing to bind: a plain Funcref will do.
     if dict_idx == 0 && arg_idx == 0 && arg_pt.is_null() && !is_funcref {
-        rettv.v_type = VAR_FUNC;
-        rettv.vval.v_string = name;
+        result.v_type = VAR_FUNC;
+        result.vval.v_string = name;
         unsafe { func_ref(name) };
         return;
     }
@@ -541,26 +541,26 @@ fn common_function(args: Args, rettv: &mut TypVal, is_funcref: bool) {
         unsafe { (*pt).pt_name = name };
         unsafe { func_ref(name) };
     }
-    rettv.v_type = VAR_PARTIAL;
-    rettv.vval.v_partial = pt;
+    result.v_type = VAR_PARTIAL;
+    result.vval.v_partial = pt;
 }
 
 /// `funcref({name} [, {arglist}] [, {dict}])`
-pub unsafe fn f_funcref(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    common_function(args, rettv, true);
+pub unsafe fn f_funcref(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    common_function(args, result, true);
 }
 
 /// `function({name} [, {arglist}] [, {dict}])`
-pub unsafe fn f_function(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    common_function(args, rettv, false);
+pub unsafe fn f_function(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    common_function(args, result, false);
 }
 
 /// `garbagecollect([{atexit}])` — schedules a collection; the argument asks
 /// for one on exit as well.
-pub unsafe fn f_garbagecollect(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _rettv) = frame!(argvars, rettv);
+pub unsafe fn f_garbagecollect(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, _rettv) = frame!(argvars, result);
     want_garbage_collect.set(true);
     if args.has(0) && arg_number(args.get(0)) == 1 {
         garbage_collect_at_exit.set(true);
@@ -621,43 +621,43 @@ fn libcall_common(args: Args, rettv: &mut TypVal, out_type: VarType) {
 }
 
 /// `libcall({lib}, {func}, {arg})`
-pub unsafe fn f_libcall(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    libcall_common(args, rettv, VAR_STRING);
+pub unsafe fn f_libcall(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    libcall_common(args, result, VAR_STRING);
 }
 
 /// `libcallnr({lib}, {func}, {arg})`
-pub unsafe fn f_libcallnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    libcall_common(args, rettv, VAR_NUMBER);
+pub unsafe fn f_libcallnr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    libcall_common(args, result, VAR_NUMBER);
 }
 
 /// `luaeval({expr} [, {expr}])`
-pub unsafe fn f_luaeval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_luaeval(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live and the chunk outlives the call.
     let chunk = arg_string_chk(&mut numbuf, args.get(0));
     if chunk.is_null() {
         return;
     }
-    unsafe { nlua_typval_eval(cstr_as_string(chunk), args.ptr(1), rettv) };
+    unsafe { nlua_typval_eval(cstr_as_string(chunk), args.ptr(1), result) };
 }
 
 /// `py3eval({expr})`
-pub unsafe fn f_py3eval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_py3eval(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
-    unsafe { script_host_eval(c"python3".as_ptr() as *mut c_char, argvars, rettv) };
+    unsafe { script_host_eval(c"python3".as_ptr() as *mut c_char, argvars, result) };
 }
 
 /// `perleval({expr})`
-pub unsafe fn f_perleval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_perleval(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
-    unsafe { script_host_eval(c"perl".as_ptr() as *mut c_char, argvars, rettv) };
+    unsafe { script_host_eval(c"perl".as_ptr() as *mut c_char, argvars, result) };
 }
 
 /// `rubyeval({expr})`
-pub unsafe fn f_rubyeval(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rubyeval(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the dispatcher's argument array and return value.
-    unsafe { script_host_eval(c"ruby".as_ptr() as *mut c_char, argvars, rettv) };
+    unsafe { script_host_eval(c"ruby".as_ptr() as *mut c_char, argvars, result) };
 }

@@ -38,8 +38,8 @@ const EMPTY_TV: TypVal = TypVal {
 
 /// `json_decode({expr})` — parse JSON from a String, or from a List of
 /// lines joined by NLs.
-pub unsafe fn f_json_decode(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_json_decode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: `tofree` owns whatever the List conversion allocated and is
     // released on every path; `s` points into it or into `numbuf`, both of
     // which outlive the parse.
@@ -69,31 +69,31 @@ pub unsafe fn f_json_decode(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         len = unsafe { cstr::bytes_at(s) }.len();
         s
     };
-    if unsafe { json_decode_string(s, len, rettv) }.is_err() {
+    if unsafe { json_decode_string(s, len, result) }.is_err() {
         // SAFETY: `s` is the caller's string and `len` its length.
         let s = unsafe { c_str_len(s, len) };
         semsg!("E474: Failed to parse {s}");
-        rettv.v_type = VAR_NUMBER;
-        rettv.vval.v_number = 0;
+        result.v_type = VAR_NUMBER;
+        result.vval.v_number = 0;
     }
-    debug_assert!(rettv.v_type != VAR_UNKNOWN);
+    debug_assert!(result.v_type != VAR_UNKNOWN);
     unsafe { xfree(tofree as *mut c_void) };
 }
 
 /// `json_encode({expr})`.
-pub unsafe fn f_json_encode(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_STRING;
+pub unsafe fn f_json_encode(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_STRING;
     // SAFETY: the encoder reads the argument and returns an owned string,
     // which the return value takes over.
-    rettv.vval.v_string = unsafe { encode_tv2json(args.ptr(0), ptr::null_mut::<usize>()) };
+    result.vval.v_string = unsafe { encode_tv2json(args.ptr(0), ptr::null_mut::<usize>()) };
 }
 
 /// `msgpackdump({list} [, {type}])` — a List of msgpack objects as a List
 /// of NL-joined lines, or as a Blob when `{type}` is "B".
-pub unsafe fn f_msgpackdump(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_msgpackdump(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the packer owns its buffer until `packer_take_string` hands
     // it over, and the string is then owned by the Blob or written into the
     // result List and freed.
@@ -125,12 +125,12 @@ pub unsafe fn f_msgpackdump(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     if args.has(1) && unsafe { strequal(arg_string(&mut numbuf, args.get(1)), c"B".as_ptr()) } {
         // The Blob adopts the packer's allocation as-is, capacity and
         // all; nothing copies.
-        let b: *mut Blob = blob_alloc_ret(rettv);
+        let b: *mut Blob = blob_alloc_ret(result);
         unsafe { (*b).bv_ga.ga_data = data.data() as *mut c_void };
         unsafe { (*b).bv_ga.ga_len = data.len() as c_int };
         unsafe { (*b).bv_ga.ga_maxlen = packer.endptr.offset_from(packer.startptr) as c_int };
     } else {
-        let l = list_alloc_ret(rettv, kListLenMayKnow as isize);
+        let l = list_alloc_ret(result, kListLenMayKnow as isize);
         unsafe { encode_list_write(l as *mut c_void, data.data(), data.len()) };
         unsafe { api_free_string(data) };
     }
@@ -240,8 +240,8 @@ unsafe fn msgpackparse_unpack_blob(blob: *const Blob, ret_list: *mut List) {
 }
 
 /// `msgpackparse({data})` — the objects in a List of strings or a Blob.
-pub unsafe fn f_msgpackparse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_msgpackparse(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the argument and the freshly allocated result list are both
     // live for the call.
     if args.ty(0) != VAR_LIST && args.ty(0) != VAR_BLOB {
@@ -249,7 +249,7 @@ pub unsafe fn f_msgpackparse(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
         semsg!("E899: Argument of {arg0} must be a List or Blob");
         return;
     }
-    let ret_list = list_alloc_ret(rettv, kListLenMayKnow as isize);
+    let ret_list = list_alloc_ret(result, kListLenMayKnow as isize);
     if args.ty(0) == VAR_LIST {
         unsafe { msgpackparse_unpack_list(args.get(0).list_or_null(), ret_list) };
     } else {

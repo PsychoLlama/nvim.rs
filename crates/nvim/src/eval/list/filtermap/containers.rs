@@ -53,17 +53,17 @@ pub(crate) fn filter_map_dict(
     filtermap: FilterMap,
     arg_errmsg: &CStr,
     expr: &mut TypVal,
-    rettv: &mut TypVal,
+    result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        rettv.v_type = VAR_DICT;
-        rettv.vval.v_dict = ptr::null_mut();
+        result.v_type = VAR_DICT;
+        result.vval.v_dict = ptr::null_mut();
     }
     if d.is_null() || (filtermap == FilterMap::Filter && check_lock(d.lock(), arg_errmsg)) {
         return;
     }
 
-    let d_ret = (filtermap == FilterMap::MapNew).then(|| DictRef::alloc_ret(rettv));
+    let d_ret = (filtermap == FilterMap::MapNew).then(|| DictRef::alloc_ret(result));
 
     let prev_lock = d.lock();
     if prev_lock == VarLock::Unlocked {
@@ -123,11 +123,11 @@ pub(crate) fn filter_map_blob(
     filtermap: FilterMap,
     arg_errmsg: &CStr,
     expr: &mut TypVal,
-    rettv: &mut TypVal,
+    result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        rettv.v_type = VAR_BLOB;
-        rettv.vval.v_blob = ptr::null_mut();
+        result.v_type = VAR_BLOB;
+        result.vval.v_blob = ptr::null_mut();
     }
     let b = blob_arg;
     if b.is_null() || (filtermap == FilterMap::Filter && check_lock(b.lock(), arg_errmsg)) {
@@ -135,7 +135,7 @@ pub(crate) fn filter_map_blob(
     }
 
     let b_ret = if filtermap == FilterMap::MapNew {
-        b.copy_to(rettv)
+        b.copy_to(result)
     } else {
         b
     };
@@ -200,10 +200,10 @@ pub(crate) fn filter_map_string(
     s: &[u8],
     filtermap: FilterMap,
     expr: &mut TypVal,
-    rettv: &mut TypVal,
+    result: &mut TypVal,
 ) {
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = ptr::null_mut();
+    result.v_type = VAR_STRING;
+    result.vval.v_string = ptr::null_mut();
 
     // set_vim_var_nr() doesn't set the type.
     set_key_type(VAR_NUMBER);
@@ -246,7 +246,7 @@ pub(crate) fn filter_map_string(
         idx += 1;
         at += len;
     }
-    rettv.vval.v_string = owned_cstr(out);
+    result.vval.v_string = owned_cstr(out);
 }
 
 /// `filter()`/`map()`/`mapnew()`/`foreach()` over a List.
@@ -262,17 +262,17 @@ pub(crate) fn filter_map_list(
     filtermap: FilterMap,
     arg_errmsg: &CStr,
     expr: &mut TypVal,
-    rettv: &mut TypVal,
+    result: &mut TypVal,
 ) {
     if filtermap == FilterMap::MapNew {
-        rettv.v_type = VAR_LIST;
-        rettv.vval.v_list = ptr::null_mut();
+        result.v_type = VAR_LIST;
+        result.vval.v_list = ptr::null_mut();
     }
     if l.is_null() || (filtermap == FilterMap::Filter && check_lock(l.locked(), arg_errmsg)) {
         return;
     }
 
-    let l_ret = (filtermap == FilterMap::MapNew).then(|| list_alloc_ret(rettv));
+    let l_ret = (filtermap == FilterMap::MapNew).then(|| list_alloc_ret(result));
 
     // set_vim_var_nr() doesn't set the type.
     set_key_type(VAR_NUMBER);

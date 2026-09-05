@@ -695,12 +695,12 @@ pub fn ins_compl_enable_autocomplete() {
 }
 
 /// `preinserted()`: is a previewed match currently in the buffer?
-pub unsafe fn f_preinserted(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_preinserted(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `ins_compl_preinsert_effect` has no precondition left, and
-    // `rettv` is the live return value the caller allocated.
+    // `result` is the live return value the caller allocated.
     unsafe {
         if ins_compl_preinsert_effect() {
-            (*rettv).vval.v_number = 1;
+            (*result).vval.v_number = 1;
         }
     }
 }

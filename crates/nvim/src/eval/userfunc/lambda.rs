@@ -90,17 +90,17 @@ pub(crate) unsafe fn alloc_ufunc(name: *const c_char, namelen: size_t) -> *mut U
     fp
 }
 
-/// Parse a lambda expression at `*arg` into a partial in `rettv`.
+/// Parse a lambda expression at `*arg` into a partial in `result`.
 ///
 /// Answers [`Parsed::NotThis`] when it is a dictionary or a `{expr}` rather
 /// than a lambda -- which is decided by whether an `->` follows a legal
 /// argument list.
 ///
 /// # Safety
-/// `*arg` points at the `{`, and `rettv` is an uninitialised return value.
+/// `*arg` points at the `{`, and `result` is an uninitialised return value.
 pub unsafe fn get_lambda_tv(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<Parsed, Failed> {
     let mut lambda_buf = [0 as c_char; LAMBDA_NAME_LEN];
@@ -175,10 +175,10 @@ pub unsafe fn get_lambda_tv(
             let name = unsafe { get_lambda_name(&mut lambda_buf) };
             let fp = unsafe { alloc_ufunc(name.data(), name.len()) };
             let pt = unsafe { xcalloc(1, size_of::<Partial>()) } as *mut Partial;
-            // SAFETY: both are this call's own allocations, and `rettv` is
+            // SAFETY: both are this call's own allocations, and `result` is
             // the caller's uninitialised return value.
             let (mut f, mut part) = unsafe { (Uf::new(fp), Live::new(pt)) };
-            let mut rv = unsafe { Tv::new(rettv) };
+            let mut rv = unsafe { Tv::new(result) };
 
             let mut newlines = GARRAY_EMPTY;
             unsafe { ga_init(&raw mut newlines, size_of::<*mut c_char>() as c_int, 1) };
@@ -254,11 +254,11 @@ pub unsafe fn get_lambda_tv(
 /// declared with the `dict` attribute.
 ///
 /// # Safety
-/// `rettv` holds the funcref just read and `selfdict` the dictionary it came
+/// `result` holds the funcref just read and `selfdict` the dictionary it came
 /// out of.
-pub unsafe fn make_partial(selfdict: *mut Dict, rettv: *mut TypVal) {
-    // SAFETY: the caller's promise -- `rettv` holds the funcref just read.
-    let mut rv = unsafe { Tv::new(rettv) };
+pub unsafe fn make_partial(selfdict: *mut Dict, result: *mut TypVal) {
+    // SAFETY: the caller's promise -- `result` holds the funcref just read.
+    let mut rv = unsafe { Tv::new(result) };
     let mut fp: *mut UserFunc = ptr::null_mut();
     let mut fname_buf: [c_char; FLEN_FIXED as usize + 1] = [0; FLEN_FIXED as usize + 1];
     let mut error = 0;

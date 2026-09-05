@@ -411,15 +411,15 @@ unsafe fn getlist_append_pair(dp: &Digraph, l: *mut List) {
 ///
 /// # Safety
 ///
-/// `rettv` must be a valid return-value slot.
-unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut TypVal) {
+/// `result` must be a valid return-value slot.
+unsafe fn digraph_getlist_common(list_all: bool, result: *mut TypVal) {
     let user_len = USER_DIGRAPHS.with(|user| user.len());
     let capacity = (tables::DEFAULT_DIGRAPHS.len() + user_len) as isize;
-    // SAFETY: `rettv` is a valid return slot, so the list it is given owns
+    // SAFETY: `result` is a valid return slot, so the list it is given owns
     // itself from here on.
     let list = unsafe {
-        tv_list_alloc_ret(rettv, capacity);
-        (*rettv).vval.v_list
+        tv_list_alloc_ret(result, capacity);
+        (*result).vval.v_list
     };
     if list_all {
         for dp in tables::DEFAULT_DIGRAPHS.iter() {
@@ -428,7 +428,7 @@ unsafe fn digraph_getlist_common(list_all: bool, rettv: *mut TypVal) {
             }
             let result = get_exact_digraph(dp.char1 as c_int, dp.char2 as c_int, false);
             if result != 0 && result != dp.char2 as c_int {
-                // SAFETY: `list` is the list just allocated into `rettv`.
+                // SAFETY: `list` is the list just allocated into `result`.
                 unsafe { getlist_append_pair(&Digraph { result, ..*dp }, list) };
             }
         }
@@ -522,12 +522,12 @@ unsafe fn digraph_set_common(argchars: *const TypVal, argdigraph: *const TypVal)
 ///
 /// # Safety
 ///
-/// `rettv` must be a valid return-value slot.
-unsafe fn set_bool_ret(rettv: *mut TypVal, value: bool) {
+/// `result` must be a valid return-value slot.
+unsafe fn set_bool_ret(result: *mut TypVal, value: bool) {
     // SAFETY: caller contract.
-    unsafe { (*rettv).v_type = VAR_BOOL };
+    unsafe { (*result).v_type = VAR_BOOL };
     unsafe {
-        (*rettv).vval.v_bool = if value {
+        (*result).vval.v_bool = if value {
             K_BOOL_VAR_TRUE
         } else {
             K_BOOL_VAR_FALSE
@@ -539,13 +539,13 @@ unsafe fn set_bool_ret(rettv: *mut TypVal, value: bool) {
 ///
 /// # Safety
 ///
-/// Standard eval-function contract: `argvars` and `rettv` are valid.
-pub unsafe fn f_digraph_get(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// Standard eval-function contract: `argvars` and `result` are valid.
+pub unsafe fn f_digraph_get(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: caller contract; the result slot starts out empty.
     let digraphs = unsafe {
-        (*rettv).v_type = VAR_STRING;
-        (*rettv).vval.v_string = core::ptr::null_mut();
+        (*result).v_type = VAR_STRING;
+        (*result).vval.v_string = core::ptr::null_mut();
         numbuf.string_chk(argvars)
     };
     if digraphs.is_null() {
@@ -567,7 +567,9 @@ pub unsafe fn f_digraph_get(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     // SAFETY: `utf_char2bytes` writes at most six bytes into `buf`, and
     // `xmemdupz` copies exactly the `len` it wrote.
     let len = unsafe { utf_char2bytes(code, buf.as_mut_ptr() as *mut c_char) } as usize;
-    unsafe { (*rettv).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char };
+    unsafe {
+        (*result).vval.v_string = xmemdupz(buf.as_ptr() as *const c_void, len) as *mut c_char
+    };
 }
 
 /// `digraph_getlist()`.
@@ -575,7 +577,7 @@ pub unsafe fn f_digraph_get(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_digraph_getlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_getlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     if unsafe { tv_check_for_opt_bool_arg(argvars, 0) }.is_err() {
         return;
@@ -584,7 +586,7 @@ pub unsafe fn f_digraph_getlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr:
     let list_all =
         unsafe { (*argvars).v_type != VAR_UNKNOWN && tv_get_bool(argvars) != 0 as VarNumber };
     // SAFETY: caller contract.
-    unsafe { digraph_getlist_common(list_all, rettv) };
+    unsafe { digraph_getlist_common(list_all, result) };
 }
 
 /// `digraph_set()`.
@@ -592,11 +594,11 @@ pub unsafe fn f_digraph_getlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr:
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_digraph_set(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_set(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract; `digraph_set()` takes two arguments.
     let set = unsafe { digraph_set_common(argvars, argvars.offset(1)) };
     // SAFETY: caller contract.
-    unsafe { set_bool_ret(rettv, set) };
+    unsafe { set_bool_ret(result, set) };
 }
 
 /// `digraph_setlist()`.
@@ -604,11 +606,11 @@ pub unsafe fn f_digraph_set(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 /// # Safety
 ///
 /// Standard eval-function contract.
-pub unsafe fn f_digraph_setlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_digraph_setlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: caller contract.
     let set = unsafe { digraph_setlist_common(argvars) };
     // SAFETY: caller contract.
-    unsafe { set_bool_ret(rettv, set) };
+    unsafe { set_bool_ret(result, set) };
 }
 
 /// Body of `digraph_setlist()`: the argument must be a list of two-item

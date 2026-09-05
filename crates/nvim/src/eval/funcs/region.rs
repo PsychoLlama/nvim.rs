@@ -133,12 +133,12 @@ impl Drop for BufferSwap {
 
 /// Resolve `getregion()`'s and `getregionpos()`'s shared arguments, leaving
 /// the current buffer pointed at the one the positions name.
-fn resolve(args: Args<'_>, rettv: &mut TypVal) -> Option<Region> {
+fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `p1`/`p2` are locals the List parser
     // fills, and every line accessor below runs against `findbuf`, which is
     // made current before it is read from.
-    list_alloc_ret(rettv, kListLenMayKnow as isize);
+    list_alloc_ret(result, kListLenMayKnow as isize);
     if check_arg(args, 0, tv_check_for_list_arg).is_err()
         || check_arg(args, 1, tv_check_for_list_arg).is_err()
         || check_arg(args, 2, tv_check_for_opt_dict_arg).is_err()
@@ -352,12 +352,12 @@ unsafe fn block_def2str(bd: &BlockDef) -> String_0 {
 
 /// `getregion({pos1}, {pos2} [, {opts}])` — the selected text, one String
 /// per line.
-pub unsafe fn f_getregion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
+pub unsafe fn f_getregion(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
     let _swap = unsafe { BufferSwap::save() };
-    let Some(r) = resolve(args, rettv) else {
+    let Some(r) = resolve(args, result) else {
         return;
     };
     for lnum in r.p1.lnum..=r.p2.lnum {
@@ -375,18 +375,18 @@ pub unsafe fn f_getregion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
             unsafe { block_def2str(&bd) }
         };
         debug_assert!(!text.data().is_null());
-        unsafe { tv_list_append_allocated_string(rettv.list_or_null(), text.data()) };
+        unsafe { tv_list_append_allocated_string(result.list_or_null(), text.data()) };
     }
 }
 
 /// `getregionpos({pos1}, {pos2} [, {opts}])` — the selection as a pair of
 /// positions per line.
-pub unsafe fn f_getregionpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; the buffer swap
+pub unsafe fn f_getregionpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; the buffer swap
     // is undone when `_swap` drops, on every path out.
     let _swap = unsafe { BufferSwap::save() };
-    let Some(r) = resolve(args, rettv) else {
+    let Some(r) = resolve(args, result) else {
         return;
     };
     // Whether a position may sit one past the end of its line.
@@ -400,7 +400,7 @@ pub unsafe fn f_getregionpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Ev
         clamp_corners(&mut ret_p1, &mut ret_p2, line_len, allow_eol);
         ret_p1.lnum = lnum;
         ret_p2.lnum = lnum;
-        add_regionpos_range(rettv, ret_p1, ret_p2);
+        add_regionpos_range(result, ret_p1, ret_p2);
     }
 }
 
@@ -484,13 +484,13 @@ fn clamp_corners(p1: &mut Pos, p2: &mut Pos, line_len: ColNr, allow_eol: bool) {
 }
 
 /// Append one line's `[[bufnr, lnum, col, off], [bufnr, lnum, col, off]]`.
-/// `rettv` holds the list being built, and `curbuf` is the region's own
+/// `result` holds the list being built, and `curbuf` is the region's own
 /// buffer -- the caller's `BufferSwap` has already put it there.
-fn add_regionpos_range(rettv: &mut TypVal, p1: Pos, p2: Pos) {
+fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     // SAFETY: the caller's obligation; each list is handed to its parent
     // immediately, so none is leaked.
     let pair = unsafe { tv_list_alloc(2) };
-    unsafe { tv_list_append_list(rettv.list_or_null(), pair) };
+    unsafe { tv_list_append_list(result.list_or_null(), pair) };
     for p in [p1, p2] {
         let l = unsafe { tv_list_alloc(4) };
         unsafe { tv_list_append_list(pair, l) };

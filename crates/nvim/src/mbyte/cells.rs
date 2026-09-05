@@ -255,7 +255,7 @@ pub unsafe fn utf_ambiguous_width(p: *const c_char) -> bool {
 /// The install is provisional even then: `'listchars'` and `'fillchars'` must
 /// still agree with the new widths, and the old table comes back if they do
 /// not.
-pub unsafe fn f_setcellwidths(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setcellwidths(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { (*argvars).v_type } as c_uint != VAR_LIST as c_uint
         || unsafe { (*argvars).vval.v_list }.is_null()
     {
@@ -377,14 +377,14 @@ unsafe fn parse_cell_width_row(li_l: *const List, item: c_int) -> Option<CellWid
 
 /// `getcellwidths()` — the table `setcellwidths()` installed, as a List of
 /// `[first, last, width]`.
-pub unsafe fn f_getcellwidths(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getcellwidths(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let rows = CELL_WIDTHS.with(|t| t.clone());
-    unsafe { tv_list_alloc_ret(rettv, rows.len() as ptrdiff_t) };
+    unsafe { tv_list_alloc_ret(result, rows.len() as ptrdiff_t) };
     for row in &rows {
         let entry = unsafe { tv_list_alloc(3) };
         unsafe { tv_list_append_number(entry, row.first) };
         unsafe { tv_list_append_number(entry, row.last) };
         unsafe { tv_list_append_number(entry, row.width as VarNumber) };
-        unsafe { tv_list_append_list((*rettv).vval.v_list, entry) };
+        unsafe { tv_list_append_list((*result).vval.v_list, entry) };
     }
 }

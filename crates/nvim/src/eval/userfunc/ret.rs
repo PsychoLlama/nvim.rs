@@ -447,11 +447,11 @@ pub unsafe fn do_return(
     eap: *mut ExArg,
     reanimate: bool,
     is_cmd: bool,
-    rettv: *mut c_void,
+    result: *mut c_void,
 ) -> bool {
     // SAFETY: the caller's promise -- `eap` is the Ex command being run.
     let ea = unsafe { Ea::new(eap) };
-    let mut rettv = rettv;
+    let mut rettv = result;
     let cstack = ea.cstack;
 
     if reanimate {
@@ -507,8 +507,8 @@ pub unsafe fn do_return(
 /// Render `:return <expr>` for the debugger, in allocated memory.
 ///
 /// # Safety
-/// `rettv` is null or a `TypVal`.
-pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
+/// `result` is null or a `TypVal`.
+pub unsafe fn get_return_cmd(result: *mut c_void) -> *mut c_char {
     // The rendered command. Upstream shares `IObuff`, which the debugger
     // this feeds writes again.
     let mut line = [0 as c_char; IOSIZE as usize];
@@ -516,8 +516,8 @@ pub unsafe fn get_return_cmd(rettv: *mut c_void) -> *mut c_char {
     let mut tofree: *mut c_char = ptr::null_mut();
     let mut slen: size_t = 0;
 
-    if !rettv.is_null() {
-        s = unsafe { encode_tv2echo(rettv as *mut TypVal, ptr::null_mut()) };
+    if !result.is_null() {
+        s = unsafe { encode_tv2echo(result as *mut TypVal, ptr::null_mut()) };
         tofree = s;
     }
     if s.is_null() {

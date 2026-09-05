@@ -27,9 +27,9 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
-pub unsafe fn f_changenr(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curbuf` is live and `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = (*curbuf.get()).b_u_seq_cur as VarNumber };
+pub unsafe fn f_changenr(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `curbuf` is live and `result` is the cleared return value.
+    unsafe { (*result).vval.v_number = (*curbuf.get()).b_u_seq_cur as VarNumber };
 }
 
 /// Add one `{lnum, col, coladd}` entry to `l`, skipping a cleared mark.
@@ -48,11 +48,11 @@ unsafe fn append_mark(l: *mut List, mark: Pos) -> *mut Dict {
 }
 
 /// `getchangelist([{buf}])` — `[changes, index]`.
-pub unsafe fn f_getchangelist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY throughout: the arguments and `rettv` are live typvals; `curwin` and its
+pub unsafe fn f_getchangelist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY throughout: the arguments and `result` are live typvals; `curwin` and its
     // buffer's window-info vector are live for the whole call.
-    let out = list_alloc_ret(rettv, 2);
+    let out = list_alloc_ret(result, 2);
     let buf: *const Buffer = if !args.has(0) {
         curbuf.get()
     } else {
@@ -94,11 +94,11 @@ pub unsafe fn f_getchangelist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
 }
 
 /// `getjumplist([{winnr} [, {tabnr}]])` — `[jumps, index]`.
-pub unsafe fn f_getjumplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY throughout: the arguments and `rettv` are live typvals, and the jump
+pub unsafe fn f_getjumplist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY throughout: the arguments and `result` are live typvals, and the jump
     // list is compacted before it is read so no entry is stale.
-    let out = list_alloc_ret(rettv, kListLenMayKnow as isize);
+    let out = list_alloc_ret(result, kListLenMayKnow as isize);
     let wp = unsafe { find_tabwin(args.ptr(0), args.ptr(1)) }.map_or(ptr::null_mut(), Win::raw);
     if wp.is_null() {
         return;
@@ -122,10 +122,10 @@ pub unsafe fn f_getjumplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 }
 
 /// `getmarklist([{buf}])` — the global marks, or one buffer's local ones.
-pub unsafe fn f_getmarklist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY throughout: the arguments and `rettv` are live typvals.
-    let out = list_alloc_ret(rettv, kListLenMayKnow as isize);
+pub unsafe fn f_getmarklist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY throughout: the arguments and `result` are live typvals.
+    let out = list_alloc_ret(result, kListLenMayKnow as isize);
     if !args.has(0) {
         unsafe { get_global_marks(out) };
         return;
@@ -138,12 +138,12 @@ pub unsafe fn f_getmarklist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 }
 
 /// `gettagstack([{winnr}])`.
-pub unsafe fn f_gettagstack(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY throughout: the arguments and `rettv` are live typvals. The dict is
+pub unsafe fn f_gettagstack(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY throughout: the arguments and `result` are live typvals. The dict is
     // allocated before the window is resolved, so a bad window still
     // yields an empty dict rather than nothing.
-    dict_alloc_ret(rettv);
+    dict_alloc_ret(result);
     let found = if !args.has(0) {
         unsafe { Win::from_raw(curwin.get()) }
     } else {
@@ -152,14 +152,14 @@ pub unsafe fn f_gettagstack(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     let Some(wp) = found else {
         return;
     };
-    unsafe { get_tagstack(wp, rettv.dict_or_null()) };
+    unsafe { get_tagstack(wp, result.dict_or_null()) };
 }
 
 /// `settagstack({winnr}, {dict} [, {action}])`.
-pub unsafe fn f_settagstack(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_settagstack(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1;
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; after the check argument 1's
     // union holds a Dict pointer, which may still be null.
     let found = unsafe { find_win_by_nr_or_id(args.ptr(0)) };
@@ -192,15 +192,15 @@ pub unsafe fn f_settagstack(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         }
     }
     if unsafe { set_tagstack(wp, d, action as c_int) }.is_ok() {
-        rettv.vval.v_number = 0;
+        result.vval.v_number = 0;
     }
 }
 
 /// `tagfiles()` — the tags files that would be searched, in order.
-pub unsafe fn f_tagfiles(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value; each name the walk
+pub unsafe fn f_tagfiles(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the cleared return value; each name the walk
     // answers is NUL-terminated and lives until the next round.
-    let out = unsafe { tv_list_alloc_ret(rettv, kListLenUnknown as isize) };
+    let out = unsafe { tv_list_alloc_ret(result, kListLenUnknown as isize) };
     let mut files = TagFiles::new();
     while let Some(name) = files.next() {
         unsafe { tv_list_append_string(out, name.as_ptr(), -1) };
@@ -208,15 +208,15 @@ pub unsafe fn f_tagfiles(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 }
 
 /// `taglist({expr} [, {filename}])`.
-pub unsafe fn f_taglist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_taglist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY throughout: the arguments and `rettv` are live typvals; both strings are
+    let (args, result) = frame!(argvars, result);
+    // SAFETY throughout: the arguments and `result` are live typvals; both strings are
     // NUL-terminated and outlive the search.
     let pattern = arg_string(&mut numbuf, args.get(0));
     // An empty pattern answers 0 — a Number, not an empty List.
-    rettv.vval.v_number = 0;
+    result.vval.v_number = 0;
     if unsafe { *pattern } == NUL as c_char {
         return;
     }
@@ -225,7 +225,7 @@ pub unsafe fn f_taglist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     } else {
         ptr::null()
     };
-    let list = list_alloc_ret(rettv, kListLenUnknown as isize);
+    let list = list_alloc_ret(result, kListLenUnknown as isize);
     let (pat, file) = (pattern as *mut c_char, fname as *mut c_char);
     let _ = unsafe { get_tags(list, pat, file) };
 }

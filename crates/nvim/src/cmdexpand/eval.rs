@@ -30,7 +30,7 @@ const GETCOMPLETION: WildOpts = WildOpts::SILENT
 /// `expand_one`'s `orig` argument, which this caller never has.
 const NO_ORIG: *mut c_char = ptr::null_mut();
 
-pub unsafe fn f_getcompletion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getcompletion(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut xpc: Expand = unsafe { core::mem::zeroed() };
@@ -164,11 +164,11 @@ pub unsafe fn f_getcompletion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
     };
 
     unsafe { expand_one(&raw mut xpc, pat, NO_ORIG, options, WildMode::AllKeep) };
-    unsafe { tv_list_alloc_ret(rettv, xpc.xp_numfiles as ptrdiff_t) };
+    unsafe { tv_list_alloc_ret(result, xpc.xp_numfiles as ptrdiff_t) };
 
     for i in 0..xpc.xp_numfiles {
         unsafe {
-            tv_list_append_string((*rettv).vval.v_list, *xpc.xp_files.offset(i as isize), -1)
+            tv_list_append_string((*result).vval.v_list, *xpc.xp_files.offset(i as isize), -1)
         };
     }
     unsafe { xfree(pat as *mut c_void) };
@@ -176,10 +176,10 @@ pub unsafe fn f_getcompletion(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
 }
 
 /// `getcompletiontype()`: the completion type name a command line would use.
-pub unsafe fn f_getcompletiontype(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getcompletiontype(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = ptr::null_mut() };
 
     if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err() {
         return;
@@ -199,20 +199,20 @@ pub unsafe fn f_getcompletiontype(argvars: *mut TypVal, rettv: *mut TypVal, _fpt
             false,
         )
     };
-    unsafe { (*rettv).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg) };
+    unsafe { (*result).vval.v_string = cmdcomplete_type_to_str(xpc.xp_context, xpc.xp_arg) };
 
     unsafe { expand_cleanup(&raw mut xpc) };
 }
 
 /// `cmdcomplete_info()`: the state of the completion in progress.
-pub unsafe fn f_cmdcomplete_info(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_cmdcomplete_info(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let xpc = Cc::current().xpc();
 
-    unsafe { tv_dict_alloc_ret(rettv) };
+    unsafe { tv_dict_alloc_ret(result) };
     if xpc.is_null() || unsafe { (*xpc).xp_files }.is_null() {
         return;
     }
-    let retdict: *mut Dict = unsafe { (*rettv).vval.v_dict };
+    let retdict: *mut Dict = unsafe { (*result).vval.v_dict };
 
     // C's S_LEN(): `tv_dict_add_*` copies exactly `key_len` bytes, so the
     // key type is a plain `&str`.

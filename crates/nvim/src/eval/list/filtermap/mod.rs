@@ -133,14 +133,14 @@ pub(crate) fn filter_map_one(
 
 /// The shared body of the four builtins: check the argument, save `v:key`
 /// and `v:val`, dispatch on the container, and put everything back.
-fn filter_map(argvars: *mut TypVal, rettv: &mut TypVal, filtermap: FilterMap) {
-    let (mut args, _) = frame!(argvars, rettv);
+fn filter_map(argvars: *mut TypVal, result: &mut TypVal, filtermap: FilterMap) {
+    let (mut args, _) = frame!(argvars, result);
     let arg = args.get_mut(0);
     let container = Container::of(arg);
 
     // map(), filter(), foreach() return the first argument, also on failure.
     if filtermap != FilterMap::MapNew && !matches!(container, Container::Str(_)) {
-        copy_tv(arg, rettv);
+        copy_tv(arg, result);
     }
     if matches!(container, Container::Other) {
         err_not_container(filtermap.func_name());
@@ -165,12 +165,12 @@ fn filter_map(argvars: *mut TypVal, rettv: &mut TypVal, filtermap: FilterMap) {
 
     let arg_errmsg = filtermap.arg_errmsg();
     match container {
-        Container::Dict(d) => filter_map_dict(d, filtermap, arg_errmsg, expr, rettv),
-        Container::Blob(b) => filter_map_blob(b, filtermap, arg_errmsg, expr, rettv),
+        Container::Dict(d) => filter_map_dict(d, filtermap, arg_errmsg, expr, result),
+        Container::Blob(b) => filter_map_blob(b, filtermap, arg_errmsg, expr, result),
         Container::Str(_) => {
-            filter_map_string(string_bytes(args.get_mut(0)), filtermap, expr, rettv)
+            filter_map_string(string_bytes(args.get_mut(0)), filtermap, expr, result)
         }
-        Container::List(l) => filter_map_list(l, filtermap, arg_errmsg, expr, rettv),
+        Container::List(l) => filter_map_list(l, filtermap, arg_errmsg, expr, result),
         Container::Other => unreachable!("reported above"),
     }
 
@@ -183,20 +183,20 @@ fn filter_map(argvars: *mut TypVal, rettv: &mut TypVal, filtermap: FilterMap) {
 /// `filter(container, expr)`: drop every item the expression calls false.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
+/// `argvars` is the evaluator's own argument vector, arity 2, and `result` a
 /// cleared result.
-pub unsafe fn f_filter(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_filter(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Filter);
+    filter_map(argvars, unsafe { &mut *result }, FilterMap::Filter);
 }
 
 /// `map(container, expr)`: replace every item with the expression's value.
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_map(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_map(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Map);
+    filter_map(argvars, unsafe { &mut *result }, FilterMap::Map);
 }
 
 /// `mapnew(container, expr)`: `map()` into a fresh container, leaving the
@@ -204,9 +204,9 @@ pub unsafe fn f_map(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDat
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_mapnew(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_mapnew(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *rettv }, FilterMap::MapNew);
+    filter_map(argvars, unsafe { &mut *result }, FilterMap::MapNew);
 }
 
 /// `foreach(container, expr)`: evaluate the expression -- or run the Ex
@@ -214,7 +214,7 @@ pub unsafe fn f_mapnew(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
 ///
 /// # Safety
 /// As [`f_filter`].
-pub unsafe fn f_foreach(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_foreach(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    filter_map(argvars, unsafe { &mut *rettv }, FilterMap::Foreach);
+    filter_map(argvars, unsafe { &mut *result }, FilterMap::Foreach);
 }

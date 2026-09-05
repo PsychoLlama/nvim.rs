@@ -36,11 +36,11 @@ const SWITCHWIN_INITIAL_VALUE: SwitchWin = SwitchWin {
 /// throughout: these functions answer the default instead.
 ///
 /// # Safety
-/// `rettv` is writable and holds nothing; `deftv` is a live value;
+/// `result` is writable and holds nothing; `deftv` is a live value;
 /// `tabpage`/`win`/`buffer` are live or NULL.
 unsafe fn get_var_from(
     mut varname: *const c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     deftv: *mut TypVal,
     htname: c_int,
     tabpage: *mut Tabpage,
@@ -52,7 +52,7 @@ unsafe fn get_var_from(
 
     let _no_emsg = Suppress::emsg();
     // SAFETY: the caller's obligation -- a writable value holding nothing.
-    let mut ret = unsafe { Tv::new(rettv) };
+    let mut ret = unsafe { Tv::new(result) };
     ret.v_type = VAR_STRING;
     ret.vval.v_string = ptr::null_mut();
 
@@ -82,10 +82,10 @@ unsafe fn get_var_from(
                     // A bare "&": every window- or buffer-local option.
                     let opts = get_winbuf_options(c_int::from(htname == b'b' as c_int));
                     if !opts.is_null() {
-                        unsafe { tv_dict_set_ret(rettv, opts) };
+                        unsafe { tv_dict_set_ret(result, opts) };
                         done = true;
                     }
-                } else if unsafe { eval_option(&raw mut varname, rettv, true) }.is_ok() {
+                } else if unsafe { eval_option(&raw mut varname, result, true) }.is_ok() {
                     done = true;
                 }
                 curbuf.set(save_curbuf);
@@ -96,7 +96,7 @@ unsafe fn get_var_from(
                     b'w' => unsafe { &raw mut (*win).w_winvar },
                     _ => unsafe { &raw mut (*tabpage).tp_winvar },
                 };
-                unsafe { tv_copy(&raw const (*v).di_tv, rettv) };
+                unsafe { tv_copy(&raw const (*v).di_tv, result) };
                 done = true;
             } else {
                 let ht = match htname as u8 {
@@ -107,7 +107,7 @@ unsafe fn get_var_from(
                 let varname_len = unsafe { cstr::bytes_at(varname) }.len();
                 let v = unsafe { find_var_in_ht(ht, htname, varname, varname_len, false) };
                 if !v.is_null() {
-                    unsafe { tv_copy(&raw const (*v).di_tv, rettv) };
+                    unsafe { tv_copy(&raw const (*v).di_tv, result) };
                     done = true;
                 }
             }
@@ -119,7 +119,7 @@ unsafe fn get_var_from(
 
     // SAFETY: the caller's obligation -- a live default value.
     if !done && unsafe { (*deftv).v_type } != VAR_UNKNOWN {
-        unsafe { tv_copy(deftv, rettv) };
+        unsafe { tv_copy(deftv, result) };
     }
 }
 
@@ -127,8 +127,8 @@ unsafe fn get_var_from(
 /// extra leading tab-page argument goes.
 ///
 /// # Safety
-/// `argvars` holds at least `off + 3` values; `rettv` is writable.
-unsafe fn getwinvar(argvars: *mut TypVal, rettv: *mut TypVal, off: c_int) {
+/// `argvars` holds at least `off + 3` values; `result` is writable.
+unsafe fn getwinvar(argvars: *mut TypVal, result: *mut TypVal, off: c_int) {
     let mut numbuf = NumBuf::new();
     let tp = if off == 1 {
         find_tabpage(unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as c_int)
@@ -142,7 +142,7 @@ unsafe fn getwinvar(argvars: *mut TypVal, rettv: *mut TypVal, off: c_int) {
     let nil = ptr::null_mut();
     // SAFETY: the caller's obligation -- `off + 3` live values -- and the
     // window and tab page the resolver answered.
-    unsafe { get_var_from(varname, rettv, deftv, b'w' as c_int, tp, win, nil) };
+    unsafe { get_var_from(varname, result, deftv, b'w' as c_int, tp, win, nil) };
 }
 
 /// `tv` as the value of option `opt_idx`, or [`OptVal::Nil`] with `error` set.
@@ -359,7 +359,7 @@ unsafe fn set_scoped_var(scope: &CStr, varname: *const c_char, varp: *mut TypVal
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_gettabvar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_gettabvar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let varname = unsafe { numbuf.string_chk(argvars.add(1)) };
     let tp = find_tabpage(unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as c_int);
@@ -367,30 +367,30 @@ pub unsafe fn f_gettabvar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     let win = any_window_of(unsafe { TabPage::from_raw(tp) });
     let (deftv, nil) = (unsafe { argvars.add(2) }, ptr::null_mut());
     // SAFETY: as a `VimLFunc` -- three live values -- and a live tab page.
-    unsafe { get_var_from(varname, rettv, deftv, b't' as c_int, tp, win, nil) };
+    unsafe { get_var_from(varname, result, deftv, b't' as c_int, tp, win, nil) };
 }
 
 /// `gettabwinvar()`.
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_gettabwinvar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { getwinvar(argvars, rettv, 1) }
+pub unsafe fn f_gettabwinvar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { getwinvar(argvars, result, 1) }
 }
 
 /// `getwinvar()`.
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_getwinvar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { getwinvar(argvars, rettv, 0) }
+pub unsafe fn f_getwinvar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { getwinvar(argvars, result, 0) }
 }
 
 /// `getbufvar()`.
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_getbufvar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_getbufvar(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let varname = unsafe { numbuf.string_chk(argvars.add(1)) };
     let buf = unsafe { tv_get_buf_from_arg(argvars) };
@@ -398,14 +398,14 @@ pub unsafe fn f_getbufvar(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     let (tp, win) = (curtab.get(), curwin.get());
     // SAFETY: as a `VimLFunc`, and the two globals are set from startup to
     // exit.
-    unsafe { get_var_from(varname, rettv, deftv, b'b' as c_int, tp, win, buf) };
+    unsafe { get_var_from(varname, result, deftv, b'b' as c_int, tp, win, buf) };
 }
 
 /// `settabvar()`.
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_settabvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_settabvar(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if check_secure() {
         return;
@@ -436,7 +436,7 @@ pub unsafe fn f_settabvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: Eval
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_settabwinvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_settabwinvar(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { setwinvar(argvars, 1) }
 }
 
@@ -444,7 +444,7 @@ pub unsafe fn f_settabwinvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: E
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_setwinvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setwinvar(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe { setwinvar(argvars, 0) }
 }
 
@@ -452,7 +452,7 @@ pub unsafe fn f_setwinvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: Eval
 ///
 /// # Safety
 /// As a `VimLFunc`.
-pub unsafe fn f_setbufvar(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setbufvar(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     if check_secure() || !unsafe { tv_check_str_or_nr(argvars) } {
         return;

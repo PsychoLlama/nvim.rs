@@ -62,13 +62,13 @@ pub(crate) unsafe fn eval_func(
     evalarg: *mut EvalArg,
     name: *mut c_char,
     name_len: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     flags: c_int,
     basetv: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression and `rettv` is the result being built.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    // expression and `result` is the result being built.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let evaluate = flags & EVAL_EVALUATE as c_int != 0;
     let mut len = name_len;
     let mut found_var = false;
@@ -97,7 +97,7 @@ pub(crate) unsafe fn eval_func(
     let exe = &raw mut funcexe;
     // SAFETY: `owned` is a NUL-terminated name of `len` bytes and `exe` is
     // this frame's local; the rest are the caller's own arguments.
-    let mut ret = unsafe { get_func_tv(owned, len, rettv, arg, evalarg, exe) };
+    let mut ret = unsafe { get_func_tv(owned, len, result, arg, evalarg, exe) };
     // SAFETY: `owned` came from `xmemdupz` and nothing else freed it.
     unsafe { xfree(owned.cast()) };
 
@@ -109,16 +109,16 @@ pub(crate) unsafe fn eval_func(
     }
     if evaluate && aborting() {
         if ret.is_ok() {
-            // SAFETY: the caller's promise -- `rettv` is valid.
-            unsafe { tv_clear(rettv) };
+            // SAFETY: the caller's promise -- `result` is valid.
+            unsafe { tv_clear(result) };
         }
         ret = Err(Failed);
     }
     ret
 }
 
-/// Call the value in `rettv` — a name, a Funcref or a partial — with the
-/// cursor on the `(`, and leave the result in `rettv`.
+/// Call the value in `result` — a name, a Funcref or a partial — with the
+/// cursor on the `(`, and leave the result in `result`.
 ///
 /// `basetv` is the `expr` of `expr->method()`, passed as the first
 /// argument; `lua_funcname` names the `v:lua.` function a partial stands
@@ -126,21 +126,21 @@ pub(crate) unsafe fn eval_func(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression;
-/// `rettv` must be valid; the rest null or valid.
+/// `result` must be valid; the rest null or valid.
 pub(crate) unsafe fn call_func_rettv(
     arg: *mut *mut c_char,
     evalarg: *mut EvalArg,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evaluate: bool,
     selfdict: *mut Dict,
     basetv: *mut TypVal,
     lua_funcname: *const c_char,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression and `rettv` holds the callee.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    // expression and `result` holds the callee.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let mut pt: *mut Partial = null_mut();
-    // The callee moves out of `rettv` so the call can fill it. It is
+    // The callee moves out of `result` so the call can fill it. It is
     // cleared at the end rather than here: the arguments are evaluated
     // in between and may delete the Funcref they name.
     let mut functv = UNSET_TV;
@@ -193,7 +193,7 @@ pub(crate) unsafe fn call_func_rettv(
     let exe = &raw mut funcexe;
     // SAFETY: `funcname` names the callee, `exe` is this frame's local and
     // the rest are the caller's own.
-    let ret = unsafe { get_func_tv(funcname, namelen, rettv, arg, evalarg, exe) };
+    let ret = unsafe { get_func_tv(funcname, namelen, result, arg, evalarg, exe) };
 
     if evaluate {
         // SAFETY: `functv` is this frame's own copy of the callee.
@@ -208,19 +208,19 @@ pub(crate) unsafe fn call_func_rettv(
 /// As `call_func_rettv`.
 pub(crate) unsafe fn eval_lambda(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` holds the base and `evalarg` is null or valid.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    // expression, `result` holds the base and `evalarg` is null or valid.
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let evaluate = unsafe { evaluating(evalarg) };
     cur.bump(2); // skip over the `->`
     let mut base = *rv;
     rv.v_type = VAR_UNKNOWN;
 
-    if unsafe { get_lambda_tv(arg, rettv, evalarg) } != Ok(Parsed::Done) {
+    if unsafe { get_lambda_tv(arg, result, evalarg) } != Ok(Parsed::Done) {
         // `base` is not cleared: `get_lambda_tv` failing means the
         // caller still owns it. Upstream's.
         return Err(Failed);
@@ -238,12 +238,12 @@ pub(crate) unsafe fn eval_lambda(
                 semsg!("E107: Missing parentheses: {what}");
             }
         }
-        unsafe { tv_clear(rettv) };
+        unsafe { tv_clear(result) };
         Err(Failed)
     } else {
         let basep = &raw mut base;
         // SAFETY: as above, with `base` this frame's own.
-        unsafe { call_func_rettv(arg, evalarg, rettv, evaluate, null_mut(), basep, null()) }
+        unsafe { call_func_rettv(arg, evalarg, result, evaluate, null_mut(), basep, null()) }
     };
 
     if evaluate {
@@ -258,14 +258,14 @@ pub(crate) unsafe fn eval_lambda(
 /// As `call_func_rettv`.
 pub(crate) unsafe fn eval_method(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
     verbose: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` holds the base and `evalarg` is null or valid.
+    // expression, `result` holds the base and `evalarg` is null or valid.
     // All three hold for every call below.
-    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(rettv)) };
+    let (cur, mut rv) = unsafe { (Cur::new(arg), Tv::new(result)) };
     let evaluate = unsafe { evaluating(evalarg) };
     cur.bump(2); // skip over the `->`
     let mut base = *rv;
@@ -393,11 +393,11 @@ pub(crate) unsafe fn eval_method(
                 }
                 let lua = lua_funcname;
                 ret = unsafe {
-                    call_func_rettv(arg, evalarg, rettv, evaluate, null_mut(), basep, lua)
+                    call_func_rettv(arg, evalarg, result, evaluate, null_mut(), basep, lua)
                 };
             } else {
                 let flags = if evaluate { EVAL_EVALUATE as c_int } else { 0 };
-                ret = unsafe { eval_func(arg, evalarg, name, len, rettv, flags, basep) };
+                ret = unsafe { eval_func(arg, evalarg, name, len, result, flags, basep) };
             }
         }
     }

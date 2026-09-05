@@ -110,11 +110,11 @@ pub unsafe fn win_execute_after(args: *mut WinExecute) {
 }
 
 /// `win_execute({winid}, {command} [, {silent}])`.
-pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = ptr::null_mut();
-    // SAFETY: the arguments and `rettv` are live typvals; the saved state is a
+pub unsafe fn f_win_execute(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_STRING;
+    result.vval.v_string = ptr::null_mut();
+    // SAFETY: the arguments and `result` are live typvals; the saved state is a
     // live local that `win_execute_after` is given whatever happens between.
     let id = number_as_int(arg_number(args, 0));
     let Some((wp, tp)) = win_and_tab_by_id(id) else {
@@ -122,7 +122,7 @@ pub unsafe fn f_win_execute(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     };
     let mut saved: WinExecute = unsafe { mem::zeroed() };
     if unsafe { win_execute_before(&raw mut saved, wp.raw(), tp.raw()) } {
-        unsafe { execute_common(argvars, rettv, 1) };
+        unsafe { execute_common(argvars, result, 1) };
     }
     unsafe { win_execute_after(&raw mut saved) };
 }

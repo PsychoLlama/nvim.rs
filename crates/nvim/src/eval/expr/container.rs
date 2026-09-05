@@ -47,11 +47,11 @@ unsafe fn evaluating(evalarg: *const EvalArg) -> bool {
 /// `arg` must point at the cursor into a NUL-terminated expression.
 pub(crate) unsafe fn eval_list(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` is the result being built and `evalarg` is null or
+    // expression, `result` is the result being built and `evalarg` is null or
     // valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
@@ -98,7 +98,7 @@ pub(crate) unsafe fn eval_list(
         }
         cur.skip(1);
         if evaluate {
-            unsafe { tv_list_set_ret(rettv, list) };
+            unsafe { tv_list_set_ret(result, list) };
         }
         true
     };
@@ -149,12 +149,12 @@ pub(crate) unsafe fn get_literal_key(arg: *mut *mut c_char, tv: *mut TypVal) -> 
 /// `arg` must point at the cursor, on the `{`.
 pub(crate) unsafe fn eval_dict(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
     literal: bool,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor into the
-    // expression, `rettv` is the result being built and `evalarg` is null or
+    // expression, `result` is the result being built and `evalarg` is null or
     // valid. All three hold for every call below.
     let cur = unsafe { Cur::new(arg) };
     let evaluate = unsafe { evaluating(evalarg) };
@@ -262,7 +262,7 @@ pub(crate) unsafe fn eval_dict(
         }
         cur.skip(1);
         if evaluate {
-            unsafe { tv_dict_set_ret(rettv, dict) };
+            unsafe { tv_dict_set_ret(result, dict) };
         }
         true
     };
@@ -282,7 +282,7 @@ pub(crate) unsafe fn eval_dict(
 /// As `eval_dict`.
 pub(crate) unsafe fn eval_lit_dict(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     evalarg: *mut EvalArg,
 ) -> Result<Parsed, Failed> {
     // SAFETY: the caller's promise -- `arg` is the cursor, on the `#`.
@@ -291,5 +291,5 @@ pub(crate) unsafe fn eval_lit_dict(
         return Ok(Parsed::NotThis);
     }
     cur.bump(1);
-    unsafe { eval_dict(arg, rettv, evalarg, true) }
+    unsafe { eval_dict(arg, result, evalarg, true) }
 }

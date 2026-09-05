@@ -51,15 +51,15 @@ unsafe fn list_last(lines: *mut TypVal) -> *mut ListItem {
 /// Text appended while the prompt line is being edited joins onto the last
 /// line rather than starting a new one, unless the previous append ended in a
 /// newline.
-pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 1;
-    // SAFETY: the arguments and `rettv` are live typvals; every list item
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 1;
+    // SAFETY: the arguments and `result` are live typvals; every list item
     // reached below belongs to the argument's own list, and `concat_str`
     // hands back an owned string the typval takes over.
     let did_emsg_before = did_emsg.get();
@@ -108,17 +108,17 @@ pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, rettv: *mut TypVal, _fptr
             let l = tv.list_or_null();
             let li = unsafe { (*l).lv_first };
             let itv = unsafe { Li::new(li) }.field_ptr(offset_of!(ListItem, li_tv));
-            unsafe { set_buffer_lines(buf.raw(), lnum, false, itv, rettv) };
-            if rettv.number_or_zero() == 0 {
+            unsafe { set_buffer_lines(buf.raw(), lnum, false, itv, result) };
+            if result.number_or_zero() == 0 {
                 unsafe { tv_list_item_remove(l, li) };
-                unsafe { set_buffer_lines(buf.raw(), lnum, true, lines, rettv) };
+                unsafe { set_buffer_lines(buf.raw(), lnum, true, lines, result) };
             }
         } else {
             let fresh = buf.b_prompt_append_new_line;
-            unsafe { set_buffer_lines(buf.raw(), lnum, fresh, lines, rettv) };
+            unsafe { set_buffer_lines(buf.raw(), lnum, fresh, lines, result) };
         }
     }
-    if rettv.number_or_zero() == 0 {
+    if result.number_or_zero() == 0 {
         let mut buf = buf;
         buf.b_prompt_append_new_line = if tv.v_type == VAR_LIST {
             let last = unsafe { list_last(lines) };
@@ -131,8 +131,12 @@ pub unsafe fn f_prompt_appendbuf(argvars: *mut TypVal, rettv: *mut TypVal, _fptr
 }
 
 /// `prompt_setcallback({buf}, {callback})`.
-pub unsafe fn f_prompt_setcallback(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, _) = frame!(argvars, _rettv);
+pub unsafe fn f_prompt_setcallback(
+    argvars: *mut TypVal,
+    _result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
+    let (args, _) = frame!(argvars, _result);
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_callback) };
 }
@@ -140,10 +144,10 @@ pub unsafe fn f_prompt_setcallback(argvars: *mut TypVal, _rettv: *mut TypVal, _f
 /// `prompt_setinterrupt({buf}, {callback})`.
 pub unsafe fn f_prompt_setinterrupt(
     argvars: *mut TypVal,
-    _rettv: *mut TypVal,
+    _result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
-    let (args, _) = frame!(argvars, _rettv);
+    let (args, _) = frame!(argvars, _result);
     // SAFETY: the arguments are live typvals, and the buffer is live.
     unsafe { set_prompt_callback(args, |buf| &raw mut buf.b_prompt_interrupt) };
 }
@@ -180,9 +184,9 @@ unsafe fn set_prompt_callback(args: Args<'_>, slot: impl Fn(&mut Buffer) -> *mut
 /// changing it has to rewrite the line the old prompt is sitting in — unless
 /// that line no longer starts with the old prompt, in which case the whole
 /// line is replaced.
-pub unsafe fn f_prompt_setprompt(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_prompt_setprompt(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _) = frame!(argvars, _rettv);
+    let (args, _) = frame!(argvars, _result);
     // SAFETY: the arguments are live typvals; every line index below is
     // clamped into the buffer first, and `concat_str` hands back an owned
     // string which `ml_replace_buf` takes over or which is freed here.

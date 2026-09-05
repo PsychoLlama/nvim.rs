@@ -30,7 +30,7 @@ const ARGV_INIT: [TypVal; MAX_FUNC_ARGS as usize + 1] =
 pub unsafe fn get_func_tv(
     name: *const c_char,
     len: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     arg: *mut *mut c_char,
     evalarg: *mut EvalArg,
     funcexe: *mut FuncExe,
@@ -67,7 +67,7 @@ pub unsafe fn get_func_tv(
         } else {
             0
         };
-        ret = unsafe { call_func(name, len, rettv, argcount, argvars.as_mut_ptr(), funcexe) };
+        ret = unsafe { call_func(name, len, result, argcount, argvars.as_mut_ptr(), funcexe) };
         // The nested calls pushed and popped their own; ours are the last.
         funcargs.with_mut(|args| args.truncate(args.len().saturating_sub(pushed)));
     } else if !aborting() && evaluate {
@@ -97,7 +97,7 @@ pub unsafe fn func_call(
     args: *mut TypVal,
     partial: *mut Partial,
     selfdict: *mut Dict,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     let mut argv = ARGV_INIT;
     let mut argc = 0;
@@ -129,7 +129,7 @@ pub unsafe fn func_call(
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = partial;
         funcexe.fe_selfdict = selfdict;
-        r = unsafe { call_func(name, -1, rettv, argc, argv.as_mut_ptr(), &raw mut funcexe) };
+        r = unsafe { call_func(name, -1, result, argc, argv.as_mut_ptr(), &raw mut funcexe) };
     }
 
     while argc > 0 {
@@ -168,7 +168,7 @@ pub unsafe fn callback_call_retnr(
 pub unsafe fn call_func(
     mut funcname: *const c_char,
     mut len: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     argcount_in: c_int,
     argvars_in: *mut TypVal,
     funcexe: *mut FuncExe,
@@ -191,7 +191,7 @@ pub unsafe fn call_func(
 
     // Initialise rettv so that the caller may `tv_clear` it even when
     // this answers FAIL.
-    unsafe { (*rettv).v_type = VAR_UNKNOWN };
+    unsafe { (*result).v_type = VAR_UNKNOWN };
 
     if len <= 0 {
         len = unsafe { cstr::bytes_at(funcname) }.len() as c_int;
@@ -252,8 +252,8 @@ pub unsafe fn call_func(
                 fname
             };
 
-            unsafe { (*rettv).v_type = VAR_NUMBER }; // the default is number zero
-            unsafe { (*rettv).vval.v_number = 0 };
+            unsafe { (*result).v_type = VAR_NUMBER }; // the default is number zero
+            unsafe { (*result).vval.v_number = 0 };
             error = FCERR_UNKNOWN;
 
             if unsafe { is_luafunc(partial) } {
@@ -265,7 +265,7 @@ pub unsafe fn call_func(
                     let (argsp, countp) = (&raw mut argvars, &raw mut argcount);
                     let (into, basep) = (argv.as_mut_ptr(), &raw mut argv_base);
                     unsafe { argv_add_base(base, argsp, countp, into, basep) };
-                    unsafe { nlua_typval_call(funcname, len as size_t, argvars, argcount, rettv) };
+                    unsafe { nlua_typval_call(funcname, len as size_t, argvars, argcount, result) };
                 } else {
                     // v:lua was called directly; show its name in the
                     // message.
@@ -313,18 +313,18 @@ pub unsafe fn call_func(
                     unsafe { argv_add_base(base, argsp, countp, into, basep) };
                     let args = argvars;
                     error = unsafe {
-                        call_user_func_check(fp, argcount, args, rettv, funcexe, selfdict)
+                        call_user_func_check(fp, argcount, args, result, funcexe, selfdict)
                     };
                 }
             } else if !unsafe { (*funcexe).fe_basetv }.is_null() {
                 // expr->method(): find the method name in the table and
                 // call it with the base as one of the arguments.
                 error = unsafe {
-                    call_internal_method(fname, argcount, argvars, rettv, (*funcexe).fe_basetv)
+                    call_internal_method(fname, argcount, argvars, result, (*funcexe).fe_basetv)
                 };
             } else {
                 // Find the function name in the table and call it.
-                error = unsafe { call_internal_func(fname, argcount, argvars, rettv) };
+                error = unsafe { call_internal_func(fname, argcount, argvars, result) };
             }
 
             // The call (or the FuncUndefined autocommand sequence) may

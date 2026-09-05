@@ -375,8 +375,8 @@ pub unsafe fn do_c_expr_indent() {
 /// when the line is out of range.
 ///
 /// # Safety
-/// Moves the cursor and restores it; `rettv` must be a valid number typval.
-pub unsafe fn f_cindent(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// Moves the cursor and restores it; `result` must be a valid number typval.
+pub unsafe fn f_cindent(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let pos = cur_win().w_cursor;
     // SAFETY: the caller's promise -- `argvars` is the call's argument list.
     let lnum = unsafe { tv_get_lnum(argvars) } as LineNr;
@@ -390,8 +390,8 @@ pub unsafe fn f_cindent(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     } else {
         -1
     };
-    // SAFETY: the caller's promise -- `rettv` is a number typval to fill in.
-    unsafe { (*rettv).vval.v_number = amount };
+    // SAFETY: the caller's promise -- `result` is a number typval to fill in.
+    unsafe { (*result).vval.v_number = amount };
 }
 
 /// The buffer the editor is working in.

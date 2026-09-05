@@ -491,55 +491,63 @@ unsafe fn assert_inrange(argvars: *mut TypVal) -> c_int {
 // ---------------------------------------------------------------------------
 
 /// `assert_beeps(cmd)`.
-pub(crate) unsafe fn f_assert_beeps(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_beeps(
+    argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_beeps(argvars, false) as VarNumber };
+    unsafe { (*result).vval.v_number = assert_beeps(argvars, false) as VarNumber };
 }
 
 /// `assert_nobeep(cmd)`.
 pub(crate) unsafe fn f_assert_nobeep(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_beeps(argvars, true) as VarNumber };
+    unsafe { (*result).vval.v_number = assert_beeps(argvars, true) as VarNumber };
 }
 
 /// `assert_equal(expected, actual[, msg])`.
-pub(crate) unsafe fn f_assert_equal(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_equal(
+    argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::Equal) as VarNumber
+        (*result).vval.v_number = assert_equal_common(argvars, AssertType::Equal) as VarNumber
     };
 }
 
 /// `assert_notequal(expected, actual[, msg])`.
 pub(crate) unsafe fn f_assert_notequal(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_equal_common(argvars, AssertType::NotEqual) as VarNumber
+        (*result).vval.v_number = assert_equal_common(argvars, AssertType::NotEqual) as VarNumber
     };
 }
 
 /// `assert_equalfile(fname-one, fname-two[, msg])`.
 pub(crate) unsafe fn f_assert_equalfile(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_equalfile(argvars) as VarNumber };
+    unsafe { (*result).vval.v_number = assert_equalfile(argvars) as VarNumber };
 }
 
 /// `assert_exception(string[, msg])`.
 pub(crate) unsafe fn f_assert_exception(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();
@@ -549,7 +557,7 @@ pub(crate) unsafe fn f_assert_exception(
         let mut ga = unsafe { prepare_assert_error() };
         ga_concat_lit(&mut ga, c"v:exception is not set");
         report_assert_error(&ga);
-        unsafe { (*rettv).vval.v_number = 1 };
+        unsafe { (*result).vval.v_number = 1 };
     } else if !error.is_null() && unsafe { strstr(get_vim_var_str(Vv::Exception), error) }.is_null()
     {
         let mut ga = unsafe { prepare_assert_error() };
@@ -564,26 +572,30 @@ pub(crate) unsafe fn f_assert_exception(
             )
         };
         report_assert_error(&ga);
-        unsafe { (*rettv).vval.v_number = 1 };
+        unsafe { (*result).vval.v_number = 1 };
     }
 }
 
 /// `assert_false(actual[, msg])`.
-pub(crate) unsafe fn f_assert_false(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_false(
+    argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_bool(argvars, false) as VarNumber };
+    unsafe { (*result).vval.v_number = assert_bool(argvars, false) as VarNumber };
 }
 
 /// `assert_true(actual[, msg])`.
-pub(crate) unsafe fn f_assert_true(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_true(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's argument vector and return slot.
-    unsafe { (*rettv).vval.v_number = assert_bool(argvars, true) as VarNumber };
+    unsafe { (*result).vval.v_number = assert_bool(argvars, true) as VarNumber };
 }
 
 /// `assert_inrange(lower, upper, actual[, msg])`.
 pub(crate) unsafe fn f_assert_inrange(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
@@ -594,33 +606,37 @@ pub(crate) unsafe fn f_assert_inrange(
     {
         return;
     }
-    unsafe { (*rettv).vval.v_number = assert_inrange(argvars) as VarNumber };
+    unsafe { (*result).vval.v_number = assert_inrange(argvars) as VarNumber };
 }
 
 /// `assert_match(pattern, actual[, msg])`.
-pub(crate) unsafe fn f_assert_match(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_assert_match(
+    argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_match_common(argvars, AssertType::Match) as VarNumber
+        (*result).vval.v_number = assert_match_common(argvars, AssertType::Match) as VarNumber
     };
 }
 
 /// `assert_notmatch(pattern, actual[, msg])`.
 pub(crate) unsafe fn f_assert_notmatch(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     // SAFETY: the evaluator's argument vector and return slot.
     unsafe {
-        (*rettv).vval.v_number = assert_match_common(argvars, AssertType::NotMatch) as VarNumber
+        (*result).vval.v_number = assert_match_common(argvars, AssertType::NotMatch) as VarNumber
     };
 }
 
 /// `assert_report(msg)`: an unconditional failure.
 pub(crate) unsafe fn f_assert_report(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();
@@ -628,7 +644,7 @@ pub(crate) unsafe fn f_assert_report(
     let mut ga = unsafe { prepare_assert_error() };
     unsafe { ga_concat_cstr(&mut ga, numbuf.string(arg(argvars, 0))) };
     report_assert_error(&ga);
-    unsafe { (*rettv).vval.v_number = 1 };
+    unsafe { (*result).vval.v_number = 1 };
 }
 
 /// `test_garbagecollect_now()`: collect immediately rather than at the next
@@ -639,7 +655,7 @@ pub(crate) unsafe fn f_assert_report(
 /// meant it.
 pub(crate) unsafe fn f_test_garbagecollect_now(
     _argvars: *mut TypVal,
-    _rettv: *mut TypVal,
+    _result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     // SAFETY: called from the evaluator on the main thread.
@@ -658,7 +674,7 @@ pub(crate) unsafe fn f_test_garbagecollect_now(
 /// reported.
 pub(crate) unsafe fn f_test_write_list_log(
     argvars: *mut TypVal,
-    _rettv: *mut TypVal,
+    _result: *mut TypVal,
     _fptr: EvalFuncData,
 ) {
     let mut numbuf = NumBuf::new();

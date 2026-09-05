@@ -180,16 +180,16 @@ pub(crate) unsafe fn string_to_list(
 /// The shared body of `system()` and `systemlist()`.
 ///
 /// # Safety
-/// `argvars` must hold the builtin's arguments; `rettv` must be valid.
+/// `argvars` must hold the builtin's arguments; `result` must be valid.
 pub(crate) unsafe fn get_system_output_as_rettv(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     retlist: bool,
 ) {
     let mut cmdbuf = NumBuf::new();
     let profiling = do_profiling.get() == PROF_YES;
-    // SAFETY: the caller's promise -- `rettv` outlives the call.
-    let mut ret = unsafe { Tv::new(rettv) };
+    // SAFETY: the caller's promise -- `result` outlives the call.
+    let mut ret = unsafe { Tv::new(result) };
     ret.v_type = VAR_STRING;
     ret.vval.v_string = null_mut();
     if check_secure() {
@@ -259,8 +259,8 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 
     if res.is_null() {
         if retlist {
-            // SAFETY: `rettv` is the caller's.
-            unsafe { tv_list_alloc_ret(rettv, 0 as ptrdiff_t) };
+            // SAFETY: `result` is the caller's.
+            unsafe { tv_list_alloc_ret(result, 0 as ptrdiff_t) };
         } else {
             // SAFETY: the literal is NUL-terminated.
             ret.vval.v_string = unsafe { xstrdup(c"".as_ptr()) };
@@ -300,16 +300,16 @@ pub(crate) unsafe fn get_system_output_as_rettv(
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe fn f_system(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { get_system_output_as_rettv(argvars, rettv, false) }
+pub unsafe fn f_system(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { get_system_output_as_rettv(argvars, result, false) }
 }
 
 /// `systemlist()`
 ///
 /// # Safety
 /// Called through the builtin table.
-pub unsafe fn f_systemlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { get_system_output_as_rettv(argvars, rettv, true) }
+pub unsafe fn f_systemlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { get_system_output_as_rettv(argvars, result, true) }
 }
 
 /// Write `c` at `dest` and answer the byte after it.

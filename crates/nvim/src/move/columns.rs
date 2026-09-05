@@ -328,10 +328,10 @@ pub unsafe fn textpos2screenpos(
 /// `screenpos({winid}, {lnum}, {col})`.
 ///
 /// # Safety
-/// The evaluator's calling convention: `argvars` and `rettv` must be valid.
-pub unsafe fn f_screenpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// The evaluator's calling convention: `argvars` and `result` must be valid.
+pub unsafe fn f_screenpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
-    let (dict, wp) = unsafe { (alloc_dict_ret(rettv), find_win_by_nr_or_id(argvars)) };
+    let (dict, wp) = unsafe { (alloc_dict_ret(result), find_win_by_nr_or_id(argvars)) };
     let Some(wp) = wp else {
         return;
     };
@@ -365,11 +365,11 @@ pub unsafe fn f_screenpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 /// `tv_dict_alloc_ret`, answering the Dict it installed.
 ///
 /// # Safety
-/// `rettv` must be a writable return value.
-unsafe fn alloc_dict_ret(rettv: *mut TypVal) -> *mut Dict {
+/// `result` must be a writable return value.
+unsafe fn alloc_dict_ret(result: *mut TypVal) -> *mut Dict {
     unsafe {
-        tv_dict_alloc_ret(rettv);
-        (*rettv).vval.v_dict
+        tv_dict_alloc_ret(result);
+        (*result).vval.v_dict
     }
 }
 
@@ -425,10 +425,10 @@ unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
 /// `virtcol2col({winid}, {lnum}, {col})`.
 ///
 /// # Safety
-/// The evaluator's calling convention: `argvars` and `rettv` must be valid.
-pub unsafe fn f_virtcol2col(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// The evaluator's calling convention: `argvars` and `result` must be valid.
+pub unsafe fn f_virtcol2col(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*rettv).vval.v_number = -1 };
+    unsafe { (*result).vval.v_number = -1 };
     // SAFETY: the evaluator's calling convention: three arguments.
     let typed = unsafe { (0..3).all(|n| tv_check_for_number_arg(argvars, n).is_ok()) };
     if !typed {
@@ -452,5 +452,5 @@ pub unsafe fn f_virtcol2col(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     // SAFETY: a live window and a line of its buffer.
     let col = unsafe { virtcol2col(win, lnum, screencol) };
     // SAFETY: the evaluator's calling convention.
-    unsafe { (*rettv).vval.v_number = col as VarNumber };
+    unsafe { (*result).vval.v_number = col as VarNumber };
 }

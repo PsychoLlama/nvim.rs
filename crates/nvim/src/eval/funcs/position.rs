@@ -54,12 +54,12 @@ const NOWHERE: Pos = Pos {
 };
 
 /// `byte2line({byte})` — which line a byte offset falls in.
-pub unsafe fn f_byte2line(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_byte2line(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer; `boff` is a live local the callee reads and writes.
     let mut boff = arg_number(args.get(0)) as c_int - 1;
-    rettv.vval.v_number = if boff < 0 {
+    result.vval.v_number = if boff < 0 {
         -1
     } else {
         unsafe { ml_find_line_or_offset(curbuf.get(), 0, &raw mut boff, false) as VarNumber }
@@ -68,33 +68,33 @@ pub unsafe fn f_byte2line(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 
 /// `line2byte({lnum})` — the byte offset a line starts at, one-based, or -1
 /// past the end. One past the last line is allowed: it is the buffer size.
-pub unsafe fn f_line2byte(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_line2byte(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer.
     let lnum = arg_lnum(args.get(0));
-    rettv.vval.v_number = if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } + 1 {
+    result.vval.v_number = if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } + 1 {
         -1
     } else {
         unsafe { ml_find_line_or_offset(curbuf.get(), lnum, ptr::null_mut(), false) as VarNumber }
     };
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
-    if rettv.number_or_zero() >= 0 {
-        unsafe { rettv.vval.v_number += 1 };
+    if result.number_or_zero() >= 0 {
+        unsafe { result.vval.v_number += 1 };
     }
 }
 
 /// `col({expr} [, {winid}])`.
-pub unsafe fn f_col(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    get_col(args, rettv, false);
+pub unsafe fn f_col(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    get_col(args, result, false);
 }
 
 /// `charcol({expr} [, {winid}])` — as `col()` but counting characters.
-pub unsafe fn f_charcol(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    get_col(args, rettv, true);
+pub unsafe fn f_charcol(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    get_col(args, result, true);
 }
 
 /// The window argument `col()`, `charcol()` and `virtcol()` share: the
@@ -110,7 +110,7 @@ fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut Window> {
     Some(wp.raw())
 }
 
-fn get_col(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
+fn get_col(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     // SAFETY throughout: `fnum` is a live local and
     // `var2fpos` hands back a pointer into the named window or buffer.
     if check_arg(args, 0, tv_check_for_string_or_list_arg).is_err()
@@ -141,7 +141,7 @@ fn get_col(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
             col += unsafe { virtualedit_tail(wp, bp, &raw mut fp) };
         }
     }
-    rettv.vval.v_number = col as VarNumber;
+    result.vval.v_number = col as VarNumber;
 }
 
 /// With 'virtualedit' on, a cursor sitting past the last character of the
@@ -183,11 +183,11 @@ unsafe fn virtualedit_tail(window: *mut Window, buffer: *mut Buffer, fp: *mut Po
 }
 
 /// `virtcol({expr} [, {list} [, {winid}]])`.
-pub unsafe fn f_virtcol(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_virtcol(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     let mut vcol_start: ColNr = 0;
     let mut vcol_end: ColNr = 0;
-    // SAFETY throughout: the arguments and `rettv` are live typvals; `var2fpos` hands
+    // SAFETY throughout: the arguments and `result` are live typvals; `var2fpos` hands
     // back a pointer into the named window or buffer, which the clamp
     // below writes through — that is upstream's behaviour and is why a
     // position from a List argument is clamped in place.
@@ -225,17 +225,17 @@ pub unsafe fn f_virtcol(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
         }
     }
     if args.has(1) && arg_bool(args.get(1)) != 0 {
-        let l = list_alloc_ret(rettv, 2);
+        let l = list_alloc_ret(result, 2);
         unsafe { tv_list_append_number(l, vcol_start as VarNumber) };
         unsafe { tv_list_append_number(l, vcol_end as VarNumber) };
     } else {
-        rettv.vval.v_number = vcol_end as VarNumber;
+        result.vval.v_number = vcol_end as VarNumber;
     }
 }
 
 /// `line({expr} [, {winid}])`.
-pub unsafe fn f_line(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_line(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     let mut fnum: c_int = 0;
     let out = &raw mut fnum;
     let fp = if !args.has(1) {
@@ -265,37 +265,37 @@ pub unsafe fn f_line(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDa
             }
         }
     };
-    rettv.vval.v_number = fp.map_or(0, |fp| fp.lnum as VarNumber);
+    result.vval.v_number = fp.map_or(0, |fp| fp.lnum as VarNumber);
 }
 
 /// `getpos({expr})`.
-pub unsafe fn f_getpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    getpos_both(args, rettv, false, false);
+pub unsafe fn f_getpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    getpos_both(args, result, false, false);
 }
 
 /// `getcharpos({expr})` — as `getpos()` but with a character column.
-pub unsafe fn f_getcharpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    getpos_both(args, rettv, false, true);
+pub unsafe fn f_getcharpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    getpos_both(args, result, false, true);
 }
 
 /// `getcurpos([{winid}])` — the cursor, plus a fifth 'curswant' element.
-pub unsafe fn f_getcurpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    getpos_both(args, rettv, true, false);
+pub unsafe fn f_getcurpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    getpos_both(args, result, true, false);
 }
 
 /// `getcursorcharpos([{winid}])`.
-pub unsafe fn f_getcursorcharpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    getpos_both(args, rettv, true, true);
+pub unsafe fn f_getcursorcharpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    getpos_both(args, result, true, true);
 }
 
 /// The four getters' shared body. `getcurpos` takes the cursor of the
 /// window its argument names rather than resolving a position expression,
 /// and appends 'curswant'.
-fn getpos_both(args: Args<'_>, rettv: &mut TypVal, getcurpos: bool, charcol: bool) {
+fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bool) {
     // SAFETY throughout: `curwin` names a live window, and every pointer
     // read below comes back from the position parser.
     let mut wp = curwin.get();
@@ -320,7 +320,7 @@ fn getpos_both(args: Args<'_>, rettv: &mut TypVal, getcurpos: bool, charcol: boo
         fp
     };
 
-    let l = list_alloc_ret(rettv, 4 + isize::from(getcurpos));
+    let l = list_alloc_ret(result, 4 + isize::from(getcurpos));
     unsafe { tv_list_append_number(l, if fnum != -1 { fnum as VarNumber } else { 0 }) };
     let (lnum, col, coladd) = fp.map_or((0, 0, 0), |fp| {
         // MAXCOL is passed through rather than made one-based.
@@ -380,22 +380,22 @@ unsafe fn append_curswant(l: *mut List, window: *mut Window) {
 }
 
 /// `cursor({lnum}, {col} [, {off}])` or `cursor({list})`.
-pub unsafe fn f_cursor(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    set_cursorpos(args, rettv, false);
+pub unsafe fn f_cursor(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    set_cursorpos(args, result, false);
 }
 
 /// `setcursorcharpos({lnum}, {col} [, {off}])` or with a List.
-pub unsafe fn f_setcursorcharpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    set_cursorpos(args, rettv, true);
+pub unsafe fn f_setcursorcharpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    set_cursorpos(args, result, true);
 }
 
-fn set_cursorpos(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
+fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `pos` and `curswant` are live
     // locals the List parser fills.
-    rettv.vval.v_number = -1;
+    result.vval.v_number = -1;
     let mut set_curswant = true;
     let (lnum, mut col, coladd) = if args.ty(0) == VAR_LIST {
         let mut pos = NOWHERE;
@@ -458,26 +458,26 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut TypVal, charcol: bool) {
     check_cursor(unsafe { Win::current() });
     unsafe { mb_adjust_cursor() };
     unsafe { (*curwin.get()).w_set_curswant = set_curswant };
-    rettv.vval.v_number = 0;
+    result.vval.v_number = 0;
 }
 
 /// `setpos({expr}, {list})`.
-pub unsafe fn f_setpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    set_position(args, rettv, false);
+pub unsafe fn f_setpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    set_position(args, result, false);
 }
 
 /// `setcharpos({expr}, {list})` — as `setpos()` with a character column.
-pub unsafe fn f_setcharpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    set_position(args, rettv, true);
+pub unsafe fn f_setcharpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    set_position(args, result, true);
 }
 
-fn set_position(args: Args<'_>, rettv: &mut TypVal, charpos: bool) {
+fn set_position(args: Args<'_>, result: &mut TypVal, charpos: bool) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: `pos`, `fnum` and `curswant` are
     // live locals the List parser fills, and `name` is NUL-terminated.
-    rettv.vval.v_number = -1;
+    result.vval.v_number = -1;
     let name = arg_string_chk(&mut numbuf, args.get(0));
     if name.is_null() {
         return;
@@ -501,12 +501,12 @@ fn set_position(args: Args<'_>, rettv: &mut TypVal, charpos: bool) {
                 unsafe { (*curwin.get()).w_set_curswant = false };
             }
             check_cursor(unsafe { Win::current() });
-            rettv.vval.v_number = 0;
+            result.vval.v_number = 0;
         }
         // A mark name is exactly one byte after the quote.
         [b'\'', c] => {
             if unsafe { setmark_pos(*c as c_int, &raw mut pos, fnum, ptr::null_mut()) }.is_ok() {
-                rettv.vval.v_number = 0;
+                result.vval.v_number = 0;
             }
         }
         _ => {
@@ -516,12 +516,12 @@ fn set_position(args: Args<'_>, rettv: &mut TypVal, charpos: bool) {
 }
 
 /// `getcharsearch()` — the state `;` and `,` repeat.
-pub unsafe fn f_getcharsearch(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY throughout: `rettv` is the dispatcher's cleared return value; the three
+pub unsafe fn f_getcharsearch(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY throughout: `result` is the dispatcher's cleared return value; the three
     // readers answer from the process-wide character-search state.
     let csearch = last_csearch();
-    unsafe { tv_dict_alloc_ret(rettv) };
-    let dict = unsafe { (*rettv).dict_or_null() };
+    unsafe { tv_dict_alloc_ret(result) };
+    let dict = unsafe { (*result).dict_or_null() };
     let _ = unsafe { tv_dict_add_str(dict, c"char".as_ptr(), 4, csearch.as_ptr()) };
     let forward = last_csearch_forward() as VarNumber;
     let _ = unsafe { tv_dict_add_nr(dict, c"forward".as_ptr(), 7, forward) };
@@ -531,9 +531,9 @@ pub unsafe fn f_getcharsearch(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: 
 
 /// `setcharsearch({dict})` — each key is optional and missing keys leave
 /// that part of the state alone.
-pub unsafe fn f_setcharsearch(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setcharsearch(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _rettv) = frame!(argvars, _rettv);
+    let (args, _rettv) = frame!(argvars, _result);
     // SAFETY throughout: `args.ptr(0)` is a live typval; after the check the union
     // holds a Dict pointer, which may still be null.
     if check_arg(args, 0, tv_check_for_dict_arg).is_err() {

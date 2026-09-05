@@ -404,11 +404,11 @@ impl Flags {
 /// written to the file, 0 on success and -1 on failure.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..3, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 2..3, and `result`
 /// a cleared result.
-pub unsafe fn f_writefile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1 as VarNumber;
+pub unsafe fn f_writefile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = -1 as VarNumber;
     if secure() || !writable(args) {
         return;
     }
@@ -451,7 +451,7 @@ pub unsafe fn f_writefile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
         _ => write_list(&mut out, list_of(args.get(0)), flags.binary),
     };
     if write_ok {
-        rettv.vval.v_number = 0 as VarNumber;
+        result.vval.v_number = 0 as VarNumber;
     }
     let error = out.close(flags.do_fsync);
     if error != 0 {

@@ -75,7 +75,7 @@ pub unsafe fn script_get(eap: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi
     owned_cstr(text)
 }
 
-/// Drive one `input()`-family prompt and leave its answer in `rettv`.
+/// Drive one `input()`-family prompt and leave its answer in `result`.
 ///
 /// Shared by `input()`, `inputsecret()` and `inputdialog()`.  `argvars` is
 /// either a single `{opts}` dict or up to three positional arguments, whose
@@ -83,12 +83,12 @@ pub unsafe fn script_get(eap: *mut ExArg, lenp: *mut size_t) -> *mut ::core::ffi
 /// `inputdialog()`.
 pub unsafe fn get_user_input(
     argvars: *const TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     inputdialog: bool,
     secret: bool,
 ) {
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>() };
+    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = ::core::ptr::null_mut::<::core::ffi::c_char>() };
 
     if cmdpreview.get() {
         return;
@@ -236,7 +236,7 @@ pub unsafe fn get_user_input(
     let save_ex_normal_busy = ex_normal_busy.get();
     ex_normal_busy.set(0);
     unsafe {
-        (*rettv).vval.v_string = getcmdline_prompt(
+        (*result).vval.v_string = getcmdline_prompt(
             if secret {
                 NUL
             } else {
@@ -257,8 +257,8 @@ pub unsafe fn get_user_input(
     ex_normal_busy.set(save_ex_normal_busy);
     unsafe { callback_free(&raw mut input_callback) };
 
-    if unsafe { (*rettv).vval.v_string }.is_null() && !cancelreturn.is_null() {
-        unsafe { tv_copy(cancelreturn, rettv) };
+    if unsafe { (*result).vval.v_string }.is_null() && !cancelreturn.is_null() {
+        unsafe { tv_copy(cancelreturn, result) };
     }
 
     unsafe { xfree(xp_arg as *mut ::core::ffi::c_void) };

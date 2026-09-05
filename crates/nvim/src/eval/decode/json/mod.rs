@@ -85,17 +85,17 @@ const fn bool_tv(value: bool) -> TypVal {
     }
 }
 
-/// Decode `buf_len` bytes of JSON, assumed UTF-8, into `rettv`.
+/// Decode `buf_len` bytes of JSON, assumed UTF-8, into `result`.
 ///
 /// Answers `Err` with the error already reported.
 ///
 /// # Safety
-/// `buf` is a live, non-NULL buffer of `buf_len` bytes and `rettv` is
+/// `buf` is a live, non-NULL buffer of `buf_len` bytes and `result` is
 /// writable.
 pub unsafe fn json_decode_string(
     buf: *const c_char,
     buf_len: size_t,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: `buf`/`buf_len` are the caller's obligation, which upstream
     // spells FUNC_ATTR_NONNULL_ALL.  Every value on the decoder's stack is
@@ -112,7 +112,7 @@ pub unsafe fn json_decode_string(
         return Err(Failed);
     }
 
-    unsafe { (*rettv).v_type = VAR_UNKNOWN };
+    unsafe { (*result).v_type = VAR_UNKNOWN };
     let mut dec = Decoder::new(bytes);
     let mut ret = Ok(());
     // Whether a container holds nothing yet, which is what makes a comma
@@ -330,7 +330,7 @@ pub unsafe fn json_decode_string(
                 p += 1;
             }
             if dec.stack.len() == 1 && dec.containers.is_empty() {
-                unsafe { *rettv = dec.stack.pop().expect("the decoded value").val };
+                unsafe { *result = dec.stack.pop().expect("the decoded value").val };
                 break 'done;
             }
             dec.emsg_rest(E474_UNEXPECTED_END, 0);

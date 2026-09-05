@@ -430,7 +430,7 @@ pub(crate) unsafe fn parse_sort_uniq_args(
 ///
 /// `sortinfo` is saved and restored around the call because a user comparison
 /// function can itself call `sort()`.
-pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, rettv: *mut TypVal, sort: bool) {
+pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, result: *mut TypVal, sort: bool) {
     let mut how = NumBuf::new();
     // SAFETY: the builtin's argument array.
     let args = unsafe { Tv::new(argvars) };
@@ -458,7 +458,7 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, rettv: *mut TypVal, sort
     };
     let l = args.list_or_null();
     if !unsafe { value_check_lock(tv_list_locked(l), arg_errmsg, TV_TRANSLATE as size_t) } {
-        unsafe { tv_list_set_ret(rettv, l) };
+        unsafe { tv_list_set_ret(result, l) };
         if unsafe { tv_list_len(l) } > 1
             && unsafe { parse_sort_uniq_args(argvars, &raw mut info, &mut how) }.is_ok()
         {
@@ -474,11 +474,11 @@ pub(crate) unsafe fn do_sort_uniq(argvars: *mut TypVal, rettv: *mut TypVal, sort
 }
 
 /// `sort()`.
-pub unsafe fn f_sort(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_sort_uniq(argvars, rettv, true) };
+pub unsafe fn f_sort(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { do_sort_uniq(argvars, result, true) };
 }
 
 /// `uniq()`.
-pub unsafe fn f_uniq(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { do_sort_uniq(argvars, rettv, false) };
+pub unsafe fn f_uniq(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { do_sort_uniq(argvars, result, false) };
 }

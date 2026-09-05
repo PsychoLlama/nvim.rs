@@ -631,18 +631,18 @@ pub unsafe fn modify_fname(
 /// `fnamemodify({fname}, {mods})`.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
+/// `argvars` is the evaluator's own argument vector, arity 2, and `result` a
 /// cleared result.
-pub unsafe fn f_fnamemodify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_fnamemodify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let mut buf = NumBuf::new();
     let (fname, mods) = (
         str_arg_chk(args, 0, &mut numbuf),
         str_arg_chk(args, 1, &mut buf),
     );
     let (Some(fname), Some(mods)) = (fname, mods) else {
-        ret_string(rettv, ptr::null_mut());
+        ret_string(result, ptr::null_mut());
         return;
     };
 
@@ -660,7 +660,7 @@ pub unsafe fn f_fnamemodify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         unsafe { modify_fname(m, false, u, n, b, l) };
     }
     ret_string(
-        rettv,
+        result,
         if name.is_null() {
             ptr::null_mut()
         } else {

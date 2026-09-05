@@ -220,7 +220,7 @@ pub unsafe fn nvim_call_dict_function(
 /// when it was named rather than given, then call it.
 ///
 /// # Safety
-/// `self_dict` must be null or the dictionary `rettv` holds, and `err` must
+/// `self_dict` must be null or the dictionary `result` holds, and `err` must
 /// be the caller's error slot.
 #[allow(clippy::too_many_arguments)]
 unsafe fn call_in_dict(
@@ -228,7 +228,7 @@ unsafe fn call_in_dict(
     dict: Object,
     args: Array,
     self_dict: *mut Dict,
-    rettv: &TypVal,
+    result: &TypVal,
     arena: *mut Arena,
     err: &mut Error,
 ) -> Object {
@@ -237,7 +237,7 @@ unsafe fn call_in_dict(
     // SAFETY: the caller's promise about `err`.
     let mut refuse = |msg: &CStr| *err = Error::validation(msg);
 
-    if rettv.v_type != VAR_DICT || self_dict.is_null() {
+    if result.v_type != VAR_DICT || self_dict.is_null() {
         refuse(c"dict not found");
         return Object::Nil;
     }

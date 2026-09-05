@@ -196,10 +196,10 @@ unsafe fn iconv_string(
 }
 
 /// `iconv({string}, {from}, {to})`.
-pub unsafe fn f_iconv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_iconv(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    unsafe { (*rettv).v_type = VAR_STRING };
-    unsafe { (*rettv).vval.v_string = core::ptr::null_mut() };
+    unsafe { (*result).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = core::ptr::null_mut() };
 
     let str = unsafe { numbuf.string(argvars) };
     let mut buf1 = [0 as c_char; NUMBUFLEN];
@@ -218,7 +218,7 @@ pub unsafe fn f_iconv(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
     let mut vimconv = CONV_NONE_INIT;
     let _ = unsafe { convert_setup(&raw mut vimconv, from, to) };
     unsafe {
-        (*rettv).vval.v_string = if vimconv.vc_type == CONV_NONE {
+        (*result).vval.v_string = if vimconv.vc_type == CONV_NONE {
             // Same encoding both ways: hand back a copy unchanged.
             xstrdup(str)
         } else {

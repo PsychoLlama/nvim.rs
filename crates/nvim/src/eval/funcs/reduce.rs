@@ -63,12 +63,12 @@ const fn number_tv(n: VarNumber) -> TypVal {
 /// The shared body of `max()` and `min()`.
 ///
 /// # Safety
-/// `tv` is a live argument typval and `rettv` the cleared return value.
-unsafe fn max_min(tv: *const TypVal, rettv: &mut TypVal, domax: bool) {
+/// `tv` is a live argument typval and `result` the cleared return value.
+unsafe fn max_min(tv: *const TypVal, result: &mut TypVal, domax: bool) {
     // SAFETY throughout: the caller's obligation; the container is only read, and the
     // dictionary walk is the C's own `TV_DICT_ITER`.
     let mut error = false;
-    rettv.vval.v_number = 0;
+    result.vval.v_number = 0;
     // Seeded at the far end so the first item always wins. An empty
     // container returns the 0 written above instead.
     let mut n: VarNumber = if domax { VARNUMBER_MIN } else { VARNUMBER_MAX };
@@ -119,21 +119,21 @@ unsafe fn max_min(tv: *const TypVal, rettv: &mut TypVal, domax: bool) {
             return;
         }
     }
-    rettv.vval.v_number = n;
+    result.vval.v_number = n;
 }
 
 /// `max({expr})`.
-pub unsafe fn f_max(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_max(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the argument is the frame's.
-    unsafe { max_min(args.ptr(0), rettv, true) }
+    unsafe { max_min(args.ptr(0), result, true) }
 }
 
 /// `min({expr})`.
-pub unsafe fn f_min(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_min(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the argument is the frame's.
-    unsafe { max_min(args.ptr(0), rettv, false) }
+    unsafe { max_min(args.ptr(0), result, false) }
 }
 
 /// What a fold arm owns, which the three arms genuinely disagree about.
@@ -169,29 +169,29 @@ const BLOB_CLEANUP: Cleanup = Cleanup {
 };
 
 /// Call `expr` with the accumulator and the next item, leaving the result in
-/// `rettv`.
+/// `result`.
 ///
 /// Returns `false` when the fold should stop — the call failed, or it
 /// reported an error of its own.
 ///
 /// # Safety
-/// `expr` is a live callable typval and `rettv` the fold's accumulator.
+/// `expr` is a live callable typval and `result` the fold's accumulator.
 unsafe fn fold_step(
     expr: *mut TypVal,
-    rettv: &mut TypVal,
+    result: &mut TypVal,
     item: TypVal,
     cleanup: Cleanup,
     called_emsg_start: c_int,
 ) -> bool {
     // SAFETY throughout: the caller's obligation. `argv` outlives the call, and
-    // `rettv`'s old value moves into `argv[0]`.
+    // `result`'s old value moves into `argv[0]`.
     let mut argv = [EMPTY_TV; 3];
-    argv[0] = *rettv;
+    argv[0] = *result;
     argv[1] = item;
     if cleanup.blank_rettv {
-        rettv.v_type = VAR_UNKNOWN;
+        result.v_type = VAR_UNKNOWN;
     }
-    let r = unsafe { eval_expr_typval(expr, true, argv.as_mut_ptr(), 2, rettv) };
+    let r = unsafe { eval_expr_typval(expr, true, argv.as_mut_ptr(), 2, result) };
     if cleanup.clear_acc {
         unsafe { tv_clear(&raw mut argv[0]) };
     }
@@ -204,8 +204,8 @@ unsafe fn fold_step(
 /// `reduce()` over a List.
 ///
 /// # Safety
-/// `args` is the call frame and `rettv` its cleared return value.
-unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
+/// `args` is the call frame and `result` its cleared return value.
+unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the list is locked against
     // modification for the whole fold and restored afterwards.
     let l = args.get(0).list_or_null();
@@ -220,7 +220,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
         let first = unsafe { tv_list_first(l) };
         (unsafe { (*first).li_tv }, unsafe { (*first).li_next })
     };
-    unsafe { tv_copy(&raw const initial, rettv) };
+    unsafe { tv_copy(&raw const initial, result) };
     // A null List is `v:_null_list`: nothing to fold, and nothing to
     // lock either.
     if l.is_null() {
@@ -229,7 +229,7 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
     let prev_locked = unsafe { tv_list_locked(l) };
     unsafe { tv_list_set_lock(l, VarLock::Fixed) };
     while !li.is_null() {
-        if !unsafe { fold_step(expr, rettv, (*li).li_tv, LIST_CLEANUP, called_emsg_start) } {
+        if !unsafe { fold_step(expr, result, (*li).li_tv, LIST_CLEANUP, called_emsg_start) } {
             break;
         }
         li = unsafe { (*li).li_next };
@@ -240,8 +240,8 @@ unsafe fn reduce_list(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
 /// `reduce()` over a String, one composed character at a time.
 ///
 /// # Safety
-/// `args` is the call frame and `rettv` its cleared return value.
-unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
+/// `args` is the call frame and `result` its cleared return value.
+unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
     let mut numbuf = NumBuf::new();
     // SAFETY throughout: the caller's obligation. `p` walks a NUL-terminated string
     // owned by the argument, which the fold cannot modify.
@@ -257,19 +257,19 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
         }
         // With no initial value the first character is it.
         let len = unsafe { utfc_ptr2len(p) };
-        *rettv = unsafe { owned_str(p, len) };
+        *result = unsafe { owned_str(p, len) };
         p = unsafe { p.add(len as usize) };
     } else if check_arg(args, 2, tv_check_for_string_arg).is_err() {
         return;
     } else {
-        arg_copy(args.get(2), rettv);
+        arg_copy(args.get(2), result);
     }
     while unsafe { *p } as c_int != NUL {
         let len = unsafe { utfc_ptr2len(p) };
         let item = unsafe { owned_str(p, len) };
-        // SAFETY: `expr` is the caller's callback and `rettv` the running
+        // SAFETY: `expr` is the caller's callback and `result` the running
         // accumulator; `item` is the character just measured.
-        if !unsafe { fold_step(expr, rettv, item, STRING_CLEANUP, called_emsg_start) } {
+        if !unsafe { fold_step(expr, result, item, STRING_CLEANUP, called_emsg_start) } {
             break;
         }
         p = unsafe { p.add(len as usize) };
@@ -279,8 +279,8 @@ unsafe fn reduce_string(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
 /// `reduce()` over a Blob, one byte at a time.
 ///
 /// # Safety
-/// `args` is the call frame and `rettv` its cleared return value.
-unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
+/// `args` is the call frame and `result` its cleared return value.
+unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, result: &mut TypVal) {
     // SAFETY: the caller's obligation; the blob is re-measured every pass,
     // as the C does, so a fold that shortens it cannot walk off the end.
     let b: *const Blob = args.get(0).blob_or_null();
@@ -297,11 +297,11 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
         }
         (number_tv(unsafe { tv_blob_get(b, 0) } as VarNumber), 1)
     };
-    unsafe { tv_copy(&raw const initial, rettv) };
+    unsafe { tv_copy(&raw const initial, result) };
     while i < unsafe { tv_blob_len(b) } {
         let item = number_tv(unsafe { tv_blob_get(b, i) } as VarNumber);
         // SAFETY: as the String walk above; `i` is inside the Blob.
-        if !unsafe { fold_step(expr, rettv, item, BLOB_CLEANUP, called_emsg_start) } {
+        if !unsafe { fold_step(expr, result, item, BLOB_CLEANUP, called_emsg_start) } {
             return;
         }
         i += 1;
@@ -309,9 +309,9 @@ unsafe fn reduce_blob(args: Args<'_>, expr: *mut TypVal, rettv: &mut TypVal) {
 }
 
 /// `reduce({object}, {func} [, {initial}])`.
-pub unsafe fn f_reduce(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_reduce(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: everything read below is the frame's.
     let ty = args.ty(0);
     if ty != VAR_STRING && ty != VAR_LIST && ty != VAR_BLOB {
@@ -332,8 +332,8 @@ pub unsafe fn f_reduce(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
     }
     let expr = args.ptr(1);
     match ty {
-        VAR_LIST => unsafe { reduce_list(args, expr, rettv) },
-        VAR_STRING => unsafe { reduce_string(args, expr, rettv) },
-        _ => unsafe { reduce_blob(args, expr, rettv) },
+        VAR_LIST => unsafe { reduce_list(args, expr, result) },
+        VAR_STRING => unsafe { reduce_string(args, expr, result) },
+        _ => unsafe { reduce_blob(args, expr, result) },
     }
 }

@@ -97,12 +97,12 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
 
 /// `getbufinfo([{buf}|{dict}])` — every buffer, one buffer, or the buffers a
 /// filter dictionary selects.
-pub unsafe fn f_getbufinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; the list belongs to
-    // `rettv` for the whole walk, and `tv_dict_find` hands back a live entry
+pub unsafe fn f_getbufinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; the list belongs to
+    // `result` for the whole walk, and `tv_dict_find` hands back a live entry
     // of the dictionary the argument holds.
-    let list = unsafe { tv_list_alloc_ret(rettv, kListLenMayKnow as ptrdiff_t) };
+    let list = unsafe { tv_list_alloc_ret(result, kListLenMayKnow as ptrdiff_t) };
     let mut argbuf: *mut Buffer = ptr::null_mut();
     let mut filter = Filter::default();
     if args.ty(0) == VAR_DICT {

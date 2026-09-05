@@ -309,26 +309,26 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
 }
 
 /// `search({pattern} [, {flags} [, {stopline} [, {timeout} [, {skip}]]]])`
-pub unsafe fn f_search(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_search(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     let mut flags = 0;
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as VarNumber;
+    result.vval.v_number = unsafe { search_cmn(args, None, &mut flags) } as VarNumber;
 }
 
 /// `searchpos()` — as `search()`, but answering `[lnum, col]`, plus the
 /// sub-pattern number under the `p` flag.
-pub unsafe fn f_searchpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_searchpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     let mut match_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
     let mut flags = 0;
-    // SAFETY: the frame is live and `rettv` is the cleared return value.
+    // SAFETY: the frame is live and `result` is the cleared return value.
     let n = unsafe { search_cmn(args, Some(&mut match_pos), &mut flags) };
-    let list = list_alloc_ret(rettv, 2 + (flags & SP_SUBPAT != 0) as isize);
+    let list = list_alloc_ret(result, 2 + (flags & SP_SUBPAT != 0) as isize);
     let (lnum, col) = if n > 0 {
         (match_pos.lnum as c_int, match_pos.col as c_int)
     } else {
@@ -343,14 +343,14 @@ pub unsafe fn f_searchpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 
 /// `searchdecl({name} [, {global} [, {thisblock}]])` — 0 when the
 /// declaration was found, 1 otherwise.
-pub unsafe fn f_searchdecl(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_searchdecl(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     let mut locally = true;
     let mut thisblock = false;
     let mut error = false;
     // Default: FAIL.
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
 
     // SAFETY throughout: the frame's arguments are live typvals and `name` is the
     // string one of them owns, which outlives the `find_decl` call.
@@ -367,7 +367,7 @@ pub unsafe fn f_searchdecl(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
         let len = unsafe { cstr::bytes_at(name) }.len();
         let keep = SEARCH_KEEP as c_int;
         let found = unsafe { find_decl(word, len, locally, thisblock, keep) };
-        rettv.vval.v_number = (found as c_int == FAIL) as VarNumber;
+        result.vval.v_number = (found as c_int == FAIL) as VarNumber;
     }
 }
 
@@ -457,23 +457,23 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut Pos>) -> c_int {
 
 /// `searchpair({start}, {middle}, {end} [, {flags} [, {skip} [, {stopline}
 /// [, {timeout}]]]])`
-pub unsafe fn f_searchpair(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_searchpair(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the frame is live.
-    rettv.vval.v_number = unsafe { searchpair_cmn(args, None) } as VarNumber;
+    result.vval.v_number = unsafe { searchpair_cmn(args, None) } as VarNumber;
 }
 
 /// `searchpairpos()` — as `searchpair()`, answering `[lnum, col]`.
-pub unsafe fn f_searchpairpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_searchpairpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     let mut match_pos = Pos {
         lnum: 0,
         col: 0,
         coladd: 0,
     };
     let (mut lnum, mut col) = (0, 0);
-    // SAFETY throughout: the frame is live and `rettv` is the cleared return value.
-    let list = list_alloc_ret(rettv, 2);
+    // SAFETY throughout: the frame is live and `result` is the cleared return value.
+    let list = list_alloc_ret(result, 2);
     if unsafe { searchpair_cmn(args, Some(&mut match_pos)) } > 0 {
         lnum = match_pos.lnum as c_int;
         col = match_pos.col as c_int;

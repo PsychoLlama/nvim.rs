@@ -700,16 +700,16 @@ pub unsafe fn tv_dict_alloc_ret(ret_tv: *mut TypVal) {
     unsafe { tv_dict_set_ret(ret_tv, d) };
 }
 
-/// `remove()` over a dictionary: move `argvars[0][argvars[1]]` into `rettv`.
+/// `remove()` over a dictionary: move `argvars[0][argvars[1]]` into `result`.
 ///
 /// # Safety
 /// `argvars` must point at at least three values, the first a `VAR_DICT`
 /// and the third the `VAR_UNKNOWN` terminator when there is no third
-/// argument. `rettv` must be writable and hold no value yet, and
+/// argument. `result` must be writable and hold no value yet, and
 /// `arg_errmsg` must be a NUL-terminated string.
 pub unsafe fn tv_dict_remove(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let mut numbuf = NumBuf::new();
@@ -744,12 +744,12 @@ pub unsafe fn tv_dict_remove(
         return;
     }
 
-    // Move the value out rather than copying it: `rettv` takes the
+    // Move the value out rather than copying it: `result` takes the
     // reference the item held.
-    unsafe { *rettv = item.di_tv };
+    unsafe { *result = item.di_tv };
     item.di_tv = TV_INITIAL_VALUE;
     unsafe { tv_dict_item_remove(d, di) };
     if unsafe { tv_dict_is_watched(d) } {
-        unsafe { tv_dict_watcher_notify(d, key, ::core::ptr::null_mut(), rettv) };
+        unsafe { tv_dict_watcher_notify(d, key, ::core::ptr::null_mut(), result) };
     }
 }

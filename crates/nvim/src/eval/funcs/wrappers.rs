@@ -142,30 +142,30 @@ pub(crate) fn check_arg(
     unsafe { check(args.ptr(0), idx) }
 }
 
-/// Make `rettv` a fresh List of `len` items, or of unknown length for one of
+/// Make `result` a fresh List of `len` items, or of unknown length for one of
 /// the `kListLen*` hints. The list the builtin then fills in.
-pub(crate) fn list_alloc_ret(rettv: &mut TypVal, len: ptrdiff_t) -> *mut List {
-    // SAFETY: `rettv` is the caller's cleared return value.
-    unsafe { tv_list_alloc_ret(rettv, len) }
+pub(crate) fn list_alloc_ret(result: &mut TypVal, len: ptrdiff_t) -> *mut List {
+    // SAFETY: `result` is the caller's cleared return value.
+    unsafe { tv_list_alloc_ret(result, len) }
 }
 
-/// Make `rettv` the List `l`, which may be null for an empty one.
-pub(crate) fn list_set_ret(rettv: &mut TypVal, l: *mut List) {
-    // SAFETY: `rettv` is the caller's cleared return value; `l` is null or a
+/// Make `result` the List `l`, which may be null for an empty one.
+pub(crate) fn list_set_ret(result: &mut TypVal, l: *mut List) {
+    // SAFETY: `result` is the caller's cleared return value; `l` is null or a
     // list the caller owns a reference to.
-    unsafe { tv_list_set_ret(rettv, l) }
+    unsafe { tv_list_set_ret(result, l) }
 }
 
-/// Make `rettv` a fresh, empty Dictionary.
-pub(crate) fn dict_alloc_ret(rettv: &mut TypVal) {
-    // SAFETY: `rettv` is the caller's cleared return value.
-    unsafe { tv_dict_alloc_ret(rettv) }
+/// Make `result` a fresh, empty Dictionary.
+pub(crate) fn dict_alloc_ret(result: &mut TypVal) {
+    // SAFETY: `result` is the caller's cleared return value.
+    unsafe { tv_dict_alloc_ret(result) }
 }
 
-/// Make `rettv` a fresh, empty Blob.
-pub(crate) fn blob_alloc_ret(rettv: &mut TypVal) -> *mut Blob {
-    // SAFETY: `rettv` is the caller's cleared return value.
-    unsafe { tv_blob_alloc_ret(rettv) }
+/// Make `result` a fresh, empty Blob.
+pub(crate) fn blob_alloc_ret(result: &mut TypVal) -> *mut Blob {
+    // SAFETY: `result` is the caller's cleared return value.
+    unsafe { tv_blob_alloc_ret(result) }
 }
 
 /// The table row for the builtin `name` spells, or null if there is none.
@@ -220,12 +220,12 @@ pub unsafe fn check_internal_func(fdef: *const EvalFuncDef, argcount: c_int) -> 
 /// # Safety
 /// `fname` is a NUL-terminated string; `argvars` points at an array of at
 /// least `MAX_FUNC_ARGS + 1` typvals of which the first `argcount` are
-/// filled; `rettv` is the cleared return value.
+/// filled; `result` is the cleared return value.
 pub unsafe fn call_internal_func(
     fname: *const c_char,
     argcount: c_int,
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> c_int {
     // SAFETY: the caller's obligation. Writing the terminator at `argcount`
     // is what makes `Args` total for the body about to run.
@@ -243,7 +243,7 @@ pub unsafe fn call_internal_func(
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
     let data = unsafe { (*fdef).data };
     // SAFETY: the row's body takes exactly the frame built above.
-    unsafe { func(argvars, rettv, data) };
+    unsafe { func(argvars, result, data) };
     FCERR_NONE as c_int
 }
 
@@ -259,7 +259,7 @@ pub unsafe fn call_internal_method(
     fname: *const c_char,
     argcount: c_int,
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     basetv: *mut TypVal,
 ) -> c_int {
     // SAFETY: the caller's obligation; `argv` is `MAX_FUNC_ARGS + 1` long
@@ -302,7 +302,7 @@ pub unsafe fn call_internal_method(
     let func = unsafe { (*fdef).func }.expect("non-null function pointer");
     let data = unsafe { (*fdef).data };
     // SAFETY: the row's body takes exactly the frame built above.
-    unsafe { func(out, rettv, data) };
+    unsafe { func(out, result, data) };
     FCERR_NONE as c_int
 }
 
@@ -427,11 +427,11 @@ pub(crate) unsafe fn tv_get_float_chk(tv: *const TypVal, ret_f: *mut Float) -> b
 
 /// The body every one-argument float builtin shares. The generated table
 /// puts the libm function in the row's payload.
-pub unsafe fn float_op_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn float_op_wrapper(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY throughout: the dispatcher's argument array and return value; the row's
     // payload is the float function for exactly these rows.
     let mut f: Float = 0.0;
-    unsafe { (*rettv).v_type = VAR_FLOAT };
+    unsafe { (*result).v_type = VAR_FLOAT };
     let value = if unsafe { tv_get_float_chk(argvars, &raw mut f) } {
         let EvalFuncData::Float(op) = fptr else {
             unreachable!("a float builtin's row carries its operation")
@@ -440,7 +440,7 @@ pub unsafe fn float_op_wrapper(argvars: *mut TypVal, rettv: *mut TypVal, fptr: E
     } else {
         0.0
     };
-    unsafe { (*rettv).vval.v_float = value };
+    unsafe { (*result).vval.v_float = value };
 }
 
 /// The body every builtin that is really an API function shares. The

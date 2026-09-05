@@ -287,16 +287,16 @@ pub unsafe fn tv_list_concat(l1: *mut List, l2: *mut List, tv: *mut TypVal) -> R
 }
 
 /// `remove()` over a list: move one item, or the range `[idx, end]`, into
-/// `rettv`.
+/// `result`.
 ///
 /// # Safety
 /// `argvars` must point at at least three values, the first a `VAR_LIST`
 /// and the third the `VAR_UNKNOWN` terminator when no range was given.
-/// `rettv` must be writable and hold no value yet, and `arg_errmsg` must be
+/// `result` must be writable and hold no value yet, and `arg_errmsg` must be
 /// a NUL-terminated string.
 pub unsafe fn tv_list_remove(
     argvars: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     arg_errmsg: *const ::core::ffi::c_char,
 ) {
     let l = unsafe { (*argvars).list_or_null() };
@@ -319,7 +319,7 @@ pub unsafe fn tv_list_remove(
     if unsafe { (*argvars.add(2)).v_type } == VAR_UNKNOWN {
         // Remove one item, return its value.
         unsafe { tv_list_drop_items(l, item, item) };
-        unsafe { *rettv = (*item).li_tv };
+        unsafe { *result = (*item).li_tv };
         unsafe { xfree(item.cast()) };
         return;
     }
@@ -348,7 +348,7 @@ pub unsafe fn tv_list_remove(
         // Didn't find "item2" after "item".
         emsg(gettext(e_invrange));
     } else {
-        let tgt = unsafe { tv_list_alloc_ret(rettv, cnt as ptrdiff_t) };
+        let tgt = unsafe { tv_list_alloc_ret(result, cnt as ptrdiff_t) };
         unsafe { tv_list_move_items(l, item, item2, tgt, cnt) };
     }
 }

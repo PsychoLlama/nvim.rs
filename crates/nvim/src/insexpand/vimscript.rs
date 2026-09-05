@@ -313,7 +313,7 @@ pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut List) {
 }
 
 /// The `complete()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_complete(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     if State.get() & MODE_INSERT == 0 {
         emsg(gettext(c"E785: complete() can only be used in Insert mode"));
         return;
@@ -337,17 +337,17 @@ pub unsafe fn f_complete(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalF
 }
 
 /// The `complete_add()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete_add(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_complete_add(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     unsafe {
-        (*rettv).vval.v_number = ins_compl_add_tv(argvars, kDirectionNotSet, false) as VarNumber
+        (*result).vval.v_number = ins_compl_add_tv(argvars, kDirectionNotSet, false) as VarNumber
     };
 }
 
 /// The `complete_check()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete_check(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_complete_check(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let _redraw = Allow::redraw();
     unsafe { ins_compl_check_keys(0, true) };
-    unsafe { (*rettv).vval.v_number = ins_compl_interrupted() as VarNumber };
+    unsafe { (*result).vval.v_number = ins_compl_interrupted() as VarNumber };
 }
 
 /// Fill `di` with one match, as `complete_info()` reports it.
@@ -506,8 +506,8 @@ pub(crate) unsafe fn get_complete_info(what_list: *mut List, retdict: *mut Dict)
 }
 
 /// The `complete_info()` function; a `VimLFunc` row in the builtin table.
-pub unsafe fn f_complete_info(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    unsafe { tv_dict_alloc_ret(rettv) };
+pub unsafe fn f_complete_info(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    unsafe { tv_dict_alloc_ret(result) };
 
     let mut what_list: *mut List = ptr::null_mut();
     if unsafe { (*argvars).v_type } != VAR_UNKNOWN {
@@ -517,7 +517,7 @@ pub unsafe fn f_complete_info(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
         }
         what_list = unsafe { (*argvars).vval.v_list };
     }
-    unsafe { get_complete_info(what_list, (*rettv).vval.v_dict) };
+    unsafe { get_complete_info(what_list, (*result).vval.v_dict) };
 }
 
 /// The window the editor is working in.

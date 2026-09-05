@@ -229,7 +229,7 @@ pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
 /// Walk the global variables whose names `'shada'` says to remember.
 ///
 /// Answers what to pass in next, or null when the walk is over; `name` is
-/// set to null at the end. `rettv` gets a copy of the value, which the
+/// set to null at the end. `result` gets a copy of the value, which the
 /// caller clears.
 ///
 /// # Safety
@@ -237,7 +237,7 @@ pub(crate) fn hist_type2char(type_0: c_int) -> c_int {
 pub(crate) unsafe fn var_shada_iter(
     iter: Option<usize>,
     name: *mut *const c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     flavour: VarFlavour,
 ) -> Option<usize> {
     let globvarht = get_globvar_ht();
@@ -259,7 +259,7 @@ pub(crate) unsafe fn var_shada_iter(
     let key = unsafe { (*globvarht).slot(idx) }.hi_key;
     let di = unsafe { key.sub(offset_of!(DictItem, di_key)) } as *mut DictItem;
     unsafe { *name = &raw mut (*di).di_key as *mut c_char };
-    unsafe { tv_copy(&raw mut (*di).di_tv, rettv) };
+    unsafe { tv_copy(&raw mut (*di).di_tv, result) };
 
     // Answer where the *next* one is, so the caller knows to stop.
     loop {

@@ -602,12 +602,16 @@ pub(crate) fn setmouse() {
 /// the editor knows.
 ///
 /// # Safety
-/// `rettv` must be a live, unset return value.
-pub(crate) unsafe fn f_getmousepos(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `result` must be a live, unset return value.
+pub(crate) unsafe fn f_getmousepos(
+    _argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
     // SAFETY: the caller's promise.
     let d = unsafe {
-        tv_dict_alloc_ret(rettv);
-        (*rettv).vval.v_dict
+        tv_dict_alloc_ret(result);
+        (*result).vval.v_dict
     };
     let add = |key: &CStr, value: VarNumber| {
         // SAFETY: the dict just allocated, and a NUL-terminated literal key.

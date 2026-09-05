@@ -60,9 +60,9 @@ unsafe fn regname(args: Args<'_>) -> Option<c_int> {
 }
 
 /// `getreg([{regname} [, 1 [, {list}]]])`.
-pub unsafe fn f_getreg(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
+pub unsafe fn f_getreg(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
     let Some(regname) = (unsafe { regname(args) }) else {
         return;
     };
@@ -82,24 +82,24 @@ pub unsafe fn f_getreg(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
     let mut flags = if expr_src { kGRegExprSrc as c_int } else { 0 };
     if return_list {
         flags |= kGRegList as c_int;
-        rettv.v_type = VAR_LIST;
+        result.v_type = VAR_LIST;
         let mut l = unsafe { get_reg_contents(regname, flags) } as *mut List;
         if l.is_null() {
             l = unsafe { tv_list_alloc(0) };
         }
-        rettv.vval.v_list = l;
+        result.vval.v_list = l;
         unsafe { tv_list_ref(l) };
     } else {
-        rettv.v_type = VAR_STRING;
-        rettv.vval.v_string = unsafe { get_reg_contents(regname, flags) } as *mut c_char;
+        result.v_type = VAR_STRING;
+        result.vval.v_string = unsafe { get_reg_contents(regname, flags) } as *mut c_char;
     }
 }
 
 /// `getregtype([{regname}])`.
-pub unsafe fn f_getregtype(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = ptr::null_mut();
+pub unsafe fn f_getregtype(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_STRING;
+    result.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments are live typvals and `buf` outlives the call
     // that fills it.
     let Some(regname) = (unsafe { regname(args) }) else {
@@ -109,13 +109,13 @@ pub unsafe fn f_getregtype(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     let mut buf: TypeBuf = [0; 67];
     let reg_type = unsafe { get_reg_type(regname, &raw mut reglen) };
     unsafe { format_reg_type(reg_type, reglen, buf.as_mut_ptr(), buf.len()) };
-    rettv.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
+    result.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
 }
 
 /// `getreginfo([{regname}])`.
-pub unsafe fn f_getreginfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; `buf` outlives
+pub unsafe fn f_getreginfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; `buf` outlives
     // the two `tv_dict_add_str` calls that copy from it.
     let Some(mut regname) = (unsafe { regname(args) }) else {
         return;
@@ -123,8 +123,8 @@ pub unsafe fn f_getreginfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     if regname == b'@' as c_int {
         regname = b'"' as c_int;
     }
-    dict_alloc_ret(rettv);
-    let dict: *mut Dict = rettv.dict_or_null();
+    dict_alloc_ret(result);
+    let dict: *mut Dict = result.dict_or_null();
     let list = unsafe { get_reg_contents(regname, kGRegExprSrc as c_int | kGRegList as c_int) }
         as *mut List;
     // An unset register has no `regcontents`, and no other key either.
@@ -167,30 +167,30 @@ pub unsafe fn f_getreginfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 /// The single-character String the three recording-state builtins return.
 ///
 /// # Safety
-/// `rettv` is the dispatcher's cleared return value.
-unsafe fn return_register(regname: c_int, rettv: &mut TypVal) {
+/// `result` is the dispatcher's cleared return value.
+unsafe fn return_register(regname: c_int, result: &mut TypVal) {
     let buf: [c_char; 2] = [regname as c_char, 0];
-    rettv.v_type = VAR_STRING;
+    result.v_type = VAR_STRING;
     // SAFETY: `buf` is NUL-terminated and outlives the copy.
-    rettv.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
+    result.vval.v_string = unsafe { xstrdup(buf.as_ptr()) };
 }
 
 /// `reg_executing()` — the register a macro is being played from.
-pub unsafe fn f_reg_executing(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the dispatcher's cleared return value.
-    unsafe { return_register(reg_executing.get(), &mut *rettv) };
+pub unsafe fn f_reg_executing(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the dispatcher's cleared return value.
+    unsafe { return_register(reg_executing.get(), &mut *result) };
 }
 
 /// `reg_recording()` — the register `q` is recording into.
-pub unsafe fn f_reg_recording(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the dispatcher's cleared return value.
-    unsafe { return_register(reg_recording.get(), &mut *rettv) };
+pub unsafe fn f_reg_recording(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the dispatcher's cleared return value.
+    unsafe { return_register(reg_recording.get(), &mut *result) };
 }
 
 /// `reg_recorded()` — the register the last recording went into.
-pub unsafe fn f_reg_recorded(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the dispatcher's cleared return value.
-    unsafe { return_register(reg_recorded.get(), &mut *rettv) };
+pub unsafe fn f_reg_recorded(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the dispatcher's cleared return value.
+    unsafe { return_register(reg_recorded.get(), &mut *result) };
 }
 
 /// Read a register-type letter, advancing `pp` past the width digits a
@@ -226,18 +226,18 @@ unsafe fn get_yank_type(
 }
 
 /// `setreg({regname}, {value} [, {options}])`.
-pub unsafe fn f_setreg(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_setreg(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
     let mut numbuf4 = NumBuf::new();
     let mut numbuf5 = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY throughout: the arguments and `rettv` are live typvals; every string
+    let (args, result) = frame!(argvars, result);
+    // SAFETY throughout: the arguments and `result` are live typvals; every string
     // read below is NUL-terminated and outlives its use.
     // Non-zero means "did not set anything", which is what every early
     // return leaves behind.
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
     let strregname = arg_string_chk(&mut numbuf, args.get(0));
     if strregname.is_null() {
         return;
@@ -337,7 +337,7 @@ pub unsafe fn f_setreg(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
     if pointreg != 0 {
         unsafe { get_yank_register(pointreg as c_int, YREG_YANK as c_int) };
     }
-    rettv.vval.v_number = 0;
+    result.vval.v_number = 0;
     if set_unnamed {
         unsafe { op_reg_set_previous(regname) };
     }

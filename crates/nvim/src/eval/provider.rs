@@ -176,13 +176,13 @@ pub unsafe fn find_job(id: uint64_t, show_error: bool) -> *mut Channel {
 /// `py3eval()` and its relatives: hand one expression to a script host.
 ///
 /// # Safety
-/// `name` must be NUL-terminated; `argvars` and `rettv` valid.
-pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut TypVal, rettv: *mut TypVal) {
+/// `name` must be NUL-terminated; `argvars` and `result` valid.
+pub unsafe fn script_host_eval(name: *mut c_char, argvars: *mut TypVal, result: *mut TypVal) {
     if check_secure() {
         return;
     }
     // SAFETY: the caller's promise -- both typvals outlive the call.
-    let (arg, mut ret) = unsafe { (Tv::new(argvars), Tv::new(rettv)) };
+    let (arg, mut ret) = unsafe { (Tv::new(argvars), Tv::new(result)) };
     if arg.v_type != VAR_STRING {
         // SAFETY: `e_invarg` is a shared NUL-terminated message.
         emsg_static(e_invarg);

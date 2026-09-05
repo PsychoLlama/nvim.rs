@@ -288,13 +288,13 @@ pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
 }
 
 /// `charclass({string})` — the class of the string's first character.
-pub unsafe fn f_charclass(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_charclass(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     if unsafe { tv_check_for_string_arg(argvars, 0) }.is_err()
         || unsafe { (*argvars).vval.v_string }.is_null()
     {
         return;
     }
-    unsafe { (*rettv).vval.v_number = mb_get_class((*argvars).vval.v_string) as VarNumber };
+    unsafe { (*result).vval.v_number = mb_get_class((*argvars).vval.v_string) as VarNumber };
 }
 
 #[cfg(test)]

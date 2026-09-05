@@ -67,9 +67,9 @@ pub fn find_timer_by_nr(id: VarNumber) -> *mut Timer {
 ///
 /// # Safety
 /// `rettv` must hold a List; `timer` must be valid.
-pub unsafe fn add_timer_info(rettv: *mut TypVal, timer: *mut Timer) {
+pub unsafe fn add_timer_info(result: *mut TypVal, timer: *mut Timer) {
     // SAFETY: the caller's promise -- both pointees outlive the call.
-    let (rettv, timer) = unsafe { (Tv::new(rettv), Tm::new(timer)) };
+    let (rettv, timer) = unsafe { (Tv::new(result), Tm::new(timer)) };
     // SAFETY: `tv_dict_alloc` never answers NULL.
     let dict: *mut Dict = unsafe { tv_dict_alloc() };
     // SAFETY: the caller's promise that `rettv` holds a List, so `v_list` is
@@ -104,14 +104,14 @@ pub unsafe fn add_timer_info(rettv: *mut TypVal, timer: *mut Timer) {
     unsafe { callback_put(cb, &raw mut (*di).di_tv) };
 }
 
-/// Fill `rettv` with a List describing every live timer.
+/// Fill `result` with a List describing every live timer.
 ///
 /// # Safety
-/// `rettv` must be valid.
-pub unsafe fn add_timer_info_all(rettv: *mut TypVal) {
+/// `result` must be valid.
+pub unsafe fn add_timer_info_all(result: *mut TypVal) {
     let live = timer_snapshot();
-    // SAFETY: the caller's promise about `rettv`.
-    unsafe { tv_list_alloc_ret(rettv, live.len() as ptrdiff_t) };
+    // SAFETY: the caller's promise about `result`.
+    unsafe { tv_list_alloc_ret(result, live.len() as ptrdiff_t) };
     for timer in live {
         // SAFETY: the snapshot holds registered timers, and nothing has run
         // between taking it and reading it.
@@ -119,8 +119,8 @@ pub unsafe fn add_timer_info_all(rettv: *mut TypVal) {
         // A stopped timer is still listed while something else holds a
         // reference to it — its own callback, for instance.
         if !timer.stopped || timer.refcount.is_shared() {
-            // SAFETY: as above; `rettv` now holds the List.
-            unsafe { add_timer_info(rettv, timer.raw()) };
+            // SAFETY: as above; `result` now holds the List.
+            unsafe { add_timer_info(result, timer.raw()) };
         }
     }
 }

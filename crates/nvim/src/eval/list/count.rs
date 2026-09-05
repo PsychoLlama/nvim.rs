@@ -24,18 +24,18 @@ use crate::types::{EvalFuncData, TypVal, VarNumber, int64_t, uint8_t};
 /// `add(container, item)`: append one item to a List or one byte to a Blob.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2, and `rettv` a
+/// `argvars` is the evaluator's own argument vector, arity 2, and `result` a
 /// cleared result.
-pub unsafe fn f_add(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_add(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, rettv) = frame!(argvars, rettv);
+    let (mut args, result) = frame!(argvars, result);
     // Default: failed.
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
     match Container::of(args.get_mut(0)) {
         Container::List(l) => {
             if !check_lock(l.locked(), c"add() argument") {
                 l.append_tv(args.get_mut(1));
-                copy_tv(args.get_mut(0), rettv);
+                copy_tv(args.get_mut(0), result);
             }
         }
         Container::Blob(b) => {
@@ -44,7 +44,7 @@ pub unsafe fn f_add(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncDat
                 let n = number_of(args.get_mut(1), &mut error);
                 if !error {
                     b.push(n as uint8_t);
-                    copy_tv(args.get_mut(0), rettv);
+                    copy_tv(args.get_mut(0), result);
                 }
             }
         }
@@ -133,11 +133,11 @@ fn count_dict(d: DictRef, needle: &mut TypVal, ic: bool) -> VarNumber {
 /// and not as a pair.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 2..4, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 2..4, and `result`
 /// a cleared result.
-pub unsafe fn f_count(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_count(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's contract.
-    let (mut args, rettv) = frame!(argvars, rettv);
+    let (mut args, result) = frame!(argvars, result);
     let mut error = false;
     let ic = args.has(2) && number_of(args.get_mut(2), &mut error) != 0;
 
@@ -174,5 +174,5 @@ pub unsafe fn f_count(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
             _ => err_not_countable(c"count()"),
         }
     }
-    rettv.vval.v_number = n;
+    result.vval.v_number = n;
 }

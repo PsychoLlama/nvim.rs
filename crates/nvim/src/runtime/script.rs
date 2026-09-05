@@ -302,9 +302,9 @@ enum ScriptQuery {
 }
 
 /// `"getscriptinfo()"` function
-pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the caller's return slot, `argvars` its arguments.
-    unsafe { tv_list_alloc_ret(rettv, script_count() as ptrdiff_t) };
+pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the caller's return slot, `argvars` its arguments.
+    unsafe { tv_list_alloc_ret(result, script_count() as ptrdiff_t) };
     if unsafe { tv_check_for_opt_dict_arg(argvars, 0) }.is_err() {
         return;
     }
@@ -319,8 +319,8 @@ pub unsafe fn f_getscriptinfo(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
     let query = unsafe { script_query(argvars, &mut pat, &mut regmatch) };
 
     if !matches!(query, ScriptQuery::Rejected) {
-        // SAFETY: `rettv` holds the list allocated above.
-        let l = unsafe { (*rettv).vval.v_list };
+        // SAFETY: `result` holds the list allocated above.
+        let l = unsafe { (*result).vval.v_list };
         // SAFETY: nothing in the loop sources a script.
         unsafe { report_scripts(l, &query, &mut regmatch) };
     }

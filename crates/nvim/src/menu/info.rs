@@ -230,13 +230,13 @@ fn menuitem_getinfo(menu_name: &CStr, menu: Menu, modes: c_int, dict: *mut Dict)
 ///
 /// # Safety
 /// The eval layer must pass live argument and return typvals.
-pub(crate) unsafe fn f_menu_info(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub(crate) unsafe fn f_menu_info(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     // SAFETY: the caller's obligation.
     let (retdict, menu_name) = unsafe {
-        tv_dict_alloc_ret(rettv);
-        ((*rettv).vval.v_dict, numbuf.string_chk(argvars))
+        tv_dict_alloc_ret(result);
+        ((*result).vval.v_dict, numbuf.string_chk(argvars))
     };
     if menu_name.is_null() {
         // Before the second argument is looked at: `tv_get_string_chk`

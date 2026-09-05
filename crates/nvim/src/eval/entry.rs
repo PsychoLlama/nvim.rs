@@ -203,10 +203,10 @@ pub unsafe fn eval_to_bool(
 ///
 /// # Safety
 /// `arg` must point at the cursor into a NUL-terminated expression;
-/// `rettv` valid; `eap` null or valid.
+/// `result` valid; `eap` null or valid.
 pub(crate) unsafe fn eval1_emsg(
     arg: *mut *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     eap: *mut ExArg,
 ) -> Result<(), Failed> {
     let start: *const c_char = unsafe { *arg };
@@ -215,7 +215,7 @@ pub(crate) unsafe fn eval1_emsg(
 
     let mut evalarg = UNSET_EVALARG;
     unsafe { fill_evalarg_from_eap(&raw mut evalarg, eap, !eap.is_null() && (*eap).skip != 0) };
-    let ret = unsafe { eval1(arg, rettv, &raw mut evalarg) };
+    let ret = unsafe { eval1(arg, result, &raw mut evalarg) };
     if ret.is_err()
         && !aborting()
         && did_emsg.get() == did_emsg_before
@@ -258,7 +258,7 @@ pub(crate) unsafe fn eval_expr_partial(
     expr: *const TypVal,
     argv: *mut TypVal,
     argc: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- a `VAR_PARTIAL`, so `v_partial` is
     // the union's live member.
@@ -273,7 +273,7 @@ pub(crate) unsafe fn eval_expr_partial(
     let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
     funcexe.fe_partial = partial;
-    unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }?;
+    unsafe { call_func(s, -1, result, argc, argv, &raw mut funcexe) }?;
     Ok(())
 }
 
@@ -285,7 +285,7 @@ pub(crate) unsafe fn eval_expr_func(
     expr: *const TypVal,
     argv: *mut TypVal,
     argc: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     // SAFETY: the caller's promise -- `expr` outlives the call, and it is
@@ -302,17 +302,17 @@ pub(crate) unsafe fn eval_expr_func(
     }
     let mut funcexe: FuncExe = FUNCEXE_INIT;
     funcexe.fe_evaluate = true;
-    unsafe { call_func(s, -1, rettv, argc, argv, &raw mut funcexe) }?;
+    unsafe { call_func(s, -1, result, argc, argv, &raw mut funcexe) }?;
     Ok(())
 }
 
 /// Evaluate `expr` as an expression *string*, which must consume all of it.
 ///
 /// # Safety
-/// `expr` and `rettv` must be valid.
+/// `expr` and `result` must be valid.
 pub(crate) unsafe fn eval_expr_string(
     expr: *const TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     let mut buf: [c_char; NUMBUFLEN] = [0; NUMBUFLEN];
     let mut s = unsafe { tv_get_string_buf_chk(expr, buf.as_mut_ptr()) } as *mut c_char;
@@ -320,9 +320,9 @@ pub(crate) unsafe fn eval_expr_string(
         return Err(Failed);
     }
     s = unsafe { skipwhite(s) };
-    unsafe { eval1_emsg(&raw mut s, rettv, null_mut()) }?;
+    unsafe { eval1_emsg(&raw mut s, result, null_mut()) }?;
     if unsafe { *skipwhite(s) } as c_int != NUL {
-        unsafe { tv_clear(rettv) };
+        unsafe { tv_clear(result) };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let s = unsafe { c_str(s) };
         semsg!("E15: Invalid expression: \"{s}\"");
@@ -335,24 +335,24 @@ pub(crate) unsafe fn eval_expr_string(
 /// or an expression string — with `argc` arguments.
 ///
 /// # Safety
-/// `expr` and `rettv` must be valid; `argv` must hold `argc` typvals.
+/// `expr` and `result` must be valid; `argv` must hold `argc` typvals.
 pub unsafe fn eval_expr_typval(
     expr: *const TypVal,
     want_func: bool,
     argv: *mut TypVal,
     argc: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- `expr` outlives the call and is only
     // read through here; each arm restates the same promise.
     let ty = unsafe { Tv::new(expr.cast_mut()) };
     if ty.v_type == VAR_PARTIAL {
-        return unsafe { eval_expr_partial(expr, argv, argc, rettv) };
+        return unsafe { eval_expr_partial(expr, argv, argc, result) };
     }
     if ty.v_type == VAR_FUNC || want_func {
-        return unsafe { eval_expr_func(expr, argv, argc, rettv) };
+        return unsafe { eval_expr_func(expr, argv, argc, result) };
     }
-    unsafe { eval_expr_string(expr, rettv) }
+    unsafe { eval_expr_string(expr, result) }
 }
 
 /// `eval_expr_typval` with no arguments, answering the result's truth.
@@ -594,12 +594,12 @@ pub unsafe fn eval_expr_ext(
 ///
 /// # Safety
 /// `func` must be NUL-terminated, `argv` must hold `argc` typvals and
-/// `rettv` must be valid.
+/// `result` must be valid.
 pub unsafe fn call_vim_function(
     func: *const c_char,
     argc: c_int,
     argv: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> Result<(), Failed> {
     let mut func = func;
     let mut len = unsafe { cstr::bytes_at(func) }.len() as c_int;
@@ -620,18 +620,18 @@ pub unsafe fn call_vim_function(
             // SAFETY: `v:lua` holds a live partial from startup to exit.
             pt = unsafe { get_vim_var_partial(Vv::Lua) };
         }
-        // SAFETY: the caller's promise about `rettv`.
-        unsafe { (*rettv).v_type = VAR_UNKNOWN };
+        // SAFETY: the caller's promise about `result`.
+        unsafe { (*result).v_type = VAR_UNKNOWN };
         let mut funcexe: FuncExe = FUNCEXE_INIT;
         funcexe.fe_firstline = cur_win().w_cursor.lnum;
         funcexe.fe_lastline = cur_win().w_cursor.lnum;
         funcexe.fe_evaluate = true;
         funcexe.fe_partial = pt;
-        ret = unsafe { call_func(func, len, rettv, argc, argv, &raw mut funcexe) };
+        ret = unsafe { call_func(func, len, result, argc, argv, &raw mut funcexe) };
     }
 
     if ret.is_err() {
-        unsafe { tv_clear(rettv) };
+        unsafe { tv_clear(result) };
     }
     ret
 }

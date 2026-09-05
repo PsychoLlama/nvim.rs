@@ -73,10 +73,10 @@ fn job_id(arg: &TypVal) -> Option<uint64_t> {
 }
 
 /// `jobpid({job})`
-pub unsafe fn f_jobpid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+pub unsafe fn f_jobpid(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
@@ -89,14 +89,14 @@ pub unsafe fn f_jobpid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
     if data.is_null() {
         return;
     }
-    rettv.vval.v_number = unsafe { (*channel_proc(data)).pid } as VarNumber;
+    result.vval.v_number = unsafe { (*channel_proc(data)).pid } as VarNumber;
 }
 
 /// `jobresize({job}, {width}, {height})` — only for a pty job.
-pub unsafe fn f_jobresize(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+pub unsafe fn f_jobresize(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null.
     if check_secure() {
@@ -122,14 +122,14 @@ pub unsafe fn f_jobresize(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     let height = args.get(2).number_or_zero() as uint16_t;
     let pty = unsafe { channel_pty(data) };
     unsafe { pty_proc_resize(pty, width, height) };
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
 }
 
 /// `jobstop({job})`
-pub unsafe fn f_jobstop(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+pub unsafe fn f_jobstop(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `find_job` answers with a live channel or
     // null, and `error` is a borrowed static message.
     if check_secure() {
@@ -149,17 +149,17 @@ pub unsafe fn f_jobstop(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     }
     unsafe { proc_stop(channel_proc(data)) };
     // Reported as a success even when closing the RPC half complained.
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
     if !error.is_null() {
         unsafe { emsg_ptr(error) };
     }
 }
 
 /// `jobwait({jobs} [, {timeout}])`
-pub unsafe fn f_jobwait(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+pub unsafe fn f_jobwait(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `jobs` is an allocation this body owns for
     // its whole length, and every channel in it holds a reference.
     if check_secure() {
@@ -266,8 +266,8 @@ pub unsafe fn f_jobwait(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
         ui_busy_stop();
     }
     unsafe { tv_list_ref(rv) };
-    rettv.v_type = VAR_LIST;
-    rettv.vval.v_list = rv;
+    result.v_type = VAR_LIST;
+    result.vval.v_list = rv;
 }
 
 /// Variables a pty job must not inherit: they describe *our* terminal, and
@@ -377,14 +377,14 @@ unsafe fn create_environment(
 }
 
 /// `jobstart({cmd} [, {opts}])`
-pub unsafe fn f_jobstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_jobstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut cmdbuf = NumBuf::new();
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `argv` is released on every path that does
     // not hand it to `channel_job_start`, which adopts it.
     if check_secure() {
@@ -397,7 +397,7 @@ pub unsafe fn f_jobstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     if argv.is_null() {
         // A malformed command answers 0; a command that is simply not
         // executable answers -1.
-        rettv.vval.v_number = if executable { 0 } else { -1 };
+        result.vval.v_number = if executable { 0 } else { -1 };
         return;
     }
     // From here on every early exit must release `argv`.
@@ -545,7 +545,7 @@ pub unsafe fn f_jobstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     }
 
     let env = unsafe { create_environment(job_env, clear_env, pty, term_name) };
-    let pid_out = &raw mut rettv.vval.v_number;
+    let pid_out = &raw mut result.vval.v_number;
     // SAFETY: `argv` is a NUL-terminated vector this frame owns, `env` the
     // environment built above, and `pid_out` the return value's own slot.
     // The fifteen arguments are what upstream's `channel_job_start` takes;
@@ -576,7 +576,7 @@ pub unsafe fn f_jobstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
         unsafe { channel_create_event(chan, ptr::null()) };
         return;
     }
-    if rettv.number_or_zero() <= 0 {
+    if result.number_or_zero() <= 0 {
         return;
     }
     unsafe { attach_terminal(chan, cwd, cmd) };

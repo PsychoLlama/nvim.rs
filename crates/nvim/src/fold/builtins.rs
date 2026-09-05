@@ -30,10 +30,10 @@ use crate::types::{VAR_STRING, Vv};
 /// "foldclosed()" and "foldclosedend()" functions
 ///
 /// # Safety
-/// `argvars` and `rettv` must be live typvals.
-pub(super) unsafe fn foldclosed_both(argvars: *mut TypVal, rettv: *mut TypVal, end: bool) {
+/// `argvars` and `result` must be live typvals.
+pub(super) unsafe fn foldclosed_both(argvars: *mut TypVal, result: *mut TypVal, end: bool) {
     // SAFETY: the caller's promise -- live typvals.
-    let (mut rv, lnum) = unsafe { (Tv::new(rettv), tv_get_lnum(argvars)) };
+    let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(argvars)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         let mut first: LineNr = 0;
         let mut last: LineNr = 0;
@@ -51,28 +51,28 @@ pub(super) unsafe fn foldclosed_both(argvars: *mut TypVal, rettv: *mut TypVal, e
 /// "foldclosed()" function
 ///
 /// # Safety
-/// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldclosed(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `argvars` and `result` must be live typvals.
+pub unsafe fn f_foldclosed(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
-    unsafe { foldclosed_both(argvars, rettv, false) };
+    unsafe { foldclosed_both(argvars, result, false) };
 }
 
 /// "foldclosedend()" function
 ///
 /// # Safety
-/// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldclosedend(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `argvars` and `result` must be live typvals.
+pub unsafe fn f_foldclosedend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise.
-    unsafe { foldclosed_both(argvars, rettv, true) };
+    unsafe { foldclosed_both(argvars, result, true) };
 }
 
 /// "foldlevel()" function
 ///
 /// # Safety
-/// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldlevel(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `argvars` and `result` must be live typvals.
+pub unsafe fn f_foldlevel(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- live typvals.
-    let (mut rv, lnum) = unsafe { (Tv::new(rettv), tv_get_lnum(argvars)) };
+    let (mut rv, lnum) = unsafe { (Tv::new(result), tv_get_lnum(argvars)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         // SAFETY: `lnum` is inside the current buffer.
         rv.vval.v_number = unsafe { fold_level(lnum) } as VarNumber;
@@ -82,10 +82,10 @@ pub unsafe fn f_foldlevel(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 /// "foldtext()" function
 ///
 /// # Safety
-/// `rettv` must be a live typval.
-pub unsafe fn f_foldtext(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `result` must be a live typval.
+pub unsafe fn f_foldtext(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the caller's promise -- a live typval.
-    let mut rv = unsafe { Tv::new(rettv) };
+    let mut rv = unsafe { Tv::new(result) };
     rv.v_type = VAR_STRING;
     rv.vval.v_string = ptr::null_mut();
     // SAFETY: reading three `v:` variables the fold drawing has just set.
@@ -149,13 +149,13 @@ pub unsafe fn f_foldtext(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
 /// "foldtextresult(lnum)" function
 ///
 /// # Safety
-/// `argvars` and `rettv` must be live typvals.
-pub unsafe fn f_foldtextresult(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+/// `argvars` and `result` must be live typvals.
+pub unsafe fn f_foldtextresult(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut buf: [c_char; FOLD_TEXT_LEN as usize] = [0; FOLD_TEXT_LEN as usize];
     // 'foldtext' can call `foldtextresult()` again; one level is enough.
     static entered: GlobalCell<bool> = GlobalCell::new(false);
     // SAFETY: the caller's promise -- a live typval.
-    let mut rv = unsafe { Tv::new(rettv) };
+    let mut rv = unsafe { Tv::new(result) };
     rv.v_type = VAR_STRING;
     rv.vval.v_string = ptr::null_mut();
     if entered.get() {

@@ -93,10 +93,10 @@ unsafe fn items(list: *const List) -> impl Iterator<Item = *const ListItem> {
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe fn f_rpcstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the caller's promise about `rettv`.
-    let rettv = unsafe { &mut *rettv };
+    let rettv = unsafe { &mut *result };
     rettv.v_type = VAR_NUMBER;
     rettv.vval.v_number = 0;
 
@@ -188,9 +188,9 @@ pub unsafe fn f_rpcstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 ///
 /// # Safety
 /// As the module doc; arity 1.
-pub unsafe fn f_rpcstop(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
-    // SAFETY: the caller's promise about `rettv`.
-    let ret = unsafe { &mut *rettv };
+pub unsafe fn f_rpcstop(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
+    // SAFETY: the caller's promise about `result`.
+    let ret = unsafe { &mut *result };
     ret.v_type = VAR_NUMBER;
     ret.vval.v_number = 0;
 
@@ -213,7 +213,7 @@ pub unsafe fn f_rpcstop(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFunc
     // SAFETY: `find_job` only looks the id up.
     if !unsafe { find_job(id, false) }.is_null() {
         // SAFETY: the arguments are this call's own.
-        unsafe { f_jobstop(argvars, rettv, fptr) };
+        unsafe { f_jobstop(argvars, result, fptr) };
     } else {
         let mut error: *const c_char = core::ptr::null();
         // SAFETY: `error` is written whenever the close fails.
@@ -233,20 +233,20 @@ pub unsafe fn f_rpcstop(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFunc
 ///
 /// # Safety
 /// As the module doc; arity 0.
-pub unsafe fn f_last_buffer_nr(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_last_buffer_nr(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut n = 0;
     for buf in buffers() {
         n = n.max(buf.handle());
     }
-    // SAFETY: the caller's promise about `rettv`.
-    unsafe { (*rettv).vval.v_number = n as VarNumber };
+    // SAFETY: the caller's promise about `result`.
+    unsafe { (*result).vval.v_number = n as VarNumber };
 }
 
 /// `termopen(cmd[, opts])`: `jobstart()` with `term` forced on.
 ///
 /// # Safety
 /// As the module doc; arity 1..2.
-pub unsafe fn f_termopen(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFuncData) {
+pub unsafe fn f_termopen(argvars: *mut TypVal, result: *mut TypVal, fptr: EvalFuncData) {
     // SAFETY: `check_secure` only reads the option and reports.
     if check_secure() {
         return;
@@ -275,7 +275,7 @@ pub unsafe fn f_termopen(argvars: *mut TypVal, rettv: *mut TypVal, fptr: EvalFun
     // SAFETY: as above -- `dict` is that dictionary.
     let _ = unsafe { tv_dict_add_bool(dict, c"term".as_ptr(), 4, kBoolVarTrue) };
     // SAFETY: as above -- the whole argument vector goes to `jobstart()`.
-    unsafe { f_jobstart(argvars, rettv, fptr) };
+    unsafe { f_jobstart(argvars, result, fptr) };
     if must_free {
         // SAFETY: the dictionary was borrowed for this call only.
         unsafe { tv_dict_free(dict) };

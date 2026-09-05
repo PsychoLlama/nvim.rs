@@ -19,17 +19,17 @@ use core::mem::offset_of;
 /// Set or append lines in buffer `buffer`, from `lines` — any type, converted to
 /// a string, or a List of them.
 ///
-/// `rettv` ends 0 when every line went in and 1 otherwise, which is what all
+/// `result` ends 0 when every line went in and 1 otherwise, which is what all
 /// four builtins answer.
 ///
 /// # Safety
-/// `buffer` must be a live buffer or NULL, and `lines`/`rettv` live typvals.
+/// `buffer` must be a live buffer or NULL, and `lines`/`result` live typvals.
 pub(crate) unsafe fn set_buffer_lines(
     buffer: *mut Buffer,
     lnum_arg: LineNr,
     append: bool,
     lines: *mut TypVal,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) {
     // SAFETY: the caller's obligation. `cob` is a live local, restored on
     // every path out; `line` is owned here and freed before each replacement
@@ -39,7 +39,7 @@ pub(crate) unsafe fn set_buffer_lines(
     let is_curbuf: bool = buffer == curbuf.get();
     // SAFETY: the caller's obligation -- live typvals, and a live buffer or
     // NULL, which the test below tells apart.
-    let mut ret = unsafe { Tv::new(rettv) };
+    let mut ret = unsafe { Tv::new(result) };
     if buffer.is_null() || !is_curbuf && unsafe { (*buffer).b_ml.ml_mfp }.is_null() || lnum < 1 {
         ret.vval.v_number = 1;
         return;
@@ -134,42 +134,42 @@ pub(crate) unsafe fn set_buffer_lines(
 /// `setbufline()` and `appendbufline()`, which differ only in `append`.
 ///
 /// # Safety
-/// The arguments and `rettv` must be live typvals.
-unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut TypVal, append: bool) {
+/// The arguments and `result` must be live typvals.
+unsafe fn buf_set_append_line(args: Args<'_>, result: &mut TypVal, append: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf(args, 0, 0);
     if buf.is_null() {
-        rettv.vval.v_number = 1;
+        result.vval.v_number = 1;
         return;
     }
     // The line number is resolved against the named buffer, and a bad one
     // reports; only then is anything written.
     let lnum = unsafe { arg_lnum_buf(args, 1, buf) };
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(buf, lnum, append, args.ptr(2), rettv) };
+        unsafe { set_buffer_lines(buf, lnum, append, args.ptr(2), result) };
     }
 }
 
 /// Lines `start..=end` of `buf`, as a List or as one String.
 ///
 /// # Safety
-/// `buf` must be a live buffer or NULL, and `rettv` a live typval.
+/// `buf` must be a live buffer or NULL, and `result` a live typval.
 unsafe fn get_buffer_lines(
     buffer: *mut Buffer,
     mut start: LineNr,
     mut end: LineNr,
     retlist: bool,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) {
     // SAFETY: the caller's obligation; every line index is clamped to the
     // buffer before `ml_get_buf` sees it.
-    let mut ret = unsafe { Tv::new(rettv) };
+    let mut ret = unsafe { Tv::new(result) };
     ret.v_type = if retlist { VAR_LIST } else { VAR_STRING };
     ret.vval.v_string = ptr::null_mut();
     if buffer.is_null() || unsafe { (*buffer).b_ml.ml_mfp }.is_null() || start < 0 || end < start {
         if retlist {
-            unsafe { tv_list_alloc_ret(rettv, 0) };
+            unsafe { tv_list_alloc_ret(result, 0) };
         }
         return;
     }
@@ -183,7 +183,7 @@ unsafe fn get_buffer_lines(
     }
     start = start.max(1);
     end = end.min(buf.line_count());
-    let list = unsafe { tv_list_alloc_ret(rettv, (end - start + 1) as ptrdiff_t) };
+    let list = unsafe { tv_list_alloc_ret(result, (end - start + 1) as ptrdiff_t) };
     for lnum in start..=end {
         let (text, len) = unsafe { (buf.line(lnum).raw(), buf.line_len(lnum) as ssize_t) };
         unsafe { tv_list_append_string(list, text, len) };
@@ -193,8 +193,8 @@ unsafe fn get_buffer_lines(
 /// `getbufline()` when `retlist`, `getbufoneline()` otherwise.
 ///
 /// # Safety
-/// The arguments and `rettv` must be live typvals.
-unsafe fn getbufline(args: Args<'_>, rettv: &mut TypVal, retlist: bool) {
+/// The arguments and `result` must be live typvals.
+unsafe fn getbufline(args: Args<'_>, result: &mut TypVal, retlist: bool) {
     // SAFETY: the caller's obligation.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf_chk(args, 0);
@@ -207,49 +207,49 @@ unsafe fn getbufline(args: Args<'_>, rettv: &mut TypVal, retlist: bool) {
     } else {
         lnum
     };
-    unsafe { get_buffer_lines(buf, lnum, end, retlist, rettv) };
+    unsafe { get_buffer_lines(buf, lnum, end, retlist, result) };
 }
 
 /// `append({lnum}, {string/list})`.
-pub unsafe fn f_append(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
+pub unsafe fn f_append(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(curbuf.get(), lnum, true, args.ptr(1), rettv) };
+        unsafe { set_buffer_lines(curbuf.get(), lnum, true, args.ptr(1), result) };
     }
 }
 
 /// `appendbufline({buf}, {lnum}, {string/list})`.
-pub unsafe fn f_appendbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { buf_set_append_line(args, rettv, true) };
+pub unsafe fn f_appendbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
+    unsafe { buf_set_append_line(args, result, true) };
 }
 
 /// `setbufline({buf}, {lnum}, {string/list})`.
-pub unsafe fn f_setbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { buf_set_append_line(args, rettv, false) };
+pub unsafe fn f_setbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
+    unsafe { buf_set_append_line(args, result, false) };
 }
 
 /// `setline({lnum}, {string/list})`.
-pub unsafe fn f_setline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
+pub unsafe fn f_setline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(curbuf.get(), lnum, false, args.ptr(1), rettv) };
+        unsafe { set_buffer_lines(curbuf.get(), lnum, false, args.ptr(1), result) };
     }
 }
 
 /// `getline({lnum} [, {end}])` — one String, or a List for a range.
-pub unsafe fn f_getline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; `curbuf` is set.
+pub unsafe fn f_getline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; `curbuf` is set.
     let lnum = arg_lnum(args, 0);
     // One argument answers a string, a range answers a list.
     let (end, retlist) = if args.has(1) {
@@ -257,28 +257,28 @@ pub unsafe fn f_getline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     } else {
         (lnum, false)
     };
-    unsafe { get_buffer_lines(curbuf.get(), lnum, end, retlist, rettv) };
+    unsafe { get_buffer_lines(curbuf.get(), lnum, end, retlist, result) };
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
-pub unsafe fn f_getbufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { getbufline(args, rettv, true) };
+pub unsafe fn f_getbufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
+    unsafe { getbufline(args, result, true) };
 }
 
 /// `getbufoneline({buf}, {lnum})`.
-pub unsafe fn f_getbufoneline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { getbufline(args, rettv, false) };
+pub unsafe fn f_getbufoneline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
+    unsafe { getbufline(args, result, false) };
 }
 
 /// `deletebufline({buf}, {first} [, {last}])` — 0 when the lines went.
-pub unsafe fn f_deletebufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = 1;
-    // SAFETY: the arguments and `rettv` are live typvals; `cob` is a live
+pub unsafe fn f_deletebufline(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = 1;
+    // SAFETY: the arguments and `result` are live typvals; `cob` is a live
     // local, restored on every path out of the change.
     let did_emsg_before = did_emsg.get();
     let buf = arg_buf(args, 0, 0);
@@ -332,7 +332,7 @@ pub unsafe fn f_deletebufline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
         }
         check_cursor_col(cur_win());
         unsafe { deleted_lines_mark(first, count) };
-        rettv.vval.v_number = 0;
+        result.vval.v_number = 0;
     }
     if !is_curbuf {
         unsafe { cob.restore() };

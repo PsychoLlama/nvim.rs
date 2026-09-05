@@ -134,7 +134,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     var1: *mut TypVal,
     flags: c_int,
     unlet: bool,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
 ) -> GlvStatus {
     let mut numbuf = NumBuf::new();
     let quiet = flags & GLV_QUIET as c_int != 0;
@@ -170,7 +170,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     // Assigning into a scope dictionary: check that the name is a valid
     // variable name, and a valid *function* name too unless the scope is
     // `l:` or `g:`. Overwriting a builtin function is not allowed.
-    if !rettv.is_null() && dv_scope != 0 {
+    if !result.is_null() && dv_scope != 0 {
         // The two checks want a NUL-terminated key, so a `.key` is
         // terminated in place and put back.
         // SAFETY: a `.key`'s `len` bytes are inside the writable `name`.
@@ -183,10 +183,10 @@ pub(crate) unsafe fn get_lval_dict_item(
             // SAFETY: as above.
             unsafe { *key.offset(len as isize) = NUL as c_char };
         }
-        // SAFETY: `rettv` is the caller's, and `key` is NUL-terminated either way now.
+        // SAFETY: `result` is the caller's, and `key` is NUL-terminated either way now.
         let existing = lp.ll_di.is_null();
         let wrong = (dv_scope == VAR_DEF_SCOPE
-            && unsafe { tv_is_func(*rettv) }
+            && unsafe { tv_is_func(*result) }
             && unsafe { var_wrong_func_name(key, existing) })
             || !unsafe { valid_varname(key) };
         if len != -1 {
@@ -202,7 +202,7 @@ pub(crate) unsafe fn get_lval_dict_item(
     let lua_key = !lp.ll_di.is_null()
         && unsafe { tv_is_luafunc(&raw mut (*lp.ll_di).di_tv) }
         && len == -1
-        && rettv.is_null();
+        && result.is_null();
     if lua_key {
         let what = c"v:['lua']".as_ptr();
         // SAFETY: the format takes one NUL-terminated string.
@@ -377,7 +377,7 @@ pub(crate) unsafe fn get_lval_subscript(
     lp: *mut LVal,
     mut p: *mut c_char,
     name: *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     _ht: *mut HashTab,
     _v: *mut DictItem,
     unlet: bool,
@@ -487,13 +487,13 @@ pub(crate) unsafe fn get_lval_subscript(
                         break 'done;
                     }
                     // The value being assigned has to be sliceable too.
-                    // A null `rettv` is `:unlet`, which assigns nothing.
-                    // SAFETY: `rettv` is non-null here; `v_type` names the member read.
-                    let sliceable = rettv.is_null()
-                        || (unsafe { (*rettv).v_type } == VAR_LIST
-                            && !unsafe { (*rettv).list_or_null() }.is_null())
-                        || (unsafe { (*rettv).v_type } == VAR_BLOB
-                            && !unsafe { (*rettv).blob_or_null() }.is_null());
+                    // A null `result` is `:unlet`, which assigns nothing.
+                    // SAFETY: `result` is non-null here; `v_type` names the member read.
+                    let sliceable = result.is_null()
+                        || (unsafe { (*result).v_type } == VAR_LIST
+                            && !unsafe { (*result).list_or_null() }.is_null())
+                        || (unsafe { (*result).v_type } == VAR_BLOB
+                            && !unsafe { (*result).blob_or_null() }.is_null());
                     if !sliceable {
                         if !quiet {
                             emsg_static(c"E709: [:] requires a List or Blob value");
@@ -531,7 +531,7 @@ pub(crate) unsafe fn get_lval_subscript(
             if container.v_type == VAR_DICT {
                 let (rec, end, idx) = (lp.raw(), &raw mut p, &raw mut var1);
                 let status = unsafe {
-                    get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, rettv)
+                    get_lval_dict_item(rec, name, key, len, end, idx, flags, unlet, result)
                 };
                 match status {
                     GLV_FAIL => break 'done,
@@ -572,10 +572,10 @@ pub(crate) unsafe fn get_lval_subscript(
 ///
 /// # Safety
 /// `name` must be a writable, NUL-terminated string; `lp` must be valid;
-/// `rettv` null or the value about to be assigned.
+/// `result` null or the value about to be assigned.
 pub unsafe fn get_lval(
     name: *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     lp: *mut LVal,
     unlet: bool,
     skip: bool,
@@ -678,7 +678,7 @@ pub unsafe fn get_lval(
     }
 
     // SAFETY: `lp` has `ll_tv` set, `p` points into `name`, and `ht` and `v` are this frame's.
-    p = unsafe { get_lval_subscript(lp.raw(), p, name, rettv, ht, v, unlet, flags) };
+    p = unsafe { get_lval_subscript(lp.raw(), p, name, result, ht, v, unlet, flags) };
     if p.is_null() {
         return null_mut();
     }
@@ -706,27 +706,27 @@ pub unsafe fn clear_lval(lp: *mut LVal) {
 ///
 /// # Safety
 /// `lp` must come from `get_lval`; `endp` must point into the same writable
-/// string; `rettv` must be valid.
+/// string; `result` must be valid.
 pub unsafe fn set_var_lval(
     lp: *mut LVal,
     endp: *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
 ) {
     // SAFETY, for every region in this body and in the two helpers below:
     // the caller's promise is that `lp` is the record `get_lval` filled in
-    // and outlives the call, that `rettv` is the value being assigned, and
+    // and outlives the call, that `result` is the value being assigned, and
     // that `endp` points into the same writable NUL-terminated string. Each
     // union member read is the one the `v_type` just tested names; a
     // non-null `op` is NUL-terminated; `oldtv` and `tv` are frame locals;
     // and every message named is a literal or a shared `e_*` text. The
     // notes below add only what is local to a site.
-    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
+    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(result)) };
     if lp.ll_tv.is_null() {
         // SAFETY: as above; `endp` points into the same writable string.
-        unsafe { set_whole_var(lp.raw(), endp, rettv, copy, is_const, op) };
+        unsafe { set_whole_var(lp.raw(), endp, result, copy, is_const, op) };
         return;
     }
 
@@ -789,8 +789,8 @@ pub unsafe fn set_var_lval(
     // `v:oldfiles`, crashes the next reader (docket O-B14-10). A new key
     // cannot happen here: `get_lval` refuses to add one to `v:`.
     if dict == get_vimvar_dict() && lp.ll_newkey.is_null() {
-        // SAFETY: `ll_di` is the existing item, and `rettv` the caller's.
-        unsafe { set_vvar_item(lp.ll_di, rettv, copy, op) };
+        // SAFETY: `ll_di` is the existing item, and `result` the caller's.
+        unsafe { set_vvar_item(lp.ll_di, result, copy, op) };
         return;
     }
 
@@ -805,7 +805,7 @@ pub unsafe fn set_var_lval(
             }
             // SAFETY: `ll_tv` holds the Dict; `ll_newkey` is the owned key text.
             let target = unsafe { Tv::new(lp.ll_tv).dict_or_null() };
-            if unsafe { tv_dict_wrong_func_name(target, rettv, lp.ll_newkey) } != 0 {
+            if unsafe { tv_dict_wrong_func_name(target, result, lp.ll_newkey) } != 0 {
                 return;
             }
             let di = unsafe { tv_dict_item_alloc(lp.ll_newkey) };
@@ -823,23 +823,23 @@ pub unsafe fn set_var_lval(
             if !op.is_null() && unsafe { *op } != b'=' as c_char {
                 // `+=` and friends modify in place; there is nothing to
                 // assign afterwards.
-                // SAFETY: `ll_tv` is the live target and `rettv` the caller's value.
-                let _ = unsafe { eexe_mod_op(lp.ll_tv, rettv, op) };
+                // SAFETY: `ll_tv` is the live target and `result` the caller's value.
+                let _ = unsafe { eexe_mod_op(lp.ll_tv, result, op) };
                 break 'notify;
             }
             unsafe { tv_clear(lp.ll_tv) };
         }
 
         if copy {
-            unsafe { tv_copy(rettv, lp.ll_tv) };
+            unsafe { tv_copy(result, lp.ll_tv) };
         } else {
-            // SAFETY: the value moves out of `rettv`, which is reset after it.
+            // SAFETY: the value moves out of `result`, which is reset after it.
             let mut target = unsafe { Tv::new(lp.ll_tv) };
             // SAFETY: as above.
-            *target = unsafe { *rettv };
+            *target = unsafe { *result };
             target.v_lock = VarLock::Unlocked;
-            // SAFETY: `rettv` is reset so nothing frees the value twice.
-            unsafe { tv_init(rettv) };
+            // SAFETY: `result` is reset so nothing frees the value twice.
+            unsafe { tv_init(result) };
         }
     }
 
@@ -870,7 +870,7 @@ pub unsafe fn set_var_lval(
 unsafe fn set_whole_var(
     lp: *mut LVal,
     endp: *mut c_char,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     copy: bool,
     is_const: bool,
     op: *const c_char,
@@ -888,8 +888,8 @@ unsafe fn set_whole_var(
         // terminated in place rather than putting `cc` back. Preserved:
         // anything that reads the command line after a rejected Blob
         // assignment sees the truncated form.
-        // SAFETY: `lp` has `ll_blob` set, and `rettv` is the caller's.
-        if !unsafe { set_blob_var(lp.raw(), rettv, op) } {
+        // SAFETY: `lp` has `ll_blob` set, and `result` is the caller's.
+        if !unsafe { set_blob_var(lp.raw(), result, op) } {
             return;
         }
     } else if !op.is_null() && unsafe { *op } != b'=' as c_char {
@@ -918,7 +918,7 @@ unsafe fn set_whole_var(
             let writable = di.is_null()
                 || (!unsafe { var_check_ro(n, name, TV_CSTRING as size_t) }
                     && !unsafe { tv_check_lock(dtv, name, TV_CSTRING as size_t) });
-            if writable && unsafe { eexe_mod_op(&raw mut tv, rettv, op) }.is_ok() {
+            if writable && unsafe { eexe_mod_op(&raw mut tv, result, op) }.is_ok() {
                 // SAFETY: as above -- the folded value goes back by name.
                 unsafe { set_var(name, name_len, &raw mut tv, false) };
             }
@@ -926,8 +926,8 @@ unsafe fn set_whole_var(
         }
     } else {
         let (name, name_len) = (lp.ll_name, lp.ll_name_len);
-        // SAFETY: the name is the one `get_lval` resolved, and `rettv` is the caller's value.
-        unsafe { set_var_const(name, name_len, rettv, copy, is_const) };
+        // SAFETY: the name is the one `get_lval` resolved, and `result` is the caller's value.
+        unsafe { set_var_const(name, name_len, result, copy, is_const) };
     }
 
     unsafe { *endp = cc };
@@ -939,9 +939,9 @@ unsafe fn set_whole_var(
 ///
 /// # Safety
 /// As `set_var_lval`, with `lp->ll_blob` set.
-unsafe fn set_blob_var(lp: *mut LVal, rettv: *mut TypVal, op: *const c_char) -> bool {
+unsafe fn set_blob_var(lp: *mut LVal, result: *mut TypVal, op: *const c_char) -> bool {
     // SAFETY: the caller's promise -- both outlive the call.
-    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(rettv)) };
+    let (mut lp, value) = unsafe { (Lv::new(lp), Tv::new(result)) };
     if !op.is_null() && unsafe { *op } != b'=' as c_char {
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let op = unsafe { c_str(op) };
@@ -961,15 +961,15 @@ unsafe fn set_blob_var(lp: *mut LVal, rettv: *mut TypVal, op: *const c_char) -> 
             lp.ll_n2 = unsafe { tv_blob_len(lp.ll_blob) } - 1;
         }
         let (blob, n1, n2) = (lp.ll_blob, lp.ll_n1 as VarNumber, lp.ll_n2 as VarNumber);
-        // SAFETY: as above; `rettv` holds the Blob being assigned.
-        if unsafe { tv_blob_set_range(blob, n1, n2, rettv) }.is_err() {
+        // SAFETY: as above; `result` holds the Blob being assigned.
+        if unsafe { tv_blob_set_range(blob, n1, n2, result) }.is_err() {
             return false;
         }
         return true;
     }
 
     let mut error = false;
-    let val = unsafe { tv_get_number_chk(rettv, &raw mut error) };
+    let val = unsafe { tv_get_number_chk(result, &raw mut error) };
     if !error {
         if !(0..=255).contains(&val) {
             // Upstream's text is `"E1239: Invalid value for blob: 0x" PRIX64`,

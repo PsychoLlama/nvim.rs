@@ -17,24 +17,24 @@ use crate::window::{WSP_ABOVE, WSP_BELOW, WSP_VERT};
 
 /// `getwinpos([{timeout}])` — the GUI's window position, which a terminal
 /// never has.
-pub unsafe fn f_getwinpos(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value, and the list it is given
+pub unsafe fn f_getwinpos(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the cleared return value, and the list it is given
     // stays alive for the two appends.
-    let list = unsafe { tv_list_alloc_ret(rettv, 2) };
+    let list = unsafe { tv_list_alloc_ret(result, 2) };
     unsafe { tv_list_append_number(list, -1) };
     unsafe { tv_list_append_number(list, -1) };
 }
 
 /// `getwinposx()` — always -1; there is no GUI window.
-pub unsafe fn f_getwinposx(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = -1 };
+pub unsafe fn f_getwinposx(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the cleared return value.
+    unsafe { (*result).vval.v_number = -1 };
 }
 
 /// `getwinposy()` — always -1; there is no GUI window.
-pub unsafe fn f_getwinposy(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value.
-    unsafe { (*rettv).vval.v_number = -1 };
+pub unsafe fn f_getwinposy(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the cleared return value.
+    unsafe { (*result).vval.v_number = -1 };
 }
 
 /// The window and the offset a `win_move_*()` call names, once the window has
@@ -58,36 +58,40 @@ unsafe fn drag_target(args: Args<'_>) -> Option<(Win, c_int)> {
 }
 
 /// `win_move_separator({nr}, {offset})` — drag a vertical separator.
-pub unsafe fn f_win_move_separator(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = 0;
+pub unsafe fn f_win_move_separator(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = 0;
     // SAFETY: the arguments are live typvals and the window is live.
     let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
         return;
     };
     unsafe { win_drag_vsep_line(wp.raw(), offset) };
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
 }
 
 /// `win_move_statusline({nr}, {offset})` — drag a status line.
-pub unsafe fn f_win_move_statusline(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = 0;
+pub unsafe fn f_win_move_statusline(
+    argvars: *mut TypVal,
+    result: *mut TypVal,
+    _fptr: EvalFuncData,
+) {
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = 0;
     // SAFETY: the arguments are live typvals and the window is live.
     let Some((wp, offset)) = (unsafe { drag_target(args) }) else {
         return;
     };
     unsafe { win_drag_status_line(wp.raw(), offset) };
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
 }
 
 /// `win_screenpos({nr})` — the window's top-left cell, one-based; `[0, 0]` for
 /// a window that does not exist.
-pub unsafe fn f_win_screenpos(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals; the list stays
-    // alive for the two appends because `rettv` owns it.
-    let list = unsafe { tv_list_alloc_ret(rettv, 2) };
+pub unsafe fn f_win_screenpos(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals; the list stays
+    // alive for the two appends because `result` owns it.
+    let list = unsafe { tv_list_alloc_ret(result, 2) };
     let wp = arg_win(args, 0);
     let (row, col) = wp.map_or((0, 0), |wp| (wp.w_winrow + 1, wp.w_wincol + 1));
     unsafe { tv_list_append_number(list, VarNumber::from(row)) };
@@ -123,9 +127,9 @@ unsafe fn splitmove_options(opts: *mut TypVal) -> (c_int, c_int) {
 }
 
 /// `win_splitmove({nr}, {target} [, {options}])` — 0 when the window moved.
-pub unsafe fn f_win_splitmove(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1;
+pub unsafe fn f_win_splitmove(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = -1;
     // SAFETY: the arguments are live typvals; the windows the resolver
     // answers are live, and every callee below re-checks validity because an
     // autocommand may close one under it.
@@ -163,7 +167,7 @@ pub unsafe fn f_win_splitmove(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
     }
     if targetwin.is_current() && win_valid(wp.raw()) {
         if unsafe { win_splitmove(wp.raw(), size, flags) }.is_ok() {
-            rettv.vval.v_number = 0;
+            result.vval.v_number = 0;
         }
     } else {
         crate::semsg!("E855: Autocommands caused command to abort");
@@ -174,35 +178,35 @@ pub unsafe fn f_win_splitmove(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: E
 }
 
 /// `wincol()` — the cursor's screen column within the window, one-based.
-pub unsafe fn f_wincol(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curwin` is set and `rettv` is the cleared return value.
+pub unsafe fn f_wincol(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = cur_win();
     validate_cursor(win);
-    unsafe { (*rettv).vval.v_number = VarNumber::from(win.w_wcol + 1) };
+    unsafe { (*result).vval.v_number = VarNumber::from(win.w_wcol + 1) };
 }
 
 /// `winline()` — the cursor's screen row within the window, one-based.
-pub unsafe fn f_winline(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curwin` is set and `rettv` is the cleared return value.
+pub unsafe fn f_winline(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `curwin` is set and `result` is the cleared return value.
     let win = cur_win();
     validate_cursor(win);
-    unsafe { (*rettv).vval.v_number = VarNumber::from(win.w_wrow + 1) };
+    unsafe { (*result).vval.v_number = VarNumber::from(win.w_wrow + 1) };
 }
 
 /// `winheight({nr})` — text height, -1 for a window that does not exist.
-pub unsafe fn f_winheight(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_winheight(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    rettv.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height));
+    result.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_height));
 }
 
 /// `winwidth({nr})` — text width, -1 for a window that does not exist.
-pub unsafe fn f_winwidth(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_winwidth(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the arguments are live typvals.
     let wp = arg_win(args, 0);
-    rettv.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width));
+    result.vval.v_number = wp.map_or(-1, |wp| VarNumber::from(wp.w_view_width));
 }
 
 /// `winrestcmd()` — the `:resize` commands that rebuild the current tab page's
@@ -210,8 +214,8 @@ pub unsafe fn f_winwidth(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 ///
 /// The whole thing is emitted twice: setting one window's height changes its
 /// neighbours', so a single pass cannot land on the sizes it names.
-pub unsafe fn f_winrestcmd(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `curtab` is set, and `rettv` takes the text over at the end.
+pub unsafe fn f_winrestcmd(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `curtab` is set, and `result` takes the text over at the end.
     let mut cmds = Vec::<u8>::new();
     let tp = cur_tab();
     // Scoped so the buffer it borrows is free again for the tail below.
@@ -227,15 +231,15 @@ pub unsafe fn f_winrestcmd(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
             }
         }
     }
-    unsafe { (*rettv).vval.v_string = owned_cstr(cmds) };
-    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*result).vval.v_string = owned_cstr(cmds) };
+    unsafe { (*result).v_type = VAR_STRING };
 }
 
 /// `winrestview({dict})` — put back what `winsaveview()` saved.
 ///
 /// Every key is optional: what the dictionary does not mention keeps its
 /// current value.
-pub unsafe fn f_winrestview(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_winrestview(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the arguments are live typvals, and `curwin` is set.
     if unsafe { tv_check_for_nonnull_dict_arg(argvars, 0) }.is_err() {
         return;
@@ -308,11 +312,11 @@ fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
 }
 
 /// `winsaveview()` — everything `winrestview()` puts back.
-pub unsafe fn f_winsaveview(_argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    // SAFETY: `rettv` is the cleared return value and `curwin` is set; the
-    // dictionary stays alive for the appends because `rettv` owns it.
-    unsafe { tv_dict_alloc_ret(rettv) };
-    let dict = unsafe { (*rettv).dict_or_null() };
+pub unsafe fn f_winsaveview(_argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    // SAFETY: `result` is the cleared return value and `curwin` is set; the
+    // dictionary stays alive for the appends because `result` owns it.
+    unsafe { tv_dict_alloc_ret(result) };
+    let dict = unsafe { (*result).dict_or_null() };
     let win = cur_win();
     let nr = |key: &CStr, value: VarNumber| {
         // SAFETY: a live dictionary and a NUL-terminated key.

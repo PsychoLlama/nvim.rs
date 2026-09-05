@@ -47,9 +47,9 @@ pub unsafe fn find_buffer(avar: *mut TypVal) -> *mut Buffer {
 }
 
 /// `bufadd({name})` — the number of the buffer, creating it if need be.
-pub unsafe fn f_bufadd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_bufadd(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the arguments are live typvals and `tv_get_string` hands back a
     // NUL-terminated string.
     let name = unsafe { numbuf.string(args.ptr(0)) } as *mut c_char;
@@ -59,24 +59,24 @@ pub unsafe fn f_bufadd(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFunc
     } else {
         name
     };
-    rettv.vval.v_number = VarNumber::from(unsafe { buflist_add(name, 0) });
+    result.vval.v_number = VarNumber::from(unsafe { buflist_add(name, 0) });
 }
 
 /// `bufexists({buf})`.
-pub unsafe fn f_bufexists(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_bufexists(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the arguments are live typvals.
     let buf = unsafe { find_buffer(args.ptr(0)) };
-    rettv.vval.v_number = VarNumber::from(!buf.is_null());
+    result.vval.v_number = VarNumber::from(!buf.is_null());
 }
 
 /// `buflisted({buf})`.
-pub unsafe fn f_buflisted(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_buflisted(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
     let listed = unsafe { Buf::from_raw(find_buffer(args.ptr(0))) }.is_some_and(|b| b.b_p_bl != 0);
-    rettv.vval.v_number = VarNumber::from(listed);
+    result.vval.v_number = VarNumber::from(listed);
 }
 
 /// `bufload({buf})` — read the file in if the buffer is not loaded yet.
@@ -97,20 +97,20 @@ pub unsafe fn f_bufload(argvars: *mut TypVal, unused: *mut TypVal, _fptr: EvalFu
 }
 
 /// `bufloaded({buf})`.
-pub unsafe fn f_bufloaded(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_bufloaded(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY: the arguments are live typvals, and the resolver answers a live
     // buffer or NULL.
     let loaded = unsafe { Buf::from_raw(find_buffer(args.ptr(0))) }
         .is_some_and(|b| !b.b_ml.ml_mfp.is_null());
-    rettv.vval.v_number = VarNumber::from(loaded);
+    result.vval.v_number = VarNumber::from(loaded);
 }
 
 /// `bufname([{buf}])` — the buffer's short name, empty when it has none.
-pub unsafe fn f_bufname(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = ptr::null_mut();
+pub unsafe fn f_bufname(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_STRING;
+    result.vval.v_string = ptr::null_mut();
     // SAFETY: the arguments are live typvals; `curbuf` is set and the resolver
     // answers a live buffer or NULL.
     let buf = if args.has(0) {
@@ -121,16 +121,16 @@ pub unsafe fn f_bufname(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
     if let Some(buf) = buf
         && !buf.b_fname.is_null()
     {
-        rettv.vval.v_string = unsafe { xstrdup(buf.b_fname) };
+        result.vval.v_string = unsafe { xstrdup(buf.b_fname) };
     }
 }
 
 /// `bufnr([{buf} [, {create}]])` — -1 when there is no such buffer and it was
 /// not asked to be created.
-pub unsafe fn f_bufnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_bufnr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1;
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = -1;
     // SAFETY: the arguments are live typvals and `curbuf` is set.
     let mut buf: *mut Buffer = if !args.has(0) {
         curbuf.get()
@@ -155,7 +155,7 @@ pub unsafe fn f_bufnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
         }
     }
     if let Some(buf) = unsafe { Buf::from_raw(buf) } {
-        rettv.vval.v_number = VarNumber::from(buf.handle);
+        result.vval.v_number = VarNumber::from(buf.handle);
     }
 }
 
@@ -163,12 +163,12 @@ pub unsafe fn f_bufnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncD
 /// showing the buffer, as an id or as a `winnr()` ordinal.
 ///
 /// # Safety
-/// The arguments and `rettv` must be live typvals.
-unsafe fn buf_win_common(args: Args<'_>, rettv: &mut TypVal, get_nr: bool) {
+/// The arguments and `result` must be live typvals.
+unsafe fn buf_win_common(args: Args<'_>, result: &mut TypVal, get_nr: bool) {
     // SAFETY: the caller's obligation.
     let buf = arg_buf_chk(args, 0);
     if buf.is_null() {
-        rettv.vval.v_number = -1;
+        result.vval.v_number = -1;
         return;
     }
     // SAFETY: `curtab` is set from startup to exit.
@@ -180,22 +180,22 @@ unsafe fn buf_win_common(args: Args<'_>, rettv: &mut TypVal, get_nr: bool) {
         winnr += c_int::from(wp.has_winnr(tp));
         ptr::eq(wp.w_buffer, buf) && (!get_nr || wp.has_winnr(tp))
     });
-    rettv.vval.v_number = match found {
+    result.vval.v_number = match found {
         Some(wp) => VarNumber::from(if get_nr { winnr } else { wp.handle }),
         None => -1,
     };
 }
 
 /// `bufwinid({buf})`.
-pub unsafe fn f_bufwinid(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { buf_win_common(args, rettv, false) };
+pub unsafe fn f_bufwinid(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
+    unsafe { buf_win_common(args, result, false) };
 }
 
 /// `bufwinnr({buf})`.
-pub unsafe fn f_bufwinnr(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    // SAFETY: the arguments and `rettv` are live typvals.
-    unsafe { buf_win_common(args, rettv, true) };
+pub unsafe fn f_bufwinnr(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    // SAFETY: the arguments and `result` are live typvals.
+    unsafe { buf_win_common(args, result, true) };
 }

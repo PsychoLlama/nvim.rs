@@ -132,23 +132,23 @@ fn eval_tree(buffer: Buf, first: UndoLink) -> *mut List {
 /// # Safety
 ///
 /// The eval-function contract: one argument and a return value to fill in.
-pub unsafe fn f_undofile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_undofile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     // SAFETY: the eval-function contract, by the contract above.
-    unsafe { (*rettv).v_type = VAR_STRING };
+    unsafe { (*result).v_type = VAR_STRING };
     // SAFETY: as above.
     let fname: *const c_char = unsafe { numbuf.string(argvars) };
     // SAFETY: a NUL-terminated name.
     if unsafe { *fname } == NUL as c_char {
         // SAFETY: the return value to fill in.
-        unsafe { (*rettv).vval.v_string = ptr::null_mut() };
+        unsafe { (*result).vval.v_string = ptr::null_mut() };
         return;
     }
     // SAFETY: a NUL-terminated name.
     let ffname: *mut c_char = unsafe { full_name_save(fname, true) };
     if !ffname.is_null() {
         // SAFETY: a NUL-terminated absolute path, and the return value.
-        unsafe { (*rettv).vval.v_string = u_get_undo_file_name(ffname, false) };
+        unsafe { (*result).vval.v_string = u_get_undo_file_name(ffname, false) };
     }
     // SAFETY: NULL, or `full_name_save`'s allocation.
     unsafe { xfree(ffname.cast()) };
@@ -159,9 +159,9 @@ pub unsafe fn f_undofile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 /// # Safety
 ///
 /// The eval-function contract, and a live current buffer.
-pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_undotree(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: the eval-function contract, by the contract above.
-    unsafe { tv_dict_alloc_ret(rettv) };
+    unsafe { tv_dict_alloc_ret(result) };
     let tv: *mut TypVal = argvars;
     // SAFETY: as above.
     let raw = if unsafe { (*tv).v_type } == VAR_UNKNOWN {
@@ -171,7 +171,7 @@ pub unsafe fn f_undotree(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
         unsafe { get_buf_arg(tv) }
     };
     // SAFETY: the return value the contract gives us.
-    let dict = unsafe { (*rettv).vval.v_dict };
+    let dict = unsafe { (*result).vval.v_dict };
     // SAFETY: `curbuf` and `get_buf_arg` both answer a live buffer or NULL.
     let buf = unsafe { Buf::from_raw(raw) };
     let Some(buf) = buf else { return };

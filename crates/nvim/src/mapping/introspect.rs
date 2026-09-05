@@ -65,7 +65,7 @@ impl Argv {
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_hasmapto(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_hasmapto(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut buf = [0 as c_char; NUMBUFLEN];
     // SAFETY: the Vimscript call convention — `argvars` is a live argument
@@ -78,11 +78,11 @@ pub unsafe fn f_hasmapto(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
         None => c"nvo".as_ptr(),
     };
     let abbr = argv.number(2).is_some_and(|n| n != 0);
-    // SAFETY: both strings are NUL-terminated, and `rettv` is the caller's
+    // SAFETY: both strings are NUL-terminated, and `result` is the caller's
     // writable answer slot.
     unsafe {
         let found = map_to_exists(name, mode, abbr);
-        (*rettv).vval.v_number = VarNumber::from(found);
+        (*result).vval.v_number = VarNumber::from(found);
     }
 }
 
@@ -232,10 +232,10 @@ pub(crate) unsafe fn mapblock_fill_dict(
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-unsafe fn get_maparg(argvars: *mut TypVal, rettv: *mut TypVal, exact: bool) {
+unsafe fn get_maparg(argvars: *mut TypVal, result: *mut TypVal, exact: bool) {
     let mut numbuf = NumBuf::new();
-    // SAFETY: the caller's promise — `rettv` is the writable answer slot.
-    let mut ret = unsafe { Live::new(rettv) };
+    // SAFETY: the caller's promise — `result` is the writable answer slot.
+    let mut ret = unsafe { Live::new(result) };
     // Return an empty string on failure.
     ret.v_type = VAR_STRING;
     ret.vval.v_string = ptr::null_mut();
@@ -321,7 +321,7 @@ unsafe fn get_maparg(argvars: *mut TypVal, rettv: *mut TypVal, exact: bool) {
         // Return a dictionary.
         let mut arena = ARENA_EMPTY;
         // SAFETY: `keys_simplified` is `replace_termcodes`'s NUL-terminated
-        // answer, `arena` is this frame's own, and `rettv` the caller's slot.
+        // answer, `arena` is this frame's own, and `result` the caller's slot.
         unsafe {
             let alt = did_simplify.then(|| MapStr::new(cstr::bytes_at(keys_simplified)));
             let dict = mapblock_fill_dict(
@@ -333,13 +333,13 @@ unsafe fn get_maparg(argvars: *mut TypVal, rettv: *mut TypVal, exact: bool) {
                 &raw mut arena,
             );
             let mut obj = Object::dict(dict);
-            object_to_vim_take_luaref(&raw mut obj, rettv, true);
+            object_to_vim_take_luaref(&raw mut obj, result, true);
             arena_mem_free(arena_finish(&raw mut arena));
         }
     } else {
         // Return an empty dictionary.
         // SAFETY: the caller's writable answer slot.
-        unsafe { tv_dict_alloc_ret(rettv) };
+        unsafe { tv_dict_alloc_ret(result) };
     }
 }
 
@@ -347,17 +347,17 @@ unsafe fn get_maparg(argvars: *mut TypVal, rettv: *mut TypVal, exact: bool) {
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_maplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_maplist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let flags = REPTERM_FROM_PART as c_int | REPTERM_DO_LT as c_int;
     let cpo = p_cpo.get();
     // SAFETY: the Vimscript call convention — `argvars` is a live argument
-    // vector and `rettv` the writable answer slot.
+    // vector and `result` the writable answer slot.
     let abbr = unsafe { Argv::new(argvars) }
         .get(0)
         // SAFETY: a slot the vector holds.
         .is_some_and(|at| unsafe { tv_get_bool(at) } != 0);
     // SAFETY: as above.
-    unsafe { tv_list_alloc_ret(rettv, kListLenUnknown as ptrdiff_t) };
+    unsafe { tv_list_alloc_ret(result, kListLenUnknown as ptrdiff_t) };
     // SAFETY: `curbuf` is set from startup to exit.
     let cur = unsafe { Buf::current() };
 
@@ -391,14 +391,14 @@ pub unsafe fn f_maplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
                 vval: typval_vval_union { v_number: 0 },
             };
             // SAFETY: `mp` is a live entry of the table being walked, `arena`
-            // is this frame's own, and `rettv`'s list was allocated above.
+            // is this frame's own, and `result`'s list was allocated above.
             unsafe {
                 let dict =
                     mapblock_fill_dict(mp, alt.as_ref(), buffer_local, abbr, true, &raw mut arena);
                 let mut obj = Object::dict(dict);
                 object_to_vim_take_luaref(&raw mut obj, &raw mut d, true);
                 debug_assert_eq!(d.v_type, VAR_DICT);
-                tv_list_append_dict((*rettv).vval.v_list, d.vval.v_dict);
+                tv_list_append_dict((*result).vval.v_list, d.vval.v_dict);
                 arena_mem_free(arena_finish(&raw mut arena));
             }
             None
@@ -413,19 +413,19 @@ pub unsafe fn f_maplist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFun
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_maparg(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_maparg(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): the Vimscript call convention, passed straight
     // through.
-    unsafe { get_maparg(argvars, rettv, true) }
+    unsafe { get_maparg(argvars, result, true) }
 }
 
 /// `mapcheck()`.
 ///
 /// # Safety
 /// The Vimscript call convention: `argvars` is a live argument vector.
-pub unsafe fn f_mapcheck(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_mapcheck(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY (this body): as [`f_maparg`].
-    unsafe { get_maparg(argvars, rettv, false) }
+    unsafe { get_maparg(argvars, result, false) }
 }
 
 /// The mode a mode-shortname string names, and how much of it was consumed.

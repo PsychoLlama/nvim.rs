@@ -41,8 +41,8 @@ impl CondStack {
     }
 
     /// Postpone a `:return`'s value at level `idx`.
-    pub fn set_pending_return(&mut self, idx: usize, rettv: *mut ::core::ffi::c_void) {
-        self.cs_pend[idx] = rettv;
+    pub fn set_pending_return(&mut self, idx: usize, result: *mut ::core::ffi::c_void) {
+        self.cs_pend[idx] = result;
     }
 
     /// The exception postponed at level `idx`. Meaningful when

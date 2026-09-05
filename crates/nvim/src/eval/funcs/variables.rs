@@ -25,9 +25,9 @@ use core::ptr;
 const NO_CALLBACK: Callback = Callback::None;
 
 /// `dictwatcheradd({dict}, {pattern}, {callback})`.
-pub unsafe fn f_dictwatcheradd(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_dictwatcheradd(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _rettv) = frame!(argvars, _rettv);
+    let (args, _rettv) = frame!(argvars, _result);
     // SAFETY throughout: every callee below is a C entry point taking live typvals from
     // the frame; the callback is handed to the watcher, which takes it over.
     if check_secure() {
@@ -64,9 +64,9 @@ pub unsafe fn f_dictwatcheradd(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr:
 }
 
 /// `dictwatcherdel({dict}, {pattern}, {callback})`.
-pub unsafe fn f_dictwatcherdel(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_dictwatcherdel(argvars: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, _rettv) = frame!(argvars, _rettv);
+    let (args, _rettv) = frame!(argvars, _result);
     // SAFETY throughout: as `f_dictwatcheradd`; the callback built here is only used to
     // identify a watcher and is freed before returning.
     if check_secure() {
@@ -100,10 +100,10 @@ pub unsafe fn f_dictwatcherdel(argvars: *mut TypVal, _rettv: *mut TypVal, _fptr:
 
 /// `islocked({expr})` — 1 when the variable the name resolves to is locked,
 /// 0 when it is not, -1 when there is no such variable.
-pub unsafe fn f_islocked(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_islocked(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.vval.v_number = -1;
+    let (args, result) = frame!(argvars, result);
+    result.vval.v_number = -1;
     // SAFETY: `get_lval` clears `lv` before writing to it, and every pointer
     // read below comes back from it; `clear_lval` runs on every path.
     let mut lv = unsafe { core::mem::zeroed() };
@@ -128,7 +128,7 @@ pub unsafe fn f_islocked(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
             if !di.is_null() {
                 let locked = unsafe { (*di).di_flags } as c_int & DI_FLAGS_LOCK as c_int != 0
                     || unsafe { tv_islocked(&raw mut (*di).di_tv) };
-                rettv.vval.v_number = locked as VarNumber;
+                result.vval.v_number = locked as VarNumber;
             }
         } else if lv.ll_range {
             semsg!("E786: Range not allowed");
@@ -137,9 +137,9 @@ pub unsafe fn f_islocked(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
             let ll_newkey = unsafe { c_str(lv.ll_newkey) };
             semsg!("E716: Key not present in Dictionary: \"{ll_newkey}\"");
         } else if !lv.ll_list.is_null() {
-            rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as VarNumber;
+            result.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_li).li_tv) } as VarNumber;
         } else {
-            rettv.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as VarNumber;
+            result.vval.v_number = unsafe { tv_islocked(&raw mut (*lv.ll_di).di_tv) } as VarNumber;
         }
     }
     unsafe { clear_lval(&raw mut lv) };
@@ -150,8 +150,8 @@ pub unsafe fn f_islocked(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
 /// The address is formatted by `vim_vsnprintf_typval`'s `%p`, which reads
 /// its operand from the typval array rather than from a `va_list`; the
 /// `va_list` handed in is a zeroed placeholder that is never read.
-pub unsafe fn f_id(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_id(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the measuring call writes nothing; the second is handed a
     // buffer of exactly the size it reported plus the terminator.
     let base = args.ptr(0);
@@ -159,9 +159,9 @@ pub unsafe fn f_id(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData
     let nul = ptr::null_mut();
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
     let len = unsafe { vim_vsnprintf_typval(nul, 0, fmt, ap, base) };
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = unsafe { xmalloc(len as usize + 1) } as *mut c_char;
-    let out = rettv.string_or_null();
+    result.v_type = VAR_STRING;
+    result.vval.v_string = unsafe { xmalloc(len as usize + 1) } as *mut c_char;
+    let out = result.string_or_null();
     let cap = len as usize + 1;
     let ap = unsafe { (*dummy_ap.ptr()).clone() };
     unsafe { vim_vsnprintf_typval(out, cap, fmt, ap, base) };

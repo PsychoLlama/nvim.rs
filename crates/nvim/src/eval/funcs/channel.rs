@@ -88,11 +88,11 @@ unsafe fn trailing_args(
 }
 
 /// `chanclose({id} [, {stream}])`
-pub unsafe fn f_chanclose(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_chanclose(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `error` is a borrowed static message.
     if check_secure() {
         return;
@@ -120,23 +120,23 @@ pub unsafe fn f_chanclose(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
     }
 
     let mut error = ptr::null::<c_char>();
-    rettv.vval.v_number = unsafe {
+    result.vval.v_number = unsafe {
         channel_close(
             args.get(0).number_or_zero() as uint64_t,
             part,
             &raw mut error,
         )
     } as VarNumber;
-    if rettv.number_or_zero() == 0 {
+    if result.number_or_zero() == 0 {
         unsafe { emsg_ptr(error) };
     }
 }
 
 /// `chansend({id}, {data})`
-pub unsafe fn f_chansend(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+pub unsafe fn f_chansend(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `input` is an allocation `channel_send`
     // adopts.
     if check_secure() {
@@ -172,18 +172,18 @@ pub unsafe fn f_chansend(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFu
     let len = input_len as usize;
     let err = &raw mut error;
     let sent = unsafe { channel_send(id, input, len, true, err) };
-    rettv.vval.v_number = sent as VarNumber;
+    result.vval.v_number = sent as VarNumber;
     if !error.is_null() {
         unsafe { emsg_ptr(error) };
     }
 }
 
 /// `rpcnotify({channel}, {event} [, {args}...])`
-pub unsafe fn f_rpcnotify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcnotify(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // SAFETY throughout: the frame is live; `items` outlives the `Array` that borrows
     // it and the arena owns what the conversion allocates.
     if check_secure() {
@@ -220,7 +220,7 @@ pub unsafe fn f_rpcnotify(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
         semsg!("E475: Invalid argument: {what}");
         return;
     }
-    rettv.vval.v_number = 1;
+    result.vval.v_number = 1;
 }
 
 /// The caller's context, restored around a provider's nested
@@ -288,11 +288,11 @@ impl ProviderScope {
 }
 
 /// `rpcrequest({channel}, {method} [, {args}...])`
-pub unsafe fn f_rpcrequest(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_rpcrequest(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // Read before `check_secure`, because that is when it still describes
     // this call rather than anything the request goes on to do.
     let nesting = provider_call_nesting.get();
@@ -327,7 +327,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     let chan_id = args.get(0).number_or_zero() as uint64_t;
     let method = arg_string(&mut numbuf, args.get(1));
     let mut res_mem: ArenaMem = ptr::null_mut();
-    let result = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &mut err) };
+    let object = unsafe { rpc_send_call(chan_id, method, call_args, &raw mut res_mem, &mut err) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
 
     if let Some(scope) = scope {
@@ -363,7 +363,7 @@ pub unsafe fn f_rpcrequest(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
             );
         }
     } else {
-        unsafe { object_to_vim(result, rettv) };
+        unsafe { object_to_vim(object, result) };
     }
     unsafe { arena_mem_free(res_mem) };
     err.clear();
@@ -371,8 +371,8 @@ pub unsafe fn f_rpcrequest(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 
 /// `serverlist([{opts}])` — this instance's listen addresses, plus the
 /// peers Lua knows about when asked for them.
-pub unsafe fn f_serverlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_serverlist(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live; `addrs` is an allocation this body owns,
     // and the strings in it are handed to the List one at a time.
     let mut n = 0usize;
@@ -381,7 +381,7 @@ pub unsafe fn f_serverlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     // The same addresses twice: once handed to the List, once copied
     // into the Array the Lua helper is passed.
     let mut addrs_arr = arena_array(&raw mut arena, n);
-    let list = list_alloc_ret(rettv, n as isize);
+    let list = list_alloc_ret(result, n as isize);
     for i in 0..n {
         unsafe { tv_list_append_allocated_string(list, *addrs.add(i)) };
         let addr = unsafe { *addrs.add(i) };
@@ -437,13 +437,13 @@ pub unsafe fn f_serverlist(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
 }
 
 /// `serverstart([{address}])`
-pub unsafe fn f_serverstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_serverstart(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
-    rettv.v_type = VAR_STRING;
-    rettv.vval.v_string = ptr::null_mut();
+    let (args, result) = frame!(argvars, result);
+    result.v_type = VAR_STRING;
+    result.vval.v_string = ptr::null_mut();
     // SAFETY throughout: the frame is live; `address` and `addrs` are allocations this
-    // body owns, bar the one entry handed to `rettv`.
+    // body owns, bar the one entry handed to `result`.
     if check_secure() {
         return;
     }
@@ -456,14 +456,14 @@ pub unsafe fn f_serverstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         unsafe { xstrdup(arg_string(&mut numbuf, args.get(0))) }
     };
 
-    let result = unsafe { server_start(address) };
+    let status = unsafe { server_start(address) };
     unsafe { xfree(address as *mut c_void) };
-    if result != 0 {
-        let why = if result > 0 {
+    if status != 0 {
+        let why = if status > 0 {
             c"Unknown system error".as_ptr()
         } else {
             // SAFETY: `uv_strerror` answers a `'static` message for any code.
-            unsafe { uv_strerror(result) }
+            unsafe { uv_strerror(status) }
         };
         // SAFETY: a message argument the caller holds as a NUL-terminated string.
         let why = unsafe { c_str(why) };
@@ -475,7 +475,7 @@ pub unsafe fn f_serverstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
     // are other people's and are released here.
     let mut n = 0usize;
     let addrs = unsafe { server_address_list(&raw mut n) };
-    rettv.vval.v_string = unsafe { *addrs.add(n - 1) };
+    result.vval.v_string = unsafe { *addrs.add(n - 1) };
     for i in 0..n - 1 {
         unsafe { xfree(*addrs.add(i) as *mut c_void) };
     }
@@ -483,8 +483,8 @@ pub unsafe fn f_serverstart(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
 }
 
 /// `serverstop({address})`
-pub unsafe fn f_serverstop(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_serverstop(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live.
     if check_secure() {
         return;
@@ -496,20 +496,20 @@ pub unsafe fn f_serverstop(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eval
     // Note the order: the return value is only cleared *after* the type
     // check, so a non-String argument answers 0 by way of the caller's
     // already-cleared return value rather than by this assignment.
-    rettv.v_type = VAR_NUMBER;
-    rettv.vval.v_number = 0;
+    result.v_type = VAR_NUMBER;
+    result.vval.v_number = 0;
     // v:_null_string stops nothing.
     if !args.get(0).string_or_null().is_null() {
-        rettv.vval.v_number =
+        result.vval.v_number =
             unsafe { server_stop(args.get(0).string_or_null(), false) } as VarNumber;
     }
 }
 
 /// `sockconnect({mode}, {address} [, {opts}])`
-pub unsafe fn f_sockconnect(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
+pub unsafe fn f_sockconnect(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
-    let (args, rettv) = frame!(argvars, rettv);
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live; `on_data` is moved into `channel_connect`,
     // which adopts its callback.
     if args.ty(0) != VAR_STRING || args.ty(1) != VAR_STRING {
@@ -557,14 +557,14 @@ pub unsafe fn f_sockconnect(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: Eva
         let error = unsafe { c_str(error) };
         semsg!("connection failed: {error}");
     }
-    rettv.vval.v_number = id as VarNumber;
-    rettv.v_type = VAR_NUMBER;
+    result.vval.v_number = id as VarNumber;
+    result.v_type = VAR_NUMBER;
 }
 
 /// `stdioopen({opts})` — turn this process's own stdin/stdout into a
 /// channel.
-pub unsafe fn f_stdioopen(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
+pub unsafe fn f_stdioopen(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
     // SAFETY throughout: the frame is live; `on_stdin` is moved into
     // `channel_from_stdio`, which adopts its callback.
     if args.ty(0) != VAR_DICT {
@@ -593,6 +593,6 @@ pub unsafe fn f_stdioopen(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalF
         let error = unsafe { c_str(error) };
         semsg!("E905: Couldn't open stdio channel: {error}");
     }
-    rettv.vval.v_number = id as VarNumber;
-    rettv.v_type = VAR_NUMBER;
+    result.vval.v_number = id as VarNumber;
+    result.v_type = VAR_NUMBER;
 }

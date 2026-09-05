@@ -108,10 +108,10 @@ impl File {
 struct BlobRef(*mut Blob);
 
 impl BlobRef {
-    /// Make `rettv` a fresh, empty Blob.
-    fn alloc(rettv: &mut TypVal) -> Self {
-        // SAFETY: `rettv` is the builtin's own cleared result slot.
-        Self(unsafe { tv_blob_alloc_ret(rettv) })
+    /// Make `result` a fresh, empty Blob.
+    fn alloc(result: &mut TypVal) -> Self {
+        // SAFETY: `result` is the builtin's own cleared result slot.
+        Self(unsafe { tv_blob_alloc_ret(result) })
     }
 
     /// Grow to `len` bytes and fill them from `fd`; false on a short read.
@@ -144,11 +144,11 @@ impl BlobRef {
 struct Lines(*mut List);
 
 impl Lines {
-    /// Make `rettv` a fresh List whose length is not known in advance.
-    fn alloc(rettv: &mut TypVal) -> Self {
+    /// Make `result` a fresh List whose length is not known in advance.
+    fn alloc(result: &mut TypVal) -> Self {
         let unknown = kListLenUnknown as c_int as ptrdiff_t;
-        // SAFETY: `rettv` is the builtin's own cleared result slot.
-        Self(unsafe { tv_list_alloc_ret(rettv, unknown) })
+        // SAFETY: `result` is the builtin's own cleared result slot.
+        Self(unsafe { tv_list_alloc_ret(result, unknown) })
     }
 
     fn len(self) -> int64_t {
@@ -273,15 +273,15 @@ impl Carry {
 // The two fillers
 // ---------------------------------------------------------------------
 
-/// `readblob()`'s body: `size_arg` bytes from `offset` into the Blob `rettv`
+/// `readblob()`'s body: `size_arg` bytes from `offset` into the Blob `result`
 /// holds, where a negative offset counts back from the end of the file and a
 /// size of -1 asks for everything from `offset` on.
 ///
 /// False -- upstream's `FAIL` -- when the file could not be measured or the
-/// read came up short; the Blob is then given back and `rettv` left empty.
+/// read came up short; the Blob is then given back and `result` left empty.
 fn read_blob(
     fd: &File,
-    rettv: &mut TypVal,
+    result: &mut TypVal,
     blob: BlobRef,
     offset: FileOffset,
     size_arg: FileOffset,
@@ -329,7 +329,7 @@ fn read_blob(
     }
     // An empty blob is returned on error.
     blob.free();
-    rettv.vval.v_blob = ptr::null_mut();
+    result.vval.v_blob = ptr::null_mut();
     false
 }
 
@@ -473,7 +473,7 @@ fn nr(args: Args<'_>, i: usize) -> int64_t {
 }
 
 /// The body both builtins share.
-fn read_file_or_blob(args: Args<'_>, rettv: &mut TypVal, always_blob: bool) {
+fn read_file_or_blob(args: Args<'_>, result: &mut TypVal, always_blob: bool) {
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let mut numbuf3 = NumBuf::new();
@@ -504,9 +504,9 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut TypVal, always_blob: bool) {
     }
 
     let filling = if blob {
-        Ok(BlobRef::alloc(rettv))
+        Ok(BlobRef::alloc(result))
     } else {
-        Err(Lines::alloc(rettv))
+        Err(Lines::alloc(result))
     };
 
     let fname = str_arg(args, 0, &mut numbuf3);
@@ -527,7 +527,7 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut TypVal, always_blob: bool) {
 
     match filling {
         Ok(blob) => {
-            if !read_blob(&fd, rettv, blob, offset, size) {
+            if !read_blob(&fd, result, blob, offset, size) {
                 err_path(e_cant_read_file_str, fname.as_ptr());
             }
         }
@@ -538,18 +538,18 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut TypVal, always_blob: bool) {
 /// `readblob({fname} [, {offset} [, {size}]])`: the file's bytes as a Blob.
 ///
 /// # Safety
-/// `argvars` is the evaluator's own argument vector, arity 1..3, and `rettv`
+/// `argvars` is the evaluator's own argument vector, arity 1..3, and `result`
 /// a cleared result.
-pub unsafe fn f_readblob(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    read_file_or_blob(args, rettv, true);
+pub unsafe fn f_readblob(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    read_file_or_blob(args, result, true);
 }
 
 /// `readfile({fname} [, {type} [, {max}]])`: the file's lines as a List.
 ///
 /// # Safety
 /// As [`f_readblob`].
-pub unsafe fn f_readfile(argvars: *mut TypVal, rettv: *mut TypVal, _fptr: EvalFuncData) {
-    let (args, rettv) = frame!(argvars, rettv);
-    read_file_or_blob(args, rettv, false);
+pub unsafe fn f_readfile(argvars: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
+    let (args, result) = frame!(argvars, result);
+    read_file_or_blob(args, result, false);
 }

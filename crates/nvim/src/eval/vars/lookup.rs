@@ -132,29 +132,29 @@ pub unsafe fn get_user_var_name(xp: *mut Expand, idx: c_int) -> *mut c_char {
     ptr::null_mut()
 }
 
-/// Read the variable `name[0..len]` into `rettv`, reporting E121 if it does
+/// Read the variable `name[0..len]` into `result`, reporting E121 if it does
 /// not exist.
 ///
-/// `rettv` may be NULL to ask only whether the variable exists, and `dip`
+/// `result` may be NULL to ask only whether the variable exists, and `dip`
 /// takes the item it was found in.  `verbose` allows the error; the message
 /// is suppressed for a lookup that is allowed to fail.
 ///
 /// # Safety
-/// `name` points at `len` readable bytes; `rettv`/`dip` are writable or
+/// `name` points at `len` readable bytes; `result`/`dip` are writable or
 /// NULL.
 pub unsafe fn eval_variable(
     name: *const c_char,
     len: c_int,
-    rettv: *mut TypVal,
+    result: *mut TypVal,
     dip: *mut *mut DictItem,
     verbose: bool,
     no_autoload: bool,
 ) -> Result<(), Failed> {
-    // SAFETY: the caller's obligation -- `len` readable bytes, and `rettv`
+    // SAFETY: the caller's obligation -- `len` readable bytes, and `result`
     // and `dip` writable or NULL.
     let v = unsafe { find_var(name, len as size_t, ptr::null_mut(), no_autoload) };
     if v.is_null() {
-        if !rettv.is_null() && verbose {
+        if !result.is_null() && verbose {
             // SAFETY: a message argument the caller holds as a NUL-terminated string.
             let name = unsafe { c_str_len(name, len as usize) };
             semsg!("E121: Undefined variable: {name}");
@@ -164,9 +164,9 @@ pub unsafe fn eval_variable(
     if !dip.is_null() {
         unsafe { *dip = v };
     }
-    if !rettv.is_null() {
+    if !result.is_null() {
         let item = unsafe { Di::new(v) };
-        unsafe { tv_copy(item.field_ptr(offset_of!(DictItem, di_tv)), rettv) };
+        unsafe { tv_copy(item.field_ptr(offset_of!(DictItem, di_tv)), result) };
     }
     Ok(())
 }
