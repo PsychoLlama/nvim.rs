@@ -67,10 +67,9 @@ use crate::option::shortmess;
 use crate::os::cshim::gettext_ptr;
 use crate::syntax::reset_synblock;
 use crate::types::{
-    AlignTextPos, CdCause, ExtmarkOp, FAIL, Failed, MarkAdjustMode, MarkTree, MetaIndex, OK,
-    UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
-    dobuf_action_values, dobuf_start_values, etype_T, exarg_T, getf_values, linenr_T, uint32_t,
-    varnumber_T,
+    AlignTextPos, CdCause, ExtmarkOp, FAIL, Failed, LineNr, MarkAdjustMode, MarkTree, MetaIndex,
+    OK, UndoObjectType, WinSplit, WinStyle, bfa_values, bln_values, buf_T, bufref_T,
+    dobuf_action_values, dobuf_start_values, etype_T, exarg_T, getf_values, uint32_t, varnumber_T,
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
@@ -462,7 +461,7 @@ pub(crate) fn xfree_clear<T>(slot: &mut *mut T) {
 }
 
 /// `ml_delete()` on the current buffer.
-pub(crate) fn delete_line(lnum: linenr_T) {
+pub(crate) fn delete_line(lnum: LineNr) {
     // SAFETY: the caller has checked the line is in the current buffer.
     let _ = unsafe { ml_delete(lnum) };
 }
@@ -526,7 +525,7 @@ pub(crate) fn edit_file(
     ffname: *mut c_char,
     sfname: *mut c_char,
     eap: *mut exarg_T,
-    newlnum: linenr_T,
+    newlnum: LineNr,
     flags: EcmdFlags,
     win: Win,
 ) -> Result<(), Failed> {

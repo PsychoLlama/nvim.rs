@@ -27,7 +27,7 @@ use crate::mark::setpcmark;
 use crate::normal::reset_VIsual_and_resel;
 use crate::options::kOptJopFlagClean;
 use crate::os::input::os_breakcheck;
-use crate::types::{FAIL, Failed, OptInt, cleanup_T, exarg_T, except_T, linenr_T, win_T};
+use crate::types::{FAIL, Failed, LineNr, OptInt, cleanup_T, exarg_T, except_T, win_T};
 use crate::undo::buf_is_changed;
 use crate::window::{
     WSP_BELOW, WSP_ROOM, WSP_VERT, global_stl_height, goto_tab as goto_tab_page,
@@ -197,8 +197,8 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
 
     // The maximum number of windows to open: as many as possible, or as many
     // as the count asked for.
-    let count: linenr_T = if eap.addr_count == 0 {
-        9999 as linenr_T
+    let count: LineNr = if eap.addr_count == 0 {
+        9999 as LineNr
     } else {
         eap.line2
     };
@@ -224,7 +224,7 @@ pub unsafe fn ex_buffer_all(eap: *mut exarg_T) {
     let no_leave = Suppress::win_leave_autocmds();
 
     for b in buffers() {
-        if (open_wins as linenr_T) >= count {
+        if (open_wins as LineNr) >= count {
             break;
         }
         if !open_window_for(b, all, had_tab, &mut split_ret, &mut open_wins) {
@@ -384,9 +384,9 @@ fn open_window_for(
 }
 
 /// The last stage: close the windows over the count asked for.
-fn close_extra_windows(count: linenr_T, open_wins: &mut c_int) {
+fn close_extra_windows(count: LineNr, open_wins: &mut c_int) {
     let mut wp = last_window();
-    while *open_wins as linenr_T > count {
+    while *open_wins as LineNr > count {
         let Some(win) = wp else { break };
         let r = (buf_hidden(win.buffer())
             || !buf_changed(win.buffer())

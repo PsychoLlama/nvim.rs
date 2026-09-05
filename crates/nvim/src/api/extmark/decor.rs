@@ -58,7 +58,7 @@ pub unsafe fn nvim_buf_clear_namespace(
     let end = line_end as ::core::ffi::c_int - 1 as ::core::ffi::c_int;
     let maxcol = MAXCOL as ::core::ffi::c_int;
     // SAFETY: `b` is the live buffer the handle named.
-    unsafe { extmark_clear(b, ns, start, 0 as colnr_T, end, maxcol) };
+    unsafe { extmark_clear(b, ns, start, 0 as ColNr, end, maxcol) };
     ().reported(error)
 }
 

@@ -32,7 +32,7 @@ use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::quickfix::qf_stack_get_bufnr;
 use crate::types::{
-    CmdModFlags, VAR_NUMBER, VarLock, buf_T, dictitem_T, linenr_T, ptrdiff_t, typval_T, varnumber_T,
+    CmdModFlags, LineNr, VAR_NUMBER, VarLock, buf_T, dictitem_T, ptrdiff_t, typval_T, varnumber_T,
 };
 use crate::winlayer::Buf;
 
@@ -245,7 +245,7 @@ pub unsafe fn buf_is_empty(buf: *mut buf_T) -> bool {
     let b = unsafe { Buf::new(buf) };
     // SAFETY: line 1 exists in every buffer, and `ml_get_buf` answers a
     // NUL-terminated line.
-    b.b_ml.ml_line_count == 1 as linenr_T && unsafe { *ml_get_buf(buf, 1 as linenr_T) } == 0
+    b.b_ml.ml_line_count == 1 as LineNr && unsafe { *ml_get_buf(buf, 1 as LineNr) } == 0
 }
 
 pub unsafe fn buf_inc_changedtick(buf: *mut buf_T) {

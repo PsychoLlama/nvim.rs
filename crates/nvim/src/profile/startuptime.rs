@@ -15,7 +15,7 @@ use crate::global_cell::GlobalCell;
 use crate::main::{e_notopen, time_fd};
 use crate::memory::{xfree, xmalloc};
 use crate::os::cshim::{gettext, stderr};
-use crate::types::proftime_T;
+use crate::types::ProfTime;
 use ::libc::{fclose, fopen, fprintf, setvbuf};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
@@ -24,16 +24,16 @@ use std::ffi::CString;
 // --startuptime.
 
 /// When `time_start()` was called.
-static G_START_TIME: GlobalCell<proftime_T> = GlobalCell::new(0);
+static G_START_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 /// Time of the previous event line, for the "elapsed" column.
-static G_PREV_TIME: GlobalCell<proftime_T> = GlobalCell::new(0);
+static G_PREV_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 /// The setvbuf buffer handed to `time_fd`; freed at [`time_finish`].
 static STARTUPTIME_BUF: GlobalCell<*mut c_char> = GlobalCell::new(core::ptr::null_mut());
 
 /// Save the previous time before doing something that could nest (sourcing
 /// a script from a script). Returns `(rel, start)`: the time elapsed so far
 /// (to hand to [`time_pop`]) and the current time.
-pub fn time_push() -> (proftime_T, proftime_T) {
+pub fn time_push() -> (ProfTime, ProfTime) {
     let now = profile_start();
     let rel = profile_sub(now, G_PREV_TIME.get());
     G_PREV_TIME.set(now);
@@ -42,12 +42,12 @@ pub fn time_push() -> (proftime_T, proftime_T) {
 
 /// Subtract the nested duration `tp` (from [`time_push`]) from the
 /// previous-event time.
-pub fn time_pop(tp: proftime_T) {
+pub fn time_pop(tp: ProfTime) {
     G_PREV_TIME.set(G_PREV_TIME.get().wrapping_sub(tp));
 }
 
 /// `"%07.3lf"` milliseconds between `then` and `now`.
-fn time_diff_str(then: proftime_T, now: proftime_T) -> String {
+fn time_diff_str(then: ProfTime, now: ProfTime) -> String {
     format!("{:07.3}", profile_sub(now, then) as f64 / 1e6)
 }
 
@@ -89,8 +89,8 @@ pub unsafe fn time_start(message: *const c_char) {
 ///
 /// # Safety
 /// `mesg` is NUL-terminated; `start` is null or points at a readable
-/// `proftime_T`.
-pub unsafe fn time_msg(mesg: *const c_char, start: *const proftime_T) {
+/// `ProfTime`.
+pub unsafe fn time_msg(mesg: *const c_char, start: *const ProfTime) {
     if time_fd.get().is_null() {
         return;
     }

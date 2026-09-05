@@ -100,7 +100,7 @@ impl ComplMatchArray {
 
 /// The highlight attribute for the inserted-but-not-accepted text at
 /// `lnum`/`col`, or −1 where there is none.
-pub unsafe fn ins_compl_col_range_attr(lnum: linenr_T, col: c_int) -> c_int {
+pub unsafe fn ins_compl_col_range_attr(lnum: LineNr, col: c_int) -> c_int {
     // SAFETY: neither query has a precondition left; both are still
     // `unsafe fn`s for their call sites outside this family.
     let (preinsert, longest) =

@@ -56,7 +56,7 @@ use crate::strings::{vim_snprintf, vim_strnsave_unquoted, vim_strsave_escaped_ex
 use crate::tag::tag_freematch;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    NUL, READBIN, StringBuilder, Vv, linenr_T, proftime_T, size_t, stream_read_cb, varnumber_T,
+    LineNr, NUL, ProfTime, READBIN, StringBuilder, Vv, size_t, stream_read_cb, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
@@ -276,7 +276,7 @@ pub unsafe fn os_call_shell(cmd: *mut c_char, opts: ShellOpts, extra_args: *mut 
 /// # Safety
 /// As [`os_call_shell`].
 pub unsafe fn call_shell(cmd: *mut c_char, opts: ShellOpts, extra_shell_arg: *mut c_char) -> c_int {
-    let mut wait_time: proftime_T = 0;
+    let mut wait_time: ProfTime = 0;
     // SAFETY: the caller's contract. `smsg` is printf-shaped.
     unsafe {
         if p_verbose.get() > 3 {
@@ -530,7 +530,7 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
                 (*curbuf.get()).b_no_eol_lnum = (*curwin.get()).w_cursor.lnum;
                 output = output.add(remaining);
             } else {
-                (*curbuf.get()).b_no_eol_lnum = 0 as linenr_T;
+                (*curbuf.get()).b_no_eol_lnum = 0 as LineNr;
             }
         }
 

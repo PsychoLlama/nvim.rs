@@ -18,11 +18,11 @@ use super::*;
 #[derive(Clone)]
 pub struct u_entry {
     pub ue_next: *mut u_entry_T,
-    pub ue_top: linenr_T,
-    pub ue_bot: linenr_T,
-    pub ue_lcount: linenr_T,
+    pub ue_top: LineNr,
+    pub ue_bot: LineNr,
+    pub ue_lcount: LineNr,
     pub ue_array: *mut *mut ::core::ffi::c_char,
-    pub ue_size: linenr_T,
+    pub ue_size: LineNr,
 }
 pub type u_entry_T = u_entry;
 
@@ -104,7 +104,7 @@ pub struct u_header {
     pub uh_entry: *mut u_entry_T,
     pub uh_getbot_entry: *mut u_entry_T,
     pub uh_cursor: pos_T,
-    pub uh_cursor_vcol: colnr_T,
+    pub uh_cursor_vcol: ColNr,
     pub uh_flags: ::core::ffi::c_int,
     pub uh_namedm: [fmark_T; 26],
     pub uh_extmark: extmark_undo_vec_t,
@@ -169,5 +169,5 @@ pub struct visualinfo_T {
     pub vi_start: pos_T,
     pub vi_end: pos_T,
     pub vi_mode: ::core::ffi::c_int,
-    pub vi_curswant: colnr_T,
+    pub vi_curswant: ColNr,
 }

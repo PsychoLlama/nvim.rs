@@ -53,8 +53,8 @@ use crate::runtime::{estack_pop, estack_push};
 use crate::strings::vim_snprintf;
 use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{
-    Failed, IOSIZE, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, Vv, linenr_T,
-    ptrdiff_t, scid_T, size_t,
+    Failed, IOSIZE, LineNr, MAXPATHL, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, Vv, ptrdiff_t,
+    scid_T, size_t,
 };
 use crate::winlayer::Live;
 use ::libc::{atoi, fprintf, strcasecmp};
@@ -779,7 +779,7 @@ pub(crate) unsafe fn execute_env(env: *mut c_char) -> Result<(), Failed> {
         return Err(Failed);
     }
 
-    estack_push(ETYPE_ENV, env, 0 as linenr_T);
+    estack_push(ETYPE_ENV, env, 0 as LineNr);
     let sctx = env_script();
 
     let _ = unsafe { do_cmdline_cmd(initstr) };

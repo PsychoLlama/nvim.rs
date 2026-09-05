@@ -70,8 +70,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf_safelen;
 use crate::terminal::terminal_check_size;
 use crate::types::{
-    Failed, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, exarg_T, linenr_T, ptrdiff_t,
-    time_t, win_T,
+    Failed, LineNr, NUL, OptInt, OptionSetFlags, ShmFlag, String_0, Vv, exarg_T, ptrdiff_t, time_t,
+    win_T,
 };
 use crate::undo::{u_savecommon, u_sync, u_unchanged};
 use crate::window::{check_lnums, curwin_init, win_valid};
@@ -89,7 +89,7 @@ use core::ptr;
 ///
 /// # Safety
 /// `command` must be live, or NULL.
-pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: linenr_T) -> bool {
+pub unsafe fn set_swapcommand(command: *mut c_char, newlnum: LineNr) -> bool {
     // SAFETY: caller's contract; `v:swapcommand` is a live string variable.
     if unsafe {
         command.is_null() && newlnum <= 0 || *get_vim_var_str(Vv::Swapcommand) as c_int != NUL
@@ -147,17 +147,17 @@ crate::flag_set! {
 /// Where [`do_ecmd`] should leave the cursor, where that is not a line number.
 ///
 /// Upstream spells these `ECMD_*` too, beside the flags above, but they are
-/// `linenr_T` values for a different parameter and never share a word with
+/// `LineNr` values for a different parameter and never share a word with
 /// one.
 pub mod newlnum {
-    use crate::types::linenr_T;
+    use crate::types::LineNr;
 
     /// The first line.
-    pub const ONE: linenr_T = 1;
+    pub const ONE: LineNr = 1;
     /// The last position in *any* file -- the one `'"` names.
-    pub const LAST: linenr_T = -1;
+    pub const LAST: LineNr = -1;
     /// The last position in *this* file, if it has been visited before.
-    pub const LASTL: linenr_T = 0;
+    pub const LASTL: LineNr = 0;
 }
 
 /// The line and column `do_ecmd`'s stages hand each other, plus the flags that
@@ -165,14 +165,14 @@ pub mod newlnum {
 struct Ecmd {
     /// Where to put the cursor: `> 0` a line number, or one of
     /// [`newlnum`]'s three sentinels.
-    newlnum: linenr_T,
+    newlnum: LineNr,
     /// Column an autocommand moved the cursor to, or `-1`.
     newcol: c_int,
     /// Last known column for `newlnum`, or `-1`; used when 'sol' is off.
     solcol: c_int,
     /// The window's `w_topline` before the file was read, or 0 when the
     /// autocommands left it alone.
-    topline: linenr_T,
+    topline: LineNr,
     /// The buffer already had a memfile: nothing to read.
     oldbuf: bool,
     /// Autocommands brought us into the buffer unexpectedly, so most of the
@@ -234,7 +234,7 @@ pub unsafe fn do_ecmd(
     ffname: *mut c_char,
     sfname: *mut c_char,
     eap: *mut exarg_T,
-    newlnum: linenr_T,
+    newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: *mut win_T,
 ) -> Result<(), Failed> {
@@ -562,7 +562,7 @@ unsafe fn reuse_current_buffer(state: &mut Ecmd) -> bool {
     // SAFETY: caller's contract.
     // may set b_last_cursor
     unsafe { set_last_cursor(cur_win().raw()) };
-    if state.newlnum == newlnum::LAST as linenr_T || state.newlnum == newlnum::LASTL as linenr_T {
+    if state.newlnum == newlnum::LAST as LineNr || state.newlnum == newlnum::LASTL as LineNr {
         state.newlnum = cur_win().w_cursor.lnum;
         state.solcol = cur_win().w_cursor.col;
     }
@@ -776,7 +776,7 @@ unsafe fn report_file_info() {
 ///
 /// # Safety
 /// `curwin` must be live, and `so` its scroll margin.
-unsafe fn recenter(so: ScrollOff, topline: linenr_T, command: *mut c_char) {
+unsafe fn recenter(so: ScrollOff, topline: LineNr, command: *mut c_char) {
     let n = so.get();
     if topline == 0 && command.is_null() {
         // force the cursor to be vertically centered in the window

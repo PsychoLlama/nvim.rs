@@ -25,7 +25,7 @@ use crate::main::{curbuf, p_fic, p_wic};
 use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
-use crate::types::{Failed, buf_T, colnr_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
+use crate::types::{ColNr, Failed, buf_T, fuzmatch_str_T, regmatch_T, regprog_T, size_t};
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -85,7 +85,7 @@ fn regfree(prog: *mut regprog_T) {
 fn regexec(rmp: &mut regmatch_T, name: *mut c_char) -> bool {
     // SAFETY: a live match state with a compiled program, and a
     // NUL-terminated string to match it against.
-    unsafe { vim_regexec(rmp, name, 0 as colnr_T) }
+    unsafe { vim_regexec(rmp, name, 0 as ColNr) }
 }
 
 /// `home_replace_save`: `name` with `$HOME` written as `~`, freshly

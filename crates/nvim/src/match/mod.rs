@@ -46,7 +46,7 @@ use crate::os::cshim::{gettext, strncasecmp};
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::regexp::{RE_MAGIC, skip_regexp, vim_regcomp, vim_regexec_multi, vim_regfree};
 use crate::types::{
-    EvalFuncData, VAR_LIST, VAR_NUMBER, colnr_T, dict_T, dictitem_T, exarg_T, int64_t, linenr_T,
+    ColNr, EvalFuncData, LineNr, VAR_LIST, VAR_NUMBER, dict_T, dictitem_T, exarg_T, int64_t,
     list_T, llpos_T, match_T, matchitem_T, ptrdiff_t, regprog_T, size_t, typval_T, uint8_t,
     varnumber_T, win_T,
 };
@@ -226,22 +226,19 @@ unsafe fn match_add(
 /// # Safety
 /// `m` must be live with `mit_pos_array` sized for the list, and `pos_list`
 /// must be a live list.
-unsafe fn fill_pos_array(
-    m: *mut matchitem_T,
-    pos_list: *mut list_T,
-) -> Option<(linenr_T, linenr_T)> {
+unsafe fn fill_pos_array(m: *mut matchitem_T, pos_list: *mut list_T) -> Option<(LineNr, LineNr)> {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let m = unsafe { Mi::new(m) };
     // SAFETY: the caller's match and list.
-    let mut toplnum: linenr_T = 0;
-    let mut botlnum: linenr_T = 0;
+    let mut toplnum: LineNr = 0;
+    let mut botlnum: LineNr = 0;
     let mut i = 0;
 
     let mut li = unsafe { tv_list_first(pos_list) };
     while !li.is_null() {
         let tv = unsafe { &raw mut (*li).li_tv };
-        let mut lnum: linenr_T = 0;
-        let mut col: colnr_T = 0;
+        let mut lnum: LineNr = 0;
+        let mut col: ColNr = 0;
         let mut len: c_int = 1;
         let mut error = false;
         let mut skip = false;
@@ -256,7 +253,7 @@ unsafe fn fill_pos_array(
                 return None;
             }
             lnum =
-                unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) } as linenr_T;
+                unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) } as LineNr;
             if error {
                 return None;
             }
@@ -267,7 +264,7 @@ unsafe fn fill_pos_array(
                 subli = unsafe { (*subli).li_next };
                 if !subli.is_null() {
                     col = unsafe { tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error) }
-                        as colnr_T;
+                        as ColNr;
                     if error {
                         return None;
                     }
@@ -278,7 +275,7 @@ unsafe fn fill_pos_array(
                         if !subli.is_null() {
                             len = unsafe {
                                 tv_get_number_chk(&raw const (*subli).li_tv, &raw mut error)
-                            } as colnr_T;
+                            } as ColNr;
                             // Note the order: a negative length is
                             // skipped before `error` is even looked at.
                             if len < 0 {
@@ -298,7 +295,7 @@ unsafe fn fill_pos_array(
             if unsafe { (*tv).vval.v_number } <= 0 {
                 skip = true;
             } else {
-                lnum = unsafe { (*tv).vval.v_number } as linenr_T;
+                lnum = unsafe { (*tv).vval.v_number } as LineNr;
                 unsafe { (*m.mit_pos_array.offset(i as isize)).lnum = lnum };
                 unsafe { (*m.mit_pos_array.offset(i as isize)).col = 0 };
                 unsafe { (*m.mit_pos_array.offset(i as isize)).len = 0 };

@@ -18,17 +18,17 @@ use crate::pos::MAXCOL;
 use crate::regexp::{
     Rex, kMarkBufLocal, nfa_state_T, reg_getline, reg_getline_len, reg_match_visual,
 };
-use crate::types::{MB_MAXBYTES, colnr_T, fmark_T, linenr_T, uint8_t, win_T};
+use crate::types::{ColNr, LineNr, MB_MAXBYTES, fmark_T, uint8_t, win_T};
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
-fn col(rex: Rex) -> colnr_T {
+fn col(rex: Rex) -> ColNr {
     // SAFETY: `input` and `line` bound the same line.
     rex.col()
 }
 
 /// The buffer line the match has reached.
-fn lnum(rex: Rex) -> linenr_T {
+fn lnum(rex: Rex) -> LineNr {
     rex.buf_lnum()
 }
 

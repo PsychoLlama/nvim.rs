@@ -107,11 +107,11 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_escaped};
 use crate::tag::find_tags;
 use crate::textformat::auto_format;
 use crate::types::{
-    Arena, BackslashEscape, BoolVarValue, Callback, Direction, EvalFuncData, ExpandContext,
-    ExtmarkOp, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T, colnr_T, dict_T,
-    expand_T, extmark_undo_vec_t, garray_T, hashtab_T, linenr_T, list_T, optset_T, pos_T,
-    ptrdiff_t, pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union,
-    uint8_t, uint64_t, varnumber_T, win_T, xp_prefix_T,
+    Arena, BackslashEscape, BoolVarValue, Callback, ColNr, Direction, EvalFuncData, ExpandContext,
+    ExtmarkOp, LineNr, MB_MAXCHAR, OptInt, String_0, VAR_UNKNOWN, VarLock, Vv, buf_T, dict_T,
+    expand_T, extmark_undo_vec_t, garray_T, hashtab_T, list_T, optset_T, pos_T, ptrdiff_t,
+    pumitem_T, regmatch_T, save_v_event_T, sctx_T, size_t, typval_T, typval_vval_union, uint8_t,
+    uint64_t, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
@@ -562,9 +562,9 @@ static compl_shows_dir: GlobalCell<Direction> = GlobalCell::new(FORWARD);
 static compl_pending: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
 static compl_startpos: GlobalCell<pos_T> = GlobalCell::new(POS_T_INIT);
 static compl_length: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);
-static compl_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-static compl_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
-static compl_ins_end_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
+static compl_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
+static compl_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
+static compl_ins_end_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
 static COMPL_ORIG_TEXT: GlobalCell<String_0> = GlobalCell::new(String_0::NULL);
 static COMPL_ORIG_EXTMARKS: GlobalCell<extmark_undo_vec_t> = GlobalCell::new(EXTMARK_UNDO_VEC_INIT);
 static compl_cont_mode: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0 as ::core::ffi::c_int);

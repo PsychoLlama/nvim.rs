@@ -316,7 +316,7 @@ pub(crate) fn ins_digraph() -> c_int {
 ///
 /// # Safety
 /// Must run with a live `curwin`/`curbuf`.
-pub(crate) unsafe fn ins_copychar(lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
     // The strings walked below are NUL-terminated lines of that buffer, and

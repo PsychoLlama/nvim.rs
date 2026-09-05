@@ -88,11 +88,11 @@ use crate::strings::vim_snprintf;
 use crate::types::AutoEvent;
 use crate::types::{
     Arena, Array, BoolVarValue, CONV_NONE, Dict, DoInRuntimepathCB, DoInRuntimepathCBFn, Error,
-    EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LuaRetMode, Object, OptVal,
-    String_0, UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T, estack_arg_T,
-    etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, int64_t, kBoolVarFalse, linenr_T,
-    list_T, optset_T, proftime_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t,
-    typval_T, typval_vval_union, ufunc_T, uv_mutex_t, varnumber_T, vimconv_T,
+    EstackInfo, EvalFuncData, FILE, Integer, LineGetter, LineGetterFn, LineNr, LuaRetMode, Object,
+    OptVal, ProfTime, String_0, UV_MUTEX_INIT, VAR_DICT, VarLock, XDGVarType, dict_T, estack_T,
+    estack_arg_T, etype_T, exarg_T, expand_T, funccal_entry_T, garray_T, int64_t, kBoolVarFalse,
+    list_T, optset_T, ptrdiff_t, regmatch_T, scid_T, scriptitem_T, sctx_T, size_t, typval_T,
+    typval_vval_union, ufunc_T, uv_mutex_t, varnumber_T, vimconv_T,
 };
 use crate::usercmd::add_win_cmd_modifiers;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
@@ -172,12 +172,12 @@ crate::flag_set! {
 pub struct source_cookie_T {
     pub fp: *mut FILE,
     pub nextline: *mut ::core::ffi::c_char,
-    pub sourcing_lnum: linenr_T,
+    pub sourcing_lnum: LineNr,
     pub finished: bool,
     pub source_from_buf_or_str: bool,
     pub buf_lnum: ::core::ffi::c_int,
     pub buflines: Vec<CString>,
-    pub breakpoint: linenr_T,
+    pub breakpoint: LineNr,
     pub fname: *mut ::core::ffi::c_char,
     pub dbg_tick: ::core::ffi::c_int,
     pub level: ::core::ffi::c_int,

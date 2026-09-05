@@ -642,7 +642,7 @@ fn insert_normal_char(s: &mut InsertState) {
         if unsafe { inindent(0) } {
             can_cindent.set(false);
         }
-        if Insstart_blank_vcol.get() == MAXCOL as colnr_T
+        if Insstart_blank_vcol.get() == MAXCOL as ColNr
             && cur_win().w_cursor.lnum == Insstart.get().lnum
         {
             Insstart_blank_vcol.set(unsafe { get_nolist_virtcol() });

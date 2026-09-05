@@ -26,7 +26,7 @@ use crate::message::emsg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::os::fs::{os_fileid, os_fileid_equal};
 use crate::path::{fix_fname, path_fnamecmp};
-use crate::types::{CmdModFlags, Failed, FileID, linenr_T};
+use crate::types::{CmdModFlags, Failed, FileID, LineNr};
 use crate::winlayer::{Buf, Win, tab_windows};
 
 // ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ fn current_win() -> Win {
 pub unsafe fn buflist_name_nr(
     fnum: c_int,
     fname: *mut *mut c_char,
-    lnum: *mut linenr_T,
+    lnum: *mut LineNr,
 ) -> Result<(), Failed> {
     let Some(buf) = find_buf(fnum) else {
         return Err(Failed);
@@ -251,7 +251,7 @@ pub unsafe fn buf_name_changed(b: Buf) {
 // The alternate file
 
 /// Set the alternate file name for the current window.
-pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: linenr_T) -> Option<Buf> {
+pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: LineNr) -> Option<Buf> {
     // Create a buffer; 'buflisted' is not set if it is a new one.
     // SAFETY: two names to hand over, either of which may be null; the
     // answer is a live buffer or null.
@@ -267,7 +267,7 @@ pub unsafe fn setaltfname(ffname: *mut c_char, sfname: *mut c_char, lnum: linenr
 /// The alternate file name for the current window, null when there is none.
 pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
     let mut fname: *mut c_char = ptr::null_mut();
-    let mut dummy: linenr_T = 0;
+    let mut dummy: LineNr = 0;
     // SAFETY: two locals to fill in.
     if unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_err() {
         if errmsg {
@@ -282,7 +282,7 @@ pub unsafe fn getaltfname(errmsg: bool) -> *mut c_char {
 /// [`buflist_new`]'s flags, except `BLN_DUMMY`.
 pub unsafe fn buflist_add(fname: *mut c_char, flags: c_int) -> c_int {
     // SAFETY: a name to hand over, which may be null.
-    let buf = unsafe { buflist_new(fname, ptr::null_mut(), 0 as linenr_T, flags) };
+    let buf = unsafe { buflist_new(fname, ptr::null_mut(), 0 as LineNr, flags) };
     if buf.is_null() {
         return 0;
     }

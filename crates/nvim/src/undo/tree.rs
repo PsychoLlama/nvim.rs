@@ -58,7 +58,7 @@ pub(crate) fn u_getbot(mut buf: Buf) {
     let uep = newhead.uh_getbot_entry;
     if !uep.is_null() {
         // SAFETY: the newest header's own deferred entry, proved live above.
-        let extra: linenr_T = buf.b_ml.ml_line_count - unsafe { (*uep).ue_lcount };
+        let extra: LineNr = buf.b_ml.ml_line_count - unsafe { (*uep).ue_lcount };
         unsafe { (*uep).ue_bot = (*uep).ue_top + (*uep).ue_size + 1 + extra };
         if unsafe { (*uep).ue_bot } < 1 || unsafe { (*uep).ue_bot } > buf.b_ml.ml_line_count {
             iemsg(gettext(c"E440: Undo line missing"));
@@ -232,7 +232,7 @@ pub fn u_clearallandblockfree(buf: Buf) {
 /// Remembers one line so `U` can put it back.
 ///
 /// Safe: `lnum` is checked against the buffer's own line count.
-pub(crate) fn u_saveline(mut buf: Buf, lnum: linenr_T) {
+pub(crate) fn u_saveline(mut buf: Buf, lnum: LineNr) {
     if lnum == buf.b_u_line_lnum {
         return;
     }
@@ -289,15 +289,15 @@ pub unsafe fn u_undoline() {
             curbuf.get(),
             cur_buf().b_u_line_lnum as c_int - 1,
             0,
-            oldp_len as colnr_T,
-            ptr_len as colnr_T,
+            oldp_len as ColNr,
+            ptr_len as ColNr,
             kExtmarkUndo,
         )
     };
     unsafe { changed_bytes(cur_buf().b_u_line_lnum, 0) };
     unsafe { xfree(cur_buf().b_u_line_ptr as *mut c_void) };
     cur_buf().b_u_line_ptr = oldp;
-    let t: colnr_T = cur_buf().b_u_line_colnr;
+    let t: ColNr = cur_buf().b_u_line_colnr;
     if cur_win().w_cursor.lnum == cur_buf().b_u_line_lnum {
         cur_buf().b_u_line_colnr = cur_win().w_cursor.col;
     }
@@ -311,7 +311,7 @@ pub unsafe fn u_undoline() {
 /// # Safety
 ///
 /// A live current buffer holding line `lnum`.
-pub(crate) unsafe fn u_save_line(lnum: linenr_T) -> *mut c_char {
+pub(crate) unsafe fn u_save_line(lnum: LineNr) -> *mut c_char {
     // SAFETY: a live current buffer holding that line, by the contract above.
     unsafe { u_save_line_buf(cur_buf(), lnum) }
 }
@@ -321,7 +321,7 @@ pub(crate) unsafe fn u_save_line(lnum: linenr_T) -> *mut c_char {
 /// # Safety
 ///
 /// `buf` holds line `lnum`.
-pub(crate) unsafe fn u_save_line_buf(buf: Buf, lnum: linenr_T) -> *mut c_char {
+pub(crate) unsafe fn u_save_line_buf(buf: Buf, lnum: LineNr) -> *mut c_char {
     // SAFETY: the buffer holds that line, by the contract above.
     unsafe { xstrdup(ml_get_buf(buf.raw(), lnum)) }
 }

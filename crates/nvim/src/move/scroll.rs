@@ -20,12 +20,12 @@ use crate::cursor::coladvance;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::edit::{cursor_down, cursor_up};
 use crate::pos::MAXCOL;
-use crate::types::{colnr_T, int64_t, linenr_T};
+use crate::types::{ColNr, LineNr, int64_t};
 
 impl Win {
     /// Put the cursor at virtual column `wcol`, or as close as the line
     /// allows. Answers whether it got there.
-    pub(crate) fn coladvance(self, wcol: colnr_T) -> bool {
+    pub(crate) fn coladvance(self, wcol: ColNr) -> bool {
         // SAFETY: a live window.
         coladvance(self, wcol)
     }
@@ -120,7 +120,7 @@ impl Win {
 ///
 /// # Safety
 /// The current window must be valid.
-pub unsafe fn scroll_redraw(up: c_int, count: linenr_T) {
+pub unsafe fn scroll_redraw(up: c_int, count: LineNr) {
     // SAFETY: `curwin` is set from startup to exit.
     scroll_redraw_cur(unsafe { Win::current() }, up != 0, count);
 }
@@ -129,7 +129,7 @@ pub unsafe fn scroll_redraw(up: c_int, count: linenr_T) {
 ///
 /// `win` must be the current window: the cursor corrections below move
 /// `curwin`'s cursor.
-pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: linenr_T) {
+pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: LineNr) {
     let prev_topline = win.w_topline;
     let prev_skipcol = win.w_skipcol;
     let prev_topfill = win.w_topfill;
@@ -184,12 +184,12 @@ pub(super) fn scroll_redraw_cur(mut win: Win, up: bool, count: linenr_T) {
 }
 
 /// [`Win::scrolldown`], for the callers still holding a raw window.
-pub fn scrolldown(wp: Win, line_count: linenr_T, byfold: bool) -> bool {
+pub fn scrolldown(wp: Win, line_count: LineNr, byfold: bool) -> bool {
     wp.scrolldown(line_count, byfold)
 }
 
 /// [`Win::scrollup`], for the callers still holding a raw window.
-pub fn scrollup(wp: Win, line_count: linenr_T, byfold: bool) -> bool {
+pub fn scrollup(wp: Win, line_count: LineNr, byfold: bool) -> bool {
     wp.scrollup(line_count, byfold)
 }
 
@@ -197,7 +197,7 @@ impl Win {
     /// Scroll the window down by `line_count` logical lines -- CTRL-Y.
     /// `byfold` counts a closed fold as one line. Answers whether the cursor
     /// had to be moved.
-    pub(super) fn scrolldown(mut self, line_count: linenr_T, byfold: bool) -> bool {
+    pub(super) fn scrolldown(mut self, line_count: LineNr, byfold: bool) -> bool {
         // Total screen lines scrolled, which is what the cursor row moves by.
         let mut done = 0;
         let do_sms = do_sms(self);
@@ -315,7 +315,7 @@ impl Win {
     /// Scroll the window up by `line_count` logical lines -- CTRL-E.
     /// `byfold` counts a closed fold as one line. Answers whether the visible
     /// range changed.
-    pub(super) fn scrollup(mut self, line_count: linenr_T, byfold: bool) -> bool {
+    pub(super) fn scrollup(mut self, line_count: LineNr, byfold: bool) -> bool {
         let topline = self.w_topline;
         let botline = self.w_botline;
         let do_sms = do_sms(self);

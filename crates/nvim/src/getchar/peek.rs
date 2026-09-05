@@ -79,7 +79,7 @@ unsafe fn esc_leaves_insert(at: &mut CursorAt) -> bool {
 
     // Move the cursor left, if that is possible.
     if win.w_cursor.col != 0 {
-        let mut col: colnr_T = 0;
+        let mut col: ColNr = 0;
         if win.w_wcol > 0 {
             if did_ai.get()
                 && c_int::from(unsafe {

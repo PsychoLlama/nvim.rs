@@ -387,7 +387,7 @@ pub unsafe fn mb_check_adjust_col(win_: *mut c_void) {
         return;
     }
     let p = unsafe { ml_get_buf((*win).w_buffer, (*win).w_cursor.lnum) };
-    let len = unsafe { cstr::bytes_at(p) }.len() as colnr_T;
+    let len = unsafe { cstr::bytes_at(p) }.len() as ColNr;
     if len == 0 || oldcol < 0 {
         unsafe { (*win).w_cursor.col = 0 };
     } else {

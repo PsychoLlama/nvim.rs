@@ -11,30 +11,30 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type colnr_T = ::core::ffi::c_int;
-pub type linenr_T = int32_t;
+pub type ColNr = ::core::ffi::c_int;
+pub type LineNr = int32_t;
 #[derive(Copy, Clone, Default)]
 pub struct lpos_T {
-    pub lnum: linenr_T,
-    pub col: colnr_T,
+    pub lnum: LineNr,
+    pub col: ColNr,
 }
 #[derive(Copy, Clone, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct pos_T {
-    pub lnum: linenr_T,
-    pub col: colnr_T,
-    pub coladd: colnr_T,
+    pub lnum: LineNr,
+    pub col: ColNr,
+    pub coladd: ColNr,
 }
 
 impl pos_T {
     /// The same position moved to `col`, for the read-modify-write of a
     /// position held in a [`crate::global_cell::GlobalCell`].
-    pub fn with_col(self, col: colnr_T) -> pos_T {
+    pub fn with_col(self, col: ColNr) -> pos_T {
         pos_T { col, ..self }
     }
 
     /// The same position moved to `lnum`.
-    pub fn with_lnum(self, lnum: linenr_T) -> pos_T {
+    pub fn with_lnum(self, lnum: LineNr) -> pos_T {
         pos_T { lnum, ..self }
     }
 }

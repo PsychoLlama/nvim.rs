@@ -45,7 +45,7 @@ pub unsafe fn op_shift(oap: *mut oparg_T, curs_top: bool, amount: c_int) {
         return;
     }
 
-    let mut block_col: colnr_T = 0;
+    let mut block_col: ColNr = 0;
     if oap.motion_type == kMTBlockWise {
         block_col = cur_win().w_cursor.col;
     }

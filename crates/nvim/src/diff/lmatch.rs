@@ -41,7 +41,7 @@ pub unsafe fn diff_linematch(dp: *mut diff_T) -> bool {
 unsafe fn apply_linematch_results(dp: *mut diff_T, decisions: &[c_int]) {
     // SAFETY: `curtab` is set from startup to exit.
     let tp = unsafe { TabPage::current() };
-    let mut line_numbers = [0 as linenr_T; DB_COUNT as usize];
+    let mut line_numbers = [0 as LineNr; DB_COUNT as usize];
     let mut outputmap = [0usize; DB_COUNT as usize];
     let mut ndiffs = 0;
     for (i, lnum) in line_numbers.iter_mut().enumerate() {

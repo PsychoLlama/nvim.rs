@@ -72,10 +72,10 @@ use crate::syntax::{
 use crate::terminal::terminal_get_line_attributes;
 use crate::types::TAB;
 use crate::types::{
-    CharSize, CharsizeArg, DecorRange, DecorVirtText, GridView, HlMode, NS, NUL, RgbValue,
-    SignTextAttrs, VirtLines, VirtText, WinExtmark, buf_T, colnr_T, diffline_T, foldinfo_T, hlf_T,
-    linenr_T, pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t, statuscol_T,
-    uint8_t, uint32_t, uint64_t, varnumber_T, virt_line, win_T,
+    CharSize, CharsizeArg, ColNr, DecorRange, DecorVirtText, GridView, HlMode, LineNr, NS, NUL,
+    RgbValue, SignTextAttrs, VirtLines, VirtText, WinExtmark, buf_T, diffline_T, foldinfo_T, hlf_T,
+    pos_T, ptrdiff_t, sattr_T, schar_T, size_t, spellvars_T, ssize_t, statuscol_T, uint8_t,
+    uint32_t, uint64_t, varnumber_T, virt_line, win_T,
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
@@ -126,7 +126,7 @@ pub const MAX_NUMBERWIDTH: ::core::ffi::c_int = 20 as ::core::ffi::c_int;
 /// live `spellvars_T`.
 pub unsafe fn win_line(
     wp: *mut win_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     startrow: ::core::ffi::c_int,
     endrow: ::core::ffi::c_int,
     col_rows: ::core::ffi::c_int,
@@ -356,8 +356,8 @@ unsafe fn wlv_put_linebuf(
 unsafe fn decor_providers_setup(
     rows_to_draw: ::core::ffi::c_int,
     draw_from_line_start: bool,
-    lnum: linenr_T,
-    col: colnr_T,
+    lnum: LineNr,
+    col: ColNr,
     wp: Win,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
@@ -386,9 +386,9 @@ unsafe fn decor_providers_setup(
 /// `wp` must be a live window and `lnum` one of its buffer's lines.
 unsafe fn invoke_range_next(
     wp: Win,
-    lnum: linenr_T,
-    begin_col: colnr_T,
-    col_off: colnr_T,
+    lnum: LineNr,
+    begin_col: ColNr,
+    col_off: ColNr,
 ) -> ::core::ffi::c_int {
     // SAFETY: the caller's window and line; the callbacks re-enter the editor.
     let line = unsafe { ml_get_buf(wp.w_buffer, lnum) };

@@ -46,7 +46,7 @@ use crate::runtime::{estack_pop, estack_push, set_sourcing_lnum};
 use crate::state::{MODE_NORMAL, may_trigger_modechanged};
 
 use crate::types::{
-    Failed, IOSIZE, LineGetter, OptInt, Vv, except_T, garray_T, linenr_T, msglist_T, ptrdiff_t,
+    Failed, IOSIZE, LineGetter, LineNr, OptInt, Vv, except_T, garray_T, msglist_T, ptrdiff_t,
     size_t,
 };
 
@@ -195,7 +195,7 @@ pub unsafe fn do_exmode() {
 
 /// `:verbose` >= 15: report the command about to run, and which line of
 /// which script it is.
-pub(crate) unsafe fn msg_verbose_cmd(lnum: linenr_T, cmd: *mut c_char) {
+pub(crate) unsafe fn msg_verbose_cmd(lnum: LineNr, cmd: *mut c_char) {
     let _no_prompt = Suppress::wait_return();
     unsafe { verbose_enter_scroll() };
     if lnum == 0 {

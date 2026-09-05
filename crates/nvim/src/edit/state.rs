@@ -67,8 +67,8 @@ fn insert_enter(s: &mut InsertState) {
             Insstart.set(Insstart.get().with_col(0));
         }
     }
-    Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as colnr_T);
-    Insstart_blank_vcol.set(MAXCOL as colnr_T);
+    Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as ColNr);
+    Insstart_blank_vcol.set(MAXCOL as ColNr);
     if !did_ai.get() {
         ai_col.set(0);
     }

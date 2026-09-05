@@ -60,11 +60,11 @@ pub(crate) fn get_syntime_arg(_xp: *mut expand_T, idx: c_int) -> *mut c_char {
 /// One row of the `:syntime report` table: a pattern's accumulated timings,
 /// copied out of its `syn_time_T` so the table can be sorted.
 struct TimeEntry {
-    total: proftime_T,
+    total: ProfTime,
     count: c_int,
     matches: c_int,
-    slowest: proftime_T,
-    average: proftime_T,
+    slowest: ProfTime,
+    average: ProfTime,
     id: c_int,
     /// The pattern text, borrowed from the pattern the row came from.
     pattern: *const c_char,

@@ -101,7 +101,7 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<boo
         // changed_lines() is postponed: calling it here would upset
         // marker folding.
         let below = cur_win().w_cursor.lnum + 1;
-        let max = MAXLNUM as linenr_T;
+        let max = MAXLNUM as LineNr;
         // SAFETY: the editor exists.
         unsafe { mark_adjust(below, max, 1, 0, kExtmarkNOOP) };
         return Some(true);
@@ -131,8 +131,8 @@ unsafe fn append_new_line(p_extra: *mut c_char, old_cursor: pos_T) -> Option<boo
 unsafe fn apply_new_indent(
     mut newindent: c_int,
     saved_line: *mut c_char,
-    less_cols: &mut colnr_T,
-    newcol: &mut colnr_T,
+    less_cols: &mut ColNr,
+    newcol: &mut ColNr,
     no_si: bool,
 ) {
     cur_win().w_cursor.lnum += 1;
@@ -182,10 +182,10 @@ unsafe fn truncate_old_line(
     saved_line: *mut c_char,
     flags: c_int,
     trunc_line: bool,
-    lnum: linenr_T,
-    mincol: colnr_T,
-    less_cols: colnr_T,
-    less_cols_off: colnr_T,
+    lnum: LineNr,
+    mincol: ColNr,
+    less_cols: ColNr,
+    less_cols_off: ColNr,
     did_append: bool,
 ) {
     unsafe { *saved_line.offset(cur_win().w_cursor.col as isize) = NUL as c_char };
@@ -262,10 +262,10 @@ unsafe fn reindent_new_line(leader: *mut c_char, do_cindent: bool) {
             && cur_buf().b_p_ai != 0
         {
             unsafe { fixthisline(Some(get_lisp_indent as unsafe fn() -> c_int)) };
-            ai_col.set(unsafe { getwhitecols_curline() } as colnr_T);
+            ai_col.set(unsafe { getwhitecols_curline() } as ColNr);
         } else if do_cindent || (cur_buf().b_p_ai != 0 && unsafe { use_indentexpr_for_lisp() }) {
             unsafe { do_c_expr_indent() };
-            ai_col.set(unsafe { getwhitecols_curline() } as colnr_T);
+            ai_col.set(unsafe { getwhitecols_curline() } as ColNr);
         }
     }
 
@@ -433,7 +433,7 @@ pub unsafe fn open_line(
 
     let mut leader: *mut c_char = ::core::ptr::null_mut();
     let mut allocated: *mut c_char = ::core::ptr::null_mut();
-    let mut newcol: colnr_T = 0;
+    let mut newcol: ColNr = 0;
     if lead_len > 0 {
         let plan = unsafe { plan_leader(dir, lead_len, lead_flags, saved_line, p_extra) };
         lead_len = plan.lead_len;
@@ -459,8 +459,8 @@ pub unsafe fn open_line(
     }
 
     // Only reached with dir == FORWARD, in Insert or Replace state.
-    let mut less_cols: colnr_T = 0;
-    let mut less_cols_off: colnr_T = 0;
+    let mut less_cols: ColNr = 0;
+    let mut less_cols_off: ColNr = 0;
     if !p_extra.is_null() {
         unsafe { *p_extra = saved_char }; // put back the byte the NUL replaced
 
@@ -483,7 +483,7 @@ pub unsafe fn open_line(
             }
         }
         // Columns for the marks, adjusted for the ones just removed.
-        less_cols = unsafe { p_extra.offset_from(saved_line) } as colnr_T;
+        less_cols = unsafe { p_extra.offset_from(saved_line) } as ColNr;
     }
     if p_extra.is_null() {
         p_extra = c"".as_ptr().cast_mut(); // append an empty line

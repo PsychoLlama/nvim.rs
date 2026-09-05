@@ -23,7 +23,7 @@ use crate::decoration::SignCountHalf;
 use crate::marktree::key::{
     MtFlags, mt_decor, mt_decor_any, mt_end, mt_flags, mt_invalid, mt_paired,
 };
-use crate::types::{DecorInline, MTKey, MTPos, MarkTreeIter, buf_T, colnr_T, uint32_t, uint64_t};
+use crate::types::{ColNr, DecorInline, MTKey, MTPos, MarkTreeIter, buf_T, uint32_t, uint64_t};
 
 /// Create or update an extmark.
 ///
@@ -33,9 +33,9 @@ pub unsafe fn extmark_set(
     ns_id: uint32_t,
     idp: *mut uint32_t,
     row: c_int,
-    col: colnr_T,
+    col: ColNr,
     end_row: c_int,
-    end_col: colnr_T,
+    end_col: ColNr,
     decor: DecorInline,
     decor_flags: MtFlags,
     right_gravity: bool,
@@ -127,13 +127,7 @@ pub unsafe fn extmark_set(
 ///
 /// `static` upstream; only [`extmark_apply_undo`](super::extmark_apply_undo)
 /// reaches it.
-pub(crate) fn extmark_setraw(
-    mut buf: Buf,
-    mark: uint64_t,
-    row: c_int,
-    col: colnr_T,
-    invalid: bool,
-) {
+pub(crate) fn extmark_setraw(mut buf: Buf, mark: uint64_t, row: c_int, col: ColNr, invalid: bool) {
     let mut itr = MarkTreeIter::default();
     let key = tree_lookup(buf.marktree(), mark, Some(&mut itr));
     let move_0 = key.pos.row != row || key.pos.col != col;

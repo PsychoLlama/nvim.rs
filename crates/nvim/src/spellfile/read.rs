@@ -54,7 +54,7 @@ use crate::spell::{
     e_format, first_lang, init_syl_tab, open_spellbuf, parse_spelllang, slang_alloc, slang_clear,
     slang_clear_sug, slang_free,
 };
-use crate::types::{NUL, OptInt, colnr_T, idx_T, langp_T, linenr_T, slang_T, time_t, uint8_t};
+use crate::types::{ColNr, LineNr, NUL, OptInt, idx_T, langp_T, slang_T, time_t, uint8_t};
 use ::libc::{strcpy, strrchr};
 
 use super::sections::{
@@ -204,7 +204,7 @@ unsafe fn load_spl(
     };
     *lpp = lp;
 
-    estack_push(ETYPE_SPELL, fname, 0 as linenr_T);
+    estack_push(ETYPE_SPELL, fname, 0 as LineNr);
     *did_estack_push = true;
 
     // SAFETY: `lp` is either this frame's allocation or the caller's
@@ -497,7 +497,7 @@ unsafe fn read_sug_body(spl: &mut Spl, slang: &mut slang_T) -> SplResult<()> {
             }
         }
         let sugbuf = slang.sl_sugbuf;
-        let (at, len) = (wordnr as linenr_T, line.len() as colnr_T);
+        let (at, len) = (wordnr as LineNr, line.len() as ColNr);
         // SAFETY: the buffer was just opened and the line is this frame's.
         let appended =
             unsafe { ml_append_buf(sugbuf, at, line.as_mut_ptr().cast::<c_char>(), len, true) };

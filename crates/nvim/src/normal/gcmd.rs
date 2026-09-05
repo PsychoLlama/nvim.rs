@@ -32,7 +32,7 @@ use crate::plines::linetabsize;
 use crate::search::{BACKWARD, FORWARD, current_search};
 use crate::state::virtual_active;
 use crate::textobject::bckend_word;
-use crate::types::{NUL, OpType, cmdarg_T, colnr_T, int64_t, linenr_T};
+use crate::types::{ColNr, LineNr, NUL, OpType, cmdarg_T, int64_t};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
 use core::ffi::c_int;
@@ -120,7 +120,7 @@ pub(crate) unsafe fn nv_g_underscore_cmd(cap: *mut cmdarg_T) {
     let mut win = cur_win();
     ca.op().motion_type = kMTCharWise;
     ca.op().inclusive = true;
-    win.w_curswant = MAXCOL as colnr_T;
+    win.w_curswant = MAXCOL as ColNr;
     if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
         return;
@@ -151,7 +151,7 @@ pub(crate) unsafe fn nv_g_dollar_cmd(cap: *mut cmdarg_T) {
     op.motion_type = kMTCharWise;
     op.inclusive = true;
     if win.w_onebuf_opt.wo_wrap != 0 && win.w_view_width != 0 {
-        win.w_curswant = MAXCOL as colnr_T;
+        win.w_curswant = MAXCOL as ColNr;
         if ca.count1 == 1 {
             let width1 = win.w_view_width - col_off;
             let width2 = width1 + win_col_off2(win);
@@ -235,7 +235,7 @@ unsafe fn nv_g_screen_line(cap: *mut cmdarg_T, dir: c_int) {
         if dir == FORWARD as c_int {
             unsafe { cursor_down(ca.count1, stop_at_end).is_ok() }
         } else {
-            unsafe { cursor_up(ca.count1 as linenr_T, stop_at_end).is_ok() }
+            unsafe { cursor_up(ca.count1 as LineNr, stop_at_end).is_ok() }
         }
     } else {
         unsafe { nv_screengo(op.raw(), dir, ca.count1, false) }

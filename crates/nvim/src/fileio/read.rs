@@ -62,9 +62,9 @@ pub(crate) struct How {
 pub(crate) unsafe fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
-    from: linenr_T,
-    lines_to_skip: linenr_T,
-    lines_to_read: linenr_T,
+    from: LineNr,
+    lines_to_skip: LineNr,
+    lines_to_read: LineNr,
     eap: *mut exarg_T,
     flags: c_int,
     silent: bool,
@@ -86,8 +86,8 @@ pub(crate) unsafe fn readfile(
 
     // Where the next line and character to read from curbuf are, for
     // READ_BUFFER.
-    let mut read_buf_lnum: linenr_T = 1;
-    let mut read_buf_col: colnr_T = 0;
+    let mut read_buf_lnum: LineNr = 1;
+    let mut read_buf_col: ColNr = 0;
 
     let mut lnum = from;
     let mut w = Window {
@@ -98,7 +98,7 @@ pub(crate) unsafe fn readfile(
         real_size: 0,
         linerest: 0,
     };
-    let mut filesize: off_T = 0;
+    let mut filesize: FileOffset = 0;
     let mut skip_read = false;
     let mut sha_ctx = Sha256::new();
     let mut read_undo_file = false;
@@ -107,13 +107,13 @@ pub(crate) unsafe fn readfile(
     let mut ff_error = EOL_UNKNOWN; // file format with errors
     let mut fileformat = 0;
     let mut keep_fileformat = false;
-    let mut skip_count: linenr_T = 0;
-    let mut read_count: linenr_T = 0;
+    let mut skip_count: LineNr = 0;
+    let mut read_count: LineNr = 0;
     let msg_save = msg_scroll.get();
     // Non-zero line number when the last line read had no end-of-line.
-    let mut read_no_eol_lnum: linenr_T = 0;
+    let mut read_no_eol_lnum: LineNr = 0;
     let mut file_rewind = false;
-    let mut illegal_byte: linenr_T = 0; // line nr with an illegal byte
+    let mut illegal_byte: LineNr = 0; // line nr with an illegal byte
     // Don't retry when a character doesn't fit in the destination
     // encoding.
     let mut keep_dest_enc = false;
@@ -126,7 +126,7 @@ pub(crate) unsafe fn readfile(
     let mut converted = false;
     let mut notconverted = false;
     let mut conv = Conv::new(BAD_REPLACE);
-    let mut linecnt: linenr_T;
+    let mut linecnt: LineNr;
     let wasempty;
 
     // Reset before triggering any autocommands.
@@ -394,10 +394,10 @@ pub(crate) unsafe fn readfile(
                 }
 
                 // Protect against the argument of lalloc() going negative,
-                // and split lines that are too long for colnr_T. After this
+                // and split lines that are too long for ColNr. After this
                 // check we read up to "size" more bytes, and even then the
                 // line length must stay below MAXCOL - 1 (we add 1 for the
-                // NUL when casting to colnr_T). If it fires we insert a
+                // NUL when casting to ColNr). If it fires we insert a
                 // newline right away, so linerest does not grow.
                 if w.size < 0
                     || w.size + w.linerest + 1 < 0
@@ -588,7 +588,7 @@ pub(crate) unsafe fn readfile(
                     };
                     if let Some((_, blen)) = found {
                         // Remove the BOM from the text.
-                        filesize += blen as off_T;
+                        filesize += blen as FileOffset;
                         w.size -= blen as ptrdiff_t;
                         unsafe { ptr::copy(w.ptr.add(blen), w.ptr, w.size as usize) };
                         if set_options {
@@ -662,7 +662,7 @@ pub(crate) unsafe fn readfile(
                 }
 
                 // Count the characters, after conversion.
-                filesize += w.size as off_T;
+                filesize += w.size as FileOffset;
 
                 // When reading the first part of a file, guess the EOL
                 // type.
@@ -742,7 +742,7 @@ pub(crate) unsafe fn readfile(
                 cur_buf().b_p_eol = false as c_int;
             }
             unsafe { *w.ptr = 0 };
-            let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as colnr_T;
+            let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as ColNr;
             if unsafe { ml_append(lnum, w.line_start, len, how.newfile) }.is_err() {
                 error = true;
             } else {

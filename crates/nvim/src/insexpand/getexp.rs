@@ -16,7 +16,7 @@ use crate::winlayer::{Buf, buffers};
 
 /// In large buffers a timeout can miss nearby matches, so the search starts
 /// this many lines above the cursor.
-const LOOKBACK_LINE_COUNT: linenr_T = 1000;
+const LOOKBACK_LINE_COUNT: LineNr = 1000;
 
 /// The running completion's own copy of `'complete'`, and how far the scan
 /// through it has got.
@@ -322,7 +322,7 @@ pub(crate) unsafe fn get_next_include_file_completion(compl_type: c_int) {
     };
     let (pat, len) = (pattern.data(), pattern.len());
     let dir = compl_direction.get();
-    let end = MAXLNUM as linenr_T;
+    let end = MAXLNUM as LineNr;
     let auto = compl_autocomplete.get();
     // SAFETY: `pat` is `len` readable bytes of the running completion's
     // pattern, and the search runs over the current buffer's include path.
@@ -561,7 +561,7 @@ pub(crate) unsafe fn get_next_cmdline_completion() {
 }
 
 /// Spelling suggestions for the bad word at `lnum`.
-pub(crate) unsafe fn get_next_spell_completion(lnum: linenr_T) {
+pub(crate) unsafe fn get_next_spell_completion(lnum: LineNr) {
     let mut matches: *mut *mut c_char = ptr::null_mut();
     let num_matches = unsafe { expand_spelling(lnum, compl_pattern().data(), &raw mut matches) };
     if num_matches > 0 {

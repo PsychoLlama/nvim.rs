@@ -1,6 +1,6 @@
 //! The 'vartabstop' / 'varsofttabstop' arithmetic.
 //!
-//! A tabstop list is stored as a `colnr_T` array whose element 0 is the
+//! A tabstop list is stored as a `ColNr` array whose element 0 is the
 //! number of stops that follow. A null pointer, or a list whose count is
 //! zero, means "no list": the uniform 'tabstop' width applies instead. The
 //! last stop repeats forever, which is what every `t > tabcount` branch here
@@ -10,7 +10,7 @@
 
 use core::ffi::c_int;
 
-use crate::types::{OptInt, colnr_T};
+use crate::types::{ColNr, OptInt};
 
 // Nested so that ffigen, which flattens a file's top-level constants into one
 // C namespace, does not publish a name this generic.
@@ -24,7 +24,7 @@ pub use limit::TABSTOP_MAX;
 /// widths.
 #[derive(Clone, Copy)]
 pub struct TabStops<'a> {
-    stops: &'a [colnr_T],
+    stops: &'a [ColNr],
 }
 
 impl<'a> TabStops<'a> {
@@ -32,7 +32,7 @@ impl<'a> TabStops<'a> {
     /// cases every caller treats as "use the uniform width".
     ///
     /// `stops` must be at least `stops[0] + 1` long.
-    pub fn new(stops: &'a [colnr_T]) -> Option<Self> {
+    pub fn new(stops: &'a [ColNr]) -> Option<Self> {
         (!stops.is_empty() && stops[0] != 0).then_some(TabStops { stops })
     }
 
@@ -42,7 +42,7 @@ impl<'a> TabStops<'a> {
     }
 
     /// The width of stop `t`, counting from one.
-    fn width(self, t: c_int) -> colnr_T {
+    fn width(self, t: c_int) -> ColNr {
         self.stops[t as usize]
     }
 
@@ -53,8 +53,8 @@ impl<'a> TabStops<'a> {
 
     /// The stop that `col` falls inside: its one-based index and the column
     /// it starts at. Answers `None` when `col` is past the last stop.
-    fn containing(self, col: colnr_T) -> Option<(c_int, colnr_T)> {
-        let mut tabcol: colnr_T = 0;
+    fn containing(self, col: ColNr) -> Option<(c_int, ColNr)> {
+        let mut tabcol: ColNr = 0;
         for t in 1..=self.count() {
             tabcol += self.width(t);
             if tabcol > col {
@@ -66,13 +66,13 @@ impl<'a> TabStops<'a> {
 
     /// The column where the repeating tail begins, and the width it repeats
     /// with — used once `col` is past the last named stop.
-    fn tail(self) -> (colnr_T, colnr_T) {
-        let total: colnr_T = self.stops[1..=self.count() as usize].iter().sum();
+    fn tail(self) -> (ColNr, ColNr) {
+        let total: ColNr = self.stops[1..=self.count() as usize].iter().sum();
         (total, self.width(self.count()))
     }
 
     /// How many columns from `col` to the next tabstop.
-    pub fn padding(self, col: colnr_T) -> c_int {
+    pub fn padding(self, col: ColNr) -> c_int {
         match self.containing(col) {
             Some((_, tabcol)) => tabcol - col,
             None => {
@@ -85,7 +85,7 @@ impl<'a> TabStops<'a> {
     /// The width of the tabstop at `col`. With `left`, the width of the stop
     /// the cursor would move *back* over, which for the first stop is `col`
     /// itself.
-    pub fn at(self, col: colnr_T, left: bool) -> c_int {
+    pub fn at(self, col: ColNr, left: bool) -> c_int {
         match self.containing(col) {
             Some((1, _)) if left => col,
             Some((t, _)) => self.width(t - c_int::from(left)),
@@ -94,7 +94,7 @@ impl<'a> TabStops<'a> {
     }
 
     /// The column the tabstop containing `col` starts at.
-    pub fn start(self, col: colnr_T) -> colnr_T {
+    pub fn start(self, col: ColNr) -> ColNr {
         match self.containing(col) {
             Some((t, tabcol)) => tabcol - self.width(t),
             None => {
@@ -108,7 +108,7 @@ impl<'a> TabStops<'a> {
 
     /// The tabs and trailing spaces that fill the columns `start_col` to
     /// `end_col`.
-    pub fn from_to(self, start_col: colnr_T, end_col: colnr_T) -> (c_int, c_int) {
+    pub fn from_to(self, start_col: ColNr, end_col: ColNr) -> (c_int, c_int) {
         let mut spaces = end_col - start_col;
         let padding = self.padding(start_col);
         if spaces < padding {
@@ -137,7 +137,7 @@ impl<'a> TabStops<'a> {
 
 /// Whether two lists name the same stops. A null list only equals another
 /// null one.
-pub fn eq(a: Option<&[colnr_T]>, b: Option<&[colnr_T]>) -> bool {
+pub fn eq(a: Option<&[ColNr]>, b: Option<&[ColNr]>) -> bool {
     match (a, b) {
         (None, None) => true,
         (Some(a), Some(b)) => a[0] == b[0] && a[1..=a[0] as usize] == b[1..=b[0] as usize],
@@ -147,13 +147,13 @@ pub fn eq(a: Option<&[colnr_T]>, b: Option<&[colnr_T]>) -> bool {
 
 /// [`TabStops::padding`] for a uniform 'tabstop' of `ts`. A zero means the
 /// default of eight.
-pub fn uniform_padding(col: colnr_T, ts: OptInt) -> c_int {
+pub fn uniform_padding(col: ColNr, ts: OptInt) -> c_int {
     let ts = if ts == 0 { 8 } else { ts };
     (ts - col as OptInt % ts) as c_int
 }
 
 /// [`TabStops::from_to`] for a uniform 'tabstop' of `ts`.
-pub fn uniform_from_to(start_col: colnr_T, end_col: colnr_T, ts: c_int) -> (c_int, c_int) {
+pub fn uniform_from_to(start_col: ColNr, end_col: ColNr, ts: c_int) -> (c_int, c_int) {
     let mut spaces = end_col - start_col;
     let mut tabs = 0;
     let initspc = ts - start_col % ts;
@@ -179,7 +179,7 @@ pub enum ParseError {
 
 /// Parse a comma-separated 'vartabstop' value into the count-prefixed array
 /// the option holds. An empty value, or a bare `0`, means "no list".
-pub fn parse(var: &[u8]) -> Result<Option<Vec<colnr_T>>, ParseError> {
+pub fn parse(var: &[u8]) -> Result<Option<Vec<ColNr>>, ParseError> {
     if var.is_empty() || var == b"0" {
         return Ok(None);
     }
@@ -216,7 +216,7 @@ pub fn parse(var: &[u8]) -> Result<Option<Vec<colnr_T>>, ParseError> {
         if n <= 0 || n > TABSTOP_MAX as i64 {
             return Err(ParseError::OutOfRange(at));
         }
-        array.push(n as colnr_T);
+        array.push(n as ColNr);
         at += part.len() + 1;
     }
     Ok(Some(array))
@@ -250,8 +250,8 @@ mod tests {
     use super::*;
 
     /// `:set vartabstop=4,8,2` — the list nvim would build.
-    fn stops(widths: &[colnr_T]) -> Vec<colnr_T> {
-        let mut v = vec![widths.len() as colnr_T];
+    fn stops(widths: &[ColNr]) -> Vec<ColNr> {
+        let mut v = vec![widths.len() as ColNr];
         v.extend_from_slice(widths);
         v
     }

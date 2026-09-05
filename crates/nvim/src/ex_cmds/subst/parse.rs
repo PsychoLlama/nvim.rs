@@ -32,7 +32,7 @@ use crate::option::magic_isset;
 use crate::os::cshim::{__ctype_b_loc, gettext};
 use crate::regexp::{RE_LAST, RE_SUBST};
 use crate::search::save_re_pat;
-use crate::types::{Failed, NUL, SubReplacementString, Timestamp, exarg_T, linenr_T, size_t};
+use crate::types::{Failed, LineNr, NUL, SubReplacementString, Timestamp, exarg_T, size_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{ptr, slice};
 
@@ -142,13 +142,13 @@ pub(crate) unsafe fn sub_joining_lines(
     // The number of lines joined is the number of lines in the range, plus
     // one more if this is not the end of the file.
     let joined_lines_count = eap.line2 - eap.line1
-        + 1 as linenr_T
-        + linenr_T::from(eap.line2 < cur_buf().b_ml.ml_line_count);
-    if joined_lines_count > 1 as linenr_T {
+        + 1 as LineNr
+        + LineNr::from(eap.line2 < cur_buf().b_ml.ml_line_count);
+    if joined_lines_count > 1 as LineNr {
         // SAFETY: the range is inside the buffer; message state is ready.
         let _ = unsafe { do_join(joined_lines_count as size_t, false, true, false, true) };
-        sub_nsubs.set(joined_lines_count - 1 as linenr_T);
-        sub_nlines.set(1 as linenr_T);
+        sub_nsubs.set(joined_lines_count - 1 as LineNr);
+        sub_nlines.set(1 as LineNr);
         unsafe { do_sub_msg(false) };
         // SAFETY: the command block is the one borrowed here.
         unsafe { ex_may_print(&raw mut *eap) };

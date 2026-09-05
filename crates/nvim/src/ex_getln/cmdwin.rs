@@ -237,7 +237,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     if get_hislen() > 0 && histtype != HIST_INVALID {
         let mut i = get_hisidx(histtype);
         if i >= 0 {
-            let mut lnum: linenr_T = 0;
+            let mut lnum: LineNr = 0;
             // C's do-while: `get_hisidx` is re-read at the test, because
             // `ml_append`'s autocommands can move it.
             loop {
@@ -261,7 +261,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // the cursor there.
     let _ = unsafe { ml_replace(cur_buf().b_ml.ml_line_count, Cc::current().text(), true) };
     cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
-    cur_win().w_cursor.col = Cc::current().cmdpos as colnr_T;
+    cur_win().w_cursor.col = Cc::current().cmdpos as ColNr;
     unsafe { changed_line_abv_curs() };
     invalidate_botline_win(unsafe { Win::current() });
     ui_ext_cmdline_hide(false);

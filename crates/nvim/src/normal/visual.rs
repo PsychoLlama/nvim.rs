@@ -45,7 +45,7 @@ use crate::strings::vim_strchr;
 use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
-use crate::types::{NUL, OpType, cmdarg_T, colnr_T, linenr_T, pos_T, size_t};
+use crate::types::{ColNr, LineNr, NUL, OpType, cmdarg_T, pos_T, size_t};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
@@ -372,7 +372,7 @@ pub(crate) unsafe fn v_swap_corners(cmdchar: c_int) {
         return;
     }
 
-    let (mut left, mut right): (colnr_T, colnr_T) = (0, 0);
+    let (mut left, mut right): (ColNr, ColNr) = (0, 0);
     let mut old_cursor = cur_win().w_cursor;
     let win = cur_win();
     let (from, to) = (&raw mut old_cursor, &raw mut anchor);
@@ -434,7 +434,7 @@ pub(crate) unsafe fn v_visop(cap: *mut cmdarg_T) {
             VIsual_mode_orig.set(visual_mode());
             set_visual_mode(VisualMode::LINE);
         } else if ca.cmdchar == 'C' as c_int || ca.cmdchar == 'D' as c_int {
-            cur_win().w_curswant = MAXCOL as colnr_T;
+            cur_win().w_curswant = MAXCOL as ColNr;
         }
     }
     let typed = ca.cmdchar as u8;
@@ -474,7 +474,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         cur_win().w_cursor.lnum = cur_win().w_cursor.lnum.wrapping_add(
             resel_VIsual_line_count
                 .get()
-                .wrapping_mul(ca.count0 as linenr_T)
+                .wrapping_mul(ca.count0 as LineNr)
                 .wrapping_sub(1),
         );
         check_cursor(unsafe { Win::current() });
@@ -485,7 +485,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
         if resel_VIsual_line_count.get() <= 1 {
             unsafe { update_curswant_force() };
             let count0 = ca.count0;
-            let extra = resel_VIsual_vcol.get().wrapping_mul(count0) as colnr_T;
+            let extra = resel_VIsual_vcol.get().wrapping_mul(count0) as ColNr;
             cur_win().w_curswant = cur_win().w_curswant.wrapping_add(extra);
             if !sel_exclusive() {
                 cur_win().w_curswant -= 1;
@@ -497,7 +497,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
     }
 
     if resel_VIsual_vcol.get() == MAXCOL as c_int {
-        cur_win().w_curswant = MAXCOL as colnr_T;
+        cur_win().w_curswant = MAXCOL as ColNr;
         coladvance(unsafe { Win::current() }, MAXCOL as c_int);
     } else if visual_mode().is_block() {
         // The width is measured from the *start* line, so the cursor goes
@@ -509,7 +509,7 @@ unsafe fn reselect_scaled(cap: *mut cmdarg_T) {
             resel_VIsual_vcol
                 .get()
                 .wrapping_mul(ca.count0)
-                .wrapping_sub(1) as colnr_T,
+                .wrapping_sub(1) as ColNr,
         );
         cur_win().w_cursor.lnum = lnum;
         if sel_exclusive() {
@@ -734,7 +734,7 @@ pub(crate) fn unadjust_for_sel_inner(pp: &mut pos_T) -> bool {
         // screen column the TAB covers.
         // SAFETY: `curwin` is set from startup to exit.
         if virtual_active(cur_win()) {
-            let (mut cs, mut ce): (colnr_T, colnr_T) = (0, 0);
+            let (mut cs, mut ce): (ColNr, ColNr) = (0, 0);
             // SAFETY: the current window, `pp` lent for the call, and two
             // columns of this frame's own.
             unsafe {

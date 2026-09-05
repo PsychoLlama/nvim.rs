@@ -306,7 +306,7 @@ pub unsafe fn f_winrestview(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr
 /// and the answer is 0 rather than 1. Only an unloaded buffer has no lines,
 /// and `winrestview()` cannot reach one, but the order is what upstream does
 /// and a differential would see any other answer.
-fn restored_topline(topline: linenr_T, line_count: linenr_T) -> linenr_T {
+fn restored_topline(topline: LineNr, line_count: LineNr) -> LineNr {
     let topline = if topline <= 0 { 1 } else { topline };
     if topline > line_count {
         line_count

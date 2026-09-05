@@ -53,7 +53,7 @@ struct SearchedFile {
     fp: *mut FILE,
     name: Name,
     /// The line last read from it, for the listing.
-    lnum: linenr_T,
+    lnum: LineNr,
     /// Whether a match has been shown in this file or in one it includes.
     matched: bool,
 }
@@ -260,7 +260,7 @@ unsafe fn include_uses_zs(inc_opt: *mut c_char) -> bool {
 /// # Safety
 /// `lnum` must be a line of the current buffer and `buf` must hold
 /// `LSIZE` bytes.
-unsafe fn get_line_and_copy(lnum: linenr_T, buf: *mut c_char) -> *mut c_char {
+unsafe fn get_line_and_copy(lnum: LineNr, buf: *mut c_char) -> *mut c_char {
     unsafe { xstrlcpy(buf, ml_get(lnum), LSIZE as size_t) };
     buf
 }
@@ -275,8 +275,8 @@ struct Walk {
     line: *mut c_char,
     buf: *mut c_char,
     /// The buffer line the walk is on, while `files.depth() == -1`.
-    lnum: linenr_T,
-    end_lnum: linenr_T,
+    lnum: LineNr,
+    end_lnum: LineNr,
     /// A line has already been read into `line`; don't read another.
     /// Upstream keeps a pointer here and only ever tests it.
     already: bool,
@@ -361,7 +361,7 @@ impl Walk {
 
     /// Where `show_pat_in_path` should read continuation lines from, and
     /// which line number it should report.
-    fn source(&mut self) -> (*mut FILE, *mut linenr_T) {
+    fn source(&mut self) -> (*mut FILE, *mut LineNr) {
         if self.files.depth() == -1 {
             (ptr::null_mut(), &raw mut self.lnum)
         } else {
@@ -782,7 +782,7 @@ unsafe fn goto_match(
         }
     }
     if action != ACTION_SHOW {
-        cur_win().w_cursor.col = unsafe { startp.offset_from(walk.line) } as colnr_T;
+        cur_win().w_cursor.col = unsafe { startp.offset_from(walk.line) } as ColNr;
         cur_win().w_set_curswant = true;
     }
 
@@ -819,8 +819,8 @@ pub unsafe fn find_pattern_in_path(
     kind: c_int,
     count: c_int,
     action: c_int,
-    start_lnum: linenr_T,
-    end_lnum: linenr_T,
+    start_lnum: LineNr,
+    end_lnum: LineNr,
     forceit: bool,
     silent: bool,
 ) {

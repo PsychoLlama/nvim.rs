@@ -48,7 +48,7 @@ use core::ptr;
 
 use crate::main::namedfm;
 use crate::os::time::os_time;
-use crate::types::{Timestamp, colnr_T, fmark_T, fmarkv_T, linenr_T, pos_T, xfmark_T};
+use crate::types::{ColNr, LineNr, Timestamp, fmark_T, fmarkv_T, pos_T, xfmark_T};
 use crate::winlayer::{Buf, Win};
 
 use super::{NGLOBALMARKS, NMARKS, free_fmark, free_xfmark};
@@ -169,19 +169,19 @@ impl Fmark {
     }
 
     #[inline(always)]
-    pub(super) fn lnum(self) -> linenr_T {
+    pub(super) fn lnum(self) -> LineNr {
         // SAFETY: as `pos_raw`.
         unsafe { (*self.0).mark.lnum }
     }
 
     #[inline(always)]
-    pub(super) fn set_lnum(self, lnum: linenr_T) {
+    pub(super) fn set_lnum(self, lnum: LineNr) {
         // SAFETY: as `pos_raw`.
         unsafe { (*self.0).mark.lnum = lnum };
     }
 
     #[inline(always)]
-    pub(super) fn col(self) -> colnr_T {
+    pub(super) fn col(self) -> ColNr {
         // SAFETY: as `pos_raw`.
         unsafe { (*self.0).mark.col }
     }
@@ -496,7 +496,7 @@ impl Win {
 mod tests {
     use super::*;
 
-    fn at(lnum: linenr_T, col: colnr_T) -> pos_T {
+    fn at(lnum: LineNr, col: ColNr) -> pos_T {
         pos_T {
             lnum,
             col,

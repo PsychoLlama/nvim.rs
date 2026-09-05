@@ -40,8 +40,8 @@ use crate::registry::id_set;
 use crate::tag::tagstack_clear_entry;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Error, Failed, Integer, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T, handle_T,
-    linenr_T, tabpage_T, win_T, winopt_T,
+    Error, Failed, Integer, LineNr, OptInt, ScreenGrid, VAR_SCOPE, WinConfig, WinInfo, frame_T,
+    handle_T, tabpage_T, win_T, winopt_T,
 };
 use crate::ui::{ui_call_grid_destroy, ui_has};
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
@@ -227,15 +227,15 @@ fn alloc(after: Option<Win>, hidden: bool) -> Win {
     }
     new_wp.w_wincol = 0;
     new_wp.w_width = Columns.get();
-    new_wp.w_topline = 1 as linenr_T;
+    new_wp.w_topline = 1 as LineNr;
     new_wp.w_topfill = 0;
-    new_wp.w_botline = 2 as linenr_T;
-    new_wp.w_cursor.lnum = 1 as linenr_T;
+    new_wp.w_botline = 2 as LineNr;
+    new_wp.w_cursor.lnum = 1 as LineNr;
     new_wp.w_scbind_pos = 1;
     new_wp.w_floating = false;
     new_wp.w_config = WIN_CONFIG_INIT;
     new_wp.w_viewport_invalid = true;
-    new_wp.w_viewport_last_topline = 1 as linenr_T;
+    new_wp.w_viewport_last_topline = 1 as LineNr;
     new_wp.w_ns_hl = -1;
     new_wp.w_onebuf_opt.wo_so = -1 as OptInt;
     new_wp.w_allbuf_opt.wo_so = new_wp.w_onebuf_opt.wo_so;

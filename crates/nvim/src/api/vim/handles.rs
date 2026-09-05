@@ -155,7 +155,7 @@ fn create_buf(listed: Boolean, scratch: Boolean) -> Buffer {
         };
     let no_name = ::core::ptr::null_mut::<::core::ffi::c_char>();
     // SAFETY: a new buffer with neither a file name nor a short name.
-    let buf = unsafe { buflist_new(no_name, no_name, 0 as linenr_T, flags) };
+    let buf = unsafe { buflist_new(no_name, no_name, 0 as LineNr, flags) };
     // SAFETY: `buf` is the buffer just made, or null.
     let opened = !buf.is_null() && unsafe { ml_open(buf) }.is_ok();
     if !opened {

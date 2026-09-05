@@ -26,7 +26,7 @@ use core::mem::offset_of;
 /// `buf` must be a live buffer or NULL, and `lines`/`rettv` live typvals.
 pub(crate) unsafe fn set_buffer_lines(
     buf: *mut buf_T,
-    lnum_arg: linenr_T,
+    lnum_arg: LineNr,
     append: bool,
     lines: *mut typval_T,
     rettv: *mut typval_T,
@@ -34,7 +34,7 @@ pub(crate) unsafe fn set_buffer_lines(
     // SAFETY: the caller's obligation. `cob` is a live local, restored on
     // every path out; `line` is owned here and freed before each replacement
     // and once at the end.
-    let mut lnum: linenr_T = lnum_arg + linenr_T::from(append);
+    let mut lnum: LineNr = lnum_arg + LineNr::from(append);
     let mut added: c_int = 0;
     let is_curbuf: bool = buf == curbuf.get();
     // SAFETY: the caller's obligation -- live typvals, and a live buffer or
@@ -48,7 +48,7 @@ pub(crate) unsafe fn set_buffer_lines(
     if !is_curbuf {
         unsafe { cob.prepare(Buf::new(buf)) };
     }
-    let append_lnum: linenr_T = if append {
+    let append_lnum: LineNr = if append {
         lnum - 1
     } else {
         cur_buf().line_count()
@@ -157,8 +157,8 @@ unsafe fn buf_set_append_line(args: Args<'_>, rettv: &mut typval_T, append: bool
 /// `buf` must be a live buffer or NULL, and `rettv` a live typval.
 unsafe fn get_buffer_lines(
     buf: *mut buf_T,
-    mut start: linenr_T,
-    mut end: linenr_T,
+    mut start: LineNr,
+    mut end: LineNr,
     retlist: bool,
     rettv: *mut typval_T,
 ) {

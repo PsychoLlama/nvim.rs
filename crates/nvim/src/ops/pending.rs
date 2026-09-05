@@ -799,7 +799,7 @@ fn run_operator(cap: Cmd, mut oap: Op, empty_region_error: bool, gui_yank: bool,
                 // has already switched it off.
                 set_visual_active(true);
                 restore_lbr(lbr_saved != 0);
-                let (count, g) = (cap.count1 as linenr_T, REDO_VISUAL.get().rv_arg != 0);
+                let (count, g) = (cap.count1 as LineNr, REDO_VISUAL.get().rv_arg != 0);
                 unsafe { op_addsub(oap.raw(), count, g) };
                 set_visual_active(false);
             }

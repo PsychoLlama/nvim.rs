@@ -135,16 +135,16 @@ use crate::types::TAB;
 use crate::types::ui::{kUICmdline, kUIMessages};
 use crate::types::{
     Arena, Array, BackslashEscape, Boolean, Callback, CmdAddr, CmdBuff, CmdParseInfo,
-    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColoredCmdline, Direction,
-    Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType, ExprAssignmentType,
-    ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, HistoryType,
-    Integer, MotionType, Object, OptInt, OptMagic, OptVal, ParserHighlight, ParserHighlightChunk,
-    ParserLine, ParserPosition, ParserState, RemapValues, String_0, TryState, UndoLink,
-    UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, colnr_T, cstack_T, dict_T, disptick_T,
+    CmdParseInfo_magic, CmdRedraw, CmdlineColorChunk, CmdlineInfo, ColNr, ColoredCmdline,
+    Direction, DispTick, Error, EvalFuncData, ExArgt, ExpandContext, ExprAST, ExprASTNodeType,
+    ExprAssignmentType, ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags,
+    HistoryType, Integer, LineNr, MotionType, Object, OptInt, OptMagic, OptVal, ParserHighlight,
+    ParserHighlightChunk, ParserLine, ParserPosition, ParserState, ProfTime, RemapValues, String_0,
+    TryState, UndoLink, UndoObjectType, VimState, aco_save_T, buf_T, cmdmod_T, cstack_T, dict_T,
     dobuf_action_values, dobuf_start_values, exarg_T, except_T, expand_T, handle_T, hashtab_T,
-    linenr_T, list_T, listitem_T, magic_T, msglist_T, oparg_T, optset_T, pos_T, proftime_T,
-    ptrdiff_t, save_v_event_T, sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T,
-    typval_vval_union, uint8_t, uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
+    list_T, listitem_T, magic_T, msglist_T, oparg_T, optset_T, pos_T, ptrdiff_t, save_v_event_T,
+    sctx_T, searchit_arg_T, size_t, tabpage_T, time_t, typval_T, typval_vval_union, uint8_t,
+    uint32_t, uvarnumber_T, varnumber_T, win_T, xp_prefix_T,
 };
 use crate::ui::{
     ui_busy_start, ui_busy_stop, ui_call_cmdline_block_append, ui_call_cmdline_block_hide,
@@ -267,12 +267,12 @@ pub struct incsearch_state_T {
 }
 #[derive(Copy, Clone)]
 pub struct viewstate_T {
-    pub vs_curswant: colnr_T,
-    pub vs_leftcol: colnr_T,
-    pub vs_skipcol: colnr_T,
-    pub vs_topline: linenr_T,
+    pub vs_curswant: ColNr,
+    pub vs_leftcol: ColNr,
+    pub vs_skipcol: ColNr,
+    pub vs_topline: LineNr,
     pub vs_topfill: ::core::ffi::c_int,
-    pub vs_botline: linenr_T,
+    pub vs_botline: LineNr,
     pub vs_empty_rows: ::core::ffi::c_int,
 }
 pub const kExprAsgnConcat: ExprAssignmentType = 3;
@@ -369,8 +369,8 @@ pub struct CpUndoInfo {
     pub save_b_u_time_cur: time_t,
     pub save_b_u_save_nr_cur: ::core::ffi::c_int,
     pub save_b_u_line_ptr: *mut ::core::ffi::c_char,
-    pub save_b_u_line_lnum: linenr_T,
-    pub save_b_u_line_colnr: colnr_T,
+    pub save_b_u_line_lnum: LineNr,
+    pub save_b_u_line_colnr: ColNr,
 }
 #[derive(Copy, Clone)]
 pub struct CpWinInfoVec {

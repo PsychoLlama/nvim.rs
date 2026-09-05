@@ -42,7 +42,7 @@ use crate::statusline::stl_clear_click_defs;
 use crate::terminal::terminal_check_size;
 use crate::types::ui::{kUIMessages, kUIMultigrid, kUITabline};
 use crate::types::{
-    FAIL, Integer, NUL, OK, OptInt, StlClickDefinition, Window, colnr_T, linenr_T, scid_T, size_t,
+    ColNr, FAIL, Integer, LineNr, NUL, OK, OptInt, StlClickDefinition, Window, scid_T, size_t,
     tabpage_T, win_T,
 };
 use crate::ui::{ui_call_win_viewport_margins, ui_has};
@@ -53,19 +53,19 @@ use crate::winlayer::{Frame, TabPage, Win, tabs, windows};
 // The neighbours only this file reaches
 
 /// How many screen lines line `lnum` takes in `wp`.
-fn plines(wp: Win, lnum: linenr_T, limit_winheight: bool) -> c_int {
+fn plines(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
     // SAFETY: a line of the window's own buffer.
     unsafe { plines_win(wp, lnum, limit_winheight) }
 }
 
 /// [`plines`] up to and including column `col` of the line.
-fn plines_to_col(wp: Win, lnum: linenr_T, col: ::core::ffi::c_long) -> c_int {
+fn plines_to_col(wp: Win, lnum: LineNr, col: ::core::ffi::c_long) -> c_int {
     // SAFETY: a position in the window's own buffer.
     unsafe { plines_win_col(wp, lnum, col) }
 }
 
 /// [`plines`] without the virtual lines a diff fills the window with.
-fn plines_nofill(wp: Win, lnum: linenr_T, limit_winheight: bool) -> c_int {
+fn plines_nofill(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
     // SAFETY: a line of the window's own buffer.
     unsafe { plines_win_nofill(wp, lnum, limit_winheight) }
 }
@@ -101,7 +101,7 @@ fn cursor_down(wp: Win, n: c_int) {
     cursor_down_inner(wp, n, false);
 }
 
-fn cursor_up(wp: Win, n: linenr_T) {
+fn cursor_up(wp: Win, n: LineNr) {
     // SAFETY: a live window.
     cursor_up_inner(wp, n, false);
 }
@@ -195,7 +195,7 @@ pub(crate) fn fix_cursor(normal: bool) {
     let mut wp = cur_win();
     if skip_win_fix_cursor.get()
         || !wp.w_do_win_fix_cursor
-        || wp.buffer().line_count() < wp.w_view_height as linenr_T
+        || wp.buffer().line_count() < wp.w_view_height as LineNr
     {
         return;
     }
@@ -207,11 +207,11 @@ pub(crate) fn fix_cursor(normal: bool) {
     cursor_down(wp, so);
     let top = wp.w_cursor.lnum;
     wp.w_cursor.lnum = wp.w_botline - 1;
-    cursor_up(wp, so as linenr_T);
+    cursor_up(wp, so as LineNr);
     let bot = wp.w_cursor.lnum;
     wp.w_cursor.lnum = lnum;
 
-    let mut nlnum = 0 as linenr_T;
+    let mut nlnum = 0 as LineNr;
     if lnum > bot && wp.w_botline - wp.buffer().line_count() != 1 {
         nlnum = bot;
     } else if lnum < top && wp.w_topline != 1 {
@@ -265,7 +265,7 @@ pub(crate) fn to_fraction(wp: Win, prev_height: c_int) {
     // buffer fits and its first line is visible.
     if height > 0
         && (wp.w_onebuf_opt.wo_scb == 0 || wp.is_current())
-        && ((height as linenr_T) < wp.buffer().line_count() || wp.w_topline > 1)
+        && ((height as LineNr) < wp.buffer().line_count() || wp.w_topline > 1)
     {
         // Find a `w_topline` that shows the cursor at the same relative
         // position in the window as before (more or less).
@@ -378,7 +378,7 @@ pub(crate) fn set_inner_size(wp: Win, valid_cursor: bool) {
         wp.w_view_height = height;
         comp_scroll(wp);
         if valid_cursor && !exiting.get() && (keeps_cursor || wp.w_floating) {
-            wp.w_skipcol = 0 as colnr_T;
+            wp.w_skipcol = 0 as ColNr;
             to_fraction(wp, prev_height);
         }
         wp.redraw_later(UPD_SOME_VALID);
@@ -466,7 +466,7 @@ pub(crate) fn comp_scroll(wp: Win) {
     if wp.w_onebuf_opt.wo_scr != old {
         let ctx = &mut wp.w_onebuf_opt.wo_script_ctx[kWinOptScroll as usize];
         ctx.sc_sid = SID_WINLAYOUT as scid_T;
-        ctx.sc_lnum = 0 as linenr_T;
+        ctx.sc_lnum = 0 as LineNr;
     }
 }
 

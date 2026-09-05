@@ -33,7 +33,7 @@ use crate::regexp::{
     cleanup_zsubexpr, reg_breakcheck, reg_nextline, reg_save, regstar_T, regstate_T, save_capture,
     save_subexpr,
 };
-use crate::types::{NUL, int16_t, int64_t, proftime_T, uint8_t};
+use crate::types::{NUL, ProfTime, int16_t, int64_t, uint8_t};
 
 /// The first code of each run a group number is measured from. These are
 /// `const` items because `BtOp::Mopen.code()` is a *call* in a runtime
@@ -62,7 +62,7 @@ pub(crate) unsafe fn operand_u32(p: *const uint8_t, off: usize) -> int64_t {
 pub(crate) fn regmatch(
     rex: Rex,
     start: *mut uint8_t,
-    tm: *const proftime_T,
+    tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> bool {
     // The working state is taken once, here, and threaded down by `&mut`:
@@ -94,7 +94,7 @@ unsafe fn walk(
     backpos: &mut BackPos,
     braces: &mut Braces,
     start: *mut uint8_t,
-    tm: *const proftime_T,
+    tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> bool {
     // SAFETY: the caller promises the program and the match.

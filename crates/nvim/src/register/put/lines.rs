@@ -29,14 +29,14 @@ impl Put {
     ///
     /// # Safety
     /// `lnum`/`col` must be a valid position, and undo already saved.
-    pub(crate) unsafe fn charwise_one_line(&mut self, mut lnum: linenr_T, mut col: colnr_T) {
+    pub(crate) unsafe fn charwise_one_line(&mut self, mut lnum: LineNr, mut col: ColNr) {
         // SAFETY: a charwise register holds at least one line, so `y_array`'s
         // first string is there.
         let yanklen = unsafe { (*self.y_array).len() } as c_int;
         let start_lnum = lnum;
         let mut end_lnum = 0;
         let mut first_byte_off = 0;
-        let mut vcol: colnr_T = 0;
+        let mut vcol: ColNr = 0;
         let mut totlen: size_t = 0;
 
         if visual_active() {
@@ -132,7 +132,7 @@ impl Put {
                     // one that just changed.
                     changed_cline_bef_curs(unsafe { Win::current() });
                     invalidate_botline_win(unsafe { Win::current() });
-                    cur_win().w_cursor.col += (totlen - 1) as colnr_T;
+                    cur_win().w_cursor.col += (totlen - 1) as ColNr;
                 }
                 // SAFETY: `lnum`/`col` is where the line changed.
                 unsafe { changed_bytes(lnum, col) };
@@ -172,7 +172,7 @@ impl Put {
     ///
     /// # Safety
     /// `lnum`/`col` must be a valid position.
-    unsafe fn split_line_for_charwise(&self, lnum: linenr_T, col: colnr_T) {
+    unsafe fn split_line_for_charwise(&self, lnum: LineNr, col: ColNr) {
         // The tail of the cursor line, with the register's *last* line in
         // front of it, becomes a new line below.
         //
@@ -217,7 +217,7 @@ impl Put {
     ///
     /// # Safety
     /// `lnum` must be a valid line.
-    unsafe fn fix_indent(&self, lnum: linenr_T, state: &mut FixIndent) {
+    unsafe fn fix_indent(&self, lnum: LineNr, state: &mut FixIndent) {
         let old_pos = cur_win().w_cursor;
         cur_win().w_cursor.lnum = lnum;
         // SAFETY: the caller promises `lnum` is a line of the buffer, so
@@ -248,10 +248,10 @@ impl Put {
     /// the `']` mark belongs on.
     unsafe fn multiline_marks(
         &self,
-        lnum: linenr_T,
-        new_lnum: linenr_T,
+        lnum: LineNr,
+        new_lnum: LineNr,
         new_cursor: pos_T,
-        col: colnr_T,
+        col: ColNr,
         lendiff: c_int,
     ) {
         if self.y_type == kMTLineWise {
@@ -268,10 +268,10 @@ impl Put {
         } else {
             kExtmarkNOOP
         };
-        let from = cur_buf().b_op_start.lnum + linenr_T::from(self.y_type == kMTCharWise);
+        let from = cur_buf().b_op_start.lnum + LineNr::from(self.y_type == kMTCharWise);
         // SAFETY: main thread, with a current buffer; the range runs from the
         // put's first line to the end of the buffer.
-        unsafe { mark_adjust(from, MAXLNUM as linenr_T, self.nr_lines, 0, kind) };
+        unsafe { mark_adjust(from, MAXLNUM as LineNr, self.nr_lines, 0, kind) };
 
         // SAFETY (both): a live buffer, and the range is the lines the put
         // just rewrote.
@@ -289,7 +289,7 @@ impl Put {
         // SAFETY: `y_array` holds `y_size` strings and `y_size` is at least
         // one, so the last is there.
         let last = unsafe { *self.y_array.add(self.y_size.wrapping_sub(1)) };
-        let col = (last.len() as colnr_T - lendiff).max(0);
+        let col = (last.len() as ColNr - lendiff).max(0);
         if col > 1 {
             cur_buf().b_op_end.col = col - 1;
             if !last.is_empty() {
@@ -342,7 +342,7 @@ impl Put {
     ///
     /// # Safety
     /// `lnum`/`col` must be a valid position, and undo already saved.
-    pub(crate) unsafe fn multiline(&mut self, mut lnum: linenr_T, col: colnr_T, new_cursor: pos_T) {
+    pub(crate) unsafe fn multiline(&mut self, mut lnum: LineNr, col: ColNr, new_cursor: pos_T) {
         let mut new_lnum = new_cursor.lnum;
         let mut lendiff = 0;
         let mut indent_state = FixIndent {

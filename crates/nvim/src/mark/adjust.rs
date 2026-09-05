@@ -56,15 +56,15 @@ const INIT_POS: pos_T = pos_T {
 /// past `line2` move by `amount_after`.
 #[derive(Copy, Clone)]
 struct LineShift {
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 }
 
 impl LineShift {
     /// `ONE_ADJUST`: a deleted mark is invalidated.
-    fn line(self, lp: &mut linenr_T) {
+    fn line(self, lp: &mut LineNr) {
         if *lp >= self.line1 && *lp <= self.line2 {
             *lp = if self.amount == MAXLNUM.cast_signed() {
                 0
@@ -78,7 +78,7 @@ impl LineShift {
 
     /// `ONE_ADJUST_NODEL`: a deleted mark lands on the first deleted line
     /// rather than being invalidated.
-    fn line_nodel(self, lp: &mut linenr_T) {
+    fn line_nodel(self, lp: &mut LineNr) {
         if *lp >= self.line1 && *lp <= self.line2 {
             *lp = if self.amount == MAXLNUM.cast_signed() {
                 self.line1
@@ -133,10 +133,10 @@ impl LineShift {
 /// `lnum` at or after `mincol` gets when text on that line moves.
 #[derive(Copy, Clone)]
 struct ColShift {
-    lnum: linenr_T,
-    mincol: colnr_T,
-    lnum_amount: linenr_T,
-    col_amount: colnr_T,
+    lnum: LineNr,
+    mincol: ColNr,
+    lnum_amount: LineNr,
+    col_amount: ColNr,
     spaces_removed: c_int,
 }
 
@@ -183,10 +183,10 @@ impl ColShift {
 /// # Safety
 /// The editor's globals must be live, which they are from startup to exit.
 pub unsafe fn mark_adjust(
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
     op: ExtmarkOp,
 ) {
     // SAFETY: forwarded from the caller; `curbuf` is live from startup.
@@ -213,10 +213,10 @@ pub unsafe fn mark_adjust(
 /// # Safety
 /// As [`mark_adjust`].
 pub unsafe fn mark_adjust_nofold(
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
     op: ExtmarkOp,
 ) {
     // SAFETY: forwarded from the caller.
@@ -239,10 +239,10 @@ pub unsafe fn mark_adjust_nofold(
 /// must be live.
 pub unsafe fn mark_adjust_buf(
     buf: *mut buf_T,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
     adjust_folds: bool,
     mode: MarkAdjustMode,
     op: ExtmarkOp,
@@ -438,16 +438,16 @@ fn follows(win: Win, by_term: bool, buf: Buf) -> bool {
 /// # Safety
 /// The editor's globals must be live, which they are from startup to exit.
 pub unsafe fn mark_col_adjust(
-    lnum: linenr_T,
-    mincol: colnr_T,
-    lnum_amount: linenr_T,
-    col_amount: colnr_T,
+    lnum: LineNr,
+    mincol: ColNr,
+    lnum_amount: LineNr,
+    col_amount: ColNr,
     spaces_removed: c_int,
 ) {
     // Upstream asserts this once per adjusted mark; `col_amount` does not
-    // change, and the upper half is vacuous for a `colnr_T`. What it really
+    // change, and the upper half is vacuous for a `ColNr`. What it really
     // guards is `-col_amount` below.
-    debug_assert!(col_amount > colnr_T::MIN, "col_amount > INT_MIN");
+    debug_assert!(col_amount > ColNr::MIN, "col_amount > INT_MIN");
     // `mark_adjust_buf`'s `:lockmarks` guard is a DIFFERENT one, in a
     // different function: a line operation never reaches here and a column
     // one never reaches that. `1787242636-jmarkmutate.py`'s
@@ -532,7 +532,7 @@ mod tests {
         amount_after: 2,
     };
 
-    fn at(lnum: linenr_T) -> pos_T {
+    fn at(lnum: LineNr) -> pos_T {
         pos_T {
             lnum,
             col: 7,
@@ -634,7 +634,7 @@ mod tests {
         }
     }
 
-    fn col_shift(col_amount: colnr_T, spaces_removed: c_int) -> ColShift {
+    fn col_shift(col_amount: ColNr, spaces_removed: c_int) -> ColShift {
         ColShift {
             lnum: 5,
             mincol: 4,

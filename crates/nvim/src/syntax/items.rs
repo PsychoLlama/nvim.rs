@@ -341,7 +341,7 @@ pub(crate) fn update_si_end(mut sip: Item, startcol: c_int, force: bool) {
 
     let startpos = lpos_T {
         lnum: current_lnum.get(),
-        col: startcol as colnr_T,
+        col: startcol as ColNr,
     };
     let end = unsafe { find_endpos(sip.si_idx, startpos, sip.si_extmatch) };
     if let Some(flags) = end.flags {

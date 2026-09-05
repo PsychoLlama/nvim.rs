@@ -27,7 +27,7 @@ use crate::lua::ffi::{
 use crate::lua::spell::luaopen_spell;
 use crate::lua::xdiff::nlua_xdl_diff;
 use crate::mpack::lmpack::luaopen_mpack;
-use crate::types::{handle_T, linenr_T, lua_State};
+use crate::types::{LineNr, handle_T, lua_State};
 use crate::winlayer::Win;
 
 unsafe extern "C-unwind" {
@@ -48,11 +48,11 @@ unsafe extern "C-unwind" fn nlua_foldupdate(lstate: *mut lua_State) -> c_int {
         if win.is_null() {
             return luaL_error(lstate, c"invalid window".as_ptr());
         }
-        let top = luaL_checkinteger(lstate, 2) as linenr_T + 1;
+        let top = luaL_checkinteger(lstate, 2) as LineNr + 1;
         if top < 1 {
             return luaL_error(lstate, c"invalid top".as_ptr());
         }
-        let bot = luaL_checkinteger(lstate, 3) as linenr_T;
+        let bot = luaL_checkinteger(lstate, 3) as LineNr;
         if top > bot {
             return luaL_error(lstate, c"invalid bot".as_ptr());
         }

@@ -42,7 +42,7 @@ use crate::search::{BACKWARD, FORWARD, findmatch, searchc};
 use crate::state::virtual_active;
 use crate::strings::vim_strchr;
 use crate::textobject::{bck_word, end_word, findpar, findsent, fwd_word};
-use crate::types::{CpoFlag, Direction, NUL, OpType, cmdarg_T, colnr_T, linenr_T, oparg_T};
+use crate::types::{ColNr, CpoFlag, Direction, LineNr, NUL, OpType, cmdarg_T, oparg_T};
 use core::ffi::{c_int, c_uint};
 
 use crate::r#move::{
@@ -191,7 +191,7 @@ pub(crate) unsafe fn nv_screengo(
         }
     }
     if atend {
-        win.w_curswant = MAXCOL as colnr_T;
+        win.w_curswant = MAXCOL as ColNr;
     }
     unsafe { adjust_skipcol() };
     retval
@@ -210,7 +210,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
     if cmdchar == 'L' as c_int {
         validate_botline_win(wp);
         win.w_cursor.lnum = win.w_botline - 1;
-        if count1 as linenr_T > win.w_cursor.lnum {
+        if count1 as LineNr > win.w_cursor.lnum {
             win.w_cursor.lnum = 1;
         } else if unsafe { win_lines_concealed(wp.raw()) } {
             // A concealed line takes no screen row, so the count has to be
@@ -227,7 +227,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
                 n -= 1;
             }
         } else {
-            win.w_cursor.lnum -= count1 as linenr_T - 1;
+            win.w_cursor.lnum -= count1 as LineNr - 1;
         }
     } else {
         let mut n;
@@ -238,19 +238,19 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
             validate_botline_win(wp);
             let half = (win.w_view_height - win.w_empty_rows + 1) / 2;
             n = 0;
-            while (win.w_topline + n as linenr_T) < cur_buf().b_ml.ml_line_count {
+            while (win.w_topline + n as LineNr) < cur_buf().b_ml.ml_line_count {
                 if n > 0
-                    && used + unsafe { win_get_fill(wp, win.w_topline + n as linenr_T) } / 2 >= half
+                    && used + unsafe { win_get_fill(wp, win.w_topline + n as LineNr) } / 2 >= half
                 {
                     n -= 1;
                     break;
                 }
-                used += unsafe { plines_win(wp, win.w_topline + n as linenr_T, true) };
+                used += unsafe { plines_win(wp, win.w_topline + n as LineNr, true) };
                 if used >= half {
                     break;
                 }
-                let mut last: linenr_T = 0;
-                let at = win.w_topline + n as linenr_T;
+                let mut last: LineNr = 0;
+                let at = win.w_topline + n as LineNr;
                 if has_folding(wp, at, None, Some(&mut last)) {
                     // The whole fold is one screen row.
                     n = (last - win.w_topline) as c_int;
@@ -278,7 +278,7 @@ pub(crate) unsafe fn nv_scroll(cap: *mut cmdarg_T) {
                 n = (lnum - win.w_topline) as c_int;
             }
         }
-        win.w_cursor.lnum = (win.w_topline + n as linenr_T).min(cur_buf().b_ml.ml_line_count);
+        win.w_cursor.lnum = (win.w_topline + n as LineNr).min(cur_buf().b_ml.ml_line_count);
     }
     if op.op_type == OpType::Nop {
         // SAFETY: `wp` is the live window.
@@ -458,7 +458,7 @@ pub(crate) unsafe fn nv_up(cap: *mut cmdarg_T) {
         return;
     }
     ca.op().motion_type = kMTLineWise;
-    if unsafe { cursor_up(ca.count1 as linenr_T, ca.op().op_type == OpType::Nop) }.is_err() {
+    if unsafe { cursor_up(ca.count1 as LineNr, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
     } else if ca.arg != 0 {
         // `-` and `CTRL-P` land on the first non-blank; `k` does not.
@@ -527,7 +527,7 @@ pub(crate) unsafe fn nv_dollar(cap: *mut cmdarg_T) {
     // Under 'virtualedit' an operator that starts past the end of the
     // line keeps the column it has rather than asking for the end again.
     if !virtual_active(cur_win()) || gchar_cursor() != NUL || ca.op().op_type == OpType::Nop {
-        cur_win().w_curswant = MAXCOL as colnr_T;
+        cur_win().w_curswant = MAXCOL as ColNr;
     }
     if unsafe { cursor_down(ca.count1 - 1, ca.op().op_type == OpType::Nop) }.is_err() {
         clear_op_beep(ca.op());
@@ -600,9 +600,9 @@ pub(crate) unsafe fn nv_percent(cap: *mut cmdarg_T) {
             // Divide first for a file long enough that `count * 100`
             // would not fit.
             win.w_cursor.lnum = if count >= 21474836 {
-                (count + 99) / 100 * count0 as linenr_T
+                (count + 99) / 100 * count0 as LineNr
             } else {
-                (count * count0 as linenr_T + 99) / 100
+                (count * count0 as LineNr + 99) / 100
             };
             win.w_cursor.lnum = win.w_cursor.lnum.max(1).min(count);
             // SAFETY: the editor's text state is live.
@@ -787,7 +787,7 @@ pub(crate) unsafe fn nv_goto(cap: *mut cmdarg_T) {
     ca.op().motion_type = kMTLineWise;
     setpcmark();
     if ca.count0 != 0 {
-        lnum = ca.count0 as linenr_T;
+        lnum = ca.count0 as LineNr;
     }
     cur_win().w_cursor.lnum = lnum.max(1).min(last);
     beginline(BeginlineOpts::SOL | BeginlineOpts::FIX);
@@ -807,7 +807,7 @@ fn cur_win() -> Win {
 }
 
 /// Whether `lnum` is inside a closed fold of `wp`.
-fn folded(wp: Win, lnum: linenr_T) -> bool {
+fn folded(wp: Win, lnum: LineNr) -> bool {
     // Both fold ends are unwanted.
     has_folding(wp, lnum, None, None)
 }

@@ -82,7 +82,7 @@ fn number_item<'a>(text: &'a [u8], prefix: &[u8]) -> Option<&'a [u8]> {
 pub(crate) unsafe fn parse_diffanchors(
     check_only: bool,
     buf: Buf,
-    anchors: *mut linenr_T,
+    anchors: *mut LineNr,
     num_anchors: *mut c_int,
 ) -> Result<(), Failed> {
     let mut dia = if unsafe { *buf.b_p_dia } == 0 {
@@ -140,7 +140,7 @@ pub(crate) unsafe fn parse_diffanchors(
         // The validator accepts an address it cannot resolve yet; only
         // the real parse insists the line exists.
         if !check_only
-            && (lnum == MAXLNUM as linenr_T || lnum <= 0 || lnum > buf.b_ml.ml_line_count + 1)
+            && (lnum == MAXLNUM as LineNr || lnum <= 0 || lnum > buf.b_ml.ml_line_count + 1)
         {
             emsg(gettext(e_invrange));
             return Err(Failed);

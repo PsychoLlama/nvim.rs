@@ -36,8 +36,8 @@ use crate::os::fs::{os_fileinfo_fd, os_fileinfo_size, os_fopen, os_isdir};
 use crate::pos::MAXLNUM;
 use crate::tr_c;
 use crate::types::{
-    EvalFuncData, FILE, FileInfo, READBIN, VAR_STRING, VarLock, blob_T, int64_t, kListLenUnknown,
-    list_T, off_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
+    EvalFuncData, FILE, FileInfo, FileOffset, READBIN, VAR_STRING, VarLock, blob_T, int64_t,
+    kListLenUnknown, list_T, off_t, ptrdiff_t, size_t, typval_T, typval_vval_union, uint64_t,
 };
 use ::libc::{fclose, fileno, fread, fseeko};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -80,7 +80,7 @@ impl File {
     }
 
     /// Seek to `offset` relative to `whence`; false when the seek failed.
-    fn seek(&self, offset: off_T, whence: c_int) -> bool {
+    fn seek(&self, offset: FileOffset, whence: c_int) -> bool {
         // SAFETY: a live stream.
         unsafe { fseeko(self.0, offset as off_t, whence) == 0 }
     }
@@ -279,13 +279,19 @@ impl Carry {
 ///
 /// False -- upstream's `FAIL` -- when the file could not be measured or the
 /// read came up short; the Blob is then given back and `rettv` left empty.
-fn read_blob(fd: &File, rettv: &mut typval_T, blob: Blob, offset: off_T, size_arg: off_T) -> bool {
+fn read_blob(
+    fd: &File,
+    rettv: &mut typval_T,
+    blob: Blob,
+    offset: FileOffset,
+    size_arg: FileOffset,
+) -> bool {
     let Some(info) = fd.info() else {
         // Can't read the file, error.
         return false;
     };
     // SAFETY: a `FileInfo` this frame owns.
-    let file_size = unsafe { os_fileinfo_size(&raw const info) } as off_T;
+    let file_size = unsafe { os_fileinfo_size(&raw const info) } as FileOffset;
     // `S_ISCHR`: a character device, whose size a `stat` does not answer,
     // which is why the two clamps below skip it.
     const S_IFCHR: uint64_t = 0o20000;
@@ -474,14 +480,14 @@ fn read_file_or_blob(args: Args<'_>, rettv: &mut typval_T, always_blob: bool) {
     let mut binary = false;
     let mut blob = always_blob;
     let mut maxline = MAXLNUM as c_int as int64_t;
-    let mut offset: off_T = 0;
-    let mut size: off_T = -1;
+    let mut offset: FileOffset = 0;
+    let mut size: FileOffset = -1;
 
     if args.has(1) {
         if always_blob {
-            offset = nr(args, 1) as off_T;
+            offset = nr(args, 1) as FileOffset;
             if args.has(2) {
-                size = nr(args, 2) as off_T;
+                size = nr(args, 2) as FileOffset;
             }
         } else {
             // The flag is coerced once per comparison, as upstream does, so

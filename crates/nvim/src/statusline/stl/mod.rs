@@ -81,8 +81,8 @@ use crate::sign::describe_sign_text;
 use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf_safelen;
 use crate::types::{
-    MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VarLock, Vv, colnr_T, int64_t, linenr_T,
-    schar_T, size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, varnumber_T, win_T,
+    ColNr, LineNr, MAXPATHL, OptIndex, StlClickRecord, VAR_NUMBER, VarLock, Vv, int64_t, schar_T,
+    size_t, statuscol_T, stl_hlrec_t, typval_T, typval_vval_union, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::{Buf, Win};
@@ -344,7 +344,7 @@ impl Env {
     pub(super) fn fold_glyphs(&self, fdc: c_int, text: &mut Vec<u8>) -> c_int {
         let mut glyphs = [0 as schar_T; 9];
         // The line the fold item describes is `v:lnum`, not the cursor line.
-        let lnum = vim_var(Vv::Lnum) as linenr_T;
+        let lnum = vim_var(Vv::Lnum) as LineNr;
         // SAFETY: `stcp` is non-null on every path that reaches a fold item,
         // `glyphs` is this frame's, and `fdc` is what `compute_foldcolumn`
         // just answered.
@@ -355,7 +355,7 @@ impl Env {
                 (*self.stcp).lnum,
                 fdc,
                 vim_var(Vv::Virtnum) < 0,
-                &raw mut (*self.stcp).fold_vcol as *mut colnr_T,
+                &raw mut (*self.stcp).fold_vcol as *mut ColNr,
                 glyphs.as_mut_ptr(),
             );
         }
@@ -763,7 +763,7 @@ pub unsafe fn build_stl_str_hl(
         // The line may have changed since the cursor column was checked, or
         // the line number was adjusted above.
         win.w_cursor.col = len;
-        win.w_cursor.coladd = 0 as colnr_T;
+        win.w_cursor.coladd = 0 as ColNr;
         0
     } else {
         // SAFETY: the cursor column is now inside the line.

@@ -47,8 +47,8 @@ use crate::path::vim_full_name;
 use crate::quickfix::qf_init;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    IOSIZE, Integer, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv, exarg_T, handle_T,
-    kListLenMayKnow, linenr_T, list_T, ptrdiff_t, size_t, ssize_t,
+    IOSIZE, Integer, LineNr, MAXPATHL, OptInt, OptVal, OptionSetFlags, VarLock, Vv, exarg_T,
+    handle_T, kListLenMayKnow, list_T, ptrdiff_t, size_t, ssize_t,
 };
 use crate::ui::ui_call_error_exit;
 use crate::window::{
@@ -171,7 +171,7 @@ pub(crate) unsafe fn read_stdin() {
         }
         let initial_buf_handle: handle_T = cur_buf().handle;
         unsafe { set_curbuf(Buf::new(stdin_buf), 0, false) };
-        let last = MAXLNUM as c_int as linenr_T;
+        let last = MAXLNUM as c_int as LineNr;
         let null_ea = ptr::null_mut::<exarg_T>();
         let flags = READ_NEW as c_int + READ_STDIN as c_int;
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
@@ -396,7 +396,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut mparm_T) {
             } else {
                 ptr::null_mut()
             };
-            let (last, hide) = (newlnum::LASTL as linenr_T, EcmdFlags::HIDE);
+            let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
             let null_ea = ptr::null_mut::<exarg_T>();
             let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
             if swap_exists_did_quit.get() {

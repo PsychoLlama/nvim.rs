@@ -35,8 +35,8 @@ use crate::memory::xfree;
 use crate::pos::MAXCOL;
 use crate::runtime::script_is_lua;
 use crate::types::{
-    Buffer, Dict, Error, HlMessage, Integer, NUL, String_0, Tabpage, TryState, Window, buf_T,
-    colnr_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException, linenr_T, msglist_T,
+    Buffer, ColNr, Dict, Error, HlMessage, Integer, LineNr, NUL, String_0, Tabpage, TryState,
+    Window, buf_T, except_type_T, fmarkv_T, handle_T, int64_t, kErrorTypeException, msglist_T,
     pos_T, scid_T, tabpage_T, uint64_t, win_T,
 };
 use crate::winlayer::{self, Buf, TabPage, Win};
@@ -372,8 +372,8 @@ pub(crate) unsafe fn set_mark(
     debug_assert!((i32::MIN as Integer..=i32::MAX as Integer).contains(&line));
 
     let mut pos = pos_T {
-        lnum: line as linenr_T,
-        col: col as colnr_T,
+        lnum: line as LineNr,
+        col: col as ColNr,
         coladd: 0,
     };
     // SAFETY: `name` names one character, per this function's contract.

@@ -37,10 +37,10 @@ pub unsafe fn nvim_buf_set_extmark(
     let mut line2: ::core::ffi::c_int;
     let mut did_end_line: bool;
     let strict: bool;
-    let mut col2: colnr_T;
+    let mut col2: ColNr;
     let mut virt_lines_flags: ::core::ffi::c_int;
     let right_gravity: bool;
-    let mut len: colnr_T;
+    let mut len: ColNr;
     let mut hl: DecorHighlightInline = DECOR_HIGHLIGHT_INLINE_INIT;
     let mut sign: DecorSignHighlight = DECOR_SIGN_HIGHLIGHT_INIT;
     let mut virt_text: DecorVirtText = DecorVirtText {
@@ -126,7 +126,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     }
                     line2 = val as ::core::ffi::c_int;
                 }
-                col2 = -1 as colnr_T;
+                col2 = -1 as ColNr;
                 if has_key(
                     opts.is_set__set_extmark_,
                     KEYSET_OPTIDX_set_extmark__end_col,
@@ -140,7 +140,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     if val_0 == -1 as Integer {
                         val_0 = MAXCOL as ::core::ffi::c_int as Integer;
                     }
-                    col2 = val_0 as ::core::ffi::c_int as colnr_T;
+                    col2 = val_0 as ::core::ffi::c_int as ColNr;
                 }
                 if has_key(
                     opts.is_set__set_extmark_,
@@ -436,7 +436,7 @@ pub unsafe fn nvim_buf_set_extmark(
                     let why = c"cannot set end_right_gravity without end_row or end_col";
                     error = Error::validation(why);
                 } else {
-                    len = 0 as colnr_T;
+                    len = 0 as ColNr;
                     if has_key(opts.is_set__set_extmark_, KEYSET_OPTIDX_set_extmark__spell) {
                         hl.flags = (hl.flags as ::core::ffi::c_int
                             | if opts.spell as ::core::ffi::c_int != 0 {
@@ -476,8 +476,8 @@ pub unsafe fn nvim_buf_set_extmark(
                             len = (if opts.ephemeral as ::core::ffi::c_int != 0 {
                                 MAXCOL as ::core::ffi::c_int
                             } else {
-                                unsafe { b.line_len(line as linenr_T + 1) }
-                            }) as colnr_T;
+                                unsafe { b.line_len(line as LineNr + 1) }
+                            }) as ColNr;
                         }
                         if col == -1 as Integer {
                             col = len as Integer;
@@ -493,15 +493,15 @@ pub unsafe fn nvim_buf_set_extmark(
                         }
                         if col2 >= 0 as ::core::ffi::c_int {
                             if line2 >= 0 as ::core::ffi::c_int
-                                && (line2 as linenr_T) < b.line_count()
+                                && (line2 as LineNr) < b.line_count()
                             {
                                 len = (if opts.ephemeral as ::core::ffi::c_int != 0 {
                                     MAXCOL as ::core::ffi::c_int
                                 } else {
-                                    unsafe { b.line_len(line2 as linenr_T + 1) }
-                                }) as colnr_T;
-                            } else if line2 as linenr_T == b.line_count() {
-                                len = 0 as ::core::ffi::c_int as colnr_T;
+                                    unsafe { b.line_len(line2 as LineNr + 1) }
+                                }) as ColNr;
+                            } else if line2 as LineNr == b.line_count() {
+                                len = 0 as ::core::ffi::c_int as ColNr;
                             } else {
                                 line2 = line as ::core::ffi::c_int;
                             }
@@ -513,7 +513,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                 col2 = len;
                             }
                         } else if line2 >= 0 as ::core::ffi::c_int {
-                            col2 = 0 as ::core::ffi::c_int as colnr_T;
+                            col2 = 0 as ::core::ffi::c_int as ColNr;
                         }
                         if opts.ephemeral as ::core::ffi::c_int != 0
                             && !unsafe { DecorStateRef::current() }.win.is_null()
@@ -523,7 +523,7 @@ pub unsafe fn nvim_buf_set_extmark(
                             let c: ::core::ffi::c_int = col as ::core::ffi::c_int;
                             if line2 == -1 as ::core::ffi::c_int {
                                 line2 = r;
-                                col2 = c as colnr_T;
+                                col2 = c as ColNr;
                             }
                             let mut subpriority: DecorPriority = 0 as DecorPriority;
                             if has_key(
@@ -684,7 +684,7 @@ pub unsafe fn nvim_buf_set_extmark(
                                     ns_id as uint32_t,
                                     &raw mut id,
                                     line as ::core::ffi::c_int,
-                                    col as colnr_T,
+                                    col as ColNr,
                                     line2,
                                     col2,
                                     decor,

@@ -120,9 +120,9 @@ pub(super) unsafe fn fold_add_marker(
             extmark_splice_cols(
                 buf,
                 lnum as c_int - 1,
-                line_len as colnr_T,
+                line_len as ColNr,
                 0,
-                added as colnr_T,
+                added as ColNr,
                 kExtmarkUndo,
             )
         };
@@ -136,7 +136,7 @@ pub(super) unsafe fn fold_add_marker(
 /// # Safety
 /// `fold` must be one of `wp`'s folds at `lnum_off`, and [`parse_marker`]
 /// must have run for `wp`.
-pub(super) unsafe fn delete_fold_markers(wp: Win, fold: Fold, recursive: bool, lnum_off: linenr_T) {
+pub(super) unsafe fn delete_fold_markers(wp: Win, fold: Fold, recursive: bool, lnum_off: LineNr) {
     if recursive {
         for child in fold.nested().folds() {
             // SAFETY: the caller's promise, one level down.
@@ -171,7 +171,7 @@ pub(super) unsafe fn delete_fold_markers(wp: Win, fold: Fold, recursive: bool, l
 /// `buf` must be a live buffer and `marker[..markerlen]` readable.
 pub(super) unsafe fn fold_del_marker(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     marker: *mut c_char,
     markerlen: size_t,
 ) {
@@ -227,8 +227,8 @@ pub(super) unsafe fn fold_del_marker(
                 extmark_splice_cols(
                     buf,
                     lnum as c_int - 1,
-                    p.offset_from(line) as colnr_T,
-                    len as colnr_T,
+                    p.offset_from(line) as ColNr,
+                    len as ColNr,
                     0,
                     kExtmarkUndo,
                 )

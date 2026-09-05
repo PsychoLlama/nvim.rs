@@ -95,7 +95,7 @@ pub unsafe fn ex_options(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `cookie` is a live [`source_cookie_T`].
-pub unsafe fn source_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
+pub unsafe fn source_breakpoint(cookie: *mut c_void) -> *mut LineNr {
     // SAFETY: the caller's contract.
     unsafe { &raw mut (*cookie.cast::<source_cookie_T>()).breakpoint }
 }
@@ -547,7 +547,7 @@ unsafe fn profile_script_start(si: *mut scriptitem_T) {
 ///
 /// # Safety
 /// A script is on the execution stack and `current_sctx` still names it.
-unsafe fn profile_script_stop(wait_start: proftime_T) {
+unsafe fn profile_script_stop(wait_start: ProfTime) {
     // SAFETY: the caller's contract.
     let si = script_item(current_sctx.get().sc_sid);
     if unsafe { (*si).sn_prof_on } {

@@ -47,8 +47,8 @@ use crate::state::MAP_ALL_MODES;
 use crate::syntax::syntax_clear;
 use crate::terminal::terminal_close;
 use crate::types::{
-    Callback, Refcount, Timestamp, WinInfo, colnr_T, dictitem_T, fmark_T, fmarkv_T, garray_T,
-    handle_T, hashtab_T, linenr_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
+    Callback, ColNr, LineNr, Refcount, Timestamp, WinInfo, dictitem_T, fmark_T, fmarkv_T, garray_T,
+    handle_T, hashtab_T, memfile_T, pos_T, synblock_T, tabpage_T, win_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
@@ -59,15 +59,15 @@ use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_w
 /// which is *not* `INIT_FMARK` (that seeds `topline_offset` with `MAXLNUM`).
 const ZERO_FMARK: fmark_T = fmark_T {
     mark: pos_T {
-        lnum: 0 as linenr_T,
-        col: 0 as colnr_T,
-        coladd: 0 as colnr_T,
+        lnum: 0 as LineNr,
+        col: 0 as ColNr,
+        coladd: 0 as ColNr,
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
     view: fmarkv_T {
-        topline_offset: 0 as linenr_T,
-        skipcol: 0 as colnr_T,
+        topline_offset: 0 as LineNr,
+        skipcol: 0 as ColNr,
     },
     additional_data: ptr::null_mut(),
 };
@@ -173,8 +173,8 @@ fn drop_mark(mark: fmark_T) {
 
 /// Move every mark in `buf` up by `count` lines from line 1 -- what an
 /// emptied buffer needs so a reload starts from a clean slate.
-fn forget_lines(buf: Buf, count: linenr_T) {
-    let (raw, last) = (buf.raw(), MAXLNUM as linenr_T);
+fn forget_lines(buf: Buf, count: LineNr) {
+    let (raw, last) = (buf.raw(), MAXLNUM as LineNr);
     // SAFETY: a live buffer.
     unsafe {
         mark_adjust_buf(
@@ -206,9 +206,9 @@ fn close_memline(buf: Buf) {
     unsafe { ml_close(buf.raw(), 1) };
 }
 
-fn mark_lines_deleted(count: linenr_T) {
+fn mark_lines_deleted(count: LineNr) {
     // SAFETY: reads the current buffer, which the caller has just emptied.
-    unsafe { deleted_lines_mark(1 as linenr_T, count as c_int) };
+    unsafe { deleted_lines_mark(1 as LineNr, count as c_int) };
 }
 
 fn free_entry(entry: *mut WinInfo) {
@@ -641,7 +641,7 @@ fn unlink_and_free(mut buf: Buf, clear_w_buf: Option<Win>) {
 /// Make buffer not contain a file.
 ///
 pub fn buf_clear_file(mut buf: Buf) {
-    buf.b_ml.ml_line_count = 1 as linenr_T;
+    buf.b_ml.ml_line_count = 1 as LineNr;
     unchanged_now(buf, true, true);
     buf.b_p_eof = 0;
     buf.b_start_eof = 0;
@@ -663,7 +663,7 @@ pub fn buf_clear() {
     let line_count = buf.line_count();
     free_extmarks(buf); // delete any extmarks
     while !cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
-        delete_line(1 as linenr_T);
+        delete_line(1 as LineNr);
     }
     mark_lines_deleted(line_count); // prepare for display
 }
@@ -733,7 +733,7 @@ pub fn buf_freeall(buf: Buf, flags: c_int) {
 
     let count = buf.line_count();
     close_memline(buf); // close and delete the memline/memfile
-    buf.b_ml.ml_line_count = 0 as linenr_T; // no lines in buffer
+    buf.b_ml.ml_line_count = 0 as LineNr; // no lines in buffer
 
     // Ensure marks are adjusted for cleared buffer in case buffer not on
     // disk: if it is reloaded the buffer will be empty.

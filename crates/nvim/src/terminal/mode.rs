@@ -44,7 +44,7 @@ use crate::options::kOptCuloptFlagNumber;
 use crate::optionstr::free_string_option;
 use crate::state::{MODE_TERMINAL, may_trigger_modechanged, state_enter, state_handle_k_event};
 use crate::types::AutoEvent;
-use crate::types::{OptInt, VimState, colnr_T, linenr_T, pos_T, uint8_t, winopt_T};
+use crate::types::{ColNr, LineNr, OptInt, VimState, pos_T, uint8_t, winopt_T};
 use crate::ui::{ui_busy_stop, ui_cursor_shape, ui_flush};
 use crate::vterm::state::entry::{vterm_state_focus_in, vterm_state_focus_out};
 use crate::window::{may_trigger_win_scrolled_resized, win_valid};
@@ -438,11 +438,11 @@ pub(crate) unsafe fn terminal_enter() -> bool {
 pub(super) fn terminal_check_cursor(term: Term) {
     let mut win = current_win();
     let buf = current_buf();
-    let cursor_line = row_to_linenr(term, term.cursor.row) as linenr_T;
+    let cursor_line = row_to_linenr(term, term.cursor.row) as LineNr;
     win.w_cursor.lnum = buf.line_count().min(cursor_line);
 
     // Terminal windows always show the bottom of the buffer.
-    let topline = (buf.line_count() - win.w_view_height as linenr_T + 1).max(1);
+    let topline = (buf.line_count() - win.w_view_height as LineNr + 1).max(1);
     if topline != win.w_topline {
         // SAFETY: a live window.
         set_topline(win, topline);
@@ -463,7 +463,7 @@ pub(super) fn terminal_check_cursor(term: Term) {
     } else {
         -1
     };
-    let col = (term.cursor.col + off).max(0) as colnr_T;
+    let col = (term.cursor.col + off).max(0) as ColNr;
     // SAFETY: a live window, and a column of the line its cursor is on.
     coladvance(win, col);
 }

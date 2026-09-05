@@ -102,7 +102,7 @@ pub(crate) unsafe fn stop_arrow() -> Result<(), Failed> {
             // right, except when nothing was inserted yet.
             update_Insstart_orig.set(false);
         }
-        Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as colnr_T);
+        Insstart_textlen.set(unsafe { linetabsize_str(get_cursor_line_ptr()) } as ColNr);
 
         if save_cursor_line().is_ok() {
             arrow_used.set(false);

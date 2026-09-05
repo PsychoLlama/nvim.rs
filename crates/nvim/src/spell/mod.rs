@@ -47,7 +47,7 @@ use crate::message_fmt::c_str;
 use crate::os::cshim::{gettext, snprintf};
 use crate::search::{SEARCH_KEEP, do_search};
 use crate::types::{
-    colnr_T, exarg_T, file_comparison, langp_T, linenr_T, oparg_T, pos_T, searchit_arg_T, size_t,
+    ColNr, LineNr, exarg_T, file_comparison, langp_T, oparg_T, pos_T, searchit_arg_T, size_t,
     slang_T, smt_T, spelltab_T, uint8_t, win_T,
 };
 use crate::undo::u_save_cursor;
@@ -288,7 +288,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.
     let save_ws = p_ws.get() != 0;
-    let mut prev_lnum: linenr_T = 0;
+    let mut prev_lnum: LineNr = 0;
 
     if repl_from.get().is_null() || repl_to.get().is_null() {
         emsg(gettext(c"E752: No previous spell replacement"));
@@ -351,7 +351,7 @@ pub unsafe fn ex_spellrepall(_eap: *mut exarg_T) {
             }
             sub_nsubs.set(sub_nsubs.get() + 1);
         }
-        unsafe { (*curwin.get()).w_cursor.col += repl_to_len as colnr_T };
+        unsafe { (*curwin.get()).w_cursor.col += repl_to_len as ColNr };
     }
 
     p_ws.set(save_ws as c_int);

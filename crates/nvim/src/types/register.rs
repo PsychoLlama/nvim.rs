@@ -18,16 +18,16 @@ pub struct block_def {
     pub endspaces: ::core::ffi::c_int,
     pub textlen: ::core::ffi::c_int,
     pub textstart: *mut ::core::ffi::c_char,
-    pub textcol: colnr_T,
-    pub start_vcol: colnr_T,
-    pub end_vcol: colnr_T,
+    pub textcol: ColNr,
+    pub start_vcol: ColNr,
+    pub end_vcol: ColNr,
     pub is_short: ::core::ffi::c_int,
     pub is_MAX: ::core::ffi::c_int,
     pub is_oneChar: ::core::ffi::c_int,
     pub pre_whitesp: ::core::ffi::c_int,
     pub pre_whitesp_c: ::core::ffi::c_int,
-    pub end_char_vcols: colnr_T,
-    pub start_char_vcols: colnr_T,
+    pub end_char_vcols: ColNr,
+    pub start_char_vcols: ColNr,
 }
 
 impl block_def {
@@ -63,7 +63,7 @@ pub struct yankreg_T {
     pub y_array: *mut String_0,
     pub y_size: size_t,
     pub y_type: MotionType,
-    pub y_width: colnr_T,
+    pub y_width: ColNr,
     pub timestamp: Timestamp,
     pub additional_data: *mut AdditionalData,
 }

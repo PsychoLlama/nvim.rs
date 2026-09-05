@@ -27,11 +27,7 @@ use crate::types::NUL;
 ///
 /// `keep_state` keeps the state stack as it stands at `col` rather than closing
 /// the items that end there, which is what `synstack()` needs.
-pub(crate) unsafe fn get_syntax_attr(
-    col: colnr_T,
-    can_spell: *mut bool,
-    keep_state: bool,
-) -> c_int {
+pub(crate) unsafe fn get_syntax_attr(col: ColNr, can_spell: *mut bool, keep_state: bool) -> c_int {
     if !can_spell.is_null() {
         unsafe { *can_spell = default_can_spell() };
     }
@@ -41,7 +37,7 @@ pub(crate) unsafe fn get_syntax_attr(
 
     // After 'synmaxcol' the attribute is always zero.
     if unsafe { (*syn_buf.get()).b_p_smc } > 0
-        && col >= unsafe { (*syn_buf.get()).b_p_smc } as colnr_T
+        && col >= unsafe { (*syn_buf.get()).b_p_smc } as ColNr
     {
         clear_current_state();
         current_id.set(0);

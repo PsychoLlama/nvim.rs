@@ -90,11 +90,11 @@ unsafe extern "C" fn input_cb(
     unsafe {
         let bp: *mut buf_T = payload as *mut buf_T;
         static buf: GlobalCell<[::core::ffi::c_char; 256]> = GlobalCell::new([0; 256]);
-        if position.row as linenr_T >= (*bp).b_ml.ml_line_count {
+        if position.row as LineNr >= (*bp).b_ml.ml_line_count {
             *bytes_read = 0 as uint32_t;
             return c"".as_ptr();
         }
-        let lnum: linenr_T = position.row as linenr_T + 1 as linenr_T;
+        let lnum: LineNr = position.row as LineNr + 1 as LineNr;
         let line: *mut ::core::ffi::c_char = ml_get_buf(bp, lnum);
         let len: size_t = ml_get_buf_len(bp, lnum) as size_t;
         if position.column as size_t > len {

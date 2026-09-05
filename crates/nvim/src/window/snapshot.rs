@@ -27,7 +27,7 @@ use crate::r#move::WinValid;
 use crate::optionstr::empty_option;
 use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
-use crate::types::{Integer, NUL, OptInt, frame_T, handle_T, linenr_T, tabpage_T, win_T};
+use crate::types::{Integer, LineNr, NUL, OptInt, frame_T, handle_T, tabpage_T, win_T};
 use crate::ui::ui_call_win_hide;
 use crate::winlayer::{
     Buf, Frame, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
@@ -86,16 +86,16 @@ pub fn reset_lnums() {
         // Restore the value if it was changed by `check_lnums` and has not been
         // changed since.
         if equalpos(wp.w_save_cursor.w_cursor_corr, wp.w_cursor)
-            && wp.w_save_cursor.w_cursor_save.lnum != 0 as linenr_T
+            && wp.w_save_cursor.w_cursor_save.lnum != 0 as LineNr
         {
             wp.w_cursor = wp.w_save_cursor.w_cursor_save;
         }
-        if wp.w_save_cursor.w_topline_corr as linenr_T == wp.w_topline
+        if wp.w_save_cursor.w_topline_corr as LineNr == wp.w_topline
             && wp.w_save_cursor.w_topline_save != 0
         {
-            wp.w_topline = wp.w_save_cursor.w_topline_save as linenr_T;
+            wp.w_topline = wp.w_save_cursor.w_topline_save as LineNr;
         }
-        if wp.w_save_cursor.w_topline_save as linenr_T > wp.buffer().line_count() {
+        if wp.w_save_cursor.w_topline_save as LineNr > wp.buffer().line_count() {
             wp.w_valid.clear(WinValid::TOPLINE);
         }
     }

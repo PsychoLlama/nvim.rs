@@ -23,7 +23,7 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    MarkGet, buf_T, colnr_T, int16_t, int64_t, linenr_T, lpos_T, magic_T, proftime_T, regengine,
+    ColNr, LineNr, MarkGet, ProfTime, buf_T, int16_t, int64_t, lpos_T, magic_T, regengine,
     regengine_T, regmatch_T, regmmatch_T, size_t, uint8_t, win_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_uint};
@@ -85,10 +85,10 @@ pub struct regexec_T {
     pub reg_endpos: *mut lpos_T,
     pub reg_win: *mut win_T,
     pub reg_buf: *mut buf_T,
-    pub reg_firstlnum: linenr_T,
-    pub reg_maxline: linenr_T,
+    pub reg_firstlnum: LineNr,
+    pub reg_maxline: LineNr,
     pub reg_line_lbr: bool,
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     pub line: *mut uint8_t,
     pub input: *mut uint8_t,
     pub need_clear_subexpr: c_int,
@@ -96,7 +96,7 @@ pub struct regexec_T {
     pub reg_ic: bool,
     pub reg_icombine: bool,
     pub reg_nobreak: bool,
-    pub reg_maxcol: colnr_T,
+    pub reg_maxcol: ColNr,
     pub nfa_has_zend: c_int,
     pub nfa_has_backref: c_int,
     pub nfa_nsubexpr: c_int,
@@ -108,8 +108,8 @@ pub struct regexec_T {
 pub struct regsubmatch_T {
     pub sm_match: *mut regmatch_T,
     pub sm_mmatch: *mut regmmatch_T,
-    pub sm_firstlnum: linenr_T,
-    pub sm_maxline: linenr_T,
+    pub sm_firstlnum: LineNr,
+    pub sm_maxline: LineNr,
     pub sm_line_lbr: c_int,
 }
 #[repr(C)]
@@ -162,7 +162,7 @@ pub(crate) struct regsub_T {
     pub in_use: c_int,
     pub list: [Capture; NSUBEXP as usize],
     /// Where a `:substitute` resumes scanning, which travels with group 0.
-    pub orig_start_col: colnr_T,
+    pub orig_start_col: ColNr,
 }
 #[derive(Copy, Clone)]
 pub(crate) struct regsubs_T {
@@ -405,8 +405,8 @@ pub enum PimResult {
     NoMatch,
 }
 static nfa_match: GlobalCell<c_int> = GlobalCell::new(0);
-static nfa_time_limit: GlobalCell<*mut proftime_T> =
-    GlobalCell::new(core::ptr::null_mut::<proftime_T>());
+static nfa_time_limit: GlobalCell<*mut ProfTime> =
+    GlobalCell::new(core::ptr::null_mut::<ProfTime>());
 static nfa_timed_out: GlobalCell<*mut c_int> = GlobalCell::new(core::ptr::null_mut::<c_int>());
 static nfa_time_count: GlobalCell<c_int> = GlobalCell::new(0);
 pub const ADDSTATE_HERE_OFFSET: c_int = 10;

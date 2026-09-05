@@ -33,8 +33,8 @@ use crate::option::get_showbreak_value;
 use crate::pos::{MAXCOL, lt, ltoreq};
 use crate::state::{MODE_NORMAL, virtual_active};
 use crate::types::{
-    CharSize, CharsizeArg, CharsizeKind, MetaIndex, NUL, OptInt, StrCharInfo, VirtLines, colnr_T,
-    int32_t, int64_t, linenr_T, pos_T, uint32_t, win_T,
+    CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, StrCharInfo,
+    VirtLines, int32_t, int64_t, pos_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -89,8 +89,8 @@ impl Win {
 
 impl Buf {
     /// Cells a tab starting at virtual column `col` takes here.
-    fn tab_width(self, col: colnr_T) -> c_int {
-        let (ts, vts): (OptInt, *const colnr_T) = (self.b_p_ts, self.b_p_vts_array);
+    fn tab_width(self, col: ColNr) -> c_int {
+        let (ts, vts): (OptInt, *const ColNr) = (self.b_p_ts, self.b_p_vts_array);
         // SAFETY: a live buffer, whose 'vartabstop' array is its own.
         unsafe { tabstop_padding(col, ts, vts) }
     }
@@ -127,7 +127,7 @@ unsafe fn byte_at(p: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `p` must point into a NUL-terminated line.
-pub(crate) unsafe fn win_chartabsize(wp: Win, p: *mut c_char, col: colnr_T) -> c_int {
+pub(crate) unsafe fn win_chartabsize(wp: Win, p: *mut c_char, col: ColNr) -> c_int {
     // SAFETY: the caller's pointer into a NUL-terminated line.
     if unsafe { byte_at(p) } == TAB && wp.expands_tab() {
         return wp.buffer().tab_width(col);
@@ -165,9 +165,9 @@ pub(crate) unsafe fn linetabsize_str(s: *mut c_char) -> c_int {
 #[inline(always)]
 pub(crate) unsafe fn win_linetabsize(
     wp: Win,
-    lnum: linenr_T,
+    lnum: LineNr,
     line: *mut c_char,
-    len: colnr_T,
+    len: ColNr,
 ) -> c_int {
     // SAFETY: the caller's window and line.
     unsafe { win_linetabsize_col(wp, lnum, line, 0, len) }
@@ -181,10 +181,10 @@ pub(crate) unsafe fn win_linetabsize(
 #[inline(always)]
 unsafe fn win_linetabsize_col(
     wp: Win,
-    lnum: linenr_T,
+    lnum: LineNr,
     line: *mut c_char,
     startvcol: c_int,
-    len: colnr_T,
+    len: ColNr,
 ) -> c_int {
     let mut csarg = CharsizeArg::default();
     // SAFETY: the caller's window and line.
@@ -202,7 +202,7 @@ unsafe fn win_linetabsize_col(
 ///
 /// # Safety
 /// `lnum` must be a line of `wp`'s buffer.
-pub(crate) unsafe fn linetabsize(wp: Win, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn linetabsize(wp: Win, lnum: LineNr) -> c_int {
     // SAFETY: the caller's promise -- `lnum` is a line of the buffer.
     let line = unsafe { wp.buffer().line(lnum) };
     // SAFETY: as above.
@@ -213,7 +213,7 @@ pub(crate) unsafe fn linetabsize(wp: Win, lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a line of `wp`'s buffer.
-pub(crate) unsafe fn linetabsize_eol(wp: Win, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn linetabsize_eol(wp: Win, lnum: LineNr) -> c_int {
     let eol = wp.w_onebuf_opt.wo_list != 0 && wp.w_p_lcs_chars.eol != 0;
     // SAFETY: the caller's promise -- `lnum` is a line of the buffer.
     unsafe { linetabsize(wp, lnum) + c_int::from(eol) }
@@ -231,7 +231,7 @@ pub(crate) unsafe fn linetabsize_eol(wp: Win, lnum: linenr_T) -> c_int {
 pub(crate) unsafe fn init_charsize_arg(
     csarg: &mut CharsizeArg,
     wp: Win,
-    lnum: linenr_T,
+    lnum: LineNr,
     line: *mut c_char,
 ) -> CharsizeKind {
     csarg.win = wp.raw();
@@ -323,7 +323,7 @@ unsafe fn wrapped_indent_width(csarg: &mut CharsizeArg, sbr: *mut c_char) -> c_i
 unsafe fn showbreak_head(
     csarg: &mut CharsizeArg,
     cur: *mut c_char,
-    vcol: colnr_T,
+    vcol: ColNr,
     size: c_int,
     mb_added: c_int,
     sbr: *mut c_char,
@@ -412,7 +412,7 @@ unsafe fn showbreak_head(
 unsafe fn add_inline_virt_text(
     csarg: &mut CharsizeArg,
     cur: *mut c_char,
-    vcol: colnr_T,
+    vcol: ColNr,
     mut size: c_int,
     expand_tab: bool,
 ) -> c_int {
@@ -498,7 +498,7 @@ unsafe fn breaks_here(csarg: &CharsizeArg, cur: *mut c_char) -> bool {
 ///
 /// # Safety
 /// `wp` must be live and `cur` must point into a NUL-terminated line.
-unsafe fn linebreak_size(win: Win, cur: *mut c_char, vcol: colnr_T, size: c_int) -> c_int {
+unsafe fn linebreak_size(win: Win, cur: *mut c_char, vcol: ColNr, size: c_int) -> c_int {
     // Count all characters from the first non-blank after a blank up to the
     // next non-blank after a blank.
     let numberextra = win.col_off();
@@ -544,7 +544,7 @@ unsafe fn linebreak_size(win: Win, cur: *mut c_char, vcol: colnr_T, size: c_int)
 pub(crate) unsafe fn charsize_regular(
     csarg: &mut CharsizeArg,
     cur: *mut c_char,
-    vcol: colnr_T,
+    vcol: ColNr,
     cur_char: int32_t,
 ) -> CharSize {
     csarg.cur_text_width_left = 0;
@@ -621,7 +621,7 @@ unsafe fn charsize_fast_impl(
     wp: *mut win_T,
     cur: *const c_char,
     use_tabstop: bool,
-    vcol: colnr_T,
+    vcol: ColNr,
     cur_char: int32_t,
 ) -> CharSize {
     // A tab is expanded according to the column it starts at.
@@ -665,7 +665,7 @@ unsafe fn charsize_fast_impl(
 pub(crate) unsafe fn charsize_fast(
     csarg: &CharsizeArg,
     cur: *const c_char,
-    vcol: colnr_T,
+    vcol: ColNr,
     cur_char: int32_t,
 ) -> CharSize {
     // SAFETY: `csarg` is initialised and `cur` points into its line.
@@ -701,7 +701,7 @@ pub(crate) unsafe fn charsize_nowrap(
     buf: Buf,
     cur: *const c_char,
     use_tabstop: bool,
-    vcol: colnr_T,
+    vcol: ColNr,
     cur_char: int32_t,
 ) -> c_int {
     if cur_char == TAB && use_tabstop {
@@ -723,7 +723,7 @@ pub(crate) unsafe fn charsize_nowrap(
 /// # Safety
 /// `wp` must be live.
 #[inline]
-unsafe fn in_win_border(wp: *mut win_T, vcol: colnr_T) -> bool {
+unsafe fn in_win_border(wp: *mut win_T, vcol: ColNr) -> bool {
     // SAFETY: the caller's window.
     let view_width = unsafe { (*wp).w_view_width };
     if view_width == 0 {
@@ -757,7 +757,7 @@ unsafe fn in_win_border(wp: *mut win_T, vcol: colnr_T) -> bool {
 pub(crate) unsafe fn linesize_regular(
     csarg: &mut CharsizeArg,
     mut vcol_arg: c_int,
-    len: colnr_T,
+    len: ColNr,
 ) -> c_int {
     let line = csarg.line;
     let mut vcol = vcol_arg as int64_t;
@@ -799,11 +799,7 @@ pub(crate) unsafe fn linesize_regular(
 ///
 /// # Safety
 /// `csarg` must be initialised.
-pub(crate) unsafe fn linesize_fast(
-    csarg: &CharsizeArg,
-    mut vcol_arg: c_int,
-    len: colnr_T,
-) -> c_int {
+pub(crate) unsafe fn linesize_fast(csarg: &CharsizeArg, mut vcol_arg: c_int, len: ColNr) -> c_int {
     let wp = csarg.win;
     let use_tabstop = csarg.use_tabstop;
     let line = csarg.line;

@@ -26,8 +26,8 @@ use crate::marktree::meta::MetaCount;
 use crate::sign::buf_has_signs;
 use crate::statusline::SIGN_SHOW_MAX;
 use crate::types::{
-    DecorInline, DecorPriority, DecorSignHighlight, MTPos, MarkTreeIter, SignItem, SignTextAttrs,
-    buf_T, linenr_T, uint32_t, win_T,
+    DecorInline, DecorPriority, DecorSignHighlight, LineNr, MTPos, MarkTreeIter, SignItem,
+    SignTextAttrs, buf_T, uint32_t, win_T,
 };
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::c_int;
@@ -61,7 +61,7 @@ fn may_force_numberwidth_recompute(buf: Buf, unplace: bool) {
             && (wp.w_onebuf_opt.wo_nu != 0 || wp.w_onebuf_opt.wo_rnu != 0)
             && (unplace || wp.w_nrwidth_width < 2)
         {
-            wp.w_nrwidth_line_count = 0 as linenr_T;
+            wp.w_nrwidth_line_count = 0 as LineNr;
         }
     }
 }

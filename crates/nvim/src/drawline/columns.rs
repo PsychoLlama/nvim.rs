@@ -61,7 +61,7 @@ impl WinLineVars {
         text: *const ::core::ffi::c_char,
         len: size_t,
         attr: ::core::ffi::c_int,
-        mut fold_vcol: *const colnr_T,
+        mut fold_vcol: *const ColNr,
         inc_vcol: bool,
     ) {
         // SAFETY: the caller's buffer, and `off` is kept under the view width
@@ -136,7 +136,7 @@ impl WinLineVars {
 ///
 /// # Safety
 /// `wp` must be a live window.
-pub unsafe fn use_cursor_line_highlight(wp: *mut win_T, lnum: linenr_T) -> bool {
+pub unsafe fn use_cursor_line_highlight(wp: *mut win_T, lnum: LineNr) -> bool {
     // SAFETY: the caller's live window.
     let wp = unsafe { Win::new(wp) };
     // SAFETY: the caller's window.
@@ -187,10 +187,10 @@ unsafe fn foldcolumn_sep_char(
 unsafe fn fold_column_cells(
     wp: Win,
     foldinfo: foldinfo_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,
-) -> [(schar_T, colnr_T); MAX_FOLDCOLUMN] {
+) -> [(schar_T, ColNr); MAX_FOLDCOLUMN] {
     // SAFETY: the caller's window.
     let closed = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
     let level = foldinfo.fi_level;
@@ -208,7 +208,7 @@ unsafe fn fold_column_cells(
         None
     };
 
-    let mut cells = [(0 as schar_T, 0 as colnr_T); MAX_FOLDCOLUMN];
+    let mut cells = [(0 as schar_T, 0 as ColNr); MAX_FOLDCOLUMN];
     for (i, cell) in cells.iter_mut().enumerate().take(fdc as usize) {
         let i = i as ::core::ffi::c_int;
         let mut symbol = if i >= level {
@@ -247,10 +247,10 @@ unsafe fn fold_column_cells(
 pub unsafe fn fill_foldcolumn(
     wp: *mut win_T,
     foldinfo: foldinfo_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     fdc: ::core::ffi::c_int,
     is_virt: bool,
-    out_vcol: *mut colnr_T,
+    out_vcol: *mut ColNr,
     out_buffer: *mut schar_T,
 ) {
     // SAFETY: the caller's window and arrays.
@@ -382,12 +382,12 @@ impl WinLineVars {
 /// # Safety
 /// `wp` must be a live window.
 #[inline]
-unsafe fn line_number_str(wp: Win, lnum: linenr_T, buf: &mut [::core::ffi::c_char; 32]) {
+unsafe fn line_number_str(wp: Win, lnum: LineNr, buf: &mut [::core::ffi::c_char; 32]) {
     // SAFETY: the caller's window; `snprintf` is bounded by the array size.
     let (num, fmt) = if wp.w_onebuf_opt.wo_nu != 0 && wp.w_onebuf_opt.wo_rnu == 0 {
         (lnum, c"%*d ")
     } else {
-        let rel = unsafe { abs(get_cursor_rel_lnum(Win::new(wp.raw()), lnum)) } as linenr_T;
+        let rel = unsafe { abs(get_cursor_rel_lnum(Win::new(wp.raw()), lnum)) } as LineNr;
         if rel == 0 && wp.w_onebuf_opt.wo_nu != 0 && wp.w_onebuf_opt.wo_rnu != 0 {
             (lnum, c"%-*d ")
         } else {
@@ -569,13 +569,12 @@ impl WinLineVars {
         // Filler lines belonging to the line above report that line's
         // number; `v:relnum` is only set on the first row of each of the
         // three groups (filler, buffer line, virtual lines below).
-        let lnum =
-            self.lnum - (self.n_virt_lines - self.filler_todo < self.n_virt_below) as linenr_T;
+        let lnum = self.lnum - (self.n_virt_lines - self.filler_todo < self.n_virt_below) as LineNr;
         let relnum = if virtnum == -self.filler_lines
             || virtnum == 0
             || virtnum == self.n_virt_below - self.filler_lines
         {
-            unsafe { abs(get_cursor_rel_lnum(Win::new(wp.raw()), lnum)) as linenr_T }
+            unsafe { abs(get_cursor_rel_lnum(Win::new(wp.raw()), lnum)) as LineNr }
         } else {
             -1
         };
@@ -652,7 +651,7 @@ impl WinLineVars {
         };
         let num_attr = unsafe { self.line_number_attr(wp) };
         let mut cur_attr = num_attr;
-        let mut fold_vcol: *const colnr_T = ::core::ptr::null();
+        let mut fold_vcol: *const ColNr = ::core::ptr::null();
         let mut transbuf: [::core::ffi::c_char; MAXPATHL as usize] = [0; MAXPATHL as usize];
         let mut p = buf.as_ptr();
         let mut sp = unsafe { (*stcp).hlrec };
@@ -692,7 +691,7 @@ impl WinLineVars {
                 )
             };
             fold_vcol = if unsafe { (*sp).item } == Some(StlOpt::FoldCol) {
-                unsafe { &raw const (*stcp).fold_vcol }.cast::<colnr_T>()
+                unsafe { &raw const (*stcp).fold_vcol }.cast::<ColNr>()
             } else {
                 ::core::ptr::null()
             };

@@ -90,7 +90,7 @@ pub(super) type Li = Live<listitem_T>;
 /// Argument `i` as a Number.
 ///
 /// Argument `i` as a line number in the current buffer, reported and clamped.
-pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> linenr_T {
+pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> LineNr {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_lnum(args.ptr(i)) }
 }
@@ -99,7 +99,7 @@ pub(super) fn arg_lnum(args: Args<'_>, i: usize) -> linenr_T {
 ///
 /// # Safety
 /// `buf` is a live buffer or NULL.
-pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buf: *mut buf_T) -> linenr_T {
+pub(super) unsafe fn arg_lnum_buf(args: Args<'_>, i: usize, buf: *mut buf_T) -> LineNr {
     // SAFETY: the caller's obligation, and [`arg_number`]'s for the typval.
     unsafe { tv_get_lnum_buf(args.ptr(i), buf) }
 }

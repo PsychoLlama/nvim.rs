@@ -62,7 +62,7 @@ use crate::spellsuggest::{
 };
 use crate::strings::{vim_snprintf, xstrnsave};
 use crate::types::ui::kUIMessages;
-use crate::types::{IOSIZE, NUL, colnr_T, int64_t, pos_T};
+use crate::types::{ColNr, IOSIZE, NUL, int64_t, pos_T};
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
@@ -222,7 +222,7 @@ unsafe fn move_to_bad_word(prev_cursor: pos_T) -> Option<c_int> {
         beep_flush(); // no word at all
         return None;
     }
-    cur_win().w_cursor.col = unsafe { p.offset_from(curline) } as colnr_T;
+    cur_win().w_cursor.col = unsafe { p.offset_from(curline) } as ColNr;
     Some(0)
 }
 
@@ -432,10 +432,10 @@ unsafe fn apply_suggestion(sug: &suginfo_T, stp: &suggest_T, line: *mut c_char) 
 
     // `newline` may be freed here.
     let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newline, false) };
-    cur_win().w_cursor.col = col as colnr_T;
+    cur_win().w_cursor.col = col as ColNr;
     // SAFETY: the cursor is on the line just replaced.
     let lnum = cur_win().w_cursor.lnum;
-    unsafe { inserted_bytes(lnum, col as colnr_T, stp.st_orglen, stp.st_wordlen) };
+    unsafe { inserted_bytes(lnum, col as ColNr, stp.st_orglen, stp.st_wordlen) };
 }
 
 /// The window the editor is working in.

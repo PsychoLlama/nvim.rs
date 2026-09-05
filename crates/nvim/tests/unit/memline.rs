@@ -35,7 +35,7 @@ use neovim::memline::{
     B0_MAGIC_INT, B0_MAGIC_LONG, B0_MAGIC_SHORT, B0_UNAME_SIZE, BLOCK0_ID0, BLOCK0_ID1, Lines,
     ZeroBlock, ml_append_buf, ml_close, ml_get_buf, ml_open, ml_open_file, ml_preserve,
 };
-use neovim::types::{buf_T, colnr_T, linenr_T};
+use neovim::types::{ColNr, LineNr, buf_T};
 use neovim::winlayer::Buf;
 
 use crate::support::{Sandbox, cstr};
@@ -148,9 +148,9 @@ impl Swapped {
             let appended = unsafe {
                 ml_append_buf(
                     buf,
-                    n as linenr_T,
+                    n as LineNr,
                     text.as_ptr().cast_mut(),
-                    line.len() as colnr_T + 1,
+                    line.len() as ColNr + 1,
                     false,
                 )
             };
@@ -159,7 +159,7 @@ impl Swapped {
         // The buffer starts with one empty line, which the appends pushed
         // to the end; drop it so the line set is exactly `LINES`.
         // SAFETY: the memline holds `LINES.len() + 1` lines.
-        unsafe { neovim::memline::ml_delete_buf(buf, LINES.len() as linenr_T + 1, false) }
+        unsafe { neovim::memline::ml_delete_buf(buf, LINES.len() as LineNr + 1, false) }
             .expect("the empty line goes");
 
         // SAFETY: as above; a swap file was opened, so this writes it.
@@ -398,7 +398,7 @@ fn a_modified_buffer_marks_its_swap_file_dirty() {
     // The line set is still what was written, so the flag is the only thing
     // that moved.
     // SAFETY: the buffer's memline holds `LINES`.
-    let lines: Vec<String> = (1..=LINES.len() as linenr_T)
+    let lines: Vec<String> = (1..=LINES.len() as LineNr)
         .map(|lnum| unsafe {
             std::ffi::CStr::from_ptr(ml_get_buf(swapped.buf, lnum))
                 .to_string_lossy()
@@ -425,7 +425,7 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
     let mut lines = unsafe { Lines::in_buffer(Buf::new(swapped.buf)) };
 
     for (n, want) in LINES.iter().enumerate() {
-        let lnum = n as linenr_T + 1;
+        let lnum = n as LineNr + 1;
         assert_eq!(lines.line(lnum), want.as_bytes(), "line {lnum}");
         // SAFETY: a line of this buffer.
         let len = unsafe { neovim::memline::ml_get_buf_len(swapped.buf, lnum) };
@@ -437,7 +437,7 @@ fn the_line_handle_reads_and_writes_the_line_the_memline_holds() {
     }
 
     // Rewrite the bytes already there -- the only change `line_mut` allows.
-    let last = LINES.len() as linenr_T;
+    let last = LINES.len() as LineNr;
     lines.line_mut(last).make_ascii_uppercase();
     assert_eq!(
         lines.line(last),

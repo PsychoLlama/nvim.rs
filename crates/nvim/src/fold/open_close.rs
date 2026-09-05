@@ -188,7 +188,7 @@ pub unsafe fn fold_check_close() {
 /// back to 'foldlevel' — what `'foldclose'` = "all" asks for.
 ///
 /// Returns whether anything changed.
-pub(super) fn close_folds_off_cursor(folds: FoldList, lnum: linenr_T, level: c_int) -> bool {
+pub(super) fn close_folds_off_cursor(folds: FoldList, lnum: LineNr, level: c_int) -> bool {
     let mut changed = false;
     for fold in folds.folds() {
         if !fold.is(FD_OPEN) {
@@ -355,8 +355,8 @@ pub unsafe fn fold_create(wp: Win, start_pos: pos_T, end_pos: pos_T) {
 /// `wp` must be a live window with a live buffer.
 pub unsafe fn delete_fold(
     wp: *mut win_T,
-    start: linenr_T,
-    end: linenr_T,
+    start: LineNr,
+    end: LineNr,
     recursive: c_int,
     had_visual: bool,
 ) {
@@ -364,15 +364,15 @@ pub unsafe fn delete_fold(
     let mut level = 0;
     let mut lnum = start;
     let mut did_one = false;
-    let mut first_lnum = MAXLNUM as linenr_T;
-    let mut last_lnum: linenr_T = 0;
+    let mut first_lnum = MAXLNUM as LineNr;
+    let mut last_lnum: LineNr = 0;
     // SAFETY: the caller's promise -- a live window.
     let win = unsafe { Win::new(wp) };
     checkupdate(win);
     while lnum <= end {
         let mut folds = window_folds(win);
-        let mut found: Option<(FoldList, c_int, linenr_T)> = None;
-        let mut lnum_off: linenr_T = 0;
+        let mut found: Option<(FoldList, c_int, LineNr)> = None;
+        let mut lnum_off: LineNr = 0;
         let mut use_level = false;
         // Descend to the innermost fold over `lnum`, stopping at the first
         // closed one — that is the fold the user is pointing at.
@@ -462,7 +462,7 @@ pub(super) fn set_manual_fold(
     opening: bool,
     recurse: bool,
     donep: Option<&mut c_int>,
-) -> linenr_T {
+) -> LineNr {
     if foldmethod_is_diff(cur_win()) && cur_win().w_onebuf_opt.wo_scb != 0 {
         // 'scrollbind' in a diff: the matching fold in the other windows.
         for win in windows_in_tab(cur_tab()) {
@@ -492,17 +492,17 @@ pub(super) fn set_manual_fold(
 ///
 pub(super) fn set_manual_fold_win(
     mut win: Win,
-    mut lnum: linenr_T,
+    mut lnum: LineNr,
     opening: bool,
     recurse: bool,
     donep: Option<&mut c_int>,
-) -> linenr_T {
+) -> LineNr {
     let mut level = 0;
     let mut use_level = false;
     let mut found_fold = false;
     let mut found: Option<Fold> = None;
-    let mut next = MAXLNUM as linenr_T;
-    let mut off: linenr_T = 0;
+    let mut next = MAXLNUM as LineNr;
+    let mut off: LineNr = 0;
     let mut done: c_int = 0;
     checkupdate(win);
     let mut folds = window_folds(win);
@@ -600,7 +600,7 @@ pub(super) unsafe fn check_closed(
     use_levelp: &mut bool,
     level: c_int,
     maybe_smallp: &mut bool,
-    lnum_off: linenr_T,
+    lnum_off: LineNr,
 ) -> bool {
     let mut closed = false;
     if *use_levelp || fold.is(FD_LEVEL) {

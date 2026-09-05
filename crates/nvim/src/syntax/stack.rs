@@ -220,11 +220,11 @@ pub(crate) fn syn_stack_cleanup() -> bool {
 
     // Normal distance between entries for lines that are not displayed.
     let entries = block.b_sst_len;
-    let dist: linenr_T = if entries <= Rows.get() {
+    let dist: LineNr = if entries <= Rows.get() {
         999999
     } else {
         let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count };
-        lines / (entries - Rows.get()) as linenr_T + 1
+        lines / (entries - Rows.get()) as LineNr + 1
     };
 
     // Find the tick of the oldest removable entry. `above` records that the
@@ -282,7 +282,7 @@ pub(crate) unsafe fn syn_stack_free_entry(mut block: SynBlock, p: *mut synstate_
 /// Answers null when the list is empty or starts after `lnum` -- which is not
 /// the same as "no entry for this line", so callers that need an exact hit
 /// compare `sst_lnum` themselves.
-pub(crate) fn syn_stack_find_entry(lnum: linenr_T) -> *mut synstate_T {
+pub(crate) fn syn_stack_find_entry(lnum: LineNr) -> *mut synstate_T {
     let mut prev = ::core::ptr::null_mut::<synstate_T>();
     let mut p = syn_block().b_sst_first;
     while !p.is_null() {

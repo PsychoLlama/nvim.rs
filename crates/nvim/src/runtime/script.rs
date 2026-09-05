@@ -243,7 +243,7 @@ pub(crate) unsafe fn get_scriptname(script_ctx: sctx_T, fold_home: bool) -> CStr
 ///
 /// A sourced script tracks its own read position, because the execution stack's
 /// number lags behind by the one line `getsourceline` reads ahead.
-pub unsafe fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> linenr_T {
+pub unsafe fn get_sourced_lnum(fgetline: LineGetter, cookie: *mut c_void) -> LineNr {
     if !getline_is_source(fgetline) {
         return sourcing_lnum();
     }

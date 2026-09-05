@@ -25,8 +25,8 @@ use crate::register::{
 use crate::semsg;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    BoolVarValue, EvalFuncData, Failed, MotionType, NUL, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
-    colnr_T, dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
+    BoolVarValue, ColNr, EvalFuncData, Failed, MotionType, NUL, VAR_DICT, VAR_LIST, VAR_STRING, Vv,
+    dict_T, kBoolVarFalse, kBoolVarTrue, list_T, listitem_T, typval_T,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -105,7 +105,7 @@ pub unsafe fn f_getregtype(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let Some(regname) = (unsafe { regname(args) }) else {
         return;
     };
-    let mut reglen: colnr_T = 0;
+    let mut reglen: ColNr = 0;
     let mut buf: TypeBuf = [0; 67];
     let reg_type = unsafe { get_reg_type(regname, &raw mut reglen) };
     unsafe { format_reg_type(reg_type, reglen, buf.as_mut_ptr(), buf.len()) };
@@ -134,7 +134,7 @@ pub unsafe fn f_getreginfo(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     let _ = unsafe { tv_dict_add_list(dict, c"regcontents".as_ptr(), 11, list) };
 
     let mut buf: TypeBuf = [0; 67];
-    let mut reglen: colnr_T = 0;
+    let mut reglen: ColNr = 0;
     match unsafe { get_reg_type(regname, &raw mut reglen) } {
         kMTLineWise => buf[0] = b'V' as c_char,
         kMTCharWise => buf[0] = b'v' as c_char,

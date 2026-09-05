@@ -28,7 +28,7 @@ use crate::types::NUL;
 ///
 /// # Safety
 /// `reg_width` must be null or writable. May run the clipboard provider.
-pub unsafe fn get_reg_type(regname: c_int, reg_width: *mut colnr_T) -> MotionType {
+pub unsafe fn get_reg_type(regname: c_int, reg_width: *mut ColNr) -> MotionType {
     // Every computed register reads as charwise.
     match regname {
         Ctrl_F | Ctrl_P | Ctrl_W | Ctrl_A => return kMTCharWise,
@@ -282,7 +282,7 @@ unsafe fn str_to_reg(
     mut yank_type: MotionType,
     str: *const c_char,
     len: size_t,
-    blocklen: colnr_T,
+    blocklen: ColNr,
     str_list: bool,
 ) {
     // SAFETY: `y_ptr` is a live register.
@@ -485,7 +485,7 @@ pub unsafe fn write_reg_contents_lst(
     strings: *mut *mut c_char,
     must_append: bool,
     yank_type: MotionType,
-    block_len: colnr_T,
+    block_len: ColNr,
 ) {
     if name == '/' as c_int || name == '=' as c_int {
         // Neither register can hold more than one line.
@@ -540,7 +540,7 @@ pub unsafe fn write_reg_contents_ex(
     len: ssize_t,
     must_append: bool,
     yank_type: MotionType,
-    block_len: colnr_T,
+    block_len: ColNr,
 ) {
     // SAFETY: a negative `len` means `str` is NUL-terminated.
     let len = if len < 0 {

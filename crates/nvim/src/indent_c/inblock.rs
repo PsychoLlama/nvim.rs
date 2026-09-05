@@ -31,7 +31,7 @@ pub(crate) struct BlockScan<'a> {
     /// The line being indented.
     pub line: &'a Line,
     /// The line the enclosing `{` is on -- the scan stops there.
-    pub ourscope: linenr_T,
+    pub ourscope: LineNr,
     /// Where that `{` is, which `LOOKFOR_COMMA` and the paren test compare
     /// against.
     pub brace: pos_T,
@@ -63,7 +63,7 @@ pub(crate) struct BlockScan<'a> {
     pub lookfor_cpp_namespace: bool,
     /// The line a raw string seen during the walk starts on; a line that
     /// *is* one must not become `LOOKFOR_UNTERM`.
-    pub raw_string_start: linenr_T,
+    pub raw_string_start: LineNr,
     /// `cin_is_cpp_baseclass`'s answer, cached across the walk.
     pub cache: cpp_baseclass_cache_T,
     /// The line being indented is a Javascript `key:` -- checked once, on the
@@ -234,7 +234,7 @@ pub(crate) unsafe fn indent_in_block(line: &Line, brace: pos_T) -> c_int {
         cache: cpp_baseclass_cache_T {
             found: 0,
             lpos: lpos_T {
-                lnum: MAXLNUM as linenr_T,
+                lnum: MAXLNUM as LineNr,
                 col: 0,
             },
         },

@@ -58,7 +58,7 @@ impl RegionEnd {
 /// The engine may hand back a *different* program (`vim_regexec_multi` can
 /// recompile), so the answer is written back into the pattern, and each
 /// pattern is timed into its own `sp_time`.
-pub(crate) unsafe fn run_pattern(idx: c_int, lnum: linenr_T, col: colnr_T) -> (bool, regmmatch_T) {
+pub(crate) unsafe fn run_pattern(idx: c_int, lnum: LineNr, col: ColNr) -> (bool, regmmatch_T) {
     let mut regmatch = empty_regmmatch();
     let mut block = syn_block();
     let spp = block.pattern_mut(idx);
@@ -142,7 +142,7 @@ unsafe fn find_endpos_scan(
     start_idx: c_int,
     skip_idx: Option<c_int>,
     startpos: lpos_T,
-    matchcol: &mut colnr_T,
+    matchcol: &mut ColNr,
 ) -> RegionEnd {
     loop {
         let Some((best_idx, best)) = (unsafe { best_end_match(start_idx, startpos, *matchcol) })
@@ -171,7 +171,7 @@ unsafe fn find_endpos_scan(
 unsafe fn best_end_match(
     start_idx: c_int,
     startpos: lpos_T,
-    matchcol: colnr_T,
+    matchcol: ColNr,
 ) -> Option<(c_int, regmmatch_T)> {
     let mut best: Option<(c_int, regmmatch_T)> = None;
     let mut idx = start_idx;
@@ -183,7 +183,7 @@ unsafe fn best_end_match(
         }
         let lc_col = (matchcol as c_int - spp.sp_offsets[SPO_LC_OFF as usize]).max(0);
 
-        let (matched, regmatch) = unsafe { run_pattern(idx, startpos.lnum, lc_col as colnr_T) };
+        let (matched, regmatch) = unsafe { run_pattern(idx, startpos.lnum, lc_col as ColNr) };
         let col = regmatch.startpos[0].col;
         if matched && best.as_ref().is_none_or(|(_, b)| col < b.startpos[0].col) {
             best = Some((idx, regmatch));
@@ -200,7 +200,7 @@ enum Skipped {
     /// It ran to the next line, or included the end of this one.
     PastLine,
     /// Resume the end-pattern search at this column.
-    To(colnr_T),
+    To(ColNr),
 }
 
 /// Does the SKIP pattern match before the best END pattern's match?
@@ -208,11 +208,11 @@ unsafe fn skip_past(
     skip_idx: c_int,
     startpos: lpos_T,
     best_start: lpos_T,
-    matchcol: colnr_T,
+    matchcol: ColNr,
 ) -> Skipped {
     let offsets = syn_block().pattern(skip_idx).offsets();
     let lc_col = (matchcol as c_int - offsets.offsets[SPO_LC_OFF as usize]).max(0);
-    let (matched, regmatch) = unsafe { run_pattern(skip_idx, startpos.lnum, lc_col as colnr_T) };
+    let (matched, regmatch) = unsafe { run_pattern(skip_idx, startpos.lnum, lc_col as ColNr) };
     if !matched || regmatch.startpos[0].col > best_start.col {
         return Skipped::No;
     }
@@ -396,7 +396,7 @@ pub(crate) unsafe fn syn_add_start_off(
 
 /// Step `off` characters forward (or backward) from `col` in line `lnum`,
 /// stopping at the line's ends. Answers the resulting column.
-unsafe fn walk_chars(lnum: linenr_T, col: colnr_T, off: c_int) -> colnr_T {
+unsafe fn walk_chars(lnum: LineNr, col: ColNr, off: c_int) -> ColNr {
     if off == 0 {
         return col;
     }
@@ -414,7 +414,7 @@ unsafe fn walk_chars(lnum: linenr_T, col: colnr_T, off: c_int) -> colnr_T {
             left += 1;
         }
     }
-    unsafe { p.offset_from(base) as colnr_T }
+    unsafe { p.offset_from(base) as ColNr }
 }
 
 /// The current line of the syntax buffer.
@@ -430,7 +430,7 @@ pub(crate) fn syn_getcurline() -> *mut c_char {
 }
 
 /// Length of the current line of the syntax buffer.
-pub(crate) fn syn_getcurline_len() -> colnr_T {
+pub(crate) fn syn_getcurline_len() -> ColNr {
     // SAFETY: as [`syn_getcurline`].
     unsafe { ml_get_buf_len(syn_buf.get(), current_lnum.get()) }
 }
@@ -439,14 +439,14 @@ pub(crate) fn syn_getcurline_len() -> colnr_T {
 ///
 /// Every caller is testing for the NUL that ends the line, so `col` is at
 /// most its length and the read stays inside what `ml_get_buf` answered.
-pub(crate) fn syn_curline_byte(col: colnr_T) -> u8 {
+pub(crate) fn syn_curline_byte(col: ColNr) -> u8 {
     debug_assert!(col <= syn_getcurline_len());
     // SAFETY: `col` is within the line, its terminator included.
     unsafe { *syn_getcurline().offset(col as isize) as u8 }
 }
 
 /// Number of lines in the buffer being parsed.
-pub(crate) fn syn_buf_line_count() -> linenr_T {
+pub(crate) fn syn_buf_line_count() -> LineNr {
     // SAFETY: `syn_buf` is the buffer `syntax_start` pointed the parser at.
     unsafe { (*syn_buf.get()).b_ml.ml_line_count }
 }
@@ -457,8 +457,8 @@ pub(crate) fn syn_buf_line_count() -> linenr_T {
 /// from pattern-relative to buffer-absolute line numbers.
 pub(crate) unsafe fn syn_regexec(
     rmp: *mut regmmatch_T,
-    lnum: linenr_T,
-    col: colnr_T,
+    lnum: LineNr,
+    col: ColNr,
     st: *mut syn_time_T,
 ) -> bool {
     let timing = syn_time_on.get();
@@ -469,7 +469,7 @@ pub(crate) unsafe fn syn_regexec(
         // NFA_TOO_EXPENSIVE, and compiling with the other engine failed.
         return false;
     }
-    unsafe { (*rmp).rmm_maxcol = (*syn_buf.get()).b_p_smc as colnr_T };
+    unsafe { (*rmp).rmm_maxcol = (*syn_buf.get()).b_p_smc as ColNr };
     let mut timed_out: c_int = 0;
     let (win, buf, tm) = (syn_win.get(), syn_buf.get(), syn_tm.get());
     // SAFETY: the window and buffer the parser was started for.

@@ -28,7 +28,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path, findmatchlimit};
 use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
-use crate::types::{MarkMove, OpType, PUT_FIXINDENT, cmdarg_T, fmark_T, linenr_T, pos_T, smt_T};
+use crate::types::{LineNr, MarkMove, OpType, PUT_FIXINDENT, cmdarg_T, fmark_T, pos_T, smt_T};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -229,7 +229,7 @@ unsafe fn nv_bracket_ident(cap: *mut cmdarg_T) {
         1
     };
     let (dir, n) = (kDirectionNotSet, ca.count1);
-    let last = MAXLNUM as linenr_T;
+    let last = MAXLNUM as LineNr;
     // SAFETY: `name` is the NUL-terminated identifier copied above.
     unsafe {
         find_pattern_in_path(

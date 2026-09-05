@@ -332,7 +332,7 @@ unsafe fn collect_args(
             && count >= 0
         {
             ea.addr_count = 1;
-            ea.line2 = count as linenr_T;
+            ea.line2 = count as LineNr;
             ea.line1 = ea.line2;
             *args = arena_array(arena, 0);
             return Some(true);
@@ -427,8 +427,8 @@ fn apply_range(cmd: &KeyDict_cmd, ea: &mut exarg_T, err: &mut Error) -> bool {
                 first.as_integer().expect(expect),
                 last.as_integer().expect(expect),
             );
-            ea.line1 = first as linenr_T;
-            ea.line2 = last as linenr_T;
+            ea.line1 = first as LineNr;
+            ea.line2 = last as LineNr;
         }
         // SAFETY: `ea` is resolved.
         if unsafe { invalid_range(ea) }.is_some() {
@@ -479,7 +479,7 @@ fn apply_count(
     }
     // SAFETY: `ea` is resolved; `set_cmd_count` only writes its address
     // fields.
-    unsafe { set_cmd_count(ea, cmd.count as linenr_T, true) };
+    unsafe { set_cmd_count(ea, cmd.count as LineNr, true) };
     true
 }
 

@@ -24,7 +24,7 @@ use crate::mbyte::utf_head_off;
 use crate::mouse::vcol2col;
 use crate::semsg;
 use crate::types::{
-    EvalFuncData, colnr_T, dict_T, int64_t, linenr_T, pos_T, size_t, typval_T, varnumber_T, win_T,
+    ColNr, EvalFuncData, LineNr, dict_T, int64_t, pos_T, size_t, typval_T, varnumber_T, win_T,
 };
 use crate::winlayer::{Pos, Win};
 
@@ -227,8 +227,8 @@ pub unsafe fn textpos2screenpos(
 ) {
     // SAFETY: the caller's promise.
     let (win, pos) = unsafe { (Win::new(wp), Pos::new(pos)) };
-    let (mut scol, mut ccol, mut ecol): (colnr_T, colnr_T, colnr_T) = (0, 0, 0);
-    let mut coloff: colnr_T = 0;
+    let (mut scol, mut ccol, mut ecol): (ColNr, ColNr, ColNr) = (0, 0, 0);
+    let mut coloff: ColNr = 0;
     let mut visible_row = false;
     let mut is_folded = false;
 
@@ -338,8 +338,8 @@ pub unsafe fn f_screenpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // by the builtin table.
     let (lnum, col) = unsafe { (arg_number(argvars, 1), arg_number(argvars, 2)) };
     let mut pos = pos_T {
-        lnum: lnum as linenr_T,
-        col: (col as colnr_T - 1).max(0),
+        lnum: lnum as LineNr,
+        col: (col as ColNr - 1).max(0),
         coladd: 0,
     };
     if pos.lnum > wp.buffer().line_count() {
@@ -402,7 +402,7 @@ unsafe fn dict_add_nr(dict: *mut dict_T, key: &CStr, value: c_int) {
 ///
 /// # Safety
 /// `wp` must be a valid window and `lnum` a line of its buffer.
-unsafe fn virtcol2col(win: Win, lnum: linenr_T, vcol: c_int) -> c_int {
+unsafe fn virtcol2col(win: Win, lnum: LineNr, vcol: c_int) -> c_int {
     // SAFETY: a live window and a line of its buffer.
     let offset = unsafe { vcol2col(win.raw(), lnum, vcol - 1, ::core::ptr::null_mut()) };
     // SAFETY: a live window and a line of its buffer.
@@ -439,7 +439,7 @@ pub unsafe fn f_virtcol2col(argvars: *mut typval_T, rettv: *mut typval_T, _fptr:
     };
     let mut error = false;
     // SAFETY: the evaluator's calling convention, and `error` is of this frame.
-    let lnum = unsafe { tv_get_number_chk(argvars.offset(1), &raw mut error) } as linenr_T;
+    let lnum = unsafe { tv_get_number_chk(argvars.offset(1), &raw mut error) } as LineNr;
     if error || lnum < 0 || lnum > win.buffer().line_count() {
         return;
     }

@@ -37,9 +37,9 @@ use crate::winlayer::{Buf, Win};
 /// which is the whole of `readfile`'s precondition; they differ only in the
 /// range and in whether the buffer is new.
 fn read_original(
-    from: linenr_T,
-    skip: linenr_T,
-    lines: linenr_T,
+    from: LineNr,
+    skip: LineNr,
+    lines: LineNr,
     flags: c_int,
 ) -> Result<Loaded, Failed> {
     let (name, short) = (cur_buf().b_ffname, core::ptr::null_mut());
@@ -186,8 +186,8 @@ pub unsafe fn ml_recover(checkext: bool) {
                 (*mfp).mf_blocknr_max = if size <= 0 {
                     0
                 } else {
-                    size / (*mfp).mf_page_size as off_T
-                } as blocknr_T
+                    size / (*mfp).mf_page_size as FileOffset
+                } as BlockNr
             };
             unsafe { (*mfp).mf_infile_count = (*mfp).mf_blocknr_max };
 
@@ -285,7 +285,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         // used — except as the "unchanged?" comparison below.
         let mut orig_file_status = Err(Failed);
         if !cur_buf().b_ffname.is_null() {
-            orig_file_status = read_original(0, 0, MAXLNUM as linenr_T, READ_NEW as c_int);
+            orig_file_status = read_original(0, 0, MAXLNUM as LineNr, READ_NEW as c_int);
         }
 
         // What the swap file recorded wins over what the file suggests.
@@ -436,11 +436,11 @@ unsafe fn recover_lines(
     buf: *mut buf_T,
     mfp: *mut memfile_T,
     hp: &mut *mut bhdr_T,
-) -> Result<(linenr_T, c_int), ()> {
-    let mut bnum: blocknr_T = 1; // start with block 1
+) -> Result<(LineNr, c_int), ()> {
+    let mut bnum: BlockNr = 1; // start with block 1
     let mut page_count: c_uint = 1; // which is one page
-    let mut lnum: linenr_T = 0; // append after line 0 in curbuf
-    let mut line_count: linenr_T = 0;
+    let mut lnum: LineNr = 0; // append after line 0 in curbuf
+    let mut line_count: LineNr = 0;
     let mut idx = 0; // start with the first index in block 1
     let mut error = 0;
     unsafe { (*buf).b_ml.stack_clear() };
@@ -449,7 +449,7 @@ unsafe fn recover_lines(
     // negative (never written to the swap file) is simply lost.
     let mut cannot_open = cur_buf().b_ffname.is_null();
 
-    let append = |lnum: &mut linenr_T, text: *const c_char| {
+    let append = |lnum: &mut LineNr, text: *const c_char| {
         let _ = unsafe { ml_append(*lnum, text.cast_mut(), 0, true) };
         *lnum += 1;
     };
@@ -552,7 +552,7 @@ unsafe fn recover_lines(
                     // gigabytes. It must be at least one page, and the
                     // block must lie inside the file.
                     if page_count < 1
-                        || bnum + page_count as blocknr_T > unsafe { (*mfp).mf_blocknr_max } + 1
+                        || bnum + page_count as BlockNr > unsafe { (*mfp).mf_blocknr_max } + 1
                     {
                         error += 1;
                         append(&mut lnum, tr(c"???ILLEGAL BLOCK NUMBER"));
@@ -804,7 +804,7 @@ pub unsafe fn ml_preserve(buf: *mut buf_T, message: bool, do_fsync: bool) {
     // the negative numbers as it fetches each block's first line.
     'theend: {
         if unsafe { mf_need_trans(mfp) } && !got_int.get() {
-            let mut lnum: linenr_T = 1;
+            let mut lnum: LineNr = 1;
             while unsafe { mf_need_trans(mfp) } && lnum <= unsafe { (*buf).b_ml.ml_line_count } {
                 if unsafe { ml_find_line(buf, lnum, ML_FIND as c_int) }.is_null() {
                     status = FAIL;

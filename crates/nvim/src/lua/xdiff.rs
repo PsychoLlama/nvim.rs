@@ -29,9 +29,9 @@ use crate::lua::ffi::{
 };
 use crate::memory::strequal;
 use crate::types::{
-    Arena, Error, KeyDict_xdl_diff, Object, OptionalKeys, String_0, int64_t, kErrorTypeException,
-    linenr_T, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t, xdemitcb_t,
-    xdemitconf_t, xpparam_t,
+    Arena, Error, KeyDict_xdl_diff, LineNr, Object, OptionalKeys, String_0, int64_t,
+    kErrorTypeException, lua_Integer, lua_State, luaL_Buffer, mmbuffer_t, mmfile_t, size_t,
+    xdemitcb_t, xdemitconf_t, xpparam_t,
 };
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
@@ -169,8 +169,8 @@ unsafe fn get_linematch_results(
             slice::from_raw_parts((*mb).ptr.cast::<u8>(), (*mb).size as usize),
         )
     };
-    let block_a = block_from_lnum(bytes_a, hunk.start_a as linenr_T + 1).unwrap_or_default();
-    let block_b = block_from_lnum(bytes_b, hunk.start_b as linenr_T + 1).unwrap_or_default();
+    let block_a = block_from_lnum(bytes_a, hunk.start_a as LineNr + 1).unwrap_or_default();
+    let block_b = block_from_lnum(bytes_b, hunk.start_b as LineNr + 1).unwrap_or_default();
     let decisions = linematch_nbuffers(&[block_a, block_b], &[hunk.count_a, hunk.count_b], iwhite);
     // SAFETY: the caller's state, with the list still on top for each push.
     let push = |finer: Hunk| unsafe { lua_pushhunk(lstate, finer) };

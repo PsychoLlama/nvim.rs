@@ -298,7 +298,7 @@ pub(crate) unsafe fn cin_isbreak(p: *const c_char) -> bool {
 /// # Safety
 /// `p` must point at a NUL-terminated string; moves the cursor and restores
 /// it, and may unlock the current line.
-pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: linenr_T) -> bool {
+pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: LineNr) -> bool {
     // SAFETY: the caller's promise; each callee answers a pointer into the
     // same string.  "} while (cond);" counts as a while.
     let is_while = unsafe { cin_starts_with(cin_skip_close_brace(cin_skipcomment(p)), b"while") };
@@ -313,7 +313,7 @@ pub(crate) unsafe fn cin_iswhileofdo(p: *const c_char, lnum: linenr_T) -> bool {
     let line = unsafe { CStr::from_ptr(get_cursor_line_ptr()) }.to_bytes();
     // Step over any '}' until the 'w' of the "while".
     let w = line.iter().position(|&b| b == b'w').unwrap_or(line.len());
-    cur_win().w_cursor.col = w as colnr_T;
+    cur_win().w_cursor.col = w as ColNr;
 
     let maxparen = int64_t::from(cur_buf().b_ind_maxparen);
     // SAFETY: the cursor is on a line of the current buffer; `ml_get_pos`
@@ -421,7 +421,7 @@ pub(crate) unsafe fn cin_iswhileofdo_end(terminated: u8) -> bool {
             // before the matching '('.
             // SAFETY: `p` points into `line`, so the distance is in range.
             let i = unsafe { p.offset_from(line) };
-            cur_win().w_cursor.col = i as colnr_T;
+            cur_win().w_cursor.col = i as ColNr;
             // SAFETY: searches the current buffer from the cursor, and puts
             // the cursor back where it found it.
             if let Some(trypos) = unsafe { find_match_paren(cur_buf().b_ind_maxparen) } {

@@ -13,18 +13,18 @@ use crate::options::{
 use crate::profile::time_msg;
 use crate::registry::{IdSet, SlotTable, id_set};
 use crate::types::{
-    AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, DecorState, EstackInfo, FILE,
-    Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter, MarkTreeIter_s, MultiQueue, NS, Object,
-    OptInt, OptMagic, Proc, Refcount, RgbValue, ScreenGrid, StlClickDefinition, StlSyntax,
-    UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark, XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T,
-    bufref_T, caller_scope, cmdmod_T, colnr_T, disptick_T, estack_T, etype_T, except_T,
-    file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T, int16_t, int32_t,
-    int64_t, linenr_T, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
-    proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T,
-    uint8_t, uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t,
-    uv_handle_type, uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s,
-    uv_signal_s_tree_entry, uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t,
-    vimmenu_T, win_T, xfmark_T,
+    AdditionalData, Array, BreakAt, Callback, Channel, CmdModFlags, ColNr, DecorState, DispTick,
+    EstackInfo, FILE, LineNr, Loop, LuaRef, LuaRetMode, MTNode, MTPos, MarkTreeIter,
+    MarkTreeIter_s, MultiQueue, NS, Object, OptInt, OptMagic, Proc, ProfTime, Refcount, RgbValue,
+    ScreenGrid, StlClickDefinition, StlSyntax, UV_MUTEX_INIT, UV_RWLOCK_INIT, WinExtmark,
+    XDGVarType, alist_T, aucmdwin_T, bln_values, buf_T, bufref_T, caller_scope, cmdmod_T, estack_T,
+    etype_T, except_T, file_comparison, fmark_T, fmarkv_T, frame_T, garray_T, handle_T, hlf_T,
+    int16_t, int32_t, int64_t, lpos_T, match_T, msglist_T, nlua_ref_state_t, nvim_stats_s, pos_T,
+    reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, sctx_T, size_t, tabpage_T, uint8_t,
+    uint32_t, uint64_t, uv__io_t, uv__queue, uv_async_s_u, uv_async_t, uv_handle_t, uv_handle_type,
+    uv_loop_s_active_reqs, uv_loop_s_timer_heap, uv_loop_t, uv_signal_s, uv_signal_s_tree_entry,
+    uv_signal_s_u, uv_signal_t, uv_timer_s_node, uv_timer_s_u, uv_timer_t, vimmenu_T, win_T,
+    xfmark_T,
 };
 use crate::winlayer::{BufId, TabId, WinId};
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
@@ -68,7 +68,7 @@ pub(crate) fn time_msg_at(what: &CStr) {
         // SAFETY: `time_fd` is the startup-timing file, opened once by
         // `init_startuptime` and closed by `time_finish`; `what` outlives the
         // call and the second argument is the "no elapsed time" null.
-        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<proftime_T>()) };
+        unsafe { time_msg(what.as_ptr(), ::core::ptr::null::<ProfTime>()) };
     }
 }
 
@@ -173,9 +173,9 @@ pub(crate) const PATHSEP: c_int = '/' as c_int;
 pub static last_cursormoved_win: GlobalCell<*mut win_T> =
     GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static last_cursormoved: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-    lnum: 0 as linenr_T,
-    col: 0 as colnr_T,
-    coladd: 0 as colnr_T,
+    lnum: 0 as LineNr,
+    col: 0 as ColNr,
+    coladd: 0 as ColNr,
 });
 pub static autocmd_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub static autocmd_no_enter: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
@@ -271,7 +271,7 @@ pub static screen_search_hl: GlobalCell<match_T> = GlobalCell::new(match_T {
     has_cursor: false,
     tm: 0,
 });
-pub static search_hl_has_cursor_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+pub static search_hl_has_cursor_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 pub static e_api_spawn_failed: &CStr = c"E903: Could not spawn API job";
 pub static e_argreq: &CStr = c"E471: Argument required";
 pub static e_backslash: &CStr = c"E10: \\ should be followed by /, ? or &";
@@ -514,7 +514,7 @@ pub static cmdline_star: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static redrawing_cmdline: GlobalCell<bool> = GlobalCell::new(false);
 pub static cmdline_was_last_drawn: GlobalCell<bool> = GlobalCell::new(false);
 pub static exec_from_reg: GlobalCell<bool> = GlobalCell::new(false);
-pub static dollar_vcol: GlobalCell<colnr_T> = GlobalCell::new(-1 as colnr_T);
+pub static dollar_vcol: GlobalCell<ColNr> = GlobalCell::new(-1 as ColNr);
 pub static edit_submode: GlobalCell<*mut c_char> =
     GlobalCell::new(::core::ptr::null_mut::<c_char>());
 pub static edit_submode_pre: GlobalCell<*mut c_char> =
@@ -611,10 +611,10 @@ pub static include_none: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static include_default: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static include_link: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static highlight_match: GlobalCell<bool> = GlobalCell::new(false);
-pub static search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
-pub static search_match_endcol: GlobalCell<colnr_T> = GlobalCell::new(0);
-pub static search_first_line: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
-pub static search_last_line: GlobalCell<linenr_T> = GlobalCell::new(MAXLNUM as c_int as linenr_T);
+pub static search_match_lines: GlobalCell<LineNr> = GlobalCell::new(0);
+pub static search_match_endcol: GlobalCell<ColNr> = GlobalCell::new(0);
+pub static search_first_line: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
+pub static search_last_line: GlobalCell<LineNr> = GlobalCell::new(MAXLNUM as c_int as LineNr);
 pub static no_smartcase: GlobalCell<bool> = GlobalCell::new(false);
 pub static need_check_timestamps: GlobalCell<bool> = GlobalCell::new(false);
 pub static did_check_timestamps: GlobalCell<bool> = GlobalCell::new(false);
@@ -673,15 +673,15 @@ pub static restart_VIsual_select: GlobalCell<c_int> = GlobalCell::new(0 as c_int
 pub static VIsual_reselect: GlobalCell<c_int> = GlobalCell::new(0);
 pub static redo_VIsual_busy: GlobalCell<bool> = GlobalCell::new(false);
 pub(crate) static resel_VIsual_mode: GlobalCell<VisualMode> = GlobalCell::new(VisualMode::NONE);
-pub static resel_VIsual_line_count: GlobalCell<linenr_T> = GlobalCell::new(0);
-pub static resel_VIsual_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
+pub static resel_VIsual_line_count: GlobalCell<LineNr> = GlobalCell::new(0);
+pub static resel_VIsual_vcol: GlobalCell<ColNr> = GlobalCell::new(0);
 pub static where_paste_started: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
     col: 0,
     coladd: 0,
 });
 pub static did_ai: GlobalCell<bool> = GlobalCell::new(false);
-pub static ai_col: GlobalCell<colnr_T> = GlobalCell::new(0 as colnr_T);
+pub static ai_col: GlobalCell<ColNr> = GlobalCell::new(0 as ColNr);
 pub static end_comment_pending: GlobalCell<c_int> = GlobalCell::new('\0' as c_int);
 pub static did_syncbind: GlobalCell<bool> = GlobalCell::new(false);
 pub static did_si: GlobalCell<bool> = GlobalCell::new(false);
@@ -689,9 +689,9 @@ pub static can_si: GlobalCell<bool> = GlobalCell::new(false);
 pub static can_si_back: GlobalCell<bool> = GlobalCell::new(false);
 pub static old_indent: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static saved_cursor: GlobalCell<pos_T> = GlobalCell::new(pos_T {
-    lnum: 0 as linenr_T,
-    col: 0 as colnr_T,
-    coladd: 0 as colnr_T,
+    lnum: 0 as LineNr,
+    col: 0 as ColNr,
+    coladd: 0 as ColNr,
 });
 pub static Insstart: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     lnum: 0,
@@ -703,7 +703,7 @@ pub static Insstart_orig: GlobalCell<pos_T> = GlobalCell::new(pos_T {
     col: 0,
     coladd: 0,
 });
-pub static orig_line_count: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+pub static orig_line_count: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 pub static vr_lines_changed: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static inhibit_delete_count: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub static fenc_default: GlobalCell<*mut c_char> =
@@ -835,15 +835,15 @@ pub static cmdwin_old_curwin: GlobalCell<*mut win_T> =
 pub static cmdline_win: GlobalCell<*mut win_T> = GlobalCell::new(::core::ptr::null_mut::<win_T>());
 pub static no_lines_msg: &CStr = c"--No lines in buffer--";
 pub static sub_nsubs: GlobalCell<c_int> = GlobalCell::new(0);
-pub static sub_nlines: GlobalCell<linenr_T> = GlobalCell::new(0);
+pub static sub_nlines: GlobalCell<LineNr> = GlobalCell::new(0);
 pub static wim_flags: GlobalCell<[uint8_t; 4]> = GlobalCell::new([0; 4]);
 pub static stl_syntax: GlobalCell<StlSyntax> = GlobalCell::new(StlSyntax::NONE);
 pub static no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
 pub static typebuf_was_filled: GlobalCell<bool> = GlobalCell::new(false);
 pub static virtual_op: GlobalCell<Option<bool>> = GlobalCell::new(None);
 #[unsafe(no_mangle)]
-pub static display_tick: GlobalCell<disptick_T> = GlobalCell::new(0 as disptick_T);
-pub static spell_redraw_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+pub static display_tick: GlobalCell<DispTick> = GlobalCell::new(0 as DispTick);
+pub static spell_redraw_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 pub static time_fd: GlobalCell<*mut FILE> = GlobalCell::new(::core::ptr::null_mut::<FILE>());
 pub static vim_ignored: GlobalCell<c_int> = GlobalCell::new(0);
 pub static embedded_mode: GlobalCell<bool> = GlobalCell::new(false);
@@ -1495,7 +1495,7 @@ pub(crate) const MAX_ARG_CMDS: c_int = 10 as c_int;
 const UNSET_NAMED_MARK: xfmark_T = xfmark_T {
     fmark: fmark_T {
         mark: pos_T {
-            lnum: 0 as linenr_T,
+            lnum: 0 as LineNr,
             col: 0,
             coladd: 0,
         },

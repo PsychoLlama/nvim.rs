@@ -186,10 +186,10 @@ pub(crate) struct LockedBlock {
     /// What `mf_get` handed out.
     pub hp: *mut bhdr_T,
     /// The first line the block holds.
-    pub low: linenr_T,
+    pub low: LineNr,
     /// The last line it holds, *after* the insert or delete the walk that
     /// locked it is making room for.
-    pub high: linenr_T,
+    pub high: LineNr,
     /// Lines added to (or, negative, removed from) the block that the
     /// pointer blocks above it have not been told about yet.
     pub lineadd: ::core::ffi::c_int,
@@ -220,12 +220,12 @@ pub(crate) struct LockedBlock {
 #[derive(Default)]
 pub(crate) struct LineCache {
     /// `ml_line_lnum`: which line is cached, or 0 for none.
-    lnum: linenr_T,
+    lnum: LineNr,
     /// `ml_line_ptr`: its text, NUL-terminated. Stale whenever `lnum` is 0.
     ptr: *mut ::core::ffi::c_char,
     /// `ml_line_textlen`: the text's length *including* the NUL that stands
     /// for the line break.
-    textlen: colnr_T,
+    textlen: ColNr,
     /// `ml_line_offset`: the byte offset of the line's start in the buffer,
     /// remembered so a run of small edits to one line computes it once.
     /// Zero means "not worked out".
@@ -246,13 +246,13 @@ pub(crate) struct LineCache {
 
 #[derive(Copy, Clone)]
 pub struct infoptr_T {
-    pub ip_bnum: blocknr_T,
-    pub ip_low: linenr_T,
-    pub ip_high: linenr_T,
+    pub ip_bnum: BlockNr,
+    pub ip_low: LineNr,
+    pub ip_high: LineNr,
     pub ip_index: ::core::ffi::c_int,
 }
 pub struct memline_T {
-    pub ml_line_count: linenr_T,
+    pub ml_line_count: LineNr,
     pub ml_mfp: *mut memfile_T,
     /// The path from the root of the block tree down to the block
     /// [`memline_T::ml_locked`] names, one entry per pointer block, the
@@ -318,7 +318,7 @@ impl memline_T {
 
     /// Correct the last line entry `idx` covers, after lines were added to
     /// or removed from the block below it.
-    pub fn stack_add_high(&mut self, idx: usize, count: linenr_T) {
+    pub fn stack_add_high(&mut self, idx: usize, count: LineNr) {
         self.ml_stack[idx].ip_high += count;
     }
 
@@ -356,7 +356,7 @@ impl memline_T {
     }
 
     /// Which line is cached, or 0 for none: upstream's `ml_line_lnum`.
-    pub fn cached_lnum(&self) -> linenr_T {
+    pub fn cached_lnum(&self) -> LineNr {
         self.ml_line.lnum
     }
 
@@ -368,19 +368,19 @@ impl memline_T {
 
     /// The cached line's length, NUL included: upstream's
     /// `ml_line_textlen`.
-    pub fn cached_len(&self) -> colnr_T {
+    pub fn cached_len(&self) -> ColNr {
         self.ml_line.textlen
     }
 
     /// Say how long the cached line is without touching its text -- the two
     /// `ml_get` failure paths, which answer a static placeholder, and the
     /// callers that shorten the text in place.
-    pub fn set_cached_len(&mut self, textlen: colnr_T) {
+    pub fn set_cached_len(&mut self, textlen: ColNr) {
         self.ml_line.textlen = textlen;
     }
 
     /// Say which line the placeholder `ml_get` just answered stands for.
-    pub fn set_cached_lnum(&mut self, lnum: linenr_T) {
+    pub fn set_cached_lnum(&mut self, lnum: LineNr) {
         self.ml_line.lnum = lnum;
     }
 
@@ -400,8 +400,8 @@ impl memline_T {
     pub fn cache_block_line(
         &mut self,
         text: *mut ::core::ffi::c_char,
-        textlen: colnr_T,
-        lnum: linenr_T,
+        textlen: ColNr,
+        lnum: LineNr,
     ) {
         self.ml_line = LineCache {
             lnum,
@@ -419,8 +419,8 @@ impl memline_T {
     pub fn cache_replacement(
         &mut self,
         text: *mut ::core::ffi::c_char,
-        textlen: colnr_T,
-        lnum: linenr_T,
+        textlen: ColNr,
+        lnum: LineNr,
     ) {
         self.ml_line = LineCache {
             lnum,
@@ -440,7 +440,7 @@ impl memline_T {
     pub fn swap_cached_text(
         &mut self,
         text: *mut ::core::ffi::c_char,
-        textlen: colnr_T,
+        textlen: ColNr,
     ) -> Option<*mut ::core::ffi::c_char> {
         let old = self.take_owned();
         self.ml_line.ptr = text;
@@ -490,7 +490,7 @@ impl memline_T {
     /// Take a data block: `mf_get` handed `hp` out, and it holds lines `low`
     /// through `high`. Nothing has changed in it yet, so neither it nor the
     /// index above it needs writing back.
-    pub fn lock(&mut self, hp: *mut bhdr_T, low: linenr_T, high: linenr_T) {
+    pub fn lock(&mut self, hp: *mut bhdr_T, low: LineNr, high: LineNr) {
         self.ml_locked = Some(LockedBlock {
             hp,
             low,
@@ -533,12 +533,12 @@ impl memline_T {
 
     /// The first line of the locked block. Every caller has just had one
     /// back from `ml_find_line`, so the "no block" answer never arises.
-    pub fn locked_low(&self) -> linenr_T {
+    pub fn locked_low(&self) -> LineNr {
         self.ml_locked.as_ref().map_or(0, |locked| locked.low)
     }
 
     /// The last line of the locked block; see [`Self::locked_low`].
-    pub fn locked_high(&self) -> linenr_T {
+    pub fn locked_high(&self) -> LineNr {
         self.ml_locked.as_ref().map_or(0, |locked| locked.high)
     }
 
@@ -548,7 +548,7 @@ impl memline_T {
     pub fn shift_locked(&mut self, delta: ::core::ffi::c_int) {
         if let Some(locked) = self.ml_locked.as_mut() {
             locked.lineadd += delta;
-            locked.high += delta as linenr_T;
+            locked.high += delta as LineNr;
         }
     }
 
@@ -590,7 +590,7 @@ mod tests {
     use super::*;
 
     /// `infoptr_T` is plain data; only the four numbers matter.
-    fn entry(bnum: blocknr_T, low: linenr_T, high: linenr_T) -> infoptr_T {
+    fn entry(bnum: BlockNr, low: LineNr, high: LineNr) -> infoptr_T {
         infoptr_T {
             ip_bnum: bnum,
             ip_low: low,
@@ -626,11 +626,11 @@ mod tests {
         let mut ml = memline_T::closed();
         for i in 0..64i32 {
             let at = ml.stack_push();
-            ml.stack_set(at, entry(blocknr_T::from(i), i, i + 1));
+            ml.stack_set(at, entry(BlockNr::from(i), i, i + 1));
         }
         for i in 0..64i32 {
             let seen = ml.stack_at(usize::try_from(i).unwrap());
-            assert_eq!(seen.ip_bnum, blocknr_T::from(i));
+            assert_eq!(seen.ip_bnum, BlockNr::from(i));
             assert_eq!(seen.ip_high, i + 1);
         }
     }

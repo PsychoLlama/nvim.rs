@@ -48,8 +48,8 @@ use crate::regexp::{RE_SEARCH, RE_SUBST, skip_regexp};
 use crate::search::{BACKWARD, FORWARD, SEARCH_HIS, SEARCH_KEEP, SEARCH_MSG, do_search, searchit};
 use crate::strings::vim_strchr;
 use crate::types::{
-    CmdAddr, Direction, ExArgt, ExpandContext, FAIL, MarkGet, MarkMove, NUL, OK, buf_T, colnr_T,
-    exarg_T, fmark_T, linenr_T, pos_T, size_t,
+    CmdAddr, ColNr, Direction, ExArgt, ExpandContext, FAIL, LineNr, MarkGet, MarkMove, NUL, OK,
+    buf_T, exarg_T, fmark_T, pos_T, size_t,
 };
 use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 
@@ -59,15 +59,11 @@ use crate::winlayer::{Buf, Ea, Win, first_buffer, last_buffer};
 /// buffer list rather than arithmetic. `CmdAddr::LoadedBuffers` skips the
 /// unloaded ones on the way, and then — the tail loop below — walks back
 /// the other way if it ended on one anyway.
-pub(crate) fn compute_buffer_local_count(
-    addr_type: CmdAddr,
-    lnum: linenr_T,
-    offset: c_int,
-) -> c_int {
+pub(crate) fn compute_buffer_local_count(addr_type: CmdAddr, lnum: LineNr, offset: c_int) -> c_int {
     let loaded_only = addr_type == CmdAddr::LoadedBuffers;
     let mut count = offset;
     let mut buf = head();
-    while (buf.handle as linenr_T) < lnum {
+    while (buf.handle as LineNr) < lnum {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
@@ -159,7 +155,7 @@ pub unsafe fn set_cmd_addr_type(eap: *mut exarg_T, p: *mut c_char) {
 
 /// The address `.` stands for, which is also what a bare `+N`/`-N` counts
 /// from.
-pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T {
+pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> LineNr {
     let eap = unsafe { Ea::new(eap) };
     match eap.addr_type {
         CmdAddr::Lines | CmdAddr::Other => {
@@ -167,20 +163,20 @@ pub unsafe fn get_cmd_default_range(eap: *mut exarg_T) -> linenr_T {
             // past it, which a buffer shrinking under a command allows.
             cur_win().w_cursor.lnum.min(cur_buf().b_ml.ml_line_count)
         }
-        CmdAddr::Windows => current_win_nr(curwin.get()) as linenr_T,
+        CmdAddr::Windows => current_win_nr(curwin.get()) as LineNr,
         CmdAddr::Arguments => {
             let len = arglist_len();
             if cur_win().w_arg_idx + 1 < len {
-                cur_win().w_arg_idx as linenr_T + 1
+                cur_win().w_arg_idx as LineNr + 1
             } else {
-                len as linenr_T
+                len as LineNr
             }
         }
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as linenr_T,
-        CmdAddr::Tabs => current_tab_nr(curtab.get()) as linenr_T,
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as LineNr,
+        CmdAddr::Tabs => current_tab_nr(curtab.get()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
-        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as linenr_T,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as linenr_T,
+        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as LineNr,
         _ => 0,
     }
 }
@@ -199,14 +195,14 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
             ea.line2 = last;
         }
         CmdAddr::Buffers => {
-            ea.line1 = head().handle as linenr_T;
-            ea.line2 = tail().handle as linenr_T;
+            ea.line1 = head().handle as LineNr;
+            ea.line2 = tail().handle as LineNr;
         }
         CmdAddr::Windows => {
-            ea.line2 = current_win_nr(ptr::null()) as linenr_T;
+            ea.line2 = current_win_nr(ptr::null()) as LineNr;
         }
         CmdAddr::Tabs => {
-            ea.line2 = current_tab_nr(ptr::null_mut()) as linenr_T;
+            ea.line2 = current_tab_nr(ptr::null_mut()) as LineNr;
         }
         CmdAddr::TabsRelative => ea.line2 = 1,
         CmdAddr::Arguments => {
@@ -215,11 +211,11 @@ pub unsafe fn set_cmd_dflall_range(eap: *mut exarg_T) {
                 ea.line2 = 0;
                 ea.line1 = 0;
             } else {
-                ea.line2 = len as linenr_T;
+                ea.line2 = len as LineNr;
             }
         }
         CmdAddr::QuickfixValid => {
-            ea.line2 = qf_get_valid_size(eap) as linenr_T;
+            ea.line2 = qf_get_valid_size(eap) as LineNr;
             if ea.line2 == 0 {
                 ea.line2 = 1;
             }
@@ -237,19 +233,19 @@ fn arglist_len() -> c_int {
 }
 
 /// The handles of the first and last *loaded* buffers.
-fn loaded_buffer_range() -> (linenr_T, linenr_T) {
+fn loaded_buffer_range() -> (LineNr, LineNr) {
     let mut buf = head();
     while buf.b_ml.ml_mfp.is_null() {
         let Some(next) = buf.next() else { break };
         buf = next;
     }
-    let first = buf.handle as linenr_T;
+    let first = buf.handle as LineNr;
     let mut buf = tail();
     while buf.b_ml.ml_mfp.is_null() {
         let Some(prev) = buf.prev() else { break };
         buf = prev;
     }
-    (first, buf.handle as linenr_T)
+    (first, buf.handle as LineNr)
 }
 
 /// Where the command word starts, without consuming the range.
@@ -278,7 +274,7 @@ pub unsafe fn parse_cmd_address(
     let (mut first, mut last) = (fmark_T::UNSET, fmark_T::UNSET);
     let mut ea = unsafe { Ea::new(eap) };
     let mut address_count = 1;
-    let mut lnum: linenr_T;
+    let mut lnum: LineNr;
     let mut need_check_cursor = false;
     let mut ret = FAIL;
 
@@ -303,7 +299,7 @@ pub unsafe fn parse_cmd_address(
             if ea.cmd.is_null() {
                 break 'theend;
             }
-            if lnum != MAXLNUM as linenr_T {
+            if lnum != MAXLNUM as LineNr {
                 ea.line2 = lnum;
             } else if byte(ea.cmd) == '%' as c_int {
                 // `%` is not an address, it is a whole range, so it is
@@ -357,7 +353,7 @@ pub unsafe fn parse_cmd_address(
         if ea.addr_count == 1 {
             ea.line1 = ea.line2;
             // One address that resolved to nothing is no address.
-            if lnum == MAXLNUM as linenr_T {
+            if lnum == MAXLNUM as LineNr {
                 ea.addr_count = 0;
             }
         }
@@ -386,8 +382,8 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
             eap.line2 = last;
         }
         CmdAddr::Buffers => {
-            eap.line1 = head().handle as linenr_T;
-            eap.line2 = tail().handle as linenr_T;
+            eap.line1 = head().handle as LineNr;
+            eap.line2 = tail().handle as LineNr;
         }
         CmdAddr::Windows | CmdAddr::Tabs => {
             // Only a *user* command may say `%` over windows or tab
@@ -398,9 +394,9 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
             }
             eap.line1 = 1;
             eap.line2 = if eap.addr_type == CmdAddr::Windows {
-                current_win_nr(ptr::null()) as linenr_T
+                current_win_nr(ptr::null()) as LineNr
             } else {
-                current_tab_nr(ptr::null_mut()) as linenr_T
+                current_tab_nr(ptr::null_mut()) as LineNr
             };
         }
         CmdAddr::TabsRelative | CmdAddr::Unsigned | CmdAddr::Quickfix => {
@@ -414,12 +410,12 @@ fn whole_range(mut eap: Ea, errormsg: &mut Option<CString>) -> bool {
                 eap.line1 = 0;
             } else {
                 eap.line1 = 1;
-                eap.line2 = len as linenr_T;
+                eap.line2 = len as LineNr;
             }
         }
         CmdAddr::QuickfixValid => {
             // SAFETY: the caller's promise -- a live command.
-            let valid = qf_get_valid_size(eap.raw()) as linenr_T;
+            let valid = qf_get_valid_size(eap.raw()) as LineNr;
             eap.line1 = 1;
             eap.line2 = valid;
             if eap.line2 == 0 {
@@ -504,12 +500,12 @@ pub unsafe fn get_address(
     to_other_file: c_int,
     address_count: c_int,
     errormsg: &mut Option<CString>,
-) -> linenr_T {
+) -> LineNr {
     let ea = unsafe { Ea::new(eap) };
     // The record a `'m` address answers into; see `mark_get`.
     let mut slot = fmark_T::UNSET;
     let mut cmd: *mut c_char = unsafe { skipwhite(*ptr) };
-    let mut lnum: linenr_T = MAXLNUM as linenr_T;
+    let mut lnum: LineNr = MAXLNUM as LineNr;
     let mut pos = pos_T {
         lnum: 0,
         col: 0,
@@ -596,11 +592,11 @@ pub unsafe fn get_address(
                     // The search starts from the address read so far,
                     // so `:3/pat/` searches from line 3.
                     pos = cur_win().w_cursor;
-                    if lnum > 0 && lnum != MAXLNUM as linenr_T {
+                    if lnum > 0 && lnum != MAXLNUM as LineNr {
                         cur_win().w_cursor.lnum = lnum.min(cur_buf().b_ml.ml_line_count);
                     }
                     cur_win().w_cursor.col = if c == '/' as c_int && cur_win().w_cursor.lnum > 0 {
-                        MAXCOL as colnr_T
+                        MAXCOL as ColNr
                     } else {
                         0
                     };
@@ -651,13 +647,13 @@ pub unsafe fn get_address(
                     break;
                 };
                 if !skip {
-                    pos.lnum = if lnum != MAXLNUM as linenr_T {
+                    pos.lnum = if lnum != MAXLNUM as LineNr {
                         lnum
                     } else {
                         cur_win().w_cursor.lnum
                     };
                     pos.col = if byte(cmd) != '?' as c_int {
-                        MAXCOL as colnr_T
+                        MAXCOL as ColNr
                     } else {
                         0
                     };
@@ -692,7 +688,7 @@ pub unsafe fn get_address(
             }
             _ => {
                 if ascii_isdigit(byte(cmd)) {
-                    lnum = unsafe { getdigits(&raw mut cmd, false, 0) } as linenr_T;
+                    lnum = unsafe { getdigits(&raw mut cmd, false, 0) } as LineNr;
                 }
             }
         }
@@ -704,7 +700,7 @@ pub unsafe fn get_address(
             if byte(cmd) != '-' as c_int && byte(cmd) != '+' as c_int && !ascii_isdigit(byte(cmd)) {
                 break;
             }
-            if lnum == MAXLNUM as linenr_T
+            if lnum == MAXLNUM as LineNr
                 && let Addr::At(n) = offset_base(ea, addr_type)
             {
                 lnum = n;
@@ -716,11 +712,11 @@ pub unsafe fn get_address(
                 cmd = unsafe { cmd.add(1) };
                 unsafe { *at as u8 as c_int }
             };
-            let n: linenr_T = if !ascii_isdigit(byte(cmd)) {
+            let n: LineNr = if !ascii_isdigit(byte(cmd)) {
                 1
             } else {
-                let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM as i32) } as linenr_T;
-                if n == MAXLNUM as linenr_T {
+                let n = unsafe { getdigits_int32(&raw mut cmd, false, MAXLNUM as i32) } as LineNr;
+                if n == MAXLNUM as LineNr {
                     *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                     cmd = ptr::null_mut();
                     break 'error;
@@ -733,7 +729,7 @@ pub unsafe fn get_address(
                 break 'error;
             } else if addr_type == CmdAddr::LoadedBuffers || addr_type == CmdAddr::Buffers {
                 let offset = if i == '-' as c_int { -n } else { n };
-                lnum = compute_buffer_local_count(addr_type, lnum, offset) as linenr_T;
+                lnum = compute_buffer_local_count(addr_type, lnum, offset) as LineNr;
             } else {
                 // An offset in the *second* address of a range counts
                 // from the end of a closed fold, so `:.,+1d` deletes
@@ -746,7 +742,7 @@ pub unsafe fn get_address(
                 }
                 if i == '-' as c_int {
                     lnum -= n;
-                } else if lnum >= 0 && n >= INT32_MAX as linenr_T - lnum {
+                } else if lnum >= 0 && n >= INT32_MAX as LineNr - lnum {
                     *errormsg = Some(ex_msg(e_line_number_out_of_range.as_ptr()));
                     cmd = ptr::null_mut();
                     break 'error;
@@ -776,7 +772,7 @@ pub unsafe fn get_address(
 /// them apart.
 enum Addr {
     /// Use this line number.
-    At(linenr_T),
+    At(LineNr),
     /// Report `addr_error` and give up on the address.
     Refused,
     /// Leave whatever the caller had. Only reachable for an address kind
@@ -788,12 +784,12 @@ enum Addr {
 fn dot_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => cur_win().w_cursor.lnum,
-        CmdAddr::Windows => current_win_nr(curwin.get()) as linenr_T,
-        CmdAddr::Arguments => (cur_win().w_arg_idx + 1) as linenr_T,
-        CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as linenr_T,
-        CmdAddr::Tabs => current_tab_nr(curtab.get()) as linenr_T,
-        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as linenr_T,
-        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as linenr_T,
+        CmdAddr::Windows => current_win_nr(curwin.get()) as LineNr,
+        CmdAddr::Arguments => (cur_win().w_arg_idx + 1) as LineNr,
+        CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as LineNr,
+        CmdAddr::Tabs => current_tab_nr(curtab.get()) as LineNr,
+        CmdAddr::Quickfix => qf_get_cur_idx(eap.raw()) as LineNr,
+        CmdAddr::QuickfixValid => qf_get_cur_valid_idx(eap.raw()) as LineNr,
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -805,14 +801,14 @@ fn dot_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
 fn last_lnum(eap: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => cur_buf().b_ml.ml_line_count,
-        CmdAddr::Windows => current_win_nr(ptr::null()) as linenr_T,
-        CmdAddr::Arguments => arglist_len() as linenr_T,
+        CmdAddr::Windows => current_win_nr(ptr::null()) as LineNr,
+        CmdAddr::Arguments => arglist_len() as LineNr,
         CmdAddr::LoadedBuffers => loaded_buffer_range().1,
-        CmdAddr::Buffers => tail().handle as linenr_T,
-        CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as linenr_T,
+        CmdAddr::Buffers => tail().handle as LineNr,
+        CmdAddr::Tabs => current_tab_nr(ptr::null_mut()) as LineNr,
         // An empty quickfix list still has a last entry, numbered 1.
-        CmdAddr::Quickfix => (unsafe { qf_get_size(eap.raw()) } as linenr_T).max(1),
-        CmdAddr::QuickfixValid => (qf_get_valid_size(eap.raw()) as linenr_T).max(1),
+        CmdAddr::Quickfix => (unsafe { qf_get_size(eap.raw()) } as LineNr).max(1),
+        CmdAddr::QuickfixValid => (qf_get_valid_size(eap.raw()) as LineNr).max(1),
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {
             return Addr::Refused;
         }
@@ -854,12 +850,12 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
             // An empty argument list still accepts line 1, which is
             // what makes `:argdelete` on it report a better message.
             let len = arglist_len();
-            if ea.line2 > len as linenr_T + (len == 0) as c_int {
+            if ea.line2 > len as LineNr + (len == 0) as c_int {
                 return invrange();
             }
         }
         CmdAddr::Buffers => {
-            if ea.line1 < 1 || ea.line2 > get_highest_fnum() as linenr_T {
+            if ea.line1 < 1 || ea.line2 > get_highest_fnum() as LineNr {
                 return invrange();
             }
         }
@@ -871,7 +867,7 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
                 };
                 buf = next;
             }
-            if ea.line1 < buf.handle as linenr_T {
+            if ea.line1 < buf.handle as LineNr {
                 return invrange();
             }
             let mut buf = tail();
@@ -881,17 +877,17 @@ pub(crate) unsafe fn invalid_range(eap: *mut exarg_T) -> Option<CString> {
                 };
                 buf = prev;
             }
-            if ea.line2 > buf.handle as linenr_T {
+            if ea.line2 > buf.handle as LineNr {
                 return invrange();
             }
         }
         CmdAddr::Windows => {
-            if ea.line2 > current_win_nr(ptr::null()) as linenr_T {
+            if ea.line2 > current_win_nr(ptr::null()) as LineNr {
                 return invrange();
             }
         }
         CmdAddr::Tabs => {
-            if ea.line2 > current_tab_nr(ptr::null_mut()) as linenr_T {
+            if ea.line2 > current_tab_nr(ptr::null_mut()) as LineNr {
                 return invrange();
             }
         }

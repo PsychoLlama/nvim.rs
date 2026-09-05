@@ -36,7 +36,7 @@ use super::{regexec_T, rex};
 use crate::charset::vim_iswordp_buf;
 use crate::mbyte::{utf_ptr2char, utf_ptr2len, utfc_ptr2len};
 use crate::types::{
-    buf_T, colnr_T, linenr_T, lpos_T, regmatch_T, regmmatch_T, regprog_T, uint8_t, win_T,
+    ColNr, LineNr, buf_T, lpos_T, regmatch_T, regmmatch_T, regprog_T, uint8_t, win_T,
 };
 
 /// A running match's context.
@@ -84,12 +84,12 @@ impl Rex {
 
     /// The line the match is on, counted from `reg_firstlnum`.
     #[inline(always)]
-    pub(crate) fn lnum(self) -> linenr_T {
+    pub(crate) fn lnum(self) -> LineNr {
         unsafe { (*self.0).lnum }
     }
 
     #[inline(always)]
-    pub(crate) fn set_lnum(self, lnum: linenr_T) {
+    pub(crate) fn set_lnum(self, lnum: LineNr) {
         unsafe { (*self.0).lnum = lnum }
     }
 
@@ -168,23 +168,23 @@ impl Rex {
     /// The column the cursor is in, zero-based, in bytes.
     ///
     /// The cursor is never before the start of its line and a line is at most
-    /// `MAXCOL` bytes, so the difference always is a `colnr_T`.
+    /// `MAXCOL` bytes, so the difference always is a `ColNr`.
     #[inline(always)]
-    pub(crate) fn col(self) -> colnr_T {
+    pub(crate) fn col(self) -> ColNr {
         let bytes = unsafe { (*self.0).input.offset_from((*self.0).line) };
-        colnr_T::try_from(bytes).unwrap_or(colnr_T::MAX)
+        ColNr::try_from(bytes).unwrap_or(ColNr::MAX)
     }
 
     /// Put the cursor in column `col` of the line it is already on.
     #[inline(always)]
-    pub(crate) fn set_col(self, col: colnr_T) {
+    pub(crate) fn set_col(self, col: ColNr) {
         unsafe { (*self.0).input = (*self.0).line.offset(col as isize) }
     }
 
     /// Put the cursor in column `col` of `line`, which becomes the line
     /// being matched.
     #[inline(always)]
-    pub(crate) fn seek(self, line: *mut uint8_t, col: colnr_T) {
+    pub(crate) fn seek(self, line: *mut uint8_t, col: ColNr) {
         self.set_line(line);
         self.set_col(col);
     }
@@ -224,40 +224,40 @@ impl Rex {
 
     /// The buffer line `lnum` 0 of the match sits on.
     #[inline(always)]
-    pub(crate) fn reg_firstlnum(self) -> linenr_T {
+    pub(crate) fn reg_firstlnum(self) -> LineNr {
         unsafe { (*self.0).reg_firstlnum }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_firstlnum(self, lnum: linenr_T) {
+    pub(crate) fn set_reg_firstlnum(self, lnum: LineNr) {
         unsafe { (*self.0).reg_firstlnum = lnum }
     }
 
     /// The last line the match may reach, relative to `reg_firstlnum`.
     #[inline(always)]
-    pub(crate) fn reg_maxline(self) -> linenr_T {
+    pub(crate) fn reg_maxline(self) -> LineNr {
         unsafe { (*self.0).reg_maxline }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_maxline(self, lnum: linenr_T) {
+    pub(crate) fn set_reg_maxline(self, lnum: LineNr) {
         unsafe { (*self.0).reg_maxline = lnum }
     }
 
     /// The buffer line the cursor is on.
     #[inline(always)]
-    pub(crate) fn buf_lnum(self) -> linenr_T {
+    pub(crate) fn buf_lnum(self) -> LineNr {
         self.reg_firstlnum() + self.lnum()
     }
 
     /// Give up once a match starts past this column, or 0 for no bound.
     #[inline(always)]
-    pub(crate) fn reg_maxcol(self) -> colnr_T {
+    pub(crate) fn reg_maxcol(self) -> ColNr {
         unsafe { (*self.0).reg_maxcol }
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_maxcol(self, col: colnr_T) {
+    pub(crate) fn set_reg_maxcol(self, col: ColNr) {
         unsafe { (*self.0).reg_maxcol = col }
     }
 
@@ -447,7 +447,7 @@ impl Rex {
     /// Record the column the reported match starts at, for a `:substitute`
     /// or a search to resume from.
     #[inline(always)]
-    pub(crate) fn set_matchcol(self, col: colnr_T) {
+    pub(crate) fn set_matchcol(self, col: ColNr) {
         if self.multi() {
             // SAFETY: a buffer match's `reg_mmatch` is the caller's structure.
             unsafe { (*self.reg_mmatch()).rmm_matchcol = col };

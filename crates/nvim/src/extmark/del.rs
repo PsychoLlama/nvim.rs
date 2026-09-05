@@ -19,7 +19,7 @@ use super::{
     ns_destroy, ns_has, tree_del_itr, tree_lookup, tree_lookup_ns,
 };
 use crate::marktree::key::{mt_decor, mt_decor_any, mt_end, mt_invalid};
-use crate::types::{MTKey, MarkTreeIter, buf_T, colnr_T, uint32_t};
+use crate::types::{ColNr, MTKey, MarkTreeIter, buf_T, uint32_t};
 
 /// Remove the extmark `id` of namespace `ns_id`.
 ///
@@ -90,9 +90,9 @@ pub unsafe fn extmark_clear(
     buf: *mut buf_T,
     ns_id: uint32_t,
     l_row: c_int,
-    l_col: colnr_T,
+    l_col: ColNr,
     u_row: c_int,
-    u_col: colnr_T,
+    u_col: ColNr,
 ) -> bool {
     // SAFETY: the caller's promise -- a live buffer.
     let mut buf = unsafe { Buf::new(buf) };

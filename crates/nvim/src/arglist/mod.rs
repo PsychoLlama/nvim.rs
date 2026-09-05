@@ -550,7 +550,7 @@ unsafe fn delete_matching_args(regmatch: *mut regmatch_T) -> bool {
     while i < argcount() {
         // SAFETY: caller contract; `i` is in range and the entry's name is
         // NUL-terminated.
-        if !unsafe { vim_regexec(regmatch, arg_name(i), 0 as colnr_T) } {
+        if !unsafe { vim_regexec(regmatch, arg_name(i), 0 as ColNr) } {
             i += 1;
             continue;
         }

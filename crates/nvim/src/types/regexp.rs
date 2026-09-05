@@ -27,16 +27,16 @@ pub type RegComp = Option<unsafe fn(*mut uint8_t, ::core::ffi::c_int) -> *mut re
 pub type RegFree = Option<unsafe fn(*mut regprog_T) -> ()>;
 /// Match within one line.
 pub type RegExecNl =
-    Option<unsafe fn(*mut regmatch_T, *mut uint8_t, colnr_T, bool) -> ::core::ffi::c_int>;
+    Option<unsafe fn(*mut regmatch_T, *mut uint8_t, ColNr, bool) -> ::core::ffi::c_int>;
 /// Match across lines of a buffer, with a timeout.
 pub type RegExecMulti = Option<
     unsafe fn(
         *mut regmmatch_T,
         *mut win_T,
         *mut buf_T,
-        linenr_T,
-        colnr_T,
-        *mut proftime_T,
+        LineNr,
+        ColNr,
+        *mut ProfTime,
         *mut ::core::ffi::c_int,
     ) -> ::core::ffi::c_int,
 >;
@@ -59,7 +59,7 @@ pub struct regmatch_T {
     pub regprog: *mut regprog_T,
     pub startp: [*mut ::core::ffi::c_char; 10],
     pub endp: [*mut ::core::ffi::c_char; 10],
-    pub rm_matchcol: colnr_T,
+    pub rm_matchcol: ColNr,
     pub rm_ic: bool,
 }
 #[derive(Clone)]
@@ -67,9 +67,9 @@ pub struct regmmatch_T {
     pub regprog: *mut regprog_T,
     pub startpos: [lpos_T; 10],
     pub endpos: [lpos_T; 10],
-    pub rmm_matchcol: colnr_T,
+    pub rmm_matchcol: ColNr,
     pub rmm_ic: ::core::ffi::c_int,
-    pub rmm_maxcol: colnr_T,
+    pub rmm_maxcol: ColNr,
 }
 
 impl Default for regmmatch_T {

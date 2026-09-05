@@ -53,8 +53,8 @@ use crate::state::{MODE_INSERT, MODE_REPLACE, virtual_active};
 use crate::strings::vim_strchr;
 use crate::textformat::{auto_format, has_format_option};
 use crate::types::{
-    FoFlag, NUL, OpType, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
-    PUT_LINE_SPLIT, cmdarg_T, colnr_T, linenr_T, size_t, yankreg_T,
+    ColNr, FoFlag, LineNr, NUL, OpType, PUT_BLOCK_INNER, PUT_CURSEND, PUT_FIXINDENT, PUT_LINE,
+    PUT_LINE_FORWARD, PUT_LINE_SPLIT, cmdarg_T, size_t, yankreg_T,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
@@ -85,7 +85,7 @@ pub(crate) unsafe fn nv_addsub(cap: *mut cmdarg_T) {
         } else {
             OpType::NrSub
         };
-        unsafe { op_addsub(ca.oap, ca.count1 as linenr_T, ca.arg != 0) };
+        unsafe { op_addsub(ca.oap, ca.count1 as LineNr, ca.arg != 0) };
         ca.op().op_type = OpType::Nop;
     } else if visual_active() {
         unsafe { nv_operator(cap) };
@@ -435,8 +435,8 @@ pub(crate) unsafe fn n_opencmd(cap: *mut cmdarg_T) {
     }
     win.w_cursor.lnum = edge;
     cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
-    let undo_first = win.w_cursor.lnum - linenr_T::from(opening_above);
-    let undo_last = win.w_cursor.lnum + linenr_T::from(!opening_above);
+    let undo_first = win.w_cursor.lnum - LineNr::from(opening_above);
+    let undo_last = win.w_cursor.lnum + LineNr::from(!opening_above);
     let dir = if opening_above {
         BACKWARD as c_int
     } else {
@@ -486,7 +486,7 @@ pub(crate) unsafe fn set_cursor_for_append_to_line() {
         coladvance(unsafe { Win::current() }, MAXCOL as c_int);
         State.set(save_state);
     } else {
-        cur_win().w_cursor.col += unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as colnr_T;
+        cur_win().w_cursor.col += unsafe { cstr::bytes_at(get_cursor_pos_ptr()) }.len() as ColNr;
     }
 }
 
@@ -589,7 +589,7 @@ pub(crate) unsafe fn nv_join(cap: *mut cmdarg_T) {
     // Joining fewer than two lines means nothing; `J` and `1J` both join
     // this line with the next.
     ca.count0 = ca.count0.max(2);
-    if cur_win().w_cursor.lnum + ca.count0 as linenr_T - 1 > cur_buf().b_ml.ml_line_count {
+    if cur_win().w_cursor.lnum + ca.count0 as LineNr - 1 > cur_buf().b_ml.ml_line_count {
         // A count that runs off the end joins what is left -- unless there
         // was no count, in which case there is nothing below to join to.
         if ca.count0 <= 2 {

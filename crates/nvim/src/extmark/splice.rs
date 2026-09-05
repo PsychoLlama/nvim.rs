@@ -28,18 +28,18 @@ use super::{
 use crate::decoration::SignCountHalf;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, MTPos, bcount_t, colnr_T,
-    extmark_undo_vec_t, linenr_T,
+    ColNr, ExtmarkMove, ExtmarkOp, ExtmarkSplice, ExtmarkUndoObject, LineNr, MTPos, bcount_t,
+    extmark_undo_vec_t,
 };
 
 /// [`extmark_adjust`](super::extmark_adjust) for the callers that already
 /// hold a [`Buf`].
 pub(crate) fn adjust(
     buf: Buf,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
     undo: ExtmarkOp,
 ) {
     if splice_pending() {
@@ -50,7 +50,7 @@ pub(crate) fn adjust(
     let mut new_byte = 0;
     let old_row;
     let new_row;
-    if amount == MAXLNUM as linenr_T {
+    if amount == MAXLNUM as LineNr {
         old_row = line2 - line1 + 1;
         // TODO(bfredl): ej kasta?
         old_byte = buf.deleted_bytes2 as bcount_t;
@@ -59,7 +59,7 @@ pub(crate) fn adjust(
         // A region is either deleted (amount == MAXLNUM) or added
         // (line2 == MAXLNUM). The only other case is `:move`, which
         // `extmark_move_region` handles.
-        debug_assert!(line2 == MAXLNUM as linenr_T, "line2 == MAXLNUM");
+        debug_assert!(line2 == MAXLNUM as LineNr, "line2 == MAXLNUM");
         old_row = 0;
         new_row = amount;
     }
@@ -88,7 +88,7 @@ pub(crate) fn adjust(
 pub(crate) fn splice(
     buf: Buf,
     start_row: c_int,
-    start_col: colnr_T,
+    start_col: ColNr,
     old: Extent,
     new: Extent,
     undo: ExtmarkOp,

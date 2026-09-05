@@ -244,7 +244,7 @@ pub(crate) fn replace_do_bs(limit_col: c_int) {
     let l_state = State.get();
     let cc = replace_pop_if_nul();
     if cc > 0 {
-        let mut start_vcol: colnr_T = 0;
+        let mut start_vcol: ColNr = 0;
         let mut orig_vcols = 0;
         if l_state & VREPLACE_FLAG != 0 {
             // How many screen cells the character about to be deleted

@@ -73,7 +73,7 @@ pub unsafe fn f_prompt_appendbuf(
     if !buf_is_prompt(Some(buf)) {
         return;
     }
-    let lnum: linenr_T = (buf.b_prompt_start.mark.lnum - 1).max(0);
+    let lnum: LineNr = (buf.b_prompt_start.mark.lnum - 1).max(0);
     let lines = args.ptr(1);
     let mut did_concat = false;
     if !buf.b_prompt_append_new_line {

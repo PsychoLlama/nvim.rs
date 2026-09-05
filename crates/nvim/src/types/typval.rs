@@ -384,11 +384,11 @@ pub struct funccall_S {
     pub fc_l_varlist: list_T,
     pub fc_l_listitems: [listitem_T; 20],
     pub fc_rettv: *mut typval_T,
-    pub fc_breakpoint: linenr_T,
+    pub fc_breakpoint: LineNr,
     pub fc_dbg_tick: ::core::ffi::c_int,
     pub fc_level: ::core::ffi::c_int,
     pub fc_defer: garray_T,
-    pub fc_prof_child: proftime_T,
+    pub fc_prof_child: ProfTime,
     pub fc_caller: *mut funccall_T,
     pub fc_refcount: Refcount,
     pub fc_copyID: ::core::ffi::c_int,
@@ -466,7 +466,7 @@ pub type scid_T = ::core::ffi::c_int;
 pub struct sctx_T {
     pub sc_sid: scid_T,
     pub sc_seq: ::core::ffi::c_int,
-    pub sc_lnum: linenr_T,
+    pub sc_lnum: LineNr,
     pub sc_chan: uint64_t,
 }
 
@@ -491,7 +491,7 @@ impl sctx_T {
     }
 
     /// The same context at a different line inside the script.
-    pub fn with_lnum(self, sc_lnum: linenr_T) -> Self {
+    pub fn with_lnum(self, sc_lnum: LineNr) -> Self {
         sctx_T { sc_lnum, ..self }
     }
 
@@ -544,15 +544,15 @@ pub struct ufunc_S {
     pub uf_prof_initialized: ::core::ffi::c_int,
     pub uf_luaref: LuaRef,
     pub uf_tm_count: ::core::ffi::c_int,
-    pub uf_tm_total: proftime_T,
-    pub uf_tm_self: proftime_T,
-    pub uf_tm_children: proftime_T,
+    pub uf_tm_total: ProfTime,
+    pub uf_tm_self: ProfTime,
+    pub uf_tm_children: ProfTime,
     pub uf_tml_count: *mut ::core::ffi::c_int,
-    pub uf_tml_total: *mut proftime_T,
-    pub uf_tml_self: *mut proftime_T,
-    pub uf_tml_start: proftime_T,
-    pub uf_tml_children: proftime_T,
-    pub uf_tml_wait: proftime_T,
+    pub uf_tml_total: *mut ProfTime,
+    pub uf_tml_self: *mut ProfTime,
+    pub uf_tml_start: ProfTime,
+    pub uf_tml_children: ProfTime,
+    pub uf_tml_wait: ProfTime,
     pub uf_tml_idx: ::core::ffi::c_int,
     pub uf_tml_execed: ::core::ffi::c_int,
     pub uf_script_ctx: sctx_T,

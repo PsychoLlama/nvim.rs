@@ -21,7 +21,7 @@ use crate::options::{
     kOptSofttabstop, kOptTextwidth, kOptVarsofttabstop, kOptWrapmargin,
 };
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
-use crate::types::{OptIndex, OptInt, OptionSetFlags, colnr_T, optset_T};
+use crate::types::{ColNr, OptIndex, OptInt, OptionSetFlags, optset_T};
 
 use crate::types::buf_T;
 use crate::winlayer::buffers;
@@ -143,7 +143,7 @@ pub(crate) unsafe fn did_set_paste(_args: &mut optset_T) -> Option<&CStr> {
                 let array = field_ptr(buf.raw(), VSTS_ARRAY, |b: &buf_T| &b.b_p_vsts_array);
                 unsafe { tabstop_set(buf.b_p_vsts, array) };
             } else {
-                buf.b_p_vsts_array = ptr::null_mut::<colnr_T>();
+                buf.b_p_vsts_array = ptr::null_mut::<ColNr>();
             }
         }
         p_sm.set(save_sm.get());

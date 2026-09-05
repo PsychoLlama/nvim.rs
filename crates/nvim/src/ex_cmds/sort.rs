@@ -38,7 +38,7 @@ use crate::regexp::{skip_regexp_err, vim_regcomp, vim_regexec, vim_regfree};
 use crate::search::last_search_pat;
 use crate::semsg;
 use crate::types::{
-    ExtmarkOp, NUL, bcount_t, colnr_T, exarg_T, float_T, linenr_T, regmatch_T, size_t, varnumber_T,
+    ColNr, ExtmarkOp, LineNr, NUL, bcount_t, exarg_T, float_T, regmatch_T, size_t, varnumber_T,
 };
 use crate::undo::u_save;
 use ::libc::{strcasecmp, strcoll, strtod};
@@ -117,7 +117,7 @@ enum SortKey {
 
 /// One line of the range as `:sort` sees it.
 struct SortLine {
-    lnum: linenr_T,
+    lnum: LineNr,
     key: SortKey,
 }
 
@@ -419,8 +419,8 @@ unsafe fn match_range(
     regmatch: &mut regmatch_T,
     line: &mut [u8],
     use_match: bool,
-) -> (colnr_T, colnr_T) {
-    let len = line.len() as colnr_T;
+) -> (ColNr, ColNr) {
+    let len = line.len() as ColNr;
     if regmatch.regprog.is_null() {
         return (0, len);
     }
@@ -430,8 +430,8 @@ unsafe fn match_range(
         return (0, 0);
     }
     // SAFETY: both are positions inside the line just matched.
-    let start = unsafe { regmatch.startp[0].offset_from(base) } as colnr_T;
-    let end = unsafe { regmatch.endp[0].offset_from(base) } as colnr_T;
+    let start = unsafe { regmatch.startp[0].offset_from(base) } as ColNr;
+    let end = unsafe { regmatch.endp[0].offset_from(base) } as ColNr;
     if use_match { (start, end) } else { (end, len) }
 }
 
@@ -443,7 +443,7 @@ unsafe fn match_range(
 ///
 /// # Safety
 /// `line` must be a buffer line and `start <= end <= line.len()`.
-unsafe fn number_key(line: &mut [u8], start: colnr_T, end: colnr_T, spec: &SortSpec) -> SortKey {
+unsafe fn number_key(line: &mut [u8], start: ColNr, end: ColNr, spec: &SortSpec) -> SortKey {
     let (start, end) = (start as usize, end as usize);
     // Terminate the key so the C parsers stop there.  When the range already
     // reaches the line's last byte, the NUL past it is the line's own.
@@ -520,8 +520,8 @@ unsafe fn number_key(line: &mut [u8], start: colnr_T, end: colnr_T, spec: &SortS
 /// The range must be lines of the current buffer, and nothing may change the
 /// buffer while the scan runs.
 unsafe fn collect_sort_keys(
-    line1: linenr_T,
-    line2: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
     spec: &SortSpec,
     regmatch: &mut regmatch_T,
 ) -> Option<Vec<SortLine>> {
@@ -558,7 +558,7 @@ struct Placed {
     /// range's length only when an append failed.
     done: size_t,
     /// The line below the last one appended.
-    lnum: linenr_T,
+    lnum: LineNr,
     /// What was read and what was written, for the extmark splice.
     old_bytes: bcount_t,
     new_bytes: bcount_t,
@@ -577,7 +577,7 @@ unsafe fn append_sorted(
     order: StringOrder,
     unique: bool,
     reverse: bool,
-    line2: linenr_T,
+    line2: LineNr,
 ) -> Placed {
     let count = sorted.len() as size_t;
     let mut placed = Placed {
@@ -601,7 +601,7 @@ unsafe fn append_sorted(
 
         // If the original line number of the line being placed is not the
         // same as "lnum" (accounting for offset), the buffer changed.
-        if get_lnum + (count as linenr_T - 1) != placed.lnum {
+        if get_lnum + (count as LineNr - 1) != placed.lnum {
             placed.moved = true;
         }
 
@@ -715,23 +715,23 @@ unsafe fn sort_range(eap: &mut exarg_T) {
 ///
 /// # Safety
 /// The range must be the one just rewritten.
-unsafe fn finish_sort(line1: linenr_T, line2: linenr_T, count: size_t, placed: &Placed) {
+unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Placed) {
     let lnum = placed.lnum;
-    let deleted = count as linenr_T - (lnum - line2);
+    let deleted = count as LineNr - (lnum - line2);
     // SAFETY: caller's contract.
     if deleted > 0 {
         unsafe {
             mark_adjust(
                 line2 - deleted,
                 line2,
-                MAXLNUM as linenr_T,
+                MAXLNUM as LineNr,
                 -deleted,
                 kExtmarkNOOP,
             )
         };
         say::more(-deleted);
     } else if deleted < 0 {
-        unsafe { mark_adjust(line2, MAXLNUM as linenr_T, -deleted, 0, kExtmarkNOOP) };
+        unsafe { mark_adjust(line2, MAXLNUM as LineNr, -deleted, 0, kExtmarkNOOP) };
     }
 
     if placed.moved || deleted != 0 {
@@ -776,7 +776,7 @@ struct UniqScan {
     /// already deleted the line it would have been compared against.
     force_unmatch: bool,
     /// The last line `:uniq!` has already decided about.
-    done_lnum: linenr_T,
+    done_lnum: LineNr,
 }
 
 impl UniqScan {
@@ -785,11 +785,11 @@ impl UniqScan {
     fn step(
         &mut self,
         mode: UniqMode,
-        i: linenr_T,
-        count: linenr_T,
-        lnum: linenr_T,
+        i: LineNr,
+        count: LineNr,
+        lnum: LineNr,
         is_match: bool,
-    ) -> (linenr_T, bool) {
+    ) -> (LineNr, bool) {
         // The flag is cleared whether or not it had anything to override;
         // `&&` would short-circuit past that when `is_match` is already false.
         let forced = core::mem::replace(&mut self.force_unmatch, false);
@@ -935,7 +935,7 @@ unsafe fn uniq_range(eap: &mut exarg_T) {
             mark_adjust(
                 line2 - deleted,
                 line2,
-                MAXLNUM as linenr_T,
+                MAXLNUM as LineNr,
                 -deleted,
                 if change_occurred {
                     kExtmarkUndo

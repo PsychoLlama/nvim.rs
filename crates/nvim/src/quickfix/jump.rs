@@ -212,7 +212,7 @@ unsafe fn escape_winfixbuf(
 ///
 /// `qf_pattern` must be null or NUL-terminated, and the buffer loaded.
 unsafe fn qf_jump_goto_line(
-    qf_lnum: linenr_T,
+    qf_lnum: LineNr,
     qf_col: c_int,
     qf_viscol: c_char,
     qf_pattern: *mut c_char,
@@ -258,9 +258,9 @@ unsafe fn qf_jump_goto_line(
     }
     cur_win().w_cursor.coladd = 0;
     if qf_viscol as c_int == 1 {
-        coladvance(unsafe { Win::current() }, qf_col as colnr_T - 1);
+        coladvance(unsafe { Win::current() }, qf_col as ColNr - 1);
     } else {
-        cur_win().w_cursor.col = (qf_col - 1) as colnr_T;
+        cur_win().w_cursor.col = (qf_col - 1) as ColNr;
     }
     cur_win().w_set_curswant = true;
     check_cursor(unsafe { Win::current() });
@@ -276,7 +276,7 @@ unsafe fn qf_jump_print_msg(
     qf_index: c_int,
     qf_ptr: *mut qfline_T,
     old_curbuf: *mut buf_T,
-    old_lnum: linenr_T,
+    old_lnum: LineNr,
 ) {
     // SAFETY: the caller's promise -- a live entry on a live stack.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };

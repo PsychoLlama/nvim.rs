@@ -92,7 +92,7 @@ pub unsafe fn diff_redraw(dofold: bool) {
 ///
 /// # Safety
 /// `linestatus` must be null or writable.
-pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: linenr_T, linestatus: *mut c_int) -> c_int {
+pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: LineNr, linestatus: *mut c_int) -> c_int {
     let set_status = |status| {
         if !linestatus.is_null() {
             // SAFETY: the caller's out-parameter, and it is not null.
@@ -210,7 +210,7 @@ pub unsafe fn diff_check_with_linestatus(wp: Win, lnum: linenr_T, linestatus: *m
 /// `filler`.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_check_fill(wp: Win, lnum: linenr_T) -> c_int {
+pub fn diff_check_fill(wp: Win, lnum: LineNr) -> c_int {
     if diff_flags.get() & DIFF_FILLER == 0 {
         return 0;
     }
@@ -224,7 +224,7 @@ pub fn diff_check_fill(wp: Win, lnum: linenr_T) -> c_int {
 /// window whose buffer is the only one in the diff folds nothing.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_infold(wp: Win, lnum: linenr_T) -> bool {
+pub fn diff_infold(wp: Win, lnum: LineNr) -> bool {
     if wp.w_onebuf_opt.wo_diff == 0 {
         return false;
     }
@@ -249,7 +249,7 @@ pub fn diff_infold(wp: Win, lnum: linenr_T) -> bool {
     if tp.tp_first_diff.is_null() {
         return true;
     }
-    let context = diff_context.get() as linenr_T;
+    let context = diff_context.get() as LineNr;
     for dp in diff_blocks(tp) {
         // The blocks are in line order, so the first one starting below
         // the context window ends the search.
@@ -270,8 +270,8 @@ pub fn diff_infold(wp: Win, lnum: linenr_T) -> bool {
 /// is about to free, and a `diff_T` carries a `garray_T` and two list links
 /// that a copy taken across the free would leave dangling.
 pub(crate) fn diff_fold_update(
-    lnum: &[linenr_T; DB_COUNT as usize],
-    count: &[linenr_T; DB_COUNT as usize],
+    lnum: &[LineNr; DB_COUNT as usize],
+    count: &[LineNr; DB_COUNT as usize],
     skip_idx: c_int,
 ) {
     let tp = cur_tab();

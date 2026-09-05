@@ -325,7 +325,7 @@ pub unsafe fn mark_get_visual(buf: *mut buf_T, fmp: *mut fmark_T, name: c_int) -
         pos.col = if name == '<' as c_int {
             0
         } else {
-            MAXCOL as colnr_T
+            MAXCOL as ColNr
         };
         pos.coladd = 0;
         mark.set_pos(pos);
@@ -352,7 +352,7 @@ pub unsafe fn getnextmark(startpos: *mut pos_T, dir: c_int, begin_line: c_int) -
         pos.col = if dir == BACKWARD as c_int {
             0
         } else {
-            MAXCOL as colnr_T
+            MAXCOL as ColNr
         };
     }
     // SAFETY: `curbuf` is live from startup to exit.

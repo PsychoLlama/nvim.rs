@@ -35,8 +35,8 @@ pub(super) unsafe fn foldclosed_both(argvars: *mut typval_T, rettv: *mut typval_
     // SAFETY: the caller's promise -- live typvals.
     let (mut rv, lnum) = unsafe { (Tv::new(rettv), tv_get_lnum(argvars)) };
     if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
-        let mut first: linenr_T = 0;
-        let mut last: linenr_T = 0;
+        let mut first: LineNr = 0;
+        let mut last: LineNr = 0;
         // SAFETY: `curwin` is set from startup to exit.
         let win = unsafe { Win::current() };
         let closed = has_folding_win(win, lnum, Some(&mut first), Some(&mut last), false, None);
@@ -97,7 +97,7 @@ pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
             get_vim_var_str(dash),
         )
     };
-    let (foldstart, foldend) = (foldstart as linenr_T, foldend as linenr_T);
+    let (foldstart, foldend) = (foldstart as LineNr, foldend as LineNr);
     if !(foldstart > 0 && foldend <= cur_buf().b_ml.ml_line_count) {
         return;
     }
@@ -113,7 +113,7 @@ pub unsafe fn f_foldtext(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: E
     // SAFETY: as `at`.
     let skip_ws = |p: *mut c_char| unsafe { skipwhite(p) };
     // SAFETY: `lnum` is inside the buffer.
-    let line = |n: linenr_T| ml_get(n);
+    let line = |n: LineNr| ml_get(n);
 
     let mut s = skip_ws(line(lnum));
     // A comment opener is skipped, and an empty one takes the next line.

@@ -234,7 +234,7 @@ fn replace_block_line(mut oap: Op, bd: &mut block_def, c: c_int, had_ctrl_v_cr: 
     let _ = unsafe { ml_replace(baselnum, newp, false) };
     let splice = Suppress::splice();
     if !after_p.is_null() {
-        let len = after_p_len as colnr_T;
+        let len = after_p_len as ColNr;
         let _ = unsafe { ml_append(cur_win().w_cursor.lnum, after_p, len, false) };
         cur_win().w_cursor.lnum += 1;
         unsafe { appended_lines_mark(cur_win().w_cursor.lnum, 1) };

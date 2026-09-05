@@ -146,9 +146,9 @@ pub(crate) unsafe fn init_search_hl(wp: *mut win_T, search_hl: *mut match_T) {
 /// `shl` and `match_0` must be live.
 unsafe fn next_search_hl_pos(
     shl: *mut match_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     match_0: *mut matchitem_T,
-    mincol: colnr_T,
+    mincol: ColNr,
 ) -> c_int {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let mut shl = unsafe { Shl::new(shl) };
@@ -226,8 +226,8 @@ unsafe fn next_search_hl(
     win: *mut win_T,
     search_hl: *mut match_T,
     shl: *mut match_T,
-    lnum: linenr_T,
-    mincol: colnr_T,
+    lnum: LineNr,
+    mincol: ColNr,
     cur: *mut matchitem_T,
 ) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
@@ -261,7 +261,7 @@ unsafe fn next_search_hl(
             break;
         }
 
-        let matchcol: colnr_T = if shl.lnum == 0 {
+        let matchcol: ColNr = if shl.lnum == 0 {
             // No useful previous match: search from the line's start.
             0
         } else if !cpo_has(CpoFlag::SEARCH)
@@ -341,7 +341,7 @@ unsafe fn next_search_hl(
 ///
 /// # Safety
 /// `wp` and `search_hl` must be live.
-pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: linenr_T) {
+pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, lnum: LineNr) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let wp = unsafe { Win::new(wp) };
     let search_hl = unsafe { Shl::new(search_hl) };
@@ -368,7 +368,7 @@ pub(crate) unsafe fn prepare_search_hl(wp: *mut win_T, search_hl: *mut match_T, 
         // A position match is "in progress" while it still has unvisited
         // positions on the line it is on.
         let mut pos_inprogress = true;
-        let mut n: colnr_T = 0;
+        let mut n: ColNr = 0;
         while shl.first_lnum < lnum
             && (!shl.rm.regprog.is_null() || (!cur.is_null() && pos_inprogress))
         {
@@ -415,8 +415,8 @@ unsafe fn check_cur_search_hl(wp: *mut win_T, shl: *mut match_T) {
 /// regexp can invalidate it.
 pub(crate) unsafe fn prepare_search_hl_line(
     wp: *mut win_T,
-    lnum: linenr_T,
-    mincol: colnr_T,
+    lnum: LineNr,
+    mincol: ColNr,
     line: *mut *mut c_char,
     search_hl: *mut match_T,
     search_attr: *mut c_int,
@@ -497,8 +497,8 @@ pub(crate) unsafe fn prepare_search_hl_line(
 #[allow(clippy::too_many_arguments)]
 pub(crate) unsafe fn update_search_hl(
     wp: *mut win_T,
-    lnum: linenr_T,
-    col: colnr_T,
+    lnum: LineNr,
+    col: ColNr,
     line: *mut *mut c_char,
     search_hl: *mut match_T,
     has_match_conc: *mut c_int,
@@ -616,7 +616,7 @@ pub(crate) unsafe fn update_search_hl(
 pub(crate) unsafe fn get_prevcol_hl_flag(
     wp: *mut win_T,
     search_hl: *mut match_T,
-    curcol: colnr_T,
+    curcol: ColNr,
 ) -> bool {
     // SAFETY: the caller's promise -- see this function's `# Safety`.
     let wp = unsafe { Win::new(wp) };
@@ -657,7 +657,7 @@ pub(crate) unsafe fn get_prevcol_hl_flag(
 pub(crate) unsafe fn get_search_match_hl(
     wp: *mut win_T,
     search_hl: *mut match_T,
-    col: colnr_T,
+    col: ColNr,
     char_attr: *mut c_int,
 ) {
     // SAFETY: the caller's promise -- see this function's `# Safety`.

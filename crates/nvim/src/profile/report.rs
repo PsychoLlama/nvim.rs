@@ -16,7 +16,7 @@ use crate::fileio::vim_fgets;
 use crate::keycodes::K_SPECIAL;
 use crate::os::fs::os_fopen;
 use crate::runtime::{get_scriptname, script_count, script_item};
-use crate::types::{IOSIZE, proftime_T, scriptitem_T, ufunc_T};
+use crate::types::{IOSIZE, ProfTime, scriptitem_T, ufunc_T};
 use ::libc::fclose;
 use core::ffi::{CStr, c_char, c_int};
 use std::ffi::OsStr;
@@ -68,8 +68,8 @@ unsafe fn write_func_name(fd: &mut dyn Write, fp: *mut ufunc_T) -> io::Result<()
 fn prof_func_line(
     fd: &mut dyn Write,
     count: c_int,
-    total: proftime_T,
-    self_: proftime_T,
+    total: ProfTime,
+    self_: ProfTime,
     prefer_self: bool,
 ) -> io::Result<()> {
     if count > 0 {

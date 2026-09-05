@@ -41,10 +41,10 @@ use crate::optionstr::{clear_string_option, free_string_option};
 use crate::strings::concat_str;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, Buffer, Error, FAIL, FloatAnchor, OptInt, OptScope, OptVal, OptionSetFlags,
-    String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, colnr_T, kErrorTypeException,
+    AlignTextPos, Buffer, ColNr, Error, FAIL, FloatAnchor, LineNr, OptInt, OptScope, OptVal,
+    OptionSetFlags, String_0, VirtText, WinConfig, WinSplit, WinStyle, Window, kErrorTypeException,
     kFloatRelativeCursor, kFloatRelativeEditor, kFloatRelativeLaststatus, kFloatRelativeMouse,
-    kFloatRelativeWindow, linenr_T, lpos_T, pos_T, schar_T, tabpage_T, win_T,
+    kFloatRelativeWindow, lpos_T, pos_T, schar_T, tabpage_T, win_T,
 };
 use crate::ui::ui_has;
 use crate::window::{
@@ -667,15 +667,15 @@ fn anchored_position(win: Win) -> (c_int, c_int) {
         row += parent.w_winrow;
         col += parent.w_wincol;
         adjust_for_grid(&mut parent, &mut row, &mut col);
-        if win.w_config.bufpos.lnum >= 0 as linenr_T {
+        if win.w_config.bufpos.lnum >= 0 as LineNr {
             // Widened: `bufpos={2147483647, ...}` reaches here and the C's
             // `lnum + 1` overflows before the clamp can catch it.
             let lnum =
                 (win.w_config.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
             let mut pos = pos_T {
-                lnum: lnum as linenr_T,
+                lnum: lnum as LineNr,
                 col: win.w_config.bufpos.col,
-                coladd: 0 as colnr_T,
+                coladd: 0 as ColNr,
             };
             let (trow, tcol) = screen_pos_of(parent, &mut pos);
             row += trow - 1;

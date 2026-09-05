@@ -42,7 +42,7 @@ pub struct ScreenGrid {
     attrs: Vec<sattr_T>,
     /// Which virtual column of the buffer line each cell came from, for the
     /// mouse. Parallel to `chars`.
-    vcols: Vec<colnr_T>,
+    vcols: Vec<ColNr>,
     /// Where each row starts in the three buffers above -- indirection on
     /// purpose, so that scrolling permutes offsets instead of moving cells.
     line_offset: Vec<size_t>,
@@ -71,7 +71,7 @@ pub struct ScreenGrid {
 pub(crate) struct GridCells<'a> {
     pub chars: &'a mut [schar_T],
     pub attrs: &'a mut [sattr_T],
-    pub vcols: &'a mut [colnr_T],
+    pub vcols: &'a mut [ColNr],
 }
 
 /// The blank a cleared cell holds.
@@ -144,7 +144,7 @@ impl ScreenGrid {
     }
 
     /// The buffer column the cell at `off` came from.
-    pub(crate) fn vcol_at(&self, off: size_t) -> colnr_T {
+    pub(crate) fn vcol_at(&self, off: size_t) -> ColNr {
         self.vcols[off]
     }
 
@@ -319,10 +319,10 @@ impl ScreenGrid {
 pub(crate) struct LineBuf {
     chars: Vec<schar_T>,
     attrs: Vec<sattr_T>,
-    vcols: Vec<colnr_T>,
+    vcols: Vec<ColNr>,
     mirror_chars: Vec<schar_T>,
     mirror_attrs: Vec<sattr_T>,
-    mirror_vcols: Vec<colnr_T>,
+    mirror_vcols: Vec<ColNr>,
 }
 
 impl LineBuf {
@@ -376,7 +376,7 @@ impl LineBuf {
     }
 
     /// The virtual columns, for the readers that only look.
-    pub(crate) fn vcols(&self) -> &[colnr_T] {
+    pub(crate) fn vcols(&self) -> &[ColNr] {
         &self.vcols
     }
 
@@ -386,18 +386,18 @@ impl LineBuf {
     }
 
     /// The virtual columns, writable.
-    pub(crate) fn vcols_mut(&mut self) -> &mut [colnr_T] {
+    pub(crate) fn vcols_mut(&mut self) -> &mut [ColNr] {
         &mut self.vcols
     }
 
     /// All three at once, which is what a loop over columns wants: one
     /// bounds-checked slicing, then plain indexing inside the loop.
-    pub(crate) fn parts_mut(&mut self) -> (&mut [schar_T], &mut [sattr_T], &mut [colnr_T]) {
+    pub(crate) fn parts_mut(&mut self) -> (&mut [schar_T], &mut [sattr_T], &mut [ColNr]) {
         (&mut self.chars, &mut self.attrs, &mut self.vcols)
     }
 
     /// Write one whole cell.
-    pub(crate) fn put(&mut self, col: size_t, ch: schar_T, attr: sattr_T, vcol: colnr_T) {
+    pub(crate) fn put(&mut self, col: size_t, ch: schar_T, attr: sattr_T, vcol: ColNr) {
         self.chars[col] = ch;
         self.attrs[col] = attr;
         self.vcols[col] = vcol;

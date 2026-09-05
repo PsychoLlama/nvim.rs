@@ -11,7 +11,7 @@
 // emitted. One definition per logical type; every module re-exports here.
 use super::*;
 
-pub type off_T = off_t;
+pub type FileOffset = off_t;
 
 /// `os_defs.h`'s floor for [`MAXPATHL`]. Upstream raises `MAXPATHL` to
 /// `PATH_MAX` where that is larger; this port does not, so the two are equal

@@ -161,8 +161,8 @@ pub(crate) unsafe fn get_syntax_name(xp: *mut expand_T, idx: c_int) -> *mut c_ch
 /// that [`syn_get_stack_item`] can be asked about it afterwards.
 pub(crate) unsafe fn syn_get_id(
     wp: *mut win_T,
-    lnum: linenr_T,
-    col: colnr_T,
+    lnum: LineNr,
+    col: ColNr,
     trans: c_int,
     spellp: *mut bool,
     keep_state: c_int,
@@ -210,7 +210,7 @@ pub(crate) fn syn_get_stack_item(i: c_int) -> c_int {
         // The state was not properly finished for the last character
         // (`keep_state` was true), so it has to be invalidated.
         invalidate_current_state();
-        current_col.set(MAXCOL as colnr_T);
+        current_col.set(MAXCOL as ColNr);
         return -1;
     }
     unsafe { state_at(i).si_id }
@@ -228,7 +228,7 @@ fn syn_cur_foldlevel() -> c_int {
 }
 
 /// The fold level of line `lnum`, for `'foldmethod'=syntax`.
-pub(crate) unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn syn_get_foldlevel(wp: *mut win_T, lnum: LineNr) -> c_int {
     let mut level = 0;
 
     // Answer quickly when there are no fold items at all.

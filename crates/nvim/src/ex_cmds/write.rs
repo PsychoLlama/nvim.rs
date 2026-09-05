@@ -55,8 +55,8 @@ use crate::semsg;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, CpoFlag, Failed, MAXPATHL, NUL, OptionSetFlags, ShmFlag, exarg_T, int32_t,
-    int64_t, linenr_T,
+    CmdModFlags, CpoFlag, Failed, LineNr, MAXPATHL, NUL, OptionSetFlags, ShmFlag, exarg_T, int32_t,
+    int64_t,
 };
 use crate::undo::{buf_is_changed, curbuf_is_changed};
 use crate::window::check_can_set_curbuf_forceit;
@@ -802,7 +802,7 @@ pub unsafe fn getfile(
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,
     setpm: bool,
-    lnum: linenr_T,
+    lnum: LineNr,
     forceit: bool,
 ) -> c_int {
     if !check_can_set_curbuf_forceit(forceit as c_int) {

@@ -24,8 +24,7 @@ use crate::message::{emsg, msg_puts, verbose_enter, verbose_leave};
 use crate::os::cshim::{gettext, gettext_ptr};
 use crate::regexp::RE_AUTO;
 use crate::types::{
-    OptInt, buf_T, colnr_T, linenr_T, proftime_T, regmatch_T, regmmatch_T, regprog_T, uint8_t,
-    win_T,
+    ColNr, LineNr, OptInt, ProfTime, buf_T, regmatch_T, regmmatch_T, regprog_T, uint8_t, win_T,
 };
 
 /// Reserve `rex` for `run`, restoring an outer match's context after. The
@@ -168,7 +167,7 @@ unsafe fn recompile_backtracking(prog: *mut regprog_T, extmatch: bool) -> *mut r
 unsafe fn vim_regexec_string(
     rmp: *mut regmatch_T,
     line: *const c_char,
-    col: colnr_T,
+    col: ColNr,
     nl: bool,
 ) -> bool {
     // SAFETY: `rmp` holds a live program and `line` is the caller's text.
@@ -217,7 +216,7 @@ pub unsafe fn vim_regexec_prog(
     prog: *mut *mut regprog_T,
     ignore_case: bool,
     line: *const c_char,
-    col: colnr_T,
+    col: ColNr,
 ) -> bool {
     // SAFETY: `prog` points at the caller's program handle.
     let mut regmatch = regmatch_T {
@@ -242,13 +241,13 @@ pub unsafe fn vim_regexec_prog(
 /// NUL-terminated, and `col` must be within it. This re-enters the editor —
 /// a `\=` expression can start a match of its own — so nothing may be held
 /// across it.
-pub unsafe fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool {
+pub unsafe fn vim_regexec(rmp: *mut regmatch_T, line: *const c_char, col: ColNr) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, false) }
 }
 
 /// [`vim_regexec`] with `$` allowed to match at the end of the string.
-pub unsafe fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const c_char, col: colnr_T) -> bool {
+pub unsafe fn vim_regexec_nl(rmp: *mut regmatch_T, line: *const c_char, col: ColNr) -> bool {
     // SAFETY: as `vim_regexec_string`.
     unsafe { vim_regexec_string(rmp, line, col, true) }
 }
@@ -260,9 +259,9 @@ pub unsafe fn vim_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,
-    lnum: linenr_T,
-    col: colnr_T,
-    tm: *mut proftime_T,
+    lnum: LineNr,
+    col: ColNr,
+    tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     // SAFETY: `rmp` holds a live program; `win`/`buf`/`tm`/`timed_out` are

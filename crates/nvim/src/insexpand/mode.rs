@@ -343,7 +343,7 @@ pub(crate) unsafe fn ins_compl_has_multiple() -> bool {
 ///
 /// # Safety
 /// As [`ins_compl_has_multiple`], which this asks first.
-pub unsafe fn ins_compl_lnum_in_range(lnum: linenr_T) -> bool {
+pub unsafe fn ins_compl_lnum_in_range(lnum: LineNr) -> bool {
     // SAFETY: the caller's promise, passed straight on.
     let multiple = unsafe { ins_compl_has_multiple() };
     multiple && lnum >= compl_lnum.get() && lnum <= cur_win().w_cursor.lnum
@@ -362,7 +362,7 @@ pub unsafe fn ins_compl_long_shown_match() -> bool {
         return false;
     };
     let typed = cur_win().w_cursor.col - compl_col.get();
-    !shown.cp_str.data().is_null() && shown.cp_str.len() as colnr_T > typed
+    !shown.cp_str.data().is_null() && shown.cp_str.len() as ColNr > typed
 }
 
 /// `'completeopt'`, buffer-local value first.
@@ -413,7 +413,7 @@ pub fn ins_compl_enter_selects() -> bool {
     compl_enter_selects.get()
 }
 
-pub fn ins_compl_col() -> colnr_T {
+pub fn ins_compl_col() -> ColNr {
     compl_col.get()
 }
 

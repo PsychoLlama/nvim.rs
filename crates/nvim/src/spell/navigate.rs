@@ -49,7 +49,7 @@ use crate::pos::{MAXCOL, clearpos};
 use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
-use crate::types::{NUL, ShmFlag, colnr_T, hlf_T, linenr_T, pos_T, size_t, smt_T, uint8_t, win_T};
+use crate::types::{ColNr, LineNr, NUL, ShmFlag, hlf_T, pos_T, size_t, smt_T, uint8_t, win_T};
 use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
@@ -64,8 +64,8 @@ use crate::spell::SMT_ALL;
 /// `wp` must be a live window and `state` the scan's own decoration state.
 unsafe fn decor_spell_nav_col(
     wp: *mut win_T,
-    lnum: linenr_T,
-    decor_lnum: &mut linenr_T,
+    lnum: LineNr,
+    decor_lnum: &mut LineNr,
     col: c_int,
     state: DecorStateRef,
 ) -> Option<bool> {
@@ -82,9 +82,9 @@ unsafe fn decor_spell_nav_col(
 
 /// Whether the syntax at this position is one that gets spell-checked.
 #[inline]
-unsafe fn can_syn_spell(wp: *mut win_T, lnum: linenr_T, col: c_int) -> bool {
+unsafe fn can_syn_spell(wp: *mut win_T, lnum: LineNr, col: c_int) -> bool {
     let mut can_spell = false;
-    unsafe { syn_get_id(wp, lnum, col as colnr_T, 0, &raw mut can_spell, 0) };
+    unsafe { syn_get_id(wp, lnum, col as ColNr, 0, &raw mut can_spell, 0) };
     can_spell
 }
 
@@ -115,7 +115,7 @@ pub unsafe fn spell_move_to(
     let mut buf: *mut c_char = core::ptr::null_mut();
     let mut buflen: size_t = 0;
     let mut skip = 0;
-    let mut capcol: colnr_T = -1;
+    let mut capcol: ColNr = -1;
     let mut found_one = false;
     let mut wrapped = false;
     let mut ret: size_t = 0;
@@ -131,7 +131,7 @@ pub unsafe fn spell_move_to(
     // one acquisition, and the address it names does not move when the
     // contents are swapped.
     let (saved_decor_start, decor) = (decor_state.take(), unsafe { DecorStateRef::current() });
-    let mut decor_lnum: linenr_T = -1;
+    let mut decor_lnum: LineNr = -1;
 
     while !got_int.get() {
         let mut line = unsafe { ml_get_buf((*wp).w_buffer, lnum) };
@@ -148,10 +148,10 @@ pub unsafe fn spell_move_to(
         }
 
         if capcol == 0 {
-            capcol = unsafe { getwhitecols(line) } as colnr_T;
+            capcol = unsafe { getwhitecols(line) } as ColNr;
         } else if curline && wp == curwin.get() {
             // For spellbadword(): does the first word need a capital?
-            let col = unsafe { getwhitecols(line) } as colnr_T;
+            let col = unsafe { getwhitecols(line) } as ColNr;
             if unsafe { check_need_cap(curwin.get(), lnum, col) } {
                 capcol = col;
             }
@@ -184,7 +184,7 @@ pub unsafe fn spell_move_to(
             if dir == BACKWARD
                 && lnum == unsafe { (*wp).w_cursor.lnum }
                 && !wrapped
-                && unsafe { p.offset_from(buf) } as colnr_T >= unsafe { (*wp).w_cursor.col }
+                && unsafe { p.offset_from(buf) } as ColNr >= unsafe { (*wp).w_cursor.col }
             {
                 break;
             }
@@ -201,12 +201,11 @@ pub unsafe fn spell_move_to(
                 // counts.
                 // SAFETY: `p` walks the line `buf` points at, so the two
                 // are always in the same allocation.
-                let col = unsafe { p.offset_from(buf) } as colnr_T;
+                let col = unsafe { p.offset_from(buf) } as ColNr;
                 let past_cursor = dir == BACKWARD
                     || lnum != unsafe { (*wp).w_cursor.lnum }
                     || wrapped
-                    || col + if curline { len as colnr_T } else { 0 }
-                        > unsafe { (*wp).w_cursor.col };
+                    || col + if curline { len as ColNr } else { 0 } > unsafe { (*wp).w_cursor.col };
 
                 if past_cursor {
                     let no_plain_buffer =

@@ -20,7 +20,7 @@ use crate::drawscreen::{UPD_NOT_VALID, UPD_SOME_VALID, UPD_VALID};
 use crate::grid::default_grid_ref;
 use crate::main::{dollar_vcol, mouse_dragging, p_sj, skip_update_topline};
 use crate::option::{ScrollMargin, ScrollOff};
-use crate::types::{OptInt, int64_t, linenr_T};
+use crate::types::{LineNr, OptInt, int64_t};
 use crate::winlayer::{Win, tab_windows};
 
 /// [`Win::update_topline`], for the callers still holding a raw window.
@@ -403,7 +403,7 @@ pub fn changed_window_setting_all() {
 
 /// Put the window's top line at `lnum`, approximating `w_botline` rather than
 /// recomputing it.
-pub fn set_topline(mut win: Win, lnum: linenr_T) {
+pub fn set_topline(mut win: Win, lnum: LineNr) {
     let prev_topline = win.w_topline;
     // Go to the first line of a closed fold.
     let lnum = win.fold_first(lnum).unwrap_or(lnum);

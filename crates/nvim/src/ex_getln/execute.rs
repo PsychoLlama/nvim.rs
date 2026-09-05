@@ -152,7 +152,7 @@ pub(crate) unsafe fn command_line_execute(
         return -1; // get another key
     }
 
-    let display_tick_saved: disptick_T = cur_win().w_display_tick;
+    let display_tick_saved: DispTick = cur_win().w_display_tick;
     // SAFETY: as [`command_line_check`] -- the header of the live
     // `CommandLineState`.
     let mut s = unsafe { Cls::new(state.cast::<CommandLineState>()) };

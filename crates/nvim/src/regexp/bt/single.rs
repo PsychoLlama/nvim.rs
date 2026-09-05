@@ -24,7 +24,7 @@ use crate::regexp::{
     cleanup_zsubexpr, cstrchr, cstrncmp, kMarkBufLocal, match_with_backref, reg_getline,
     reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
-use crate::types::{GraphemeState, NUL, fmark_T, linenr_T, pos_T, uint8_t, uint32_t, uint64_t};
+use crate::types::{GraphemeState, LineNr, NUL, fmark_T, pos_T, uint8_t, uint32_t, uint64_t};
 
 use crate::winlayer::Win;
 
@@ -225,7 +225,7 @@ fn virtual_column(rex: Rex) -> uint32_t {
     } else {
         rex.reg_win()
     };
-    let mut lnum: linenr_T = if rex.multi() { rex.buf_lnum() } else { 1 };
+    let mut lnum: LineNr = if rex.multi() { rex.buf_lnum() } else { 1 };
     // A string match has no line numbers, and a multi-line match may be
     // running over a line that has since been deleted.
     // SAFETY: `wp` is a live window, so it has a buffer.

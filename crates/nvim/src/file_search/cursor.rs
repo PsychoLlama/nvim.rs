@@ -23,7 +23,7 @@ use std::ffi::CStr;
 /// The file name at the cursor, or the Visual selection when there is one.
 ///
 /// Returns the name in allocated memory, NULL for failure.
-pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *mut c_char {
+pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mut c_char {
     let options = FileNameOpts::MESS | FileNameOpts::EXP | FileNameOpts::REL | FileNameOpts::UNESC;
     if !visual_active() {
         return unsafe { file_name_at_cursor(options | FileNameOpts::HYP, count, file_lnum) };
@@ -42,7 +42,7 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *
         && (unsafe { *ptr.add(len + 1) } as u8).is_ascii_digit()
     {
         let mut p = unsafe { ptr.add(len + 1) };
-        unsafe { *file_lnum = getdigits_int32(&raw mut p, false, 0) as linenr_T };
+        unsafe { *file_lnum = getdigits_int32(&raw mut p, false, 0) as LineNr };
     }
     unsafe { find_file_name_in_path(ptr, len, options, count as c_long, (*curbuf.get()).b_ffname) }
 }
@@ -61,7 +61,7 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut linenr_T) -> *
 pub(crate) unsafe fn file_name_at_cursor(
     options: FileNameOpts,
     count: c_int,
-    file_lnum: *mut linenr_T,
+    file_lnum: *mut LineNr,
 ) -> *mut c_char {
     unsafe {
         file_name_in_line(
@@ -196,7 +196,7 @@ pub(crate) unsafe fn file_name_in_line(
     options: FileNameOpts,
     count: c_int,
     rel_fname: *mut c_char,
-    file_lnum: *mut linenr_T,
+    file_lnum: *mut LineNr,
 ) -> *mut c_char {
     let ptr = unsafe { name_start(line, col, options) };
     if ptr.is_null() {
@@ -210,7 +210,7 @@ pub(crate) unsafe fn file_name_in_line(
     if !file_lnum.is_null()
         && let Some(lnum) = unsafe { trailing_line_number(ptr.add(len)) }
     {
-        unsafe { *file_lnum = lnum as linenr_T };
+        unsafe { *file_lnum = lnum as LineNr };
     }
 
     unsafe { find_file_name_in_path(ptr, len, options, count as c_long, rel_fname) }

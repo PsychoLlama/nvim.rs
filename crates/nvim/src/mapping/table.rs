@@ -309,7 +309,7 @@ pub(crate) unsafe fn map_add(
     mode: c_int,
     is_abbr: bool,
     sid: scid_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     simplified: bool,
 ) -> *mut mapblock_T {
     // The buffer's tables are reached through the one raw pointer, not

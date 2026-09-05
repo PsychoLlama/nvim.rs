@@ -27,8 +27,8 @@ pub struct fmark_T {
 }
 #[derive(Copy, Clone)]
 pub struct fmarkv_T {
-    pub topline_offset: linenr_T,
-    pub skipcol: colnr_T,
+    pub topline_offset: LineNr,
+    pub skipcol: ColNr,
 }
 
 impl fmarkv_T {

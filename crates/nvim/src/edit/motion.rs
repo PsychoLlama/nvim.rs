@@ -141,7 +141,7 @@ pub(crate) fn ins_end(c: c_int) {
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;
     }
     coladvance_to(MAXCOL as c_int);
-    cur_win().w_curswant = MAXCOL as colnr_T;
+    cur_win().w_curswant = MAXCOL as ColNr;
     start_arrow_at(&mut tpos);
 }
 

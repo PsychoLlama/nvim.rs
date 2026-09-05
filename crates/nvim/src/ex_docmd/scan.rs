@@ -31,7 +31,7 @@ use crate::quickfix::grep_internal;
 use crate::register::{set_expr_line, valid_yank_reg};
 use crate::strings::del_trailing_spaces;
 use crate::types::ex_cmds::exarg_T;
-use crate::types::pos::linenr_T;
+use crate::types::pos::LineNr;
 use crate::types::{CmdAddr, CpoFlag, ExArgt, Failed, NUL, size_t};
 use crate::winlayer::{Buf, Ea};
 
@@ -86,7 +86,7 @@ pub(crate) unsafe fn parse_register(eap: *mut exarg_T) {
 
 /// Turn a count into a range, which is what a count means for every command
 /// that takes one: "this many lines, starting where the range ended".
-pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: linenr_T, validate: bool) {
+pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: LineNr, validate: bool) {
     let mut ea = unsafe { Ea::new(eap) };
     if ea.addr_type != CmdAddr::Lines {
         ea.line2 = count;
@@ -101,8 +101,8 @@ pub unsafe fn set_cmd_count(eap: *mut exarg_T, count: linenr_T, validate: bool) 
     // right-hand side itself overflows. The C wraps there, so the
     // comparison always succeeds and the answer is `INT32_MAX`. Spelled
     // as a wrapping subtraction so the debug build does not abort.
-    if ea.line2 >= (INT32_MAX as linenr_T).wrapping_sub(count.wrapping_sub(1)) {
-        ea.line2 = INT32_MAX as linenr_T;
+    if ea.line2 >= (INT32_MAX as LineNr).wrapping_sub(count.wrapping_sub(1)) {
+        ea.line2 = INT32_MAX as LineNr;
     } else {
         ea.line2 += count - 1;
     }
@@ -132,7 +132,7 @@ pub(crate) unsafe fn parse_count(
         }
     }
 
-    let n: linenr_T = unsafe { getdigits_int32(ea.arg_ptr(), false, INT32_MAX) };
+    let n: LineNr = unsafe { getdigits_int32(ea.arg_ptr(), false, INT32_MAX) };
     ea.arg = skipwhite(ea.arg);
     if !ea.args.is_null() {
         // `nvim_cmd` supplies the arguments already split, so the count

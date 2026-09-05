@@ -283,7 +283,7 @@ unsafe fn sign_define_cmd(name: *mut c_char, cmdline: *mut c_char) {
 /// NUL-terminated.
 unsafe fn sign_place_cmd(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     name: *mut c_char,
     id: c_int,
     group: *const c_char,
@@ -320,7 +320,7 @@ unsafe fn sign_place_cmd(
 /// NUL-terminated.
 unsafe fn sign_unplace_cmd(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     name: *const c_char,
     id: c_int,
     group: *const c_char,
@@ -351,7 +351,7 @@ unsafe fn sign_unplace_cmd(
 /// NUL-terminated.
 unsafe fn sign_jump_cmd(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     name: *const c_char,
     id: c_int,
     group: *const c_char,
@@ -382,7 +382,7 @@ struct SignCmdArgs {
     group: *const c_char,
     prio: c_int,
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
 }
 
 impl Default for SignCmdArgs {

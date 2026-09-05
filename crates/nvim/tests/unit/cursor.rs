@@ -19,7 +19,7 @@ use neovim::cursor::arith::{
     ColAdd, carried_coladd, checked_col, folded_line_span, gap_coladd, step_back, wrap_target_col,
 };
 use neovim::pos::MAXCOL;
-use neovim::types::{colnr_T, linenr_T};
+use neovim::types::{ColNr, LineNr};
 
 // --------------------------------------------------------------- wrap_target_col
 //
@@ -207,12 +207,12 @@ fn a_virtual_column_the_clamp_caught_up_with_is_dropped() {
 // from_line, NULL, &from_line); } if (from_line > to_line) retval--;`
 
 /// The `fold_last` of a buffer with no folds at all.
-fn unfolded(lnum: linenr_T) -> linenr_T {
+fn unfolded(lnum: LineNr) -> LineNr {
     lnum
 }
 
 /// The `fold_last` of a buffer whose only closed fold covers `range`.
-fn folded(range: std::ops::RangeInclusive<linenr_T>) -> impl Fn(linenr_T) -> linenr_T {
+fn folded(range: std::ops::RangeInclusive<LineNr>) -> impl Fn(LineNr) -> LineNr {
     move |lnum| {
         if range.contains(&lnum) {
             *range.end()
@@ -251,7 +251,7 @@ fn the_span_is_a_column_of_visible_rows() {
     // Every from/to pair inside one closed fold has no visible lines
     // between them at all.
     let fold = folded(2..=9);
-    for from in 2..=8 as colnr_T {
+    for from in 2..=8 as ColNr {
         assert_eq!(folded_line_span(from, from + 1, &fold), 0);
     }
 }

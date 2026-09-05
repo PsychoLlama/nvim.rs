@@ -54,8 +54,8 @@ use crate::semsg;
 use crate::strings::xstrnsave;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, NUL, OptInt, OptionSetFlags, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
-    lpos_T, pos_T, proftime_T, regmmatch_T, size_t,
+    CmdModFlags, ColNr, LineNr, NUL, OptInt, OptionSetFlags, ProfTime, exarg_T, handle_T, int64_t,
+    lpos_T, pos_T, regmmatch_T, size_t,
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
@@ -70,9 +70,9 @@ pub(super) struct SubArgs {
     /// The command's range, which the `'[`/`']` marks and the preview's
     /// "is this more than the current line" test are all it wanted the
     /// command block for.
-    pub range: (linenr_T, linenr_T),
+    pub range: (LineNr, LineNr),
     /// When the substitute takes longer than this the preview gives up.
-    pub timeout: proftime_T,
+    pub timeout: ProfTime,
     /// The namespace to draw `'inccommand'` highlights in; `<= 0` means this
     /// is a real substitute, not a preview.
     pub cmdpreview_ns: c_int,
@@ -86,7 +86,7 @@ pub(super) struct SubArgs {
     /// column.
     pub endcolumn: bool,
     pub old_cursor: pos_T,
-    pub old_line_count: linenr_T,
+    pub old_line_count: LineNr,
     /// `sub_nsubs` before this command, so that a `:global` can tell whether
     /// *this* `:s` did anything.
     pub start_nsubs: c_int,
@@ -105,10 +105,10 @@ pub(super) struct Sub {
     // --- the range ---
     /// The line where the start of the match was found.  Can be below the
     /// line searched, when there is a `\n` before a `\zs` in the pattern.
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     /// Last line of the range.  The `l` answer and a `\r` in the replacement
     /// both move it.
-    pub line2: linenr_T,
+    pub line2: LineNr,
     pub got_quit: bool,
     pub got_match: bool,
     /// Whether undo has been saved for this command yet -- extmarks need it
@@ -116,8 +116,8 @@ pub(super) struct Sub {
     pub did_save: bool,
     /// First changed line, and the line below the last changed one *after*
     /// the change.  Zero until something changes.
-    pub first_line: linenr_T,
-    pub last_line: linenr_T,
+    pub first_line: LineNr,
+    pub last_line: LineNr,
     pub preview_lines: PreviewLines,
 
     // --- the line being substituted ---
@@ -128,15 +128,15 @@ pub(super) struct Sub {
     pub sub_firstline: *mut c_char,
     /// The line in the buffer to look for a match in.  Differs from `lnum`
     /// when the pattern or the replacement contains line breaks.
-    pub sub_firstlnum: linenr_T,
+    pub sub_firstlnum: LineNr,
     /// Column of the old text from which text still has to be copied over.
-    pub copycol: colnr_T,
+    pub copycol: ColNr,
     /// Column of the old text to look for the next match at: just after the
     /// previous match, or one further.
-    pub matchcol: colnr_T,
+    pub matchcol: ColNr,
     /// Column just after the previous match, if any.  Equal to `matchcol`
     /// except for the first match and after skipping an empty one.
-    pub prev_matchcol: colnr_T,
+    pub prev_matchcol: ColNr,
     /// The new text, all that has been produced so far.
     pub new_start: *mut c_char,
     /// Bytes allocated at `new_start`.
@@ -145,12 +145,12 @@ pub(super) struct Sub {
     pub sublen: c_int,
     pub did_sub: bool,
     /// Number of lines matched below `lnum`, waiting to be deleted.
-    pub nmatch_tl: linenr_T,
+    pub nmatch_tl: LineNr,
     /// Try again after joining lines.
     pub do_again: bool,
     pub skip_match: bool,
     /// Where the substitutions on this line started.
-    pub lnum_start: linenr_T,
+    pub lnum_start: LineNr,
     /// Per-match data, sent to `extmark_splice` in a batch once the line has
     /// been replaced.
     pub line_matches: Vec<LineData>,
@@ -189,7 +189,7 @@ impl Sub {
     /// Main thread; the buffer must be live.
     pub(super) unsafe fn adjust_sub_firstlnum(&mut self) {
         if self.nmatch > 1 as c_int {
-            self.sub_firstlnum += self.nmatch as linenr_T - 1 as linenr_T;
+            self.sub_firstlnum += self.nmatch as LineNr - 1 as LineNr;
             // SAFETY: caller's contract.
             unsafe { self.clear_firstline() };
             unsafe { self.load_firstline() };
@@ -206,7 +206,7 @@ impl Sub {
             // SAFETY: caller's contract.
             unsafe { self.clear_firstline() };
             self.sub_firstline = unsafe { xstrdup(c"".as_ptr()) };
-            self.copycol = 0 as colnr_T;
+            self.copycol = 0 as ColNr;
         }
     }
 }
@@ -226,7 +226,7 @@ pub(super) unsafe fn is_expr_sub(sub: *const c_char) -> bool {
 ///
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program.
-pub(super) unsafe fn regexec_at(regmatch: *mut regmmatch_T, lnum: linenr_T, col: colnr_T) -> c_int {
+pub(super) unsafe fn regexec_at(regmatch: *mut regmmatch_T, lnum: LineNr, col: ColNr) -> c_int {
     // SAFETY: caller's contract; the current window and buffer are live.
     unsafe {
         vim_regexec_multi(
@@ -244,11 +244,11 @@ pub(super) unsafe fn regexec_at(regmatch: *mut regmmatch_T, lnum: linenr_T, col:
 /// Record a match for the `'inccommand'` preview, and how many lines it adds
 /// to what the preview window will have to show.
 fn push_preview(preview_lines: &mut PreviewLines, current_match: SubResult) {
-    let match_lines = current_match.end.lnum - current_match.start.lnum + 1 as linenr_T;
+    let match_lines = current_match.end.lnum - current_match.start.lnum + 1 as LineNr;
     let continues =
         preview_lines.subresults.last().map(|last| last.end.lnum) == Some(current_match.start.lnum);
     preview_lines.lines_needed += if continues {
-        match_lines - 1 as linenr_T
+        match_lines - 1 as LineNr
     } else {
         match_lines
     };
@@ -268,7 +268,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
     //    match.  This reproduces the strange vi behaviour, and also catches
     //    endless loops.
     if st.matchcol == st.prev_matchcol
-        && st.regmatch.endpos[0].lnum == 0 as linenr_T
+        && st.regmatch.endpos[0].lnum == 0 as LineNr
         && st.matchcol == st.regmatch.endpos[0].col
     {
         // SAFETY: `matchcol` is a column of the copied line.
@@ -302,7 +302,7 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
         // on the next line.  Avoids that ":s/\nB\@=//gc" gets stuck.
         if st.nmatch > 1 as c_int {
             // SAFETY: the copied line is NUL-terminated.
-            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as colnr_T;
+            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as ColNr;
             st.nmatch = 1 as c_int;
             st.skip_match = true;
         }
@@ -331,9 +331,9 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
 
     // When the match included the "$" of the last line it may go beyond the
     // last line of the buffer.
-    if st.nmatch as linenr_T > line_count - st.sub_firstlnum + 1 as linenr_T {
-        st.nmatch = (line_count - st.sub_firstlnum + 1 as linenr_T) as c_int;
-        current_match.end.lnum = st.sub_firstlnum + st.nmatch as linenr_T;
+    if st.nmatch as LineNr > line_count - st.sub_firstlnum + 1 as LineNr {
+        st.nmatch = (line_count - st.sub_firstlnum + 1 as LineNr) as c_int;
+        current_match.end.lnum = st.sub_firstlnum + st.nmatch as LineNr;
         st.skip_match = true;
         // Safety check.
         if st.nmatch < 0 as c_int {
@@ -346,13 +346,13 @@ unsafe fn match_one(st: &mut Sub, args: &SubArgs, current_match: &mut SubResult)
     // intentional for now.
     if args.cmdpreview_ns > 0 as c_int && !args.has_second_delim {
         current_match.start.col = st.regmatch.startpos[0].col;
-        if current_match.end.lnum == 0 as linenr_T {
-            current_match.end.lnum = st.sub_firstlnum + st.nmatch as linenr_T - 1 as linenr_T;
+        if current_match.end.lnum == 0 as LineNr {
+            current_match.end.lnum = st.sub_firstlnum + st.nmatch as LineNr - 1 as LineNr;
         }
         current_match.end.col = st.regmatch.endpos[0].col;
         // SAFETY: the buffer is live.
         unsafe { st.adjust_sub_firstlnum() };
-        st.lnum += st.nmatch as linenr_T - 1 as linenr_T;
+        st.lnum += st.nmatch as LineNr - 1 as LineNr;
         return;
     }
 
@@ -399,19 +399,19 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
     loop {
         let mut current_match = SubResult {
             start: lpos_T {
-                lnum: 0 as linenr_T,
-                col: 0 as colnr_T,
+                lnum: 0 as LineNr,
+                col: 0 as ColNr,
             },
             end: lpos_T {
-                lnum: 0 as linenr_T,
-                col: 0 as colnr_T,
+                lnum: 0 as LineNr,
+                col: 0 as ColNr,
             },
-            pre_match: 0 as linenr_T,
+            pre_match: 0 as LineNr,
         };
 
         // Advance "lnum" to the line where the match starts.  The match does
         // not start in the first line when there is a line break before \zs.
-        if st.regmatch.startpos[0].lnum > 0 as linenr_T {
+        if st.regmatch.startpos[0].lnum > 0 as LineNr {
             current_match.pre_match = st.lnum;
             st.lnum += st.regmatch.startpos[0].lnum;
             st.sub_firstlnum += st.regmatch.startpos[0].lnum;
@@ -457,12 +457,12 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
         // match, otherwise "\@<=" won't work; and when the match starts below
         // where we started searching we also need to replace the line first
         // (using \zs after \n).
-        let no_more = if lastone || st.nmatch_tl > 0 as linenr_T {
+        let no_more = if lastone || st.nmatch_tl > 0 as LineNr {
             true
         } else {
             // SAFETY: the program is compiled.
             st.nmatch = unsafe { regexec_at(&raw mut st.regmatch, st.sub_firstlnum, st.matchcol) };
-            st.nmatch == 0 as c_int || st.regmatch.startpos[0].lnum > 0 as linenr_T
+            st.nmatch == 0 as c_int || st.regmatch.startpos[0].lnum > 0 as LineNr
         };
 
         if no_more {
@@ -503,17 +503,17 @@ unsafe fn match_loop(st: &mut Sub, args: &SubArgs) {
 /// # Safety
 /// Main thread; `st.lnum` must be a line of the current buffer.
 unsafe fn substitute_line(st: &mut Sub, args: &SubArgs) {
-    st.prev_matchcol = MAXCOL as colnr_T;
+    st.prev_matchcol = MAXCOL as ColNr;
     st.new_start = ptr::null_mut();
     st.new_start_len = 0 as c_int;
     st.did_sub = false;
-    st.nmatch_tl = 0 as linenr_T;
+    st.nmatch_tl = 0 as LineNr;
     st.skip_match = false;
-    st.lnum_start = 0 as linenr_T;
+    st.lnum_start = 0 as LineNr;
     st.line_matches.clear();
     st.sub_firstlnum = st.lnum;
-    st.copycol = 0 as colnr_T;
-    st.matchcol = 0 as colnr_T;
+    st.copycol = 0 as ColNr;
+    st.matchcol = 0 as ColNr;
 
     // At the first match, remember the current cursor position.
     if !st.got_match {
@@ -548,14 +548,14 @@ unsafe fn substitute_range(st: &mut Sub, args: &SubArgs) {
             break;
         }
         if args.cmdpreview_ns > 0 as c_int
-            && st.preview_lines.lines_needed > p_cwh.get() as linenr_T
+            && st.preview_lines.lines_needed > p_cwh.get() as LineNr
             // SAFETY: the current window is live.
             && st.lnum > cur_win().w_botline
         {
             break;
         }
         // SAFETY: the program is compiled.
-        st.nmatch = unsafe { regexec_at(&raw mut st.regmatch, st.lnum, 0 as colnr_T) };
+        st.nmatch = unsafe { regexec_at(&raw mut st.regmatch, st.lnum, 0 as ColNr) };
         if st.nmatch != 0 {
             // SAFETY: `lnum` is a line of the buffer.
             unsafe { substitute_line(st, args) };
@@ -578,7 +578,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
     // SAFETY: the current buffer is live.
     cur_buf().deleted_bytes2 = 0 as size_t;
 
-    if st.first_line != 0 as linenr_T {
+    if st.first_line != 0 as LineNr {
         // Subtract the number of added lines from "last_line" to get the line
         // number before the change (the same as adding the number of deleted
         // lines).
@@ -586,7 +586,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         changed_lines(
             cur_buf(),
             st.first_line,
-            0 as colnr_T,
+            0 as ColNr,
             st.last_line - added,
             added,
             false,
@@ -612,7 +612,7 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
             // SAFETY: the current buffer is live.
             cur_buf().b_op_start.lnum = args.range.0;
             cur_buf().b_op_end.lnum = st.line2;
-            cur_buf().b_op_end.col = 0 as colnr_T;
+            cur_buf().b_op_end.col = 0 as ColNr;
             cur_buf().b_op_start.col = cur_buf().b_op_end.col;
         }
 
@@ -734,13 +734,13 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
 /// Main thread; `eap` must be the live Ex-command argument.
 pub(crate) unsafe fn do_sub(
     eap: &mut exarg_T,
-    timeout: proftime_T,
+    timeout: ProfTime,
     cmdpreview_ns: c_int,
     cmdpreview_bufnr: handle_T,
 ) -> c_int {
     if global_busy.get() == 0 {
         sub_nsubs.set(0 as c_int);
-        sub_nlines.set(0 as linenr_T);
+        sub_nlines.set(0 as LineNr);
     }
     let start_nsubs = sub_nsubs.get();
     let keeppatterns = cmdmod_has(CmdModFlags::KEEPPATTERNS);
@@ -784,23 +784,23 @@ pub(crate) unsafe fn do_sub(
         got_quit: false,
         got_match: false,
         did_save: false,
-        first_line: 0 as linenr_T,
-        last_line: 0 as linenr_T,
+        first_line: 0 as LineNr,
+        last_line: 0 as LineNr,
         preview_lines: PreviewLines::default(),
         nmatch: 0 as c_int,
         sub_firstline: ptr::null_mut(),
-        sub_firstlnum: 0 as linenr_T,
-        copycol: 0 as colnr_T,
-        matchcol: 0 as colnr_T,
-        prev_matchcol: 0 as colnr_T,
+        sub_firstlnum: 0 as LineNr,
+        copycol: 0 as ColNr,
+        matchcol: 0 as ColNr,
+        prev_matchcol: 0 as ColNr,
         new_start: ptr::null_mut(),
         new_start_len: 0 as c_int,
         sublen: 0 as c_int,
         did_sub: false,
-        nmatch_tl: 0 as linenr_T,
+        nmatch_tl: 0 as LineNr,
         do_again: false,
         skip_match: false,
-        lnum_start: 0 as linenr_T,
+        lnum_start: 0 as LineNr,
         line_matches: Vec::new(),
     };
 

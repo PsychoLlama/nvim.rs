@@ -37,7 +37,7 @@ use crate::semsg;
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
 use crate::types::{
-    AdditionalData, NUL, SubReplacementString, exarg_T, linenr_T, regmmatch_T, size_t,
+    AdditionalData, LineNr, NUL, SubReplacementString, exarg_T, regmmatch_T, size_t,
 };
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -248,7 +248,7 @@ unsafe fn read_count(eap: &mut exarg_T, cmd: &mut *mut c_char) -> bool {
         return false;
     }
     eap.line1 = eap.line2;
-    eap.line2 += i as linenr_T - 1 as linenr_T;
+    eap.line2 += i as LineNr - 1 as LineNr;
     eap.line2 = eap.line2.min(cur_buf().b_ml.ml_line_count);
     true
 }

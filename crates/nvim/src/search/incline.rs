@@ -126,7 +126,7 @@ pub(crate) unsafe fn match_on_line(
     }
 
     if pats.pat.regprog.is_null()
-        || !unsafe { vim_regexec(&raw mut pats.pat, line, p.offset_from(line) as colnr_T) }
+        || !unsafe { vim_regexec(&raw mut pats.pat, line, p.offset_from(line) as ColNr) }
     {
         return None;
     }
@@ -151,7 +151,7 @@ pub(crate) unsafe fn show_pat_in_path(
     did_show: bool,
     action: c_int,
     fp: *mut FILE,
-    lnum: *mut linenr_T,
+    lnum: *mut LineNr,
     count: c_int,
 ) {
     // The match-number prefix; upstream shares `IObuff`, which the message

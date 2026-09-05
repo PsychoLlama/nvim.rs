@@ -31,9 +31,9 @@ use crate::os::cshim::gettext;
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, buf_T, colnr_T, dict_T, kListLenMayKnow, kListLenUnknown, linenr_T, list_T,
-    listitem_T, regmatch_T, regprog_T, typval_T, typval_vval_union, varnumber_T,
+    Callback, ColNr, EvalFuncData, LineNr, VAR_BOOL, VAR_DICT, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, buf_T, dict_T, kListLenMayKnow, kListLenUnknown, list_T, listitem_T,
+    regmatch_T, regprog_T, typval_T, typval_vval_union, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -151,7 +151,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
     let mut len: i64 = 0;
     let mut start: i64;
     let mut nth: i64 = 1;
-    let mut startcol: colnr_T = 0;
+    let mut startcol: ColNr = 0;
     let mut idx: c_int = 0;
     let mut matched = false;
     // Owns whatever the List walk echoed most recently.
@@ -203,7 +203,7 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
                 // start of the string; without one the string itself
                 // moves forward.
                 if args.has(3) {
-                    startcol = start as colnr_T;
+                    startcol = start as ColNr;
                 } else {
                     str = unsafe { str.offset(start as isize) };
                     len -= start;
@@ -256,8 +256,8 @@ unsafe fn find_some_match(args: Args<'_>, rettv: &mut typval_T, kind: SomeMatchT
             // match started on. A match that did not advance, or one
             // past the end, ends the search.
             let hit = regmatch.startp[0];
-            startcol = unsafe { hit.add(utfc_ptr2len(hit) as usize).offset_from(str) } as colnr_T;
-            if startcol > len as colnr_T || unsafe { str.offset(startcol as isize) } <= hit {
+            startcol = unsafe { hit.add(utfc_ptr2len(hit) as usize).offset_from(str) } as ColNr;
+            if startcol > len as ColNr || unsafe { str.offset(startcol as isize) } <= hit {
                 matched = false;
                 break;
             }
@@ -352,7 +352,7 @@ unsafe fn get_matches_in_str(
     // SAFETY: the caller's obligation; every pointer written below comes
     // back from the matcher and points into `str`.
     let len = unsafe { cstr::bytes_at(str) }.len();
-    let mut startidx: colnr_T = 0;
+    let mut startidx: ColNr = 0;
     loop {
         if !unsafe { vim_regexec_nl(rmp, str, startidx) } {
             return;
@@ -367,7 +367,7 @@ unsafe fn get_matches_in_str(
             let _ = unsafe { tv_dict_add_nr(d, c"idx".as_ptr(), 3, idx as varnumber_T) };
         }
         let (start, end) = unsafe { ((*rmp).startp[0], (*rmp).endp[0]) };
-        let byteidx = unsafe { start.offset_from(str) } as colnr_T as varnumber_T;
+        let byteidx = unsafe { start.offset_from(str) } as ColNr as varnumber_T;
         let _ = unsafe { tv_dict_add_nr(d, c"byteidx".as_ptr(), 7, byteidx) };
         let matchlen = unsafe { end.offset_from(start) } as c_int;
         let _ = unsafe { tv_dict_add_str_len(d, c"text".as_ptr(), 4, start, matchlen) };
@@ -386,8 +386,8 @@ unsafe fn get_matches_in_str(
         }
         // Resume past this match; stop at the end of the string, and
         // stop on a match that did not advance.
-        startidx = unsafe { (*rmp).endp[0].offset_from(str) } as colnr_T;
-        if startidx >= len as colnr_T
+        startidx = unsafe { (*rmp).endp[0].offset_from(str) } as ColNr;
+        if startidx >= len as ColNr
             || unsafe { str.offset(startidx as isize) }
                 <= unsafe { (*rmp).startp[0] } as *const c_char
         {
@@ -433,7 +433,7 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     let pat = arg_string(&mut patbuf, args.get(1));
 
     let did_emsg_before = did_emsg.get();
-    let mut slnum: linenr_T = unsafe { tv_get_lnum_buf(args.ptr(2), buf) };
+    let mut slnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(2), buf) };
     if did_emsg.get() > did_emsg_before {
         return;
     }
@@ -442,7 +442,7 @@ pub unsafe fn f_matchbufline(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
         semsg!("E475: Invalid value for argument {arg0}");
         return;
     }
-    let mut elnum: linenr_T = unsafe { tv_get_lnum_buf(args.ptr(3), buf) };
+    let mut elnum: LineNr = unsafe { tv_get_lnum_buf(args.ptr(3), buf) };
     if did_emsg.get() > did_emsg_before {
         return;
     }

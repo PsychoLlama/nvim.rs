@@ -592,7 +592,7 @@ pub unsafe fn buf_reload(buf: Buf, orig_mode: c_int, reload_options: bool) {
         cur_buf().b_flags |= BufFlags::CHECK_RO; // check for RO again
         cur_buf().b_keep_filetype = true; // don't detect 'filetype'
         let (ffname, fname) = (buf.b_ffname, buf.b_fname);
-        let last = MAXLNUM as linenr_T;
+        let last = MAXLNUM as LineNr;
         let quiet = shortmess(ShmFlag::FILEINFO);
         let at = &raw mut ea;
         // SAFETY: a live buffer's own names, and `ea` is a local.
@@ -682,7 +682,7 @@ pub unsafe fn buf_store_file_info(mut buf: Buf, file_info: *mut FileInfo) {
 /// Adjust the line with a missing end-of-line, used for the next write.
 ///
 /// Needed by `do_filter()`, where the input lines for the filter are deleted.
-pub unsafe fn write_lnum_adjust(offset: linenr_T) {
+pub unsafe fn write_lnum_adjust(offset: LineNr) {
     if cur_buf().b_no_eol_lnum != 0 {
         // Only if there is a missing end-of-line.
         cur_buf().b_no_eol_lnum += offset;

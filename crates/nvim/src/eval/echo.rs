@@ -36,8 +36,8 @@ use crate::os::cshim::gettext;
 use crate::runtime::{get_scriptname, script_is_lua};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING, VAR_UNKNOWN,
-    VarLock, evalarg_T, exarg_T, funccal_entry_T, linenr_T, ptrdiff_t, sctx_T, size_t, typval_T,
+    LineNr, NUL, VAR_FLAVOUR_DEFAULT, VAR_FLAVOUR_SESSION, VAR_FLAVOUR_SHADA, VAR_STRING,
+    VAR_UNKNOWN, VarLock, evalarg_T, exarg_T, funccal_entry_T, ptrdiff_t, sctx_T, size_t, typval_T,
     typval_vval_union, var_flavour_T,
 };
 use crate::ui::ui_has;
@@ -321,7 +321,7 @@ pub unsafe fn last_set_msg(script_ctx: sctx_T) {
     unsafe { msg_puts(gettext(c"\n\tLast set from ").as_ptr()) };
     // SAFETY: the `CString` `p` outlives the call.
     unsafe { msg_puts(p.as_ptr()) };
-    if script_ctx.sc_lnum > 0 as linenr_T {
+    if script_ctx.sc_lnum > 0 as LineNr {
         // SAFETY: `line_msg` is a shared NUL-terminated message.
         unsafe { msg_puts(gettext(line_msg).as_ptr()) };
         // SAFETY: the number is rendered into the message area.

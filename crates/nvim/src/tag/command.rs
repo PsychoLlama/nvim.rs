@@ -88,7 +88,7 @@ const DT_LAST: c_uint = 6;
 /// The view the tag stack starts a jump from: no remembered scroll
 /// position.
 const NO_VIEW: fmarkv_T = fmarkv_T {
-    topline_offset: MAXLNUM as linenr_T,
+    topline_offset: MAXLNUM as LineNr,
     skipcol: 0,
 };
 

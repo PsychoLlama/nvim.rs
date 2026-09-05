@@ -379,7 +379,7 @@ pub unsafe fn op_yank_reg(oap: *mut oparg_T, message: bool, mut reg: *mut yankre
 /// `buf` must hold at least `buf_len` bytes, and `buf_len` be more than 1.
 pub unsafe fn format_reg_type(
     reg_type: MotionType,
-    reg_width: colnr_T,
+    reg_width: ColNr,
     buf: *mut c_char,
     buf_len: size_t,
 ) {

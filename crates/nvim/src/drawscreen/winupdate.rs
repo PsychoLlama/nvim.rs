@@ -55,9 +55,9 @@ pub(crate) struct Regions {
     /// has to be redrawn (a multi-line pattern makes a change reach upwards).
     pub top_to_mod: bool,
     /// First changed buffer line; 0 when nothing changed.
-    pub mod_top: linenr_T,
+    pub mod_top: LineNr,
     /// First buffer line after the change; 0 when nothing changed.
-    pub mod_bot: linenr_T,
+    pub mod_bot: LineNr,
     /// The redraw type after this half adjusted it -- it is re-read from the
     /// window after `validate_virtcol`, raised when the number column changed
     /// width, and lowered once `UPD_REDRAW_TOP` has been turned into a top area.
@@ -428,7 +428,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
     // The line below the last valid entry above `mod_top`, and the first
     // valid entry at or below `mod_bot`.
     let mut lnumt = win.w_topline;
-    let mut lnumb = MAXLNUM as linenr_T;
+    let mut lnumb = MAXLNUM as LineNr;
     for i in 0..win.w_lines_valid {
         let wl = unsafe { win.w_lines.add(i as usize) };
         if !unsafe { (*wl).wl_valid } {
@@ -437,7 +437,7 @@ unsafe fn widen_over_folds(win: Win, rg: &mut Regions) {
         if unsafe { (*wl).wl_lastlnum } < rg.mod_top {
             lnumt = unsafe { (*wl).wl_lastlnum } + 1;
         }
-        if lnumb == MAXLNUM as linenr_T && unsafe { (*wl).wl_lnum } >= rg.mod_bot {
+        if lnumb == MAXLNUM as LineNr && unsafe { (*wl).wl_lnum } >= rg.mod_bot {
             lnumb = unsafe { (*wl).wl_lnum };
             // A fold column may need updating on the next line as well
             // ("J" just above an open fold).
@@ -753,7 +753,7 @@ unsafe fn visual_line_range(
     mut win: Win,
     sel: VisualSelection,
     redr_type: c_int,
-) -> (linenr_T, linenr_T) {
+) -> (LineNr, LineNr) {
     // SAFETY: the caller's window.
     let cursor = unsafe { (*curwin.get()).w_cursor.lnum };
     let anchor = sel.anchor.lnum;
@@ -807,7 +807,7 @@ unsafe fn visual_line_range(
 ///
 /// # Safety
 /// `wp` must be a live window and `sel` a blockwise selection in its buffer.
-unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (colnr_T, colnr_T) {
+unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr) {
     // A copy of the anchor: `getvcols` only reads it.
     let mut anchor = sel.anchor;
     // SAFETY: the caller's window.
@@ -832,14 +832,14 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (colnr_T, coln
     toc += 1;
     unsafe { (*curwin.get()).w_onebuf_opt.wo_ve_flags = save_ve_flags };
 
-    if unsafe { (*curwin.get()).w_curswant } != MAXCOL as colnr_T {
+    if unsafe { (*curwin.get()).w_curswant } != MAXCOL as ColNr {
         return (fromc, toc);
     }
 
     // `$` in blockwise mode: highlight to the end of every line, unless
     // 'virtualedit' has "block", in which case it stops at the longest one.
     if get_ve_flags(cur_win()) & kOptVeFlagBlock == 0 {
-        return (fromc, MAXCOL as colnr_T);
+        return (fromc, MAXCOL as ColNr);
     }
 
     let cursor_lnum = unsafe { (*curwin.get()).w_cursor.lnum };
@@ -923,12 +923,7 @@ unsafe fn send_win_extmarks(wp: Win) {
 ///
 /// # Safety
 /// `wp` must be the window that was just drawn and `buf` its buffer.
-unsafe fn finish_botline(
-    mut wp: Win,
-    buf: *mut buf_T,
-    old_botline: linenr_T,
-    nrwidth_before: c_int,
-) {
+unsafe fn finish_botline(mut wp: Win, buf: *mut buf_T, old_botline: LineNr, nrwidth_before: c_int) {
     // Recursion guard: the second pass must not start a third.
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
 

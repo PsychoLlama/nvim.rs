@@ -23,7 +23,7 @@ fn redraw_status(mut wp: Win, opts: Redraw, flush: bool) -> bool {
     // SAFETY: a window's `'statuscolumn'` is a live NUL-terminated string.
     let has_statuscolumn = unsafe { *wp.w_onebuf_opt.wo_stc } as ::core::ffi::c_int != NUL;
     if opts.statuscolumn && has_statuscolumn {
-        wp.w_nrwidth_line_count = 0 as linenr_T;
+        wp.w_nrwidth_line_count = 0 as LineNr;
         changed_window_setting(wp);
     }
     let old_row_offset = wp.w_grid.row_offset;
@@ -131,7 +131,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
             end_raw.max(begin).min(line_count)
         };
         if begin < end {
-            let (first, last) = (1 + begin as linenr_T, end as linenr_T);
+            let (first, last) = (1 + begin as LineNr, end as LineNr);
             // SAFETY: as above.
             unsafe { redraw_buf_range_later(rbuf, first, last) };
         }

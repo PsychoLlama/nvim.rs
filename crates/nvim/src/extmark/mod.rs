@@ -56,9 +56,9 @@ use crate::memline::ml_find_line_or_offset;
 use crate::memory::xrealloc;
 use crate::types::buffer::ExtmarkNs;
 use crate::types::{
-    DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject, MTKey,
-    MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType, bcount_t, buf_T, colnr_T,
-    extmark_undo_vec_t, int32_t, linenr_T, size_t, u_header_T, uint16_t, uint32_t, uint64_t,
+    ColNr, DecorInline, ExtmarkInfoArray, ExtmarkOp, ExtmarkSplice, ExtmarkType, ExtmarkUndoObject,
+    LineNr, MTKey, MTPair, MTPos, MarkTree, MarkTreeIter, UndoObjectType, bcount_t, buf_T,
+    extmark_undo_vec_t, int32_t, size_t, u_header_T, uint16_t, uint32_t, uint64_t,
 };
 use crate::undo::u_force_get_undo_header;
 use crate::winlayer::Buf;
@@ -199,9 +199,9 @@ fn tree_move_region(
     tree: &mut MarkTree,
     start: MTPos,
     extent_row: c_int,
-    extent_col: colnr_T,
+    extent_col: ColNr,
     new_row: c_int,
-    new_col: colnr_T,
+    new_col: ColNr,
 ) {
     marktree_move_region(
         tree, start.row, start.col, extent_row, extent_col, new_row, new_col,
@@ -316,7 +316,7 @@ fn ns_destroy(map: &mut ExtmarkNs) {
 
 /// `ml_find_line_or_offset(buf, lnum, NULL, true)`: the byte offset of a
 /// line, counted with the file format's line endings ignored.
-fn line_offset(buf: Buf, lnum: linenr_T) -> c_int {
+fn line_offset(buf: Buf, lnum: LineNr) -> c_int {
     // SAFETY: a live buffer; the `offp` out-parameter is NULL, which the
     // callee tests for.
     unsafe { ml_find_line_or_offset(buf.raw(), lnum, ptr::null_mut(), true) }
@@ -346,7 +346,7 @@ fn splice_pending() -> bool {
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Extent {
     pub row: c_int,
-    pub col: colnr_T,
+    pub col: ColNr,
     pub byte: bcount_t,
 }
 
@@ -430,10 +430,10 @@ fn last_splice<'a>(uvp: *mut extmark_undo_vec_t) -> Option<&'a mut ExtmarkSplice
 /// Adjust extmark rows for inserted or deleted rows; columns stay fixed.
 pub unsafe fn extmark_adjust(
     buf: *mut buf_T,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
     undo: ExtmarkOp,
 ) {
     // SAFETY: the caller's promise -- a live buffer.
@@ -449,12 +449,12 @@ pub unsafe fn extmark_adjust(
 pub unsafe fn extmark_splice(
     buf: *mut buf_T,
     start_row: c_int,
-    start_col: colnr_T,
+    start_col: ColNr,
     old_row: c_int,
-    old_col: colnr_T,
+    old_col: ColNr,
     old_byte: bcount_t,
     new_row: c_int,
-    new_col: colnr_T,
+    new_col: ColNr,
     new_byte: bcount_t,
     undo: ExtmarkOp,
 ) {
@@ -478,9 +478,9 @@ pub unsafe fn extmark_splice(
 pub unsafe fn extmark_splice_cols(
     buf: *mut buf_T,
     start_row: c_int,
-    start_col: colnr_T,
-    old_col: colnr_T,
-    new_col: colnr_T,
+    start_col: ColNr,
+    old_col: ColNr,
+    new_col: ColNr,
     undo: ExtmarkOp,
 ) {
     let old = Extent {
@@ -502,13 +502,13 @@ pub unsafe fn extmark_splice_cols(
 pub unsafe fn extmark_move_region(
     buf: *mut buf_T,
     start_row: c_int,
-    start_col: colnr_T,
+    start_col: ColNr,
     start_byte: bcount_t,
     extent_row: c_int,
-    extent_col: colnr_T,
+    extent_col: ColNr,
     extent_byte: bcount_t,
     new_row: c_int,
-    new_col: colnr_T,
+    new_col: ColNr,
     new_byte: bcount_t,
     undo: ExtmarkOp,
 ) {

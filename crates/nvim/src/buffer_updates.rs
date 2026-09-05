@@ -37,8 +37,8 @@ use crate::memory::{ARENA_EMPTY, arena_finish, arena_mem_free, xfree, xrealloc};
 use crate::msgpack_rpc::channel::rpc_send_event;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Arena, Array, BufUpdateCallbacks, Integer, LuaRef, LuaRetMode, Object, bcount_t, buf_T,
-    colnr_T, int64_t, linenr_T, size_t, uint64_t,
+    Arena, Array, BufUpdateCallbacks, ColNr, Integer, LineNr, LuaRef, LuaRetMode, Object, bcount_t,
+    buf_T, int64_t, size_t, uint64_t,
 };
 use crate::winlayer::{Buf, Win};
 
@@ -271,7 +271,7 @@ fn flush_deleted_bytes(buf: Buf) -> Deleted {
 
 /// `linedata` for `nvim_buf_lines_event`: `n` lines from `first`, allocated
 /// in `arena`.
-fn collect_lines(buf: Buf, n: size_t, first: linenr_T, arena: &mut Arena) -> Array {
+fn collect_lines(buf: Buf, n: size_t, first: LineNr, arena: &mut Arena) -> Array {
     let ar = &raw mut *arena;
     let mut linedata = arena_array(ar, n);
     let (b, out, none) = (buf.raw(), &raw mut linedata, ptr::null_mut());
@@ -520,7 +520,7 @@ fn unload(mut buf: Buf, can_reload: bool) {
 /// `buf` must be a live buffer.
 pub unsafe fn buf_updates_send_changes(
     buf: *mut buf_T,
-    firstline: linenr_T,
+    firstline: LineNr,
     num_added: int64_t,
     num_removed: int64_t,
 ) {
@@ -529,7 +529,7 @@ pub unsafe fn buf_updates_send_changes(
     send_changes(buf, firstline, num_added, num_removed);
 }
 
-fn send_changes(mut buf: Buf, firstline: linenr_T, num_added: int64_t, num_removed: int64_t) {
+fn send_changes(mut buf: Buf, firstline: LineNr, num_added: int64_t, num_removed: int64_t) {
     let deleted = flush_deleted_bytes(buf);
 
     if !active(buf) {
@@ -638,13 +638,13 @@ fn tick_obj(buf: Buf, send_tick: bool) -> Object {
 pub unsafe fn buf_updates_send_splice(
     buf: *mut buf_T,
     start_row: c_int,
-    start_col: colnr_T,
+    start_col: ColNr,
     start_byte: bcount_t,
     old_row: c_int,
-    old_col: colnr_T,
+    old_col: ColNr,
     old_byte: bcount_t,
     new_row: c_int,
-    new_col: colnr_T,
+    new_col: ColNr,
     new_byte: bcount_t,
 ) {
     // SAFETY: the caller's promise.
@@ -661,12 +661,12 @@ pub unsafe fn buf_updates_send_splice(
 #[derive(Clone, Copy)]
 struct Corner {
     row: c_int,
-    col: colnr_T,
+    col: ColNr,
     byte: bcount_t,
 }
 
 impl Corner {
-    fn new(row: c_int, col: colnr_T, byte: bcount_t) -> Self {
+    fn new(row: c_int, col: ColNr, byte: bcount_t) -> Self {
         Self { row, col, byte }
     }
 }

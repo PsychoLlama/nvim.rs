@@ -21,7 +21,7 @@ use crate::types::{IOSIZE, NUL, ShmFlag};
 #[derive(Default)]
 pub(crate) struct Written {
     /// One past the last line written, so `lnum - start` is the count.
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     /// File bytes written.
     pub nchars: c_int,
     /// The last line went out without a trailing end-of-line.
@@ -35,7 +35,7 @@ pub(crate) struct WriteNotes {
     /// Some character could not be represented in `'fileencoding'`.
     pub conv_error: bool,
     /// The line the first such character was on, or zero.
-    pub conv_error_lnum: linenr_T,
+    pub conv_error_lnum: LineNr,
     /// Conversion was wanted but `!` said to write the bytes as they are.
     pub notconverted: bool,
     /// Conversion happened.
@@ -65,7 +65,7 @@ unsafe fn flush_full(writer: &mut ByteWriter, nchars: &mut c_int) -> bool {
 /// conversion works.
 pub(crate) unsafe fn write_lines(
     buf: *mut buf_T,
-    range: (linenr_T, linenr_T),
+    range: (LineNr, LineNr),
     writer: &mut ByteWriter,
     fileformat: c_int,
     write_bin: bool,
@@ -191,7 +191,7 @@ pub(crate) unsafe fn report_written(
     // The report. Upstream assembles it in `IObuff`, which `msg_progress`
     // and `set_keep_msg` write again.
     let mut report = [0 as c_char; IOSIZE as usize];
-    let (lnum, nchars) = (written.lnum, written.nchars as off_T);
+    let (lnum, nchars) = (written.lnum, written.nchars as FileOffset);
     let iobuff = report.as_mut_ptr();
     unsafe { add_quoted_fname(iobuff, IOSIZE as size_t, Buf::new(buf), fname) };
     let note = |text: &'static CStr| {

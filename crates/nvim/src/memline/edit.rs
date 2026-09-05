@@ -22,8 +22,8 @@ use crate::types::Failed;
 /// itself splits, *it* becomes the left/right pair its own parent must
 /// describe.
 struct SplitBlocks {
-    bnum_left: blocknr_T,
-    bnum_right: blocknr_T,
+    bnum_left: BlockNr,
+    bnum_right: BlockNr,
     line_count_left: c_int,
     line_count_right: c_int,
     page_count_left: c_int,
@@ -31,8 +31,8 @@ struct SplitBlocks {
     /// `pe_old_lnum`: which line the block held first when the file was read,
     /// which is all `:recover` has to order blocks by. Zero means "leave the
     /// entry's alone".
-    lnum_left: linenr_T,
-    lnum_right: linenr_T,
+    lnum_left: LineNr,
+    lnum_right: LineNr,
     /// Lines added to the old block that the pointer blocks above it have not
     /// been told about yet.
     lineadd: c_int,
@@ -43,7 +43,7 @@ struct NewLine {
     /// `len` bytes of text, the last of which is the NUL standing for the
     /// line's newline.
     text: *mut c_char,
-    len: colnr_T,
+    len: ColNr,
     /// [`ML_APPEND_MARK`] and [`ML_APPEND_NEW`].
     flags: c_int,
 }
@@ -69,9 +69,9 @@ struct InsertAt {
 /// NUL-terminated string, if `len` is 0).
 pub(crate) unsafe fn ml_append_int(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     line: *mut c_char,
-    len_arg: colnr_T,
+    len_arg: ColNr,
     flags: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that
@@ -87,7 +87,7 @@ pub(crate) unsafe fn ml_append_int(
 
     // Space needed for the text, and then for its index entry too.
     let len = if len_arg == 0 {
-        unsafe { cstr::bytes_at(line).len() as colnr_T + 1 }
+        unsafe { cstr::bytes_at(line).len() as ColNr + 1 }
     } else {
         len_arg
     };
@@ -211,8 +211,7 @@ unsafe fn ml_insert_in_block(
             i -= 1;
         }
         unsafe {
-            *db_index(dp).wrapping_offset((db_idx + 1) as isize) =
-                (offset as colnr_T - len) as c_uint
+            *db_index(dp).wrapping_offset((db_idx + 1) as isize) = (offset as ColNr - len) as c_uint
         };
     } else {
         // Add at the end, which is the start of the text.
@@ -248,7 +247,7 @@ unsafe fn ml_split_data_block(
     buf: *mut buf_T,
     hp: *mut bhdr_T,
     at: &InsertAt,
-    lnum: linenr_T,
+    lnum: LineNr,
     new: &NewLine,
     space_needed_arg: int64_t,
 ) -> SplitBlocks {
@@ -667,7 +666,7 @@ unsafe fn ml_split_pointer_block(
 /// `buf` must point at a buffer holding line `lnum`.
 pub(crate) unsafe fn ml_delete_int(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     flags: c_int,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's buffer, reached through a handle that

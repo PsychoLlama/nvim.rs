@@ -373,7 +373,7 @@ unsafe fn back_off_start(pos: &mut pos_T, off: i64) {
         if c != 0 {
             // At the start of the buffer; lnum == 0 is allowed here.
             pos.lnum = 0;
-            pos.col = MAXCOL as colnr_T;
+            pos.col = MAXCOL as ColNr;
         }
     } else {
         while c != 0 {
@@ -407,7 +407,7 @@ unsafe fn add_offset(pos: &mut pos_T, off: SearchOffset) -> c_int {
         } else if lnum > last as i64 {
             last
         } else {
-            lnum as linenr_T
+            lnum as LineNr
         };
         pos.col = 0;
         return 2; // pattern found, line offset added
@@ -504,7 +504,7 @@ pub unsafe fn do_search(
     // the same fold.
     if cmd.dirc == '/' as c_int {
         if unsafe { has_folding(Win::current(), pos.lnum, None, Some(&mut pos.lnum)) } {
-            pos.col = (MAXCOL - 2) as colnr_T; // avoid overflow when adding 1
+            pos.col = (MAXCOL - 2) as ColNr; // avoid overflow when adding 1
         }
     } else if unsafe { has_folding(Win::current(), pos.lnum, Some(&mut pos.lnum), None) } {
         pos.col = 0;
@@ -751,7 +751,7 @@ pub unsafe fn showmatch(c: c_int) {
         return;
     }
 
-    let mut vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
     if cur_win().w_onebuf_opt.wo_wrap == 0 {
         let (w, at, col) = (curwin.get(), &raw mut lpos, &raw mut vcol);
         // SAFETY: `lpos` is this frame's position in the live window.

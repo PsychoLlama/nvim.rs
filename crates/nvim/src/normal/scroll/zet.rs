@@ -33,7 +33,7 @@ use crate::spellfile::spell_add_word;
 use crate::spellsuggest::spell_suggest;
 use crate::strings::vim_strchr;
 use crate::types::{
-    Failed, OpType, OptInt, SpellAddType, cmdarg_T, colnr_T, int64_t, linenr_T, size_t,
+    ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, cmdarg_T, int64_t, size_t,
 };
 use crate::window::{set_fraction, win_setheight};
 use core::ffi::{c_char, c_int};
@@ -201,7 +201,7 @@ unsafe fn scroll_cursor_to_edge(to_left: bool) {
         return;
     }
     let siso = get_sidescrolloff_value(win);
-    let mut col: colnr_T = 0;
+    let mut col: ColNr = 0;
     // A closed fold shows one line of its own, which starts at column 0.
     if !folded(win.w_cursor.lnum) {
         let (start, end) = win.vcol_span(win.cursor());
@@ -415,10 +415,10 @@ pub(crate) unsafe fn nv_zet(cap: *mut cmdarg_T) {
     // not how many of anything.
     if !unsafe { vim_strchr(c"+\r\nt.z^-b".as_ptr(), nchar) }.is_null()
         && ca.count0 != 0
-        && ca.count0 as linenr_T != win.w_cursor.lnum
+        && ca.count0 as LineNr != win.w_cursor.lnum
     {
         setpcmark();
-        let count0 = ca.count0 as linenr_T;
+        let count0 = ca.count0 as LineNr;
         win.w_cursor.lnum = count0.min(cur_buf().b_ml.ml_line_count);
         check_cursor_col(win);
     }
@@ -572,7 +572,7 @@ fn cur_win() -> Win {
 }
 
 /// Whether `lnum` is inside a closed fold of the current window.
-fn folded(lnum: linenr_T) -> bool {
+fn folded(lnum: LineNr) -> bool {
     // SAFETY: `cur_win()` is the live window.
     has_folding(cur_win(), lnum, None, None)
 }

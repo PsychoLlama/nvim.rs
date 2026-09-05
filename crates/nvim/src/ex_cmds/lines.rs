@@ -27,7 +27,7 @@ use crate::message_fmt::report_msg;
 use crate::normal::{visual_active, with_visual_anchor};
 use crate::os::cshim::{gettext, ngettext};
 use crate::tr_plural;
-use crate::types::{Failed, OptInt, bcount_t, int64_t, linenr_T};
+use crate::types::{Failed, LineNr, OptInt, bcount_t, int64_t};
 use crate::undo::u_save;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
@@ -40,7 +40,7 @@ use core::ptr;
 /// # Safety
 /// The range and the destination must be lines of the current buffer, or one
 /// short of its first line.
-pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Result<(), Failed> {
+pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), Failed> {
     if dest >= line1 && dest < line2 {
         emsg(gettext(c"E134: Cannot move a range of lines into itself"));
         return Err(Failed);
@@ -207,7 +207,7 @@ pub unsafe fn do_move(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> Resul
 }
 
 /// Where `:move` leaves the cursor: on the last line it moved.
-fn last_moved_line(line1: linenr_T, line2: linenr_T, dest: linenr_T) -> linenr_T {
+fn last_moved_line(line1: LineNr, line2: LineNr, dest: LineNr) -> LineNr {
     if dest >= line1 {
         dest
     } else {
@@ -231,7 +231,7 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 /// # Safety
 /// The three line numbers must be a `:move` range of the current
 /// buffer.
-unsafe fn move_folds_in_windows(line1: linenr_T, line2: linenr_T, dest: linenr_T) {
+unsafe fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
         if unsafe { (*wp).w_buffer } == cur_buf().raw() {
@@ -245,7 +245,7 @@ unsafe fn move_folds_in_windows(line1: linenr_T, line2: linenr_T, dest: linenr_T
 ///
 /// # Safety
 /// The current buffer must be live.
-pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
+pub(super) unsafe fn set_op_range(start: LineNr, end: LineNr) {
     if cmdmod_has(CmdModFlags::LOCKMARKS) {
         return;
     }
@@ -262,7 +262,7 @@ pub(super) unsafe fn set_op_range(start: linenr_T, end: linenr_T) {
 /// # Safety
 /// The range and the destination must be lines of the current buffer, or one
 /// short of its first line.
-pub unsafe fn ex_copy(mut line1: linenr_T, mut line2: linenr_T, n: linenr_T) {
+pub unsafe fn ex_copy(mut line1: LineNr, mut line2: LineNr, n: LineNr) {
     let count = line2 - line1 + 1;
     // SAFETY: `curbuf` is live.
     unsafe { set_op_range(n + 1, n + count) };

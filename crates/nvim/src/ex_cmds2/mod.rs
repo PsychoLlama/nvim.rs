@@ -80,7 +80,7 @@ use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::semsg;
 use crate::types::CmdIdx;
 use crate::types::{
-    CmdModFlags, Failed, MAXPATHL, NUL, Vv, buf_T, exarg_T, linenr_T, ptrdiff_t, size_t, ssize_t,
+    CmdModFlags, Failed, LineNr, MAXPATHL, NUL, Vv, buf_T, exarg_T, ptrdiff_t, size_t, ssize_t,
     tabpage_T, uint64_t, varnumber_T, win_T,
 };
 use crate::undo::buf_is_changed;
@@ -673,7 +673,7 @@ pub(crate) unsafe fn buf_write_all(buf: *mut buf_T, forceit: bool) -> Result<(),
             buf,
             (*buf).b_ffname,
             (*buf).b_fname,
-            1 as linenr_T,
+            1 as LineNr,
             (*buf).b_ml.ml_line_count,
             ptr::null_mut(),
             WriteRequest {
@@ -850,7 +850,7 @@ pub(crate) unsafe fn ex_drop(eap: *mut exarg_T) {
         // Execute [+cmd]. No need to execute [++opts]: those only apply
         // to newly loaded buffers.
         if !unsafe { (*eap).do_ecmd_cmd }.is_null() {
-            let did_set_swapcommand = unsafe { set_swapcommand((*eap).do_ecmd_cmd, 0 as linenr_T) };
+            let did_set_swapcommand = unsafe { set_swapcommand((*eap).do_ecmd_cmd, 0 as LineNr) };
             let verbose = DoCmdOpts::VERBOSE;
             let _ = unsafe { do_cmdline((*eap).do_ecmd_cmd, None, ptr::null_mut(), verbose) };
             if did_set_swapcommand {

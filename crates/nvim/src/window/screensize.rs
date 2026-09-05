@@ -33,7 +33,7 @@ use crate::option::option_was_set;
 use crate::options::kOptWindow;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, linenr_T, list_T, ptrdiff_t,
+    LineNr, OptInt, Refcount, VAR_NUMBER, VarLock, buf_T, dict_T, list_T, ptrdiff_t,
     save_v_event_T, size_t, typval_T, typval_vval_union, varnumber_T,
 };
 use crate::winfloat::win_reconfig_floats;
@@ -215,7 +215,7 @@ enum Scan<'a> {
 fn scan_windows(what: &mut Scan) {
     let mut tot = [0 as c_int; 6];
     for mut wp in windows() {
-        if wp.w_floating && wp.w_last_topline == 0 as linenr_T {
+        if wp.w_floating && wp.w_last_topline == 0 as LineNr {
             // A just-created float has no previous size to compare with.
             snapshot_window(&mut wp);
             continue;

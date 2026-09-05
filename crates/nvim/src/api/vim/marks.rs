@@ -97,7 +97,7 @@ pub unsafe fn nvim_get_mark(
     };
     let mut row: Integer = 0;
     let mut col: Integer = 0;
-    if filename.is_null() || pos.lnum <= 0 as linenr_T {
+    if filename.is_null() || pos.lnum <= 0 as LineNr {
         if allocated {
             // SAFETY: `buflist_nr2name` handed back an allocation.
             unsafe { xfree(filename.cast()) };

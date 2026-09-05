@@ -132,16 +132,16 @@ impl Pattern {
 #[derive(Default)]
 pub(crate) struct SearchInfo {
     /// Offset of the first line that could still match.
-    pub(crate) low_offset: off_T,
+    pub(crate) low_offset: FileOffset,
     /// Offset just past the last line that could still match.
-    pub(crate) high_offset: off_T,
+    pub(crate) high_offset: FileOffset,
     /// Where in that range the file is being read.
-    pub(crate) curr_offset: off_T,
+    pub(crate) curr_offset: FileOffset,
     /// The `curr_offset` the current skip-back round started from; a long
     /// line would otherwise leave the walk stuck on it.
-    pub(crate) curr_offset_used: off_T,
+    pub(crate) curr_offset_used: FileOffset,
     /// Where the bisection found its match.
-    pub(crate) match_offset: off_T,
+    pub(crate) match_offset: FileOffset,
     /// The first byte of the line at `low_offset`.
     pub(crate) low_char: c_int,
     /// The first byte of the line at `high_offset`. A line whose first

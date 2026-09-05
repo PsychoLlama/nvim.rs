@@ -35,7 +35,7 @@ pub(crate) unsafe fn report_and_place(
     silent: bool,
     out: &Outcome,
     bad_char: c_int,
-    from: linenr_T,
+    from: LineNr,
 ) {
     if !how.filtering && !how.dummy && !silent {
         // SAFETY: the caller's file name.

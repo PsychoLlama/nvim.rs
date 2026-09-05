@@ -121,7 +121,7 @@ pub unsafe fn parse_pattern_and_range(
 
     // Default range: all lines.
     search_first_line.set(0);
-    search_last_line.set(MAXLNUM as linenr_T);
+    search_last_line.set(MAXLNUM as LineNr);
 
     let mut ea = exarg_T {
         line1: 1,
@@ -292,7 +292,7 @@ pub(crate) fn do_incsearch_highlighting(
 
     // By default search all lines.
     search_first_line.set(0);
-    search_last_line.set(MAXLNUM as linenr_T);
+    search_last_line.set(MAXLNUM as LineNr);
 
     if firstc == '/' as ::core::ffi::c_int || firstc == '?' as ::core::ffi::c_int {
         *search_delim = firstc;
@@ -371,7 +371,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
             search_flags += SEARCH_START;
         }
         // Half a second of search time.
-        let mut tm: proftime_T = profile_setlimit(500);
+        let mut tm: ProfTime = profile_setlimit(500);
         let mut sia = searchit_arg_T {
             sa_stop_lnum: 0,
             sa_tm: &raw mut tm,
@@ -578,7 +578,7 @@ pub(crate) unsafe fn finish_incsearch_highlighting(
 
     // By default search all lines.
     search_first_line.set(0);
-    search_last_line.set(MAXLNUM as linenr_T);
+    search_last_line.set(MAXLNUM as LineNr);
 
     magic_overruled.set(s.magic_overruled_save);
 

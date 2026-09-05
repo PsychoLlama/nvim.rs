@@ -185,10 +185,10 @@ unsafe fn parse_mark(
         mark.name = it.n as c_char;
     }
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__l) {
-        mark.mark.lnum = it.l as linenr_T;
+        mark.mark.lnum = it.l as LineNr;
     }
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__c) {
-        mark.mark.col = it.c as colnr_T;
+        mark.mark.col = it.c as ColNr;
     }
     if has_key(it.is_set___shada_mark_, KEYSET_OPTIDX__shada_mark__f) {
         mark.fname = unsafe { xmemdupz(it.f.data().cast::<c_void>(), it.f.len()) }.cast::<c_char>();
@@ -468,13 +468,13 @@ unsafe fn parse_buffer_list(
             it.is_set___shada_buflist_item_,
             KEYSET_OPTIDX__shada_buflist_item__l,
         ) {
-            unsafe { (*e).pos.lnum = it.l as linenr_T };
+            unsafe { (*e).pos.lnum = it.l as LineNr };
         }
         if has_key(
             it.is_set___shada_buflist_item_,
             KEYSET_OPTIDX__shada_buflist_item__c,
         ) {
-            unsafe { (*e).pos.col = it.c as colnr_T };
+            unsafe { (*e).pos.col = it.c as ColNr };
         }
         if has_key(
             it.is_set___shada_buflist_item_,

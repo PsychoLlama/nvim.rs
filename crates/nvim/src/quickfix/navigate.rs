@@ -290,7 +290,7 @@ unsafe fn closest_entry(
 /// # Safety
 ///
 /// `at.entry` must be a live entry.
-unsafe fn nth_entry_below(mut at: At, n: linenr_T, linewise: bool) -> c_int {
+unsafe fn nth_entry_below(mut at: At, n: LineNr, linewise: bool) -> c_int {
     // SAFETY: forwarded from the caller.
     let mut left = n;
     while left > 0 && !got_int.get() {
@@ -321,7 +321,7 @@ unsafe fn nth_entry_below(mut at: At, n: linenr_T, linewise: bool) -> c_int {
 /// # Safety
 ///
 /// `at.entry` must be a live entry.
-unsafe fn nth_entry_above(mut at: At, n: linenr_T, linewise: bool) -> c_int {
+unsafe fn nth_entry_above(mut at: At, n: LineNr, linewise: bool) -> c_int {
     // SAFETY: forwarded from the caller.
     let mut left = n;
     while left > 0 && !got_int.get() {
@@ -351,7 +351,7 @@ unsafe fn nth_adjacent_entry(
     qfl: *mut qf_list_T,
     bnr: c_int,
     pos: *const pos_T,
-    n: linenr_T,
+    n: LineNr,
     dir: Direction,
     linewise: bool,
 ) -> c_int {

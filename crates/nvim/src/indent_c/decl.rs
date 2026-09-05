@@ -226,7 +226,7 @@ pub(crate) unsafe fn cin_ispreproc(s: *const c_char) -> bool {
 /// `*pp` must point at a NUL-terminated line; may unlock the current line.
 pub(crate) unsafe fn cin_ispreproc_cont(
     pp: &mut *const c_char,
-    lnump: &mut linenr_T,
+    lnump: &mut LineNr,
     amount: &mut c_int,
 ) -> bool {
     let mut line = *pp;
@@ -286,8 +286,8 @@ pub(crate) unsafe fn cin_ispreproc_cont(
 /// line number, and may unlock the current line.
 pub(crate) unsafe fn cin_isfuncdecl(
     sp: Option<&mut *const c_char>,
-    first_lnum: linenr_T,
-    min_lnum: linenr_T,
+    first_lnum: LineNr,
+    min_lnum: LineNr,
 ) -> bool {
     let mut lnum = first_lnum;
     let save_lnum = cur_win().w_cursor.lnum;

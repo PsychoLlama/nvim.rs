@@ -42,7 +42,7 @@ use crate::state::virtual_active;
 use crate::statusline::stl_connected;
 use crate::strings::vim_strchr;
 use crate::types::{
-    EvalFuncData, MotionType, NUL, StlClickDefinition, cmdarg_T, colnr_T, linenr_T, pos_T, size_t,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, StlClickDefinition, cmdarg_T, pos_T, size_t,
     tabpage_T, typval_T, varnumber_T, win_T,
 };
 use crate::ui::{ui_check_mouse, ui_cursor_shape};
@@ -147,7 +147,7 @@ impl Landed {
 
 /// The top line of the window a click moved focus to, remembered so that the
 /// double click that follows still counts as one.
-static orig_topline: GlobalCell<linenr_T> = GlobalCell::new(0);
+static orig_topline: GlobalCell<LineNr> = GlobalCell::new(0);
 static orig_topfill: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// Whether a press was seen; drags and releases without one are ignored.
@@ -181,7 +181,7 @@ fn global_stl_height() -> c_int {
 }
 
 /// The leftmost and rightmost virtual column two positions span.
-fn vcols_between(win: Win, mut first: pos_T, mut second: pos_T) -> (colnr_T, colnr_T) {
+fn vcols_between(win: Win, mut first: pos_T, mut second: pos_T) -> (ColNr, ColNr) {
     let (mut left, mut right) = (0, 0);
     let (a, b) = (&raw mut first, &raw mut second);
     // SAFETY: a live window and two local copies of positions in its buffer,
@@ -300,7 +300,7 @@ impl ClickDefs {
 ///
 /// # Safety
 /// `lnum` must be a line of the current buffer.
-unsafe fn with_line<R>(lnum: linenr_T, f: impl FnOnce(&[u8]) -> R) -> R {
+unsafe fn with_line<R>(lnum: LineNr, f: impl FnOnce(&[u8]) -> R) -> R {
     // SAFETY: the caller's promise; `ml_get_buf` answers a NUL-terminated
     // line of `ml_get_buf_len` bytes, so one byte more is still in bounds.
     let line = unsafe {
@@ -443,11 +443,11 @@ fn mouse_tab_close(c1: c_int) {
 
 /// Length of line `lnum` in screen cells, for horizontal scrolling.  The last
 /// character is deliberately not counted.
-fn scroll_line_len(win: Win, lnum: linenr_T) -> colnr_T {
+fn scroll_line_len(win: Win, lnum: LineNr) -> ColNr {
     // SAFETY: a live window, and a line of the buffer it shows -- so the walk
     // below stays inside that NUL-terminated line.
     let mut p = unsafe { win.buffer().line(lnum) }.raw();
-    let mut col: colnr_T = 0;
+    let mut col: ColNr = 0;
     while unsafe { *p } != NUL as c_char {
         let numchar = unsafe { win_chartabsize(win, p, col) };
         p = unsafe { p.offset(utfc_ptr2len(p) as isize) };
@@ -463,7 +463,7 @@ fn scroll_line_len(win: Win, lnum: linenr_T) -> colnr_T {
 ///
 /// Topline and botline can be invalid when displaying is postponed, which is
 /// what the range check is for; then only the cursor line is considered.
-fn find_longest_lnum(win: Win) -> linenr_T {
+fn find_longest_lnum(win: Win) -> LineNr {
     let cursor = win.w_cursor.lnum;
     if !(win.w_topline <= cursor
         && win.w_botline > cursor
@@ -472,8 +472,8 @@ fn find_longest_lnum(win: Win) -> linenr_T {
         return cursor;
     }
 
-    let mut ret: linenr_T = 0;
-    let mut max: colnr_T = 0;
+    let mut ret: LineNr = 0;
+    let mut max: ColNr = 0;
     for lnum in win.w_topline..win.w_botline {
         let len = scroll_line_len(win, lnum);
         if len > max {
@@ -487,7 +487,7 @@ fn find_longest_lnum(win: Win) -> linenr_T {
 }
 
 /// Make a horizontal scroll to `leftcol`.  Answers whether the cursor moved.
-fn do_mousescroll_horiz(mut win: Win, leftcol: colnr_T) -> bool {
+fn do_mousescroll_horiz(mut win: Win, leftcol: ColNr) -> bool {
     if win.w_onebuf_opt.wo_wrap != 0 {
         return false; // no horizontal scrolling when wrapping
     }
@@ -516,7 +516,7 @@ fn do_mousescroll_horiz(mut win: Win, leftcol: colnr_T) -> bool {
 /// `vcols[]` is only meaningful after the window was redrawn -- mainly matters
 /// for tests, a user would not click before redrawing -- so the answer is
 /// `None` whenever the click is not on a drawn cell of the current window.
-fn mouse_check_grid() -> (Option<colnr_T>, c_int) {
+fn mouse_check_grid() -> (Option<ColNr>, c_int) {
     let mut pos = MousePos::current();
     // XXX: this doesn't change `pos.grid` if it is 1, even with multigrid.
     let win = match find_win_inner(&mut pos) {
@@ -621,9 +621,9 @@ pub(crate) unsafe fn f_getmousepos(
     let mut winid: varnumber_T = 0;
     let mut winrow: varnumber_T = 0;
     let mut wincol: varnumber_T = 0;
-    let mut lnum: linenr_T = 0;
+    let mut lnum: LineNr = 0;
     let mut column: varnumber_T = 0;
-    let mut coladd: colnr_T = 0;
+    let mut coladd: ColNr = 0;
 
     if let Some(win) = find_win_inner(&mut pos) {
         // `w_height` / `w_width` here, where the rest of the family reads

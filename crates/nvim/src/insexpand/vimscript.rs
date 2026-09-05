@@ -244,7 +244,7 @@ impl ComplOrigExtmarks {
 
 /// Start the completion `complete()` describes: `startcol` is where the
 /// matched text starts (1 is the first column) and `list` holds the matches.
-pub(crate) unsafe fn set_completion(mut startcol: colnr_T, list: *mut list_T) {
+pub(crate) unsafe fn set_completion(mut startcol: ColNr, list: *mut list_T) {
     let cur_cot_flags = unsafe { get_cot_flags() };
     let compl_longest = cur_cot_flags & kOptCotFlagLongest as c_uint != 0;
     let compl_no_insert = cur_cot_flags & kOptCotFlagNoinsert as c_uint != 0;
@@ -329,7 +329,7 @@ pub unsafe fn f_complete(argvars: *mut typval_T, _rettv: *mut typval_T, _fptr: E
     if unsafe { (*argvars.offset(1)).v_type } != VAR_LIST {
         emsg(gettext(e_invarg));
     } else {
-        let startcol = unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as colnr_T;
+        let startcol = unsafe { tv_get_number_chk(argvars, ptr::null_mut()) } as ColNr;
         if startcol > 0 {
             unsafe { set_completion(startcol - 1, (*argvars.offset(1)).vval.v_list) };
         }

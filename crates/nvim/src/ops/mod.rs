@@ -86,10 +86,10 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    Callback, CharsizeArg, CmdModFlags, ExtmarkOp, MotionType, OpType, OptInt, StrCharInfo,
-    VAR_STRING, VAR_UNKNOWN, VarLock, bcount_t, block_def, cmdarg_T, colnr_T, dict_T, int32_t,
-    int64_t, linenr_T, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union,
-    uvarnumber_T, varnumber_T, yankreg_T,
+    Callback, CharsizeArg, CmdModFlags, ColNr, ExtmarkOp, LineNr, MotionType, OpType, OptInt,
+    StrCharInfo, VAR_STRING, VAR_UNKNOWN, VarLock, bcount_t, block_def, cmdarg_T, dict_T, int32_t,
+    int64_t, oparg_T, optset_T, pos_T, size_t, ssize_t, typval_T, typval_vval_union, uvarnumber_T,
+    varnumber_T, yankreg_T,
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
@@ -167,9 +167,9 @@ pub struct redo_VIsual_T {
     /// `v`, `V` or CTRL-V.
     pub rv_mode: ::core::ffi::c_int,
     /// Number of lines.
-    pub rv_line_count: linenr_T,
+    pub rv_line_count: LineNr,
     /// Number of columns, or the end column.
-    pub rv_vcol: colnr_T,
+    pub rv_vcol: ColNr,
     /// Count typed before the Visual operator.
     pub rv_count: ::core::ffi::c_int,
     /// Extra argument; `g CTRL-A` is the only user.

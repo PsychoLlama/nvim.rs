@@ -38,7 +38,7 @@ use crate::state::{MODE_CMDLINE, get_mode, get_was_safe_state};
 use crate::strings::vim_strchr;
 use crate::syntax::syntax_present;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv, colnr_T,
+    Arena, Array, ColNr, Error, EvalFuncData, NUL, Object, String_0, VAR_STRING, Vv,
     kListLenMayKnow, typval_T, varnumber_T,
 };
 use crate::ui::ui_gui_attached;
@@ -486,7 +486,7 @@ pub unsafe fn f_shiftwidth(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     rettv.vval.v_number = 0;
     // SAFETY throughout: the frame is live and `curbuf` is live for the call.
     if args.has(0) {
-        let col = arg_number_chk(args.get(0), None) as colnr_T;
+        let col = arg_number_chk(args.get(0), None) as ColNr;
         // A coercion failure answers 0, which passes; a negative column
         // leaves the 0 already in place.
         if col < 0 {

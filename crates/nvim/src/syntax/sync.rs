@@ -28,7 +28,7 @@ use crate::types::NUL;
 ///
 /// `last_valid` is the last cached state before `start_lnum` that is still
 /// trustworthy; running into it during the backward scan ends the search.
-pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: linenr_T, last_valid: *mut synstate_T) {
+pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: LineNr, last_valid: *mut synstate_T) {
     // Clear any current state that might be hanging around.
     invalidate_current_state();
 
@@ -50,7 +50,7 @@ pub(crate) unsafe fn syn_sync(wp: *mut win_T, start_lnum: linenr_T, last_valid: 
 /// resync on every line: it then resyncs one line in N, where N is minlines
 /// times 1.5 -- or times 2 when minlines is small. Watch out for overflow when
 /// minlines is MAXLNUM.
-unsafe fn sync_backoff(start_lnum: linenr_T) -> linenr_T {
+unsafe fn sync_backoff(start_lnum: LineNr) -> LineNr {
     let minlines = syn_block().b_syn_sync_minlines;
     if minlines > start_lnum {
         return 1;
@@ -75,7 +75,7 @@ unsafe fn sync_backoff(start_lnum: linenr_T) -> linenr_T {
 
 /// Search backwards for the end of a C-style comment, and if the start line
 /// turns out to be inside one, push the syntax item that defines it.
-unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: linenr_T) {
+unsafe fn sync_by_ccomment(wp: *mut win_T, mut start_lnum: LineNr) {
     // `find_start_comment` works on the current buffer, so make syn_buf it
     // for a moment.
     let curwin_save = curwin.get();
@@ -131,14 +131,14 @@ struct SyncPoint {
     /// The pattern index of the group to push, or negative for none.
     match_idx: c_int,
     /// Where the match itself began.
-    lnum: linenr_T,
+    lnum: LineNr,
     col: c_int,
     /// Where it ended.
     m_endpos: lpos_T,
 }
 
 /// Search backwards, one line at a time, for a `:syntax sync match`.
-unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
+unsafe fn sync_by_match(start_lnum: LineNr, last_valid: *mut synstate_T) {
     let maxlines = syn_block().b_syn_sync_maxlines;
     let break_lnum = if maxlines != 0 && start_lnum > maxlines {
         start_lnum - maxlines
@@ -225,9 +225,9 @@ unsafe fn sync_by_match(start_lnum: linenr_T, last_valid: *mut synstate_T) {
 /// The scan does not stop at the first sync point: it keeps looking further on
 /// in the line, so the one that wins is the closest to `end_lnum`.
 unsafe fn scan_for_sync_point(
-    from: linenr_T,
-    end_lnum: linenr_T,
-    start_lnum: linenr_T,
+    from: LineNr,
+    end_lnum: LineNr,
+    start_lnum: LineNr,
 ) -> Option<SyncPoint> {
     let mut found: Option<SyncPoint> = None;
     current_lnum.set(from);
@@ -319,7 +319,7 @@ pub(crate) fn restore_chartab(chartab: &[uint64_t; 4]) {
 
 /// Does line `lnum` match the `:syntax sync linecont` pattern, i.e. does the
 /// line after it continue it?
-pub(crate) unsafe fn syn_match_linecont(lnum: linenr_T) -> bool {
+pub(crate) unsafe fn syn_match_linecont(lnum: LineNr) -> bool {
     if syn_block().b_syn_linecont_prog.is_null() {
         return false;
     }
@@ -461,7 +461,7 @@ pub(crate) fn syn_cmd_sync(eap: &mut exarg_T, _syncing: c_int) {
             }
         } else if word == b"FROMSTART" {
             if eap.skip == 0 {
-                cur_syn_block().b_syn_sync_minlines = MAXLNUM as linenr_T;
+                cur_syn_block().b_syn_sync_minlines = MAXLNUM as LineNr;
                 cur_syn_block().b_syn_sync_maxlines = 0;
             }
         } else if word == b"LINECONT" {

@@ -250,7 +250,7 @@ pub unsafe fn ex_display(eap: *mut exarg_T) {
     let want_alt = arg.is_null() || !unsafe { vim_strchr(arg, '%' as c_int) }.is_null();
     if want_alt && !got_int.get() {
         let mut fname: *mut c_char = ::core::ptr::null_mut();
-        let mut dummy: linenr_T = 0;
+        let mut dummy: LineNr = 0;
         // SAFETY: both out-parameters are writable locals.
         let named = unsafe { buflist_name_nr(0, &raw mut fname, &raw mut dummy) }.is_ok();
         // SAFETY: on success `fname` is the alternate file's name, which is

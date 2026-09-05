@@ -90,9 +90,9 @@ use crate::syntax::{
 use crate::terminal::{terminal_check_size, terminal_suspended};
 use crate::types::ui::{kUICmdline, kUIMessages, kUIMultigrid};
 use crate::types::{
-    DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Integer, OptInt, VirtText,
-    VirtTextChunk, Window, buf_T, colnr_T, foldinfo_T, frame_T, handle_T, hlf_T, int64_t, linenr_T,
-    match_T, pos_T, proftime_T, regmmatch_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
+    ColNr, DecorPriority, DecorVirtText, DecorVirtText_data, Failed, Integer, LineNr, OptInt,
+    ProfTime, VirtText, VirtTextChunk, Window, buf_T, foldinfo_T, frame_T, handle_T, hlf_T,
+    int64_t, match_T, pos_T, regmmatch_T, regprog_T, schar_T, size_t, spellvars_T, uint16_t,
     varnumber_T, win_T,
 };
 use crate::ui::{
@@ -605,7 +605,7 @@ impl SearchHl {
     }
 
     /// Bound the matching by `'redrawtime'`.
-    fn set_time_limit(self, tm: proftime_T) {
+    fn set_time_limit(self, tm: ProfTime) {
         // SAFETY: as `regprog`.
         unsafe { (*self.0).tm = tm };
     }
@@ -707,7 +707,7 @@ pub unsafe fn number_width(wp: *mut win_T) -> c_int {
     // With 'relativenumber' alone the largest number shown is the window
     // height (the cursor line shows "0"); otherwise it is the line count.
     let largest = if wp.w_onebuf_opt.wo_rnu != 0 && wp.w_onebuf_opt.wo_nu == 0 {
-        wp.w_view_height as linenr_T
+        wp.w_view_height as LineNr
     } else {
         unsafe { (*wp.w_buffer).b_ml.ml_line_count }
     };

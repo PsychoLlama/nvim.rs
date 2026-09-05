@@ -32,9 +32,9 @@ use crate::types::TAB;
 pub(crate) use crate::main::e_invalblob;
 use crate::registry::SlotTable;
 use crate::types::{
-    Array, ChannelStreamType, Failed, GRegFlags, LuaRetMode, MarkGet, MotionType, Object, blob_T,
-    dict_T, exprtype_T, funcexe_T, linenr_T, list_T, listwatch_T, lval_T, partial_T, size_t,
-    timer_T, typval_T, uint64_t,
+    Array, ChannelStreamType, Failed, GRegFlags, LineNr, LuaRetMode, MarkGet, MotionType, Object,
+    blob_T, dict_T, exprtype_T, funcexe_T, list_T, listwatch_T, lval_T, partial_T, size_t, timer_T,
+    typval_T, uint64_t,
 };
 use crate::winlayer::Live;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_ulong};
@@ -211,8 +211,8 @@ static callback_depth: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub const TV_CSTRING: c_ulong = SIZE_MAX.wrapping_sub(1 as c_ulong);
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_argv_func: None,
-    fe_firstline: 0 as linenr_T,
-    fe_lastline: 0 as linenr_T,
+    fe_firstline: 0 as LineNr,
+    fe_lastline: 0 as LineNr,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
     fe_evaluate: false,
     fe_partial: ::core::ptr::null_mut::<partial_T>(),

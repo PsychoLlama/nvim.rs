@@ -22,7 +22,7 @@ use neovim::r#move::arith::{
     skipped_plines, sms_cursor_row, sms_fixup_count_back, sms_fixup_count_forw, top_skipped_plines,
     visible_sms_col, wrap_cursor_cell, wrap_rowoff,
 };
-use neovim::types::colnr_T;
+use neovim::types::ColNr;
 
 // ------------------------------------------------------------ skipped_plines
 //
@@ -184,7 +184,7 @@ fn a_short_window_still_scrolls_two_lines_before_recentring() {
 // text width of a *later* screen line, `view_width - off + col_off2`) is 10.
 
 const VIEW: c_int = 12;
-const OFF: colnr_T = 2;
+const OFF: ColNr = 2;
 const WIDTH: c_int = 10;
 
 #[test]
@@ -270,7 +270,7 @@ fn a_cursor_before_the_skipped_columns_is_left_alone() {
 
 const SIDE_VIEW: c_int = 40;
 
-fn scroll(start: colnr_T, end: colnr_T, leftcol: colnr_T, siso: i64, ss: i64) -> Option<c_int> {
+fn scroll(start: ColNr, end: ColNr, leftcol: ColNr, siso: i64, ss: i64) -> Option<c_int> {
     // `wcol` is the cursor's screen column with `extra` still in it, which is
     // how `curs_columns()` has it at this point; `extra` is the gutter.
     let extra = 0;

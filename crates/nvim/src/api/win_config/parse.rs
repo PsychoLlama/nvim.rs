@@ -211,8 +211,8 @@ unsafe fn parse_float_bufpos(bufpos: Array, out: &mut lpos_T) -> bool {
     let (Some(lnum), Some(col)) = (lnum.as_integer(), col.as_integer()) else {
         return false;
     };
-    out.lnum = lnum as linenr_T;
-    out.col = col as colnr_T;
+    out.lnum = lnum as LineNr;
+    out.col = col as ColNr;
     true
 }
 

@@ -139,7 +139,7 @@ pub(crate) unsafe fn oneleft() -> Result<(), Failed> {
         // cannot occupy -- so widen the step until it actually moves.
         let mut width = 1;
         loop {
-            coladvance_win(win, v as colnr_T - width as colnr_T);
+            coladvance_win(win, v as ColNr - width as ColNr);
             if viscol() < v {
                 break;
             }
@@ -182,7 +182,7 @@ pub(crate) unsafe fn oneleft() -> Result<(), Failed> {
 /// loop runs one more time.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub(crate) fn cursor_up_inner(mut win: Win, mut n: linenr_T, skip_conceal: bool) {
+pub(crate) fn cursor_up_inner(mut win: Win, mut n: LineNr, skip_conceal: bool) {
     let mut lnum = win.w_cursor.lnum;
 
     if n >= lnum {
@@ -198,7 +198,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: linenr_T, skip_conceal: bool)
             if lnum <= 1 {
                 break;
             }
-            n += (skip_conceal && line_concealed(win, lnum)) as linenr_T;
+            n += (skip_conceal && line_concealed(win, lnum)) as LineNr;
             // On entering a fold, move to its beginning -- unless this is
             // the last step and the fold is about to open anyway.
             if n > 0
@@ -222,7 +222,7 @@ pub(crate) fn cursor_up_inner(mut win: Win, mut n: linenr_T, skip_conceal: bool)
 ///
 /// # Safety
 /// Must run with a live `curwin`.
-pub(crate) unsafe fn cursor_up(n: linenr_T, upd_topline: bool) -> Result<(), Failed> {
+pub(crate) unsafe fn cursor_up(n: LineNr, upd_topline: bool) -> Result<(), Failed> {
     let win = cur_win();
     if n > 0 && win.w_cursor.lnum <= 1 {
         return Err(Failed);
@@ -248,10 +248,10 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
     let mut lnum = win.w_cursor.lnum;
     let line_count = win.buffer().b_ml.ml_line_count;
 
-    if lnum + n as linenr_T >= line_count {
+    if lnum + n as LineNr >= line_count {
         lnum = line_count;
     } else if lines_concealed(win) {
-        let mut last: linenr_T = 0;
+        let mut last: LineNr = 0;
         while n != 0 {
             n -= 1;
             if fold_end(win, lnum, &mut last) {
@@ -266,7 +266,7 @@ pub(crate) fn cursor_down_inner(mut win: Win, mut n: c_int, skip_conceal: bool) 
         }
         lnum = lnum.min(line_count);
     } else {
-        lnum += n as linenr_T;
+        lnum += n as LineNr;
     }
 
     win.w_cursor.lnum = lnum;
@@ -307,7 +307,7 @@ fn adjust_skipcol_now() {
 
 /// Move `win`'s cursor to virtual column `vcol` of its line.
 #[inline(always)]
-fn coladvance_win(win: Win, vcol: colnr_T) {
+fn coladvance_win(win: Win, vcol: ColNr) {
     // SAFETY: a live window, whose cursor line exists.
     coladvance(win, vcol);
 }
@@ -321,7 +321,7 @@ fn cursor_pos_ptr() -> *mut c_char {
 
 /// The cursor's virtual column.
 #[inline(always)]
-fn viscol() -> colnr_T {
+fn viscol() -> ColNr {
     // SAFETY: `curwin` is live for the whole session.
     unsafe { getviscol() }
 }
@@ -342,7 +342,7 @@ fn lines_concealed(win: Win) -> bool {
 
 /// Is the line *before* `lnum` hidden by a `conceal_lines` decoration?
 #[inline(always)]
-fn line_concealed(win: Win, lnum: linenr_T) -> bool {
+fn line_concealed(win: Win, lnum: LineNr) -> bool {
     // SAFETY: a live window and a line number of its buffer.
     unsafe { decor_conceal_line(win.raw(), lnum as c_int - 1, true) }
 }
@@ -350,13 +350,13 @@ fn line_concealed(win: Win, lnum: linenr_T) -> bool {
 /// Is `lnum` inside a closed fold of `win`?  `first` is left holding that
 /// fold's first line when it is.
 #[inline(always)]
-fn fold_start(win: Win, lnum: linenr_T, first: &mut linenr_T) -> bool {
+fn fold_start(win: Win, lnum: LineNr, first: &mut LineNr) -> bool {
     has_folding(win, lnum, Some(first), None)
 }
 
 /// [`fold_start`], leaving the fold's *last* line in `last` instead.
 #[inline(always)]
-fn fold_end(win: Win, lnum: linenr_T, last: &mut linenr_T) -> bool {
+fn fold_end(win: Win, lnum: LineNr, last: &mut LineNr) -> bool {
     has_folding_win(win, lnum, None, Some(last), true, None)
 }
 

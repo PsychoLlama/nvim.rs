@@ -120,7 +120,7 @@ pub(crate) unsafe fn align_in_comment(line: &Line, comment: &mut pos_T) -> c_int
         let look = unsafe { start.offset(comment.col as isize).add(2) }; // skip / and *
         nothing_after_opener = unsafe { *look } == 0;
         if !nothing_after_opener {
-            comment.col = unsafe { skipwhite(look).offset_from(start) } as colnr_T;
+            comment.col = unsafe { skipwhite(look).offset_from(start) } as ColNr;
         }
     }
     // SAFETY: `comment` is still a position in the current buffer -- the

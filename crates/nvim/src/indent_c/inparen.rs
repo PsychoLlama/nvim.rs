@@ -175,7 +175,7 @@ unsafe fn align_with_unclosed_paren(
         // SAFETY: the cursor was just moved onto `our_paren_pos.lnum`, so
         // `get_cursor_line_ptr` hands back the very line `look` points into
         // -- the two pointers are into the same allocation.
-        let look_col = unsafe { look.offset_from(get_cursor_line_ptr()) } as colnr_T;
+        let look_col = unsafe { look.offset_from(get_cursor_line_ptr()) } as ColNr;
         cur_win().w_cursor.col = look_col + 1;
         let no_oparg = ::core::ptr::null_mut::<oparg_T>();
         let maxparen = int64_t::from(cur_buf().b_ind_maxparen);

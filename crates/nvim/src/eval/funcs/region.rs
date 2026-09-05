@@ -28,8 +28,8 @@ use crate::pos::{MAXCOL, equalpos, lt};
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    EvalFuncData, MotionType, NUL, OpType, String_0, VAR_DICT, block_def, buf_T, colnr_T,
-    kListLenMayKnow, linenr_T, oparg_T, pos_T, typval_T, varnumber_T,
+    ColNr, EvalFuncData, LineNr, MotionType, NUL, OpType, String_0, VAR_DICT, block_def, buf_T,
+    kListLenMayKnow, oparg_T, pos_T, typval_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -274,7 +274,7 @@ unsafe fn check_corner(buf: *mut buf_T, p: &mut pos_T) -> Option<()> {
         return None;
     }
     let len = unsafe { ml_get_buf_len(buf, p.lnum) };
-    if p.col == MAXCOL as colnr_T {
+    if p.col == MAXCOL as ColNr {
         p.col = len + 1;
     } else if p.col < 1 || p.col > len + 1 {
         semsg!("E964: Invalid column number: {}", p.col);
@@ -407,13 +407,13 @@ pub unsafe fn f_getregionpos(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
 /// # Safety
 /// `line` is line `lnum` of the current buffer and `r` describes a region
 /// covering it.
-unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T, pos_T) {
+unsafe fn line_corners(r: &Region, lnum: LineNr, line: *mut c_char) -> (pos_T, pos_T) {
     if r.region_type == kMTLineWise {
         // A linewise region always covers the whole line.
         return (
             pos_T { col: 1, ..NOWHERE },
             pos_T {
-                col: MAXCOL as colnr_T,
+                col: MAXCOL as ColNr,
                 ..NOWHERE
             },
         );
@@ -430,7 +430,7 @@ unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T,
     let mut p1 = NOWHERE;
     if bd.is_oneChar != 0 {
         if r.region_type == kMTBlockWise {
-            p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as colnr_T + 1;
+            p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as ColNr + 1;
             p1.coladd = bd.start_char_vcols - (bd.start_vcol - r.oap.start_vcol);
         } else {
             p1.col = r.p1.col + 1;
@@ -438,11 +438,11 @@ unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T,
         }
     } else if r.region_type == kMTBlockWise && r.oap.start_vcol > bd.start_vcol {
         // The block starts inside a character that begins before it.
-        p1.col = MAXCOL as colnr_T;
+        p1.col = MAXCOL as ColNr;
         p1.coladd = r.oap.start_vcol - bd.start_vcol;
         bd.is_oneChar = 1;
     } else if bd.startspaces > 0 {
-        p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as colnr_T + 1;
+        p1.col = unsafe { mb_prevptr(line, bd.textstart).offset_from(line) } as ColNr + 1;
         p1.coladd = bd.start_char_vcols - bd.startspaces;
     } else {
         p1.col = bd.textcol + 1;
@@ -464,7 +464,7 @@ unsafe fn line_corners(r: &Region, lnum: linenr_T, line: *mut c_char) -> (pos_T,
 /// Pull both corners back onto the line. Without `eol` a corner past the
 /// last byte collapses to zero — "nothing here" — rather than to the line
 /// end.
-fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: colnr_T, allow_eol: bool) {
+fn clamp_corners(p1: &mut pos_T, p2: &mut pos_T, line_len: ColNr, allow_eol: bool) {
     if !allow_eol && p1.col > line_len {
         p1.col = 0;
         p1.coladd = 0;

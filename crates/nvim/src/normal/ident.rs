@@ -50,7 +50,7 @@ use crate::strings::{vim_strchr, vim_strsave_shellescape, xstrnsave};
 use crate::tag::do_tag;
 use crate::textobject::findpar;
 use crate::types::{
-    NUL, OpType, ShmFlag, cmdarg_T, colnr_T, int64_t, linenr_T, oparg_T, pos_T, size_t, uint8_t,
+    ColNr, LineNr, NUL, OpType, ShmFlag, cmdarg_T, int64_t, oparg_T, pos_T, size_t, uint8_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
@@ -175,8 +175,8 @@ impl ScanLine {
 /// position for a character it will take, then backs up to that run's start.
 pub(crate) unsafe fn find_ident_at_pos(
     wp: Win,
-    lnum: linenr_T,
-    mut startcol: colnr_T,
+    lnum: LineNr,
+    mut startcol: ColNr,
     text: *mut *mut c_char,
     textcol: *mut c_int,
     find_type: c_int,
@@ -825,7 +825,7 @@ pub(crate) unsafe fn nv_ident(cap: *mut cmdarg_T) {
             // the word first.
             // SAFETY: `word` points into the cursor's own line.
             setpcmark();
-            let col = unsafe { word.offset_from(get_cursor_line_ptr()) } as colnr_T;
+            let col = unsafe { word.offset_from(get_cursor_line_ptr()) } as ColNr;
             cur_win().w_cursor.col = col;
             if !g_cmd && unsafe { vim_iswordp(word) } {
                 // The plain forms anchor at a word boundary.
@@ -949,7 +949,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
         return;
     }
     // `gF` also takes a line number off the end of the name.
-    let mut lnum: linenr_T = -1;
+    let mut lnum: LineNr = -1;
     // SAFETY: `lnum` is this frame's own out-parameter.
     let name = unsafe { grab_file_name((*cap).count1, &raw mut lnum) };
     if name.is_null() {
@@ -966,7 +966,7 @@ pub(crate) unsafe fn nv_gotofile(cap: *mut cmdarg_T) {
     setpcmark();
     let hidden = unsafe { buf_hide(curbuf.get()) };
     let hide = EcmdFlags::HIDE.when(hidden);
-    let last = newlnum::LAST as linenr_T;
+    let last = newlnum::LAST as LineNr;
     let win = curwin.get();
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };

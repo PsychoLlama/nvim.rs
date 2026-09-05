@@ -55,9 +55,9 @@ pub(crate) struct Fields {
     /// Buffer number, from `%b`.
     pub(crate) bnr: c_int,
     /// Line number, from `%l`.
-    pub(crate) lnum: linenr_T,
+    pub(crate) lnum: LineNr,
     /// End line number, from `%e`.
-    pub(crate) end_lnum: linenr_T,
+    pub(crate) end_lnum: LineNr,
     /// Column, from `%c`, `%v` or `%p`.
     pub(crate) col: c_int,
     /// End column, from `%k`.
@@ -332,12 +332,12 @@ impl Fields {
                 }
                 self.bnr = bnr;
             }
-            2 => self.enr = number() as c_int,         // %n
-            3 => self.lnum = number() as linenr_T,     // %l
-            4 => self.end_lnum = number() as linenr_T, // %e
-            5 => self.col = number() as c_int,         // %c
-            6 => self.end_col = number() as c_int,     // %k
-            7 => self.kind = unsafe { *start },        // %t
+            2 => self.enr = number() as c_int,       // %n
+            3 => self.lnum = number() as LineNr,     // %l
+            4 => self.end_lnum = number() as LineNr, // %e
+            5 => self.col = number() as c_int,       // %c
+            6 => self.end_col = number() as c_int,   // %k
+            7 => self.kind = unsafe { *start },      // %t
             10 => {
                 // %p: a pointer line such as "   ^", whose width is the
                 // column. A tab advances to the next multiple of eight.

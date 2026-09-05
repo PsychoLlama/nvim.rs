@@ -67,8 +67,8 @@ use crate::register::{do_execreg, do_put, op_yank};
 use crate::search::{BACKWARD, FORWARD};
 use crate::state::{MODE_INSERT, MODE_TERMINAL};
 use crate::types::{
-    CpoFlag, Failed, NUL, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, colnr_T,
-    exarg_T, handle_T, int64_t, linenr_T, oparg_T, pos_T, save_state_T, size_t, ssize_t,
+    ColNr, CpoFlag, Failed, LineNr, NUL, OpType, OptMagic, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE,
+    exarg_T, handle_T, int64_t, oparg_T, pos_T, save_state_T, size_t, ssize_t,
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 
@@ -115,14 +115,14 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
 
     // The topline to use is the smallest that every bound window can
     // reach: one of them may be shorter than the rest.
-    let mut vtopline: linenr_T = 1;
+    let mut vtopline: LineNr = 1;
     if cur_win().w_onebuf_opt.wo_scb != 0 {
-        vtopline = get_vtopline(cur_win()) as linenr_T;
+        vtopline = get_vtopline(cur_win()) as LineNr;
         for wp in windows() {
             if wp.w_onebuf_opt.wo_scb != 0 && !wp.w_buffer.is_null() {
                 let limit = unsafe { plines_m_win_fill(wp, 1, (*wp.w_buffer).b_ml.ml_line_count) }
-                    as linenr_T
-                    - get_scrolloff_value(cur_win()) as linenr_T;
+                    as LineNr
+                    - get_scrolloff_value(cur_win()) as LineNr;
                 vtopline = vtopline.min(limit);
             }
         }
@@ -133,9 +133,9 @@ pub(crate) unsafe fn ex_syncbind(_eap: *mut exarg_T) {
         if wp.w_onebuf_opt.wo_scb != 0 {
             let y = vtopline as c_int - get_vtopline(wp);
             if y > 0 {
-                scrollup(wp, y as linenr_T, true);
+                scrollup(wp, y as LineNr, true);
             } else {
-                scrolldown(wp, -(y as linenr_T), true);
+                scrolldown(wp, -(y as LineNr), true);
             }
             wp.w_scbind_pos = vtopline as c_int;
             unsafe { redraw_later(wp.raw(), UPD_VALID) };
@@ -329,7 +329,7 @@ pub(crate) unsafe fn ex_copymove(eap: *mut exarg_T) {
     get_flags(eap);
 
     // `MAXLNUM` is what `get_address` answers for "no address at all".
-    if n == MAXLNUM as linenr_T || n < 0 || n > cur_buf().b_ml.ml_line_count {
+    if n == MAXLNUM as LineNr || n < 0 || n > cur_buf().b_ml.ml_line_count {
         emsg(gettext(e_invrange.as_ptr()));
         return;
     }
@@ -477,7 +477,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
         return;
     }
 
-    if step >= cur_buf().b_u_seq_cur as linenr_T {
+    if step >= cur_buf().b_u_seq_cur as LineNr {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
         return;
     }
@@ -490,7 +490,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     let mut count = 0;
     let mut uhp = ::core::ptr::null_mut();
     for header in unsafe { header_chain(Buf::current(), start, |uh| uh.uh_next) } {
-        if header.uh_seq as linenr_T <= step {
+        if header.uh_seq as LineNr <= step {
             uhp = header.raw();
             break;
         }
@@ -499,7 +499,7 @@ pub(crate) unsafe fn ex_undo(eap: *mut exarg_T) {
     // Running past it, or off the end, means `step` is on another
     // branch. Sequence 0 is the state before any change and is always
     // reachable.
-    if step != 0 && (uhp.is_null() || (unsafe { (*uhp).uh_seq } as linenr_T) < step) {
+    if step != 0 && (uhp.is_null() || (unsafe { (*uhp).uh_seq } as LineNr) < step) {
         emsg(gettext(e_undobang_cannot_redo_or_move_branch.as_ptr()));
         return;
     }
@@ -680,7 +680,7 @@ pub(crate) unsafe fn ex_normal(eap: *mut exarg_T) {
             if eap.addr_count != 0 {
                 cur_win().w_cursor.lnum = eap.line1;
                 eap.line1 += 1;
-                cur_win().w_cursor.col = 0 as colnr_T;
+                cur_win().w_cursor.col = 0 as ColNr;
                 check_cursor_moved(cur_win());
             }
             unsafe {
@@ -784,7 +784,7 @@ pub(crate) unsafe fn ex_startinsert(eap: *mut exarg_T) {
         if idx == CmdIdx::startinsert {
             restart_edit.set('i' as c_int);
         }
-        cur_win().w_curswant = 0 as colnr_T;
+        cur_win().w_curswant = 0 as ColNr;
     }
     if visual_active() {
         unsafe { showmode() };
@@ -851,8 +851,8 @@ pub(crate) unsafe fn ex_foldopen(eap: *mut exarg_T) {
 fn range_start(eap: Ea) -> pos_T {
     pos_T {
         lnum: eap.line1,
-        col: 1 as colnr_T,
-        coladd: 0 as colnr_T,
+        col: 1 as ColNr,
+        coladd: 0 as ColNr,
     }
 }
 
@@ -860,8 +860,8 @@ fn range_start(eap: Ea) -> pos_T {
 fn range_end(eap: Ea) -> pos_T {
     pos_T {
         lnum: eap.line2,
-        col: 1 as colnr_T,
-        coladd: 0 as colnr_T,
+        col: 1 as ColNr,
+        coladd: 0 as ColNr,
     }
 }
 
@@ -924,7 +924,7 @@ fn ins_typebuf(
 }
 
 /// `print_line()` as checked code.
-fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bool) {
+fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     // SAFETY: reads the editor's own state, which exists from startup to exit.
     unsafe { crate::ex_cmds::print_line(lnum, use_number, list, first) }
 }

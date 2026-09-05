@@ -43,8 +43,8 @@ use crate::message::msg_ptr;
 use crate::os::cshim::snprintf;
 
 use crate::types::{
-    CmdModFlags, FAIL, Failed, Integer, NUL, OK, Vv, buf_T, exarg_T, linenr_T, ptrdiff_t,
-    tabpage_T, win_T,
+    CmdModFlags, FAIL, Failed, Integer, LineNr, NUL, OK, Vv, buf_T, exarg_T, ptrdiff_t, tabpage_T,
+    win_T,
 };
 use crate::ui::{ui_call_error_exit, ui_call_suspend, ui_flush};
 use crate::undo::{buf_is_changed, curbuf_is_changed};
@@ -219,7 +219,7 @@ pub(crate) unsafe fn ex_quit(eap: *mut exarg_T) {
 }
 
 /// The `nr`'th window of the current tab page, clamped to the last one.
-fn window_at(nr: linenr_T) -> *mut win_T {
+fn window_at(nr: LineNr) -> *mut win_T {
     let mut wp = first_win();
     let mut n = nr;
     while let Some(next) = wp.next() {
@@ -313,11 +313,11 @@ pub(crate) unsafe fn ex_close(eap: *mut exarg_T) {
 ///
 /// Unlike `window_at`, this counts from one and falls back to `lastwin`
 /// rather than stopping at the end.
-fn numbered_window(nr: linenr_T) -> *mut win_T {
+fn numbered_window(nr: LineNr) -> *mut win_T {
     let mut winnr = 0;
     for wp in windows() {
         winnr += 1;
-        if winnr as linenr_T == nr {
+        if winnr as LineNr == nr {
             return wp.raw();
         }
     }
@@ -552,7 +552,7 @@ pub(crate) unsafe fn ex_only(eap: *mut exarg_T) {
 ///
 /// `:1only` is the *current* window: the count is spent before the walk
 /// starts, unlike `window_at`, which always steps at least once.
-fn window_at_stepwise(nr: linenr_T) -> *mut win_T {
+fn window_at_stepwise(nr: LineNr) -> *mut win_T {
     let mut wp = first_win();
     let mut n = nr;
     loop {

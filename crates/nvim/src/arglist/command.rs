@@ -234,7 +234,7 @@ pub unsafe fn do_argfile(eap: *mut exarg_T, argn: c_int) {
     let hidden = unsafe { buf_hide((*wp).w_buffer) };
     let flags = EcmdFlags::HIDE.when(hidden) | EcmdFlags::FORCEIT.when(forceit);
     let name = arg_name(cur_arg_idx());
-    let last = newlnum::LAST as linenr_T;
+    let last = newlnum::LAST as LineNr;
     let none = ptr::null_mut();
     // SAFETY: as above; `do_ecmd` may fire autocommands, and nothing here
     // is held across it.

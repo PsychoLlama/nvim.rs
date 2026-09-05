@@ -333,7 +333,7 @@ pub(crate) unsafe fn cin_is_cpp_baseclass(cached: &mut cpp_baseclass_cache_T) ->
                 // The first statement starts here; line up with it.
                 if cpp_base_class {
                     // SAFETY: `s` and `line` point into the same line.
-                    cached.lpos.col = unsafe { s.offset_from(line) } as colnr_T;
+                    cached.lpos.col = unsafe { s.offset_from(line) } as ColNr;
                 }
             }
 

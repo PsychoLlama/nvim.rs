@@ -129,7 +129,7 @@ class Reader:
     def signed(self, n: int) -> int:
         """The same, reinterpreted as two's complement.
 
-        Fields holding a `linenr_T`/`colnr_T`/`int` are written by
+        Fields holding a `LineNr`/`ColNr`/`int` are written by
         widening to `uintmax_t` and keeping the low `n` bytes, so a
         negative value arrives as its two's-complement tail.
         """

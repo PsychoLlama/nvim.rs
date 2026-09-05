@@ -28,7 +28,7 @@ use std::ffi::CString;
 
 /// A stack entry with no `es_info` payload yet; the pushers that have one fill
 /// it in through the returned pointer.
-fn entry_for(es_type: etype_T, name: *mut c_char, lnum: linenr_T) -> estack_T {
+fn entry_for(es_type: etype_T, name: *mut c_char, lnum: LineNr) -> estack_T {
     estack_T {
         es_lnum: lnum,
         es_name: name,
@@ -54,12 +54,12 @@ pub fn estack_init() {
 /// The `es_info` payload, where the frame has one, is filled in afterwards
 /// through [`with_innermost`]; upstream hands the caller a pointer to the new
 /// slot instead, and no caller here wanted one.
-pub fn estack_push(es_type: etype_T, name: *mut c_char, lnum: linenr_T) {
+pub fn estack_push(es_type: etype_T, name: *mut c_char, lnum: LineNr) {
     push_entry(entry_for(es_type, name, lnum));
 }
 
 /// Add a user function to the execution stack.
-pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: linenr_T) {
+pub unsafe fn estack_push_ufunc(ufunc: *mut ufunc_T, lnum: LineNr) {
     // SAFETY: `ufunc` is a live user function. `uf_name_exp` is the
     // `<SNR>`-expanded name when one was built; otherwise the name is the
     // struct's trailing inline buffer.
@@ -134,7 +134,7 @@ pub fn replace_sourcing_name(name: *mut c_char) -> *mut c_char {
 }
 
 /// The line number the innermost frame is on -- upstream's `SOURCING_LNUM`.
-pub(crate) fn sourcing_lnum() -> linenr_T {
+pub(crate) fn sourcing_lnum() -> LineNr {
     innermost().map_or(0, |entry| entry.es_lnum)
 }
 
@@ -145,7 +145,7 @@ pub(crate) fn sourcing_name() -> *mut c_char {
 }
 
 /// Move the innermost frame to `lnum`.
-pub(crate) fn set_sourcing_lnum(lnum: linenr_T) {
+pub(crate) fn set_sourcing_lnum(lnum: LineNr) {
     exestack.with_mut(|stack| {
         if let Some(entry) = stack.last_mut() {
             entry.es_lnum = lnum;
@@ -293,7 +293,7 @@ unsafe fn stacktrace_push_item(
     l: *mut list_T,
     fp: *mut ufunc_T,
     event: *const c_char,
-    lnum: linenr_T,
+    lnum: LineNr,
     filepath: *mut c_char,
 ) {
     // SAFETY: `l` is the caller's list, and the dict below is freshly

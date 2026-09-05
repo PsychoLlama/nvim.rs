@@ -122,10 +122,10 @@ pub fn diff_invalidate(buf: Buf) {
 /// `amount`, everything below by `amount_after`.
 pub fn diff_mark_adjust(
     buf: Buf,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 ) {
     for tp in tabs() {
         let idx = diff_buf_idx(buf, tp);
@@ -139,12 +139,8 @@ pub fn diff_mark_adjust(
 
 /// The edit `mark_adjust`'s four numbers describe, as the two counts every
 /// case below is written in terms of.
-fn inserted_deleted(
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
-) -> (linenr_T, linenr_T) {
-    if line2 == MAXLNUM as linenr_T {
+fn inserted_deleted(line2: LineNr, amount: LineNr, amount_after: LineNr) -> (LineNr, LineNr) {
+    if line2 == MAXLNUM as LineNr {
         (amount, 0) // `mark_adjust(99, MAXLNUM, 9, 0)`: insert lines
     } else if amount_after > 0 {
         (amount_after, 0) // `mark_adjust(99, 98, MAXLNUM, 9)`: a change that inserts
@@ -163,10 +159,10 @@ fn inserted_deleted(
 unsafe fn diff_mark_adjust_tp(
     mut tp: TabPage,
     idx: c_int,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 ) {
     if unsafe { diff_internal() } != 0 {
         // The blocks will be recomputed before the next redraw, so
@@ -185,7 +181,7 @@ unsafe fn diff_mark_adjust_tp(
     // Slide the *other* buffers' ranges by the same edit: `off` is how
     // far the block's start moved up, `n` how many lines they gain --
     // which is how a deletion in one buffer becomes a change in the rest.
-    let adjust_others = |dp: *mut diff_T, off: linenr_T, n: linenr_T| {
+    let adjust_others = |dp: *mut diff_T, off: LineNr, n: LineNr| {
         for i in 0..DB_COUNT as usize {
             if tp.tp_diffbuf[i].is_null() || i == idx {
                 continue;
@@ -223,7 +219,7 @@ unsafe fn diff_mark_adjust_tp(
         // list, which is doing its own bookkeeping.
         if (dp.is_null()
             || unsafe { (*dp).df_lnum[idx] } - 1 > line2
-            || line2 == MAXLNUM as linenr_T && unsafe { (*dp).df_lnum[idx] } > line1)
+            || line2 == MAXLNUM as LineNr && unsafe { (*dp).df_lnum[idx] } > line1)
             && (dprev.is_null()
                 || unsafe { (*dprev).df_lnum[idx] } + unsafe { (*dprev).df_count[idx] } < line1)
             && !diff_busy.get()

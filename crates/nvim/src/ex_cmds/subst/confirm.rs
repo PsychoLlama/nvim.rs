@@ -40,7 +40,7 @@ use crate::os::cshim::{gettext, snprintf};
 use crate::plines::getvcol;
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUIMessages;
-use crate::types::{Callback, CpoFlag, ExpandContext, IOSIZE, NUL, colnr_T, linenr_T, size_t};
+use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};
 use crate::ui::ui_has;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -83,8 +83,8 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
         )
     };
 
-    let mut sc = 0 as colnr_T;
-    let mut ec = 0 as colnr_T;
+    let mut sc = 0 as ColNr;
+    let mut ec = 0 as ColNr;
     // SAFETY: the cursor is at the start of the match; moving it to the last
     // byte of the match and back is what gives the match's screen columns.
     unsafe {
@@ -194,9 +194,9 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
 
     search_match_lines.set(st.regmatch.endpos[0].lnum - st.regmatch.startpos[0].lnum);
     search_match_endcol.set(st.regmatch.endpos[0].col + len_change);
-    if search_match_lines.get() == 0 as linenr_T && search_match_endcol.get() == 0 as colnr_T {
+    if search_match_lines.get() == 0 as LineNr && search_match_endcol.get() == 0 as ColNr {
         // Highlight at least one character for /^/.
-        search_match_endcol.set(1 as colnr_T);
+        search_match_endcol.set(1 as ColNr);
     }
     highlight_match.set(true);
 
@@ -311,7 +311,7 @@ pub(super) unsafe fn ask_confirm(st: &mut Sub) -> Confirm {
         // get stuck when pressing 'n'.
         if st.nmatch > 1 as c_int {
             // SAFETY: the copied line is NUL-terminated.
-            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as colnr_T;
+            st.matchcol = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as ColNr;
             st.skip_match = true;
         }
         return Confirm::Skip;

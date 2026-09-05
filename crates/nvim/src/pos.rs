@@ -21,7 +21,7 @@ use crate::types::pos_T;
 pub const MAXLNUM: ::core::ffi::c_uint = 2147483647;
 
 /// One past the last addressable column: the sentinel meaning "to the end of
-/// the line", which is `INT_MAX` because `colnr_T` is `int`.
+/// the line", which is `INT_MAX` because `ColNr` is `int`.
 pub const MAXCOL: ::core::ffi::c_int = ::core::ffi::c_int::MAX;
 
 /// Whether two positions name the same place, `coladd` included.

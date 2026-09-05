@@ -37,7 +37,7 @@ const TAGSTACKSIZE: usize = super::TAGSTACKSIZE as usize;
 
 /// The view a stack entry's mark starts with: no remembered scroll position.
 const NO_VIEW: fmarkv_T = fmarkv_T {
-    topline_offset: MAXLNUM as linenr_T,
+    topline_offset: MAXLNUM as LineNr,
     skipcol: 0,
 };
 
@@ -309,7 +309,7 @@ unsafe fn tag_details(tag: &taggy_T, retdict: *mut dict_T) {
     unsafe { tv_list_append_number(pos, mark.mark.lnum as varnumber_T) };
     // Columns are counted from one outside, except for the "past the
     // end of the line" sentinel, which is passed through.
-    let n2 = if mark.mark.col == MAXCOL as colnr_T {
+    let n2 = if mark.mark.col == MAXCOL as ColNr {
         MAXCOL as varnumber_T
     } else {
         (mark.mark.col + 1) as varnumber_T

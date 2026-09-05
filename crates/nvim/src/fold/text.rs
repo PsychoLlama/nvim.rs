@@ -43,8 +43,8 @@ use crate::options::kWinOptFoldtext;
 /// `buf` must be writable for [`FOLD_TEXT_LEN`] bytes, and `vt` writable.
 pub unsafe fn get_foldtext(
     wp: Win,
-    lnum: linenr_T,
-    lnume: linenr_T,
+    lnum: LineNr,
+    lnume: LineNr,
     foldinfo: foldinfo_T,
     buf: *mut c_char,
     vt: *mut VirtText,
@@ -55,7 +55,7 @@ pub unsafe fn get_foldtext(
     // raise one error per drawn fold.
     static got_fdt_error: GlobalCell<bool> = GlobalCell::new(false);
     static last_wp: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
-    static last_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+    static last_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     let save_did_emsg = did_emsg.get();
     if last_wp.get().is_null()
         || last_wp.get() != wp.raw()

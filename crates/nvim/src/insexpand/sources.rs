@@ -270,7 +270,7 @@ pub(crate) unsafe fn ins_compl_files(
                     }
                 }
             } else if !regmatch.is_null() {
-                while unsafe { vim_regexec(regmatch, buf, ptr.offset_from(buf) as colnr_T) } {
+                while unsafe { vim_regexec(regmatch, buf, ptr.offset_from(buf) as ColNr) } {
                     let start = unsafe { (*regmatch).startp[0] };
                     ptr = if ctrl_x_mode_line_or_eval() {
                         unsafe { find_line_end(start) }
@@ -905,7 +905,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
         }
     };
     if whole_line && unsafe { (*start_pos).lnum } != unsafe { (*pos).lnum } {
-        current_pos.lnum += dir as linenr_T;
+        current_pos.lnum += dir as LineNr;
     }
     let mut looped_around = false;
     loop {

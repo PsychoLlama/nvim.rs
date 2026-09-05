@@ -54,9 +54,9 @@ use crate::options::{kOptRdbFlagInvalid, kOptRdbFlagNodelta};
 use crate::optionstr::check_chars_options;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    AlignTextPos, BorderTextType, GridCells, GridView, Integer, MHPutStatus, MapHash, ScreenGrid,
-    Set_glyph, String_0, VirtText, WinConfig, colnr_T, handle_T, schar_T, size_t, uint32_t, win_T,
-    wline_T,
+    AlignTextPos, BorderTextType, ColNr, GridCells, GridView, Integer, MHPutStatus, MapHash,
+    ScreenGrid, Set_glyph, String_0, VirtText, WinConfig, handle_T, schar_T, size_t, uint32_t,
+    win_T, wline_T,
 };
 use crate::ui::{
     ui_call_grid_resize, ui_call_grid_scroll, ui_check_cursor_grid, ui_grid_cursor_goto, ui_has,

@@ -25,7 +25,7 @@ pub type DoInRuntimepathCBFn = unsafe fn(
 pub type DoInRuntimepathCB = Option<DoInRuntimepathCBFn>;
 #[derive(Copy, Clone)]
 pub struct estack_T {
-    pub es_lnum: linenr_T,
+    pub es_lnum: LineNr,
     pub es_name: *mut ::core::ffi::c_char,
     pub es_type: etype_T,
     pub es_info: EstackInfo,
@@ -72,8 +72,8 @@ pub type etype_T = ::core::ffi::c_uint;
 #[derive(Copy, Clone, Default)]
 pub(crate) struct sn_prl_T {
     pub(crate) snp_count: ::core::ffi::c_int,
-    pub(crate) sn_prl_total: proftime_T,
-    pub(crate) sn_prl_self: proftime_T,
+    pub(crate) sn_prl_total: ProfTime,
+    pub(crate) sn_prl_self: ProfTime,
 }
 
 pub struct scriptitem_T {
@@ -82,18 +82,18 @@ pub struct scriptitem_T {
     pub sn_lua: bool,
     pub sn_prof_on: bool,
     pub sn_pr_force: bool,
-    pub sn_pr_child: proftime_T,
+    pub sn_pr_child: ProfTime,
     pub sn_pr_nest: ::core::ffi::c_int,
     pub sn_pr_count: ::core::ffi::c_int,
-    pub sn_pr_total: proftime_T,
-    pub sn_pr_self: proftime_T,
-    pub sn_pr_start: proftime_T,
-    pub sn_pr_children: proftime_T,
+    pub sn_pr_total: ProfTime,
+    pub sn_pr_self: ProfTime,
+    pub sn_pr_start: ProfTime,
+    pub sn_pr_children: ProfTime,
     pub(crate) sn_prl_ga: Vec<sn_prl_T>,
-    pub sn_prl_start: proftime_T,
-    pub sn_prl_children: proftime_T,
-    pub sn_prl_wait: proftime_T,
-    pub sn_prl_idx: linenr_T,
+    pub sn_prl_start: ProfTime,
+    pub sn_prl_children: ProfTime,
+    pub sn_prl_wait: ProfTime,
+    pub sn_prl_idx: LineNr,
     pub sn_prl_execed: ::core::ffi::c_int,
 }
 

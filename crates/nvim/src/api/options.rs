@@ -37,8 +37,8 @@ use crate::option::{
     option_has_scope, optval_as_object, optval_free, set_option_direct, set_option_value_for,
 };
 use crate::types::{
-    Arena, Dict, Error, KeyDict_option, Object, OptIndex, OptScope, OptVal, OptionSetFlags,
-    String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, linenr_T, uint64_t,
+    Arena, Dict, Error, KeyDict_option, LineNr, Object, OptIndex, OptScope, OptVal, OptionSetFlags,
+    String_0, aco_save_T, buf_T, kErrorTypeNone, kErrorTypeValidation, uint64_t,
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
@@ -213,7 +213,7 @@ unsafe fn do_ft_buf(
         return ptr::null_mut::<buf_T>();
     }
     // SAFETY: a dummy buffer of no name, which owns everything it holds.
-    let ftbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as linenr_T, BLN_DUMMY) };
+    let ftbuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1 as LineNr, BLN_DUMMY) };
     if ftbuf.is_null() {
         *err = Error::exception(c"Could not create internal buffer");
         return ptr::null_mut::<buf_T>();

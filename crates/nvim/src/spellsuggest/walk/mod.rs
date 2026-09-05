@@ -88,7 +88,7 @@ use crate::os::input::os_breakcheck;
 use crate::profile::{profile_passed_limit, profile_setlimit};
 use crate::spell::Tree;
 use crate::spellsuggest::{MAXWLEN, spell_suggest_timeout, suginfo_T};
-use crate::types::{idx_T, int64_t, langp_T, proftime_T, slang_T};
+use crate::types::{ProfTime, idx_T, int64_t, langp_T, slang_T};
 use core::ffi::{c_char, c_int};
 
 /// One level per byte of the bad word is all the walk can ever need.
@@ -253,7 +253,7 @@ pub(crate) struct Walk<'a> {
     /// The tree of postponed prefixes, empty when the language has none.
     pub prefix_tree: Tree<'a>,
     /// When to give up. The walk can otherwise run for an unbounded time.
-    pub time_limit: proftime_T,
+    pub time_limit: ProfTime,
 
     /// The tree currently being walked: the prefix tree while inside a
     /// postponed prefix, `word_tree` otherwise.

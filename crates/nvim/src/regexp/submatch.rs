@@ -21,7 +21,7 @@ use crate::eval::typval::{
 };
 use crate::memory::{xfree, xmalloc, xmemcpyz};
 use crate::strings::xstrnsave;
-use crate::types::{NUL, VAR_STRING, colnr_T, linenr_T, list_T, staticList10_T, typval_T, ufunc_T};
+use crate::types::{ColNr, LineNr, NUL, VAR_STRING, list_T, staticList10_T, typval_T, ufunc_T};
 use crate::winlayer::Live;
 use ::libc::{strcpy, strncpy};
 
@@ -67,14 +67,14 @@ impl Rsm {
 
     /// The buffer line the snapshot's line 0 sits on.
     #[inline(always)]
-    pub(crate) fn firstlnum(self) -> linenr_T {
+    pub(crate) fn firstlnum(self) -> LineNr {
         // SAFETY: as `match_`.
         unsafe { (*self.0).sm_firstlnum }
     }
 
     /// The last line it reaches, relative to [`Rsm::firstlnum`].
     #[inline(always)]
-    pub(crate) fn maxline(self) -> linenr_T {
+    pub(crate) fn maxline(self) -> LineNr {
         // SAFETY: as `match_`.
         unsafe { (*self.0).sm_maxline }
     }
@@ -89,12 +89,12 @@ impl Rsm {
 
 /// The text of the submatch line `lnum` lines into the match `submatch()`
 /// and a `\=` expression see.
-pub(crate) fn reg_getline_submatch(rex: Rex, lnum: linenr_T) -> *mut c_char {
+pub(crate) fn reg_getline_submatch(rex: Rex, lnum: LineNr) -> *mut c_char {
     reg_line(rex, lnum, LineOrigin::Submatch)
 }
 
 /// Its length.
-pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: linenr_T) -> colnr_T {
+pub(crate) fn reg_getline_submatch_len(rex: Rex, lnum: LineNr) -> ColNr {
     reg_line_len(rex, lnum, LineOrigin::Submatch)
 }
 

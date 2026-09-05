@@ -30,8 +30,8 @@ use crate::memory::{xcalloc, xrealloc};
 use crate::option::{clear_winopt, copy_winopt, didset_window_options};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    AdditionalData, OptInt, Timestamp, WinInfo, buf_T, colnr_T, fmark_T, fmarkv_T, garray_T,
-    linenr_T, pos_T, size_t, win_T, winopt_T,
+    AdditionalData, ColNr, LineNr, OptInt, Timestamp, WinInfo, buf_T, fmark_T, fmarkv_T, garray_T,
+    pos_T, size_t, win_T, winopt_T,
 };
 use crate::winfloat::win_set_minimal_style;
 use crate::winlayer::{Buf, Win, windows};
@@ -237,8 +237,8 @@ fn current_win() -> Win {
 pub unsafe fn buflist_setfpos(
     mut buf: Buf,
     win: Option<Win>,
-    mut lnum: linenr_T,
-    col: colnr_T,
+    mut lnum: LineNr,
+    col: ColNr,
     copy_options: bool,
 ) {
     let raw_win = win.map_or(ptr::null_mut(), Win::raw);
@@ -249,9 +249,9 @@ pub unsafe fn buflist_setfpos(
         None => {
             let mut entry = Entry::new();
             entry.wi_win = raw_win;
-            if lnum == 0 as linenr_T {
+            if lnum == 0 as LineNr {
                 // Set lnum even when it is 0.
-                lnum = 1 as linenr_T;
+                lnum = 1 as LineNr;
             }
             entry
         }
@@ -266,7 +266,7 @@ pub unsafe fn buflist_setfpos(
         }
     };
 
-    if lnum != 0 as linenr_T {
+    if lnum != 0 as LineNr {
         entry.wi_mark.mark.lnum = lnum;
         entry.wi_mark.mark.col = col;
         if let Some(win) = win {
@@ -402,15 +402,15 @@ pub unsafe fn get_winopts(mut buf: Buf) {
 pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut fmark_T {
     static no_position: GlobalCell<fmark_T> = GlobalCell::new(fmark_T {
         mark: pos_T {
-            lnum: 1 as linenr_T,
-            col: 0 as colnr_T,
-            coladd: 0 as colnr_T,
+            lnum: 1 as LineNr,
+            col: 0 as ColNr,
+            coladd: 0 as ColNr,
         },
         fnum: 0,
         timestamp: 0 as Timestamp,
         view: fmarkv_T {
-            topline_offset: MAXLNUM as linenr_T,
-            skipcol: 0 as colnr_T,
+            topline_offset: MAXLNUM as LineNr,
+            skipcol: 0 as ColNr,
         },
         additional_data: ptr::null_mut::<AdditionalData>(),
     });
@@ -423,7 +423,7 @@ pub unsafe fn buflist_findfmark(mut buf: Buf) -> *mut fmark_T {
     }
 }
 
-pub unsafe fn buflist_findlnum(buf: Buf) -> linenr_T {
+pub unsafe fn buflist_findlnum(buf: Buf) -> LineNr {
     // SAFETY: the answer is a live mark -- an entry's own, or the shared
     // "no position".
     unsafe { (*buflist_findfmark(buf)).mark.lnum }

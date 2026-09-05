@@ -38,9 +38,9 @@ use crate::os::cshim::snprintf;
 use crate::runtime::script_autoload;
 use crate::strings::concat_str;
 use crate::types::{
-    Callback, CallbackReader, Channel, FAIL, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN,
-    VarLock, buf_T, caller_scope, colnr_T, dict_T, estack_T, funccal_entry_T, funcexe_T, list_T,
-    ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
+    Callback, CallbackReader, Channel, ColNr, FAIL, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING,
+    VAR_UNKNOWN, VarLock, buf_T, caller_scope, dict_T, estack_T, funccal_entry_T, funcexe_T,
+    list_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uint64_t, varnumber_T,
 };
 use crate::undo::u_clearallandblockfree;
 use crate::winlayer::{Buf, Live};
@@ -452,7 +452,7 @@ pub unsafe fn prompt_invoke_callback() {
 
     // SAFETY: `lnum` is the buffer's last line, and the literal is
     // NUL-terminated.
-    let _ = unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as colnr_T, false) };
+    let _ = unsafe { ml_append(lnum, c"".as_ptr() as *mut c_char, 0 as ColNr, false) };
     // SAFETY: the line was just appended.
     unsafe { appended_lines_mark(lnum, 1) };
     cur_win().w_cursor.lnum = lnum + 1;

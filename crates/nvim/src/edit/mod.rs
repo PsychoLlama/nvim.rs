@@ -170,9 +170,9 @@ use crate::textobject::{bck_word, fwd_word};
 use crate::types::AutoEvent;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CharsizeArg, CmdModFlags, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, MB_MAXBYTES, OptInt,
-    PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv, aco_save_T, colnr_T, int32_t,
-    int64_t, linenr_T, pos_T, ptrdiff_t, schar_T, size_t, uint8_t, varnumber_T,
+    CharsizeArg, CmdModFlags, ColNr, INSCHAR_CTRLV, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
+    MB_MAXBYTES, OptInt, PUT_CURSEND, PUT_FIXINDENT, StrCharInfo, String_0, VimState, Vv,
+    aco_save_T, int32_t, int64_t, pos_T, ptrdiff_t, schar_T, size_t, uint8_t, varnumber_T,
 };
 use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
@@ -233,7 +233,7 @@ pub(crate) struct InsertState {
     pub i: ::core::ffi::c_int,
     pub did_backspace: bool,
     pub line_is_white: bool,
-    pub old_topline: linenr_T,
+    pub old_topline: LineNr,
     pub old_topfill: ::core::ffi::c_int,
     pub inserted_space: ::core::ffi::c_int,
     pub replaceState: ::core::ffi::c_int,
@@ -258,8 +258,8 @@ pub(crate) const CTRL_V_STR: &::core::ffi::CStr = c"\x16";
 pub(crate) const COM_MIDDLE: ::core::ffi::c_int = 'm' as ::core::ffi::c_int;
 pub(crate) const COM_MAX_LEN: ::core::ffi::c_int = 50 as ::core::ffi::c_int;
 static compl_busy: GlobalCell<bool> = GlobalCell::new(false);
-static Insstart_textlen: GlobalCell<colnr_T> = GlobalCell::new(0);
-static Insstart_blank_vcol: GlobalCell<colnr_T> = GlobalCell::new(0);
+static Insstart_textlen: GlobalCell<ColNr> = GlobalCell::new(0);
+static Insstart_blank_vcol: GlobalCell<ColNr> = GlobalCell::new(0);
 static update_Insstart_orig: GlobalCell<bool> = GlobalCell::new(true);
 static last_insert: GlobalCell<String_0> = GlobalCell::new(String_0::from_raw_parts(
     ::core::ptr::null_mut::<::core::ffi::c_char>(),
@@ -290,7 +290,7 @@ pub(crate) enum KeepUndo {
 }
 
 static dont_sync_undo: GlobalCell<KeepUndo> = GlobalCell::new(KeepUndo::No);
-static o_lnum: GlobalCell<linenr_T> = GlobalCell::new(0 as linenr_T);
+static o_lnum: GlobalCell<LineNr> = GlobalCell::new(0 as LineNr);
 /// The Replace-mode stack of overwritten bytes -- see [`replace`].
 ///
 /// A `Vec`, not klib's `kvec_t(char)`: the growth policy was the only thing

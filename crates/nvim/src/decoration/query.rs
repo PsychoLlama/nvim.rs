@@ -24,7 +24,7 @@ use crate::marktree::key::{kMTFilterSelect, mt_conceal_lines, mt_invalid};
 use crate::marktree::meta::MetaCount;
 use crate::memory::xrealloc;
 use crate::types::{
-    DecorVirtText, MarkTreeIter, OptInt, VirtLines, VirtText, buf_T, linenr_T, size_t, uint64_t,
+    DecorVirtText, LineNr, MarkTreeIter, OptInt, VirtLines, VirtText, buf_T, size_t, uint64_t,
     virt_line, win_T,
 };
 use crate::winlayer::{Buf, Win};
@@ -144,7 +144,7 @@ pub unsafe fn decor_conceal_line(wp: *mut win_T, row: c_int, check_cursor: bool)
         || wp.w_onebuf_opt.wo_cole < 2 as OptInt
         || (!check_cursor
             && wp.is_current()
-            && row as linenr_T + 1 == wp.w_cursor.lnum
+            && row as LineNr + 1 == wp.w_cursor.lnum
             && !wp.conceals_cursor_line())
     {
         return false;
@@ -243,7 +243,7 @@ pub unsafe fn decor_virt_lines(
                 if draw_row >= start_row
                     && draw_row < end_row
                     && (!apply_folds
-                        || !(wp.fold_span(mrow as linenr_T + 1).0 || wp.conceal_line(mrow, false)))
+                        || !(wp.fold_span(mrow as LineNr + 1).0 || wp.conceal_line(mrow, false)))
                 {
                     let block = vt.lines();
                     virt_lines += block.size as c_int;

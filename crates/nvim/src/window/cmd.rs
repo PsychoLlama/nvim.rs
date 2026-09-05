@@ -51,7 +51,7 @@ use crate::search::find_pattern_in_path;
 use crate::strings::vim_snprintf;
 use crate::tr_c;
 use crate::types::ui::kUIMultigrid;
-use crate::types::{Failed, NUL, WinConfig, exarg_T, int64_t, linenr_T, oparg_T, size_t};
+use crate::types::{Failed, LineNr, NUL, WinConfig, exarg_T, int64_t, oparg_T, size_t};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
 
@@ -536,7 +536,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     if text_or_buffer_locked() {
         return;
     }
-    let mut lnum = -1 as linenr_T;
+    let mut lnum = -1 as LineNr;
     let ptr = grab_filename(prenum1, &mut lnum);
     if ptr.is_null() {
         return;
@@ -566,7 +566,7 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
             wp = Some(cur_win());
         }
     }
-    if wp.is_some() && nchar == b'F' as c_int && lnum >= 0 as linenr_T {
+    if wp.is_some() && nchar == b'F' as c_int && lnum >= 0 as LineNr {
         let mut cur = cur_win();
         cur.w_cursor.lnum = lnum;
         revalidate_cursor_lnum(cur);
@@ -709,7 +709,7 @@ fn find_buffer_by_name(name: *mut c_char) -> Option<Buf> {
 /// Edit buffer `fnum` in the current window, remembering the alternate file.
 fn open_buffer_here(fnum: c_int) {
     // SAFETY: a buffer number the list was just searched for.
-    let _ = unsafe { buflist_getfile(fnum, 0 as linenr_T, GETF_ALT as c_int, 0) };
+    let _ = unsafe { buflist_getfile(fnum, 0 as LineNr, GETF_ALT as c_int, 0) };
 }
 
 /// Whether the current buffer may not be changed right now.
@@ -726,7 +726,7 @@ fn text_or_buffer_locked() -> bool {
 
 /// The file name under the cursor, `prenum1` names in from it, with the line
 /// number that follows it written to `lnum`.
-fn grab_filename(prenum1: c_int, lnum: &mut linenr_T) -> *mut c_char {
+fn grab_filename(prenum1: c_int, lnum: &mut LineNr) -> *mut c_char {
     // SAFETY: reads the current line, and writes only through `lnum`.
     unsafe { grab_file_name(prenum1, lnum) }
 }
@@ -734,7 +734,7 @@ fn grab_filename(prenum1: c_int, lnum: &mut linenr_T) -> *mut c_char {
 /// `do_ecmd()`: edit file `ptr` in the current window, keeping the alternate.
 fn edit_file(ptr: *mut c_char) -> Result<(), Failed> {
     let (sfname, eap, win) = (ptr::null_mut(), ptr::null_mut::<exarg_T>(), ptr::null_mut());
-    let lnum = newlnum::LASTL as linenr_T;
+    let lnum = newlnum::LASTL as LineNr;
     // SAFETY: a NUL-terminated file name; every other argument is optional.
     unsafe { do_ecmd(0, ptr, sfname, eap, lnum, EcmdFlags::HIDE, win) }
 }
@@ -767,7 +767,7 @@ fn dup_bytes(src: *mut c_char, len: size_t) -> *mut c_char {
 /// `find_pattern_in_path()` as CTRL-W i / d asks it: split a window on the
 /// first, or the `prenum1`th, match of `pat` along `'path'`.
 fn search_path(pat: *mut c_char, len: size_t, kind: c_int, skip_comments: bool, prenum1: c_int) {
-    let (first, last) = (1 as linenr_T, MAXLNUM as linenr_T);
+    let (first, last) = (1 as LineNr, MAXLNUM as LineNr);
     let action = ACTION_SPLIT as c_int;
     // SAFETY: a NUL-terminated pattern of `len` bytes.
     unsafe {

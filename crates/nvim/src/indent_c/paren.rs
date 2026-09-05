@@ -31,7 +31,7 @@ pub(crate) unsafe fn cin_skip2pos(trypos: pos_T) -> c_int {
     // region around the whole walk is as tight as this gets.
     let line = ml_get(trypos.lnum);
     let mut p = line.cast_const();
-    while unsafe { *p } != 0 && (unsafe { p.offset_from(line) } as colnr_T) < trypos.col {
+    while unsafe { *p } != 0 && (unsafe { p.offset_from(line) } as ColNr) < trypos.col {
         if unsafe { cin_iscomment(p) } {
             p = unsafe { cin_skipcomment(p) };
         } else {
@@ -215,7 +215,7 @@ pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bo
             if open_count > 0 {
                 open_count -= 1;
             } else {
-                cur_win().w_cursor.col = i as colnr_T;
+                cur_win().w_cursor.col = i as ColNr;
                 retval = true;
             }
         }
@@ -234,7 +234,7 @@ pub(crate) unsafe fn find_last_paren(l: *const c_char, start: u8, end: u8) -> bo
 ///
 /// # Safety
 /// Moves the cursor; may unlock the current line.
-pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: linenr_T) -> bool {
+pub(crate) unsafe fn find_match(lookfor: c_int, ourscope: LineNr) -> bool {
     let (mut elselevel, mut whilelevel) = if lookfor == LOOKFOR_IF {
         (1, 0)
     } else {

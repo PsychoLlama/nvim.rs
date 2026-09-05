@@ -22,7 +22,7 @@ use crate::winlayer::{Buf, Win};
 /// What a mark restored from a file starts its view at: nothing is known
 /// about where the window was scrolled to.
 const INIT_FMARKV: fmarkv_T = fmarkv_T {
-    topline_offset: MAXLNUM as linenr_T,
+    topline_offset: MAXLNUM as LineNr,
     skipcol: 0,
 };
 
@@ -258,7 +258,7 @@ impl Reading {
             y_array: reg.contents,
             y_size: reg.contents_size,
             y_type: reg.type_0,
-            y_width: reg.width as colnr_T,
+            y_width: reg.width as ColNr,
             timestamp: entry.timestamp,
             additional_data: entry.additional_data,
         };

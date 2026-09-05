@@ -138,7 +138,7 @@ unsafe fn read_undo_file(
         unsafe { corruption_error(c"hash".as_ptr(), file_name) };
         return;
     }
-    let line_count = unsafe { undo_read_4c(bi) } as linenr_T;
+    let line_count = unsafe { undo_read_4c(bi) } as LineNr;
     // The tree describes text; a buffer holding different text cannot
     // have it applied.
     if unsafe { core::slice::from_raw_parts(hash, read_hash.len()) } != read_hash
@@ -175,8 +175,8 @@ struct FileHeader {
     /// The `U` shadow line, and where it came from. Owned: whoever holds a
     /// `FileHeader` and gives up on it frees this.
     line_ptr: *mut c_char,
-    line_lnum: linenr_T,
-    line_colnr: colnr_T,
+    line_lnum: LineNr,
+    line_colnr: ColNr,
     /// The three tree heads, still as the sequence numbers the file spells
     /// them as — a link *is* a sequence number, so no conversion happens.
     old_head: c_int,
@@ -208,7 +208,7 @@ unsafe fn read_file_header(bi: *mut bufinfo_T, file_name: *const c_char) -> Opti
     } else {
         ptr::null_mut()
     };
-    let line_lnum = unsafe { undo_read_4c(bi) } as linenr_T;
+    let line_lnum = unsafe { undo_read_4c(bi) } as LineNr;
     let line_colnr = unsafe { undo_read_4c(bi) };
     if line_lnum < 0 || line_colnr < 0 {
         unsafe { corruption_error(c"line lnum/col".as_ptr(), file_name) };

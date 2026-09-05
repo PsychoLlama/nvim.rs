@@ -38,10 +38,10 @@ use crate::winlayer::{Buf, TabPage, Win, tab_windows, windows};
 /// change covered, and shift what is below it by `xtra`.
 fn changed_lines_invalidate_win(
     wp: Win,
-    lnum: linenr_T,
-    col: colnr_T,
-    mut lnume: linenr_T,
-    xtra: linenr_T,
+    lnum: LineNr,
+    col: ColNr,
+    mut lnume: LineNr,
+    xtra: LineNr,
 ) {
     if wp.w_cursor.lnum <= lnum {
         // SAFETY: a live window; the answer is an index into `w_lines` or -1.
@@ -106,10 +106,10 @@ fn changed_lines_invalidate_win(
 ///
 pub fn changed_lines_invalidate_buf(
     buf: Buf,
-    lnum: linenr_T,
-    col: colnr_T,
-    lnume: linenr_T,
-    xtra: linenr_T,
+    lnum: LineNr,
+    col: ColNr,
+    lnume: LineNr,
+    xtra: LineNr,
 ) {
     for wp in tab_windows() {
         if wp.w_buffer == buf.raw() {
@@ -125,11 +125,11 @@ pub fn changed_lines_invalidate_buf(
 /// then only if it is far enough from the last one -- otherwise typing
 /// `xxxxx` would fill the list. "Far enough" is a 'textwidth' away, or 79
 /// columns when 'textwidth' is 0.
-fn record_change_mark(mut buf: Buf, lnum: linenr_T, col: colnr_T) {
+fn record_change_mark(mut buf: Buf, lnum: LineNr, col: ColNr) {
     // Only record the view if the changed line is on screen: a change can
     // be made outside the current window's view.
     let mut view = fmarkv_T {
-        topline_offset: MAXLNUM as linenr_T,
+        topline_offset: MAXLNUM as LineNr,
         skipcol: 0,
     };
     let win = cur_win();
@@ -221,13 +221,7 @@ fn record_change_mark(mut buf: Buf, lnum: linenr_T, col: colnr_T) {
 
 /// Bring one window's fold, scroll and cursor-line state up to date with a
 /// change that covered `lnum`..`lnume` and moved what follows by `xtra`.
-fn redraw_win_for_change(
-    mut wp: Win,
-    mut lnum: linenr_T,
-    col: colnr_T,
-    lnume: linenr_T,
-    xtra: linenr_T,
-) {
+fn redraw_win_for_change(mut wp: Win, mut lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
     if !redraw_not_allowed.get() && wp.w_redr_type < UPD_VALID {
         wp.w_redr_type = UPD_VALID;
     }
@@ -306,7 +300,7 @@ fn redraw_win_for_change(
 /// cached display state.
 ///
 /// See [`changed_lines`] for the arguments.
-fn changed_common(buf: Buf, lnum: linenr_T, col: colnr_T, lnume: linenr_T, xtra: linenr_T) {
+fn changed_common(buf: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: LineNr) {
     // SAFETY: a live buffer.
     unsafe { changed(buf) };
 
@@ -359,7 +353,7 @@ fn changed_common(buf: Buf, lnum: linenr_T, col: colnr_T, lnume: linenr_T, xtra:
 /// # Safety
 /// `lnum` must be a valid line of the current buffer. May trigger
 /// autocommands that reload it.
-pub unsafe fn changed_bytes(lnum: linenr_T, col: colnr_T) {
+pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { changed_lines_redraw_buf(Buf::new(curbuf.get()), lnum, lnum + 1, 0) };
     changed_common(cur_buf(), lnum, col, lnum + 1, 0);
@@ -398,7 +392,7 @@ pub unsafe fn changed_bytes(lnum: linenr_T, col: colnr_T) {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn inserted_bytes(lnum: linenr_T, start_col: colnr_T, old_col: c_int, new_col: c_int) {
+pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
     if curbuf_splice_pending.get() == 0 {
         let cb = curbuf.get();
         // SAFETY: the current buffer is live and `lnum` is a line of it.
@@ -414,7 +408,7 @@ pub unsafe fn inserted_bytes(lnum: linenr_T, start_col: colnr_T, old_col: c_int,
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn appended_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
+pub unsafe fn appended_lines_buf(buf: *mut buf_T, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
     unsafe { changed_lines(Buf::new(buf), lnum + 1, 0, lnum + 1, count, true) };
 }
@@ -423,7 +417,7 @@ pub unsafe fn appended_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn appended_lines(lnum: linenr_T, count: linenr_T) {
+pub unsafe fn appended_lines(lnum: LineNr, count: LineNr) {
     // SAFETY: the current buffer is live.
     unsafe { appended_lines_buf(curbuf.get(), lnum, count) };
 }
@@ -432,8 +426,8 @@ pub unsafe fn appended_lines(lnum: linenr_T, count: linenr_T) {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn appended_lines_mark(lnum: linenr_T, count: c_int) {
-    let max = MAXLNUM as linenr_T;
+pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
+    let max = MAXLNUM as LineNr;
     let cb = curbuf.get();
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo) };
@@ -446,7 +440,7 @@ pub unsafe fn appended_lines_mark(lnum: linenr_T, count: c_int) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn deleted_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T) {
+pub unsafe fn deleted_lines_buf(buf: *mut buf_T, lnum: LineNr, count: LineNr) {
     // SAFETY: the caller's buffer.
     unsafe { changed_lines(Buf::new(buf), lnum, 0, lnum + count, -count, true) };
 }
@@ -455,7 +449,7 @@ pub unsafe fn deleted_lines_buf(buf: *mut buf_T, lnum: linenr_T, count: linenr_T
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn deleted_lines(lnum: linenr_T, count: linenr_T) {
+pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
     // SAFETY: the current buffer is live.
     unsafe { deleted_lines_buf(curbuf.get(), lnum, count) };
 }
@@ -467,11 +461,11 @@ pub unsafe fn deleted_lines(lnum: linenr_T, count: linenr_T) {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn deleted_lines_mark(lnum: linenr_T, count: c_int) {
+pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let made_empty = count > 0 && cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
     let cb = curbuf.get();
     let last = lnum + count - 1;
-    let max = MAXLNUM as linenr_T;
+    let max = MAXLNUM as LineNr;
     // Deleting the whole buffer implicitly adds one empty line back.
     let back = -count + i32::from(made_empty);
     // SAFETY: the current buffer is live and `lnum` is a line of it.
@@ -488,13 +482,13 @@ pub unsafe fn deleted_lines_mark(lnum: linenr_T, count: c_int) {
 /// one *before* the change, and `xtra` the net number of lines added
 /// (negative when deleting).
 ///
-pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: linenr_T, mut lnume: linenr_T, xtra: linenr_T) {
+pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: LineNr, mut lnume: LineNr, xtra: LineNr) {
     // A decoration whose mark moved has to be re-measured and redrawn at
     // wherever it moved to, so widen by one line; a virt_line mark may be
     // drawn two lines below, so a deletion widens by one more.
     if xtra != 0 && buf.b_marktree.n_keys > 0 {
         let lines = buf_meta_total(buf, kMTMetaLines);
-        lnume += 1 + linenr_T::from(xtra < 0 && lines != 0);
+        lnume += 1 + LineNr::from(xtra < 0 && lines != 0);
     }
 
     if buf.b_mod_set {
@@ -530,10 +524,10 @@ pub fn changed_lines_redraw_buf(mut buf: Buf, lnum: linenr_T, mut lnume: linenr_
 /// using it across this call without re-deriving it from its handle.
 pub fn changed_lines(
     buf: Buf,
-    lnum: linenr_T,
-    col: colnr_T,
-    lnume: linenr_T,
-    xtra: linenr_T,
+    lnum: LineNr,
+    col: ColNr,
+    lnume: LineNr,
+    xtra: LineNr,
     do_buf_event: bool,
 ) {
     changed_lines_redraw_buf(buf, lnum, lnume, xtra);

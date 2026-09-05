@@ -57,8 +57,8 @@ use crate::types::ESC;
 use crate::types::NL;
 use crate::types::TAB;
 use crate::types::{
-    CmdModFlags, ExtmarkOp, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv, bcount_t,
-    bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, linenr_T, list_T, lpos_T,
+    CmdModFlags, ExtmarkOp, LineNr, NUL, OptVal, OptionSetFlags, String_0, UndoObjectType, Vv,
+    bcount_t, bfa_values, bln_values, dobuf_action_values, exarg_T, getf_retvalues, list_T, lpos_T,
     size_t, uint8_t, win_T,
 };
 use crate::window::{win_enter, win_split};
@@ -123,7 +123,7 @@ pub const CCGD_AW: ::core::ffi::c_uint = 1;
 pub struct SubResult {
     pub start: lpos_T,
     pub end: lpos_T,
-    pub pre_match: linenr_T,
+    pub pre_match: LineNr,
 }
 /// The matches an `'inccommand'` preview has to show, and how many lines they
 /// need on screen -- which is what caps the scan when the preview window is
@@ -131,7 +131,7 @@ pub struct SubResult {
 #[derive(Default)]
 pub struct PreviewLines {
     pub subresults: Vec<SubResult>,
-    pub lines_needed: linenr_T,
+    pub lines_needed: LineNr,
 }
 #[derive(Copy, Clone)]
 pub struct subflags_T {
@@ -156,8 +156,8 @@ pub struct LineData {
     pub matchbytes: bcount_t,
     pub subcols: ::core::ffi::c_int,
     pub subbytes: bcount_t,
-    pub lnum_before: linenr_T,
-    pub lnum_after: linenr_T,
+    pub lnum_before: LineNr,
+    pub lnum_after: LineNr,
 }
 pub const VGR_FUZZY: ::core::ffi::c_uint = 4;
 pub const VGR_NOJUMP: ::core::ffi::c_uint = 2;
@@ -442,7 +442,7 @@ impl LineCopy {
     /// # Safety
     /// `lnum` must be a line of the current buffer, and nothing may read
     /// another line of it while this runs.
-    pub(crate) unsafe fn fill_line(&mut self, lnum: linenr_T) -> usize {
+    pub(crate) unsafe fn fill_line(&mut self, lnum: LineNr) -> usize {
         // SAFETY: caller's contract.
         let mut lines = unsafe { crate::memline::Lines::current() };
         let text = lines.line(lnum);

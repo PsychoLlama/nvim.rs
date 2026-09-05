@@ -99,11 +99,11 @@ use crate::types::NL;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, CharsizeArg, CmdModFlags, ExtmarkOp, GRegFlags, MotionType, NUL,
+    AdditionalData, CharsizeArg, CmdModFlags, ColNr, ExtmarkOp, GRegFlags, LineNr, MotionType, NUL,
     PUT_BLOCK_INNER, PUT_CURSEND, PUT_CURSLINE, PUT_FIXINDENT, PUT_LINE, PUT_LINE_FORWARD,
-    PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VarLock, bcount_t, block_def, colnr_T,
-    exarg_T, hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, linenr_T, oparg_T, pos_T, ptrdiff_t,
-    save_v_event_T, size_t, ssize_t, yankreg_T,
+    PUT_LINE_SPLIT, RemapValues, String_0, UndoObjectType, VarLock, bcount_t, block_def, exarg_T,
+    hashtab_T, int64_t, kBoolVarFalse, kBoolVarTrue, oparg_T, pos_T, ptrdiff_t, save_v_event_T,
+    size_t, ssize_t, yankreg_T,
 };
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};

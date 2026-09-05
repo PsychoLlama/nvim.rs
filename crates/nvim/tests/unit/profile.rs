@@ -1,4 +1,4 @@
-//! Port of the former `test/unit/profile_spec.lua`: the pure `proftime_T`
+//! Port of the former `test/unit/profile_spec.lua`: the pure `ProfTime`
 //! arithmetic. The stateful pieces (wait-time accounting, the `:profile`
 //! report, `--startuptime`) are covered by the functional and old suites.
 

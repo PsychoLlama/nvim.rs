@@ -27,11 +27,11 @@ pub(crate) enum Split {
 /// What line splitting needs to know, and what it changes.
 pub(crate) struct Lines<'a> {
     /// The line to append after.
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     /// How many more lines to throw away before keeping any (`:recover`).
-    pub skip_count: linenr_T,
+    pub skip_count: LineNr,
     /// How many more lines to keep.
-    pub read_count: linenr_T,
+    pub read_count: LineNr,
     /// The hash of the text, for the undo file.
     pub sha: &'a mut Sha256,
     pub read_undo_file: bool,
@@ -51,9 +51,9 @@ pub(crate) struct Lines<'a> {
 pub(crate) unsafe fn split_lines(
     w: &mut Window,
     st: &mut Lines,
-    lnum: &mut linenr_T,
-    skip_count: &mut linenr_T,
-    read_count: &mut linenr_T,
+    lnum: &mut LineNr,
+    skip_count: &mut LineNr,
+    read_count: &mut LineNr,
     fileformat: &mut c_int,
     ff_error: &mut c_int,
 ) -> Split {
@@ -69,7 +69,7 @@ pub(crate) unsafe fn split_lines(
 unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
     // The loops below run once for every character read, so keep them
     // fast.
-    let mut appended = |line_start: *mut c_char, len: colnr_T| -> bool {
+    let mut appended = |line_start: *mut c_char, len: ColNr| -> bool {
         if unsafe { ml_append(st.lnum, line_start, len, st.newfile) }.is_err() {
             return false;
         }
@@ -101,7 +101,7 @@ unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
             } else {
                 if st.skip_count == 0 {
                     unsafe { *w.ptr = 0 }; // end of line
-                    let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as colnr_T;
+                    let len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as ColNr;
                     if !appended(w.line_start, len) {
                         return Split::Stop;
                     }
@@ -155,7 +155,7 @@ unsafe fn split(w: &mut Window, st: &mut Lines) -> Split {
             w.ptr = nl;
             if st.skip_count == 0 {
                 unsafe { *w.ptr = 0 }; // end of line
-                let mut len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as colnr_T;
+                let mut len = (unsafe { w.ptr.offset_from(w.line_start) } + 1) as ColNr;
                 if st.fileformat == EOL_DOS {
                     if w.ptr > w.line_start && unsafe { *w.ptr.offset(-1) } == CAR as c_char {
                         // Remove the CR before the NL.

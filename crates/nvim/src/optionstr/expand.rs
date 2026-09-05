@@ -36,7 +36,7 @@ use crate::os::cshim::snprintf;
 use crate::strings::vim_strchr;
 use crate::syntax::EXPAND_BUF_LEN;
 use crate::types::{
-    CompleteListItemGetter, Failed, NUL, colnr_T, expand_T, optexpand_T, regmatch_T, size_t,
+    ColNr, CompleteListItemGetter, Failed, NUL, expand_T, optexpand_T, regmatch_T, size_t,
 };
 
 use super::{
@@ -144,7 +144,7 @@ pub(crate) unsafe fn expand_set_opt_string(
         }
         // SAFETY: `regmatch` is the command line's compiled pattern and
         // `word` a C string.
-        if unsafe { vim_regexec(regmatch, word, 0 as colnr_T) } {
+        if unsafe { vim_regexec(regmatch, word, 0 as ColNr) } {
             unsafe { out.push(xstrdup(word)) };
         }
     }

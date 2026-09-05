@@ -337,9 +337,9 @@ pub unsafe fn ins_compl_insert(move_cursor: bool, insert_prefix: bool) {
                 // `wrapping_sub` as the transpile has it: nothing here
                 // proves the match is longer than the leader (a fuzzy
                 // match need not start with it), and upstream's `size_t`
-                // underflow narrows to a negative `colnr_T`, i.e. the
+                // underflow narrows to a negative `ColNr`, i.e. the
                 // cursor moves the other way.
-                cur_win().w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as colnr_T;
+                cur_win().w_cursor.col -= cp_str_len.wrapping_sub(leader_len) as ColNr;
             }
         }
     }

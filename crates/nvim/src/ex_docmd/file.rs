@@ -53,7 +53,7 @@ use crate::search::{BACKWARD, FORWARD, find_pattern_in_path};
 use crate::shada::{shada_read_everything, shada_write_file};
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    CmdModFlags, CpoFlag, Failed, NUL, buf_T, cleanup_T, exarg_T, linenr_T, memfile_T, size_t,
+    CmdModFlags, CpoFlag, Failed, LineNr, NUL, buf_T, cleanup_T, exarg_T, memfile_T, size_t,
     uint8_t, win_T,
 };
 use crate::ui::ui_has;
@@ -232,7 +232,7 @@ pub(crate) unsafe fn ex_find(eap: *mut exarg_T) {
 /// The search context is what makes the second and later matches cheap:
 /// each `find_file_in_path(NULL, …)` resumes the walk the first one
 /// started.
-unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: linenr_T) -> *mut c_char {
+unsafe fn find_nth_on_path(pat: *mut c_char, addr_count: c_int, count: LineNr) -> *mut c_char {
     let mut file_to_find: *mut c_char = ptr::null_mut();
     let mut search_ctx: *mut c_char = ptr::null_mut();
     let pat_len = unsafe { cstr::bytes_at(pat) }.len();
@@ -346,7 +346,7 @@ pub unsafe fn do_exedit(eap: *mut exarg_T, old_curwin: *mut win_T) {
             ptr::null_mut(),
             ptr::null_mut(),
             eap,
-            newlnum::ONE as linenr_T,
+            newlnum::ONE as LineNr,
             EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(ea.forceit != 0),
             if old_curwin.is_null() {
                 curwin.get()
@@ -462,7 +462,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
             cur_buf().b_fname,
             eap.line2,
             0,
-            MAXLNUM as linenr_T,
+            MAXLNUM as LineNr,
             eap.raw(),
             0,
             false,
@@ -477,7 +477,7 @@ pub(crate) unsafe fn ex_read(eap: *mut exarg_T) {
             ptr::null_mut(),
             eap.line2,
             0,
-            MAXLNUM as linenr_T,
+            MAXLNUM as LineNr,
             eap.raw(),
             0,
             false,
@@ -560,7 +560,7 @@ pub(crate) unsafe fn ex_checkpath(eap: *mut exarg_T) {
                 ACTION_SHOW as c_int
             },
             1,
-            MAXLNUM as linenr_T,
+            MAXLNUM as LineNr,
             eap.forceit != 0,
             false,
         )
@@ -621,7 +621,7 @@ fn do_ecmd(
     ffname: *mut c_char,
     sfname: *mut c_char,
     eap: *mut exarg_T,
-    newlnum: linenr_T,
+    newlnum: LineNr,
     flags: EcmdFlags,
     oldwin: *mut win_T,
 ) -> Result<(), Failed> {
@@ -683,9 +683,9 @@ fn msg(s: *const c_char, hl_id: c_int) -> bool {
 fn readfile(
     fname: *mut c_char,
     sfname: *mut c_char,
-    from: linenr_T,
-    lines_to_skip: linenr_T,
-    lines_to_read: linenr_T,
+    from: LineNr,
+    lines_to_skip: LineNr,
+    lines_to_read: LineNr,
     eap: *mut exarg_T,
     flags: c_int,
     silent: bool,

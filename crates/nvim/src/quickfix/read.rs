@@ -39,8 +39,8 @@ enum Source {
     /// A range of lines in a buffer.
     Buffer {
         buf: Buf,
-        lnum: linenr_T,
-        last: linenr_T,
+        lnum: LineNr,
+        last: LineNr,
     },
     /// A Vimscript list, one entry per line; non-string entries are
     /// skipped.
@@ -102,8 +102,8 @@ impl Reader {
         efile: *const c_char,
         tv: *mut typval_T,
         buf: Option<Buf>,
-        lnumfirst: linenr_T,
-        lnumlast: linenr_T,
+        lnumfirst: LineNr,
+        lnumlast: LineNr,
     ) -> Option<Reader> {
         let mut reader = Reader {
             // Without a buffer the source is one of the two set below; a
@@ -474,8 +474,8 @@ pub(crate) unsafe fn qf_init_ext(
     tv: *mut typval_T,
     errorformat: *mut c_char,
     newlist: bool,
-    lnumfirst: linenr_T,
-    lnumlast: linenr_T,
+    lnumfirst: LineNr,
+    lnumlast: LineNr,
     qf_title: *const c_char,
     enc: *mut c_char,
 ) -> c_int {

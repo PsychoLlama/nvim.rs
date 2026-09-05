@@ -185,7 +185,7 @@ pub(crate) fn ins_bs(c: c_int, mode: Backspace, inserted_space_p: &mut c_int) ->
 
         // Keep the indent: CTRL-U stops at the first non-blank if there
         // is one before the cursor.
-        let mut mincol: colnr_T = 0;
+        let mut mincol: ColNr = 0;
         if mode == Backspace::Line
             && (cur_buf().b_p_ai != 0 || unsafe { cindent_on() })
             && !revins_on.get()
@@ -363,8 +363,8 @@ fn bs_one_shiftwidth(in_indent: bool) {
 
     // The cursor's virtual column, and the last white space before it
     // that is preceded by non-white space.
-    let mut vcol: colnr_T = 0;
-    let mut space_vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
+    let mut space_vcol: ColNr = 0;
     let mut sci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut space_sci = sci;
     let mut prev_space = false;
@@ -399,7 +399,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
     }
     // SAFETY: the walk never stepped past `cursor_ptr`, so `space_sci` is
     // still inside the same line as `line`.
-    let want_col = unsafe { space_sci.ptr.offset_from(line) } as colnr_T;
+    let want_col = unsafe { space_sci.ptr.offset_from(line) } as ColNr;
 
     // Delete until at or before `want_col`.
     while cur_win().w_cursor.col > want_col {
@@ -441,7 +441,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
 /// space as [`Backspace::Word`] and then the word itself as
 /// [`Backspace::WordNotSpace`], stopping at the first character whose
 /// "wordness" or multi-byte class differs from the previous one's.
-fn bs_delete_chars(mut mode: Backspace, mincol: colnr_T) {
+fn bs_delete_chars(mut mode: Backspace, mincol: ColNr) {
     // What kind of word the deletion started in, so a class change can
     // end it.
     let mut cclass = cursor_char_class();
@@ -563,7 +563,7 @@ fn cursor_char_class() -> c_int {
 /// The screen width of the character `sci` names, standing at virtual
 /// column `vcol`.  `use_ts` says whether a TAB still advances to a tab stop.
 #[inline(always)]
-fn charsize_at(use_ts: bool, vcol: colnr_T, sci: StrCharInfo) -> c_int {
+fn charsize_at(use_ts: bool, vcol: ColNr, sci: StrCharInfo) -> c_int {
     // SAFETY: `sci` names a character of a live line of `curbuf`.
     unsafe { charsize_nowrap(Buf::new(curbuf.get()), sci.ptr, use_ts, vcol, sci.chr.value) }
 }

@@ -90,9 +90,9 @@ use crate::strings::{vim_snprintf, vim_strchr, vim_strsave_shellescape, xstrnsav
 use crate::types::AutoEvent;
 use crate::types::NL;
 use crate::types::{
-    CmdAddr, CmdModFlags, EvalFuncData, ExtmarkOp, FILE, FileInfo, OptInt, OptScope, OptVal,
-    String_0, aco_save_T, colnr_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T,
-    hlf_T, linenr_T, mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t,
+    CmdAddr, CmdModFlags, ColNr, EvalFuncData, ExtmarkOp, FILE, FileInfo, LineNr, OptInt, OptScope,
+    OptVal, String_0, aco_save_T, diff_T, diffline_S, diffline_T, diffline_change_T, exarg_T,
+    hlf_T, mmfile_t, scid_T, size_t, typval_T, uint64_t, varnumber_T, win_T, xdemitcb_t,
     xdemitconf_t, xpparam_t,
 };
 use crate::ui::vim_beep;
@@ -171,15 +171,15 @@ pub struct diffin_T {
 }
 #[derive(Copy, Clone)]
 pub struct diffhunk_T {
-    pub lnum_orig: linenr_T,
+    pub lnum_orig: LineNr,
     pub count_orig: ::core::ffi::c_int,
-    pub lnum_new: linenr_T,
+    pub lnum_new: LineNr,
     pub count_new: ::core::ffi::c_int,
 }
 pub const MAX_DIFF_ANCHORS: ::core::ffi::c_int = 20;
 pub struct linemap_entry_T {
-    pub byte_start: colnr_T,
-    pub num_bytes: colnr_T,
+    pub byte_start: ColNr,
+    pub num_bytes: ColNr,
     pub lineoff: ::core::ffi::c_int,
 }
 pub const NULL: *mut ::core::ffi::c_void = ::core::ptr::null_mut::<::core::ffi::c_void>();

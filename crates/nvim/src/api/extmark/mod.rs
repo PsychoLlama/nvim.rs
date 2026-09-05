@@ -28,13 +28,13 @@ use crate::pos::{MAXCOL, MAXLNUM};
 use crate::registry::{IdSet, id_set};
 use crate::sign::init_sign_text;
 use crate::types::{
-    Arena, Array, Boolean, Buffer, DecorExt, DecorHighlightInline, DecorInline, DecorInlineData,
-    DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText, DecorVirtText_data, Dict,
-    Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark, KeyDict_get_extmarks,
-    KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark, KeySetLink, LuaRef,
-    MTKey, MTPair, NS, Object, OptionalKeys, String_0, UndoObjectType, VirtLines, VirtText,
-    VirtTextChunk, Window, buf_T, colnr_T, handle_T, int32_t, kErrorTypeNone, kObjectTypeArray,
-    linenr_T, schar_T, size_t, uint8_t, uint16_t, uint32_t, virt_line, win_T,
+    Arena, Array, Boolean, Buffer, ColNr, DecorExt, DecorHighlightInline, DecorInline,
+    DecorInlineData, DecorPriority, DecorProvider, DecorSignHighlight, DecorVirtText,
+    DecorVirtText_data, Dict, Error, ExtmarkInfoArray, ExtmarkType, Integer, KeyDict_get_extmark,
+    KeyDict_get_extmarks, KeyDict_ns_opts, KeyDict_set_decoration_provider, KeyDict_set_extmark,
+    KeySetLink, LineNr, LuaRef, MTKey, MTPair, NS, Object, OptionalKeys, String_0, UndoObjectType,
+    VirtLines, VirtText, VirtTextChunk, Window, buf_T, handle_T, int32_t, kErrorTypeNone,
+    kObjectTypeArray, schar_T, size_t, uint8_t, uint16_t, uint32_t, virt_line, win_T,
 };
 
 // The carve of the transpiled module; see each child's docs.

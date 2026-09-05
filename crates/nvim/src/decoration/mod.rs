@@ -43,10 +43,9 @@ use crate::marktree::key::MtFlags;
 use crate::memory::{xfree, xmalloc};
 use crate::r#move::changed_window_setting;
 use crate::types::{
-    DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
-    DecorSignHighlight, DecorVirtText, HlMode, MTKey, MetaIndex, VirtLines, VirtText,
-    VirtTextChunk, VirtTextPos, buf_T, colnr_T, linenr_T, lpos_T, uint8_t, uint16_t, uint32_t,
-    virt_line,
+    ColNr, DecorHighlightInline, DecorInline, DecorInlineData, DecorPriority, DecorRangeKind,
+    DecorSignHighlight, DecorVirtText, HlMode, LineNr, MTKey, MetaIndex, VirtLines, VirtText,
+    VirtTextChunk, VirtTextPos, buf_T, lpos_T, uint8_t, uint16_t, uint32_t, virt_line,
 };
 use crate::winlayer::{self, Buf, Win};
 use core::ffi::c_int;
@@ -527,7 +526,7 @@ pub unsafe fn bufhl_add_hl_pos_offset(
     hl_id: c_int,
     pos_start: lpos_T,
     pos_end: lpos_T,
-    offset: colnr_T,
+    offset: ColNr,
 ) {
     let mut decor = DECOR_INLINE_INIT;
     decor.data.hl.hl_id = hl_id;
@@ -590,12 +589,12 @@ pub unsafe fn decor_redraw(
     while !vt.is_null() {
         let is_lines = unsafe { (*vt).flags } & kVTIsLines != 0;
         let below = is_lines && unsafe { (*vt).flags } & kVTLinesAbove == 0;
-        let vt_lnum = row1 as linenr_T + 1 + linenr_T::from(below);
+        let vt_lnum = row1 as LineNr + 1 + LineNr::from(below);
         unsafe { redraw_buf_line_later(buf, vt_lnum, true) };
         // Virtual lines and inline virtual text change how much room the
         // line takes, so the cached line sizes have to go as well.
         if is_lines || unsafe { (*vt).pos } == kVPosInline {
-            let vt_col: colnr_T = if is_lines { 0 } else { col1 };
+            let vt_col: ColNr = if is_lines { 0 } else { col1 };
             changed_lines_invalidate_buf(unsafe { Buf::new(buf) }, vt_lnum, vt_col, vt_lnum + 1, 0);
         }
         vt = unsafe { (*vt).next };
@@ -617,7 +616,7 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
     // SAFETY: the caller's buffer and the editor's window list.
     let paints = sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal) != 0;
     if (sh.hl_id != 0 || !sh.url.is_null() || paints) && row2 >= row1 {
-        unsafe { redraw_buf_range_later(buf, row1 as linenr_T + 1, row2 as linenr_T + 1) };
+        unsafe { redraw_buf_range_later(buf, row1 as LineNr + 1, row2 as LineNr + 1) };
     }
 
     if sh.flags & kSHConcealLines != 0 {
@@ -631,7 +630,7 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
     }
 
     if sh.flags & kSHUIWatched != 0 {
-        unsafe { redraw_buf_line_later(buf, row1 as linenr_T + 1, false) };
+        unsafe { redraw_buf_line_later(buf, row1 as LineNr + 1, false) };
     }
 }
 
@@ -641,10 +640,10 @@ pub unsafe fn decor_redraw_sh(buf: *mut buf_T, row1: c_int, row2: c_int, sh: Dec
 /// `buf` must be live and `decor` must be its mark's decoration.
 pub unsafe fn buf_put_decor(buf: *mut buf_T, decor: DecorInline, row: c_int, mut row2: c_int) {
     // SAFETY: the caller's buffer and decoration.
-    if !decor.ext || row as linenr_T >= unsafe { (*buf).b_ml.ml_line_count } {
+    if !decor.ext || row as LineNr >= unsafe { (*buf).b_ml.ml_line_count } {
         return;
     }
-    row2 = (unsafe { (*buf).b_ml.ml_line_count } - 1).min(row2 as linenr_T) as c_int;
+    row2 = (unsafe { (*buf).b_ml.ml_line_count } - 1).min(row2 as LineNr) as c_int;
     let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
     while idx != DECOR_ID_INVALID {
         let sh = decor_item(idx);
@@ -668,8 +667,8 @@ pub unsafe fn buf_decor_remove(
 ) {
     // SAFETY: the caller's buffer and decoration.
     unsafe { decor_redraw(buf, row1, row2, col1, decor) };
-    if decor.ext && (row1 as linenr_T) < unsafe { (*buf).b_ml.ml_line_count } {
-        row2 = (unsafe { (*buf).b_ml.ml_line_count } - 1).min(row2 as linenr_T) as c_int;
+    if decor.ext && (row1 as LineNr) < unsafe { (*buf).b_ml.ml_line_count } {
+        row2 = (unsafe { (*buf).b_ml.ml_line_count } - 1).min(row2 as LineNr) as c_int;
         let mut idx: uint32_t = unsafe { decor.data.ext }.sh_idx;
         while idx != DECOR_ID_INVALID {
             let sh = decor_item(idx);

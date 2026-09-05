@@ -59,13 +59,14 @@ use crate::search::{
 };
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, AdditionalDataBuilder, Arena, Dict, FileDescriptor, FileInfo, HistoryType,
-    Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark, KeyDict__shada_register,
-    KeyDict__shada_search_pat, KeyValuePair, MarkGet, MotionType, OptionalKeys, PackerBuffer,
-    SearchOffset, SearchPattern, String_0, StringArray, SubReplacementString, Timestamp,
-    VAR_UNKNOWN, VarLock, bln_values, buf_T, colnr_T, dictitem_T, fmark_T, fmarkv_T, int64_t,
-    linenr_T, list_T, pos_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union, uid_t,
-    uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T, yankreg_T,
+    AdditionalData, AdditionalDataBuilder, Arena, ColNr, Dict, FileDescriptor, FileInfo,
+    HistoryType, Integer, KeyDict__shada_buflist_item, KeyDict__shada_mark,
+    KeyDict__shada_register, KeyDict__shada_search_pat, KeyValuePair, LineNr, MarkGet, MotionType,
+    OptionalKeys, PackerBuffer, SearchOffset, SearchPattern, String_0, StringArray,
+    SubReplacementString, Timestamp, VAR_UNKNOWN, VarLock, bln_values, buf_T, dictitem_T, fmark_T,
+    fmarkv_T, int64_t, list_T, pos_T, ptrdiff_t, size_t, ssize_t, typval_T, typval_vval_union,
+    uid_t, uint8_t, uint32_t, uint64_t, uintmax_t, uv_gid_t, uv_uid_t, var_flavour_T, xfmark_T,
+    yankreg_T,
 };
 use crate::version::LONG_VERSION;
 use crate::winlayer::{buffers, tab_windows};
@@ -610,9 +611,9 @@ fn mark_local_index(name: ::core::ffi::c_char) -> ::core::ffi::c_int {
 }
 
 pub const DEFAULT_POS: pos_T = pos_T {
-    lnum: 1 as linenr_T,
-    col: 0 as colnr_T,
-    coladd: 0 as colnr_T,
+    lnum: 1 as LineNr,
+    col: 0 as ColNr,
+    coladd: 0 as ColNr,
 };
 /// The empty dictionary a header entry starts as.
 const EMPTY_DICT: Dict = Dict {

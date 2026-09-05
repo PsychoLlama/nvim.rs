@@ -185,7 +185,7 @@ unsafe fn read_extra_fields(tagp: &mut TagParts, mut p: *mut c_char) {
         } else if unsafe { cstr::starts_with(p, b"user_data:") } {
             tagp.user_data = unsafe { p.add(10) };
         } else if unsafe { cstr::starts_with(p, b"line:") } {
-            tagp.tagline = unsafe { atoi(p.add(5)) } as linenr_T;
+            tagp.tagline = unsafe { atoi(p.add(5)) } as LineNr;
         }
         if !tagp.tagkind.is_null() && !tagp.user_data.is_null() {
             // Nothing else is read from here.

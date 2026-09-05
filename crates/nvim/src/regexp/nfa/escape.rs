@@ -18,7 +18,7 @@ use crate::regexp::{
     gethexchrs, getoctchrs, magic_prefix, pat_byte, peekchr, re_has_z, re_mult_next, unmagic,
 };
 use crate::semsg;
-use crate::types::{MB_MAXBYTES, NUL, colnr_T};
+use crate::types::{ColNr, MB_MAXBYTES, NUL};
 
 use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
@@ -291,7 +291,7 @@ fn cursor_col() -> i64 {
 fn cursor_vcol() -> i64 {
     // SAFETY: as `cursor_lnum`; `getvvcol` writes only through the pointers
     // it is given.
-    let mut vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
     unsafe {
         getvvcol(
             Win::new(curwin.get()),

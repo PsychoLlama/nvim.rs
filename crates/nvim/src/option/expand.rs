@@ -35,7 +35,7 @@ use crate::os::env::expand_env_esc;
 use crate::regexp::vim_regexec;
 use crate::strings::{vim_strchr, vim_strsave_escaped};
 use crate::types::{
-    BackslashEscape, ExpandContext, Failed, MAXPATHL, NUL, OptIndex, OptionSetFlags, colnr_T,
+    BackslashEscape, ColNr, ExpandContext, Failed, MAXPATHL, NUL, OptIndex, OptionSetFlags,
     expand_T, fuzmatch_str_T, garray_T, optexpand_T, regmatch_T, size_t, uint32_t, xp_prefix_T,
 };
 use crate::winlayer::Live;
@@ -445,7 +445,7 @@ struct Matcher {
 unsafe fn match_str(str: *mut c_char, idx: c_int, test_only: bool, m: Matcher) -> bool {
     // SAFETY: the caller's strings and output arrays.
     if !m.fuzzy {
-        if !unsafe { vim_regexec(m.regmatch, str, 0 as colnr_T) } {
+        if !unsafe { vim_regexec(m.regmatch, str, 0 as ColNr) } {
             return false;
         }
         if !test_only {
@@ -535,7 +535,7 @@ pub(crate) unsafe fn expand_settings(
                 }
             } else if !fuzzy
                 && !opt.shortname.is_null()
-                && unsafe { vim_regexec(regmatch, opt.shortname, 0 as colnr_T) }
+                && unsafe { vim_regexec(regmatch, opt.shortname, 0 as ColNr) }
             {
                 // A short name matches, but what is offered is the
                 // full one.
@@ -707,7 +707,7 @@ pub(crate) unsafe fn expand_setting_subtract(
                 next = unsafe { comma.add(1) };
             }
             if unsafe { *item } != NUL as c_char
-                && unsafe { vim_regexec(regmatch, item, 0 as colnr_T) }
+                && unsafe { vim_regexec(regmatch, item, 0 as ColNr) }
             {
                 unsafe { ga_grow(&raw mut ga, 1) };
                 let slot = ga.ga_data.cast::<*mut c_char>();

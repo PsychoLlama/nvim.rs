@@ -49,7 +49,7 @@ use crate::os::input::os_breakcheck;
 use crate::search::FORWARD;
 use crate::terminal::terminal_running;
 use crate::types::{
-    CmdModFlags, FAIL, Failed, NUL, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t, linenr_T,
+    CmdModFlags, FAIL, Failed, LineNr, NUL, OptInt, OptionSetFlags, cleanup_T, exarg_T, int64_t,
     win_T,
 };
 use crate::window::{
@@ -456,7 +456,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
 
     set_pcmark();
     let none = ptr::null_mut::<c_char>();
-    let one = newlnum::ONE as linenr_T;
+    let one = newlnum::ONE as LineNr;
     let flags = EcmdFlags::FORCEIT.when(forceit != 0);
     let retval = edit_file(0, none, none, ptr::null_mut(), one, flags, cur_win());
 

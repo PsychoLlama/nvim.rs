@@ -33,7 +33,7 @@ use crate::main::{
 };
 use crate::r#move::WinValid;
 use crate::state::MODE_INSERT;
-use crate::types::{CmdModFlags, Error, FAIL, NUL, buf_T, colnr_T, linenr_T};
+use crate::types::{CmdModFlags, ColNr, Error, FAIL, LineNr, NUL, buf_T};
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
 pub unsafe fn entering_window(win: *mut win_T) {
@@ -99,10 +99,10 @@ pub(crate) fn init_empty(wp: Win) {
     wp.w_cursor.lnum = 1;
     wp.w_cursor.col = 0;
     wp.w_curswant = wp.w_cursor.col;
-    wp.w_cursor.coladd = 0 as colnr_T;
+    wp.w_cursor.coladd = 0 as ColNr;
     wp.w_pcmark.lnum = 1; // pcmark not cleared but set to line 1
     wp.w_pcmark.col = 0;
-    wp.w_prev_pcmark.lnum = 0 as linenr_T;
+    wp.w_prev_pcmark.lnum = 0 as LineNr;
     wp.w_prev_pcmark.col = 0;
     wp.w_topline = 1;
     wp.w_topfill = 0;

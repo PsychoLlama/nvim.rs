@@ -19,11 +19,11 @@ use neovim::fold::adjust::fold_mark_adjust_recurse;
 use neovim::fold::fold_T;
 use neovim::garray::{ga_clear, ga_grow, ga_init};
 use neovim::pos::MAXLNUM;
-use neovim::types::{garray_T, linenr_T};
+use neovim::types::{LineNr, garray_T};
 
 /// The sentinel `mark_adjust` passes as `amount` to mean "these lines are
 /// gone".
-const DELETED: linenr_T = MAXLNUM as c_int;
+const DELETED: LineNr = MAXLNUM as c_int;
 
 fn empty_list() -> garray_T {
     let mut gap = garray_T {
@@ -39,7 +39,7 @@ fn empty_list() -> garray_T {
 
 /// Append a fold covering `top..top + len - 1`, and hand back its nested list
 /// so a caller can build a second level under it.
-unsafe fn push(gap: &mut garray_T, top: linenr_T, len: linenr_T) -> *mut garray_T {
+unsafe fn push(gap: &mut garray_T, top: LineNr, len: LineNr) -> *mut garray_T {
     ga_grow(gap, 1);
     let fp = (gap.ga_data as *mut fold_T).add(gap.ga_len as usize);
     (*fp).fd_top = top;
@@ -52,7 +52,7 @@ unsafe fn push(gap: &mut garray_T, top: linenr_T, len: linenr_T) -> *mut garray_
 }
 
 /// Every fold in `gap` as `(fd_top, fd_len)`.
-unsafe fn spans(gap: &garray_T) -> Vec<(linenr_T, linenr_T)> {
+unsafe fn spans(gap: &garray_T) -> Vec<(LineNr, LineNr)> {
     (0..gap.ga_len)
         .map(|i| {
             let fp = (gap.ga_data as *const fold_T).offset(i as isize);

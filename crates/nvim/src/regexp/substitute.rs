@@ -44,7 +44,7 @@ use crate::os::cshim::gettext;
 use crate::pos::MAXCOL;
 use crate::strings::{vim_strchr, vim_strsave_escaped, xstrnsave};
 use crate::types::{
-    NUL, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, funcexe_T, linenr_T,
+    LineNr, NUL, VAR_FUNC, VAR_LIST, VAR_PARTIAL, VAR_STRING, VAR_UNKNOWN, VarLock, funcexe_T,
     partial_T, regmatch_T, regmmatch_T, staticList10_T, typval_T,
 };
 use crate::winlayer::Live;
@@ -352,7 +352,7 @@ pub(crate) unsafe fn vim_regsub(
 /// `lnum` on.
 pub(crate) unsafe fn vim_regsub_multi(
     rmp: *mut regmmatch_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     source: *mut c_char,
     dest: *mut c_char,
     destlen: c_int,
@@ -721,7 +721,7 @@ unsafe fn copy_capture(
 
     // Where the capture starts, how much of it is on that line, and —
     // for a buffer match — which line that is.
-    let mut clnum: linenr_T = 0;
+    let mut clnum: LineNr = 0;
     let mut len: c_int = 0;
     let mut s = if multi {
         // SAFETY: a buffer match's `reg_mmatch` is the caller's live structure.

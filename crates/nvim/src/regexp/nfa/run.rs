@@ -27,7 +27,7 @@ use crate::regexp::{
     nfa_ll_index, nfa_match, nfa_pim_T, nfa_regprog_T, nfa_state_T, nfa_time_limit, nfa_timed_out,
     reg_getline, reg_getline_len, reg_iswordc, regsub_T, regsubs_T,
 };
-use crate::types::{Failed, colnr_T, uint8_t};
+use crate::types::{ColNr, Failed, uint8_t};
 
 /// Is `c` a member of the `[:name:]` class `cls` stands for?
 ///
@@ -372,7 +372,7 @@ pub(crate) fn failure_chance(state: *mut nfa_state_T, depth: c_int) -> c_int {
 /// Move `*colp` forward to the next occurrence of `c` in the line, or fail
 /// if there is none. The whole machine cannot match before the character
 /// every match must start with.
-pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut colnr_T) -> Result<(), Failed> {
+pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut ColNr) -> Result<(), Failed> {
     // SAFETY: `rex.line` is the NUL-terminated line being matched and
     // `*colp` is a column inside it.
     let from = unsafe { (rex.line() as *mut c_char).offset(*colp as isize) };
@@ -380,7 +380,7 @@ pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut colnr_T) -> Result<()
     if found.is_null() {
         return Err(Failed);
     }
-    *colp = unsafe { found.offset_from(rex.line() as *mut c_char) } as colnr_T;
+    *colp = unsafe { found.offset_from(rex.line() as *mut c_char) } as ColNr;
     Ok(())
 }
 
@@ -388,7 +388,7 @@ pub(crate) fn skip_to_start(rex: Rex, c: c_int, colp: &mut colnr_T) -> Result<()
 /// text directly. Returns 1 and fills in the capture slots on a match.
 pub(crate) fn find_match_text(
     rex: Rex,
-    startcol: &mut colnr_T,
+    startcol: &mut ColNr,
     regstart: c_int,
     match_text: *mut uint8_t,
 ) -> c_int {
@@ -434,7 +434,7 @@ pub(crate) fn find_match_text(
                 unsafe { (*start).lnum = rex.lnum() };
                 unsafe { (*start).col = col };
                 unsafe { (*end).lnum = rex.lnum() };
-                unsafe { (*end).col = s2.offset_from(rex.line()) as colnr_T };
+                unsafe { (*end).col = s2.offset_from(rex.line()) as ColNr };
             } else {
                 unsafe { *rex.reg_startp() = rex.line().offset(col as isize) };
                 unsafe { *rex.reg_endp() = s2 };

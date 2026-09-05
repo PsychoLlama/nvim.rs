@@ -288,7 +288,7 @@ fn count_selected_line(
     counts: &mut PosCounts,
     sel: &mut Selection,
     bd: &mut block_def,
-    lnum: linenr_T,
+    lnum: LineNr,
     eol_size: c_int,
 ) {
     // SAFETY: `lnum` is a line of the current buffer, so `ml_get` answers a
@@ -471,10 +471,10 @@ unsafe fn store_counts(
 /// line asked for below is checked against its line count first.
 pub fn get_region_bytecount(
     buf: Buf,
-    start_lnum: linenr_T,
-    end_lnum: linenr_T,
-    start_col: colnr_T,
-    end_col: colnr_T,
+    start_lnum: LineNr,
+    end_lnum: LineNr,
+    start_col: ColNr,
+    end_col: ColNr,
 ) -> bcount_t {
     let max_lnum = buf.line_count();
     if start_lnum > max_lnum {

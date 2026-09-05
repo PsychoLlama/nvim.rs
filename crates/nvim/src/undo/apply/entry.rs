@@ -25,7 +25,7 @@ struct CursorPick {
     /// The earliest line an entry actually changed: `MAXLNUM` until one
     /// does, and `-1` once the header's own saved cursor claimed the
     /// position, which no later entry may override.
-    line: linenr_T,
+    line: LineNr,
     /// The position itself.
     pos: pos_T,
 }
@@ -42,9 +42,9 @@ impl CursorPick {
         &mut self,
         curhead: Header,
         uep: *mut u_entry_T,
-        top: linenr_T,
-        oldsize: linenr_T,
-        newsize: linenr_T,
+        top: LineNr,
+        oldsize: LineNr,
+        newsize: LineNr,
     ) {
         // If the header's saved cursor falls inside this entry it wins: that
         // is what puts the cursor back where it was after a "gwap".
@@ -59,7 +59,7 @@ impl CursorPick {
         }
         // Otherwise the first line that really differs, so that undoing an
         // auto-format does not land on the line before it.
-        let mut same: linenr_T = 0;
+        let mut same: LineNr = 0;
         while same < newsize && same < oldsize {
             // SAFETY: a live entry with `newsize` lines, by the contract
             // above.
@@ -72,7 +72,7 @@ impl CursorPick {
             same += 1;
         }
         if same == newsize
-            && self.line == MAXLNUM as linenr_T
+            && self.line == MAXLNUM as LineNr
             // SAFETY: a live entry, by the contract above.
             && unsafe { (*uep).ue_next }.is_null()
         {
@@ -129,7 +129,7 @@ pub(crate) unsafe fn u_undoredo(undo: bool, do_buf_event: bool) {
 
     // SAFETY: a live current window.
     let mut pick = CursorPick {
-        line: MAXLNUM as linenr_T,
+        line: MAXLNUM as LineNr,
         pos: unsafe { Win::current() }.w_cursor,
     };
     // The entries come back in the reverse of the order they are applied,
@@ -312,7 +312,7 @@ unsafe fn apply_entry(
 
     if oldsize != newsize {
         let delta = newsize - oldsize;
-        let maxlnum = MAXLNUM as linenr_T;
+        let maxlnum = MAXLNUM as LineNr;
         // SAFETY: a live current buffer.
         unsafe { mark_adjust(top + 1, top + oldsize, maxlnum, delta, kExtmarkNOOP) };
         if buf.b_op_start.lnum > top + oldsize {

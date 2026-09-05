@@ -22,7 +22,7 @@ use crate::eval::vars::assert_error;
 use crate::mbyte::{mb_cptr2char_adv, utf_ptr2char};
 use crate::memory::xfree;
 use crate::runtime::estack_sfile;
-use crate::types::{VAR_DICT, VAR_STRING, VAR_UNKNOWN, linenr_T, typval_T};
+use crate::types::{LineNr, VAR_DICT, VAR_STRING, VAR_UNKNOWN, typval_T};
 
 use super::{AssertType, ESTACK_NONE};
 
@@ -54,7 +54,7 @@ pub(super) unsafe fn ga_concat_bytes(gap: &mut Vec<u8>, p: *const c_char, len: u
 }
 
 /// Line number being sourced or executed: the top of the exestack.
-pub(super) fn sourcing_lnum() -> linenr_T {
+pub(super) fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 

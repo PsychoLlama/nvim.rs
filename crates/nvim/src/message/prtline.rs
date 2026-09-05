@@ -140,7 +140,7 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
                 // How wide the tab is depends on where it starts.
                 let ts = unsafe { (*curbuf.get()).b_p_ts };
                 let vts = unsafe { (*curbuf.get()).b_p_vts_array };
-                extra_left = unsafe { tabstop_padding(col as colnr_T, ts, vts) } - 1;
+                extra_left = unsafe { tabstop_padding(col as ColNr, ts, vts) } - 1;
                 if list {
                     let (mut tab1, mut tab2, mut tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);
                     if !lead.is_null() && s <= lead && lcs.leadtab1 != 0 {

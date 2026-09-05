@@ -31,7 +31,7 @@ use crate::search::{
 };
 use crate::semsg;
 use crate::types::{
-    Direction, EvalFuncData, FAIL, NUL, OptVal, OptionSetFlags, VAR_UNKNOWN, int64_t, linenr_T,
+    Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, VAR_UNKNOWN, int64_t,
     pos_T, searchit_arg_T, size_t, typval_T, varnumber_T,
 };
 use crate::winlayer::{Buf, Win};
@@ -174,7 +174,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
     let mut numbuf = NumBuf::new();
     let mut numbuf2 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
-    let mut lnum_stop: linenr_T = 0;
+    let mut lnum_stop: LineNr = 0;
     let mut time_limit: int64_t = 0;
     let mut options = SEARCH_KEEP as c_int;
     let mut use_skip = false;
@@ -203,7 +203,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut pos_T>, flagsp: &mut c_i
     // only read when the one before it was supplied, so a {skip} passed
     // without a {flags} is silently ignored.
     if args.has(1) && args.has(2) {
-        lnum_stop = arg_number_chk(args.get(2), None) as linenr_T;
+        lnum_stop = arg_number_chk(args.get(2), None) as LineNr;
         if lnum_stop < 0 {
             return 0;
         }
@@ -382,7 +382,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     let mut numbuf4 = NumBuf::new();
     let _wrapscan = SavedWrapScan::new();
     let mut flags = 0;
-    let mut lnum_stop: linenr_T = 0;
+    let mut lnum_stop: LineNr = 0;
     let mut time_limit: int64_t = 0;
 
     // SAFETY throughout: the frame's arguments are live typvals; the two scratch
@@ -425,7 +425,7 @@ unsafe fn searchpair_cmn(args: Args, match_pos: Option<&mut pos_T>) -> c_int {
     } else {
         // The type is checked later, when the expression is evaluated.
         if args.has(5) {
-            lnum_stop = arg_number_chk(args.get(5), None) as linenr_T;
+            lnum_stop = arg_number_chk(args.get(5), None) as LineNr;
             if lnum_stop < 0 {
                 let what = arg_string(&mut numbuf3, args.get(5));
                 // SAFETY: a message argument the caller holds as a NUL-terminated string.
@@ -555,7 +555,7 @@ pub unsafe fn do_searchpair(
     skip: *const typval_T,
     flags: c_int,
     match_pos: *mut pos_T,
-    lnum_stop: linenr_T,
+    lnum_stop: LineNr,
     time_limit: int64_t,
 ) -> c_int {
     let _cpo = EmptyCpo::new();

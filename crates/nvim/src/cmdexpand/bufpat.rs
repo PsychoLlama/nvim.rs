@@ -100,7 +100,7 @@ pub(crate) unsafe fn copy_substring_from_pos(
 
     unsafe { *match_out = owned_cstr(text) };
     unsafe { (*match_end).lnum = (*end).lnum };
-    unsafe { (*match_end).col = segment_len as colnr_T };
+    unsafe { (*match_end).col = segment_len as ColNr };
 
     Ok(())
 }

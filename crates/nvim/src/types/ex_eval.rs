@@ -78,7 +78,7 @@ pub struct msglist {
     pub msg: *mut ::core::ffi::c_char,
     pub throw_msg: *mut ::core::ffi::c_char,
     pub sfile: *mut ::core::ffi::c_char,
-    pub slnum: linenr_T,
+    pub slnum: LineNr,
     pub multiline: bool,
 }
 pub type msglist_T = msglist;
@@ -87,7 +87,7 @@ pub struct vim_exception {
     pub value: *mut ::core::ffi::c_char,
     pub messages: *mut msglist_T,
     pub throw_name: *mut ::core::ffi::c_char,
-    pub throw_lnum: linenr_T,
+    pub throw_lnum: LineNr,
     pub stacktrace: *mut list_T,
     pub caught: *mut except_T,
 }

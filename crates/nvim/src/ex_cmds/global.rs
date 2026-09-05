@@ -35,7 +35,7 @@ use crate::regexp::{
 };
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
-use crate::types::{NUL, colnr_T, exarg_T, linenr_T, regmmatch_T, size_t};
+use crate::types::{ColNr, LineNr, NUL, exarg_T, regmmatch_T, size_t};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -47,10 +47,10 @@ use core::ptr;
 /// # Safety
 /// Main thread; `lnum` must be a line of the current buffer and `cmd` a live
 /// C string.  This re-enters `do_cmdline`, so every global may change.
-unsafe fn global_exe_one(cmd: *mut c_char, lnum: linenr_T) {
+unsafe fn global_exe_one(cmd: *mut c_char, lnum: LineNr) {
     // SAFETY: caller's contract -- the current window is live.
     cur_win().w_cursor.lnum = lnum;
-    cur_win().w_cursor.col = 0 as colnr_T;
+    cur_win().w_cursor.col = 0 as ColNr;
     // SAFETY: caller's contract -- `cmd` is NUL-terminated.
     let first = unsafe { *cmd } as c_int;
     let cmd = if first == NUL || first == '\n' as c_int {
@@ -75,7 +75,7 @@ fn selects(kind: u8, matched: bool) -> bool {
 ///
 /// # Safety
 /// Main thread; `regmatch` must hold a compiled program.
-unsafe fn matches_line(regmatch: *mut regmmatch_T, lnum: linenr_T) -> bool {
+unsafe fn matches_line(regmatch: *mut regmmatch_T, lnum: LineNr) -> bool {
     // SAFETY: caller's contract; `curwin`/`curbuf` are the live pair.
     unsafe {
         vim_regexec_multi(
@@ -83,7 +83,7 @@ unsafe fn matches_line(regmatch: *mut regmmatch_T, lnum: linenr_T) -> bool {
             cur_win().raw(),
             cur_buf().raw(),
             lnum,
-            0 as colnr_T,
+            0 as ColNr,
             ptr::null_mut(),
             ptr::null_mut(),
         ) != 0
@@ -313,7 +313,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     msg_didout.set(true);
 
     sub_nsubs.set(0 as c_int);
-    sub_nlines.set(0 as linenr_T);
+    sub_nlines.set(0 as LineNr);
     global_need_msg_kind.set(true);
     global_need_beginline.set(false);
     global_busy.set(1 as c_int);
@@ -323,7 +323,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     while !got_int.get() {
         // SAFETY: main thread, live buffer.
         let lnum = unsafe { ml_firstmarked() };
-        if lnum == 0 as linenr_T || global_busy.get() != 1 as c_int {
+        if lnum == 0 as LineNr || global_busy.get() != 1 as c_int {
             break;
         }
         // SAFETY: `lnum` is a marked line of the buffer; `cmd` is live.

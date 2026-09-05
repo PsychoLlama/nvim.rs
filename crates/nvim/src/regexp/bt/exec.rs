@@ -32,8 +32,8 @@ use crate::regexp::{
 };
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::{
-    NUL, buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
-    uint8_t, uint32_t, win_T,
+    ColNr, LineNr, NUL, ProfTime, buf_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t,
+    uint32_t, win_T,
 };
 
 /// How many start columns may be tried between two reads of the caller's
@@ -47,13 +47,7 @@ const REG_TOFREE_KEEP: u32 = 400;
 /// Try to match the whole pattern starting at column `col`.
 ///
 /// Returns 0 for no match, or one more than the line the match ended on.
-fn regtry(
-    rex: Rex,
-    prog: BtProg,
-    col: colnr_T,
-    tm: *const proftime_T,
-    timed_out: *mut c_int,
-) -> c_int {
+fn regtry(rex: Rex, prog: BtProg, col: ColNr, tm: *const ProfTime, timed_out: *mut c_int) -> c_int {
     rex.set_col(col);
     rex.set_need_clear_subexpr(1);
     rex.set_need_clear_zsubexpr(prog.has_z() as c_int);
@@ -82,7 +76,7 @@ fn regtry(
 ///
 /// A `\zs` before the start, or a `\ze` before the end, can leave it unset;
 /// it then covers what the matcher actually walked.
-fn settle_group_zero(rex: Rex, col: colnr_T) {
+fn settle_group_zero(rex: Rex, col: ColNr) {
     let kind = rex.pos_kind();
     // SAFETY: group 0's slots are the ones the caller's match structure holds
     // and `bt_regexec_both` pointed the context at, and the match that just
@@ -108,7 +102,7 @@ fn settle_group_zero(rex: Rex, col: colnr_T) {
 /// Column `col` of the line the match was attempted from, in the shape this
 /// match records. A buffer match counts its lines from the one it started on,
 /// so that is line zero.
-fn match_start(rex: Rex, col: colnr_T) -> MatchPos {
+fn match_start(rex: Rex, col: ColNr) -> MatchPos {
     if rex.multi() {
         MatchPos::from_pos(lpos_T { lnum: 0, col })
     } else {
@@ -193,8 +187,8 @@ fn trim_working_set() {
 fn bt_regexec_both(
     rex: Rex,
     line: *mut uint8_t,
-    startcol: colnr_T,
-    tm: *const proftime_T,
+    startcol: ColNr,
+    tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     let mut col = startcol;
@@ -261,7 +255,7 @@ fn clamp_group_zero(rex: Rex) {
 ///
 /// SAFETY: as `bt_regexec_both`. `regmust` is a NUL-terminated run the
 /// compiler kept and the walk below stops at `line`'s terminator.
-fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: colnr_T) -> bool {
+fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: ColNr) -> bool {
     let c = unsafe { utf_ptr2char(prog.regmust().cast::<c_char>()) };
     let mut s = unsafe { line.offset(col as isize) }.cast::<c_char>();
     loop {
@@ -294,8 +288,8 @@ fn has_regmust(rex: Rex, prog: BtProg, line: *mut uint8_t, col: colnr_T) -> bool
 fn try_anchored(
     rex: Rex,
     prog: BtProg,
-    col: colnr_T,
-    tm: *const proftime_T,
+    col: ColNr,
+    tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     let start = prog.regstart();
@@ -321,8 +315,8 @@ fn try_anchored(
 fn scan_columns(
     rex: Rex,
     prog: BtProg,
-    col: &mut colnr_T,
-    tm: *const proftime_T,
+    col: &mut ColNr,
+    tm: *const ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     let mut tm_count = 0;
@@ -335,7 +329,7 @@ fn scan_columns(
             if s.is_null() {
                 return 0;
             }
-            *col = unsafe { s.cast::<uint8_t>().offset_from(rex.line()) } as colnr_T;
+            *col = unsafe { s.cast::<uint8_t>().offset_from(rex.line()) } as ColNr;
         }
         if rex.reg_maxcol() > 0 && *col >= rex.reg_maxcol() {
             return 0;
@@ -382,7 +376,7 @@ fn scan_columns(
 pub(crate) unsafe fn bt_regexec_nl(
     rmp: *mut regmatch_T,
     line: *mut uint8_t,
-    col: colnr_T,
+    col: ColNr,
     line_lbr: bool,
 ) -> c_int {
     // SAFETY: the caller holds the context (`with_rex`) and hands us a
@@ -402,9 +396,9 @@ pub(crate) unsafe fn bt_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,
-    lnum: linenr_T,
-    col: colnr_T,
-    tm: *mut proftime_T,
+    lnum: LineNr,
+    col: ColNr,
+    tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     // SAFETY: the caller holds the context (`with_rex`) and hands us a live

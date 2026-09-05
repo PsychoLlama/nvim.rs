@@ -63,11 +63,10 @@ use crate::types::AutoEvent;
 use crate::types::builders::{DictBuf, static_cstring};
 use crate::types::terminal_defs::SELECTIONBUF_SIZE;
 use crate::types::{
-    Arena, Buffer, Error, Event, ExtmarkOp, HlAttrs, MarkAdjustMode, Object, OptVal,
+    Arena, Buffer, ColNr, Error, Event, ExtmarkOp, HlAttrs, LineNr, MarkAdjustMode, Object, OptVal,
     OptionSetFlags, RefcountSize, RgbValue, Terminal, TerminalOptions, VTermColor, VTermColor_rgb,
-    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, colnr_T,
-    dict_T, exarg_T, handle_T, int16_t, linenr_T, pos_T, save_v_event_T, size_t, uint8_t,
-    varnumber_T, win_T,
+    VTermScreenCell, VTermScreenCellAttrs, VTermState, VTermValue, aco_save_T, buf_T, dict_T,
+    exarg_T, handle_T, int16_t, pos_T, save_v_event_T, size_t, uint8_t, varnumber_T, win_T,
 };
 use crate::vterm::parser::vterm_input_write;
 use crate::vterm::pen::{convert_color_to_rgb, set_palette_color};
@@ -317,10 +316,10 @@ pub(crate) unsafe fn terminal_alloc(buf: *mut buf_T, opts: TerminalOptions) -> *
         while !buf.b_ml.ml_flags.has(MlFlags::EMPTY) {
             // SAFETY: a live buffer, deleting its own lines down to the one
             // empty line `MlFlags::EMPTY` stands for.
-            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
+            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as LineNr, false) };
         }
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf.raw(), 1 as linenr_T, line_count) };
+        unsafe { deleted_lines_buf(buf.raw(), 1 as LineNr, line_count) };
     }
     term.old_height = 1;
     raw
@@ -373,9 +372,9 @@ pub(crate) unsafe fn terminal_open(termpp: *mut *mut Terminal, buf: *mut buf_T) 
     win.w_onebuf_opt.wo_scb = 0;
     win.w_onebuf_opt.wo_crb = 0;
     win.w_cursor = pos_T {
-        lnum: 1 as linenr_T,
-        col: 0 as colnr_T,
-        coladd: 0 as colnr_T,
+        lnum: 1 as LineNr,
+        col: 0 as ColNr,
+        coladd: 0 as ColNr,
     };
     let none = ::core::ptr::null_mut();
     // SAFETY: TermOpen against a live buffer. It may wipe the buffer or

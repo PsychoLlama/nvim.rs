@@ -50,8 +50,8 @@ use crate::strings::{vim_snprintf, vim_snprintf_safelen, vim_strchr};
 use crate::terminal::terminal_running;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    IOSIZE, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, buf_T, exarg_T,
-    int64_t, linenr_T, size_t, time_t,
+    IOSIZE, LineNr, MAXPATHL, OptIndex, OptInt, OptionSetFlags, ShmFlag, StlSyntax, buf_T, exarg_T,
+    int64_t, size_t, time_t,
 };
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
@@ -75,7 +75,7 @@ fn tr_raw(msg: *const c_char) -> *mut c_char {
 }
 
 /// `NGETTEXT`: the singular or plural form, by `n`.
-fn tr_n(one: &'static CStr, many: &'static CStr, n: linenr_T) -> *mut c_char {
+fn tr_n(one: &'static CStr, many: &'static CStr, n: LineNr) -> *mut c_char {
     ngettext(one, many, n as ::core::ffi::c_ulong)
         .as_ptr()
         .cast_mut()
@@ -115,7 +115,7 @@ fn special_name(buf: Buf) -> *mut c_char {
     unsafe { buf_spname(buf.raw()) }
 }
 
-fn remembered_lnum(buf: Buf) -> linenr_T {
+fn remembered_lnum(buf: Buf) -> LineNr {
     // SAFETY: the answer is a live mark.
     unsafe { buflist_findlnum(buf) }
 }
@@ -357,7 +357,7 @@ fn format_time(io: &mut [c_char; IOSIZE as usize], len: c_int, last_used: time_t
     unsafe { undo_fmt_time(dst, cap, last_used) };
 }
 
-fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: linenr_T) {
+fn format_lnum(io: &mut [c_char; IOSIZE as usize], len: c_int, lnum: LineNr) {
     let (dst, cap) = (
         io.as_mut_ptr().wrapping_add(len as usize),
         (IOSIZE - len) as size_t,
@@ -488,7 +488,7 @@ fn curbuf_changed() -> bool {
     curbuf_is_changed()
 }
 
-fn percentage(part: linenr_T, whole: linenr_T) -> c_int {
+fn percentage(part: LineNr, whole: LineNr) -> c_int {
     calc_percentage(part as int64_t, whole as int64_t)
 }
 
@@ -547,7 +547,7 @@ impl Msg {
         self.len += unsafe { vim_snprintf_safelen(dst, room, fmt, a, b, c, d, e, f) };
     }
 
-    fn put_lines(&mut self, fmt: *const c_char, lines: linenr_T, percent: c_int) {
+    fn put_lines(&mut self, fmt: *const c_char, lines: LineNr, percent: c_int) {
         let (dst, room) = self.tail();
         let lines = lines as int64_t;
         // SAFETY: the buffer's own tail, and a format taking a number and a
@@ -555,7 +555,7 @@ impl Msg {
         self.len += unsafe { vim_snprintf_safelen(dst, room, fmt, lines, percent) };
     }
 
-    fn put_position(&mut self, fmt: *const c_char, at: linenr_T, of: linenr_T, percent: c_int) {
+    fn put_position(&mut self, fmt: *const c_char, at: LineNr, of: LineNr, percent: c_int) {
         let (dst, room) = self.tail();
         let (at, of) = (at as int64_t, of as int64_t);
         // SAFETY: the buffer's own tail, and a format taking two numbers and
@@ -760,7 +760,7 @@ pub unsafe fn get_rel_pos(wp: Win, buf: *mut c_char, buflen: c_int) -> c_int {
     // The number of lines above the window.
     // SAFETY: a live window and one of its line numbers.
     let fill = unsafe { win_get_fill(win, win.w_topline) };
-    let mut above = win.w_topline - 1 + (fill - win.w_topfill) as linenr_T;
+    let mut above = win.w_topline - 1 + (fill - win.w_topfill) as LineNr;
     if win.w_topline == 1 && win.w_topfill >= 1 {
         // All the buffer's lines are displayed and there is an indication of
         // filler lines, which can be considered seeing all of them.

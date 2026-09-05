@@ -27,9 +27,9 @@ use crate::types::NUL;
 pub(crate) unsafe fn getvcol(
     wp: Win,
     pos: *mut pos_T,
-    start: *mut colnr_T,
-    cursor: *mut colnr_T,
-    end: *mut colnr_T,
+    start: *mut ColNr,
+    cursor: *mut ColNr,
+    end: *mut ColNr,
 ) {
     let line = unsafe { ml_get_buf(wp.w_buffer, (*pos).lnum) };
     let end_col = unsafe { (*pos).col };
@@ -39,7 +39,7 @@ pub(crate) unsafe fn getvcol(
     csarg.max_head_vcol = -1;
 
     let mut on_nul = false;
-    let mut vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
     let mut char_size;
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
 
@@ -84,7 +84,7 @@ pub(crate) unsafe fn getvcol(
         && end_col < MAXCOL
         && end_col as isize > unsafe { ci.ptr.offset_from(line) }
     {
-        unsafe { (*pos).col = ci.ptr.offset_from(line) as colnr_T };
+        unsafe { (*pos).col = ci.ptr.offset_from(line) as ColNr };
     }
 
     let head = char_size.head;
@@ -117,11 +117,11 @@ pub(crate) unsafe fn getvcol(
 ///
 /// # Safety
 /// `posp` must be live.
-pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
+pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> ColNr {
     let win = curwin.get();
     let list_save = unsafe { (*win).w_onebuf_opt.wo_list };
-    let mut vcol: colnr_T = 0;
-    let null = ::core::ptr::null_mut::<colnr_T>();
+    let mut vcol: ColNr = 0;
+    let null = ::core::ptr::null_mut::<ColNr>();
 
     unsafe { (*win).w_onebuf_opt.wo_list = 0 };
     if unsafe { (*posp).coladd } != 0 {
@@ -141,9 +141,9 @@ pub(crate) unsafe fn getvcol_nolist(posp: *mut pos_T) -> colnr_T {
 pub(crate) unsafe fn getvvcol(
     wp: Win,
     pos: *mut pos_T,
-    start: *mut colnr_T,
-    cursor: *mut colnr_T,
-    end: *mut colnr_T,
+    start: *mut ColNr,
+    cursor: *mut ColNr,
+    end: *mut ColNr,
 ) {
     if !virtual_active(wp) {
         unsafe { getvcol(wp, pos, start, cursor, end) };
@@ -151,12 +151,12 @@ pub(crate) unsafe fn getvvcol(
     }
 
     // In virtual mode only one value is wanted.
-    let null = ::core::ptr::null_mut::<colnr_T>();
-    let mut col: colnr_T = 0;
+    let null = ::core::ptr::null_mut::<ColNr>();
+    let mut col: ColNr = 0;
     unsafe { getvcol(wp, pos, &raw mut col, null, null) };
 
     let mut coladd = unsafe { (*pos).coladd };
-    let mut endadd: colnr_T = 0;
+    let mut endadd: ColNr = 0;
 
     // The cursor cannot sit on part of a wide character.
     let ptr = unsafe { ml_get_buf(wp.w_buffer, (*pos).lnum) };
@@ -194,8 +194,8 @@ pub(crate) unsafe fn getvcols(
     wp: Win,
     pos1: *mut pos_T,
     pos2: *mut pos_T,
-    left: *mut colnr_T,
-    right: *mut colnr_T,
+    left: *mut ColNr,
+    right: *mut ColNr,
 ) {
     let (first, second) = if lt(unsafe { *pos1 }, unsafe { *pos2 }) {
         (pos1, pos2)
@@ -203,11 +203,11 @@ pub(crate) unsafe fn getvcols(
         (pos2, pos1)
     };
 
-    let null = ::core::ptr::null_mut::<colnr_T>();
-    let mut from1: colnr_T = 0;
-    let mut from2: colnr_T = 0;
-    let mut to1: colnr_T = 0;
-    let mut to2: colnr_T = 0;
+    let null = ::core::ptr::null_mut::<ColNr>();
+    let mut from1: ColNr = 0;
+    let mut from2: ColNr = 0;
+    let mut to1: ColNr = 0;
+    let mut to2: ColNr = 0;
     unsafe { getvvcol(wp, first, &raw mut from1, null, &raw mut to1) };
     unsafe { getvvcol(wp, second, &raw mut from2, null, &raw mut to2) };
 

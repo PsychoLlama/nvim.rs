@@ -82,7 +82,7 @@ pub const DONE_ACTION: c_int = 1;
 pub const DONE_FOLD: c_int = 2;
 
 /// The `amount` `mark_adjust` passes to mean "these lines are gone".
-const LINES_DELETED: linenr_T = MAXLNUM as linenr_T;
+const LINES_DELETED: LineNr = MAXLNUM as LineNr;
 
 /// One of the six per-'foldmethod' level computations in [`level`].
 pub(in crate::fold) type LevelGetter = Option<unsafe fn(FLine) -> ()>;
@@ -90,9 +90,9 @@ pub(in crate::fold) type LevelGetter = Option<unsafe fn(FLine) -> ()>;
 #[derive(Copy, Clone)]
 pub struct fold_T {
     /// First line of the fold; relative to the parent for a nested fold.
-    pub fd_top: linenr_T,
+    pub fd_top: LineNr,
     /// Number of lines in the fold.
-    pub fd_len: linenr_T,
+    pub fd_len: LineNr,
     /// The folds nested inside this one.
     pub fd_nested: garray_T,
     /// `FD_OPEN`, `FD_CLOSED` or `FD_LEVEL`.
@@ -107,11 +107,11 @@ pub struct fold_T {
 pub struct fline_T {
     pub wp: *mut win_T,
     /// Current line number.
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     /// Offset between `lnum` and the real line number.
-    pub off: linenr_T,
+    pub off: LineNr,
     /// Line number used by `fold_update_computed_recurse`.
-    pub lnum_save: linenr_T,
+    pub lnum_save: LineNr,
     /// Current level; -1 for undefined.
     pub lvl: c_int,
     /// Level to use for the next line.
@@ -132,14 +132,14 @@ static e_nofold: GlobalCell<*const c_char> = GlobalCell::new(c"E490: No fold fou
 /// While the folds are being updated, the lines between `invalid_top` and
 /// `invalid_bot` have an undefined fold level. Only meaningful for the window
 /// currently being updated.
-static invalid_top: GlobalCell<linenr_T> = GlobalCell::new(0);
-static invalid_bot: GlobalCell<linenr_T> = GlobalCell::new(0);
+static invalid_top: GlobalCell<LineNr> = GlobalCell::new(0);
+static invalid_bot: GlobalCell<LineNr> = GlobalCell::new(0);
 
 /// With 'foldexpr' we sometimes ask for the level of the *next* line, which
 /// calls `foldlevel()` for the current one — which has not been stored yet.
 /// The previous line's level is parked here to break that cycle;
 /// `prev_lnum` is zero when there is nothing to offer.
-static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
 static prev_lnum_lvl: GlobalCell<c_int> = GlobalCell::new(-1);
 
 /// 'foldmarker' split into its two halves, refreshed by `parse_marker`.
@@ -183,9 +183,9 @@ pub fn has_any_folding(win: Win) -> c_int {
 /// Returns true if line "lnum" in window "win" is part of a closed fold.
 pub fn has_folding(
     win: Win,
-    lnum: linenr_T,
-    firstp: Option<&mut linenr_T>,
-    lastp: Option<&mut linenr_T>,
+    lnum: LineNr,
+    firstp: Option<&mut LineNr>,
+    lastp: Option<&mut LineNr>,
 ) -> bool {
     has_folding_win(win, lnum, firstp, lastp, true, None)
 }
@@ -201,9 +201,9 @@ pub fn has_folding(
 ///
 pub fn has_folding_win(
     win: Win,
-    lnum: linenr_T,
-    firstp: Option<&mut linenr_T>,
-    lastp: Option<&mut linenr_T>,
+    lnum: LineNr,
+    firstp: Option<&mut LineNr>,
+    lastp: Option<&mut LineNr>,
     cache: bool,
     mut infop: Option<&mut foldinfo_T>,
 ) -> bool {
@@ -215,8 +215,8 @@ pub fn has_folding_win(
         return false;
     }
     let mut had_folded = false;
-    let mut first: linenr_T = 0;
-    let mut last: linenr_T = 0;
+    let mut first: LineNr = 0;
+    let mut last: LineNr = 0;
     if cache {
         let x = find_wl_entry(win, lnum);
         if x >= 0 {
@@ -292,7 +292,7 @@ pub fn has_folding_win(
 ///
 /// # Safety
 /// The current window must be live.
-unsafe fn fold_level(lnum: linenr_T) -> c_int {
+unsafe fn fold_level(lnum: LineNr) -> c_int {
     // SAFETY: the caller's promise.
     let win = unsafe { Win::current() };
     if invalid_top.get() == 0 {
@@ -313,7 +313,7 @@ unsafe fn fold_level(lnum: linenr_T) -> c_int {
 /// Returns true if line is folded or,
 ///          false if line is not folded.
 ///
-pub fn line_folded(win: Win, lnum: linenr_T) -> bool {
+pub fn line_folded(win: Win, lnum: LineNr) -> bool {
     fold_info(win, lnum).fi_lines != 0
 }
 
@@ -326,14 +326,14 @@ pub fn line_folded(win: Win, lnum: linenr_T) -> bool {
 ///         fi_lines = number of folded lines from "lnum",
 ///                    or 0 if line is not folded.
 ///
-pub fn fold_info(win: Win, lnum: linenr_T) -> foldinfo_T {
+pub fn fold_info(win: Win, lnum: LineNr) -> foldinfo_T {
     let mut info = foldinfo_T {
         fi_lnum: 0,
         fi_level: 0,
         fi_low_level: 0,
         fi_lines: 0,
     };
-    let mut last: linenr_T = 0;
+    let mut last: LineNr = 0;
     let folded = has_folding_win(win, lnum, None, Some(&mut last), false, Some(&mut info));
     info.fi_lines = if folded { last - lnum + 1 } else { 0 };
     info
@@ -396,7 +396,7 @@ pub fn clear_folding(mut win: Win) {
 /// calling fold_mark_adjust().
 /// The changes in lines from top to bot (inclusive).
 ///
-pub fn fold_update(wp: Win, top: linenr_T, bot: linenr_T) {
+pub fn fold_update(wp: Win, top: LineNr, bot: LineNr) {
     if disable_fold_update.get() != 0 || State.get() & MODE_INSERT != 0 && !foldmethod_is_indent(wp)
     {
         return;
@@ -477,7 +477,7 @@ pub unsafe fn fold_init_win(mut new_win: Win) {
 ///
 /// Returns index of entry or -1 if not found.
 ///
-pub fn find_wl_entry(win: Win, lnum: linenr_T) -> c_int {
+pub fn find_wl_entry(win: Win, lnum: LineNr) -> c_int {
     let valid = win.w_lines_valid;
     // SAFETY: a live window's `w_lines` holds at least `w_lines_valid`
     // initialised entries, and is only null while that count is zero.
@@ -533,7 +533,7 @@ pub unsafe fn clone_fold_list(from: *mut garray_T, to: *mut garray_T) {
 
 /// Returns fold level at line number "lnum" in window "wp".
 ///
-fn fold_level_win(wp: Win, lnum: linenr_T) -> c_int {
+fn fold_level_win(wp: Win, lnum: LineNr) -> c_int {
     let mut folds = window_folds(wp);
     let mut lnum_rel = lnum;
     let mut level = 0;
@@ -552,7 +552,7 @@ fn checkupdate(mut wp: Win) {
     if !wp.w_foldinvalid {
         return;
     }
-    fold_update(wp, 1, MAXLNUM as linenr_T);
+    fold_update(wp, 1, MAXLNUM as LineNr);
     wp.w_foldinvalid = false;
 }
 
@@ -663,7 +663,7 @@ fn deepest_nesting_of(folds: FoldList) -> c_int {
 ///
 /// # Safety
 /// `fold` must be a fold of `wp`'s tree at `lnum_off`.
-unsafe fn check_small(wp: Win, fold: Fold, lnum_off: linenr_T) {
+unsafe fn check_small(wp: Win, fold: Fold, lnum_off: LineNr) {
     if fold.small().is_some() {
         return;
     }

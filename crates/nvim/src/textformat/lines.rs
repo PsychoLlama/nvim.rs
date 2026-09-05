@@ -42,8 +42,8 @@ use crate::pos::MAXCOL;
 use crate::search::check_linecomment;
 use crate::state::{MODE_INSERT, MODE_NORMAL};
 use crate::types::{
-    CmdModFlags, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, NUL,
-    OptionSetFlags, Vv, colnr_T, linenr_T, oparg_T, ptrdiff_t, size_t, varnumber_T,
+    CmdModFlags, ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, INSCHAR_NO_FEX, LineNr,
+    NUL, OptionSetFlags, Vv, oparg_T, ptrdiff_t, size_t, varnumber_T,
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
@@ -141,7 +141,7 @@ pub(crate) unsafe fn op_formatexpr(oap: *mut oparg_T) {
 ///
 /// # Safety
 /// There must be a current buffer and window.
-pub(crate) unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_int {
+pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     let use_sandbox =
         unsafe { was_set_insecurely(curwin.get(), kOptFormatexpr, OptionSetFlags::LOCAL) };
 
@@ -171,7 +171,7 @@ pub(crate) unsafe fn fex_format(lnum: linenr_T, count: c_long, c: c_int) -> c_in
 ///
 /// # Safety
 /// There must be a current line.
-unsafe fn paragraph_indent(first_line: linenr_T) -> c_int {
+unsafe fn paragraph_indent(first_line: LineNr) -> c_int {
     if cur_win().w_cursor.lnum == first_line {
         get_indent()
     } else if cur_buf().b_p_lisp != 0 {
@@ -195,11 +195,7 @@ unsafe fn paragraph_indent(first_line: linenr_T) -> c_int {
 ///
 /// # Safety
 /// There must be a current line, and it must be modifiable.
-unsafe fn join_next_line(
-    next_leader_len: c_int,
-    second_indent: c_int,
-    line_count: linenr_T,
-) -> bool {
+unsafe fn join_next_line(next_leader_len: c_int, second_indent: c_int, line_count: LineNr) -> bool {
     cur_win().w_cursor.lnum += 1;
     cur_win().w_cursor.col = 0;
     if line_count < 0 && u_save_cursor().is_err() {
@@ -214,8 +210,8 @@ unsafe fn join_next_line(
         0
     };
     if strip > 0 {
-        let _ = unsafe { del_bytes(strip as colnr_T, false, false) };
-        unsafe { mark_col_adjust(cur_win().w_cursor.lnum, 0, 0, -(strip as colnr_T), 0) };
+        let _ = unsafe { del_bytes(strip as ColNr, false, false) };
+        unsafe { mark_col_adjust(cur_win().w_cursor.lnum, 0, 0, -(strip as ColNr), 0) };
     }
     cur_win().w_cursor.lnum -= 1;
     if unsafe { do_join(2 as size_t, true, false, false, false) }.is_err() {
@@ -243,7 +239,7 @@ unsafe fn join_next_line(
 ///
 /// # Safety
 /// There must be a current line, and it must be modifiable.
-pub(crate) unsafe fn format_lines(line_count: linenr_T, avoid_fex: bool) {
+pub(crate) unsafe fn format_lines(line_count: LineNr, avoid_fex: bool) {
     let mut prev_is_end_par = false;
     let mut next_is_start_par = false;
     let mut leader = Leader::NONE;

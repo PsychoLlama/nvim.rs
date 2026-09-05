@@ -29,8 +29,8 @@ use crate::os::cshim::gettext_ptr;
 use crate::plines::{win_get_fill, win_text_height};
 use crate::pos::MAXCOL;
 use crate::types::{
-    Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LuaRef, Object,
-    String_0, Tabpage, Window, buf_T, int64_t, linenr_T, size_t, switchwin_T, tabpage_T,
+    Arena, Array, Boolean, Buffer, Dict, Error, Integer, KeyDict_win_text_height, LineNr, LuaRef,
+    Object, String_0, Tabpage, Window, buf_T, int64_t, size_t, switchwin_T, tabpage_T,
     win_execute_T,
 };
 use crate::window::{
@@ -403,13 +403,13 @@ pub unsafe fn nvim_win_text_height(
         return rv.reported(err);
     };
     let buf: *mut buf_T = w.buffer().raw();
-    let line_count: linenr_T = w.buffer().line_count();
+    let line_count: LineNr = w.buffer().line_count();
 
     // SAFETY: `opts` is the caller's, per this function's contract; `set` and
     // the field reads only touch it.
     let set = |key| unsafe { has_key((*opts).is_set__win_text_height_, key) };
-    let mut start_lnum: linenr_T = 1 as linenr_T;
-    let mut end_lnum: linenr_T = line_count;
+    let mut start_lnum: LineNr = 1 as LineNr;
+    let mut end_lnum: LineNr = line_count;
     let mut oob: bool = false;
     // SAFETY: as above; `buf` is live and `oob` is this frame's own.
     if set(OPTIDX_START_ROW) {

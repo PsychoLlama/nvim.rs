@@ -115,7 +115,7 @@ pub(crate) fn init_prompt(cmdchar_todo: c_int) {
         Insstart.set(insstart);
         Insstart_orig.set(insstart);
         Insstart_textlen.set(insstart.col);
-        Insstart_blank_vcol.set(MAXCOL as colnr_T);
+        Insstart_blank_vcol.set(MAXCOL as ColNr);
         arrow_used.set(false);
     }
 
@@ -137,13 +137,13 @@ fn start() -> pos_T {
 
 /// Move that mark to line `lnum`.
 #[inline(always)]
-fn set_start_lnum(lnum: linenr_T) {
+fn set_start_lnum(lnum: LineNr) {
     cur_buf().b_prompt_start.mark.lnum = lnum;
 }
 
 /// Move that mark to column `col`.
 #[inline(always)]
-fn set_start_col(col: colnr_T) {
+fn set_start_col(col: ColNr) {
     cur_buf().b_prompt_start.mark.col = col;
 }
 

@@ -71,8 +71,8 @@ unsafe fn qf_add_entry_from_dict(
     let filename = unsafe { tv_dict_get_string_alloc(d, c"filename".as_ptr()) };
     let module = unsafe { tv_dict_get_string_alloc(d, c"module".as_ptr()) };
     let mut bufnum = unsafe { tv_dict_get_number(d, c"bufnr".as_ptr()) } as c_int;
-    let lnum = unsafe { tv_dict_get_number(d, c"lnum".as_ptr()) } as linenr_T;
-    let end_lnum = unsafe { tv_dict_get_number(d, c"end_lnum".as_ptr()) } as linenr_T;
+    let lnum = unsafe { tv_dict_get_number(d, c"lnum".as_ptr()) } as LineNr;
+    let end_lnum = unsafe { tv_dict_get_number(d, c"end_lnum".as_ptr()) } as LineNr;
     let col = unsafe { tv_dict_get_number(d, c"col".as_ptr()) } as c_int;
     let end_col = unsafe { tv_dict_get_number(d, c"end_col".as_ptr()) } as c_int;
     // Not narrowed to a bool: `setqflist({'vcol': 5})` stores the 5 and

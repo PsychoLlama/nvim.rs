@@ -31,8 +31,8 @@ use crate::profile::{time_msg, time_pop, time_push};
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, String_0, VAR_STRING, VarLock,
-    intptr_t, lua_State, proftime_T, size_t, typval_T, typval_vval_union,
+    Event, HlMessage, HlMessageChunk, IOSIZE, MessageData, Object, ProfTime, String_0, VAR_STRING,
+    VarLock, intptr_t, lua_State, size_t, typval_T, typval_vval_union,
 };
 use crate::ui::ui_has;
 
@@ -203,7 +203,7 @@ pub(crate) unsafe extern "C-unwind" fn nlua_require(lstate: *mut lua_State) -> c
             return 1;
         }
 
-        let (rel_time, mut start_time): (proftime_T, proftime_T) = time_push();
+        let (rel_time, mut start_time): (ProfTime, ProfTime) = time_push();
         let status = lua_pcall(lstate, 1, 1, 0);
         if status == 0 {
             vim_snprintf(

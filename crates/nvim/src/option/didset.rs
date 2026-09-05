@@ -60,8 +60,8 @@ use crate::spell::parse_spelllang;
 use crate::strings::vim_snprintf;
 use crate::terminal::on_scrollback_option_changed;
 use crate::types::{
-    NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, buf_T, colnr_T, linenr_T,
-    optset_T, ptrdiff_t, size_t, uint8_t, win_T,
+    ColNr, LineNr, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, String_0, Vv, buf_T, optset_T,
+    ptrdiff_t, size_t, uint8_t, win_T,
 };
 use crate::undo::{buf_is_changed, u_compute_hash, u_read_undo, u_sync};
 use crate::window::{
@@ -444,7 +444,7 @@ pub(crate) unsafe fn did_set_number_relativenumber(args: &mut optset_T) -> Optio
     // A 'statuscolumn' draws the number itself, so the cached width has
     // to be recomputed rather than reused.
     if (unsafe { *win.w_onebuf_opt.wo_stc }) != NUL as c_char {
-        win.w_nrwidth_line_count = 0 as linenr_T;
+        win.w_nrwidth_line_count = 0 as LineNr;
     }
     let _ = unsafe { check_signcolumn(ptr::null_mut(), win.raw()) };
     None
@@ -453,7 +453,7 @@ pub(crate) unsafe fn did_set_number_relativenumber(args: &mut optset_T) -> Optio
 /// 'numberwidth': the cached number-column width is stale.
 pub(crate) unsafe fn did_set_numberwidth(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
-    unsafe { Frame::read(args).win.w_nrwidth_line_count = 0 as linenr_T };
+    unsafe { Frame::read(args).win.w_nrwidth_line_count = 0 as LineNr };
     None
 }
 
@@ -549,7 +549,7 @@ pub(crate) unsafe fn did_set_smoothscroll(args: &mut optset_T) -> Option<&CStr> 
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_sms == 0 {
-        win.w_skipcol = 0 as colnr_T;
+        win.w_skipcol = 0 as ColNr;
     }
     None
 }
@@ -719,9 +719,9 @@ pub(crate) unsafe fn did_set_wrap(args: &mut optset_T) -> Option<&CStr> {
     // SAFETY: the table's call frame, and the window it names is live.
     let mut win = unsafe { Frame::read(args) }.win;
     if win.w_onebuf_opt.wo_wrap != 0 {
-        win.w_leftcol = 0 as colnr_T;
+        win.w_leftcol = 0 as ColNr;
     } else {
-        win.w_skipcol = 0 as colnr_T;
+        win.w_skipcol = 0 as ColNr;
     }
     None
 }

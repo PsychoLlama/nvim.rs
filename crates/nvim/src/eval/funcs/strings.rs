@@ -39,7 +39,7 @@ use crate::spell::{SMT_ALL, eval_soundfold, parse_spelllang, spell_check, spell_
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::{vim_strsave_escaped, vim_strsave_shellescape, vim_vsnprintf_typval};
 use crate::types::{
-    CONV_NONE, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, colnr_T, garray_T, hlf_T,
+    CONV_NONE, ColNr, EvalFuncData, NUL, VAR_BLOB, VAR_LIST, VAR_STRING, blob_T, garray_T, hlf_T,
     kListLenMayKnow, list_T, regmatch_T, regprog_T, time_t, tm, typval_T, varnumber_T, vimconv_T,
 };
 use ::libc::{mktime, strftime, time};
@@ -529,7 +529,7 @@ unsafe fn split_into(
         rm_matchcol: 0,
         rm_ic: false,
     };
-    let mut col: colnr_T = 0;
+    let mut col: ColNr = 0;
     while unsafe { *str } != NUL as c_char || keepempty {
         let matched = unsafe { *str } != NUL as c_char
             && unsafe { vim_regexec_nl(&raw mut regmatch, str, col) };
@@ -555,7 +555,7 @@ unsafe fn split_into(
         col = if regmatch.endp[0] > str as *mut c_char {
             0
         } else {
-            unsafe { utfc_ptr2len(regmatch.endp[0]) as colnr_T }
+            unsafe { utfc_ptr2len(regmatch.endp[0]) as ColNr }
         };
         str = regmatch.endp[0];
     }

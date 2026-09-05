@@ -58,8 +58,8 @@ use crate::smsg;
 use crate::state::MODE_NORMAL;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, Failed, MAXPATHL, NUL, buf_T, colnr_T, estack_arg_T, exarg_T, int32_t, int64_t,
-    linenr_T, regprog_T, size_t, tasave_T, typval_T, uint8_t,
+    Callback, ColNr, Failed, LineNr, MAXPATHL, NUL, buf_T, estack_arg_T, exarg_T, int32_t, int64_t,
+    regprog_T, size_t, tasave_T, typval_T, uint8_t,
 };
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -86,7 +86,7 @@ pub struct debuggy {
     /// `dbg_name` compiled, for the two name kinds.
     pub dbg_prog: *mut regprog_T,
     /// Line within the function or file.
-    pub dbg_lnum: linenr_T,
+    pub dbg_lnum: LineNr,
     /// `!` was used.
     pub dbg_forceit: c_int,
     /// Last value of a watched expression.
@@ -202,7 +202,7 @@ impl BreakList {
 /// The breakpoint `dbg_breakpoint` recorded, waiting for `do_one_cmd` to
 /// reach a command that is actually executed.
 static debug_breakpoint_name: GlobalCell<*mut c_char> = GlobalCell::new(ptr::null_mut());
-static debug_breakpoint_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+static debug_breakpoint_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
 /// A prompt that was owed but not shown, because the command it belonged to
 /// was skipped (an untaken `:if` branch, say). A skipped command that decides
 /// to run something itself calls [`dbg_check_skipped`] to collect it.
@@ -291,7 +291,7 @@ pub unsafe fn dbg_check_skipped(eap: *mut exarg_T) -> bool {
 
 /// Record that `name` has a breakpoint on `lnum`. Whether it is announced is
 /// [`dbg_check_breakpoint`]'s decision, since the line may not be executed.
-pub fn dbg_breakpoint(name: *mut c_char, lnum: linenr_T) {
+pub fn dbg_breakpoint(name: *mut c_char, lnum: LineNr) {
     debug_breakpoint_name.set(name);
     debug_breakpoint_lnum.set(lnum);
 }
@@ -360,11 +360,11 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<debuggy, Fai
         if here {
             (*curwin.get()).w_cursor.lnum
         } else if debugger && ascii_isdigit(*p as c_int) {
-            let lnum = getdigits_int32(&raw mut p, true, 0 as int32_t) as linenr_T;
+            let lnum = getdigits_int32(&raw mut p, true, 0 as int32_t) as LineNr;
             p = skipwhite(p);
             lnum
         } else {
-            0 as linenr_T
+            0 as LineNr
         }
     };
     // SAFETY: as above.
@@ -479,9 +479,9 @@ pub unsafe fn ex_breakadd(eap: *mut exarg_T) {
         return;
     }
 
-    if bp.dbg_lnum == 0 as linenr_T {
+    if bp.dbg_lnum == 0 as LineNr {
         // The default line number is the first.
-        bp.dbg_lnum = 1 as linenr_T;
+        bp.dbg_lnum = 1 as LineNr;
     }
     // A profiling point is not numbered and does not bump `debug_tick`:
     // nothing lists or deletes it by number.
@@ -530,7 +530,7 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
         let Ok(bp) = (unsafe { dbg_parsearg(arg, list) }) else {
             return;
         };
-        let mut best_lnum = 0 as linenr_T;
+        let mut best_lnum = 0 as LineNr;
         let mut found = None;
         for i in 0..list.len() {
             // SAFETY: `i` is below the list's length, and `bp` is this
@@ -540,8 +540,8 @@ pub unsafe fn ex_breakdel(eap: *mut exarg_T) {
                 bp.dbg_type == (*bpi).dbg_type
                     && cstr::eq(bp.dbg_name, (*bpi).dbg_name)
                     && (bp.dbg_lnum == (*bpi).dbg_lnum
-                        || (bp.dbg_lnum == 0 as linenr_T
-                            && (best_lnum == 0 as linenr_T || (*bpi).dbg_lnum < best_lnum)))
+                        || (bp.dbg_lnum == 0 as LineNr
+                            && (best_lnum == 0 as LineNr || (*bpi).dbg_lnum < best_lnum)))
             };
             if matches {
                 found = Some(i);
@@ -650,7 +650,7 @@ pub unsafe fn ex_breaklist(_eap: *mut exarg_T) {
 ///
 /// # Safety
 /// `fname` must be NUL-terminated.
-pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: linenr_T) -> linenr_T {
+pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr) -> LineNr {
     // SAFETY: caller contract.
     unsafe { debuggy_find(file, fname, after, BreakList::Debug, ptr::null_mut()) }
 }
@@ -662,7 +662,7 @@ pub unsafe fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: linenr_
 /// `fname` must be NUL-terminated; `fp` null or writable.
 pub unsafe fn has_profiling(file: bool, fname: *mut c_char, fp: *mut bool) -> bool {
     // SAFETY: caller contract.
-    unsafe { debuggy_find(file, fname, 0 as linenr_T, BreakList::Profiling, fp) != 0 as linenr_T }
+    unsafe { debuggy_find(file, fname, 0 as LineNr, BreakList::Profiling, fp) != 0 as LineNr }
 }
 
 /// The shared body of [`dbg_find_breakpoint`] and [`has_profiling`]: the
@@ -674,12 +674,12 @@ pub unsafe fn has_profiling(file: bool, fname: *mut c_char, fp: *mut bool) -> bo
 unsafe fn debuggy_find(
     file: bool,
     fname: *mut c_char,
-    after: linenr_T,
+    after: LineNr,
     list: BreakList,
     fp: *mut bool,
-) -> linenr_T {
+) -> LineNr {
     if list.is_empty() {
-        return 0 as linenr_T;
+        return 0 as LineNr;
     }
 
     // A script-local function arrives with `K_SNR` in front of its name; the
@@ -696,7 +696,7 @@ unsafe fn debuggy_find(
         }
     };
 
-    let mut lnum = 0 as linenr_T;
+    let mut lnum = 0 as LineNr;
     for i in 0..list.len() {
         // SAFETY: `i` is below `ga_len`. Re-read every pass, because a watch
         // expression below can grow the array.
@@ -711,7 +711,7 @@ unsafe fn debuggy_find(
             (kind == DBG_FILE) == file
                 && kind != DBG_EXPR
                 && (list == BreakList::Profiling
-                    || ((*bp).dbg_lnum > after && (lnum == 0 as linenr_T || (*bp).dbg_lnum < lnum)))
+                    || ((*bp).dbg_lnum > after && (lnum == 0 as LineNr || (*bp).dbg_lnum < lnum)))
         };
 
         if candidate {
@@ -721,7 +721,7 @@ unsafe fn debuggy_find(
             got_int.set(false);
             // SAFETY: `dbg_prog` is this entry's compiled pattern and `name`
             // is NUL-terminated.
-            if unsafe { vim_regexec_prog(&raw mut (*bp).dbg_prog, false, name, 0 as colnr_T) } {
+            if unsafe { vim_regexec_prog(&raw mut (*bp).dbg_prog, false, name, 0 as ColNr) } {
                 lnum = unsafe { (*bp).dbg_lnum };
                 if !fp.is_null() {
                     unsafe { *fp = (*bp).dbg_forceit != 0 };
@@ -731,10 +731,10 @@ unsafe fn debuggy_find(
         } else if kind == DBG_EXPR {
             // SAFETY: `bp` is a live watch entry.
             if unsafe { watch_changed(bp) } {
-                lnum = if after > 0 as linenr_T {
+                lnum = if after > 0 as LineNr {
                     after
                 } else {
-                    1 as linenr_T
+                    1 as LineNr
                 };
                 break;
             }

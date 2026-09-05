@@ -21,7 +21,7 @@ use crate::winlayer::Buf;
 /// and buffer are remembered in `syn_win`/`syn_buf`/`syn_block`, because
 /// [`get_syntax_attr`] is not given them -- and careful: `curwin` and `curbuf`
 /// are likely to point somewhere else entirely.
-pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: linenr_T) {
+pub(crate) unsafe fn syntax_start(wp: *mut win_T, lnum: LineNr) {
     // The last change id we parsed at. A change may have invalidated the
     // current state, so this is checked as if it were part of the identity
     // of the buffer.
@@ -132,13 +132,13 @@ pub(crate) fn current_state_valid() -> bool {
 
 /// How many lines apart to store cache entries for lines that are not
 /// displayed. Displayed lines get one each; the rest share what is left.
-fn store_distance() -> linenr_T {
+fn store_distance() -> LineNr {
     let entries = syn_block().b_sst_len;
     if entries <= Rows.get() {
         999999
     } else {
         let lines = unsafe { (*syn_buf.get()).b_ml.ml_line_count };
-        lines / (entries - Rows.get()) as linenr_T + 1
+        lines / (entries - Rows.get()) as LineNr + 1
     }
 }
 
@@ -149,11 +149,7 @@ fn store_distance() -> linenr_T {
 /// When the cached entry for this line matches what we parsed, every entry
 /// below it that was only waiting on a change *before* this line becomes valid
 /// again -- which is what turns one re-parse into a whole valid tail.
-unsafe fn record_line(
-    mut prev: *mut synstate_T,
-    lnum: linenr_T,
-    dist: linenr_T,
-) -> *mut synstate_T {
+unsafe fn record_line(mut prev: *mut synstate_T, lnum: LineNr, dist: LineNr) -> *mut synstate_T {
     if prev.is_null() {
         prev = syn_stack_find_entry(current_lnum.get() - 1);
     }
@@ -328,7 +324,7 @@ pub(crate) fn syn_update_ends(startofline: bool) {
 /// now depends on the line below the last parsed one. The window looks like:
 /// the line which changed, the displayed lines, then `lnum` -- the line below
 /// the window.
-pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: linenr_T) {
+pub(crate) unsafe fn syntax_end_parsing(wp: *mut win_T, lnum: LineNr) {
     if syn_block().raw() != unsafe { (*wp).w_s } {
         return; // not the right window
     }
@@ -363,7 +359,7 @@ pub(crate) fn validate_current_state() {
 ///
 /// Only called just after [`get_syntax_attr`] for the previous line, to decide
 /// whether the next line has to be redrawn too.
-pub(crate) fn syntax_check_changed(lnum: linenr_T) -> bool {
+pub(crate) fn syntax_check_changed(lnum: LineNr) -> bool {
     // Only worth checking when `lnum` is just below the line we last
     // parsed and there is a saved state for it.
     if !current_state_valid() || lnum != current_lnum.get() + 1 {

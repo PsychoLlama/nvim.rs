@@ -202,7 +202,7 @@ pub unsafe fn in_cinkeys(keytyped: c_int, when: c_int, line_is_empty: bool) -> b
             // SAFETY: `end` and `look` point into the same option string.
             let len = unsafe { end.offset_from(look) } as usize;
             if (try_match || try_match_word)
-                && cur_win().w_cursor.col >= len as colnr_T
+                && cur_win().w_cursor.col >= len as ColNr
                 // SAFETY: `look` has `len` bytes in front of it, and the
                 // column test the `&&` chain keeps in front is what says the
                 // cursor's line has `len` bytes behind it.
@@ -342,7 +342,7 @@ unsafe fn word_matches(
         // are on that line -- except when `col == len`, which the `||` chain
         // keeps in front of the read and which is left whole for that reason.
         let line = get_cursor_pos_ptr();
-        (cur_win().w_cursor.col == len as colnr_T
+        (cur_win().w_cursor.col == len as ColNr
             || !unsafe { vim_iswordc(c_int::from(*line.sub(len + 1) as u8)) })
             && same(unsafe { line.sub(len) }, look)
     };
@@ -379,7 +379,7 @@ pub unsafe fn do_c_expr_indent() {
 pub unsafe fn f_cindent(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let pos = cur_win().w_cursor;
     // SAFETY: the caller's promise -- `argvars` is the call's argument list.
-    let lnum = unsafe { tv_get_lnum(argvars) } as linenr_T;
+    let lnum = unsafe { tv_get_lnum(argvars) } as LineNr;
     let amount = if lnum >= 1 && lnum <= cur_buf().b_ml.ml_line_count {
         cur_win().w_cursor.lnum = lnum;
         // SAFETY: the cursor now sits on a line of the current buffer, and it

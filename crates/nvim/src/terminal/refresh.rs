@@ -32,9 +32,7 @@ use crate::main::{exiting, main_loop};
 use crate::mbyte::mb_check_adjust_col;
 use crate::memline::{ml_append_buf, ml_replace_buf};
 use crate::r#move::{curs_columns, set_topline};
-use crate::types::{
-    MultiQueue, Terminal, TimeWatcher, WinInfo, colnr_T, linenr_T, uint16_t, uint64_t,
-};
+use crate::types::{ColNr, LineNr, MultiQueue, Terminal, TimeWatcher, WinInfo, uint16_t, uint64_t};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_mode_info_set};
 use crate::winlayer::{Buf, Win, tab_windows};
 use core::ffi::{c_int, c_void};
@@ -175,7 +173,7 @@ pub(crate) fn refresh_terminal(term: Term) {
         // showing a column that no longer means anything.
         for mut wp in windows_showing(buf) {
             if wp.w_leftcol != 0 {
-                wp.w_leftcol = 0 as colnr_T;
+                wp.w_leftcol = 0 as ColNr;
                 // SAFETY: a window of the current tab page's own list.
                 curs_columns(wp, 1);
             }
@@ -236,7 +234,7 @@ pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
 
     let first_linenr = row_to_linenr(term, term.invalid_start);
     for (offset, row) in (term.invalid_start..term.invalid_end).enumerate() {
-        let linenr = (first_linenr + offset as c_int) as linenr_T;
+        let linenr = (first_linenr + offset as c_int) as LineNr;
         fetch_row(term, row, width);
         let text = term.textbuf.as_mut_ptr();
         // Past the end of the buffer means the terminal is still filling
@@ -248,18 +246,18 @@ pub(crate) fn refresh_screen(mut term: Term, buf: Buf) {
             changed += 1;
         } else {
             // SAFETY: as above, appending past the last line.
-            let _ = unsafe { ml_append_buf(buf.raw(), linenr - 1, text, 0 as colnr_T, false) };
+            let _ = unsafe { ml_append_buf(buf.raw(), linenr - 1, text, 0 as ColNr, false) };
             added += 1;
         }
     }
 
     term.old_height = height;
-    let change_start = row_to_linenr(term, term.invalid_start) as linenr_T;
-    let change_end = change_start + changed as linenr_T;
+    let change_start = row_to_linenr(term, term.invalid_start) as LineNr;
+    let change_end = change_start + changed as LineNr;
     clear_invalid(term);
     // Reports the lines replaced and appended above.
-    let added = added as linenr_T;
-    changed_lines(buf, change_start, 0 as colnr_T, change_end, added, true);
+    let added = added as LineNr;
+    changed_lines(buf, change_start, 0 as ColNr, change_end, added, true);
 }
 
 /// Reset the damaged-row range to "nothing damaged" — an empty range that
@@ -286,9 +284,9 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
             terminal_check_cursor(term);
             continue;
         }
-        if ml_end == wp.w_cursor.lnum + added as linenr_T {
+        if ml_end == wp.w_cursor.lnum + added as LineNr {
             wp.w_cursor.lnum = ml_end;
-            let topline = (wp.w_cursor.lnum - wp.w_view_height as linenr_T + 1).max(1);
+            let topline = (wp.w_cursor.lnum - wp.w_view_height as LineNr + 1).max(1);
             // SAFETY: a window of the current tab page's own list.
             set_topline(wp, topline);
         } else {
@@ -301,7 +299,7 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
 
     // Windows are not the only things remembering a line: the buffer's own
     // last-cursor mark and the per-window info follow too.
-    if ml_end == buf.b_last_cursor.mark.lnum + added as linenr_T {
+    if ml_end == buf.b_last_cursor.mark.lnum + added as LineNr {
         buf.b_last_cursor.mark.lnum = ml_end;
     }
     let (wininfos, count) = (buf.b_wininfo.items, buf.b_wininfo.size);
@@ -309,7 +307,7 @@ pub(crate) fn adjust_topline_cursor(term: Term, mut buf: Buf, added: c_int) {
         // SAFETY: the buffer's own array of `count` live entries, none of
         // which anything above frees.
         let wip: &mut WinInfo = unsafe { &mut **wininfos.add(i) };
-        if ml_end == wip.wi_mark.mark.lnum + added as linenr_T {
+        if ml_end == wip.wi_mark.mark.lnum + added as LineNr {
             wip.wi_mark.mark.lnum = ml_end;
         }
     }

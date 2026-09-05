@@ -48,8 +48,8 @@ use crate::os::input::line_breakcheck;
 use crate::search::FORWARD;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    Direction, IOSIZE, NUL, OK, OptVal, OptionSetFlags, exarg_T, langp_T, linenr_T, size_t,
-    slang_T, wordcount_T,
+    Direction, IOSIZE, LineNr, NUL, OK, OptVal, OptionSetFlags, exarg_T, langp_T, size_t, slang_T,
+    wordcount_T,
 };
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
@@ -151,7 +151,7 @@ pub unsafe fn spell_dump_compl(
     let mut arridx = [0usize; MAXWLEN];
     let mut curi = [0usize; MAXWLEN];
     let mut word = [0 as c_char; MAXWLEN];
-    let mut lnum: linenr_T = 0;
+    let mut lnum: LineNr = 0;
     let mut region_names: *mut c_char = core::ptr::null_mut();
     let mut do_region = true;
     let mut dumpflags = dumpflags_arg;
@@ -324,7 +324,7 @@ unsafe fn dump_word(
     dir: *mut Direction,
     dumpflags: c_int,
     wordflags: WordFlags,
-    lnum: linenr_T,
+    lnum: LineNr,
 ) {
     let mut counted = [0 as c_char; IOSIZE as usize];
     let mut keepcap = false;
@@ -424,8 +424,8 @@ unsafe fn dump_prefixes(
     dir: *mut Direction,
     dumpflags: c_int,
     flags: WordFlags,
-    startlnum: linenr_T,
-) -> linenr_T {
+    startlnum: LineNr,
+) -> LineNr {
     let mut arridx = [0usize; MAXWLEN];
     let mut curi = [0usize; MAXWLEN];
     let mut prefix = [0 as c_char; MAXWLEN];

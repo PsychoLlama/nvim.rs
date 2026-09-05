@@ -56,7 +56,7 @@ use crate::optionstr::{
 };
 use crate::spell::compile_cap_prog;
 use crate::tag::set_buflocal_tfu_callback;
-use crate::types::{CmdModFlags, CpoFlag, NUL, OptInt, buf_T, colnr_T, int16_t, win_T, winopt_T};
+use crate::types::{CmdModFlags, ColNr, CpoFlag, NUL, OptInt, buf_T, int16_t, win_T, winopt_T};
 use crate::window::{check_colorcolumn, set_winbar_win};
 use crate::winlayer::{Buf, Live, Win};
 
@@ -342,9 +342,9 @@ pub(crate) unsafe fn didset_window_options(wp: *mut win_T, valid_cursor: bool) {
     // 'wrap' and 'smoothscroll' scroll in different directions, and only
     // one of the two offsets can be non-zero.
     if w.w_onebuf_opt.wo_wrap != 0 {
-        w.w_leftcol = 0 as colnr_T;
+        w.w_leftcol = 0 as ColNr;
     } else {
-        w.w_skipcol = 0 as colnr_T;
+        w.w_skipcol = 0 as ColNr;
     }
     let no_err: *mut c_char = ptr::null_mut();
     // SAFETY: the caller's window, which is all any of these needs; the
@@ -669,8 +669,8 @@ pub(crate) unsafe fn buf_copy_options(buf: *mut buf_T, flags: c_int) {
 /// # Safety
 ///
 /// `value` must be a non-empty string option value.
-unsafe fn tabstop_array(value: *mut c_char) -> *mut colnr_T {
-    let mut array: *mut colnr_T = ptr::null_mut();
+unsafe fn tabstop_array(value: *mut c_char) -> *mut ColNr {
+    let mut array: *mut ColNr = ptr::null_mut();
     // SAFETY: the caller's value.
     unsafe { tabstop_set(value, &raw mut array) };
     array
@@ -682,7 +682,7 @@ unsafe fn tabstop_array(value: *mut c_char) -> *mut colnr_T {
 /// The drop is upstream behaviour and leaks the old array; it is here rather
 /// than inline so that the two identical call sites cannot drift.
 ///
-fn vts_array(buf: Buf) -> *mut colnr_T {
+fn vts_array(buf: Buf) -> *mut ColNr {
     let vts = p_vts.get();
     // SAFETY: 'vartabstop' is a string option, so its value is a live
     // NUL-terminated string; the test above is what `tabstop_set` needs.

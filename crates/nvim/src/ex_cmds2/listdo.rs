@@ -40,7 +40,7 @@ use crate::quickfix::{ex_cc, ex_cnext, qf_get_cur_idx, qf_get_valid_size};
 use crate::search::FORWARD;
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
-use crate::types::{aco_save_T, exarg_T, linenr_T, size_t};
+use crate::types::{LineNr, aco_save_T, exarg_T, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
@@ -184,13 +184,13 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
     let mut tp = first_tab();
     match list {
         ListDo::Windows => {
-            while let Some(cur) = wp.filter(|_| (i as linenr_T + 1) < unsafe { (*eap).line1 }) {
+            while let Some(cur) = wp.filter(|_| (i as LineNr + 1) < unsafe { (*eap).line1 }) {
                 i += 1;
                 wp = cur.next();
             }
         }
         ListDo::Tabs => {
-            while let Some(cur) = tp.filter(|_| (i as linenr_T + 1) < unsafe { (*eap).line1 }) {
+            while let Some(cur) = tp.filter(|_| (i as LineNr + 1) < unsafe { (*eap).line1 }) {
                 i += 1;
                 tp = cur.next();
             }
@@ -206,9 +206,9 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
             // Advance to the first listed buffer after "eap->line1".
             let mut cur = first_buffer();
             let unlisted =
-                |b: &Buf| (b.handle as linenr_T) < unsafe { (*eap).line1 } || b.b_p_bl == 0;
+                |b: &Buf| (b.handle as LineNr) < unsafe { (*eap).line1 } || b.b_p_bl == 0;
             while let Some(b) = cur.filter(unlisted) {
-                if b.handle as linenr_T > unsafe { (*eap).line2 } {
+                if b.handle as LineNr > unsafe { (*eap).line2 } {
                     cur = None;
                     break;
                 }
@@ -228,7 +228,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
         }
         ListDo::Quickfix { .. } => {
             qf_size = unsafe { qf_get_valid_size(eap) };
-            debug_assert!(unsafe { (*eap).line1 } >= 0 as linenr_T, "eap->line1 >= 0");
+            debug_assert!(unsafe { (*eap).line1 } >= 0 as LineNr, "eap->line1 >= 0");
             if qf_size == 0 || unsafe { (*eap).line1 } as size_t > qf_size {
                 buf = ptr::null_mut();
             } else {
@@ -238,7 +238,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                 if unsafe { (*eap).addr_count } <= 0 {
                     // Default to every quickfix/location list entry.
                     debug_assert!(qf_size < MAXLNUM as c_int as size_t, "qf_size < MAXLNUM");
-                    unsafe { (*eap).line2 = qf_size as linenr_T };
+                    unsafe { (*eap).line2 = qf_size as LineNr };
                 }
             }
         }
@@ -323,7 +323,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
         match list {
             ListDo::Buffers => {
                 // Done?
-                if next_fnum < 0 || next_fnum as linenr_T > unsafe { (*eap).line2 } {
+                if next_fnum < 0 || next_fnum as LineNr > unsafe { (*eap).line2 } {
                     break;
                 }
                 // Does the buffer still exist?
@@ -338,7 +338,7 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
             }
             ListDo::Quickfix { .. } => {
                 debug_assert!(i >= 0, "i >= 0");
-                if i as size_t >= qf_size || i as linenr_T >= unsafe { (*eap).line2 } {
+                if i as size_t >= qf_size || i as LineNr >= unsafe { (*eap).line2 } {
                     break;
                 }
                 let qf_idx = unsafe { qf_get_cur_idx(eap) };
@@ -357,17 +357,17 @@ unsafe fn listdo_walk(eap: *mut exarg_T, list: ListDo) {
                         unsafe { do_check_scrollbind(true) };
                     }
                 }
-                if i as linenr_T + 1 > unsafe { (*eap).line2 } {
+                if i as LineNr + 1 > unsafe { (*eap).line2 } {
                     break;
                 }
             }
             ListDo::Tabs => {
-                if i as linenr_T + 1 > unsafe { (*eap).line2 } {
+                if i as LineNr + 1 > unsafe { (*eap).line2 } {
                     break;
                 }
             }
             ListDo::Args => {
-                if i as linenr_T >= unsafe { (*eap).line2 } {
+                if i as LineNr >= unsafe { (*eap).line2 } {
                     break;
                 }
             }

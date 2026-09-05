@@ -59,7 +59,7 @@ struct Searcher {
     /// the whole search.
     regmatch: regmmatch_T,
     /// Timeout limit, or null for none.
-    tm: *mut proftime_T,
+    tm: *mut ProfTime,
     /// Set when the limit was passed, or null.
     timed_out: *mut c_int,
     options: c_int,
@@ -83,7 +83,7 @@ impl Searcher {
     /// # Safety
     /// `lnum` must be a line of `self.buf`.
     #[inline(always)]
-    unsafe fn exec(&mut self, lnum: linenr_T, col: colnr_T) -> c_int {
+    unsafe fn exec(&mut self, lnum: LineNr, col: ColNr) -> c_int {
         unsafe {
             vim_regexec_multi(
                 &raw mut self.regmatch,
@@ -113,7 +113,7 @@ impl Searcher {
     /// # Safety
     /// `lnum` must be a line of `self.buf`.
     #[inline(always)]
-    unsafe fn line(&self, lnum: linenr_T) -> *mut c_char {
+    unsafe fn line(&self, lnum: LineNr) -> *mut c_char {
         unsafe { ml_get_buf(self.buf.raw(), lnum) }
     }
 
@@ -139,7 +139,7 @@ impl Searcher {
     /// # Safety
     /// `line` must be NUL-terminated and `col` within it.
     #[inline(always)]
-    unsafe fn step_over(&self, line: *mut c_char, col: colnr_T) -> colnr_T {
+    unsafe fn step_over(&self, line: *mut c_char, col: ColNr) -> ColNr {
         if unsafe { *line.offset(col as isize) } as c_int != NUL {
             col + unsafe { utfc_ptr2len(line.offset(col as isize)) }
         } else {
@@ -159,7 +159,7 @@ impl Searcher {
     /// `lnum` must be a line of `self.buf` and `line` its text.
     unsafe fn skip_to_start_pos(
         &mut self,
-        lnum: linenr_T,
+        lnum: LineNr,
         mut line: *mut c_char,
         found: &mut Found,
         nmatched: &mut c_int,
@@ -228,7 +228,7 @@ impl Searcher {
     /// `lnum` must be a line of `self.buf` and `line` its text.
     unsafe fn last_match_before(
         &mut self,
-        lnum: linenr_T,
+        lnum: LineNr,
         mut line: *mut c_char,
         found: &mut Found,
         nmatched: &mut c_int,
@@ -284,7 +284,7 @@ impl Searcher {
     /// Whether the match `exec` last reported begins (or, with
     /// `SEARCH_END`, ends) before the start position.
     #[inline(always)]
-    fn before_start_pos(&self, lnum: linenr_T, start: StartPos) -> bool {
+    fn before_start_pos(&self, lnum: LineNr, start: StartPos) -> bool {
         if self.opt(SEARCH_END) {
             let end = self.regmatch.endpos[0];
             lnum + end.lnum < start.pos.lnum
@@ -305,7 +305,7 @@ impl Searcher {
     ///
     /// # Safety
     /// `pos` must be writable and `end_pos` writable or null.
-    unsafe fn record(&self, lnum: linenr_T, found: Found, pos: *mut pos_T, end_pos: *mut pos_T) {
+    unsafe fn record(&self, lnum: LineNr, found: Found, pos: *mut pos_T, end_pos: *mut pos_T) {
         let empty = found.start.lnum == found.end.lnum && found.start.col == found.end.col;
         if self.opt(SEARCH_END) && !self.opt(SEARCH_NOOF) && !empty {
             unsafe { (*pos).lnum = lnum + found.end.lnum };
@@ -402,7 +402,7 @@ pub unsafe fn searchit(
     }
 
     // Stop after this line number, when it is not zero.
-    let mut stop_lnum: linenr_T = 0;
+    let mut stop_lnum: LineNr = 0;
     let mut s = Searcher {
         win,
         buf,
@@ -425,7 +425,7 @@ pub unsafe fn searchit(
     let mut break_loop = false;
     // The line the walk stopped on; the "hit TOP" message reads it
     // after every loop has been left.
-    let mut lnum: linenr_T;
+    let mut lnum: LineNr;
 
     loop {
         // When a match at the start position is not acceptable,
@@ -700,7 +700,7 @@ pub unsafe fn search_for_exact_line(
     dir: Direction,
     pat: *mut c_char,
 ) -> Result<(), Failed> {
-    let mut start: linenr_T = 0;
+    let mut start: LineNr = 0;
     let compl_len = ins_compl_len();
     if buf.b_ml.ml_line_count == 0 {
         return Err(Failed);
@@ -734,7 +734,7 @@ pub unsafe fn search_for_exact_line(
 
         let line = unsafe { ml_get_buf(buf.raw(), (*pos).lnum) };
         let text = unsafe { skipwhite(line) };
-        unsafe { (*pos).col = text.offset_from(line) as colnr_T };
+        unsafe { (*pos).col = text.offset_from(line) as ColNr };
 
         if compl_status_adding() && !compl_status_sol() {
             // When adding lines the matching line may be empty; it is

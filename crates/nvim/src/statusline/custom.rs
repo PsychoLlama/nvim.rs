@@ -48,8 +48,8 @@ use crate::state::MODE_INSERT;
 use crate::strings::vim_snprintf;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    Array, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags, StlOpt, String_0,
-    colnr_T, hlf_T, int64_t, schar_T, ssize_t, tabpage_T, win_T,
+    Array, ColNr, Integer, MAXPATHL, NUL, Object, OptIndex, OptInt, OptionSetFlags, StlOpt,
+    String_0, hlf_T, int64_t, schar_T, ssize_t, tabpage_T, win_T,
 };
 use crate::ui::{ui_call_msg_ruler, ui_has};
 use crate::window::lastwin_nofloating;
@@ -711,7 +711,7 @@ pub unsafe fn redraw_ruler() {
 ///
 /// The line number is 0 for an empty buffer, and the column is 0 outside
 /// Insert mode on an empty line -- which is what makes that read "0-1".
-fn ruler_position(win: Win, virtcol: colnr_T, buffer: &mut [c_char]) -> c_int {
+fn ruler_position(win: Win, virtcol: ColNr, buffer: &mut [c_char]) -> c_int {
     let empty_buffer = win.buffer().b_ml.ml_flags.has(MlFlags::EMPTY);
     // SAFETY: a live window's cursor line, which is NUL-terminated.
     let first = unsafe { *ml_get_buf(win.buffer().raw(), win.w_cursor.lnum) };

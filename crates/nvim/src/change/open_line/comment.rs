@@ -524,7 +524,7 @@ pub(crate) struct BuiltLeader {
     /// The allocation, for `xfree`.
     pub(crate) allocated: *mut c_char,
     pub(crate) lead_len: c_int,
-    pub(crate) newcol: colnr_T,
+    pub(crate) newcol: ColNr,
     pub(crate) newindent: c_int,
 }
 
@@ -644,7 +644,7 @@ pub(crate) unsafe fn build_leader(
         unsafe { *leader.offset(lead_len as isize) = NUL as c_char };
     }
 
-    let mut newcol = lead_len as colnr_T;
+    let mut newcol = lead_len as ColNr;
 
     // An indent is about to be set below, so drop the one the leader
     // carries -- advancing past it rather than moving the text.
@@ -686,7 +686,7 @@ pub(crate) unsafe fn indent_after_comment_end(
         return newindent;
     }
     let old_cursor = cur_win().w_cursor;
-    cur_win().w_cursor.col = unsafe { comment_end.offset_from(saved_line) } as colnr_T;
+    cur_win().w_cursor.col = unsafe { comment_end.offset_from(saved_line) } as ColNr;
     let newindent = match unsafe { findmatch(::core::ptr::null_mut(), NUL) } {
         None => newindent,
         Some(pos) => {

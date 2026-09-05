@@ -65,7 +65,7 @@ impl Df {
     /// A block covers `df_count[idx]` lines from `df_lnum[idx]`, so this is
     /// the line the next block may start at -- the sum the walks all compare
     /// against.
-    pub(crate) fn end(self, idx: usize) -> linenr_T {
+    pub(crate) fn end(self, idx: usize) -> LineNr {
         self.df_lnum[idx] + self.df_count[idx]
     }
 
@@ -168,8 +168,8 @@ pub(crate) unsafe fn clear_diffout(dout: *mut diffout_T) {
 pub(crate) unsafe fn diff_write_buffer(
     buf: Buf,
     m: *mut mmfile_t,
-    start: linenr_T,
-    mut end: linenr_T,
+    start: LineNr,
+    mut end: LineNr,
 ) -> Result<(), Failed> {
     if end < 0 {
         end = buf.b_ml.ml_line_count;
@@ -269,8 +269,8 @@ fn fold_line(line: &[u8], out: &mut [u8]) -> usize {
 unsafe fn diff_write(
     mut buf: Buf,
     din: *mut diffin_T,
-    start: linenr_T,
-    mut end: linenr_T,
+    start: LineNr,
+    mut end: LineNr,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's input side.
     let din = unsafe { Live::<diffin_T>::new(din) };
@@ -340,7 +340,7 @@ unsafe fn diff_try_update(dio: *mut diffio_T, idx_orig: c_int, eap: *mut exarg_T
     let diff_out: *mut diffout_T = dio.field_ptr(offset_of!(diffio_T, dio_diff));
     let mut tp = cur_tab();
     let idx_orig = idx_orig as usize;
-    let mut anchors = [[0 as linenr_T; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
+    let mut anchors = [[0 as LineNr; MAX_DIFF_ANCHORS as usize]; DB_COUNT as usize];
     'theend: {
         if dio.dio_internal != 0 {
             dio.dio_diff.dout_ga.clear();

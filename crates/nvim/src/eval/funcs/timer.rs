@@ -23,8 +23,8 @@ use crate::memory::{xfree, xmalloc, xstrdup};
 use crate::profile::{profile_end, profile_msg, profile_signed, profile_start, profile_sub};
 use crate::semsg;
 use crate::types::{
-    Callback, EvalFuncData, MultiQueue, TimeWatcher, VAR_FLOAT, VAR_LIST, VAR_NUMBER, VAR_STRING,
-    VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, proftime_T, time_t, typval_T,
+    Callback, EvalFuncData, MultiQueue, ProfTime, TimeWatcher, VAR_FLOAT, VAR_LIST, VAR_NUMBER,
+    VAR_STRING, VAR_UNKNOWN, VarLock, float_T, int32_t, kListLenUnknown, time_t, typval_T,
     typval_vval_union, varnumber_T,
 };
 use crate::ui::ui_flush;
@@ -135,13 +135,13 @@ pub unsafe fn f_localtime(_argvars: *mut typval_T, rettv: *mut typval_T, _fptr: 
     rettv.vval.v_number = unsafe { time(ptr::null_mut::<time_t>()) } as varnumber_T;
 }
 
-/// A `proftime_T` split into the pair of 32-bit halves `reltime()` reports.
+/// A `ProfTime` split into the pair of 32-bit halves `reltime()` reports.
 ///
 /// The C reads the profile time through a union of the timestamp with a
 /// `struct { int32_t low, high; }`, so the halves are the timestamp's own
 /// bytes in memory order. `to_ne_bytes` reproduces exactly that, on any
 /// endianness, without the transmute.
-fn proftime_halves(tm: proftime_T) -> (int32_t, int32_t) {
+fn proftime_halves(tm: ProfTime) -> (int32_t, int32_t) {
     let bytes = tm.to_ne_bytes();
     let low = int32_t::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
     let high = int32_t::from_ne_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
@@ -149,9 +149,9 @@ fn proftime_halves(tm: proftime_T) -> (int32_t, int32_t) {
 }
 
 /// The inverse of [`proftime_halves`].
-fn proftime_from_halves(high: int32_t, low: int32_t) -> proftime_T {
+fn proftime_from_halves(high: int32_t, low: int32_t) -> ProfTime {
     let (lo, hi) = (low.to_ne_bytes(), high.to_ne_bytes());
-    proftime_T::from_ne_bytes([lo[0], lo[1], lo[2], lo[3], hi[0], hi[1], hi[2], hi[3]])
+    ProfTime::from_ne_bytes([lo[0], lo[1], lo[2], lo[3], hi[0], hi[1], hi[2], hi[3]])
 }
 
 /// Read a `[high, low]` List back into a profile timestamp. `None` when the
@@ -159,7 +159,7 @@ fn proftime_from_halves(high: int32_t, low: int32_t) -> proftime_T {
 ///
 /// # Safety
 /// `arg` is a live typval from the call frame.
-unsafe fn list2proftime(arg: *const typval_T) -> Option<proftime_T> {
+unsafe fn list2proftime(arg: *const typval_T) -> Option<ProfTime> {
     // SAFETY: the caller's obligation; the list is only read.
     let arg = unsafe { &*arg };
     if arg.v_type != VAR_LIST || unsafe { tv_list_len(arg.list_or_null()) } != 2 {

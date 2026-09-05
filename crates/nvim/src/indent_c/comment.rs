@@ -99,7 +99,7 @@ pub(crate) unsafe fn find_start_rawstring(ind_maxcomment: c_int) -> Option<pos_T
 /// # Safety
 /// Reads the current buffer and window; the current line may be unlocked.
 pub(crate) unsafe fn ind_find_start_comment_or_raw_string(
-    is_raw: Option<&mut linenr_T>,
+    is_raw: Option<&mut LineNr>,
 ) -> Option<pos_T> {
     // SAFETY: on the main thread, with a current window and buffer.
     let comment_pos = unsafe { find_start_comment(cur_buf().b_ind_maxcomment) };
@@ -217,15 +217,15 @@ pub(crate) unsafe fn skip_string(p: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// `line` must point at a NUL-terminated string.
-pub unsafe fn is_pos_in_string(line: *const c_char, col: colnr_T) -> bool {
+pub unsafe fn is_pos_in_string(line: *const c_char, col: ColNr) -> bool {
     let s = unsafe { CStr::from_ptr(line).to_bytes() };
     let mut p = 0usize;
-    while p < s.len() && (p as colnr_T) < col {
+    while p < s.len() && (p as ColNr) < col {
         // `p < s.len()` is upstream's `*p`, so the tail is non-empty and the
         // signed answer is non-negative.
         p = (p as isize + string_end(&s[p..]) + 1) as usize;
     }
-    p as colnr_T > col
+    p as ColNr > col
 }
 
 /// Step over white space and C comments -- and, with 'cinoptions' `#N`, over
@@ -304,7 +304,7 @@ pub(crate) unsafe fn find_line_comment() -> Option<pos_T> {
             let p = skipwhite(line);
             (
                 cin_islinecomment(p),
-                p.offset_from(line) as colnr_T,
+                p.offset_from(line) as ColNr,
                 *p as c_int == NUL,
             )
         };

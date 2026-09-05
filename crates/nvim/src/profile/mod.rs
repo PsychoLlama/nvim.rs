@@ -1,8 +1,8 @@
-//! Profiling: the `proftime_T` arithmetic shared by `:profile`, `reltime()`
+//! Profiling: the `ProfTime` arithmetic shared by `:profile`, `reltime()`
 //! and regex/search timeouts, the `:profile` command, and the per-line
 //! accounting the profiled scripts and functions keep.
 //!
-//! A `proftime_T` is a `u64` nanosecond reading from `os_hrtime`. Durations
+//! A `ProfTime` is a `u64` nanosecond reading from `os_hrtime`. Durations
 //! are unsigned differences and may wrap when a "later" time is subtracted
 //! from an "earlier" one; [`profile_signed`] recovers the signed value
 //! (#10452), and everything user-visible funnels through it.
@@ -41,7 +41,7 @@ use crate::os::env::expand_env_save_opt;
 use crate::os::time::os_hrtime;
 use crate::runtime::{script_count, script_id_valid, script_item};
 use crate::types::{
-    ExpandContext, Vv, exarg_T, expand_T, funccall_T, int64_t, linenr_T, proftime_T, scriptitem_T,
+    ExpandContext, LineNr, ProfTime, Vv, exarg_T, expand_T, funccall_T, int64_t, scriptitem_T,
     sn_prl_T, ufunc_T, varnumber_T,
 };
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -61,7 +61,7 @@ const UF_NAME_OFFSET: isize = 240;
 
 /// Accumulated time the user kept the editor waiting (input, `:profile
 /// pause`); subtracted from measurements via [`profile_sub_wait`].
-static PROF_WAIT_TIME: GlobalCell<proftime_T> = GlobalCell::new(0);
+static PROF_WAIT_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 /// Report path from `:profile start {fname}`; `None` when not profiling.
 static PROFILE_FNAME: GlobalCell<Option<CString>> = GlobalCell::new(None);
 
@@ -69,23 +69,23 @@ static PROFILE_FNAME: GlobalCell<Option<CString>> = GlobalCell::new(None);
 // Time arithmetic.
 
 /// The current time.
-pub fn profile_start() -> proftime_T {
+pub fn profile_start() -> ProfTime {
     os_hrtime()
 }
 
 /// Elapsed time from `tm` until now.
-pub fn profile_end(tm: proftime_T) -> proftime_T {
+pub fn profile_end(tm: ProfTime) -> ProfTime {
     profile_sub(profile_start(), tm)
 }
 
 /// The zero time.
-pub fn profile_zero() -> proftime_T {
+pub fn profile_zero() -> ProfTime {
     0
 }
 
 /// The time `msec` milliseconds into the future, or the zero time ("no
 /// limit") when `msec <= 0`.
-pub fn profile_setlimit(msec: int64_t) -> proftime_T {
+pub fn profile_setlimit(msec: int64_t) -> ProfTime {
     if msec <= 0 {
         return profile_zero();
     }
@@ -97,15 +97,15 @@ pub fn profile_setlimit(msec: int64_t) -> proftime_T {
     // `INT64_MAX` nanoseconds -- ~292 years -- because that is how far apart
     // [`profile_cmp`] can still tell two times, and the wrapping add past it
     // is the arithmetic this module is built on.
-    let nsec = (msec as proftime_T)
+    let nsec = (msec as ProfTime)
         .saturating_mul(1_000_000)
-        .min(int64_t::MAX as proftime_T);
+        .min(int64_t::MAX as ProfTime);
     profile_start().wrapping_add(nsec)
 }
 
 /// Whether the current time is past `tm`. False if the limit was never set
 /// (`tm` is the zero time).
-pub fn profile_passed_limit(tm: proftime_T) -> bool {
+pub fn profile_passed_limit(tm: ProfTime) -> bool {
     if tm == 0 {
         return false;
     }
@@ -113,25 +113,25 @@ pub fn profile_passed_limit(tm: proftime_T) -> bool {
 }
 
 /// `tm / count` (rounded), or zero when `count <= 0`.
-pub fn profile_divide(tm: proftime_T, count: c_int) -> proftime_T {
+pub fn profile_divide(tm: ProfTime, count: c_int) -> ProfTime {
     if count <= 0 {
         return profile_zero();
     }
-    (tm as f64 / count as f64).round() as proftime_T
+    (tm as f64 / count as f64).round() as ProfTime
 }
 
-pub fn profile_add(tm1: proftime_T, tm2: proftime_T) -> proftime_T {
+pub fn profile_add(tm1: ProfTime, tm2: ProfTime) -> ProfTime {
     tm1.wrapping_add(tm2)
 }
 
 /// `tm1 - tm2`, wrapping when `tm2 > tm1`; see [`profile_signed`].
-pub fn profile_sub(tm1: proftime_T, tm2: proftime_T) -> proftime_T {
+pub fn profile_sub(tm1: ProfTime, tm2: ProfTime) -> ProfTime {
     tm1.wrapping_sub(tm2)
 }
 
 /// Self time: `self + total - children`, or `self` unchanged when `total <=
 /// children` (possible with recursive calls).
-pub fn profile_self(self_: proftime_T, total: proftime_T, children: proftime_T) -> proftime_T {
+pub fn profile_self(self_: ProfTime, total: ProfTime, children: ProfTime) -> ProfTime {
     if total <= children {
         return self_;
     }
@@ -140,24 +140,24 @@ pub fn profile_self(self_: proftime_T, total: proftime_T, children: proftime_T) 
 
 /// `tma` minus the wait time accumulated since the [`PROF_WAIT_TIME`]
 /// snapshot `tm`.
-pub fn profile_sub_wait(tm: proftime_T, tma: proftime_T) -> proftime_T {
+pub fn profile_sub_wait(tm: ProfTime, tma: ProfTime) -> ProfTime {
     let waited = profile_sub(PROF_WAIT_TIME.get(), tm);
     profile_sub(tma, waited)
 }
 
 /// Signed value of a duration produced by [`profile_sub`]. Values above
 /// `i64::MAX` (>=150 years) are taken to be wrapped negative differences.
-pub fn profile_signed(tm: proftime_T) -> int64_t {
-    if tm <= int64_t::MAX as proftime_T {
+pub fn profile_signed(tm: ProfTime) -> int64_t {
+    if tm <= int64_t::MAX as ProfTime {
         tm as int64_t
     } else {
-        -((proftime_T::MAX - tm) as int64_t)
+        -((ProfTime::MAX - tm) as int64_t)
     }
 }
 
 /// Compare two times (which must be less than 150 years apart): negative
 /// when `tm2 < tm1`, `0` when equal, positive when `tm2 > tm1`.
-pub fn profile_cmp(tm1: proftime_T, tm2: proftime_T) -> c_int {
+pub fn profile_cmp(tm1: ProfTime, tm2: ProfTime) -> c_int {
     if tm1 == tm2 {
         return 0;
     }
@@ -170,14 +170,14 @@ pub fn profile_cmp(tm1: proftime_T, tm2: proftime_T) -> c_int {
 
 /// `tm` as `"%10.6lf"` seconds, the format used throughout the report and
 /// by `reltimestr()`.
-pub fn profile_msg_str(tm: proftime_T) -> String {
+pub fn profile_msg_str(tm: ProfTime) -> String {
     format!("{:10.6}", profile_signed(tm) as f64 / 1e9)
 }
 
 /// C-string flavor of [`profile_msg_str`] for the transpiled callers
 /// (syntime report, `reltimestr()`), in its own storage. Upstream answers a
 /// static buffer the next call overwrites.
-pub(crate) fn profile_msg(tm: proftime_T) -> [c_char; 50] {
+pub(crate) fn profile_msg(tm: ProfTime) -> [c_char; 50] {
     let s = profile_msg_str(tm);
     let mut buf = [0 as c_char; 50];
     let n = s.len().min(buf.len() - 1);
@@ -197,7 +197,7 @@ pub(crate) fn profile_msg(tm: proftime_T) -> [c_char; 50] {
 /// `eap` is the live ex command being executed.
 pub unsafe fn ex_profile(eap: *mut exarg_T) {
     /// Time at which `:profile pause` stopped the clock.
-    static PAUSE_TIME: GlobalCell<proftime_T> = GlobalCell::new(0);
+    static PAUSE_TIME: GlobalCell<ProfTime> = GlobalCell::new(0);
 
     // SAFETY: `eap.arg` is the command's NUL-terminated argument, so both
     // walkers stay inside it and the two views borrow from it for the length
@@ -362,7 +362,7 @@ pub unsafe fn set_context_in_profile_cmd(xp: *mut expand_T, arg: *const c_char) 
 // Wait time.
 
 /// When the editor started waiting for the user to type.
-static INPUT_WAIT_START: GlobalCell<proftime_T> = GlobalCell::new(0);
+static INPUT_WAIT_START: GlobalCell<ProfTime> = GlobalCell::new(0);
 
 /// Called when starting to wait for the user to type a character.
 pub fn prof_input_start() {
@@ -409,10 +409,10 @@ pub unsafe fn func_do_profile(fp: *mut ufunc_T) {
             fp.uf_tml_count = unsafe { xcalloc(len, size_of::<c_int>()) } as *mut c_int;
         }
         if fp.uf_tml_total.is_null() {
-            fp.uf_tml_total = unsafe { xcalloc(len, size_of::<proftime_T>()) } as *mut proftime_T;
+            fp.uf_tml_total = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
         }
         if fp.uf_tml_self.is_null() {
-            fp.uf_tml_self = unsafe { xcalloc(len, size_of::<proftime_T>()) } as *mut proftime_T;
+            fp.uf_tml_self = unsafe { xcalloc(len, size_of::<ProfTime>()) } as *mut ProfTime;
         }
         fp.uf_tml_idx = -1;
         fp.uf_prof_initialized = 1;
@@ -426,7 +426,7 @@ pub unsafe fn func_do_profile(fp: *mut ufunc_T) {
 ///
 /// # Safety
 /// Main-thread editor call; the call stack and script table are live.
-pub unsafe fn prof_child_enter() -> proftime_T {
+pub unsafe fn prof_child_enter() -> ProfTime {
     // SAFETY: `get_current_funccal` answers with the live call frame or null,
     // and a frame's `fc_func` is the function being executed.
     if let Some(fc) = unsafe { profiled_funccal() } {
@@ -440,7 +440,7 @@ pub unsafe fn prof_child_enter() -> proftime_T {
 ///
 /// # Safety
 /// Main-thread editor call; the call stack and script table are live.
-pub unsafe fn prof_child_exit(wait: proftime_T) {
+pub unsafe fn prof_child_exit(wait: ProfTime) {
     // SAFETY: as [`prof_child_enter`].
     if let Some(fc) = unsafe { profiled_funccal() } {
         let fc = unsafe { &mut *fc };
@@ -474,7 +474,7 @@ pub unsafe fn func_line_start(cookie: *mut c_void) {
     // SAFETY: the caller's call frame and its function.
     let fp = unsafe { &mut *(*(cookie as *mut funccall_T)).fc_func };
     let lnum = sourcing_lnum();
-    if fp.uf_profiling != 0 && lnum >= 1 && lnum <= fp.uf_lines.ga_len as linenr_T {
+    if fp.uf_profiling != 0 && lnum >= 1 && lnum <= fp.uf_lines.ga_len as LineNr {
         fp.uf_tml_idx = lnum as c_int - 1;
         // Skip continuation lines, which the line array stores as nulls.
         while fp.uf_tml_idx > 0 && unsafe { func_line(fp, fp.uf_tml_idx as isize) }.is_null() {
@@ -558,7 +558,7 @@ pub unsafe fn profile_init(si: *mut scriptitem_T) {
 ///
 /// # Safety
 /// Main-thread editor call; the script table is live.
-pub unsafe fn script_prof_save() -> proftime_T {
+pub unsafe fn script_prof_save() -> ProfTime {
     if let Some(si) = current_script() {
         let si = unsafe { &mut *si };
         if si.sn_prof_on {
@@ -577,7 +577,7 @@ pub unsafe fn script_prof_save() -> proftime_T {
 ///
 /// # Safety
 /// Main-thread editor call; the script table is live.
-pub unsafe fn script_prof_restore(wait: proftime_T) {
+pub unsafe fn script_prof_restore(wait: ProfTime) {
     let Some(si) = current_script() else {
         return;
     };
@@ -671,7 +671,7 @@ fn current_script() -> Option<*mut scriptitem_T> {
 }
 
 /// Line number being sourced/executed: the top of the exestack.
-fn sourcing_lnum() -> linenr_T {
+fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 

@@ -33,7 +33,7 @@ use crate::options::kOptBoFlagEsc;
 use crate::os::cshim::gettext;
 use crate::state::{may_trigger_modechanged, state_handle_k_event};
 use crate::syntax::{cur_syn_block, syn_stack_free_all};
-use crate::types::{LineGetter, NUL, OpType, cmdarg_T, linenr_T};
+use crate::types::{LineGetter, LineNr, NUL, OpType, cmdarg_T};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
@@ -197,7 +197,7 @@ pub(crate) unsafe fn nv_hat(cap: *mut cmdarg_T) {
     let ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op_quit(ca.op()) {
         let flags = GETF_SETMARK as c_int | GETF_ALT as c_int;
-        let _ = unsafe { buflist_getfile(ca.count0, 0 as linenr_T, flags, 0) };
+        let _ = unsafe { buflist_getfile(ca.count0, 0 as LineNr, flags, 0) };
     }
 }
 

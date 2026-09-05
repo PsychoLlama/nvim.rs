@@ -42,9 +42,7 @@ use crate::os::cshim::gettext;
 use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
-use crate::types::{
-    colnr_T, garray_T, hlf_T, langp_T, linenr_T, regmatch_T, size_t, uint8_t, win_T,
-};
+use crate::types::{ColNr, LineNr, garray_T, hlf_T, langp_T, regmatch_T, size_t, uint8_t, win_T};
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -380,7 +378,7 @@ pub unsafe fn no_spell_checking(wp: *mut win_T) -> bool {
 /// The question is whether a sentence ends just before it. At the start of
 /// a line that means looking at the previous line, with a space standing
 /// in for the line break.
-pub unsafe fn check_need_cap(wp: *mut win_T, lnum: linenr_T, col: colnr_T) -> bool {
+pub unsafe fn check_need_cap(wp: *mut win_T, lnum: LineNr, col: ColNr) -> bool {
     if unsafe { (*(*wp).w_s).b_cap_prog }.is_null() {
         return false;
     }
@@ -392,7 +390,7 @@ pub unsafe fn check_need_cap(wp: *mut win_T, lnum: linenr_T, col: colnr_T) -> bo
         core::ptr::null_mut()
     };
     let mut line_copy: *mut c_char = core::ptr::null_mut();
-    let mut endcol: colnr_T = 0;
+    let mut endcol: ColNr = 0;
 
     if col == 0 || unsafe { getwhitecols(line) } >= col as isize {
         // At the start of the line: the previous line has to be empty,
@@ -407,7 +405,7 @@ pub unsafe fn check_need_cap(wp: *mut win_T, lnum: linenr_T, col: colnr_T) -> bo
                 // A space stands in for the line break.
                 line_copy = unsafe { concat_str(line, c" ".as_ptr()) };
                 line = line_copy;
-                endcol = unsafe { cstr::bytes_at(line) }.len() as colnr_T;
+                endcol = unsafe { cstr::bytes_at(line) }.len() as ColNr;
             }
         }
     } else {
@@ -491,7 +489,7 @@ static spell_expand_need_cap: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Record, before the word is removed, whether its replacement will need a
 /// capital.
-pub unsafe fn spell_expand_check_cap(col: colnr_T) {
+pub unsafe fn spell_expand_check_cap(col: ColNr) {
     spell_expand_need_cap
         .set(unsafe { check_need_cap(curwin.get(), (*curwin.get()).w_cursor.lnum, col) });
 }
@@ -499,7 +497,7 @@ pub unsafe fn spell_expand_check_cap(col: colnr_T) {
 /// Insert-mode completion `CTRL-X ?`: fill `matchp` with suggestions for
 /// `pat` and return how many there are.
 pub unsafe fn expand_spelling(
-    _lnum: linenr_T,
+    _lnum: LineNr,
     pat: *mut c_char,
     matchp: *mut *mut *mut c_char,
 ) -> c_int {

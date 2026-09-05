@@ -24,7 +24,7 @@ use crate::normal::{
 };
 use crate::pos::{equalpos, lt};
 use crate::strings::vim_strchr;
-use crate::types::{NUL, colnr_T, oparg_T};
+use crate::types::{ColNr, NUL, oparg_T};
 
 /// The column of the next `quotechar` at or after `col`, or -1 when there is
 /// none before the end of the line.
@@ -357,7 +357,7 @@ pub unsafe fn current_quote(
     if !include && count < 2 && (vis_empty || !inside_quotes) {
         col_start += 1;
     }
-    cur_win().w_cursor.col = col_start as colnr_T;
+    cur_win().w_cursor.col = col_start as ColNr;
     if visual_active() {
         // Set the start of the Visual area when it was empty, when we
         // were just inside quotes, or when it neither started at a quote
@@ -382,7 +382,7 @@ pub unsafe fn current_quote(
     }
 
     // The end position.
-    cur_win().w_cursor.col = col_end as colnr_T;
+    cur_win().w_cursor.col = col_end as ColNr;
     // SAFETY: the cursor is on a line of the current buffer; the `&&` keeps
     // `inc_cursor`'s side effect behind the same test it had.
     if (include || count > 1 || (!vis_empty && inside_quotes)) && inc_cursor() == 2 {
@@ -410,7 +410,7 @@ pub unsafe fn current_quote(
                 dec_cursor();
                 set_visual_anchor(cur_win().w_cursor);
             }
-            cur_win().w_cursor.col = col_start as colnr_T;
+            cur_win().w_cursor.col = col_start as ColNr;
         }
         if visual_mode().is_line() {
             set_visual_mode(VisualMode::CHAR);

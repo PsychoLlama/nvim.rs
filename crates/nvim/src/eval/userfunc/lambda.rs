@@ -224,7 +224,7 @@ pub unsafe fn get_lambda_tv(
             f.uf_flags = flags;
             f.uf_calls = 0;
             f.uf_script_ctx = current_sctx.get();
-            f.uf_script_ctx.sc_lnum += sourcing_lnum() - newlines.ga_len as linenr_T;
+            f.uf_script_ctx.sc_lnum += sourcing_lnum() - newlines.ga_len as LineNr;
 
             part.pt_func = fp;
             part.pt_refcount = Refcount::ONE;

@@ -81,10 +81,10 @@ use crate::types::CAR;
 use crate::types::NL;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CheckItem, Directory, FAIL, FILE, Failed, FileInfo, IOSIZE, OK, OptInt, OptVal, OptionSetFlags,
-    ShmFlag, aco_save_T, bln_values, buf_T, colnr_T, exarg_T, garray_T, iconv_t, int64_t, linenr_T,
-    off_T, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t, uintmax_t,
-    uv_gid_t, uv_uid_t,
+    CheckItem, ColNr, Directory, FAIL, FILE, Failed, FileInfo, FileOffset, IOSIZE, LineNr, OK,
+    OptInt, OptVal, OptionSetFlags, ShmFlag, aco_save_T, bln_values, buf_T, exarg_T, garray_T,
+    iconv_t, int64_t, ptrdiff_t, regmatch_T, regprog_T, scid_T, size_t, ssize_t, time_t, uint64_t,
+    uintmax_t, uv_gid_t, uv_uid_t,
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::{
@@ -235,11 +235,11 @@ pub unsafe fn filemess(buf: Buf, name: *mut c_char, s: *mut c_char) {
 /// @param p        the start of those bytes
 /// @param endp     the end of them
 pub(crate) unsafe fn readfile_linenr(
-    linecnt: linenr_T,
+    linecnt: LineNr,
     p: *const ::core::ffi::c_char,
     endp: *const ::core::ffi::c_char,
-) -> linenr_T {
-    let mut lnum: linenr_T = cur_buf().b_ml.ml_line_count - linecnt + 1 as linenr_T;
+) -> LineNr {
+    let mut lnum: LineNr = cur_buf().b_ml.ml_line_count - linecnt + 1 as LineNr;
     let mut s = p;
     while s < endp {
         if unsafe { *s } as ::core::ffi::c_int == '\n' as ::core::ffi::c_int {
@@ -337,8 +337,8 @@ pub(crate) unsafe fn msg_add_fileformat(
 pub(crate) unsafe fn msg_add_lines(
     report: &mut [c_char; IOSIZE as usize],
     insert_space: c_int,
-    lnum: linenr_T,
-    nchars: off_T,
+    lnum: LineNr,
+    nchars: FileOffset,
 ) {
     let io = report.as_mut_ptr();
     let mut len = unsafe { cstr::bytes_at(io) }.len();

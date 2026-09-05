@@ -61,7 +61,7 @@ unsafe fn pum_selected_info() -> Option<*mut c_char> {
 /// # Safety
 /// `win` must be live and `info` NUL-terminated. `info` is written through
 /// and restored, so it must be writable — the callers own it.
-unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T, c_int) {
+unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (LineNr, c_int) {
     // SAFETY: the buffer is `win`'s own and `nvim_buf_set_lines` copies out of
     // `replacement` before it is freed.
     let buf = unsafe { (*win).w_buffer };
@@ -112,7 +112,7 @@ unsafe fn pum_preview_set_text(win: *mut win_T, info: *mut c_char) -> (linenr_T,
         replacement.size = lines.len() as size_t;
         replacement.capacity = replacement.size;
     }
-    let lnum = lines.len() as linenr_T;
+    let lnum = lines.len() as LineNr;
 
     let mut arena = ARENA_EMPTY;
     // Setting the lines is the editor's own doing, not a plugin's.
@@ -406,8 +406,8 @@ unsafe fn pum_fill_info(
 
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
-        let lnum = lnum.min(p_pvh.get() as linenr_T);
-        if linenr_T::from(unsafe { (*curwin.get()).w_height }) < lnum {
+        let lnum = lnum.min(p_pvh.get() as LineNr);
+        if LineNr::from(unsafe { (*curwin.get()).w_height }) < lnum {
             win_setheight(lnum as c_int);
             resized = true;
         }

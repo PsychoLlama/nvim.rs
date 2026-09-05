@@ -394,7 +394,7 @@ unsafe fn open_window_for_arg(
     let ffname = unsafe { alist_name(alist_arg(aall.alist, i)) };
     let sfname = ptr::null_mut();
     let eap2 = ptr::null_mut();
-    let newlnum = newlnum::ONE as linenr_T;
+    let newlnum = newlnum::ONE as LineNr;
     let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, curwin.get()) };
     aall.use_firstwin = false;
     Ok(())
@@ -553,7 +553,7 @@ pub unsafe fn ex_all(eap: *mut exarg_T) {
     let mut eap = unsafe { Ea::new(eap) };
     // `:all` takes an optional count as its range.
     if eap.addr_count == 0 {
-        eap.line2 = 9999 as linenr_T;
+        eap.line2 = 9999 as LineNr;
     }
     let count = eap.line2 as c_int;
     let forceit = eap.forceit != 0;

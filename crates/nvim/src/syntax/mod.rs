@@ -85,8 +85,8 @@ use crate::runtime::{do_source, source_runtime};
 use crate::strings::{vim_snprintf, vim_strchr};
 use crate::types::AutoEvent;
 use crate::types::{
-    OptInt, buf_T, bufstate_T, colnr_T, exarg_T, expand_T, hashtab_T, int16_t, linenr_T, lpos_T,
-    proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T,
+    ColNr, LineNr, OptInt, ProfTime, buf_T, bufstate_T, exarg_T, expand_T, hashtab_T, int16_t,
+    lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, regprog_T, size_t, syn_time_T, synblock_T,
     synstate_T, uint8_t, uint64_t, varnumber_T, win_T,
 };
 use crate::winlayer::{Live, Win};
@@ -636,11 +636,11 @@ pub(crate) fn syn_block() -> SynBlock {
     unsafe { SynBlock::new(parsed_block.get()) }
 }
 /// When parsing must give up, or NULL for no limit.
-static syn_tm: GlobalCell<*mut proftime_T> = GlobalCell::new(::core::ptr::null_mut());
+static syn_tm: GlobalCell<*mut ProfTime> = GlobalCell::new(::core::ptr::null_mut());
 /// The line being parsed.
-static current_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+static current_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
 /// The column being parsed.
-static current_col: GlobalCell<colnr_T> = GlobalCell::new(0);
+static current_col: GlobalCell<ColNr> = GlobalCell::new(0);
 /// Whether the state at `current_lnum` has been put in the cache.
 static current_state_stored: GlobalCell<bool> = GlobalCell::new(false);
 /// Whether the line has been parsed to its end.
@@ -687,7 +687,7 @@ static current_line_id: GlobalCell<::core::ffi::c_int> = GlobalCell::new(0);
 static syn_time_on: GlobalCell<bool> = GlobalCell::new(false);
 
 /// Set the time limit for parsing, or clear it with NULL.
-pub(crate) unsafe fn syn_set_timeout(tm: *mut proftime_T) {
+pub(crate) unsafe fn syn_set_timeout(tm: *mut ProfTime) {
     syn_tm.set(tm);
 }
 pub(crate) const ITEM_START: ::core::ffi::c_int = 0 as ::core::ffi::c_int;

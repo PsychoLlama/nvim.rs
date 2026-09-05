@@ -65,7 +65,7 @@ unsafe fn hgr_search_file(qfl: *mut qf_list_T, fname: *mut c_char, p_regmatch: *
     }
 
     let line = read.as_mut_ptr();
-    let mut lnum: linenr_T = 1;
+    let mut lnum: LineNr = 1;
     while !unsafe { vim_fgets(line, IOSIZE, fd) } && !got_int.get() {
         if unsafe { vim_regexec(p_regmatch, line, 0) } {
             // Remove the trailing CR, LF, spaces, etc.

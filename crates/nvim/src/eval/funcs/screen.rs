@@ -24,7 +24,7 @@ use crate::memory::xstrdup;
 use crate::message::msg_scroll_flush;
 use crate::syntax::{SynFlags, get_syntax_info, syn_get_id, syn_get_stack_item, syn_get_sub_char};
 use crate::types::{
-    EvalFuncData, NUL, VAR_STRING, colnr_T, kListLenMayKnow, schar_T, typval_T, varnumber_T,
+    ColNr, EvalFuncData, NUL, VAR_STRING, kListLenMayKnow, schar_T, typval_T, varnumber_T,
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
@@ -295,7 +295,7 @@ pub unsafe fn f_syn_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Eval
     // whole call.
     let lnum = arg_lnum(args.get(0));
     // Wraps because the C's does; `col` is only used as a range test.
-    let col = (arg_number(args.get(1)) as colnr_T).wrapping_sub(1);
+    let col = (arg_number(args.get(1)) as ColNr).wrapping_sub(1);
     let mut transerr = false;
     let trans = arg_number_chk(args.get(2), Some(&mut transerr)) as c_int;
 
@@ -336,7 +336,7 @@ pub unsafe fn f_synconcealed(argvars: *mut typval_T, rettv: *mut typval_T, _fptr
     list_set_ret(rettv, ptr::null_mut());
     let lnum = arg_lnum(args.get(0));
     // Wraps because the C's does.
-    let col = (arg_number(args.get(1)) as colnr_T).wrapping_sub(1);
+    let col = (arg_number(args.get(1)) as ColNr).wrapping_sub(1);
 
     // Note the `<=`: unlike synID(), the position one past the end of
     // the line is in range here.
@@ -386,7 +386,7 @@ pub unsafe fn f_synstack(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: Ev
     list_set_ret(rettv, ptr::null_mut());
     let lnum = arg_lnum(args.get(0));
     // Wraps because the C's does.
-    let col = (arg_number(args.get(1)) as colnr_T).wrapping_sub(1);
+    let col = (arg_number(args.get(1)) as ColNr).wrapping_sub(1);
 
     if lnum >= 1
         && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }

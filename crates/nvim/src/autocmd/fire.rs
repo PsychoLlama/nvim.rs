@@ -356,7 +356,7 @@ pub unsafe fn apply_autocmds_group(
         // the handlers this fires each point it at themselves.
         let sctx = Script::saved();
 
-        let mut wait_time: proftime_T = 0;
+        let mut wait_time: ProfTime = 0;
         if do_profiling.get() == PROF_YES {
             // Doesn't count for the caller itself.
             wait_time = unsafe { prof_child_enter() };

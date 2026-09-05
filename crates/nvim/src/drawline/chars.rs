@@ -442,7 +442,7 @@ impl Cells {
         if spell_hlf != HLF_COUNT
             && State.get() & MODE_INSERT != 0
             && wp.w_cursor.lnum == wlv.lnum
-            && wp.w_cursor.col >= prev_at as colnr_T
+            && wp.w_cursor.col >= prev_at as ColNr
             && wp.w_cursor.col < self.word_end
         {
             spell_hlf = HLF_COUNT;
@@ -622,7 +622,7 @@ impl Cells {
         // this one is honoured with 'nolist' too.
         if self.char_code == ' ' as ::core::ffi::c_int
             && self.char_len == 1
-            && ((self.trailcol != MAXCOL as colnr_T && at > self.trailcol as isize)
+            && ((self.trailcol != MAXCOL as ColNr && at > self.trailcol as isize)
                 || (self.leadcol != 0 && at < self.leadcol as isize))
         {
             if self.leadcol != 0

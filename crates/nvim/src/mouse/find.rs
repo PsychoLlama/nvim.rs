@@ -24,7 +24,7 @@ use crate::grid::get_win_by_grid_handle;
 use crate::main::{msg_grid, msg_grid_pos, topframe};
 use crate::plines::{init_charsize_arg, win_charsize};
 use crate::popupmenu::pum_grid_ref;
-use crate::types::{CharsizeArg, handle_T, linenr_T};
+use crate::types::{CharsizeArg, LineNr, handle_T};
 use crate::ui_compositor::ui_comp_mouse_focus;
 use crate::winlayer::{Frame, first_window, windows};
 
@@ -149,7 +149,7 @@ fn find_grid_win(pos: &mut MousePos) -> Option<Win> {
 /// window `win`, both rewritten to be relative to that line.
 ///
 /// Answers the line, and whether the position is below the last one.
-pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (linenr_T, bool) {
+pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (LineNr, bool) {
     let mut screen_col = if win.w_onebuf_opt.wo_rl != 0 {
         win.w_view_width - 1 - *col
     } else {
@@ -222,7 +222,7 @@ pub(crate) fn comp_pos(win: Win, row: &mut c_int, col: &mut c_int) -> (linenr_T,
 /// Convert a virtual (screen) column to a character column, the first column
 /// being zero.  Answers the byte index and the columns left over inside the
 /// character it landed in.
-pub(crate) fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, colnr_T) {
+pub(crate) fn vcol_to_col(win: Win, lnum: LineNr, vcol: ColNr) -> (ColNr, ColNr) {
     // SAFETY: a live window, and `lnum` a line of the buffer it shows.
     let line = unsafe { win.buffer().line(lnum) };
     let mut csarg = CharsizeArg::default();
@@ -254,10 +254,10 @@ pub(crate) fn vcol_to_col(win: Win, lnum: linenr_T, vcol: colnr_T) -> (colnr_T, 
 /// `coladdp` must be writable or null.
 pub(crate) unsafe fn vcol2col(
     wp: *mut win_T,
-    lnum: linenr_T,
-    vcol: colnr_T,
-    coladdp: *mut colnr_T,
-) -> colnr_T {
+    lnum: LineNr,
+    vcol: ColNr,
+    coladdp: *mut ColNr,
+) -> ColNr {
     // SAFETY: the caller's promise.
     let (col, coladd) = unsafe { vcol_to_col(Win::new(wp), lnum, vcol) };
     if !coladdp.is_null() {

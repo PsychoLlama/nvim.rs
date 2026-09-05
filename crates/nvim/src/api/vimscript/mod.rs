@@ -20,10 +20,10 @@ use crate::runtime::do_source_str;
 use crate::types::{
     Arena, Array, Boolean, Dict, Error, ExprAST, ExprASTNode, ExprASTNodeType, ExprAssignmentType,
     ExprCaseCompareStrategy, ExprComparisonType, ExprOptScope, ExprParserFlags, Integer,
-    KeyDict_exec_opts, KeyValuePair, Object, ParserHighlight, ParserHighlightChunk, ParserLine,
-    ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL, dict_T,
-    dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException, kErrorTypeNone,
-    kErrorTypeValidation, linenr_T, partial_T, ptrdiff_t, size_t, typval_T, uint64_t, uvarnumber_T,
+    KeyDict_exec_opts, KeyValuePair, LineNr, Object, ParserHighlight, ParserHighlightChunk,
+    ParserLine, ParserPosition, ParserState, String_0, TryState, VAR_DICT, VAR_FUNC, VAR_PARTIAL,
+    dict_T, dictitem_T, exarg_T, funcexe_T, garray_T, kErrorTypeException, kErrorTypeNone,
+    kErrorTypeValidation, partial_T, ptrdiff_t, size_t, typval_T, uint64_t, uvarnumber_T,
 };
 use crate::viml::parser::expressions::{
     ccs_tab, east_node_type_tab, eltkn_cmp_type_tab, expr_asgn_type_tab, viml_pexpr_free_ast,
@@ -118,8 +118,8 @@ pub const KV_INITIAL_VALUE: Dict = Dict {
 pub const ARRAY_DICT_INIT: Dict = KV_INITIAL_VALUE;
 pub const FUNCEXE_INIT: funcexe_T = funcexe_T {
     fe_argv_func: None,
-    fe_firstline: 0 as linenr_T,
-    fe_lastline: 0 as linenr_T,
+    fe_firstline: 0 as LineNr,
+    fe_lastline: 0 as LineNr,
     fe_doesrange: ::core::ptr::null_mut::<bool>(),
     fe_evaluate: false,
     fe_partial: ::core::ptr::null_mut::<partial_T>(),

@@ -249,7 +249,7 @@ pub(crate) unsafe fn get_buffer_signs(buf: *mut buf_T) -> *mut list_T {
 /// `buf` and `retlist` must be live; `group` must be null or NUL-terminated.
 unsafe fn sign_get_placed_in_buf(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     sign_id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
     retlist: *mut list_T,
@@ -304,7 +304,7 @@ unsafe fn sign_get_placed_in_buf(
 /// `buf` must be null or live; `retlist` must be live.
 unsafe fn sign_get_placed(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     id: ::core::ffi::c_int,
     group: *const ::core::ffi::c_char,
     retlist: *mut list_T,
@@ -446,7 +446,7 @@ pub(crate) unsafe fn f_sign_getplaced(
     // SAFETY: the frame's return slot and argument slots.
     unsafe {
         let mut buf = null();
-        let mut lnum: linenr_T = 0;
+        let mut lnum: LineNr = 0;
         let mut sign_id = 0;
         let mut group: *const ::core::ffi::c_char = ::core::ptr::null();
 
@@ -601,7 +601,7 @@ unsafe fn sign_place_from_dict(
         return -1;
     }
 
-    let mut lnum: linenr_T = 0;
+    let mut lnum: LineNr = 0;
     if let Some(tv) = unsafe { key(dict, "lnum") } {
         lnum = unsafe { tv_get_lnum(tv) };
         if lnum <= 0 {

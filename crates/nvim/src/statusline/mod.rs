@@ -55,9 +55,9 @@ use crate::main::hl_attr_active;
 use crate::memory::{xcalloc, xfree, xstrdup};
 use crate::options::kOptStatuscolumn;
 use crate::types::{
-    AlignTextPos, Array, Dict, GridView, MAXPATHL, Object, OptIndex, OptionSetFlags,
+    AlignTextPos, Array, Dict, GridView, LineNr, MAXPATHL, Object, OptIndex, OptionSetFlags,
     StlClickDefinition, StlClickDefinition_type_0, StlClickRecord, Vv, WinSplit, WinStyle, hlf_T,
-    linenr_T, schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
+    schar_T, size_t, statuscol_T, stl_hlrec_t, varnumber_T, win_T,
 };
 use crate::window::global_stl_height;
 use crate::winlayer::Win;
@@ -646,8 +646,8 @@ pub unsafe fn redraw_custom_statusline(wp: *mut win_T) {
 /// buffer of `MAXPATHL` bytes and `stcp` this line's status-column state.
 pub unsafe fn build_statuscol_str(
     wp: *mut win_T,
-    lnum: linenr_T,
-    relnum: linenr_T,
+    lnum: LineNr,
+    relnum: LineNr,
     buf: *mut ::core::ffi::c_char,
     stcp: *mut statuscol_T,
 ) -> ::core::ffi::c_int {

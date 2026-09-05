@@ -178,9 +178,7 @@ use crate::mark::mark_mb_adjustpos;
 use crate::mbyte::{utf_ptr2str_char_info, utfc_next};
 use crate::memline::{ml_get_buf, ml_get_buf_len, ml_get_buf_mut};
 use crate::plines::{getvcol, getvvcol};
-use crate::types::{
-    StrCharInfo, buf_T, colnr_T, frame_T, handle_T, linenr_T, pos_T, tabpage_T, win_T,
-};
+use crate::types::{ColNr, LineNr, StrCharInfo, buf_T, frame_T, handle_T, pos_T, tabpage_T, win_T};
 
 // ---------------------------------------------------------------------------
 // The pointers, wrapped
@@ -425,7 +423,7 @@ impl Win {
 
     /// First line of the fold containing `lnum`, if there is one.
     #[inline(always)]
-    pub fn fold_first(self, lnum: linenr_T) -> Option<linenr_T> {
+    pub fn fold_first(self, lnum: LineNr) -> Option<LineNr> {
         let mut first = lnum;
         // `firstp` is written only when the answer is true, so the seed
         // survives a line that is in no fold.
@@ -435,7 +433,7 @@ impl Win {
 
     /// Last line of the fold containing `lnum`, or `lnum` when it is in none.
     #[inline(always)]
-    pub fn fold_last(self, lnum: linenr_T) -> linenr_T {
+    pub fn fold_last(self, lnum: LineNr) -> LineNr {
         let mut last = lnum;
         // `lastp` is written only when folded.
         has_folding(self, lnum, None, Some(&mut last));
@@ -445,7 +443,7 @@ impl Win {
     /// Last line of the fold containing `lnum`, `None` when it is in none --
     /// [`Win::fold_first`]'s partner at the other end.
     #[inline(always)]
-    pub fn fold_end(self, lnum: linenr_T) -> Option<linenr_T> {
+    pub fn fold_end(self, lnum: LineNr) -> Option<LineNr> {
         let (folded, _, last) = self.fold_span(lnum);
         folded.then_some(last)
     }
@@ -453,7 +451,7 @@ impl Win {
     /// The whole fold containing `lnum`: whether there is one, and its first
     /// and last line (both `lnum` when there is not).
     #[inline(always)]
-    pub fn fold_span(self, lnum: linenr_T) -> (bool, linenr_T, linenr_T) {
+    pub fn fold_span(self, lnum: LineNr) -> (bool, LineNr, LineNr) {
         let (mut first, mut last) = (lnum, lnum);
         // Both out-params are written only when folded.
         let folded = has_folding(self, lnum, Some(&mut first), Some(&mut last));
@@ -467,7 +465,7 @@ impl Win {
 
     /// First and last virtual column of the character at `pos`.
     #[inline(always)]
-    pub fn vcol_span(self, pos: Pos) -> (colnr_T, colnr_T) {
+    pub fn vcol_span(self, pos: Pos) -> (ColNr, ColNr) {
         let (mut start, mut end) = (0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
@@ -476,7 +474,7 @@ impl Win {
 
     /// Start, cursor and end virtual column of the character at `pos`.
     #[inline(always)]
-    pub fn vcol_triple(self, pos: Pos) -> (colnr_T, colnr_T, colnr_T) {
+    pub fn vcol_triple(self, pos: Pos) -> (ColNr, ColNr, ColNr) {
         let (mut start, mut cursor, mut end) = (0, 0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
@@ -485,13 +483,13 @@ impl Win {
 
     /// The first virtual column of the character at `pos`.
     #[inline(always)]
-    pub fn vcol(self, pos: Pos) -> colnr_T {
+    pub fn vcol(self, pos: Pos) -> ColNr {
         self.vcol_span(pos).0
     }
 
     /// [`Win::vcol_span`] with 'virtualedit' taken into account.
     #[inline(always)]
-    pub fn virtual_vcol_span(self, pos: Pos) -> (colnr_T, colnr_T) {
+    pub fn virtual_vcol_span(self, pos: Pos) -> (ColNr, ColNr) {
         let (mut start, mut end) = (0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvvcol(self, pos.0, &raw mut start, ptr::null_mut(), &raw mut end) };
@@ -500,7 +498,7 @@ impl Win {
 
     /// [`Win::vcol_triple`] with 'virtualedit' taken into account.
     #[inline(always)]
-    pub fn virtual_vcol_triple(self, pos: Pos) -> (colnr_T, colnr_T, colnr_T) {
+    pub fn virtual_vcol_triple(self, pos: Pos) -> (ColNr, ColNr, ColNr) {
         let (mut start, mut cursor, mut end) = (0, 0, 0);
         // SAFETY: a live window and a live position in its buffer.
         unsafe { getvvcol(self, pos.0, &raw mut start, &raw mut cursor, &raw mut end) };
@@ -510,14 +508,14 @@ impl Win {
     /// The first virtual column of the character at `pos`, 'virtualedit'
     /// included.
     #[inline(always)]
-    pub fn virtual_vcol(self, pos: Pos) -> colnr_T {
+    pub fn virtual_vcol(self, pos: Pos) -> ColNr {
         self.virtual_vcol_span(pos).0
     }
 
     /// The virtual column the *cursor* shows at within the character at
     /// `pos`, which is not its first column when the character is a tab.
     #[inline(always)]
-    pub fn virtual_cursor_vcol(self, pos: Pos) -> colnr_T {
+    pub fn virtual_cursor_vcol(self, pos: Pos) -> ColNr {
         let mut cursor = 0;
         let (none, c) = (ptr::null_mut(), &raw mut cursor);
         // SAFETY: a live window and a live position in its buffer.
@@ -581,14 +579,14 @@ impl Buf {
     }
 
     #[inline(always)]
-    pub fn line_count(self) -> linenr_T {
+    pub fn line_count(self) -> LineNr {
         self.b_ml.ml_line_count
     }
 
     /// # Safety
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
-    pub unsafe fn line(self, lnum: linenr_T) -> Line {
+    pub unsafe fn line(self, lnum: LineNr) -> Line {
         Line(unsafe { ml_get_buf(self.0, lnum) })
     }
 
@@ -597,7 +595,7 @@ impl Buf {
     /// # Safety
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
-    pub unsafe fn line_mut(self, lnum: linenr_T) -> Line {
+    pub unsafe fn line_mut(self, lnum: LineNr) -> Line {
         Line(unsafe { ml_get_buf_mut(self.0, lnum) })
     }
 
@@ -606,7 +604,7 @@ impl Buf {
     /// # Safety
     /// `lnum` must be a line of this buffer.
     #[inline(always)]
-    pub unsafe fn line_len(self, lnum: linenr_T) -> colnr_T {
+    pub unsafe fn line_len(self, lnum: LineNr) -> ColNr {
         unsafe { ml_get_buf_len(self.0, lnum) }
     }
 

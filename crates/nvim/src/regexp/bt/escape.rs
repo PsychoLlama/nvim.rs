@@ -20,7 +20,7 @@ use crate::regexp::{
     one_exactly, pat_byte, re_has_z, re_mult_next, reg_toolong, ungetchr, unmagic,
 };
 use crate::semsg;
-use crate::types::{NUL, colnr_T, int64_t, uint8_t, uint32_t};
+use crate::types::{ColNr, NUL, int64_t, uint8_t, uint32_t};
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
@@ -332,7 +332,7 @@ fn cursor_value(kind: u8) -> uint32_t {
         b'l' => (unsafe { (*curwin.get()).w_cursor.lnum }) as uint32_t,
         b'c' => (unsafe { (*curwin.get()).w_cursor.col }) as uint32_t + 1,
         _ => {
-            let mut vcol: colnr_T = 0;
+            let mut vcol: ColNr = 0;
             unsafe {
                 getvvcol(
                     Win::new(curwin.get()),

@@ -16,7 +16,7 @@ use core::ffi::{CStr, c_char, c_int};
 
 use super::{MOUSE_LEFT, MOUSE_MIDDLE, MOUSE_RIGHT, MOUSE_X1, MOUSE_X2, MSCR_RIGHT};
 use crate::main::{mouse_col, mouse_grid, mouse_row};
-use crate::types::{colnr_T, varnumber_T};
+use crate::types::{ColNr, varnumber_T};
 
 /// Where a mouse event landed: a grid handle, and a row and column within it.
 ///
@@ -120,7 +120,7 @@ pub(crate) fn button_name(which_button: c_int) -> &'static CStr {
 /// [`super::comp_pos`] must not count when walking down the window.
 ///
 /// A similar formula is used in `curs_columns()`; see `move/arith.rs`.
-pub(crate) fn skipped_top_lines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+pub(crate) fn skipped_top_lines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
     if skipcol > width1 {
         (skipcol - width1) / width2 + 1
     } else if skipcol > 0 {
@@ -132,7 +132,7 @@ pub(crate) fn skipped_top_lines(skipcol: colnr_T, width1: c_int, width2: c_int) 
 
 /// The column a horizontal wheel event scrolls to: `'mousescroll'` columns (or
 /// a window's width) left or right of `leftcol`, never past the left margin.
-pub(crate) fn wheel_leftcol(leftcol: colnr_T, step: c_int, direction: c_int) -> colnr_T {
+pub(crate) fn wheel_leftcol(leftcol: ColNr, step: c_int, direction: c_int) -> ColNr {
     let moved = leftcol + if direction == MSCR_RIGHT { -step } else { step };
     moved.max(0)
 }

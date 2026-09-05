@@ -97,8 +97,8 @@ pub type qfline_T = qfline_S;
 pub struct qfline_S {
     pub qf_next: *mut qfline_T,
     pub qf_prev: *mut qfline_T,
-    pub qf_lnum: linenr_T,
-    pub qf_end_lnum: linenr_T,
+    pub qf_lnum: LineNr,
+    pub qf_end_lnum: LineNr,
     pub qf_fnum: ::core::ffi::c_int,
     pub qf_col: ::core::ffi::c_int,
     pub qf_end_col: ::core::ffi::c_int,

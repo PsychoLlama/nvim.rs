@@ -263,10 +263,10 @@ pub(crate) struct Conv {
     /// `BAD_REPLACE`, `BAD_KEEP`, `BAD_DROP`, or the replacement character.
     pub bad_char: c_int,
     /// Line number of the first conversion error, or 0.
-    pub conv_error: linenr_T,
+    pub conv_error: LineNr,
     /// Buffer line count before this read, for turning an offset into a line
     /// number.
-    pub linecnt: linenr_T,
+    pub linecnt: LineNr,
     /// Is rewinding and trying another `'fileencoding'` still an option?
     pub can_retry: bool,
 }
@@ -549,8 +549,8 @@ impl Conv {
     pub(crate) unsafe fn check_utf8(
         &mut self,
         w: &mut Window,
-        filesize: off_T,
-        illegal_byte: &mut linenr_T,
+        filesize: FileOffset,
+        illegal_byte: &mut LineNr,
     ) -> bool {
         let start: *mut u8 = w.ptr.cast();
         let mut p = start;

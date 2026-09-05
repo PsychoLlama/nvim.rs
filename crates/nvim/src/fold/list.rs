@@ -23,7 +23,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use super::{fline_T, fold_T};
-use crate::types::{garray_T, linenr_T};
+use crate::types::{LineNr, garray_T};
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
@@ -126,7 +126,7 @@ impl FoldList {
     /// `slice::binary_search_by` so that a malformed list — a zero-length
     /// entry, say — lands on exactly the entry `fold.c`'s loop would have
     /// landed on.
-    pub(super) fn find(self, lnum: linenr_T) -> Result<c_int, c_int> {
+    pub(super) fn find(self, lnum: LineNr) -> Result<c_int, c_int> {
         let mut low: c_int = 0;
         let mut high: c_int = self.len() - 1;
         while low <= high {
@@ -175,29 +175,29 @@ impl Fold {
     }
 
     /// The fold's first line, relative to the start of its parent.
-    pub(super) fn top(self) -> linenr_T {
+    pub(super) fn top(self) -> LineNr {
         // SAFETY: the handle names an entry of a live fold list.
         unsafe { (*self.fp).fd_top }
     }
 
-    pub(super) fn set_top(self, top: linenr_T) {
+    pub(super) fn set_top(self, top: LineNr) {
         // SAFETY: as `top`.
         unsafe { (*self.fp).fd_top = top };
     }
 
     /// How many lines the fold spans.
-    pub(super) fn len(self) -> linenr_T {
+    pub(super) fn len(self) -> LineNr {
         // SAFETY: as `top`.
         unsafe { (*self.fp).fd_len }
     }
 
-    pub(super) fn set_len(self, len: linenr_T) {
+    pub(super) fn set_len(self, len: LineNr) {
         // SAFETY: as `top`.
         unsafe { (*self.fp).fd_len = len };
     }
 
     /// The fold's last line, in the same frame as [`Fold::top`].
-    pub(super) fn last(self) -> linenr_T {
+    pub(super) fn last(self) -> LineNr {
         self.top() + self.len() - 1
     }
 
@@ -283,35 +283,35 @@ impl FLine {
     }
 
     /// Current line number, relative to the start of the enclosing fold.
-    pub(super) fn lnum(self) -> linenr_T {
+    pub(super) fn lnum(self) -> LineNr {
         // SAFETY: as `win`.
         unsafe { (*self.flp).lnum }
     }
 
-    pub(super) fn set_lnum(self, lnum: linenr_T) {
+    pub(super) fn set_lnum(self, lnum: LineNr) {
         // SAFETY: as `win`.
         unsafe { (*self.flp).lnum = lnum };
     }
 
     /// Offset between [`FLine::lnum`] and the real buffer line.
-    pub(super) fn off(self) -> linenr_T {
+    pub(super) fn off(self) -> LineNr {
         // SAFETY: as `win`.
         unsafe { (*self.flp).off }
     }
 
-    pub(super) fn set_off(self, off: linenr_T) {
+    pub(super) fn set_off(self, off: LineNr) {
         // SAFETY: as `win`.
         unsafe { (*self.flp).off = off };
     }
 
     /// The line the level was actually read from, when the level at
     /// [`FLine::lnum`] is undefined.
-    pub(super) fn lnum_save(self) -> linenr_T {
+    pub(super) fn lnum_save(self) -> LineNr {
         // SAFETY: as `win`.
         unsafe { (*self.flp).lnum_save }
     }
 
-    pub(super) fn set_lnum_save(self, lnum: linenr_T) {
+    pub(super) fn set_lnum_save(self, lnum: LineNr) {
         // SAFETY: as `win`.
         unsafe { (*self.flp).lnum_save = lnum };
     }
@@ -381,7 +381,7 @@ mod tests {
     /// Build a detached fold list from `(top, len)` pairs. The entries are
     /// leaked with the array; the tests are short and Miri only cares that
     /// nothing is read out of bounds.
-    fn list(spans: &[(linenr_T, linenr_T)]) -> (Box<garray_T>, Vec<fold_T>) {
+    fn list(spans: &[(LineNr, LineNr)]) -> (Box<garray_T>, Vec<fold_T>) {
         let mut folds: Vec<fold_T> = spans
             .iter()
             .map(|&(top, len)| fold_T {

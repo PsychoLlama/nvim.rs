@@ -51,7 +51,7 @@ use crate::os::input::line_breakcheck;
 use crate::path::path_full_compare;
 use crate::spell::{close_spellbuf, first_lang, open_spellbuf, slang_free, spell_soundfold};
 use crate::types::{
-    Failed, MAXPATHL, NUL, colnr_T, garray_T, idx_T, int16_t, linenr_T, size_t, slang_T, uint16_t,
+    ColNr, Failed, LineNr, MAXPATHL, NUL, garray_T, idx_T, int16_t, size_t, slang_T, uint16_t,
 };
 
 use super::wordtree::{tree_add_word, wordnode_T, wordtree_alloc, wordtree_compress};
@@ -297,8 +297,8 @@ unsafe fn sug_filltable(
         unsafe { *end = NUL as c_char };
         unsafe { (*gap).ga_len += 1 };
 
-        let at = wordnr as linenr_T;
-        let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as colnr_T) };
+        let at = wordnr as LineNr;
+        let (text, len) = unsafe { ((*gap).ga_data.cast::<c_char>(), (*gap).ga_len as ColNr) };
         if unsafe { ml_append_buf(spin.si_spellbuf, at, text, len, true) }.is_err() {
             return -1;
         }

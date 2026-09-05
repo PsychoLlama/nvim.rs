@@ -210,14 +210,14 @@ pub unsafe fn nvim_buf_get_extmarks(
         limit = INT64_MAX as Integer;
     }
     let mut l_row: ::core::ffi::c_int = 0;
-    let mut l_col: colnr_T = 0;
+    let mut l_col: ColNr = 0;
     if !unsafe {
         extmark_get_index_from_obj(b, ns_id, start, &raw mut l_row, &raw mut l_col, &mut error)
     } {
         return rv.reported(error);
     }
     let mut u_row: ::core::ffi::c_int = 0;
-    let mut u_col: colnr_T = 0;
+    let mut u_col: ColNr = 0;
     if !unsafe {
         extmark_get_index_from_obj(b, ns_id, end, &raw mut u_row, &raw mut u_col, &mut error)
     } {
@@ -285,17 +285,17 @@ unsafe fn extmark_get_index_from_obj(
     ns_id: Integer,
     obj: Object,
     row: *mut ::core::ffi::c_int,
-    col: *mut colnr_T,
+    col: *mut ColNr,
     err: &mut Error,
 ) -> bool {
     if let Object::Integer(id) = obj {
         if id == 0 as Integer {
             unsafe { *row = 0 as ::core::ffi::c_int };
-            unsafe { *col = 0 as ::core::ffi::c_int as colnr_T };
+            unsafe { *col = 0 as ::core::ffi::c_int as ColNr };
             return true;
         } else if id == -1 as Integer {
             unsafe { *row = MAXLNUM as ::core::ffi::c_int };
-            unsafe { *col = MAXCOL as ::core::ffi::c_int as colnr_T };
+            unsafe { *col = MAXCOL as ::core::ffi::c_int as ColNr };
             return true;
         } else if id < 0 as Integer && true {
             *err = err_bad_number(c"mark id", id);
@@ -307,7 +307,7 @@ unsafe fn extmark_get_index_from_obj(
             return false;
         }
         unsafe { *row = extmark.start.pos.row as ::core::ffi::c_int };
-        unsafe { *col = extmark.start.pos.col as colnr_T };
+        unsafe { *col = extmark.start.pos.col as ColNr };
         return true;
     } else if let Object::Array(pos) = obj {
         let two = match pos.size {
@@ -333,7 +333,7 @@ unsafe fn extmark_get_index_from_obj(
             pos_col
         } else {
             MAXCOL as ::core::ffi::c_int as Integer
-        }) as colnr_T;
+        }) as ColNr;
         // SAFETY: the caller's own out-parameters.
         unsafe { *row = r };
         // SAFETY: as above.

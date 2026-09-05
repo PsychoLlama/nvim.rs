@@ -62,7 +62,7 @@ pub(crate) unsafe fn after_label(l: *const c_char) -> *const c_char {
 ///
 /// # Safety
 /// `lnum` must be a valid line; may unlock the current line.
-pub(crate) unsafe fn get_indent_nolabel(lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn get_indent_nolabel(lnum: LineNr) -> c_int {
     // SAFETY: on the main thread with a current buffer; `after_label` is
     // handed the NUL-terminated line `ml_get` answered with, and gives back
     // either null or a pointer inside it.
@@ -74,7 +74,7 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: linenr_T) -> c_int {
         return 0;
     }
     // SAFETY: `p` points inside line `lnum`.
-    unsafe { line_vcol(lnum, p.offset_from(l) as colnr_T) }
+    unsafe { line_vcol(lnum, p.offset_from(l) as ColNr) }
 }
 
 /// The indent of line `lnum` ignoring any case or jump label, with `pp` left
@@ -87,7 +87,7 @@ pub(crate) unsafe fn get_indent_nolabel(lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// Moves the cursor and restores it; may unlock the current line.
-pub(crate) unsafe fn skip_label(lnum: linenr_T, pp: &mut *const c_char) -> c_int {
+pub(crate) unsafe fn skip_label(lnum: LineNr, pp: &mut *const c_char) -> c_int {
     let cursor_save = cur_win().w_cursor;
     cur_win().w_cursor.lnum = lnum;
     // SAFETY: the cursor now sits on line `lnum` of the current buffer, so
@@ -172,7 +172,7 @@ pub(crate) unsafe fn cin_first_id_amount() -> c_int {
     }
 
     let p = unsafe { skipwhite(p.add(len)) }.cast_const();
-    unsafe { line_vcol(cur_win().w_cursor.lnum, p.offset_from(line) as colnr_T) }
+    unsafe { line_vcol(cur_win().w_cursor.lnum, p.offset_from(line) as ColNr) }
 }
 
 /// The screen column of the first non-blank after an `=` on line `lnum`.
@@ -188,7 +188,7 @@ pub(crate) unsafe fn cin_first_id_amount() -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line; may unlock the current line.
-pub(crate) unsafe fn cin_get_equal_amount(lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn cin_get_equal_amount(lnum: LineNr) -> c_int {
     if lnum > 1 {
         // SAFETY: on the main thread with a current buffer; `ml_get` hands
         // back a NUL-terminated line.
@@ -221,7 +221,7 @@ pub(crate) unsafe fn cin_get_equal_amount(lnum: linenr_T) -> c_int {
     if unsafe { *s } as u8 == b'"' {
         s = unsafe { s.add(1) }; // nice alignment for continued strings
     }
-    unsafe { line_vcol(lnum, s.offset_from(line) as colnr_T) }
+    unsafe { line_vcol(lnum, s.offset_from(line) as ColNr) }
 }
 
 /// The window the editor is working in.

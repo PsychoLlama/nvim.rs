@@ -48,8 +48,8 @@ pub unsafe fn call_user_func(
     argcount: c_int,
     argvars: *mut typval_T,
     rettv: *mut typval_T,
-    firstline: linenr_T,
-    lastline: linenr_T,
+    firstline: LineNr,
+    lastline: LineNr,
     selfdict: *mut dict_T,
 ) {
     // SAFETY: the caller's promise -- `fp` is a live function.

@@ -38,7 +38,7 @@ impl BlockScan<'_> {
 
     /// Put the cursor one line *below* `lnum`, so that the scan's next
     /// decrement lands on `lnum` itself.
-    fn resume_at(&self, lnum: linenr_T) {
+    fn resume_at(&self, lnum: LineNr) {
         cur_win().w_cursor.lnum = lnum + 1;
         cur_win().w_cursor.col = 0;
     }
@@ -855,7 +855,7 @@ impl BlockScan<'_> {
             // the very line `get_cursor_line_ptr` hands back: one allocation.
             if unsafe { *l } as u8 == b'}' {
                 cur_win().w_cursor.col =
-                    unsafe { l.offset_from(get_cursor_line_ptr()) } as colnr_T + 1;
+                    unsafe { l.offset_from(get_cursor_line_ptr()) } as ColNr + 1;
             }
             // SAFETY: both move the cursor inside the current buffer.
             let unmatched =

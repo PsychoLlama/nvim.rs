@@ -39,7 +39,7 @@ use crate::option::buf_copy_options;
 use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::terminal::terminal_running;
-use crate::types::{CmdModFlags, linenr_T, win_T};
+use crate::types::{CmdModFlags, LineNr, win_T};
 use crate::undo::u_sync;
 use crate::window::{win_valid, win_valid_any_tab};
 use crate::winlayer::{Buf, Win};
@@ -100,7 +100,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         // SAFETY: `command` and the names are live when non-NULL.
         let mut tlnum = 0;
         if !command.is_null() {
-            tlnum = unsafe { atol(command) } as linenr_T;
+            tlnum = unsafe { atol(command) } as LineNr;
             if tlnum <= 0 {
                 tlnum = 1;
             }
@@ -184,8 +184,8 @@ pub(super) unsafe fn switch_to_other_buffer(
 
     // May jump to last used line number for a loaded buffer or when asked for
     // explicitly.
-    if (state.oldbuf && state.newlnum == newlnum::LASTL as linenr_T)
-        || state.newlnum == newlnum::LAST as linenr_T
+    if (state.oldbuf && state.newlnum == newlnum::LASTL as LineNr)
+        || state.newlnum == newlnum::LAST as LineNr
     {
         // SAFETY: `buf` is live.
         let pos = unsafe { &raw mut (*buflist_findfmark(Buf::new(buf))).mark };

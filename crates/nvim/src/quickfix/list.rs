@@ -113,8 +113,8 @@ pub(crate) struct NewEntry {
     pub(crate) bufnum: c_int,
     /// The text shown for the entry. Never null.
     pub(crate) mesg: *mut c_char,
-    pub(crate) lnum: linenr_T,
-    pub(crate) end_lnum: linenr_T,
+    pub(crate) lnum: LineNr,
+    pub(crate) end_lnum: LineNr,
     pub(crate) col: c_int,
     pub(crate) end_col: c_int,
     /// Non-zero when the column is a screen column, not a byte index.
@@ -446,10 +446,10 @@ pub(crate) unsafe fn qf_free(qfl: *mut qf_list_T) {
 pub fn qf_mark_adjust(
     buf: Buf,
     wp: Option<Win>,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 ) -> bool {
     // SAFETY: forwarded from the caller.
     let wanted = if wp.is_none() {
@@ -475,7 +475,7 @@ pub fn qf_mark_adjust(
             if unsafe { (*qfp).qf_fnum } == buf.handle {
                 found_one = true;
                 if unsafe { (*qfp).qf_lnum } >= line1 && unsafe { (*qfp).qf_lnum } <= line2 {
-                    if amount == MAXLNUM as linenr_T {
+                    if amount == MAXLNUM as LineNr {
                         unsafe { (*qfp).qf_cleared = 1 };
                     } else {
                         unsafe { (*qfp).qf_lnum += amount };

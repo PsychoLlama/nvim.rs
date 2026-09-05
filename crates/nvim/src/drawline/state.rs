@@ -41,7 +41,7 @@ pub struct WinLineVars {
     pub decor: DecorStateRef,
 
     /// Buffer line being drawn.
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     /// Fold state of `lnum`, from `win_update`.
     pub foldinfo: foldinfo_T,
 
@@ -51,7 +51,7 @@ pub struct WinLineVars {
     pub row: ::core::ffi::c_int,
 
     /// Virtual column in the buffer line, before wrapping.
-    pub vcol: colnr_T,
+    pub vcol: ColNr,
     /// Screen column, after wrapping.
     pub col: ::core::ffi::c_int,
     /// Nonexistent columns added to `col` to force a wrap.
@@ -84,7 +84,7 @@ pub struct WinLineVars {
     pub tocol: ::core::ffi::c_int,
 
     /// Virtual column just after `'showbreak'`.
-    pub showbreak_vcol: colnr_T,
+    pub showbreak_vcol: ColNr,
     /// This row still owes a `'showbreak'`.
     pub need_showbreak: bool,
 
@@ -217,10 +217,10 @@ pub(crate) struct LineSetup {
     pub(crate) ptr: *mut ::core::ffi::c_char,
     /// Byte index where the trailing whitespace `'listchars'` "trail" applies
     /// to starts, or `MAXCOL` when it does not apply.
-    pub(crate) trailcol: colnr_T,
+    pub(crate) trailcol: ColNr,
     /// Byte index one past the leading whitespace, or 0 when "lead" does not
     /// apply.
-    pub(crate) leadcol: colnr_T,
+    pub(crate) leadcol: ColNr,
     /// `'listchars'` "eol".
     pub(crate) lcs_eol: schar_T,
     /// `'listchars'` "prec", cleared by the loop once it has been drawn.
@@ -322,7 +322,7 @@ pub(crate) fn put_cell(
     off: ::core::ffi::c_int,
     ch: schar_T,
     attr: ::core::ffi::c_int,
-    vcol: colnr_T,
+    vcol: ColNr,
 ) {
     linebuf().put(off as usize, ch, attr as sattr_T, vcol);
 }

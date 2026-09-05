@@ -601,7 +601,7 @@ fn clear_rest_of_line(
     clear_width: c_int,
     clear_attr: c_int,
     flags: c_int,
-    mut last_vcol: colnr_T,
+    mut last_vcol: ColNr,
 ) -> Dirty {
     let inc_vcol = flags & SLF_INC_VCOL != 0;
     let rightleft = flags & SLF_RIGHTLEFT != 0;
@@ -671,7 +671,7 @@ pub unsafe fn grid_put_linebuf(
     coloff: c_int,
     span: LineSpan,
     attrs: LineAttrs,
-    last_vcol: colnr_T,
+    last_vcol: ColNr,
     flags: c_int,
 ) {
     let mut line = linebuf();

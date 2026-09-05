@@ -20,7 +20,7 @@ use crate::normal::{
     VisualMode, set_visual_anchor, set_visual_mode, visual_active, visual_anchor, visual_mode,
 };
 use crate::search::{BACKWARD, FORWARD, linewhite};
-use crate::types::{FAIL, NUL, OK, linenr_T, oparg_T};
+use crate::types::{FAIL, LineNr, NUL, OK, oparg_T};
 
 /// `{` / `}` / `[[` / `]]`: move to the `count`th paragraph or section
 /// boundary in `dir`, answering whether one was found.
@@ -62,7 +62,7 @@ pub unsafe fn findpar(
             if first {
                 let (folded, fold_first, fold_last) = cur_win().fold_span(curr);
                 if folded {
-                    curr = (if dir > 0 { fold_last } else { fold_first }) + dir as linenr_T;
+                    curr = (if dir > 0 { fold_last } else { fold_first }) + dir as LineNr;
                     fold_skipped = true;
                 }
             }
@@ -70,14 +70,14 @@ pub unsafe fn findpar(
                 break;
             }
             if fold_skipped {
-                curr -= dir as linenr_T;
+                curr -= dir as LineNr;
             }
-            curr += dir as linenr_T;
+            curr += dir as LineNr;
             if curr < 1 || curr > cur_buf().b_ml.ml_line_count {
                 if count != 0 {
                     return false;
                 }
-                curr -= dir as linenr_T;
+                curr -= dir as LineNr;
                 break;
             }
             first = false;
@@ -159,7 +159,7 @@ unsafe fn inmacro(opt: *mut c_char, s: *const c_char) -> bool {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub unsafe fn starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
+pub unsafe fn starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
     // SAFETY: on the main thread with a current buffer; `ml_get` checks the
     // line number itself and hands back a NUL-terminated line.
     let s = ml_get(lnum);
@@ -186,7 +186,7 @@ pub unsafe fn starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
 /// would otherwise get stuck -- `Vipipip` on a single white line.
 ///
 /// Answers OK, or FAIL when the buffer ran out.
-fn extend_paragraphs(mut start_lnum: linenr_T, count: c_int, include: bool) -> c_int {
+fn extend_paragraphs(mut start_lnum: LineNr, count: c_int, include: bool) -> c_int {
     let mut retval = OK;
     let dir = if start_lnum < visual_anchor().lnum {
         BACKWARD as c_int
@@ -217,20 +217,20 @@ fn extend_paragraphs(mut start_lnum: linenr_T, count: c_int, include: bool) -> c
         // of paragraph.
         let mut prev_start_is_white = -1;
         for _ in 0..2 {
-            start_lnum += dir as linenr_T;
+            start_lnum += dir as LineNr;
             let start_is_white = line_is_white(start_lnum) as c_int;
             if prev_start_is_white == start_is_white {
-                start_lnum -= dir as linenr_T;
+                start_lnum -= dir as LineNr;
                 break;
             }
             while start_lnum != limit(dir) {
-                if start_is_white != line_is_white(start_lnum + dir as linenr_T) as c_int
+                if start_is_white != line_is_white(start_lnum + dir as LineNr) as c_int
                     || (start_is_white == 0
                         && line_starts_para(start_lnum + if dir > 0 { 1 } else { 0 }, 0, false))
                 {
                     break;
                 }
-                start_lnum += dir as linenr_T;
+                start_lnum += dir as LineNr;
             }
             if !include || start_lnum == limit(dir) {
                 break;
@@ -359,7 +359,7 @@ pub unsafe fn current_par(oap: *mut oparg_T, count: c_int, include: bool, type_0
 }
 
 /// [`linewhite`] for a line of the current buffer.
-fn line_is_white(lnum: linenr_T) -> bool {
+fn line_is_white(lnum: LineNr) -> bool {
     // SAFETY: on the main thread with a current buffer; `ml_get` checks the
     // line number itself, so any `lnum` is answered rather than read out of
     // bounds.
@@ -367,7 +367,7 @@ fn line_is_white(lnum: linenr_T) -> bool {
 }
 
 /// [`starts_para`] for a line of the current buffer.
-fn line_starts_para(lnum: linenr_T, para: c_int, both: bool) -> bool {
+fn line_starts_para(lnum: LineNr, para: c_int, both: bool) -> bool {
     // SAFETY: as above -- the line number is `ml_get`'s to check.
     unsafe { starts_para(lnum, para, both) }
 }

@@ -30,7 +30,7 @@ use crate::option::cpo_has;
 use crate::os::cshim::snprintf;
 use crate::pos::{equalpos, lt, ltoreq};
 use crate::search::{BACKWARD, FORWARD, findmatch, findmatchlimit};
-use crate::types::{CpoFlag, FAIL, Failed, NUL, OK, colnr_T, oparg_T, pos_T, size_t};
+use crate::types::{ColNr, CpoFlag, FAIL, Failed, NUL, OK, oparg_T, pos_T, size_t};
 
 /// The `do_searchpair` pattern that matches any HTML start tag, used to find
 /// the one enclosing the cursor before its name is known.
@@ -283,7 +283,7 @@ unsafe fn in_html_tag(end_tag: bool) -> bool {
     let mut pos = pos_T {
         lnum: cur_win().w_cursor.lnum,
         // SAFETY: `p` and `line` point into the same line.
-        col: unsafe { p.offset_from(line) } as colnr_T,
+        col: unsafe { p.offset_from(line) } as ColNr,
         coladd: 0,
     };
     // SAFETY: `p` is on the `<`, so the character it starts is inside the

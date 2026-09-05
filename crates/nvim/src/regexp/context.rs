@@ -40,7 +40,7 @@ use crate::pos::{MAXCOL, lt};
 use crate::regexp::RE_NOBREAK;
 use crate::semsg;
 use crate::types::{
-    buf_T, colnr_T, linenr_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t, win_T,
+    ColNr, LineNr, buf_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T, uint8_t, win_T,
 };
 use ::libc::strcpy;
 
@@ -71,7 +71,7 @@ pub(crate) enum LineOrigin {
 
 impl LineOrigin {
     /// The buffer line the origin's line 0 sits on.
-    fn first(self, rex: Rex) -> linenr_T {
+    fn first(self, rex: Rex) -> LineNr {
         match self {
             LineOrigin::Exec => rex.reg_firstlnum(),
             // SAFETY: `can_f_submatch` gates every path that gets here.
@@ -80,7 +80,7 @@ impl LineOrigin {
     }
 
     /// The last line the origin reaches, relative to [`LineOrigin::first`].
-    fn maxline(self, rex: Rex) -> linenr_T {
+    fn maxline(self, rex: Rex) -> LineNr {
         match self {
             LineOrigin::Exec => rex.reg_maxline(),
             // SAFETY: as `first`.
@@ -95,10 +95,10 @@ enum Located {
     Before,
     /// Past the match's last line.
     Past,
-    At(linenr_T),
+    At(LineNr),
 }
 
-fn locate(lnum: linenr_T, first: linenr_T, maxline: linenr_T) -> Located {
+fn locate(lnum: LineNr, first: LineNr, maxline: LineNr) -> Located {
     if first + lnum < 1 {
         Located::Before
     } else if lnum > maxline {
@@ -111,7 +111,7 @@ fn locate(lnum: linenr_T, first: linenr_T, maxline: linenr_T) -> Located {
 /// The text `lnum` lines into the match: NULL above the buffer, an empty
 /// string past the match's last line. Note that a submatch line comes from
 /// `rex`'s buffer even though its numbering comes from `rsm`.
-pub(crate) fn reg_line(rex: Rex, lnum: linenr_T, origin: LineOrigin) -> *mut c_char {
+pub(crate) fn reg_line(rex: Rex, lnum: LineNr, origin: LineOrigin) -> *mut c_char {
     match locate(lnum, origin.first(rex), origin.maxline(rex)) {
         Located::Before => core::ptr::null_mut(),
         Located::Past => c"".as_ptr().cast_mut(),
@@ -122,7 +122,7 @@ pub(crate) fn reg_line(rex: Rex, lnum: linenr_T, origin: LineOrigin) -> *mut c_c
 }
 
 /// The length of [`reg_line`]'s text; 0 for either stand-in.
-pub(crate) fn reg_line_len(rex: Rex, lnum: linenr_T, origin: LineOrigin) -> colnr_T {
+pub(crate) fn reg_line_len(rex: Rex, lnum: LineNr, origin: LineOrigin) -> ColNr {
     match locate(lnum, origin.first(rex), origin.maxline(rex)) {
         Located::Before | Located::Past => 0,
         // SAFETY: as `reg_line`.
@@ -130,11 +130,11 @@ pub(crate) fn reg_line_len(rex: Rex, lnum: linenr_T, origin: LineOrigin) -> coln
     }
 }
 
-pub(crate) fn reg_getline(rex: Rex, lnum: linenr_T) -> *mut c_char {
+pub(crate) fn reg_getline(rex: Rex, lnum: LineNr) -> *mut c_char {
     reg_line(rex, lnum, LineOrigin::Exec)
 }
 
-pub(crate) fn reg_getline_len(rex: Rex, lnum: linenr_T) -> colnr_T {
+pub(crate) fn reg_getline_len(rex: Rex, lnum: LineNr) -> ColNr {
     reg_line_len(rex, lnum, LineOrigin::Exec)
 }
 
@@ -242,7 +242,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     if mode.is_char() {
         // 'selection' decides whether the last character is included.
         // SAFETY: `p_sel` is the option's own string.
-        let inclusive = unsafe { *p_sel.get() as u8 != b'e' } as colnr_T;
+        let inclusive = unsafe { *p_sel.get() as u8 != b'e' } as ColNr;
         !((lnum == top.lnum && col < top.col) || (lnum == bot.lnum && col >= bot.col + inclusive))
     } else if mode.is_block() {
         let (mut start, mut end, mut start2, mut end2) = (0, 0, 0, 0);
@@ -266,7 +266,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
         // byte offset into it.
         let cols = unsafe { win_linetabsize(wp, rex.buf_lnum(), line.cast(), col) };
         // SAFETY: as `inclusive` above.
-        cols >= start && cols <= end - unsafe { *p_sel.get() as u8 == b'e' } as colnr_T
+        cols >= start && cols <= end - unsafe { *p_sel.get() as u8 == b'e' } as ColNr
     } else {
         true
     }
@@ -370,10 +370,10 @@ pub(crate) fn reg_nextline(rex: Rex) {
 ///
 pub(crate) fn match_with_backref(
     rex: Rex,
-    start_lnum: linenr_T,
-    start_col: colnr_T,
-    end_lnum: linenr_T,
-    end_col: colnr_T,
+    start_lnum: LineNr,
+    start_col: ColNr,
+    end_lnum: LineNr,
+    end_col: ColNr,
     mut bytelen: Option<&mut c_int>,
 ) -> c_int {
     let mut clnum = start_lnum;
@@ -494,7 +494,7 @@ pub(crate) fn init_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
 ) {
     rex.set_reg_match(core::ptr::null_mut::<regmatch_T>());
     rex.set_reg_mmatch(rmp);

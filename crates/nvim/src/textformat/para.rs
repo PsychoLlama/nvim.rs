@@ -16,7 +16,7 @@ use crate::charset::skipwhite;
 use crate::indent::{byte_at, get_number_indent};
 use crate::memline::{ml_get, ml_get_len};
 use crate::textobject::starts_para;
-use crate::types::{NUL, linenr_T};
+use crate::types::{LineNr, NUL};
 
 /// A line's comment leader: how many bytes of it there are, and where the
 /// 'comments' item that matched begins.
@@ -77,7 +77,7 @@ impl Leader {
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn fmt_check_par(lnum: linenr_T, leader: &mut Leader, do_comments: bool) -> bool {
+pub(crate) unsafe fn fmt_check_par(lnum: LineNr, leader: &mut Leader, do_comments: bool) -> bool {
     let ptr = ml_get(lnum);
     leader.len = if do_comments {
         unsafe { get_leader_len(ptr, &raw mut leader.flags, false, true) }
@@ -96,7 +96,7 @@ pub(crate) unsafe fn fmt_check_par(lnum: linenr_T, leader: &mut Leader, do_comme
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn ends_in_white(lnum: linenr_T) -> bool {
+pub(crate) unsafe fn ends_in_white(lnum: LineNr) -> bool {
     let s = ml_get(lnum);
     if unsafe { *s } as c_int == NUL {
         return false;
@@ -119,7 +119,7 @@ pub(crate) unsafe fn ends_in_white(lnum: linenr_T) -> bool {
 ///
 /// # Safety
 /// `lnum` and `lnum + 1` must be valid lines of the current buffer.
-pub(crate) unsafe fn same_leader(lnum: linenr_T, first: Leader, second: Leader) -> bool {
+pub(crate) unsafe fn same_leader(lnum: LineNr, first: Leader, second: Leader) -> bool {
     if first.len == 0 {
         return second.len == 0;
     }
@@ -186,7 +186,7 @@ pub(crate) unsafe fn same_leader(lnum: linenr_T, first: Leader, second: Leader) 
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn paragraph_start(lnum: linenr_T) -> bool {
+pub(crate) unsafe fn paragraph_start(lnum: LineNr) -> bool {
     if lnum <= 1 {
         return true; // start of the file
     }

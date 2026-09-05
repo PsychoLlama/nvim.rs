@@ -63,7 +63,7 @@ use crate::plines::{
     linetabsize_eol, plines_m_win, plines_win, plines_win_full, plines_win_nofill, win_get_fill,
     win_may_fill,
 };
-use crate::types::{CpoFlag, MotionType, NUL, colnr_T, int64_t, linenr_T, win_T, wline_T};
+use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, int64_t, win_T, wline_T};
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
@@ -73,7 +73,7 @@ pub const kMTCharWise: MotionType = 0;
 /// One buffer line as the vertical scrolling walks it: the line, the filler
 /// lines drawn above it, and the screen lines it takes.
 pub struct lineoff_T {
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     pub fill: c_int,
     pub height: c_int,
 }
@@ -171,26 +171,26 @@ impl Win {
 
     /// Screen lines line `lnum` takes with 'wrap' and folds accounted for but
     /// filler lines left out, optionally capped at the window height.
-    pub(super) fn plines_nofill(self, lnum: linenr_T, limit_winheight: bool) -> c_int {
+    pub(super) fn plines_nofill(self, lnum: LineNr, limit_winheight: bool) -> c_int {
         // SAFETY: a line of the window's own buffer.
         unsafe { plines_win_nofill(self, lnum, limit_winheight) }
     }
 
     /// As [`Win::plines_nofill`], filler lines included.
-    pub(super) fn plines(self, lnum: linenr_T, limit_winheight: bool) -> c_int {
+    pub(super) fn plines(self, lnum: LineNr, limit_winheight: bool) -> c_int {
         // SAFETY: a line of the window's own buffer.
         unsafe { plines_win(self, lnum, limit_winheight) }
     }
 
     /// Screen lines the range `first..=last` takes, capped at `max`.
-    pub(super) fn plines_range(self, first: linenr_T, last: linenr_T, max: c_int) -> c_int {
+    pub(super) fn plines_range(self, first: LineNr, last: LineNr, max: c_int) -> c_int {
         // SAFETY: a line of the window's own buffer.
         unsafe { plines_m_win(self, first, last, max) }
     }
 
     /// Screen cells line `lnum` takes, the cell past its end included -- the
     /// width 'smoothscroll' measures a line by.
-    pub(super) fn line_display_width(self, lnum: linenr_T) -> c_int {
+    pub(super) fn line_display_width(self, lnum: LineNr) -> c_int {
         // SAFETY: a live window.
         unsafe { linetabsize_eol(self, lnum) }
     }
@@ -206,10 +206,10 @@ impl Win {
     /// `lnum` (`lnum` itself when there is none), and whether it is folded.
     pub(super) fn plines_full(
         self,
-        lnum: linenr_T,
+        lnum: LineNr,
         cache: bool,
         limit_winheight: bool,
-    ) -> (c_int, linenr_T, bool) {
+    ) -> (c_int, LineNr, bool) {
         let mut next = lnum;
         let mut folded = false;
         // SAFETY: a line of the window's own buffer. `next` is written only
@@ -233,7 +233,7 @@ impl Win {
     }
 
     /// Filler lines drawn above line `lnum`.
-    pub(super) fn fill_above(self, lnum: linenr_T) -> c_int {
+    pub(super) fn fill_above(self, lnum: LineNr) -> c_int {
         // SAFETY: a line of the window's own buffer.
         unsafe { win_get_fill(self, lnum) }
     }
@@ -314,9 +314,9 @@ impl Win {
     /// `lnum`, and whether there is one.
     pub(super) fn corrected_plines(
         self,
-        lnum: linenr_T,
+        lnum: LineNr,
         limit_winheight: bool,
-    ) -> (c_int, linenr_T, bool) {
+    ) -> (c_int, LineNr, bool) {
         let (mut n, next, folded) = self.plines_full(lnum, true, false);
         if lnum == self.w_topline {
             n -= adjust_plines_for_skipcol(self);
@@ -331,16 +331,16 @@ impl Win {
 /// [`Win::corrected_plines`], for the callers still holding a raw window.
 ///
 /// Answers the height and the last line of a fold starting at `lnum`.
-/// Upstream passes both back through `linenr_T *`/`bool *` out-params; no
+/// Upstream passes both back through `LineNr *`/`bool *` out-params; no
 /// caller ever asked for the third.
 ///
 /// # Safety
 /// `wp` must be a valid window.
 pub unsafe fn plines_correct_topline(
     wp: *mut win_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     limit_winheight: bool,
-) -> (c_int, linenr_T) {
+) -> (c_int, LineNr) {
     // SAFETY: the caller's promise.
     let (n, next, _) = unsafe { Win::new(wp) }.corrected_plines(lnum, limit_winheight);
     (n, next)
@@ -418,7 +418,7 @@ fn redraw_for_cursorcolumn(win: Win) {
 
 /// Record a `w_virtcol` the caller has already computed, redrawing if it was
 /// invalid before.
-pub fn set_valid_virtcol(mut win: Win, vcol: colnr_T) {
+pub fn set_valid_virtcol(mut win: Win, vcol: ColNr) {
     win.w_virtcol = vcol;
     redraw_for_cursorcolumn(win);
     win.w_valid |= WinValid::VIRTCOL;
@@ -447,7 +447,7 @@ impl Win {
     }
 
     /// The `w_skipcol` that hides `plines_off` screen lines of the top line.
-    pub(super) fn skipcol_from_plines(self, plines_off: c_int) -> colnr_T {
+    pub(super) fn skipcol_from_plines(self, plines_off: c_int) -> ColNr {
         let (width1, width2) = self.text_widths();
         arith::skipcol_from_plines(plines_off, width1, width2)
     }
@@ -611,7 +611,7 @@ fn curs_rows(mut win: Win) {
             } else {
                 let (n, last, _) = win.corrected_plines(lnum, true);
                 lnum = last + 1;
-                if lnum + win.conceals_line(lnum - 1, false) as linenr_T > win.w_cursor.lnum {
+                if lnum + win.conceals_line(lnum - 1, false) as LineNr > win.w_cursor.lnum {
                     break;
                 }
                 win.w_cline_row += n;

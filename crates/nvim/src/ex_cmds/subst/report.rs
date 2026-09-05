@@ -30,7 +30,7 @@ use crate::os::cshim::{gettext, ngettext, snprintf};
 use crate::profile::{profile_setlimit, profile_zero};
 use crate::strings::vim_snprintf_add;
 use crate::types::{
-    NUL, OptInt, OptVal, OptionSetFlags, String_0, colnr_T, exarg_T, handle_T, int64_t, linenr_T,
+    ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, exarg_T, handle_T, int64_t,
     lpos_T, pos_T, size_t,
 };
 use crate::winlayer::Buf;
@@ -87,7 +87,7 @@ pub unsafe fn do_sub_msg(count_only: bool) -> bool {
     // the command was typed by the user or more than one line changed, and
     // messages are not disabled.
     let worth_reporting = sub_nsubs.get() as OptInt > p_report.get()
-        && (KeyTyped.get() || sub_nlines.get() > 1 as linenr_T || p_report.get() < 1 as OptInt);
+        && (KeyTyped.get() || sub_nlines.get() > 1 as LineNr || p_report.get() < 1 as OptInt);
     // SAFETY: message state.
     if (worth_reporting || count_only) && unsafe { messaging() } {
         let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
@@ -133,15 +133,15 @@ struct PreviewBuf {
     /// Width of the "|lnum| " column that carries the line numbers.
     col_width: c_int,
     /// Last line added to the preview buffer.
-    linenr_preview: linenr_T,
+    linenr_preview: LineNr,
     /// Last line of the original buffer already shown.
-    linenr_origbuf: linenr_T,
+    linenr_origbuf: LineNr,
     /// Scratch holding one formatted line, grown as the lines get longer.
     str: *mut c_char,
-    old_line_size: colnr_T,
+    old_line_size: ColNr,
     /// The size the last real line needed.  Deliberately *not* reset for the
     /// past-the-end line, which formats into whatever the previous one left.
-    line_size: colnr_T,
+    line_size: ColNr,
 }
 
 impl PreviewBuf {
@@ -152,17 +152,17 @@ impl PreviewBuf {
     /// Main thread; `self.buf` must be a real buffer.
     unsafe fn add_match(&mut self, orig_buf: Buf, m: SubResult) -> (lpos_T, lpos_T) {
         let mut p_start = lpos_T {
-            lnum: 0 as linenr_T,
+            lnum: 0 as LineNr,
             col: m.start.col,
         };
         let mut p_end = lpos_T {
-            lnum: 0 as linenr_T,
+            lnum: 0 as LineNr,
             col: m.end.col,
         };
         // You Might Gonna Need It.
         buf_ensure_loaded(self.buf);
 
-        let mut next_linenr = if m.pre_match == 0 as linenr_T {
+        let mut next_linenr = if m.pre_match == 0 as LineNr {
             m.start.lnum
         } else {
             m.pre_match
@@ -177,10 +177,10 @@ impl PreviewBuf {
 
         while next_linenr <= m.end.lnum {
             if next_linenr == m.start.lnum {
-                p_start.lnum = self.linenr_preview + 1 as linenr_T;
+                p_start.lnum = self.linenr_preview + 1 as LineNr;
             }
             if next_linenr == m.end.lnum {
-                p_end.lnum = self.linenr_preview + 1 as linenr_T;
+                p_end.lnum = self.linenr_preview + 1 as LineNr;
             }
             // SAFETY: `next_linenr` is a line of `orig_buf`, or one past its
             // last, which is the empty-line case.
@@ -196,10 +196,10 @@ impl PreviewBuf {
     /// # Safety
     /// Main thread; `lnum` must be one of `orig_buf`'s lines, or one past the
     /// last.
-    unsafe fn add_line(&mut self, orig_buf: Buf, lnum: linenr_T) {
+    unsafe fn add_line(&mut self, orig_buf: Buf, lnum: LineNr) {
         // SAFETY: caller's contract.
         let line = unsafe {
-            if lnum == orig_buf.b_ml.ml_line_count + 1 as linenr_T {
+            if lnum == orig_buf.b_ml.ml_line_count + 1 as LineNr {
                 c"".as_ptr() as *mut c_char
             } else {
                 let line = ml_get_buf(orig_buf.raw(), lnum);
@@ -226,8 +226,8 @@ impl PreviewBuf {
                 line,
             )
         };
-        if self.linenr_preview == 0 as linenr_T {
-            let _ = unsafe { ml_replace_buf(self.buf.raw(), 1 as linenr_T, self.str, true, false) };
+        if self.linenr_preview == 0 as LineNr {
+            let _ = unsafe { ml_replace_buf(self.buf.raw(), 1 as LineNr, self.str, true, false) };
         } else {
             let _ = unsafe {
                 ml_append_buf(
@@ -254,7 +254,7 @@ impl PreviewBuf {
 /// Main thread; `cmdpreview_bufnr` must name the preview buffer when
 /// 'inccommand' is `split`.
 pub(crate) unsafe fn show_sub(
-    range: (linenr_T, linenr_T),
+    range: (LineNr, LineNr),
     old_cusr: pos_T,
     preview_lines: &PreviewLines,
     hl_id: c_int,
@@ -310,17 +310,17 @@ pub(crate) unsafe fn show_sub(
             let mut col_width = 0 as c_int;
             if let Some(last) = preview_lines.subresults.last() {
                 let highest_lnum = last.start.lnum.max(last.end.lnum);
-                debug_assert!(highest_lnum > 0 as linenr_T, "highest_lnum > 0");
+                debug_assert!(highest_lnum > 0 as LineNr, "highest_lnum > 0");
                 col_width = f64::from(highest_lnum).log10() as c_int + 1 as c_int + 3 as c_int;
             }
             PreviewBuf {
                 buf,
                 col_width,
-                linenr_preview: 0 as linenr_T,
-                linenr_origbuf: 0 as linenr_T,
+                linenr_preview: 0 as LineNr,
+                linenr_origbuf: 0 as LineNr,
                 str: ptr::null_mut(),
-                old_line_size: 0 as colnr_T,
-                line_size: 0 as colnr_T,
+                old_line_size: 0 as ColNr,
+                line_size: 0 as ColNr,
             }
         })
     } else {
@@ -340,13 +340,13 @@ pub(crate) unsafe fn show_sub(
                     hl_id,
                     p_start,
                     p_end,
-                    pv.col_width as colnr_T,
+                    pv.col_width as ColNr,
                 )
             };
         }
         // SAFETY: as above, over the buffer the match came from.
         unsafe {
-            bufhl_add_hl_pos_offset(orig_raw, cmdpreview_ns, hl_id, m.start, m.end, 0 as colnr_T)
+            bufhl_add_hl_pos_offset(orig_raw, cmdpreview_ns, hl_id, m.start, m.end, 0 as ColNr)
         };
     }
 

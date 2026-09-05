@@ -53,7 +53,7 @@ use crate::runtime::estack_sfile;
 use crate::strings::strrep;
 
 use crate::types::{
-    ExArgt, ExpandContext, Failed, MAXPATHL, NUL, Vv, exarg_T, expand_T, linenr_T, size_t, ssize_t,
+    ExArgt, ExpandContext, Failed, LineNr, MAXPATHL, NUL, Vv, exarg_T, expand_T, size_t, ssize_t,
     uint8_t,
 };
 use crate::winlayer::{Buf, Ea};
@@ -394,7 +394,7 @@ pub unsafe fn eval_vars(
     src: *mut c_char,
     srcstart: *const c_char,
     usedlen: *mut size_t,
-    lnump: *mut linenr_T,
+    lnump: *mut LineNr,
     errormsg: *mut *const c_char,
     escaped: *mut c_int,
     empty_is_error: bool,
@@ -499,7 +499,7 @@ pub unsafe fn eval_vars(
                             return ptr::null_mut();
                         };
                         if !lnump.is_null() {
-                            unsafe { *lnump = newlnum::LAST as linenr_T };
+                            unsafe { *lnump = newlnum::LAST as LineNr };
                         }
                         if buf.b_fname.is_null() {
                             result = c"".as_ptr() as *mut c_char;

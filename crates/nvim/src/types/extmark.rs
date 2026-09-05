@@ -30,18 +30,18 @@ pub type ExtmarkOp = ::core::ffi::c_uint;
 pub struct ExtmarkSavePos {
     pub mark: uint64_t,
     pub old_row: ::core::ffi::c_int,
-    pub old_col: colnr_T,
+    pub old_col: ColNr,
     pub invalidated: bool,
 }
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct ExtmarkSplice {
     pub start_row: ::core::ffi::c_int,
-    pub start_col: colnr_T,
+    pub start_col: ColNr,
     pub old_row: ::core::ffi::c_int,
-    pub old_col: colnr_T,
+    pub old_col: ColNr,
     pub new_row: ::core::ffi::c_int,
-    pub new_col: colnr_T,
+    pub new_col: ColNr,
     pub start_byte: bcount_t,
     pub old_byte: bcount_t,
     pub new_byte: bcount_t,

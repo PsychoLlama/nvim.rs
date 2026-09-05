@@ -29,8 +29,8 @@ pub struct SearchPattern {
     pub additional_data: *mut AdditionalData,
 }
 pub struct searchit_arg_T {
-    pub sa_stop_lnum: linenr_T,
-    pub sa_tm: *mut proftime_T,
+    pub sa_stop_lnum: LineNr,
+    pub sa_tm: *mut ProfTime,
     pub sa_timed_out: ::core::ffi::c_int,
     pub sa_wrapped: ::core::ffi::c_int,
 }

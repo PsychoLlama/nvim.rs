@@ -20,7 +20,7 @@ use crate::winlayer::{Buf, Win};
 
 /// C's `compl_startpos.lnum = curwin->w_cursor.lnum; compl_startpos.col = col;`
 /// — the completion's anchor moved to `col` on the cursor's line.
-fn set_compl_startpos_here(col: colnr_T) {
+fn set_compl_startpos_here(col: ColNr) {
     let lnum = cur_win().w_cursor.lnum;
     compl_startpos.set(compl_startpos.get().with_lnum(lnum).with_col(col));
 }
@@ -32,7 +32,7 @@ fn set_compl_startpos_here(col: colnr_T) {
 pub(crate) unsafe fn get_normal_compl_info(
     line: *mut c_char,
     mut startcol: c_int,
-    curs_col: colnr_T,
+    curs_col: ColNr,
 ) -> Result<(), Failed> {
     // The pattern under construction: `prefix`, then `quote_meta` of the
     // `len` bytes at `compl_col` — the size `quote_meta` answers for a
@@ -140,9 +140,9 @@ pub(crate) unsafe fn get_normal_compl_info(
 /// `complete()` function.
 pub(crate) unsafe fn get_wholeline_compl_info(
     line: *mut c_char,
-    curs_col: colnr_T,
+    curs_col: ColNr,
 ) -> Result<(), Failed> {
-    compl_col.set(unsafe { getwhitecols(line) } as colnr_T);
+    compl_col.set(unsafe { getwhitecols(line) } as ColNr);
     compl_length.set(curs_col - compl_col.get());
     if compl_length.get() < 0 {
         // Cursor in indent: empty pattern.
@@ -157,7 +157,7 @@ pub(crate) unsafe fn get_wholeline_compl_info(
 pub(crate) unsafe fn get_filename_compl_info(
     line: *mut c_char,
     mut startcol: c_int,
-    curs_col: colnr_T,
+    curs_col: ColNr,
 ) -> Result<(), Failed> {
     // Go back to just before the first filename character.
     if startcol > 0 {
@@ -194,7 +194,7 @@ pub(crate) unsafe fn get_filename_compl_info(
 /// The pattern, column and length for command-line completion.
 pub(crate) unsafe fn get_cmdline_compl_info(
     line: *mut c_char,
-    curs_col: colnr_T,
+    curs_col: ColNr,
 ) -> Result<(), Failed> {
     // The expansion context outlives no call here, but `set_cmd_context`
     // and `nlua_expand_pat` both want it by pointer, so it is taken once.
@@ -222,14 +222,14 @@ pub(crate) unsafe fn get_cmdline_compl_info(
         // SAFETY: `xp_pattern` points into `compl_pattern`, which
         // `set_cmd_context` was given.
         let off = unsafe { (*xp).xp_pattern.offset_from(compl_pattern().data()) };
-        compl_col.set(off as colnr_T);
+        compl_col.set(off as ColNr);
     }
     compl_length.set(curs_col - compl_col.get());
     Ok(())
 }
 
 /// Set `compl_col`, `compl_length`, `compl_pattern` and `cpt_compl_pattern`.
-pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: colnr_T, is_cpt_compl: bool) {
+pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: ColNr, is_cpt_compl: bool) {
     if is_cpt_compl {
         cpt_compl_pattern().clear();
         if startcol < compl_col.get() {
@@ -258,7 +258,7 @@ pub(crate) unsafe fn set_compl_globals(mut startcol: c_int, curs_col: colnr_T, i
 /// `cb` is set when a function in `'complete'` triggered this, null otherwise;
 /// `startcol`, when not null, receives the column the function answered.
 pub(crate) unsafe fn get_userdefined_compl_info(
-    curs_col: colnr_T,
+    curs_col: ColNr,
     mut cb: *mut Callback,
     startcol: *mut c_int,
 ) -> Result<(), Failed> {
@@ -292,7 +292,7 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 
     let pos = cur_win().w_cursor;
     let locked = Lock::text();
-    let col = unsafe { callback_call_retnr(cb, 2, args.as_mut_ptr()) } as colnr_T;
+    let col = unsafe { callback_call_retnr(cb, 2, args.as_mut_ptr()) } as ColNr;
     drop(locked);
 
     State.set(save_State);
@@ -337,15 +337,12 @@ pub(crate) unsafe fn get_userdefined_compl_info(
 }
 
 /// The pattern, column and length for spell completion; reads `spell_bad_len`.
-pub(crate) unsafe fn get_spell_compl_info(
-    startcol: c_int,
-    curs_col: colnr_T,
-) -> Result<(), Failed> {
+pub(crate) unsafe fn get_spell_compl_info(startcol: c_int, curs_col: ColNr) -> Result<(), Failed> {
     if spell_bad_len.get() > 0 {
         debug_assert!(spell_bad_len.get() <= c_int::MAX as size_t);
         compl_col.set(curs_col - spell_bad_len.get() as c_int);
     } else {
-        compl_col.set(unsafe { spell_word_start(startcol) } as colnr_T);
+        compl_col.set(unsafe { spell_word_start(startcol) } as ColNr);
     }
     if compl_col.get() >= startcol {
         compl_length.set(0);
@@ -367,7 +364,7 @@ pub(crate) unsafe fn get_spell_compl_info(
 pub(crate) unsafe fn compl_get_info(
     line: *mut c_char,
     startcol: c_int,
-    curs_col: colnr_T,
+    curs_col: ColNr,
     line_invalid: *mut bool,
 ) -> Result<(), Failed> {
     if ctrl_x_mode_normal()
@@ -420,7 +417,7 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
             // non-blank in the line. If that is not a word character we
             // include it to get a better pattern, but then we don't want
             // the "\\<" prefix — checked below.
-            compl_col.set(unsafe { getwhitecols(line) } as colnr_T);
+            compl_col.set(unsafe { getwhitecols(line) } as ColNr);
             set_compl_startpos_here(compl_col.get());
             compl_cont_status.set(compl_cont_status.get() & !CONT_SOL); // clear SOL if present
         } else {
@@ -432,7 +429,7 @@ pub(crate) unsafe fn ins_compl_continue_search(line: *mut c_char) {
                 let skip = (compl_length.get() + compl_startpos.get().col) as isize;
                 // SAFETY: `line` is the cursor line and `skip` is inside it;
                 // `skipwhite` answers a pointer into the same line.
-                let col = unsafe { skipwhite(line.offset(skip)).offset_from(line) } as colnr_T;
+                let col = unsafe { skipwhite(line.offset(skip)).offset_from(line) } as ColNr;
                 compl_startpos.set(compl_startpos.get().with_col(col));
             }
             compl_col.set(compl_startpos.get().col);

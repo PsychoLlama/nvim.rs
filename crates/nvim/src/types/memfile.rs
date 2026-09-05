@@ -17,5 +17,5 @@ pub use crate::memfile::{bhdr_T, memfile_T};
 
 /// A block number. Non-negative ones are page numbers in the swap file;
 /// negative ones name a block that has never been written.
-pub type blocknr_T = int64_t;
+pub type BlockNr = int64_t;
 pub use crate::memfile::MfDirty;

@@ -58,7 +58,7 @@ use crate::pos::MAXLNUM;
 use crate::semsg;
 use crate::strings::{vim_snprintf, vim_strsave_escaped};
 use crate::types::ui::kUIMessages;
-use crate::types::{CmdModFlags, CpoFlag, NUL, OptInt, exarg_T, linenr_T};
+use crate::types::{CmdModFlags, CpoFlag, LineNr, NUL, OptInt, exarg_T};
 use crate::ui::{ui_cursor_goto, ui_has};
 use crate::undo::{buf_is_changed, u_save};
 use crate::winlayer::buffers;
@@ -260,8 +260,8 @@ impl Drop for TempFile {
 /// `eap` and `cmd` must be live, and the range must be lines of the current
 /// buffer.
 unsafe fn do_filter(
-    line1: linenr_T,
-    line2: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
     eap: &mut exarg_T,
     cmd: *mut c_char,
     do_in: bool,
@@ -427,7 +427,7 @@ unsafe fn do_filter(
                         ptr::null_mut(),
                         line2,
                         0,
-                        MAXLNUM as linenr_T,
+                        MAXLNUM as LineNr,
                         &raw mut *eap,
                         READ_FILTER as c_int,
                         false,
@@ -486,7 +486,7 @@ unsafe fn do_filter(
                             mark_adjust(
                                 line1 + read_linecount,
                                 line2,
-                                MAXLNUM as linenr_T,
+                                MAXLNUM as LineNr,
                                 0,
                                 kExtmarkNOOP,
                             )
@@ -557,7 +557,7 @@ unsafe fn do_filter(
 
 /// `:range!cmd`'s "N lines filtered". `set_keep_msg` takes a copy, so it
 /// survives the redraw without a buffer outliving this call.
-fn report_filtered(linecount: linenr_T) {
+fn report_filtered(linecount: LineNr) {
     let mut scratch = [0 as c_char; MSG_BUF_LEN as usize];
     let buf = scratch.as_mut_ptr();
     // SAFETY: `scratch` is `MSG_BUF_LEN` bytes and outlives the call; one
@@ -820,7 +820,7 @@ fn has_percent_s(opt: &[u8]) -> bool {
 ///
 /// # Safety
 /// `lnum` must be a line of the current buffer.
-pub unsafe fn print_line_no_prefix(lnum: linenr_T, use_number: bool, list: bool) {
+pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
     // SAFETY: `curwin` is the live current window.
     if cur_win().w_onebuf_opt.wo_nu != 0 || use_number {
         let mut numbuf: [c_char; 30] = [0; 30];
@@ -848,7 +848,7 @@ pub(crate) static global_need_msg_kind: GlobalCell<bool> = GlobalCell::new(false
 ///
 /// # Safety
 /// `lnum` must be a line of the current buffer.
-pub unsafe fn print_line(lnum: linenr_T, use_number: bool, list: bool, first: bool) {
+pub unsafe fn print_line(lnum: LineNr, use_number: bool, list: bool, first: bool) {
     let save_silent = silent_mode.get();
 
     // apply :filter /pat/

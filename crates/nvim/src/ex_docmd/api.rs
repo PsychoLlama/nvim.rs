@@ -54,7 +54,7 @@ use crate::main::{
 use crate::os::cshim::gettext;
 use crate::search::{restore_last_search_pattern, save_last_search_pattern};
 use crate::types::{
-    CmdAddr, CmdParseInfo, ExArgt, FAIL, Failed, NUL, cstack_T, exarg_T, linenr_T, pos_T,
+    CmdAddr, CmdParseInfo, ExArgt, FAIL, Failed, LineNr, NUL, cstack_T, exarg_T, pos_T,
 };
 use crate::usercmd::do_ucmd;
 use crate::winlayer::{Buf, Ea, Win};
@@ -267,7 +267,7 @@ pub(crate) unsafe fn execute_cmd0(
                 p
             };
             ea.line2 =
-                buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false) as linenr_T;
+                buflist_findpat(ea.arg, p, ea.argt.has(ExArgt::BUFUNL), false, false) as LineNr;
             ea.addr_count = 1;
             ea.arg = skipwhite(p);
         } else {
@@ -281,7 +281,7 @@ pub(crate) unsafe fn execute_cmd0(
                     false,
                     false,
                 )
-            } as linenr_T;
+            } as LineNr;
             ea.addr_count = 1;
             shift_cmd_args(ea);
         }

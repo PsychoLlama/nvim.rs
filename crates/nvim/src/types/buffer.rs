@@ -108,11 +108,11 @@ pub type diff_T = diffblock_S;
 /// Not `Copy` and not `Clone`: a block is a node of the tab page's list and
 /// `df_changes` is an array it allocates, so a by-value duplicate would name
 /// a `ga_data` and a `df_next` it does not own. Code that wants a block's
-/// ranges past the block's lifetime copies the two `linenr_T` arrays.
+/// ranges past the block's lifetime copies the two `LineNr` arrays.
 pub struct diffblock_S {
     pub df_next: *mut diff_T,
-    pub df_lnum: [linenr_T; 8],
-    pub df_count: [linenr_T; 8],
+    pub df_lnum: [LineNr; 8],
+    pub df_count: [LineNr; 8],
     pub is_linematched: bool,
     pub has_changes: bool,
     /// The block's inline changes, cached by `diff_find_change_inline_diff`
@@ -144,13 +144,13 @@ pub struct diffline_S {
 pub type diffline_T = diffline_S;
 #[derive(Copy, Clone)]
 pub struct diffline_change_S {
-    pub dc_start: [colnr_T; 8],
-    pub dc_end: [colnr_T; 8],
+    pub dc_start: [ColNr; 8],
+    pub dc_end: [ColNr; 8],
     pub dc_start_lnum_off: [::core::ffi::c_int; 8],
     pub dc_end_lnum_off: [::core::ffi::c_int; 8],
 }
 pub type diffline_change_T = diffline_change_S;
-pub type disptick_T = uint64_t;
+pub type DispTick = uint64_t;
 pub type dobuf_action_values = ::core::ffi::c_uint;
 pub type dobuf_start_values = ::core::ffi::c_uint;
 pub struct fcs_chars_T {
@@ -217,12 +217,12 @@ pub struct file_buffer {
     pub b_last_changedtick_pum: varnumber_T,
     pub b_saving: bool,
     pub b_mod_set: bool,
-    pub b_mod_top: linenr_T,
-    pub b_mod_bot: linenr_T,
-    pub b_mod_xlines: linenr_T,
+    pub b_mod_top: LineNr,
+    pub b_mod_bot: LineNr,
+    pub b_mod_xlines: LineNr,
     pub b_wininfo: file_buffer_b_wininfo,
-    pub b_mod_tick_syn: disptick_T,
-    pub b_mod_tick_decor: disptick_T,
+    pub b_mod_tick_syn: DispTick,
+    pub b_mod_tick_decor: DispTick,
     pub b_mtime: int64_t,
     pub b_mtime_ns: int64_t,
     pub b_mtime_read: int64_t,
@@ -268,8 +268,8 @@ pub struct file_buffer {
     pub b_u_time_cur: time_t,
     pub b_u_save_nr_cur: ::core::ffi::c_int,
     pub b_u_line_ptr: *mut ::core::ffi::c_char,
-    pub b_u_line_lnum: linenr_T,
-    pub b_u_line_colnr: colnr_T,
+    pub b_u_line_lnum: LineNr,
+    pub b_u_line_colnr: ColNr,
     pub b_scanned: bool,
     pub b_p_iminsert: OptInt,
     pub b_p_imsearch: OptInt,
@@ -364,10 +364,10 @@ pub struct file_buffer {
     pub b_p_wm_nobin: OptInt,
     pub b_p_wm_nopaste: OptInt,
     pub b_p_vsts: *mut ::core::ffi::c_char,
-    pub b_p_vsts_array: *mut colnr_T,
+    pub b_p_vsts_array: *mut ColNr,
     pub b_p_vsts_nopaste: *mut ::core::ffi::c_char,
     pub b_p_vts: *mut ::core::ffi::c_char,
-    pub b_p_vts_array: *mut colnr_T,
+    pub b_p_vts_array: *mut ColNr,
     pub b_p_keymap: *mut ::core::ffi::c_char,
     pub b_p_gefm: *mut ::core::ffi::c_char,
     pub b_p_gp: *mut ::core::ffi::c_char,
@@ -424,7 +424,7 @@ pub struct file_buffer {
     pub b_ind_if_for_while: ::core::ffi::c_int,
     pub b_ind_cpp_extern_c: ::core::ffi::c_int,
     pub b_ind_pragma: ::core::ffi::c_int,
-    pub b_no_eol_lnum: linenr_T,
+    pub b_no_eol_lnum: LineNr,
     pub b_start_eof: ::core::ffi::c_int,
     pub b_start_eol: ::core::ffi::c_int,
     pub b_start_ffc: ::core::ffi::c_int,
@@ -529,23 +529,23 @@ pub struct lcs_chars_T {
     pub conceal: schar_T,
 }
 pub struct llpos_T {
-    pub lnum: linenr_T,
-    pub col: colnr_T,
+    pub lnum: LineNr,
+    pub col: ColNr,
     pub len: ::core::ffi::c_int,
 }
 #[derive(Clone)]
 pub struct match_T {
     pub rm: regmmatch_T,
     pub buf: *mut buf_T,
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     pub attr: ::core::ffi::c_int,
     pub attr_cur: ::core::ffi::c_int,
-    pub first_lnum: linenr_T,
-    pub startcol: colnr_T,
-    pub endcol: colnr_T,
+    pub first_lnum: LineNr,
+    pub startcol: ColNr,
+    pub endcol: ColNr,
     pub is_addpos: bool,
     pub has_cursor: bool,
-    pub tm: proftime_T,
+    pub tm: ProfTime,
 }
 #[derive(Clone)]
 pub struct matchitem {
@@ -557,8 +557,8 @@ pub struct matchitem {
     pub mit_pos_array: *mut llpos_T,
     pub mit_pos_count: ::core::ffi::c_int,
     pub mit_pos_cur: ::core::ffi::c_int,
-    pub mit_toplnum: linenr_T,
-    pub mit_botlnum: linenr_T,
+    pub mit_toplnum: LineNr,
+    pub mit_botlnum: LineNr,
     pub mit_hl: match_T,
     pub mit_hlg_id: ::core::ffi::c_int,
     pub mit_conceal_char: ::core::ffi::c_int,
@@ -572,8 +572,8 @@ pub struct pos_save_T {
 }
 #[derive(Copy, Clone)]
 pub struct syn_time_T {
-    pub total: proftime_T,
-    pub slowest: proftime_T,
+    pub total: ProfTime,
+    pub slowest: ProfTime,
     pub count: ::core::ffi::c_int,
     pub match_0: ::core::ffi::c_int,
 }
@@ -597,9 +597,9 @@ pub struct synblock_T {
     pub b_syn_containedin: ::core::ffi::c_int,
     pub b_syn_sync_flags: ::core::ffi::c_int,
     pub b_syn_sync_id: int16_t,
-    pub b_syn_sync_minlines: linenr_T,
-    pub b_syn_sync_maxlines: linenr_T,
-    pub b_syn_sync_linebreaks: linenr_T,
+    pub b_syn_sync_minlines: LineNr,
+    pub b_syn_sync_maxlines: LineNr,
+    pub b_syn_sync_linebreaks: LineNr,
     /// `:syntax sync linecont`'s pattern, owned; `b_syn_linecont_prog`
     /// is what it compiled to.
     pub(crate) b_syn_linecont_pat: Option<::std::ffi::CString>,
@@ -631,8 +631,8 @@ pub struct synblock_T {
     /// The recycled entries. Points into [`Self::b_sst_array`].
     pub b_sst_firstfree: *mut synstate_T,
     pub b_sst_freecount: ::core::ffi::c_int,
-    pub b_sst_check_lnum: linenr_T,
-    pub b_sst_lasttick: disptick_T,
+    pub b_sst_check_lnum: LineNr,
+    pub b_sst_lasttick: DispTick,
     pub b_langp: garray_T,
     pub b_spell_ismw: [bool; 256],
     pub b_spell_ismw_mb: *mut ::core::ffi::c_char,
@@ -724,24 +724,24 @@ pub struct window_S {
     pub w_locked: bool,
     pub w_frame: *mut frame_T,
     pub w_cursor: pos_T,
-    pub w_curswant: colnr_T,
+    pub w_curswant: ColNr,
     /// Whether the next cursor move should recompute `w_curswant` — the
     /// column a vertical move aims for — rather than keep the one the last
     /// horizontal move set.
     pub w_set_curswant: bool,
-    pub w_cursorline: linenr_T,
-    pub w_last_cursorline: linenr_T,
+    pub w_cursorline: LineNr,
+    pub w_last_cursorline: LineNr,
     pub w_old_visual_mode: ::core::ffi::c_char,
-    pub w_old_cursor_lnum: linenr_T,
-    pub w_old_cursor_fcol: colnr_T,
-    pub w_old_cursor_lcol: colnr_T,
-    pub w_old_visual_lnum: linenr_T,
-    pub w_old_visual_col: colnr_T,
-    pub w_old_curswant: colnr_T,
-    pub w_last_cursor_lnum_rnu: linenr_T,
+    pub w_old_cursor_lnum: LineNr,
+    pub w_old_cursor_fcol: ColNr,
+    pub w_old_cursor_lcol: ColNr,
+    pub w_old_visual_lnum: LineNr,
+    pub w_old_visual_col: ColNr,
+    pub w_old_curswant: ColNr,
+    pub w_last_cursor_lnum_rnu: LineNr,
     pub w_p_lcs_chars: lcs_chars_T,
     pub w_p_fcs_chars: fcs_chars_T,
-    pub w_topline: linenr_T,
+    pub w_topline: LineNr,
     /// Whether `w_topline` was set on purpose rather than left at its
     /// default, which decides whether entering the buffer may move it.
     pub w_topline_was_set: bool,
@@ -749,12 +749,12 @@ pub struct window_S {
     pub w_old_topfill: ::core::ffi::c_int,
     pub w_botfill: bool,
     pub w_old_botfill: bool,
-    pub w_leftcol: colnr_T,
-    pub w_skipcol: colnr_T,
-    pub w_last_topline: linenr_T,
+    pub w_leftcol: ColNr,
+    pub w_skipcol: ColNr,
+    pub w_last_topline: LineNr,
     pub w_last_topfill: ::core::ffi::c_int,
-    pub w_last_leftcol: colnr_T,
-    pub w_last_skipcol: colnr_T,
+    pub w_last_leftcol: ColNr,
+    pub w_last_skipcol: ColNr,
     pub w_last_width: ::core::ffi::c_int,
     pub w_last_height: ::core::ffi::c_int,
     pub w_winrow: ::core::ffi::c_int,
@@ -780,20 +780,20 @@ pub struct window_S {
     pub w_width_outer: ::core::ffi::c_int,
     pub w_valid: WinValid,
     pub w_valid_cursor: pos_T,
-    pub w_valid_leftcol: colnr_T,
-    pub w_valid_skipcol: colnr_T,
+    pub w_valid_leftcol: ColNr,
+    pub w_valid_skipcol: ColNr,
     pub w_viewport_invalid: bool,
-    pub w_viewport_last_topline: linenr_T,
-    pub w_viewport_last_botline: linenr_T,
-    pub w_viewport_last_topfill: linenr_T,
-    pub w_viewport_last_skipcol: linenr_T,
+    pub w_viewport_last_topline: LineNr,
+    pub w_viewport_last_botline: LineNr,
+    pub w_viewport_last_topfill: LineNr,
+    pub w_viewport_last_skipcol: LineNr,
     pub w_cline_height: ::core::ffi::c_int,
     pub w_cline_folded: bool,
     pub w_cline_row: ::core::ffi::c_int,
-    pub w_virtcol: colnr_T,
+    pub w_virtcol: ColNr,
     pub w_wrow: ::core::ffi::c_int,
     pub w_wcol: ::core::ffi::c_int,
-    pub w_botline: linenr_T,
+    pub w_botline: LineNr,
     pub w_empty_rows: ::core::ffi::c_int,
     pub w_filler_rows: ::core::ffi::c_int,
     pub w_lines_valid: ::core::ffi::c_int,
@@ -808,16 +808,16 @@ pub struct window_S {
     pub w_maxscwidth: ::core::ffi::c_int,
     pub w_redr_type: ::core::ffi::c_int,
     pub w_upd_rows: ::core::ffi::c_int,
-    pub w_redraw_top: linenr_T,
-    pub w_redraw_bot: linenr_T,
+    pub w_redraw_top: LineNr,
+    pub w_redraw_bot: LineNr,
     pub w_redr_status: bool,
     pub w_redr_border: bool,
     pub w_redr_statuscol: bool,
-    pub w_display_tick: disptick_T,
+    pub w_display_tick: DispTick,
     pub w_stl_cursor: pos_T,
-    pub w_stl_virtcol: colnr_T,
-    pub w_stl_topline: linenr_T,
-    pub w_stl_line_count: linenr_T,
+    pub w_stl_virtcol: ColNr,
+    pub w_stl_topline: LineNr,
+    pub w_stl_line_count: LineNr,
     pub w_stl_topfill: ::core::ffi::c_int,
     /// Whether the last line drawn in the window was empty, as the status
     /// line last saw it.
@@ -864,8 +864,8 @@ pub struct window_S {
     pub w_config: WinConfig,
     pub w_fraction: ::core::ffi::c_int,
     pub w_prev_fraction_row: ::core::ffi::c_int,
-    pub w_nrwidth_line_count: linenr_T,
-    pub w_statuscol_line_count: linenr_T,
+    pub w_nrwidth_line_count: LineNr,
+    pub w_statuscol_line_count: LineNr,
     pub w_nrwidth_width: ::core::ffi::c_int,
     pub w_llist: *mut qf_info_T,
     pub w_llist_ref: *mut qf_info_T,
@@ -960,12 +960,12 @@ pub struct winopt_T {
 }
 #[derive(Copy, Clone)]
 pub struct wline_T {
-    pub wl_lnum: linenr_T,
+    pub wl_lnum: LineNr,
     pub wl_size: uint16_t,
     pub wl_valid: bool,
     pub wl_folded: bool,
-    pub wl_foldend: linenr_T,
-    pub wl_lastlnum: linenr_T,
+    pub wl_foldend: LineNr,
+    pub wl_lastlnum: LineNr,
 }
 
 impl bufref_T {

@@ -90,7 +90,7 @@ fn buf_is_valid(buf: *mut buf_T) -> bool {
 /// when it is zero, without entering the window.
 fn load_buffer(fnum: c_int, flags: EcmdFlags, oldwin: Option<Win>) -> Result<(), Failed> {
     let (no_name, no_cmd) = (ptr::null_mut(), ptr::null_mut());
-    let one = newlnum::ONE as linenr_T;
+    let one = newlnum::ONE as LineNr;
     let oldwin = oldwin.map_or(ptr::null_mut(), Win::raw);
     // SAFETY: a buffer number the caller has just looked up, and a live
     // window or null.
@@ -371,7 +371,7 @@ pub unsafe fn ex_copen(eap: *mut exarg_T) {
     busy_end();
 
     let mut win = cur_win();
-    win.w_cursor.lnum = lnum as linenr_T;
+    win.w_cursor.lnum = lnum as LineNr;
     win.w_cursor.col = 0;
     clamp_cursor(win);
     win.update_topline(); // scroll to show the line
@@ -421,7 +421,7 @@ pub unsafe fn ex_cclose(eap: *mut exarg_T) {
 
 /// The window is made current for the cursor move only; nothing in between
 /// can leave it current.
-fn win_goto_line(mut win: Win, lnum: linenr_T) {
+fn win_goto_line(mut win: Win, lnum: LineNr) {
     let old_curwin = cur_win();
     curwin.set(win.raw());
     curbuf.set(win.w_buffer);
@@ -458,13 +458,13 @@ pub unsafe fn ex_cbottom(eap: *mut exarg_T) {
 /// the display code highlights.
 ///
 /// `wp` must be showing a quickfix buffer.
-pub fn qf_current_entry(wp: Win) -> linenr_T {
+pub fn qf_current_entry(wp: Win) -> LineNr {
     let mut qi = QfStack::Global.qi();
     if is_location_list_window(wp) {
         // In the location list window, the referenced list is the one.
         qi = QfStack::Local(wp.w_llist_ref.cast()).qi();
     }
-    qi.curlist().qf_index as linenr_T
+    qi.curlist().qf_index as LineNr
 }
 
 /// Put the cursor of the quickfix window on the current entry, answering
@@ -474,11 +474,11 @@ pub(crate) fn qf_win_pos_update(qi: Qi, old_qf_index: c_int) -> bool {
     let Some(mut win) = qf_find_win(qi) else {
         return false;
     };
-    if qf_index as linenr_T <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
+    if qf_index as LineNr <= win.buffer().b_ml.ml_line_count && old_qf_index != qf_index {
         // Both the old and the new line need redrawing.
-        win.w_redraw_top = old_qf_index.min(qf_index) as linenr_T;
-        win.w_redraw_bot = old_qf_index.max(qf_index) as linenr_T;
-        win_goto_line(win, qf_index as linenr_T);
+        win.w_redraw_top = old_qf_index.min(qf_index) as LineNr;
+        win.w_redraw_bot = old_qf_index.max(qf_index) as LineNr;
+        win_goto_line(win, qf_index as LineNr);
     }
     true
 }

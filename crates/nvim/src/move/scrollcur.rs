@@ -20,7 +20,7 @@ use crate::drawscreen::UPD_NOT_VALID;
 use crate::main::mouse_dragging;
 use crate::pos::MAXCOL;
 use crate::search::{BACKWARD, FORWARD};
-use crate::types::{Direction, colnr_T, int64_t, linenr_T};
+use crate::types::{ColNr, Direction, LineNr, int64_t};
 
 /// The 'scrolloff' the `scroll_cursor_*` family works with: a mouse drag
 /// slows scrolling down by standing in for the option.
@@ -33,7 +33,7 @@ fn scrolloff_or_drag(win: Win) -> int64_t {
 }
 
 /// An empty [`lineoff_T`] at `lnum`, which the walks below fill in.
-fn lineoff_at(lnum: linenr_T) -> lineoff_T {
+fn lineoff_at(lnum: LineNr) -> lineoff_T {
     lineoff_T {
         lnum,
         fill: 0,
@@ -223,12 +223,12 @@ impl Win {
 
         // Scroll up when the cursor is a little off the bottom of the screen;
         // otherwise put it at half the screen.
-        if line_count >= self.w_view_height as linenr_T && line_count > min_scroll as linenr_T {
+        if line_count >= self.w_view_height as LineNr && line_count > min_scroll as LineNr {
             self.scroll_cursor_halfway(false, true);
         } else if line_count > 0 {
             if do_sms {
                 // TODO(vim):
-                self.scrollup(scrolled as linenr_T, true);
+                self.scrollup(scrolled as LineNr, true);
             } else {
                 self.scrollup(line_count, true);
             }
@@ -252,7 +252,7 @@ impl Win {
 
     /// `zb`'s first half: fill the window upwards from the cursor line, so
     /// that it is the last one shown.
-    fn fill_from_bottom(mut self, cursor_lnum: linenr_T, do_sms: bool) {
+    fn fill_from_bottom(mut self, cursor_lnum: LineNr, do_sms: bool) {
         let mut used = 0;
         let last = self.fold_last(cursor_lnum);
         self.w_botline = last + 1;
@@ -288,7 +288,7 @@ impl Win {
     /// so would have to be scrolled into view.
     fn count_below_window(
         self,
-        cursor_lnum: linenr_T,
+        cursor_lnum: LineNr,
         min_scroll: c_int,
         do_sms: bool,
     ) -> (c_int, c_int) {
@@ -389,14 +389,14 @@ impl Win {
 
     /// Turn the screen lines below the window into the number of logical lines
     /// to scroll by -- 0 for none, 9999 for "more than the window holds".
-    fn lines_to_scroll(self, used: c_int, scrolled: c_int) -> linenr_T {
+    fn lines_to_scroll(self, used: c_int, scrolled: c_int) -> LineNr {
         if scrolled <= 0 {
             // `w_empty_rows` is larger: no need to scroll.
             return 0;
         }
         if used > self.w_view_height {
             // More than a screenful: don't scroll, redraw.
-            return used as linenr_T;
+            return used as LineNr;
         }
         // Scroll the minimal number of lines.
         let mut line_count = 0;
@@ -440,7 +440,7 @@ impl Win {
         };
         let mut used = self.plines_nofill(loff.lnum, true);
         let mut topline = loff.lnum;
-        let mut skipcol: colnr_T = 0;
+        let mut skipcol: ColNr = 0;
 
         let do_sms = self.w_onebuf_opt.wo_wrap != 0 && self.w_onebuf_opt.wo_sms != 0;
         // Only read under `do_sms`, which is also the only arm that sets it.
@@ -557,7 +557,7 @@ impl Win {
             }
         }
         self.w_topfill = topfill;
-        if old_topline > self.w_topline + self.w_view_height as linenr_T {
+        if old_topline > self.w_topline + self.w_view_height as LineNr {
             self.w_botfill = false;
         }
         self.check_topfill(false);
@@ -700,7 +700,7 @@ pub(super) fn get_scroll_overlap(win: Win, dir: Direction) -> c_int {
         lnum,
         // Paging backwards, the filler lines that matter are the ones above
         // the line *below* this one.
-        fill: win.fill_above(lnum + backward as linenr_T)
+        fill: win.fill_above(lnum + backward as LineNr)
             - if forward {
                 win.w_filler_rows
             } else {
@@ -768,7 +768,7 @@ pub(super) fn scroll_with_sms(
     let prev_topfill = win.w_topfill;
 
     win.w_onebuf_opt.wo_sms = 1;
-    scroll_redraw_cur(win, dir == FORWARD, count as linenr_T);
+    scroll_redraw_cur(win, dir == FORWARD, count as LineNr);
 
     // Not actually smoothscrolling, but we ended up with a partly visible
     // line. Keep scrolling until `w_skipcol` is zero again.
@@ -776,7 +776,7 @@ pub(super) fn scroll_with_sms(
         // Reverse the scroll direction when `w_topline` already changed. One
         // line extra scrolling backward, so that consuming `w_skipcol` is
         // symmetric.
-        let fixdir = if (win.w_topline - prev_topline).abs() > (dir == BACKWARD) as linenr_T {
+        let fixdir = if (win.w_topline - prev_topline).abs() > (dir == BACKWARD) as LineNr {
             -dir
         } else {
             dir
@@ -790,7 +790,7 @@ pub(super) fn scroll_with_sms(
             arith::sms_fixup_count_back(win.w_skipcol, width1, width2)
         };
 
-        scroll_redraw_cur(win, fixdir == FORWARD, count as linenr_T);
+        scroll_redraw_cur(win, fixdir == FORWARD, count as LineNr);
         *curscount += count * if fixdir == dir { 1 } else { -1 };
     }
     win.w_onebuf_opt.wo_sms = prev_sms;

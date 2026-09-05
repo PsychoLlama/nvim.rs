@@ -176,7 +176,7 @@ impl From<Failed> for UndoFailed {
 /// Safe: as [`u_save`], over the cursor's line.
 pub fn u_save_cursor() -> Result<(), Failed> {
     // SAFETY: a live current window, by the contract above.
-    let cur: linenr_T = cur_win().w_cursor.lnum;
+    let cur: LineNr = cur_win().w_cursor.lnum;
     // SAFETY: a live current buffer, by the contract above.
     u_save((cur - 1).max(0), cur + 1)
 }
@@ -185,7 +185,7 @@ pub fn u_save_cursor() -> Result<(), Failed> {
 ///
 /// Safe: the only promise is that the editor exists; `u_save_buf` validates
 /// the line range itself and answers `Err` when it is out of range.
-pub fn u_save(top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
+pub fn u_save(top: LineNr, bot: LineNr) -> Result<(), Failed> {
     u_save_buf(cur_buf(), top, bot)
 }
 
@@ -194,7 +194,7 @@ pub fn u_save(top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
 ///
 /// Safe: the line range is validated here, and `Err` is the answer for one
 /// that is out of range.
-pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> Result<(), Failed> {
+pub fn u_save_buf(buf: Buf, top: LineNr, bot: LineNr) -> Result<(), Failed> {
     if top >= bot || bot > buf.line_count() + 1 {
         return Err(Failed);
     }
@@ -208,21 +208,21 @@ pub fn u_save_buf(buf: Buf, top: linenr_T, bot: linenr_T) -> Result<(), Failed> 
 /// Saves the line a `:substitute` is about to replace.
 ///
 /// Safe: as [`u_save`].
-pub fn u_savesub(lnum: linenr_T) -> Result<(), Failed> {
+pub fn u_savesub(lnum: LineNr) -> Result<(), Failed> {
     u_savecommon(cur_buf(), lnum - 1, lnum + 1, lnum + 1, false)
 }
 
 /// Saves the position a `:substitute` is about to insert a line at.
 ///
 /// Safe: as [`u_savesub`].
-pub fn u_inssub(lnum: linenr_T) -> Result<(), Failed> {
+pub fn u_inssub(lnum: LineNr) -> Result<(), Failed> {
     u_savecommon(cur_buf(), lnum - 1, lnum, lnum + 1, false)
 }
 
 /// Saves the `nlines` lines from `lnum` that are about to be deleted.
 ///
 /// Safe: as [`u_save`].
-pub fn u_savedel(lnum: linenr_T, nlines: linenr_T) -> Result<(), Failed> {
+pub fn u_savedel(lnum: LineNr, nlines: LineNr) -> Result<(), Failed> {
     let whole_buffer = nlines == cur_buf().b_ml.ml_line_count;
     u_savecommon(
         cur_buf(),
@@ -294,9 +294,9 @@ unsafe fn zero_fmark_additional_data(fmarks: &mut [fmark_T; NMARKS as usize]) {
 /// `buf` points at a live buffer, and there is a live current window.
 pub fn u_savecommon(
     buf: Buf,
-    top: linenr_T,
-    bot: linenr_T,
-    newbot: linenr_T,
+    top: LineNr,
+    bot: LineNr,
+    newbot: LineNr,
     reload: bool,
 ) -> Result<(), Failed> {
     let b = buf;
@@ -314,7 +314,7 @@ pub fn u_savecommon(
             return Err(Failed);
         }
     }
-    let size: linenr_T = bot - top - 1;
+    let size: LineNr = bot - top - 1;
     if b.b_u_synced {
         // A boundary: this change starts an undo header of its own.
         // SAFETY: a live current window.
@@ -461,7 +461,7 @@ unsafe fn start_new_header(mut b: Buf) -> bool {
 /// # Safety
 ///
 /// `b` is a live buffer, and there is a live current window.
-unsafe fn extend_last_entry(mut b: Buf, top: linenr_T, bot: linenr_T, newbot: linenr_T) -> bool {
+unsafe fn extend_last_entry(mut b: Buf, top: LineNr, bot: LineNr, newbot: LineNr) -> bool {
     // SAFETY: a live buffer, by the contract above.
     let mut uep = u_get_headentry(b);
     let Some(mut newhead) = b.header(b.b_u_newhead) else {
@@ -522,8 +522,8 @@ unsafe fn set_entry_bottom(
     b: Buf,
     newhead: &mut Header,
     uep: *mut u_entry_T,
-    bot: linenr_T,
-    newbot: linenr_T,
+    bot: LineNr,
+    newbot: LineNr,
 ) {
     // SAFETY: a live entry, by the contract above.
     if newbot != 0 {
@@ -547,10 +547,10 @@ unsafe fn set_entry_bottom(
 /// a newest header to record against.
 unsafe fn record_entry(
     mut b: Buf,
-    top: linenr_T,
-    size: linenr_T,
-    bot: linenr_T,
-    newbot: linenr_T,
+    top: LineNr,
+    size: LineNr,
+    bot: LineNr,
+    newbot: LineNr,
     reload: bool,
 ) -> Result<(), Failed> {
     let mut newhead = b
@@ -695,7 +695,7 @@ pub fn u_find_first_changed() {
         // Not a whole-buffer entry: there is nothing to line up against.
         return;
     }
-    let mut lnum: linenr_T = 1;
+    let mut lnum: LineNr = 1;
     while lnum < b.line_count() && lnum <= unsafe { (*uep).ue_size } {
         let saved = unsafe { *(*uep).ue_array.offset((lnum - 1) as isize) };
         if !unsafe { cstr::eq(ml_get_buf(b.raw(), lnum), saved) } {

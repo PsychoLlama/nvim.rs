@@ -202,7 +202,7 @@ impl LineSetup {
 
             line: ::core::ptr::null_mut(),
             ptr: ::core::ptr::null_mut(),
-            trailcol: MAXCOL as colnr_T,
+            trailcol: MAXCOL as ColNr,
             leadcol: 0,
             lcs_eol: 0,
             lcs_prec_todo: 0,
@@ -255,7 +255,7 @@ impl LineSetup {
     ///
     /// # Safety
     /// `wp` must be a live window.
-    unsafe fn start_syntax(&mut self, mut wp: Win, lnum: linenr_T) {
+    unsafe fn start_syntax(&mut self, mut wp: Win, lnum: LineNr) {
         // SAFETY: the caller's window.
         if !unsafe { syntax_present(wp.raw()) }
             || unsafe { (*wp.w_s).b_syn_error }
@@ -333,7 +333,7 @@ impl LineSetup {
                     // the start of this line: none of it is here.
                     wlv.fromcol = -10;
                     wlv.tocol = MAXCOL as ::core::ffi::c_int;
-                } else if bot.col == MAXCOL as colnr_T {
+                } else if bot.col == MAXCOL as ColNr {
                     wlv.tocol = MAXCOL as ::core::ffi::c_int;
                 } else {
                     let mut pos = bot;
@@ -590,7 +590,7 @@ impl LineSetup {
     unsafe fn spell_line_start(
         &mut self,
         wp: Win,
-        lnum: linenr_T,
+        lnum: LineNr,
         spv: *mut spellvars_T,
         nextline: &mut SpellLookahead,
     ) {
@@ -668,7 +668,7 @@ impl LineSetup {
     ///
     /// # Safety
     /// `wp` must be a live window and [`LineSetup::line`] its line `lnum`.
-    unsafe fn listchars_columns(&mut self, wp: Win, lnum: linenr_T) {
+    unsafe fn listchars_columns(&mut self, wp: Win, lnum: LineNr) {
         // SAFETY: the caller's window and line.
         if wp.w_p_lcs_chars.space != 0
             || !wp.w_p_lcs_chars.multispace.is_null()
@@ -688,13 +688,13 @@ impl LineSetup {
             {
                 trailcol -= 1;
             }
-            self.trailcol = trailcol + unsafe { self.ptr.offset_from(self.line) } as colnr_T;
+            self.trailcol = trailcol + unsafe { self.ptr.offset_from(self.line) } as ColNr;
         }
         if wp.w_p_lcs_chars.lead != 0
             || !wp.w_p_lcs_chars.leadmultispace.is_null()
             || wp.w_p_lcs_chars.leadtab1 != 0
         {
-            let mut leadcol: colnr_T = 0;
+            let mut leadcol: ColNr = 0;
             while ascii_iswhite(unsafe { *self.ptr.offset(leadcol as isize) } as ::core::ffi::c_int)
             {
                 leadcol += 1;
@@ -705,7 +705,7 @@ impl LineSetup {
                 0
             } else {
                 // The first column not filled with spaces.
-                leadcol + (unsafe { self.ptr.offset_from(self.line) } + 1) as colnr_T
+                leadcol + (unsafe { self.ptr.offset_from(self.line) } + 1) as ColNr
             };
         }
     }
@@ -826,9 +826,9 @@ impl LineSetup {
     ///
     /// # Safety
     /// `wp` must be a live window and [`LineSetup::line`] its line `lnum`.
-    unsafe fn spell_at_start_vcol(&mut self, mut wp: Win, lnum: linenr_T) {
+    unsafe fn spell_at_start_vcol(&mut self, mut wp: Win, lnum: LineNr) {
         // SAFETY: the caller's window and line.
-        let linecol = unsafe { self.ptr.offset_from(self.line) } as colnr_T;
+        let linecol = unsafe { self.ptr.offset_from(self.line) } as ColNr;
         let mut spell_hlf: hlf_T = HLF_COUNT;
 
         let saved_cursor = wp.w_cursor;

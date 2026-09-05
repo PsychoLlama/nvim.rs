@@ -15,7 +15,7 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::memory::{memchrsub, xmemdupz, xstrndup};
 use crate::pos::MAXLNUM;
 use crate::types::{
-    Arena, Array, ArrayBuilder, Error, NUL, Object, String_0, buf_T, int64_t, linenr_T, size_t,
+    Arena, Array, ArrayBuilder, Error, LineNr, NUL, Object, String_0, buf_T, int64_t, size_t,
 };
 use ::libc::strnlen;
 use core::ffi::{CStr, c_char};
@@ -184,7 +184,7 @@ pub(crate) unsafe fn normalize_index(
     // SAFETY: the caller's promise -- `buf` is a loaded buffer.
     let line_count = unsafe { (*buf).b_ml.ml_line_count };
     debug_assert!(line_count > 0);
-    let max_index = (line_count + end_exclusive as linenr_T - 1) as int64_t;
+    let max_index = (line_count + end_exclusive as LineNr - 1) as int64_t;
     let mut index = if index < 0 {
         max_index + index + 1
     } else {
@@ -217,9 +217,9 @@ pub(crate) unsafe fn buf_get_text(
     }
     // SAFETY: the caller's promise -- `buf` is a loaded buffer, and `lnum`
     // is below `MAXLNUM`.
-    let bufstr = unsafe { ml_get_buf(buf, lnum as linenr_T) };
+    let bufstr = unsafe { ml_get_buf(buf, lnum as LineNr) };
     // SAFETY: as above.
-    let line_length = unsafe { ml_get_buf_len(buf, lnum as linenr_T) } as int64_t;
+    let line_length = unsafe { ml_get_buf_len(buf, lnum as LineNr) } as int64_t;
 
     let relative = |col: int64_t| if col < 0 { line_length + col + 1 } else { col };
     let start_col = relative(start_col).clamp(0, line_length);

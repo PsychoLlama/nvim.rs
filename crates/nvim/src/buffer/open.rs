@@ -43,8 +43,8 @@ use crate::options::{kOptBufhidden, kOptBuftype, kOptSwapfile};
 use crate::os::fs::os_getperm;
 use crate::pos::MAXLNUM;
 use crate::types::{
-    CpoFlag, Failed, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0, StringBuilder,
-    aco_save_T, colnr_T, exarg_T, handle_T, int64_t, linenr_T, size_t, varnumber_T,
+    ColNr, CpoFlag, Failed, LineNr, NUL, OptInt, OptVal, OptionSetFlags, ShmFlag, String_0,
+    StringBuilder, aco_save_T, exarg_T, handle_T, int64_t, size_t, varnumber_T,
 };
 use crate::winlayer::buffers;
 
@@ -60,9 +60,9 @@ use crate::winlayer::buffers;
 fn read_file(
     ffname: *mut c_char,
     fname: *mut c_char,
-    lnum: linenr_T,
-    from: linenr_T,
-    to: linenr_T,
+    lnum: LineNr,
+    from: LineNr,
+    to: LineNr,
     eap: *mut exarg_T,
     flags: c_int,
     silent: bool,
@@ -143,14 +143,14 @@ fn set_option_false(id: c_int) {
 }
 
 /// Whether lines `a` and `b` of the two buffers differ.
-fn lines_differ(buf: Buf, lnum: linenr_T) -> bool {
+fn lines_differ(buf: Buf, lnum: LineNr) -> bool {
     // SAFETY: two live buffers and a line number inside both, the caller
     // having compared the line counts.
     unsafe { !(cstr::eq(ml_get_buf(buf.raw(), lnum), ml_get(lnum))) }
 }
 
 /// Line `lnum` of `buf` as bytes, its terminating NUL excluded.
-fn line_bytes<'a>(buf: Buf, lnum: linenr_T) -> &'a [u8] {
+fn line_bytes<'a>(buf: Buf, lnum: LineNr) -> &'a [u8] {
     // SAFETY: a live buffer and a line of it; `ml_get_buf` answers that many
     // readable bytes, and the line stays put until the memline is touched.
     unsafe {
@@ -211,7 +211,7 @@ fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> Result<Load
         true => (ptr::null_mut(), ptr::null_mut()),
         false => (cur_buf().b_ffname, cur_buf().b_fname),
     };
-    let last = MAXLNUM as linenr_T;
+    let last = MAXLNUM as LineNr;
     let mut retval = read_file(
         ffname,
         fname,
@@ -225,7 +225,7 @@ fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> Result<Load
     if retval == Ok(Loaded::Read) {
         // Delete the binary lines.
         for _ in 0..line_count {
-            delete_line(1 as linenr_T);
+            delete_line(1 as LineNr);
         }
     } else {
         // Delete the converted lines.
@@ -235,8 +235,8 @@ fn read_buffer(read_stdin: bool, eap: *mut exarg_T, flags: c_int) -> Result<Load
     }
     // Put the cursor on the first line.
     let mut cursor = cur_win().cursor();
-    cursor.lnum = 1 as linenr_T;
-    cursor.col = 0 as colnr_T;
+    cursor.lnum = 1 as LineNr;
+    cursor.col = 0 as ColNr;
 
     if read_stdin {
         // Set or reset 'modified' before executing autocommands, so that it
@@ -334,7 +334,7 @@ fn open_buffer_inner(
             buf.b_p_bin = 1;
         }
         let fifo = if read_fifo { READ_FIFO as c_int } else { 0 };
-        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as linenr_T);
+        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as LineNr);
         let read = flags | READ_NEW as c_int | fifo;
         retval = read_file(ffname, fname, 0, 0, last, eap, read, silent);
         if read_fifo {
@@ -356,7 +356,7 @@ fn open_buffer_inner(
         // that same buffer and append at the end.  This makes it possible to
         // retry when 'fileformat' or 'fileencoding' was guessed wrong.
         buf.b_p_bin = 1;
-        let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM as linenr_T);
+        let (none, last) = (ptr::null_mut::<c_char>(), MAXLNUM as LineNr);
         let read = flags | (READ_NEW as c_int + READ_STDIN as c_int);
         retval = read_file(none, none, 0, 0, last, ptr::null_mut(), read, silent);
         cur_buf().b_p_bin = save_bin;
@@ -417,7 +417,7 @@ fn open_buffer_inner(
     // need to set w_topline, unless some autocommand already did that.
     let mut win = cur_win();
     if !win.w_valid.has(WinValid::TOPLINE) {
-        win.w_topline = 1 as linenr_T;
+        win.w_topline = 1 as LineNr;
         win.w_topfill = 0;
     }
     fire_retval(AutoEvent::BufEnter, cur_buf(), &mut retval);
@@ -508,7 +508,7 @@ pub fn buf_contents_changed(buf: Buf) -> bool {
     in_buffer(newbuf, || {
         block_autocmds_now();
         let read = READ_NEW as c_int | READ_DUMMY as c_int;
-        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as linenr_T);
+        let (ffname, fname, last) = (buf.b_ffname, buf.b_fname, MAXLNUM as LineNr);
         if open_memline(cur_buf()).is_ok()
             && read_file(ffname, fname, 0, 0, last, &raw mut ea, read, false) == Ok(Loaded::Read)
             && buf.line_count() == cur_buf().line_count()
@@ -536,7 +536,7 @@ pub fn buf_contents_changed(buf: Buf) -> bool {
 /// `bufname` must be null or NUL-terminated, and `curwin` be set.
 pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> Result<(), Failed> {
     let none = ptr::null_mut::<c_char>();
-    let one = newlnum::ONE as linenr_T;
+    let one = newlnum::ONE as LineNr;
     let hide = EcmdFlags::HIDE;
     edit_file(bufnr, none, none, ptr::null_mut(), one, hide, cur_win())?;
     if !bufname.is_null() {
@@ -560,7 +560,7 @@ pub unsafe fn buf_open_scratch(bufnr: handle_T, bufname: *mut c_char) -> Result<
 /// # Safety
 /// `sb` must be a live `StringBuilder`, and `start` and `end` lines of the
 /// buffer.
-pub unsafe fn read_buffer_into(buf: Buf, start: linenr_T, end: linenr_T, sb: *mut StringBuilder) {
+pub unsafe fn read_buffer_into(buf: Buf, start: LineNr, end: LineNr, sb: *mut StringBuilder) {
     debug_assert!(!sb.is_null(), "sb");
     // SAFETY: the caller's promise -- a live builder.
     let mut out = unsafe { Builder::of(&mut *sb) };

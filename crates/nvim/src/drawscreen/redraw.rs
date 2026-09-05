@@ -168,7 +168,7 @@ pub unsafe fn redraw_buf_later(buf: *mut buf_T, redr_type: c_int) {
 ///
 /// `force` also marks a line *past* the end of the buffer, which is how a
 /// deletion gets the rows it used to occupy redrawn.
-pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool) {
+pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: LineNr, force: bool) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buf {
@@ -183,7 +183,7 @@ pub unsafe fn redraw_buf_line_later(buf: *mut buf_T, line: linenr_T, force: bool
 /// Widen window `wp`'s pending redraw range to cover lines `first..=last`.
 ///
 /// Nothing is marked when the range is entirely outside the window.
-pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: linenr_T) {
+pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: LineNr, last: LineNr) {
     // SAFETY: a live window on the main thread.
     let mut win = unsafe { Win::new(wp) };
     if last >= win.w_topline && first < win.w_botline {
@@ -201,13 +201,13 @@ pub unsafe fn redraw_win_range_later(wp: *mut win_T, first: linenr_T, last: line
 ///
 /// Inserting or deleting lines invalidates the range this widens, so a caller
 /// that does either has to mark the whole window instead.
-pub unsafe fn redraw_win_line(wp: *mut win_T, lnum: linenr_T) {
+pub unsafe fn redraw_win_line(wp: *mut win_T, lnum: LineNr) {
     // SAFETY: a live window on the main thread.
     unsafe { redraw_win_range_later(wp, lnum, lnum) }
 }
 
 /// Mark lines `first..=last` of `buf` in every window showing it.
-pub unsafe fn redraw_buf_range_later(buf: *mut buf_T, first: linenr_T, last: linenr_T) {
+pub unsafe fn redraw_buf_range_later(buf: *mut buf_T, first: LineNr, last: LineNr) {
     // SAFETY: walking the current tab page's window list on the main thread.
     for wp in winlayer::windows() {
         if wp.w_buffer == buf {

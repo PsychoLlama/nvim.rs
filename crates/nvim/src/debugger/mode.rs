@@ -512,5 +512,5 @@ pub unsafe fn ex_debug(eap: *mut exarg_T) {
 pub unsafe fn ex_debuggreedy(eap: *mut exarg_T) {
     // SAFETY: caller contract.
     let (addr_count, line2) = unsafe { ((*eap).addr_count, (*eap).line2) };
-    debug_greedy.set(addr_count == 0 || line2 != 0 as linenr_T);
+    debug_greedy.set(addr_count == 0 || line2 != 0 as LineNr);
 }

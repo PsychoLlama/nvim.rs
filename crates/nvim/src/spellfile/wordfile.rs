@@ -22,7 +22,7 @@ use crate::memory::xfree;
 use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::strings::{has_non_ascii, vim_strchr};
-use crate::types::{CONV_NONE, Failed, NUL, linenr_T, size_t, uint8_t};
+use crate::types::{CONV_NONE, Failed, LineNr, NUL, size_t, uint8_t};
 use ::libc::{fclose, strcpy};
 
 use super::wordtree::store_word;
@@ -52,7 +52,7 @@ pub(super) unsafe fn spell_read_wordfile(
 
     let mut rline: [c_char; MAXLINELEN as usize] = [0; MAXLINELEN as usize];
     let mut pc: *mut c_char = core::ptr::null_mut();
-    let mut lnum: linenr_T = 0;
+    let mut lnum: LineNr = 0;
     let mut retval = Ok(());
     let mut did_word = false;
     let mut non_ascii = 0;
@@ -170,7 +170,7 @@ unsafe fn read_wordfile_header(
     spin: &mut spellinfo_T,
     mut line: *mut c_char,
     fname: *mut c_char,
-    lnum: linenr_T,
+    lnum: LineNr,
     did_word: bool,
 ) {
     // SAFETY: the caller promises the strings; the region name is copied

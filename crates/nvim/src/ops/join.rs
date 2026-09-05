@@ -120,14 +120,14 @@ impl JoinPlan {
     /// range, which is what makes these three safe -- the raw pointers stay
     /// so that the walk is an index rather than a bounds check.
     #[inline(always)]
-    fn spaces_at(&self, t: linenr_T) -> c_int {
+    fn spaces_at(&self, t: LineNr) -> c_int {
         // SAFETY: `t` is below `count`, the length both arrays were made at.
         c_int::from(unsafe { *self.spaces.offset(t as isize) })
     }
 
     /// One more space in front of line `t`.
     #[inline(always)]
-    fn add_space(&mut self, t: linenr_T) {
+    fn add_space(&mut self, t: LineNr) {
         // SAFETY: as [`JoinPlan::spaces_at`].
         unsafe { *self.spaces.offset(t as isize) += 1 };
     }
@@ -135,14 +135,14 @@ impl JoinPlan {
     /// Bytes of comment leader skipped on line `t`; only with `j` in
     /// 'formatoptions', where `comments` is non-null.
     #[inline(always)]
-    fn comment_at(&self, t: linenr_T) -> c_int {
+    fn comment_at(&self, t: LineNr) -> c_int {
         // SAFETY: as [`JoinPlan::spaces_at`].
         unsafe { *self.comments.offset(t as isize) }
     }
 
     /// Record the bytes of comment leader skipped on line `t`.
     #[inline(always)]
-    fn set_comment(&mut self, t: linenr_T, len: c_int) {
+    fn set_comment(&mut self, t: LineNr, len: c_int) {
         // SAFETY: as [`JoinPlan::spaces_at`].
         unsafe { *self.comments.offset(t as isize) = len };
     }
@@ -171,7 +171,7 @@ pub unsafe fn do_join(
     let remove_comments = use_formatoptions && has_format_option(FoFlag::REMOVE_COMS);
 
     let above = cur_win().w_cursor.lnum - 1;
-    let past = cur_win().w_cursor.lnum + count as linenr_T;
+    let past = cur_win().w_cursor.lnum + count as LineNr;
     if save_undo {
         u_save(above, past)?;
     }
@@ -228,14 +228,14 @@ fn measure_join(
     // SAFETY: every line the walk reaches exists (the caller's promise), so
     // `ml_get` answers a live NUL-terminated line, and `plan.curr` stays
     // inside the line `plan.curr_start` begins.
-    for t in 0..count as linenr_T {
+    for t in 0..count as LineNr {
         plan.curr_start = ml_get(cur_win().w_cursor.lnum + t);
         plan.curr = plan.curr_start;
 
         if t == 0 && setmark && !cmdmod_has(CmdModFlags::LOCKMARKS) {
             let mut buf = cur_win().buffer();
             buf.b_op_start.lnum = cur_win().w_cursor.lnum;
-            buf.b_op_start.col = unsafe { cstr::bytes_at(plan.curr) }.len() as colnr_T;
+            buf.b_op_start.col = unsafe { cstr::bytes_at(plan.curr) }.len() as ColNr;
         }
 
         if !plan.comments.is_null() {
@@ -290,7 +290,7 @@ fn measure_join(
 
         let added = plan.spaces_at(t);
         if t > 0 && curbuf_splice_pending.get() == 0 {
-            let removed = unsafe { plan.curr.offset_from(plan.curr_start) } as colnr_T;
+            let removed = unsafe { plan.curr.offset_from(plan.curr_start) } as ColNr;
             let row = cur_win().w_cursor.lnum as c_int - 1;
             let (old, new) = ((removed + 1) as bcount_t, added as bcount_t);
             let op = kExtmarkUndo;
@@ -354,7 +354,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     // SAFETY: `plan.sumsize` is what `measure_join` counted for exactly the
     // lines copied back here, so `newp` has room for all of them; every line
     // the backwards walk asks for is one the forwards walk already read.
-    let last = count as linenr_T - 1;
+    let last = count as LineNr - 1;
     // The column the last line starts at, for the cursor below.
     let col = plan.sumsize - plan.currsize - plan.spaces_at(last);
 
@@ -380,7 +380,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
             }
             let removed = (plan.curr.offset_from(plan.curr_start) - spaces_t as isize) as c_int;
             (
-                (cend.offset_from(newp) - removed as isize) as colnr_T,
+                (cend.offset_from(newp) - removed as isize) as ColNr,
                 removed,
             )
         };
@@ -427,7 +427,7 @@ fn assemble_join(count: size_t, insert_space: bool, setmark: bool, plan: &mut Jo
     // number is kept.
     let joined_lnum = cur_win().w_cursor.lnum;
     cur_win().w_cursor.lnum += 1;
-    unsafe { del_lines(count as linenr_T - 1, false) };
+    unsafe { del_lines(count as LineNr - 1, false) };
     cur_win().w_cursor.lnum = joined_lnum;
     drop(splice);
     cur_buf().deleted_bytes2 = 0;

@@ -81,7 +81,7 @@ pub(crate) struct Opened {
 pub(crate) unsafe fn open_source(
     fname: *mut c_char,
     sfname: *mut c_char,
-    from: linenr_T,
+    from: LineNr,
     eap: *mut exarg_T,
     how: How,
     silent: bool,

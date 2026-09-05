@@ -20,7 +20,7 @@ use crate::types::NUL;
 /// Where in one buffer line the block goes, measured by [`Put::blockwise`].
 struct Landing {
     /// Byte offset in the line where the insert starts.
-    textcol: colnr_T,
+    textcol: ColNr,
     /// Spaces to add in front of the block, padding a short line out to the
     /// block's column, or replacing the front half of a split tab.
     startspaces: c_int,
@@ -37,7 +37,7 @@ struct Landing {
 ///
 /// # Safety
 /// `oldp` must be the cursor line, NUL-terminated.
-unsafe fn land_block(oldp: *mut c_char, col: colnr_T) -> Landing {
+unsafe fn land_block(oldp: *mut c_char, col: ColNr) -> Landing {
     let mut csarg = CharsizeArg::default();
     // SAFETY: a live window whose cursor is on `oldp`'s line, and `oldp` is
     // that line's NUL-terminated text.
@@ -59,7 +59,7 @@ unsafe fn land_block(oldp: *mut c_char, col: colnr_T) -> Landing {
 
     // SAFETY: `ptr` is a position in `oldp`'s NUL-terminated line, so the
     // distance back to `oldp` is a column of it and the byte there readable.
-    let textcol = unsafe { ptr.offset_from(oldp) } as colnr_T;
+    let textcol = unsafe { ptr.offset_from(oldp) } as ColNr;
     let ends_here = vcol == col && unsafe { c_int::from(*ptr) } == NUL;
     let mut land = Landing {
         textcol,
@@ -120,11 +120,11 @@ impl Put {
     ///
     /// # Safety
     /// The cursor must be on a valid line.
-    unsafe fn block_start_col(&self) -> colnr_T {
+    unsafe fn block_start_col(&self) -> ColNr {
         // SAFETY: the cursor is on a valid line.
         let c = gchar_cursor();
-        let mut col: colnr_T;
-        let mut endcol2: colnr_T = 0;
+        let mut col: ColNr;
+        let mut endcol2: ColNr = 0;
 
         if self.dir == FORWARD && c != NUL {
             if self.ve_flags == kOptVeFlagAll as ::core::ffi::c_uint {
@@ -181,8 +181,8 @@ impl Put {
     unsafe fn blockwise_line(
         &mut self,
         i: size_t,
-        col: colnr_T,
-        textcol: &mut colnr_T,
+        col: ColNr,
+        textcol: &mut ColNr,
         totlen: &mut size_t,
     ) -> bool {
         // Pasting past the end of the buffer appends empty lines.
@@ -298,11 +298,11 @@ impl Put {
     ///
     /// # Safety
     /// The cursor must be on a valid line, and undo already saved.
-    pub(crate) unsafe fn blockwise(&mut self, lnum: linenr_T) {
+    pub(crate) unsafe fn blockwise(&mut self, lnum: LineNr) {
         // SAFETY: the cursor is on a valid line.
         let col = unsafe { self.block_start_col() };
 
-        let mut textcol: colnr_T = 0;
+        let mut textcol: ColNr = 0;
         let mut totlen: size_t = 0;
         for i in 0..self.y_size {
             // SAFETY: the cursor is on a line of the buffer, or one past its
@@ -312,7 +312,7 @@ impl Put {
             }
         }
 
-        let to = cur_buf().b_op_start.lnum + self.y_size as linenr_T - self.nr_lines;
+        let to = cur_buf().b_op_start.lnum + self.y_size as LineNr - self.nr_lines;
         // SAFETY: a live buffer; the range is the lines the put rewrote.
         changed_lines(cur_buf(), lnum, 0, to, self.nr_lines, true);
 
@@ -320,7 +320,7 @@ impl Put {
         cur_buf().b_op_start.lnum = lnum;
 
         cur_buf().b_op_end.lnum = cur_win().w_cursor.lnum - 1;
-        cur_buf().b_op_end.col = (textcol + totlen as colnr_T - 1).max(0);
+        cur_buf().b_op_end.col = (textcol + totlen as ColNr - 1).max(0);
         cur_buf().b_op_end.coladd = 0;
 
         if self.flags & PUT_CURSEND as c_int != 0 {

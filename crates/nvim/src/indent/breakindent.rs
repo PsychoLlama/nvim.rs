@@ -149,7 +149,7 @@ pub unsafe fn briopt_check(briopt: *mut c_char, wp: *mut win_T) -> bool {
 struct BreakindentKey {
     fnum: c_int,
     ts: OptInt,
-    vts: *mut colnr_T,
+    vts: *mut ColNr,
     tick: varnumber_T,
     /// 'breakindentopt' "list".
     listopt: c_int,
@@ -267,7 +267,7 @@ impl BreakindentCache {
         if regmatch.regprog.is_null() {
             return;
         }
-        if unsafe { vim_regexec(&raw mut regmatch, line, 0 as colnr_T) } {
+        if unsafe { vim_regexec(&raw mut regmatch, line, 0 as ColNr) } {
             if unsafe { (*wp).w_briopt_list } > 0 {
                 self.list += unsafe { (*wp).w_briopt_list };
             } else {
@@ -277,7 +277,7 @@ impl BreakindentCache {
                 let mut ptr = regmatch.startp[0];
                 let mut indent = 0;
                 while ptr < end {
-                    indent += unsafe { win_chartabsize(Win::new(wp), ptr, indent as colnr_T) };
+                    indent += unsafe { win_chartabsize(Win::new(wp), ptr, indent as ColNr) };
                     ptr = unsafe { ptr.offset(utfc_ptr2len(ptr) as isize) };
                 }
                 self.indent = indent;

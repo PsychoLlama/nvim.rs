@@ -276,10 +276,10 @@ unsafe fn match_buflines(
     let global = search.flags & VGR_GLOBAL as c_int != 0;
     let mut found_match = false;
 
-    let mut lnum: linenr_T = 1;
+    let mut lnum: LineNr = 1;
     while lnum <= buf.b_ml.ml_line_count && search.tomatch > 0 {
         if search.flags & VGR_FUZZY as c_int == 0 {
-            let mut col: colnr_T = 0;
+            let mut col: ColNr = 0;
             while unsafe {
                 vim_regexec_multi(
                     &raw mut search.regmatch,
@@ -318,7 +318,7 @@ unsafe fn match_buflines(
                 }
                 // Move past the match, and past one more column when the
                 // match was empty, so that the scan makes progress.
-                col = end.col + colnr_T::from(col == end.col);
+                col = end.col + ColNr::from(col == end.col);
                 if col > unsafe { ml_get_buf_len(buf.raw(), lnum) } {
                     break;
                 }
@@ -333,7 +333,7 @@ unsafe fn match_buflines(
             let pat_len = unsafe { cstr::bytes_at(search.spat) }
                 .len()
                 .min(FUZZY_MATCH_MAX_LEN as size_t);
-            let mut col: colnr_T = 0;
+            let mut col: ColNr = 0;
             // Cleared once per line, not once per match: a second match
             // on the same line reads whatever the first one left in the
             // positions past its own length, which is what upstream does.
@@ -364,7 +364,7 @@ unsafe fn match_buflines(
                 }
                 // `pat_len` is at least 1 here: an empty pattern fills
                 // no position and so never passes the test above.
-                col = positions[pat_len - 1] as colnr_T + col + 1;
+                col = positions[pat_len - 1] as ColNr + col + 1;
                 if col > linelen {
                     break;
                 }

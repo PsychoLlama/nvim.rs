@@ -52,9 +52,7 @@ use crate::os::fs::os_fopen;
 use crate::os::input::line_breakcheck;
 use crate::os::time::os_time;
 use crate::strings::{has_non_ascii, vim_snprintf};
-use crate::types::{
-    CONV_NONE, Failed, NUL, Timestamp, colnr_T, hash_T, hashtab_T, size_t, uint8_t,
-};
+use crate::types::{CONV_NONE, ColNr, Failed, NUL, Timestamp, hash_T, hashtab_T, size_t, uint8_t};
 use crate::ui::ui_flush;
 use ::libc::fclose;
 
@@ -669,7 +667,7 @@ unsafe fn affix_applies(
     }
     // The affix's condition must match the word.
     if !unsafe { (*ae).ae_prog }.is_null()
-        && !unsafe { vim_regexec_prog(&raw mut (*ae).ae_prog, false, word, 0 as colnr_T) }
+        && !unsafe { vim_regexec_prog(&raw mut (*ae).ae_prog, false, word, 0 as ColNr) }
     {
         return false;
     }

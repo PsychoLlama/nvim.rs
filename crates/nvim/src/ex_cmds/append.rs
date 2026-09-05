@@ -32,7 +32,7 @@ use crate::os::cshim::gettext;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_LANGMAP, MODE_NORMAL};
 use crate::strings::vim_strchr;
 use crate::types::CmdIdx;
-use crate::types::{NUL, OptInt, exarg_T, int64_t, linenr_T, size_t};
+use crate::types::{LineNr, NUL, OptInt, exarg_T, int64_t, size_t};
 use crate::ui::ui_cursor_shape;
 use crate::undo::u_save;
 use ::libc::atol;
@@ -138,7 +138,7 @@ pub unsafe fn ex_append(eap: *mut exarg_T) {
         let ended = &text[typed..] == b".";
         // SAFETY: `lnum` is a line of the current buffer, or zero.
         let undo_failed =
-            !ended && !did_undo && u_save(lnum, lnum + 1 + linenr_T::from(empty)).is_err();
+            !ended && !did_undo && u_save(lnum, lnum + 1 + LineNr::from(empty)).is_err();
         if ended || undo_failed {
             break;
         }
@@ -362,8 +362,8 @@ pub unsafe fn ex_z(eap: *mut exarg_T) {
             repeat += 1;
         }
     }
-    let repeat = repeat as linenr_T;
-    let bigness = bigness as linenr_T;
+    let repeat = repeat as LineNr;
+    let bigness = bigness as LineNr;
     let half = (bigness + 1) / 2;
 
     // `minus` asks for the ruled line `:z=` draws around the current line.

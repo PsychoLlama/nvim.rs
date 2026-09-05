@@ -22,7 +22,7 @@ pub struct spellvars_T {
     pub spv_has_spell: bool,
     pub spv_unchanged: bool,
     pub spv_checked_col: ::core::ffi::c_int,
-    pub spv_checked_lnum: linenr_T,
+    pub spv_checked_lnum: LineNr,
     pub spv_cap_col: ::core::ffi::c_int,
-    pub spv_capcol_lnum: linenr_T,
+    pub spv_capcol_lnum: LineNr,
 }

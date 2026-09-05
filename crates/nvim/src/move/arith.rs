@@ -8,7 +8,7 @@
 //! directly, which is also how Miri sees this half of the module.
 //!
 //! Every function here mirrors one arm of `v0.12.4`'s `src/nvim/move.c`, and
-//! keeps that arm's integer widths: the C mixes `int`, `colnr_T` and
+//! keeps that arm's integer widths: the C mixes `int`, `ColNr` and
 //! `int64_t` deliberately, and where a subtraction is done narrow before it
 //! is widened, so is it here.
 //!
@@ -18,13 +18,13 @@
 
 use core::ffi::c_int;
 
-use crate::types::{OptInt, colnr_T, int64_t};
+use crate::types::{ColNr, OptInt, int64_t};
 
 /// Screen lines of the top line that `w_skipcol` scrolls out of sight.
 ///
 /// `width1` is the text width of a line's first screen line and `width2` that
 /// of its later ones. From `adjust_plines_for_skipcol()`.
-pub fn skipped_plines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+pub fn skipped_plines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
     if skipcol == 0 {
         return 0;
     }
@@ -72,7 +72,7 @@ pub fn marker_overlap(extra2: c_int, showbreak: bool, list_precedes: bool) -> c_
 /// counts any non-zero `w_skipcol` as a whole screen line. The C calls it "a
 /// similar formula" to `curs_columns()`'s and the difference is deliberate --
 /// here the partly-hidden first screen line still has to be scrolled past.
-pub fn top_skipped_plines(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+pub fn top_skipped_plines(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
     if skipcol > width1 {
         (skipcol - width1) / width2 + 1
     } else {
@@ -113,12 +113,12 @@ pub fn fit_scrolloff_cols(so_cols: int64_t, size: c_int, width1: c_int, width2: 
 ///
 /// Stepping by whole screen lines is what keeps the cursor's column intact.
 pub fn visible_sms_col(
-    col: colnr_T,
+    col: ColNr,
     top: int64_t,
     bot: int64_t,
     width1: c_int,
     width2: c_int,
-) -> colnr_T {
+) -> ColNr {
     let mut col = col;
     if (col as int64_t) < top {
         if col < width1 {
@@ -138,7 +138,7 @@ pub fn visible_sms_col(
 /// The `w_skipcol` one screen line further down from `skipcol` -- the first
 /// screen line is `width1` wide, every later one `width2`. From
 /// `scrolldown()` and `adjust_skipcol()`.
-pub fn skipcol_line_back(skipcol: colnr_T, width1: c_int, width2: c_int) -> colnr_T {
+pub fn skipcol_line_back(skipcol: ColNr, width1: c_int, width2: c_int) -> ColNr {
     if skipcol >= width1 + width2 {
         skipcol - width2
     } else {
@@ -148,7 +148,7 @@ pub fn skipcol_line_back(skipcol: colnr_T, width1: c_int, width2: c_int) -> coln
 
 /// The `w_skipcol` that puts the *last* screen line of a `size`-wide line at
 /// the top of the window. From `scrolldown()`'s 'smoothscroll' arm.
-pub fn skipcol_showing_last(size: c_int, width1: c_int, width2: c_int) -> colnr_T {
+pub fn skipcol_showing_last(size: c_int, width1: c_int, width2: c_int) -> ColNr {
     if size <= width1 {
         return 0;
     }
@@ -167,9 +167,9 @@ pub fn skipcol_showing_last(size: c_int, width1: c_int, width2: c_int) -> colnr_
 /// `size` is the line's display width; the 'scrolloff' columns are wound back
 /// to it so a short line does not push the cursor off the bottom.
 pub fn sms_cursor_row(
-    virtcol: colnr_T,
+    virtcol: ColNr,
     scrolloff_cols: int64_t,
-    skipcol: colnr_T,
+    skipcol: ColNr,
     size: c_int,
     width1: c_int,
     width2: c_int,
@@ -200,13 +200,13 @@ pub fn sms_cursor_row(
 /// Screen lines `scroll_with_sms()` has to scroll *backwards* to bring
 /// `w_skipcol` back to zero: the screen lines of the top line already
 /// scrolled past.
-pub fn sms_fixup_count_back(skipcol: colnr_T, width1: c_int, width2: c_int) -> c_int {
+pub fn sms_fixup_count_back(skipcol: ColNr, width1: c_int, width2: c_int) -> c_int {
     1 + (skipcol - width1 - 1) / width2
 }
 
 /// As [`sms_fixup_count_back`], *forwards*: the screen lines of a
 /// `size`-wide top line still to come.
-pub fn sms_fixup_count_forw(skipcol: colnr_T, size: c_int, width1: c_int, width2: c_int) -> c_int {
+pub fn sms_fixup_count_forw(skipcol: ColNr, size: c_int, width1: c_int, width2: c_int) -> c_int {
     1 + (size - skipcol - width1 + width2 - 1) / width2
 }
 
@@ -232,7 +232,7 @@ pub fn recentre_threshold(view_height: c_int) -> c_int {
 /// `col` falls on, where `width` is the text width of the later screen lines.
 /// From the shared formula in `curs_columns()`, `validate_cursor_col()` and
 /// `textpos2screenpos()`.
-pub fn wrap_rowoff(col: colnr_T, view_width: c_int, width: c_int) -> c_int {
+pub fn wrap_rowoff(col: ColNr, view_width: c_int, width: c_int) -> c_int {
     (col - view_width) / width + 1
 }
 
@@ -242,12 +242,12 @@ pub fn wrap_rowoff(col: colnr_T, view_width: c_int, width: c_int) -> c_int {
 /// `off` is the non-text width on the left, `width` the text width of a
 /// wrapped line's later screen lines.
 pub fn cursor_screen_col(
-    virtcol: colnr_T,
-    off: colnr_T,
+    virtcol: ColNr,
+    off: ColNr,
     view_width: c_int,
     width: c_int,
     wrap: bool,
-    leftcol: colnr_T,
+    leftcol: ColNr,
 ) -> c_int {
     let mut col = virtcol + off;
     // Long line wrapping: bring the column back onto its own screen line.
@@ -265,7 +265,7 @@ pub fn cursor_screen_col(
 pub fn wrap_cursor_cell(
     wcol: c_int,
     wrow: c_int,
-    skipcol: colnr_T,
+    skipcol: ColNr,
     at_topline: bool,
     width1: c_int,
     width2: c_int,
@@ -301,9 +301,9 @@ pub fn wrap_cursor_cell(
 /// column with `extra` (the non-text width) still included.
 #[allow(clippy::too_many_arguments)]
 pub fn sidescroll_leftcol(
-    startcol: colnr_T,
-    endcol: colnr_T,
-    leftcol: colnr_T,
+    startcol: ColNr,
+    endcol: ColNr,
+    leftcol: ColNr,
     wcol: c_int,
     extra: c_int,
     view_width: c_int,
@@ -342,15 +342,15 @@ pub fn sidescroll_leftcol(
 /// `plines` is the line's height in screen lines, *before* the C's `plines--`.
 #[allow(clippy::too_many_arguments)]
 pub fn skipcol_for_tall_line(
-    skipcol: colnr_T,
-    virtcol: colnr_T,
+    skipcol: ColNr,
+    virtcol: ColNr,
     so: int64_t,
     width1: c_int,
     width2: c_int,
     view_height: c_int,
     wrow: c_int,
     plines: c_int,
-) -> colnr_T {
+) -> ColNr {
     // 1: less than 'scrolloff' lines above; 2: less than 'scrolloff' below;
     // 3: both.
     let mut extra = 0;
@@ -417,13 +417,13 @@ pub fn skipcol_for_tall_line(
 ///
 /// From the tail of `curs_columns()`'s tall-line arm.
 pub fn fit_skipcol_to_window(
-    skipcol: colnr_T,
-    prev_skipcol: colnr_T,
+    skipcol: ColNr,
+    prev_skipcol: ColNr,
     wrow: c_int,
     did_sub_skipcol: bool,
     width2: c_int,
     view_height: c_int,
-) -> (colnr_T, c_int, c_int) {
+) -> (ColNr, c_int, c_int) {
     let mut skipcol = skipcol;
     let mut wrow = wrow;
     if did_sub_skipcol {

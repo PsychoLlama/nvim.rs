@@ -19,8 +19,8 @@ use crate::os::time::os_hrtime;
 use crate::registry::{IdMap, id_map};
 use crate::strings::vim_snprintf;
 use crate::types::{
-    LuaRef, buf_T, handle_T, int32_t, linenr_T, lua_Integer, lua_Number, lua_State, luaL_Reg,
-    size_t, uint8_t, uint16_t, uint32_t, uint64_t, uv_lib_t,
+    LineNr, LuaRef, buf_T, handle_T, int32_t, lua_Integer, lua_Number, lua_State, luaL_Reg, size_t,
+    uint8_t, uint16_t, uint32_t, uint64_t, uv_lib_t,
 };
 use ::libc::abort;
 

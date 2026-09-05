@@ -501,7 +501,7 @@ pub(crate) unsafe fn mb_adjust_opend(oap: *mut oparg_T) {
     if unsafe { *ptr } as c_int != NUL {
         ptr = unsafe { ptr.offset(-(utf_head_off(line, ptr) as isize)) };
         ptr = unsafe { ptr.offset((utfc_ptr2len(ptr) - 1) as isize) };
-        oap.end.col = unsafe { ptr.offset_from(line) } as colnr_T;
+        oap.end.col = unsafe { ptr.offset_from(line) } as ColNr;
     }
 }
 

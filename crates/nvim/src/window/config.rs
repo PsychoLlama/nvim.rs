@@ -35,9 +35,9 @@ use crate::pos::MAXCOL;
 use crate::search::FORWARD;
 use crate::types::ui::kUIMultigrid;
 use crate::types::{
-    Boolean, Error, FAIL, Float, Integer, OK, ScreenGrid, TryState, WinConfig, WinStyle, Window,
-    buf_T, colnr_T, int64_t, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
-    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, linenr_T, pos_T, size_t,
+    Boolean, ColNr, Error, FAIL, Float, Integer, LineNr, OK, ScreenGrid, TryState, WinConfig,
+    WinStyle, Window, buf_T, int64_t, kErrorTypeException, kFloatAnchorEast, kFloatAnchorSouth,
+    kFloatRelativeLaststatus, kFloatRelativeTabline, kFloatRelativeWindow, pos_T, size_t,
     switchwin_T, win_T,
 };
 use crate::ui::{
@@ -348,16 +348,16 @@ fn anchor_to_window(
     *grid = unsafe { grid_adjust(own, &mut row_off, &mut col_off) }.raw();
     *row += row_off as Float;
     *col += col_off as Float;
-    if c.bufpos.lnum < 0 as linenr_T {
+    if c.bufpos.lnum < 0 as LineNr {
         return;
     }
     // The line after the one `bufpos` names, clamped to the buffer. Widened:
     // `bufpos={INT_MAX, ...}` reaches here, and the C's `lnum + 1` wraps.
     let lnum = (c.bufpos.lnum as i64 + 1).min(parent.buffer().line_count() as i64);
     let mut pos = pos_T {
-        lnum: lnum as linenr_T,
+        lnum: lnum as LineNr,
         col: c.bufpos.col,
-        coladd: 0 as colnr_T,
+        coladd: 0 as ColNr,
     };
     let (mut trow, mut tcol, mut tcolc, mut tcole) = (0, 0, 0, 0);
     let (win, at) = (parent.raw(), &raw mut pos);
@@ -454,17 +454,17 @@ fn ext_win_viewport(wp: Win) {
     wp.w_viewport_invalid = false;
     wp.w_viewport_last_topline = wp.w_topline;
     wp.w_viewport_last_botline = wp.w_botline;
-    wp.w_viewport_last_topfill = wp.w_topfill as linenr_T;
-    wp.w_viewport_last_skipcol = wp.w_skipcol as linenr_T;
+    wp.w_viewport_last_topfill = wp.w_topfill as LineNr;
+    wp.w_viewport_last_skipcol = wp.w_skipcol as LineNr;
 }
 
 /// The screen lines between two buffer positions, `win_text_height()` with its
 /// two in-out parameters borrowed rather than pointed at.
 fn text_height(
     wp: Win,
-    start_lnum: linenr_T,
+    start_lnum: LineNr,
     start_vcol: int64_t,
-    end_lnum: &mut linenr_T,
+    end_lnum: &mut LineNr,
     end_vcol: &mut int64_t,
 ) -> int64_t {
     let (none, all) = (ptr::null_mut::<int64_t>(), INT64_MAX as int64_t);

@@ -26,7 +26,7 @@ use crate::marktree::key::{
     mt_right,
 };
 use crate::types::{
-    ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, buf_T, colnr_T,
+    ColNr, ExtmarkOp, ExtmarkSavePos, ExtmarkUndoObject, MTPos, MarkTreeIter, buf_T,
     extmark_undo_vec_t,
 };
 
@@ -37,9 +37,9 @@ use crate::types::{
 pub unsafe fn extmark_splice_delete(
     buf: *mut buf_T,
     l_row: c_int,
-    l_col: colnr_T,
+    l_col: ColNr,
     u_row: c_int,
-    u_col: colnr_T,
+    u_col: ColNr,
     uvp: *mut extmark_undo_vec_t,
     only_copy: bool,
     op: ExtmarkOp,

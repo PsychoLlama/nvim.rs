@@ -78,7 +78,7 @@ pub(crate) fn ins_shift(c: c_int, lastc: c_int) {
 /// which is the common case: 'expandtab' off, 'softtabstop' unset, and either
 /// 'smarttab' off or 'tabstop' equal to 'shiftwidth' anyway.
 pub(crate) fn ins_tab() -> bool {
-    if Insstart_blank_vcol.get() == MAXCOL as colnr_T
+    if Insstart_blank_vcol.get() == MAXCOL as ColNr
         && cur_win().w_cursor.lnum == Insstart.get().lnum
     {
         Insstart_blank_vcol.set(nolist_virtcol());
@@ -219,8 +219,8 @@ fn tab_spaces_to_tabs() {
         fpos.col = Insstart.get().col;
     }
 
-    let mut vcol: colnr_T = 0;
-    let mut want_vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
+    let mut want_vcol: ColNr = 0;
     let none = ::core::ptr::null_mut();
     // SAFETY: `fpos` and `cursor` are live positions in the current buffer.
     unsafe { getvcol(cur_win(), &raw mut fpos, &raw mut vcol, none, none) };
@@ -395,7 +395,7 @@ pub(crate) fn ins_eol(c: c_int) -> bool {
 /// The column [`tab_spaces_to_tabs`] measures against: the real cursor's, or
 /// -- in `MODE_VREPLACE`, where nothing may move yet -- the copy's.
 #[inline(always)]
-fn walk_col(pos: &pos_T, vreplace: bool) -> colnr_T {
+fn walk_col(pos: &pos_T, vreplace: bool) -> ColNr {
     if vreplace {
         pos.col
     } else {
@@ -413,7 +413,7 @@ fn stop_arrow_failed() -> bool {
 
 /// The cursor's virtual column, as it would be with 'list' off.
 #[inline(always)]
-fn nolist_virtcol() -> colnr_T {
+fn nolist_virtcol() -> ColNr {
     // SAFETY: `curwin` is live for the whole session.
     unsafe { get_nolist_virtcol() }
 }
@@ -434,7 +434,7 @@ fn sts_value() -> c_int {
 
 /// How many stops the 'vartabstop'-style array `ts` holds.
 #[inline(always)]
-fn tabstops(ts: *mut colnr_T) -> c_int {
+fn tabstops(ts: *mut ColNr) -> c_int {
     // SAFETY: a live buffer's own tab-stop array, or null for none.
     unsafe { tabstop_count(ts) }
 }

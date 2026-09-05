@@ -41,7 +41,7 @@ pub unsafe fn fold_move_to(updown: bool, dir: c_int, count: c_int) -> c_int {
             break;
         }
         let cursor = cur_win().w_cursor.lnum;
-        let mut lnum_off: linenr_T = 0;
+        let mut lnum_off: LineNr = 0;
         let mut use_level = false;
         let mut maybe_small = false;
         let mut lnum_found = cursor;
@@ -200,10 +200,10 @@ pub fn fold_adjust_cursor(wp: Win) {
 ///
 pub fn fold_mark_adjust(
     wp: Win,
-    mut line1: linenr_T,
-    mut line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    mut line1: LineNr,
+    mut line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 ) {
     if amount == LINES_DELETED && line2 >= line1 && line2 - line1 >= -amount_after {
         line2 = line1 - amount_after - 1;
@@ -211,7 +211,7 @@ pub fn fold_mark_adjust(
     if line2 < line1 {
         line2 = line1;
     }
-    if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as linenr_T {
+    if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as LineNr {
         line1 -= 1;
     }
     adjust_fold_list(window_folds(wp), line1, line2, amount, amount_after);
@@ -231,17 +231,17 @@ pub fn fold_mark_adjust(
 /// growarray itself.
 pub(super) fn adjust_fold_list(
     folds: FoldList,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 ) {
     if folds.is_empty() {
         return;
     }
     // In Insert mode a fold that starts exactly where the line is being
     // inserted keeps its top, so the new line lands above it.
-    let top = if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as linenr_T {
+    let top = if State.get() & MODE_INSERT != 0 && amount == 1 && line2 == MAXLNUM as LineNr {
         line1 + 1
     } else {
         line1
@@ -349,7 +349,7 @@ pub(super) unsafe fn fold_insert(folds: FoldList, i: c_int) {
 ///
 /// # Safety
 /// `i` must name an entry of `folds`.
-pub(super) unsafe fn fold_split(folds: FoldList, i: c_int, top: linenr_T, bot: linenr_T) {
+pub(super) unsafe fn fold_split(folds: FoldList, i: c_int, top: LineNr, bot: LineNr) {
     // SAFETY: `i + 1` is in `0..=folds.len()`.
     unsafe { fold_insert(folds, i + 1) };
     let fold = folds.at(i);
@@ -400,7 +400,7 @@ pub(super) unsafe fn fold_split(folds: FoldList, i: c_int, top: linenr_T, bot: l
 ///
 /// Safe: [`FoldList`] carries the promise about the array, and every index
 /// below is one this function's own search produced.
-pub(super) fn fold_remove(folds: FoldList, top: linenr_T, bot: linenr_T) {
+pub(super) fn fold_remove(folds: FoldList, top: LineNr, bot: LineNr) {
     if bot < top {
         return;
     }
@@ -474,9 +474,9 @@ pub(super) unsafe fn fold_reverse_order(folds: FoldList, start_arg: c_int, end_a
 
 /// Drop everything in `fold` below line `end`, nested folds included.
 ///
-pub(super) fn truncate_fold(fold: Fold, end: linenr_T) {
+pub(super) fn truncate_fold(fold: Fold, end: LineNr) {
     let end = end + 1;
-    fold_remove(fold.nested(), end - fold.top(), MAXLNUM as linenr_T);
+    fold_remove(fold.nested(), end - fold.top(), MAXLNUM as LineNr);
     fold.set_len(end - fold.top());
 }
 
@@ -512,12 +512,7 @@ pub(super) fn truncate_fold(fold: Fold, end: linenr_T) {
 ///
 /// # Safety
 /// `gap` must be a live fold list.
-pub unsafe fn fold_move_range(
-    gap: *mut garray_T,
-    line1: linenr_T,
-    line2: linenr_T,
-    dest: linenr_T,
-) {
+pub unsafe fn fold_move_range(gap: *mut garray_T, line1: LineNr, line2: LineNr, dest: LineNr) {
     // SAFETY: the caller's promise.
     let folds = unsafe { FoldList::new(gap) };
     let range_len = line2 - line1 + 1;
@@ -676,10 +671,10 @@ fn cur_win() -> Win {
 /// `gap` must be a live fold list -- see [`FoldList::new`].
 pub unsafe fn fold_mark_adjust_recurse(
     gap: *mut garray_T,
-    line1: linenr_T,
-    line2: linenr_T,
-    amount: linenr_T,
-    amount_after: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
 ) {
     // SAFETY: the caller's promise, which is `FoldList`'s.
     let folds = unsafe { FoldList::new(gap) };

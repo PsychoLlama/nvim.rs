@@ -74,9 +74,9 @@ pub unsafe fn tv_get_bool_chk(tv: *const typval_T, ret_error: *mut bool) -> varn
 
 /// `tv` as a line number, resolving a non-Number such as `"$"` or `"."`
 /// through `var2fpos`.
-pub unsafe fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
+pub unsafe fn tv_get_lnum(tv: *const typval_T) -> LineNr {
     let did_emsg_before = did_emsg.get();
-    let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as linenr_T;
+    let mut lnum = unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) } as LineNr;
     if lnum <= 0 && did_emsg_before == did_emsg.get() && unsafe { (*tv).v_type } != VAR_NUMBER {
         // No valid number, try using same function as line() does.
         let mut fnum = 0;
@@ -89,7 +89,7 @@ pub unsafe fn tv_get_lnum(tv: *const typval_T) -> linenr_T {
 }
 
 /// [`tv_get_lnum`] against a given buffer: `"$"` is that buffer's last line.
-pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_T {
+pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> LineNr {
     // SAFETY: the caller's promise: a live typval.
     let val = unsafe { Tv::new(tv.cast_mut()) };
     let s = val.string_or_null();
@@ -100,7 +100,7 @@ pub unsafe fn tv_get_lnum_buf(tv: *const typval_T, buf: *const buf_T) -> linenr_
     {
         return unsafe { (*buf).b_ml.ml_line_count };
     }
-    unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) as linenr_T }
+    unsafe { tv_get_number_chk(tv, ::core::ptr::null_mut()) as LineNr }
 }
 
 /// `tv` as a float, raising an error and answering 0.0 for a value that has no

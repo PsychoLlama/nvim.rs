@@ -22,7 +22,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::types::linenr_T;
+use crate::types::LineNr;
 use core::ffi::c_int;
 
 /// Buffers a diff block can span (`DB_COUNT`).
@@ -163,7 +163,7 @@ fn count_matched_chars(lines: &[Option<&[u8]>], iwhite: bool) -> c_int {
 
 /// The block text from line `lnum` (1-based) onward, or `None` when the
 /// block ends before that line starts.
-pub fn block_from_lnum(block: &[u8], lnum: linenr_T) -> Option<&[u8]> {
+pub fn block_from_lnum(block: &[u8], lnum: LineNr) -> Option<&[u8]> {
     let mut rest = block;
     for _ in 1..lnum {
         let end = rest.iter().position(|&b| b == b'\n')?;

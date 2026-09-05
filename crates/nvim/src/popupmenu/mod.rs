@@ -56,9 +56,9 @@ use crate::state::MODE_CMDLINE;
 use crate::strings::reverse_text;
 use crate::types::ui::{kUICmdline, kUIMultigrid, kUIPopupmenu, kUIWildmenu};
 use crate::types::{
-    AlignTextPos, Array, Buffer, Error, Float, Integer, Object, OptInt, OptVal, String_0, VirtText,
-    VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T, exarg_T, float_T, handle_T,
-    hlf_T, kBoolVarFalse, kBoolVarTrue, linenr_T, lpos_T, pumitem_T, sattr_T, schar_T, size_t,
+    AlignTextPos, Array, Buffer, Error, Float, Integer, LineNr, Object, OptInt, OptVal, String_0,
+    VirtText, VirtTextChunk, WinConfig, WinSplit, WinStyle, Window, dict_T, exarg_T, float_T,
+    handle_T, hlf_T, kBoolVarFalse, kBoolVarTrue, lpos_T, pumitem_T, sattr_T, schar_T, size_t,
     tabpage_T, uint32_t, varnumber_T, vimmenu_T, win_T,
 };
 use crate::ui::{

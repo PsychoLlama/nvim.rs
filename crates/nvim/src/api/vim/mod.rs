@@ -95,13 +95,13 @@ use crate::types::{
     Context, Dict, Error, Float, HlAttrs, HlMessage, Integer, KeyDict_complete_set,
     KeyDict_context, KeyDict_echo_opts, KeyDict_empty, KeyDict_eval_statusline,
     KeyDict_get_highlight, KeyDict_get_ns, KeyDict_highlight, KeyDict_keymap, KeyDict_open_term,
-    KeyDict_redraw, KeyDict_runtime, KeyValuePair, LuaRef, LuaRetMode, MessageData, MessageType,
-    MotionType, NS, Object, OptScope, OptVal, RemapValues, SignTextAttrs, String_0, StringBuilder,
-    Tabpage, TerminalOptions, Vv, Window, bln_values, buf_T, dictitem_T, dobuf_action_values,
-    dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal, kErrorTypeException,
-    kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, linenr_T, mpack_token_type_t,
-    ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t, uint64_t, varnumber_T,
-    win_T, yankreg_T,
+    KeyDict_redraw, KeyDict_runtime, KeyValuePair, LineNr, LuaRef, LuaRetMode, MessageData,
+    MessageType, MotionType, NS, Object, OptScope, OptVal, RemapValues, SignTextAttrs, String_0,
+    StringBuilder, Tabpage, TerminalOptions, Vv, Window, bln_values, buf_T, dictitem_T,
+    dobuf_action_values, dobuf_start_values, foldinfo_T, handle_T, int64_t, kCdScopeGlobal,
+    kErrorTypeException, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString,
+    mpack_token_type_t, ptrdiff_t, schar_T, scid_T, size_t, statuscol_T, uint8_t, uint16_t,
+    uint64_t, varnumber_T, win_T, yankreg_T,
 };
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};

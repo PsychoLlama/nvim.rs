@@ -198,7 +198,7 @@ impl Context {
             KEYSET_OPTIDX_eval_statusline__use_statuscol_lnum,
         ) {
             statuscol_lnum = opts.use_statuscol_lnum as c_int;
-            if !(statuscol_lnum > 0 && statuscol_lnum as linenr_T <= win.buffer().line_count()) {
+            if !(statuscol_lnum > 0 && statuscol_lnum as LineNr <= win.buffer().line_count()) {
                 let key = c"use_statuscol_lnum".as_ptr();
                 let why = c"out of range".as_ptr();
                 // SAFETY: the names and values are NUL-terminated strings.
@@ -270,7 +270,7 @@ unsafe fn statuscol_state(
     statuscol: &mut statuscol_T,
     sattrs: &mut [SignTextAttrs; SIGN_SHOW_MAX as usize],
 ) -> (c_int, c_int) {
-    let lnum = lnum as linenr_T;
+    let lnum = lnum as LineNr;
     let (mut line_id, mut cul_id, mut num_id) = (0, 0, 0);
     let mut cursorline_fi = foldinfo_T::default();
     let (wp, buf, signs) = (win.raw(), win.buffer().raw(), sattrs.as_mut_ptr());

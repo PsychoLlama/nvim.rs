@@ -36,8 +36,8 @@ use crate::os::fs::os_can_exe;
 use crate::os::shell::{os_system, shell_argv_to_str, shell_build_argv, shell_free_argv};
 use crate::profile::{prof_child_enter, prof_child_exit};
 use crate::types::{
-    EvalFuncData, IOSIZE, NUL, OptInt, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, Vv,
-    kListLenMayKnow, list_T, listitem_T, proftime_T, ptrdiff_t, size_t, typval_T, varnumber_T,
+    EvalFuncData, IOSIZE, NUL, OptInt, ProfTime, VAR_LIST, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, Vv,
+    kListLenMayKnow, list_T, listitem_T, ptrdiff_t, size_t, typval_T, varnumber_T,
 };
 
 /// Build a `NULL`-terminated argument vector out of a String (through the
@@ -235,7 +235,7 @@ pub(crate) unsafe fn get_system_output_as_rettv(
         unsafe { xfree(cmdstr as *mut c_void) };
     }
 
-    let mut wait_time: proftime_T = 0;
+    let mut wait_time: ProfTime = 0;
     if profiling {
         // SAFETY: the profile clock is the editor's own.
         wait_time = unsafe { prof_child_enter() };

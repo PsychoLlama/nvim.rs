@@ -28,11 +28,11 @@ use crate::main::{
 use crate::normal::{VisualMode, set_visual_active, set_visual_anchor, set_visual_mode};
 use crate::pos::MAXCOL;
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
-use crate::types::{buf_T, colnr_T, exarg_T, linenr_T, pos_T, save_state_T, win_T};
+use crate::types::{ColNr, LineNr, buf_T, exarg_T, pos_T, save_state_T, win_T};
 use crate::winlayer::Win;
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
-type Range = Option<(linenr_T, linenr_T)>;
+type Range = Option<(LineNr, LineNr)>;
 
 /// Run `menu`'s right-hand side. Used by `:emenu`, `:popup` and the window
 /// toolbar.
@@ -117,7 +117,7 @@ fn run_menu(menu: Menu, mode_idx: c_int, from_command: bool, range: Range) {
 /// A range that matches the buffer's last Visual selection restores that
 /// selection exactly -- upstream's own comment calls this "not perfect, but a
 /// quick way of detecting whether we are doing this from a selection".
-fn select_range(line1: linenr_T, line2: linenr_T) {
+fn select_range(line1: LineNr, line2: LineNr) {
     let visual = with_curbuf(|buf| buf.b_visual);
     let end = if visual.vi_start.lnum == line1 && visual.vi_end.lnum == line2 {
         set_visual_mode(VisualMode::from_raw(visual.vi_mode));
@@ -135,7 +135,7 @@ fn select_range(line1: linenr_T, line2: linenr_T) {
         });
         pos_T {
             lnum: line2,
-            col: MAXCOL as colnr_T,
+            col: MAXCOL as ColNr,
             coladd: 0,
         }
     };

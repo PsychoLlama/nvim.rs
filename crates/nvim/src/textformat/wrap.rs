@@ -32,7 +32,7 @@ use crate::pos::MAXCOL;
 use crate::search::{FORWARD, check_linecomment};
 use crate::state::VREPLACE_FLAG;
 use crate::strings::xstrnsave;
-use crate::types::{INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL, colnr_T, size_t};
+use crate::types::{ColNr, INSCHAR_COM_LIST, INSCHAR_DO_COM, INSCHAR_FORMAT, NUL, size_t};
 
 /// What one step of the backwards search for a break column decided.
 ///
@@ -60,7 +60,7 @@ struct BreakSearch {
     /// at: reaching it ends the search.
     wantcol: c_int,
     /// Bytes of comment leader that must not be broken inside.
-    leader_len: colnr_T,
+    leader_len: ColNr,
     /// The character about to be inserted, or NUL. It is not in the buffer
     /// yet, so at `startcol` the walk substitutes it.
     c: c_int,
@@ -247,7 +247,7 @@ impl BreakSearch {
             || cur_win().w_cursor.lnum != Insstart.get().lnum
             || cur_win().w_cursor.col >= Insstart.get().col
         {
-            let cc = if cur_win().w_cursor.col == self.startcol as colnr_T && self.c != NUL {
+            let cc = if cur_win().w_cursor.col == self.startcol as ColNr && self.c != NUL {
                 self.c
             } else {
                 gchar_cursor()
@@ -280,7 +280,7 @@ impl BreakSearch {
 ///
 /// # Safety
 /// There must be a current line.
-unsafe fn wrap_leader_len() -> colnr_T {
+unsafe fn wrap_leader_len() -> ColNr {
     let line = get_cursor_line_ptr();
     let mut leader_len =
         unsafe { get_leader_len(line, ::core::ptr::null_mut::<*mut c_char>(), false, true) };
@@ -390,7 +390,7 @@ pub unsafe fn internal_format(
         // Find the column 'textwidth' falls at.
         win.coladvance(textwidth);
         let wantcol = win.w_cursor.col as c_int;
-        win.w_cursor.col = startcol as colnr_T;
+        win.w_cursor.col = startcol as ColNr;
 
         let mut search = BreakSearch {
             startcol,
@@ -406,7 +406,7 @@ pub unsafe fn internal_format(
         unsafe { search.run(flags, fo_ins_blank) };
         if search.foundcol == 0 {
             // No break column: the line has to stay long.
-            win.w_cursor.col = startcol as colnr_T;
+            win.w_cursor.col = startcol as ColNr;
             break;
         }
         let foundcol = search.foundcol;
@@ -425,10 +425,10 @@ pub unsafe fn internal_format(
 
         // Move `startcol` past the spaces that are about to be deleted
         // and the characters that stay on the top line.
-        win.w_cursor.col = foundcol as colnr_T;
+        win.w_cursor.col = foundcol as ColNr;
         while {
             let cc = gchar_cursor();
-            (unsafe { whitechar(cc) }) && (!fo_white_par || win.w_cursor.col < startcol as colnr_T)
+            (unsafe { whitechar(cc) }) && (!fo_white_par || win.w_cursor.col < startcol as ColNr)
         } {
             inc_cursor();
         }
@@ -440,14 +440,14 @@ pub unsafe fn internal_format(
             // MODE_VREPLACE backspaces over the text being wrapped, so
             // save a copy now to put on the next line.
             saved_text = unsafe { xstrnsave(get_cursor_pos_ptr(), get_cursor_pos_len() as size_t) };
-            win.w_cursor.col = orig_col as colnr_T;
+            win.w_cursor.col = orig_col as ColNr;
             unsafe { *saved_text.offset(startcol as isize) = NUL as c_char };
             if !fo_white_par {
                 unsafe { backspace_until_column(foundcol) };
             }
         } else if !fo_white_par {
             // Put the cursor after the position to break at.
-            win.w_cursor.col = foundcol as colnr_T;
+            win.w_cursor.col = foundcol as ColNr;
         }
 
         // Split the line just before the margin. Only insert and delete
@@ -519,7 +519,7 @@ pub unsafe fn internal_format(
         } else {
             // Keep the cursor off the NUL past the end: cindent may have
             // added or removed indent.
-            win.w_cursor.col += startcol as colnr_T;
+            win.w_cursor.col += startcol as ColNr;
             let len = get_cursor_line_len();
             win.w_cursor.col = win.w_cursor.col.min(len);
         }

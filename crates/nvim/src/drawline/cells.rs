@@ -122,9 +122,9 @@ pub(crate) struct Cells {
     /// Read cursor into [`Cells::line`].
     pub(super) ptr: *mut ::core::ffi::c_char,
     /// Byte index the `'listchars'` "trail" applies from, or `MAXCOL`.
-    pub(super) trailcol: colnr_T,
+    pub(super) trailcol: ColNr,
     /// Byte index one past the leading whitespace, or 0.
-    pub(super) leadcol: colnr_T,
+    pub(super) leadcol: ColNr,
     /// `'listchars'` "eol".
     pub(super) lcs_eol: schar_T,
     /// `'listchars'` "precedes", cleared once it has been drawn on a row.
@@ -230,7 +230,7 @@ pub(crate) struct Cells {
 
     /// Virtual column of the previous pass, for the "not at a margin" tests
     /// that resume inverting after a skipped cursor.
-    pub(super) prev_vcol: colnr_T,
+    pub(super) prev_vcol: ColNr,
     /// Attribute to restore when [`WinLineVars::n_attr`] runs out.
     pub(super) attr_before_run: ::core::ffi::c_int,
     /// Cells left of the `'listchars'` "precedes" attribute.
@@ -415,7 +415,7 @@ impl Cells {
     /// # Safety
     /// `wp` must be a live window and `lnum` one of its buffer's lines.
     #[inline]
-    pub(super) unsafe fn refetch_line(&mut self, wp: Win, lnum: linenr_T, at: ::core::ffi::c_int) {
+    pub(super) unsafe fn refetch_line(&mut self, wp: Win, lnum: LineNr, at: ::core::ffi::c_int) {
         // SAFETY: the caller's window and line.
         self.line = unsafe { ml_get_buf(wp.w_buffer, lnum) };
         self.ptr = unsafe { self.line.offset(at as isize) };
@@ -559,7 +559,7 @@ impl Cells {
     ///
     /// # Safety
     /// `wp` must be a live window and `lnum` one of its buffer's lines.
-    pub(super) unsafe fn provider_chunk(&mut self, wp: Win, lnum: linenr_T, decor: DecorStateRef) {
+    pub(super) unsafe fn provider_chunk(&mut self, wp: Win, lnum: LineNr, decor: DecorStateRef) {
         // SAFETY: the caller's window and line.
         if !self.check_decor_providers || self.byte_col() < self.decor_provider_end_col {
             return;

@@ -385,7 +385,7 @@ pub(crate) unsafe fn add_llist_tags(
         // A command that starts with a digit is a line number;
         // anything else is a search pattern.
         let lnum = if ascii_isdigit(unsafe { *tagp.command } as u8 as c_int) {
-            unsafe { atoi(tagp.command) as linenr_T }
+            unsafe { atoi(tagp.command) as LineNr }
         } else {
             0
         };

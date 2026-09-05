@@ -130,9 +130,9 @@ pub(crate) struct ByteWriter<'a> {
     /// Some character could not be represented in the target encoding.
     pub conv_error: bool,
     /// The line the first such character was on, or zero if not known.
-    pub conv_error_lnum: linenr_T,
+    pub conv_error_lnum: LineNr,
     /// The line the staged bytes start on, for `conv_error_lnum`.
-    pub start_lnum: linenr_T,
+    pub start_lnum: LineNr,
 }
 
 impl Drop for ByteWriter<'_> {

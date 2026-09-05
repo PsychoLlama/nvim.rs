@@ -589,7 +589,7 @@ pub unsafe fn get_func_line(
             let line = lines()[frame.fc_linenr as usize];
             frame.fc_linenr += 1;
             let dup = unsafe { xstrdup(line) };
-            crate::runtime::set_sourcing_lnum(frame.fc_linenr as linenr_T);
+            crate::runtime::set_sourcing_lnum(frame.fc_linenr as LineNr);
             if do_profiling.get() == PROF_YES {
                 unsafe { func_line_start(cookie) };
             }
@@ -643,7 +643,7 @@ pub unsafe fn func_name(cookie: *mut c_void) -> *mut c_char {
 ///
 /// # Safety
 /// `cookie` is a `funccall_T`.
-pub unsafe fn func_breakpoint(cookie: *mut c_void) -> *mut linenr_T {
+pub unsafe fn func_breakpoint(cookie: *mut c_void) -> *mut LineNr {
     unsafe { &raw mut (*(cookie as *mut funccall_T)).fc_breakpoint }
 }
 

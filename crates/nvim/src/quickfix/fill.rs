@@ -149,7 +149,7 @@ pub(crate) unsafe fn qf_update_buffer(qi: *mut qf_info_T, old_last: *mut qfline_
 /// `qfp` must be a live entry, and `buf` the quickfix buffer.
 unsafe fn qf_buf_add_line(
     buf: Buf,
-    lnum: linenr_T,
+    lnum: LineNr,
     qfp: *const qfline_T,
     dir: &mut CurrentDir,
     qftf_str: *const c_char,
@@ -227,7 +227,7 @@ unsafe fn qf_buf_add_line(
             buf.raw(),
             lnum,
             line.as_ptr().cast_mut().cast(),
-            line.len() as colnr_T,
+            line.len() as ColNr,
             false,
         )
         .is_ok()
@@ -374,9 +374,9 @@ unsafe fn finish_qf_buffer() {
 /// What one rewrite of the quickfix buffer moved: where it started, and the
 /// rows, columns and bytes the old and the new text took from there.
 struct Splice {
-    start: (linenr_T, colnr_T),
-    old: (linenr_T, colnr_T, bcount_t),
-    new: (linenr_T, colnr_T, bcount_t),
+    start: (LineNr, ColNr),
+    old: (LineNr, ColNr, bcount_t),
+    new: (LineNr, ColNr, bcount_t),
 }
 
 /// [`extmark_splice`] for a quickfix-buffer rewrite, which is never undoable.
@@ -445,7 +445,7 @@ pub(crate) unsafe fn qf_fill_buffer(
         let mut prev_bufnr = -1;
         let mut invalid_val = false;
 
-        while lnum < unsafe { (*qfl).qf_count } as linenr_T {
+        while lnum < unsafe { (*qfl).qf_count } as LineNr {
             // Use the text the user's function supplied, if any. Once
             // it answers something that is not a string, the rest of
             // its answer is ignored too.

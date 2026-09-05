@@ -19,17 +19,17 @@ use crate::types::{IOSIZE, ShmFlag};
 /// Everything the closing message needs to know about how the read went.
 pub(crate) struct Outcome {
     pub perm: c_int,
-    pub read_no_eol_lnum: linenr_T,
+    pub read_no_eol_lnum: LineNr,
     pub ff_error: c_int,
     pub split: c_int,
     pub notconverted: bool,
     pub converted: bool,
-    pub conv_error: linenr_T,
-    pub illegal_byte: linenr_T,
+    pub conv_error: LineNr,
+    pub illegal_byte: LineNr,
     pub error: bool,
     pub fileformat: c_int,
-    pub linecnt: linenr_T,
-    pub filesize: off_T,
+    pub linecnt: LineNr,
+    pub filesize: FileOffset,
 }
 
 /// `snprintf` a plain note into the report at `buflen`, answering how many

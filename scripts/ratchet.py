@@ -407,9 +407,8 @@ plus these whole-tree metrics, which are not per-file:
                         some `struct`/`enum`/`union`/`type` item declares —
                         a set over the whole tree, so moving a type between
                         files is free and only deleting or renaming one
-                        counts. `type` aliases are in deliberately:
-                        `linenr_T`, `colnr_T` and their kin are aliases, and
-                        they are the bulk of phase 27's rename.
+                        counts. `type` aliases are in deliberately: the
+                        integer aliases are the bulk of phase 27's rename.
                       raw_win_buf_sigs  `*mut win_T`/`*mut buf_T`/
                         `*mut tabpage_T` inside a `fn` *signature* — the span
                         from the `fn` keyword through the return type, so a
@@ -881,7 +880,7 @@ PUB_CONST_DECL = re.compile(
 )
 
 # Declarations of a `_T` type, counted as a *set* of names over the whole
-# tree: `type` aliases included, because `linenr_T` and its kin are aliases.
+# tree: `type` aliases included, because the integer names are aliases.
 T_SUFFIX_DECL = re.compile(
     r"\b(?:struct|enum|union|type)\s+([A-Za-z_][A-Za-z0-9_]*_T)\b"
 )

@@ -19,8 +19,8 @@ use crate::grid::{MAX_SCHAR_SIZE, schar_get_adv};
 use crate::mark::mark_adjust_buf;
 use crate::memline::{ml_append_buf, ml_delete_buf};
 use crate::types::{
-    NUL, OptInt, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs, buf_T, colnr_T,
-    linenr_T, schar_T,
+    ColNr, LineNr, NUL, OptInt, VTermColor, VTermPos, VTermScreenCell, VTermScreenCellAttrs, buf_T,
+    schar_T,
 };
 use crate::vterm::screen::vterm_screen_get_cell;
 use crate::winlayer::Buf;
@@ -208,15 +208,15 @@ pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
         for _ in 0..diff {
             // SAFETY: a live buffer, deleting the line the row that is
             // about to be dropped was mirrored onto.
-            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
+            let _ = unsafe { ml_delete_buf(buf.raw(), 1 as LineNr, false) };
             term.sb.drop_oldest();
         }
-        let (buf, diff) = (buf.raw(), diff as linenr_T);
+        let (buf, diff) = (buf.raw(), diff as LineNr);
         // SAFETY: as above; the marks that pointed into the deleted lines
         // move with them.
-        unsafe { mark_adjust_term(buf, 1 as linenr_T, diff, -diff) };
+        unsafe { mark_adjust_term(buf, 1 as LineNr, diff, -diff) };
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf, 1 as linenr_T, diff) };
+        unsafe { deleted_lines_buf(buf, 1 as LineNr, diff) };
     }
     term.sb.set_capacity(limit);
 }
@@ -226,8 +226,8 @@ pub(crate) fn adjust_scrollback(mut term: Term, buf: Buf) {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-unsafe fn mark_adjust_term(buf: *mut buf_T, line1: linenr_T, line2: linenr_T, amount: linenr_T) {
-    let (end, after) = (MAXLNUM as linenr_T, true);
+unsafe fn mark_adjust_term(buf: *mut buf_T, line1: LineNr, line2: LineNr, amount: LineNr) {
+    let (end, after) = (MAXLNUM as LineNr, true);
     let (mode, op) = (kMarkAdjustTerm, kExtmarkUndo);
     // SAFETY: the caller's promise.
     unsafe { mark_adjust_buf(buf, line1, line2, end, amount, after, mode, op) };
@@ -247,21 +247,21 @@ pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
 
     // Rows evicted since the last refresh are gone from the buffer's top;
     // move the marks that were pointing at them.
-    let mut deleted = (term.sb.deleted() - term.old_sb_deleted) as linenr_T;
+    let mut deleted = (term.sb.deleted() - term.old_sb_deleted) as LineNr;
     deleted = deleted.min(buf.line_count());
     // SAFETY: a live buffer.
-    unsafe { mark_adjust_term(buf.raw(), 1 as linenr_T, deleted, -deleted) };
+    unsafe { mark_adjust_term(buf.raw(), 1 as LineNr, deleted, -deleted) };
     term.old_sb_deleted = term.sb.deleted();
 
     let mut old_height = term.old_height;
     let (height, width) = term.size();
 
-    while deleted > 0 && buf.line_count() > old_height as linenr_T {
+    while deleted > 0 && buf.line_count() > old_height as LineNr {
         // SAFETY: a live buffer, deleting a line the scrollback no longer
         // holds.
-        let _ = unsafe { ml_delete_buf(buf.raw(), 1 as linenr_T, false) };
+        let _ = unsafe { ml_delete_buf(buf.raw(), 1 as LineNr, false) };
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf.raw(), 1 as linenr_T, 1 as linenr_T) };
+        unsafe { deleted_lines_buf(buf.raw(), 1 as LineNr, 1 as LineNr) };
         deleted -= 1;
     }
     old_height = old_height.min(buf.line_count() as c_int);
@@ -270,24 +270,24 @@ pub(crate) fn refresh_scrollback(mut term: Term, buf: Buf) {
     // screen, which sit at the end of the buffer.
     while term.sb.pending() > 0 {
         fetch_row(term, -term.sb.pending(), width);
-        let at = (buf.line_count() as c_int - old_height) as linenr_T;
+        let at = (buf.line_count() as c_int - old_height) as LineNr;
         let text = term.textbuf.as_mut_ptr();
         // SAFETY: a live buffer, taking the row this terminal's own line
         // buffer holds.
-        let _ = unsafe { ml_append_buf(buf.raw(), at, text, 0 as colnr_T, false) };
+        let _ = unsafe { ml_append_buf(buf.raw(), at, text, 0 as ColNr, false) };
         // SAFETY: as above, reporting the line just appended.
-        unsafe { appended_lines_buf(buf.raw(), at, 1 as linenr_T) };
+        unsafe { appended_lines_buf(buf.raw(), at, 1 as LineNr) };
         term.sb.mark_mirrored();
     }
 
     // Anything past the scrollback plus one screen is stale.
-    let max_line_count = (term.sb.len() as c_int + height) as linenr_T;
+    let max_line_count = (term.sb.len() as c_int + height) as LineNr;
     while buf.line_count() > max_line_count {
         let last = buf.line_count();
         // SAFETY: a live buffer, deleting its own last line.
         let _ = unsafe { ml_delete_buf(buf.raw(), last, false) };
         // SAFETY: as above, reporting what the deletion took away.
-        unsafe { deleted_lines_buf(buf.raw(), buf.line_count(), 1 as linenr_T) };
+        unsafe { deleted_lines_buf(buf.raw(), buf.line_count(), 1 as LineNr) };
     }
 
     adjust_scrollback(term, buf);

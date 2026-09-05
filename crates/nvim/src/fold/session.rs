@@ -43,7 +43,7 @@ pub unsafe fn put_folds(fd: *mut FILE, wp: Win) -> Result<(), Failed> {
 pub(super) unsafe fn put_folds_recurse(
     fd: *mut FILE,
     folds: FoldList,
-    off: linenr_T,
+    off: LineNr,
 ) -> Result<(), Failed> {
     for fold in folds.folds() {
         // The nested folds are written first, because `:fold` over a range
@@ -78,7 +78,7 @@ pub(super) unsafe fn put_foldopen_recurse(
     fd: *mut FILE,
     wp: Win,
     folds: FoldList,
-    off: linenr_T,
+    off: LineNr,
 ) -> Result<(), Failed> {
     for fold in folds.folds() {
         if fold.is(FD_LEVEL) {
@@ -130,7 +130,7 @@ pub(super) unsafe fn put_foldopen_recurse(
 pub(super) unsafe fn put_fold_open_close(
     fd: *mut FILE,
     fold: Fold,
-    off: linenr_T,
+    off: LineNr,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise; both formats match their arguments.
     if unsafe { fprintf(fd, c"%d".as_ptr(), fold.top() + off) } < 0

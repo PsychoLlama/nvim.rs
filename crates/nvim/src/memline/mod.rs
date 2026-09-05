@@ -73,9 +73,9 @@ use crate::statusline::get_trans_bufname;
 use crate::strings::{vim_strchr, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    CmdModFlags, Failed, FileInfo, NUL, OptVal, String_0, Timestamp, bhdr_T, blocknr_T, buf_T,
-    colnr_T, dict_T, file_comparison, flush_buffers_T, infoptr_T, int16_t, int64_t, linenr_T,
-    list_T, memfile_T, off_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
+    BlockNr, CmdModFlags, ColNr, Failed, FileInfo, FileOffset, LineNr, NUL, OptVal, String_0,
+    Timestamp, bhdr_T, buf_T, dict_T, file_comparison, flush_buffers_T, infoptr_T, int16_t,
+    int64_t, list_T, memfile_T, pos_T, size_t, ssize_t, time_t, uint8_t, uint16_t, uint64_t,
     uv_uid_t, varnumber_T,
 };
 use crate::ui::{ui_flush, ui_has};
@@ -120,9 +120,9 @@ pub const DATA_ID: ::core::ffi::c_uint = 25697;
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct PointerEntry {
-    pub pe_bnum: blocknr_T,
-    pub pe_line_count: linenr_T,
-    pub pe_old_lnum: linenr_T,
+    pub pe_bnum: BlockNr,
+    pub pe_line_count: LineNr,
+    pub pe_old_lnum: LineNr,
     pub pe_page_count: ::core::ffi::c_int,
 }
 #[repr(C)]
@@ -274,7 +274,7 @@ fn tell(text: &'static ::core::ffi::CStr, hl_id: ::core::ffi::c_int) {
 
 /// The lowest line number that may still carry a [`DB_MARKED`] bit, so
 /// `ml_firstmarked` need not start its search at line one.
-static lowest_marked: GlobalCell<linenr_T> = GlobalCell::new(0);
+static lowest_marked: GlobalCell<LineNr> = GlobalCell::new(0);
 
 /// Published by `swapfile_info` for the ATTENTION dialog: whether the process
 /// that owns the swap file it just described is still alive.

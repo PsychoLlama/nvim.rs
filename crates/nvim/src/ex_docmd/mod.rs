@@ -70,9 +70,9 @@ use crate::syntax::{ex_ownsyntax, ex_syntax, ex_syntime};
 use crate::tag::do_tags;
 use crate::types::CmdIdx;
 use crate::types::{
-    Callback, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter, LuaRetMode, MarkGet,
-    MotionType, OptMagic, RemapValues, dobuf_action_values, dobuf_start_values, estack_arg_T,
-    etype_T, exarg_T, except_T, garray_T, handle_T, linenr_T, uint8_t, uint16_t,
+    Callback, CdCause, ChannelPart, CmdAddr, Direction, ExArgt, LineGetter, LineNr, LuaRetMode,
+    MarkGet, MotionType, OptMagic, RemapValues, dobuf_action_values, dobuf_start_values,
+    estack_arg_T, etype_T, exarg_T, except_T, garray_T, handle_T, uint8_t, uint16_t,
 };
 use crate::undo::{ex_undojoin, ex_undolist};
 use crate::usercmd::{ex_comclear, ex_command, ex_delcommand};
@@ -108,7 +108,7 @@ impl Ea {
     }
 
     /// `&eap->do_ecmd_lnum` — written by the `+cmd` line-number form.
-    pub(crate) fn do_ecmd_lnum_ptr(self) -> *mut linenr_T {
+    pub(crate) fn do_ecmd_lnum_ptr(self) -> *mut LineNr {
         self.field_ptr(offset_of!(exarg_T, do_ecmd_lnum))
     }
 
@@ -232,7 +232,7 @@ pub struct loop_cookie {
 }
 pub struct wcmd_T {
     pub line: *mut c_char,
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
 }
 pub const ETYPE_EXCEPT: etype_T = 5;
 pub const DT_LTAG: c_uint = 11;

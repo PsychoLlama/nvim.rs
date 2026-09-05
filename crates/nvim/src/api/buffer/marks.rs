@@ -39,8 +39,7 @@ pub unsafe fn nvim_buf_del_mark(buf: Buffer, name: String_0) -> Result<Boolean, 
         error = err_bad_value(c"mark name", unsafe { name.as_cstr() });
         return (res as Boolean).reported(error);
     }
-    if unsafe { (*fm).mark.lnum } != 0 as linenr_T
-        && unsafe { (*fm).fnum } == unsafe { (*b).handle }
+    if unsafe { (*fm).mark.lnum } != 0 as LineNr && unsafe { (*fm).fnum } == unsafe { (*b).handle }
     {
         res = unsafe { set_mark(b, name, 0 as Integer, 0 as Integer, &mut error) };
     }
@@ -115,8 +114,8 @@ pub unsafe fn nvim_buf_get_mark(
         return rv.reported(error);
     }
     if unsafe { (*fm).fnum } != unsafe { (*b).handle } {
-        pos.lnum = 0 as ::core::ffi::c_int as linenr_T;
-        pos.col = 0 as ::core::ffi::c_int as colnr_T;
+        pos.lnum = 0 as ::core::ffi::c_int as LineNr;
+        pos.col = 0 as ::core::ffi::c_int as ColNr;
     } else {
         pos = unsafe { (*fm).mark };
     }

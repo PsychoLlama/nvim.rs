@@ -45,8 +45,8 @@ use crate::os::time::os_time;
 use crate::spell::spell_reload;
 use crate::strings::vim_strchr;
 use crate::types::{
-    AdditionalData, NUL, OptInt, OptVal, OptionSetFlags, String_0, buf_T, colnr_T, fmark_T,
-    fmarkv_T, linenr_T, optset_T, pos_T,
+    AdditionalData, ColNr, LineNr, NUL, OptInt, OptVal, OptionSetFlags, String_0, buf_T, fmark_T,
+    fmarkv_T, optset_T, pos_T,
 };
 use crate::window::global_stl_height;
 
@@ -190,15 +190,15 @@ pub unsafe fn did_set_buftype(args: &mut optset_T) -> Option<&CStr> {
             (*prompt).mark = pos_T {
                 lnum: (*buf).b_ml.ml_line_count,
                 col: (*buf).b_prompt_start.mark.col,
-                coladd: 0 as colnr_T,
+                coladd: 0 as ColNr,
             }
         };
         unsafe { (*prompt).fnum = 0 };
         unsafe { (*prompt).timestamp = os_time() };
         unsafe {
             (*prompt).view = fmarkv_T {
-                topline_offset: MAXLNUM as c_int as linenr_T,
-                skipcol: 0 as colnr_T,
+                topline_offset: MAXLNUM as c_int as LineNr,
+                skipcol: 0 as ColNr,
             }
         };
         unsafe { (*prompt).additional_data = ptr::null_mut::<AdditionalData>() };
@@ -635,7 +635,7 @@ pub unsafe fn did_set_vartabstop(args: &mut optset_T) -> Option<&CStr> {
 /// # Safety
 /// `args` points at the option table's call frame, and `into` at the
 /// buffer's array for this option.
-unsafe fn did_set_vartabs(args: &optset_T, into: *mut *mut colnr_T) -> Option<&'static CStr> {
+unsafe fn did_set_vartabs(args: &optset_T, into: *mut *mut ColNr) -> Option<&'static CStr> {
     // SAFETY: the frame's C string value.
     let value = unsafe { CStr::from_ptr(*varp(args)) }.to_bytes();
     if value.is_empty() || value == b"0" {

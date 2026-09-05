@@ -58,7 +58,7 @@ unsafe fn merge_gaps(
     dp_orig: *mut diff_T,
     linemap: &LineMap,
     idx1: usize,
-    entry_back: linenr_T,
+    entry_back: LineNr,
     mut decide: impl FnMut(*mut diff_T, &linemap_entry_T, &linemap_entry_T) -> Gap,
 ) -> (bool, bool) {
     let (mut merged, mut unmerged) = (false, false);
@@ -74,7 +74,7 @@ unsafe fn merge_gaps(
         // here rather than reproduced.
         let last = unsafe { (*dp).df_lnum[idx1] } + unsafe { (*dp).df_count[idx1] } - 1;
         let right = unsafe { (*next).df_lnum[idx1] } - 1;
-        if last >= map.len() as linenr_T || right >= map.len() as linenr_T {
+        if last >= map.len() as LineNr || right >= map.len() as LineNr {
             dp = next;
             continue;
         }
@@ -155,7 +155,7 @@ unsafe fn refine_inline_word(
     dp_orig: *mut diff_T,
     linemap: &LineMap,
     idx1: usize,
-    start_lnum: linenr_T,
+    start_lnum: LineNr,
 ) {
     let buf = unsafe { (*curtab.get()).tp_diffbuf[idx1] };
     for _ in 0..4 {
@@ -169,7 +169,7 @@ unsafe fn refine_inline_word(
                 // The gap is only worth swallowing if it is *punctuation*
                 // between two changed words; a word in the gap is a real
                 // unchanged word and splitting there is the point.
-                let line = CStr::from_ptr(ml_get_buf(buf, start_lnum + entry1.lineoff as linenr_T))
+                let line = CStr::from_ptr(ml_get_buf(buf, start_lnum + entry1.lineoff as LineNr))
                     .to_bytes();
                 let gap = &line[(gap_start as usize).min(line.len())..];
                 let gap = &gap[..(gap_size as usize).min(gap.len())];
@@ -294,7 +294,7 @@ unsafe fn tokenize_line(
         }
         if !new_in_keyword || !in_keyword {
             map.push(linemap_entry_T {
-                byte_start: i as colnr_T,
+                byte_start: i as ColNr,
                 num_bytes: tok_len,
                 lineoff: off,
             });
@@ -320,12 +320,12 @@ unsafe fn tokenize_line(
         // highlight.
         out.push(NL as u8);
         map.push(linemap_entry_T {
-            byte_start: bytes.len() as colnr_T,
+            byte_start: bytes.len() as ColNr,
             // Upstream writes `sizeof(NL)`, and `NL` is a *character
             // constant*, so this is 4 rather than 1.  Reproduced: the
             // width lands in `dc_end` and so in what gets highlighted.
             // See O-B15-16.
-            num_bytes: ::core::mem::size_of::<c_int>() as colnr_T,
+            num_bytes: ::core::mem::size_of::<c_int>() as ColNr,
             lineoff: off,
         });
     }
@@ -358,7 +358,7 @@ fn change_for(new_diff: &diff_T, linemap: &LineMap) -> diffline_change_T {
                 change.dc_start_lnum_off[i] = e.lineoff;
             }
             None => {
-                change.dc_start[i] = MAXCOL as colnr_T;
+                change.dc_start[i] = MAXCOL as ColNr;
                 change.dc_start_lnum_off[i] = c_int::MAX;
             }
         }
@@ -372,7 +372,7 @@ fn change_for(new_diff: &diff_T, linemap: &LineMap) -> diffline_change_T {
                     change.dc_end_lnum_off[i] = e.lineoff;
                 }
                 None => {
-                    change.dc_end[i] = MAXCOL as colnr_T;
+                    change.dc_end[i] = MAXCOL as ColNr;
                     change.dc_end_lnum_off[i] = c_int::MAX;
                 }
             }

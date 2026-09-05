@@ -40,7 +40,7 @@ use crate::types::NUL;
 /// is the *text* and not an indent change.
 struct BlockInsertPre {
     /// Indent of the first line in bytes.
-    ind_pre_col: colnr_T,
+    ind_pre_col: ColNr,
     /// Indent of the first line in screen columns.
     ind_pre_vcol: c_int,
     /// Bytes of the first line from the block's column onwards (past the
@@ -141,7 +141,7 @@ fn measure_before_insert(oap: Op, bd: &mut block_def) -> Option<BlockInsertPre> 
         pre_textlen -= bd.textlen;
     }
     Some(BlockInsertPre {
-        ind_pre_col: unsafe { getwhitecols_curline() } as colnr_T,
+        ind_pre_col: unsafe { getwhitecols_curline() } as ColNr,
         ind_pre_vcol: get_indent(),
         pre_textlen,
     })
@@ -199,7 +199,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
     let mut did_indent = false;
     // If indenting kicked in the first line has moved -- but only count it
     // when the indent actually grew.
-    let ind_post_col = unsafe { getwhitecols_curline() } as colnr_T;
+    let ind_post_col = unsafe { getwhitecols_curline() } as ColNr;
     if cur_buf().b_op_start.col > pre.ind_pre_col && ind_post_col > pre.ind_pre_col {
         bd.textcol += ind_post_col - pre.ind_pre_col;
         ind_post_vcol = get_indent();
@@ -265,7 +265,7 @@ fn replay_insert(mut oap: Op, bd: &mut block_def, pre: &mut BlockInsertPre, star
     let mut len = ml_get_len(oap.start.lnum);
     let mut add = bd.textcol;
     // How far the cursor was moved during the insert.
-    let mut offset: colnr_T = 0;
+    let mut offset: ColNr = 0;
     if oap.op_type == OpType::Append {
         add += bd.textlen;
         // The cursor may have been moved during the insert when `$` was

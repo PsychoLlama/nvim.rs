@@ -117,7 +117,7 @@ static ml_get_recursive: GlobalCell<c_int> = GlobalCell::new(0);
 
 /// # Safety
 /// `buf` must point at a buffer.
-unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: linenr_T) -> *mut c_char {
+unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: LineNr) -> *mut c_char {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -139,7 +139,7 @@ unsafe fn ml_get_placeholder(buf: *mut buf_T, lnum: linenr_T) -> *mut c_char {
 /// `buf` must point at a buffer.
 pub(crate) unsafe fn ml_get_buf_impl(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     will_change: bool,
 ) -> *mut c_char {
     // SAFETY: the caller's buffer, reached through a handle that
@@ -207,7 +207,7 @@ pub(crate) unsafe fn ml_get_buf_impl(
         };
 
         let text = db_byte(dp, start as isize);
-        let len = end.wrapping_sub(start) as colnr_T;
+        let len = end.wrapping_sub(start) as ColNr;
         b.b_ml.cache_block_line(text, len, lnum);
     }
 
@@ -275,7 +275,7 @@ pub(crate) unsafe fn ml_flush_line(buf: *mut buf_T, noalloc: bool) {
 /// # Safety
 /// `hp` must be the block `ml_find_line(buf, lnum, ML_FIND)` returned, still
 /// locked, and `new_line` must hold `ml_line_textlen` readable bytes.
-unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: linenr_T, new_line: *mut c_char) {
+unsafe fn ml_store_line(buf: *mut buf_T, hp: *mut bhdr_T, lnum: LineNr, new_line: *mut c_char) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -398,7 +398,7 @@ pub(crate) unsafe fn ml_new_ptr(mfp: *mut memfile_T) -> *mut bhdr_T {
 ///
 /// # Safety
 /// `buf` must point at a buffer whose memline is open.
-pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int) -> *mut bhdr_T {
+pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: LineNr, action: c_int) -> *mut bhdr_T {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -433,10 +433,10 @@ pub(crate) unsafe fn ml_find_line(buf: *mut buf_T, lnum: linenr_T, action: c_int
         return core::ptr::null_mut(); // nothing else to do
     }
 
-    let mut bnum: blocknr_T = 1; // start at the root of the tree
+    let mut bnum: BlockNr = 1; // start at the root of the tree
     let mut page_count: c_int = 1;
-    let mut low: linenr_T = 1;
-    let mut high: linenr_T = b.b_ml.ml_line_count;
+    let mut low: LineNr = 1;
+    let mut high: LineNr = b.b_ml.ml_line_count;
 
     if action == ML_FIND as c_int {
         // The previous walk's stack usually still covers this line —

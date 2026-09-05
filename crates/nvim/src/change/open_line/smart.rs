@@ -69,9 +69,9 @@ impl Ln {
     }
 
     /// How far into `start` the cursor is.
-    fn col_in(self, start: Ln) -> colnr_T {
+    fn col_in(self, start: Ln) -> ColNr {
         // SAFETY: both cursors are inside the same line.
-        unsafe { self.0.offset_from(start.0) as colnr_T }
+        unsafe { self.0.offset_from(start.0) as ColNr }
     }
 }
 
@@ -82,7 +82,7 @@ fn indent_here() -> c_int {
 }
 
 /// Line `lnum` of the current buffer.
-fn line_at(lnum: linenr_T) -> *mut c_char {
+fn line_at(lnum: LineNr) -> *mut c_char {
     // SAFETY: every caller has just clamped `lnum` into the buffer.
     ml_get(lnum)
 }

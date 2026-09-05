@@ -51,8 +51,8 @@ use crate::registry::id_map;
 use crate::semsg;
 use crate::syntax::init_synblock;
 use crate::types::{
-    AdditionalData, Callback, Failed, FileID, OptInt, Timestamp, VAR_SCOPE, buf_T, colnr_T,
-    fmark_T, fmarkv_T, handle_T, int16_t, linenr_T, memline_T, pos_T, regprog_T, size_t, uint64_t,
+    AdditionalData, Callback, ColNr, Failed, FileID, LineNr, OptInt, Timestamp, VAR_SCOPE, buf_T,
+    fmark_T, fmarkv_T, handle_T, int16_t, memline_T, pos_T, regprog_T, size_t, uint64_t,
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
@@ -64,15 +64,15 @@ use super::pos::{Entry, WinInfos};
 /// `INIT_FMARK`: a mark that has never been set.
 pub(crate) const INIT_FMARK: fmark_T = fmark_T {
     mark: pos_T {
-        lnum: 0 as linenr_T,
-        col: 0 as colnr_T,
-        coladd: 0 as colnr_T,
+        lnum: 0 as LineNr,
+        col: 0 as ColNr,
+        coladd: 0 as ColNr,
     },
     fnum: 0,
     timestamp: 0 as Timestamp,
     view: fmarkv_T {
-        topline_offset: MAXLNUM as linenr_T,
-        skipcol: 0 as colnr_T,
+        topline_offset: MAXLNUM as LineNr,
+        skipcol: 0 as ColNr,
     },
     additional_data: ptr::null_mut::<AdditionalData>(),
 };
@@ -200,7 +200,7 @@ fn check_cursor_line(win: Win) {
 pub unsafe fn buflist_new(
     ffname_arg: *mut c_char,
     sfname_arg: *mut c_char,
-    lnum: linenr_T,
+    lnum: LineNr,
     flags: c_int,
 ) -> *mut buf_T {
     let mut ffname = ffname_arg;
@@ -328,7 +328,7 @@ pub unsafe fn buflist_new(
     buf.b_prompt_text = ptr::null_mut();
     buf.b_prompt_start = INIT_FMARK;
     // The default prompt is "% ".
-    buf.b_prompt_start.mark.col = 2 as colnr_T;
+    buf.b_prompt_start.mark.col = 2 as ColNr;
     buf.b_prompt_append_new_line = true;
 
     buf.raw()
@@ -336,11 +336,11 @@ pub unsafe fn buflist_new(
 
 /// The entry a buffer with this name already has: refresh its position and
 /// options, and list it if `BLN_LISTED` asked and it was not listed.
-fn reuse_entry(mut buf: Buf, lnum: linenr_T, flags: c_int) -> *mut buf_T {
-    if lnum != 0 as linenr_T {
+fn reuse_entry(mut buf: Buf, lnum: LineNr, flags: c_int) -> *mut buf_T {
+    if lnum != 0 as LineNr {
         let win = (flags & BLN_NOCURWIN as c_int == 0).then(current_win);
         // SAFETY: records a position in the buffer's own entry list.
-        unsafe { buflist_setfpos(buf, win, lnum, 0 as colnr_T, false) };
+        unsafe { buflist_setfpos(buf, win, lnum, 0 as ColNr, false) };
     }
     if flags & BLN_NOOPT as c_int == 0 {
         // Copy the options now, if 'cpo' doesn't have 's' and not done
@@ -599,7 +599,7 @@ pub unsafe fn free_buf_options(mut buf: Buf, free_p_ff: bool) {
 /// Go to buffer `n`, putting the cursor where it was left.
 pub unsafe fn buflist_getfile(
     n: c_int,
-    mut lnum: linenr_T,
+    mut lnum: LineNr,
     options: c_int,
     forceit: c_int,
 ) -> Result<(), Failed> {
@@ -622,10 +622,10 @@ pub unsafe fn buflist_getfile(
         return Err(Failed);
     }
 
-    let mut col: colnr_T = 0;
+    let mut col: ColNr = 0;
     let mut fm: *mut fmark_T = ptr::null_mut();
     let mut restore_view = false;
-    if lnum == 0 as linenr_T {
+    if lnum == 0 as LineNr {
         // Default line number: where the cursor was left last time.
         // SAFETY: a live buffer; the answer is a live mark.
         fm = unsafe { buflist_findfmark(buf) };
@@ -655,7 +655,7 @@ pub unsafe fn buflist_getfile(
         let mut win = current_win();
         win.w_cursor.col = col;
         check_cursor_column(win);
-        win.w_cursor.coladd = 0 as colnr_T;
+        win.w_cursor.coladd = 0 as ColNr;
         win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 && restore_view {
@@ -703,11 +703,11 @@ pub(crate) unsafe fn buflist_getfpos() {
     win.w_cursor.lnum = lnum;
     check_cursor_line(win);
     if p_sol.get() != 0 {
-        win.w_cursor.col = 0 as colnr_T;
+        win.w_cursor.col = 0 as ColNr;
     } else {
         win.w_cursor.col = col;
         check_cursor_column(win);
-        win.w_cursor.coladd = 0 as colnr_T;
+        win.w_cursor.coladd = 0 as ColNr;
         win.w_set_curswant = true;
     }
     if jop_flags.get() & kOptJopFlagView as c_int as u32 != 0 {

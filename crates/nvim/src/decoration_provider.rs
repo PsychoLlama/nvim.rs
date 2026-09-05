@@ -35,8 +35,8 @@ use crate::r#move::validate_botline_win;
 use crate::msg_schedule_semsg_multiline;
 use crate::types::builders::ArrayBuf;
 use crate::types::{
-    Array, DecorProvider, DecorProvider_state, Error, Integer, LuaRef, LuaRetMode, NS, Object,
-    buf_T, linenr_T, win_T,
+    Array, DecorProvider, DecorProvider_state, Error, Integer, LineNr, LuaRef, LuaRetMode, NS,
+    Object, buf_T, win_T,
 };
 use crate::winlayer::Win;
 
@@ -308,7 +308,7 @@ pub(crate) unsafe fn decor_providers_invoke_win(wp: *mut win_T, state: DecorStat
     if provider_count() > 0 {
         validate_botline_win(unsafe { Win::new(wp) });
     }
-    let botline: linenr_T =
+    let botline: LineNr =
         unsafe { (*wp).w_botline }.min(unsafe { (*(*wp).w_buffer).b_ml.ml_line_count });
 
     for idx in 0..provider_count() {

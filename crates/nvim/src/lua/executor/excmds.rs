@@ -30,7 +30,7 @@ use crate::os::fileio::{file_close, file_open_stdin};
 use crate::runtime::cmd_source_buffer;
 use crate::strings::vim_snprintf;
 use crate::types::{
-    FileDescriptor, IOSIZE, buf_T, colnr_T, exarg_T, linenr_T, lua_Number, size_t, typval_T,
+    ColNr, FileDescriptor, IOSIZE, LineNr, buf_T, exarg_T, lua_Number, size_t, typval_T,
 };
 use crate::undo::u_save;
 
@@ -145,7 +145,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
         }
 
         let was_curbuf: *mut buf_T = curbuf.get();
-        let mut l: linenr_T = (*eap).line1;
+        let mut l: LineNr = (*eap).line1;
         while l <= (*eap).line2 {
             if l > (*curbuf.get()).b_ml.ml_line_count {
                 break;
@@ -173,7 +173,7 @@ pub unsafe fn ex_luado(eap: *mut exarg_T) {
                     }
                 }
                 let _ = ml_replace(l, new_line_transformed, false);
-                inserted_bytes(l, 0 as colnr_T, old_line_len, new_line_len as c_int);
+                inserted_bytes(l, 0 as ColNr, old_line_len, new_line_len as c_int);
             }
             lua_pop(lstate, 1);
             l += 1;

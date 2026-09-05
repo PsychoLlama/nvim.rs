@@ -99,7 +99,7 @@ enum Minus {
 /// # Safety
 /// `oap` must point to a live `oparg_T` describing a region of the current
 /// buffer.
-pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: linenr_T, g_cmd: bool) {
+pub unsafe fn op_addsub(oap: *mut oparg_T, prenum1: LineNr, g_cmd: bool) {
     // SAFETY: the caller's promise -- a live `oparg_T` of the current buffer.
     // Everything below works on that region and on the cursor line, which is
     // what `u_save`, `do_addsub` and `changed_lines` each ask for.
@@ -219,7 +219,7 @@ pub unsafe fn do_addsub(
     op_type: OpType,
     pos: *mut pos_T,
     mut length: c_int,
-    prenum1: linenr_T,
+    prenum1: LineNr,
 ) -> bool {
     // SAFETY: the caller's promise -- `pos` names a position of the current
     // buffer, so its line is a live NUL-terminated string.
@@ -228,7 +228,7 @@ pub unsafe fn do_addsub(
     let visual = visual_active();
     let save_cursor = cur_win().w_cursor;
 
-    let mut save_coladd: colnr_T = 0;
+    let mut save_coladd: ColNr = 0;
     if virtual_active(cur_win()) {
         save_coladd = pos.coladd;
         pos.coladd = 0;
@@ -302,7 +302,7 @@ pub unsafe fn do_addsub(
 }
 
 /// Put the cursor back where the caller expects it, and answer `did_change`.
-fn finish_addsub(visual: bool, did_change: bool, save_cursor: pos_T, save_coladd: colnr_T) -> bool {
+fn finish_addsub(visual: bool, did_change: bool, save_cursor: pos_T, save_coladd: ColNr) -> bool {
     if visual {
         cur_win().w_cursor = save_cursor;
     } else if did_change {
@@ -326,17 +326,17 @@ fn finish_addsub(visual: bool, did_change: bool, save_cursor: pos_T, save_coladd
 ///
 /// # Safety
 /// `ptr` must be a NUL-terminated line and `start_col` a column in it.
-unsafe fn find_number_start(ptr: *mut c_char, start_col: colnr_T, fmt: &NrFormats) -> colnr_T {
+unsafe fn find_number_start(ptr: *mut c_char, start_col: ColNr, fmt: &NrFormats) -> ColNr {
     // SAFETY: the caller's promise -- every column the walks below reach is
     // one of `ptr`'s, the terminating NUL included, and the walks stop there.
-    let byte = |c: colnr_T| unsafe { *ptr.offset(c as isize) } as c_int;
+    let byte = |c: ColNr| unsafe { *ptr.offset(c as isize) } as c_int;
     // Step back one character, not one byte.
-    let back = |c: colnr_T| {
+    let back = |c: ColNr| {
         let c = c - 1;
         c - unsafe { utf_head_off(ptr, ptr.offset(c as isize)) }
     };
     // `0x`/`0b` at `col`, with a digit of that base after it.
-    let prefixed_at = |c: colnr_T, upper: u8, lower: u8, digit: fn(c_int) -> bool| {
+    let prefixed_at = |c: ColNr, upper: u8, lower: u8, digit: fn(c_int) -> bool| {
         c > 0
             && (byte(c) == c_int::from(upper) || byte(c) == c_int::from(lower))
             && byte(c - 1) == '0' as c_int
@@ -392,12 +392,12 @@ unsafe fn find_number_start(ptr: *mut c_char, start_col: colnr_T, fmt: &NrFormat
 /// `ptr` must be a NUL-terminated line and `col` a column in it.
 unsafe fn visual_skip_to_number(
     ptr: *mut c_char,
-    mut col: colnr_T,
+    mut col: ColNr,
     mut length: c_int,
     fmt: &NrFormats,
-) -> Option<(colnr_T, c_int)> {
+) -> Option<(ColNr, c_int)> {
     // SAFETY: the caller's promise -- `col` stays a column of `ptr`.
-    let byte = |c: colnr_T| unsafe { *ptr.offset(c as isize) } as c_int;
+    let byte = |c: ColNr| unsafe { *ptr.offset(c as isize) } as c_int;
     while byte(col) != NUL
         && length > 0
         && !ascii_isdigit(byte(col))
@@ -417,7 +417,7 @@ unsafe fn visual_skip_to_number(
 ///
 /// # Safety
 /// `ptr` must be a NUL-terminated line and `col` a column in it.
-unsafe fn minus_before(ptr: *mut c_char, col: colnr_T, min_col: colnr_T, fmt: &NrFormats) -> Minus {
+unsafe fn minus_before(ptr: *mut c_char, col: ColNr, min_col: ColNr, fmt: &NrFormats) -> Minus {
     // SAFETY: the caller's promise -- `col` is a column of `ptr`, and each
     // read below is guarded by the bound that keeps it inside the line.
     if !(col > min_col
@@ -445,11 +445,11 @@ unsafe fn minus_before(ptr: *mut c_char, col: colnr_T, min_col: colnr_T, fmt: &N
 unsafe fn bump_alpha_char(
     mut firstdigit: c_int,
     op_type: OpType,
-    prenum1: linenr_T,
-    col: colnr_T,
+    prenum1: LineNr,
+    col: ColNr,
 ) -> (pos_T, pos_T) {
     // The letter's ordinal within its own case.
-    let ord = linenr_T::from(if firstdigit < 'a' as c_int {
+    let ord = LineNr::from(if firstdigit < 'a' as c_int {
         firstdigit - 'A' as c_int
     } else {
         firstdigit - 'a' as c_int
@@ -486,7 +486,7 @@ struct Scan {
     /// Its length in bytes.
     linelen: c_int,
     /// Column the number starts at.
-    col: colnr_T,
+    col: ColNr,
     /// First byte of the number, which decides whether leading zeros are kept.
     firstdigit: c_int,
     /// A Visual selection is active.
@@ -510,7 +510,7 @@ struct Scan {
 unsafe fn replace_number(
     op_type: OpType,
     length: &mut c_int,
-    prenum1: linenr_T,
+    prenum1: LineNr,
     fmt: &NrFormats,
     scan: Scan,
 ) -> (pos_T, pos_T) {
@@ -630,7 +630,7 @@ unsafe fn replace_number(
 /// nothing is added at all.
 fn add_or_subtract(
     mut n: uvarnumber_T,
-    prenum1: linenr_T,
+    prenum1: LineNr,
     subtract: bool,
     mut negative: bool,
     overflow: bool,

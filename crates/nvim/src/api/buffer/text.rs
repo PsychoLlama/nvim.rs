@@ -58,9 +58,8 @@ pub unsafe fn nvim_buf_set_text(
         error = err_out_of_range(c"end_row");
         return ().reported(error);
     }
-    let mut str_at_start: *mut ::core::ffi::c_char =
-        unsafe { ml_get_buf(b, start_row as linenr_T) };
-    let len_at_start: colnr_T = unsafe { ml_get_buf_len(b, start_row as linenr_T) };
+    let mut str_at_start: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, start_row as LineNr) };
+    let len_at_start: ColNr = unsafe { ml_get_buf_len(b, start_row as LineNr) };
     str_at_start = unsafe { arena_memdupz(arena, str_at_start, len_at_start as size_t) };
     start_col = if start_col < 0 as Integer {
         len_at_start as Integer + start_col + 1 as Integer
@@ -71,8 +70,8 @@ pub unsafe fn nvim_buf_set_text(
         error = err_out_of_range(c"start_col");
         return ().reported(error);
     }
-    let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as linenr_T) };
-    let len_at_end: colnr_T = unsafe { ml_get_buf_len(b, end_row as linenr_T) };
+    let mut str_at_end: *mut ::core::ffi::c_char = unsafe { ml_get_buf(b, end_row as LineNr) };
+    let len_at_end: ColNr = unsafe { ml_get_buf_len(b, end_row as LineNr) };
     str_at_end = unsafe { arena_memdupz(arena, str_at_end, len_at_end as size_t) };
     end_col = if end_col < 0 as Integer {
         len_at_end as Integer + end_col + 1 as Integer
@@ -103,7 +102,7 @@ pub unsafe fn nvim_buf_set_text(
         let mut i: int64_t = 1 as int64_t;
         while i < end_row - start_row {
             let lnum: int64_t = start_row as int64_t + i;
-            old_byte += (unsafe { ml_get_buf_len(b, lnum as linenr_T) } + 1 as ::core::ffi::c_int)
+            old_byte += (unsafe { ml_get_buf_len(b, lnum as LineNr) } + 1 as ::core::ffi::c_int)
                 as bcount_t;
             i += 1;
         }
@@ -211,8 +210,8 @@ pub unsafe fn nvim_buf_set_text(
             error = Error::exception(why);
         } else if u_save_buf(
             unsafe { Buf::new(b) },
-            start_row as linenr_T - 1 as linenr_T,
-            end_row as linenr_T + 1 as linenr_T,
+            start_row as LineNr - 1 as LineNr,
+            end_row as LineNr + 1 as LineNr,
         )
         .is_err()
         {
@@ -228,7 +227,7 @@ pub unsafe fn nvim_buf_set_text(
             };
             let mut i_1: size_t = 0 as size_t;
             while i_1 < to_delete {
-                if unsafe { ml_delete_buf(b, start_row as linenr_T, false) }.is_err() {
+                if unsafe { ml_delete_buf(b, start_row as LineNr, false) }.is_err() {
                     let why = c"Failed to delete line";
                     error = Error::exception(why);
                     break 's_652;
@@ -248,7 +247,7 @@ pub unsafe fn nvim_buf_set_text(
                     error = Error::validation(why);
                     break 's_652;
                 } else if unsafe {
-                    ml_replace_buf(b, lnum_0 as linenr_T, *lines.add(i_2), false, true)
+                    ml_replace_buf(b, lnum_0 as LineNr, *lines.add(i_2), false, true)
                 }
                 .is_err()
                 {
@@ -267,7 +266,7 @@ pub unsafe fn nvim_buf_set_text(
                     error = Error::validation(why);
                     break 's_652;
                 } else if unsafe {
-                    ml_append_buf(b, lnum_1 as linenr_T, *lines.add(i_3), 0 as colnr_T, false)
+                    ml_append_buf(b, lnum_1 as LineNr, *lines.add(i_3), 0 as ColNr, false)
                 }
                 .is_err()
                 {
@@ -279,24 +278,24 @@ pub unsafe fn nvim_buf_set_text(
                     i_3 = i_3.wrapping_add(1);
                 }
             }
-            let col_extent: colnr_T = (end_col
+            let col_extent: ColNr = (end_col
                 - (if end_row == start_row {
                     start_col
                 } else {
                     0 as Integer
-                })) as colnr_T;
-            let adjust: linenr_T = if end_row >= start_row {
-                MAXLNUM as ::core::ffi::c_int as linenr_T
+                })) as ColNr;
+            let adjust: LineNr = if end_row >= start_row {
+                MAXLNUM as ::core::ffi::c_int as LineNr
             } else {
-                0 as linenr_T
+                0 as LineNr
             };
             unsafe {
                 mark_adjust_buf(
                     b,
-                    start_row as linenr_T,
-                    end_row as linenr_T - 1 as linenr_T,
+                    start_row as LineNr,
+                    end_row as LineNr - 1 as LineNr,
                     adjust,
-                    extra as linenr_T,
+                    extra as LineNr,
                     true,
                     kMarkAdjustApi,
                     kExtmarkNOOP,
@@ -308,13 +307,13 @@ pub unsafe fn nvim_buf_set_text(
                     fix_pos_col(
                         b,
                         &raw mut anchor,
-                        start_row as linenr_T,
-                        start_col as colnr_T,
-                        end_row as linenr_T,
-                        end_col as colnr_T,
-                        new_len as linenr_T,
-                        last_item.len() as colnr_T,
-                        1 as colnr_T,
+                        start_row as LineNr,
+                        start_col as ColNr,
+                        end_row as LineNr,
+                        end_col as ColNr,
+                        new_len as LineNr,
+                        last_item.len() as ColNr,
+                        1 as ColNr,
                     )
                 };
                 set_visual_anchor(anchor);
@@ -324,22 +323,22 @@ pub unsafe fn nvim_buf_set_text(
                 extmark_splice(
                     b,
                     start_row as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    start_col as colnr_T,
+                    start_col as ColNr,
                     (end_row - start_row) as ::core::ffi::c_int,
                     col_extent,
                     old_byte,
                     new_len as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    last_item.len() as colnr_T,
+                    last_item.len() as ColNr,
                     new_byte,
                     kExtmarkUndo,
                 )
             };
             changed_lines(
                 unsafe { Buf::new(b) },
-                start_row as linenr_T,
-                start_col as colnr_T,
-                end_row as linenr_T + 1 as linenr_T,
-                extra as linenr_T,
+                start_row as LineNr,
+                start_col as ColNr,
+                end_row as LineNr + 1 as LineNr,
+                extra as LineNr,
                 true,
             );
             for win in tab_windows().map(Win::raw) {
@@ -350,18 +349,18 @@ pub unsafe fn nvim_buf_set_text(
                         unsafe {
                             fix_cursor_cols(
                                 win,
-                                start_row as linenr_T,
-                                start_col as colnr_T,
-                                end_row as linenr_T,
-                                end_col as colnr_T,
-                                new_len as linenr_T,
-                                last_item.len() as colnr_T,
+                                start_row as LineNr,
+                                start_col as ColNr,
+                                end_row as LineNr,
+                                end_col as ColNr,
+                                new_len as LineNr,
+                                last_item.len() as ColNr,
                             )
                         };
                     } else {
-                        let (lo, hi) = (start_row as linenr_T, end_row as linenr_T);
+                        let (lo, hi) = (start_row as LineNr, end_row as LineNr);
                         // SAFETY: a live window showing this buffer.
-                        unsafe { fix_cursor(win, lo, hi, extra as linenr_T) };
+                        unsafe { fix_cursor(win, lo, hi, extra as LineNr) };
                     }
                 }
             }
@@ -371,13 +370,13 @@ pub unsafe fn nvim_buf_set_text(
     ().reported(error)
 }
 
-pub(crate) unsafe fn fix_cursor(win: *mut win_T, lo: linenr_T, hi: linenr_T, extra: linenr_T) {
+pub(crate) unsafe fn fix_cursor(win: *mut win_T, lo: LineNr, hi: LineNr, extra: LineNr) {
     // SAFETY: the caller's promise -- `win` is a live window.
     let mut win = unsafe { Win::new(win) };
     if win.w_cursor.lnum >= lo {
         if win.w_cursor.lnum >= hi {
             win.w_cursor.lnum += extra;
-        } else if extra < 0 as linenr_T {
+        } else if extra < 0 as LineNr {
             check_cursor_lnum(win);
         }
         check_cursor_col(win);
@@ -392,13 +391,13 @@ pub(crate) unsafe fn fix_cursor(win: *mut win_T, lo: linenr_T, hi: linenr_T, ext
 unsafe fn fix_pos_col(
     buf: *mut buf_T,
     pos: *mut pos_T,
-    start_row: linenr_T,
-    start_col: colnr_T,
-    end_row: linenr_T,
-    end_col: colnr_T,
-    new_rows: linenr_T,
-    new_cols_at_end_row: colnr_T,
-    mode_col_adj: colnr_T,
+    start_row: LineNr,
+    start_col: ColNr,
+    end_row: LineNr,
+    end_col: ColNr,
+    new_rows: LineNr,
+    new_cols_at_end_row: ColNr,
+    mode_col_adj: ColNr,
 ) {
     // SAFETY: the caller's promise -- `pos` is a live position, and nothing
     // below can move it.
@@ -406,31 +405,31 @@ unsafe fn fix_pos_col(
     if pos.lnum < start_row {
         return;
     }
-    let old_rows: linenr_T = end_row - start_row + 1 as linenr_T;
-    let lnum_shift: linenr_T = new_rows - old_rows;
+    let old_rows: LineNr = end_row - start_row + 1 as LineNr;
+    let lnum_shift: LineNr = new_rows - old_rows;
     if pos.lnum > end_row {
         pos.lnum += lnum_shift;
         return;
     }
-    let end_row_change_start: colnr_T = if new_rows == 1 as linenr_T {
+    let end_row_change_start: ColNr = if new_rows == 1 as LineNr {
         start_col
     } else {
-        0 as colnr_T
+        0 as ColNr
     };
-    let end_row_change_end: colnr_T = end_row_change_start + new_cols_at_end_row;
+    let end_row_change_end: ColNr = end_row_change_start + new_cols_at_end_row;
     if pos.lnum == end_row && pos.col + mode_col_adj > end_col {
         pos.lnum += lnum_shift;
         pos.col += end_row_change_end - end_col;
         return;
     }
-    let old_coladd: colnr_T = pos.coladd;
+    let old_coladd: ColNr = pos.coladd;
     let coladd = pos.coladd;
     pos.col += coladd;
-    pos.coladd = 0 as ::core::ffi::c_int as colnr_T;
-    let new_end_row: linenr_T = start_row + new_rows - 1 as linenr_T;
+    pos.coladd = 0 as ::core::ffi::c_int as ColNr;
+    let new_end_row: LineNr = start_row + new_rows - 1 as LineNr;
     if pos.lnum > new_end_row {
         pos.lnum = new_end_row;
-        let len: colnr_T = unsafe { ml_get_buf_len(buf, new_end_row) };
+        let len: ColNr = unsafe { ml_get_buf_len(buf, new_end_row) };
         if pos.col < len {
             pos.col = len;
         }
@@ -448,17 +447,17 @@ unsafe fn fix_pos_col(
 
 unsafe fn fix_cursor_cols(
     win: *mut win_T,
-    start_row: linenr_T,
-    start_col: colnr_T,
-    end_row: linenr_T,
-    end_col: colnr_T,
-    new_rows: linenr_T,
-    new_cols_at_end_row: colnr_T,
+    start_row: LineNr,
+    start_col: ColNr,
+    end_row: LineNr,
+    end_col: ColNr,
+    new_rows: LineNr,
+    new_cols_at_end_row: ColNr,
 ) {
-    let mode_col_adj: colnr_T = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
-        0 as colnr_T
+    let mode_col_adj: ColNr = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
+        0 as ColNr
     } else {
-        1 as colnr_T
+        1 as ColNr
     };
     unsafe {
         fix_pos_col(

@@ -95,8 +95,8 @@ unsafe fn apply_pre(
 pub(crate) unsafe fn buf_write_do_autocmds(
     buf: *mut buf_T,
     names: &mut WriteNames,
-    start: linenr_T,
-    end: &mut linenr_T,
+    start: LineNr,
+    end: &mut LineNr,
     eap: *mut exarg_T,
     mode: WriteMode,
     orig: OpMarks,

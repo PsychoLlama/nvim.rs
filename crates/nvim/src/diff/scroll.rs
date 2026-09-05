@@ -24,7 +24,7 @@ use core::ffi::c_int;
 /// Blocks are adjacent when one ends exactly where the next begins, and a run
 /// of them is one unbroken stretch of screen rows -- the unit both windows
 /// have to agree on.
-fn find_top_diff_block(fromidx: usize, topline: linenr_T) -> (Option<Df>, Option<Df>) {
+fn find_top_diff_block(fromidx: usize, topline: LineNr) -> (Option<Df>, Option<Df>) {
     let mut thistopdiff = None;
     let mut runstart = None;
     let mut start_next_run = true;
@@ -63,9 +63,9 @@ fn find_top_diff_block(fromidx: usize, topline: linenr_T) -> (Option<Df>, Option
 fn calculate_topfill_and_topline(
     fromidx: usize,
     toidx: usize,
-    from_topline: linenr_T,
+    from_topline: LineNr,
     from_topfill: c_int,
-) -> (Option<c_int>, linenr_T) {
+) -> (Option<c_int>, LineNr) {
     let (thistopdiff, next_adjacent_blocks) = find_top_diff_block(fromidx, from_topline);
     // The run ends here; `Df` has no equality of its own, so the comparison
     // the walks below make is against the raw pointer.
@@ -238,7 +238,7 @@ pub unsafe fn diff_move_to(dir: c_int, mut count: c_int) -> Result<(), Failed> {
 ///
 /// `baseline` accumulates how far the two buffers have drifted apart over the
 /// blocks passed so far, which is the answer for any line outside a block.
-fn diff_get_corresponding_line_int(buf1: Buf, lnum1: linenr_T) -> linenr_T {
+fn diff_get_corresponding_line_int(buf1: Buf, lnum1: LineNr) -> LineNr {
     let tp = cur_tab();
     let idx1 = diff_slot(buf1, tp);
     let idx2 = diff_slot(cur_buf(), tp);
@@ -282,7 +282,7 @@ fn diff_get_corresponding_line_int(buf1: Buf, lnum1: linenr_T) -> linenr_T {
 /// [`diff_get_corresponding_line_int`], clamped to the buffer.
 ///
 /// Safe: a [`Buf`] carries the whole of the promise this needs.
-pub fn diff_get_corresponding_line(buf1: Buf, lnum1: linenr_T) -> linenr_T {
+pub fn diff_get_corresponding_line(buf1: Buf, lnum1: LineNr) -> LineNr {
     diff_get_corresponding_line_int(buf1, lnum1).min(cur_buf().b_ml.ml_line_count)
 }
 
@@ -293,7 +293,7 @@ pub fn diff_get_corresponding_line(buf1: Buf, lnum1: linenr_T) -> linenr_T {
 /// running past the block would point at the next change.
 ///
 /// Safe: a [`Win`] carries the whole of the promise this needs.
-pub fn diff_lnum_win(lnum: linenr_T, wp: Win) -> linenr_T {
+pub fn diff_lnum_win(lnum: LineNr, wp: Win) -> LineNr {
     let tp = cur_tab();
     let idx = diff_slot(cur_buf(), tp);
     if idx == DB_COUNT {

@@ -84,7 +84,7 @@ use crate::shada::shada_read_everything;
 use crate::syntax::syn_maybe_enable;
 use crate::terminal::{terminal_init, terminal_teardown};
 use crate::types::{
-    CallbackReader, IOSIZE, NUL, OptInt, Vv, int64_t, linenr_T, list_T, qf_info_T, varnumber_T,
+    CallbackReader, IOSIZE, LineNr, NUL, OptInt, Vv, int64_t, list_T, qf_info_T, varnumber_T,
 };
 use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
@@ -480,7 +480,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     if cur_win().w_onebuf_opt.wo_diff != 0 && cur_win().w_onebuf_opt.wo_scb != 0 {
         update_topline(unsafe { Win::current() });
-        unsafe { check_scrollbind(0 as linenr_T, 0) };
+        unsafe { check_scrollbind(0 as LineNr, 0) };
         time_msg_at(c"diff scrollbinding");
     }
 

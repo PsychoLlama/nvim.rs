@@ -80,7 +80,7 @@ pub(crate) unsafe fn block_insert(
         let ts_val;
         let mut count = 0;
         let mut spaces = 0;
-        let mut offset: colnr_T;
+        let mut offset: ColNr;
         if b_insert {
             ts_val = bdp.start_char_vcols;
             spaces = bdp.startspaces;
@@ -142,16 +142,16 @@ pub(crate) unsafe fn block_insert(
         // Pre-padding, then the new text.
         let pad = unsafe { newp.offset(offset as isize) } as *mut c_void;
         unsafe { pad.cast::<u8>().write_bytes(b' ', spaces as size_t) };
-        let at = unsafe { newp.offset((offset + spaces as colnr_T) as isize) } as *mut c_void;
+        let at = unsafe { newp.offset((offset + spaces as ColNr) as isize) } as *mut c_void;
         unsafe { at.cast::<u8>().copy_from(s.cast(), slen) };
-        offset += slen as colnr_T;
+        offset += slen as ColNr;
 
         if spaces > 0 && bdp.is_short == 0 {
             if unsafe { *oldp } as c_int == TAB {
                 // Post-padding: the rest of the TAB being split, which is
                 // then dropped rather than copied.
                 let tail =
-                    unsafe { newp.offset((offset + spaces as colnr_T) as isize) } as *mut c_void;
+                    unsafe { newp.offset((offset + spaces as ColNr) as isize) } as *mut c_void;
                 let into = tail.cast::<u8>();
                 unsafe { into.write_bytes(b' ', (ts_val - spaces) as size_t) };
                 oldp = unsafe { oldp.offset(1) };
@@ -248,7 +248,7 @@ pub fn restore_lbr(lbr_saved: bool) {
 /// # Safety
 /// `oap` and `bdp` must point to live structs, and `lnum` must be a line of
 /// the current buffer.
-pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T, is_del: bool) {
+pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: LineNr, is_del: bool) {
     // SAFETY: the caller's promise -- both point to live structs.
     let (oap, bdp) = unsafe { (&mut *oap, &mut *bdp) };
     // Unwanted line breaks would move every column measured below.
@@ -374,7 +374,7 @@ pub unsafe fn block_prep(oap: *mut oparg_T, bdp: *mut block_def, lnum: linenr_T,
         bdp.textlen = unsafe { pend.offset_from(pstart) } as c_int;
     }
 
-    bdp.textcol = unsafe { pstart.offset_from(line) } as colnr_T;
+    bdp.textcol = unsafe { pstart.offset_from(line) } as ColNr;
     bdp.textstart = pstart;
     restore_lbr(lbr_saved);
 }
@@ -394,7 +394,7 @@ pub unsafe fn charwise_block_prep(
     mut start: pos_T,
     mut end: pos_T,
     bdp: *mut block_def,
-    lnum: linenr_T,
+    lnum: LineNr,
     inclusive: bool,
 ) {
     // SAFETY: the caller's promise -- `bdp` is live and `lnum` is a line of
@@ -409,8 +409,8 @@ pub unsafe fn charwise_block_prep(
     bdp.is_oneChar = 0;
     bdp.start_char_vcols = 0;
 
-    let mut startcol: colnr_T = 0;
-    let mut endcol: colnr_T = MAXCOL;
+    let mut startcol: ColNr = 0;
+    let mut endcol: ColNr = MAXCOL;
 
     if lnum == start.lnum {
         startcol = start.col;
@@ -475,7 +475,7 @@ pub unsafe fn charwise_block_prep(
 /// `initial` is false when replaying, and asks for the 'selection' adjustment
 /// to be skipped. `redo_visual_vcol` is the recorded width a `.` replay uses
 /// instead of measuring the selection again.
-pub(crate) fn get_op_vcol(mut oap: Op, redo_visual_vcol: colnr_T, initial: bool) {
+pub(crate) fn get_op_vcol(mut oap: Op, redo_visual_vcol: ColNr, initial: bool) {
     if !visual_mode().is_block() || (!initial && oap.end.col < cur_win().w_view_width) {
         return;
     }

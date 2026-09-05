@@ -197,12 +197,12 @@ impl PartialEq for StlOpt {
 #[derive(Copy, Clone, Default)]
 pub struct statuscol_T {
     pub width: ::core::ffi::c_int,
-    pub lnum: linenr_T,
+    pub lnum: LineNr,
     pub sign_cul_id: ::core::ffi::c_int,
     pub draw: bool,
     pub hlrec: *mut stl_hlrec_t,
     pub foldinfo: foldinfo_T,
-    pub fold_vcol: [colnr_T; 9],
+    pub fold_vcol: [ColNr; 9],
     pub sattrs: *mut SignTextAttrs,
 }
 /// One highlight run of a built statusline.

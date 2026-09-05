@@ -50,7 +50,7 @@ use crate::spellsuggest::{
     MAXWLEN, SCORE_ICASE, SCORE_LIMITMAX, SCORE_MAXMAX, SCORE_REGION, SPS_DOUBLE, TAB, sps_flags,
     suginfo_T,
 };
-use crate::types::{NUL, int16_t, langp_T, linenr_T, slang_T, uint8_t};
+use crate::types::{LineNr, NUL, int16_t, langp_T, slang_T, uint8_t};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
 
@@ -251,7 +251,7 @@ pub(super) unsafe fn add_sound_suggest(
     // SAFETY: `sl_sugbuf` is the loaded `.sug` buffer and `soundfold_find`
     // returned a line number inside it; the line it hands back is a
     // NUL-terminated string owned by that buffer.
-    let nrline = unsafe { ml_get_buf((*slang).sl_sugbuf, sfwordnr as linenr_T + 1) };
+    let nrline = unsafe { ml_get_buf((*slang).sl_sugbuf, sfwordnr as LineNr + 1) };
     let deltas = unsafe { core::ffi::CStr::from_ptr(nrline) }.to_bytes();
     let mut pos = 0;
     let mut orgnr = 0;

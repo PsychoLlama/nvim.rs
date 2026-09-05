@@ -66,9 +66,9 @@ use crate::types::AutoEvent;
 use crate::types::TAB;
 use crate::types::ui::kUIMessages;
 use crate::types::{
-    AdditionalData, Callback, FILE, OptInt, OptMagic, Timestamp, colnr_T, dict_T, dictitem_T,
-    exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values, int64_t,
-    linenr_T, list_T, off_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T,
+    AdditionalData, Callback, ColNr, FILE, FileOffset, LineNr, OptInt, OptMagic, Timestamp, dict_T,
+    dictitem_T, exarg_T, expand_T, file_comparison, fmark_T, fmarkv_T, getf_retvalues, getf_values,
+    int64_t, list_T, optset_T, pos_T, ptrdiff_t, regmatch_T, size_t, taggy_T, typval_T,
     typval_vval_union, varnumber_T, vimconv_T,
 };
 use crate::ui::ui_has;
@@ -142,7 +142,7 @@ pub struct TagParts {
     pub tagkind_end: *mut ::core::ffi::c_char,
     pub user_data: *mut ::core::ffi::c_char,
     pub user_data_end: *mut ::core::ffi::c_char,
-    pub tagline: linenr_T,
+    pub tagline: LineNr,
 }
 pub const MT_IC_OFF: ::core::ffi::c_uint = 4;
 pub const MT_MASK: ::core::ffi::c_uint = 7;
@@ -181,15 +181,15 @@ static ptag_entry: GlobalCell<taggy_T> = GlobalCell::new(taggy_T {
     tagname: ::core::ptr::null_mut::<::core::ffi::c_char>(),
     fmark: fmark_T {
         mark: pos_T {
-            lnum: 0 as linenr_T,
-            col: 0 as colnr_T,
-            coladd: 0 as colnr_T,
+            lnum: 0 as LineNr,
+            col: 0 as ColNr,
+            coladd: 0 as ColNr,
         },
         fnum: 0 as ::core::ffi::c_int,
         timestamp: 0 as Timestamp,
         view: fmarkv_T {
-            topline_offset: MAXLNUM as ::core::ffi::c_int as linenr_T,
-            skipcol: 0 as colnr_T,
+            topline_offset: MAXLNUM as ::core::ffi::c_int as LineNr,
+            skipcol: 0 as ColNr,
         },
         additional_data: ::core::ptr::null_mut::<AdditionalData>(),
     },

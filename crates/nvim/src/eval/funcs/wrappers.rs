@@ -37,9 +37,9 @@ use crate::os::cshim::gettext;
 use crate::semsg;
 use crate::semsg_multiline;
 use crate::types::{
-    Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, MsgpackRpcRequestHandler, NUL, Object,
-    VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T, expand_T,
-    float_T, kBoolVarTrue, linenr_T, list_T, ptrdiff_t, typval_T, typval_vval_union, varnumber_T,
+    Arena, Array, Error, EvalFuncData, EvalFuncDef, Failed, LineNr, MsgpackRpcRequestHandler, NUL,
+    Object, VAR_BOOL, VAR_FLOAT, VAR_NUMBER, VAR_STRING, VAR_UNKNOWN, VarLock, blob_T, buf_T,
+    expand_T, float_T, kBoolVarTrue, list_T, ptrdiff_t, typval_T, typval_vval_union, varnumber_T,
     win_T,
 };
 use crate::winlayer::{Buf, Win, last_buffer};
@@ -96,7 +96,7 @@ pub(crate) fn arg_bool_chk(tv: &typval_T, error: &mut bool) -> varnumber_T {
 
 /// Argument `tv` as a line number, resolving `"$"` and `"."` the way
 /// `line()` does.
-pub(crate) fn arg_lnum(tv: &typval_T) -> linenr_T {
+pub(crate) fn arg_lnum(tv: &typval_T) -> LineNr {
     // SAFETY: as [`arg_number`].
     unsafe { tv_get_lnum(tv) }
 }

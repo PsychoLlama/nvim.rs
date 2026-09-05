@@ -225,7 +225,7 @@ pub(crate) unsafe fn edit_unputchar() {
 /// # Safety
 /// Must run with a live `curwin` whose cursor line is at least `col_arg`
 /// bytes long.
-pub(crate) unsafe fn display_dollar(col_arg: colnr_T) {
+pub(crate) unsafe fn display_dollar(col_arg: ColNr) {
     let col = col_arg.max(0);
 
     if !unsafe { redrawing() } {
@@ -269,7 +269,7 @@ pub(crate) unsafe fn undisplay_dollar() {
 ///
 /// # Safety
 /// Must run with a live `curwin`.
-pub(crate) unsafe fn get_nolist_virtcol() -> colnr_T {
+pub(crate) unsafe fn get_nolist_virtcol() -> ColNr {
     let mut win = cur_win();
     if win.w_buffer.is_null()
         || win.buffer().b_ml.ml_mfp.is_null()

@@ -204,12 +204,12 @@ pub unsafe fn ex_diffgetput(eap: *mut exarg_T) {
         let below_end = line1 == cur_buf().b_ml.ml_line_count
             && unsafe { diff_check_with_linestatus(cur_win(), line1, status) } == 0
             && linestatus == 0
-            && (line1 == 1 as linenr_T
+            && (line1 == 1 as LineNr
                 || unsafe { diff_check_with_linestatus(cur_win(), line1 - 1, status) } >= 0
                     && linestatus == 0);
         if below_end {
             eap.line2 += 1;
-        } else if line1 > 0 as linenr_T {
+        } else if line1 > 0 as LineNr {
             eap.line1 -= 1;
         }
     }
@@ -292,12 +292,12 @@ fn diffgetput(
     idx_cur: c_int,
     idx_from: c_int,
     idx_to: c_int,
-    line1: linenr_T,
-    line2: linenr_T,
+    line1: LineNr,
+    line2: LineNr,
 ) {
     let (idx_cur, idx_from, idx_to) = (idx_cur as usize, idx_from as usize, idx_to as usize);
     let tp = cur_tab();
-    let mut off = 0 as linenr_T;
+    let mut off = 0 as LineNr;
     let mut dprev = ::core::ptr::null_mut::<diff_T>();
     let mut cursor = Df::first(tp);
     while let Some(mut dp) = cursor {
@@ -305,7 +305,7 @@ fn diffgetput(
             // Without a range, a run of blocks that touch is taken as one.
             while let Some(next) = dp.next()
                 && next.df_lnum[idx_cur] == dp.end(idx_cur)
-                && next.df_lnum[idx_cur] == line1 + off + 1 as linenr_T
+                && next.df_lnum[idx_cur] == line1 + off + 1 as LineNr
             {
                 dprev = dp.raw();
                 dp = next;
@@ -319,33 +319,32 @@ fn diffgetput(
         // the tail still needs its line numbers. Only the two arrays, never
         // the block -- a `diff_T` also carries a `garray_T` and its list
         // links, and `diff_free` releases all three.
-        let mut freed: Option<([linenr_T; DB_COUNT as usize], [linenr_T; DB_COUNT as usize])> =
-            None;
+        let mut freed: Option<([LineNr; DB_COUNT as usize], [LineNr; DB_COUNT as usize])> = None;
         let mut lnum = dp.df_lnum[idx_to];
         let mut count = dp.df_count[idx_to];
         // SAFETY: the editor exists; the short circuit is upstream's.
         let undoable =
-            dp.end(idx_cur) > line1 + off && u_save(lnum - 1 as linenr_T, lnum + count).is_ok();
+            dp.end(idx_cur) > line1 + off && u_save(lnum - 1 as LineNr, lnum + count).is_ok();
         if undoable {
             // With a range, the first and last block of it are only partly
             // copied; `start_skip`/`end_skip` are the parts left out.
-            let mut start_skip = 0 as linenr_T;
-            let mut end_skip = 0 as linenr_T;
+            let mut start_skip = 0 as LineNr;
+            let mut end_skip = 0 as LineNr;
             if addr_count > 0 {
                 start_skip = line1 + off - dp.df_lnum[idx_cur];
-                if start_skip > 0 as linenr_T {
+                if start_skip > 0 as LineNr {
                     if start_skip > count {
                         lnum += count;
-                        count = 0 as linenr_T;
+                        count = 0 as LineNr;
                     } else {
                         count -= start_skip;
                         lnum += start_skip;
                     }
                 } else {
-                    start_skip = 0 as linenr_T;
+                    start_skip = 0 as LineNr;
                 }
-                end_skip = dp.end(idx_cur) - 1 as linenr_T - (line2 + off);
-                if end_skip > 0 as linenr_T {
+                end_skip = dp.end(idx_cur) - 1 as LineNr - (line2 + off);
+                if end_skip > 0 as LineNr {
                     if idx_cur == idx_from {
                         count = count.min(dp.df_count[idx_cur] - start_skip - end_skip);
                     } else {
@@ -353,7 +352,7 @@ fn diffgetput(
                         end_skip = (dp.df_count[idx_from] - start_skip - count).max(0);
                     }
                 } else {
-                    end_skip = 0 as linenr_T;
+                    end_skip = 0 as LineNr;
                 }
             }
 
@@ -361,13 +360,13 @@ fn diffgetput(
             let mut buf_empty = unsafe { buf_is_empty(curbuf.get()) };
             let mut added: c_int = 0;
             for _ in 0..count {
-                buf_empty = cur_buf().b_ml.ml_line_count == 1 as linenr_T;
+                buf_empty = cur_buf().b_ml.ml_line_count == 1 as LineNr;
                 // SAFETY: the editor exists and `lnum` is a line of it.
                 if unsafe { ml_delete(lnum) }.is_ok() {
                     added -= 1;
                 }
             }
-            let mut i = 0 as linenr_T;
+            let mut i = 0 as LineNr;
             while i < dp.df_count[idx_from] - start_skip - end_skip {
                 let src = tp.tp_diffbuf[idx_from];
                 let nr = dp.df_lnum[idx_from] + start_skip + i;
@@ -378,22 +377,22 @@ fn diffgetput(
                 // SAFETY: a live buffer and a line number inside it.
                 let p = unsafe { xstrdup(ml_get_buf(src, nr)) };
                 // SAFETY: the editor exists; `p` is our own copy of the line.
-                let _ = unsafe { ml_append(lnum + i - 1 as linenr_T, p, 0 as colnr_T, false) };
+                let _ = unsafe { ml_append(lnum + i - 1 as LineNr, p, 0 as ColNr, false) };
                 unsafe { xfree(p.cast()) };
                 added += 1;
-                if buf_empty && cur_buf().b_ml.ml_line_count == 2 as linenr_T {
+                if buf_empty && cur_buf().b_ml.ml_line_count == 2 as LineNr {
                     buf_empty = false;
                     // SAFETY: the buffer holds the two lines just counted.
-                    let _ = unsafe { ml_delete(2 as linenr_T) };
+                    let _ = unsafe { ml_delete(2 as LineNr) };
                 }
                 i += 1;
             }
-            let new_count = dp.df_count[idx_to] + added as linenr_T;
+            let new_count = dp.df_count[idx_to] + added as LineNr;
             dp.df_count[idx_to] = new_count;
 
             // A block that now reads the same in every buffer is not a
             // difference any more.
-            if start_skip == 0 as linenr_T && end_skip == 0 as linenr_T {
+            if start_skip == 0 as LineNr && end_skip == 0 as LineNr {
                 let all_equal = (0..DB_COUNT as usize).all(|i| {
                     tp.tp_diffbuf[i].is_null()
                         || i == idx_from
@@ -410,9 +409,9 @@ fn diffgetput(
                 }
             }
 
-            let last = lnum + count - 1 as linenr_T;
-            let max = MAXLNUM as c_int as linenr_T;
-            let amount = added as linenr_T;
+            let last = lnum + count - 1 as LineNr;
+            let max = MAXLNUM as c_int as LineNr;
+            let amount = added as LineNr;
             if added != 0 {
                 // SAFETY: the editor exists.
                 unsafe { mark_adjust(lnum, last, max, amount, kExtmarkNOOP) };
@@ -431,7 +430,7 @@ fn diffgetput(
             changed_lines(
                 unsafe { Buf::new(cb) },
                 lnum,
-                0 as colnr_T,
+                0 as ColNr,
                 lnum + count,
                 amount,
                 true,

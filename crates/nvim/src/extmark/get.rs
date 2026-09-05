@@ -22,7 +22,7 @@ use crate::marktree::key::{
     MT_INVALID_KEY, mt_decor, mt_decor_any, mt_end, mt_paired, mtpair_from,
 };
 use crate::types::{
-    ExtmarkInfoArray, ExtmarkType, MTPair, MTPos, MarkTreeIter, buf_T, colnr_T, int64_t, uint32_t,
+    ColNr, ExtmarkInfoArray, ExtmarkType, MTPair, MTPos, MarkTreeIter, buf_T, int64_t, uint32_t,
 };
 
 /// Every mark between two positions, the ones at either end included.
@@ -32,9 +32,9 @@ pub unsafe fn extmark_get(
     buf: *mut buf_T,
     ns_id: uint32_t,
     l_row: c_int,
-    l_col: colnr_T,
+    l_col: ColNr,
     u_row: c_int,
-    u_col: colnr_T,
+    u_col: ColNr,
     amount: int64_t,
     type_filter: ExtmarkType,
     overlap: bool,

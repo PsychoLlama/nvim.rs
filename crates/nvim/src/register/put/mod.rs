@@ -53,10 +53,10 @@ pub(crate) struct Put {
     y_array: *mut String_0,
 
     /// Lines the put added, for `msgmore` and `mark_adjust`.
-    nr_lines: linenr_T,
+    nr_lines: LineNr,
     /// Where a `PUT_LINE_SPLIT` broke the cursor line, for the extmark
     /// splice.
-    split_pos: colnr_T,
+    split_pos: ColNr,
 }
 
 /// `".p` -- putting the last inserted text.
@@ -251,7 +251,7 @@ impl Put {
         // Kept for the extmark_splice() the multiline put emits.
         //
         // SAFETY: `p` is a position in `curline`.
-        self.split_pos = unsafe { p.offset_from(curline) } as colnr_T;
+        self.split_pos = unsafe { p.offset_from(curline) } as ColNr;
 
         // SAFETY: `p` is inside the cursor line, and what is left of the line
         // from there is `plen` less the bytes in front of it.
@@ -287,7 +287,7 @@ impl Put {
     /// The cursor must be on a valid line.
     unsafe fn save_for_undo(&self) -> bool {
         if self.y_type == kMTBlockWise {
-            let mut lnum = cur_win().w_cursor.lnum + self.y_size as linenr_T + 1;
+            let mut lnum = cur_win().w_cursor.lnum + self.y_size as LineNr + 1;
             lnum = lnum.min(cur_buf().b_ml.ml_line_count + 1);
             // SAFETY: the cursor is on a valid line and `lnum` is capped at
             // one past the last, so the range is the buffer's.

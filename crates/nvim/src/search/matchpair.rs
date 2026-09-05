@@ -255,7 +255,7 @@ unsafe fn make_plan(
             let col = pos.col as isize;
             let at = |off: isize| unsafe { *linep.offset(col + off) } as c_int;
             if unsafe { *ptr } as c_int == '#' as c_int
-                && pos.col <= unsafe { ptr.offset_from(linep) } as colnr_T
+                && pos.col <= unsafe { ptr.offset_from(linep) } as ColNr
             {
                 // Are we before or at #if, #else etc.?
                 let ptr = unsafe { skipwhite(ptr.offset(1)) };
@@ -362,7 +362,7 @@ unsafe fn find_hash_match(mut pos: pos_T, hash_dir: c_int, initc: c_int) -> Opti
         if unsafe { *ptr } as c_int != '#' as c_int {
             continue;
         }
-        pos.col = unsafe { ptr.offset_from(linep) } as colnr_T;
+        pos.col = unsafe { ptr.offset_from(linep) } as ColNr;
         let ptr = unsafe { skipwhite(ptr.offset(1)) };
         if hash_dir > 0 {
             if unsafe { starts_with(ptr, "if") } {

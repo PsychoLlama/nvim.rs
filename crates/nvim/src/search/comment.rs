@@ -55,7 +55,7 @@ pub(crate) unsafe fn find_rawstring_end(
         let mut p = unsafe { line.offset(from as isize) };
         while unsafe { *p } as c_int != NUL {
             if lnum == unsafe { (*endpos).lnum }
-                && unsafe { p.offset_from(line) } as colnr_T >= unsafe { (*endpos).col }
+                && unsafe { p.offset_from(line) } as ColNr >= unsafe { (*endpos).col }
             {
                 break;
             }
@@ -115,7 +115,7 @@ pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
                 && (unsafe { p.offset_from(line) } < 2
                     || (unsafe { *p.offset(-1) } as c_int != '\\' as c_int
                         && unsafe { *p.offset(-2) } as c_int != '#' as c_int))
-                && !unsafe { is_pos_in_string(line, p.offset_from(line) as colnr_T) }
+                && !unsafe { is_pos_in_string(line, p.offset_from(line) as ColNr) }
             {
                 break; // found!
             }
@@ -135,7 +135,7 @@ pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
                 && (p == line
                     || unsafe { *p.offset(-1) } as c_int != '*' as c_int
                     || unsafe { *p.offset(2) } as c_int != '*' as c_int)
-                && !unsafe { is_pos_in_string(line, p.offset_from(line) as colnr_T) }
+                && !unsafe { is_pos_in_string(line, p.offset_from(line) as ColNr) }
             {
                 break;
             }
@@ -149,7 +149,7 @@ pub unsafe fn check_linecomment(line: *const c_char) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a line of the current buffer.
-pub unsafe fn linewhite(lnum: linenr_T) -> bool {
+pub unsafe fn linewhite(lnum: LineNr) -> bool {
     // SAFETY: the slice is read and dropped before anything else runs, so
     // nothing can swap the line out from under it.
     let mut lines = unsafe { Lines::current() };

@@ -82,20 +82,20 @@ const SIN_NOMARK: c_uint = 8;
 ///
 /// # Safety
 /// `lnum` must be a valid line of the current buffer.
-pub(crate) unsafe fn line_vcol(lnum: linenr_T, col: colnr_T) -> c_int {
+pub(crate) unsafe fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
     let mut fp = pos_T {
         lnum,
         col,
         coladd: 0,
     };
-    let mut vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
     unsafe {
         getvcol(
             Win::new(curwin.get()),
             &raw mut fp,
             &raw mut vcol,
-            ::core::ptr::null_mut::<colnr_T>(),
-            ::core::ptr::null_mut::<colnr_T>(),
+            ::core::ptr::null_mut::<ColNr>(),
+            ::core::ptr::null_mut::<ColNr>(),
         )
     };
     vcol
@@ -115,7 +115,7 @@ pub(crate) fn byte_at(s: &[u8], i: usize) -> u8 {
 ///
 /// # Safety
 /// `vts`, if not null, must point at a count-prefixed array of that length.
-unsafe fn tabstops<'a>(vts: *const colnr_T) -> Option<tabstop::TabStops<'a>> {
+unsafe fn tabstops<'a>(vts: *const ColNr) -> Option<tabstop::TabStops<'a>> {
     if vts.is_null() {
         return None;
     }
@@ -128,7 +128,7 @@ unsafe fn tabstops<'a>(vts: *const colnr_T) -> Option<tabstop::TabStops<'a>> {
 ///
 /// # Safety
 /// `var` must be NUL-terminated and `array` must own its current value.
-pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut colnr_T) -> bool {
+pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut ColNr) -> bool {
     let text = unsafe { CStr::from_ptr(var) }.to_bytes();
     let parsed = match tabstop::parse(text) {
         Ok(parsed) => parsed,
@@ -148,7 +148,7 @@ pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut colnr_T) -> bool {
         *array = match parsed {
             None => ::core::ptr::null_mut(),
             Some(stops) => {
-                let out = xmalloc(size_of::<colnr_T>() * stops.len()) as *mut colnr_T;
+                let out = xmalloc(size_of::<ColNr>() * stops.len()) as *mut ColNr;
                 ::core::ptr::copy_nonoverlapping(stops.as_ptr(), out, stops.len());
                 out
             }
@@ -161,7 +161,7 @@ pub unsafe fn tabstop_set(var: *mut c_char, array: *mut *mut colnr_T) -> bool {
 ///
 /// # Safety
 /// `vts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_padding(col: colnr_T, ts: OptInt, vts: *const colnr_T) -> c_int {
+pub unsafe fn tabstop_padding(col: ColNr, ts: OptInt, vts: *const ColNr) -> c_int {
     match unsafe { tabstops(vts) } {
         Some(stops) => stops.padding(col),
         None => tabstop::uniform_padding(col, ts),
@@ -173,7 +173,7 @@ pub unsafe fn tabstop_padding(col: colnr_T, ts: OptInt, vts: *const colnr_T) -> 
 ///
 /// # Safety
 /// `vts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_at(col: colnr_T, ts: OptInt, vts: *const colnr_T, left: bool) -> c_int {
+pub unsafe fn tabstop_at(col: ColNr, ts: OptInt, vts: *const ColNr, left: bool) -> c_int {
     match unsafe { tabstops(vts) } {
         Some(stops) => stops.at(col, left),
         None => ts as c_int,
@@ -184,7 +184,7 @@ pub unsafe fn tabstop_at(col: colnr_T, ts: OptInt, vts: *const colnr_T, left: bo
 ///
 /// # Safety
 /// `vts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_start(col: colnr_T, ts: c_int, vts: *mut colnr_T) -> colnr_T {
+pub unsafe fn tabstop_start(col: ColNr, ts: c_int, vts: *mut ColNr) -> ColNr {
     match unsafe { tabstops(vts) } {
         Some(stops) => stops.start(col),
         None => col - col % ts,
@@ -198,10 +198,10 @@ pub unsafe fn tabstop_start(col: colnr_T, ts: c_int, vts: *mut colnr_T) -> colnr
 /// `vts` must be a valid tabstop array or null; the out-pointers must be
 /// writable.
 pub unsafe fn tabstop_fromto(
-    start_col: colnr_T,
-    end_col: colnr_T,
+    start_col: ColNr,
+    end_col: ColNr,
     ts_arg: c_int,
-    vts: *const colnr_T,
+    vts: *const ColNr,
     ntabs: *mut c_int,
     nspcs: *mut c_int,
 ) {
@@ -223,8 +223,8 @@ pub unsafe fn tabstop_fromto(
 ///
 /// # Safety
 /// Both must be valid tabstop arrays or null.
-unsafe fn tabstop_eq(ts1: *const colnr_T, ts2: *const colnr_T) -> bool {
-    let borrow = |ts: *const colnr_T| {
+unsafe fn tabstop_eq(ts1: *const ColNr, ts2: *const ColNr) -> bool {
+    let borrow = |ts: *const ColNr| {
         (!ts.is_null()).then(|| unsafe { ::core::slice::from_raw_parts(ts, *ts as usize + 1) })
     };
     tabstop::eq(borrow(ts1), borrow(ts2))
@@ -234,7 +234,7 @@ unsafe fn tabstop_eq(ts1: *const colnr_T, ts2: *const colnr_T) -> bool {
 ///
 /// # Safety
 /// `ts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_count(ts: *mut colnr_T) -> c_int {
+pub unsafe fn tabstop_count(ts: *mut ColNr) -> c_int {
     if ts.is_null() { 0 } else { unsafe { *ts } }
 }
 
@@ -242,7 +242,7 @@ pub unsafe fn tabstop_count(ts: *mut colnr_T) -> c_int {
 ///
 /// # Safety
 /// `ts` must be a valid tabstop array or null.
-pub unsafe fn tabstop_first(ts: *mut colnr_T) -> c_int {
+pub unsafe fn tabstop_first(ts: *mut ColNr) -> c_int {
     if ts.is_null() {
         8
     } else {
@@ -279,7 +279,7 @@ unsafe fn get_sw_value_pos(buf: *mut buf_T, pos: *mut pos_T, left: bool) -> c_in
 /// `buf` must be a live buffer.
 pub unsafe fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_int {
     let mut pos = unsafe { (*curwin.get()).w_cursor };
-    pos.col = unsafe { getwhitecols_curline() } as colnr_T;
+    pos.col = unsafe { getwhitecols_curline() } as ColNr;
     unsafe { get_sw_value_pos(buf, &raw mut pos, left) }
 }
 
@@ -287,7 +287,7 @@ pub unsafe fn get_sw_value_indent(buf: *mut buf_T, left: bool) -> c_int {
 ///
 /// # Safety
 /// `buf` must be a live buffer.
-pub unsafe fn get_sw_value_col(buf: *mut buf_T, col: colnr_T, left: bool) -> c_int {
+pub unsafe fn get_sw_value_col(buf: *mut buf_T, col: ColNr, left: bool) -> c_int {
     if unsafe { (*buf).b_p_sw } != 0 {
         unsafe { (*buf).b_p_sw as c_int }
     } else {
@@ -326,7 +326,7 @@ pub fn get_indent() -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line.
-pub unsafe fn get_indent_lnum(lnum: linenr_T) -> c_int {
+pub unsafe fn get_indent_lnum(lnum: LineNr) -> c_int {
     unsafe {
         indent_size_ts(
             ml_get(lnum),
@@ -340,7 +340,7 @@ pub unsafe fn get_indent_lnum(lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `lnum` must be a valid line of `buf`.
-pub unsafe fn get_indent_buf(buf: *mut buf_T, lnum: linenr_T) -> c_int {
+pub unsafe fn get_indent_buf(buf: *mut buf_T, lnum: LineNr) -> c_int {
     unsafe { indent_size_ts(ml_get_buf(buf, lnum), (*buf).b_p_ts, (*buf).b_p_vts_array) }
 }
 
@@ -383,7 +383,7 @@ pub unsafe fn indent_size_no_ts(ptr: *const c_char) -> c_int {
 /// `next` answers the indent's bytes and then NUL forever, which is how a
 /// pointer into a NUL-terminated line behaves and what makes this the whole
 /// arithmetic with none of the pointer.
-fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[colnr_T]>, ts: OptInt) -> c_int {
+fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
     let mut vcol: c_int = 0;
     let tabstop_width: c_int;
     let mut next_tab_vcol: c_int;
@@ -439,7 +439,7 @@ fn indent_width(mut next: impl FnMut() -> u8, stops: Option<&[colnr_T]>, ts: Opt
 /// # Safety
 /// `ptr` must point at a NUL-terminated string; `vts` must be a valid
 /// tabstop array or null.
-pub unsafe fn indent_size_ts(ptr: *const c_char, ts: OptInt, vts: *mut colnr_T) -> c_int {
+pub unsafe fn indent_size_ts(ptr: *const c_char, ts: OptInt, vts: *mut ColNr) -> c_int {
     debug_assert!(unsafe { char2cells(' ' as c_int) } == 1);
     // `vts[0]` is the count and `vts[1..=count]` the widths.
     let stops = (!vts.is_null() && unsafe { *vts } >= 1)
@@ -485,9 +485,8 @@ struct IndentPlan {
 unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> IndentPlan {
     let buf = curbuf.get();
     let preserve = flags & SIN_INSERT as c_int == 0 && unsafe { (*buf).b_p_pi } != 0;
-    let pad = |col: c_int| unsafe {
-        tabstop_padding(col as colnr_T, (*buf).b_p_ts, (*buf).b_p_vts_array)
-    };
+    let pad =
+        |col: c_int| unsafe { tabstop_padding(col as ColNr, (*buf).b_p_ts, (*buf).b_p_vts_array) };
     let mut plan = IndentPlan {
         doit: false,
         ind_len: 0,
@@ -579,9 +578,8 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     let oldline = get_cursor_line_ptr();
     // The size of the line, including the NUL.
     let mut line_len = get_cursor_line_len() + 1;
-    let pad = |col: c_int| unsafe {
-        tabstop_padding(col as colnr_T, (*buf).b_p_ts, (*buf).b_p_vts_array)
-    };
+    let pad =
+        |col: c_int| unsafe { tabstop_padding(col as ColNr, (*buf).b_p_ts, (*buf).b_p_vts_array) };
     // `STRICT_ADD`/`STRICT_SUB` (`macros.h`): the arithmetic sizing the
     // replacement line must not wrap, and upstream logs and aborts rather
     // than trusting a wrapped answer. `line` is the site in
@@ -618,7 +616,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
 
     // Columns (in bytes) of the old indent that were preserved, and so
     // that an extmark inside them must not be moved by.
-    let mut skipcols: colnr_T = 0;
+    let mut skipcols: ColNr = 0;
     // What is left to emit, in screen columns.
     let mut todo;
     let newline_size: usize;
@@ -715,8 +713,8 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
         ::core::slice::from_raw_parts(p as *const u8, line_len as usize)
     });
 
-    let old_offset = unsafe { p.offset_from(oldline) } as colnr_T;
-    let new_offset = n as colnr_T;
+    let old_offset = unsafe { p.offset_from(oldline) } as ColNr;
+    let new_offset = n as ColNr;
     let mut retval = false;
     // Replace the line, unless undo fails.
     if flags & SIN_UNDO as c_int == 0 || u_savesub(unsafe { (*curwin.get()).w_cursor.lnum }).is_ok()
@@ -754,7 +752,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     } else {
         unsafe { xfree(newline as *mut c_void) };
     }
-    unsafe { (*curwin.get()).w_cursor.col = ind_len as colnr_T };
+    unsafe { (*curwin.get()).w_cursor.col = ind_len as ColNr };
     retval
 }
 
@@ -767,7 +765,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
 ///
 /// # Safety
 /// There must be a current buffer and window.
-pub unsafe fn get_number_indent(lnum: linenr_T) -> c_int {
+pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
     if lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
         return -1;
     }
@@ -802,7 +800,7 @@ pub unsafe fn get_number_indent(lnum: linenr_T) -> c_int {
         // match start past the comment leader.
         if unsafe { vim_regexec(&raw mut regmatch, ml_get(lnum).offset(lead_len as isize), 0) } {
             pos.lnum = lnum;
-            pos.col = unsafe { regmatch.endp[0].offset_from(ml_get(lnum)) } as colnr_T;
+            pos.col = unsafe { regmatch.endp[0].offset_from(ml_get(lnum)) } as ColNr;
             pos.coladd = 0;
         }
         unsafe { vim_regfree(regmatch.regprog) };
@@ -819,7 +817,7 @@ mod tests {
 
     /// Ask [`indent_width`] about a line, the way a NUL-terminated one is
     /// read: the bytes, then the terminator forever.
-    fn width(line: &[u8], stops: Option<&[colnr_T]>, ts: OptInt) -> c_int {
+    fn width(line: &[u8], stops: Option<&[ColNr]>, ts: OptInt) -> c_int {
         let mut i = 0;
         indent_width(
             || {
@@ -853,7 +851,7 @@ mod tests {
 
     #[test]
     fn vartabstop_walks_the_stops() {
-        let stops: &[colnr_T] = &[3, 5, 7];
+        let stops: &[ColNr] = &[3, 5, 7];
         // A tab jumps to the end of the stop it is inside.
         assert_eq!(width(b"\tx", Some(stops), 8), 3);
         assert_eq!(width(b"\t\tx", Some(stops), 8), 8);
@@ -868,7 +866,7 @@ mod tests {
     fn a_stop_left_part_filled_answers_the_column_reached() {
         // The inner loop's `cur_vcol`: three stops of 3, 5, 7, and the indent
         // ends four columns in -- inside the second stop, not at its end.
-        let stops: &[colnr_T] = &[3, 5, 7];
+        let stops: &[ColNr] = &[3, 5, 7];
         assert_eq!(width(b"    x", Some(stops), 8), 4);
         assert_eq!(width(b"x", Some(stops), 8), 0);
     }
@@ -877,7 +875,7 @@ mod tests {
     fn one_vartabstop_is_a_uniform_width() {
         // The single stop is the "last" one, so nothing is walked and it
         // becomes the repeating width.
-        let stops: &[colnr_T] = &[4];
+        let stops: &[ColNr] = &[4];
         assert_eq!(width(b"\tx", Some(stops), 8), 4);
         assert_eq!(width(b"\t\tx", Some(stops), 8), 8);
         assert_eq!(width(b"  \tx", Some(stops), 8), 4);

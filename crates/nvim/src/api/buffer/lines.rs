@@ -66,7 +66,7 @@ pub unsafe fn nvim_buf_get_lines(
     }
     let size: size_t = (end - start) as size_t;
     unsafe { init_line_array(lstate, &raw mut rv, size, arena) };
-    let at = start as linenr_T;
+    let at = start as LineNr;
     let nl = channel_id != VIML_INTERNAL_CALL;
     let rvp = &raw mut rv;
     // SAFETY: `b` is the live buffer and `rvp` this call's own array.
@@ -147,17 +147,12 @@ pub unsafe fn nvim_buf_set_lines(
         if buf.b_p_ma == 0 {
             let why = c"Buffer is not 'modifiable'";
             error = Error::exception(why);
-        } else if u_save_buf(buf, (start - 1 as Integer) as linenr_T, end as linenr_T).is_err() {
+        } else if u_save_buf(buf, (start - 1 as Integer) as LineNr, end as LineNr).is_err() {
             let why = c"Failed to save undo information";
             error = Error::exception(why);
         } else {
-            let deleted_bytes: bcount_t = get_region_bytecount(
-                buf,
-                start as linenr_T,
-                end as linenr_T,
-                0 as colnr_T,
-                0 as colnr_T,
-            );
+            let deleted_bytes: bcount_t =
+                get_region_bytecount(buf, start as LineNr, end as LineNr, 0 as ColNr, 0 as ColNr);
             let to_delete: size_t = if new_len < old_len {
                 old_len.wrapping_sub(new_len)
             } else {
@@ -165,7 +160,7 @@ pub unsafe fn nvim_buf_set_lines(
             };
             let mut i_0: size_t = 0 as size_t;
             while i_0 < to_delete {
-                if unsafe { ml_delete_buf(b, start as linenr_T, false) }.is_err() {
+                if unsafe { ml_delete_buf(b, start as LineNr, false) }.is_err() {
                     let why = c"Failed to delete line";
                     error = Error::exception(why);
                     break 's_382;
@@ -189,7 +184,7 @@ pub unsafe fn nvim_buf_set_lines(
                     // SAFETY: `i_1` is below `new_len`.
                     let line = unsafe { *lines.add(i_1) };
                     // SAFETY: `b` is the live buffer, `lnum` one of its lines.
-                    unsafe { ml_replace_buf(b, lnum as linenr_T, line, false, true) }
+                    unsafe { ml_replace_buf(b, lnum as LineNr, line, false, true) }
                 }
                 .is_err()
                 {
@@ -212,9 +207,9 @@ pub unsafe fn nvim_buf_set_lines(
                 } else if {
                     // SAFETY: `i_2` is below `new_len`.
                     let line = unsafe { *lines.add(i_2) };
-                    let at = lnum_0 as linenr_T;
+                    let at = lnum_0 as LineNr;
                     // SAFETY: `b` is the live buffer.
-                    unsafe { ml_append_buf(b, at, line, 0 as colnr_T, false) }
+                    unsafe { ml_append_buf(b, at, line, 0 as ColNr, false) }
                 }
                 .is_err()
                 {
@@ -228,18 +223,18 @@ pub unsafe fn nvim_buf_set_lines(
                     i_2 = i_2.wrapping_add(1);
                 }
             }
-            let adjust: linenr_T = if end > start {
-                MAXLNUM as ::core::ffi::c_int as linenr_T
+            let adjust: LineNr = if end > start {
+                MAXLNUM as ::core::ffi::c_int as LineNr
             } else {
-                0 as linenr_T
+                0 as LineNr
             };
             unsafe {
                 mark_adjust_buf(
                     b,
-                    start as linenr_T,
-                    (end - 1 as Integer) as linenr_T,
+                    start as LineNr,
+                    (end - 1 as Integer) as LineNr,
                     adjust,
-                    extra as linenr_T,
+                    extra as LineNr,
                     true,
                     kMarkAdjustApi,
                     kExtmarkNOOP,
@@ -247,10 +242,10 @@ pub unsafe fn nvim_buf_set_lines(
             };
             if visual_active() as ::core::ffi::c_int != 0
                 && b == curbuf.get()
-                && visual_anchor().lnum >= start as linenr_T
+                && visual_anchor().lnum >= start as LineNr
             {
-                if visual_anchor().lnum >= end as linenr_T {
-                    with_visual_anchor(|a| a.lnum += extra as linenr_T);
+                if visual_anchor().lnum >= end as LineNr {
+                    with_visual_anchor(|a| a.lnum += extra as LineNr);
                 }
                 unsafe { check_visual_pos() };
             }
@@ -258,29 +253,29 @@ pub unsafe fn nvim_buf_set_lines(
                 extmark_splice(
                     b,
                     start as ::core::ffi::c_int - 1 as ::core::ffi::c_int,
-                    0 as colnr_T,
+                    0 as ColNr,
                     (end - start) as ::core::ffi::c_int,
-                    0 as colnr_T,
+                    0 as ColNr,
                     deleted_bytes,
                     new_len as ::core::ffi::c_int,
-                    0 as colnr_T,
+                    0 as ColNr,
                     inserted_bytes,
                     kExtmarkUndo,
                 )
             };
             changed_lines(
                 unsafe { Buf::new(b) },
-                start as linenr_T,
-                0 as colnr_T,
-                end as linenr_T,
-                extra as linenr_T,
+                start as LineNr,
+                0 as ColNr,
+                end as LineNr,
+                extra as LineNr,
                 true,
             );
             for win in tab_windows() {
                 if win.w_buffer == b {
-                    let (lo, hi) = (start as linenr_T, end as linenr_T);
+                    let (lo, hi) = (start as LineNr, end as LineNr);
                     // SAFETY: a live window showing this buffer.
-                    unsafe { fix_cursor(win.raw(), lo, hi, extra as linenr_T) };
+                    unsafe { fix_cursor(win.raw(), lo, hi, extra as LineNr) };
                 }
             }
         }
@@ -354,7 +349,7 @@ pub unsafe fn nvim_buf_get_text(
             unsafe { push_linestr(lstate, rvp, data, len, 0, replace_nl, arena) };
             if size > 2 as size_t {
                 let n = size.wrapping_sub(2 as size_t);
-                let at = start_row as linenr_T + 1 as linenr_T;
+                let at = start_row as LineNr + 1 as LineNr;
                 // SAFETY: `b` is the live buffer and `rvp` this call's array.
                 unsafe { buf_collect_lines(b, n, at, 1, replace_nl, rvp, lstate, arena) };
             }
@@ -392,7 +387,7 @@ pub unsafe fn nvim_buf_get_offset(buf: Buffer, index: Integer) -> Result<Integer
         error = Error::validation(why);
         return (0 as Integer).reported(error);
     }
-    let lnum = index as linenr_T + 1 as linenr_T;
+    let lnum = index as LineNr + 1 as LineNr;
     let no_lnum = ::core::ptr::null_mut::<::core::ffi::c_int>();
     // SAFETY: `b` is the live buffer and `lnum` one past its last line at
     // most, which is what this asks for.
@@ -455,7 +450,7 @@ unsafe fn push_linestr(
 pub unsafe fn buf_collect_lines(
     buf: *mut buf_T,
     n: size_t,
-    start: linenr_T,
+    start: LineNr,
     start_idx: ::core::ffi::c_int,
     replace_nl: bool,
     l: *mut Array,
@@ -464,7 +459,7 @@ pub unsafe fn buf_collect_lines(
 ) {
     let mut i: size_t = 0 as size_t;
     while i < n {
-        let lnum: linenr_T = start + i as linenr_T;
+        let lnum: LineNr = start + i as LineNr;
         let bufstr: *mut ::core::ffi::c_char = unsafe { ml_get_buf(buf, lnum) };
         let len: size_t = unsafe { ml_get_buf_len(buf, lnum) } as size_t;
         let at = start_idx + i as ::core::ffi::c_int;

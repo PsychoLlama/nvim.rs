@@ -22,7 +22,7 @@ use crate::options::{kOptSsopFlagCurdir, kOptSsopFlagSesdir, kOptStatusline, opt
 use crate::os::cshim::gettext;
 use crate::shada::get_shada_parameter;
 use crate::strings::{vim_snprintf, vim_strchr};
-use crate::types::{NUL, OptionSetFlags, StlSyntax, linenr_T, optset_T};
+use crate::types::{LineNr, NUL, OptionSetFlags, StlSyntax, optset_T};
 use crate::winfloat::win_config_float;
 
 use super::frame::{errbuf, invalid, old_value, varp, win};
@@ -133,7 +133,7 @@ pub(crate) unsafe fn did_set_statustabline_rulerformat(
         ru_wid.set(0);
     } else if statuscolumn {
         // SAFETY: the frame's window.
-        unsafe { (*wp).w_nrwidth_line_count = 0 as linenr_T };
+        unsafe { (*wp).w_nrwidth_line_count = 0 as LineNr };
     }
 
     // SAFETY: the frame and its C string value.

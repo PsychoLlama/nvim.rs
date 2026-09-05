@@ -34,7 +34,7 @@ use crate::memory::xfree;
 use crate::option::magic_isset;
 use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
-use crate::types::{NUL, bcount_t, colnr_T, linenr_T, lpos_T, size_t};
+use crate::types::{ColNr, LineNr, NUL, bcount_t, lpos_T, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
 use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
@@ -84,29 +84,29 @@ unsafe fn split_carriage_returns(st: &mut Sub, new_end: *mut c_char) {
                 unsafe { *p1 = NUL as c_char }; // truncate up to the CR
                 let _ = unsafe {
                     ml_append(
-                        st.lnum - 1 as linenr_T,
+                        st.lnum - 1 as LineNr,
                         st.new_start,
-                        (p1.offset_from(st.new_start) + 1_isize) as colnr_T,
+                        (p1.offset_from(st.new_start) + 1_isize) as ColNr,
                         false,
                     )
                 };
                 unsafe {
                     mark_adjust(
-                        st.lnum + 1 as linenr_T,
-                        MAXLNUM as linenr_T,
-                        1 as linenr_T,
-                        0 as linenr_T,
+                        st.lnum + 1 as LineNr,
+                        MAXLNUM as LineNr,
+                        1 as LineNr,
+                        0 as LineNr,
                         kExtmarkNOOP,
                     )
                 };
                 if subflags.with(|flags| flags.do_ask) {
                     // SAFETY: the line was just appended.
-                    unsafe { appended_lines(st.lnum - 1 as linenr_T, 1 as linenr_T) };
+                    unsafe { appended_lines(st.lnum - 1 as LineNr, 1 as LineNr) };
                 } else {
-                    if st.first_line == 0 as linenr_T {
+                    if st.first_line == 0 as LineNr {
                         st.first_line = st.lnum;
                     }
-                    st.last_line = st.lnum + 1 as linenr_T;
+                    st.last_line = st.lnum + 1 as LineNr;
                 }
                 // All line numbers increase.
                 st.sub_firstlnum += 1;
@@ -196,8 +196,8 @@ pub(super) unsafe fn build_replacement(
     let p1 = if st.nmatch == 1 as c_int {
         st.sub_firstline
     } else {
-        let lastlnum = st.sub_firstlnum + st.nmatch as linenr_T - 1 as linenr_T;
-        st.nmatch_tl += st.nmatch as linenr_T - 1 as linenr_T;
+        let lastlnum = st.sub_firstlnum + st.nmatch as LineNr - 1 as LineNr;
+        st.nmatch_tl += st.nmatch as LineNr - 1 as LineNr;
         ml_get(lastlnum)
     };
     let copy_len = st.regmatch.startpos[0].col - st.copycol;
@@ -228,7 +228,7 @@ pub(super) unsafe fn build_replacement(
     // text.
     // SAFETY: both point into the same allocation.
     let start_col = unsafe { new_end.offset_from(st.new_start) } as c_int;
-    current_match.start.col = start_col as colnr_T;
+    current_match.start.col = start_col as ColNr;
 
     {
         let _locked = Lock::text();
@@ -250,7 +250,7 @@ pub(super) unsafe fn build_replacement(
     // Move the cursor to the start of the line, to avoid it being beyond the
     // end of the line after the substitution.
     // SAFETY: the current window is live.
-    cur_win().w_cursor.col = 0 as colnr_T;
+    cur_win().w_cursor.col = 0 as ColNr;
 
     // Remember the next character to be copied.
     st.copycol = st.regmatch.endpos[0].col;
@@ -265,7 +265,7 @@ pub(super) unsafe fn build_replacement(
     let mut i = 0 as c_int;
     while i < st.nmatch - 1 as c_int {
         // SAFETY: the lines of a multi-line match are all in the buffer.
-        let line = unsafe { cstr::bytes_at(ml_get(st.lnum_start + i as linenr_T)) };
+        let line = unsafe { cstr::bytes_at(ml_get(st.lnum_start + i as LineNr)) };
         replaced_bytes += line.len() as bcount_t + 1 as bcount_t;
         i += 1;
     }
@@ -277,7 +277,7 @@ pub(super) unsafe fn build_replacement(
     unsafe { split_carriage_returns(st, new_end) };
 
     // SAFETY: the replacement is NUL-terminated.
-    let new_endcol = unsafe { cstr::bytes_at(st.new_start) }.len() as colnr_T;
+    let new_endcol = unsafe { cstr::bytes_at(st.new_start) }.len() as ColNr;
     current_match.end.col = new_endcol;
     current_match.end.lnum = st.lnum;
 
@@ -285,7 +285,7 @@ pub(super) unsafe fn build_replacement(
         - if end.lnum == start.lnum {
             start.col
         } else {
-            0 as colnr_T
+            0 as ColNr
         };
     let subcols = new_endcol
         - if st.lnum == st.lnum_start {
@@ -324,7 +324,7 @@ unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
     if u_savedel(st.lnum, st.nmatch_tl).is_err() {
         return false;
     }
-    let mut i = 0 as linenr_T;
+    let mut i = 0 as LineNr;
     while i < st.nmatch_tl {
         // SAFETY: as above.
         let _ = unsafe { ml_delete(st.lnum) };
@@ -334,8 +334,8 @@ unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
     unsafe {
         mark_adjust(
             st.lnum,
-            st.lnum + st.nmatch_tl - 1 as linenr_T,
-            MAXLNUM as linenr_T,
+            st.lnum + st.nmatch_tl - 1 as LineNr,
+            MAXLNUM as LineNr,
             -st.nmatch_tl,
             kExtmarkNOOP,
         )
@@ -346,7 +346,7 @@ unsafe fn delete_matched_lines(st: &mut Sub) -> bool {
     }
     st.lnum -= 1;
     st.line2 -= st.nmatch_tl; // the number of lines decreases
-    st.nmatch_tl = 0 as linenr_T;
+    st.nmatch_tl = 0 as LineNr;
     true
 }
 
@@ -366,7 +366,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     // NUL-terminated.
     let old_len = unsafe {
         strcat(st.new_start, st.sub_firstline.add(st.copycol as usize));
-        cstr::bytes_at(st.sub_firstline).len() as colnr_T
+        cstr::bytes_at(st.sub_firstline).len() as ColNr
     };
     st.matchcol = old_len - st.matchcol;
     st.prev_matchcol = old_len - st.prev_matchcol;
@@ -385,12 +385,12 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
             extmark_splice(
                 cur_buf().raw(),
                 m.lnum_before as c_int - 1 as c_int,
-                m.start_col as colnr_T,
+                m.start_col as ColNr,
                 m.end.lnum as c_int - m.start.lnum as c_int,
-                m.matchcols as colnr_T,
+                m.matchcols as ColNr,
                 m.matchbytes,
                 m.lnum_after as c_int - m.lnum_before as c_int,
-                m.subcols as colnr_T,
+                m.subcols as ColNr,
                 m.subbytes,
                 kExtmarkUndo,
             )
@@ -399,7 +399,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     // Reset the match data for the next line.
     st.line_matches.clear();
 
-    if st.nmatch_tl > 0 as linenr_T {
+    if st.nmatch_tl > 0 as LineNr {
         // SAFETY: the rebuilt line is in the buffer.
         if !unsafe { delete_matched_lines(st) } {
             return false;
@@ -410,12 +410,12 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     // each time too.
     if subflags.with(|flags| flags.do_ask) {
         // SAFETY: `lnum` is a line of the buffer.
-        unsafe { changed_bytes(st.lnum, 0 as colnr_T) };
+        unsafe { changed_bytes(st.lnum, 0 as ColNr) };
     } else {
-        if st.first_line == 0 as linenr_T {
+        if st.first_line == 0 as LineNr {
             st.first_line = st.lnum;
         }
-        st.last_line = st.lnum + 1 as linenr_T;
+        st.last_line = st.lnum + 1 as LineNr;
     }
 
     st.sub_firstlnum = st.lnum;
@@ -426,9 +426,9 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
     st.sub_firstline = st.new_start;
     st.new_start = ptr::null_mut();
     // SAFETY: the new old-text is NUL-terminated.
-    let new_len = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as colnr_T;
+    let new_len = unsafe { cstr::bytes_at(st.sub_firstline) }.len() as ColNr;
     st.matchcol = new_len - st.matchcol;
     st.prev_matchcol = new_len - st.prev_matchcol;
-    st.copycol = 0 as colnr_T;
+    st.copycol = 0 as ColNr;
     true
 }

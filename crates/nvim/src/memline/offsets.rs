@@ -23,8 +23,8 @@ use crate::winlayer::Win;
 ///
 /// Setting `ml_upd_lastbuf` to null invalidates the lot.
 static ml_upd_lastbuf: GlobalCell<*mut buf_T> = GlobalCell::new(core::ptr::null_mut());
-static ml_upd_lastline: GlobalCell<linenr_T> = GlobalCell::new(0);
-static ml_upd_lastcurline: GlobalCell<linenr_T> = GlobalCell::new(0);
+static ml_upd_lastline: GlobalCell<LineNr> = GlobalCell::new(0);
+static ml_upd_lastcurline: GlobalCell<LineNr> = GlobalCell::new(0);
 static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 
 /// Keep the chunk table up to date for a line that was added, removed or
@@ -37,12 +37,7 @@ static ml_upd_lastcurix: GlobalCell<usize> = GlobalCell::new(0);
 ///
 /// # Safety
 /// `buf` must point at a buffer.
-pub(crate) unsafe fn ml_updatechunk(
-    buf: *mut buf_T,
-    line: linenr_T,
-    len_arg: c_int,
-    updtype: c_int,
-) {
+pub(crate) unsafe fn ml_updatechunk(buf: *mut buf_T, line: LineNr, len_arg: c_int, updtype: c_int) {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -112,12 +107,7 @@ pub(crate) unsafe fn ml_updatechunk(
 ///
 /// # Safety
 /// `buf` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_addline(
-    buf: *mut buf_T,
-    line: linenr_T,
-    curline: linenr_T,
-    curix: usize,
-) -> bool {
+unsafe fn ml_chunk_addline(buf: *mut buf_T, line: LineNr, curline: LineNr, curix: usize) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -169,7 +159,7 @@ unsafe fn ml_chunk_addline(
 ///
 /// # Safety
 /// `buf` must point at a buffer whose chunk index has a chunk `curix`.
-unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: linenr_T) -> bool {
+unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: LineNr) -> bool {
     // SAFETY: the caller's buffer, reached through a handle that
     // borrows it for the one access that asked and no longer.
     let mut b = unsafe { Buf::new(buf) };
@@ -234,7 +224,7 @@ unsafe fn ml_chunk_split(buf: *mut buf_T, curix: usize, curline_arg: linenr_T) -
 /// `buf` must point at a buffer, and `offp` be NULL or writable.
 pub unsafe fn ml_find_line_or_offset(
     buf: *mut buf_T,
-    lnum: linenr_T,
+    lnum: LineNr,
     offp: *mut c_int,
     no_ff: bool,
 ) -> c_int {
@@ -279,7 +269,7 @@ pub unsafe fn ml_find_line_or_offset(
     // SAFETY: the caller's buffer. The borrow is read-only and lasts only
     // for the search below.
     let chunks = unsafe { &(*buf).b_ml.ml_chunks };
-    let mut curline: linenr_T = 1;
+    let mut curline: LineNr = 1;
     let mut curix = 0usize;
     let mut size = 0;
     while curix + 1 < chunks.len()

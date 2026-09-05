@@ -19,7 +19,7 @@ use std::ffi::CStr;
 ///
 /// Only the `inline:char`/`inline:word` modes cache anything; the simple rule
 /// is recomputed per line.
-pub unsafe fn diff_update_line(lnum: linenr_T) {
+pub unsafe fn diff_update_line(lnum: LineNr) {
     if diff_flags.get() & ALL_INLINE_DIFF == 0 {
         return;
     }
@@ -169,7 +169,7 @@ fn common_suffix(org: &[u8], new: &[u8], start: c_int, si_new: c_int) -> c_int {
 /// partners reports the union.
 fn diff_find_change_simple(
     wp: Win,
-    lnum: linenr_T,
+    lnum: LineNr,
     dp: Df,
     idx: c_int,
     startp: &mut c_int,
@@ -219,7 +219,7 @@ fn diff_find_change_simple(
 ///
 /// # Safety
 /// `diffline` must be a writable `diffline_T`.
-pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_T) -> bool {
+pub unsafe fn diff_find_change(wp: Win, lnum: LineNr, diffline: *mut diffline_T) -> bool {
     let tp = cur_tab();
     let idx = diff_slot(wp.buffer(), tp);
     if idx == DB_COUNT {
@@ -246,8 +246,8 @@ pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_
             dc_start_lnum_off: [0; 8],
             dc_end_lnum_off: [0; 8],
         };
-        only.dc_start[idx as usize] = change_start as colnr_T;
-        only.dc_end[idx as usize] = (change_end + 1) as colnr_T;
+        only.dc_start[idx as usize] = change_start as ColNr;
+        only.dc_end[idx as usize] = (change_end + 1) as ColNr;
         only.dc_start_lnum_off[idx as usize] = off;
         only.dc_end_lnum_off[idx as usize] = off;
         let change = simple_diffline_change.ptr();
@@ -320,7 +320,7 @@ pub unsafe fn diff_find_change(wp: Win, lnum: linenr_T, diffline: *mut diffline_
 /// one line has one range.  With `inline:char`/`inline:word` a line can carry
 /// several, so the cache is bypassed and `diffline` is walked per column.
 pub unsafe fn f_diff_hl_id(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
-    static prev_lnum: GlobalCell<linenr_T> = GlobalCell::new(0);
+    static prev_lnum: GlobalCell<LineNr> = GlobalCell::new(0);
     static changedtick: GlobalCell<varnumber_T> = GlobalCell::new(0);
     static fnum: GlobalCell<c_int> = GlobalCell::new(0);
     static prev_diff_flags: GlobalCell<c_int> = GlobalCell::new(0);

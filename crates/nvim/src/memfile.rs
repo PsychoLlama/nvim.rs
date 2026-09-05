@@ -65,7 +65,7 @@ use crate::os::fs::{
 };
 use crate::os::input::{os_breakcheck, os_char_avail};
 use crate::path::full_name_save;
-use crate::types::{FileInfo, blocknr_T, buf_T, off_T};
+use crate::types::{BlockNr, FileInfo, FileOffset, buf_T};
 use crate::winlayer::buffers;
 use ::libc::{__errno_location, close, lseek, strerror};
 
@@ -132,7 +132,7 @@ const SWAPFILE_MODE: c_int = 0o400 | 0o200;
 /// box that owns it and no other way.
 pub struct bhdr_T {
     /// The block number, which is also the key it is filed under.
-    pub bh_bnum: blocknr_T,
+    pub bh_bnum: BlockNr,
     pub bh_data: *mut c_void,
     pub bh_page_count: c_uint,
     /// [`BH_DIRTY`] and/or [`BH_LOCKED`].
@@ -174,7 +174,7 @@ impl Drop for bhdr_T {
 
 /// A run of pages in the file that no block uses.
 struct FreeBlock {
-    bnum: blocknr_T,
+    bnum: BlockNr,
     page_count: c_uint,
 }
 
@@ -215,7 +215,7 @@ struct BlockTable {
     // or swapping entries around.
     #[allow(clippy::vec_box)]
     blocks: Vec<Box<bhdr_T>>,
-    index: HashMap<blocknr_T, u32, BuildHasherDefault<BlockNrHasher>>,
+    index: HashMap<BlockNr, u32, BuildHasherDefault<BlockNrHasher>>,
 }
 
 impl BlockTable {
@@ -231,7 +231,7 @@ impl BlockTable {
     }
 
     #[inline]
-    fn get(&mut self, nr: blocknr_T) -> Option<*mut bhdr_T> {
+    fn get(&mut self, nr: BlockNr) -> Option<*mut bhdr_T> {
         let i = *self.index.get(&nr)? as usize;
         Some(&raw mut *self.blocks[i])
     }
@@ -249,7 +249,7 @@ impl BlockTable {
 
     /// Take the block numbered `nr` out, moving the last one into its slot.
     #[inline]
-    fn remove(&mut self, nr: blocknr_T) -> Option<Box<bhdr_T>> {
+    fn remove(&mut self, nr: BlockNr) -> Option<Box<bhdr_T>> {
         let i = self.index.remove(&nr)? as usize;
         let block = self.blocks.swap_remove(i);
         if let Some(moved) = self.blocks.get(i) {
@@ -277,15 +277,15 @@ pub struct memfile_T {
     /// Unused page runs in the file, most recently freed last.
     free: Vec<FreeBlock>,
     /// Negative block number to the file block number it was given.
-    trans: HashMap<blocknr_T, blocknr_T, BuildHasherDefault<BlockNrHasher>>,
+    trans: HashMap<BlockNr, BlockNr, BuildHasherDefault<BlockNrHasher>>,
     /// Highest file block number handed out, plus one.
-    pub mf_blocknr_max: blocknr_T,
+    pub mf_blocknr_max: BlockNr,
     /// Lowest memory-only block number handed out, minus one.
-    pub mf_blocknr_min: blocknr_T,
+    pub mf_blocknr_min: BlockNr,
     /// How many memory-only block numbers are outstanding.
-    pub mf_neg_count: blocknr_T,
+    pub mf_neg_count: BlockNr,
     /// How many pages the file holds.
-    pub mf_infile_count: blocknr_T,
+    pub mf_infile_count: BlockNr,
     pub mf_page_size: c_uint,
     pub mf_dirty: MfDirty,
 }
@@ -335,21 +335,27 @@ pub(crate) unsafe fn mf_open(fname: *mut c_char, flags: c_int) -> *mut memfile_T
         let size = if (*mfp).mf_fd < 0 || flags & (O_TRUNC | O_EXCL) != 0 {
             0
         } else {
-            lseek((*mfp).mf_fd, 0, SEEK_END) as off_T
+            lseek((*mfp).mf_fd, 0, SEEK_END) as FileOffset
         };
-        (*mfp).mf_blocknr_max = if size <= 0 {
-            0
-        } else {
-            assert!(
-                (*mfp).mf_page_size > 0 && (*mfp).mf_page_size as off_T - 1 <= off_T::MAX - size,
-                "memfile: swap file too large for its page size"
-            );
-            (size + (*mfp).mf_page_size as blocknr_T - 1) / (*mfp).mf_page_size as blocknr_T
-        };
+        (*mfp).mf_blocknr_max = pages_in_file(size, (*mfp).mf_page_size);
         (*mfp).mf_infile_count = (*mfp).mf_blocknr_max;
     }
 
     mfp
+}
+
+/// How many `page_size` pages a swap file of `size` bytes holds, rounded up.
+/// Zero for an empty file, and for one that was never opened.
+fn pages_in_file(size: FileOffset, page_size: c_uint) -> BlockNr {
+    if size <= 0 {
+        return 0;
+    }
+    let page_size = BlockNr::from(page_size);
+    assert!(
+        page_size > 0 && page_size - 1 <= BlockNr::MAX - size,
+        "memfile: swap file too large for its page size"
+    );
+    (size + page_size - 1) / page_size
 }
 
 /// Give an existing memory file a swap file, as `'updatecount'` going from
@@ -444,7 +450,7 @@ pub(crate) unsafe fn mf_new(
             block = bhdr_T::new(page_size, page_count);
             block.bh_bnum = free.bnum;
             if free.page_count > page_count {
-                free.bnum += page_count as blocknr_T;
+                free.bnum += page_count as BlockNr;
                 free.page_count -= page_count;
             } else {
                 (*mfp).free.pop();
@@ -457,7 +463,7 @@ pub(crate) unsafe fn mf_new(
                 (*mfp).mf_neg_count += 1;
             } else {
                 block.bh_bnum = (*mfp).mf_blocknr_max;
-                (*mfp).mf_blocknr_max += page_count as blocknr_T;
+                (*mfp).mf_blocknr_max += page_count as BlockNr;
             }
         }
 
@@ -471,7 +477,7 @@ pub(crate) unsafe fn mf_new(
 /// lock it. Answers null if there is no such block.
 ///
 /// A negative `nr` must go through [`mf_trans_del`] first.
-pub(crate) unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_uint) -> *mut bhdr_T {
+pub(crate) unsafe fn mf_get(mfp: *mut memfile_T, nr: BlockNr, page_count: c_uint) -> *mut bhdr_T {
     unsafe {
         if nr >= (*mfp).mf_blocknr_max || nr <= (*mfp).mf_blocknr_min {
             return core::ptr::null_mut();
@@ -506,7 +512,7 @@ pub(crate) unsafe fn mf_get(mfp: *mut memfile_T, nr: blocknr_T, page_count: c_ui
 /// Unlike [`mf_get`] this neither reads the file, nor locks the block, nor
 /// moves it in the sync order. `ml_setflags` uses it to amend block zero
 /// where it lies.
-pub(crate) unsafe fn mf_find(mfp: *mut memfile_T, nr: blocknr_T) -> *mut bhdr_T {
+pub(crate) unsafe fn mf_find(mfp: *mut memfile_T, nr: BlockNr) -> *mut bhdr_T {
     unsafe { (*mfp).used.get(nr).unwrap_or(core::ptr::null_mut()) }
 }
 
@@ -685,7 +691,7 @@ unsafe fn mf_read(mfp: *mut memfile_T, hp: &mut bhdr_T) -> Result<(), SwapFailed
         }
 
         let page_size = (*mfp).mf_page_size;
-        let offset = (page_size as blocknr_T * hp.bh_bnum) as off_T;
+        let offset = (page_size as BlockNr * hp.bh_bnum) as FileOffset;
         if lseek((*mfp).mf_fd, offset, SEEK_SET) != offset {
             perror_msg(c"E294: Seek error in swap file read");
             return Err(SwapFailed);
@@ -732,7 +738,7 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> Result<(), SwapFaile
                 hp
             };
 
-            let offset = (page_size as blocknr_T * nr) as off_T;
+            let offset = (page_size as BlockNr * nr) as FileOffset;
             let page_count = if hp2.is_null() {
                 1
             } else {
@@ -783,8 +789,8 @@ unsafe fn mf_write(mfp: *mut memfile_T, hp: *mut bhdr_T) -> Result<(), SwapFaile
             if !hp2.is_null() {
                 (*hp2).bh_flags &= !BH_DIRTY; // wrote a real block, not filler
             }
-            if nr + page_count as blocknr_T > (*mfp).mf_infile_count {
-                (*mfp).mf_infile_count = nr + page_count as blocknr_T;
+            if nr + page_count as BlockNr > (*mfp).mf_infile_count {
+                (*mfp).mf_infile_count = nr + page_count as BlockNr;
             }
             if nr == (*hp).bh_bnum {
                 break; // wrote the block we came for
@@ -815,14 +821,14 @@ unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) {
         {
             new_bnum = free.bnum;
             if free.page_count > page_count {
-                free.bnum += page_count as blocknr_T;
+                free.bnum += page_count as BlockNr;
                 free.page_count -= page_count;
             } else {
                 (*mfp).free.pop();
             }
         } else {
             new_bnum = (*mfp).mf_blocknr_max;
-            (*mfp).mf_blocknr_max += page_count as blocknr_T;
+            (*mfp).mf_blocknr_max += page_count as BlockNr;
         }
 
         let old_bnum = (*hp).bh_bnum;
@@ -839,7 +845,7 @@ unsafe fn mf_trans_add(mfp: *mut memfile_T, hp: *mut bhdr_T) {
 
 /// The file block number a memory-only block was given, consuming the
 /// record of it. Answers `old_nr` unchanged if there is none.
-pub(crate) unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: blocknr_T) -> blocknr_T {
+pub(crate) unsafe fn mf_trans_del(mfp: *mut memfile_T, old_nr: BlockNr) -> BlockNr {
     unsafe {
         match (*mfp).trans.remove(&old_nr) {
             Some(new_bnum) => {

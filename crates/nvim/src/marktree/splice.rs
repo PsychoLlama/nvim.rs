@@ -52,8 +52,7 @@ use crate::marktree::node::{Node, refkey};
 use crate::marktree::pair::{marktree_intersect_pair, marktree_restore_pair};
 use crate::memory::xfree;
 use crate::types::{
-    MTDamage, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, Set_uint64_t, colnr_T, int32_t,
-    uint64_t,
+    ColNr, MTDamage, MTKey, MTNode, MTPos, MarkTree, MarkTreeIter, Set_uint64_t, int32_t, uint64_t,
 };
 
 use super::{MAPHASH_INIT, MTDamageMap, marktree_del_itr, marktree_lookup, marktree_put_key};
@@ -495,11 +494,11 @@ pub unsafe fn marktree_splice(
 pub fn marktree_move_region(
     b: &mut MarkTree,
     start_row: c_int,
-    start_col: colnr_T,
+    start_col: ColNr,
     extent_row: c_int,
-    extent_col: colnr_T,
+    extent_col: ColNr,
     new_row: c_int,
-    new_col: colnr_T,
+    new_col: ColNr,
 ) {
     let start = MTPos {
         row: start_row,

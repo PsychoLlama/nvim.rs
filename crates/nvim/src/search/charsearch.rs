@@ -176,7 +176,7 @@ pub unsafe fn searchc(cap: *mut cmdarg_T, t_cmd: bool) -> Result<(), Failed> {
             col -= unsafe { utf_head_off(line, line.offset(col as isize)) };
         }
     }
-    cur_win().w_cursor.col = col as colnr_T;
+    cur_win().w_cursor.col = col as ColNr;
     Ok(())
 }
 

@@ -77,7 +77,7 @@ impl FindTags {
 
     /// Where the file is being read from now.
     #[inline(always)]
-    fn tell(&self) -> off_T {
+    fn tell(&self) -> FileOffset {
         // SAFETY: `fp` is open.
         unsafe { ftello(self.fp) }
     }
@@ -101,7 +101,7 @@ impl FindTags {
             }
             Reading::SkipBack => {
                 // Step back over roughly two lines' worth of file.
-                sinfo.curr_offset -= (self.lbuf.len() * 2) as off_T;
+                sinfo.curr_offset -= (self.lbuf.len() * 2) as FileOffset;
                 if sinfo.curr_offset < 0 {
                     sinfo.curr_offset = 0;
                     vim_ignored.set(unsafe { fseeko(self.fp, 0, SEEK_SET) });

@@ -30,7 +30,7 @@ use crate::regexp::{
 };
 use crate::strings::xstrnsave;
 use crate::types::{
-    NUL, buf_T, colnr_T, linenr_T, lpos_T, proftime_T, reg_extmatch_T, regmatch_T, regmmatch_T,
+    ColNr, LineNr, NUL, ProfTime, buf_T, lpos_T, reg_extmatch_T, regmatch_T, regmmatch_T,
     regprog_T, uint8_t, win_T,
 };
 
@@ -41,8 +41,8 @@ use crate::types::{
 fn nfa_regtry(
     rex: Rex,
     prog: *mut nfa_regprog_T,
-    col: colnr_T,
-    tm: *mut proftime_T,
+    col: ColNr,
+    tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     // SAFETY: `prog` is a live program and `rex` the match context set up by
@@ -91,7 +91,7 @@ fn nfa_regtry(
 }
 
 /// Copy the capture positions of a buffer match into the caller's arrays.
-fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
+fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
     // SAFETY: a buffer match's context holds the caller's position arrays,
     // `NSUBEXP` slots each.
     let (starts, ends) = unsafe {
@@ -124,7 +124,7 @@ fn report_buffer_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
 }
 
 /// As [`report_buffer_match`], for a match over a plain string.
-fn report_string_match(rex: Rex, subs: &regsubs_T, col: colnr_T) {
+fn report_string_match(rex: Rex, subs: &regsubs_T, col: ColNr) {
     // SAFETY: as `report_buffer_match`; a string match's slots are pointers.
     let (starts, ends) = unsafe {
         (
@@ -182,8 +182,8 @@ fn save_z_captures(rex: Rex, subs: &regsubs_T) {
 fn nfa_regexec_both(
     rex: Rex,
     mut line: *mut uint8_t,
-    startcol: colnr_T,
-    tm: *mut proftime_T,
+    startcol: ColNr,
+    tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     let mut col = startcol;
@@ -263,8 +263,8 @@ enum Attempt {
 fn try_match(
     rex: Rex,
     prog: *mut nfa_regprog_T,
-    col: &mut colnr_T,
-    tm: *mut proftime_T,
+    col: &mut ColNr,
+    tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> Attempt {
     // An anchored pattern can only match at the start of the line.
@@ -387,7 +387,7 @@ pub(crate) unsafe fn nfa_regfree(prog: *mut regprog_T) {
 pub(crate) unsafe fn nfa_regexec_nl(
     rmp: *mut regmatch_T,
     line: *mut uint8_t,
-    col: colnr_T,
+    col: ColNr,
     line_lbr: bool,
 ) -> c_int {
     // SAFETY: the caller holds the context (`with_rex`) and hands us a
@@ -407,9 +407,9 @@ pub(crate) unsafe fn nfa_regexec_multi(
     rmp: *mut regmmatch_T,
     win: *mut win_T,
     buf: *mut buf_T,
-    lnum: linenr_T,
-    col: colnr_T,
-    tm: *mut proftime_T,
+    lnum: LineNr,
+    col: ColNr,
+    tm: *mut ProfTime,
     timed_out: *mut c_int,
 ) -> c_int {
     // SAFETY: the caller holds the context (`with_rex`) and hands us a live

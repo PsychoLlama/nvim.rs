@@ -419,7 +419,7 @@ pub unsafe fn qf_history(eap: *mut exarg_T) {
     if eap.addr_count > 0 {
         match stack {
             None => qf_emsg(e_loclist.as_ptr()),
-            Some(mut qi) if eap.line2 > 0 && eap.line2 <= qi.qf_listcount as linenr_T => {
+            Some(mut qi) if eap.line2 > 0 && eap.line2 <= qi.qf_listcount as LineNr => {
                 qi.qf_curlist = (eap.line2 - 1) as c_int;
                 // SAFETY: `qi` is live and `qf_curlist` names one of its
                 // lists, which is the whole of `qf_msg`'s precondition.

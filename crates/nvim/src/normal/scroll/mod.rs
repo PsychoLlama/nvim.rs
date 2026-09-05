@@ -21,7 +21,7 @@ use crate::normal::{
 };
 use crate::plines::plines_m_win_fill;
 use crate::strings::vim_strchr;
-use crate::types::{Direction, buf_T, cmdarg_T, colnr_T, linenr_T, win_T};
+use crate::types::{ColNr, Direction, LineNr, buf_T, cmdarg_T, win_T};
 use crate::window::goto_tabpage;
 use core::ffi::c_int;
 
@@ -49,9 +49,9 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
     // rather than an absolute position, so that a window bound to two others
     // does not fight itself.
     static old_curwin: GlobalCell<*mut win_T> = GlobalCell::new(ptr::null_mut());
-    static old_vtopline: GlobalCell<linenr_T> = GlobalCell::new(0);
+    static old_vtopline: GlobalCell<LineNr> = GlobalCell::new(0);
     static old_buf: GlobalCell<*mut buf_T> = GlobalCell::new(ptr::null_mut());
-    static old_leftcol: GlobalCell<colnr_T> = GlobalCell::new(0);
+    static old_leftcol: GlobalCell<ColNr> = GlobalCell::new(0);
 
     // SAFETY: reads the current window and the remembered previous one.
     let mut win = cur_win();
@@ -62,21 +62,20 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
             did_syncbind.set(false);
         } else if win.raw() == old_curwin.get() {
             if (win.w_buffer == old_buf.get() || win.w_onebuf_opt.wo_diff != 0)
-                && (vtopline as linenr_T != old_vtopline.get()
-                    || win.w_leftcol != old_leftcol.get())
+                && (vtopline as LineNr != old_vtopline.get() || win.w_leftcol != old_leftcol.get())
             {
-                let down = vtopline as linenr_T - old_vtopline.get();
+                let down = vtopline as LineNr - old_vtopline.get();
                 unsafe { check_scrollbind(down, win.w_leftcol - old_leftcol.get()) };
             }
         } else if !unsafe { vim_strchr(p_sbo.get(), 'j' as c_int) }.is_null() {
             // Just moved into this window, and 'scrollopt' has "jump":
             // bring it back to where the binding says it should be.
-            unsafe { check_scrollbind(vtopline as linenr_T - win.w_scbind_pos as linenr_T, 0) };
+            unsafe { check_scrollbind(vtopline as LineNr - win.w_scbind_pos as LineNr, 0) };
         }
         win.w_scbind_pos = vtopline;
     }
     old_curwin.set(win.raw());
-    old_vtopline.set(vtopline as linenr_T);
+    old_vtopline.set(vtopline as LineNr);
     old_buf.set(win.w_buffer);
     old_leftcol.set(win.w_leftcol);
 }
@@ -87,7 +86,7 @@ pub(crate) unsafe fn do_check_scrollbind(check: bool) {
 /// Each window is made current in turn, because the scrolling functions work
 /// on `curwin`. Any Visual selection is put down for the duration so that
 /// nothing extends it.
-pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_int) {
+pub(crate) unsafe fn check_scrollbind(vtopline_diff: LineNr, leftcol_diff: c_int) {
     // SAFETY (throughout): walks the current tab page's window list, restoring `curwin`
     // and `curbuf` before returning.
     let old_curwin = curwin.get();
@@ -131,9 +130,9 @@ pub(crate) unsafe fn check_scrollbind(vtopline_diff: linenr_T, leftcol_diff: c_i
                     let new_vtopline = win.w_scbind_pos.min(max_vtopline).max(1);
                     let y = new_vtopline - curr_vtopline;
                     if y > 0 {
-                        scrollup(win, y as linenr_T, false);
+                        scrollup(win, y as LineNr, false);
                     } else {
-                        scrolldown(win, -(y as linenr_T), false);
+                        scrolldown(win, -(y as LineNr), false);
                     }
                 }
                 unsafe { redraw_later(win.raw(), UPD_VALID) };
@@ -177,7 +176,7 @@ pub(crate) unsafe fn nv_scroll_line(cap: *mut cmdarg_T) {
     // SAFETY (throughout): `cap` is the caller's live command argument.
     let ca = unsafe { CmdArg::new(cap) };
     if !check_clear_op(ca.op()) {
-        unsafe { scroll_redraw(ca.arg, ca.count1 as linenr_T) };
+        unsafe { scroll_redraw(ca.arg, ca.count1 as LineNr) };
     }
 }
 

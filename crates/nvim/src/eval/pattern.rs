@@ -18,7 +18,7 @@ use crate::options::kOptCpoptions;
 use crate::optionstr::{empty_option, free_string_option, is_empty_option};
 use crate::regexp::{RE_MAGIC, RE_STRING, vim_regcomp, vim_regexec_nl, vim_regfree, vim_regsub};
 use crate::strings::xstrnsave;
-use crate::types::{NUL, OptVal, OptionSetFlags, colnr_T, regmatch_T, regprog_T, size_t, typval_T};
+use crate::types::{ColNr, NUL, OptVal, OptionSetFlags, regmatch_T, regprog_T, size_t, typval_T};
 use core::slice;
 
 /// A `regmatch_T` with nothing in it.
@@ -88,7 +88,7 @@ pub unsafe fn pattern_match(pat: *const c_char, text: *const c_char, ic: bool) -
     regmatch.rm_ic = ic;
     // SAFETY: `regmatch` is this frame's and holds a compiled program;
     // `text` is the caller's NUL-terminated subject.
-    let matched = unsafe { vim_regexec_nl(&raw mut regmatch, text, 0 as colnr_T) };
+    let matched = unsafe { vim_regexec_nl(&raw mut regmatch, text, 0 as ColNr) };
     // SAFETY: nothing else owns the program.
     unsafe { vim_regfree(regmatch.regprog) };
     matched
@@ -138,7 +138,7 @@ pub unsafe fn do_string_sub(
 
         // SAFETY: `regmatch` holds a compiled program, `str` is the
         // caller's subject and `tail` is inside it.
-        while unsafe { vim_regexec_nl(&raw mut regmatch, str, tail.offset_from(str) as colnr_T) } {
+        while unsafe { vim_regexec_nl(&raw mut regmatch, str, tail.offset_from(str) as ColNr) } {
             if regmatch.startp[0] == regmatch.endp[0] {
                 if zero_width == regmatch.startp[0] {
                     // Copy one whole character across and try again.

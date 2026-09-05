@@ -320,7 +320,7 @@ pub fn diff_win_options(mut wp: Win, addbuf: bool) {
             wp.w_onebuf_opt.wo_wrap_save = wp.w_onebuf_opt.wo_wrap;
         }
         wp.w_onebuf_opt.wo_wrap = 0;
-        wp.w_skipcol = 0 as colnr_T;
+        wp.w_skipcol = 0 as ColNr;
     }
     if first_time {
         if wp.w_onebuf_opt.wo_diff_saved != 0 {
@@ -423,7 +423,7 @@ pub unsafe fn ex_diffoff(eap: *mut exarg_T) {
                     && wp.w_onebuf_opt.wo_wrap_save != 0
                 {
                     wp.w_onebuf_opt.wo_wrap = 1;
-                    wp.w_leftcol = 0 as colnr_T;
+                    wp.w_leftcol = 0 as ColNr;
                 }
                 free_string_option_of(wp.w_onebuf_opt.wo_fdm);
                 wp.w_onebuf_opt.wo_fdm =

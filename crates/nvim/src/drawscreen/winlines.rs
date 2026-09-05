@@ -43,13 +43,13 @@ struct Walk {
     /// First row of the line being drawn.
     srow: c_int,
     /// Next buffer line to draw.
-    lnum: linenr_T,
+    lnum: LineNr,
     /// Hit the end of the buffer.
     eof: bool,
     /// Finished the last line that fits.
     didline: bool,
     /// Last line whose syntax state was parsed, 0 for none.
-    syntax_last_parsed: linenr_T,
+    syntax_last_parsed: LineNr,
     /// Whether the changed lines have already been scrolled for.
     scrolled_for_mod: bool,
     /// What the previous iteration did.
@@ -71,7 +71,7 @@ pub(crate) unsafe fn draw_window_lines(
     cursorline_fi: foldinfo_T,
     spv: &mut spellvars_T,
     decor: DecorStateRef,
-) -> linenr_T {
+) -> LineNr {
     // Plain construction but for the one field, so it sits outside the
     // promise below.
     let mut w = Walk {
@@ -348,7 +348,7 @@ unsafe fn draw_one_line(
             spv.spv_capcol_lnum = 0;
         }
 
-        let lastlnum = w.lnum + foldinfo.fi_lines - linenr_T::from(foldinfo.fi_lines > 0);
+        let lastlnum = w.lnum + foldinfo.fi_lines - LineNr::from(foldinfo.fi_lines > 0);
         unsafe { (*wl).wl_folded = foldinfo.fi_lines > 0 };
         unsafe { (*wl).wl_foldend = lastlnum };
         unsafe { (*wl).wl_lastlnum = lastlnum };
@@ -422,7 +422,7 @@ unsafe fn scroll_for_changed_lines(wp: Win, rg: &mut Regions, w: &mut Walk) {
     // Not when the change continues to the end, and not for changed lines
     // in a top area that was already scrolled for.
     let at_change = !w.scrolled_for_mod
-        && rg.mod_bot != MAXLNUM as linenr_T
+        && rg.mod_bot != MAXLNUM as LineNr
         && w.lnum >= rg.mod_top
         && w.lnum < rg.mod_bot.max(rg.mod_top + 1)
         && (!rg.scrolled_down || w.row >= rg.top_end);
@@ -500,7 +500,7 @@ unsafe fn scroll_for_changed_lines(wp: Win, rg: &mut Regions, w: &mut Walk) {
         // from where they used to end. Not worth it if there is barely any
         // text left, or if the scroll fails.
         if w.row - xtra_rows >= wp.w_view_height - 2 {
-            rg.mod_bot = MAXLNUM as linenr_T;
+            rg.mod_bot = MAXLNUM as LineNr;
         } else {
             unsafe { win_scroll_lines(wp.raw(), w.row, xtra_rows) };
             rg.bot_start = wp.w_view_height + xtra_rows;
@@ -510,7 +510,7 @@ unsafe fn scroll_for_changed_lines(wp: Win, rg: &mut Regions, w: &mut Walk) {
         // The text got taller: scroll the rows below it down. They keep
         // their contents, so only the end-of-buffer area is stale.
         if w.row + xtra_rows >= wp.w_view_height - 2 {
-            rg.mod_bot = MAXLNUM as linenr_T;
+            rg.mod_bot = MAXLNUM as LineNr;
         } else {
             unsafe { win_scroll_lines(wp.raw(), w.row + old_rows, xtra_rows) };
             rg.bot_scroll_start = 0;
@@ -524,7 +524,7 @@ unsafe fn scroll_for_changed_lines(wp: Win, rg: &mut Regions, w: &mut Walk) {
 
     // Move the `w_lines[]` entries to match, unless the rest is being
     // redrawn anyway.
-    if rg.mod_bot != MAXLNUM as linenr_T && i != j {
+    if rg.mod_bot != MAXLNUM as LineNr && i != j {
         unsafe { move_line_entries(wp, rg, w, i, j, new_rows) };
     }
 }

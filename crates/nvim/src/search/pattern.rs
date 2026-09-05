@@ -84,8 +84,8 @@ static saved_last_search_spat: GlobalCell<SearchPattern> = GlobalCell::new(no_pa
 static did_save_last_search_spat: GlobalCell<c_int> = GlobalCell::new(0);
 static saved_last_idx: GlobalCell<c_int> = GlobalCell::new(0);
 static saved_no_hlsearch: GlobalCell<bool> = GlobalCell::new(false);
-static saved_search_match_endcol: GlobalCell<colnr_T> = GlobalCell::new(0);
-static saved_search_match_lines: GlobalCell<linenr_T> = GlobalCell::new(0);
+static saved_search_match_endcol: GlobalCell<ColNr> = GlobalCell::new(0);
+static saved_search_match_lines: GlobalCell<LineNr> = GlobalCell::new(0);
 
 /// The remembered pattern at `idx`, copied out.
 ///

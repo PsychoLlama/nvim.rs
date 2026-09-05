@@ -22,7 +22,7 @@ pub(crate) fn win_may_fill(wp: Win) -> bool {
 ///
 /// # Safety
 /// `wp` must be live.
-pub(crate) unsafe fn win_get_fill(wp: Win, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn win_get_fill(wp: Win, lnum: LineNr) -> c_int {
     let virt_lines = unsafe {
         decor_virt_lines(
             wp.raw(),
@@ -48,7 +48,7 @@ pub(crate) unsafe fn win_get_fill(wp: Win, lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win(wp: Win, lnum: linenr_T, limit_winheight: bool) -> c_int {
+pub(crate) unsafe fn plines_win(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
     unsafe { plines_win_nofill(wp, lnum, limit_winheight) + win_get_fill(wp, lnum) }
 }
 
@@ -56,7 +56,7 @@ pub(crate) unsafe fn plines_win(wp: Win, lnum: linenr_T, limit_winheight: bool) 
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win_nofill(wp: Win, lnum: linenr_T, limit_winheight: bool) -> c_int {
+pub(crate) unsafe fn plines_win_nofill(wp: Win, lnum: LineNr, limit_winheight: bool) -> c_int {
     if unsafe { decor_conceal_line(wp.raw(), lnum - 1, false) } {
         return 0;
     }
@@ -80,7 +80,7 @@ pub(crate) unsafe fn plines_win_nofill(wp: Win, lnum: linenr_T, limit_winheight:
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: linenr_T) -> c_int {
+pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: LineNr) -> c_int {
     let s = unsafe { ml_get_buf(wp.w_buffer, lnum) };
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, wp, lnum, s) };
@@ -122,7 +122,7 @@ pub(crate) unsafe fn plines_win_nofold(wp: Win, lnum: linenr_T) -> c_int {
 ///
 /// # Safety
 /// `wp` must be live and `lnum` a line of its buffer.
-pub(crate) unsafe fn plines_win_col(wp: Win, lnum: linenr_T, mut column: c_long) -> c_int {
+pub(crate) unsafe fn plines_win_col(wp: Win, lnum: LineNr, mut column: c_long) -> c_int {
     // Filler lines above this buffer line.
     let mut lines = unsafe { win_get_fill(wp, lnum) };
 
@@ -134,7 +134,7 @@ pub(crate) unsafe fn plines_win_col(wp: Win, lnum: linenr_T, mut column: c_long)
     let mut csarg = CharsizeArg::default();
     let cstype = unsafe { init_charsize_arg(&mut csarg, wp, lnum, line) };
 
-    let mut vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     if cstype == CharsizeKind::Fast {
         let use_tabstop = csarg.use_tabstop;
@@ -188,8 +188,8 @@ pub(crate) unsafe fn plines_win_col(wp: Win, lnum: linenr_T, mut column: c_long)
 /// a fold, `foldedp` to whether there was one.
 pub(crate) unsafe fn plines_win_full(
     wp: Win,
-    mut lnum: linenr_T,
-    nextp: Option<&mut linenr_T>,
+    mut lnum: LineNr,
+    nextp: Option<&mut LineNr>,
     foldedp: Option<&mut bool>,
     cache: bool,
     limit_winheight: bool,
@@ -224,12 +224,7 @@ pub(crate) unsafe fn plines_win_full(
 ///
 /// # Safety
 /// `wp` must be live.
-pub(crate) unsafe fn plines_m_win(
-    wp: Win,
-    mut first: linenr_T,
-    last: linenr_T,
-    max: c_int,
-) -> c_int {
+pub(crate) unsafe fn plines_m_win(wp: Win, mut first: LineNr, last: LineNr, max: c_int) -> c_int {
     let mut count = 0;
     while first <= last && count < max {
         let mut next = first;
@@ -248,7 +243,7 @@ pub(crate) unsafe fn plines_m_win(
 ///
 /// # Safety
 /// `wp` must be live.
-pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: linenr_T, last: linenr_T) -> c_int {
+pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: LineNr, last: LineNr) -> c_int {
     let mut count = last - first
         + 1
         + unsafe {
@@ -287,9 +282,9 @@ pub(crate) unsafe fn plines_m_win_fill(wp: Win, first: linenr_T, last: linenr_T)
 /// `wp`, `end_lnum` and `end_vcol` must be live; `fill` may be null.
 pub(crate) unsafe fn win_text_height(
     wp: Win,
-    start_lnum: linenr_T,
+    start_lnum: LineNr,
     start_vcol: int64_t,
-    end_lnum: *mut linenr_T,
+    end_lnum: *mut LineNr,
     end_vcol: *mut int64_t,
     fill: *mut int64_t,
     max: int64_t,

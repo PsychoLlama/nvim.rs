@@ -61,9 +61,9 @@ use crate::types::libc::{STDERR_FILENO, STDOUT_FILENO};
 use crate::types::ui::kLineFlagWrap;
 use crate::types::{
     Arena, Array, Callback, CallbackReader, Dict, Error, Event, GridLineEvent, HlAttrs, Integer,
-    KeyDict_highlight, Object, ObjectType, TUIData, UIClientHandler, Unpacker, dict_T,
+    KeyDict_highlight, Object, ObjectType, ProfTime, TUIData, UIClientHandler, Unpacker, dict_T,
     kObjectTypeArray, kObjectTypeBoolean, kObjectTypeDict, kObjectTypeInteger, kObjectTypeString,
-    proftime_T, uint16_t,
+    uint16_t,
 };
 use ::libc::{close, dup};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -276,7 +276,7 @@ unsafe fn api_version() -> Dict {
 /// `step` must outlive the log entry.
 unsafe fn log_startup_step(step: &'static CStr) {
     if !time_fd.get().is_null() {
-        unsafe { time_msg(step.as_ptr(), core::ptr::null::<proftime_T>()) };
+        unsafe { time_msg(step.as_ptr(), core::ptr::null::<ProfTime>()) };
     }
 }
 

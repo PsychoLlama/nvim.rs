@@ -24,7 +24,7 @@ use crate::regexp::{
     RS_STAR_LONG, RS_STAR_SHORT, RS_ZCLOSE, RS_ZOPEN, Rex, SavedInput, behind_pos, reg_breakcheck,
     reg_getline, reg_getline_len, reg_restore, reg_save, regstate_T, restore_subexpr,
 };
-use crate::types::{NUL, colnr_T, int64_t, uint8_t};
+use crate::types::{ColNr, NUL, int64_t, uint8_t};
 
 /// Pop frames until one of them has something new to try, or the stack runs
 /// out. Updates `scan` and `status` in place.
@@ -292,7 +292,7 @@ unsafe fn step_back_lines(
     let (was, stop) = (start.pos.as_pos(), stop.as_pos());
     let end_col = if was.lnum < stop.lnum {
         // SAFETY: `rex.line` is the NUL-terminated line being matched.
-        unsafe { cstr::bytes_at(rex.line().cast()).len() as colnr_T }
+        unsafe { cstr::bytes_at(rex.line().cast()).len() as ColNr }
     } else {
         stop.col
     };
@@ -310,7 +310,7 @@ unsafe fn step_back_lines(
         }
         reg_restore(rex, start, backpos);
         // SAFETY: as above.
-        start.pos.pos_mut().col = unsafe { cstr::bytes_at(rex.line().cast()) }.len() as colnr_T;
+        start.pos.pos_mut().col = unsafe { cstr::bytes_at(rex.line().cast()) }.len() as ColNr;
     } else {
         let line = reg_getline(rex, was.lnum);
         // SAFETY: `was.col` is a column of `line` and is not zero, so the

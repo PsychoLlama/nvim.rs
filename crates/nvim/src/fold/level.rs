@@ -52,7 +52,7 @@ fn getlevel_is_open_ended(getlevel: LevelGetter) -> bool {
 ///
 /// # Safety
 /// `win` must have a live buffer.
-pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: linenr_T, mut bot: linenr_T) {
+pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: LineNr, mut bot: LineNr) {
     if invalid_top.get() != 0 {
         // Already updating this window; the recursion would fight itself.
         return;
@@ -146,7 +146,7 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: linenr_T, mut b
         let mut folds = window_folds(win);
         let mut innermost = None;
         let mut current_fdl = 0;
-        let mut fold_start_lnum: linenr_T = 0;
+        let mut fold_start_lnum: LineNr = 0;
         let mut lnum_rel = fline.lnum;
         while current_fdl < fline.lvl {
             let Ok(i) = folds.find(lnum_rel) else { break };
@@ -270,12 +270,12 @@ pub(super) unsafe fn fold_update_computed(mut win: Win, mut top: linenr_T, mut b
 pub(super) unsafe fn fold_update_computed_recurse(
     folds: FoldList,
     level: c_int,
-    startlnum: linenr_T,
+    startlnum: LineNr,
     line: FLine,
     getlevel: LevelGetter,
-    mut bot: linenr_T,
+    mut bot: LineNr,
     topflags: c_int,
-) -> linenr_T {
+) -> LineNr {
     // The fold this call is building, once there is one. `None` means "not
     // started yet", which is what the whole first half of the loop is about.
     let mut fold: Option<Fold> = None;
@@ -446,7 +446,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                         adjust_fold_list(
                             current.nested(),
                             current.len(),
-                            MAXLNUM as linenr_T,
+                            MAXLNUM as LineNr,
                             LINES_DELETED,
                             0,
                         );
@@ -463,7 +463,7 @@ pub(super) unsafe fn fold_update_computed_recurse(
                             adjust_fold_list(
                                 current.nested(),
                                 0,
-                                MAXLNUM as linenr_T,
+                                MAXLNUM as LineNr,
                                 current.top() - firstlnum,
                                 0,
                             );

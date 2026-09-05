@@ -19,8 +19,8 @@ use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::r#move::{check_cursor_moved, update_topline, validate_botline_win};
 use crate::normal::{visual_active, visual_anchor};
 use crate::types::{
-    Failed, NUL, VAR_LIST, VAR_STRING, buf_T, colnr_T, fmark_T, linenr_T, list_T, listitem_T,
-    pos_T, typval_T, uint8_t, win_T,
+    ColNr, Failed, LineNr, NUL, VAR_LIST, VAR_STRING, buf_T, fmark_T, list_T, listitem_T, pos_T,
+    typval_T, uint8_t, win_T,
 };
 use crate::winlayer::Win;
 
@@ -28,7 +28,7 @@ use crate::winlayer::Win;
 ///
 /// # Safety
 /// `buf` must be null or valid.
-pub unsafe fn buf_byteidx_to_charidx(buf: *mut buf_T, mut lnum: linenr_T, byteidx: c_int) -> c_int {
+pub unsafe fn buf_byteidx_to_charidx(buf: *mut buf_T, mut lnum: LineNr, byteidx: c_int) -> c_int {
     // SAFETY: the caller's promise -- `buf` is null or a live buffer.
     let Some(buf) = (unsafe { Buf::from_raw(buf) }) else {
         return -1;
@@ -73,7 +73,7 @@ pub unsafe fn buf_byteidx_to_charidx(buf: *mut buf_T, mut lnum: linenr_T, byteid
 /// `buf` must be null or valid.
 pub unsafe fn buf_charidx_to_byteidx(
     buf: *mut buf_T,
-    mut lnum: linenr_T,
+    mut lnum: LineNr,
     mut charidx: c_int,
 ) -> c_int {
     // SAFETY: the caller's promise -- `buf` is null or a live buffer.
@@ -136,12 +136,12 @@ pub unsafe fn var2fpos(
         }
         let mut error = false;
         // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.lnum = unsafe { tv_list_find_nr(l, 0, &raw mut error) } as linenr_T;
+        pos.lnum = unsafe { tv_list_find_nr(l, 0, &raw mut error) } as LineNr;
         if error || pos.lnum <= 0 || pos.lnum > bp.line_count() {
             return None;
         }
         // SAFETY: as above.
-        pos.col = unsafe { tv_list_find_nr(l, 1, &raw mut error) } as colnr_T;
+        pos.col = unsafe { tv_list_find_nr(l, 1, &raw mut error) } as ColNr;
         if error {
             return None;
         }
@@ -171,7 +171,7 @@ pub unsafe fn var2fpos(
         pos.col -= 1;
 
         // SAFETY: `l` is a live List and `error` is this frame's.
-        pos.coladd = unsafe { tv_list_find_nr(l, 2, &raw mut error) } as colnr_T;
+        pos.coladd = unsafe { tv_list_find_nr(l, 2, &raw mut error) } as ColNr;
         if error {
             pos.coladd = 0;
         }
@@ -223,7 +223,7 @@ pub unsafe fn var2fpos(
     if pos.lnum != 0 {
         if charcol {
             // SAFETY: the buffer is live.
-            pos.col = unsafe { buf_byteidx_to_charidx(bp.raw(), pos.lnum, pos.col) } as colnr_T;
+            pos.col = unsafe { buf_byteidx_to_charidx(bp.raw(), pos.lnum, pos.col) } as ColNr;
         }
         return Some(pos);
     }
@@ -279,7 +279,7 @@ pub unsafe fn list2fpos(
     arg: *mut typval_T,
     posp: *mut pos_T,
     fnump: *mut c_int,
-    curswantp: *mut colnr_T,
+    curswantp: *mut ColNr,
     charcol: bool,
 ) -> Result<(), Failed> {
     // SAFETY: the caller's promise -- both outlive the call.
@@ -321,7 +321,7 @@ pub unsafe fn list2fpos(
     if n < 0 {
         return Err(Failed);
     }
-    posp.lnum = n as linenr_T;
+    posp.lnum = n as LineNr;
 
     // SAFETY: as above.
     let mut n = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
@@ -348,16 +348,16 @@ pub unsafe fn list2fpos(
         // SAFETY: `buf` is a live buffer with a memline.
         n = unsafe { buf_charidx_to_byteidx(buf.raw(), lnum, n) } + 1;
     }
-    posp.col = n as colnr_T;
+    posp.col = n as ColNr;
 
     // A missing or negative offset is no offset.
     // SAFETY: `l` is a live List.
     let off = unsafe { tv_list_find_nr(l, i, null_mut()) } as c_int;
-    posp.coladd = if off < 0 { 0 } else { off as colnr_T };
+    posp.coladd = if off < 0 { 0 } else { off as ColNr };
 
     if !curswantp.is_null() {
         // SAFETY: `l` is a live List, and a non-null `curswantp` is valid.
-        unsafe { *curswantp = tv_list_find_nr(l, i + 1, null_mut()) as colnr_T };
+        unsafe { *curswantp = tv_list_find_nr(l, i + 1, null_mut()) as ColNr };
     }
     Ok(())
 }

@@ -30,9 +30,7 @@ use crate::normal::{
 };
 use crate::pos::equalpos;
 use crate::search::FORWARD;
-use crate::types::{
-    Direction, FAIL, OK, OptInt, cmdarg_T, colnr_T, linenr_T, oparg_T, pos_T, win_T,
-};
+use crate::types::{ColNr, Direction, FAIL, LineNr, OK, OptInt, cmdarg_T, oparg_T, pos_T, win_T};
 use crate::winlayer::{Buf, Win, first_window};
 
 /// A command with nothing set, as C's `cmdarg_T ca = { 0 }` leaves it.
@@ -56,9 +54,9 @@ const CMDARG_ZERO: cmdarg_T = cmdarg_T {
 /// the cursor position a half-page scroll puts back before moving it itself.
 #[derive(Clone, Copy)]
 struct Saved {
-    buflen: linenr_T,
+    buflen: LineNr,
     cursor: pos_T,
-    curswant: colnr_T,
+    curswant: ColNr,
 }
 
 /// Move the screen `count` (half) pages backwards (`dir` is `BACKWARD`) or
@@ -136,7 +134,7 @@ unsafe fn half_page(
     let mut curscount = count;
     // Adjust the count so as not to reveal lines past the end of the buffer.
     if dir == FORWARD
-        && (win.w_topline + win.w_view_height as linenr_T + count as linenr_T > saved.buflen
+        && (win.w_topline + win.w_view_height as LineNr + count as LineNr > saved.buflen
             || win.lines_concealed())
     {
         let mut n = win.corrected_plines(win.w_topline, false).0;
@@ -167,7 +165,7 @@ unsafe fn half_page(
         cursor_down_inner(win, curscount, true);
     } else {
         // SAFETY: a live window.
-        cursor_up_inner(win, curscount as linenr_T, true);
+        cursor_up_inner(win, curscount as LineNr, true);
     }
     did_move
 }

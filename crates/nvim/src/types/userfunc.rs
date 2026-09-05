@@ -32,8 +32,8 @@ pub struct funcdict_T {
 #[derive(Copy, Clone)]
 pub struct funcexe_T {
     pub fe_argv_func: ArgvFunc,
-    pub fe_firstline: linenr_T,
-    pub fe_lastline: linenr_T,
+    pub fe_firstline: LineNr,
+    pub fe_lastline: LineNr,
     pub fe_doesrange: *mut bool,
     pub fe_evaluate: bool,
     pub fe_partial: *mut partial_T,

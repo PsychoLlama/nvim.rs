@@ -36,7 +36,7 @@ use crate::optionstr::empty_option;
 use crate::plines::getvcols;
 use crate::pos::lt;
 use crate::statusline::{draw_tabline, win_redr_status};
-use crate::types::{Array, NUL, Object, OptInt, colnr_T, linenr_T};
+use crate::types::{Array, ColNr, LineNr, NUL, Object, OptInt};
 use crate::ui::{ui_call_msg_showcmd, ui_has};
 use core::ffi::{CStr, c_char, c_int};
 
@@ -170,7 +170,7 @@ const IGNORED: [c_int; 22] = [
 
 /// The two lines the Visual selection spans, with any fold at either end
 /// opened out to its whole range.
-fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (linenr_T, linenr_T) {
+fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (LineNr, LineNr) {
     // SAFETY (throughout): `curwin` is the current window.
     let (mut top, mut bot) = if cursor_bot {
         (sel.anchor.lnum, cur_win().w_cursor.lnum)
@@ -185,7 +185,7 @@ fn visual_line_range(sel: VisualSelection, cursor_bot: bool) -> (linenr_T, linen
 /// The width of a blockwise selection, measured with 'showbreak' suppressed
 /// so a wrapped line does not add the leader to the column count.
 fn blockwise_width(sel: VisualSelection) -> c_int {
-    let (mut leftcol, mut rightcol): (colnr_T, colnr_T) = (0, 0);
+    let (mut leftcol, mut rightcol): (ColNr, ColNr) = (0, 0);
     // A copy of the anchor: `getvcols` only reads it.
     let mut anchor = sel.anchor;
     // SAFETY: both positions are in the current buffer, and the two

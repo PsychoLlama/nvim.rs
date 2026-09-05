@@ -59,7 +59,7 @@ use crate::runtime::{
 
 use crate::types::ui::kUICmdline;
 use crate::types::{
-    Failed, LineGetter, OptInt, cstack_T, eslist_T, estack_T, garray_T, linenr_T, msglist_T, size_t,
+    Failed, LineGetter, LineNr, OptInt, cstack_T, eslist_T, estack_T, garray_T, msglist_T, size_t,
 };
 use crate::ui::ui_has;
 
@@ -71,7 +71,7 @@ pub(crate) fn sourcing_entry() -> estack_T {
 }
 
 /// The line number the message and breakpoint machinery reports.
-pub(crate) fn sourcing_lnum() -> linenr_T {
+pub(crate) fn sourcing_lnum() -> LineNr {
     crate::runtime::innermost_frame().es_lnum
 }
 
@@ -158,7 +158,7 @@ pub unsafe fn do_cmdline(
     let mut lines_ga: garray_T = unsafe { core::mem::zeroed() };
     let mut current_line: c_int = 0;
     let mut fname: *mut c_char = ptr::null_mut();
-    let mut breakpoint: *mut linenr_T = ptr::null_mut();
+    let mut breakpoint: *mut LineNr = ptr::null_mut();
     let mut dbg_tick: *mut c_int = ptr::null_mut();
     let mut debug_saved: dbg_stuff = unsafe { core::mem::zeroed() };
     let mut cmd_loop_cookie: loop_cookie = unsafe { core::mem::zeroed() };
@@ -759,7 +759,7 @@ pub unsafe fn do_cmdline(
 }
 
 /// `dbg_find_breakpoint()` as checked code.
-fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: linenr_T) -> linenr_T {
+fn dbg_find_breakpoint(file: bool, fname: *mut c_char, after: LineNr) -> LineNr {
     // SAFETY: the pointers are the command line's own, and live for the call.
     unsafe { crate::debugger::dbg_find_breakpoint(file, fname, after) }
 }

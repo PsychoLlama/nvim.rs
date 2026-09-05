@@ -35,7 +35,7 @@ fn move_bytes(dst: *mut c_char, src: *const c_char, n: size_t) {
 }
 
 /// The line the cursor is on, and its length.
-fn cursor_line() -> (*mut c_char, colnr_T) {
+fn cursor_line() -> (*mut c_char, ColNr) {
     let lnum = cur_win().w_cursor.lnum;
     // SAFETY: the cursor is on a valid line of the current buffer.
     (ml_get(lnum), ml_get_len(lnum))
@@ -106,10 +106,10 @@ unsafe fn vreplace_extent(
 
     let mut oldlen: size_t = 0;
     let mut newlen: size_t = charlen;
-    let mut vcol: colnr_T = 0;
+    let mut vcol: ColNr = 0;
     let win = curwin.get();
     let cursor = cur_win().cursor().raw();
-    let novcol = ::core::ptr::null_mut::<colnr_T>();
+    let novcol = ::core::ptr::null_mut::<ColNr>();
     // SAFETY: the current window and its own cursor; only the middle column
     // is asked for, and it is a local.
     unsafe { getvcol(Win::new(win), cursor, novcol, &raw mut vcol, novcol) };
@@ -198,7 +198,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
     // SAFETY: `newp` is our own NUL-terminated line, which the buffer takes
     // over, and `lnum` is the cursor line.
     let _ = unsafe { ml_replace(lnum, newp, false) };
-    unsafe { inserted_bytes(lnum, col as colnr_T, oldlen as c_int, newlen as c_int) };
+    unsafe { inserted_bytes(lnum, col as ColNr, oldlen as c_int, newlen as c_int) };
 
     // In Insert or Replace mode with 'showmatch', briefly show the match
     // for a closing bracket.
@@ -212,7 +212,7 @@ pub unsafe fn ins_char_bytes(buf: *mut c_char, charlen: size_t) {
 
     if p_ri.get() == 0 || State.get() & REPLACE_FLAG != 0 {
         // Normal insert: move the cursor right.
-        cur_win().w_cursor.col += charlen as colnr_T;
+        cur_win().w_cursor.col += charlen as ColNr;
     }
 }
 
@@ -251,7 +251,7 @@ pub unsafe fn ins_str(s: *mut c_char, slen: size_t) {
     // over, and `lnum` is the cursor line.
     let _ = unsafe { ml_replace(lnum, newp, false) };
     unsafe { inserted_bytes(lnum, col, 0, slen as c_int) };
-    cur_win().w_cursor.col += slen as colnr_T;
+    cur_win().w_cursor.col += slen as ColNr;
 }
 
 /// Delete the character under the cursor.
@@ -298,7 +298,7 @@ pub unsafe fn del_chars(count: c_int, fixpos: c_int) -> Result<(), Failed> {
 /// # Safety
 /// The caller must have prepared for undo.
 pub unsafe fn del_bytes(
-    mut count: colnr_T,
+    mut count: ColNr,
     fixpos_arg: bool,
     use_delcombine: bool,
 ) -> Result<(), Failed> {
@@ -437,7 +437,7 @@ pub unsafe fn truncate_line(fixpos: c_int) {
 /// # Safety
 /// The cursor must be on a valid line. With `undo` false the caller must have
 /// prepared for undo itself.
-pub unsafe fn del_lines(nlines: linenr_T, undo: bool) {
+pub unsafe fn del_lines(nlines: LineNr, undo: bool) {
     let first = cur_win().w_cursor.lnum;
     if nlines <= 0 {
         return;

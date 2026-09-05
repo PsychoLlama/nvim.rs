@@ -32,7 +32,7 @@ use crate::search::{
 use crate::semsg;
 use crate::state::virtual_active;
 use crate::types::{
-    Direction, EvalFuncData, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, colnr_T, list_T, pos_T,
+    ColNr, Direction, EvalFuncData, NUL, VAR_LIST, VAR_NUMBER, VAR_STRING, buf_T, list_T, pos_T,
     typval_T, varnumber_T, win_T,
 };
 use crate::winlayer::Win;
@@ -40,8 +40,8 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// "End of line", the column sentinel. `MAXCOL` is spelled as an unsigned
-/// constant but every column it is compared against is a `colnr_T`.
-const END_OF_LINE: colnr_T = MAXCOL as colnr_T;
+/// constant but every column it is compared against is a `ColNr`.
+const END_OF_LINE: ColNr = MAXCOL as ColNr;
 
 /// The zeroed position both the getters and the setters start from.
 const NOWHERE: pos_T = pos_T {
@@ -121,7 +121,7 @@ fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
     let bp = unsafe { (*wp).w_buffer };
     let mut fnum = unsafe { (*bp).handle } as c_int;
     let fp = unsafe { var2fpos(args.ptr(0), false, &raw mut fnum, charcol, wp) };
-    let mut col: colnr_T = 0;
+    let mut col: ColNr = 0;
     if let Some(mut fp) = fp
         && fnum == unsafe { (*bp).handle }
     {
@@ -153,7 +153,7 @@ fn get_col(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
 ///
 /// # Safety
 /// `wp`, `bp` and `fp` are live, and `fp` is a position in `bp`.
-unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> colnr_T {
+unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> ColNr {
     // SAFETY: the caller's promise, taken once for the whole body.
     let mut win = unsafe { Win::new(wp) };
     // SAFETY throughout: the caller's obligation; `p` points into the cursor's line
@@ -182,8 +182,8 @@ unsafe fn virtualedit_tail(wp: *mut win_T, bp: *mut buf_T, fp: *mut pos_T) -> co
 /// `virtcol({expr} [, {list} [, {winid}]])`.
 pub unsafe fn f_virtcol(argvars: *mut typval_T, rettv: *mut typval_T, _fptr: EvalFuncData) {
     let (args, rettv) = frame!(argvars, rettv);
-    let mut vcol_start: colnr_T = 0;
-    let mut vcol_end: colnr_T = 0;
+    let mut vcol_start: ColNr = 0;
+    let mut vcol_end: ColNr = 0;
     // SAFETY throughout: the arguments and `rettv` are live typvals; `var2fpos` hands
     // back a pointer into the named window or buffer, which the clamp
     // below writes through — that is upstream's behaviour and is why a
@@ -316,8 +316,7 @@ fn getpos_both(args: Args<'_>, rettv: &mut typval_T, getcurpos: bool, charcol: b
         if let Some(pos) = &mut fp
             && charcol
         {
-            pos.col =
-                unsafe { buf_byteidx_to_charidx((*wp).w_buffer, pos.lnum, pos.col) } as colnr_T;
+            pos.col = unsafe { buf_byteidx_to_charidx((*wp).w_buffer, pos.lnum, pos.col) } as ColNr;
         }
         fp
     };
@@ -405,7 +404,7 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
     let mut set_curswant = true;
     let (lnum, mut col, coladd) = if args.ty(0) == VAR_LIST {
         let mut pos = NOWHERE;
-        let mut curswant: colnr_T = -1;
+        let mut curswant: ColNr = -1;
         let (out, want) = (&raw mut pos, &raw mut curswant);
         // SAFETY: argument 0 is a live typval and both are locals.
         let read = unsafe { list2fpos(args.ptr(0), out, ptr::null_mut(), want, charcol) };
@@ -433,12 +432,12 @@ fn set_cursorpos(args: Args<'_>, rettv: &mut typval_T, charcol: bool) {
         } else if lnum == 0 {
             lnum = unsafe { (*curwin.get()).w_cursor.lnum };
         }
-        let mut col = arg_number_chk(args.get(1), None) as colnr_T;
+        let mut col = arg_number_chk(args.get(1), None) as ColNr;
         if charcol {
             col = unsafe { buf_charidx_to_byteidx(curbuf.get(), lnum, col) } + 1;
         }
         let coladd = if args.has(2) {
-            arg_number_chk(args.get(2), None) as colnr_T
+            arg_number_chk(args.get(2), None) as ColNr
         } else {
             0
         };
@@ -490,7 +489,7 @@ fn set_position(args: Args<'_>, rettv: &mut typval_T, charpos: bool) {
     }
     let mut pos = NOWHERE;
     let mut fnum: c_int = 0;
-    let mut curswant: colnr_T = -1;
+    let mut curswant: ColNr = -1;
     let (out, buf, want) = (&raw mut pos, &raw mut fnum, &raw mut curswant);
     // SAFETY: argument 1 is a live typval and the three are locals.
     if unsafe { list2fpos(args.ptr(1), out, buf, want, charpos) }.is_err() {

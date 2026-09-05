@@ -90,7 +90,7 @@ pub(crate) unsafe fn insertchar(c: c_int, flags: c_int, second_indent: c_int) {
         && p_ri.get() == 0
     {
         let mut buf: [c_char; INPUT_BUFLEN as usize + 1] = [0; INPUT_BUFLEN as usize + 1];
-        let mut virtcol: colnr_T = 0;
+        let mut virtcol: ColNr = 0;
 
         buf[0] = c as c_char;
         let mut i = 1;
