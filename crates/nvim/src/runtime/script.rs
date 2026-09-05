@@ -538,7 +538,7 @@ unsafe fn refresh_breakpoint(source: *mut SourceCookie) {
 }
 
 /// The next line of the script, using the one `getsourceline` read ahead if
-/// there is one.  `fp` is null when the source is a string rather than a file.
+/// there is one.  `source.fp` is null when the source is a string rather than a file.
 ///
 /// # Safety
 ///
