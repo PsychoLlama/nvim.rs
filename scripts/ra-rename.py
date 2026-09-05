@@ -12,12 +12,18 @@ Usage:
 
     scripts/ra-rename.py TABLE [--dry-run] [--fold] [--root DIR]
 
-`TABLE` is a file of `old_name new_name` lines; `#` starts a comment and blank
-lines are skipped. The script finds each `old_name`'s own declaration under
-`crates/nvim/src` (`struct`/`enum`/`union`/`type`, and it must be unique), asks
+`TABLE` is a file of `old_name new_name [declared_in]` lines; `#` starts a
+comment and blank lines are skipped. The script finds each `old_name`'s own
+declaration under `crates/nvim/src` (`struct`/`enum`/`union`/`type`), asks
 rust-analyzer to rename the symbol at that position, and applies the returned
 `WorkspaceEdit` to disk. `--dry-run` prints the edit counts per file and writes
 nothing.
+
+The declaration must be unique, so that a name declared twice is an error
+rather than a coin flip over which one the rename starts from. `declared_in`
+is how a collision batch says which one it means: a path the declaring file
+must end with (`eval/list/mod.rs`), needed exactly when the tree already holds
+two of a name -- which is the situation a collision rename exists to end.
 
 `--fold` is for an alias over a C tag struct -- `pub type win_T = window_S;`.
 Two renames are needed, because the LSP renames the *alias*, not the tag it
@@ -241,16 +247,20 @@ class Client:
         )
 
 
-def declaration(name, root):
+def declaration(name, root, declared_in=None):
     """(path, 0-based line, 0-based column) of `name`'s own declaration.
 
     The caller never hand-computes a position: a table is a list of names, and
     a name that is declared twice (or not at all) is an error rather than a
-    coin flip over which declaration the rename starts from.
+    coin flip over which declaration the rename starts from. `declared_in`
+    narrows the search to files whose path ends with it, which is how a table
+    names one of two same-named types.
     """
     needle = re.compile(DECL.format(re.escape(name)), re.MULTILINE)
     found = []
     for path in sorted((root / "crates" / "nvim" / "src").rglob("*.rs")):
+        if declared_in and not path.as_posix().endswith(declared_in):
+            continue
         text = path.read_text()
         for match in needle.finditer(text):
             line = text.count("\n", 0, match.start())
@@ -258,11 +268,12 @@ def declaration(name, root):
                 text.rfind("\n", 0, match.start()) + 1
             )
             found.append((path, line, column))
+    scope = f" in `{declared_in}`" if declared_in else ""
     if not found:
-        sys.exit(f"ra-rename: no declaration of `{name}` under crates/nvim/src")
+        sys.exit(f"ra-rename: no declaration of `{name}`{scope} under crates/nvim/src")
     if len(found) > 1:
         where = ", ".join(f"{p.relative_to(root)}:{ln + 1}" for p, ln, _ in found)
-        sys.exit(f"ra-rename: `{name}` is declared more than once: {where}")
+        sys.exit(f"ra-rename: `{name}` is declared more than once{scope}: {where}")
     return found[0]
 
 
@@ -388,27 +399,27 @@ def report(changes, label):
 
 
 def read_table(path):
-    pairs = []
+    rows = []
     for raw in Path(path).read_text().split("\n"):
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
         parts = line.split()
-        if len(parts) != 2:
-            sys.exit(f"ra-rename: not an `old new` pair: {raw!r}")
-        pairs.append((parts[0], parts[1]))
-    return pairs
+        if not 2 <= len(parts) <= 3:
+            sys.exit(f"ra-rename: not an `old new [declared_in]` row: {raw!r}")
+        rows.append((parts[0], parts[1], parts[2] if len(parts) == 3 else None))
+    return rows
 
 
-def plan(pairs, root, fold):
+def plan(rows, root, fold):
     """Resolve every table entry to the positions a rename starts from.
 
     Done once, against the pristine tree, for every `cfg` profile: a position
     is a line and column, and applying an edit would move the ones below it.
     """
     entries = []
-    for old, new in pairs:
-        path, line, column = declaration(old, root)
+    for old, new, declared_in in rows:
+        path, line, column = declaration(old, root, declared_in)
         positions = []
         tag = None
         if fold:
@@ -423,7 +434,7 @@ def plan(pairs, root, fold):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("table", help="file of `old_name new_name` lines")
+    parser.add_argument("table", help="file of `old_name new_name [declared_in]` lines")
     parser.add_argument(
         "--dry-run", action="store_true", help="print edit counts, write nothing"
     )
