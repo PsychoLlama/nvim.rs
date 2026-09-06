@@ -54,7 +54,7 @@ use crate::types::{
 use crate::undo::u_clearallandblockfree;
 use crate::usercmd::{Table, uc_clear};
 use crate::window::{free_wininfo, goto_tabpage_win, one_window, win_valid_any_tab};
-use crate::winlayer::graph::{curbuf, curtab, curwin, firstbuf, lastbuf, leave_curbuf};
+use crate::winlayer::graph::{firstbuf, lastbuf, leave_curbuf};
 use crate::winlayer::{Buf, TabPage, Win, defer_free_buffer, forget_buffer, tab_windows, windows};
 
 /// A mark that has never been set, as `CLEAR_FIELD()` leaves one: all zero,
@@ -413,8 +413,8 @@ fn close_buffer_inner(
 ) -> bool {
     let mut how = Disposition::of(buffer, action);
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
-    let the_curwin = curwin.get();
-    let the_curtab = curtab.get();
+    let the_curwin = Win::current_raw();
+    let the_curtab = TabPage::current_raw();
     // Upstream's CHECK_CURBUF sits here; it is a no-op outside
     // ABORT_ON_INTERNAL_ERROR builds.
 
@@ -483,7 +483,7 @@ fn close_buffer_inner(
     // autocommands when del_buf is true.  Remember if we are closing the
     // current buffer.  Restore the number of windows, so that autocommands in
     // buf_freeall() don't get confused.
-    let is_curbuf = buffer.raw() == curbuf.get();
+    let is_curbuf = buffer.raw() == Buf::current_raw();
 
     // When closing the current buffer stop Visual mode before freeing
     // anything.
@@ -509,7 +509,7 @@ fn close_buffer_inner(
     // in some cases it's OK to delete the curbuf, because a new one is
     // obtained anyway.  Therefore only return if curbuf changed to the
     // deleted buffer.
-    if buf.raw() == curbuf.get() && !is_curbuf {
+    if buf.raw() == Buf::current_raw() && !is_curbuf {
         return false;
     }
 
@@ -602,7 +602,7 @@ fn leave_last_window(
 /// Go back to the window the caller started in, if an autocommand left us
 /// somewhere else and it still exists.
 fn restore_curwin(was_curwin: bool, the_curwin: *mut Window, the_curtab: *mut Tabpage) {
-    if !was_curwin || curwin.get() == the_curwin {
+    if !was_curwin || Win::current_raw() == the_curwin {
         return;
     }
     let Some(wp) = valid_win(the_curwin) else {
@@ -687,10 +687,10 @@ pub fn buf_clear() {
 /// Careful: gets here with `curwin` NULL when exiting.
 ///
 pub fn buf_freeall(buffer: Buf, flags: c_int) {
-    let is_curbuf = buffer.raw() == curbuf.get();
+    let is_curbuf = buffer.raw() == Buf::current_raw();
     let is_curwin = current_win().is_some_and(|wp| wp.w_buffer == buffer.raw());
-    let the_curwin = curwin.get();
-    let the_curtab = curtab.get();
+    let the_curwin = Win::current_raw();
+    let the_curtab = TabPage::current_raw();
 
     let Some(mut buf) = announce_unload(buffer, flags) else {
         return;
@@ -712,7 +712,7 @@ pub fn buf_freeall(buffer: Buf, flags: c_int) {
     // This might cause curbuf to be deleted unexpectedly.  But in some cases
     // it's OK to delete the curbuf, because a new one is obtained anyway.
     // Therefore only return if curbuf changed to the deleted buffer.
-    if buf.raw() == curbuf.get() && !is_curbuf {
+    if buf.raw() == Buf::current_raw() && !is_curbuf {
         return;
     }
     diff_forget(buf); // Can't use 'diff' for unloaded buffer.
@@ -836,7 +836,7 @@ fn free_buffer(mut buffer: Buf) {
     } else {
         // The free: `Buffer`'s destructor runs and the memory goes back.
         drop(owned);
-        if curbuf.get() == buffer.raw() {
+        if Buf::current_raw() == buffer.raw() {
             leave_curbuf(); // make clear it's not to be used
         }
     }

@@ -126,7 +126,7 @@ use crate::ui::{ui_flush, vim_beep};
 use crate::undo::undo_allowed;
 use crate::window::win_valid;
 use crate::winfloat::win_float_find_preview;
-use crate::winlayer::graph::{cmdwin_type, curbuf, curwin};
+use crate::winlayer::graph::cmdwin_type;
 use crate::winlayer::{BufId, WinId};
 use ::libc::{atoi, fclose, qsort, strcat, strcpy, strncpy, strrchr};
 

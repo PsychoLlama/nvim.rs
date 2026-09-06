@@ -16,6 +16,7 @@
 use super::*;
 use crate::normal::{visual_active, visual_anchor, visual_mode};
 use crate::types::StlSyntax;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// Mark the title and icon for redraw if either of them uses statusline format.
@@ -150,7 +151,7 @@ pub unsafe fn screen_invalidate_highlights() {
 /// from startup to exit.
 pub fn redraw_curbuf_later(redr_type: c_int) {
     // SAFETY: `curbuf` is the editor's current buffer.
-    unsafe { redraw_buf_later(curbuf.get(), redr_type) }
+    unsafe { redraw_buf_later(Buf::current_raw(), redr_type) }
 }
 
 /// Mark every window showing `buffer`.
@@ -221,7 +222,7 @@ pub unsafe fn redraw_buf_status_later(buffer: *mut Buffer) {
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buffer
             && (wp.w_status_height != 0
-                || (wp.raw() == curwin.get() && global_stl_height() != 0)
+                || (wp.raw() == Win::current_raw() && global_stl_height() != 0)
                 || wp.w_winbar_height != 0)
         {
             wp.w_redr_status = true;
@@ -236,7 +237,7 @@ pub unsafe fn status_redraw_all() {
     let is_stl_global = global_stl_height() != 0;
     for mut wp in winlayer::windows() {
         if (!is_stl_global && wp.w_status_height != 0)
-            || wp.raw() == curwin.get()
+            || wp.raw() == Win::current_raw()
             || wp.w_winbar_height != 0
         {
             wp.w_redr_status = true;
@@ -248,7 +249,7 @@ pub unsafe fn status_redraw_all() {
 /// Mark the status lines and window bars of the current buffer.
 pub unsafe fn status_redraw_curbuf() {
     // SAFETY: `curbuf` is the editor's current buffer.
-    unsafe { status_redraw_buf(curbuf.get()) }
+    unsafe { status_redraw_buf(Buf::current_raw()) }
 }
 
 /// Mark the status lines and window bars of `buffer`.
@@ -258,7 +259,7 @@ pub unsafe fn status_redraw_buf(buffer: *mut Buffer) {
     for mut wp in winlayer::windows() {
         if wp.w_buffer == buffer
             && ((!is_stl_global && wp.w_status_height != 0)
-                || (is_stl_global && wp.raw() == curwin.get())
+                || (is_stl_global && wp.raw() == Win::current_raw())
                 || wp.w_winbar_height != 0)
         {
             wp.w_redr_status = true;

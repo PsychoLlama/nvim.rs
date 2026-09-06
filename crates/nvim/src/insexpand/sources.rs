@@ -325,9 +325,9 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
 
     if flag == 'w' as c_int {
         // Just windows.
-        if buffer.raw() == curbuf.get() || !win_valid(wp.get()) {
+        if buffer.raw() == Buf::current_raw() || !win_valid(wp.get()) {
             // First call for this flag/expansion, or the window was closed.
-            wp.set(curwin.get());
+            wp.set(Win::current_raw());
         }
         debug_assert!(!wp.get().is_null());
         // SAFETY: `wp` is `curwin` or a window `win_valid` just vouched for,
@@ -339,7 +339,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
             wp.set(next.map_or(::core::ptr::null_mut(), Win::raw));
             // Stop if we're back at the start, or found an unscanned
             // buffer in a focusable window.
-            if wp.get() == curwin.get()
+            if wp.get() == Win::current_raw()
                 || (!unsafe { (*(*wp.get()).w_buffer).b_scanned }
                     && unsafe { (*wp.get()).w_config.focusable })
             {
@@ -358,7 +358,7 @@ pub(crate) fn ins_compl_next_buf(mut buffer: Buf, flag: c_int) -> Buf {
                 None => first_buffer().expect("the editor always has a buffer"),
             };
             // Stop if we're back at the start buffer.
-            if buffer.raw() == curbuf.get() {
+            if buffer.raw() == Buf::current_raw() {
                 break;
             }
             let skip_buffer = if flag == 'U' as c_int {
@@ -513,7 +513,7 @@ pub(crate) unsafe fn get_next_default_completion(
             PosRef::new(start_pos),
         )
     };
-    let in_curbuf = ins_buf.raw() == curbuf.get();
+    let in_curbuf = ins_buf.raw() == Buf::current_raw();
 
     // If 'infercase' is set, don't use 'smartcase' here.
     let save_p_scs = p_scs.get();
@@ -895,7 +895,7 @@ pub(super) unsafe fn search_for_fuzzy_match(
 
     // Where the search has come full circle. Another buffer is walked
     // from wherever it is to its end rather than back to the start.
-    let circly_end = if buffer == curbuf.get() {
+    let circly_end = if buffer == Buf::current_raw() {
         unsafe { *start_pos }
     } else {
         Pos {

@@ -36,7 +36,7 @@ pub(crate) unsafe fn set_buffer_lines(
     // and once at the end.
     let mut lnum: LineNr = lnum_arg + LineNr::from(append);
     let mut added: c_int = 0;
-    let is_curbuf: bool = buffer == curbuf.get();
+    let is_curbuf: bool = buffer == Buf::current_raw();
     // SAFETY: the caller's obligation -- live typvals, and a live buffer or
     // NULL, which the test below tells apart.
     let mut ret = unsafe { Tv::new(result) };
@@ -116,7 +116,7 @@ pub(crate) unsafe fn set_buffer_lines(
             // insertion; the others keep looking at the line they were on.
             for mut wp in tab_windows() {
                 if wp.w_buffer == buffer
-                    && (wp.w_buffer != curbuf.get() || wp.is_current())
+                    && (wp.w_buffer != Buf::current_raw() || wp.is_current())
                     && wp.w_cursor.lnum > append_lnum
                 {
                     wp.w_cursor.lnum += added;
@@ -217,7 +217,7 @@ pub unsafe fn f_append(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(curbuf.get(), lnum, true, args.ptr(1), result) };
+        unsafe { set_buffer_lines(Buf::current_raw(), lnum, true, args.ptr(1), result) };
     }
 }
 
@@ -242,7 +242,7 @@ pub unsafe fn f_setline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let did_emsg_before = did_emsg.get();
     let lnum = arg_lnum(args, 0);
     if did_emsg.get() == did_emsg_before {
-        unsafe { set_buffer_lines(curbuf.get(), lnum, false, args.ptr(1), result) };
+        unsafe { set_buffer_lines(Buf::current_raw(), lnum, false, args.ptr(1), result) };
     }
 }
 
@@ -257,7 +257,7 @@ pub unsafe fn f_getline(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     } else {
         (lnum, false)
     };
-    unsafe { get_buffer_lines(curbuf.get(), lnum, end, retlist, result) };
+    unsafe { get_buffer_lines(Buf::current_raw(), lnum, end, retlist, result) };
 }
 
 /// `getbufline({buf}, {lnum} [, {end}])`.
@@ -300,7 +300,7 @@ pub unsafe fn f_deletebufline(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     if mfp.is_null() || first < 1 || first > count || last < first {
         return;
     }
-    let is_curbuf = buf == curbuf.get();
+    let is_curbuf = buf == Buf::current_raw();
     let mut cob = SavedBufferState::new();
     if !is_curbuf {
         unsafe { cob.prepare(Buf::new(buf)) };

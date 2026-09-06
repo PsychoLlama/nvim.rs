@@ -36,7 +36,6 @@ use crate::textobject::bckend_word;
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, int64_t};
 use crate::undo::undo_time;
 use crate::window::{goto_tabpage, goto_tabpage_lastused};
-use crate::winlayer::graph::curwin;
 use core::ffi::c_int;
 
 use crate::r#move::{
@@ -350,7 +349,7 @@ pub(crate) unsafe fn nv_g_cmd(cmd_arg: *mut CmdArg) {
         Ok(b'M') => {
             op.motion_type = kMTCharWise;
             op.inclusive = false;
-            let width = unsafe { linetabsize(Win::new(curwin.get()), cur_win().w_cursor.lnum) };
+            let width = unsafe { linetabsize(cur_win(), cur_win().w_cursor.lnum) };
             if ca.count0 > 0 && ca.count0 <= 100 {
                 coladvance(Win::current(), width * ca.count0 / 100);
             } else {

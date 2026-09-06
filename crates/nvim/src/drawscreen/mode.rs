@@ -11,6 +11,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::CStr;
 
 use super::*;
@@ -144,7 +145,7 @@ pub unsafe fn showmode() -> c_int {
                     u8::try_from(restart_edit.get()),
                     Ok(b'I' | b'i' | b'a' | b'A')
                 ) {
-                    if unsafe { (*curbuf.get()).terminal }.is_null() {
+                    if Buf::current().terminal.is_null() {
                         put_translated(c" (insert)");
                     } else {
                         put_translated(c" (terminal)");
@@ -156,9 +157,9 @@ pub unsafe fn showmode() -> c_int {
                 }
 
                 if State.get() & MODE_LANGMAP != 0 {
-                    if unsafe { (*curwin.get()).w_onebuf_opt.wo_arab } != 0 {
+                    if Win::current().w_onebuf_opt.wo_arab != 0 {
                         put_translated(c" Arabic");
-                    } else if let Some(keymap_name) = unsafe { keymap_str(curwin.get()) } {
+                    } else if let Some(keymap_name) = unsafe { keymap_str(Win::current_raw()) } {
                         let buf = keymap.as_mut_ptr();
                         let plen = unsafe {
                             vim_snprintf(

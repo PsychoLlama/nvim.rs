@@ -21,6 +21,7 @@ use crate::keycodes::{Ctrl_B, Ctrl_C, Ctrl_F, Key, NotAKey};
 use crate::log::logmsg;
 use crate::message_fmt::c_str;
 use crate::types::NUL;
+use crate::winlayer::Win;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -274,7 +275,7 @@ pub unsafe fn wait_return(redraw: c_int) {
         // got resize event while in vgetc()
         unsafe { ui_refresh() };
     } else if !skip_redraw.get() && (redraw == 1 || (msg_scrolled.get() != 0 && redraw != -1)) {
-        unsafe { redraw_later(curwin.get(), UPD_VALID) };
+        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
     }
 }
 

@@ -67,7 +67,7 @@ use crate::types::{
     kErrorTypeException, size_t,
 };
 use crate::ui_compositor::ui_comp_remove_grid;
-use crate::winlayer::graph::{curtab, curwin, first_tabpage, firstwin, lastwin, prevwin, topframe};
+use crate::winlayer::graph::{first_tabpage, firstwin, lastwin, prevwin, topframe};
 use crate::winlayer::{Buf, FrameRef, TabPage, Win, tab_windows, windows, windows_in_tab};
 
 // The carve of the transpiled module; see each child's docs.
@@ -268,7 +268,7 @@ pub unsafe fn prevwin_curwin() -> *mut Window {
     if in_cmdwin && !prev.is_null() {
         prev
     } else {
-        curwin.get()
+        Win::current_raw()
     }
 }
 
@@ -331,7 +331,7 @@ static min_set_ch: GlobalCell<OptInt> = GlobalCell::new(1 as OptInt);
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn win_valid(win: *const Window) -> bool {
     // SAFETY: `curtab` is always a live tab page, and `win` is only compared.
-    unsafe { tabpage_win_valid(curtab.get(), win) }
+    unsafe { tabpage_win_valid(TabPage::current_raw(), win) }
 }
 
 pub unsafe fn tabpage_win_valid(tabpage: *const Tabpage, win: *const Window) -> bool {

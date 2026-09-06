@@ -70,7 +70,6 @@ use crate::strings::vim_snprintf;
 use crate::types::Failed;
 use crate::types::*;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{close, fclose, fdopen, fflush, fread, fwrite, getuid, strftime, time};
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
@@ -311,7 +310,7 @@ pub fn u_savecommon(
         if !undo_allowed(buffer) {
             return Err(Failed);
         }
-        if ptr::eq(buffer.raw(), curbuf.get()) {
+        if ptr::eq(buffer.raw(), Buf::current_raw()) {
             // SAFETY: the current buffer, which is live and survives
             // FileChangedRO.
             unsafe { change_warning(buffer, 0) };

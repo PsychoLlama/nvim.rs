@@ -12,11 +12,12 @@ use crate::api::private::helpers::{Reported, buffer_by_handle, window_by_handle}
 use crate::api::private::validate::{err_bad_value, err_expected};
 use crate::cstr;
 use crate::types::OptionSetFlags;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_void};
 
 pub unsafe fn nvim_get_option_info(name: String_0, arena: *mut Arena) -> Result<ApiDict, Error> {
     let mut error = Error::none();
-    let (buf, win) = (curbuf.get(), curwin.get());
+    let (buf, win) = (Buf::current_raw(), Win::current_raw());
     // SAFETY: `name` is the caller's, the two globals name the current
     // buffer and window, and `arena`/`error` are the caller's and this
     // frame's slot.

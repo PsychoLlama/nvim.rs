@@ -77,7 +77,6 @@ use crate::types::{
     size_t, uint32_t,
 };
 use crate::window::buf_jump_open_win;
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win, buffers, first_buffer, windows};
 use ::libc::atoi;
 

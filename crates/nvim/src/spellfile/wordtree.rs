@@ -61,6 +61,7 @@
 
 use crate::cstr;
 use crate::spell::WordFlags;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 use core::{mem, ptr};
 
@@ -76,7 +77,6 @@ use crate::os::input::veryfast_breakcheck;
 use crate::spell::{captype, spell_casefold};
 use crate::types::{Failed, HashTab, NUL, int16_t, uint8_t, uint16_t};
 use crate::ui::ui_flush;
-use crate::winlayer::graph::curwin;
 
 use super::{MAXWLEN, SpellInfo, spell_message_fmt};
 
@@ -320,7 +320,7 @@ pub(super) unsafe fn store_word(
         return Err(Failed);
     }
 
-    let (win, out) = (curwin.get(), foldword.as_mut_ptr());
+    let (win, out) = (Win::current_raw(), foldword.as_mut_ptr());
     let _ = unsafe { spell_casefold(win, word, len, out, MAXWLEN as c_int) };
 
     let root = spin.si_foldroot;

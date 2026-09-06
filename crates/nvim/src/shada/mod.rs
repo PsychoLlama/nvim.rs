@@ -70,7 +70,6 @@ use crate::types::{
     uv_uid_t,
 };
 use crate::version::LONG_VERSION;
-use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{buffers, tab_windows};
 use ::libc::{atoi, getgid, getuid, qsort};
 

@@ -327,7 +327,7 @@ unsafe fn clear_qf_buffer() -> bool {
     // SAFETY: the closure only writes a field of each window it is handed.
     unsafe {
         find_tab_win(|mut wp| {
-            if wp.w_buffer == curbuf.get() {
+            if wp.w_buffer == Buf::current_raw() {
                 wp.w_skipcol = 0;
             }
             false
@@ -355,11 +355,11 @@ unsafe fn finish_qf_buffer() {
     cur_buf().b_keep_filetype = true; // don't detect 'filetype'
     let start_row = c"quickfix".as_ptr().cast_mut();
     let start_col = ptr::null_mut();
-    let old_col = curbuf.get();
+    let old_col = Buf::current_raw();
     unsafe { apply_autocmds(AutoEvent::BufReadPost, start_row, start_col, false, old_col) };
     let lnum2 = c"quickfix".as_ptr().cast_mut();
     let col = ptr::null_mut();
-    let old_col2 = curbuf.get();
+    let old_col2 = Buf::current_raw();
     unsafe { apply_autocmds(AutoEvent::BufWinEnter, lnum2, col, false, old_col2) };
     cur_buf().b_keep_filetype = false;
     cur_buf().b_ro_locked -= 1;
@@ -415,7 +415,7 @@ pub(crate) unsafe fn qf_fill_buffer(
     let old_key_typed = KeyTyped.get();
     let rewriting = old_last.is_null();
     if rewriting {
-        if buffer.raw() != curbuf.get() {
+        if buffer.raw() != Buf::current_raw() {
             unsafe { internal_error(c"qf_fill_buffer()".as_ptr()) };
             return;
         }

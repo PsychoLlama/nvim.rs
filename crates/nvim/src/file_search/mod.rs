@@ -51,7 +51,7 @@ use crate::types::AutoEvent;
 use crate::types::{
     BoolVarValue, CdCause, CdScope, CmdArg, FileID, LineNr, MAXPATHL, SaveVEvent, ptrdiff_t, size_t,
 };
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::Buf;
 use ::libc::{abort, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -509,7 +509,7 @@ impl FindContext {
             let mut suffix = if self.tagfile {
                 c"".as_ptr().cast_mut()
             } else {
-                unsafe { (*curbuf.get()).b_p_sua }
+                Buf::current().b_p_sua
             };
             loop {
                 let exists = unsafe { path_with_url(file_path.as_ptr()) } != 0

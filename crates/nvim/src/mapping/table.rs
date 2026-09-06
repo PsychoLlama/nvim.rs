@@ -135,8 +135,7 @@ pub fn get_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
 /// # Safety
 /// `curbuf` must be a live buffer.
 pub unsafe fn get_buf_maphash_list(state: c_int, c: c_int) -> *mut MapBlock {
-    // SAFETY (this body): the caller's promise -- `curbuf` is a live buffer.
-    unsafe { (*curbuf.get()).b_maphash[map_hash(state, c)] }
+    Buf::current().b_maphash[map_hash(state, c)]
 }
 
 /// Which pair of tables a walk reads: the global one, or a buffer's.

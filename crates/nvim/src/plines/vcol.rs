@@ -119,7 +119,7 @@ pub(crate) unsafe fn getvcol(
 /// # Safety
 /// `posp` must be live.
 pub(crate) unsafe fn getvcol_nolist(posp: *mut Pos) -> ColNr {
-    let win = curwin.get();
+    let win = Win::current_raw();
     let list_save = unsafe { (*win).w_onebuf_opt.wo_list };
     let mut vcol: ColNr = 0;
     let null = ::core::ptr::null_mut::<ColNr>();

@@ -12,6 +12,7 @@
 
 use crate::types::AutoEvent;
 use crate::types::CmdIdx;
+use crate::winlayer::TabPage;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -36,9 +37,7 @@ use crate::keycodes::{Ctrl_C, KE_IGNORE, KE_XF1, KE_XF2};
 use crate::message::e_autocmd_close;
 use crate::option::vars::{p_awa, p_confirm, p_write};
 use crate::startup::exiting;
-use crate::winlayer::graph::{
-    cmdwin_result, cmdwin_type, curbuf, curtab, curwin, firstwin, lastwin, topframe,
-};
+use crate::winlayer::graph::{cmdwin_result, cmdwin_type, firstwin, lastwin, topframe};
 
 use crate::message::msg_ptr;
 
@@ -128,9 +127,9 @@ pub(crate) unsafe fn before_quit_autocmds(
             ptr::null_mut(),
             ptr::null_mut(),
             false,
-            curbuf.get(),
+            Buf::current_raw(),
         );
-        if quit_was_cancelled(window, || curbuf.get()) {
+        if quit_was_cancelled(window, Buf::current_raw) {
             return true;
         }
     }
@@ -172,7 +171,7 @@ pub(crate) unsafe fn ex_quit(args: *mut ExArg) {
     let wp = if args.addr_count > 0 {
         window_at(args.line2)
     } else {
-        curwin.get()
+        Win::current_raw()
     };
     if curbuf_locked() {
         return;
@@ -277,7 +276,7 @@ pub unsafe fn before_quit_all(args: *mut ExArg) -> Result<(), Failed> {
         return Err(Failed);
     }
     // SAFETY: `curwin` is set from startup to exit.
-    if unsafe { before_quit_autocmds(curwin.get(), true, args.forceit != 0) } {
+    if unsafe { before_quit_autocmds(Win::current_raw(), true, args.forceit != 0) } {
         return Err(Failed);
     }
     Ok(())
@@ -308,7 +307,7 @@ pub(crate) unsafe fn ex_close(args: *mut ExArg) {
         return;
     }
     let win = if args.addr_count == 0 {
-        curwin.get()
+        Win::current_raw()
     } else {
         numbered_window(args.line2)
     };
@@ -413,7 +412,7 @@ pub(crate) unsafe fn ex_tabclose(args: *mut ExArg) {
         beep_flush();
         return;
     }
-    if tp != curtab.get() {
+    if tp != TabPage::current_raw() {
         unsafe { tabpage_close_other(tp, args.forceit) };
     } else if !text_locked() && !curbuf_locked() {
         unsafe { tabpage_close(args.forceit) };
@@ -468,24 +467,24 @@ pub unsafe fn tabpage_close(forceit: c_int) {
     if window_layout_locked(CmdIdx::tabclose) {
         return;
     }
-    trigger_tabclosedpre(curtab.get());
+    trigger_tabclosedpre(TabPage::current_raw());
     // The flag stops the per-window closes triggering TabClosedPre
     // again; it is cleared only if this is still the tab page it was
     // set on.
-    unsafe { (*curtab.get()).tp_did_tabclosedpre = true };
-    let save_curtab = curtab.get();
+    TabPage::current().tp_did_tabclosedpre = true;
+    let save_curtab = TabPage::current_raw();
 
     while cur_win().w_floating {
-        unsafe { ex_win_close(forceit, curwin.get(), ptr::null_mut()) };
+        unsafe { ex_win_close(forceit, Win::current_raw(), ptr::null_mut()) };
     }
     if firstwin.get() != lastwin.get() {
         close_others(1, forceit);
     }
     if firstwin.get() == lastwin.get() {
-        unsafe { ex_win_close(forceit, curwin.get(), ptr::null_mut()) };
+        unsafe { ex_win_close(forceit, Win::current_raw(), ptr::null_mut()) };
     }
-    if curtab.get() == save_curtab {
-        unsafe { (*curtab.get()).tp_did_tabclosedpre = false };
+    if TabPage::current_raw() == save_curtab {
+        TabPage::current().tp_did_tabclosedpre = false;
     }
 }
 
@@ -547,7 +546,7 @@ pub(crate) unsafe fn ex_only(args: *mut ExArg) {
     }
     if args.addr_count > 0 {
         let wp = window_at_stepwise(args.line2);
-        if wp != curwin.get() {
+        if wp != Win::current_raw() {
             unsafe { win_goto(wp) };
         }
     }
@@ -578,7 +577,7 @@ pub(crate) unsafe fn ex_hide(args: *mut ExArg) {
         return;
     }
     let win = if args.addr_count == 0 {
-        curwin.get()
+        Win::current_raw()
     } else {
         numbered_window(args.line2)
     };
@@ -618,7 +617,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     if (args.cmdidx == CmdIdx::wq || curbuf_is_changed())
         && unsafe { do_write(&mut args) }.is_err()
         // SAFETY: `curwin` is set from startup to exit.
-        || unsafe { before_quit_autocmds(curwin.get(), false, args.forceit != 0) }
+        || unsafe { before_quit_autocmds(Win::current_raw(), false, args.forceit != 0) }
         || check_more(true, args.forceit != 0) == FAIL
         || only_one_window() && check_changed_any(args.forceit != 0, false)
     {
@@ -630,7 +629,7 @@ pub(crate) unsafe fn ex_exit(args: *mut ExArg) {
     }
     not_exiting(save_exiting);
     win_close(
-        curwin.get(),
+        Win::current_raw(),
         !buf_hide(cur_win().w_buffer),
         args.forceit != 0,
     );

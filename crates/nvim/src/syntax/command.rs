@@ -12,6 +12,7 @@ use crate::guard::Suppress;
 use crate::message_fmt::c_str;
 use crate::optionstr::is_empty_option;
 use crate::semsg;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 
 use super::*;
@@ -151,7 +152,7 @@ pub(crate) fn syn_cmd_spell(args: &mut ExArg, _syncing: c_int) {
     }
 
     // Assume spell checking changed, force a redraw.
-    unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
 }
 
 /// `:syntax iskeyword [clear|{isk-value}]`.
@@ -180,35 +181,32 @@ pub(crate) fn syn_cmd_iskeyword(args: &mut ExArg, _syncing: c_int) {
         // buffer and keep the table it produces, putting the buffer's own
         // option and table back afterwards.
         let saved = buf_chartab();
-        let save_isk = unsafe { (*curbuf.get()).b_p_isk };
-        unsafe { (*curbuf.get()).b_p_isk = xstrdup(arg) };
+        let save_isk = Buf::current().b_p_isk;
+        unsafe { Buf::current().b_p_isk = xstrdup(arg) };
 
-        unsafe { buf_init_chartab(curbuf.get(), false) };
+        unsafe { buf_init_chartab(Buf::current_raw(), false) };
         cur_syn_block().b_syn_chartab = buf_chartab();
         set_buf_chartab(saved);
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_syn_isk)) };
-        unsafe { cur_syn_block().b_syn_isk = (*curbuf.get()).b_p_isk };
-        unsafe { (*curbuf.get()).b_p_isk = save_isk };
+        cur_syn_block().b_syn_isk = Buf::current().b_p_isk;
+        Buf::current().b_p_isk = save_isk;
     }
-    unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
 }
 
 /// The current buffer's character table, as the 32 bytes a syntax block
 /// stores it in. The buffer declares it as four `uint64_t`s.
 fn buf_chartab() -> [uint8_t; 32] {
     // SAFETY: the editor's current buffer.
-    let words = unsafe { (*curbuf.get()).b_chartab };
+    let words = Buf::current().b_chartab;
     ::core::array::from_fn(|i| words[i / 8].to_ne_bytes()[i % 8])
 }
 
 /// Put `table` back as the current buffer's character table.
 fn set_buf_chartab(table: [uint8_t; 32]) {
-    // SAFETY: the editor's current buffer.
-    unsafe {
-        (*curbuf.get()).b_chartab = ::core::array::from_fn(|i| {
-            uint64_t::from_ne_bytes(table[i * 8..i * 8 + 8].try_into().unwrap())
-        });
-    };
+    Buf::current().b_chartab = ::core::array::from_fn(|i| {
+        uint64_t::from_ne_bytes(table[i * 8..i * 8 + 8].try_into().unwrap())
+    });
 }
 
 /// `:syntax on` / `:syntax enable`.
@@ -351,12 +349,12 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     // SAFETY: the command table's promise, as `ex_syntax`'s.
     let args = unsafe { &mut *args };
     let mut numbuf = NumBuf::new();
-    if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*(*curwin.get()).w_buffer).b_s } {
-        unsafe { (*curwin.get()).w_s = Box::into_raw(empty_synblock()) };
+    if Win::current().w_s == unsafe { &raw mut (*Win::current().w_buffer).b_s } {
+        Win::current().w_s = Box::into_raw(empty_synblock());
         unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab)) };
         unsafe { hash_init(syn_field!(cur_syn_block(), b_keywtab_ic)) };
         // TODO(vim): Keep the spell checking as it was.
-        unsafe { (*curwin.get()).w_onebuf_opt.wo_spell = 0 }; // No spell checking
+        Win::current().w_onebuf_opt.wo_spell = 0; // No spell checking
         // Make sure option values are "empty_string_option" instead of NULL.
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spc)) };
         unsafe { clear_string_option(syn_field!(cur_syn_block(), b_p_spf)) };
@@ -373,7 +371,7 @@ pub(crate) unsafe fn ex_ownsyntax(args: *mut ExArg) {
     let old_value = unsafe { cstr::at_opt(old_value) }.map(CStr::to_owned);
 
     // Apply the Syntax autocommand, which finds and loads the syntax file.
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: the editor's current buffer.
     let fname = unsafe { (*buf).b_fname };
     let arg = args.arg;

@@ -21,7 +21,7 @@ use crate::types::{
     Window, kErrorTypeNone,
 };
 use crate::window::win_find_tabpage;
-use crate::winlayer::graph::{curbuf, curwin, switch_buffer, switch_to};
+use crate::winlayer::graph::{switch_buffer, switch_to};
 use crate::winlayer::{Buf, Win};
 
 use super::{
@@ -107,7 +107,7 @@ impl OptionContext {
             OptionContext::Global => false,
             OptionContext::Win(switchwin) => {
                 let win = from.cast::<Window>();
-                if win == curwin.get() {
+                if win == Win::current_raw() {
                     return false;
                 }
                 if unsafe { switch_win_noblock(switchwin, win, win_find_tabpage(win), true) }
@@ -123,7 +123,7 @@ impl OptionContext {
             }
             OptionContext::Buf(aco) => {
                 let buf = from.cast::<Buffer>();
-                if buf == curbuf.get() {
+                if buf == Buf::current_raw() {
                     return false;
                 }
                 unsafe { aucmd_prepbuf(aco, buf) };

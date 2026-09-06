@@ -137,7 +137,7 @@ unsafe fn apply_new_indent(
 ) {
     cur_win().w_cursor.lnum += 1;
     if did_si.get() {
-        let sw = unsafe { get_sw_value(curbuf.get()) };
+        let sw = unsafe { get_sw_value(Buf::current_raw()) };
         if p_sr.get() != 0 {
             newindent -= newindent % sw;
         }
@@ -201,7 +201,7 @@ unsafe fn truncate_old_line(
     let mut cols_spliced = 0;
     if new_len < cur_win().w_cursor.col {
         // Trailing white space went as well as the split.
-        let cb = curbuf.get();
+        let cb = Buf::current_raw();
         let row = cur_win().w_cursor.lnum - 1;
         let gone = cur_win().w_cursor.col - new_len;
         // SAFETY: the current buffer is live, and the row is the line just
@@ -214,7 +214,7 @@ unsafe fn truncate_old_line(
         // Move the extmarks of the line the cursor is on; the
         // mark_adjust() in `append_new_line` took care of the lines below.
         let added = mincol - 1 + less_cols_off - less_cols;
-        let cb = curbuf.get();
+        let cb = Buf::current_raw();
         let row = lnum - 1;
         let at = mincol - 1 - cols_spliced;
         let off = less_cols_off;
@@ -568,7 +568,7 @@ pub unsafe fn open_line(
             cur_win().w_cursor.lnum = old_cursor.lnum + 1;
         }
         if did_append {
-            let cb = curbuf.get();
+            let cb = Buf::current_raw();
             let at = cur_win().w_cursor.lnum;
             // SAFETY: the current buffer is live and `at` is the new line.
             let extra = ml_get_len(at) as BCount;

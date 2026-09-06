@@ -275,7 +275,7 @@ impl Put {
         // SAFETY: `newp` is a NUL-terminated line the buffer takes over.
         let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, newp, false) };
 
-        let buf = curbuf.get();
+        let buf = Buf::current_raw();
         let at = cur_win().w_cursor.lnum - 1;
         let inserted = *totlen as c_int + lines_appended;
         // SAFETY: a live buffer; `delcount` bytes came out at `textcol` and

@@ -16,6 +16,7 @@ use crate::message_fmt::c_str;
 use crate::normal::visual_active;
 use crate::semsg;
 use crate::types::{FAIL, OptionSetFlags, Vv};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
 use std::ffi::CStr;
@@ -44,7 +45,7 @@ pub(crate) unsafe fn grab_file_name(count: c_int, file_lnum: *mut LineNr) -> *mu
         let mut p = unsafe { ptr.add(len + 1) };
         unsafe { *file_lnum = getdigits_int32(&raw mut p, false, 0) as LineNr };
     }
-    unsafe { find_file_name_in_path(ptr, len, options, count as c_long, (*curbuf.get()).b_ffname) }
+    unsafe { find_file_name_in_path(ptr, len, options, count as c_long, Buf::current().b_ffname) }
 }
 
 /// The file name under or after the cursor.
@@ -66,10 +67,10 @@ pub(crate) unsafe fn file_name_at_cursor(
     unsafe {
         file_name_in_line(
             get_cursor_line_ptr(),
-            (*curwin.get()).w_cursor.col as c_int,
+            Win::current().w_cursor.col as c_int,
             options,
             count,
-            (*curbuf.get()).b_ffname,
+            Buf::current().b_ffname,
             file_lnum,
         )
     }
@@ -220,13 +221,12 @@ pub(crate) unsafe fn file_name_in_line(
 pub(crate) unsafe fn eval_includeexpr(name: *const c_char, len: size_t) -> *mut c_char {
     unsafe { set_vim_var_string(Vv::Fname, name, len as ptrdiff_t) };
     // Errors go against the script that set `'includeexpr'`.
-    let script_ctx =
-        Script::context(unsafe { (*curbuf.get()).b_p_script_ctx[kBufOptIncludeexpr as usize] });
+    let script_ctx = Script::context(Buf::current().b_p_script_ctx[kBufOptIncludeexpr as usize]);
 
     let res = unsafe {
         eval_to_string_safe(
-            (*curbuf.get()).b_p_inex,
-            was_set_insecurely(curwin.get(), kOptIncludeexpr, OptionSetFlags::LOCAL),
+            Buf::current().b_p_inex,
+            was_set_insecurely(Win::current_raw(), kOptIncludeexpr, OptionSetFlags::LOCAL),
             true,
         )
     };
@@ -272,7 +272,7 @@ pub(crate) unsafe fn find_file_name_in_path(
     }
 
     let mut tofree: *mut c_char = ptr::null_mut();
-    if options.has(FileNameOpts::INCL) && unsafe { *(*curbuf.get()).b_p_inex } != 0 {
+    if options.has(FileNameOpts::INCL) && unsafe { *Buf::current().b_p_inex } != 0 {
         tofree = unsafe { eval_includeexpr(name, len) };
         if !tofree.is_null() {
             name = tofree;
@@ -302,7 +302,7 @@ pub(crate) unsafe fn find_file_name_in_path(
         // 'includeexpr' (unless done already).
         if file_name.is_null()
             && !options.has(FileNameOpts::INCL)
-            && unsafe { *(*curbuf.get()).b_p_inex } != 0
+            && unsafe { *Buf::current().b_p_inex } != 0
         {
             tofree = unsafe { eval_includeexpr(name, len) };
             if !tofree.is_null() {

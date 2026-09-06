@@ -137,7 +137,7 @@ unsafe fn arg_index_for_window(
         // A window in the current tab page beats one elsewhere, and the
         // current window beats another in the same tab page.
         let mut weight = 1;
-        if old_curtab == curtab.get() {
+        if old_curtab == TabPage::current_raw() {
             weight += 1;
             if old_curwin == window.raw() {
                 weight += 1;
@@ -155,7 +155,7 @@ unsafe fn arg_index_for_window(
                     unsafe { (*aall.new_curwin).w_arg_idx = aall.opened_len };
                 }
                 aall.new_curwin = window.raw();
-                aall.new_curtab = curtab.get();
+                aall.new_curtab = TabPage::current_raw();
             }
         } else if aall.keep_tabs {
             i = aall.opened_len;
@@ -278,8 +278,8 @@ unsafe fn close_unused_windows_in_tab(
 ///
 /// `aall` must be the live state.
 unsafe fn arg_all_close_unused_windows(aall: &mut ArgAllState) {
-    let old_curwin = curwin.get();
-    let old_curtab = curtab.get();
+    let old_curwin = Win::current_raw();
+    let old_curtab = TabPage::current_raw();
     if aall.had_tab > 0 {
         goto_tab(
             first_tab().expect("there is always a first tab page"),
@@ -330,7 +330,7 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
     };
     if aall.keep_tabs {
         aall.new_curwin = wp.raw();
-        aall.new_curtab = curtab.get();
+        aall.new_curtab = TabPage::current_raw();
         return false;
     }
     // SAFETY: `wp` is a live window with a frame, as is `curwin`.
@@ -343,7 +343,7 @@ unsafe fn move_existing_window_for_arg(aall: &mut ArgAllState, i: c_int) -> bool
     // A floating window is left where it is.
     if !wp.w_floating {
         // SAFETY: `wp` and `curwin` are live windows of the same tab page.
-        unsafe { win_move_after(wp.raw(), curwin.get()) };
+        unsafe { win_move_after(wp.raw(), Win::current_raw()) };
     }
     false
 }
@@ -386,8 +386,8 @@ unsafe fn open_window_for_arg(
     // argument name outlives `do_ecmd`'s use of it.
     cur_win().w_arg_idx = i;
     if i == 0 {
-        aall.new_curwin = curwin.get();
-        aall.new_curtab = curtab.get();
+        aall.new_curwin = Win::current_raw();
+        aall.new_curtab = TabPage::current_raw();
     }
     // SAFETY: as above; `i` is an entry of the locked argument list.
     let buf = cur_win().buffer();
@@ -397,7 +397,7 @@ unsafe fn open_window_for_arg(
     let sfname = ptr::null_mut();
     let eap2 = ptr::null_mut();
     let newlnum = newlnum::ONE as LineNr;
-    let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, curwin.get()) };
+    let _ = unsafe { do_ecmd(0, ffname, sfname, eap2, newlnum, flags, Win::current_raw()) };
     aall.use_firstwin = false;
     Ok(())
 }
@@ -413,7 +413,7 @@ unsafe fn arg_all_open_windows(aall: &mut ArgAllState, count: c_int) {
     // SAFETY: caller contract; curbuf is valid.
     let tab_drop_empty_window = unsafe {
         aall.keep_tabs
-            && buf_is_empty(curbuf.get())
+            && buf_is_empty(Buf::current_raw())
             && cur_buf().b_nwindows == 1
             && cur_buf().b_ffname.is_null()
             && cur_buf().b_changed == 0
@@ -490,7 +490,7 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     };
     let prev_arglist_locked = ARGLIST_LOCKED.get();
     ARGLIST_LOCKED.set(true);
-    let new_lu_tp = curtab.get();
+    let new_lu_tp = TabPage::current_raw();
     // Stop Visual mode: the cursor and "VIsual" may well be invalid after
     // switching to another buffer.
     // SAFETY: the state is this frame's and the list is locked.
@@ -506,8 +506,8 @@ unsafe fn do_arg_all(count: c_int, forceit: bool, keep_tabs: bool) {
     // Don't run the Win/Buf Enter/Leave autocommands here.
     let no_enter = Suppress::win_enter_autocmds();
     let no_leave = Suppress::win_leave_autocmds();
-    let last_curwin = curwin.get();
-    let last_curtab = curtab.get();
+    let last_curwin = Win::current_raw();
+    let last_curtab = TabPage::current_raw();
     // SAFETY: lastwin may be aucmd_win, which `lastwin_nofloating` skips.
     unsafe { win_enter(lastwin_nofloating(ptr::null_mut()), false) };
     unsafe { arg_all_open_windows(&mut aall, count) };

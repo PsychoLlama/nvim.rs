@@ -24,6 +24,7 @@ use crate::window::{
     WSP_BELOW, WSP_BOT, WSP_NEWLOC, WSP_QUICKFIX, WSP_VERT, close, goto_win, setheight_win,
     setwidth_win, split, tabline_rows, valid_win,
 };
+use crate::winlayer::TabPage;
 use crate::winlayer::graph::switch_to;
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{CStr, c_char, c_int};
@@ -224,13 +225,13 @@ fn set_cwindow_options() {
 /// and set the window's options. Answers false when there was no room.
 fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
     let oldwin = cur_win();
-    let prevtab = curtab.get();
+    let prevtab = TabPage::current_raw();
     // Looked up before the split, and read after it: upstream does the same,
     // so an autocommand that wipes the quickfix buffer during `win_split`
     // leaves this reading a freed buffer either way.
     let qf_buf = qf_find_buf(qi);
     // The current window becomes the previous window afterwards.
-    let win = curwin.get();
+    let win = Win::current_raw();
 
     if split(height, split_flags(qi)).is_err() {
         return false; // not enough room for the window
@@ -274,7 +275,7 @@ fn open_new_cwindow(mut qi: Qi, height: c_int) -> bool {
 
     // Only set the height when still in the same tab page and there is
     // no window to the side.
-    if curtab.get() == prevtab && cur_win().w_width == Columns.get() {
+    if TabPage::current_raw() == prevtab && cur_win().w_width == Columns.get() {
         setheight_win(height, cur_win());
     }
     cur_win().w_onebuf_opt.wo_wfh = true as c_int; // 'winfixheight'

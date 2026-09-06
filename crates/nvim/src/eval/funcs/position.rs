@@ -37,8 +37,8 @@ use crate::types::{
     VAR_STRING, VarNumber, Window,
 };
 use crate::window::state::skip_update_topline;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -62,7 +62,7 @@ pub unsafe fn f_byte2line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     result.vval.v_number = if boff < 0 {
         -1
     } else {
-        unsafe { ml_find_line_or_offset(curbuf.get(), 0, &raw mut boff, false) as VarNumber }
+        unsafe { ml_find_line_or_offset(Buf::current_raw(), 0, &raw mut boff, false) as VarNumber }
     };
 }
 
@@ -73,10 +73,12 @@ pub unsafe fn f_line2byte(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     // SAFETY throughout: `args.ptr(0)` is a live typval and `curbuf` is the current
     // buffer.
     let lnum = arg_lnum(args.get(0));
-    result.vval.v_number = if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } + 1 {
+    result.vval.v_number = if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count + 1 {
         -1
     } else {
-        unsafe { ml_find_line_or_offset(curbuf.get(), lnum, ptr::null_mut(), false) as VarNumber }
+        unsafe {
+            ml_find_line_or_offset(Buf::current_raw(), lnum, ptr::null_mut(), false) as VarNumber
+        }
     };
     // The offset is zero-based inside memline and one-based here; -1
     // stays -1 because the bump only applies to a found offset.
@@ -103,7 +105,7 @@ pub unsafe fn f_charcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
 /// every caller treats as "no answer".
 fn window_arg(args: Args<'_>, idx: usize) -> Option<*mut Window> {
     if !args.has(idx) {
-        return Some(curwin.get());
+        return Some(Win::current_raw());
     }
     let (wp, _) = win_and_tab_by_id(arg_number(args.get(idx)) as c_int)?;
     check_cursor(wp);
@@ -196,7 +198,7 @@ pub unsafe fn f_virtcol(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncD
     let wp = if args.has(1) && args.has(2) {
         window_arg(args, 2)
     } else {
-        Some(curwin.get())
+        Some(Win::current_raw())
     };
     if let Some(wp) = wp {
         let bp = unsafe { (*wp).w_buffer };
@@ -240,7 +242,7 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
     let out = &raw mut fnum;
     let fp = if !args.has(1) {
         // SAFETY: argument 0 is a live typval and `curwin` a live window.
-        unsafe { var2fpos(args.ptr(0), true, out, false, curwin.get()) }
+        unsafe { var2fpos(args.ptr(0), true, out, false, Win::current_raw()) }
     } else {
         match win_and_tab_by_id(arg_number(args.get(1)) as c_int) {
             None => None,
@@ -253,7 +255,7 @@ pub unsafe fn f_line(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData
                 // SAFETY: `wp` is the window the id resolved to, and
                 // `curwin` is live.
                 let both_diff = unsafe { (*wp).w_onebuf_opt.wo_diff } != 0
-                    && unsafe { (*curwin.get()).w_onebuf_opt.wo_diff } != 0;
+                    && Win::current().w_onebuf_opt.wo_diff != 0;
                 if unsafe { *p_spk.get() } != b'c' as c_char || both_diff {
                     skip_update_topline.set(true);
                 }
@@ -298,10 +300,18 @@ pub unsafe fn f_getcursorcharpos(args: *mut TypVal, result: *mut TypVal, _fptr: 
 fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bool) {
     // SAFETY throughout: `curwin` names a live window, and every pointer
     // read below comes back from the position parser.
-    let mut wp = curwin.get();
+    let mut wp = Win::current_raw();
     let mut fnum: c_int = -1;
     let fp = if !getcurpos {
-        unsafe { var2fpos(args.ptr(0), true, &raw mut fnum, charcol, curwin.get()) }
+        unsafe {
+            var2fpos(
+                args.ptr(0),
+                true,
+                &raw mut fnum,
+                charcol,
+                Win::current_raw(),
+            )
+        }
     } else {
         let mut fp = if args.has(0) {
             // `wp` is overwritten even when the lookup fails: a
@@ -310,7 +320,7 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
             wp = unsafe { find_win_by_nr_or_id(args.ptr(0)) }.map_or(ptr::null_mut(), Win::raw);
             (!wp.is_null()).then(|| unsafe { (*wp).w_cursor })
         } else {
-            Some(unsafe { (*curwin.get()).w_cursor })
+            Some(Win::current().w_cursor)
         };
         if let Some(pos) = &mut fp
             && charcol
@@ -352,7 +362,7 @@ fn getpos_both(args: Args<'_>, result: &mut TypVal, getcurpos: bool, charcol: bo
 /// `l` is a live list and `window` is a window pointer or null.
 unsafe fn append_curswant(l: *mut List, window: *mut Window) {
     // SAFETY throughout: the caller's obligation.
-    let cur = curwin.get();
+    let cur = Win::current_raw();
     let saved_set_curswant = unsafe { (*cur).w_set_curswant };
     let saved_curswant = unsafe { (*cur).w_curswant };
     let saved_virtcol = unsafe { (*cur).w_virtcol };
@@ -408,7 +418,7 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
             return;
         }
         if curswant >= 0 {
-            unsafe { (*curwin.get()).w_curswant = curswant - 1 };
+            Win::current().w_curswant = curswant - 1;
             set_curswant = false;
         }
         (pos.lnum, pos.col, pos.coladd)
@@ -425,11 +435,11 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
             let what = unsafe { c_str(what) };
             semsg!("E475: Invalid argument: {what}");
         } else if lnum == 0 {
-            lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+            lnum = Win::current().w_cursor.lnum;
         }
         let mut col = arg_number_chk(args.get(1), None) as ColNr;
         if charcol {
-            col = unsafe { buf_charidx_to_byteidx(curbuf.get(), lnum, col) } + 1;
+            col = unsafe { buf_charidx_to_byteidx(Buf::current_raw(), lnum, col) } + 1;
         }
         let coladd = if args.has(2) {
             arg_number_chk(args.get(2), None) as ColNr
@@ -446,18 +456,18 @@ fn set_cursorpos(args: Args<'_>, result: &mut TypVal, charcol: bool) {
         return;
     }
     if lnum > 0 {
-        unsafe { (*curwin.get()).w_cursor.lnum = lnum };
+        Win::current().w_cursor.lnum = lnum;
     }
     // The column is one-based on the way in, except for MAXCOL which
     // means "end of line" and is passed through.
     if col != END_OF_LINE {
         col = (col - 1).max(0);
     }
-    unsafe { (*curwin.get()).w_cursor.col = col };
-    unsafe { (*curwin.get()).w_cursor.coladd = coladd };
+    Win::current().w_cursor.col = col;
+    Win::current().w_cursor.coladd = coladd;
     check_cursor(Win::current());
     unsafe { mb_adjust_cursor() };
-    unsafe { (*curwin.get()).w_set_curswant = set_curswant };
+    Win::current().w_set_curswant = set_curswant;
     result.vval.v_number = 0;
 }
 
@@ -495,10 +505,10 @@ fn set_position(args: Args<'_>, result: &mut TypVal, charpos: bool) {
     }
     match unsafe { CStr::from_ptr(name) }.to_bytes() {
         b"." => {
-            unsafe { (*curwin.get()).w_cursor = pos };
+            Win::current().w_cursor = pos;
             if curswant >= 0 {
-                unsafe { (*curwin.get()).w_curswant = curswant - 1 };
-                unsafe { (*curwin.get()).w_set_curswant = false };
+                Win::current().w_curswant = curswant - 1;
+                Win::current().w_set_curswant = false;
             }
             check_cursor(Win::current());
             result.vval.v_number = 0;

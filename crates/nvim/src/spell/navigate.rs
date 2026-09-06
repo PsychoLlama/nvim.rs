@@ -29,6 +29,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
@@ -53,7 +54,6 @@ use crate::search::{BACKWARD, FORWARD};
 use crate::strings::vim_strchr;
 use crate::syntax::{syn_get_id, syntax_present};
 use crate::types::{ColNr, Hlf, LineNr, NUL, Pos, ShmFlag, SpellMoveType, Window, size_t, uint8_t};
-use crate::winlayer::graph::curwin;
 use ::libc::strcpy;
 
 use super::check::{check_need_cap, no_spell_checking, spell_check};
@@ -155,10 +155,10 @@ pub unsafe fn spell_move_to(
 
         if capcol == 0 {
             capcol = unsafe { getwhitecols(line) } as ColNr;
-        } else if curline && window == curwin.get() {
+        } else if curline && window == Win::current_raw() {
             // For spellbadword(): does the first word need a capital?
             let col = unsafe { getwhitecols(line) } as ColNr;
-            if unsafe { check_need_cap(curwin.get(), lnum, col) } {
+            if unsafe { check_need_cap(Win::current_raw(), lnum, col) } {
                 capcol = col;
             }
             // check_need_cap() looked at the previous line, so the line

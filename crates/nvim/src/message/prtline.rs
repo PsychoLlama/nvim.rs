@@ -9,6 +9,7 @@
 use super::*;
 use crate::cstr;
 use crate::types::{MB_MAXBYTES, NUL};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -28,11 +29,11 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
     let mut s = s;
     // `'list'` on the window forces the listing form whatever the caller
     // asked for.
-    let list = list || unsafe { (*curwin.get()).w_onebuf_opt.wo_list } != 0;
+    let list = list || Win::current().w_onebuf_opt.wo_list != 0;
     // The window's 'listchars', borrowed rather than copied: the struct
     // owns its two "multispace" runs, and nothing printed below changes
     // which window is current.
-    let lcs = unsafe { &(*curwin.get()).w_p_lcs_chars };
+    let lcs = unsafe { &(*Win::current_raw()).w_p_lcs_chars };
 
     // Where the trailing whitespace starts, and where the leading
     // whitespace ends; both null when no 'listchars' item needs them.
@@ -138,8 +139,8 @@ pub unsafe fn msg_prt_line(s: *const c_char, list: bool) {
 
             if c == TAB && (!list || lcs.tab1 != 0) {
                 // How wide the tab is depends on where it starts.
-                let ts = unsafe { (*curbuf.get()).b_p_ts };
-                let vts = unsafe { (*curbuf.get()).b_p_vts_array };
+                let ts = Buf::current().b_p_ts;
+                let vts = Buf::current().b_p_vts_array;
                 extra_left = unsafe { tabstop_padding(col as ColNr, ts, vts) } - 1;
                 if list {
                     let (mut tab1, mut tab2, mut tab3) = (lcs.tab1, lcs.tab2, lcs.tab3);

@@ -419,11 +419,12 @@ pub fn set_buflocal_cpt_callbacks(buffer: Buf) {
 /// than `F{func}` are counted but leave their slot empty.
 pub unsafe fn set_cpt_callbacks(args: *mut OptSet) -> Result<(), Failed> {
     let local = unsafe { (*args).os_flags }.has(OptionSetFlags::LOCAL);
-    if curbuf.get().is_null() {
+    if Buf::current_or_none().is_none() {
         return Err(Failed);
     }
 
-    unsafe { clear_cpt_callbacks(&raw mut (*curbuf.get()).b_p_cpt_cb, cur_buf().b_p_cpt_count) };
+    let (buffer, count) = (Buf::current_raw(), cur_buf().b_p_cpt_count);
+    unsafe { clear_cpt_callbacks(&raw mut (*buffer).b_p_cpt_cb, count) };
     cur_buf().b_p_cpt_count = 0;
 
     let count = unsafe { get_cpt_sources_count() };
@@ -541,14 +542,14 @@ pub(crate) unsafe fn get_complete_funcname(type_0: c_int) -> *mut c_char {
 /// The callback to use for insert-mode completion of `type_0`.
 pub(crate) unsafe fn get_insert_callback(type_0: c_int) -> *mut Callback {
     if type_0 == CTRL_X_FUNCTION {
-        return unsafe { &raw mut (*curbuf.get()).b_cfu_cb };
+        return unsafe { &raw mut (*Buf::current_raw()).b_cfu_cb };
     }
     if type_0 == CTRL_X_OMNI {
-        return unsafe { &raw mut (*curbuf.get()).b_ofu_cb };
+        return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
     }
     // CTRL_X_THESAURUS
     if unsafe { *cur_buf().b_p_tsrfu } as c_int != NUL {
-        unsafe { &raw mut (*curbuf.get()).b_tsrfu_cb }
+        unsafe { &raw mut (*Buf::current_raw()).b_tsrfu_cb }
     } else {
         tsrfu_cb().slot()
     }
@@ -560,7 +561,7 @@ pub(crate) unsafe fn get_insert_callback(type_0: c_int) -> *mut Callback {
 /// `type_0` is one of `CTRL_X_OMNI`, `CTRL_X_FUNCTION` or `CTRL_X_THESAURUS`;
 /// `cb` is set when a function in `'complete'` triggered this, null otherwise.
 pub(crate) unsafe fn expand_by_function(type_0: c_int, base: *mut c_char, mut cb: *mut Callback) {
-    debug_assert!(!curbuf.get().is_null());
+    debug_assert!(Buf::current_or_none().is_some());
 
     let is_cpt_function = !cb.is_null();
     if !is_cpt_function {
@@ -637,7 +638,7 @@ pub(crate) unsafe fn get_user_highlight_attr(hlname: *const c_char) -> c_int {
 /// `'complete'`; `idx` indexes the callback array.
 pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) -> *mut Callback {
     if unsafe { *p } as c_int == 'o' as c_int {
-        return unsafe { &raw mut (*curbuf.get()).b_ofu_cb };
+        return unsafe { &raw mut (*Buf::current_raw()).b_ofu_cb };
     }
     if unsafe { *p } as c_int == 'F' as c_int {
         p = unsafe { p.offset(1) };
@@ -650,7 +651,7 @@ pub(crate) unsafe fn get_callback_if_cpt_func(mut p: *mut c_char, idx: c_int) ->
                 ptr::null_mut()
             };
         }
-        return unsafe { &raw mut (*curbuf.get()).b_cfu_cb }; // 'cfu'
+        return unsafe { &raw mut (*Buf::current_raw()).b_cfu_cb }; // 'cfu'
     }
     ptr::null_mut()
 }

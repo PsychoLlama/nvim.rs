@@ -19,7 +19,7 @@ use crate::message::emsg;
 use crate::os::cshim::gettext;
 use crate::spell::{parse_spelllang, spell_check};
 use crate::types::{Hlf, lua_Integer, lua_State, luaL_Reg, size_t};
-use crate::winlayer::graph::curwin;
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -44,7 +44,7 @@ unsafe extern "C-unwind" fn nlua_spell_check(lstate: *mut lua_State) -> c_int {
     };
 
     // spell.c insists 'spell' is on, so turn it on for the duration.
-    let win = curwin.get();
+    let win = Win::current_raw();
     // SAFETY: `curwin` is a live window whenever Lua is running.
     let wo_spell_save = unsafe {
         let saved = (*win).w_onebuf_opt.wo_spell;

@@ -181,7 +181,7 @@ use crate::window::{
 use crate::winlayer::Cc;
 use crate::winlayer::graph::{
     cmdline_win, cmdwin_buf, cmdwin_level, cmdwin_old_curwin, cmdwin_result, cmdwin_type,
-    cmdwin_win, curbuf, curwin,
+    cmdwin_win,
 };
 use ::libc::{abort, strcpy, strrchr};
 

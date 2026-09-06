@@ -114,7 +114,7 @@ use crate::types::{
 use crate::ui::state::Columns;
 use crate::ui::{ui_array, ui_call_screenshot, ui_flush};
 use crate::window::{goto_tabpage_tp, goto_tabpage_win, win_find_tabpage};
-use crate::winlayer::graph::{cmdwin_buf, curbuf, curwin};
+use crate::winlayer::graph::cmdwin_buf;
 use ::libc::labs;
 
 // The carve of the transpiled module; see each child's docs.

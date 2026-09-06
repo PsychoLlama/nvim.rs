@@ -241,7 +241,7 @@ pub unsafe fn nvim_buf_set_lines(
                 )
             };
             if visual_active() as ::core::ffi::c_int != 0
-                && b == curbuf.get()
+                && b == Buf::current_raw()
                 && visual_anchor().lnum >= start as LineNr
             {
                 if visual_anchor().lnum >= end as LineNr {

@@ -16,6 +16,7 @@
 
 use crate::cstr;
 use crate::keycodes::ModMask;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -49,7 +50,6 @@ use crate::types::{
 use crate::ui::state::Columns;
 use crate::ui::ui_call_option_set;
 use crate::undo::curbuf_is_changed;
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{fprintf, fputs};
 
 use super::{
@@ -206,10 +206,11 @@ pub(crate) unsafe fn showoneopt(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // anything else it is not an `int` at all. 'modified' has no
     // variable worth reading either; the undo state decides.
     let word = || unsafe { *varp.boolean_var() };
-    let is_off = || match varp == OptSlot::Boolean(unsafe { &raw mut (*curbuf.get()).b_changed }) {
-        true => !curbuf_is_changed(),
-        false => word() == 0,
-    };
+    let is_off =
+        || match varp == OptSlot::Boolean(unsafe { &raw mut (*Buf::current_raw()).b_changed }) {
+            true => !curbuf_is_changed(),
+            false => word() == 0,
+        };
     let prefix = if boolean && is_off() {
         c"no"
     } else if boolean && word() < 0 {
@@ -338,7 +339,7 @@ pub(crate) unsafe fn makeset(
 /// `fd` must be an open file and the current window live.
 pub(crate) unsafe fn makefoldset(fd: *mut FILE) -> Result<(), Failed> {
     // SAFETY: the caller's file, and `curwin` is live.
-    let wo = unsafe { &raw mut (*curwin.get()).w_onebuf_opt };
+    let wo = unsafe { &raw mut (*Win::current_raw()).w_onebuf_opt };
     let fields: [(OptIndex, OptSlot); 8] = [
         (
             kOptFoldmethod,

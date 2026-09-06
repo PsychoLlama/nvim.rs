@@ -23,6 +23,7 @@ use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::smsg;
 use crate::types::FAIL;
+use crate::winlayer::Win;
 use core::ptr;
 
 /// The `"*"` group's only byte, and the leading zero a sign name may carry.
@@ -337,9 +338,7 @@ unsafe fn sign_unplace_cmd(
     }
 
     let (buf, lnum) = if id == -1 {
-        (unsafe { (*curwin.get()).w_buffer }, unsafe {
-            (*curwin.get()).w_cursor.lnum
-        })
+        (Win::current().w_buffer, Win::current().w_cursor.lnum)
     } else {
         (buffer, lnum)
     };
@@ -513,7 +512,7 @@ unsafe fn parse_sign_cmd_args(cmd: c_int, arg: *mut c_char) -> Option<SignCmdArg
     // `:sign place line=N` and `:sign jump` default to the current
     // buffer; `:sign unplace` deliberately does not.
     if filename.is_null() && ((cmd == SIGNCMD_PLACE && lnum_arg) || cmd == SIGNCMD_JUMP) {
-        out.buf = unsafe { (*curwin.get()).w_buffer };
+        out.buf = Win::current().w_buffer;
     }
     Some(out)
 }

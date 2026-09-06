@@ -361,25 +361,24 @@ fn changed_common(buffer: Buf, lnum: LineNr, col: ColNr, lnume: LineNr, xtra: Li
 /// `lnum` must be a valid line of the current buffer. May trigger
 /// autocommands that reload it.
 pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
-    // SAFETY: the current buffer is live and `lnum` is a line of it.
-    unsafe { changed_lines_redraw_buf(Buf::new(curbuf.get()), lnum, lnum + 1, 0) };
+    changed_lines_redraw_buf(cur_buf(), lnum, lnum + 1, 0);
     changed_common(cur_buf(), lnum, col, lnum + 1, 0);
 
     // Changing the end of a line can add or remove SpellCap on the start of
     // the next one, so schedule that line too -- but not when a `$` is
     // being displayed at the end of the changed text.
     // SAFETY: the current window is live; the short circuit is upstream's.
-    let spell_next = unsafe { spell_check_window(cur_win().raw()) }
+    let spell_next = unsafe { spell_check_window(Win::current_raw()) }
         && lnum < cur_buf().b_ml.ml_line_count
         && !cpo_has(CpoFlag::DOLLAR);
     if spell_next {
         // SAFETY: the current window is live.
-        unsafe { redraw_win_line(cur_win().raw(), lnum + 1) };
+        unsafe { redraw_win_line(Win::current_raw(), lnum + 1) };
     }
 
     // Notify any channels that are watching.
     // SAFETY: the current buffer is live.
-    unsafe { buf_updates_send_changes(curbuf.get(), lnum, 1, 1) };
+    unsafe { buf_updates_send_changes(Buf::current_raw(), lnum, 1, 1) };
 
     // Diff highlighting in the other diff windows may need updating too.
     if cur_win().w_onebuf_opt.wo_diff != 0 {
@@ -401,7 +400,7 @@ pub unsafe fn changed_bytes(lnum: LineNr, col: ColNr) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn inserted_bytes(lnum: LineNr, start_col: ColNr, old_col: c_int, new_col: c_int) {
     if curbuf_splice_pending.get() == 0 {
-        let cb = curbuf.get();
+        let cb = Buf::current_raw();
         // SAFETY: the current buffer is live and `lnum` is a line of it.
         unsafe { extmark_splice_cols(cb, lnum - 1, start_col, old_col, new_col, kExtmarkUndo) };
     }
@@ -426,7 +425,7 @@ pub unsafe fn appended_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineN
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn appended_lines(lnum: LineNr, count: LineNr) {
     // SAFETY: the current buffer is live.
-    unsafe { appended_lines_buf(curbuf.get(), lnum, count) };
+    unsafe { appended_lines_buf(Buf::current_raw(), lnum, count) };
 }
 
 /// [`appended_lines`], adjusting the marks first.
@@ -435,7 +434,7 @@ pub unsafe fn appended_lines(lnum: LineNr, count: LineNr) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn appended_lines_mark(lnum: LineNr, count: c_int) {
     let max = MAXLNUM as LineNr;
-    let cb = curbuf.get();
+    let cb = Buf::current_raw();
     // SAFETY: the current buffer is live and `lnum` is a line of it.
     unsafe { mark_adjust(lnum + 1, max, count, 0, kExtmarkUndo) };
     changed_lines(unsafe { Buf::new(cb) }, lnum + 1, 0, lnum + 1, count, true);
@@ -458,7 +457,7 @@ pub unsafe fn deleted_lines_buf(buffer: *mut Buffer, lnum: LineNr, count: LineNr
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
     // SAFETY: the current buffer is live.
-    unsafe { deleted_lines_buf(curbuf.get(), lnum, count) };
+    unsafe { deleted_lines_buf(Buf::current_raw(), lnum, count) };
 }
 
 /// [`deleted_lines`], adjusting the marks first.
@@ -470,7 +469,7 @@ pub unsafe fn deleted_lines(lnum: LineNr, count: LineNr) {
 /// `lnum` must be a valid line of the current buffer.
 pub unsafe fn deleted_lines_mark(lnum: LineNr, count: c_int) {
     let made_empty = count > 0 && cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY);
-    let cb = curbuf.get();
+    let cb = Buf::current_raw();
     let last = lnum + count - 1;
     let max = MAXLNUM as LineNr;
     // Deleting the whole buffer implicitly adds one empty line back.

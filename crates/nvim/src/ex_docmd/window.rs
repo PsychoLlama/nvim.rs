@@ -59,7 +59,7 @@ use crate::window::{
     WSP_VERT, do_window, enter, goto_tab_number, new_tabpage, setheight_win, setwidth_win, split,
     tabpage_move, valid_tab, valid_win,
 };
-use crate::winlayer::graph::{curbuf, curwin, lastused_tabpage};
+use crate::winlayer::graph::lastused_tabpage;
 use crate::winlayer::{Buf, Ea, TabPage, Win, tabs, windows, windows_in_tab};
 use ::libc::atol;
 
@@ -225,7 +225,7 @@ pub unsafe fn ex_splitview(args: *mut ExArg) {
 }
 
 fn splitview(mut ea: Ex) {
-    let old_curwin = curwin.get();
+    let old_curwin = Win::current_raw();
     let use_tab = ea.is(CmdIdx::tabedit) || ea.is(CmdIdx::tabfind) || ea.is(CmdIdx::tabnew);
 
     // Splitting a quickfix window gives a plain window, not a second
@@ -317,15 +317,15 @@ fn open_tabpage(ea: Ex, old_curwin: *mut Window) {
         return;
     }
     edit(ea, old_curwin);
-    let (ev, buf) = (AutoEvent::TabNewEntered, curbuf.get());
+    let (ev, buf) = (AutoEvent::TabNewEntered, Buf::current_raw());
     let (no_fname, no_file) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: an event with no file name, over the current buffer.
     unsafe { apply_autocmds(ev, no_fname, no_file, false, buf) };
 
     // The window left behind gets the new buffer as its alternate file.
-    if curwin.get() != old_curwin
+    if Win::current_raw() != old_curwin
         && let Some(mut old) = valid_win(old_curwin)
-        && old.w_buffer != curbuf.get()
+        && old.w_buffer != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
         old.w_alt_fnum = cur_buf().handle as c_int;
@@ -691,7 +691,7 @@ pub(crate) unsafe fn ex_psearch(args: *mut ExArg) {
 pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
     // SAFETY: the caller's promise -- a live command.
     let ea = Ex(args);
-    let curwin_save = curwin.get();
+    let curwin_save = Win::current_raw();
     prepare_preview_window();
     edit(ea, ptr::null_mut());
     back_to_current_window(curwin_save);
@@ -699,7 +699,7 @@ pub(crate) unsafe fn ex_pedit(args: *mut ExArg) {
 
 /// `:pbuffer`.
 pub(crate) unsafe fn ex_pbuffer(args: *mut ExArg) {
-    let curwin_save = curwin.get();
+    let curwin_save = Win::current_raw();
     prepare_preview_window();
     // SAFETY: the caller's promise -- a live command.
     do_exbuffer(unsafe { Ea::new(args) });
@@ -715,7 +715,7 @@ fn prepare_preview_window() {
 
 /// Go back to the window `:pedit` was run from, if it is still there.
 fn back_to_current_window(curwin_save: *mut Window) {
-    if curwin.get() != curwin_save
+    if Win::current_raw() != curwin_save
         && let Some(saved) = valid_win(curwin_save)
     {
         // The preview window is left drawn but not current.

@@ -37,7 +37,7 @@ pub fn diff_buf_delete(buffer: Buf) {
             if tp.is_current() {
                 need_diff_redraw.set(true);
                 // SAFETY: `curwin` is set from startup to exit.
-                unsafe { redraw_later(curwin.get(), UPD_VALID) };
+                unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
             }
         }
     }
@@ -512,7 +512,7 @@ pub fn diff_clear(mut tabpage: TabPage) {
 /// every window: the shorter buffers are padded with filler.
 pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
     (0..DB_COUNT as usize)
-        .filter(|&k| !unsafe { (*curtab.get()).tp_diffbuf[k] }.is_null())
+        .filter(|&k| !cur_tab().tp_diffbuf[k].is_null())
         .map(|k| unsafe { (*dp).df_count[k] })
         .max()
         .unwrap_or(0)
@@ -523,7 +523,7 @@ pub(crate) unsafe fn get_max_diff_length(dp: *const DiffBlock) -> c_int {
 /// `:diffget`/`:diffput` run autocommands between reading a block and using
 /// it, and those can rebuild the list underneath.
 pub(crate) unsafe fn valid_diff(diff: *mut DiffBlock) -> bool {
-    let mut dp = unsafe { (*curtab.get()).tp_first_diff };
+    let mut dp = cur_tab().tp_first_diff;
     while !dp.is_null() {
         if dp == diff {
             return true;

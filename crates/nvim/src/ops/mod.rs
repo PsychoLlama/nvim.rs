@@ -101,7 +101,6 @@ use crate::types::{
 };
 use crate::ui::vim_beep;
 use crate::undo::{u_clearline, u_save, u_save_cursor};
-use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Live, PosRef};
 use ::libc::{abort, strcpy};
 use core::mem::offset_of;

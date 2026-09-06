@@ -17,6 +17,7 @@
 use super::*;
 use crate::cstr;
 use crate::types::NUL;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
 /// The most bytes a UTF-8 sequence can occupy in this port's decoders, which
@@ -366,7 +367,8 @@ pub unsafe fn utf_cp_bounds(base: *const c_char, p_in: *const c_char) -> CharBou
 ///
 /// The editor's globals must be live.
 pub unsafe fn mb_adjust_cursor() {
-    unsafe { mark_mb_adjustpos(curbuf.get(), &raw mut (*curwin.get()).w_cursor) }
+    let (buffer, cursor) = (Buf::current_raw(), Win::current().cursor().raw());
+    unsafe { mark_mb_adjustpos(buffer, cursor) }
 }
 
 /// Pull `win`'s cursor back onto a character start, and clear a `coladd` that

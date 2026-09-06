@@ -62,9 +62,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, goto_tabpage_tp, lastwin_nofloating, tabpage_index,
     valid_tabpage, win_close, win_enter, win_move_after, win_split, win_valid,
 };
-use crate::winlayer::graph::{
-    cmdwin_type, curbuf, curtab, curwin, firstwin, lastused_tabpage, lastwin,
-};
+use crate::winlayer::graph::{cmdwin_type, firstwin, lastused_tabpage, lastwin};
 use crate::winlayer::{Buf, Ea, Live, Win, tab_windows};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;

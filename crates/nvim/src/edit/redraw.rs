@@ -50,21 +50,21 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // the command might delete it.
     if ready
         && has_event(AutoEvent::CursorMovedI)
-        && (last_cursormoved_win.get() != curwin.get()
+        && (last_cursormoved_win.get() != Win::current_raw()
             || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
         && !pum_visible()
     {
         // Update the screen first so syntax highlighting is right after a
         // change (inserting a `(`, say).  The autocommand may ask for
         // another redraw, which happens again below.
-        if unsafe { syntax_present(curwin.get()) } && must_redraw.get() != 0 {
+        if unsafe { syntax_present(Win::current_raw()) } && must_redraw.get() != 0 {
             let _ = unsafe { update_screen() };
         }
         // An autocommand may call getcurpos(), so curswant has to be
         // correct first.
         unsafe { update_curswant() };
         unsafe { ins_apply_autocmds(AutoEvent::CursorMovedI) };
-        last_cursormoved_win.set(curwin.get());
+        last_cursormoved_win.set(Win::current_raw());
         last_cursormoved.set(cur_win().w_cursor);
     }
 
@@ -77,16 +77,16 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     // block has to be closed the way `ins_apply_autocmds` does it.
     let fire_text_changed = |event: AutoEvent, tick: *mut VarNumber| {
         let mut aco = AcoSave::default();
-        let before = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
+        let before = buf_get_changedtick(cur_buf());
 
         // Save and restore curwin/curbuf, in case the autocommand changes
         // them.
-        unsafe { aucmd_prepbuf(&raw mut aco, curbuf.get()) };
+        unsafe { aucmd_prepbuf(&raw mut aco, Buf::current_raw()) };
         let none = ::core::ptr::null_mut();
-        unsafe { apply_autocmds(event, none, none, false, curbuf.get()) };
+        unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) };
         unsafe { aucmd_restbuf(&raw mut aco) };
 
-        unsafe { *tick = buf_get_changedtick(Buf::new(curbuf.get())) };
+        unsafe { *tick = buf_get_changedtick(cur_buf()) };
         if before != unsafe { *tick } {
             // See `ins_apply_autocmds`: the autocommand's change belongs
             // to a block of its own.
@@ -97,13 +97,13 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
     let mut buf = cur_buf();
     if ready && has_event(AutoEvent::TextChangedI) && !pum_visible() {
         let tick = &mut buf.b_last_changedtick_i;
-        if *tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } {
+        if *tick != buf_get_changedtick(cur_buf()) {
             fire_text_changed(AutoEvent::TextChangedI, tick);
         }
     }
     if ready && has_event(AutoEvent::TextChangedP) && pum_visible() {
         let tick = &mut buf.b_last_changedtick_pum;
-        if *tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) } {
+        if *tick != buf_get_changedtick(cur_buf()) {
             fire_text_changed(AutoEvent::TextChangedP, tick);
         }
     }
@@ -119,7 +119,8 @@ pub(crate) unsafe fn ins_redraw(ready: bool) {
         && !pum_visible()
     {
         let none = ::core::ptr::null_mut();
-        unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, curbuf.get()) };
+        let buffer = Buf::current_raw();
+        unsafe { apply_autocmds(AutoEvent::BufModifiedSet, none, none, false, buffer) };
         cur_buf().b_changed_invalid = false;
     }
 
@@ -263,7 +264,7 @@ pub(crate) unsafe fn undisplay_dollar() {
         return;
     }
     dollar_vcol.set(-1);
-    unsafe { redraw_win_line(curwin.get(), cur_win().w_cursor.lnum) };
+    unsafe { redraw_win_line(Win::current_raw(), cur_win().w_cursor.lnum) };
 }
 
 /// The value `w_virtcol` would have with 'list' off -- unless 'cpoptions'

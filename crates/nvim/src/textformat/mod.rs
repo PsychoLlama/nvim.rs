@@ -19,6 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -27,7 +28,7 @@ use crate::mbyte::{utf_iscomposing_first, utf_ptr2char};
 use crate::option::vars::p_paste;
 use crate::types::FoFlag;
 use crate::window::win_fdccol_count;
-use crate::winlayer::graph::{cmdwin_buf, curbuf, curwin};
+use crate::winlayer::graph::cmdwin_buf;
 
 mod auto;
 mod lines;
@@ -94,11 +95,11 @@ pub(crate) unsafe fn whitechar(cc: c_int) -> bool {
 /// # Safety
 /// There must be a current window and buffer.
 pub unsafe fn comp_textwidth(ff: bool) -> c_int {
-    let win = curwin.get();
+    let win = Win::current_raw();
     let mut textwidth = cur_buf().b_p_tw as c_int;
     if textwidth == 0 && cur_buf().b_p_wm != 0 {
         textwidth = unsafe { (*win).w_view_width } - cur_buf().b_p_wm as c_int;
-        if curbuf.get() == cmdwin_buf.get() {
+        if Buf::current_raw() == cmdwin_buf.get() {
             textwidth -= 1;
         }
         textwidth -= unsafe { win_fdccol_count(win) };

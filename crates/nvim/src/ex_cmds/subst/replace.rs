@@ -36,6 +36,7 @@ use crate::pos::MAXLNUM;
 use crate::regexp::vim_regsub_multi;
 use crate::types::{BCount, ColNr, LPos, LineNr, NUL, size_t};
 use crate::undo::{u_inssub, u_savedel, u_savesub};
+use crate::winlayer::Buf;
 use ::libc::strcat;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -383,7 +384,7 @@ pub(super) unsafe fn commit_line(st: &mut Sub) -> bool {
         // SAFETY: the current buffer is live and the data describes it.
         unsafe {
             extmark_splice(
-                cur_buf().raw(),
+                Buf::current_raw(),
                 m.lnum_before as c_int - 1 as c_int,
                 m.start_col as ColNr,
                 m.end.lnum as c_int - m.start.lnum as c_int,

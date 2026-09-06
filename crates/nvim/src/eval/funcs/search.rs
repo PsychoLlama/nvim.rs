@@ -34,7 +34,6 @@ use crate::types::{
     Direction, EvalFuncData, FAIL, LineNr, NUL, OptVal, OptionSetFlags, Pos, SearchItArg, TypVal,
     VAR_UNKNOWN, VarNumber, int64_t, size_t,
 };
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -228,7 +227,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
         return 0;
     }
 
-    let save_cursor = unsafe { (*curwin.get()).w_cursor };
+    let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;
     let mut firstpos = Pos {
         lnum: 0,
@@ -263,11 +262,11 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
         }
 
         // {skip} is evaluated with the cursor on the match.
-        let save_pos = unsafe { (*curwin.get()).w_cursor };
-        unsafe { (*curwin.get()).w_cursor = pos };
+        let save_pos = Win::current().w_cursor;
+        Win::current().w_cursor = pos;
         let mut err = false;
         let do_skip = unsafe { eval_expr_to_bool(args.ptr(4), &raw mut err) };
-        unsafe { (*curwin.get()).w_cursor = save_pos };
+        Win::current().w_cursor = save_pos;
         if err {
             subpatnum = FAIL;
             break;
@@ -289,7 +288,7 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
         if flags & SP_SETPCMARK != 0 {
             setpcmark();
         }
-        unsafe { (*curwin.get()).w_cursor = pos };
+        Win::current().w_cursor = pos;
         if let Some(match_pos) = match_pos {
             match_pos.lnum = pos.lnum;
             match_pos.col = pos.col + 1;
@@ -299,9 +298,9 @@ unsafe fn search_cmn(args: Args, match_pos: Option<&mut Pos>, flagsp: &mut c_int
     }
 
     if flags & SP_NOMOVE != 0 {
-        unsafe { (*curwin.get()).w_cursor = save_cursor };
+        Win::current().w_cursor = save_cursor;
     } else {
-        unsafe { (*curwin.get()).w_set_curswant = true };
+        Win::current().w_set_curswant = true;
     }
     retval
 }
@@ -588,7 +587,7 @@ pub unsafe fn do_searchpair(
     }
     let use_skip = !skip.is_null() && unsafe { eval_expr_valid_arg(skip) };
 
-    let save_cursor = unsafe { (*curwin.get()).w_cursor };
+    let save_cursor = Win::current().w_cursor;
     let mut pos = save_cursor;
     let mut firstpos = Pos {
         lnum: 0,
@@ -634,13 +633,13 @@ pub unsafe fn do_searchpair(
         options &= !(SEARCH_START as c_int);
 
         if use_skip {
-            let save_pos = unsafe { (*curwin.get()).w_cursor };
-            unsafe { (*curwin.get()).w_cursor = pos };
+            let save_pos = Win::current().w_cursor;
+            Win::current().w_cursor = pos;
             let mut err = false;
             let skipped = unsafe { eval_expr_to_bool(skip, &raw mut err) };
-            unsafe { (*curwin.get()).w_cursor = save_pos };
+            Win::current().w_cursor = save_pos;
             if err {
-                unsafe { (*curwin.get()).w_cursor = save_cursor };
+                Win::current().w_cursor = save_cursor;
                 retval = -1;
                 break;
             }
@@ -674,7 +673,7 @@ pub unsafe fn do_searchpair(
         if flags & SP_SETPCMARK != 0 {
             setpcmark();
         }
-        unsafe { (*curwin.get()).w_cursor = pos };
+        Win::current().w_cursor = pos;
         if flags & SP_REPEAT == 0 {
             break;
         }
@@ -682,11 +681,11 @@ pub unsafe fn do_searchpair(
     }
 
     if !match_pos.is_null() {
-        unsafe { (*match_pos).lnum = (*curwin.get()).w_cursor.lnum };
-        unsafe { (*match_pos).col = (*curwin.get()).w_cursor.col + 1 };
+        unsafe { (*match_pos).lnum = Win::current().w_cursor.lnum };
+        unsafe { (*match_pos).col = Win::current().w_cursor.col + 1 };
     }
     if flags & SP_NOMOVE != 0 || retval == 0 {
-        unsafe { (*curwin.get()).w_cursor = save_cursor };
+        Win::current().w_cursor = save_cursor;
     }
     retval
 }

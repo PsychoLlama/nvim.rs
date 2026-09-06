@@ -75,7 +75,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::{check_colorcolumn, close_windows, window_layout_lock, window_layout_unlock};
-use crate::winlayer::graph::{curbuf, curwin, leave_curbuf};
+use crate::winlayer::graph::leave_curbuf;
 use crate::winlayer::{Buf, Win, buffers_back, first_buffer, last_buffer};
 
 // The carve of the transpiled module; see each child's docs.
@@ -375,9 +375,7 @@ pub(crate) fn cur_buf() -> Buf {
 
 /// The current buffer, or `None` where the C tests `curbuf != NULL`.
 pub(crate) fn current_buf() -> Option<Buf> {
-    let buf = curbuf.get();
-    // SAFETY: non-null, hence live.
-    (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
+    Buf::current_or_none()
 }
 
 /// The current window. Null only while exiting, which is why
@@ -388,9 +386,7 @@ pub(crate) fn cur_win() -> Win {
 
 /// The current window, or `None` where the C tests `curwin != NULL`.
 pub(crate) fn current_win() -> Option<Win> {
-    let win = curwin.get();
-    // SAFETY: non-null, hence live.
-    (!win.is_null()).then(|| unsafe { Win::new(win) })
+    Win::current_or_none()
 }
 
 /// The first buffer in the list, `None` before any exists.

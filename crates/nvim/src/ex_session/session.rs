@@ -51,7 +51,7 @@ use crate::types::{
 };
 use crate::ui::state::{Columns, Rows};
 use crate::window::tabpage_index;
-use crate::winlayer::graph::{curtab, curwin, firstwin, topframe};
+use crate::winlayer::graph::{firstwin, topframe};
 use crate::winlayer::{Buf, TabPage, Win, WinId, buffers, first_tab, tabs, windows_in_tab};
 use ::libc::fprintf;
 use core::ffi::{c_char, c_int, c_void};
@@ -155,7 +155,7 @@ pub(crate) unsafe fn makeopens(out: SessionFile, dirnow: *mut c_char) -> bool {
     }
 
     if opts.has(kOptSsopFlagTabpages) {
-        let index = tabpage_index(curtab.get());
+        let index = tabpage_index(TabPage::current_raw());
         if !out.write(format_args!("tabnext {index}\n")) {
             return false;
         }
@@ -356,7 +356,7 @@ unsafe fn put_tabs(out: SessionFile, restore_height_width: &mut bool) -> bool {
             } else if !unsafe { (*wp).w_floating } {
                 restore_size = false;
             }
-            if curwin.get() == wp {
+            if Win::current_raw() == wp {
                 cnr = nr;
             }
         }

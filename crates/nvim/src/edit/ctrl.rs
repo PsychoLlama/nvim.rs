@@ -220,7 +220,7 @@ pub(crate) fn ins_ctrl_hat() {
             State.set(State.get() | MODE_LANGMAP);
         }
     }
-    unsafe { set_iminsert_global(curbuf.get()) };
+    unsafe { set_iminsert_global(Buf::current_raw()) };
     show_mode();
     // Show or unshow the value of 'keymap' in status lines.
     unsafe { status_redraw_curbuf() };
@@ -294,7 +294,7 @@ pub(crate) fn ins_esc(count: &mut c_int, cmdchar: c_int, nomove: bool) -> bool {
 
     // Remember the last Insert position in the `'^` mark (`RESET_FMARK`).
     if !cmdmod_has(CmdModFlags::KEEPJUMPS) {
-        let view = unsafe { mark_view_make(curwin.get(), cur_win().w_cursor) };
+        let view = unsafe { mark_view_make(Win::current_raw(), cur_win().w_cursor) };
         let mut buf = cur_buf();
         let fm = &mut buf.b_last_insert;
         unsafe { free_fmark(fm.clone()) };

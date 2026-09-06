@@ -47,7 +47,7 @@ unsafe fn get_buffer_info(buffer: Buf) -> *mut Dict {
     );
     // The *current* buffer's line is the cursor's; any other's is the one it
     // will be entered at.
-    let lnum = if buffer.raw() == curbuf.get() {
+    let lnum = if buffer.raw() == Buf::current_raw() {
         // SAFETY: `curwin` is set from startup to exit.
         cur_win().w_cursor.lnum
     } else {

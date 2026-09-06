@@ -15,6 +15,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -54,7 +55,6 @@ use crate::types::{
 };
 use crate::ui::state::Rows;
 use crate::window::{last_status, win_comp_scroll};
-use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{self, Buf};
 use ::libc::getuid;
 
@@ -313,8 +313,8 @@ pub(crate) fn set_init_1(clean_arg: bool) {
     cur_buf().b_p_fs = -1;
     cur_buf().b_p_ul = NO_LOCAL_UNDOLEVEL as OptInt;
 
-    unsafe { check_buf_options(curbuf.get()) };
-    unsafe { check_win_options(curwin.get()) };
+    unsafe { check_buf_options(Buf::current_raw()) };
+    unsafe { check_win_options(Win::current_raw()) };
     check_options();
     last_status(false);
     didset_options();
@@ -401,11 +401,11 @@ fn set_option_default(opt_idx: OptIndex, opt_flags: OptionSetFlags) {
     // 'scroll' is half the window height, which the option table cannot
     // know.
     if opt_idx == kOptScroll {
-        unsafe { win_comp_scroll(curwin.get()) };
+        unsafe { win_comp_scroll(Win::current_raw()) };
     }
-    unsafe { insecure_flag(curwin.get(), opt_idx, opt_flags) }.set(false);
+    unsafe { insecure_flag(Win::current_raw(), opt_idx, opt_flags) }.set(false);
     if both {
-        unsafe { insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL) }.set(false);
+        unsafe { insecure_flag(Win::current_raw(), opt_idx, OptionSetFlags::LOCAL) }.set(false);
     }
 }
 
@@ -564,7 +564,7 @@ pub(crate) fn set_init_3() {
     // An empty buffer has no line endings to have detected a format
     // from, so it takes the first of 'fileformats' — but only if the
     // user gave that option a value; otherwise its own default stands.
-    if unsafe { buf_is_empty(curbuf.get()) } && option_was_set(kOptFileformats) {
+    if unsafe { buf_is_empty(Buf::current_raw()) } && option_was_set(kOptFileformats) {
         set_fileformat(default_fileformat(), OptionSetFlags::LOCAL);
     }
     set_title_defaults();

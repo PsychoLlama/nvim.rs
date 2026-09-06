@@ -17,6 +17,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -41,7 +42,7 @@ use crate::ui::state::{Columns, t_colors};
 use crate::ui::{ui_call_tabline_update, ui_has};
 use crate::undo::buf_is_changed;
 use crate::window::tabline_height;
-use crate::winlayer::graph::{curbuf, curtab, curwin, topframe};
+use crate::winlayer::graph::topframe;
 use crate::winlayer::{TabPage, buffers, tabs, windows_in_tab};
 
 /// The window whose buffer names tab page `tabpage`.
@@ -55,7 +56,7 @@ unsafe fn current_window_of(tabpage: TabPage) -> Win {
     // SAFETY: the caller's promise.
     unsafe {
         Win::new(if tabpage.is_current() {
-            curwin.get()
+            Win::current_raw()
         } else {
             tabpage.tp_curwin
         })
@@ -108,8 +109,8 @@ unsafe fn ui_ext_tabline_update() {
     // SAFETY: as above; the arena is released once the event has been sent.
     unsafe {
         let (tab, buf) = (
-            (*curtab.get()).handle as TabpageHandle,
-            (*curbuf.get()).handle as BufferHandle,
+            TabPage::current().handle as TabpageHandle,
+            Buf::current().handle as BufferHandle,
         );
         ui_call_tabline_update(tab, tab_infos, buf, bufs);
         arena_mem_free(arena_finish(arenap));

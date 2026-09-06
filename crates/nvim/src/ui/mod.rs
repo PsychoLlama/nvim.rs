@@ -85,7 +85,6 @@ use crate::ui_compositor::{
 };
 use crate::window::{win_set_inner_size, win_ui_flush};
 use crate::winfloat::win_config_float;
-use crate::winlayer::graph::curwin;
 use core::ffi::c_int;
 
 use crate::api::private::validate::err_bad_number;
@@ -652,7 +651,8 @@ pub unsafe fn ui_flush() {
     // is inside it, so there is nowhere to draw it: look busy instead.
     static was_busy: GlobalCell<bool> = GlobalCell::new(false);
     let cursor_nowhere = State.get() & MODE_CMDLINE == 0
-        && unsafe { (*curwin.get()).w_floating && (*curwin.get()).w_config.hide };
+        && Win::current().w_floating
+        && Win::current().w_config.hide;
     if cursor_nowhere {
         if !was_busy.get() {
             ui_call_busy_start();
@@ -760,7 +760,7 @@ unsafe fn ui_cursor_is_behind_floatwin() -> bool {
     if State.get() & MODE_CMDLINE != 0 || !ui_comp_should_draw() {
         return false;
     }
-    let win = unsafe { &mut *curwin.get() };
+    let win = unsafe { &mut *Win::current_raw() };
     let crow = win.w_winrow + win.w_winrow_off + win.w_wrow;
     let wcol = if win.w_onebuf_opt.wo_rl != 0 {
         win.w_view_width - win.w_wcol - 1

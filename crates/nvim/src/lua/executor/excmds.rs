@@ -9,6 +9,7 @@
 
 use crate::cstr;
 use crate::types::CmdIdx;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -34,7 +35,6 @@ use crate::types::{
     Buffer, ColNr, ExArg, FileDescriptor, IOSIZE, LineNr, TypVal, lua_Number, size_t,
 };
 use crate::undo::u_save;
-use crate::winlayer::graph::curbuf;
 
 /// The wrapper `:luado`'s body is compiled inside, so each line is one call.
 const DOSTART: &CStr = c"return function(line, linenr) ";
@@ -146,22 +146,22 @@ pub unsafe fn ex_luado(eap: *mut ExArg) {
             return;
         }
 
-        let was_curbuf: *mut Buffer = curbuf.get();
+        let was_curbuf: *mut Buffer = Buf::current_raw();
         let mut l: LineNr = (*eap).line1;
         while l <= (*eap).line2 {
-            if l > (*curbuf.get()).b_ml.ml_line_count {
+            if l > Buf::current().b_ml.ml_line_count {
                 break;
             }
             lua_pushvalue(lstate, -1);
-            let old_line = ml_get_buf(curbuf.get(), l);
-            let old_line_len = ml_get_buf_len(curbuf.get(), l);
+            let old_line = ml_get_buf(Buf::current_raw(), l);
+            let old_line_len = ml_get_buf_len(Buf::current_raw(), l);
             lua_pushstring(lstate, old_line);
             lua_pushnumber(lstate, l as lua_Number);
             if nlua_pcall(lstate, 2, 1) != 0 {
                 nlua_error(lstate, gettext(c"E5111: Lua: %.*s").as_ptr());
                 break;
             }
-            if curbuf.get() != was_curbuf || l > (*curbuf.get()).b_ml.ml_line_count {
+            if Buf::current_raw() != was_curbuf || l > Buf::current().b_ml.ml_line_count {
                 break;
             }
             if lua_isstring(lstate, -1) != 0 {

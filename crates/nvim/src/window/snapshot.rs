@@ -29,7 +29,6 @@ use crate::popupmenu::pum_ui_flush;
 use crate::pos::equalpos;
 use crate::types::{Frame, Handle, Integer, LineNr, NUL, OptInt, Tabpage, Window};
 use crate::ui::ui_call_win_hide;
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
@@ -43,7 +42,7 @@ use crate::winlayer::{
 /// `nested` means an outer call has already saved them, so only the
 /// corrections are recorded.
 fn check_lnums_both(do_curwin: bool, nested: bool) {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: `curbuf` is set from startup to exit.
     let line_count = unsafe { Buf::new(buf) }.line_count();
     for mut wp in tab_windows() {
@@ -81,7 +80,7 @@ pub fn check_lnums_nested(do_curwin: bool) {
 
 pub fn reset_lnums() {
     for mut wp in tab_windows() {
-        if wp.w_buffer != curbuf.get() {
+        if wp.w_buffer != Buf::current_raw() {
             continue;
         }
         // Restore the value if it was changed by `check_lnums` and has not been
@@ -151,7 +150,7 @@ fn make_snapshot_rec(fr: FrameRef, slot: *mut *mut Frame) {
         make_snapshot_rec(child, &raw mut copy.fr_child);
     }
     if fr.fr_layout as c_int == FR_LEAF && fr.win().is_some_and(Win::is_current) {
-        copy.fr_win = cur_win().raw();
+        copy.fr_win = Win::current_raw();
     }
 }
 

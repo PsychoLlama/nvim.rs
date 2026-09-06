@@ -68,7 +68,6 @@ use crate::ui::state::Rows;
 use crate::ui::{ui_has, vim_beep};
 use crate::undo::u_save_cursor;
 use crate::winlayer::Win;
-use crate::winlayer::graph::curwin;
 use ::libc::{strcat, strcpy};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
@@ -95,7 +94,7 @@ pub(crate) unsafe fn spell_suggest(count: c_int) {
     // for it, which is what turning the option on does.
     let wo_spell_save = cur_win().w_onebuf_opt.wo_spell;
     if cur_win().w_onebuf_opt.wo_spell == 0 {
-        unsafe { parse_spelllang(curwin.get()) };
+        unsafe { parse_spelllang(Win::current_raw()) };
         cur_win().w_onebuf_opt.wo_spell = 1;
     }
 
@@ -128,7 +127,7 @@ unsafe fn suggest_and_replace(count: c_int, prev_cursor: Pos, msg_scroll_save: c
     // it, and the caller guarantees its spell state.
     let lnum = cur_win().w_cursor.lnum;
     let col = cur_win().w_cursor.col;
-    let need_cap = unsafe { check_need_cap(curwin.get(), lnum, col) };
+    let need_cap = unsafe { check_need_cap(Win::current_raw(), lnum, col) };
 
     // Autocommands may free the line, so work from a copy.
     let line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as usize) };
@@ -202,7 +201,7 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
 
     // SAFETY: `curwin` is set from startup to exit and the caller
     // guarantees its spell state; a null `attrp` asks for no attribute.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let moved = unsafe { spell_move_to(win, FORWARD as c_int, SMT_ALL, true, ptr::null_mut()) };
     if moved != 0 && cur_win().w_cursor.col <= prev_cursor.col {
         return Some(0);
@@ -214,14 +213,14 @@ unsafe fn move_to_bad_word(prev_cursor: Pos) -> Option<c_int> {
     let curline = get_cursor_line_ptr();
     let mut p = unsafe { curline.offset(cur_win().w_cursor.col as isize) };
     // Back up to before the start of the word...
-    while p > curline && unsafe { spell_iswordp_nmw(p, curwin.get()) } {
+    while p > curline && unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
         p = unsafe { p.sub(utf_head_off(curline, p.sub(1)) as usize + 1) };
     }
     // ...then forward to its start.
-    while unsafe { *p } as c_int != NUL && !unsafe { spell_iswordp_nmw(p, curwin.get()) } {
+    while unsafe { *p } as c_int != NUL && !unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
         p = unsafe { p.add(utfc_ptr2len(p) as usize) };
     }
-    if !unsafe { spell_iswordp_nmw(p, curwin.get()) } {
+    if !unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
         beep_flush(); // no word at all
         return None;
     }

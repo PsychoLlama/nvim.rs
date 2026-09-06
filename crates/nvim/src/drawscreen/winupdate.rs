@@ -19,6 +19,7 @@ use crate::grid::default_grid_ref;
 use crate::r#move::WinValid;
 use crate::normal::{VisualSelection, visual_selection};
 use crate::pos::MAXCOL;
+use crate::winlayer::Buf;
 use crate::winlayer::{self, Win};
 
 /// A row index no window can reach, used as "this area is empty".
@@ -225,8 +226,8 @@ pub(crate) unsafe fn win_update(window: Win) {
 
     let mut cursorline_fi = FoldInfo::default();
     unsafe { win_update_cursorline(window.raw(), &raw mut cursorline_fi) };
-    if window.raw() == curwin.get() {
-        conceal_cursor_used.set(unsafe { conceal_cursor_line(curwin.get()) });
+    if window.raw() == Win::current_raw() {
+        conceal_cursor_used.set(unsafe { conceal_cursor_line(Win::current_raw()) });
     }
 
     unsafe { win_check_ns_hl(window.raw()) };
@@ -679,7 +680,7 @@ unsafe fn scroll_up(mut win: Win, rg: &mut Regions) {
 /// `window` must be a live window and `buffer` its buffer.
 unsafe fn plan_visual_area(win: Win, buffer: *mut Buffer, rg: &mut Regions) {
     // SAFETY: the caller's window, its buffer and the global Visual state.
-    let shown = visual_selection().filter(|_| buffer == unsafe { (*curwin.get()).w_buffer });
+    let shown = visual_selection().filter(|_| buffer == cur_win().w_buffer);
     if shown.is_none() && !(win.w_old_cursor_lnum != 0 && rg.redr_type != UPD_NOT_VALID) {
         return;
     }
@@ -756,7 +757,7 @@ unsafe fn visual_line_range(
     redr_type: c_int,
 ) -> (LineNr, LineNr) {
     // SAFETY: the caller's window.
-    let cursor = unsafe { (*curwin.get()).w_cursor.lnum };
+    let cursor = cur_win().w_cursor.lnum;
     let anchor = sel.anchor.lnum;
 
     let (mut from, mut to) =
@@ -817,23 +818,23 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 
     // With 'linebreak' the columns are computed as if 'virtualedit' were
     // "all", because that is how the selection is drawn.
-    let save_ve_flags = unsafe { (*curwin.get()).w_onebuf_opt.wo_ve_flags };
-    if unsafe { (*curwin.get()).w_onebuf_opt.wo_lbr } != 0 {
-        unsafe { (*curwin.get()).w_onebuf_opt.wo_ve_flags = kOptVeFlagAll };
+    let save_ve_flags = cur_win().w_onebuf_opt.wo_ve_flags;
+    if cur_win().w_onebuf_opt.wo_lbr != 0 {
+        cur_win().w_onebuf_opt.wo_ve_flags = kOptVeFlagAll;
     }
     unsafe {
         getvcols(
             win,
             &raw mut anchor,
-            &raw mut (*curwin.get()).w_cursor,
+            &raw mut (*Win::current_raw()).w_cursor,
             &raw mut fromc,
             &raw mut toc,
         )
     };
     toc += 1;
-    unsafe { (*curwin.get()).w_onebuf_opt.wo_ve_flags = save_ve_flags };
+    cur_win().w_onebuf_opt.wo_ve_flags = save_ve_flags;
 
-    if unsafe { (*curwin.get()).w_curswant } != MAXCOL as ColNr {
+    if cur_win().w_curswant != MAXCOL as ColNr {
         return (fromc, toc);
     }
 
@@ -843,7 +844,7 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
         return (fromc, MAXCOL as ColNr);
     }
 
-    let cursor_lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+    let cursor_lnum = cur_win().w_cursor.lnum;
     let anchor_lnum = sel.anchor.lnum;
     let cursor_above = cursor_lnum < anchor_lnum;
     let mut pos = Pos::default();
@@ -879,13 +880,12 @@ unsafe fn visual_block_columns(win: Win, sel: VisualSelection) -> (ColNr, ColNr)
 /// `window` must be a live window and `buffer` its buffer.
 unsafe fn remember_visual_area(mut window: Win, buffer: *mut Buffer) {
     // SAFETY: the caller's window and the global Visual state.
-    if let Some(sel) = visual_selection().filter(|_| buffer == unsafe { (*curwin.get()).w_buffer })
-    {
+    if let Some(sel) = visual_selection().filter(|_| buffer == cur_win().w_buffer) {
         window.w_old_visual_mode = sel.mode.raw() as c_char;
-        unsafe { window.w_old_cursor_lnum = (*curwin.get()).w_cursor.lnum };
+        window.w_old_cursor_lnum = cur_win().w_cursor.lnum;
         window.w_old_visual_lnum = sel.anchor.lnum;
         window.w_old_visual_col = sel.anchor.col;
-        unsafe { window.w_old_curswant = (*curwin.get()).w_curswant };
+        window.w_old_curswant = cur_win().w_curswant;
     } else {
         window.w_old_visual_mode = 0;
         window.w_old_cursor_lnum = 0;
@@ -937,22 +937,23 @@ unsafe fn finish_botline(
     // SAFETY: the caller's window and buffer.
     // `dollar_vcol >= 0` means the cursor line is showing a `$` for a change
     // command and was not fully drawn, so its height is not known here.
-    if dollar_vcol.get() == -1 || window.raw() != curwin.get() {
+    if dollar_vcol.get() == -1 || window.raw() != Win::current_raw() {
         window.w_valid |= WinValid::BOTLINE;
         window.w_viewport_invalid = true;
-        if window.raw() == curwin.get() && window.w_botline != old_botline && !RECURSIVE.get() {
+        if window.raw() == Win::current_raw() && window.w_botline != old_botline && !RECURSIVE.get()
+        {
             RECURSIVE.set(true);
-            unsafe { (*curwin.get()).w_valid.clear(WinValid::TOPLINE) };
+            cur_win().w_valid.clear(WinValid::TOPLINE);
             update_topline(Win::current()); // may invalidate w_botline again
             // A new redraw, either from a moved topline or a reset skipcol.
             if must_redraw.get() != 0 {
                 // Do not update for the buffer changes a second time.
-                let mod_set = unsafe { (*curbuf.get()).b_mod_set };
-                unsafe { (*curbuf.get()).b_mod_set = false };
+                let mod_set = Buf::current().b_mod_set;
+                Buf::current().b_mod_set = false;
                 curs_columns(Win::current(), c_int::from(true));
                 unsafe { win_update(Win::current()) };
                 must_redraw.set(0);
-                unsafe { (*curbuf.get()).b_mod_set = mod_set };
+                Buf::current().b_mod_set = mod_set;
             }
             RECURSIVE.set(false);
         }

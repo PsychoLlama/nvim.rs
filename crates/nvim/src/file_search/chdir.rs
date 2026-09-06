@@ -14,6 +14,7 @@ use crate::cstr;
 use crate::types::{
     Failed, MAXPATHL, kCdScopeGlobal, kCdScopeInvalid, kCdScopeTabpage, kCdScopeWindow,
 };
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::ffi::CStr;
@@ -87,7 +88,7 @@ pub(crate) unsafe fn do_autocmd_dirchanged(
             pattern.as_ptr().cast_mut(),
             new_dir,
             false,
-            curbuf.get(),
+            Buf::current_raw(),
         )
     };
 
@@ -137,7 +138,7 @@ pub(crate) unsafe fn vim_chdir(new_dir: *mut c_char) -> c_int {
             new_dir,
             dir_len,
             FileNameOpts::MESS,
-            (*curbuf.get()).b_ffname,
+            Buf::current().b_ffname,
             &raw mut file_to_find,
             &raw mut search_ctx,
         )

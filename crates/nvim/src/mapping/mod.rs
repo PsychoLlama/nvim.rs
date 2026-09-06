@@ -66,7 +66,6 @@ use crate::message::{e_invarg, e_noabbr, e_nomap};
 use crate::option::vars::{p_cpo, p_langmap, p_verbose};
 use crate::runtime::state::current_sctx;
 use crate::state::mode::{State, no_abbr};
-use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::mbyte::{
     cluster_len, mb_prevptr, mb_unescape, utf_char2bytes, utf_ptr2char, utf_ptr2len, utfc_ptr2len,

@@ -46,7 +46,6 @@ use crate::mouse::setmouse;
 use crate::runtime::state::current_sctx;
 use crate::startup::starting;
 use crate::ui::state::t_colors;
-use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::options::{
     find_option_index, kOptAutocomplete, kOptAutoread, kOptFiletype, kOptFormatlistpat, kOptFsync,
@@ -399,8 +398,8 @@ pub(crate) unsafe fn did_set_option(
         os_restore_chartab: false,
         os_errbuf: errbuf,
         os_errbuflen: errbuflen,
-        os_win: curwin.get().cast::<c_void>(),
-        os_buf: curbuf.get().cast::<c_void>(),
+        os_win: Win::current_raw().cast::<c_void>(),
+        os_buf: Buf::current_raw().cast::<c_void>(),
     };
 
     if direct {
@@ -432,7 +431,7 @@ pub(crate) unsafe fn did_set_option(
     if !errmsg.is_null() {
         unsafe { set_option_varp(opt_idx, varp, old_value, true) };
         if restore_chartab {
-            unsafe { buf_init_chartab(curbuf.get(), true) };
+            unsafe { buf_init_chartab(Buf::current_raw(), true) };
         }
         return errmsg;
     }
@@ -477,13 +476,13 @@ pub(crate) unsafe fn did_set_option(
 
     // The autocommands go last, once every flag they might read is set.
     match opt_idx {
-        kOptSyntax => unsafe { do_syntax_autocmd(curbuf.get(), value_changed) },
+        kOptSyntax => unsafe { do_syntax_autocmd(Buf::current_raw(), value_changed) },
         // A modeline only forces the FileType autocommand when the
         // filetype really changed.
         kOptFiletype if !opt_flags.has(OptionSetFlags::MODELINE) || value_changed => {
             do_filetype_autocmd(Buf::current(), value_changed);
         }
-        kOptSpelllang => unsafe { do_spelllang_source(curwin.get()) },
+        kOptSpelllang => unsafe { do_spelllang_source(Win::current_raw()) },
         _ => {}
     }
 
@@ -514,9 +513,9 @@ pub(crate) unsafe fn did_set_option(
     // Anything set from a modeline, from the sandbox or in secure mode
     // is insecure unless the callback vetted it; replacing a value
     // outright clears the mark again.
-    let flagsp = unsafe { insecure_flag(curwin.get(), opt_idx, opt_flags) };
-    let flagsp_local =
-        scope_both.then(|| unsafe { insecure_flag(curwin.get(), opt_idx, OptionSetFlags::LOCAL) });
+    let flagsp = unsafe { insecure_flag(Win::current_raw(), opt_idx, opt_flags) };
+    let flagsp_local = scope_both
+        .then(|| unsafe { insecure_flag(Win::current_raw(), opt_idx, OptionSetFlags::LOCAL) });
     if !value_checked
         && (secure.get() != 0 || sandbox.get() != 0 || opt_flags.has(OptionSetFlags::MODELINE))
     {
@@ -610,7 +609,7 @@ pub(crate) unsafe fn set_option(
     let saved_old_local_value = optval_copy(old_local_value);
     let saved_new_value = optval_copy(value);
 
-    let insecure = unsafe { insecure_flag(curwin.get(), opt_idx, opt_flags) }.is_set();
+    let insecure = unsafe { insecure_flag(Win::current_raw(), opt_idx, opt_flags) }.is_set();
     let secure_saved = secure.get();
     // Deal with the side effects of a modeline, of the sandbox, or of a
     // value amended rather than replaced, in secure mode.

@@ -11,6 +11,7 @@ use super::*;
 use crate::api::private::helpers::{Reported, has_key};
 use crate::guard::Allow;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win, first_window, windows};
 use core::ffi::CStr;
 
@@ -121,7 +122,7 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         } else if !buf.is_null() {
             buf
         } else {
-            curbuf.get()
+            Buf::current_raw()
         };
         // SAFETY: `rbuf` is a live buffer.
         let line_count = int64_t::from(unsafe { (*rbuf).b_ml.ml_line_count });
@@ -171,7 +172,11 @@ pub unsafe fn nvim__redraw(opts: *mut KeyDict_redraw) -> Result<(), Error> {
         }
         flush_ui = true;
     }
-    let cwin: *mut Window = if win.is_null() { curwin.get() } else { win };
+    let cwin: *mut Window = if win.is_null() {
+        Win::current_raw()
+    } else {
+        win
+    };
     // SAFETY: `cwin` is a live window, and its grid's target is a live grid
     // or null.
     let stale_grid = unsafe {

@@ -10,6 +10,7 @@
 
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::winlayer::Win;
 use core::ffi::c_int;
 
 use super::*;
@@ -141,7 +142,7 @@ pub(crate) fn syn_cmd_clear(args: &mut ExArg, syncing: c_int) {
             syntax_sync_clear();
         } else {
             unsafe { syntax_clear(cur_syn_block().raw()) };
-            if cur_syn_block().raw() == unsafe { &raw mut (*(*curwin.get()).w_buffer).b_s } {
+            if cur_syn_block().raw() == unsafe { &raw mut (*Win::current().w_buffer).b_s } {
                 let _ = unsafe { do_unlet(c"b:current_syntax".as_ptr(), 16, true) };
             }
             let _ = unsafe { do_unlet(c"w:current_syntax".as_ptr(), 16, true) };

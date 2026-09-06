@@ -14,6 +14,7 @@ use super::*;
 use crate::cstr;
 use crate::grid::default_gridview;
 use crate::types::{ExpandContext, MB_MAXBYTES, NUL};
+use crate::winlayer::Win;
 use crate::winlayer::last_window;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
@@ -288,8 +289,8 @@ pub(crate) unsafe fn redraw_wildmenu(
     }
 
     let mut group: Hlf = HLF_NONE;
-    let fillchar = unsafe { fillchar_status(&raw mut group, curwin.get()) };
-    let attr = unsafe { win_hl_attr(curwin.get(), group as c_int) };
+    let fillchar = unsafe { fillchar_status(&raw mut group, Win::current_raw()) };
+    let attr = unsafe { win_hl_attr(Win::current_raw(), group as c_int) };
 
     let mut len;
     if first_match.get() == 0 {

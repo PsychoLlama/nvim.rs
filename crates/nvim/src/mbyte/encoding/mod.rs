@@ -23,6 +23,7 @@
 
 use super::*;
 use crate::cstr;
+use crate::winlayer::Buf;
 use ::libc::nl_langinfo;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -112,7 +113,7 @@ pub unsafe fn enc_canon_props(name: *const c_char) -> EncProps {
 ///
 /// The editor's globals must be live.
 pub unsafe fn bomb_size() -> c_int {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     if unsafe { (*buf).b_p_bomb } == 0 || unsafe { (*buf).b_p_bin } != 0 {
         return 0;
     }

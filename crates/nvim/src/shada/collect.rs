@@ -18,6 +18,7 @@
 use crate::message_fmt::msg_addr;
 use crate::siemsg;
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 
@@ -284,10 +285,10 @@ pub(crate) unsafe fn shada_init_jumps(
     let mut jumps_size: size_t = 0;
     let mut jump_iter = core::ptr::null::<c_void>();
     setpcmark();
-    unsafe { cleanup_jumplist(curwin.get(), false) };
+    unsafe { cleanup_jumplist(Win::current_raw(), false) };
     loop {
         let mut fm: XFileMark = unsafe { core::mem::zeroed() };
-        jump_iter = unsafe { mark_jumplist_iter(jump_iter, curwin.get(), &raw mut fm) };
+        jump_iter = unsafe { mark_jumplist_iter(jump_iter, Win::current_raw(), &raw mut fm) };
 
         if let Some(fname) = unsafe { jump_target(&fm, jump_iter, removable_bufs) } {
             let entry = ShadaEntry {
@@ -323,8 +324,8 @@ unsafe fn jump_target(
             siemsg!(
                 "ShaDa: mark lnum zero (ji:{}, js:{}, len:{})",
                 msg_addr(jump_iter),
-                msg_addr(&raw const (*curwin.get()).w_jumplist),
-                (*curwin.get()).w_jumplistlen,
+                msg_addr(&raw const (*Win::current_raw()).w_jumplist),
+                Win::current().w_jumplistlen,
             )
         };
         return None;

@@ -275,7 +275,7 @@ impl Put {
 
         let lnum = cur_win().w_cursor.lnum;
         // SAFETY: a live buffer, in which one line just became two.
-        unsafe { buf_updates_send_changes(curbuf.get(), lnum, 1, 1) };
+        unsafe { buf_updates_send_changes(Buf::current_raw(), lnum, 1, 1) };
         true
     }
 
@@ -314,7 +314,7 @@ impl Put {
         // has to be part of what is saved.
         //
         // SAFETY (these three): a live buffer, and `lnum` is a line of it.
-        let saved = if unsafe { buf_is_empty(curbuf.get()) } {
+        let saved = if unsafe { buf_is_empty(Buf::current_raw()) } {
             u_save(0, 2)
         } else {
             u_save(lnum - 1, lnum)

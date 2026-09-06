@@ -4,6 +4,7 @@
 use crate::cstr;
 use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
+use crate::winlayer::TabPage;
 
 use std::ffi::CString;
 
@@ -37,7 +38,7 @@ use crate::message_fmt::{c_str, emsg_text};
 use crate::option::vars::p_confirm;
 use crate::optionstr::{check_ff_value, get_fileformat_name};
 use crate::os::cshim::ngettext;
-use crate::winlayer::graph::{curtab, lastused_tabpage};
+use crate::winlayer::graph::lastused_tabpage;
 
 use crate::os::fs::{os_fopen, os_isdir, os_mkdir, os_path_exists};
 
@@ -330,7 +331,7 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
                 // case that reaches it.
                 tab_number = tab_number
                     .wrapping_mul(relative)
-                    .wrapping_add(tabpage_index(curtab.get()));
+                    .wrapping_add(tabpage_index(TabPage::current_raw()));
                 // `:tabmove -1` moves *before* the tab to the left,
                 // which is one place further than counting says.
                 if unaccept_arg0 == 0 && relative == -1 {
@@ -370,12 +371,12 @@ pub(crate) fn get_tabpage_arg(mut ea: Ea) -> c_int {
         } else {
             // No argument at all.
             tab_number = if ea.cmdidx == CmdIdx::tabnext {
-                let next = tabpage_index(curtab.get()) + 1;
+                let next = tabpage_index(TabPage::current_raw()) + 1;
                 if next > last_tab() { 1 } else { next }
             } else if ea.cmdidx == CmdIdx::tabmove {
                 last_tab()
             } else {
-                tabpage_index(curtab.get())
+                tabpage_index(TabPage::current_raw())
             };
         }
     }

@@ -164,7 +164,7 @@ pub unsafe fn f_undotree(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     let tv: *mut TypVal = args;
     // SAFETY: as above.
     let raw = if unsafe { (*tv).v_type } == VAR_UNKNOWN {
-        curbuf.get()
+        Buf::current_raw()
     } else {
         // SAFETY: as above.
         unsafe { get_buf_arg(tv) }

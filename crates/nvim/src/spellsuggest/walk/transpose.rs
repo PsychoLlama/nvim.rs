@@ -39,7 +39,7 @@ use crate::spell::spell_iswordp;
 use crate::spellsuggest::walk::{State, Walk};
 use crate::spellsuggest::{SCORE_SWAP, SCORE_SWAP3};
 use crate::types::NUL;
-use crate::winlayer::graph::curwin;
+use crate::winlayer::Win;
 use core::ffi::c_int;
 
 impl Walk<'_> {
@@ -77,7 +77,7 @@ impl Walk<'_> {
         // SAFETY: the byte at `bad_idx` was just tested non-NUL, so the
         // character there is inside the bad word.
         let p = self.fword_ptr(bad_idx);
-        if !self.soundfold && !unsafe { spell_iswordp(p, curwin.get()) } {
+        if !self.soundfold && !unsafe { spell_iswordp(p, Win::current_raw()) } {
             self.stack[level].state = State::RepIni;
             return;
         }
@@ -89,7 +89,7 @@ impl Walk<'_> {
         } else if !self.soundfold
             // SAFETY: the byte after the first character was just tested
             // non-NUL, so the character there is inside the bad word too.
-            && !unsafe { spell_iswordp(self.fword_ptr(bad_idx + first_len), curwin.get()) }
+            && !unsafe { spell_iswordp(self.fword_ptr(bad_idx + first_len), Win::current_raw()) }
         {
             first // don't swap a non-word character
         } else {
@@ -170,7 +170,7 @@ impl Walk<'_> {
         // SAFETY: `third_at` is a character boundary at or before the
         // terminator, so the character there is inside the bad word.
         let third = if !self.soundfold
-            && !unsafe { spell_iswordp(self.fword_ptr(bad_idx + third_at), curwin.get()) }
+            && !unsafe { spell_iswordp(self.fword_ptr(bad_idx + third_at), Win::current_raw()) }
         {
             first // don't swap a non-word character
         } else {
@@ -234,7 +234,7 @@ impl Walk<'_> {
         //
         // SAFETY: `first_len` is a character boundary inside the bad word.
         let middle_at = self.fword_ptr(bad_idx + first_len);
-        if !self.soundfold && !unsafe { spell_iswordp(middle_at, curwin.get()) } {
+        if !self.soundfold && !unsafe { spell_iswordp(middle_at, Win::current_raw()) } {
             self.stack[level].state = State::RepIni;
             return;
         }

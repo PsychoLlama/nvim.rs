@@ -36,7 +36,7 @@ use crate::types::{
     Buffer, CmdModFlags, DictItem, LineNr, TypVal, VAR_NUMBER, VarLock, VarNumber, ptrdiff_t,
 };
 use crate::winlayer::Buf;
-use crate::winlayer::graph::{cmdwin_buf, curbuf};
+use crate::winlayer::graph::cmdwin_buf;
 
 // ---------------------------------------------------------------------------
 // The neighbours, wrapped
@@ -236,7 +236,7 @@ pub unsafe fn set_buflisted(on: c_int) {
     } else {
         AutoEvent::BufDelete
     };
-    let raw = curbuf.get();
+    let raw = Buf::current_raw();
     // SAFETY: a live buffer; both name arguments are optional.
     unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, raw) };
 }

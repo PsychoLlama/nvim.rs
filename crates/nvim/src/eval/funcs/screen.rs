@@ -6,6 +6,7 @@ use super::args::{Args, frame};
 use super::wrappers::{
     arg_lnum, arg_number, arg_number_chk, arg_string, list_alloc_ret, list_set_ret,
 };
+use crate::winlayer::{Buf, Win};
 
 use crate::eval::typval::{NumBuf, tv_list_append_number, tv_list_append_string};
 use crate::grid::{
@@ -27,7 +28,6 @@ use crate::types::{
 };
 use crate::ui::{ui_current_col, ui_current_row, ui_rgb_attached};
 use crate::ui_compositor::ui_comp_get_grid_at_coord;
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -302,11 +302,11 @@ pub unsafe fn f_syn_id(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDa
     let mut id = 0;
     if !transerr
         && lnum >= 1
-        && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }
+        && lnum <= Buf::current().b_ml.ml_line_count
         && col >= 0
         && col < ml_get_len(lnum)
     {
-        id = unsafe { syn_get_id(curwin.get(), lnum, col, trans, ptr::null_mut(), 0) };
+        id = unsafe { syn_get_id(Win::current_raw(), lnum, col, trans, ptr::null_mut(), 0) };
     }
     result.vval.v_number = id as VarNumber;
 }
@@ -341,23 +341,21 @@ pub unsafe fn f_synconcealed(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     // Note the `<=`: unlike synID(), the position one past the end of
     // the line is in range here.
     if lnum >= 1
-        && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }
+        && lnum <= Buf::current().b_ml.ml_line_count
         && col >= 0
         && col <= ml_get_len(lnum)
-        && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } > 0
+        && Win::current().w_onebuf_opt.wo_cole > 0
     {
         // Run the syntax engine for its side effect: `get_syntax_info`
         // reports on the position it last looked at.
-        unsafe { syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 0) };
+        unsafe { syn_get_id(Win::current_raw(), lnum, col, 0, ptr::null_mut(), 0) };
         syntax_flags = unsafe { get_syntax_info(&raw mut matchid) };
-        if syntax_flags.has(SynFlags::CONCEAL)
-            && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } < 3
-        {
+        if syntax_flags.has(SynFlags::CONCEAL) && Win::current().w_onebuf_opt.wo_cole < 3 {
             let mut cchar = schar_from_char(syn_get_sub_char());
             // At 'conceallevel' 1 a group with no `cchar` falls back to
             // 'listchars' "conceal", and to a space if that is unset.
-            if cchar == NUL as ScreenChar && unsafe { (*curwin.get()).w_onebuf_opt.wo_cole } == 1 {
-                cchar = match unsafe { (*curwin.get()).w_p_lcs_chars.conceal } {
+            if cchar == NUL as ScreenChar && Win::current().w_onebuf_opt.wo_cole == 1 {
+                cchar = match Win::current().w_p_lcs_chars.conceal {
                     c if c == NUL as ScreenChar => ' ' as ScreenChar,
                     c => c,
                 };
@@ -388,14 +386,11 @@ pub unsafe fn f_synstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
     // Wraps because the C's does.
     let col = (arg_number(args.get(1)) as ColNr).wrapping_sub(1);
 
-    if lnum >= 1
-        && lnum <= unsafe { (*curbuf.get()).b_ml.ml_line_count }
-        && col >= 0
-        && col <= ml_get_len(lnum)
+    if lnum >= 1 && lnum <= Buf::current().b_ml.ml_line_count && col >= 0 && col <= ml_get_len(lnum)
     {
         let list = list_alloc_ret(result, kListLenMayKnow as isize);
         // Run the syntax engine, keeping the stack this time.
-        unsafe { syn_get_id(curwin.get(), lnum, col, 0, ptr::null_mut(), 1) };
+        unsafe { syn_get_id(Win::current_raw(), lnum, col, 0, ptr::null_mut(), 1) };
         for i in 0.. {
             let id = syn_get_stack_item(i);
             if id < 0 {

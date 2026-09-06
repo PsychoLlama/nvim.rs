@@ -9,6 +9,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -33,7 +34,6 @@ use crate::types::{
     ApiDict, Arena, Array, Channel, IOSIZE, Integer, Object, SaveVEvent, TypVal, VAR_DICT,
     VAR_UNKNOWN, VarLock, key_value_pair, typval_vval_union, uint64_t,
 };
-use crate::winlayer::graph::curbuf;
 
 use super::known::*;
 use super::{
@@ -160,7 +160,8 @@ unsafe extern "C" fn set_info_event(argv: *mut *mut c_void) {
     let retval = unsafe { info_tv((*chan).id, &raw mut arena) };
     let _ = unsafe { tv_dict_add_dict(dict, c"info".as_ptr(), 4, retval.vval.v_dict) };
     unsafe { tv_dict_set_keys_readonly(dict) };
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, curbuf.get()) };
+    let buffer = Buf::current_raw();
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), true, buffer) };
     unsafe { restore_v_event(dict, &raw mut save_v_event) };
     unsafe { arena_mem_free(arena_finish(&raw mut arena)) };
     unsafe { channel_decref(chan) };

@@ -132,7 +132,7 @@ unsafe fn is_current(i: c_int, use_tagstack: bool) -> bool {
     }
     // The index is one past the end when nothing has been popped;
     // upstream reads that slot anyway.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let at = unsafe { (*win).w_tagstackidx } as usize;
     unsafe { (*win).w_tagstack.get(at) }.is_some_and(|entry| i == entry.cur_match)
 }
@@ -419,7 +419,7 @@ pub(crate) unsafe fn add_llist_tags(
     // Answers `Ok` for a plain entry list; upstream discarded it too.
     let _ = unsafe {
         set_errorlist(
-            Win::from_raw(curwin.get()),
+            Win::from_raw(Win::current_raw()),
             list,
             ' ' as c_int,
             title.as_mut_ptr(),

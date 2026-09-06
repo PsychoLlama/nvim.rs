@@ -48,7 +48,7 @@ use crate::spellsuggest::{
     SCORE_MAXMAX, SCORE_SIMILAR, SCORE_SUBST, SCORE_SWAP, SCORE_THRES2, SCORE_THRES3, SugInfo,
 };
 use crate::types::{MB_MAXCHAR, NUL, SpellLang, WordCount, size_t};
-use crate::winlayer::graph::curwin;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -721,7 +721,7 @@ pub(super) unsafe fn stp_sal_score(
         // SAFETY: `su_badptr` points into the line the bad word came from,
         // of which the suggestion replaces `st_orglen` bytes; `fword` is
         // `MAXWLEN` bytes, which is the bound handed over.
-        let win = curwin.get();
+        let win = Win::current_raw();
         let len = MAXWLEN as c_int;
         let _ = unsafe { spell_casefold(win, su.su_badptr, orglen, fword.as_mut_ptr(), len) };
 

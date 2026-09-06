@@ -227,7 +227,7 @@ pub(crate) unsafe fn diff_read(idx_orig: c_int, idx_new: c_int, dio: *mut DiffIo
     }
 
     let mut walk = Walk {
-        dp: unsafe { (*curtab.get()).tp_first_diff },
+        dp: TabPage::current().tp_first_diff,
         dprev: ::core::ptr::null_mut(),
         notset: true,
     };

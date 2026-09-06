@@ -49,6 +49,7 @@ mod walk;
 
 use crate::cstr;
 use crate::spell::WordFlags;
+use crate::winlayer::Buf;
 use crate::winlayer::{Live, Win};
 pub(crate) use prompt::spell_suggest;
 pub(crate) use sps::spell_check_sps;
@@ -77,7 +78,6 @@ use crate::spellsuggest::soundalike::{
 };
 use crate::spellsuggest::walk::suggest_trie_walk;
 use crate::types::{GArray, HashTab, Hlf, LangP, MAXPATHL, NUL, SpellLang};
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::offset_of;
@@ -453,8 +453,8 @@ unsafe fn spell_find_suggest(
     su.su_badlen = if badlen != 0 {
         badlen
     } else {
-        (unsafe { spell_check(curwin.get(), badptr, &raw mut attr, ptr::null_mut(), false) })
-            as c_int
+        let win = Win::current_raw();
+        (unsafe { spell_check(win, badptr, &raw mut attr, ptr::null_mut(), false) }) as c_int
     };
     su.su_maxcount = maxcount;
     su.su_maxscore = SCORE_MAXINIT;
@@ -465,7 +465,7 @@ unsafe fn spell_find_suggest(
     let badword = su.su_badword() as *mut c_char as *mut c_void;
     unsafe { xmemcpyz(badword, badptr as *const c_void, su.su_badlen as usize) };
     let fbadword = su.su_fbadword() as *mut c_char;
-    let win = curwin.get();
+    let win = Win::current_raw();
     let _ = unsafe { spell_casefold(win, badptr, su.su_badlen, fbadword, MAXWLEN as c_int) };
     // Upstream note: this breaks if the case-folded text comes out
     // longer than the original, because an illegal byte then throws
@@ -482,7 +482,7 @@ unsafe fn spell_find_suggest(
     // is right for several files of one language and not too bad for a
     // mixture like "pl,en". Note this is the buffer's list of
     // languages rather than the window's.
-    let langp = unsafe { &raw const (*curbuf.get()).b_s.b_langp };
+    let langp = unsafe { &raw const (*Buf::current_raw()).b_s.b_langp };
     for i in 0..unsafe { (*langp).ga_len } {
         let lp = unsafe { ((*langp).ga_data as *mut LangP).offset(i as isize) };
         if !unsafe { (*lp).lp_sallang.is_null() } {
@@ -696,7 +696,8 @@ unsafe fn suggest_try_change(su: Sug) {
     // it may fill the `MAXWLEN - n` that are left.
     let taillen = unsafe { cstr::bytes_at(tail) }.len() as c_int;
     let dest = unsafe { fwordp.offset(n as isize) };
-    let _ = unsafe { spell_casefold(curwin.get(), tail, taillen, dest, MAXWLEN as c_int - n) };
+    let win = Win::current_raw();
+    let _ = unsafe { spell_casefold(win, tail, taillen, dest, MAXWLEN as c_int - n) };
 
     // Keep the result no longer than the original text.
     let n = unsafe { cstr::bytes_at(su.su_badptr) }.len();

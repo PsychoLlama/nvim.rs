@@ -15,6 +15,7 @@ use crate::guard::{Allow, Lock};
 use crate::message::msg_ptr;
 use crate::os::cshim::gettext_ptr;
 use crate::types::{IOSIZE, NUL, ShmFlag};
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 
 /// The popup menu's view of the match list.
@@ -195,7 +196,7 @@ pub(crate) unsafe fn trigger_complete_changed_event(cur: c_int) {
     // SAFETY: `save_v_event` is this frame's, and lives until the restore
     // below hands the saved dict back.
     let v_event = unsafe { get_v_event(&raw mut save_v_event) };
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: `v_event` is the dict just built, the key is a static string
     // of the length given, and `buf` is the current buffer.
     unsafe {

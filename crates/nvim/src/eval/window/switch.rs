@@ -48,8 +48,7 @@ pub unsafe fn win_execute_before(
         && (!cur_win().w_localdir.is_null()
             || !win.w_localdir.is_null()
             || !tab.is_current()
-                && (!unsafe { (*curtab.get()).tp_localdir }.is_null()
-                    || !tab.tp_localdir.is_null())
+                && (!cur_tab().tp_localdir.is_null() || !tab.tp_localdir.is_null())
             || p_acd.get() != 0)
     {
         args.cwd_status = unsafe { os_dirname(args.cwd.as_mut_ptr(), size_of_val(&args.cwd)) };
@@ -165,8 +164,8 @@ pub unsafe fn switch_win_noblock(
     let into = switchwin.cast::<u8>();
     unsafe { into.write_bytes(0, size_of::<SwitchWin>()) };
     let switchwin = unsafe { &mut *switchwin };
-    switchwin.sw_curwin = curwin.get();
-    if win == curwin.get() {
+    switchwin.sw_curwin = Win::current_raw();
+    if win == Win::current_raw() {
         switchwin.sw_same_win = true;
     } else {
         // A Visual selection belongs to the window it was made in.
@@ -176,9 +175,9 @@ pub unsafe fn switch_win_noblock(
     // SAFETY: a live tab page or NULL, and `win_valid` re-checks the window
     // before it is entered -- entering the tab page can close it.
     if !tabpage.is_null() {
-        switchwin.sw_curtab = curtab.get();
+        switchwin.sw_curtab = TabPage::current_raw();
         if no_display {
-            unsafe { unuse_tabpage(curtab.get()) };
+            unsafe { unuse_tabpage(TabPage::current_raw()) };
             unsafe { use_tabpage(tabpage) };
         } else {
             unsafe { goto_tabpage_tp(tabpage, false, false) };

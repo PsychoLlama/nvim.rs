@@ -96,7 +96,6 @@ use crate::ui::{do_autocmd_uienter_all, ui_init};
 use crate::ui_client::{ui_client_run, ui_client_start_server};
 use crate::ui_compositor::ui_comp_syn_init;
 use crate::window::{win_alloc_first, win_init_size, win_new_screensize};
-use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Win, first_window, windows};
 use ::libc::{abort, exit, fprintf, setbuf, strcasecmp};
 
@@ -427,7 +426,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     setmouse();
-    unsafe { redraw_later(curwin.get(), UPD_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
     no_wait_return.set(1);
 
     unsafe { create_windows(&raw mut params) };
@@ -442,7 +441,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::BufEnter;
-    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, curbuf.get()) };
+    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_raw()) };
     time_msg_at(c"BufEnter autocommands");
     setpcmark();
 
@@ -476,7 +475,7 @@ pub(crate) unsafe fn main_0(argc: c_int, argv: *mut *mut c_char) -> c_int {
     unsafe { set_vim_var_nr(Vv::VimDidEnter, 1 as VarNumber) };
     let (no_fname, no_fname_io) = (ptr::null_mut(), ptr::null_mut());
     let event = AutoEvent::VimEnter;
-    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, curbuf.get()) };
+    unsafe { apply_autocmds(event, no_fname, no_fname_io, false, Buf::current_raw()) };
     time_msg_at(c"VimEnter autocommands");
     if use_remote_ui {
         unsafe { do_autocmd_uienter_all() };

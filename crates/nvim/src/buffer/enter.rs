@@ -56,7 +56,6 @@ use crate::types::{
 };
 use crate::undo::u_sync;
 use crate::window::{get_last_winid, win_valid};
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::time;
 
 // ---------------------------------------------------------------------------
@@ -271,7 +270,9 @@ pub unsafe fn set_curbuf(buffer: Buf, action: c_int, update_jumplist: bool) {
     // wiped and a new one allocated at the same address would pass an address
     // comparison, the hazard `BufferRef` carries `br_buf_free_count` for.
     let valid = buf_id.valid();
-    if valid && buffer.raw() != curbuf.get() && !aborting_now() || cur_win().w_buffer.is_null() {
+    if valid && buffer.raw() != Buf::current_raw() && !aborting_now()
+        || cur_win().w_buffer.is_null()
+    {
         // autocommands changed curbuf and we will move to another buffer soon,
         // so decrement curbuf->b_nwindows
         if let Some(mut cur) = current_buf().filter(|c| *c != prevbuf) {
@@ -323,15 +324,17 @@ fn leave_prevbuf(
     let Some(prevbuf) = prevbufref.get().filter(|_| !aborting_now()) else {
         return;
     };
-    let previouswin = curwin.get();
+    let previouswin = Win::current_raw();
 
     // Do not sync when in Insert mode and the buffer is open in another
     // window, might be a timer doing something in another window.
-    if prevraw == curbuf.get() && (State.get() & MODE_INSERT == 0 || cur_buf().b_nwindows <= 1) {
+    if prevraw == Buf::current_raw()
+        && (State.get() & MODE_INSERT == 0 || cur_buf().b_nwindows <= 1)
+    {
         sync_undo();
     }
     let win = if prevraw == cur_win().w_buffer {
-        curwin.get()
+        Win::current_raw()
     } else {
         ptr::null_mut::<Window>()
     };
@@ -344,7 +347,7 @@ fn leave_prevbuf(
     };
     // SAFETY: `prevbuf` is still live, the guard above having said so.
     unsafe { close_buffer(Win::from_raw(win), Buf::new(prevraw), how, false, false) };
-    if curwin.get() != previouswin
+    if Win::current_raw() != previouswin
         && let Some(previous) = valid_win(previouswin)
     {
         // autocommands changed curwin, Grr!

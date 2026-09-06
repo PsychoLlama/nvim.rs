@@ -85,7 +85,7 @@ use crate::window::{
     win_init_empty, win_remove,
 };
 use crate::winfloat::win_config_float;
-use crate::winlayer::graph::{curbuf, curtab, curwin, prevwin};
+use crate::winlayer::graph::prevwin;
 use crate::winlayer::{forget_window, free_deferred, register_window};
 use ::libc::{abort, atoi, strcasecmp, strcpy};
 

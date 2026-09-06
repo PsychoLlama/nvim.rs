@@ -10,6 +10,7 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -91,7 +92,7 @@ pub(crate) unsafe fn list_win_vars(first: *mut c_int) {
 pub(crate) unsafe fn list_tab_vars(first: *mut c_int) {
     // SAFETY: `curtab` is set from startup to exit, and the tab page's own
     // `t:` dictionary is live with it.
-    let ht = unsafe { &raw mut (*(*curtab.get()).tp_vars).dv_hashtab };
+    let ht = unsafe { &raw mut (*TabPage::current().tp_vars).dv_hashtab };
     unsafe { list_hashtable_vars(ht, c"t:".as_ptr(), true, first) }
 }
 

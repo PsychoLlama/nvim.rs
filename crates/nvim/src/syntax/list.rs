@@ -10,6 +10,7 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 
 use super::*;
@@ -28,7 +29,7 @@ pub(crate) fn syn_cmd_list(args: &mut ExArg, syncing: c_int) {
     }
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
-    if !unsafe { syntax_present(curwin.get()) } {
+    if !unsafe { syntax_present(Win::current_raw()) } {
         msg(gettext(MSG_NO_ITEMS), 0);
         return;
     }

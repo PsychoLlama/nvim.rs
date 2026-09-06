@@ -296,7 +296,7 @@ pub(crate) unsafe fn command_line_enter(
             } else {
                 cur_buf_imsearch()
             };
-            s.b_im_ptr_buf = curbuf.get();
+            s.b_im_ptr_buf = Buf::current_raw();
             if unsafe { *s.b_im_ptr } == B_IMODE_LMAP as OptInt {
                 State.set(State.get() | MODE_LANGMAP);
             }
@@ -692,13 +692,13 @@ pub unsafe fn getcmdline_prompt(
 /// `&curbuf->b_p_iminsert`: a field's address, which reads nothing.
 pub(crate) fn cur_buf_iminsert() -> *mut OptInt {
     // SAFETY: a field's address is the object's plus a constant.
-    unsafe { &raw mut (*curbuf.get()).b_p_iminsert }
+    unsafe { &raw mut (*Buf::current_raw()).b_p_iminsert }
 }
 
 /// `&curbuf->b_p_imsearch`; see [`cur_buf_iminsert`].
 pub(crate) fn cur_buf_imsearch() -> *mut OptInt {
     // SAFETY: a field's address is the object's plus a constant.
-    unsafe { &raw mut (*curbuf.get()).b_p_imsearch }
+    unsafe { &raw mut (*Buf::current_raw()).b_p_imsearch }
 }
 
 /// The buffer the editor is working in.

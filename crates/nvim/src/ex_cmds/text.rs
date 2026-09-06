@@ -33,6 +33,7 @@ use crate::strings::vim_snprintf;
 use crate::types::CmdIdx;
 use crate::types::{ExArg, IOSIZE, NUL};
 use crate::undo::u_save;
+use crate::winlayer::Buf;
 use ::libc::atoi;
 use core::ffi::{CStr, c_char, c_int};
 
@@ -118,7 +119,7 @@ unsafe fn describe_byte(
     // seven into `raw` before the `  <%s>` wrapper takes it.
     if unsafe { vim_isprintc(c) } && !(' ' as c_int..='~' as c_int).contains(&c) {
         let mut raw: [c_char; 7] = [0; 7];
-        unsafe { transchar_nonprint(cur_buf().raw(), raw.as_mut_ptr(), c) };
+        unsafe { transchar_nonprint(Buf::current_raw(), raw.as_mut_ptr(), c) };
         unsafe {
             vim_snprintf(
                 nonprint.as_mut_ptr(),

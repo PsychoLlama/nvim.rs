@@ -47,7 +47,7 @@ use crate::types::{
 use crate::ui::ui_gui_attached;
 use crate::version::{has_nvim_version, has_vim_patch};
 use crate::window::find_tabpage;
-use crate::winlayer::graph::{curbuf, curtab};
+use crate::winlayer::{Buf, Win};
 use crate::winlayer::{TabPage, windows_in_tab};
 use ::libc::{atoi, strcasecmp, strtoul};
 use core::ffi::{CStr, c_char, c_int};
@@ -230,7 +230,7 @@ unsafe fn special_feature(name: *const c_char) -> Option<bool> {
         _ if unsafe { same_name(name, c"multi_byte_encoding") } => true,
         _ if unsafe { same_name(name, c"gui_running") } => ui_gui_attached(),
         _ if unsafe { same_name(name, c"syntax_items") } => unsafe {
-            syntax_present(crate::winlayer::graph::curwin.get())
+            syntax_present(Win::current_raw())
         },
         _ if unsafe { same_name(name, c"wsl") } => has_wsl(),
         _ => return None,
@@ -306,7 +306,7 @@ pub unsafe fn f_api_info(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
 /// buffer since it was last loaded.
 pub unsafe fn f_did_filetype(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = (*curbuf.get()).b_did_filetype as VarNumber };
+    unsafe { (*result).vval.v_number = Buf::current().b_did_filetype as VarNumber };
 }
 
 /// `eventhandler()` — whether we are inside a `vgetc()` from an event.
@@ -439,7 +439,7 @@ pub unsafe fn f_nextnonblank(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     // loop only reads lines it has range-checked.
     let mut lnum = arg_lnum(args.get(0));
     loop {
-        if lnum < 0 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+        if lnum < 0 || lnum > Buf::current().b_ml.ml_line_count {
             lnum = 0;
             break;
         }
@@ -457,7 +457,7 @@ pub unsafe fn f_prevnonblank(args: *mut TypVal, result: *mut TypVal, _fptr: Eval
     let (args, result) = frame!(args, result);
     // SAFETY throughout: as `f_nextnonblank`.
     let mut lnum = arg_lnum(args.get(0));
-    if lnum < 1 || lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+    if lnum < 1 || lnum > Buf::current().b_ml.ml_line_count {
         lnum = 0;
     } else {
         while lnum >= 1 && unsafe { *skipwhite(ml_get(lnum)) } as c_int == NUL {
@@ -496,10 +496,11 @@ pub unsafe fn f_shiftwidth(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         if col < 0 {
             return;
         }
-        result.vval.v_number = unsafe { get_sw_value_col(curbuf.get(), col, false) } as VarNumber;
+        result.vval.v_number =
+            unsafe { get_sw_value_col(Buf::current_raw(), col, false) } as VarNumber;
         return;
     }
-    result.vval.v_number = unsafe { get_sw_value(curbuf.get()) } as VarNumber;
+    result.vval.v_number = unsafe { get_sw_value(Buf::current_raw()) } as VarNumber;
 }
 
 /// `tabpagebuflist([{tabnr}])` — the buffer of every window in the tab, in
@@ -511,7 +512,7 @@ pub unsafe fn f_tabpagebuflist(args: *mut TypVal, result: *mut TypVal, _fptr: Ev
     let tab = if args.has(0) {
         unsafe { TabPage::from_raw(find_tabpage(arg_number(args.get(0)) as c_int)) }
     } else {
-        Some(unsafe { TabPage::new(curtab.get()) })
+        Some(TabPage::current())
     };
     // A bad tab number answers 0, not an empty List. Every live tab page
     // has at least one window, so this is the only way out.
@@ -533,14 +534,11 @@ pub unsafe fn f_visualmode(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
     let (args, result) = frame!(args, result);
     // SAFETY throughout: the frame is live, `curbuf` is live for the call, and `result`
     // owns the duplicate.
-    let mode = [
-        unsafe { (*curbuf.get()).b_visual_mode_eval } as c_char,
-        NUL as c_char,
-    ];
+    let mode = [Buf::current().b_visual_mode_eval as c_char, NUL as c_char];
     result.v_type = VAR_STRING;
     result.vval.v_string = unsafe { xstrdup(mode.as_ptr()) };
     if unsafe { non_zero_arg(args.ptr(0)) } {
-        unsafe { (*curbuf.get()).b_visual_mode_eval = NUL };
+        Buf::current().b_visual_mode_eval = NUL;
     }
 }
 

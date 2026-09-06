@@ -101,7 +101,6 @@ use crate::undo::{
     buf_is_changed, u_clearallandblockfree, u_clearline, u_compute_hash, u_find_first_changed,
     u_read_undo, u_savecommon, u_sync, u_unchanged, u_write_undo,
 };
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Ea};
 use ::libc::{
     __errno_location, close, dup, feof, ferror, fgets, flock, fwrite, iconv, iconv_close, lseek,
@@ -181,7 +180,7 @@ pub enum Loaded {
 /// One of the buffer-lifecycle autocommands this file fires about the current
 /// buffer: `apply_autocmds(event, NULL, NULL, false, curbuf)`.
 fn autocmd_for_curbuf(event: AutoEvent) {
-    let (nofile, cb) = (ptr::null_mut(), curbuf.get());
+    let (nofile, cb) = (ptr::null_mut(), Buf::current_raw());
     // SAFETY: the current buffer is live, and the event takes no file name.
     unsafe { apply_autocmds(event, nofile, nofile, false, cb) };
 }
@@ -263,7 +262,7 @@ pub(crate) unsafe fn readfile_linenr(
 /// Set the name of the current buffer, for a `:r` or `:w` command with a file
 /// name given for a buffer that has none.
 pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<(), Failed> {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
 
     // It's like the unnamed buffer is deleted...
     if cur_buf().b_p_bl != 0 {
@@ -274,7 +273,7 @@ pub unsafe fn set_rw_fname(fname: *mut c_char, sfname: *mut c_char) -> Result<()
         // Autocommands may abort script processing.
         return Err(Failed);
     }
-    if curbuf.get() != buf {
+    if Buf::current_raw() != buf {
         // We are in another buffer now, don't do the renaming.
         unsafe { emsg(gettext_ptr(e_auchangedbuf.get())) };
         return Err(Failed);

@@ -13,6 +13,7 @@ use super::*;
 use crate::grid::default_grid_ref;
 use crate::guard::Suppress;
 use crate::winlayer::{self, Win};
+use crate::winlayer::{Buf, TabPage};
 
 /// The largest screen this port will allocate, so that `Rows * Columns` cannot
 /// overflow.
@@ -153,10 +154,10 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
     if !ui_has(kUIMessages) {
         // Clamp 'cmdheight' so the windows still fit, on this tab page and
         // on every other one.
-        let max_p_ch = Rows.get() - unsafe { min_rows(curtab.get()) } + 1;
+        let max_p_ch = Rows.get() - unsafe { min_rows(TabPage::current_raw()) } + 1;
         if p_ch.get() > 0 && p_ch.get() > max_p_ch as OptInt {
             p_ch.set(max_p_ch.max(1) as OptInt);
-            unsafe { (*curtab.get()).tp_ch_used = p_ch.get() };
+            TabPage::current().tp_ch_used = p_ch.get();
         }
         for mut tp in winlayer::tabs() {
             if !tp.is_current() {
@@ -204,7 +205,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
                 false,
-                curbuf.get(),
+                Buf::current_raw(),
             )
         };
     }
@@ -239,7 +240,7 @@ pub unsafe extern "C" fn screen_resize(width: c_int, height: c_int) {
             ui_comp_set_screen_valid(true);
             unsafe { repeat_message() };
         } else {
-            if unsafe { (*curwin.get()).w_onebuf_opt.wo_scb } != 0 {
+            if Win::current().w_onebuf_opt.wo_scb != 0 {
                 unsafe { do_check_scrollbind(true) };
             }
             if State.get() & MODE_CMDLINE != 0 {

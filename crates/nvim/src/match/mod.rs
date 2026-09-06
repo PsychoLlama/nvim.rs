@@ -51,7 +51,6 @@ use crate::types::{
     ColNr, Dict, DictItem, EvalFuncData, ExArg, LLPos, LineNr, List, MatchItem, MatchState,
     RegProg, TypVal, VAR_LIST, VAR_NUMBER, VarNumber, Window, int64_t, ptrdiff_t, size_t, uint8_t,
 };
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{Live, Win};
 
 mod searchhl;
@@ -429,7 +428,7 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
 
     // Whatever happens next, the old pattern for this id goes.
     if !skip {
-        unsafe { match_delete(curwin.get(), id, false) };
+        unsafe { match_delete(Win::current_raw(), id, false) };
     }
 
     let arg = unsafe { (*args).arg };
@@ -483,7 +482,7 @@ pub(crate) unsafe fn ex_match(args: *mut ExArg) {
             unsafe { *end = 0 };
             // SAFETY: the pattern is NUL-terminated in place just above.
             let pat = unsafe { p.offset(1) };
-            let win = curwin.get();
+            let win = Win::current_raw();
             let no_pos = ::core::ptr::null_mut();
             let no_conceal = ::core::ptr::null();
             // SAFETY: the editor's own window and the group checked above.

@@ -19,12 +19,12 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::mem::offset_of;
 
 use crate::message::iemsg;
 use crate::os::cshim::gettext;
-use crate::winlayer::graph::{curbuf, curwin};
 // The generated index enum: 176 of its `kOpt*` constants name an arm below.
 use crate::options::*;
 use crate::types::{
@@ -368,7 +368,8 @@ pub(crate) unsafe fn get_varp_scope_from(
 /// [`get_varp_scope_from`] for the current buffer and window.
 pub(crate) fn get_varp_scope(opt_idx: OptIndex, opt_flags: OptionSetFlags) -> OptSlot {
     // SAFETY: `curbuf`/`curwin` are live.
-    unsafe { get_varp_scope_from(opt_idx, opt_flags, curbuf.get(), curwin.get()) }
+    let (buffer, win) = (Buf::current_raw(), Win::current_raw());
+    unsafe { get_varp_scope_from(opt_idx, opt_flags, buffer, win) }
 }
 
 /// The variable the option reads from right now, for the given buffer and
@@ -564,5 +565,5 @@ pub(crate) unsafe fn get_varp_from(
 #[inline]
 pub(crate) fn get_varp(opt_idx: OptIndex) -> OptSlot {
     // SAFETY: `curbuf`/`curwin` are live.
-    unsafe { get_varp_from(opt_idx, curbuf.get(), curwin.get()) }
+    unsafe { get_varp_from(opt_idx, Buf::current_raw(), Win::current_raw()) }
 }

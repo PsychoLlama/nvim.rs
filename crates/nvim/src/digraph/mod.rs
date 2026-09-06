@@ -43,8 +43,9 @@ use crate::types::{
     VAR_LIST, VAR_STRING, VAR_UNKNOWN, VarNumber, Window, int16_t,
 };
 use crate::ui::state::Columns;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, switch_to};
+use crate::winlayer::graph::switch_to;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
@@ -668,7 +669,7 @@ const MAPTYPE_UNMAP: c_int = 1;
 /// Source the keymap file for the current buffer's 'keymap' (or unload
 /// language mappings when it is empty). Answers an error message.
 pub fn keymap_init() -> Option<&'static CStr> {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: curbuf is valid, and the 'keymap' value it holds is a
     // NUL-terminated option string.
     let keymap = unsafe {
@@ -729,7 +730,7 @@ pub unsafe fn ex_loadkeymap(args: *mut ExArg) {
     }
     // Stop any active keymap and load the new entries.
     keymap_unload();
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: curbuf is valid and `keymap_unload` left its keymap garray
     // cleared.
     unsafe { (*buf).b_kmap_state = 0 };
@@ -834,7 +835,7 @@ fn keymap_map_cmd(from: &[u8], to: Option<&[u8]>) -> Vec<u8> {
 
 /// Stop using 'keymap': remove the language mappings and free the entries.
 fn keymap_unload() {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: curbuf is valid.
     if unsafe { (*buf).b_kmap_state } as c_int & KEYMAP_LOADED == 0 {
         return;

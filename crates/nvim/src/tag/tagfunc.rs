@@ -117,7 +117,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     // The tag stack entry the jump came from, whose `user_data` the
     // function may want. One past the top means nothing was popped, so
     // the newest entry is the interesting one.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let from = if unsafe { (*win).w_tagstacklen } > 0 {
         let at = unsafe { (*win).w_tagstackidx };
         let at = if at == unsafe { (*win).w_tagstacklen } {
@@ -183,7 +183,7 @@ pub(crate) unsafe fn find_tagfunc_tags(
     let save_pos = cur_win().w_cursor;
     let mut result = unsafe {
         callback_call(
-            &raw mut (*curbuf.get()).b_tfu_cb,
+            &raw mut (*Buf::current_raw()).b_tfu_cb,
             3,
             args.as_mut_ptr(),
             &raw mut rettv,

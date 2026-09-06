@@ -19,6 +19,7 @@ use crate::cstr;
 use crate::grid::linebuf;
 use crate::message::emsg_ptr;
 use crate::types::kFloatRelativeEditor;
+use crate::winlayer::Win;
 
 /// `WIN_CONFIG_INIT`: the float config a fresh `parse_winborder` writes into.
 ///
@@ -138,7 +139,7 @@ unsafe fn pum_compute_text_attrs(
 ) -> Option<Vec<c_int>> {
     // SAFETY: `text` is the caller's NUL-terminated string; `ins_compl_leader`
     // and `cmdline_compl_pattern` answer editor-owned strings.
-    let win = curwin.get();
+    let win = Win::current_raw();
     if unsafe { *text } == 0
         || (hlf != HLF_PSI as Hlf && hlf != HLF_PNI as Hlf)
         || (unsafe { win_hl_attr(win, HLF_PMSI) } == unsafe { win_hl_attr(win, HLF_PSI) }
@@ -467,7 +468,7 @@ impl PumRow {
     unsafe fn put_column(&mut self, style: &RowStyle, item_type: c_int, next_isempty: bool) {
         // SAFETY: the caller holds the batch; `p` walks an item string, which
         // is NUL-terminated and stays live for the whole redraw.
-        let win = curwin.get();
+        let win = Win::current_raw();
         let hlf = self.hlfs[item_type as usize];
         self.orig_attr =
             unsafe { hl_combine_attr(win_hl_attr(win, HLF_PNI), win_hl_attr(win, hlf as c_int)) };
@@ -553,7 +554,7 @@ impl PumRow {
 unsafe fn pum_draw_row(style: &RowStyle, i: c_int, grid_row: c_int) {
     // SAFETY: the item indices come from `pum_first`/`pum_height`, which
     // `pum_redraw` has already clamped to the array.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let idx = i + pum_first.get();
     let selected = idx == pum_selected.get();
     let mut row = PumRow {
@@ -710,7 +711,7 @@ pub unsafe fn pum_redraw() {
     let mut grid = pum_grid_ref();
     // SAFETY: the placement functions have filled the state cells and the
     // item array is live.
-    let win = curwin.get();
+    let win = Win::current_raw();
 
     // Room for one padding cell beside the text, when there is any.
     let mut grid_width = pum_width.get();

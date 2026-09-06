@@ -116,7 +116,7 @@ pub unsafe fn nvim_set_current_win(win: WindowHandle) -> Result<(), Error> {
         return ().reported(err);
     };
     api_try(&mut err, |_| {
-        if w.w_buffer != curbuf.get() {
+        if w.w_buffer != Buf::current_raw() {
             reset_visual_and_resel();
         }
         // SAFETY: `w` is the live window just found.

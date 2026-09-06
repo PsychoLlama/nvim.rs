@@ -205,7 +205,7 @@ pub(crate) unsafe fn set_b0_fname(b0p: *mut ZeroBlock, buffer: *mut Buffer) {
 
     // Upstream passes `curbuf` here, not `buffer`. Preserved: the two are
     // the same for every reachable caller.
-    unsafe { add_b0_fenc(b0p, curbuf.get()) };
+    unsafe { add_b0_fenc(b0p, Buf::current_raw()) };
 }
 
 /// Record whether the file and its swap file are in the same directory.

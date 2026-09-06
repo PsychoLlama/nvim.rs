@@ -30,6 +30,7 @@ use crate::os::cshim::{gettext, ngettext};
 use crate::tr_plural;
 use crate::types::{BCount, Failed, LineNr, OptInt, int64_t};
 use crate::undo::u_save;
+use crate::winlayer::Buf;
 use crate::winlayer::{Win, tab_windows};
 use core::ffi::{c_int, c_ulong};
 use core::ptr;
@@ -60,9 +61,9 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // NULL length is upstream's way of asking only for the byte offset.
     let (start_byte, end_byte, dest_byte) = unsafe {
         (
-            ml_find_line_or_offset(cur_buf().raw(), line1, ptr::null_mut(), true) as BCount,
-            ml_find_line_or_offset(cur_buf().raw(), line2 + 1, ptr::null_mut(), true) as BCount,
-            ml_find_line_or_offset(cur_buf().raw(), dest + 1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(Buf::current_raw(), line1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(Buf::current_raw(), line2 + 1, ptr::null_mut(), true) as BCount,
+            ml_find_line_or_offset(Buf::current_raw(), dest + 1, ptr::null_mut(), true) as BCount,
         )
     };
     let extent_byte = end_byte - start_byte;
@@ -156,7 +157,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
 
     // Send an update regarding the new lines that were added.
     // SAFETY: `curbuf` is live.
-    unsafe { buf_updates_send_changes(cur_buf().raw(), dest + 1, num_lines as int64_t, 0) };
+    unsafe { buf_updates_send_changes(Buf::current_raw(), dest + 1, num_lines as int64_t, 0) };
 
     // Now we delete the original text -- webb
     // SAFETY: the original range sits at `line1 + extra` now.
@@ -175,7 +176,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
     // move; `line_off`/`byte_off` correct the destination for the deletion.
     unsafe {
         extmark_move_region(
-            cur_buf().raw(),
+            Buf::current_raw(),
             line1 - 1,
             0,
             start_byte,
@@ -202,7 +203,7 @@ pub unsafe fn do_move(line1: LineNr, line2: LineNr, dest: LineNr) -> Result<(), 
         changed_lines(cur_buf(), dest + 1, 0, line1 + num_lines, 0, false);
     }
     // Send nvim_buf_lines_event regarding lines that were deleted.
-    unsafe { buf_updates_send_changes(cur_buf().raw(), line1 + extra, 0, num_lines as int64_t) };
+    unsafe { buf_updates_send_changes(Buf::current_raw(), line1 + extra, 0, num_lines as int64_t) };
 
     Ok(())
 }
@@ -235,7 +236,7 @@ fn folds_frozen<R>(f: impl FnOnce() -> R) -> R {
 unsafe fn move_folds_in_windows(line1: LineNr, line2: LineNr, dest: LineNr) {
     for wp in tab_windows().map(Win::raw) {
         // SAFETY: `wp` is a live window.
-        if unsafe { (*wp).w_buffer } == cur_buf().raw() {
+        if unsafe { (*wp).w_buffer } == Buf::current_raw() {
             unsafe { fold_move_range(&raw mut (*wp).w_folds, line1, line2, dest) };
         }
     }

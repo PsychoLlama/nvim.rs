@@ -45,7 +45,6 @@ use crate::semsg;
 use crate::types::{
     Buffer, ColNr, LPos, LineNr, RegExtMatch, RegMMatch, RegMatch, Window, uint8_t,
 };
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::strcpy;
 
 use crate::winlayer::{Buf, Win};
@@ -200,7 +199,7 @@ pub(crate) fn reg_prev_class(rex: Rex) -> c_int {
 /// Is the position being matched inside the Visual area? Backs `\%V`.
 pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     let raw = match rex.reg_win() {
-        w if w.is_null() => curwin.get(),
+        w if w.is_null() => Win::current_raw(),
         w => w,
     };
     // SAFETY: `reg_win` is the window the match is running for, or `curwin`
@@ -208,7 +207,7 @@ pub(crate) fn reg_match_visual(rex: Rex) -> bool {
     let wp = unsafe { Win::new(raw) };
     // `\%V` is a buffer-position test, so it only applies to a multi-line
     // match in the current buffer.
-    if rex.reg_buf() != curbuf.get() || !visual_ever_started() || !rex.multi() {
+    if rex.reg_buf() != Buf::current_raw() || !visual_ever_started() || !rex.multi() {
         return false;
     }
 
@@ -478,7 +477,7 @@ pub(crate) fn init_regexec(rex: Rex, rmp: *mut RegMatch, line_lbr: bool) {
     rex.set_reg_line_lbr(line_lbr);
     // A string match has no buffer of its own, but `\k` and friends still
     // need an 'iskeyword' to read.
-    rex.set_reg_buf(curbuf.get());
+    rex.set_reg_buf(Buf::current_raw());
     rex.set_reg_win(core::ptr::null_mut::<Window>());
     // SAFETY: the caller's match structure, live with a program.
     rex.set_reg_ic(unsafe { (*rmp).rm_ic });

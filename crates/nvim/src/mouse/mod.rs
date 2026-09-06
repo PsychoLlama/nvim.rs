@@ -27,6 +27,7 @@
 #![allow(non_upper_case_globals)]
 
 pub(crate) mod state;
+use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_char, c_int};
 use core::{ptr, slice};
 
@@ -54,7 +55,6 @@ use crate::window::{
     self, find_tabpage, tabpage_index, tabpage_move, win_drag_status_line, win_drag_vsep_line,
     win_enter, win_valid,
 };
-use crate::winlayer::graph::curtab;
 use crate::winlayer::{Buf, PosRef, Win, first_tab};
 
 // The carve of the transpiled module; see each child's docs.
@@ -414,7 +414,7 @@ fn move_tab_to_mouse(defs: ClickDefs) {
     let tabnr = defs.at(mouse_col.get()).tabnr;
     // The index is read even where the C would not ask for it, which is a
     // pure walk of the tab page list.
-    let current = tabpage_index(curtab.get());
+    let current = tabpage_index(TabPage::current_raw());
     let target = if tabnr <= 0 {
         9999
     } else if tabnr < current {
@@ -428,11 +428,11 @@ fn move_tab_to_mouse(defs: ClickDefs) {
 /// Close tab page `c1`, or the current one when it is 999.
 fn mouse_tab_close(c1: c_int) {
     let tp: *mut Tabpage = if c1 == 999 {
-        curtab.get()
+        TabPage::current_raw()
     } else {
         find_tabpage(c1)
     };
-    if tp == curtab.get() {
+    if tp == TabPage::current_raw() {
         if first_tab().is_some_and(|tp| tp.next().is_some()) {
             // SAFETY: as above.
             unsafe { tabpage_close(false as c_int) };

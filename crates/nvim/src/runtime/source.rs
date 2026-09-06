@@ -19,6 +19,7 @@ use crate::message_fmt::{c_str, report_msg};
 use crate::semsg;
 use crate::smsg;
 use crate::tr_c;
+use crate::winlayer::Buf;
 
 use crate::ex_docmd::DoCmdOpts;
 use crate::guard::Script;
@@ -214,7 +215,7 @@ unsafe fn do_source_buffer_init(
     args: *const ExArg,
     ex_lua: bool,
 ) -> *mut c_char {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     if buf.is_null() {
         return ptr::null_mut();
     }
@@ -427,7 +428,7 @@ unsafe fn source_name(
 /// # Safety
 /// `fname_exp` is the resolved name.
 unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: the caller's contract; the handlers may run arbitrary script,
     // which is why nothing is borrowed across them.
     if unsafe { has_autocmd(AutoEvent::SourceCmd, fname_exp, None) }
@@ -436,12 +437,12 @@ unsafe fn source_autocmds(fname_exp: *mut c_char) -> Option<c_int> {
         let retval = if aborting() { FAIL } else { OK };
         if retval == OK {
             let event = AutoEvent::SourcePost;
-            unsafe { apply_autocmds(event, fname_exp, fname_exp, false, curbuf.get()) };
+            unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_raw()) };
         }
         return Some(retval);
     }
     let event = AutoEvent::SourcePre;
-    unsafe { apply_autocmds(event, fname_exp, fname_exp, false, curbuf.get()) };
+    unsafe { apply_autocmds(event, fname_exp, fname_exp, false, Buf::current_raw()) };
     None
 }
 
@@ -571,7 +572,7 @@ unsafe fn profile_script_stop(wait_start: ProfTime) {
 /// # Safety
 /// There is a current buffer.
 unsafe fn curbuf_is_lua() -> bool {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: the caller's contract.
     let ft_is_lua = unsafe { strequal((*buf).b_p_ft, c"lua".as_ptr()) };
     ft_is_lua
@@ -589,7 +590,7 @@ unsafe fn range_is_lua(args: *const ExArg) -> bool {
         return false;
     }
     // SAFETY: the caller's command, and the current buffer.
-    let (handle, line1, line2) = unsafe { ((*curbuf.get()).handle, (*args).line1, (*args).line2) };
+    let (handle, line1, line2) = unsafe { (Buf::current().handle, (*args).line1, (*args).line2) };
     let mut items = [
         integer_obj(handle as Integer),
         integer_obj(line1 as Integer),
@@ -860,7 +861,7 @@ unsafe fn source_bracket(
     }
     unsafe { finish_source(cookie, firstline) };
     if !req.is(Origin::Str) && trigger_source_post {
-        let (name, buf) = (*fname_exp, curbuf.get());
+        let (name, buf) = (*fname_exp, Buf::current_raw());
         // SAFETY: the resolved name, still owned by this frame.
         unsafe { apply_autocmds(AutoEvent::SourcePost, name, name, false, buf) };
     }

@@ -186,7 +186,7 @@ pub unsafe fn diffanchors_changed(buflocal: bool) -> Result<(), Failed> {
         return result;
     }
     for mut tp in tabs() {
-        if !buflocal || tp.tp_diffbuf.contains(&curbuf.get()) {
+        if !buflocal || tp.tp_diffbuf.contains(&Buf::current_raw()) {
             tp.tp_diff_invalid = 1;
         }
     }

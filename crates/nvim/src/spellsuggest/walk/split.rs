@@ -35,7 +35,7 @@ use crate::spellsuggest::score::score_wordcount_adj;
 use crate::spellsuggest::walk::{FLAG_DID_SPLIT, PFD_NOPREFIX, PFD_PREFIXTREE, State, Walk};
 use crate::spellsuggest::{MAXWLEN, SCORE_SPLIT, SCORE_SPLIT_NO, SCORE_SUBST, badword_captype};
 use crate::types::NUL;
-use crate::winlayer::graph::curwin;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -293,8 +293,8 @@ impl Walk<'_> {
 
         // SAFETY: `bad_idx` is a position the walk reached inside the bad
         // word, the caller's NUL-terminated buffer.
-        let replacing_nonword =
-            !try_compound && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), curwin.get()) };
+        let replacing_nonword = !try_compound
+            && !unsafe { spell_iswordp_nmw(self.fword_ptr(bad_idx), Win::current_raw()) };
         if !((replacing_nonword || bad_word_ends)
             && self.fword_at(bad_idx) != NUL
             && good_word_ends)

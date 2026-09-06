@@ -30,7 +30,6 @@ use crate::strings::vim_snprintf;
 use crate::types::{IOSIZE, MAX_MCO, OptIndex, OptInt, OptVal, OptionSetFlags, size_t};
 use crate::ui::state::Rows;
 use crate::window::{min_rows_for_all_tabpages, win_default_scroll};
-use crate::winlayer::graph::curwin;
 
 use super::{
     INT_MAX, INT_MIN, MAX_NUMBERWIDTH, MIN_COLUMNS, SB_MAX, TABSTOP_MAX, get_option,
@@ -131,7 +130,7 @@ pub(crate) unsafe fn check_num_option_bounds(
                 if *newval != 0 {
                     errmsg = e_scroll.as_ptr();
                 }
-                *newval = unsafe { win_default_scroll(curwin.get()) };
+                *newval = unsafe { win_default_scroll(Win::current_raw()) };
             }
         }
         _ => {}

@@ -51,7 +51,6 @@ use crate::types::{
     Directory, Failed, FileComparison, FileID, FileInfo, GArray, MAXPATHL, PATHSEPSTR, RegMatch,
     size_t,
 };
-use crate::winlayer::graph::curbuf;
 use ::libc::{qsort, strcasecmp, strcpy};
 
 // The carve of the transpiled module; see each child's docs.

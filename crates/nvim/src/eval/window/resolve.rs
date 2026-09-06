@@ -346,7 +346,7 @@ pub unsafe fn f_win_gotoid(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFu
         return;
     };
     // SAFETY: a live window in a live tab page.
-    if visual_active() && wp.buffer().raw() != curbuf.get() {
+    if visual_active() && wp.buffer().raw() != Buf::current_raw() {
         end_visual_mode();
     }
     unsafe { goto_tabpage_win(tp.raw(), wp.raw()) };
@@ -367,7 +367,7 @@ pub unsafe fn f_tabpagenr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let (args, result) = frame!(args, result);
     // SAFETY: the arguments are live typvals; the tab page globals are set.
     let nr = if !args.has(0) {
-        tabpage_index(curtab.get())
+        tabpage_index(TabPage::current_raw())
     } else {
         // SAFETY: the arguments are live typvals, and `tv_get_string_chk`
         // hands back a NUL-terminated string or NULL.

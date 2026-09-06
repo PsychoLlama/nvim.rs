@@ -14,6 +14,7 @@
 use crate::guard::Depth;
 use crate::message_fmt::msg_cstr;
 use crate::tr;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -31,7 +32,6 @@ use crate::state::mode::{State, VIsual_reselect, restart_edit};
 use crate::state::{MODE_CMDLINE, MODE_INSERT, MODE_TERMINAL, MODE_VISUAL, get_real_state};
 use crate::types::{Buffer, ColNr, ExArg, LineNr, Pos, SaveState, Window};
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curwin};
 
 /// The `:emenu` range, when there was one: `eap != NULL` and `addr_count`.
 type Range = Option<(LineNr, LineNr)>;
@@ -312,12 +312,12 @@ pub(crate) unsafe fn menu_find(path_name: *const c_char) -> *mut VimMenu {
 
 fn with_curwin<R>(f: impl FnOnce(&mut Window) -> R) -> R {
     // SAFETY: `curwin` always names a live window on the main thread.
-    unsafe { f(&mut *curwin.get()) }
+    unsafe { f(&mut *Win::current_raw()) }
 }
 
 fn with_curbuf<R>(f: impl FnOnce(&Buffer) -> R) -> R {
     // SAFETY: `curbuf` always names a live buffer on the main thread.
-    unsafe { f(&*curbuf.get()) }
+    unsafe { f(&*Buf::current_raw()) }
 }
 
 /// The script id of whatever is running, 0 for the user's own typing.

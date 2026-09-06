@@ -133,7 +133,7 @@ pub unsafe fn f_bufnr(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
     result.vval.v_number = -1;
     // SAFETY: the arguments are live typvals and `curbuf` is set.
     let mut buf: *mut Buffer = if !args.has(0) {
-        curbuf.get()
+        Buf::current_raw()
     } else {
         if !unsafe { tv_check_str_or_nr(args.ptr(0)) } {
             return;

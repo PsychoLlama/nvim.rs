@@ -7,6 +7,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -22,7 +23,6 @@ use crate::luaL_reg_table;
 use crate::memline::{ml_get_buf, ml_get_buf_len};
 use crate::regexp::{vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{Buffer, ColNr, Error, Handle, LineNr, RegMatch, RegProg, lua_State, luaL_Reg};
-use crate::winlayer::graph::curbuf;
 
 /// The registry key the metatable is stored under, and the type name
 /// `luaL_checkudata` matches against.
@@ -125,7 +125,7 @@ unsafe extern "C-unwind" fn regex_match_line(lstate: *mut lua_State) -> c_int {
         let buf: *mut Buffer = if bufnr != 0 {
             handle_get_buffer(bufnr)
         } else {
-            curbuf.get()
+            Buf::current_raw()
         };
         if buf.is_null() || (*buf).b_ml.ml_mfp.is_null() {
             return luaL_error(lstate, c"invalid buffer".as_ptr());

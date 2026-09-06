@@ -133,7 +133,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         };
         // Autocmds may change curwin and curbuf.
         if !oldwin.is_null() {
-            *oldwin = cur_win().raw();
+            *oldwin = Win::current_raw();
         }
         *old_curbuf = BufRef::of_opt(current_buf());
     }
@@ -176,7 +176,7 @@ pub(super) unsafe fn switch_to_other_buffer(
         unsafe { buf_check_timestamp(Buf::new(buf)) };
         // Check if autocommands made the buffer invalid or changed the
         // current buffer; they may also abort script processing.
-        if !bufref.valid() || cur_buf().raw() != old_curbuf.raw() || aborting() {
+        if !bufref.valid() || Buf::current_raw() != old_curbuf.raw() || aborting() {
             return Switch::Abandon;
         }
     }
@@ -196,7 +196,7 @@ pub(super) unsafe fn switch_to_other_buffer(
     // buffer becomes unused, free it if EcmdFlags::HIDE is false.  If the current
     // buffer was empty and has no file name, curbuf is returned by
     // buflist_new(), and there is nothing to do here.
-    if buf != cur_buf().raw() {
+    if buf != Buf::current_raw() {
         // SAFETY: the editor's own state.
         match unsafe { leave_for_buffer(Buf::new(buf), args, *oldwin, old_curbuf, state) } {
             Switch::Abandon => return Switch::Abandon,
@@ -270,15 +270,15 @@ unsafe fn leave_for_buffer(
         return Switch::Abandon;
     }
 
-    if buffer.raw() == cur_buf().raw() {
+    if buffer.raw() == Buf::current_raw() {
         // already in new buffer
         state.auto_buf = true;
         au_new_curbuf.set(save_au_new_curbuf);
         return Switch::Ready;
     }
 
-    let the_curwin = cur_win().raw();
-    let was_curbuf = cur_buf().raw();
+    let the_curwin = Win::current_raw();
+    let was_curbuf = Buf::current_raw();
 
     // Set w_locked to avoid that autocommands close the window.  Set
     // b_locked for the same reason.
@@ -286,7 +286,7 @@ unsafe fn leave_for_buffer(
     unsafe { (*the_curwin).w_locked = true };
     buffer.b_locked += 1;
 
-    if cur_buf().raw() == old_curbuf.raw() {
+    if Buf::current_raw() == old_curbuf.raw() {
         // SAFETY: a live buffer.
         unsafe { buf_copy_options(buffer.raw(), BCO_ENTER as c_int) };
     }

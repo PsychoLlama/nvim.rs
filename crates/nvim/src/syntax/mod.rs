@@ -94,7 +94,6 @@ use crate::types::{
     uint8_t, uint64_t,
 };
 use crate::ui::state::{Columns, Rows};
-use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Live, Win};
 use ::libc::{qsort, strcpy, strpbrk};
 

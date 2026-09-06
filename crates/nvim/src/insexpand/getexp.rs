@@ -179,7 +179,7 @@ pub(crate) unsafe fn process_next_cpt_value(
             && !skip_source
             && !compl_time_slice_expired.get()
         {
-            unsafe { (*st).ins_buf = curbuf.get() };
+            unsafe { (*st).ins_buf = Buf::current_raw() };
             unsafe { (*st).first_match_pos = *start_match_pos };
             // Move the cursor back one character so that CTRL-N can match
             // the word immediately after the cursor.
@@ -206,7 +206,7 @@ pub(crate) unsafe fn process_next_cpt_value(
                     (*st).ins_buf =
                         ins_compl_next_buf(Buf::new((*st).ins_buf), (*st).cpt.at() as c_int).raw()
                 };
-                unsafe { (*st).ins_buf != curbuf.get() }
+                unsafe { (*st).ins_buf != Buf::current_raw() }
             }
         {
             // Scan a buffer, but not the current one.
@@ -612,7 +612,7 @@ pub(crate) unsafe fn get_next_completion_match(
         // Normal CTRL-P/CTRL-N and CTRL-X CTRL-L.
         _ => {
             found_new_match = unsafe { get_next_default_completion(st, ini) };
-            if found_new_match.is_err() && unsafe { (*st).ins_buf } == curbuf.get() {
+            if found_new_match.is_err() && unsafe { (*st).ins_buf } == Buf::current_raw() {
                 unsafe { (*st).found_all = true };
             }
         }
@@ -655,7 +655,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
     let mut may_advance_cpt_idx = false;
     let mut start_pos = ini;
 
-    debug_assert!(!curbuf.get().is_null());
+    debug_assert!(Buf::current_or_none().is_some());
 
     if !compl_started.get() {
         for mut buf in buffers() {
@@ -666,7 +666,7 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
             st_cleared.set(true);
         }
         unsafe { (*st).found_all = false };
-        unsafe { (*st).ins_buf = curbuf.get() };
+        unsafe { (*st).ins_buf = Buf::current_raw() };
         // Copy 'complete', in case the buffer is wiped out.
         let option = if compl_cont_status.get() & CONT_LOCAL != 0 {
             c".".as_ptr()
@@ -683,9 +683,10 @@ pub(crate) unsafe fn ins_compl_get_exp(ini: Pos) -> c_int {
         }
         unsafe { (*st).first_match_pos = start_pos };
         unsafe { (*st).last_match_pos = start_pos };
-    } else if unsafe { (*st).ins_buf } != curbuf.get() && !unsafe { buf_valid((*st).ins_buf) } {
+    } else if unsafe { (*st).ins_buf } != Buf::current_raw() && !unsafe { buf_valid((*st).ins_buf) }
+    {
         // In case the buffer was wiped out.
-        unsafe { (*st).ins_buf = curbuf.get() };
+        unsafe { (*st).ins_buf = Buf::current_raw() };
     }
     debug_assert!(!unsafe { (*st).ins_buf }.is_null());
 

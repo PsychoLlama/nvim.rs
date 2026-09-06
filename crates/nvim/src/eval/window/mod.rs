@@ -72,9 +72,7 @@ use crate::normal::end_visual_mode;
 use crate::option::vars::p_acd;
 use crate::os::fs::{os_chdir, os_dirname};
 use crate::types::*;
-use crate::winlayer::graph::{
-    cmdwin_type, cmdwin_win, curbuf, curtab, curwin, lastused_tabpage, prevwin,
-};
+use crate::winlayer::graph::{cmdwin_type, cmdwin_win, lastused_tabpage, prevwin};
 use crate::winlayer::{
     Buf, FrameRef, TabPage, Win, WinId, last_window, tab_windows, tabs, windows_in_tab,
 };
@@ -105,7 +103,7 @@ impl TabPage {
     /// The window that is current in this tab page.
     fn curwin(self) -> Win {
         let wp = if self.is_current() {
-            curwin.get()
+            Win::current_raw()
         } else {
             self.tp_curwin
         };

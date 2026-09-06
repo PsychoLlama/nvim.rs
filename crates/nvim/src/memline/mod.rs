@@ -87,7 +87,6 @@ use crate::types::{
 use crate::ui::{ui_flush, ui_has};
 use crate::undo::buf_is_changed;
 use crate::version::min_vim_version_name;
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, buffers};
 use ::libc::{__errno_location, close, lseek, readlink, strcasecmp};
 use core::ffi::c_int;
@@ -549,7 +548,7 @@ pub unsafe fn check_need_swap(newfile: bool) {
     // reset this again.
     let _loud = Allow::messages();
     if cur_buf().b_may_swap && (cur_buf().b_p_ro == 0 || !newfile) {
-        unsafe { ml_open_file(curbuf.get()) };
+        unsafe { ml_open_file(Buf::current_raw()) };
     }
 }
 

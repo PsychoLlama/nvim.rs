@@ -15,13 +15,13 @@
 use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use crate::mbyte::{char_at, char_len, mb_ptr2char_adv, utfc_ptr2len};
 use crate::spell::spell_casefold;
 use crate::strings::vim_strchr;
 use crate::types::{NUL, RepItem};
-use crate::winlayer::graph::curwin;
 use ::libc::{strcat, strcpy};
 
 use super::aff::{AffState, is_digit_byte};
@@ -216,7 +216,7 @@ pub(super) unsafe fn add_fromto(out: &mut Vec<RepItem>, from: *mut c_char, to: *
     // bound `spell_casefold` is given.
     let folded = |s: *mut c_char| -> Box<[u8]> {
         let mut word: [c_char; MAXWLEN] = [0; MAXWLEN];
-        let (win, buf) = (curwin.get(), word.as_mut_ptr());
+        let (win, buf) = (Win::current_raw(), word.as_mut_ptr());
         let len = unsafe { cstr::bytes_at(s) }.len() as c_int;
         let _ = unsafe { spell_casefold(win, s, len, buf, MAXWLEN as c_int) };
         unsafe { cstr::bytes_at(word.as_ptr()) }.into()

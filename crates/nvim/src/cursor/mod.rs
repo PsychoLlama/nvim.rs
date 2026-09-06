@@ -49,7 +49,6 @@ use crate::state::{MODE_INSERT, MODE_TERMINAL, virtual_active};
 use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, NUL, Pos, StrCharInfo, int64_t,
 };
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Line, PosRef, Win};
 
 const TAB: c_int = 9;
@@ -289,7 +288,7 @@ unsafe fn coladvance2(
     // Inserting the spaces edits the buffer, which only the current window
     // may do.
     debug_assert!(
-        win.raw() == curwin.get() || !addspaces,
+        win.raw() == Win::current_raw() || !addspaces,
         "wp == curwin || !addspaces"
     );
     let mut wcol = wcol_arg;

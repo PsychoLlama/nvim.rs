@@ -186,7 +186,7 @@ pub(crate) unsafe fn draw_window_lines(
                         continue 'restart;
                     }
                 }
-            } else if dollar_vcol.get() == -1 || window.raw() != curwin.get() {
+            } else if dollar_vcol.get() == -1 || window.raw() != Win::current_raw() {
                 window.w_botline = w.lnum;
             }
 
@@ -393,7 +393,7 @@ unsafe fn draw_one_line(
 
     // `dollar_vcol >= 0` on the cursor line means it was not fully drawn
     // for a change command, so its recorded height must not move.
-    let is_curline = window.raw() == curwin.get() && w.lnum == window.w_cursor.lnum;
+    let is_curline = window.raw() == Win::current_raw() && w.lnum == window.w_cursor.lnum;
 
     if w.row > window.w_view_height {
         // Past the end of the grid. The height may still be needed later.
@@ -475,7 +475,7 @@ unsafe fn scroll_for_changed_lines(window: Win, rg: &mut Regions, w: &mut Walk) 
     let mut l = w.lnum;
     while l < rg.mod_bot {
         if dollar_vcol.get() >= 0
-            && window.raw() == curwin.get()
+            && window.raw() == Win::current_raw()
             && old_cline_height > 0
             && l == window.w_cursor.lnum
         {

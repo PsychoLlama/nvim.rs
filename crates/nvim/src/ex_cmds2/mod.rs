@@ -87,7 +87,7 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::window::goto_tabpage_win;
-use crate::winlayer::graph::{curbuf, curtab, curwin};
+use crate::winlayer::TabPage;
 use crate::winlayer::{
     Buf, Win, buffers as all_buffers, first_buffer, tabs, windows, windows_in_tab,
 };
@@ -518,14 +518,14 @@ unsafe fn changed_check_order() -> Vec<c_int> {
 
     // SAFETY: caller contract; none of these walks runs editor code.
     let mut nrs = Vec::new();
-    nrs.push(unsafe { (*curbuf.get()).handle } as c_int);
+    nrs.push(Buf::current().handle as c_int);
     for wp in windows().map(Win::raw) {
-        if unsafe { (*wp).w_buffer } != curbuf.get() {
+        if unsafe { (*wp).w_buffer } != Buf::current_raw() {
             push_unique(&mut nrs, unsafe { (*(*wp).w_buffer).handle } as c_int);
         }
     }
     for (tp, wp) in tab_windows() {
-        if tp != curtab.get() {
+        if tp != TabPage::current_raw() {
             push_unique(&mut nrs, unsafe { (*(*wp).w_buffer).handle } as c_int);
         }
     }
@@ -578,7 +578,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     }
 
     // Try to find a window that already shows the buffer.
-    if culprit != curbuf.get() {
+    if culprit != Buf::current_raw() {
         for (tp, wp) in tab_windows() {
             if unsafe { (*wp).w_buffer } != culprit {
                 continue;
@@ -594,7 +594,7 @@ pub(crate) unsafe fn check_changed_any(hidden: bool, unload: bool) -> bool {
     }
 
     // Otherwise open the changed buffer in the current window.
-    if culprit != curbuf.get() {
+    if culprit != Buf::current_raw() {
         unsafe {
             set_curbuf(
                 Buf::new(culprit),
@@ -657,7 +657,7 @@ unsafe fn report_unwritten(buffer: *mut Buffer) {
 /// Module contract.
 pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
     // SAFETY: module contract.
-    if unsafe { (*curbuf.get()).b_ffname }.is_null() {
+    if Buf::current().b_ffname.is_null() {
         emsg(gettext(c"E32: No file name"));
         return Err(Failed);
     }
@@ -669,7 +669,7 @@ pub(crate) unsafe fn check_fname() -> Result<(), Failed> {
 /// # Safety
 /// Module contract.
 pub(crate) unsafe fn buf_write_all(buffer: *mut Buffer, forceit: bool) -> Result<(), Failed> {
-    let old_curbuf = curbuf.get();
+    let old_curbuf = Buf::current_raw();
     // SAFETY: module contract.
     let retval = unsafe {
         buf_write(
@@ -687,7 +687,7 @@ pub(crate) unsafe fn buf_write_all(buffer: *mut Buffer, forceit: bool) -> Result
             },
         )
     };
-    if curbuf.get() != old_curbuf {
+    if Buf::current_raw() != old_curbuf {
         // SAFETY: module contract.
         unsafe { msg_source(HLF_W) };
         msg(
@@ -815,7 +815,7 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // Expanding wildcards may leave the argument list empty, e.g. when
     // editing "foo.pyc" with ".pyc" in 'wildignore'. Assume an error
     // message was already given for that.
-    if unsafe { (*(*curwin.get()).w_alist).al_ga.len() as c_int } == 0 {
+    if unsafe { (*Win::current().w_alist).al_ga.len() as c_int } == 0 {
         return;
     }
 
@@ -832,22 +832,22 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // ":drop file ...": edit the first argument, jumping to an existing
     // window if there is one, editing in the current window if its
     // buffer can be abandoned, and otherwise opening a new window.
-    let buf = find_buf(unsafe { *((*(*curwin.get()).w_alist).al_ga.as_mut_ptr()) }.ae_fnum)
+    let buf = find_buf(unsafe { *((*Win::current().w_alist).al_ga.as_mut_ptr()) }.ae_fnum)
         .map_or(ptr::null_mut(), |b| b.raw());
     for (tp, wp) in tab_windows() {
         if unsafe { (*wp).w_buffer } != buf {
             continue;
         }
         unsafe { goto_tabpage_win(tp, wp) };
-        unsafe { (*curwin.get()).w_arg_idx = 0 };
+        Win::current().w_arg_idx = 0;
         if !buf_is_changed(Buf::current()) {
             // Reload the file if it is newer.
-            let save_ar = unsafe { (*curbuf.get()).b_p_ar };
-            unsafe { (*curbuf.get()).b_p_ar = 1 };
+            let save_ar = Buf::current().b_p_ar;
+            Buf::current().b_p_ar = 1;
             unsafe { buf_check_timestamp(Buf::current()) };
-            unsafe { (*curbuf.get()).b_p_ar = save_ar };
+            Buf::current().b_p_ar = save_ar;
         }
-        if unsafe { (*curbuf.get()).b_ml.ml_flags }.has(MlFlags::EMPTY) {
+        if Buf::current().b_ml.ml_flags.has(MlFlags::EMPTY) {
             unsafe { ex_rewind(args) };
         }
         // Execute [+cmd]. No need to execute [++opts]: those only apply
@@ -867,9 +867,9 @@ pub(crate) unsafe fn ex_drop(args: *mut ExArg) {
     // split or data could be lost. 'hidden' makes that unnecessary,
     // since then the buffer is not lost.
     let mut split = false;
-    if !unsafe { buf_hide(curbuf.get()) } {
+    if !unsafe { buf_hide(Buf::current_raw()) } {
         let _no_emsg = Suppress::emsg();
-        split = unsafe { check_changed(curbuf.get(), CCGD_AW | CCGD_EXCMD) };
+        split = unsafe { check_changed(Buf::current_raw(), CCGD_AW | CCGD_EXCMD) };
     }
 
     // Fake a ":sfirst" or ":first" to edit the first argument.

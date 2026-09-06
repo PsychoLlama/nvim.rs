@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::types::AutoEvent;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char};
 
 use crate::autocmd::apply_autocmds;
@@ -20,7 +21,6 @@ use crate::memory::{xfree, xstrdup};
 use crate::option::vars::p_bg;
 use crate::runtime::{RuntimeOpts, source_runtime_vim_lua};
 use crate::types::{Failed, RgbValue};
-use crate::winlayer::graph::curbuf;
 
 use super::do_highlight;
 use crate::eval::typval::NumBuf;
@@ -572,7 +572,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     }
     RECURSIVE.set(true);
 
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: the editor's current buffer.
     let fname = unsafe { (*buf).b_fname };
     unsafe { apply_autocmds(AutoEvent::ColorSchemePre, name, fname, false, buf) };
@@ -586,7 +586,7 @@ pub(crate) unsafe fn load_colors(name: *mut c_char) -> Result<(), Failed> {
     // SAFETY: a NUL-terminated pattern this frame owns.
     let retval = unsafe { source_runtime_vim_lua(pattern, RuntimeOpts::START | RuntimeOpts::OPT) };
     if retval.is_ok() {
-        let buf = curbuf.get();
+        let buf = Buf::current_raw();
         // SAFETY: the editor's current buffer.
         let fname = unsafe { (*buf).b_fname };
         unsafe { apply_autocmds(AutoEvent::ColorScheme, name, fname, false, buf) };

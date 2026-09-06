@@ -29,6 +29,7 @@
 use crate::cstr;
 use crate::memory::xstrlcat;
 use crate::spell::WordFlags;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::buffer::buf_is_empty;
@@ -52,7 +53,6 @@ use crate::types::{
     Direction, ExArg, IOSIZE, LangP, LineNr, NUL, OK, OptVal, OptionSetFlags, SpellLang, WordCount,
     size_t,
 };
-use crate::winlayer::graph::{curbuf, curwin};
 
 use super::chartab::{captype, make_case_word, onecap_copy, spell_toupper};
 use super::check::no_spell_checking;
@@ -73,14 +73,14 @@ const DUMPFLAG_ALLCAP: c_int = 16;
 /// `:spellinfo` — where each loaded language came from, and whatever its
 /// `.spl` file recorded about itself.
 pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
-    if unsafe { no_spell_checking(curwin.get()) } {
+    if unsafe { no_spell_checking(Win::current_raw()) } {
         return;
     }
 
     unsafe { msg_ext_set_kind(c"list_cmd".as_ptr()) };
     unsafe { msg_start() };
     // SAFETY: the current window and its syntax block are live.
-    let langp = unsafe { &(*(*curwin.get()).w_s).b_langp };
+    let langp = unsafe { &(*Win::current().w_s).b_langp };
     let mut lpi = 0;
     while lpi < langp.ga_len && !got_int.get() {
         let lp = unsafe { (langp.ga_data as *mut LangP).offset(lpi as isize) };
@@ -105,7 +105,7 @@ pub unsafe fn ex_spellinfo(_args: *mut ExArg) {
 /// `'spelllang'`, in `:mkspell` input format. With `!` each word gets its
 /// `COMMON` count appended.
 pub unsafe fn ex_spelldump(args: *mut ExArg) {
-    if unsafe { no_spell_checking(curwin.get()) } {
+    if unsafe { no_spell_checking(Win::current_raw()) } {
         return;
     }
     let spl: OptVal = get_option_value(kOptSpelllang, OptionSetFlags::LOCAL);
@@ -118,7 +118,7 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
     set_option_value_give_err(kOptSpelllang, spl, OptionSetFlags::LOCAL);
     optval_free(spl);
 
-    if !unsafe { buf_is_empty(curbuf.get()) } {
+    if !unsafe { buf_is_empty(Buf::current_raw()) } {
         return;
     }
 
@@ -131,10 +131,10 @@ pub unsafe fn ex_spelldump(args: *mut ExArg) {
     unsafe { spell_dump_compl(pat, 0, dir, dumpflags) };
 
     // Drop the empty line the new buffer started with.
-    if unsafe { (*curbuf.get()).b_ml.ml_line_count } > 1 {
-        let _ = unsafe { ml_delete((*curbuf.get()).b_ml.ml_line_count) };
+    if Buf::current().b_ml.ml_line_count > 1 {
+        let _ = unsafe { ml_delete(Buf::current().b_ml.ml_line_count) };
     }
-    unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
 }
 
 /// Walk every word of every loaded language.
@@ -176,8 +176,8 @@ pub unsafe fn spell_dump_compl(
     }
 
     // Regions can only be dumped when every language agrees on them.
-    let langp_data = unsafe { (*(*curwin.get()).w_s).b_langp.ga_data } as *mut LangP;
-    let langp_len = unsafe { (*(*curwin.get()).w_s).b_langp.ga_len };
+    let langp_data = unsafe { (*Win::current().w_s).b_langp.ga_data } as *mut LangP;
+    let langp_len = unsafe { (*Win::current().w_s).b_langp.ga_len };
     for lpi in 0..langp_len {
         let lp = unsafe { langp_data.offset(lpi as isize) };
         let p = unsafe { (*(*lp).lp_slang).sl_regions.as_mut_ptr() };

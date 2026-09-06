@@ -35,6 +35,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::types::TAB;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use crate::change::inserted_bytes;
@@ -55,7 +56,6 @@ use crate::types::{
     SpellTab, Window, size_t, uint8_t,
 };
 use crate::undo::u_save_cursor;
-use crate::winlayer::graph::curwin;
 use ::libc::{strcat, strcpy};
 
 mod chartab;
@@ -291,7 +291,7 @@ pub static repl_to: GlobalCell<*mut c_char> = GlobalCell::new(::core::ptr::null_
 /// `:spellrepall` — repeat the last `z=` replacement everywhere else in
 /// the buffer.
 pub unsafe fn ex_spellrepall(_args: *mut ExArg) {
-    let pos: Pos = unsafe { (*curwin.get()).w_cursor };
+    let pos: Pos = Win::current().w_cursor;
     // Round-tripped through a bool, as in C: any non-zero 'wrapscan'
     // comes back as 1.
     let save_ws = p_ws.get() != 0;
@@ -314,7 +314,7 @@ pub unsafe fn ex_spellrepall(_args: *mut ExArg) {
 
     sub_nsubs.set(0);
     sub_nlines.set(0);
-    unsafe { (*curwin.get()).w_cursor.lnum = 0 };
+    Win::current().w_cursor.lnum = 0;
     while !got_int.get() {
         let slash = '/' as c_int;
         let null_op = ::core::ptr::null_mut::<OpArg>();
@@ -338,7 +338,7 @@ pub unsafe fn ex_spellrepall(_args: *mut ExArg) {
         // Only replace where the replacement is not already there. That
         // happens when changing "etc" to "etc.".
         let line = get_cursor_line_ptr();
-        let col = unsafe { (*curwin.get()).w_cursor.col };
+        let col = Win::current().w_cursor.col;
         if addlen <= 0
             || !(unsafe { cstr::prefix_eq(line.offset(col as isize), repl_to.get(), repl_to_len) })
         {
@@ -347,22 +347,22 @@ pub unsafe fn ex_spellrepall(_args: *mut ExArg) {
             unsafe { p.cast::<u8>().copy_from(line.cast(), col as size_t) };
             unsafe { strcpy(p.offset(col as isize), repl_to.get()) };
             unsafe { strcat(p, line.offset(col as isize).add(repl_from_len)) };
-            let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, p, false) };
-            let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+            let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, p, false) };
+            let lnum = Win::current().w_cursor.lnum;
             let (was, now) = (repl_from_len as c_int, repl_to_len as c_int);
             unsafe { inserted_bytes(lnum, col, was, now) };
 
-            if unsafe { (*curwin.get()).w_cursor.lnum } != prev_lnum {
+            if Win::current().w_cursor.lnum != prev_lnum {
                 sub_nlines.set(sub_nlines.get() + 1);
-                prev_lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+                prev_lnum = Win::current().w_cursor.lnum;
             }
             sub_nsubs.set(sub_nsubs.get() + 1);
         }
-        unsafe { (*curwin.get()).w_cursor.col += repl_to_len as ColNr };
+        Win::current().w_cursor.col += repl_to_len as ColNr;
     }
 
     p_ws.set(save_ws as c_int);
-    unsafe { (*curwin.get()).w_cursor = pos };
+    Win::current().w_cursor = pos;
     unsafe { xfree(frompat as *mut c_void) };
 
     if sub_nsubs.get() == 0 {

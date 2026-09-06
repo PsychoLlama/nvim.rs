@@ -53,7 +53,7 @@ use crate::types::{
     uv_handle_type,
 };
 use crate::ui::state::{Columns, Rows, current_ui};
-use crate::winlayer::graph::curbuf;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
@@ -138,7 +138,8 @@ unsafe extern "C" fn cursorhold_event(_argv: *mut *mut c_void) {
     } as AutoEvent;
     // SAFETY: no pattern and no filename, which `apply_autocmds` documents as
     // "match on the current buffer's name"; `curbuf` is always live.
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, curbuf.get()) };
+    let buffer = Buf::current_raw();
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer) };
     did_cursorhold.set(true);
 }
 
@@ -217,7 +218,7 @@ pub unsafe fn input_get(
 
         // No risk of a UI flood, so disable CTRL-C "interrupt" behaviour if
         // it is mapped.
-        if (mapped_ctrl_c.get() | (*curbuf.get()).b_mapped_ctrl_c) & get_real_state() != 0 {
+        if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
             ctrl_c_interrupts.set(false);
         }
 

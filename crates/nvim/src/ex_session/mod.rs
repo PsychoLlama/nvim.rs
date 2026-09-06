@@ -80,7 +80,7 @@ use crate::types::{
     Window, size_t,
 };
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curtab, curwin};
+use crate::winlayer::{Buf, TabPage};
 use ::libc::{fclose, fprintf, fputs, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::{fmt, ptr};
@@ -430,11 +430,11 @@ pub(crate) unsafe fn ex_loadview(args: *mut ExArg) {
 unsafe fn get_view_file(c: c_char) -> *mut c_char {
     // SAFETY: `curbuf` is live, 'viewdir' is a NUL-terminated option string,
     // and `retval` is sized below for every byte written into it.
-    if unsafe { (*curbuf.get()).b_ffname }.is_null() {
+    if Buf::current().b_ffname.is_null() {
         emsg(gettext(e_noname));
         return ptr::null_mut();
     }
-    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), (*curbuf.get()).b_ffname) };
+    let sname = unsafe { home_replace_save(ptr::null_mut::<Buffer>(), Buf::current().b_ffname) };
 
     // One extra byte for each character that doubles.
     let mut extra = 0usize;
@@ -548,15 +548,9 @@ pub(crate) unsafe fn ex_mkrc(args: *mut ExArg) {
         }
     }
     unsafe { xfree(view_file.cast::<c_void>()) };
-    unsafe {
-        apply_autocmds(
-            AutoEvent::SessionWritePost,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            false,
-            curbuf.get(),
-        )
-    };
+    let buffer = Buf::current_raw();
+    let (none, post) = (ptr::null_mut(), AutoEvent::SessionWritePost);
+    unsafe { apply_autocmds(post, none, none, false, buffer) };
 }
 
 /// The body of [`ex_mkrc`] once the file is open: answers whether anything
@@ -612,7 +606,8 @@ unsafe fn write_rc(
             failed |= unsafe { !write_session(out, fname) };
         } else {
             // SAFETY: `curwin`/`curtab` are live.
-            failed |= unsafe { !put_view(out, curwin.get(), curtab.get(), !using_vdir, opts, -1) };
+            let (win, tab) = (Win::current_raw(), TabPage::current_raw());
+            failed |= unsafe { !put_view(out, win, tab, !using_vdir, opts, -1) };
         }
         if !out.line(c"let &g:so = s:so_save | let &g:siso = s:siso_save") {
             failed = true;

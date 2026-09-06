@@ -25,6 +25,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Win;
 
 use crate::hashtab::{hash_add_item, hash_hash, hash_lookup};
 use crate::highlight_group::HLF_COUNT;
@@ -34,7 +35,6 @@ use crate::spell::{spell_check, spell_soundfold};
 use crate::spellsuggest::score::{EMPTY_SOUND, spell_edit_score, stp_sal_score};
 use crate::spellsuggest::{MAXWLEN, SCORE_INS, SCORE_MAXMAX, SugInfo, Suggest, window_langs};
 use crate::types::{__compar_fn_t, Hlf, SpellLang, size_t};
-use crate::winlayer::graph::curwin;
 use ::libc::{qsort, strcasecmp};
 use core::ffi::{c_char, c_int, c_void};
 use core::{mem, ptr};
@@ -247,7 +247,7 @@ pub(super) unsafe fn check_suggestions(su: *mut SugInfo, gap: *mut Vec<Suggest>)
         unsafe { xstrlcpy(tail, rest, MAXWLEN + 1 - len as usize) };
 
         let mut attr: Hlf = HLF_COUNT;
-        let win = curwin.get();
+        let win = Win::current_raw();
         let longwordp = longword.as_mut_ptr();
         let attrp = &raw mut attr;
         // SAFETY: `longword` is NUL-terminated by the copies above and

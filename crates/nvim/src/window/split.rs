@@ -460,7 +460,7 @@ fn insert_window(flags: c_int, new_wp: Option<Win>, oldwin: Win, _vertical: bool
         attach_frame(wp);
         // Make the contents of the new window the same as the current one.
         // SAFETY: two live windows.
-        unsafe { win_init(wp.raw(), cur_win().raw(), flags) };
+        unsafe { win_init(wp.raw(), Win::current_raw(), flags) };
         return Some(wp);
     };
     append(after, wp, None);

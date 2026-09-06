@@ -36,7 +36,6 @@ use crate::search::{SEARCH_ECHO, SEARCH_MARK, SEARCH_MSG, SEARCH_OPT, do_search}
 use crate::state::virtual_active;
 use crate::types::{CmdArg, FileMark, MarkMove, MarkMoveRes, OpType, SearchItArg, size_t};
 use crate::window::goto_tabpage_lastused;
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{c_char, c_int, c_uint};
 
 /// Whether the highlight of the previous match has to be redrawn.
@@ -48,8 +47,8 @@ fn current_match_is_distinct() -> bool {
     // SAFETY (throughout): `curwin` is the current window.
     p_hls.get() != 0
         && !no_hlsearch.get()
-        && unsafe { win_hl_attr(curwin.get(), HLF_LC) }
-            != unsafe { win_hl_attr(curwin.get(), HLF_L) }
+        && unsafe { win_hl_attr(Win::current_raw(), HLF_LC) }
+            != unsafe { win_hl_attr(Win::current_raw(), HLF_L) }
 }
 
 /// `/` and `?`: read a pattern from the command line and search for it.
@@ -102,7 +101,7 @@ pub(crate) unsafe fn nv_next(cmd_arg: *mut CmdArg) {
         ca.count1 -= 1;
     }
     if i > 0 && current_match_is_distinct() {
-        unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+        unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     }
 }
 
@@ -155,7 +154,7 @@ pub(crate) unsafe fn normal_search(
         }
     }
     if !equalpos(cur_win().w_cursor, prev_cursor) && current_match_is_distinct() {
-        unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+        unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     }
     check_cursor(Win::current());
     i
@@ -258,7 +257,8 @@ pub(crate) unsafe fn nv_gomark(cmd_arg: *mut CmdArg) {
 
     // The record the lookup answers into; it outlives the jump below.
     let mut slot = FileMark::UNSET;
-    let fm = unsafe { mark_get(curbuf.get(), curwin.get(), &raw mut slot, kMarkAll, name) };
+    let (buffer, win) = (Buf::current_raw(), Win::current_raw());
+    let fm = unsafe { mark_get(buffer, win, &raw mut slot, kMarkAll, name) };
     let move_res = unsafe { nv_mark_move_to(cmd_arg, flags, fm) };
     if !virtual_active(cur_win()) {
         cur_win().w_cursor.coladd = 0;
@@ -289,10 +289,10 @@ pub(crate) unsafe fn nv_pcmark(cmd_arg: *mut CmdArg) {
     }
 
     let fm = if ca.cmdchar == 'g' as c_int {
-        unsafe { get_changelist(curbuf.get(), curwin.get(), ca.count1) }
+        unsafe { get_changelist(Buf::current_raw(), Win::current_raw(), ca.count1) }
     } else {
         flags |= (KMarkNoContext as c_int | kMarkJumpList as c_int) as MarkMove;
-        unsafe { get_jumplist(curwin.get(), ca.count1) }
+        unsafe { get_jumplist(Win::current_raw(), ca.count1) }
     };
 
     if !fm.is_null() {

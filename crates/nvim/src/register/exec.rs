@@ -19,6 +19,7 @@
 
 use crate::cstr;
 use crate::memory::handoff::owned_cstr;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::slice;
@@ -123,7 +124,7 @@ unsafe fn fire_recording_leave(regname: c_int, contents: *mut c_char) {
             no_fname,
             no_fname,
             false,
-            curbuf.get(),
+            Buf::current_raw(),
         )
     };
     // SAFETY: `dict` and `save_v_event` are the pair `get_v_event` made.
@@ -165,7 +166,7 @@ pub unsafe fn do_record(c: c_int) -> Result<(), Failed> {
                 no_fname,
                 no_fname,
                 false,
-                curbuf.get(),
+                Buf::current_raw(),
             )
         };
         return Ok(());

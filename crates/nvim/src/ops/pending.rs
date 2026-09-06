@@ -797,7 +797,7 @@ fn run_operator(
             VIsual_reselect.set(0);
             let recursive = c_int::from(op.op_type == OpType::Folddelrec);
             let (first, last, visual) = (op.start.lnum, op.end.lnum, op.is_visual);
-            unsafe { delete_fold(curwin.get(), first, last, recursive, visual) };
+            unsafe { delete_fold(Win::current_raw(), first, last, recursive, visual) };
         }
 
         OpType::NrAdd | OpType::NrSub => {
@@ -864,7 +864,7 @@ fn run_change(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
     restore_lbr(lbr_saved != 0);
     // Trigger TextChangedI.
     // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
-    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
+    cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
 
     if unsafe { op_change(op.raw()) } != 0 {
         // `edit()` returned because of a CTRL-O command.
@@ -882,7 +882,7 @@ fn run_block_insert(mut cmd_arg: Cmd, op: Op, lbr_saved: c_int) {
 
     restore_lbr(lbr_saved != 0);
     // SAFETY: a live buffer, and a live `OpArg` whose region is set up.
-    cur_buf().b_last_changedtick_i = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
+    cur_buf().b_last_changedtick_i = buf_get_changedtick(cur_buf());
 
     unsafe { op_insert(op.raw(), cmd_arg.count1) };
 

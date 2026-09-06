@@ -18,7 +18,6 @@ use crate::option::vars::{p_ch, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::options::kOptCmdheight;
 use crate::types::{Frame, OptInt, OptVal, OptionSetFlags};
 use crate::ui::state::Rows;
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{FrameRef, Win};
 
 // ---------------------------------------------------------------------------
@@ -35,7 +34,7 @@ fn height_opts() -> MinSize {
     MinSize {
         wanted: p_wh.get() as ::core::ffi::c_int,
         minimum: p_wmh.get() as ::core::ffi::c_int,
-        curwin: curwin.get(),
+        curwin: Win::current_raw(),
     }
 }
 
@@ -44,7 +43,7 @@ fn width_opts() -> MinSize {
     MinSize {
         wanted: p_wiw.get() as ::core::ffi::c_int,
         minimum: p_wmw.get() as ::core::ffi::c_int,
-        curwin: curwin.get(),
+        curwin: Win::current_raw(),
     }
 }
 

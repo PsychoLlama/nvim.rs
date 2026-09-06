@@ -21,7 +21,7 @@ pub unsafe fn diff_linematch(dp: *mut DiffBlock) -> bool {
     }
     let mut total = 0;
     for i in 0..DB_COUNT as usize {
-        if unsafe { (*curtab.get()).tp_diffbuf[i] }.is_null() {
+        if TabPage::current().tp_diffbuf[i].is_null() {
             continue;
         }
         if unsafe { (*dp).df_count[i] } < 0 {

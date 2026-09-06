@@ -15,6 +15,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::mem::size_of;
 use core::ptr;
@@ -41,7 +42,6 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::window::state::skip_win_fix_scroll;
 use crate::winfloat::win_reconfig_floats;
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Win, windows};
 
 /// The rows the frame tree has to itself: the screen minus the command line,
@@ -343,7 +343,7 @@ impl Subject {
         if self.bufref.valid() {
             self.bufref.raw()
         } else {
-            curbuf.get()
+            Buf::current_raw()
         }
     }
 }

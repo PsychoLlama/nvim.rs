@@ -21,7 +21,6 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{ColNr, NUL, int64_t, uint8_t, uint32_t};
-use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 /// `\z(`, `\z1`..`\z9`, `\zs` and `\ze`.
@@ -330,14 +329,14 @@ fn cursor_value(kind: u8) -> uint32_t {
     // SAFETY: `curwin` is the current window, and `getvvcol` writes only
     // through the out-parameters it is given.
     match kind {
-        b'l' => (unsafe { (*curwin.get()).w_cursor.lnum }) as uint32_t,
-        b'c' => (unsafe { (*curwin.get()).w_cursor.col }) as uint32_t + 1,
+        b'l' => (Win::current().w_cursor.lnum) as uint32_t,
+        b'c' => (Win::current().w_cursor.col) as uint32_t + 1,
         _ => {
             let mut vcol: ColNr = 0;
             unsafe {
                 getvvcol(
-                    Win::new(curwin.get()),
-                    &raw mut (*curwin.get()).w_cursor,
+                    Win::current(),
+                    &raw mut (*Win::current_raw()).w_cursor,
                     core::ptr::null_mut(),
                     core::ptr::null_mut(),
                     &raw mut vcol,

@@ -20,6 +20,7 @@ use crate::message_fmt::{c_str, emsg_text, msg_cstr};
 use crate::os::uv_error::{UV_EEXIST, UV_ELOOP, UV_ENOENT};
 use crate::smsg;
 use crate::tr_c;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::ffi::CString;
 
@@ -541,7 +542,7 @@ pub unsafe fn find_shada_parameter(type_0: c_int) -> *mut c_char {
 
 /// Read the current buffer's marks, the first time it is looked at.
 pub unsafe fn check_marks_read() {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     if !unsafe { (*buf).b_marks_read }
         && unsafe { get_shada_parameter('\'' as c_int) } > 0
         && !unsafe { (*buf).b_ffname.is_null() }

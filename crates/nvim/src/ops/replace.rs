@@ -35,7 +35,7 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     debug_assert!(c <= c_int::from(u8::MAX));
     // SAFETY: the caller's promise -- `pos` names a line of the current
     // buffer, and the column is clamped to that line below before the write.
-    let p = unsafe { ml_get_buf_mut(curbuf.get(), pos.lnum) };
+    let p = unsafe { ml_get_buf_mut(Buf::current_raw(), pos.lnum) };
     let len = cur_buf().b_ml.cached_len();
 
     // Safety check: the caller's column may be past the line.
@@ -45,7 +45,7 @@ pub(crate) unsafe fn pbyte(mut pos: Pos, c: c_int) {
     unsafe { *p.offset(pos.col as isize) = c as c_char };
     if curbuf_splice_pending.get() == 0 {
         let row = pos.lnum as c_int - 1;
-        unsafe { extmark_splice_cols(curbuf.get(), row, pos.col, 1, 1, kExtmarkUndo) };
+        unsafe { extmark_splice_cols(Buf::current_raw(), row, pos.col, 1, 1, kExtmarkUndo) };
     }
 }
 
@@ -249,7 +249,7 @@ fn replace_block_line(mut op: Op, bd: &mut BlockDef, c: c_int, had_ctrl_v_cr: bo
     let op = kExtmarkUndo;
     unsafe {
         extmark_splice(
-            curbuf.get(),
+            Buf::current_raw(),
             row,
             col,
             0,

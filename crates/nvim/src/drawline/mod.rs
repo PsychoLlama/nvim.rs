@@ -81,7 +81,7 @@ use crate::types::{
 };
 use crate::ui::ui_rgb_attached;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{cmdwin_type, cmdwin_win, curwin};
+use crate::winlayer::graph::{cmdwin_type, cmdwin_win};
 use ::libc::abs;
 
 // The carve of the transpiled module; see each child's docs.

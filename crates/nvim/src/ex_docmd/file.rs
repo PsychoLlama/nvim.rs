@@ -41,7 +41,6 @@ use crate::message::state::{msg_scroll, need_wait_return};
 use crate::option::vars::{p_awa, p_shada};
 use crate::startup::{readonlymode, recoverymode};
 use crate::state::mode::{exmode_active, pending_exmode_active};
-use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::memline::{ml_delete, ml_get, ml_preserve, ml_recover};
 
@@ -173,7 +172,7 @@ pub(crate) unsafe fn ex_blast(args: *mut ExArg) {
 
 /// `:preserve` — flush the swap file to disk now.
 pub(crate) unsafe fn ex_preserve(_args: *mut ExArg) {
-    unsafe { ml_preserve(curbuf.get(), true, true) };
+    unsafe { ml_preserve(Buf::current_raw(), true, true) };
 }
 
 /// `:recover` — read the buffer back out of a swap file.
@@ -184,7 +183,7 @@ pub(crate) unsafe fn ex_recover(args: *mut ExArg) {
     recoverymode.set(true);
     let unsaved = unsafe {
         check_changed(
-            curbuf.get(),
+            Buf::current_raw(),
             (if p_awa.get() != 0 {
                 CCGD_AW as c_int
             } else {
@@ -353,7 +352,7 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             newlnum::ONE as LineNr,
             EcmdFlags::HIDE | EcmdFlags::FORCEIT.when(ea.forceit != 0),
             if old_curwin.is_null() {
-                curwin.get()
+                Win::current_raw()
             } else {
                 ptr::null_mut()
             },
@@ -382,13 +381,13 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             ptr::null_mut(),
             args,
             ea.do_ecmd_lnum,
-            EcmdFlags::HIDE.when(buf_hide(curbuf.get()))
+            EcmdFlags::HIDE.when(buf_hide(Buf::current_raw()))
                 | EcmdFlags::FORCEIT.when(ea.forceit != 0)
                 | EcmdFlags::OLDBUF.when(!old_curwin.is_null())
                 | EcmdFlags::ADDBUF.when(idx == CmdIdx::badd)
                 | EcmdFlags::ALTBUF.when(idx == CmdIdx::balt),
             if old_curwin.is_null() {
-                curwin.get()
+                Win::current_raw()
             } else {
                 ptr::null_mut()
             },
@@ -400,12 +399,11 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
             // being lost while the window is closed.
             if !old_curwin.is_null() {
                 let need_hide = curbuf_is_changed() && cur_buf().b_nwindows <= 1;
-                if !need_hide || buf_hide(curbuf.get()) {
+                if !need_hide || buf_hide(Buf::current_raw()) {
                     let mut cs: Cleanup = unsafe { core::mem::zeroed() };
                     unsafe { enter_cleanup(&raw mut cs) };
-                    unsafe {
-                        win_close(curwin.get(), !need_hide && !buf_hide(curbuf.get()), false)
-                    };
+                    let free = !need_hide && !buf_hide(Buf::current_raw());
+                    unsafe { win_close(Win::current_raw(), free, false) };
                     unsafe { leave_cleanup(&raw mut cs) };
                 }
             }
@@ -425,9 +423,9 @@ pub unsafe fn do_exedit(args: *mut ExArg, old_curwin: *mut Window) {
 
     if !old_curwin.is_null()
         && byte(ea.arg) != NUL
-        && curwin.get() != old_curwin
+        && Win::current_raw() != old_curwin
         && win_valid(old_curwin)
-        && unsafe { (*old_curwin).w_buffer } != curbuf.get()
+        && unsafe { (*old_curwin).w_buffer } != Buf::current_raw()
         && !cmdmod_has(CmdModFlags::KEEPALT)
     {
         unsafe { (*old_curwin).w_alt_fnum = cur_buf().handle as c_int };
@@ -528,14 +526,9 @@ pub(crate) unsafe fn ex_wundo(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     let mut hash: [uint8_t; 32] = [0; 32];
     u_compute_hash(Buf::current(), &raw mut hash as *mut uint8_t);
-    unsafe {
-        u_write_undo(
-            args.arg,
-            args.forceit != 0,
-            Buf::current(),
-            &raw mut hash as *mut uint8_t,
-        )
-    };
+    let buffer = Buf::current();
+    let hash = hash.as_mut_ptr();
+    unsafe { u_write_undo(args.arg, args.forceit != 0, buffer, hash) };
 }
 
 /// `:rundo`.

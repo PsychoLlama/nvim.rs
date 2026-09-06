@@ -283,7 +283,7 @@ unsafe fn match_buflines(
             while unsafe {
                 vim_regexec_multi(
                     &raw mut search.regmatch,
-                    curwin.get(),
+                    Win::current_raw(),
                     buffer.raw(),
                     lnum,
                     col,
@@ -588,9 +588,9 @@ unsafe fn keep_or_drop_dummy(
 /// `qi` must be a live stack.
 unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
     // SAFETY: forwarded from the caller.
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     unsafe { qf_jump(qi, 0, 0, forceit) };
-    if !ptr::eq(buf, curbuf.get()) {
+    if !ptr::eq(buf, Buf::current_raw()) {
         out.redraw_for_dummy = false;
     }
 
@@ -599,7 +599,7 @@ unsafe fn jump_to_match(qi: *mut QfInfo, forceit: c_int, out: &mut Outcome) {
     if let Some(target_dir) = &out.target_dir
         && out
             .first_match_buf
-            .is_some_and(|b| ptr::eq(curbuf.get(), b.raw()))
+            .is_some_and(|b| ptr::eq(Buf::current_raw(), b.raw()))
     {
         let mut ea = ExArg {
             arg: target_dir.as_ptr().cast_mut(),

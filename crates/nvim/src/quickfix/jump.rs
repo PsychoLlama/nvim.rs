@@ -94,7 +94,7 @@ unsafe fn qf_jump_edit_buffer(
     let opened = if qf_ptr.qf_type == 1 {
         // A help file: `do_ecmd` sets 'buftype', `readfile` sets
         // 'readonly'.
-        if !unsafe { can_abandon(curbuf.get(), forceit != 0) } {
+        if !unsafe { can_abandon(Buf::current_raw(), forceit != 0) } {
             no_write_message();
             return Jumped::Restore;
         }
@@ -107,7 +107,7 @@ unsafe fn qf_jump_edit_buffer(
                 1,
                 EcmdFlags::HIDE | EcmdFlags::SET_HELP,
                 if prev_winid == cur_win().handle {
-                    curwin.get()
+                    Win::current_raw()
                 } else {
                     ptr::null_mut()
                 },
@@ -323,7 +323,7 @@ unsafe fn qf_jump_print_msg(
     // Overwrite rather than scroll when 'shortmess' holds "O" — but
     // print the whole message when the jump did not actually move.
     let old_msg_scroll = msg_scroll.get();
-    if curbuf.get() == old_curbuf && cur_win().w_cursor.lnum == old_lnum {
+    if Buf::current_raw() == old_curbuf && cur_win().w_cursor.lnum == old_lnum {
         msg_scroll.set(true as c_int);
     } else if (msg_scrolled.get() == 0 || p_ch.get() == 0 && msg_scrolled.get() == 1)
         && shortmess(ShmFlag::OVERALL)
@@ -401,7 +401,7 @@ unsafe fn qf_jump_to_buffer(
     // SAFETY: the caller's promise -- a live `QfLine`.
     let qf_ptr = unsafe { Qfe::new(qf_ptr) };
     // SAFETY: forwarded from the caller.
-    let old_curbuf = curbuf.get();
+    let old_curbuf = Buf::current_raw();
     let old_lnum = cur_win().w_cursor.lnum;
 
     if qf_ptr.qf_fnum != 0 {
@@ -412,7 +412,7 @@ unsafe fn qf_jump_to_buffer(
         }
     }
     // Staying in the same buffer still sets the previous-context mark.
-    if curbuf.get() == old_curbuf {
+    if Buf::current_raw() == old_curbuf {
         setpcmark();
     }
     let lnum2 = qf_ptr.qf_lnum;
@@ -514,7 +514,7 @@ pub(crate) unsafe fn qf_jump_newwin(
                 };
                 if jumped != Jumped::Done {
                     if opened_window {
-                        unsafe { win_close(curwin.get(), true, false) };
+                        unsafe { win_close(Win::current_raw(), true, false) };
                     }
                     if jumped == Jumped::Aborted {
                         settle = None;

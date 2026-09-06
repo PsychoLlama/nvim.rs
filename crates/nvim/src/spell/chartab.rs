@@ -22,6 +22,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::spell::WordFlags;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use crate::mbyte::{
@@ -31,7 +32,6 @@ use crate::mbyte::{
 use crate::memory::xstrlcpy;
 use crate::strings::vim_strchr;
 use crate::types::{Failed, MB_MAXBYTES, NUL, SpellTab, Window, uint8_t};
-use crate::winlayer::graph::curwin;
 use ::libc::strcpy;
 
 use super::{MAXWLEN, did_set_spelltab, spelltab};
@@ -261,7 +261,7 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> WordFlags {
         }
     };
     let mut p = word;
-    while !unsafe { spell_iswordp_nmw(p, curwin.get()) } {
+    while !unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
         if at_end(p) {
             return WordFlags::NONE;
         }
@@ -274,7 +274,7 @@ pub unsafe fn captype(word: *const c_char, end: *const c_char) -> WordFlags {
     let mut past_second = false;
 
     while !at_end(p) {
-        if unsafe { spell_iswordp_nmw(p, curwin.get()) } {
+        if unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
             if !is_upper(unsafe { utf_ptr2char(p) }) {
                 // A lower-case letter after two upper-case ones, or
                 // after a mix, cannot be described by a flag.

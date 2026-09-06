@@ -44,7 +44,6 @@ use crate::types::{
     kSpecialVarNull, ptrdiff_t, size_t, ssize_t, typval_vval_union, uint8_t,
 };
 use crate::winlayer::Live;
-use crate::winlayer::graph::curwin;
 use ::libc::{abort, qsort, strcasecmp, strcoll, strcpy, strtod};
 
 // The carve of the transpiled module; see each child's docs.

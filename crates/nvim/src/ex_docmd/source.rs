@@ -45,7 +45,6 @@ use crate::option::vars::p_mfd;
 use crate::startup::exiting;
 use crate::state::mode::{State, exmode_active};
 use crate::ui::state::Rows;
-use crate::winlayer::graph::curbuf;
 
 use crate::message::{
     emsg_multiline, msg_clr_eos, msg_ptr, msg_puts, msg_scroll_flush, verbose_enter_scroll,
@@ -157,7 +156,7 @@ pub unsafe fn do_exmode() {
         need_wait_return.set(false);
         ex_pressedreturn.set(false);
         ex_no_reprint.set(false);
-        let changedtick = buf_get_changedtick(unsafe { Buf::new(curbuf.get()) });
+        let changedtick = buf_get_changedtick(cur_buf());
         let prev_msg_row = msg_row.get();
         let prev_line = cur_win().w_cursor.lnum;
         cmdline_row.set(msg_row.get());
@@ -166,8 +165,8 @@ pub unsafe fn do_exmode() {
         let _ = unsafe { do_cmdline(ptr::null_mut(), Some(getexline), ptr::null_mut(), plain) };
         lines_left.set(Rows.get() - 1);
 
-        let moved = prev_line != cur_win().w_cursor.lnum
-            || changedtick != buf_get_changedtick(unsafe { Buf::new(curbuf.get()) });
+        let moved =
+            prev_line != cur_win().w_cursor.lnum || changedtick != buf_get_changedtick(cur_buf());
         if moved && !ex_no_reprint.get() {
             if cur_buf().b_ml.ml_flags.has(MlFlags::EMPTY) {
                 emsg(gettext(e_empty_buffer.as_ptr()));

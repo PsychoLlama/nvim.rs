@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::guard::Lock;
 use crate::lua::executor::nlua_call_ref_quiet;
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 
 pub unsafe fn nvim_open_term(
     buf: BufferHandle,
@@ -59,9 +60,9 @@ pub unsafe fn nvim_open_term(
     // SAFETY: `curwin` names a live window for the editor's whole run.
     let (view_width, view_height, col_off) = unsafe {
         (
-            (*curwin.get()).w_view_width,
-            (*curwin.get()).w_view_height,
-            win_col_off(curwin.get()),
+            Win::current().w_view_width,
+            Win::current().w_view_height,
+            win_col_off(Win::current_raw()),
         )
     };
     let topts: TerminalOptions = TerminalOptions {

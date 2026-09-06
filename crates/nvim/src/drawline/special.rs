@@ -194,7 +194,7 @@ impl Cells {
                 && wlv.vcol == wlv.fromcol
                 && (!visual_mode().is_block()
                     || wlv.lnum == visual_anchor().lnum
-                    || wlv.lnum == unsafe { (*curwin.get()).w_cursor.lnum }))
+                    || wlv.lnum == Win::current().w_cursor.lnum))
                 || prevcol_hl_flag);
         if !want {
             return;
@@ -504,7 +504,7 @@ impl Cells {
     pub(super) unsafe fn conceal(&mut self, wlv: &mut WinLineVars, window: Win) {
         // SAFETY: the caller's window and the redraw's decoration state.
         let wants_conceal = window.w_onebuf_opt.wo_cole > 0
-            && (window.raw() != curwin.get()
+            && (window.raw() != Win::current_raw()
                 || wlv.lnum != window.w_cursor.lnum
                 || unsafe { conceal_cursor_line(window.raw()) })
             && (self.syntax_flags.has(SynFlags::CONCEAL)

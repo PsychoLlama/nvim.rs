@@ -23,6 +23,7 @@ use crate::global_cell::GlobalCell;
 use crate::guard::Suppress;
 use crate::normal::{set_visual_active, visual_active, with_visual_anchor};
 use crate::types::{AucmdWin, size_t};
+use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, first_window, last_window, tabs, windows, windows_in_tab};
 
 /// The stack of autocommand windows, one slot per nesting level.
@@ -115,7 +116,7 @@ pub fn is_aucmd_win(win: *mut Window) -> bool {
 pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
     let entry = |idx: usize| aucmd_wins().slot(idx);
 
-    let same_buffer = buffer == curbuf.get();
+    let same_buffer = buffer == Buf::current_raw();
 
     // A window already showing `buffer` is preferred: making it current
     // has the fewest side effects.  Only `curtab` is searched, which is
@@ -184,8 +185,8 @@ pub unsafe fn aucmd_prepbuf(aco: *mut AcoSave, buffer: *mut Buffer) {
         // null, or `win_enter_ext` chdir()s.
         unsafe { xfree((*auc_win).w_localdir.cast::<::core::ffi::c_void>()) };
         unsafe { (*auc_win).w_localdir = ::core::ptr::null_mut() };
-        unsafe { (*aco).tp_localdir = (*curtab.get()).tp_localdir };
-        unsafe { (*curtab.get()).tp_localdir = ::core::ptr::null_mut() };
+        unsafe { (*aco).tp_localdir = TabPage::current().tp_localdir };
+        TabPage::current().tp_localdir = ::core::ptr::null_mut();
         unsafe { (*aco).globaldir = globaldir.get() };
         globaldir.set(::core::ptr::null_mut());
 
@@ -235,7 +236,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         // Go to `awp`.  It cannot have been closed, but the autocommand
         // may have moved it to another tab page.
         unsafe { block_autocmds() };
-        if curwin.get() != awp {
+        if Win::current_raw() != awp {
             'found: for tp in tabs() {
                 for wp in windows_in_tab(tp) {
                     if wp.raw() == awp {
@@ -253,7 +254,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         }
 
         cur_buf().b_nwindows -= 1;
-        unsafe { win_remove(curwin.get(), ::core::ptr::null_mut()) };
+        unsafe { win_remove(Win::current_raw(), ::core::ptr::null_mut()) };
         // The autocommand window, held as an address across its own
         // deregistration: it is still current and still perfectly alive, but
         // `Win::current()` answers from the registry and would say there is
@@ -271,8 +272,8 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         // The window is given back, not freed: it is used again.
         unsafe { (*aucmd_wins().slot(idx)).auc_win_used = false };
 
-        if valid_tabpage_win(curtab.get()) == 0 {
-            unsafe { close_tabpage(curtab.get()) };
+        if valid_tabpage_win(TabPage::current_raw()) == 0 {
+            unsafe { close_tabpage(TabPage::current_raw()) };
         }
         unsafe { unblock_autocmds() };
 
@@ -286,7 +287,7 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             landing.make_current();
             landing.buffer().make_current();
         }
-        unsafe { entering_window(curwin.get()) };
+        unsafe { entering_window(Win::current_raw()) };
         if buf_is_prompt(current_buf()) {
             cur_buf().b_prompt_insert = unsafe { (*aco).save_prompt_insert };
         }
@@ -302,8 +303,8 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
         if !unsafe { (*awp).w_localdir.is_null() } {
             win_fix_current_dir();
         }
-        unsafe { xfree((*curtab.get()).tp_localdir.cast::<::core::ffi::c_void>()) };
-        unsafe { (*curtab.get()).tp_localdir = (*aco).tp_localdir };
+        unsafe { xfree(TabPage::current().tp_localdir.cast::<::core::ffi::c_void>()) };
+        unsafe { TabPage::current().tp_localdir = (*aco).tp_localdir };
         unsafe { xfree(globaldir.get().cast::<::core::ffi::c_void>()) };
         globaldir.set(unsafe { (*aco).globaldir });
 
@@ -326,11 +327,11 @@ pub unsafe fn aucmd_restbuf(aco: *mut AcoSave) {
             // SAFETY: `aco` is the caller's, filled in by `aucmd_prepbuf`.
             let new_curbuf = BufRef::of_record(unsafe { (*aco).new_curbuf });
             if cur_win().handle == unsafe { (*aco).new_curwin_handle }
-                && curbuf.get() != new_curbuf.raw()
+                && Buf::current_raw() != new_curbuf.raw()
                 && let Some(mut new_curbuf) = new_curbuf.get()
                 && !new_curbuf.b_ml.ml_mfp.is_null()
             {
-                if unsafe { (*curwin.get()).w_s } == unsafe { &raw mut (*curbuf.get()).b_s } {
+                if cur_win().w_s == unsafe { &raw mut (*Buf::current_raw()).b_s } {
                     cur_win().w_s = &raw mut new_curbuf.b_s;
                 }
                 cur_buf().b_nwindows -= 1;

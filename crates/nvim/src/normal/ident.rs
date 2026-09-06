@@ -58,7 +58,6 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::check_can_set_curbuf_disabled;
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::strcpy;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
@@ -123,7 +122,7 @@ pub(crate) unsafe fn find_ident_under_cursor(
     } else {
         &raw mut textcol
     };
-    let win = curwin.get();
+    let win = Win::current_raw();
     let pos = cur_win().w_cursor;
     // SAFETY: `win` is live; `text`/`textcolp` have room for one value each.
     let len =
@@ -411,7 +410,7 @@ pub(crate) unsafe fn find_decl(
     };
     let mut found;
     loop {
-        let wp = curwin.get();
+        let wp = Win::current_raw();
         // SAFETY: `wp` is the live window, so its cursor is live too.
         let pos = unsafe { &raw mut (*wp).w_cursor };
         // SAFETY: `curwin` and `curbuf` are the live window and buffer.
@@ -965,16 +964,17 @@ pub(crate) unsafe fn nv_gotofile(cmd_arg: *mut CmdArg) {
     }
     // Leaving the only window on a changed buffer that cannot be hidden
     // means writing it first.
-    let must_write =
-        curbuf_is_changed() && cur_buf().b_nwindows <= 1 && !unsafe { buf_hide(curbuf.get()) };
+    let must_write = curbuf_is_changed()
+        && cur_buf().b_nwindows <= 1
+        && !unsafe { buf_hide(Buf::current_raw()) };
     if must_write {
-        let _ = unsafe { autowrite(curbuf.get(), false) };
+        let _ = unsafe { autowrite(Buf::current_raw(), false) };
     }
     setpcmark();
-    let hidden = unsafe { buf_hide(curbuf.get()) };
+    let hidden = unsafe { buf_hide(Buf::current_raw()) };
     let hide = EcmdFlags::HIDE.when(hidden);
     let last = newlnum::LAST as LineNr;
-    let win = curwin.get();
+    let win = Win::current_raw();
     // SAFETY: `name` is a NUL-terminated file name.
     let opened = unsafe { do_ecmd(0, name, ptr::null_mut(), ptr::null_mut(), last, hide, win) };
     if opened.is_ok() && unsafe { (*cmd_arg).nchar } == 'F' as c_int && lnum >= 0 {

@@ -43,6 +43,7 @@ use crate::strings::{concat_str, xstrnsave};
 use crate::types::ui::kUIMessages;
 use crate::types::{Callback, ColNr, CpoFlag, ExpandContext, IOSIZE, LineNr, NUL, size_t};
 use crate::ui::ui_has;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -91,7 +92,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     unsafe {
         getvcol(
             cur_win(),
-            &raw mut (*cur_win().raw()).w_cursor,
+            &raw mut (*Win::current_raw()).w_cursor,
             &raw mut sc,
             ptr::null_mut(),
             ptr::null_mut(),
@@ -101,7 +102,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     unsafe {
         getvcol(
             cur_win(),
-            &raw mut (*cur_win().raw()).w_cursor,
+            &raw mut (*Win::current_raw()).w_cursor,
             ptr::null_mut(),
             ptr::null_mut(),
             &raw mut ec,
@@ -109,7 +110,7 @@ unsafe fn prompt_exmode(st: &Sub) -> c_int {
     };
     cur_win().w_cursor.col = st.regmatch.startpos[0].col;
     if subflags.with(|flags| flags.do_number) || cur_win().w_onebuf_opt.wo_nu != 0 {
-        let numw = unsafe { number_width(cur_win().raw()) } + 1 as c_int;
+        let numw = unsafe { number_width(Win::current_raw()) } + 1 as c_int;
         sc += numw;
         ec += numw;
     }
@@ -204,10 +205,10 @@ unsafe fn prompt_visual(st: &Sub) -> c_int {
     // SAFETY: the current window is live.
     update_topline(cur_win());
     validate_cursor(cur_win());
-    unsafe { redraw_later(cur_win().raw(), UPD_SOME_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     unsafe { show_cursor_info_later(true) };
     let _ = unsafe { update_screen() };
-    unsafe { redraw_later(cur_win().raw(), UPD_SOME_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     cur_win().w_onebuf_opt.wo_fen = save_p_fen;
 
     let mut ask = [0 as c_char; IOSIZE as usize];

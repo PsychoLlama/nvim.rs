@@ -108,7 +108,7 @@ pub(crate) fn derive_cedit_key() -> Option<&'static CStr> {
 /// continues.
 pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let mut bufref = BufRef::NONE;
-    let old_curwin = curwin.get();
+    let old_curwin = Win::current_raw();
     // Uninitialised in the C; `win_size_save` below fills it.
     let save_restart_edit = restart_edit.get();
     let save_state = State.get();
@@ -148,7 +148,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // win_split() autocommands may have messed with the old window or
     // buffer. Treat it as abandoning this command line.
     if !win_valid(old_curwin)
-        || curwin.get() == old_curwin
+        || Win::current_raw() == old_curwin
         || !old_curbuf.valid()
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
     {
@@ -162,7 +162,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     // things up.
     cmdwin_type.set(get_cmdline_type());
     cmdwin_level.set(Cc::current().level);
-    cmdwin_win.set(curwin.get());
+    cmdwin_win.set(Win::current_raw());
     cmdwin_old_curwin.set(old_curwin);
 
     // Create the empty command-line buffer. Be especially cautious of
@@ -173,7 +173,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     let cmdwin_valid = win_valid(cmdwin_win.get());
     if newbuf_status.is_err()
         || !cmdwin_valid
-        || curwin.get() != cmdwin_win.get()
+        || Win::current_raw() != cmdwin_win.get()
         || !win_valid(old_curwin)
         || !old_curbuf.valid()
         || unsafe { (*old_curwin).w_buffer } != old_curbuf.raw()
@@ -185,7 +185,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
             unsafe { win_close(cmdwin_win.get(), true, false) };
         }
         // win_close() autocommands may have already deleted the buffer.
-        if newbuf_status.is_ok() && bufref.valid() && bufref.raw() != curbuf.get() {
+        if newbuf_status.is_ok() && bufref.valid() && bufref.raw() != Buf::current_raw() {
             wipe_buffer(bufref.raw());
         }
 
@@ -196,7 +196,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         beep_flush();
         return Ctrl_C;
     }
-    cmdwin_buf.set(curbuf.get());
+    cmdwin_buf.set(Buf::current_raw());
 
     // The command-line buffer has bufhidden=wipe, unlike a true
     // "scratch" buffer.
@@ -265,7 +265,7 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
     unsafe { changed_line_abv_curs() };
     invalidate_botline_win(Win::current());
     ui_ext_cmdline_hide(false);
-    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
 
     // No Ex mode here.
     exmode_active.set(false);
@@ -372,20 +372,20 @@ pub(crate) unsafe fn open_cmdwin() -> ::core::ffi::c_int {
         // concealed.
         cur_win().w_onebuf_opt.wo_cole = 0;
         // First go back to the original window.
-        let wp = curwin.get();
+        let wp = Win::current_raw();
         bufref = BufRef::of_opt(current_buf());
         skip_win_fix_cursor.set(true);
         unsafe { win_goto(old_curwin) };
 
         // win_goto() may trigger an autocommand that already closes the
         // cmdline window.
-        if win_valid(wp) && wp != curwin.get() {
+        if win_valid(wp) && wp != Win::current_raw() {
             unsafe { win_close(wp, true, false) };
         }
 
         // win_close() may have already wiped the buffer when 'bh' is set
         // to 'wipe'; autocommands may have closed other windows.
-        if bufref.valid() && bufref.raw() != curbuf.get() {
+        if bufref.valid() && bufref.raw() != Buf::current_raw() {
             wipe_buffer(bufref.raw());
         }
 

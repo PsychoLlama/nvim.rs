@@ -44,7 +44,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
     }
 
     // The preview buffer cannot preview itself.
-    if cmdpreview_buf == curbuf.get() {
+    if cmdpreview_buf == Buf::current_raw() {
         return ::core::ptr::null_mut::<Buffer>();
     }
 
@@ -74,7 +74,7 @@ pub(crate) unsafe fn cmdpreview_open_buf() -> *mut Buffer {
 /// Open the command preview window, if it is not already open, and return to
 /// the original window.  Answers NULL if it could not be opened.
 pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Window {
-    let save_curwin = curwin.get();
+    let save_curwin = Win::current_raw();
 
     if win_split(
         p_cwh.get() as ::core::ffi::c_int,
@@ -85,7 +85,7 @@ pub(crate) unsafe fn cmdpreview_open_win(cmdpreview_buf: *mut Buffer) -> *mut Wi
         return ::core::ptr::null_mut::<Window>();
     }
 
-    let preview_win = curwin.get();
+    let preview_win = Win::current_raw();
     let mut err: Error = Error::none();
 
     // Switch to the preview buffer. C's TRY_WRAP.

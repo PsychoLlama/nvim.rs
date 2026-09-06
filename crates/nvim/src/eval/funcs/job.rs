@@ -52,7 +52,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_flush};
 use crate::winlayer::Buf;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -506,14 +506,14 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
             unsafe { text_locked_msg() };
             bail!();
         }
-        if unsafe { (*curbuf.get()).b_changed } != 0 {
+        if Buf::current().b_changed != 0 {
             let msg = c"jobstart(...,{term=true}) requires unmodified buffer";
             emsg(gettext(msg));
             bail!();
         }
-        if !unsafe { (*curbuf.get()).terminal }.is_null() {
-            if unsafe { terminal_running((*curbuf.get()).terminal) } {
-                let handle = unsafe { (*curbuf.get()).handle };
+        if !Buf::current().terminal.is_null() {
+            if unsafe { terminal_running(Buf::current().terminal) } {
+                let handle = Buf::current().handle;
                 semsg!("Terminal already connected to buffer {}", handle);
                 bail!();
             }
@@ -530,11 +530,11 @@ pub unsafe fn f_jobstart(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFunc
         detach = false;
         stdin_mode = kChannelStdinPipe;
         if width == 0 {
-            width = (unsafe { (*curwin.get()).w_view_width } - unsafe { win_col_off(curwin.get()) })
+            width = (Win::current().w_view_width - unsafe { win_col_off(Win::current_raw()) })
                 .max(0) as uint16_t;
         }
         if height == 0 {
-            height = unsafe { (*curwin.get()).w_view_height } as uint16_t;
+            height = Win::current().w_view_height as uint16_t;
         }
     }
     if pty && term_name.is_null() {
@@ -595,7 +595,7 @@ unsafe fn attach_terminal(chan: *mut Channel, cwd: *const c_char, cmd: *const c_
     // SAFETY: the caller's obligation; both buffers outlive every call they
     // are handed to below.
     let pid = unsafe { (*channel_proc(chan)).pid };
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     unsafe { (*buf).b_p_swf = 0 };
     if unsafe { (*buf).b_ml.ml_mfp }.is_null() && unsafe { ml_open(buf) }.is_err() {
         unsafe { proc_stop(channel_proc(chan)) };

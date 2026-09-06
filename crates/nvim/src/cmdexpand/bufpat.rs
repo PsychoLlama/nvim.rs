@@ -287,7 +287,7 @@ pub(crate) unsafe fn expand_pattern_in_buf(
 
             // searchit() can return line number +1 past the last line when
             // searching for "foo\n" if "foo" is at end of buffer.
-            if end_match_pos.lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+            if end_match_pos.lnum > Buf::current().b_ml.ml_line_count {
                 cur_match_pos.lnum = 1;
                 cur_match_pos.col = 0;
                 cur_match_pos.coladd = 0;

@@ -49,7 +49,6 @@ use crate::textobject::{
     current_block, current_par, current_quote, current_sent, current_tagblock, current_word,
 };
 use crate::types::{CmdArg, ColNr, LineNr, NUL, OpType, Pos, size_t};
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{c_char, c_int, c_uint};
 
 use crate::keycodes::{Ctrl_Q, Ctrl_V};
@@ -333,7 +332,7 @@ pub(crate) unsafe fn get_visual_text(
         // The earlier of the two ends is the start; the length is the
         // column difference, inclusive.
         if lt(cur_win().w_cursor, anchor) {
-            unsafe { *cursor = ml_get_pos(&raw mut (*curwin.get()).w_cursor) };
+            unsafe { *cursor = ml_get_pos(&raw mut (*Win::current_raw()).w_cursor) };
             unsafe { *lenp = (anchor.col - cur_win().w_cursor.col + 1) as size_t };
         } else {
             unsafe { *cursor = ml_get_pos(&raw const anchor) };
@@ -643,7 +642,7 @@ pub(crate) unsafe fn n_start_visual_mode(c: c_int) {
 pub(crate) unsafe fn nv_gv_cmd(cmd_arg: *mut CmdArg) {
     // SAFETY (throughout): `cmd_arg` is the caller's live command argument.
     let ca = unsafe { CmdArgRef::new(cmd_arg) };
-    let vi = unsafe { &raw mut (*curbuf.get()).b_visual };
+    let vi = unsafe { &raw mut (*Buf::current_raw()).b_visual };
     if unsafe { (*vi).vi_start.lnum } == 0
         || unsafe { (*vi).vi_start.lnum } > cur_buf().b_ml.ml_line_count
         || unsafe { (*vi).vi_end.lnum } == 0
@@ -733,7 +732,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
         pos.col -= 1;
         // SAFETY: `curbuf` is set from startup to exit, and `pos` is lent for
         // the length of the call.
-        unsafe { mark_mb_adjustpos(curbuf.get(), pos) };
+        unsafe { mark_mb_adjustpos(Buf::current_raw(), pos) };
         // Inside a TAB, stepping back a byte means stepping to the last
         // screen column the TAB covers.
         // SAFETY: `curwin` is set from startup to exit.
@@ -741,15 +740,7 @@ pub(crate) fn unadjust_for_sel_inner(pos: &mut Pos) -> bool {
             let (mut cs, mut ce): (ColNr, ColNr) = (0, 0);
             // SAFETY: the current window, `pos` lent for the call, and two
             // columns of this frame's own.
-            unsafe {
-                getvcol(
-                    Win::new(curwin.get()),
-                    pos,
-                    &raw mut cs,
-                    ptr::null_mut(),
-                    &raw mut ce,
-                )
-            };
+            unsafe { getvcol(cur_win(), pos, &raw mut cs, ptr::null_mut(), &raw mut ce) };
             pos.coladd = ce - cs;
         }
     } else if pos.lnum > 1 {

@@ -37,7 +37,6 @@ use crate::types::{
     CharSize, CharsizeArg, CharsizeKind, ColNr, LineNr, MetaIndex, NUL, OptInt, Pos, StrCharInfo,
     VirtLines, Window, int32_t, int64_t, uint32_t,
 };
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win};
 
 use core::ffi::{c_char, c_int, c_long};
@@ -146,7 +145,7 @@ pub(crate) unsafe fn win_chartabsize(window: Win, p: *mut c_char, col: ColNr) ->
 pub(crate) unsafe fn linetabsize_col(startvcol: c_int, s: *mut c_char) -> c_int {
     // SAFETY: `curwin` is live from startup to exit, and `s` is the caller's
     // NUL-terminated string.
-    unsafe { win_linetabsize_col(Win::new(curwin.get()), 0, s, startvcol, MAXCOL) }
+    unsafe { win_linetabsize_col(Win::current(), 0, s, startvcol, MAXCOL) }
 }
 
 /// The screen width of a whole line, starting from virtual column zero.

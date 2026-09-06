@@ -49,7 +49,6 @@ use crate::types::{
 };
 use crate::ui::ui_cursor_shape;
 use crate::undo::{u_save, u_save_cursor};
-use crate::winlayer::graph::curwin;
 
 /// The `gq` / `gw` operator.
 ///
@@ -146,7 +145,7 @@ pub(crate) unsafe fn op_formatexpr(op: *mut OpArg) {
 /// There must be a current buffer and window.
 pub(crate) unsafe fn fex_format(lnum: LineNr, count: c_long, c: c_int) -> c_int {
     let use_sandbox =
-        unsafe { was_set_insecurely(curwin.get(), kOptFormatexpr, OptionSetFlags::LOCAL) };
+        unsafe { was_set_insecurely(Win::current_raw(), kOptFormatexpr, OptionSetFlags::LOCAL) };
 
     unsafe { set_vim_var_nr(Vv::Lnum, lnum as VarNumber) };
     unsafe { set_vim_var_nr(Vv::Count, count as VarNumber) };

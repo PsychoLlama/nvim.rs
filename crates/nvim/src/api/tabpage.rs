@@ -26,7 +26,7 @@ use crate::types::{
 use crate::window::{
     tabpage_index, tabpage_win_valid, valid_tabpage, win_goto, win_new_tabpage, win_set_buf,
 };
-use crate::winlayer::graph::{cmdwin_buf, cmdwin_type, curwin};
+use crate::winlayer::graph::{cmdwin_buf, cmdwin_type};
 use crate::winlayer::{TabPage, Win, windows_in_tab};
 use ::libc::abort;
 use core::ffi::CStr;
@@ -238,7 +238,7 @@ pub unsafe fn nvim_open_tabpage(
     if let Some(w) = new_win {
         // `win_set_buf` fires `BufEnter`/`BufLeave` only for the window the
         // user is in; a tab page opened without entering it must not.
-        let quiet = (curwin.get() != w.raw()).then(Suppress::win_enter_leave_autocmds);
+        let quiet = (Win::current_raw() != w.raw()).then(Suppress::win_enter_leave_autocmds);
         unsafe { win_set_buf(w.raw(), b.raw(), &mut err) };
         drop(quiet);
         if !valid_tabpage(tp.raw()) {

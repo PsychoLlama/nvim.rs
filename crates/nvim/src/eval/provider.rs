@@ -466,7 +466,7 @@ pub unsafe fn prompt_get_input(buffer: *mut Buffer) -> *mut c_char {
 pub unsafe fn prompt_invoke_callback() {
     let lnum = cur_buf().line_count();
     // SAFETY: the current buffer is live.
-    let user_input = unsafe { prompt_get_input(cur_buf().raw()) };
+    let user_input = unsafe { prompt_get_input(Buf::current_raw()) };
     if user_input.is_null() {
         return;
     }
@@ -491,7 +491,7 @@ pub unsafe fn prompt_invoke_callback() {
         argv[1].v_type = VAR_UNKNOWN;
         // SAFETY: the callback is the current buffer's own, and the
         // argument array and result are this frame's.
-        let cb = unsafe { &raw mut (*cur_buf().raw()).b_prompt_callback };
+        let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_callback };
         // SAFETY: as above.
         unsafe { callback_call(cb, 1, argv.as_mut_ptr(), &raw mut rettv) };
         // SAFETY: the argument array and the result are this frame's.
@@ -522,7 +522,7 @@ pub unsafe fn invoke_prompt_interrupt() -> bool {
     got_int.set(false);
     // SAFETY: the callback is the current buffer's own, and the argument
     // array and result are this frame's.
-    let cb = unsafe { &raw mut (*cur_buf().raw()).b_prompt_interrupt };
+    let cb = unsafe { &raw mut (*Buf::current_raw()).b_prompt_interrupt };
     // SAFETY: as above.
     let ret = unsafe { callback_call(cb, 0, argv.as_mut_ptr(), &raw mut rettv) };
     // SAFETY: `rettv` is this frame's.

@@ -30,6 +30,7 @@
 use crate::cstr;
 use crate::semsg;
 use crate::smsg;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long, c_void};
 
 use crate::api::private::helpers::cstr_as_string;
@@ -55,7 +56,6 @@ use crate::types::{
 };
 use crate::undo::buf_is_changed;
 use crate::winlayer::Buf;
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{__errno_location, fclose, fprintf, fputc, fseek, ftell, strerror};
 
 use super::wordtree::valid_spell_word;
@@ -101,17 +101,17 @@ pub unsafe fn spell_add_word(
         int_wordlist.get()
     } else {
         // Give 'spellfile' a sensible default if it has none.
-        if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
+        if unsafe { *(*Win::current().w_s).b_p_spf } == 0 {
             unsafe { init_spellfile() };
             new_spf = true;
         }
-        if unsafe { *(*(*curwin.get()).w_s).b_p_spf } == 0 {
+        if unsafe { *(*Win::current().w_s).b_p_spf } == 0 {
             semsg!("E764: Option '{}' is not set", "spellfile");
             return;
         }
 
         fnamebuf = unsafe { xmalloc(MAXPATHL as size_t) } as *mut c_char;
-        let mut spf = unsafe { (*(*curwin.get()).w_s).b_p_spf };
+        let mut spf = unsafe { (*Win::current().w_s).b_p_spf };
         let mut i = 1;
         while unsafe { *spf } != 0 {
             let sep = c",".as_ptr() as *mut c_char;
@@ -280,16 +280,16 @@ unsafe fn comment_out_word(fname: *mut c_char, word: *mut c_char, len: c_int, un
 /// directory `'spelllang'` named if it named one by path, holding a
 /// `.add` file named after the language and encoding in use.
 unsafe fn init_spellfile() {
-    if unsafe { *(*(*curwin.get()).w_s).b_p_spl } == 0
-        || unsafe { (*(*curwin.get()).w_s).b_langp.ga_len } <= 0
+    if unsafe { *(*Win::current().w_s).b_p_spl } == 0
+        || unsafe { (*Win::current().w_s).b_langp.ga_len } <= 0
     {
         return;
     }
 
     // Take the first 'spelllang' entry up to a separator. When it is a
     // path, the file goes beside it and "lstart" is its last component.
-    let mut lstart = unsafe { (*curbuf.get()).b_s.b_p_spl };
-    let mut lend = unsafe { (*(*curwin.get()).w_s).b_p_spl };
+    let mut lstart = Buf::current().b_s.b_p_spl;
+    let mut lend = unsafe { (*Win::current().w_s).b_p_spl };
     let mut aspath = false;
     while unsafe { *lend } != 0
         && unsafe { vim_strchr(c",._".as_ptr(), *lend as uint8_t as c_int) }.is_null()
@@ -305,11 +305,11 @@ unsafe fn init_spellfile() {
     let buf = unsafe { xmalloc(buf_len) } as *mut c_char;
     if aspath {
         // Use the directory 'spelllang' pointed at.
-        if unsafe { lend.offset_from((*curbuf.get()).b_s.b_p_spl) } as size_t >= buf_len {
+        if unsafe { lend.offset_from(Buf::current().b_s.b_p_spl) } as size_t >= buf_len {
             unsafe { xfree(buf as *mut c_void) };
             return;
         }
-        let spl = unsafe { (*curbuf.get()).b_s.b_p_spl };
+        let spl = Buf::current().b_s.b_p_spl;
         let len = unsafe { lend.offset_from(spl) } as size_t;
         unsafe { xmemcpyz(buf as *mut c_void, spl as *const c_void, len) };
     } else {
@@ -337,7 +337,7 @@ unsafe fn init_spellfile() {
     // The suffix has to match the file actually loaded, which may be
     // the ASCII build of the language rather than the current encoding.
     let fname =
-        unsafe { (*(*((*(*curwin.get()).w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
+        unsafe { (*(*((*Win::current().w_s).b_langp.ga_data as *mut LangP)).lp_slang).sl_fname };
     let enc_suffix = if !fname.is_null()
         && !unsafe { strstr(path_tail(fname), c".ascii.".as_ptr()) }.is_null()
     {

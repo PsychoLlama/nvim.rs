@@ -75,7 +75,7 @@ use crate::sign::{buf_has_signs, get_buffer_signs};
 use crate::strings::{concat_str, xstrnsave};
 use crate::types::*;
 use crate::undo::u_sync_once;
-use crate::winlayer::graph::{cmdwin_buf, curbuf};
+use crate::winlayer::graph::cmdwin_buf;
 pub const kExtmarkNoUndo: ExtmarkOp = 2;
 use crate::memline::ML_DEL_MESSAGE;
 use crate::normal::{set_visual_active, visual_active};
@@ -213,7 +213,7 @@ unsafe fn find_win_for_curbuf() {
         let Some(win) = (unsafe { Win::from_raw((*wip).wi_win) }) else {
             continue;
         };
-        if win.w_buffer == curbuf.get() {
+        if win.w_buffer == Buf::current_raw() {
             win.make_current();
             break;
         }

@@ -15,6 +15,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::semsg;
 use crate::types::{Failed, RefcountSize};
+use crate::winlayer::TabPage;
 use crate::winlayer::{Live, Win, tabs};
 
 /// A `Callback` that holds nothing: `CALLBACK_INIT`.
@@ -392,19 +393,19 @@ pub unsafe fn autocmd_register(
         if (event == AutoEvent::CursorMoved && !has_event(AutoEvent::CursorMoved))
             || (event == AutoEvent::CursorMovedI && !has_event(AutoEvent::CursorMovedI))
         {
-            last_cursormoved_win.set(curwin.get());
+            last_cursormoved_win.set(Win::current_raw());
             last_cursormoved.set(cur_win().w_cursor);
         }
         if (event == AutoEvent::WinScrolled || event == AutoEvent::WinResized)
             && !(has_event(AutoEvent::WinScrolled) || has_event(AutoEvent::WinResized))
         {
-            let save_curtab = curtab.get();
+            let save_curtab = TabPage::current_raw();
             for tp in tabs() {
-                unsafe { unuse_tabpage(curtab.get()) };
+                unsafe { unuse_tabpage(TabPage::current_raw()) };
                 unsafe { use_tabpage(tp.raw()) };
                 snapshot_windows_scroll_size();
             }
-            unsafe { unuse_tabpage(curtab.get()) };
+            unsafe { unuse_tabpage(TabPage::current_raw()) };
             unsafe { use_tabpage(save_curtab) };
         }
 

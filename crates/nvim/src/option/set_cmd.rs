@@ -50,7 +50,6 @@ use crate::types::{
     ExArg, Failed, IOSIZE, NUL, OptIndex, OptInt, OptVal, OptionSetFlags, ScriptId, UVarNumber,
     Window, size_t, uint8_t, uint32_t,
 };
-use crate::winlayer::graph::curwin;
 
 use super::{
     FSK_KEEP_X_KEY, FSK_KEYCODE, FSK_SIMPLIFY, OP_ADDING, OP_NONE, OP_PREPENDING, OP_REMOVING,
@@ -454,8 +453,8 @@ unsafe fn do_one_set_option(
     let flags = get_option(opt_idx).flags;
     let varp = get_varp_scope(opt_idx, opt_flags);
 
-    if unsafe { validate_opt_idx(curwin.get(), opt_idx, opt_flags, flags, prefix, errmsg) }.is_err()
-    {
+    let win = Win::current_raw();
+    if unsafe { validate_opt_idx(win, opt_idx, opt_flags, flags, prefix, errmsg) }.is_err() {
         return;
     }
 

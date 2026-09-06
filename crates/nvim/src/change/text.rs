@@ -107,7 +107,7 @@ unsafe fn vreplace_extent(
     let mut oldlen: size_t = 0;
     let mut newlen: size_t = charlen;
     let mut vcol: ColNr = 0;
-    let win = curwin.get();
+    let win = Win::current_raw();
     let cursor = cur_win().cursor().raw();
     let novcol = ::core::ptr::null_mut::<ColNr>();
     // SAFETY: the current window and its own cursor; only the middle column

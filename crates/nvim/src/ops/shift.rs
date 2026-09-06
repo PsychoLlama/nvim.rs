@@ -319,7 +319,7 @@ fn shift_block(op: Op, amount: c_int) {
     let left = op.op_type == OpType::Lshift;
     let old_state = State.get();
     let old_col = cur_win().w_cursor.col;
-    let sw_val = unsafe { get_sw_value_indent(curbuf.get(), left) };
+    let sw_val = unsafe { get_sw_value_indent(Buf::current_raw(), left) };
     let old_p_ri = p_ri.get();
 
     // No 'revins' and no MODE_REPLACE while we rebuild the indent.
@@ -349,7 +349,8 @@ fn shift_block(op: Op, amount: c_int) {
     let _ = unsafe { ml_replace(lnum, shifted.line, false) };
     unsafe { changed_bytes(lnum, bd.textcol) };
     let (at, old, new) = (shifted.start_col, shifted.old_len, shifted.new_len);
-    unsafe { extmark_splice_cols(curbuf.get(), lnum as c_int - 1, at, old, new, kExtmarkUndo) };
+    let (buffer, row) = (Buf::current_raw(), lnum as c_int - 1);
+    unsafe { extmark_splice_cols(buffer, row, at, old, new, kExtmarkUndo) };
 
     State.set(old_state);
     cur_win().w_cursor.col = old_col;
@@ -391,8 +392,7 @@ fn shift_block_right(bd: &mut BlockDef, mut total: c_int) -> ShiftedLine {
     // Add the width of the white space that follows the block's edge.
     let mut csarg = CharsizeArg::default();
     let lnum = cur_win().w_cursor.lnum;
-    let cstype =
-        unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, bd.textstart) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, bd.textstart) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     let mut vcol = bd.start_vcol as c_int;
     while ascii_iswhite(ci.chr.value) {
@@ -478,8 +478,7 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     let mut non_white_col = bd.start_vcol;
     let mut csarg = CharsizeArg::default();
     let lnum = cur_win().w_cursor.lnum;
-    let mut cstype =
-        unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, bd.textstart) };
+    let mut cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, bd.textstart) };
     while ascii_iswhite(unsafe { *non_white } as c_int) {
         let c = unsafe { *non_white } as u8 as int32_t;
         let at = non_white;
@@ -498,7 +497,7 @@ fn shift_block_left(op: Op, bd: &mut BlockDef, total: c_int) -> ShiftedLine {
     if bd.startspaces != 0 {
         verbatim_copy_width -= bd.start_char_vcols;
     }
-    cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), 0, bd.textstart) };
+    cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), 0, bd.textstart) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(bd.textstart) };
     while verbatim_copy_width < destination_col {
         let w = verbatim_copy_width;

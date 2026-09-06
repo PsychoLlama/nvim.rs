@@ -41,7 +41,6 @@ use crate::types::{
     Integer, LineNr, MsgList, NUL, Pos, ScriptId, String_0, Tabpage, TabpageHandle, TryState,
     Window, WindowHandle, int64_t, kErrorTypeException, uint64_t,
 };
-use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::winlayer::{self, Buf, TabPage, Win};
 
 mod keydict;
@@ -111,7 +110,7 @@ pub(crate) fn handle_get_window(handle: Handle) -> *mut Window {
 /// set — when it names nothing.
 pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error) -> *mut Buffer {
     if buffer == 0 {
-        return curbuf.get();
+        return Buf::current_raw();
     }
     let rv = handle_get_buffer(buffer);
     if rv.is_null() {
@@ -125,7 +124,7 @@ pub(crate) unsafe fn find_buffer_by_handle(buffer: BufferHandle, err: &mut Error
 /// [`find_buffer_by_handle`] for a window.
 pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *mut Window {
     if window == 0 {
-        return curwin.get();
+        return Win::current_raw();
     }
     let rv = handle_get_window(window);
     if rv.is_null() {
@@ -139,7 +138,7 @@ pub unsafe fn find_window_by_handle(window: WindowHandle, err: &mut Error) -> *m
 /// [`find_buffer_by_handle`] for a tab page.
 pub(crate) unsafe fn find_tab_by_handle(tabpage: TabpageHandle, err: &mut Error) -> *mut Tabpage {
     if tabpage == 0 {
-        return curtab.get();
+        return TabPage::current_raw();
     }
     let rv = winlayer::tabpage(tabpage).map_or(ptr::null_mut(), TabPage::raw);
     if rv.is_null() {
@@ -352,7 +351,7 @@ pub(crate) unsafe fn set_mark(
     err: &mut Error,
 ) -> bool {
     let buffer = if buffer.is_null() {
-        curbuf.get()
+        Buf::current_raw()
     } else {
         buffer
     };
@@ -414,14 +413,14 @@ pub(crate) fn get_default_stl_hl(
     if window.is_null() {
         c"TabLineFill".as_ptr()
     } else if use_winbar {
-        if window == curwin.get() {
+        if window == Win::current_raw() {
             c"WinBar".as_ptr()
         } else {
             c"WinBarNC".as_ptr()
         }
     } else if stc_hl_id > 0 {
         syn_id2name(stc_hl_id)
-    } else if window == curwin.get() {
+    } else if window == Win::current_raw() {
         c"StatusLine".as_ptr()
     } else {
         c"StatusLineNC".as_ptr()

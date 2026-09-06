@@ -9,6 +9,7 @@
 use super::*;
 use crate::api::private::helpers::{Reported, array_add};
 use crate::api::private::validate::err_bad_value;
+use crate::winlayer::Win;
 
 pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boolean, Error> {
     let mut error = Error::none();
@@ -29,7 +30,7 @@ pub unsafe fn nvim_buf_del_mark(buf: BufferHandle, name: String_0) -> Result<Boo
     let fm: *mut FileMark = unsafe {
         mark_get(
             b,
-            curwin.get(),
+            Win::current_raw(),
             &raw mut slot,
             kMarkAllNoResolve,
             *name.data() as ::core::ffi::c_int,
@@ -103,7 +104,7 @@ pub unsafe fn nvim_buf_get_mark(
     let fm: *mut FileMark = unsafe {
         mark_get(
             b,
-            curwin.get(),
+            Win::current_raw(),
             &raw mut slot,
             kMarkAllNoResolve,
             mark as ::core::ffi::c_int,

@@ -19,7 +19,6 @@ use crate::regexp::{
 };
 use crate::semsg;
 use crate::types::{ColNr, MB_MAXBYTES, NUL};
-use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 /// `\z`: the highlighter's own captures, plus `\zs`/`\ze`.
@@ -280,13 +279,11 @@ fn position_atom(cmp: c_int, save_prev_at_start: c_int) -> Parsed {
 }
 
 fn cursor_lnum() -> i64 {
-    // SAFETY: `curwin` is the current window.
-    unsafe { (*curwin.get()).w_cursor.lnum as i64 }
+    Win::current().w_cursor.lnum as i64
 }
 
 fn cursor_col() -> i64 {
-    // SAFETY: as `cursor_lnum`.
-    unsafe { (*curwin.get()).w_cursor.col as i64 }
+    Win::current().w_cursor.col as i64
 }
 
 fn cursor_vcol() -> i64 {
@@ -295,8 +292,8 @@ fn cursor_vcol() -> i64 {
     let mut vcol: ColNr = 0;
     unsafe {
         getvvcol(
-            Win::new(curwin.get()),
-            &raw mut (*curwin.get()).w_cursor,
+            Win::current(),
+            &raw mut (*Win::current_raw()).w_cursor,
             core::ptr::null_mut(),
             core::ptr::null_mut(),
             &raw mut vcol,

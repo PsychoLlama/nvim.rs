@@ -25,7 +25,7 @@ use crate::types::{
     IOSIZE, SignalWatcher, Vv, uv__queue, uv_handle_type, uv_signal_s_tree_entry, uv_signal_s_u,
     uv_signal_t,
 };
-use crate::winlayer::graph::curbuf;
+use crate::winlayer::Buf;
 use ::libc::{pthread_sigmask, sigemptyset, sigset_t};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -253,9 +253,9 @@ fn handle_signal(signum: c_int) {
                 apply_autocmds(
                     AutoEvent::Signal,
                     signal_name(signum).as_ptr() as *mut c_char,
-                    (*curbuf.get()).b_fname,
+                    Buf::current().b_fname,
                     true,
-                    curbuf.get(),
+                    Buf::current_raw(),
                 );
             }
             _ => {

@@ -19,6 +19,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::semsg;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -39,7 +40,6 @@ use crate::plines::getvcol;
 use crate::state::mode::{State, saved_cursor};
 use crate::textformat::has_format_option;
 use crate::types::*;
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::abort;
 
 // `regexp.rs` keeps its own copy of `RegProg`, so these stay declarations
@@ -95,7 +95,7 @@ pub(crate) unsafe fn line_vcol(lnum: LineNr, col: ColNr) -> c_int {
     let mut vcol: ColNr = 0;
     unsafe {
         getvcol(
-            Win::new(curwin.get()),
+            Win::current(),
             &raw mut fp,
             &raw mut vcol,
             ::core::ptr::null_mut::<ColNr>(),
@@ -210,7 +210,7 @@ pub unsafe fn tabstop_fromto(
     nspcs: *mut c_int,
 ) {
     let ts = if ts_arg == 0 {
-        unsafe { (*curbuf.get()).b_p_ts as c_int }
+        Buf::current().b_p_ts as c_int
     } else {
         ts_arg
     };
@@ -270,10 +270,10 @@ pub unsafe fn get_sw_value(buffer: *mut Buffer) -> c_int {
 /// `buffer` must be a live buffer and `pos` a position in the current one: the
 /// cursor is moved there and restored.
 unsafe fn get_sw_value_pos(buffer: *mut Buffer, pos: *mut Pos, left: bool) -> c_int {
-    let save_cursor = unsafe { (*curwin.get()).w_cursor };
-    unsafe { (*curwin.get()).w_cursor = *pos };
+    let save_cursor = Win::current().w_cursor;
+    unsafe { Win::current().w_cursor = *pos };
     let sw_value = unsafe { get_sw_value_col(buffer, get_nolist_virtcol(), left) };
-    unsafe { (*curwin.get()).w_cursor = save_cursor };
+    Win::current().w_cursor = save_cursor;
     sw_value
 }
 
@@ -282,7 +282,7 @@ unsafe fn get_sw_value_pos(buffer: *mut Buffer, pos: *mut Pos, left: bool) -> c_
 /// # Safety
 /// `buffer` must be a live buffer.
 pub unsafe fn get_sw_value_indent(buffer: *mut Buffer, left: bool) -> c_int {
-    let mut pos = unsafe { (*curwin.get()).w_cursor };
+    let mut pos = Win::current().w_cursor;
     pos.col = unsafe { getwhitecols_curline() } as ColNr;
     unsafe { get_sw_value_pos(buffer, &raw mut pos, left) }
 }
@@ -305,10 +305,10 @@ pub unsafe fn get_sw_value_col(buffer: *mut Buffer, col: ColNr, left: bool) -> c
 /// # Safety
 /// There must be a current buffer.
 pub unsafe fn get_sts_value() -> c_int {
-    if unsafe { (*curbuf.get()).b_p_sts } < 0 {
-        unsafe { get_sw_value(curbuf.get()) }
+    if Buf::current().b_p_sts < 0 {
+        unsafe { get_sw_value(Buf::current_raw()) }
     } else {
-        unsafe { (*curbuf.get()).b_p_sts as c_int }
+        Buf::current().b_p_sts as c_int
     }
 }
 
@@ -320,8 +320,8 @@ pub fn get_indent() -> c_int {
     unsafe {
         indent_size_ts(
             get_cursor_line_ptr(),
-            (*curbuf.get()).b_p_ts,
-            (*curbuf.get()).b_p_vts_array,
+            Buf::current().b_p_ts,
+            Buf::current().b_p_vts_array,
         )
     }
 }
@@ -334,8 +334,8 @@ pub unsafe fn get_indent_lnum(lnum: LineNr) -> c_int {
     unsafe {
         indent_size_ts(
             ml_get(lnum),
-            (*curbuf.get()).b_p_ts,
-            (*curbuf.get()).b_p_vts_array,
+            Buf::current().b_p_ts,
+            Buf::current().b_p_vts_array,
         )
     }
 }
@@ -493,7 +493,7 @@ struct IndentPlan {
 /// # Safety
 /// `oldline` must be the current line, NUL-terminated.
 unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> IndentPlan {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     let preserve = flags & SIN_INSERT as c_int == 0 && unsafe { (*buf).b_p_pi } != 0;
     let pad =
         |col: c_int| unsafe { tabstop_padding(col as ColNr, (*buf).b_p_ts, (*buf).b_p_vts_array) };
@@ -584,7 +584,7 @@ unsafe fn plan_indent(size: c_int, flags: c_int, oldline: *mut c_char) -> Indent
 /// # Safety
 /// There must be a current line, and it must be modifiable.
 pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     let oldline = get_cursor_line_ptr();
     // The size of the line, including the NUL.
     let mut line_len = get_cursor_line_len() + 1;
@@ -727,15 +727,14 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     let new_offset = n as ColNr;
     let mut retval = false;
     // Replace the line, unless undo fails.
-    if flags & SIN_UNDO as c_int == 0 || u_savesub(unsafe { (*curwin.get()).w_cursor.lnum }).is_ok()
-    {
+    if flags & SIN_UNDO as c_int == 0 || u_savesub(Win::current().w_cursor.lnum).is_ok() {
         // This may free `newline`.
-        let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, newline, false) };
+        let _ = unsafe { ml_replace(Win::current().w_cursor.lnum, newline, false) };
         if flags & SIN_NOMARK as c_int == 0 {
             unsafe {
                 extmark_splice_cols(
                     buf,
-                    (*curwin.get()).w_cursor.lnum as c_int - 1,
+                    Win::current().w_cursor.lnum as c_int - 1,
                     skipcols,
                     old_offset - skipcols,
                     new_offset - skipcols,
@@ -744,11 +743,11 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
             };
         }
         if flags & SIN_CHANGED as c_int != 0 {
-            unsafe { changed_bytes((*curwin.get()).w_cursor.lnum, 0) };
+            unsafe { changed_bytes(Win::current().w_cursor.lnum, 0) };
         }
         // Correct the saved cursor position if it is on this line.
         let saved = saved_cursor.get();
-        if saved.lnum == unsafe { (*curwin.get()).w_cursor.lnum } {
+        if saved.lnum == Win::current().w_cursor.lnum {
             if saved.col >= old_offset {
                 // It was after the indent: shift it by the byte delta.
                 saved_cursor.set(saved.with_col(saved.col + ind_len - old_offset));
@@ -762,7 +761,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
     } else {
         unsafe { xfree(newline as *mut c_void) };
     }
-    unsafe { (*curwin.get()).w_cursor.col = ind_len as ColNr };
+    Win::current().w_cursor.col = ind_len as ColNr;
     retval
 }
 
@@ -776,7 +775,7 @@ pub unsafe fn set_indent(size: c_int, flags: c_int) -> bool {
 /// # Safety
 /// There must be a current buffer and window.
 pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
-    if lnum > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
+    if lnum > Buf::current().b_ml.ml_line_count {
         return -1;
     }
     let mut pos = Pos {
@@ -798,7 +797,7 @@ pub unsafe fn get_number_indent(lnum: LineNr) -> c_int {
         };
     }
     let mut regmatch = RegMatch {
-        regprog: unsafe { vim_regcomp((*curbuf.get()).b_p_flp, RE_MAGIC) },
+        regprog: unsafe { vim_regcomp(Buf::current().b_p_flp, RE_MAGIC) },
         startp: [::core::ptr::null_mut::<c_char>(); 10],
         endp: [::core::ptr::null_mut::<c_char>(); 10],
         rm_matchcol: 0,

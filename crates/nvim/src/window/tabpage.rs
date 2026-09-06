@@ -47,8 +47,7 @@ use crate::ui::state::{Columns, Rows};
 use crate::window::state::{skip_win_fix_scroll, tabpage_move_disallowed};
 use crate::winfloat::{win_config_float, win_float_update_statusline};
 use crate::winlayer::graph::{
-    cmdwin_type, curbuf, curtab, curwin, first_tabpage, firstwin, lastused_tabpage, lastwin,
-    prevwin, topframe,
+    cmdwin_type, first_tabpage, firstwin, lastused_tabpage, lastwin, prevwin, topframe,
 };
 use crate::winlayer::{WinId, forget_tabpage, register_tabpage, tabs};
 
@@ -64,7 +63,7 @@ pub(crate) fn stash_tabpage(tabpage: TabPage) {
     tabpage.tp_topframe = topframe.get();
     tabpage.tp_firstwin = firstwin.get();
     tabpage.tp_lastwin = lastwin.get();
-    tabpage.tp_curwin = curwin.get();
+    tabpage.tp_curwin = Win::current_raw();
 }
 
 pub unsafe fn use_tabpage(tabpage: *mut Tabpage) {
@@ -430,7 +429,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
     leave_window(cur_win());
     reset_visual_and_resel(); // stop Visual mode
     if trigger_leave_autocmds {
-        if raw_buf(new_curbuf) != curbuf.get() {
+        if raw_buf(new_curbuf) != Buf::current_raw() {
             fire(AutoEvent::BufLeave, cur_buf());
             if !tp.is_current() {
                 return Err(Failed);
@@ -446,7 +445,7 @@ fn leave_tab(new_curbuf: Option<Buf>, trigger_leave_autocmds: bool) -> Result<()
         }
     }
     reset_dragwin();
-    tp.tp_curwin = curwin.get();
+    tp.tp_curwin = Win::current_raw();
     tp.tp_prevwin = prevwin.get();
     tp.tp_firstwin = firstwin.get();
     tp.tp_lastwin = lastwin.get();
@@ -476,7 +475,7 @@ fn enter_tab(
     let old_curtab = cur_tab();
     adopt_tabpage(tabpage);
 
-    if old_curtab.raw() != curtab.get() {
+    if old_curtab.raw() != TabPage::current_raw() {
         check_tabpage_windows(old_curtab);
         if p_ch.get() != cur_tab().tp_ch_used {
             // Use the stored value of 'cmdheight', which may differ per tab
@@ -535,7 +534,7 @@ fn enter_tab(
     // have been set correctly.
     if trigger_enter_autocmds {
         fire(AutoEvent::TabEnter, cur_buf());
-        if old_curbuf.raw() != curbuf.get() {
+        if old_curbuf.raw() != Buf::current_raw() {
             fire(AutoEvent::BufEnter, cur_buf());
         }
     }
@@ -704,7 +703,7 @@ pub(crate) fn goto_tab_win(tabpage: TabPage, window: Win) {
 }
 
 pub fn tabpage_move(nr: c_int) {
-    debug_assert!(!curtab.get().is_null(), "curtab != NULL");
+    debug_assert!(TabPage::current_or_none().is_some(), "curtab != NULL");
     if first_tab().next().is_none() || tabpage_move_disallowed.get() != 0 {
         return;
     }

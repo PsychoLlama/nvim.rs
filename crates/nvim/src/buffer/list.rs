@@ -56,7 +56,7 @@ use crate::types::{
 };
 use crate::undo::curbuf_is_changed;
 use crate::window::{WSP_VERT, swbuf_goto_win_with_buf, win_split};
-use crate::winlayer::graph::{curbuf, firstbuf, lastbuf};
+use crate::winlayer::graph::{firstbuf, lastbuf};
 use crate::winlayer::{Buf, Win, buffers_back, register_buffer, windows};
 
 use super::expand::{NO_REGMATCH, buflist_match, find_buf};
@@ -156,7 +156,7 @@ fn is_diff_mode(buffer: Buf) -> bool {
 
 /// The current buffer, which is null only before the first one is created.
 fn current_buf() -> Option<Buf> {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: non-null, hence live.
     (!buf.is_null()).then(|| unsafe { Buf::new(buf) })
 }
@@ -618,7 +618,7 @@ pub unsafe fn buflist_getfile(
     };
 
     // There is nothing to do when it is the current buffer.
-    if buf.raw() == curbuf.get() {
+    if buf.raw() == Buf::current_raw() {
         return Ok(());
     }
 
@@ -679,7 +679,8 @@ fn goto_existing_window(buffer: Buf) -> bool {
         | kOptSwbFlagSplit as c_int
         | kOptSwbFlagNewtab as c_int) as u32;
     // SAFETY: the current buffer.
-    if !wp.is_null() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(curbuf.get()) } {
+    if !wp.is_null() || swb_flags.get() & splits == 0 || unsafe { buf_is_empty(Buf::current_raw()) }
+    {
         return true;
     }
     if swb_flags.get() & kOptSwbFlagNewtab as c_int as u32 != 0 {

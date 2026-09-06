@@ -35,7 +35,7 @@ use crate::types::ui::kUIMultigrid;
 use crate::types::{FAIL, Frame, Integer, OK, size_t};
 use crate::ui::{ui_call_win_close, ui_has};
 use crate::winfloat::win_float_find_altwin;
-use crate::winlayer::graph::{curbuf, curtab, first_tabpage, firstwin, lastwin};
+use crate::winlayer::graph::{first_tabpage, firstwin, lastwin};
 use crate::winlayer::{WinId, tabs};
 
 pub unsafe fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int {
@@ -48,7 +48,7 @@ pub unsafe fn win_close(win: *mut Window, free_buf: bool, force: bool) -> c_int 
 ///
 /// Called by `:quit`, `:close`, `:xit`, `:wq` and `findtag()`.
 pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
-    let prev_curtab = curtab.get();
+    let prev_curtab = TabPage::current_raw();
     let win_frame = if win.w_floating {
         ptr::null_mut::<Frame>()
     } else {
@@ -122,12 +122,14 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
         // Autocommands have closed all windows, quit now. Restore
         // `curwin->w_buffer`, or writing the ShaDa file may fail.
         if cur_win().buffer_or_none().is_none() {
-            cur_win().w_buffer = curbuf.get();
+            cur_win().w_buffer = Buf::current_raw();
         }
         quit_now();
     }
     // Autocommands may have moved to another tab page.
-    if curtab.get() != prev_curtab && valid_win_any_tab(win.raw()) && win.buffer_or_none().is_none()
+    if TabPage::current_raw() != prev_curtab
+        && valid_win_any_tab(win.raw())
+        && win.buffer_or_none().is_none()
     {
         // The window has to be closed anyway, since the buffer is gone.
         if let Some(prev) = valid_tab(prev_curtab) {
@@ -261,7 +263,7 @@ pub(crate) fn close(win: Win, free_buf: bool, force: bool) -> c_int {
 
     // If the window had 'diff' set and only one window with 'diff' is left in
     // the tab page, and "closeoff" is in 'diffopt', run ":diffoff!".
-    if diffopt_closeoff() && had_diffmode && curtab.get() == prev_curtab {
+    if diffopt_closeoff() && had_diffmode && TabPage::current_raw() == prev_curtab {
         let diffcount = windows().filter(|w| w.w_onebuf_opt.wo_diff != 0).count();
         if diffcount == 1 {
             run_cmd(c"diffoff!".as_ptr());
@@ -344,7 +346,7 @@ fn leave_closing_window(win: Win) -> Leave {
     // Be careful: if autocommands delete the window, or leave it the last one,
     // return now.
     let mut other_buffer = false;
-    if wp.w_buffer != curbuf.get() {
+    if wp.w_buffer != Buf::current_raw() {
         reset_visual_and_resel(); // stop Visual mode
         other_buffer = true;
         if valid_win(win.raw()).is_none() {
@@ -426,7 +428,7 @@ pub fn trigger_tabclosedpre(tabpage: *mut Tabpage) {
 /// re-entered. Comes back to the tab page it started in, or to the first.
 fn tabclosedpre(tabpage: *mut Tabpage) {
     static RECURSIVE: GlobalCell<bool> = GlobalCell::new(false);
-    let ptp = curtab.get();
+    let ptp = TabPage::current_raw();
     // Return quickly when there is no TabClosedPre autocommand to run, or one
     // is already running.
     if !event_wanted(AutoEvent::TabClosedPre) || RECURSIVE.get() {

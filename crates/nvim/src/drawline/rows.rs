@@ -435,10 +435,10 @@ impl Cells {
         // Record the cursor line's height while it is known, which saves a
         // `plines_win` later.
         if self.in_curline {
-            unsafe { (*curwin.get()).w_cline_row = wlv.startrow };
-            unsafe { (*curwin.get()).w_cline_height = wlv.row - wlv.startrow };
-            unsafe { (*curwin.get()).w_cline_folded = self.has_fold };
-            unsafe { (*curwin.get()).w_valid |= WinValid::CHEIGHT | WinValid::CROW };
+            Win::current().w_cline_row = wlv.startrow;
+            Win::current().w_cline_height = wlv.row - wlv.startrow;
+            Win::current().w_cline_folded = self.has_fold;
+            Win::current().w_valid |= WinValid::CHEIGHT | WinValid::CROW;
         }
     }
 

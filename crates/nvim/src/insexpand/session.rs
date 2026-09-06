@@ -702,8 +702,8 @@ pub unsafe fn ins_complete(c: c_int, enable_pum: bool) -> Result<(), Failed> {
 /// `spell_bad_len`.
 pub(crate) unsafe fn spell_back_to_badword() {
     let mut tpos = cur_win().w_cursor;
-    spell_bad_len
-        .set(unsafe { spell_move_to(curwin.get(), BACKWARD, SMT_ALL, true, ptr::null_mut()) });
+    let win = Win::current_raw();
+    spell_bad_len.set(unsafe { spell_move_to(win, BACKWARD, SMT_ALL, true, ptr::null_mut()) });
     if cur_win().w_cursor.col != tpos.col {
         unsafe { start_arrow(&raw mut tpos) };
     }

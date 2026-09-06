@@ -21,15 +21,15 @@ use crate::tag::{TagFiles, get_tags, get_tagstack, set_tagstack};
 use crate::types::{
     Buffer, Dict, EvalFuncData, List, NUL, Pos, TypVal, VarNumber, kListLenMayKnow, kListLenUnknown,
 };
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 /// `changenr()` — the sequence number of the change the undo tree is at.
 pub unsafe fn f_changenr(_args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncData) {
     // SAFETY: `curbuf` is live and `result` is the cleared return value.
-    unsafe { (*result).vval.v_number = (*curbuf.get()).b_u_seq_cur as VarNumber };
+    unsafe { (*result).vval.v_number = Buf::current().b_u_seq_cur as VarNumber };
 }
 
 /// Add one `{lnum, col, coladd}` entry to `l`, skipping a cleared mark.
@@ -54,7 +54,7 @@ pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     // buffer's window-info vector are live for the whole call.
     let out = list_alloc_ret(result, 2);
     let buf: *const Buffer = if !args.has(0) {
-        curbuf.get()
+        Buf::current_raw()
     } else {
         // The value is coerced to a Number purely so that a bad type
         // reports; the result is thrown away and the argument is
@@ -73,12 +73,12 @@ pub unsafe fn f_getchangelist(args: *mut TypVal, result: *mut TypVal, _fptr: Eva
     // otherwise the one remembered for this window in the buffer's
     // window-info list. A buffer this window has never shown reports
     // the end of the list.
-    let index = if ptr::eq(buf, unsafe { (*curwin.get()).w_buffer }) {
-        unsafe { (*curwin.get()).w_changelistidx }
+    let index = if ptr::eq(buf, Win::current().w_buffer) {
+        Win::current().w_changelistidx
     } else {
         (0..unsafe { (*buf).b_wininfo.size })
             .map(|i| unsafe { *(*buf).b_wininfo.items.add(i) })
-            .find(|wip| unsafe { (**wip).wi_win } == curwin.get())
+            .find(|wip| unsafe { (**wip).wi_win } == Win::current_raw())
             .map_or(unsafe { (*buf).b_changelistlen }, |wip| unsafe {
                 (*wip).wi_changelistidx
             })
@@ -145,7 +145,7 @@ pub unsafe fn f_gettagstack(args: *mut TypVal, result: *mut TypVal, _fptr: EvalF
     // yields an empty dict rather than nothing.
     dict_alloc_ret(result);
     let found = if !args.has(0) {
-        unsafe { Win::from_raw(curwin.get()) }
+        unsafe { Win::from_raw(Win::current_raw()) }
     } else {
         unsafe { find_win_by_nr_or_id(args.ptr(0)) }
     };

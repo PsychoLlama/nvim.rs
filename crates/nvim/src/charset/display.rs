@@ -24,7 +24,6 @@ use crate::option::get_fileformat;
 use crate::option::vars::dy_flags;
 use crate::types::{Buffer, GArray, NUL, StringBuilder, size_t, ssize_t, uint8_t};
 use crate::winlayer::Buf;
-use crate::winlayer::graph::curbuf;
 
 use super::{
     CT_CELL_MASK, EOL_MAC, NL, TAB, chartab, chartab_initialized, kOptDyFlagUhex,
@@ -146,7 +145,7 @@ pub unsafe fn trans_characters(buf: *mut c_char, bufsize: c_int) {
             len -= step;
         } else {
             // SAFETY: the current buffer is valid.
-            let trs = unsafe { render_byte(curbuf.get(), bytes[at] as c_int) };
+            let trs = unsafe { render_byte(Buf::current_raw(), bytes[at] as c_int) };
             step = trs.len;
             if step > 1 {
                 room -= step as isize - 1;
@@ -261,7 +260,7 @@ pub unsafe fn transstr_buf(
             read += 1;
         } else {
             // SAFETY: the current buffer is valid.
-            let tb = unsafe { render_byte(curbuf.get(), cursor.byte() as c_int) };
+            let tb = unsafe { render_byte(Buf::current_raw(), cursor.byte() as c_int) };
             cursor.advance(1);
             read += 1;
             if written + tb.len > limit {
@@ -531,7 +530,7 @@ unsafe fn render_byte(buffer: *const Buffer, c: c_int) -> render::Rendered {
 /// The current buffer must be valid.
 pub(crate) unsafe fn transchar(c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    unsafe { transchar_buf(curbuf.get(), c) }
+    unsafe { transchar_buf(Buf::current_raw(), c) }
 }
 
 /// The display form of `c` as it would appear in `buffer` (which decides how a
@@ -560,7 +559,7 @@ pub(crate) unsafe fn transchar_byte_buf(buffer: *const Buffer, c: c_int) -> Char
 /// The current buffer must be valid.
 pub(crate) unsafe fn transchar_byte(c: c_int) -> CharDisplay {
     // SAFETY: forwarded to the caller's contract.
-    unsafe { transchar_byte_buf(curbuf.get(), c) }
+    unsafe { transchar_byte_buf(Buf::current_raw(), c) }
 }
 
 /// Write the display form of the unprintable byte `c` into `charbuf`.

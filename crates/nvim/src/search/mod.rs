@@ -97,7 +97,6 @@ use crate::types::{
 use crate::ui::state::{Columns, Rows};
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::window::{win_enter, win_split, win_valid};
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{atol, fclose, strpbrk};
 /// `searchit`/`do_search` flags plus the search-stat sizing constants.
 pub const SEARCH_HL_PRIORITY: ::core::ffi::c_int = 0;

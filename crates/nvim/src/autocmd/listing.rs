@@ -410,7 +410,7 @@ pub unsafe fn au_exists(arg: *const ::core::ffi::c_char) -> bool {
         // and it is NUL-terminated when it is not.
         let buflocal_buf =
             if !pattern.is_null() && unsafe { strcasecmp(pattern, c"<buffer>".as_ptr()) } == 0 {
-                curbuf.get()
+                Buf::current_raw()
             } else {
                 ::core::ptr::null_mut()
             };

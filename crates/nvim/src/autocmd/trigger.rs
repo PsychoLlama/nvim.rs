@@ -18,6 +18,7 @@ use crate::guard::Depth;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::types::{Failed, OptionSetFlags};
+use crate::winlayer::Win;
 use crate::winlayer::{Buf, first_buffer};
 
 /// A `multiqueue` event's argument vector with nothing in it.
@@ -81,7 +82,7 @@ pub unsafe fn do_doautocmd(
                 ::core::ptr::null_mut(),
                 true,
                 group,
-                curbuf.get(),
+                Buf::current_raw(),
                 ::core::ptr::null_mut(),
                 ::core::ptr::null_mut(),
             )
@@ -125,7 +126,7 @@ pub unsafe fn ex_doautoall(args: *mut ExArg) {
         // Loaded buffers only, and the current one is done last. The step
         // is at the bottom, on a buffer `bufref` has just proved this pass
         // did not delete -- which is why this is not `buffers()`.
-        if !buf.b_ml.ml_mfp.is_null() && buf.raw() != curbuf.get() {
+        if !buf.b_ml.ml_mfp.is_null() && buf.raw() != Buf::current_raw() {
             // SAFETY: `aco` is this frame's own storage and `buf` is live.
             unsafe { aucmd_prepbuf(&raw mut aco, buf.raw()) };
             let bufref = BufRef::of(buf);
@@ -137,7 +138,7 @@ pub unsafe fn ex_doautoall(args: *mut ExArg) {
             if call_do_modelines && did_aucmd {
                 // Don't set window-local options when the window we are
                 // in belongs to another buffer.
-                do_modelines(if is_aucmd_win(curwin.get()) {
+                do_modelines(if is_aucmd_win(Win::current_raw()) {
                     OptionSetFlags::NOWIN
                 } else {
                     OptionSetFlags::NONE
@@ -395,7 +396,7 @@ pub fn do_autocmd_uienter(chanid: uint64_t, attached: bool) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            curbuf.get(),
+            Buf::current_raw(),
         )
     };
     // SAFETY: the pair `get_v_event` above opened.
@@ -426,7 +427,7 @@ pub fn do_autocmd_focusgained(gained: bool) {
             ::core::ptr::null_mut(),
             ::core::ptr::null_mut(),
             false,
-            curbuf.get(),
+            Buf::current_raw(),
         )
     };
     if gained && last_time.get().wrapping_add(2000 as Timestamp) < os_now() {

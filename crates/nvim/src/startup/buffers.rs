@@ -62,7 +62,6 @@ use crate::window::{
     goto_tabpage, make_tabpages, make_windows, only_one_window, win_close, win_count, win_enter,
     win_equal,
 };
-use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::arglist::global_arglist;
 use crate::pos::MAXLNUM;
@@ -185,7 +184,7 @@ pub(crate) unsafe fn read_stdin() {
         let (no_fname, no_sfname) = (ptr::null_mut(), ptr::null_mut());
         let _ = unsafe { readfile(no_fname, no_sfname, 0, 0, last, null_ea, flags, true) };
         let stdin_buf_handle: Handle = unsafe { (*stdin_buf).handle };
-        let stdin_buf_empty = unsafe { buf_is_empty(curbuf.get()) };
+        let stdin_buf_empty = unsafe { buf_is_empty(Buf::current_raw()) };
 
         // Done as commands rather than calls so the autocommands and the
         // window bookkeeping happen as they would for the user.
@@ -203,7 +202,7 @@ pub(crate) unsafe fn read_stdin() {
     } else {
         unsafe { set_buflisted(1) };
         let _ = unsafe { open_buffer(true, ptr::null_mut::<ExArg>(), 0) };
-        if unsafe { buf_is_empty(curbuf.get()) } && Buf::current().b_next.is_some() {
+        if unsafe { buf_is_empty(Buf::current_raw()) } && Buf::current().b_next.is_some() {
             let _ = unsafe { do_cmdline_cmd(c"silent! bnext".as_ptr()) };
             let _ = unsafe { do_cmdline_cmd(c"silent! bwipeout 1".as_ptr()) };
         }
@@ -353,7 +352,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     // `create_windows` marks a window whose file could not be opened.
     let mut advance = true;
     if cur_win().w_arg_idx == -1 {
-        unsafe { win_close(curwin.get(), true, false) };
+        unsafe { win_close(Win::current_raw(), true, false) };
         advance = false;
     }
 
@@ -365,7 +364,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
     for i in 1..parm.window_count {
         if cur_win().w_arg_idx == -1 {
             arg_idx += 1;
-            unsafe { win_close(curwin.get(), true, false) };
+            unsafe { win_close(Win::current_raw(), true, false) };
             advance = false;
             continue;
         }
@@ -394,7 +393,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
         // Only load a file into a window that is still showing the first
         // window's buffer, or an unnamed one.
-        if curbuf.get() == first_win().w_buffer || cur_buf().b_ffname.is_null() {
+        if Buf::current_raw() == first_win().w_buffer || cur_buf().b_ffname.is_null() {
             cur_win().w_arg_idx = arg_idx;
             swap_exists_did_quit.set(false);
             let alist = global_arglist();
@@ -406,12 +405,13 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
             };
             let (last, hide) = (newlnum::LASTL as LineNr, EcmdFlags::HIDE);
             let null_ea = ptr::null_mut::<ExArg>();
-            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, curwin.get()) };
+            let win = Win::current_raw();
+            let _ = unsafe { do_ecmd(0, name, ptr::null_mut(), null_ea, last, hide, win) };
             if swap_exists_did_quit.get() {
                 if got_int.get() || unsafe { only_one_window() } {
                     quit_on_swap_exists(true);
                 }
-                unsafe { win_close(curwin.get(), true, false) };
+                unsafe { win_close(Win::current_raw(), true, false) };
                 advance = false;
             }
             if arg_idx == unsafe { (*alist).al_ga.len() as c_int } - 1 {
@@ -453,7 +453,7 @@ pub(crate) unsafe fn edit_buffers(parmp: *mut MainParams) {
 
     time_msg_at(c"editing files in windows");
     if parm.window_count > 1 && parm.window_layout != WIN_TABS as c_int {
-        unsafe { win_equal(curwin.get(), false, 'b' as c_int) };
+        unsafe { win_equal(Win::current_raw(), false, 'b' as c_int) };
     }
 }
 

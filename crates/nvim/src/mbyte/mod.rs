@@ -32,6 +32,7 @@
 use crate::cstr;
 use crate::types::NL;
 use crate::types::TAB;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 
 use crate::ascii::ascii_iswhite;
@@ -74,7 +75,6 @@ use crate::utf8proc::{
     utf8proc_get_property, utf8proc_grapheme_break, utf8proc_grapheme_break_stateful,
     utf8proc_property_t, utf8proc_tolower, utf8proc_toupper,
 };
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{
     __errno_location, iconv, iconv_close, iconv_open, setlocale, strcpy, tolower, toupper,
 };
@@ -178,17 +178,17 @@ pub unsafe fn show_utf8() {
 ///
 /// The editor's globals must be live.
 pub unsafe fn utf_find_illegal() {
-    let start = unsafe { (*curwin.get()).w_cursor };
+    let start = Win::current().w_cursor;
     let mut vimconv = CONV_NONE_INIT;
     let mut tofree: *mut c_char = core::ptr::null_mut();
 
-    if unsafe { enc_canon_props((*curbuf.get()).b_p_fenc) } & ENC_8BIT != 0 {
+    if unsafe { enc_canon_props(Buf::current().b_p_fenc) } & ENC_8BIT != 0 {
         // 'encoding' is utf-8 but the file is 8-bit, so what is illegal is
         // decided after converting back to the file's encoding.
-        let _ = unsafe { convert_setup(&raw mut vimconv, p_enc.get(), (*curbuf.get()).b_p_fenc) };
+        let _ = unsafe { convert_setup(&raw mut vimconv, p_enc.get(), Buf::current().b_p_fenc) };
     }
 
-    unsafe { (*curwin.get()).w_cursor.coladd = 0 };
+    Win::current().w_cursor.coladd = 0;
     let found = 'search: loop {
         let mut p = get_cursor_pos_ptr();
         if vimconv.vc_type != CONV_NONE {
@@ -207,7 +207,7 @@ pub unsafe fn utf_find_illegal() {
             {
                 if vimconv.vc_type == CONV_NONE {
                     unsafe {
-                        (*curwin.get()).w_cursor.col += p.offset_from(get_cursor_pos_ptr()) as ColNr
+                        Win::current().w_cursor.col += p.offset_from(get_cursor_pos_ptr()) as ColNr
                     };
                 } else {
                     // `p` is an offset into the *converted* line; step the
@@ -218,7 +218,7 @@ pub unsafe fn utf_find_illegal() {
                     while unsafe { *q } != NUL as c_char && left > 0 {
                         left -= 1;
                         let l = unsafe { utf_ptr2len(q) };
-                        unsafe { (*curwin.get()).w_cursor.col += l };
+                        Win::current().w_cursor.col += l;
                         q = unsafe { q.offset(l as isize) };
                     }
                 }
@@ -227,16 +227,15 @@ pub unsafe fn utf_find_illegal() {
             p = unsafe { p.offset(len as isize) };
         }
 
-        if unsafe { (*curwin.get()).w_cursor.lnum } == unsafe { (*curbuf.get()).b_ml.ml_line_count }
-        {
+        if Win::current().w_cursor.lnum == Buf::current().b_ml.ml_line_count {
             break false;
         }
-        unsafe { (*curwin.get()).w_cursor.lnum += 1 };
-        unsafe { (*curwin.get()).w_cursor.col = 0 };
+        Win::current().w_cursor.lnum += 1;
+        Win::current().w_cursor.col = 0;
     };
 
     if !found {
-        unsafe { (*curwin.get()).w_cursor = start };
+        Win::current().w_cursor = start;
         beep_flush();
     }
     unsafe { xfree(tofree as *mut c_void) };

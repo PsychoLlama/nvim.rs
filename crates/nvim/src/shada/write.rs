@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
 use super::*;
@@ -493,8 +494,8 @@ impl Writing {
     /// marks down and dropping `'9`.
     unsafe fn update_numbered_marks(&mut self) {
         if !self.limits.global_marks
-            || unsafe { ignore_buf(curbuf.get(), &self.removable_bufs) }
-            || unsafe { (*curwin.get()).w_cursor.lnum } == 0
+            || unsafe { ignore_buf(Buf::current_raw(), &self.removable_bufs) }
+            || Win::current().w_cursor.lnum == 0
         {
             return;
         }
@@ -503,8 +504,8 @@ impl Writing {
             timestamp: os_time(),
             data: ShadaEntryData::GlobalMark(ShadaFileMark {
                 name: '0' as c_char,
-                mark: unsafe { (*curwin.get()).w_cursor },
-                fname: unsafe { (*curbuf.get()).b_ffname },
+                mark: Win::current().w_cursor,
+                fname: Buf::current().b_ffname,
             }),
             additional_data: core::ptr::null_mut(),
         };

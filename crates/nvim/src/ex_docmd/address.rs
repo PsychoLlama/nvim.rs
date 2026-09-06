@@ -16,6 +16,7 @@ use crate::ascii::ascii_isdigit;
 use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::types::CmdIdx;
+use crate::winlayer::TabPage;
 
 use core::ffi::{c_char, c_int};
 use core::ptr;
@@ -36,7 +37,6 @@ use crate::ex_docmd::{
 
 use crate::fold::has_folding;
 use crate::mark::{mark_check, mark_get, mark_move_to};
-use crate::winlayer::graph::{curbuf, curtab, curwin};
 
 use crate::message::iemsg;
 use crate::option::magic_isset;
@@ -163,7 +163,7 @@ pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
             // past it, which a buffer shrinking under a command allows.
             cur_win().w_cursor.lnum.min(cur_buf().b_ml.ml_line_count)
         }
-        CmdAddr::Windows => current_win_nr(curwin.get()) as LineNr,
+        CmdAddr::Windows => current_win_nr(Win::current_raw()) as LineNr,
         CmdAddr::Arguments => {
             let len = arglist_len();
             if cur_win().w_arg_idx + 1 < len {
@@ -173,7 +173,7 @@ pub unsafe fn get_cmd_default_range(args: *mut ExArg) -> LineNr {
             }
         }
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as LineNr,
-        CmdAddr::Tabs => current_tab_nr(curtab.get()) as LineNr,
+        CmdAddr::Tabs => current_tab_nr(TabPage::current_raw()) as LineNr,
         CmdAddr::TabsRelative | CmdAddr::Unsigned => 1,
         CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
         CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
@@ -317,13 +317,13 @@ pub unsafe fn parse_cmd_address(
                 }
                 ea.cmd = unsafe { ea.cmd.add(1) };
                 if ea.skip == 0 {
-                    let fm = mark_get_visual(curbuf.get(), &raw mut first, '<' as c_int);
+                    let fm = mark_get_visual(Buf::current_raw(), &raw mut first, '<' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
                     debug_assert!(!fm.is_null());
                     ea.line1 = unsafe { (*fm).mark.lnum };
-                    let fm = mark_get_visual(curbuf.get(), &raw mut last, '>' as c_int);
+                    let fm = mark_get_visual(Buf::current_raw(), &raw mut last, '>' as c_int);
                     if !unsafe { mark_check(fm, errormsg) } {
                         break 'theend;
                     }
@@ -555,8 +555,8 @@ pub unsafe fn get_address(
                     } as MarkGet;
                     let fm = unsafe {
                         mark_get(
-                            curbuf.get(),
-                            curwin.get(),
+                            Buf::current_raw(),
+                            Win::current_raw(),
                             &raw mut slot,
                             flag,
                             *cmd as c_int,
@@ -784,10 +784,10 @@ enum Addr {
 fn dot_lnum(args: Ea, addr_type: CmdAddr) -> Addr {
     Addr::At(match addr_type {
         CmdAddr::Lines | CmdAddr::Other => cur_win().w_cursor.lnum,
-        CmdAddr::Windows => current_win_nr(curwin.get()) as LineNr,
+        CmdAddr::Windows => current_win_nr(Win::current_raw()) as LineNr,
         CmdAddr::Arguments => (cur_win().w_arg_idx + 1) as LineNr,
         CmdAddr::LoadedBuffers | CmdAddr::Buffers => cur_buf().handle as LineNr,
-        CmdAddr::Tabs => current_tab_nr(curtab.get()) as LineNr,
+        CmdAddr::Tabs => current_tab_nr(TabPage::current_raw()) as LineNr,
         CmdAddr::Quickfix => qf_get_cur_idx(args.raw()) as LineNr,
         CmdAddr::QuickfixValid => qf_get_cur_valid_idx(args.raw()) as LineNr,
         t if t == CmdAddr::NoRange || t == CmdAddr::TabsRelative || t == CmdAddr::Unsigned => {

@@ -568,25 +568,25 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
     // move the buffer contents to a hidden buffer.
     let mut savebuf = ptr::null_mut::<Buffer>();
     let mut bufref = BufRef::NONE;
-    if !(unsafe { buf_is_empty(curbuf.get()) } || saved.is_err()) {
+    if !(unsafe { buf_is_empty(Buf::current_raw()) } || saved.is_err()) {
         // Allocate a buffer without putting it in the buffer list.
         savebuf = unsafe { buflist_new(ptr::null_mut(), ptr::null_mut(), 1, BLN_DUMMY as c_int) };
         // SAFETY: `buflist_new` answers a live buffer or null.
         let scratch = unsafe { Buf::from_raw(savebuf) };
         bufref = BufRef::of_opt(scratch);
         if let Some(scratch) = scratch
-            && buffer.raw() == curbuf.get()
+            && buffer.raw() == Buf::current_raw()
         {
             // Open the memline.
             scratch.make_current();
             cur_win().w_buffer = savebuf;
-            saved = unsafe { ml_open(curbuf.get()) };
+            saved = unsafe { ml_open(Buf::current_raw()) };
             buffer.make_current();
             cur_win().w_buffer = buffer.raw();
         }
         if savebuf.is_null()
             || saved.is_err()
-            || buffer.raw() != curbuf.get()
+            || buffer.raw() != Buf::current_raw()
             // SAFETY: the null check above guards this one.
             || move_lines(buffer, unsafe { Buf::new(savebuf) }) == FAIL
         {
@@ -613,10 +613,10 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 let fname = unsafe { c_str(fname) };
                 semsg!("E321: Could not reload \"{fname}\"");
             }
-            if !savebuf.is_null() && bufref.valid() && buffer.raw() == curbuf.get() {
+            if !savebuf.is_null() && bufref.valid() && buffer.raw() == Buf::current_raw() {
                 // Put the text back from the save buffer. First delete any
                 // lines that readfile() added.
-                while !unsafe { buf_is_empty(curbuf.get()) } {
+                while !unsafe { buf_is_empty(Buf::current_raw()) } {
                     if unsafe { ml_delete(buffer.b_ml.ml_line_count) }.is_err() {
                         break;
                     }
@@ -624,7 +624,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 // SAFETY: `savebuf` is non-null here, and still valid.
                 move_lines(unsafe { Buf::new(savebuf) }, buffer);
             }
-        } else if buffer.raw() == curbuf.get() {
+        } else if buffer.raw() == Buf::current_raw() {
             // "buf" is still valid. Mark the buffer as unmodified and free
             // the undo info.
             unchanged(buffer, true, true);
@@ -634,7 +634,7 @@ pub unsafe fn buf_reload(buffer: Buf, orig_mode: c_int, reload_options: bool) {
                 // Mark all undo states as changed.
                 u_unchanged(cur_buf());
             }
-            unsafe { buf_updates_unload(curbuf.get(), true) };
+            unsafe { buf_updates_unload(Buf::current_raw(), true) };
             cur_buf().b_mod_set = true;
         }
     }

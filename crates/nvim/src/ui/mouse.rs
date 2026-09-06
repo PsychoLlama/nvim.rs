@@ -18,7 +18,7 @@ use crate::state::{
     MODE_ASKMORE, MODE_CMDLINE, MODE_EXTERNCMD, MODE_HITRETURN, MODE_INSERT, MODE_SETWSIZE,
 };
 use crate::strings::vim_strchr;
-use crate::winlayer::graph::curbuf;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_int};
 
 /// What [`ui_check_mouse`] last worked out.
@@ -82,7 +82,7 @@ pub unsafe fn ui_mouse_has(mode: c_int) -> bool {
             _ if flag == b'a' as c_int => {
                 !unsafe { vim_strchr(MOUSE_A.as_ptr().cast_mut(), mode) }.is_null()
             }
-            MOUSE_HELP => mode != MOUSE_RETURN && unsafe { (*curbuf.get()).b_help },
+            MOUSE_HELP => mode != MOUSE_RETURN && Buf::current().b_help,
             _ => mode == flag,
         };
         if matched {

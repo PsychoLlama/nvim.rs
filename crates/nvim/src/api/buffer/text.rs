@@ -301,7 +301,7 @@ pub unsafe fn nvim_buf_set_text(
                     kExtmarkNOOP,
                 )
             };
-            if visual_active() && b == curbuf.get() && !visual_mode().is_block() {
+            if visual_active() && b == Buf::current_raw() && !visual_mode().is_block() {
                 let mut anchor = visual_anchor();
                 unsafe {
                     fix_pos_col(
@@ -454,7 +454,7 @@ unsafe fn fix_cursor_cols(
     new_rows: LineNr,
     new_cols_at_end_row: ColNr,
 ) {
-    let mode_col_adj: ColNr = if win == curwin.get() && State.get() & MODE_INSERT != 0 {
+    let mode_col_adj: ColNr = if win == Win::current_raw() && State.get() & MODE_INSERT != 0 {
         0 as ColNr
     } else {
         1 as ColNr

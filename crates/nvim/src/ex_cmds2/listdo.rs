@@ -43,7 +43,7 @@ use crate::types::AutoEvent;
 use crate::types::CmdIdx;
 use crate::types::{AcoSave, ExArg, LineNr, size_t};
 use crate::window::{goto_tab, valid_tabpage, win_goto, win_split, win_valid};
-use crate::winlayer::graph::{curbuf, curwin, prevwin};
+use crate::winlayer::graph::prevwin;
 use crate::winlayer::{Buf, Win, first_buffer, first_tab, first_window};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
@@ -121,9 +121,9 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
     // SAFETY: module contract.
     let may_run = unsafe {
         !list.changes_buffer()
-            || buf_hide(curbuf.get())
+            || buf_hide(Buf::current_raw())
             || !check_changed(
-                curbuf.get(),
+                Buf::current_raw(),
                 CCGD_AW | if forceit { CCGD_FORCEIT } else { 0 } | CCGD_EXCMD,
             )
     };
@@ -148,7 +148,7 @@ pub(crate) unsafe fn ex_listdo(args: *mut ExArg) {
 unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     const E_WINFIXBUF: &CStr = c"E1513: Cannot switch buffer. 'winfixbuf' is enabled";
     // SAFETY: module contract.
-    if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } == 0 {
+    if Win::current().w_onebuf_opt.wo_wfb == 0 {
         return true;
     }
     if list == (ListDo::Quickfix { location: true }) && !forceit {
@@ -159,10 +159,10 @@ unsafe fn leave_winfixbuf(list: ListDo, forceit: bool) -> bool {
     if win_valid(prevwin.get()) && unsafe { (*prevwin.get()).w_onebuf_opt.wo_wfb } == 0 {
         unsafe { win_goto(prevwin.get()) };
     }
-    if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
+    if Win::current().w_onebuf_opt.wo_wfb != 0 {
         // The new window is 'nowinfixbuf' and becomes the current one.
         let _ = win_split(0, 0);
-        if unsafe { (*curwin.get()).w_onebuf_opt.wo_wfb } != 0 {
+        if Win::current().w_onebuf_opt.wo_wfb != 0 {
             // Autocommands set 'winfixbuf', or sent us to another window
             // that has it set, or the split failed. Give up.
             emsg(E_WINFIXBUF);
@@ -201,7 +201,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         _ => {}
     }
 
-    let mut buf = curbuf.get();
+    let mut buf = Buf::current_raw();
     let mut qf_size: size_t = 0;
     match list {
         ListDo::Buffers => {
@@ -235,7 +235,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 buf = ptr::null_mut();
             } else {
                 unsafe { ex_cc(args) };
-                buf = curbuf.get();
+                buf = Buf::current_raw();
                 i = unsafe { (*args).line1 } as c_int - 1;
                 if unsafe { (*args).addr_count } <= 0 {
                     // Default to every quickfix/location list entry.
@@ -257,15 +257,15 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
         match list {
             ListDo::Args => {
                 // Go to argument "i".
-                if i == unsafe { (*(*curwin.get()).w_alist).al_ga.len() as c_int } {
+                if i == unsafe { (*Win::current().w_alist).al_ga.len() as c_int } {
                     break;
                 }
                 // Don't call `do_argfile` when already there, it would
                 // try reloading the file.
-                if unsafe { (*curwin.get()).w_arg_idx } != i || !editing_arg_idx(Win::current()) {
+                if Win::current().w_arg_idx != i || !editing_arg_idx(Win::current()) {
                     unsafe { do_argfile(args, i) };
                 }
-                if unsafe { (*curwin.get()).w_arg_idx } != i {
+                if Win::current().w_arg_idx != i {
                     break;
                 }
             }
@@ -277,7 +277,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 execute = !cur.w_floating || (!cur.w_config.hide && cur.w_config.focusable);
                 if execute {
                     unsafe { win_goto(cur.raw()) };
-                    if curwin.get() != cur.raw() {
+                    if Win::current_raw() != cur.raw() {
                         // Something must be wrong.
                         break;
                     }
@@ -332,7 +332,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                 }
                 unsafe { goto_buffer(args, DOBUF_FIRST as c_int, FORWARD as c_int, next_fnum) };
                 // If autocommands took us elsewhere, quit here.
-                if unsafe { (*curbuf.get()).handle } != next_fnum {
+                if Buf::current().handle != next_fnum {
                     break;
                 }
             }
@@ -353,7 +353,7 @@ unsafe fn listdo_walk(args: *mut ExArg, list: ListDo) {
                     // The cursor may have moved.
                     validate_cursor(Win::current());
                     // Required when 'scrollbind' has been set.
-                    if unsafe { (*curwin.get()).w_onebuf_opt.wo_scb } != 0 {
+                    if Win::current().w_onebuf_opt.wo_scb != 0 {
                         unsafe { do_check_scrollbind(true) };
                     }
                 }
@@ -392,14 +392,14 @@ unsafe fn restore_syntax_events(save_ei: *mut c_char) {
         let mut bnext = buf.next();
         if buf.b_nwindows > 0 && buf.b_flags.has(BufFlags::SYN_SET) {
             buf.b_flags.clear(BufFlags::SYN_SET);
-            if buf.raw() == curbuf.get() {
+            if buf.raw() == Buf::current_raw() {
                 unsafe {
                     apply_autocmds(
                         AutoEvent::Syntax,
-                        (*curbuf.get()).b_p_syn,
-                        (*curbuf.get()).b_fname,
+                        Buf::current().b_p_syn,
+                        Buf::current().b_fname,
                         true,
-                        curbuf.get(),
+                        Buf::current_raw(),
                     )
                 };
             } else {

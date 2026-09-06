@@ -42,7 +42,6 @@ use crate::types::{
     Arena, Array, BCount, BufUpdateCallbacks, Buffer, ColNr, Integer, LineNr, LuaRef, LuaRetMode,
     Object, int64_t, size_t, uint64_t,
 };
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Win};
 
 pub const kRetObject: LuaRetMode = 0;
@@ -544,7 +543,7 @@ fn send_changes(mut buffer: Buf, firstline: LineNr, num_added: int64_t, num_remo
 
     // Don't send b:changedtick during 'inccommand' preview if "buf" is the
     // current buffer.
-    let send_tick = !(cmdpreview.get() && buffer.raw() == curbuf.get());
+    let send_tick = !(cmdpreview.get() && buffer.raw() == Buf::current_raw());
 
     // If one of the channels doesn't work, put its ID here so we can remove
     // it later.

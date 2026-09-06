@@ -12,6 +12,7 @@ use super::*;
 use crate::keycodes::{Ctrl_V, key_unescape};
 use crate::normal::{set_visual_active, set_visual_anchor, set_visual_select};
 use crate::types::{FAIL, Failed, MB_MAXBYTES, NUL, OK};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -360,7 +361,7 @@ pub unsafe fn start_redo(count: c_int, old_redo: bool) -> Result<(), Failed> {
 
     if c == 'v' as c_int {
         // Redo a Visual-mode operator over the same area.
-        set_visual_anchor(unsafe { (*curwin.get()).w_cursor });
+        set_visual_anchor(Win::current().w_cursor);
         set_visual_active(true);
         set_visual_select(false);
         VIsual_reselect.set(1);

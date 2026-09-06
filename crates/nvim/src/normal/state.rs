@@ -16,6 +16,7 @@
 use crate::keycodes::ModMask;
 use crate::ops::Op;
 use crate::types::AutoEvent;
+use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -73,7 +74,7 @@ use crate::terminal::terminal_check_refresh;
 use crate::types::{CmdArg, NUL, OpArg, OpType, ShmFlag, VimState, int64_t};
 use crate::ui::{ui_cursor_shape, ui_flush};
 use crate::window::{may_make_initial_scroll_size_snapshot, may_trigger_win_scrolled_resized};
-use crate::winlayer::graph::{cmdwin_result, curbuf, curtab, curwin};
+use crate::winlayer::graph::cmdwin_result;
 use ::libc::time;
 use core::ffi::{c_int, c_uint, c_void};
 
@@ -450,11 +451,11 @@ fn normal_check_cursor_moved() {
     // SAFETY (throughout): reads the current window and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::CursorMoved)
-        && (last_cursormoved_win.get() != curwin.get()
+        && (last_cursormoved_win.get() != Win::current_raw()
             || !equalpos(last_cursormoved.get(), cur_win().w_cursor))
     {
         fire_on_curbuf(AutoEvent::CursorMoved);
-        last_cursormoved_win.set(curwin.get());
+        last_cursormoved_win.set(Win::current_raw());
         last_cursormoved.set(cur_win().w_cursor);
     }
 }
@@ -463,10 +464,10 @@ fn normal_check_text_changed() {
     // SAFETY (throughout): reads the current buffer and fires an autocommand.
     if !finish_op.get()
         && has_event(AutoEvent::TextChanged)
-        && cur_buf().b_last_changedtick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
+        && cur_buf().b_last_changedtick != buf_get_changedtick(cur_buf())
     {
         fire_on_curbuf(AutoEvent::TextChanged);
-        cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
+        cur_buf().b_last_changedtick = buf_get_changedtick(cur_buf());
     }
 }
 
@@ -569,11 +570,9 @@ pub(crate) unsafe fn normal_check(state: *mut VimState) -> c_int {
         normal_check_window_scrolled();
         normal_check_buffer_modified();
         normal_check_safe_state();
-        if unsafe { (*curtab.get()).tp_diff_update } != 0
-            || unsafe { (*curtab.get()).tp_diff_invalid } != 0
-        {
+        if TabPage::current().tp_diff_update != 0 || TabPage::current().tp_diff_invalid != 0 {
             unsafe { ex_diffupdate(ptr::null_mut()) };
-            unsafe { (*curtab.get()).tp_diff_update = 0 };
+            TabPage::current().tp_diff_update = 0;
         }
         if diff_need_scrollbind.get() {
             unsafe { check_scrollbind(0, 0) };
@@ -651,5 +650,5 @@ fn cur_win() -> Win {
 fn fire_on_curbuf(event: AutoEvent) {
     let (fname, fname_io) = (ptr::null_mut(), ptr::null_mut());
     // SAFETY: `curbuf` is the live buffer the event is about.
-    unsafe { apply_autocmds(event, fname, fname_io, false, curbuf.get()) };
+    unsafe { apply_autocmds(event, fname, fname_io, false, Buf::current_raw()) };
 }

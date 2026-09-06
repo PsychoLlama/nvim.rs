@@ -44,7 +44,6 @@ use crate::types::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use crate::types::{NUL, VAR_NUMBER, VarNumber, Vv};
 use crate::ui::{ui_call_set_title, ui_call_stop, ui_flush};
 use crate::ui_client::ui_client_stop;
-use crate::winlayer::graph::curbuf;
 use ::libc::{exit, fprintf, tcdrain};
 
 use crate::winlayer::{Buf, WinId, buffers, first_buffer, first_tab, first_window};
@@ -226,7 +225,8 @@ unsafe fn with_autocmds_unblocked(event: AutoEvent) {
     if blocked {
         unsafe { unblock_autocmds() };
     }
-    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, curbuf.get()) };
+    let buffer = Buf::current_raw();
+    unsafe { apply_autocmds(event, ptr::null_mut(), ptr::null_mut(), false, buffer) };
     if blocked {
         unsafe { block_autocmds() };
     }

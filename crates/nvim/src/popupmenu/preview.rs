@@ -21,6 +21,7 @@ use crate::option::boolean_optval;
 use crate::pos::MAXCOL;
 use crate::types::OptionSetFlags;
 use crate::winlayer::Win;
+use crate::winlayer::{Buf, TabPage};
 
 /// How tall a preview split starts out.
 const PUM_PREVIEW_HEIGHT: c_int = 3;
@@ -306,8 +307,8 @@ unsafe fn pum_show_info(
     // SAFETY: every window pointer below is re-checked with `win_valid`
     // after anything that can run autocommands.
     let mut resized = false;
-    let curwin_save = curwin.get();
-    let curtab_save = curtab.get();
+    let curwin_save = Win::current_raw();
+    let curtab_save = TabPage::current_raw();
 
     if use_float {
         unsafe { block_autocmds() };
@@ -336,15 +337,13 @@ unsafe fn pum_show_info(
     drop(redraw_off);
     g_do_tagpreview.set(0);
 
-    if unsafe { (*curwin.get()).w_onebuf_opt.wo_pvw } != 0
-        || unsafe { (*curwin.get()).w_float_is_info }
-    {
+    if Win::current().w_onebuf_opt.wo_pvw != 0 || Win::current().w_float_is_info {
         let mut res = Ok(());
         if !resized
-            && unsafe { (*curbuf.get()).b_nwindows } == 1
-            && unsafe { (*curbuf.get()).b_fname }.is_null()
+            && Buf::current().b_nwindows == 1
+            && Buf::current().b_fname.is_null()
             && buf_is_nofile(current_buf())
-            && unsafe { *(*curbuf.get()).b_p_bh } == b'w' as c_char
+            && unsafe { *Buf::current().b_p_bh } == b'w' as c_char
         {
             // Already a "wipeout" buffer: just empty it.
             buf_clear();
@@ -405,29 +404,29 @@ unsafe fn pum_fill_info(
 ) -> bool {
     // SAFETY: `curwin`/`curbuf` are the preview window and its buffer;
     // `curwin_save` is the window completion started in and is re-validated.
-    let (lnum, max_info_width) = unsafe { pum_preview_set_text(curwin.get(), info) };
+    let (lnum, max_info_width) = unsafe { pum_preview_set_text(Win::current_raw(), info) };
 
     // Grow a preview split to fit the text, up to 'previewheight'.
     if repeat == 0 && !use_float {
         let lnum = lnum.min(p_pvh.get() as LineNr);
-        if LineNr::from(unsafe { (*curwin.get()).w_height }) < lnum {
+        if LineNr::from(Win::current().w_height) < lnum {
             win_setheight(lnum as c_int);
             resized = true;
         }
     }
 
-    unsafe { (*curbuf.get()).b_changed = 0 };
-    unsafe { (*curbuf.get()).b_p_ma = 0 };
+    Buf::current().b_changed = 0;
+    Buf::current().b_p_ma = 0;
     if pum_selected.get() != prev_selected {
-        unsafe { (*curwin.get()).w_topline = 1 };
-    } else if unsafe { (*curwin.get()).w_topline } > unsafe { (*curbuf.get()).b_ml.ml_line_count } {
-        unsafe { (*curwin.get()).w_topline = (*curbuf.get()).b_ml.ml_line_count };
+        Win::current().w_topline = 1;
+    } else if Win::current().w_topline > Buf::current().b_ml.ml_line_count {
+        Win::current().w_topline = Buf::current().b_ml.ml_line_count;
     }
-    unsafe { (*curwin.get()).w_cursor.lnum = 1 };
-    unsafe { (*curwin.get()).w_cursor.col = 0 };
+    Win::current().w_cursor.lnum = 1;
+    Win::current().w_cursor.col = 0;
 
     if use_float
-        && !unsafe { pum_adjust_info_position(curwin.get(), max_info_width) }
+        && !unsafe { pum_adjust_info_position(Win::current_raw(), max_info_width) }
         && win_valid(curwin_save)
     {
         unsafe { win_enter(curwin_save, false) };
@@ -448,8 +447,8 @@ unsafe fn pum_restore_window(
     resized: bool,
 ) -> bool {
     // SAFETY: both pointers are validated before they are entered.
-    let left_window = curwin.get() != curwin_save && win_valid(curwin_save);
-    let left_tab = curtab.get() != curtab_save && valid_tabpage(curtab_save);
+    let left_window = Win::current_raw() != curwin_save && win_valid(curwin_save);
+    let left_tab = TabPage::current_raw() != curtab_save && valid_tabpage(curtab_save);
     if !left_window && !left_tab {
         return resized;
     }
@@ -460,11 +459,11 @@ unsafe fn pum_restore_window(
     // On the first completion, with the preview window not resized, skip
     // its status line redraw.
     if ins_compl_active() && !resized {
-        unsafe { (*curwin.get()).w_redr_status = false };
+        Win::current().w_redr_status = false;
     }
 
     validate_cursor(Win::current());
-    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
 
     // A resized preview window needs the buffer view updated, which only
     // happens in the window itself.

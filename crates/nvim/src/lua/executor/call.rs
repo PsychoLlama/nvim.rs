@@ -8,6 +8,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -34,7 +35,6 @@ use crate::types::{
     Arena, ArenaMem, Array, ConsumedBlk, Error, Object, kErrorTypeException, kErrorTypeValidation,
     lua_State, size_t, uint64_t,
 };
-use crate::winlayer::graph::curwin;
 
 /// How much of a rejected function's name the "not allowed in a fast event"
 /// message quotes.
@@ -96,8 +96,8 @@ pub unsafe extern "C-unwind" fn nlua_call(lstate: *mut lua_State) -> c_int {
 
             let mut rettv = TV_INITIAL_VALUE;
             let mut funcexe = FUNCEXE_INIT;
-            funcexe.fe_firstline = (*curwin.get()).w_cursor.lnum;
-            funcexe.fe_lastline = (*curwin.get()).w_cursor.lnum;
+            funcexe.fe_firstline = Win::current().w_cursor.lnum;
+            funcexe.fe_lastline = Win::current().w_cursor.lnum;
             funcexe.fe_evaluate = true;
 
             let sctx = api_set_sctx(LUA_INTERNAL_CALL);

@@ -33,6 +33,7 @@ use crate::cstr;
 use crate::message_fmt::c_str;
 use crate::smsg;
 use crate::types::AutoEvent;
+use crate::winlayer::Win;
 use ::libc::strcasecmp;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
@@ -60,7 +61,6 @@ use crate::types::{
     size_t,
 };
 use crate::window::win_valid_any_tab;
-use crate::winlayer::graph::{curbuf, curwin};
 
 use super::chartab::init_spell_chartab;
 use super::slang::slang_free;
@@ -117,7 +117,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
     sl.sl_nobreak = 0;
 
     // Autocommands could otherwise delete the buffer and free "lang".
-    unsafe { (*curbuf.get()).b_locked += 1 };
+    Buf::current().b_locked += 1;
 
     let mut r = Err(Failed);
     for round in 1..=2 {
@@ -137,7 +137,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             };
 
             if r.is_err() && sl.sl_lang[0] != 0 && round == 1 && {
-                let buf = curbuf.get();
+                let buf = Buf::current_raw();
                 let fname = unsafe { (*buf).b_fname };
                 let event = AutoEvent::SpellFileMissing;
                 unsafe { apply_autocmds(event, lang, fname, false, buf) }
@@ -175,7 +175,7 @@ unsafe fn spell_load_lang(lang: *mut c_char) {
             unsafe { do_in_runtimepath_cb(fname_enc.as_mut_ptr(), RuntimeOpts::ALL, &raw mut sl) };
     }
 
-    unsafe { (*curbuf.get()).b_locked -= 1 };
+    Buf::current().b_locked -= 1;
 }
 
 /// `do_in_runtimepath` with [`spell_load_cb`] as the callback.
@@ -399,7 +399,7 @@ pub unsafe fn parse_spelllang(window: *mut Window) -> Option<&'static CStr> {
     if ret_msg.is_none() {
         // Round 0 is the internal word list; each round after that is one
         // entry of 'spellfile'.
-        let mut spf = unsafe { (*(*curwin.get()).w_s).b_p_spf };
+        let mut spf = unsafe { (*Win::current().w_s).b_p_spf };
         let mut round = 0;
         while round == 0 || unsafe { *spf } != 0 {
             if round == 0 {
@@ -663,7 +663,7 @@ pub unsafe fn valid_spellfile(val: *const c_char) -> bool {
 pub unsafe fn did_set_spell_option() -> Option<&'static CStr> {
     let mut errmsg = None;
     for wp in windows() {
-        if wp.w_buffer == curbuf.get() && wp.w_onebuf_opt.wo_spell != 0 {
+        if wp.w_buffer == Buf::current_raw() && wp.w_onebuf_opt.wo_spell != 0 {
             // SAFETY: a live window of the current tab page.
             errmsg = unsafe { parse_spelllang(wp.raw()) };
             break;

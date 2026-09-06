@@ -20,6 +20,7 @@ use crate::keycodes::{
     is_special,
 };
 use crate::types::{ExpandContext, FAIL, MB_MAXCHAR, NUL};
+use crate::winlayer::Buf;
 
 /// Handle the erase keys: backspace, delete and CTRL-W.
 ///
@@ -113,9 +114,9 @@ pub(crate) unsafe fn command_line_toggle_langmap(s: Cls) {
 
     if !b_im_ptr.is_null() {
         if b_im_ptr == cur_buf_iminsert() {
-            unsafe { set_iminsert_global(curbuf.get()) };
+            unsafe { set_iminsert_global(Buf::current_raw()) };
         } else {
-            unsafe { set_imsearch_global(curbuf.get()) };
+            unsafe { set_imsearch_global(Buf::current_raw()) };
         }
     }
     unsafe { ui_cursor_shape() }; // may show a different cursor shape

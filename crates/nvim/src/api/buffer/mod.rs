@@ -44,7 +44,6 @@ use crate::types::{
     WinSplit, WinStyle, Window, int64_t, kErrorTypeNone, lua_State, ptrdiff_t, size_t, uint64_t,
 };
 use crate::undo::u_save_buf;
-use crate::winlayer::graph::{curbuf, curwin};
 
 // The carve of the transpiled module; see each child's docs.
 mod attach;

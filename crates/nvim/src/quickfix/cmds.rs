@@ -131,7 +131,7 @@ unsafe fn cbuffer_process_args(args: *mut ExArg) -> Option<Buf> {
     let mut args = unsafe { Ea::new(args) };
     // SAFETY: forwarded from the caller.
     let buf = if unsafe { *args.arg } as c_int == NUL {
-        curbuf.get()
+        Buf::current_raw()
     } else if unsafe { *skipwhite(skipdigits(args.arg)) } as c_int == NUL {
         find_buf(unsafe { atoi(args.arg) }).map_or(ptr::null_mut(), |b| b.raw())
     } else {
@@ -235,11 +235,11 @@ pub unsafe fn ex_cbuffer(args: *mut ExArg) {
     }
     let save_qfid = qf_current_list(qi).qf_id;
     if let Some(name) = au_name {
-        let curbuf_old: *const Buffer = curbuf.get();
+        let curbuf_old: *const Buffer = Buf::current_raw();
         fire_qf_autocmd(AutoEvent::QuickFixCmdPost, name, true);
         // The autocommand switched buffers: do not jump away from
         // wherever it left the user.
-        if !ptr::eq(curbuf.get(), curbuf_old) {
+        if !ptr::eq(Buf::current_raw(), curbuf_old) {
             res = 0;
         }
     }

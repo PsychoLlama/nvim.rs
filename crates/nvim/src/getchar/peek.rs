@@ -29,6 +29,7 @@ use super::*;
 use crate::guard::Depth;
 use crate::keycodes::{Ctrl_C, key_escape};
 use crate::types::NUL;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_long};
 use core::ptr;
@@ -298,9 +299,7 @@ unsafe fn read_from_typeahead(
             // SAFETY (this body): `curbuf` is set from startup to exit, and
             // every typeahead access goes through the accessors, which
             // bound-check against the buffer's own length.
-            if (mapped_ctrl_c.get() | unsafe { (*curbuf.get()).b_mapped_ctrl_c }) & get_real_state()
-                != 0
-            {
+            if (mapped_ctrl_c.get() | Buf::current().b_mapped_ctrl_c) & get_real_state() != 0 {
                 ctrl_c_interrupts.set(false);
             }
             os_breakcheck(); // check for CTRL-C
@@ -346,7 +345,7 @@ unsafe fn read_from_typeahead(
         // redisplayed; that the cursor is in the wrong place until then
         // does not matter.
         let mut c = 0;
-        let win = curwin.get();
+        let win = Win::current_raw();
         let mut at = CursorAt {
             wcol: unsafe { (*win).w_wcol },
             wrow: unsafe { (*win).w_wrow },

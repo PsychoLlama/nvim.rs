@@ -80,7 +80,7 @@ use crate::types::{
     int64_t, size_t,
 };
 use crate::window::prevwin_curwin;
-use crate::winlayer::graph::curbuf;
+use crate::winlayer::Buf;
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::{mem, ptr, slice};
@@ -390,7 +390,7 @@ pub(crate) unsafe fn uc_add_command(
     }
 
     let table = if flags & UC_BUFFER != 0 {
-        Table::Buffer(curbuf.get())
+        Table::Buffer(Buf::current_raw())
     } else {
         Table::Global
     };
@@ -638,8 +638,8 @@ pub(crate) unsafe fn ex_command(args: *mut ExArg) {
 pub(crate) unsafe fn ex_comclear(_args: *mut ExArg) {
     // SAFETY: module contract.
     unsafe { uc_clear(Table::Global) };
-    if !curbuf.get().is_null() {
-        unsafe { uc_clear(Table::Buffer(curbuf.get())) };
+    if let Some(buffer) = Buf::current_or_none() {
+        unsafe { uc_clear(Table::Buffer(buffer.raw())) };
     }
 }
 

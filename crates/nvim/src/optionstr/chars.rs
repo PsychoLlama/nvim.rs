@@ -27,6 +27,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
 use core::{ptr, slice};
@@ -47,7 +48,6 @@ use crate::types::{
     int64_t, size_t,
 };
 use crate::winlayer;
-use crate::winlayer::graph::curwin;
 
 use super::{
     clear_string_option, e_conflicts_with_value_of_fillchars, e_conflicts_with_value_of_listchars,
@@ -797,10 +797,10 @@ pub unsafe fn check_chars_options() -> Option<&'static CStr> {
         }
     };
 
-    if let Some(global) = check(curwin.get(), p_lcs.get(), kListchars, false) {
+    if let Some(global) = check(Win::current_raw(), p_lcs.get(), kListchars, false) {
         return Some(global);
     }
-    if let Some(global) = check(curwin.get(), p_fcs.get(), kFillchars, false) {
+    if let Some(global) = check(Win::current_raw(), p_fcs.get(), kFillchars, false) {
         return Some(global);
     }
     // SAFETY: `for_each_window` only visits live windows.

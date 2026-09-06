@@ -26,6 +26,7 @@ use crate::autocmd::{
 use crate::buffer::{BufFlags, BufRef, buflist_new, wipe_buffer};
 use crate::options::{kOptBufhidden, kOptBuftype, kOptInvalid};
 use crate::types::AutoEvent;
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_char, c_int, c_void};
 
 use crate::api::private::validate::{err_bad_value, err_expected};
@@ -43,7 +44,6 @@ use crate::types::{
 };
 use crate::window::close_windows;
 use crate::winlayer::Buf;
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ptr;
 
 const kOptScopeBuf: OptScope = 2;
@@ -288,7 +288,7 @@ unsafe fn wipe_ft_buf(buffer: *mut Buffer) {
     unsafe { block_autocmds() };
     let bufref = BufRef::of_opt(unsafe { Buf::from_raw(buffer) });
     unsafe { close_windows(buffer, false) };
-    if bufref.valid() && buffer != curbuf.get() && unsafe { (*buffer).b_nwindows } == 0 {
+    if bufref.valid() && buffer != Buf::current_raw() && unsafe { (*buffer).b_nwindows } == 0 {
         wipe_buffer(unsafe { Buf::new(buffer) }, false);
     }
     if bufref.valid() {
@@ -431,11 +431,11 @@ pub unsafe fn nvim_get_option_info2(
     // the two the caller did not name default to the current ones.
     let buf = match target.scope == kOptScopeBuf {
         true => target.from.cast::<Buffer>(),
-        false => curbuf.get(),
+        false => Buf::current_raw(),
     };
     let win = match target.scope == kOptScopeWin {
         true => target.from.cast(),
-        false => curwin.get(),
+        false => Win::current_raw(),
     };
     // SAFETY: `buf` and `win` are live, `name` and `arena` are the caller's,
     // and `err` is this frame's own.

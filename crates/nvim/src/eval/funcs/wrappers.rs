@@ -43,7 +43,6 @@ use crate::types::{
     VAR_STRING, VAR_UNKNOWN, VarLock, VarNumber, Window, kBoolVarTrue, ptrdiff_t,
     typval_vval_union,
 };
-use crate::winlayer::graph::{curbuf, curwin};
 use crate::winlayer::{Buf, Win, last_buffer};
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
@@ -512,7 +511,7 @@ pub unsafe fn tv_get_buf(tv: *mut TypVal, curtab_only: c_int) -> *mut Buffer {
     let name = unsafe { (*tv).string_or_null() };
     // The empty string is the current buffer, `$` the last one.
     if name.is_null() || unsafe { *name } as c_int == NUL {
-        return curbuf.get();
+        return Buf::current_raw();
     }
     if unsafe { *name } as u8 == b'$' && unsafe { *name.add(1) } as c_int == NUL {
         return last_buffer().map_or(ptr::null_mut(), Buf::raw);
@@ -580,7 +579,7 @@ pub unsafe fn get_buf_arg(arg: *mut TypVal) -> *mut Buffer {
 pub unsafe fn get_optional_window(args: *mut TypVal, idx: c_int) -> *mut Window {
     // SAFETY: the caller's obligation.
     if unsafe { (*args.add(idx as usize)).v_type } == VAR_UNKNOWN {
-        return curwin.get();
+        return Win::current_raw();
     }
     let win = unsafe { find_win_by_nr_or_id(args.add(idx as usize)) };
     if win.is_none() {

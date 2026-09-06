@@ -65,6 +65,7 @@ use crate::types::{
 };
 use crate::ui::ui_has;
 use crate::undo::u_save_cursor;
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
 
@@ -234,17 +235,9 @@ pub(super) unsafe fn is_expr_sub(sub: *const c_char) -> bool {
 /// Main thread; `regmatch` must hold a compiled program.
 pub(super) unsafe fn regexec_at(regmatch: *mut RegMMatch, lnum: LineNr, col: ColNr) -> c_int {
     // SAFETY: caller's contract; the current window and buffer are live.
-    unsafe {
-        vim_regexec_multi(
-            regmatch,
-            cur_win().raw(),
-            cur_buf().raw(),
-            lnum,
-            col,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    }
+    let (win, buffer) = (Win::current_raw(), Buf::current_raw());
+    let (timeout, timed_out) = (ptr::null_mut(), ptr::null_mut());
+    unsafe { vim_regexec_multi(regmatch, win, buffer, lnum, col, timeout, timed_out) }
 }
 
 /// Record a match for the `'inccommand'` preview, and how many lines it adds
@@ -599,7 +592,8 @@ unsafe fn finish(st: &mut Sub, args: &SubArgs) -> c_int {
         );
         let num_added = (st.last_line - st.first_line) as int64_t;
         let num_removed = num_added - added as int64_t;
-        unsafe { buf_updates_send_changes(cur_buf().raw(), st.first_line, num_added, num_removed) };
+        let buffer = Buf::current_raw();
+        unsafe { buf_updates_send_changes(buffer, st.first_line, num_added, num_removed) };
     }
 
     // May have to free the allocated copy of the line.

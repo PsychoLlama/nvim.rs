@@ -139,7 +139,7 @@ pub(crate) fn fire_qf_autocmd(event: AutoEvent, name: &CStr, on_fname: bool) -> 
     };
     // SAFETY: a static event name, the current buffer's own file name, and
     // the current buffer — all live across the call.
-    unsafe { apply_autocmds(event, pat, fname, on_fname, curbuf.get()) }
+    unsafe { apply_autocmds(event, pat, fname, on_fname, Buf::current_raw()) }
 }
 
 /// The quickfix stack, as a [`Qi`]. It is a static, so it is always live.
@@ -399,7 +399,7 @@ unsafe fn wipe_qf_buffer(qi: *mut QfInfo) {
     // already released the current window's buffer.
     let buf_was_null = cur_win().w_buffer.is_null();
     if buf_was_null {
-        cur_win().w_buffer = curbuf.get();
+        cur_win().w_buffer = Buf::current_raw();
     }
     close_buffer(None, qfbuf, DOBUF_WIPE as c_int, false, false);
     qi.qf_bufnr = INVALID_QFBUFNR;

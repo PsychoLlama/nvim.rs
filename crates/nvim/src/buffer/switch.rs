@@ -57,7 +57,6 @@ use crate::window::{
     check_can_set_curbuf_forceit, last_window, swbuf_goto_win_with_buf, win_close, win_locked,
     win_split,
 };
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{buffers, last_window as last_listed_window, windows};
 
 use super::expand::find_buf;
@@ -278,7 +277,7 @@ pub(crate) fn handle_swap_exists(old_curbuf: Option<BufRef>) {
 
         let kept = old_curbuf
             .and_then(BufRef::get)
-            .filter(|b| b.raw() != curbuf.get());
+            .filter(|b| b.raw() != Buf::current_raw());
         let buf = match kept {
             Some(buf) => Some(buf),
             None => {
@@ -451,7 +450,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
         let can_close_all_others = !cur_win().w_floating
             || windows()
                 .take_while(|wp| !wp.w_floating)
-                .any(|wp| wp.w_buffer != curbuf.get());
+                .any(|wp| wp.w_buffer != Buf::current_raw());
         close_all_windows(buf, can_close_all_others);
     }
 
@@ -466,7 +465,7 @@ fn empty_curbuf(close_others: bool, forceit: c_int, action: c_int) -> Result<(),
     // exists.
     if let Some(old) = bufref
         .get()
-        .filter(|b| b.raw() != curbuf.get() && b.b_nwindows == 0)
+        .filter(|b| b.raw() != Buf::current_raw() && b.b_nwindows == 0)
     {
         close_buffer(None, old, action, false, false);
     }
@@ -502,7 +501,10 @@ fn do_buffer_ext(
         return Err(Failed);
     };
 
-    if action == DOBUF_GOTO as c_int && buf.raw() != curbuf.get() && !may_change_buffer(forceit) {
+    if action == DOBUF_GOTO as c_int
+        && buf.raw() != Buf::current_raw()
+        && !may_change_buffer(forceit)
+    {
         // disallow navigating to another buffer when 'winfixbuf' is applied
         return Err(Failed);
     }
@@ -536,7 +538,7 @@ fn do_buffer_ext(
         return Ok(());
     }
     // Whether splitting or not, don't open a closing buffer in more windows.
-    if buf.raw() != curbuf.get() && buf.b_locked_split != 0 {
+    if buf.raw() != Buf::current_raw() && buf.b_locked_split != 0 {
         err_raw(tr_raw(e_cannot_switch_to_a_closing_buffer.as_ptr()));
         return Err(Failed);
     }
@@ -545,7 +547,7 @@ fn do_buffer_ext(
     }
 
     // go to current buffer - nothing to do
-    if buf.raw() == curbuf.get() {
+    if buf.raw() == Buf::current_raw() {
         return Ok(());
     }
 
@@ -743,13 +745,13 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     let buf_fnum = buffer.handle as c_int;
 
     // When closing the current buffer stop Visual mode.
-    if buffer.raw() == curbuf.get() && visual_active() {
+    if buffer.raw() == Buf::current_raw() && visual_active() {
         end_visual();
     }
 
     // If deleting the last (listed) buffer, make it empty.
     // The last (listed) buffer cannot be unloaded.
-    if !buffers().any(|b| b.b_p_bl != 0 && b != buffer) && buffer.raw() == curbuf.get() {
+    if !buffers().any(|b| b.b_p_bl != 0 && b != buffer) && buffer.raw() == Buf::current_raw() {
         let forceit = flags & DOBUF_FORCEIT as c_int;
         return Unloaded::Done(empty_curbuf(true, forceit, action));
     }
@@ -757,7 +759,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     // If the deleted buffer is the current one, close the current window
     // (unless it's the only non-floating window), for as long as we end up in
     // a window with this buffer.
-    while buffer.raw() == curbuf.get()
+    while buffer.raw() == Buf::current_raw()
         && !(window_locked(cur_win()) || cur_win().buffer().b_locked > 0)
         && (last_listed_window().is_some_and(|wp| is_autocmd_window(wp.raw()))
             || !is_last_window(cur_win()))
@@ -768,7 +770,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
     }
 
     // If the buffer to be deleted is not the current one, delete it here.
-    if buffer.raw() != curbuf.get() {
+    if buffer.raw() != Buf::current_raw() {
         if jop_clean() {
             // Remove the buffer to be deleted from the jump list.
             forget_jumps(cur_win(), buf_fnum);
@@ -778,7 +780,7 @@ fn unload_buffer(buffer: Buf, action: c_int, flags: c_int, update_jumplist: &mut
 
         if let Some(gone) = bufref
             .get()
-            .filter(|b| b.raw() != curbuf.get() && b.b_nwindows <= 0)
+            .filter(|b| b.raw() != Buf::current_raw() && b.b_nwindows <= 0)
         {
             close_buffer(None, gone, action, false, false);
         }
@@ -860,7 +862,10 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
     if buf.is_none() {
         // No loaded buffer, find listed one
         buf = buffers().find(|b| {
-            b.b_p_bl != 0 && b.raw() != curbuf.get() && !is_quickfix(*b) && b.b_locked_split == 0
+            b.b_p_bl != 0
+                && b.raw() != Buf::current_raw()
+                && !is_quickfix(*b)
+                && b.b_locked_split == 0
         });
     }
     if buf.is_none() {
@@ -868,10 +873,9 @@ fn pick_replacement(buf_fnum: c_int, update_jumplist: &mut bool) -> Option<Buf> 
         // checking it for null first; with both neighbours gone there is
         // nothing to test, which is what `filter` says here.
         let cur = cur_buf();
-        buf = cur
-            .next()
-            .or_else(|| cur.prev())
-            .filter(|b| !is_quickfix(*b) && !(b.raw() != curbuf.get() && b.b_locked_split != 0));
+        buf = cur.next().or_else(|| cur.prev()).filter(|b| {
+            !is_quickfix(*b) && !(b.raw() != Buf::current_raw() && b.b_locked_split != 0)
+        });
     }
     buf
 }
@@ -904,7 +908,11 @@ fn walk_jumplist(unloaded: &mut Option<Buf>, update_jumplist: &mut bool) -> Opti
         if let Some(b) = buf {
             // Skip current and unlisted bufs.  Also skip a quickfix or closing
             // buffer, it might be deleted soon.
-            if b.raw() == curbuf.get() || b.b_p_bl == 0 || is_quickfix(b) || b.b_locked_split != 0 {
+            if b.raw() == Buf::current_raw()
+                || b.b_p_bl == 0
+                || is_quickfix(b)
+                || b.b_locked_split != 0
+            {
                 buf = None;
             } else if b.b_ml.ml_mfp.is_null() {
                 // skip unloaded buf, but may keep it for later

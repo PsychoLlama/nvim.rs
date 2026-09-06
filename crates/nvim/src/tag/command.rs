@@ -196,7 +196,7 @@ impl DoTag {
         verbose: bool,
     ) -> Self {
         // SAFETY: the caller's promise.
-        let win = curwin.get();
+        let win = Win::current_raw();
         // `:help` tags are literal, and 'tagfunc' has no business
         // answering for them.
         let help = kind == DT_HELP as c_int;
@@ -516,7 +516,7 @@ impl DoTag {
             self.current().fmark.mark = cursor;
             self.current().fmark.fnum = cur_buf().handle;
             // SAFETY: `curwin` is live and `cursor` is a position in it.
-            self.current().fmark.view = unsafe { mark_view_make(curwin.get(), cursor) };
+            self.current().fmark.view = unsafe { mark_view_make(Win::current_raw(), cursor) };
         }
 
         // `curwin` changes in `jumpto_tag` for `:stag`, or when an
@@ -524,7 +524,7 @@ impl DoTag {
         cur_win().w_tagstackidx = self.idx;
         if !self.selecting() {
             let entry = unsafe {
-                (&raw mut (*curwin.get()).w_tagstack)
+                (&raw mut (*Win::current_raw()).w_tagstack)
                     .cast::<Taggy>()
                     .offset(self.idx as isize)
             };
@@ -659,7 +659,7 @@ impl DoTag {
         // A tag function may do anything, which may make all sorts of
         // things invalid. At least check that the tag stack is still
         // the one we started with.
-        if self.tagstack != (unsafe { &raw mut (*curwin.get()).w_tagstack }).cast() {
+        if self.tagstack != (unsafe { &raw mut (*Win::current_raw()).w_tagstack }).cast() {
             tag_emsg(c"E1299: Window unexpectedly closed while searching for tags");
             unsafe { free_wild(new_num_matches, new_matches) };
             return false;

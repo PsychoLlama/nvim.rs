@@ -27,7 +27,6 @@ use crate::types::{
     String_0, TryState, int64_t, kErrorTypeNone, kErrorTypeValidation, kObjectTypeString, size_t,
     uint64_t,
 };
-use crate::winlayer::graph::curbuf;
 use ::libc::abort;
 
 // The carve of the transpiled module; see each child's docs.

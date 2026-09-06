@@ -177,7 +177,7 @@ pub unsafe fn mark_get_local(
         // here and `nvim_buf_get_mark` relies on it.
         // SAFETY: `curbuf` is live from startup to exit and `fmp` is the
         // caller's record.
-        unsafe { pos_to_mark(Buf::current().raw(), fmp, winh.w_pcmark) }
+        unsafe { pos_to_mark(Buf::current_raw(), fmp, winh.w_pcmark) }
     } else if name == '"' as c_int {
         bufh.last_cursor().raw()
     } else if name == '^' as c_int {
@@ -430,7 +430,7 @@ pub unsafe fn mark_move_to(mut fm: *mut FileMark, flags: MarkMove) -> MarkMoveRe
         // The mark's line was checked against the OLD buffer above; now that
         // the file is loaded, ask again against the real one.
         // SAFETY: `curbuf` is live and the record is the static.
-        if !unsafe { mark_check_line_bounds(Buf::current().raw(), fm, &mut errormsg) } {
+        if !unsafe { mark_check_line_bounds(Buf::current_raw(), fm, &mut errormsg) } {
             if let Some(msg) = &errormsg {
                 emsg(msg);
             }

@@ -21,6 +21,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::winlayer::Win;
 use core::cmp::Ordering;
 use core::ffi::{c_int, c_uint, c_void};
 
@@ -691,7 +692,7 @@ unsafe fn beaten_by_a_loaded_buffer(entry: &ShadaEntry) -> bool {
         {
             let mut fm: FileMark = FileMark::UNSET;
             let name = entry.data.filemark().name as c_int;
-            let win = curwin.get();
+            let win = Win::current_raw();
             unsafe { mark_get(buf.raw(), win, &raw mut fm, kMarkBufLocal, name) };
             if fm.timestamp >= entry.timestamp {
                 return true;

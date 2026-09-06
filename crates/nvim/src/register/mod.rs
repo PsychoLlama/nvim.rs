@@ -113,7 +113,6 @@ use crate::types::{
 use crate::ui::state::Columns;
 use crate::ui::ui_has;
 use crate::undo::{u_save, u_save_cursor};
-use crate::winlayer::graph::curbuf;
 use ::libc::{abort, atoi, strcpy};
 
 // The carve of the transpiled module; see each child's docs.

@@ -62,15 +62,15 @@ pub(crate) unsafe fn prepare_line(
         };
         unsafe { wlv.advance_color_col(wlv.vcol - wlv.vcol_off_co) };
 
-        if window.w_buffer == unsafe { (*curwin.get()).w_buffer }
+        if window.w_buffer == Win::current().w_buffer
             && let Some(sel) = visual_selection()
         {
             unsafe { s.visual_area(wlv, window, sel) };
         } else if highlight_match.get()
-            && window.raw() == curwin.get()
+            && window.raw() == Win::current_raw()
             && !s.has_foldtext
-            && lnum >= unsafe { (*curwin.get()).w_cursor.lnum }
-            && lnum <= unsafe { (*curwin.get()).w_cursor.lnum } + search_match_lines.get()
+            && lnum >= Win::current().w_cursor.lnum
+            && lnum <= Win::current().w_cursor.lnum + search_match_lines.get()
         {
             unsafe { s.incsearch_area(wlv, window) };
         }
@@ -191,8 +191,8 @@ impl LineSetup {
             conceal_attr: unsafe { win_hl_attr(window.raw(), HLF_CONCEAL) },
             view_width: window.w_view_width,
             view_height: window.w_view_height,
-            in_curline: window.raw() == curwin.get()
-                && wlv.lnum == unsafe { (*curwin.get()).w_cursor.lnum },
+            in_curline: window.raw() == Win::current_raw()
+                && wlv.lnum == Win::current().w_cursor.lnum,
             has_fold,
             has_foldtext,
             is_wrapped: window.w_onebuf_opt.wo_wrap != 0 && !has_fold,
@@ -292,7 +292,7 @@ impl LineSetup {
         // Both ends by value: nothing here writes through either, and copying
         // the cursor keeps the ordering out of the unsafe region.
         // SAFETY: the caller's window.
-        let cursor = unsafe { (*curwin.get()).w_cursor };
+        let cursor = Win::current().w_cursor;
         let (mut top, bot) = if ltoreq(cursor, sel.anchor) {
             (cursor, sel.anchor)
         } else {
@@ -390,11 +390,11 @@ impl LineSetup {
     unsafe fn incsearch_area(&mut self, wlv: &mut WinLineVars, window: Win) {
         let lnum = wlv.lnum;
         // SAFETY: the caller's window.
-        if lnum == unsafe { (*curwin.get()).w_cursor.lnum } {
+        if lnum == Win::current().w_cursor.lnum {
             unsafe {
                 getvcol(
-                    Win::new(curwin.get()),
-                    &raw mut (*curwin.get()).w_cursor,
+                    Win::current(),
+                    &raw mut (*Win::current_raw()).w_cursor,
                     &raw mut wlv.fromcol,
                     ::core::ptr::null_mut(),
                     ::core::ptr::null_mut(),
@@ -403,7 +403,7 @@ impl LineSetup {
         } else {
             wlv.fromcol = 0;
         }
-        if lnum == unsafe { (*curwin.get()).w_cursor.lnum } + search_match_lines.get() {
+        if lnum == Win::current().w_cursor.lnum + search_match_lines.get() {
             let mut pos = Pos {
                 lnum,
                 col: search_match_endcol.get(),
@@ -411,7 +411,7 @@ impl LineSetup {
             };
             unsafe {
                 getvcol(
-                    Win::new(curwin.get()),
+                    Win::current(),
                     &raw mut pos,
                     &raw mut wlv.tocol,
                     ::core::ptr::null_mut(),
@@ -508,7 +508,7 @@ impl LineSetup {
             || wlv.lnum != window.w_cursorline
             // Not while Visual mode is active: it would stop being clear
             // what is selected.
-            || (window.raw() == curwin.get() && visual_active())
+            || (window.raw() == Win::current_raw() && visual_active())
         {
             return;
         }
@@ -764,7 +764,7 @@ impl LineSetup {
             && (window.w_onebuf_opt.wo_cuc != 0
                 || !wlv.color_cols.is_null()
                 || virtual_active(unsafe { Win::new(window.raw()) })
-                || (visual_active() && window.w_buffer == unsafe { (*curwin.get()).w_buffer })
+                || (visual_active() && window.w_buffer == Win::current().w_buffer)
                 || self.has_fold)
         {
             wlv.vcol = start_vcol;

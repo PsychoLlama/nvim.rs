@@ -14,6 +14,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::slice;
@@ -41,7 +42,6 @@ use crate::types::{
     OptExpand, OptIndex, OptionSetFlags, RegMatch, XpPrefix, size_t, uint32_t,
 };
 use crate::winlayer::Live;
-use crate::winlayer::graph::{curbuf, curwin};
 
 use super::{
     FUZZY_SCORE_NONE, XP_PREFIX_INV, XP_PREFIX_NO, find_option, find_option_len, get_option,
@@ -673,7 +673,7 @@ pub(crate) unsafe fn expand_setting_subtract(
     if opt_idx == kOptInvalid || option_has_type(opt_idx, kOptValTypeNumber) {
         return unsafe { expand_old_setting(num_matches, matches) };
     }
-    let (buf, win) = (curbuf.get(), curwin.get());
+    let (buf, win) = (Buf::current_raw(), Win::current_raw());
     let varp = unsafe { get_varp_scope_from(opt_idx, FLAGS.get(), buf, win) };
     let value = unsafe { *varp.string_var() };
     let flags = get_option(opt_idx).flags;

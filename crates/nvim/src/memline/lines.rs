@@ -21,7 +21,7 @@ use crate::winlayer::Buf;
 /// buffer itself. The answer is a raw pointer, so *reading* through it is
 /// still the caller's business.
 pub fn ml_get(lnum: LineNr) -> *mut ::core::ffi::c_char {
-    unsafe { ml_get_buf_impl(curbuf.get(), lnum, false) }
+    unsafe { ml_get_buf_impl(Buf::current_raw(), lnum, false) }
 }
 
 /// [`ml_get`] for an arbitrary buffer.
@@ -138,7 +138,7 @@ fn to_len(len: ColNr) -> usize {
 /// # Safety
 /// `pos` must be a valid position in the current buffer.
 pub unsafe fn ml_get_pos(pos: *const Pos) -> *mut ::core::ffi::c_char {
-    unsafe { ml_get_buf(curbuf.get(), (*pos).lnum).offset((*pos).col as isize) }
+    unsafe { ml_get_buf(Buf::current_raw(), (*pos).lnum).offset((*pos).col as isize) }
 }
 
 /// Length of line `lnum` of the current buffer, excluding the NUL.
@@ -146,7 +146,7 @@ pub unsafe fn ml_get_pos(pos: *const Pos) -> *mut ::core::ffi::c_char {
 /// Safe: as [`ml_get`] -- the editor exists, and the line number is
 /// clamped.
 pub fn ml_get_len(lnum: LineNr) -> ColNr {
-    unsafe { ml_get_buf_len(curbuf.get(), lnum) }
+    unsafe { ml_get_buf_len(Buf::current_raw(), lnum) }
 }
 
 /// Length of the text after position `pos`, excluding the NUL.
@@ -154,7 +154,7 @@ pub fn ml_get_len(lnum: LineNr) -> ColNr {
 /// # Safety
 /// `pos` must be a valid position in the current buffer.
 pub unsafe fn ml_get_pos_len(pos: *mut Pos) -> ColNr {
-    unsafe { ml_get_buf_len(curbuf.get(), (*pos).lnum) - (*pos).col }
+    unsafe { ml_get_buf_len(Buf::current_raw(), (*pos).lnum) - (*pos).col }
 }
 
 /// Length of line `lnum` of `buffer`, excluding the NUL.
@@ -256,7 +256,7 @@ pub unsafe fn ml_append_flags(
     {
         return Err(Failed);
     }
-    unsafe { ml_append_flush(curbuf.get(), lnum, line, len, flags) }
+    unsafe { ml_append_flush(Buf::current_raw(), lnum, line, len, flags) }
 }
 
 /// [`ml_append`] for an arbitrary buffer, which must already have a memline.
@@ -286,7 +286,7 @@ pub unsafe fn ml_append_buf(
 /// # Safety
 /// Must run on the main thread; `text` must be NUL-terminated.
 pub unsafe fn ml_add_deleted_len(text: *mut ::core::ffi::c_char, len: ssize_t) {
-    unsafe { ml_add_deleted_len_buf(curbuf.get(), text, len) }
+    unsafe { ml_add_deleted_len_buf(Buf::current_raw(), text, len) }
 }
 
 /// [`ml_add_deleted_len`] for an arbitrary buffer. `len` of -1 measures the
@@ -337,7 +337,7 @@ pub unsafe fn ml_replace(
     line: *mut ::core::ffi::c_char,
     copy: bool,
 ) -> Result<(), Failed> {
-    unsafe { ml_replace_buf(curbuf.get(), lnum, line, copy, false) }
+    unsafe { ml_replace_buf(Buf::current_raw(), lnum, line, copy, false) }
 }
 
 /// [`ml_replace`] with the length given, excluding the NUL.
@@ -350,7 +350,7 @@ pub unsafe fn ml_replace_len(
     len: size_t,
     copy: bool,
 ) -> Result<(), Failed> {
-    unsafe { ml_replace_buf_len(curbuf.get(), lnum, line, len, copy, false) }
+    unsafe { ml_replace_buf_len(Buf::current_raw(), lnum, line, len, copy, false) }
 }
 
 /// [`ml_replace`] for an arbitrary buffer.
@@ -460,11 +460,11 @@ pub unsafe fn ml_delete(lnum: LineNr) -> Result<(), Failed> {
 /// # Safety
 /// Must run on the main thread, with a current buffer.
 pub unsafe fn ml_delete_flags(lnum: LineNr, flags: ::core::ffi::c_int) -> Result<(), Failed> {
-    unsafe { ml_flush_line(curbuf.get(), false) };
+    unsafe { ml_flush_line(Buf::current_raw(), false) };
     if lnum < 1 || lnum > cur_buf().b_ml.ml_line_count {
         return Err(Failed);
     }
-    unsafe { ml_delete_int(curbuf.get(), lnum, flags) }
+    unsafe { ml_delete_int(Buf::current_raw(), lnum, flags) }
 }
 
 /// Set the [`DB_MARKED`] bit on line `lnum`.
@@ -478,7 +478,7 @@ pub unsafe fn ml_setmarked(lnum: LineNr) {
     if lowest_marked.get() == 0 || lowest_marked.get() > lnum {
         lowest_marked.set(lnum);
     }
-    let hp = unsafe { ml_find_line(curbuf.get(), lnum, ML_FIND) };
+    let hp = unsafe { ml_find_line(Buf::current_raw(), lnum, ML_FIND) };
     if hp.is_null() {
         return;
     }
@@ -502,7 +502,7 @@ pub unsafe fn ml_firstmarked() -> LineNr {
     // to date as lines are inserted and deleted.
     let mut lnum = lowest_marked.get();
     while lnum <= cur_buf().b_ml.ml_line_count {
-        let hp = unsafe { ml_find_line(curbuf.get(), lnum, ML_FIND) };
+        let hp = unsafe { ml_find_line(Buf::current_raw(), lnum, ML_FIND) };
         if hp.is_null() {
             return 0;
         }
@@ -533,7 +533,7 @@ pub unsafe fn ml_clearmarked() {
     }
     let mut lnum = lowest_marked.get();
     while lnum <= cur_buf().b_ml.ml_line_count {
-        let hp = unsafe { ml_find_line(curbuf.get(), lnum, ML_FIND) };
+        let hp = unsafe { ml_find_line(Buf::current_raw(), lnum, ML_FIND) };
         if hp.is_null() {
             return;
         }

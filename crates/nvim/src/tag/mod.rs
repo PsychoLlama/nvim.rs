@@ -87,7 +87,6 @@ use crate::window::{
     check_can_set_curbuf_forceit, swbuf_goto_win_with_buf, tabpage_index, win_close, win_enter,
     win_split, win_valid,
 };
-use crate::winlayer::graph::{curbuf, curtab, curwin};
 use ::libc::{abort, atoi, fclose, fseeko, ftello, strcasecmp};
 
 // The carve of the transpiled module; see each child's docs.

@@ -34,6 +34,7 @@ use crate::cstr;
 use crate::semsg;
 use crate::smsg;
 use crate::spell::{WordFlags, WordTree};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
@@ -56,7 +57,6 @@ use crate::spell::{
     slang_clear_sug, slang_free,
 };
 use crate::types::{ColNr, LangP, LineNr, NUL, OptInt, SpellIdx, SpellLang, time_t, uint8_t};
-use crate::winlayer::graph::curwin;
 use ::libc::{strcpy, strrchr};
 
 use super::sections::{
@@ -388,7 +388,7 @@ fn read_trees(spl: &mut Spl, slang: &mut SpellLang) -> SplResult<()> {
 /// reported and the language carries on without sound-a-like suggestions.
 pub unsafe fn suggest_load_files() {
     // SAFETY: `b_langp` holds `ga_len` live `LangP`s.
-    let langp = unsafe { (*(*curwin.get()).w_s).b_langp };
+    let langp = unsafe { (*Win::current().w_s).b_langp };
     for lpi in 0..langp.ga_len {
         // SAFETY: `lpi` is inside the array's own length.
         let lp = unsafe { langp.ga_data.cast::<LangP>().offset(lpi as isize) };
@@ -757,6 +757,6 @@ pub(super) unsafe fn spell_reload_one(fname: *mut c_char, added_word: bool) {
     // A word was added to a file no window had loaded; re-resolving
     // 'spelllang' is what picks it up.
     if added_word && !didit {
-        unsafe { parse_spelllang(curwin.get()) };
+        unsafe { parse_spelllang(Win::current_raw()) };
     }
 }

@@ -34,7 +34,6 @@ use crate::state::mode::finish_op;
 use crate::strings::vim_strchr;
 use crate::types::{CmdArg, ColNr, Failed, LineNr, OpType, OptInt, SpellAddType, int64_t, size_t};
 use crate::window::{set_fraction, win_setheight};
-use crate::winlayer::graph::curwin;
 use core::ffi::{c_char, c_int};
 
 use crate::r#move::{
@@ -138,12 +137,12 @@ pub(crate) unsafe fn nv_zg_zw(cmd_arg: *mut CmdArg, mut nchar: c_int) -> Result<
         // starts; its "no more misspellings" message is not wanted.
         let no_emsg = Suppress::emsg();
         let (fwd, none) = (FORWARD as c_int, ptr::null_mut());
-        len = unsafe { spell_move_to(curwin.get(), fwd, SMT_ALL, true, none) };
+        len = unsafe { spell_move_to(Win::current_raw(), fwd, SMT_ALL, true, none) };
         drop(no_emsg);
         // Only if it found one at or before the cursor, i.e. the one the
         // cursor is inside rather than the next one.
         if len != 0 && cur_win().w_cursor.col <= pos.col {
-            word = unsafe { ml_get_pos(&raw mut (*curwin.get()).w_cursor) };
+            word = unsafe { ml_get_pos(&raw mut (*Win::current_raw()).w_cursor) };
         }
         cur_win().w_cursor = pos;
     }

@@ -157,7 +157,7 @@ unsafe fn refine_inline_word(
     idx1: usize,
     start_lnum: LineNr,
 ) {
-    let buf = unsafe { (*curtab.get()).tp_diffbuf[idx1] };
+    let buf = TabPage::current().tp_diffbuf[idx1];
     for _ in 0..4 {
         unsafe {
             merge_gaps(dp_orig, linemap, idx1, 2, |dp, entry1, entry2| {
@@ -186,7 +186,7 @@ unsafe fn refine_inline_word(
                 let next = (*dp).df_next;
                 let mut changed: i64 = 0;
                 for (i, map) in linemap.iter().enumerate() {
-                    if (*curtab.get()).tp_diffbuf[i].is_null() {
+                    if TabPage::current().tp_diffbuf[i].is_null() {
                         continue;
                     }
                     for block in [dp, next] {

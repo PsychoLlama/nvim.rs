@@ -171,7 +171,7 @@ pub(crate) unsafe fn block_insert(
         let splice = offset - startcol;
         unsafe {
             extmark_splice_cols(
-                curbuf.get(),
+                Buf::current_raw(),
                 lnum as c_int - 1,
                 startcol,
                 skipped,
@@ -277,7 +277,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
     // front of it (`shift_block` widens exactly that run).
     let mut incr = 0;
     let mut csarg = CharsizeArg::default();
-    let mut cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
+    let mut cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = bdp.start_vcol;
     while vcol < op.start_vcol && unsafe { *ci.ptr } as c_int != NUL {
@@ -331,7 +331,7 @@ pub unsafe fn block_prep(op: *mut OpArg, bdp: *mut BlockDef, lnum: LineNr, is_de
             }
         } else {
             // Walk on to the block's right edge.
-            cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
+            cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, line) };
             ci = unsafe { utf_ptr2str_char_info(pend) };
             vcol = bdp.end_vcol;
             let mut prev_pend = pend;

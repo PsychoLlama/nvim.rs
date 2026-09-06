@@ -15,6 +15,7 @@ use crate::message_fmt::{c_str, emsg_text};
 use crate::path::buffer_path;
 use crate::tr_c;
 use crate::types::MAXPATHL;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use core::{ptr, slice};
 
@@ -54,7 +55,7 @@ pub(crate) unsafe fn find_file_in_path(
             buffer_path(),
             FINDFILE_BOTH as c_int,
             rel_fname,
-            (*curbuf.get()).b_p_sua,
+            Buf::current().b_p_sua,
             file_to_find,
             search_ctx,
         )

@@ -54,7 +54,7 @@ unsafe fn read_autocmd(
     let (iofile, buf) = if for_file {
         (sfname, ptr::null_mut())
     } else {
-        (ptr::null_mut(), curbuf.get())
+        (ptr::null_mut(), Buf::current_raw())
     };
     // SAFETY: the current buffer is live and `args` is the caller's command.
     unsafe { apply_autocmds_exarg(event, iofile, sfname, false, buf, args) }
@@ -105,13 +105,13 @@ pub(crate) unsafe fn open_source(
     // Remember the initial values of curbuf, curbuf->b_ffname and
     // curbuf->b_fname, to detect nasty autocommands altering them.
     // Also check whether "fname" and "sfname" point at one of them.
-    let old_curbuf = curbuf.get();
+    let old_curbuf = Buf::current_raw();
     let old_b_ffname = cur_buf().b_ffname;
     let old_b_fname = cur_buf().b_fname;
     let using_b_ffname = fname == old_b_ffname || sfname == old_b_ffname;
     let using_b_fname = fname == old_b_fname || sfname == old_b_fname;
     let buffer_changed = || {
-        curbuf.get() != old_curbuf
+        Buf::current_raw() != old_curbuf
             || (using_b_ffname && old_b_ffname != cur_buf().b_ffname)
             || (using_b_fname && old_b_fname != cur_buf().b_fname)
     };
@@ -316,7 +316,7 @@ pub(crate) unsafe fn open_source(
                 unsafe { set_forced_fenc(args) };
             }
             let event = AutoEvent::BufNewFile;
-            unsafe { apply_autocmds_exarg(event, sfname, sfname, false, curbuf.get(), args) };
+            unsafe { apply_autocmds_exarg(event, sfname, sfname, false, Buf::current_raw(), args) };
             // Remember the current fileformat.
             save_file_ff(Buf::current());
 

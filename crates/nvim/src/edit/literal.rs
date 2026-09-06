@@ -332,7 +332,7 @@ pub(crate) unsafe fn ins_copychar(lnum: LineNr) -> c_int {
     let line = ml_get(lnum);
 
     let mut csarg = CharsizeArg::default();
-    let cstype = unsafe { init_charsize_arg(&mut csarg, Win::new(curwin.get()), lnum, line) };
+    let cstype = unsafe { init_charsize_arg(&mut csarg, cur_win(), lnum, line) };
     let mut ci: StrCharInfo = unsafe { utf_ptr2str_char_info(line) };
     let mut vcol = 0;
     while vcol < end_vcol && unsafe { *ci.ptr } as c_int != NUL {
@@ -374,7 +374,7 @@ pub(crate) fn ins_ctrl_ey(tc: c_int) -> c_int {
         } else {
             unsafe { scrollup_clamp() };
         }
-        unsafe { redraw_later(curwin.get(), UPD_VALID) };
+        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
         return c;
     }
 

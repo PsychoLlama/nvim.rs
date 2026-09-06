@@ -28,6 +28,7 @@
 
 mod scratch;
 
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
@@ -52,7 +53,6 @@ use crate::ui::{
     ui_call_flush, ui_composed_call_grid_cursor_goto, ui_composed_call_grid_resize,
     ui_composed_call_grid_scroll, ui_composed_call_raw_line, ui_has,
 };
-use crate::winlayer::graph::curwin;
 use scratch::{Bufs, blend, clear_invalid_attrs};
 
 /// The screen every other layer is composed onto.
@@ -264,10 +264,13 @@ pub unsafe fn ui_comp_put_grid(
         // `layers[insert_at - 1]` without checking `insert_at` first; that
         // read needs a grid below `default_grid`'s zindex of 0, which
         // nothing produces.
-        if insert_at > 0 && !curwin.get().is_null() && !on_top {
+        if insert_at > 0
+            && let Some(win) = Win::current_or_none()
+            && !on_top
+        {
             let below = layer_at(insert_at - 1);
-            // SAFETY: `curwin` is a live window whenever it is non-null.
-            let curwin_grid = unsafe { win_layer(curwin.get()) };
+            // SAFETY: a live window, by the handle.
+            let curwin_grid = unsafe { win_layer(win.raw()) };
             if below.same(curwin_grid) && below.zindex == grid.zindex {
                 insert_at -= 1;
             }

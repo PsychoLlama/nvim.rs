@@ -53,7 +53,6 @@ use crate::types::{
     LuaRetMode, NS, Object, Window,
 };
 use crate::winlayer::Win;
-use crate::winlayer::graph::curwin;
 use core::ffi::c_int;
 use core::hash::BuildHasherDefault;
 use std::collections::HashMap;
@@ -554,7 +553,7 @@ pub unsafe fn win_bg_attr(window: *mut Window) -> c_int {
     // SAFETY: the caller's window and the active namespace table.
     // A fast callback's namespace overrides the window's own cache.
     if ns_hl_fast.get() < 0 {
-        let local = if window.raw() == curwin.get() {
+        let local = if window.raw() == Win::current_raw() {
             window.w_hl_attr_normal
         } else {
             window.w_hl_attr_normalnc
@@ -564,7 +563,7 @@ pub unsafe fn win_bg_attr(window: *mut Window) -> c_int {
         }
     }
     let inactive = unsafe { *hl_attr_active.get().add(HLF_INACTIVE as usize) };
-    if window.raw() == curwin.get() || inactive == 0 {
+    if window.raw() == Win::current_raw() || inactive == 0 {
         unsafe { *hl_attr_active.get().add(HLF_NONE as usize) }
     } else {
         inactive

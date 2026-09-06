@@ -16,6 +16,7 @@ use crate::message_fmt::msg_cstr;
 use crate::types::CmdIdx;
 use crate::types::builders::static_cstring;
 use crate::types::{ExArgt, NUL};
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -267,7 +268,7 @@ pub unsafe fn nvim_parse_cmd(
     let args = unsafe { parse_args(&ea, arena) };
     let cmd: *mut UserCmd = match ea.cmdidx {
         CmdIdx::USER => nth(Table::Global),
-        CmdIdx::USER_BUF => nth(Table::Buffer(curbuf.get())),
+        CmdIdx::USER_BUF => nth(Table::Buffer(Buf::current_raw())),
         _ => ptr::null_mut(),
     };
     // A user command carries its own default count.

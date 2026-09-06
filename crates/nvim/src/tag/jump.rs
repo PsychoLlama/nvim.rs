@@ -17,6 +17,7 @@ use crate::option::cpo_has;
 use crate::search::SEARCH_KEEP;
 use crate::types::{CpoFlag, FAIL, Failed, OK};
 use crate::window::WSP_VERT;
+use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win, WinId};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
@@ -451,7 +452,7 @@ impl Jump {
         if opened > 0 {
             drop(redraw_off);
             if postponed_split.get() != 0 {
-                unsafe { win_close(curwin.get(), false, false) };
+                unsafe { win_close(Win::current_raw(), false, false) };
                 postponed_split.set(0);
             }
             return Err(Failed);
@@ -491,7 +492,7 @@ impl Jump {
         {
             // Put the cursor back where it was.
             validate_cursor(Win::current());
-            unsafe { redraw_later(curwin.get(), UPD_VALID) };
+            unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
             unsafe { win_enter(saved.raw(), true) };
         }
         drop(redraw_off);
@@ -543,7 +544,7 @@ impl Jump {
             cmdmod_add_split(WSP_VERT as c_int);
         }
         if switchbuf & kOptSwbFlagNewtab as c_uint != 0 && cmdmod_tab() == 0 {
-            cmdmod_set_tab(tabpage_index(curtab.get()) + 1);
+            cmdmod_set_tab(tabpage_index(TabPage::current_raw()) + 1);
         }
         if win_split(postponed_split.get().max(0), postponed_split_flags.get()).is_err() {
             return false;

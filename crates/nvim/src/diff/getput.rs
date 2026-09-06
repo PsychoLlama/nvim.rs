@@ -122,7 +122,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         let mut found_not_ma = false;
         while idx_other < DB_COUNT {
             let buf = tp.tp_diffbuf[idx_other as usize];
-            if buf != curbuf.get() && !buf.is_null() {
+            if buf != Buf::current_raw() && !buf.is_null() {
                 if writable_target(unsafe { Buf::new(buf) }, cmdidx) {
                     break;
                 }
@@ -140,7 +140,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         }
         for i in idx_other + 1..DB_COUNT {
             let buf = tp.tp_diffbuf[i as usize];
-            if buf != curbuf.get()
+            if buf != Buf::current_raw()
                 && !buf.is_null()
                 && writable_target(unsafe { Buf::new(buf) }, cmdidx)
             {
@@ -180,7 +180,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
             semsg!("E102: Can't find buffer \"{arg}\"");
             return;
         };
-        if buf.raw() == curbuf.get() {
+        if buf.raw() == Buf::current_raw() {
             return;
         }
         idx_other = diff_slot(buf, tp);
@@ -276,7 +276,7 @@ pub unsafe fn ex_diffgetput(args: *mut ExArg) {
         let nul = ::core::ptr::null_mut::<c_char>();
         // SAFETY: the editor exists; `DiffUpdated` takes no file name.
         unsafe { diff_redraw(false) };
-        unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, curbuf.get()) };
+        unsafe { apply_autocmds(AutoEvent::DiffUpdated, nul, nul, false, Buf::current_raw()) };
     }
 }
 
@@ -357,7 +357,7 @@ fn diffgetput(
             }
 
             // SAFETY: the current buffer is live.
-            let mut buf_empty = unsafe { buf_is_empty(curbuf.get()) };
+            let mut buf_empty = unsafe { buf_is_empty(Buf::current_raw()) };
             let mut added: c_int = 0;
             for _ in 0..count {
                 buf_empty = cur_buf().b_ml.ml_line_count == 1 as LineNr;
@@ -424,7 +424,7 @@ fn diffgetput(
                     }
                 }
             }
-            let cb = curbuf.get();
+            let cb = Buf::current_raw();
             // SAFETY: the current buffer is live, in both calls.
             unsafe { extmark_adjust(cb, lnum, last, max, amount, kExtmarkUndo) };
             changed_lines(

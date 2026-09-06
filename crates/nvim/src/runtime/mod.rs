@@ -101,7 +101,6 @@ use crate::types::{
     kBoolVarFalse, ptrdiff_t, size_t, typval_vval_union, uv_mutex_t,
 };
 use crate::usercmd::add_win_cmd_modifiers;
-use crate::winlayer::graph::curbuf;
 use ::libc::{__errno_location, fclose, fdopen, fgets, strcasecmp, strcat};
 use std::ffi::CString;
 

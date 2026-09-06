@@ -177,7 +177,7 @@ impl Context {
         // window or null.
         let wp = unsafe {
             if opts.use_tabline {
-                curwin.get()
+                Win::current_raw()
             } else {
                 find_window_by_handle(opts.winid, err)
             }

@@ -21,6 +21,7 @@ use crate::api_error;
 use crate::cstr;
 use crate::eval::typval::TV_INITIAL_VALUE;
 use crate::message_fmt::{c_str, c_str_len};
+use crate::winlayer::Win;
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
@@ -116,7 +117,7 @@ unsafe fn call_function_with(
         let mut rettv: TypVal = TV_INITIAL_VALUE;
         let mut funcexe: FuncExe = FUNCEXE_INIT;
         // SAFETY: there is always a current window.
-        let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+        let lnum = Win::current().w_cursor.lnum;
         funcexe.fe_firstline = lnum;
         funcexe.fe_lastline = lnum;
         funcexe.fe_evaluate = true;

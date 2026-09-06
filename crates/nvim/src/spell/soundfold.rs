@@ -22,13 +22,13 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::cstr;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 
 use crate::ascii::{ascii_isdigit, ascii_iswhite};
 use crate::mbyte::{mb_cptr2char_adv, utf_char2bytes, utf_class};
 use crate::memory::xstrdup;
 use crate::types::{LangP, MB_MAXBYTES, NUL, SpellLang};
-use crate::winlayer::graph::curwin;
 
 use super::MAXWLEN;
 use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
@@ -37,7 +37,7 @@ use super::chartab::{spell_casefold, spell_iswordp_nmw, spell_iswordp_w};
 /// languages that has a sound-folding table, or a copy of `word` itself
 /// when spell checking is off or no language defines one.
 pub unsafe fn eval_soundfold(word: *const c_char) -> *mut c_char {
-    let win = curwin.get();
+    let win = Win::current_raw();
     if unsafe { (*win).w_onebuf_opt.wo_spell } != 0 && unsafe { *(*(*win).w_s).b_p_spl } != 0 {
         // SAFETY: `win` is the current window; its syntax block is live.
         let langp = unsafe { &(*(*win).w_s).b_langp };
@@ -73,7 +73,7 @@ pub unsafe fn spell_soundfold(
         unsafe { spell_soundfold_wsal(slang, inword, res) };
     } else {
         let mut fword = [0 as c_char; MAXWLEN];
-        let (win, out) = (curwin.get(), fword.as_mut_ptr());
+        let (win, out) = (Win::current_raw(), fword.as_mut_ptr());
         let len = unsafe { cstr::bytes_at(inword) }.len() as c_int;
         let _ = unsafe { spell_casefold(win, inword, len, out, MAXWLEN as c_int) };
         unsafe { spell_soundfold_wsal(slang, fword.as_ptr(), res) };
@@ -153,6 +153,9 @@ unsafe fn spell_soundfold_sofo(slang: *mut SpellLang, inword: *const c_char, res
 /// character the match already compared against the word and found
 /// non-NUL, or the NUL that terminates it, so no index passes `wordlen`.
 unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res: *mut c_char) {
+    // `spell_iswordp*` answer for a window's `'iskeyword'`, and this whole
+    // body runs in one: read the current one once.
+    let win = Win::current_raw();
     // Widen the word, dropping what the language does not consider part
     // of a word when it asked for accents to be removed.
     let mut word = [0 as c_int; MAXWLEN];
@@ -171,7 +174,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                 did_white = true;
             } else {
                 did_white = false;
-                if !unsafe { spell_iswordp_nmw(t, curwin.get()) } {
+                if !unsafe { spell_iswordp_nmw(t, win) } {
                     continue;
                 }
             }
@@ -263,13 +266,12 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                     let at_word_start = rules[0] == b'^'
                         && (i == 0
                             || !(word[i - 1] == ' ' as c_int
-                                || unsafe { spell_iswordp_w(&word[i - 1..], curwin.get()) }))
-                        && (rules[1] != b'$'
-                            || !unsafe { spell_iswordp_w(&word[i + k0..], curwin.get()) });
+                                || unsafe { spell_iswordp_w(&word[i - 1..], win) }))
+                        && (rules[1] != b'$' || !unsafe { spell_iswordp_w(&word[i + k0..], win) });
                     let at_word_end = rules[0] == b'$'
                         && i > 0
-                        && unsafe { spell_iswordp_w(&word[i - 1..], curwin.get()) }
-                        && !unsafe { spell_iswordp_w(&word[i + k0..], curwin.get()) };
+                        && unsafe { spell_iswordp_w(&word[i - 1..], win) }
+                        && !unsafe { spell_iswordp_w(&word[i + k0..], win) };
                     if !(rules[0] == NUL as u8 || at_word_start || at_word_end) {
                         break 'next_rule;
                     }
@@ -342,9 +344,7 @@ unsafe fn spell_soundfold_wsal(slang: *mut SpellLang, inword: *const c_char, res
                                 // A '^' rule never cuts the current match.
                                 if frules[0] == NUL as u8
                                     || (frules[0] == b'$'
-                                        && !unsafe {
-                                            spell_iswordp_w(&word[i + k0..], curwin.get())
-                                        })
+                                        && !unsafe { spell_iswordp_w(&word[i + k0..], win) })
                                 {
                                     // Same length means the follow-up is
                                     // only a piece of this match.

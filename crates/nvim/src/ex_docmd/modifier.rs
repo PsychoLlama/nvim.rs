@@ -11,6 +11,7 @@ use crate::cstr;
 use crate::ex_docmd::is_user_cmd;
 use crate::ex_docmd::scan::ends_excmd;
 use crate::types::CmdIdx;
+use crate::winlayer::TabPage;
 
 use crate::winlayer::{Buf, Ea, Win};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -40,7 +41,6 @@ use crate::memory::{xfree, xmemcpyz};
 use crate::message::state::{did_emsg, emsg_silent, msg_col, msg_scroll, msg_silent};
 use crate::option::vars::{p_ei, p_verbose};
 use crate::state::mode::exmode_active;
-use crate::winlayer::graph::curtab;
 
 use crate::message::redirecting;
 use crate::option::set_option_direct;
@@ -331,7 +331,7 @@ pub(crate) unsafe fn parse_command_modifiers(
                             return Err(Failed);
                         }
                         if tabnr == MAXLNUM as c_int {
-                            cm.cmod_tab = tabpage_index(curtab.get()) + 1;
+                            cm.cmod_tab = tabpage_index(TabPage::current_raw()) + 1;
                         } else {
                             if tabnr < 0 || tabnr > current_tab_nr(ptr::null_mut()) {
                                 *errormsg = Some(unsafe { ex_msg(e_invrange.as_ptr()) });

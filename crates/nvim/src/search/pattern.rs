@@ -641,7 +641,7 @@ pub(crate) unsafe fn is_zero_width(
     };
 
     let mut result = -1;
-    let (w, b) = (curwin.get(), curbuf.get());
+    let (w, b) = (Win::current_raw(), Buf::current_raw());
     let (at, end) = (&raw mut pos, ptr::null_mut());
     let (opts, none) = (SEARCH_KEEP as c_int + flag, ptr::null_mut());
     let (win, buf) = (Some(cur_win()), cur_buf());

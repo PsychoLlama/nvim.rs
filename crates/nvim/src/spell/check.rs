@@ -28,6 +28,7 @@
 
 use crate::cstr;
 use crate::spell::WordFlags;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::mem;
 
@@ -45,7 +46,6 @@ use crate::regexp::vim_regexec;
 use crate::spellsuggest::spell_suggest_list;
 use crate::strings::concat_str;
 use crate::types::{ColNr, GArray, Hlf, LangP, LineNr, RegMatch, Window, size_t, uint8_t};
-use crate::winlayer::graph::curwin;
 
 use super::chartab::{spell_iswordp, spell_iswordp_nmw};
 use super::lookup::{find_prefix, find_word};
@@ -454,7 +454,7 @@ pub unsafe fn spell_to_word_end(start: *mut c_char, win: *mut Window) -> *mut c_
 /// Whether it is misspelled is not checked — completion can only replace
 /// the word before the cursor anyway.
 pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
-    if unsafe { no_spell_checking(curwin.get()) } {
+    if unsafe { no_spell_checking(Win::current_raw()) } {
         return startcol;
     }
 
@@ -464,7 +464,7 @@ pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
     let mut p = unsafe { line.offset(startcol as isize) };
     while p > line {
         p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-        if unsafe { spell_iswordp_nmw(p, curwin.get()) } {
+        if unsafe { spell_iswordp_nmw(p, Win::current_raw()) } {
             break;
         }
     }
@@ -474,7 +474,7 @@ pub unsafe fn spell_word_start(startcol: c_int) -> c_int {
     while p > line {
         col = unsafe { p.offset_from(line) } as c_int;
         p = unsafe { p.offset(-(utf_head_off(line, p.offset(-1)) as isize + 1)) };
-        if !unsafe { spell_iswordp(p, curwin.get()) } {
+        if !unsafe { spell_iswordp(p, Win::current_raw()) } {
             break;
         }
         col = 0;
@@ -494,7 +494,7 @@ static spell_expand_need_cap: GlobalCell<bool> = GlobalCell::new(false);
 /// capital.
 pub unsafe fn spell_expand_check_cap(col: ColNr) {
     spell_expand_need_cap
-        .set(unsafe { check_need_cap(curwin.get(), (*curwin.get()).w_cursor.lnum, col) });
+        .set(unsafe { check_need_cap(Win::current_raw(), Win::current().w_cursor.lnum, col) });
 }
 
 /// Insert-mode completion `CTRL-X ?`: fill `matchp` with suggestions for

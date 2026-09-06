@@ -39,19 +39,30 @@ pub(crate) static firstwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static lastwin: GlobalCell<Option<WinId>> = GlobalCell::new(None);
 pub(crate) static prevwin: GlobalCell<*mut Window> =
     GlobalCell::new(::core::ptr::null_mut::<Window>());
+/// The current window's address, mirroring [`CURRENT_WIN`].
+///
+/// `pub` and unmangled because it is read as a **data symbol** from outside
+/// the crate: plugins do it, and so does
+/// `test/functional/lua/ffi_spec.lua` (`extern win_T *curwin`, handed to
+/// `win_col_off`). Inside the crate it answers [`Win::is_current`] without a
+/// registry lookup. Nothing but the funnel below writes it.
 #[unsafe(no_mangle)]
 pub static curwin: GlobalCell<*mut Window> = GlobalCell::new(::core::ptr::null_mut::<Window>());
 pub(crate) static topframe: GlobalCell<*mut Frame> =
     GlobalCell::new(::core::ptr::null_mut::<Frame>());
 pub(crate) static first_tabpage: GlobalCell<Option<TabId>> = GlobalCell::new(None);
-pub(crate) static curtab: GlobalCell<*mut Tabpage> =
+/// The current tab page's address, mirroring [`CURRENT_TAB`]. [`curwin`],
+/// minus the symbol: only [`TabPage::is_current`] reads it.
+pub(super) static curtab: GlobalCell<*mut Tabpage> =
     GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
 pub(crate) static lastused_tabpage: GlobalCell<*mut Tabpage> =
     GlobalCell::new(::core::ptr::null_mut::<Tabpage>());
 pub(crate) static firstbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
 pub(crate) static lastbuf: GlobalCell<Option<BufId>> = GlobalCell::new(None);
-pub(crate) static curbuf: GlobalCell<*mut Buffer> =
-    GlobalCell::new(::core::ptr::null_mut::<Buffer>());
+/// The current buffer's address, mirroring [`CURRENT_BUF`]. Private: a
+/// buffer has no `is_current`, so nothing outside this module reads it, and
+/// [`switch_buffer`] is the one place that does.
+static curbuf: GlobalCell<*mut Buffer> = GlobalCell::new(::core::ptr::null_mut::<Buffer>());
 pub(crate) static cmdwin_type: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_result: GlobalCell<c_int> = GlobalCell::new(0 as c_int);
 pub(crate) static cmdwin_level: GlobalCell<c_int> = GlobalCell::new(0 as c_int);

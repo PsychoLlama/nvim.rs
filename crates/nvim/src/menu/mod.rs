@@ -30,6 +30,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::types::AutoEvent;
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ops::{Deref, DerefMut};
 use core::ptr;
@@ -58,7 +59,6 @@ use crate::state::{
     MODE_TERMINAL,
 };
 use crate::types::{Dict, List, VarNumber, VimMenu, kListLenMayKnow, ptrdiff_t};
-use crate::winlayer::graph::curbuf;
 
 // The carve of the transpiled module; see each child's docs.
 mod complete;
@@ -731,7 +731,7 @@ pub(crate) unsafe fn show_popupmenu() {
             mode.as_ptr().cast_mut(),
             ptr::null_mut(),
             false,
-            curbuf.get(),
+            Buf::current_raw(),
         )
     };
 

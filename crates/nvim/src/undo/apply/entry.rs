@@ -325,9 +325,9 @@ unsafe fn apply_entry(
         // The next line's start may have gained or lost a SpellCap, so
         // schedule it for redrawing just in case.
         // SAFETY: a live current window.
-        if unsafe { spell_check_window(curwin.get()) } && bot <= buffer.b_ml.ml_line_count {
+        if unsafe { spell_check_window(Win::current_raw()) } && bot <= buffer.b_ml.ml_line_count {
             // SAFETY: as above.
-            unsafe { redraw_win_line(curwin.get(), bot) };
+            unsafe { redraw_win_line(Win::current_raw(), bot) };
         }
     }
 

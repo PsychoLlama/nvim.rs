@@ -26,6 +26,7 @@ use crate::cstr;
 use crate::guard::Suppress;
 use crate::semsg;
 use crate::smsg;
+use crate::winlayer::Win;
 pub use expand::os_expand_wildcards;
 pub use system::os_system;
 
@@ -62,7 +63,6 @@ use crate::types::{
 };
 use crate::ui::{ui_flush, ui_has};
 use crate::winlayer::Buf;
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{fclose, fopen, fread, fseek, ftell, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -466,8 +466,8 @@ unsafe fn read_input(buf: *mut StringBuilder) {
     unsafe {
         read_buffer_into(
             Buf::current(),
-            (*curbuf.get()).b_op_start.lnum,
-            (*curbuf.get()).b_op_end.lnum,
+            Buf::current().b_op_start.lnum,
+            Buf::current().b_op_end.lnum,
             buf,
         );
     }
@@ -495,7 +495,7 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
         let mut remaining = remaining;
         let mut off: usize = 0;
         while off < remaining {
-            let binary = (*curbuf.get()).b_p_bin != 0;
+            let binary = Buf::current().b_p_bin != 0;
             let byte = *output.add(off) as c_int;
             // CRLF, except in binary mode, where the CR is kept.
             let skip = if byte == CAR
@@ -515,8 +515,8 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
                 continue;
             };
             *output.add(off) = 0;
-            let lnum = (*curwin.get()).w_cursor.lnum;
-            (*curwin.get()).w_cursor.lnum += 1;
+            let lnum = Win::current().w_cursor.lnum;
+            Win::current().w_cursor.lnum += 1;
             let _ = ml_append(lnum, output, off as c_int + 1, false);
             output = output.add(skip);
             remaining -= skip;
@@ -527,13 +527,13 @@ unsafe fn write_output(output: *mut c_char, remaining: size_t, eof: bool) -> siz
             if remaining != 0 {
                 // An unfinished last line, and a note that its ending was
                 // missing.
-                let lnum = (*curwin.get()).w_cursor.lnum;
-                (*curwin.get()).w_cursor.lnum += 1;
+                let lnum = Win::current().w_cursor.lnum;
+                Win::current().w_cursor.lnum += 1;
                 let _ = ml_append(lnum, output, 0, false);
-                (*curbuf.get()).b_no_eol_lnum = (*curwin.get()).w_cursor.lnum;
+                Buf::current().b_no_eol_lnum = Win::current().w_cursor.lnum;
                 output = output.add(remaining);
             } else {
-                (*curbuf.get()).b_no_eol_lnum = 0 as LineNr;
+                Buf::current().b_no_eol_lnum = 0 as LineNr;
             }
         }
 

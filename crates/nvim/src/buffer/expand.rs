@@ -26,7 +26,6 @@ use crate::option::vars::{p_fic, p_wic};
 use crate::os::env::home_replace_save;
 use crate::regexp::{RE_MAGIC, vim_regcomp, vim_regexec, vim_regfree};
 use crate::types::{Buffer, ColNr, Failed, FuzMatchStr, RegMatch, RegProg, size_t};
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{self, Buf, Win, buffers};
 use ::libc::qsort;
 
@@ -176,7 +175,7 @@ pub unsafe fn expand_buf_names(
             if options.has(BUF_DIFF_FILTER) {
                 // Skip buffers not suitable for :diffget or :diffput
                 // completion.
-                if buf.raw() == curbuf.get() || !diff_mode(buf) {
+                if buf.raw() == Buf::current_raw() || !diff_mode(buf) {
                     continue;
                 }
             }
@@ -298,7 +297,7 @@ fn order_by_last_used(matches: *mut BufMatch, files: &mut [*mut c_char]) {
     }
     // SAFETY: `count` initialised elements.
     let matches = unsafe { slice::from_raw_parts(matches, count) };
-    if matches[0].buf == curbuf.get() {
+    if matches[0].buf == Buf::current_raw() {
         // The current buffer came first: place it at the end.
         for i in 1..count {
             files[i - 1] = matches[i].match_0;

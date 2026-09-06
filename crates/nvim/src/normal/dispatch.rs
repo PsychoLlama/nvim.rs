@@ -62,7 +62,6 @@ use crate::types::{
     CmdArg, CpoFlag, GraphemeState, NUL, OpArg, OpType, OptInt, VimState, int16_t, int64_t,
 };
 use crate::ui::{ui_cursor_shape, ui_cursor_shape_no_check_conceal, ui_flush};
-use crate::winlayer::graph::curwin;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 
@@ -526,7 +525,7 @@ pub(crate) unsafe fn normal_finish_command(s: *mut NormalState) {
     }
     unsafe { checkpcmark() };
     unsafe { xfree(ns.ca.searchbuf.cast::<c_void>()) };
-    unsafe { mb_check_adjust_col(curwin.get().cast::<c_void>()) };
+    unsafe { mb_check_adjust_col(Win::current_raw().cast::<c_void>()) };
 
     if cur_win().w_onebuf_opt.wo_scb != 0 && ns.toplevel {
         validate_cursor(Win::current());

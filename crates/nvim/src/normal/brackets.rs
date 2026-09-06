@@ -4,6 +4,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use crate::keycodes::Key;
+use crate::winlayer::Buf;
 use crate::winlayer::Win;
 use core::ptr;
 
@@ -28,7 +29,6 @@ use crate::spell::{SMT_ALL, spell_move_to};
 use crate::strings::vim_strchr;
 use crate::textobject::findpar;
 use crate::types::{CmdArg, FileMark, LineNr, MarkMove, OpType, PUT_FIXINDENT, Pos, SpellMoveType};
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ushort, c_void};
 
 /// Which way a `[` or `]` command searches.
@@ -248,7 +248,7 @@ unsafe fn nv_bracket_mark(cmd_arg: *mut CmdArg) {
     // The walk starts from a mark standing for the cursor itself, in this
     // frame's own record — every later `fm` is a store's address instead.
     let mut here = FileMark::UNSET;
-    let mut fm = unsafe { pos_to_mark(curbuf.get(), &raw mut here, cur_win().w_cursor) };
+    let mut fm = unsafe { pos_to_mark(Buf::current_raw(), &raw mut here, cur_win().w_cursor) };
     debug_assert!(!fm.is_null());
     let linewise = ca.nchar == '\'' as c_int;
     let mut prev_fm = ptr::null_mut();
@@ -285,7 +285,7 @@ unsafe fn nv_bracket_spell(cmd_arg: *mut CmdArg) {
     for _ in 0..ca.count1 {
         if unsafe {
             spell_move_to(
-                curwin.get(),
+                Win::current_raw(),
                 direction(cmd_arg),
                 what,
                 false,

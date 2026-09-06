@@ -443,7 +443,8 @@ fn replay_change(op: Op, bd: &mut BlockDef, mut pre_textlen: c_int, pre_indent: 
             let _ = unsafe { ml_replace(linenr, newp, false) };
             let splice = vpos.coladd + ins_len;
             let row = linenr as c_int - 1;
-            unsafe { extmark_splice_cols(curbuf.get(), row, bd.textcol, 0, splice, kExtmarkUndo) };
+            let buffer = Buf::current_raw();
+            unsafe { extmark_splice_cols(buffer, row, bd.textcol, 0, splice, kExtmarkUndo) };
         }
         linenr += 1;
     }

@@ -33,7 +33,6 @@ use crate::types::{
     BlockDef, Buffer, ColNr, EvalFuncData, LineNr, MotionType, NUL, OpArg, OpType, Pos, String_0,
     TypVal, VAR_DICT, VarNumber, kListLenMayKnow,
 };
-use crate::winlayer::graph::curbuf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -117,7 +116,7 @@ impl BufferSwap {
     unsafe fn save() -> Self {
         BufferSwap {
             // SAFETY: the caller's promise -- `curbuf` is live.
-            buf: unsafe { Buf::new(curbuf.get()) },
+            buf: Buf::current(),
             virtual_op: virtual_op.get(),
         }
     }
@@ -179,7 +178,7 @@ fn resolve(args: Args<'_>, result: &mut TypVal) -> Option<Region> {
     let findbuf = if fnum1 != 0 {
         find_buf(fnum1).map_or(ptr::null_mut(), |b| b.raw())
     } else {
-        curbuf.get()
+        Buf::current_raw()
     };
     // SAFETY: `find_buf` and `curbuf` are both a live buffer or null.
     let loaded = (unsafe { Buf::from_raw(findbuf) }).filter(|b| !b.b_ml.ml_mfp.is_null());
@@ -497,7 +496,7 @@ fn add_regionpos_range(result: &mut TypVal, p1: Pos, p2: Pos) {
     for p in [p1, p2] {
         let l = unsafe { tv_list_alloc(4) };
         unsafe { tv_list_append_list(pair, l) };
-        unsafe { tv_list_append_number(l, (*curbuf.get()).handle as VarNumber) };
+        unsafe { tv_list_append_number(l, Buf::current().handle as VarNumber) };
         unsafe { tv_list_append_number(l, p.lnum as VarNumber) };
         unsafe { tv_list_append_number(l, p.col as VarNumber) };
         unsafe { tv_list_append_number(l, p.coladd as VarNumber) };

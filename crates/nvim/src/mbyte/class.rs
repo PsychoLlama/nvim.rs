@@ -20,6 +20,7 @@
 
 use super::*;
 use crate::types::NUL;
+use crate::winlayer::Buf;
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
 
@@ -251,7 +252,8 @@ pub unsafe fn utf_class_tab(c: c_int, chartab: *const uint64_t) -> c_int {
 
 /// [`utf_class_tab`] against the current buffer's `'iskeyword'`.
 pub unsafe fn utf_class(c: c_int) -> c_int {
-    unsafe { utf_class_tab(c, &raw const (*curbuf.get()).b_chartab as *const uint64_t) }
+    let buffer = Buf::current_raw();
+    unsafe { utf_class_tab(c, &raw const (*buffer).b_chartab as *const uint64_t) }
 }
 
 /// The character class of the character `p` points at.
@@ -284,7 +286,8 @@ pub unsafe fn mb_get_class_tab(p: *const c_char, chartab: *const uint64_t) -> c_
 ///
 /// `p` must point at a NUL-terminated string.
 pub unsafe fn mb_get_class(p: *const c_char) -> c_int {
-    unsafe { mb_get_class_tab(p, &raw const (*curbuf.get()).b_chartab as *const uint64_t) }
+    let buffer = Buf::current_raw();
+    unsafe { mb_get_class_tab(p, &raw const (*buffer).b_chartab as *const uint64_t) }
 }
 
 /// `charclass({string})` — the class of the string's first character.

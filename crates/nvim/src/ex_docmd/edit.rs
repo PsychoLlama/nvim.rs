@@ -51,7 +51,6 @@ use crate::state::mode::{
     State, did_syncbind, finish_op, force_restart_edit, opcount, restart_edit, stop_insert_mode,
     virtual_op,
 };
-use crate::winlayer::graph::curwin;
 
 use crate::memline::{goto_byte, ml_clearmarked, ml_setmarked};
 use crate::memory::{xfree, xmalloc};
@@ -185,7 +184,7 @@ pub(crate) unsafe fn ex_equal(args: *mut ExArg) {
 pub(crate) unsafe fn ex_sleep(args: *mut ExArg) {
     let args = unsafe { Ea::new(args) };
     if cursor_valid(cur_win()) != 0 {
-        unsafe { setcursor_mayforce(curwin.get(), true) };
+        unsafe { setcursor_mayforce(Win::current_raw(), true) };
     }
     let mut len = args.line2 as int64_t;
     match byte(args.arg) {

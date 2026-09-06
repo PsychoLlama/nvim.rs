@@ -237,7 +237,7 @@ pub unsafe fn apply_autocmds_group(
         // window-local events can be listed there.
         let win_local = event_row(event).win_local;
         let mut win_ignore = false;
-        if buffer == curbuf.get() && win_local {
+        if buffer == Buf::current_raw() && win_local {
             win_ignore = unsafe { event_ignored(event, cur_win().w_onebuf_opt.wo_eiw) };
         } else if !buffer.is_null() && win_local && unsafe { (*buffer).b_nwindows } > 0 {
             win_ignore = true;
@@ -277,7 +277,7 @@ pub unsafe fn apply_autocmds_group(
         let save_autocmd_busy = autocmd_busy.get();
         let save_autocmd_nested = autocmd_nested.get();
         let save_changed = cur_buf().b_changed != 0;
-        let old_curbuf = curbuf.get();
+        let old_curbuf = Buf::current_raw();
 
         // `<afile>`.  A copy, so renaming a buffer or changing
         // directory cannot invalidate it.
@@ -519,7 +519,7 @@ pub unsafe fn apply_autocmds_group(
         }
 
         // Only if we are still in the same buffer.
-        if curbuf.get() == old_curbuf && keeps_changed_flag(event) {
+        if Buf::current_raw() == old_curbuf && keeps_changed_flag(event) {
             if cur_buf().b_changed != save_changed as ::core::ffi::c_int {
                 need_maketitle.set(true);
             }

@@ -49,7 +49,6 @@ use crate::types::{
     typval_vval_union, uint64_t,
 };
 use crate::window::find_tabpage;
-use crate::winlayer::graph::{curtab, curwin};
 use crate::winlayer::{TabPage, Win};
 use ::libc::abort;
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -201,8 +200,8 @@ impl Scope {
         let mut s = Self {
             scope: kCdScopeInvalid,
             number: [0, 0],
-            tp: curtab.get(),
-            win: curwin.get(),
+            tp: TabPage::current_raw(),
+            win: Win::current_raw(),
         };
 
         // Preconditions and scope extraction together.
@@ -307,9 +306,9 @@ pub unsafe fn f_chdir(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFuncDat
                 return;
             }
         };
-    } else if !win_localdir(curwin.get()).is_null() {
+    } else if !win_localdir(Win::current_raw()).is_null() {
         scope = kCdScopeWindow;
-    } else if !tab_localdir(curtab.get()).is_null() {
+    } else if !tab_localdir(TabPage::current_raw()).is_null() {
         scope = kCdScopeTabpage;
     }
 

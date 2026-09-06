@@ -42,7 +42,6 @@ use crate::statusline::{draw_tabline, win_redr_status};
 use crate::types::{Array, ColNr, LineNr, NUL, Object, OptInt};
 use crate::ui::state::Rows;
 use crate::ui::{ui_call_msg_showcmd, ui_has};
-use crate::winlayer::graph::curwin;
 use core::ffi::{CStr, c_char, c_int};
 
 use crate::highlight_group::HLF_MSG;
@@ -392,7 +391,7 @@ pub(crate) fn display_showcmd() {
         if clear {
             cur_win().w_redr_status = true;
         } else {
-            unsafe { win_redr_status(curwin.get()) };
+            unsafe { win_redr_status(Win::current_raw()) };
             unsafe { setcursor() };
         }
         return;

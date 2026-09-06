@@ -46,9 +46,7 @@ use crate::window::{
 use crate::winfloat::{
     win_config_float, win_float_find_altwin, win_new_float, win_set_minimal_style,
 };
-use crate::winlayer::graph::{
-    cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win, curbuf, curtab, curwin,
-};
+use crate::winlayer::graph::{cmdline_win, cmdwin_buf, cmdwin_old_curwin, cmdwin_type, cmdwin_win};
 
 // The carve of the transpiled module; see each child's docs.
 mod apply;

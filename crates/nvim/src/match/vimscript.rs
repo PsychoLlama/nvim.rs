@@ -12,6 +12,7 @@ use super::*;
 use crate::eval::typval::NumBuf;
 use crate::semsg;
 use crate::types::{Failed, MB_MAXCHAR, VAR_DICT, VAR_LIST, VAR_UNKNOWN, kListLenMayKnow};
+use crate::winlayer::Win;
 
 /// How many `posN` keys a saved position match can carry.
 ///
@@ -281,7 +282,7 @@ unsafe fn optional_args(
     let mut prio = DEFAULT_PRIORITY;
     let mut id = -1;
     let mut conceal_char: *const c_char = ::core::ptr::null();
-    let mut win = curwin.get();
+    let mut win = Win::current_raw();
     let mut error = false;
 
     // Nested, not sequential: an `id` is only read when a `priority` was
@@ -394,7 +395,7 @@ pub(crate) unsafe fn f_matcharg(args: *mut TypVal, result: *mut TypVal, _fptr: E
     if !is_excmd {
         return;
     }
-    let m = unsafe { get_match(curwin.get(), id) };
+    let m = unsafe { get_match(Win::current_raw(), id) };
     if m.is_null() {
         unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };
         unsafe { tv_list_append_string(l, ::core::ptr::null(), 0) };

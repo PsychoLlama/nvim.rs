@@ -18,6 +18,7 @@
 use crate::cstr;
 use crate::keycodes::{Ctrl_C, Key};
 use crate::types::AutoEvent;
+use crate::winlayer::TabPage;
 use core::ffi::{CStr, c_char, c_int};
 use core::mem::offset_of;
 use core::ptr;
@@ -73,7 +74,7 @@ use crate::window::{
     tabline_height, win_comp_pos, win_equal, win_new_screen_rows, win_setheight, win_setwidth,
 };
 use crate::winfloat::win_float_update_statusline;
-use crate::winlayer::graph::{curtab, firstwin, lastwin, topframe};
+use crate::winlayer::graph::{firstwin, lastwin, topframe};
 
 use super::{
     B_IMODE_NONE, B_IMODE_USE_INSERT, NO_SCREEN, OptSlot, STATUS_HEIGHT, answer_err,
@@ -240,7 +241,7 @@ pub(crate) unsafe fn did_set_buflisted(args: &mut OptSet) -> Option<&CStr> {
 pub(crate) unsafe fn did_set_cmdheight(args: &mut OptSet) -> Option<&CStr> {
     // SAFETY: the table's call frame; the rest reads globals.
     let old_value = unsafe { Frame::read(args) }.old_number();
-    let room = (Rows.get() - unsafe { min_rows(curtab.get()) } + 1) as OptInt;
+    let room = (Rows.get() - unsafe { min_rows(TabPage::current_raw()) } + 1) as OptInt;
     if p_ch.get() > room {
         p_ch.set(room);
     }

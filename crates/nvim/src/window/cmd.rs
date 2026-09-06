@@ -57,7 +57,7 @@ use crate::types::{ExArg, Failed, LineNr, NUL, OpArg, WinConfig, int64_t, size_t
 use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::winfloat::{WIN_CONFIG_INIT, win_new_float};
-use crate::winlayer::graph::{cmdwin_type, curtab, curwin, firstwin, lastwin, prevwin};
+use crate::winlayer::graph::{cmdwin_type, firstwin, lastwin, prevwin};
 
 // The keys CTRL-W dispatches on. `const` blocks because a cast expression
 // is not a `match` pattern, and a plain integer `const` would also land in
@@ -475,17 +475,17 @@ fn move_to_new_tabpage(prenum: c_int) {
         only_one_message();
         return;
     }
-    let oldtab = curtab.get();
-    let wp = cur_win().raw();
+    let oldtab = TabPage::current_raw();
+    let wp = Win::current_raw();
     if new_tabpage(prenum, ptr::null_mut(), true).is_none() {
         return;
     }
     let Some(oldtab) = valid_tab(oldtab) else {
         return;
     };
-    let newtab = curtab.get();
+    let newtab = TabPage::current_raw();
     goto_tab(oldtab, true, true);
-    if curwin.get() == wp {
+    if Win::current_raw() == wp {
         close(cur_win(), false, false);
     }
     if let Some(newtab) = valid_tab(newtab) {
@@ -545,8 +545,8 @@ fn goto_file(nchar: c_int, prenum1: c_int) {
     if ptr.is_null() {
         return;
     }
-    let oldtab = curtab.get();
-    let oldwin = curwin.get();
+    let oldtab = TabPage::current_raw();
+    let oldwin = Win::current_raw();
     set_pcmark();
 
     // If 'switchbuf' has "useopen" or "usetab" and the file is already open in
@@ -651,7 +651,7 @@ fn detach_window() {
     };
     let mut error = Error::none();
     // SAFETY: a live window, its own size, and an error slot of ours.
-    let made = unsafe { win_new_float(curwin.get(), false, config, &mut error) };
+    let made = unsafe { win_new_float(Win::current_raw(), false, config, &mut error) };
     if made.is_null() {
         err_raw(error.message_or_empty().as_ptr());
         // SAFETY: an error the call above filled in, which owns its message.

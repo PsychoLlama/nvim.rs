@@ -67,7 +67,7 @@ unsafe fn get_var_from(
         // and not at all with a buffer in hand, where `curbuf` is saved
         // and restored directly instead.
         let need_switch_win =
-            !(tabpage == curtab.get() && win == curwin.get()) && !do_change_curbuf;
+            !(tabpage == TabPage::current_raw() && win == Win::current_raw()) && !do_change_curbuf;
         let mut switchwin = SWITCHWIN_INITIAL_VALUE;
         // SAFETY: `varname` is NUL-terminated and the handles are live.
         let lead = unsafe { *varname } as u8;
@@ -137,7 +137,7 @@ unsafe fn getwinvar(args: *mut TypVal, result: *mut TypVal, off: c_int) {
     let tp = if off == 1 {
         find_tabpage(unsafe { tv_get_number_chk(args, ptr::null_mut()) } as c_int)
     } else {
-        curtab.get()
+        TabPage::current_raw()
     };
     let win = unsafe { find_win_by_nr(args.offset(off as isize), TabPage::from_raw(tp)) }
         .map_or(ptr::null_mut(), Win::raw);
@@ -316,7 +316,7 @@ unsafe fn setwinvar(args: *mut TypVal, off: c_int) {
     let tp = if off == 1 {
         find_tabpage(unsafe { tv_get_number_chk(args, ptr::null_mut()) } as c_int)
     } else {
-        curtab.get()
+        TabPage::current_raw()
     };
     let win = unsafe { find_win_by_nr(args.offset(off as isize), TabPage::from_raw(tp)) }
         .map_or(ptr::null_mut(), Win::raw);
@@ -326,7 +326,7 @@ unsafe fn setwinvar(args: *mut TypVal, off: c_int) {
         return;
     }
 
-    let need_switch_win = !(tp == curtab.get() && win == curwin.get());
+    let need_switch_win = !(tp == TabPage::current_raw() && win == Win::current_raw());
     let mut switchwin = SWITCHWIN_INITIAL_VALUE;
     if !need_switch_win || unsafe { switch_win(&raw mut switchwin, win, tp, true) }.is_ok() {
         if unsafe { *varname } == b'&' as c_char {
@@ -399,7 +399,7 @@ pub unsafe fn f_getbufvar(args: *mut TypVal, result: *mut TypVal, _fptr: EvalFun
     let varname = unsafe { numbuf.string_chk(args.add(1)) };
     let buf = unsafe { tv_get_buf_from_arg(args) };
     let deftv = unsafe { args.add(2) };
-    let (tp, win) = (curtab.get(), curwin.get());
+    let (tp, win) = (TabPage::current_raw(), Win::current_raw());
     // SAFETY: as a `VimLFunc`, and the two globals are set from startup to
     // exit.
     unsafe { get_var_from(varname, result, deftv, b'b' as c_int, tp, win, buf) };
@@ -421,7 +421,7 @@ pub unsafe fn f_settabvar(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFu
         return;
     }
 
-    let save_curtab = curtab.get();
+    let save_curtab = TabPage::current_raw();
     let save_lu_tp = lastused_tabpage.get();
     unsafe { goto_tabpage_tp(tp, false, false) };
 

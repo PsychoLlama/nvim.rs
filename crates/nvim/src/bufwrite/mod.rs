@@ -60,7 +60,6 @@ use crate::types::{
 use crate::ui::ui_flush;
 use crate::undo::{curbuf_is_changed, u_unchanged, u_update_save_nr, u_write_undo};
 use crate::winlayer::Buf;
-use crate::winlayer::graph::curbuf;
 use ::libc::{__errno_location, close, getgid, getuid, iconv, iconv_close};
 
 // The carve of the transpiled module; see each child's docs.
@@ -322,14 +321,14 @@ pub unsafe fn buf_write(
     if b.b_ffname.is_null()
         && req.reset_changed
         && whole
-        && buf == curbuf.get()
+        && buf == Buf::current_raw()
         && !buf_is_nofilename(unsafe { Buf::from_raw(buf) })
         && !req.filtering
         && (!req.append || cpo_has(CpoFlag::FNAMEAPP))
         && cpo_has(CpoFlag::FNAMEW)
     {
         unsafe { set_rw_fname(fname, sfname) }?;
-        buf = curbuf.get(); // just in case autocmds made "buf" invalid
+        buf = Buf::current_raw(); // just in case autocmds made "buf" invalid
         // SAFETY: `curbuf` is live; keep the handle in step with the pointer.
         b = unsafe { Buf::new(buf) };
     }

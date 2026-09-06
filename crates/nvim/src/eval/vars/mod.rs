@@ -98,7 +98,7 @@ use crate::types::{
 };
 use crate::version::{highest_patch, min_vim_version};
 use crate::window::{find_tabpage, goto_tabpage_tp, prevwin_curwin, valid_tabpage};
-use crate::winlayer::graph::{curbuf, curtab, curwin, lastused_tabpage};
+use crate::winlayer::graph::lastused_tabpage;
 use crate::winlayer::{Ea, Live};
 use ::libc::{abort, memchr, strcpy};
 

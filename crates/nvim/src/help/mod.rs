@@ -65,7 +65,8 @@ use crate::types::{
 };
 use crate::ui::state::Columns;
 use crate::window::{WSP_BOT, WSP_HELP, WSP_TOP, win_close, win_enter, win_setheight, win_split};
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use crate::winlayer::windows;
 use ::libc::{fclose, qsort, strcasecmp};
 use core::ffi::{CStr, c_char, c_int, c_void};
@@ -221,17 +222,14 @@ pub(crate) unsafe fn ex_help(args: *mut ExArg) {
         // autocommands may have jumped to another window, so check that
         // the buffer is not in one.
         if opened.empty_fnum != 0
-            && unsafe { (*curbuf.get()).handle } != opened.empty_fnum
+            && Buf::current().handle != opened.empty_fnum
             && let Some(buf) = find_buf(opened.empty_fnum).filter(|b| b.b_nwindows == 0)
         {
             wipe_buffer(buf, true);
         }
         // Keep the previous alternate file.
-        if opened.alt_fnum != 0
-            && unsafe { (*curwin.get()).w_alt_fnum } == opened.empty_fnum
-            && keepalt_is_off()
-        {
-            unsafe { (*curwin.get()).w_alt_fnum = opened.alt_fnum };
+        if opened.alt_fnum != 0 && cur_win().w_alt_fnum == opened.empty_fnum && keepalt_is_off() {
+            cur_win().w_alt_fnum = opened.alt_fnum;
         }
     }
     unsafe { xfree(tag.cast::<c_void>()) };
@@ -362,8 +360,8 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     // was given and the current window is vertically split and narrow.
     let mut split = WSP_HELP as c_int;
     if cmdmod.with(|m| m.cmod_split) == 0
-        && unsafe { (*curwin.get()).w_width } != Columns.get()
-        && unsafe { (*curwin.get()).w_width } < 80
+        && cur_win().w_width != Columns.get()
+        && cur_win().w_width < 80
     {
         split |= if p_sb.get() != 0 {
             WSP_BOT as c_int
@@ -374,22 +372,22 @@ unsafe fn enter_help_window() -> Option<HelpWindow> {
     if win_split(0, split).is_err() {
         return None;
     }
-    if (unsafe { (*curwin.get()).w_height } as OptInt) < p_hh.get() {
+    if (cur_win().w_height as OptInt) < p_hh.get() {
         win_setheight(p_hh.get() as c_int);
     }
 
     // Open the help file. `do_ecmd` sets `b_help` and `readfile` sets
     // 'readonly'. The buffer is still open, so don't store info.
-    opened.alt_fnum = unsafe { (*curbuf.get()).handle };
+    opened.alt_fnum = Buf::current().handle;
     let (fnum, fname, sfname) = (0, ptr::null_mut(), ptr::null_mut());
     let (eap_0, win) = (ptr::null_mut(), ptr::null_mut());
     let (lnum, flags) = (newlnum::LASTL, EcmdFlags::HIDE | EcmdFlags::SET_HELP);
     // SAFETY: the editor's own current window and buffer.
     let _ = unsafe { do_ecmd(fnum, fname, sfname, eap_0, lnum, flags, win) };
     if keepalt_is_off() {
-        unsafe { (*curwin.get()).w_alt_fnum = opened.alt_fnum };
+        cur_win().w_alt_fnum = opened.alt_fnum;
     }
-    opened.empty_fnum = unsafe { (*curbuf.get()).handle };
+    opened.empty_fnum = Buf::current().handle;
     Some(opened)
 }
 
@@ -637,18 +635,17 @@ pub(crate) unsafe fn cleanup_help_tags(num_file: c_int, file: *mut *mut c_char) 
 /// # Safety
 /// Main thread; `curbuf` and `curwin` are live.
 pub(crate) unsafe fn prepare_help_buffer() {
-    // SAFETY: `curbuf`/`curwin` are the editor's current buffer and window.
-    unsafe { (*curbuf.get()).b_help = true };
+    Buf::current().b_help = true;
     set_option_direct(kOptBuftype, cstr_optval(c"help"), OptionSetFlags::LOCAL, 0);
 
     // Accept every ASCII character as a keyword character except ' ',
     // '*', '"' and '|', plus the latin1 word characters translated help
     // files use. Only set it when needed: `buf_init_chartab` is work.
     let isk = c"!-~,^*,^|,^\",192-255";
-    if !unsafe { cstr::eq((*curbuf.get()).b_p_isk, isk.as_ptr()) } {
+    if !unsafe { cstr::eq(Buf::current().b_p_isk, isk.as_ptr()) } {
         set_option_direct(kOptIskeyword, cstr_optval(isk), OptionSetFlags::LOCAL, 0);
-        unsafe { check_buf_options(curbuf.get()) };
-        unsafe { buf_init_chartab(curbuf.get(), false) };
+        unsafe { check_buf_options(Buf::current_raw()) };
+        unsafe { buf_init_chartab(Buf::current_raw(), false) };
     }
 
     // Don't use the global foldmethod.
@@ -659,10 +656,10 @@ pub(crate) unsafe fn prepare_help_buffer() {
         0,
     );
 
-    unsafe { (*curbuf.get()).b_p_ts = 8 };
-    unsafe { (*curbuf.get()).b_p_ma = 0 }; // not modifiable
-    unsafe { (*curbuf.get()).b_p_bin = 0 }; // reset 'bin' before reading the file
-    let wo = unsafe { &raw mut (*curwin.get()).w_onebuf_opt };
+    Buf::current().b_p_ts = 8;
+    Buf::current().b_p_ma = 0; // not modifiable
+    Buf::current().b_p_bin = 0; // reset 'bin' before reading the file
+    let wo = unsafe { &raw mut (*Win::current_raw()).w_onebuf_opt };
     unsafe { (*wo).wo_list = 0 };
     unsafe { (*wo).wo_nu = 0 };
     unsafe { (*wo).wo_rnu = 0 };

@@ -81,7 +81,7 @@ pub(crate) fn check_spell_redraw() {
     if spell_redraw_lnum.get() != 0 {
         let lnum = spell_redraw_lnum.get();
         spell_redraw_lnum.set(0);
-        unsafe { redraw_win_line(curwin.get(), lnum) };
+        unsafe { redraw_win_line(Win::current_raw(), lnum) };
     }
 }
 
@@ -271,13 +271,11 @@ pub(crate) unsafe fn stop_insert(end_insert_pos: *mut Pos, esc: c_int, nomove: c
 pub(crate) unsafe fn ins_apply_autocmds(event: AutoEvent) -> c_int {
     // SAFETY: every `unsafe` call below is an editor-wide routine whose only
     // precondition is the live `curwin`/`curbuf` this mode runs with.
-    let tick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
+    let tick = buf_get_changedtick(cur_buf());
     let none = ::core::ptr::null_mut();
-    let r = unsafe { apply_autocmds(event, none, none, false, curbuf.get()) } as c_int;
+    let r = unsafe { apply_autocmds(event, none, none, false, Buf::current_raw()) } as c_int;
 
-    if event != AutoEvent::InsertLeave
-        && tick != unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
-    {
+    if event != AutoEvent::InsertLeave && tick != buf_get_changedtick(cur_buf()) {
         let _ = u_save(cur_win().w_cursor.lnum, cur_win().w_cursor.lnum + 1);
     }
     r

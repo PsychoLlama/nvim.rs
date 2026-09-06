@@ -78,7 +78,7 @@ use crate::window::{
     goto_tabpage_tp, valid_tabpage, win_close, win_enter, win_setheight, win_valid,
 };
 use crate::winfloat::{win_config_float, win_float_create_preview, win_float_find_preview};
-use crate::winlayer::graph::{cmdline_win, cmdwin_type, curbuf, curtab, curwin};
+use crate::winlayer::graph::{cmdline_win, cmdwin_type};
 use crate::winlayer::{Win, windows};
 
 // The carve of the transpiled module; see each child's docs.
@@ -227,7 +227,7 @@ struct PumAnchor {
 /// `curwin` must be live and the cursor column validated.
 unsafe fn pum_compute_anchor(cmd_startcol: c_int) -> PumAnchor {
     // SAFETY: `curwin`, `cmdline_win` and the window tree are the editor's.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let cmdline = State.get() & MODE_CMDLINE != 0;
     let target_win = if cmdline { cmdline_win.get() } else { win };
     let mut above_row = 0;
@@ -373,8 +373,7 @@ pub unsafe fn pum_display(
         pum_external
             .set(ui_has(kUIPopupmenu) || (State.get() & MODE_CMDLINE != 0 && ui_has(kUIWildmenu)));
     }
-    pum_rl
-        .set(State.get() & MODE_CMDLINE == 0 && unsafe { (*curwin.get()).w_onebuf_opt.wo_rl } != 0);
+    pum_rl.set(State.get() & MODE_CMDLINE == 0 && Win::current().w_onebuf_opt.wo_rl != 0);
     let border_width = unsafe { pum_border_width() };
 
     // Placing the menu can resize a window, which invalidates the

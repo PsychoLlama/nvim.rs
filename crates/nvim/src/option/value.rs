@@ -12,6 +12,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char};
 use core::ptr;
 
@@ -21,7 +22,6 @@ use crate::optionstr::is_empty_option;
 use crate::os::cshim::snprintf;
 use crate::types::{Arena, Object, OptIndex, OptVal, OptValType, size_t};
 use crate::undo::curbuf_is_changed;
-use crate::winlayer::graph::curbuf;
 
 use super::{
     NUMBUFLEN, OptSlot, get_option, is_option_hidden, kOptValTypeBoolean, kOptValTypeNil,
@@ -105,7 +105,7 @@ pub(crate) unsafe fn optval_from_varp(opt_idx: OptIndex, slot: OptSlot) -> OptVa
     // 'modified' has no variable of its own worth reading: `b_changed` alone
     // misses a buffer whose undo state says it is unchanged after all.
     // SAFETY: `curbuf` is a live buffer for as long as the editor is running.
-    if slot == OptSlot::Boolean(unsafe { &raw mut (*curbuf.get()).b_changed }) {
+    if slot == OptSlot::Boolean(unsafe { &raw mut (*Buf::current_raw()).b_changed }) {
         // SAFETY: reading the current buffer's change state.
         return boolean_optval(Some(curbuf_is_changed()));
     }

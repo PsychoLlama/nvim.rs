@@ -93,7 +93,7 @@ use crate::types::{
 };
 use crate::ui::{ui_busy_start, ui_busy_stop, ui_cursor_goto, ui_flush, vim_beep};
 use crate::undo::u_sync;
-use crate::winlayer::graph::{cmdwin_type, curbuf, curwin};
+use crate::winlayer::graph::cmdwin_type;
 use ::libc::{atoi, fprintf};
 
 // The carve of the transpiled module; see each child's docs.

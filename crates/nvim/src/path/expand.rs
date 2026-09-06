@@ -11,6 +11,7 @@
 
 use crate::cmdexpand::WildOpts;
 use crate::cstr;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 use std::ffi::CStr;
 
@@ -66,7 +67,7 @@ pub(crate) unsafe fn expand_path_option(
             // Relative to the current buffer:
             //     "/path/file" + "."        -> "/path/"
             //     "/path/file" + "./subdir" -> "/path/subdir"
-            let ffname = unsafe { (*curbuf.get()).b_ffname };
+            let ffname = Buf::current().b_ffname;
             if ffname.is_null() {
                 continue;
             }
@@ -176,10 +177,10 @@ pub(crate) unsafe fn expand_in_path(
 /// # Safety
 /// There must be a current buffer.
 pub(crate) unsafe fn buffer_path() -> *mut c_char {
-    if unsafe { *(*curbuf.get()).b_p_path } == 0 {
+    if unsafe { *Buf::current().b_p_path } == 0 {
         p_path.get()
     } else {
-        unsafe { (*curbuf.get()).b_p_path }
+        Buf::current().b_p_path
     }
 }
 

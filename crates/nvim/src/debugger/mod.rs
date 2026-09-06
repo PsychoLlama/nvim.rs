@@ -70,7 +70,7 @@ use crate::types::{
     TypeaheadSave, int32_t, int64_t, size_t, uint8_t,
 };
 use crate::ui::state::Rows;
-use crate::winlayer::graph::{curbuf, curwin};
+use crate::winlayer::{Buf, Win};
 use ::libc::{atoi, strcpy};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
@@ -346,7 +346,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
         } else if cstr::starts_with(arg, b"file") {
             (DBG_FILE, false)
         } else if debugger && cstr::starts_with(arg, b"here") {
-            if (*curbuf.get()).b_ffname.is_null() {
+            if Buf::current().b_ffname.is_null() {
                 semsg!("E32: No file name");
                 return Err(Failed);
             }
@@ -368,7 +368,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
     // SAFETY: `p` is inside `arg`, and `getdigits_int32` only advances it.
     let lnum = unsafe {
         if here {
-            (*curwin.get()).w_cursor.lnum
+            Win::current().w_cursor.lnum
         } else if debugger && ascii_isdigit(*p as c_int) {
             let lnum = getdigits_int32(&raw mut p, true, 0 as int32_t) as LineNr;
             p = skipwhite(p);
@@ -409,7 +409,7 @@ unsafe fn dbg_parsearg(arg: *mut c_char, list: BreakList) -> Result<Breakpoint, 
             };
             xstrdup(bare)
         } else if here {
-            xstrdup((*curbuf.get()).b_ffname)
+            xstrdup(Buf::current().b_ffname)
         } else if kind == DBG_EXPR {
             let expr = xstrdup(p);
             // `eval_expr_no_emsg` reads the entry's `dbg_name`, so the

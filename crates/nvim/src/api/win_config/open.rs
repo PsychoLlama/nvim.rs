@@ -66,10 +66,10 @@ pub unsafe fn nvim_open_win(
         unsafe { block_autocmds() };
     }
     let wp: *mut Window;
-    let mut tp: *mut Tabpage = curtab.get();
-    debug_assert!(!curwin.get().is_null(), "curwin != NULL");
+    let mut tp: *mut Tabpage = TabPage::current_raw();
+    debug_assert!(Win::current_or_none().is_some(), "curwin != NULL");
     let mut parent: *mut Window = if keys.win == 0 {
-        curwin.get()
+        Win::current_raw()
     } else {
         ::core::ptr::null_mut::<Window>()
     };
@@ -93,7 +93,7 @@ pub unsafe fn nvim_open_win(
         }
         if is_split {
             let target = if parent.is_null() {
-                curwin.get()
+                Win::current_raw()
             } else {
                 parent
             };
@@ -129,7 +129,7 @@ pub unsafe fn nvim_open_win(
             let mut tstate = TryState::default();
             // SAFETY: `tstate` is this frame's own, live until `try_leave`.
             unsafe { try_enter(&raw mut tstate) };
-            if parent.is_null() || parent == curwin.get() {
+            if parent.is_null() || parent == Win::current_raw() {
                 // SAFETY: a split of the current window, which is live.
                 wp = unsafe { split_ins(size, flags) };
             } else {
@@ -170,7 +170,7 @@ pub unsafe fn nvim_open_win(
         } else {
             // SAFETY: `curwin` is live for the editor's whole run, and so is
             // the buffer it shows.
-            let locked = unsafe { (*(*curwin.get()).w_buffer).b_locked_split } != 0;
+            let locked = unsafe { (*Win::current().w_buffer).b_locked_split } != 0;
             if locked {
                 let msg = c"E1159: Cannot open a float when closing the buffer";
                 err_msg(report, kErrorTypeException, msg);
@@ -209,7 +209,7 @@ pub unsafe fn nvim_open_win(
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     ::core::ptr::null_mut::<::core::ffi::c_char>(),
                     false,
-                    curbuf.get(),
+                    Buf::current_raw(),
                 )
             };
             if switched {
@@ -227,7 +227,8 @@ pub unsafe fn nvim_open_win(
         // is what says the autocommands above did not close it.
         let other_buf = !tp.is_null() && bufref.valid() && b != unsafe { (*wp).w_buffer };
         if other_buf {
-            let quiet = (curwin.get() != wp && !noautocmd).then(Suppress::win_enter_leave_autocmds);
+            let quiet =
+                (Win::current_raw() != wp && !noautocmd).then(Suppress::win_enter_leave_autocmds);
             // SAFETY: `wp` and `b` are live, and `error` is this frame's slot.
             unsafe { win_set_buf(wp, b, &mut error) };
             if !noautocmd {
@@ -346,7 +347,7 @@ pub(crate) unsafe fn win_can_move_tp(
 ) -> bool {
     // SAFETY: the caller's error slot.
     let report = unsafe { ErrSlot::new(err) };
-    let other_tab = if tabpage == curtab.get() {
+    let other_tab = if tabpage == TabPage::current_raw() {
         ::core::ptr::null_mut::<Tabpage>()
     } else {
         tabpage
@@ -391,7 +392,7 @@ pub(crate) unsafe fn win_can_move_tp(
 /// # Safety
 /// `win` must be a live window and `tabpage` a live tab page.
 pub(crate) unsafe fn win_find_altwin(win: *mut Window, tabpage: *mut Tabpage) -> *mut Window {
-    let at = (tabpage != curtab.get()).then(|| {
+    let at = (tabpage != TabPage::current_raw()).then(|| {
         // SAFETY: the caller's tab page.
         unsafe { TabPage::new(tabpage) }
     });

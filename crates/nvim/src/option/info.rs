@@ -6,6 +6,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::c_char;
 use core::ptr;
 
@@ -15,7 +16,6 @@ use crate::types::{
     ApiDict, Arena, Buffer, Error, Integer, KeyValuePair, Object, OptIndex, OptionSetFlags,
     ScriptCtx, String_0, Window, int64_t, key_value_pair, size_t,
 };
-use crate::winlayer::graph::{curbuf, curwin};
 
 use crate::api::private::validate::err_bad_value;
 
@@ -100,7 +100,11 @@ pub(crate) unsafe fn get_all_vimoptions(arena: *mut Arena) -> ApiDict {
     // pairs before any is pushed.
     let mut retval = arena_dict(arena, kOptCount as size_t);
     for opt_idx in kOptAleph..kOptCount {
-        let (scope, buf, win) = (OptionSetFlags::GLOBAL, curbuf.get(), curwin.get());
+        let (scope, buf, win) = (
+            OptionSetFlags::GLOBAL,
+            Buf::current_raw(),
+            Win::current_raw(),
+        );
         // SAFETY: the caller's arena, and `curbuf`/`curwin` are live.
         let opt_dict = unsafe { vimoption2dict(opt_idx, scope, buf, win, arena) };
         let pair = key_value_pair {

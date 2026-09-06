@@ -209,7 +209,7 @@ impl ComplOrigExtmarks {
         let mut saved = COMPL_ORIG_EXTMARKS.get();
         // SAFETY: the caller's promise; `saved` is a live vector.
         let lnum = cur_win().w_cursor.lnum as c_int - 1;
-        let buf = curbuf.get();
+        let buf = Buf::current_raw();
         let (start, end) = (compl_col.get(), compl_col.get() + compl_length.get());
         let list = &raw mut saved;
         // SAFETY: the caller's promise -- `start .. end` is a range of the

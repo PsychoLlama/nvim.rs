@@ -58,7 +58,7 @@ pub unsafe fn inindent(extra: c_int) -> bool {
         ptr = unsafe { ptr.add(1) };
         col += 1;
     }
-    col >= unsafe { (*curwin.get()).w_cursor.col } as c_int + extra
+    col >= cur_win().w_cursor.col as c_int + extra
 }
 
 /// Writes `fmt` with `n` into a buffer of its own and shows it as
@@ -91,8 +91,8 @@ unsafe fn indent_progress(fmt: *const c_char, n: int64_t, status: &CStr) {
 pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
     // SAFETY: the caller's operator argument, and the buffer it names is
     // the current one.
-    let win = curwin.get();
-    let buf = curbuf.get();
+    let win = Win::current_raw();
+    let buf = Buf::current_raw();
     let start_lnum = unsafe { (*win).w_cursor.lnum };
     let line_count = unsafe { (*op).line_count };
     if unsafe { (*buf).b_p_ma } == 0 {
@@ -202,7 +202,7 @@ pub unsafe fn op_reindent(op: *mut OpArg, how: Indenter) {
 /// There must be a current buffer.
 pub unsafe fn preprocs_left() -> bool {
     // SAFETY: the caller's contract.
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     unsafe {
         (*buf).b_p_si != 0 && (*buf).b_p_cin == 0
             || (*buf).b_p_cin != 0
@@ -217,7 +217,7 @@ pub unsafe fn preprocs_left() -> bool {
 /// There must be a current buffer.
 pub unsafe fn may_do_si() -> bool {
     // SAFETY: the caller's contract.
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     unsafe {
         (*buf).b_p_si != 0 && (*buf).b_p_cin == 0 && *(*buf).b_p_inde == 0 && p_paste.get() == 0
     }
@@ -233,7 +233,7 @@ pub unsafe fn may_do_si() -> bool {
 unsafe fn si_indent_like_open_brace(pos: Pos) {
     // SAFETY: the caller's position, and the cursor is put back before the
     // indent is applied.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let old_pos = unsafe { (*win).w_cursor };
     let ptr = ml_get(pos.lnum);
     let mut i = pos.col as c_int;
@@ -268,7 +268,7 @@ unsafe fn si_indent_like_open_brace(pos: Pos) {
 unsafe fn si_should_shift_back() -> bool {
     // SAFETY: the caller's contract; the walk stops at line 1 and the cursor
     // is put back before answering.
-    let win = curwin.get();
+    let win = Win::current_raw();
     let old_pos = unsafe { (*win).w_cursor };
     let here = get_indent();
     while unsafe { (*win).w_cursor.lnum } > 1 {
@@ -292,7 +292,7 @@ unsafe fn si_should_shift_back() -> bool {
 pub unsafe fn ins_try_si(c: c_int) {
     // SAFETY: the caller's contract; every helper below reads and restores
     // the cursor itself.
-    let win = curwin.get();
+    let win = Win::current_raw();
     if (did_si.get() || can_si_back.get()) && c == '{' as c_int
         || can_si.get() && c == '}' as c_int && unsafe { inindent(0) }
     {
@@ -372,7 +372,7 @@ unsafe fn apply_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_
 unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
     // SAFETY: the caller's contract; the walk is over the cursor line and
     // stopped by its NUL.
-    let win = curwin.get();
+    let win = Win::current_raw();
     unsafe { (*win).w_virtcol = end_vcol as ColNr };
     let line = get_cursor_line_ptr();
     let mut new_cursor_col = 0;
@@ -417,7 +417,7 @@ unsafe fn place_cursor_in_indent(end_vcol: c_int) -> c_int {
 unsafe fn adjust_insert_start(insstart_less: c_int) {
     let mut insstart = Insstart.get();
     // SAFETY: the caller's contract.
-    let lnum = unsafe { (*curwin.get()).w_cursor.lnum };
+    let lnum = cur_win().w_cursor.lnum;
     if lnum == insstart.lnum && insstart.col != 0 {
         insstart.col = if (insstart.col as c_int) <= insstart_less {
             0
@@ -440,7 +440,7 @@ unsafe fn adjust_insert_start(insstart_less: c_int) {
 /// There must be an open replace stack.
 unsafe fn fix_replace_stack(mut start_col: c_int) {
     // SAFETY: the caller's contract.
-    let win = curwin.get();
+    let win = Win::current_raw();
     while start_col > unsafe { (*win).w_cursor.col } as c_int {
         replace_join(0); // remove a NUL from the replace stack
         start_col -= 1;
@@ -459,7 +459,7 @@ unsafe fn fix_replace_stack(mut start_col: c_int) {
 /// `orig_line`/`orig_col` must be what [`change_indent`] saved.
 unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
     // SAFETY: the caller's saved line, which `ml_replace` takes over.
-    let win = curwin.get();
+    let win = Win::current_raw();
     // The new line, but only up to the cursor.
     let new_line = unsafe { xstrnsave(get_cursor_line_ptr(), get_cursor_line_len() as size_t) };
     let new_col = unsafe { (*win).w_cursor.col };
@@ -474,7 +474,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
     let delta = orig_col as c_int - new_col as c_int;
     unsafe {
         extmark_splice_cols(
-            curbuf.get(),
+            Buf::current_raw(),
             (*win).w_cursor.lnum as c_int - 1,
             new_col,
             if delta < 0 { -delta as ColNr } else { 0 },
@@ -493,7 +493,7 @@ unsafe fn vreplace_restore(orig_line: *mut c_char, orig_col: ColNr) {
 /// There must be a current window and a modifiable line.
 pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_changed_bytes: bool) {
     // SAFETY: the caller's contract; every deref is the current window.
-    let win = curwin.get();
+    let win = Win::current_raw();
     // Virtual Replace needs to know what the line looked like before.
     let orig = (State.get() & VREPLACE_FLAG != 0).then(|| {
         (
@@ -566,7 +566,7 @@ pub unsafe fn change_indent(type_0: c_int, amount: c_int, round: c_int, call_cha
 /// # Safety
 /// `src` must be NUL-terminated, and there must be a current window.
 pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     // SAFETY: `b_p_ts`/`b_p_vts_array` are the buffer's own tabstop
     // settings. Written as a closure inside the `unsafe`, so that the walk
     // below — which is the whole of this function — stays checked code.
@@ -639,8 +639,8 @@ pub unsafe fn copy_indent(size: c_int, src: *mut c_char) -> bool {
             .cast::<u8>()
             .copy_from(get_cursor_line_ptr().cast(), line_len as size_t)
     };
-    let _ = unsafe { ml_replace((*curwin.get()).w_cursor.lnum, line, false) };
-    unsafe { (*curwin.get()).w_cursor.col = ind_len as ColNr };
+    let _ = unsafe { ml_replace(cur_win().w_cursor.lnum, line, false) };
+    cur_win().w_cursor.col = ind_len as ColNr;
     true
 }
 
@@ -693,7 +693,7 @@ unsafe fn parse_retab_arg(arg: *mut c_char) -> Option<RetabTabs> {
     // array and `ts_str` is null.
     if vts.is_null() {
         Some(RetabTabs {
-            vts: unsafe { (*curbuf.get()).b_p_vts_array },
+            vts: Buf::current().b_p_vts_array,
             ts_str: ptr::null_mut(),
             indent_only,
         })
@@ -755,7 +755,7 @@ impl Retab {
     unsafe fn retabulate(&mut self, scan: &mut LineScan, tabs: &RetabTabs) -> Retabulated {
         // SAFETY: the caller's line; the replacement is sized from its
         // length and handed to `ml_replace`, which takes it over.
-        let buf = curbuf.get();
+        let buf = Buf::current_raw();
         // The run's width on screen.
         let width = (scan.vcol - self.start_vcol) as c_int;
         self.num_spaces = width;
@@ -898,7 +898,7 @@ impl Retab {
 unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
     // SAFETY: the caller's contract; the buffer takes over `tabs.vts` on the
     // 'vartabstop' path and the old array is freed instead.
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     let old_vts_ary = unsafe { (*buf).b_p_vts_array };
     if unsafe { tabstop_count(old_vts_ary) } > 0 || unsafe { tabstop_count(tabs.vts) } > 1 {
         // 'vartabstop' is in use, or more than one stop was given.
@@ -925,8 +925,8 @@ unsafe fn set_retab_tabstop(tabs: &RetabTabs) {
 pub unsafe fn ex_retab(args: *mut ExArg) {
     // SAFETY: the caller's Ex-command argument; the line range it names is
     // the current buffer's.
-    let win = curwin.get();
-    let buf = curbuf.get();
+    let win = Win::current_raw();
+    let buf = Buf::current_raw();
     let b = unsafe { Buf::new(buf) };
     let save_list = unsafe { (*win).w_onebuf_opt.wo_list };
     unsafe { (*win).w_onebuf_opt.wo_list = 0 }; // 'list' mode is not wanted here

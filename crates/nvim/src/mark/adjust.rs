@@ -35,7 +35,6 @@ use crate::extmark::extmark_adjust;
 use crate::fold::fold_mark_adjust;
 use crate::pos::{MAXLNUM, equalpos};
 use crate::state::mode::saved_cursor;
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Win, tab_windows, windows};
 use core::ffi::{c_int, c_uint};
 
@@ -193,7 +192,7 @@ pub unsafe fn mark_adjust(
     // SAFETY: forwarded from the caller; `curbuf` is live from startup.
     unsafe {
         mark_adjust_buf(
-            curbuf.get(),
+            Buf::current_raw(),
             line1,
             line2,
             amount,
@@ -223,7 +222,7 @@ pub unsafe fn mark_adjust_nofold(
     // SAFETY: forwarded from the caller.
     unsafe {
         mark_adjust_buf(
-            curbuf.get(),
+            Buf::current_raw(),
             line1,
             line2,
             amount,

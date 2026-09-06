@@ -119,7 +119,6 @@ use crate::ui::{
     ui_cursor_goto, ui_flush, ui_grid_cursor_goto, ui_has, ui_line, ui_refresh, vim_beep,
 };
 use crate::ui_compositor::{ui_comp_put_grid, ui_comp_remove_grid};
-use crate::winlayer::graph::{curbuf, curwin};
 use ::libc::{abort, abs, fclose, fprintf, fputs, memchr, printf, strnlen};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;

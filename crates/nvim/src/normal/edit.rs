@@ -58,7 +58,6 @@ use crate::types::{
     PUT_LINE, PUT_LINE_FORWARD, PUT_LINE_SPLIT, YankReg, size_t,
 };
 use crate::undo::{u_clearline, u_save, u_save_cursor, u_savesub};
-use crate::winlayer::graph::{curbuf, curwin};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 
 /// Refuse a change in a prompt buffer that is not on its own editable line.
@@ -315,7 +314,7 @@ pub(crate) unsafe fn n_swapchar(cmd_arg: *mut CmdArg) {
     let mut did_change = false;
     let mut n = ca.count1;
     while n > 0 {
-        did_change |= unsafe { swapchar(ca.op().op_type, &raw mut (*curwin.get()).w_cursor) };
+        did_change |= unsafe { swapchar(ca.op().op_type, &raw mut (*Win::current_raw()).w_cursor) };
         inc_cursor();
         if gchar_cursor() == NUL {
             if !(wraps && cur_win().w_cursor.lnum < cur_buf().b_ml.ml_line_count) {
@@ -746,7 +745,7 @@ pub(crate) unsafe fn nv_put_opt(cmd_arg: *mut CmdArg, fix_indent: bool) {
         cur_buf().b_visual.vi_start = cur_buf().b_op_start;
         cur_buf().b_visual.vi_end = cur_buf().b_op_end;
         if unsafe { *p_sel.get() } as c_int == 'e' as c_int {
-            unsafe { inc(&mut (*curbuf.get()).b_visual.vi_end) };
+            unsafe { inc(&mut (*Buf::current_raw()).b_visual.vi_end) };
         }
     }
     if emptied && unsafe { *ml_get(cur_buf().b_ml.ml_line_count) } as c_int == NUL {

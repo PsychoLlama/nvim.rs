@@ -17,6 +17,7 @@ use crate::message_fmt::c_str;
 use crate::semsg_multiline;
 use crate::types::{MB_MAXBYTES, NUL};
 use crate::winlayer::Buf;
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int};
 use core::ptr;
 
@@ -240,7 +241,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     // SAFETY: sets `v:char`, which is a plain vim variable.
     unsafe { set_vim_var_char(c) }; // set v:char to the typed character
     // SAFETY: the caller's promise — `curwin` is a live window.
-    let save_cursor = unsafe { (*curwin.get()).w_cursor };
+    let save_cursor = Win::current().w_cursor;
     let save_msg_col = msg_col.get();
     let save_msg_row = msg_row.get();
 
@@ -283,9 +284,7 @@ pub(crate) unsafe fn eval_map_expr(mp: Mb, c: c_int) -> Option<MapStr> {
     };
 
     drop(locked);
-    // SAFETY: `curwin` is live again — the evaluation above cannot close the
-    // last window, and `w_cursor` is restored into whatever it now names.
-    unsafe { (*curwin.get()).w_cursor = save_cursor };
+    Win::current().w_cursor = save_cursor;
     msg_col.set(save_msg_col);
     msg_row.set(save_msg_row);
 

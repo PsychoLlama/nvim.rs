@@ -89,7 +89,7 @@ pub unsafe fn ml_recover(checkext: bool) {
         }
         // When called from main() the storage structure still needs
         // initialising.
-        if called_from_main && unsafe { ml_open(curbuf.get()) }.is_err() {
+        if called_from_main && unsafe { ml_open(Buf::current_raw()) }.is_err() {
             unsafe { getout(1) };
         }
 
@@ -219,11 +219,11 @@ pub unsafe fn ml_recover(checkext: bool) {
         // SAFETY: `home_replace` NUL-terminated `path`.
         let shown = unsafe { c_str(path.as_ptr()) };
         smsg!(0, "Using swap file \"{shown}\"");
-        if !unsafe { buf_spname(curbuf.get()) }.is_null() {
+        if !unsafe { buf_spname(Buf::current_raw()) }.is_null() {
             unsafe {
                 xstrlcpy(
                     path.as_mut_ptr(),
-                    buf_spname(curbuf.get()),
+                    buf_spname(Buf::current_raw()),
                     MAXPATHL as size_t,
                 )
             };
@@ -316,7 +316,7 @@ pub unsafe fn ml_recover(checkext: bool) {
             // is empty; that is not a modification.
             if !(cur_buf().b_ml.ml_line_count == 2 && unsafe { *ml_get(1) } as c_int == NUL) {
                 changed_internal(cur_buf());
-                unsafe { buf_inc_changedtick(curbuf.get()) };
+                unsafe { buf_inc_changedtick(Buf::current_raw()) };
             }
         } else {
             for idx in 1..=lnum {
@@ -327,7 +327,7 @@ pub unsafe fn ml_recover(checkext: bool) {
                 unsafe { xfree(p.cast()) };
                 if !same {
                     changed_internal(cur_buf());
-                    unsafe { buf_inc_changedtick(curbuf.get()) };
+                    unsafe { buf_inc_changedtick(Buf::current_raw()) };
                     break;
                 }
             }
@@ -360,9 +360,9 @@ pub unsafe fn ml_recover(checkext: bool) {
     // it, and the memory goes back.
     drop(owned_buf);
     if serious_error && called_from_main {
-        unsafe { ml_close(curbuf.get(), 1) };
+        unsafe { ml_close(Buf::current_raw(), 1) };
     } else {
-        let (name, buf) = (cur_buf().b_fname, curbuf.get());
+        let (name, buf) = (cur_buf().b_fname, Buf::current_raw());
         let none = core::ptr::null_mut();
         unsafe { apply_autocmds(AutoEvent::BufReadPost, none, name, false, buf) };
         unsafe { apply_autocmds(AutoEvent::BufWinEnter, none, name, false, buf) };

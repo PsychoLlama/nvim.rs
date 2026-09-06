@@ -38,7 +38,7 @@ use crate::types::{CmdArg, LineGetter, LineNr, NUL, OpType};
 use crate::ui::vim_beep;
 use crate::undo::any_buf_is_changed;
 use crate::window::do_window;
-use crate::winlayer::graph::{cmdwin_result, cmdwin_type, curwin};
+use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 use core::ffi::{c_int, c_uint};
 
 /// A key the command loop must swallow without doing anything: it marks the
@@ -171,7 +171,7 @@ pub(crate) unsafe fn nv_clear(cmd_arg: *mut CmdArg) {
         // SAFETY: a live window's syntax block.
         unsafe { (*block).b_syn_slow = false };
     }
-    unsafe { redraw_later(curwin.get(), UPD_CLEAR) };
+    unsafe { redraw_later(Win::current_raw(), UPD_CLEAR) };
 }
 
 /// `CTRL-O`: jump back in the jump list -- or leave Select mode for one

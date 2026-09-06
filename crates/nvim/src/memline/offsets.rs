@@ -256,7 +256,7 @@ pub unsafe fn ml_find_line_or_offset(
     // does invalidate the cache for the time being.
     let can_cache = lnum != 0 && ffdos == 0 && b.b_ml.cached_lnum() == lnum;
     if lnum == 0 || b.b_ml.cached_lnum() < lnum || !no_ff {
-        unsafe { ml_flush_line(curbuf.get(), false) };
+        unsafe { ml_flush_line(Buf::current_raw(), false) };
     } else if can_cache && b.b_ml.cached_offset() > 0 {
         return b.b_ml.cached_offset() as c_int;
     }
@@ -385,12 +385,12 @@ pub unsafe fn ml_find_line_or_offset(
 /// Must run on the main thread, with a current buffer and window.
 pub unsafe fn goto_byte(cnt: c_int) {
     let mut boff = cnt;
-    unsafe { ml_flush_line(curbuf.get(), false) }; // the cached line may be dirty
+    unsafe { ml_flush_line(Buf::current_raw(), false) }; // the cached line may be dirty
     setpcmark();
     if boff != 0 {
         boff -= 1;
     }
-    let lnum = unsafe { ml_find_line_or_offset(curbuf.get(), 0, &raw mut boff, false) };
+    let lnum = unsafe { ml_find_line_or_offset(Buf::current_raw(), 0, &raw mut boff, false) };
     if lnum < 1 {
         // Past the end.
         cur_win().w_cursor.lnum = cur_buf().b_ml.ml_line_count;

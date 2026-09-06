@@ -40,7 +40,6 @@ use crate::types::{
     VirtText, WinConfig, kFloatRelativeEditor,
 };
 use crate::window::check_colorcolumn;
-use crate::winlayer::graph::curwin;
 
 use super::frame::{errbuf, invalid, local_window, old_value, varp, win};
 use super::{
@@ -250,7 +249,7 @@ pub unsafe fn did_set_guicursor(_args: &mut OptSet) -> Option<&CStr> {
     // The Visual-mode cursor shape is drawn as part of the line.
     if visual_active() {
         // SAFETY: the current window is live.
-        unsafe { redraw_win_line(curwin.get(), (*curwin.get()).w_cursor.lnum) };
+        unsafe { redraw_win_line(Win::current_raw(), Win::current().w_cursor.lnum) };
     }
     None
 }

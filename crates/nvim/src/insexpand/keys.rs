@@ -91,7 +91,7 @@ pub(crate) unsafe fn ins_compl_new_leader() {
 
     if p_acl.get() > 0 {
         unsafe { pum_undisplay(true) };
-        unsafe { redraw_later(curwin.get(), UPD_VALID) };
+        unsafe { redraw_later(Win::current_raw(), UPD_VALID) };
         let _ = unsafe { update_screen() }; // Show char (deletion) immediately
         unsafe { ui_flush() };
     }
@@ -317,7 +317,7 @@ pub(crate) unsafe fn ins_compl_stop(c: c_int, prev_mode: c_int, mut retval: bool
         word = unsafe { xstrdup((*compl_shown_match.get()).cp_str.data()) };
         retval = true;
         // May need to remove ComplMatchIns highlight.
-        unsafe { redraw_win_line(curwin.get(), cur_win().w_cursor.lnum) };
+        unsafe { redraw_win_line(Win::current_raw(), cur_win().w_cursor.lnum) };
     }
 
     // When a match was inserted but the pum was never displayed (e.g. only

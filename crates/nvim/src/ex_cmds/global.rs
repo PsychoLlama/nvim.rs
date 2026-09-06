@@ -37,6 +37,7 @@ use crate::regexp::{
 use crate::search::{SEARCH_HIS, search_regcomp};
 use crate::smsg;
 use crate::types::{ColNr, ExArg, LineNr, NUL, RegMMatch, size_t};
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
@@ -81,8 +82,8 @@ unsafe fn matches_line(regmatch: *mut RegMMatch, lnum: LineNr) -> bool {
     unsafe {
         vim_regexec_multi(
             regmatch,
-            cur_win().raw(),
-            cur_buf().raw(),
+            Win::current_raw(),
+            Buf::current_raw(),
             lnum,
             0 as ColNr,
             ptr::null_mut(),
@@ -302,7 +303,7 @@ pub unsafe fn ex_global(args: *mut ExArg) {
 /// `do_cmdline`, so nothing may be cached across the loop.
 pub unsafe fn global_exe(cmd: *mut c_char) {
     // Remember what buffer we started in.
-    let old_buf = cur_buf().raw();
+    let old_buf = Buf::current_raw();
 
     // Set the current position only once for a global command.  If
     // global_busy is set, setpcmark() will not do anything.  If there is an
@@ -357,7 +358,7 @@ pub unsafe fn global_exe(cmd: *mut c_char) {
     // edge case where the buffer we are in after execution is different from
     // the one we started in.
     // SAFETY: message state; `curbuf` is live.
-    if !unsafe { do_sub_msg(false) } && cur_buf().raw() == old_buf {
+    if !unsafe { do_sub_msg(false) } && Buf::current_raw() == old_buf {
         say::more(cur_buf().b_ml.ml_line_count as c_int - old_lcount as c_int);
     }
 }

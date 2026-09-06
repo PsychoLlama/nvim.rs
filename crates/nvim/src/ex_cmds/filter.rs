@@ -20,6 +20,7 @@ use super::say;
 use super::{READ_FILTER, buf_autocmd, check_secure, kExtmarkNOOP};
 use super::{cur_buf, cur_win};
 use crate::types::AutoEvent;
+use crate::winlayer::{Buf, Win};
 
 use crate::autocmd::state::autocmd_busy;
 use crate::bufwrite::{WriteRequest, buf_write};
@@ -278,7 +279,7 @@ unsafe fn do_filter(
         return; // no filter command
     }
 
-    let old_curbuf = cur_buf().raw();
+    let old_curbuf = Buf::current_raw();
     // SAFETY: `curbuf` and `curwin` are the live current buffer and window.
     let (orig_start, orig_end, cursor_save) =
         (cur_buf().b_op_start, cur_buf().b_op_end, cur_win().w_cursor);
@@ -357,7 +358,7 @@ unsafe fn do_filter(
             // SAFETY: `args` is live and the range is the current buffer's.
             && unsafe {
                 buf_write(
-                    cur_buf().raw(),
+                    Buf::current_raw(),
                     TempFile::name(&itmp),
                     ptr::null_mut(),
                     line1,
@@ -379,7 +380,7 @@ unsafe fn do_filter(
             }
             break 'filterend;
         }
-        if cur_buf().raw() != old_curbuf {
+        if Buf::current_raw() != old_curbuf {
             break 'filterend;
         }
 
@@ -449,7 +450,7 @@ unsafe fn do_filter(
                     }
                     break 'error;
                 }
-                if cur_buf().raw() != old_curbuf {
+                if Buf::current_raw() != old_curbuf {
                     break 'filterend;
                 }
             }
@@ -546,7 +547,7 @@ unsafe fn do_filter(
     }
 
     cmdmod.with_mut(|mods| mods.cmod_flags = save_cmod_flags);
-    if cur_buf().raw() != old_curbuf {
+    if Buf::current_raw() != old_curbuf {
         // The C decrements here even on the ":w !cmd" path that already
         // did, which would take the counter below where it started; the
         // guard releases once.
@@ -837,7 +838,7 @@ pub unsafe fn print_line_no_prefix(lnum: LineNr, use_number: bool, list: bool) {
                 numbuf.as_mut_ptr(),
                 numbuf.len(),
                 c"%*d ".as_ptr(),
-                number_width(cur_win().raw()),
+                number_width(Win::current_raw()),
                 lnum,
             )
         };

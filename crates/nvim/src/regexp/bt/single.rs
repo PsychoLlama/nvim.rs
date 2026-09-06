@@ -25,7 +25,6 @@ use crate::regexp::{
     reg_getline_len, reg_match_visual, reg_nextline, reg_prev_class,
 };
 use crate::types::{FileMark, GraphemeState, LineNr, NUL, Pos, uint8_t, uint32_t, uint64_t};
-use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 
@@ -222,7 +221,7 @@ fn char_class(rex: Rex) -> c_int {
 /// `\%23v` compares against this: the screen column the cursor sits in.
 fn virtual_column(rex: Rex) -> uint32_t {
     let wp = if rex.reg_win().is_null() {
-        curwin.get()
+        Win::current_raw()
     } else {
         rex.reg_win()
     };
@@ -250,7 +249,7 @@ fn at_mark(rex: Rex, scan: *mut uint8_t) -> c_int {
     // SAFETY: `reg_buf` is the buffer being matched and `curwin` the current
     // window; `slot` is this frame's and outlives every use of `fm`.
     let buf = rex.reg_buf();
-    let win = curwin.get();
+    let win = Win::current_raw();
     let fm = unsafe { mark_get(buf, win, &raw mut slot, kMarkBufLocal, mark) };
     // `mark_get` can move the buffer's line pointers, so re-anchor.
     if rex.multi() {

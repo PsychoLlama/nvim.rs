@@ -202,10 +202,8 @@ fn insert_enter(s: &mut InsertState) {
     // `ins_redraw` triggers TextChangedI only when the typeahead buffer
     // is empty, so `b_last_changedtick` is reset here when the event was
     // not blocked by `char_avail()` (`:norm!`, say) and did fire.
-    if !key_available()
-        && cur_buf().b_last_changedtick_i == unsafe { buf_get_changedtick(Buf::new(curbuf.get())) }
-    {
-        cur_buf().b_last_changedtick = unsafe { buf_get_changedtick(Buf::new(curbuf.get())) };
+    if !key_available() && cur_buf().b_last_changedtick_i == buf_get_changedtick(cur_buf()) {
+        cur_buf().b_last_changedtick = buf_get_changedtick(cur_buf());
     }
 }
 

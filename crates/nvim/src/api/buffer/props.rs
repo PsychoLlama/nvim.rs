@@ -142,7 +142,7 @@ pub unsafe fn nvim_buf_set_name(buf: BufferHandle, name: String_0) -> Result<(),
         did_emsg: 0,
     };
     unsafe { try_enter(&raw mut tstate) };
-    let is_curbuf: bool = b == curbuf.get();
+    let is_curbuf: bool = b == Buf::current_raw();
     let save_acd: ::core::ffi::c_int = p_acd.get();
     let redraw_off = (!is_curbuf).then(Suppress::redraw);
     if !is_curbuf {

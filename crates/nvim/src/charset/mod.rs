@@ -24,6 +24,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::cstr;
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -38,7 +39,6 @@ use crate::option::vars::{breakat_flags, dy_flags, p_isf, p_isi, p_isp};
 use crate::options::kOptDyFlagUhex;
 use crate::path::path_has_wildcard;
 use crate::types::{Buffer, Failed, NUL, UVarNumber, VarNumber, uint8_t, uint64_t};
-use crate::winlayer::graph::curbuf;
 use ::libc::abort;
 
 pub mod display;
@@ -229,7 +229,7 @@ fn is_xdigit(byte: uint8_t) -> bool {
 /// # Safety
 /// The current buffer must be valid.
 pub unsafe fn init_chartab() -> bool {
-    unsafe { buf_init_chartab(curbuf.get(), true) }
+    unsafe { buf_init_chartab(Buf::current_raw(), true) }
 }
 
 /// Rebuild `buffer`'s keyword set from 'iskeyword', and — when `global` — the
@@ -484,7 +484,7 @@ pub unsafe fn vim_is_ident_char(c: c_int) -> bool {
 /// # Safety
 /// The current buffer must be valid.
 pub unsafe fn vim_iswordc(c: c_int) -> bool {
-    unsafe { vim_iswordc_buf(c, curbuf.get()) }
+    unsafe { vim_iswordc_buf(c, Buf::current_raw()) }
 }
 
 /// [`vim_iswordc`] as a safe call, for a module that holds no pointer of its
@@ -528,7 +528,7 @@ pub unsafe fn vim_iswordc_buf(c: c_int, buffer: *mut Buffer) -> bool {
 /// # Safety
 /// `p` must point into a NUL-terminated string.
 pub unsafe fn vim_iswordp(p: *const c_char) -> bool {
-    unsafe { vim_iswordp_buf(p, curbuf.get()) }
+    unsafe { vim_iswordp_buf(p, Buf::current_raw()) }
 }
 
 /// Whether the character at `p` belongs to a word in `buffer`.

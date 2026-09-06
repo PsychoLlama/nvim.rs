@@ -16,7 +16,6 @@ use crate::plines::win_linetabsize;
 use crate::pos::MAXCOL;
 use crate::regexp::{NfaState, Rex, kMarkBufLocal, reg_getline, reg_getline_len, reg_match_visual};
 use crate::types::{ColNr, FileMark, LineNr, MB_MAXBYTES, Window, uint8_t};
-use crate::winlayer::graph::curwin;
 
 use crate::winlayer::Win;
 /// The column the match has reached, in bytes from the start of the line.
@@ -33,7 +32,7 @@ fn lnum(rex: Rex) -> LineNr {
 /// The window the match runs in, for the assertions that need one.
 fn window(rex: Rex) -> *mut Window {
     match rex.reg_win() {
-        w if w.is_null() => curwin.get(),
+        w if w.is_null() => Win::current_raw(),
         w => w,
     }
 }
@@ -114,7 +113,7 @@ pub(crate) fn at_mark(rex: Rex, state: *mut NfaState) -> bool {
     let fm: *mut FileMark = unsafe {
         mark_get(
             rex.reg_buf(),
-            curwin.get(),
+            Win::current_raw(),
             &raw mut slot,
             kMarkBufLocal,
             (*state).val,

@@ -35,7 +35,7 @@ use crate::state::MODE_INSERT;
 use crate::state::mode::{State, restart_edit, stop_insert_mode};
 use crate::types::{Buffer, CmdModFlags, ColNr, Error, FAIL, LineNr, NUL};
 use crate::winlayer::graph::{
-    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, curbuf, curtab, leave_curbuf,
+    cmdwin_old_curwin, cmdwin_result, cmdwin_type, cmdwin_win, leave_curbuf,
 };
 use crate::winlayer::{Win, WinId, first_buffer, first_window, tabs};
 
@@ -278,7 +278,7 @@ pub(crate) fn close_last_tabpage_window(
     if firstwin.get() != lastwin.get() {
         return false;
     }
-    let old_curbuf = curbuf.get();
+    let old_curbuf = Buf::current_raw();
     if win
         .buffer_or_none()
         .is_some_and(|buf| !buf.terminal.is_null())
@@ -297,7 +297,7 @@ pub(crate) fn close_last_tabpage_window(
 
     // Safety check: autocommands may have switched back to the old tab page or
     // closed the window while jumping to the other one.
-    if let Some(prev) = valid_tab(prev_curtab).filter(|_| curtab.get() != prev_curtab)
+    if let Some(prev) = valid_tab(prev_curtab).filter(|_| TabPage::current_raw() != prev_curtab)
         && prev.tp_firstwin == Some(win.id())
     {
         close_othertab(win, free_buf, prev, false);
@@ -307,7 +307,7 @@ pub(crate) fn close_last_tabpage_window(
     // `goto_tab` above did not trigger *Enter autocommands: do that now.
     fire(AutoEvent::WinEnter, cur_buf());
     fire(AutoEvent::TabEnter, cur_buf());
-    if old_curbuf != curbuf.get() {
+    if old_curbuf != Buf::current_raw() {
         fire(AutoEvent::BufEnter, cur_buf());
     }
     true

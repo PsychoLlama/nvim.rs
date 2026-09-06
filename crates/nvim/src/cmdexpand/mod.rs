@@ -121,7 +121,7 @@ use crate::usercmd::{
     set_context_in_user_cmd, set_context_in_user_cmdarg,
 };
 use crate::window::{global_stl_height, last_status};
-use crate::winlayer::graph::{cmdline_win, curbuf, curwin, topframe};
+use crate::winlayer::graph::{cmdline_win, topframe};
 use crate::winlayer::{Cc, Live};
 use ::libc::{qsort, strcpy, strncpy};
 use core::ffi::{CStr, c_char, c_int};

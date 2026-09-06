@@ -359,6 +359,19 @@ impl Win {
         graph::CURRENT_WIN.get().and_then(WinId::get)
     }
 
+    /// [`Win::current_or_none`] as the pointer the C compared against: the
+    /// window's address, or null where there is none.
+    ///
+    /// The transpiled tree is full of `wp == curwin` and of callees that
+    /// still take a `*mut Window` and mean "or NULL" by it. Those are the
+    /// sites this exists for, and it retires with them: a signature that
+    /// takes `Option<Win>` wants [`Win::current_or_none`], and a body that
+    /// reads a field wants [`Win::current`].
+    #[inline]
+    pub fn current_raw() -> *mut Window {
+        Self::current_or_none().map_or(ptr::null_mut(), Self::raw)
+    }
+
     #[inline(always)]
     pub fn raw(self) -> *mut Window {
         self.0
@@ -596,6 +609,13 @@ impl Buf {
         graph::CURRENT_BUF.get().and_then(BufId::get)
     }
 
+    /// The buffer's address, or null where there is none.
+    /// [`Win::current_raw`].
+    #[inline]
+    pub fn current_raw() -> *mut Buffer {
+        Self::current_or_none().map_or(ptr::null_mut(), Self::raw)
+    }
+
     #[inline(always)]
     pub fn raw(self) -> *mut Buffer {
         self.0
@@ -776,6 +796,13 @@ impl TabPage {
     #[inline]
     pub fn current_or_none() -> Option<Self> {
         graph::CURRENT_TAB.get().and_then(TabId::get)
+    }
+
+    /// The tab page's address, or null where there is none.
+    /// [`Win::current_raw`].
+    #[inline]
+    pub fn current_raw() -> *mut Tabpage {
+        Self::current_or_none().map_or(ptr::null_mut(), Self::raw)
     }
 
     #[inline(always)]

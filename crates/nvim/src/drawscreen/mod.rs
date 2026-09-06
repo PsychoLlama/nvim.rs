@@ -122,7 +122,6 @@ use crate::window::{
     frame2win, global_stl_height, last_stl_height, min_rows, min_rows_for_all_tabpages,
     win_fdccol_count, win_new_screensize, win_ui_flush,
 };
-use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::winlayer::{self, Cc, Win};
 
 // The carve of the transpiled module; see each child's docs.
@@ -288,7 +287,7 @@ unsafe fn restore_scrolled_messages(redr_type: c_int, is_stl_global: bool) {
             }
         }
         if is_stl_global && Rows.get() as OptInt - p_ch.get() - 1 > valid as OptInt {
-            unsafe { (*curwin.get()).w_redr_status = true };
+            Win::current().w_redr_status = true;
         }
     }
 
@@ -481,7 +480,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     }
 
     if redraw_tabline.get() || redr_type >= UPD_NOT_VALID {
-        unsafe { update_window_hl(curwin.get(), redr_type >= UPD_NOT_VALID) };
+        unsafe { update_window_hl(Win::current_raw(), redr_type >= UPD_NOT_VALID) };
         for tp in winlayer::tabs() {
             if !tp.is_current() {
                 unsafe { update_window_hl(tp.tp_curwin, redr_type >= UPD_NOT_VALID) };
@@ -544,7 +543,7 @@ pub unsafe fn update_screen() -> Result<(), Failed> {
     end_search_hl();
 
     if pum_drawn() && must_redraw_pum.get() {
-        unsafe { win_check_ns_hl(curwin.get()) };
+        unsafe { win_check_ns_hl(Win::current_raw()) };
         unsafe { pum_redraw() };
     } else if State.get() & MODE_CMDLINE != 0 {
         unsafe { pum_check_clear() };
@@ -657,7 +656,7 @@ pub fn end_search_hl() {
 /// Put the terminal cursor where the cursor is in the current window.
 pub unsafe fn setcursor() {
     // SAFETY: `curwin` is the editor's current window.
-    unsafe { setcursor_mayforce(curwin.get(), false) }
+    unsafe { setcursor_mayforce(Win::current_raw(), false) }
 }
 
 /// Put the terminal cursor where the cursor is in window `window`.
@@ -706,7 +705,7 @@ pub unsafe fn compute_foldcolumn(window: *mut Window, col: c_int) -> c_int {
     // SAFETY: a live window, on the main thread.
     let window = unsafe { Win::new(window) };
     let fdc = unsafe { win_fdccol_count(window.raw()) };
-    let min_width = if window.raw() == curwin.get() && p_wmw.get() == 0 {
+    let min_width = if window.raw() == Win::current_raw() && p_wmw.get() == 0 {
         1
     } else {
         p_wmw.get() as c_int
@@ -803,7 +802,7 @@ pub unsafe fn win_cursorline_standout(window: *const Window) -> bool {
     // SAFETY: a live window, on the main thread.
     unsafe {
         (*window).w_onebuf_opt.wo_cul != 0
-            || (window == curwin.get()
+            || (window == Win::current_raw()
                 && (*window).w_onebuf_opt.wo_cole > 0
                 && !conceal_cursor_line(window))
     }

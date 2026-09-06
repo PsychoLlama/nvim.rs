@@ -107,11 +107,11 @@ pub(crate) unsafe fn load_dummy_buffer(
         unsafe { (*newbuf).b_locked -= 1 };
         if readfile_result.is_ok() && !got_int.get() && !cur_buf().b_flags.has(BufFlags::NEW) {
             failed = false;
-            if !ptr::eq(curbuf.get(), newbuf) {
+            if !ptr::eq(Buf::current_raw(), newbuf) {
                 // Bloody autocommands changed the buffer! Restore
                 // the original buffer and wipe the new one later.
                 newbuf_to_wipe = BufRef::of_opt(unsafe { Buf::from_raw(newbuf) });
-                newbuf = curbuf.get();
+                newbuf = Buf::current_raw();
             }
         }
 
@@ -177,7 +177,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: *const c_
         }
     }
 
-    if !ptr::eq(curbuf.get(), buffer.raw().cast_const()) && buffer.b_nwindows == 0 {
+    if !ptr::eq(Buf::current_raw(), buffer.raw().cast_const()) && buffer.b_nwindows == 0 {
         // Delete the buffer and its swap file. `wipe_buffer` calls
         // `close_buffer`, which may run autocommands, so a pending
         // exception or `:return` has to be parked over the call.
@@ -206,7 +206,7 @@ pub(crate) unsafe fn wipe_dummy_buffer(mut buffer: Buf, dirname_start: *const c_
 ///
 /// `dirname_start` must be NUL-terminated.
 pub(crate) unsafe fn unload_dummy_buffer(buffer: Buf, dirname_start: *const c_char) {
-    if ptr::eq(curbuf.get(), buffer.raw()) {
+    if ptr::eq(Buf::current_raw(), buffer.raw()) {
         return;
     }
     close_buffer(None, buffer, DOBUF_UNLOAD as c_int, false, true);

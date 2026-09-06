@@ -13,6 +13,7 @@
 use crate::cstr;
 use crate::message_fmt::c_str_len;
 use crate::semsg;
+use crate::winlayer::TabPage;
 use crate::winlayer::{Buf, Win};
 use core::ffi::{c_char, c_int};
 use core::mem::offset_of;
@@ -118,7 +119,7 @@ pub unsafe fn get_user_var_name(expand: *mut Expand, idx: c_int) -> *mut c_char 
     if let Some(key) = step(&wdone, unsafe { &raw const (*(*win).w_vars).dv_hashtab }) {
         return unsafe { cat_prefix_varname(b'w' as c_int, key) };
     }
-    let tvars = unsafe { &raw const (*(*curtab.get()).tp_vars).dv_hashtab };
+    let tvars = unsafe { &raw const (*TabPage::current().tp_vars).dv_hashtab };
     if let Some(key) = step(&tdone, tvars) {
         return unsafe { cat_prefix_varname(b't' as c_int, key) };
     }
@@ -249,9 +250,9 @@ pub unsafe fn find_var_in_ht(
             b's' => (unsafe { &raw mut (*script_sv(current_sctx.get().sc_sid)).sv_var }).cast(),
             b'g' => globvar_scope_item().cast(),
             b'v' => vimvar_scope_item().cast(),
-            b'b' => (unsafe { &raw mut (*curbuf.get()).b_bufvar }).cast(),
-            b'w' => (unsafe { &raw mut (*curwin.get()).w_winvar }).cast(),
-            b't' => (unsafe { &raw mut (*curtab.get()).tp_winvar }).cast(),
+            b'b' => (unsafe { &raw mut (*Buf::current_raw()).b_bufvar }).cast(),
+            b'w' => (unsafe { &raw mut (*Win::current_raw()).w_winvar }).cast(),
+            b't' => (unsafe { &raw mut (*TabPage::current_raw()).tp_winvar }).cast(),
             b'l' => unsafe { get_funccal_local_var() },
             b'a' => unsafe { get_funccal_args_var() },
             _ => ptr::null_mut(),
@@ -340,7 +341,7 @@ pub(crate) unsafe fn find_var_ht_dict(
             b'w' => *dict = cur_win().w_vars,
             // SAFETY: `curtab` is set from startup to exit, and the two
             // function-scope getters read the call stack the editor owns.
-            b't' => *dict = unsafe { (*curtab.get()).tp_vars },
+            b't' => *dict = TabPage::current().tp_vars,
             b'v' => *dict = get_vimvar_dict(),
             b'a' => *dict = unsafe { get_funccal_args_dict() },
             b'l' => *dict = unsafe { get_funccal_local_dict() },

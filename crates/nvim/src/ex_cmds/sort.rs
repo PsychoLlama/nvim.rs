@@ -42,6 +42,7 @@ use crate::types::{
     BCount, ColNr, ExArg, ExtmarkOp, Float, LineNr, NUL, RegMatch, VarNumber, size_t,
 };
 use crate::undo::u_save;
+use crate::winlayer::Buf;
 use ::libc::{strcasecmp, strcoll, strtod};
 use core::cmp::Ordering;
 use core::ffi::{c_char, c_int};
@@ -735,7 +736,7 @@ unsafe fn finish_sort(line1: LineNr, line2: LineNr, count: size_t, placed: &Plac
         // SAFETY: as above.
         unsafe {
             extmark_splice(
-                cur_buf().raw(),
+                Buf::current_raw(),
                 line1 - 1,
                 0,
                 count as c_int,

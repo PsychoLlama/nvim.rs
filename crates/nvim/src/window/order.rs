@@ -12,6 +12,7 @@
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
+use crate::winlayer::Buf;
 use core::ffi::c_int;
 use core::ptr;
 
@@ -25,7 +26,7 @@ use crate::message::{emsg, iemsg};
 use crate::normal::{reset_visual_and_resel, visual_active};
 use crate::option::vars::{p_ea, p_wh, p_wiw, p_wmh, p_wmw};
 use crate::types::{FAIL, Failed, Frame, OptInt, Window};
-use crate::winlayer::graph::{curbuf, lastwin};
+use crate::winlayer::graph::lastwin;
 use crate::winlayer::{FrameRef, Win, frames};
 
 pub unsafe fn make_windows(count: c_int, vertical: bool) -> c_int {
@@ -156,7 +157,7 @@ pub(crate) fn exchange(prenum: c_int) {
     frame_fix_width(wp);
     comp_positions();
 
-    if wp.w_buffer != curbuf.get() {
+    if wp.w_buffer != Buf::current_raw() {
         reset_visual_and_resel();
     } else if visual_active() {
         wp.w_cursor = cur.w_cursor;

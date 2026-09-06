@@ -10,6 +10,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::winlayer::Buf;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
@@ -44,7 +45,6 @@ use crate::types::{
     uint32_t,
 };
 use crate::winlayer::Win;
-use crate::winlayer::graph::{curbuf, curwin};
 
 use super::{
     HLATTRS_INIT, NO_SCREEN, didset_options_sctx, didset_window_options, get_option, get_varp,
@@ -80,7 +80,7 @@ pub(crate) fn set_options_bin(oldval: bool, newval: bool, opt_flags: OptionSetFl
     let local = !opt_flags.has(OptionSetFlags::GLOBAL);
     let global = !opt_flags.has(OptionSetFlags::LOCAL);
     // SAFETY: `curbuf` is live.
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     if newval {
         if !oldval {
             if local {
@@ -142,7 +142,7 @@ pub(crate) fn didset_options() {
     // startup sweep has none to give.
     let _ = derive_cedit_key();
     unsafe { derive_breakat_flags() };
-    unsafe { didset_window_options(curwin.get(), true) };
+    unsafe { didset_window_options(Win::current_raw(), true) };
 }
 
 /// The second startup sweep: what needs highlight groups, and the option
@@ -150,14 +150,14 @@ pub(crate) fn didset_options() {
 pub(crate) fn didset_options2() {
     // SAFETY: `curwin`/`curbuf` are live by the time this runs.
     unsafe { highlight_changed() };
-    let win = curwin.get();
+    let win = Win::current_raw();
     let no_err = ptr::null_mut::<c_char>();
     let fcs = unsafe { (*win).w_onebuf_opt.wo_fcs };
     unsafe { set_chars_option(win, fcs, kFillchars, true, no_err, 0) };
     let lcs = unsafe { (*win).w_onebuf_opt.wo_lcs };
     unsafe { set_chars_option(win, lcs, kListchars, true, no_err, 0) };
     let _ = unsafe { check_opt_wim() };
-    let buf = curbuf.get();
+    let buf = Buf::current_raw();
     unsafe { xfree((*buf).b_p_vsts_array.cast::<c_void>()) };
     unsafe { tabstop_set((*buf).b_p_vsts, &raw mut (*buf).b_p_vsts_array) };
     unsafe { xfree((*buf).b_p_vts_array.cast::<c_void>()) };
@@ -444,7 +444,7 @@ pub(crate) unsafe fn check_redraw_for(buffer: *mut Buffer, win: *mut Window, fla
 /// [`check_redraw_for`] for the current buffer and window.
 pub(crate) fn check_redraw(flags: uint32_t) {
     // SAFETY: `curbuf`/`curwin` are live.
-    unsafe { check_redraw_for(curbuf.get(), curwin.get(), flags) }
+    unsafe { check_redraw_for(Buf::current_raw(), Win::current_raw(), flags) }
 }
 
 /// The window the editor is working in.

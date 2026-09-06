@@ -107,7 +107,7 @@ pub(crate) fn ins_del() {
 /// line break without `eol`.  All of it is off in 'revins'.
 fn bs_blocked() -> bool {
     // SAFETY: `curbuf` is live for the whole session.
-    if unsafe { buf_is_empty(curbuf.get()) } {
+    if unsafe { buf_is_empty(Buf::current_raw()) } {
         return true;
     }
     if revins_on.get() {
@@ -305,7 +305,7 @@ fn bs_join_line() -> bool {
         // With `aw` in 'formatoptions' the space at the end of the line
         // has to go too, or auto-formatting would break the line again.
         if has_format_option(FoFlag::AUTO) && has_format_option(FoFlag::WHITE_PAR) {
-            let ptr = unsafe { ml_get_buf(curbuf.get(), cur_win().w_cursor.lnum) };
+            let ptr = unsafe { ml_get_buf(Buf::current_raw(), cur_win().w_cursor.lnum) };
             let len = get_cursor_line_len();
             // SAFETY: `ptr` is that line and `len` its length, so its last
             // byte is in bounds, and `xmemdupz` copies that many bytes.
@@ -382,7 +382,7 @@ fn bs_one_shiftwidth(in_indent: bool) {
     // The virtual column to end up at.
     let mut want_vcol = if vcol > 0 { vcol - 1 } else { 0 };
     if p_sta.get() != 0 && in_indent {
-        want_vcol -= want_vcol % unsafe { get_sw_value(curbuf.get()) };
+        want_vcol -= want_vcol % unsafe { get_sw_value(Buf::current_raw()) };
     } else {
         let sts = unsafe { get_sts_value() };
         want_vcol = unsafe { tabstop_start(want_vcol, sts, cur_buf().b_p_vsts_array) };
@@ -565,7 +565,7 @@ fn cursor_char_class() -> c_int {
 #[inline(always)]
 fn charsize_at(use_ts: bool, vcol: ColNr, sci: StrCharInfo) -> c_int {
     // SAFETY: `sci` names a character of a live line of `curbuf`.
-    unsafe { charsize_nowrap(Buf::new(curbuf.get()), sci.ptr, use_ts, vcol, sci.chr.value) }
+    unsafe { charsize_nowrap(cur_buf(), sci.ptr, use_ts, vcol, sci.chr.value) }
 }
 
 /// The buffer the editor is working in.

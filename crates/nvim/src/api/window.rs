@@ -18,6 +18,7 @@ use crate::cursor::check_cursor_col;
 use crate::drawscreen::{UPD_NOT_VALID, UPD_VALID};
 use crate::eval::window::{restore_win, switch_win, win_execute_after, win_execute_before};
 use crate::ex_docmd::ex_win_close;
+use crate::winlayer::TabPage;
 
 use crate::api::private::validate::{Bad, err_expected, err_invalid, err_out_of_range};
 use crate::lua::executor::{kRetLuaref, nlua_call_ref};
@@ -38,7 +39,7 @@ use crate::window::{
     win_set_buf, win_setheight_win, win_setwidth_win,
 };
 use crate::winlayer::Win;
-use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win, curtab};
+use crate::winlayer::graph::{cmdwin_buf, cmdwin_old_curwin, cmdwin_win};
 use core::ptr;
 
 /// The buffer `win` is showing.
@@ -296,7 +297,7 @@ pub fn nvim_win_hide(win: WindowHandle) -> Result<(), Error> {
     let tabpage = win_find_tabpage(w.raw());
     let refused = e_autocmd_close.as_ptr();
     let is_aucmd = is_aucmd_win(w.raw());
-    let same_tab = tabpage == curtab.get();
+    let same_tab = tabpage == TabPage::current_raw();
     api_try(&mut err, |_| {
         if is_aucmd {
             // SAFETY: `e_autocmd_close` is a static message.
@@ -325,7 +326,7 @@ pub fn nvim_win_close(win: WindowHandle, force: Boolean) -> Result<(), Error> {
     let tabpage = win_find_tabpage(w.raw());
     // `ex_win_close` reads a null tab page as "the current one", which is the
     // only case where it may close the window the user is in.
-    let other_tab = if tabpage == curtab.get() {
+    let other_tab = if tabpage == TabPage::current_raw() {
         ptr::null_mut::<Tabpage>()
     } else {
         tabpage

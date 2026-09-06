@@ -104,7 +104,6 @@ use crate::undo::{u_save, u_sync};
 use crate::window::{
     WSP_VERT, frames_locked, scroll_to_fraction, set_fraction, win_split, win_valid,
 };
-use crate::winlayer::graph::{curbuf, curtab, curwin};
 use crate::xdiff::ffi::xdl_diff;
 use crate::xdiff::xtypes::{
     XDF_HISTOGRAM_DIFF, XDF_IGNORE_BLANK_LINES, XDF_IGNORE_WHITESPACE,

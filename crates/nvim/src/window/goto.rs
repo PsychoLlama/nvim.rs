@@ -42,7 +42,7 @@ use crate::types::{
     kCdScopeWindow,
 };
 use crate::undo::u_sync;
-use crate::winlayer::graph::{curbuf, curwin, prevwin};
+use crate::winlayer::graph::prevwin;
 use crate::winlayer::{first_window, frames, tabs, windows_in_tab};
 
 pub unsafe fn win_goto(window: *mut Window) {
@@ -60,7 +60,7 @@ pub(crate) fn goto_win(window: Win) {
         return;
     }
 
-    if window.w_buffer != curbuf.get() {
+    if window.w_buffer != Buf::current_raw() {
         // careful: triggers ModeChanged autocommand
         reset_visual_and_resel();
     } else if visual_active() {
@@ -283,7 +283,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
     if !curwin_invalid && flags & WEE_TRIGGER_LEAVE_AUTOCMDS as c_int != 0 {
         // Be careful: if autocommands delete the window, return now.
-        if window.w_buffer != curbuf.get() {
+        if window.w_buffer != Buf::current_raw() {
             fire(AutoEvent::BufLeave, cur_buf());
             other_buffer = true;
             if valid_win(window.raw()).is_none() {
@@ -301,7 +301,7 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
     }
 
     // sync undo before leaving the current buffer
-    if flags & WEE_UNDO_SYNC as c_int != 0 && curbuf.get() != window.w_buffer {
+    if flags & WEE_UNDO_SYNC as c_int != 0 && Buf::current_raw() != window.w_buffer {
         // SAFETY: reads the current buffer's undo state.
         u_sync(false);
     }
@@ -311,13 +311,13 @@ pub(crate) fn enter_ext(window: Win, flags: c_int) {
         update_topline(Win::current());
     }
     // may have to copy the buffer options when 'cpo' contains 'S'
-    if window.w_buffer != curbuf.get() {
+    if window.w_buffer != Buf::current_raw() {
         let (buf, flags) = (window.w_buffer, BCO_ENTER as c_int | BCO_NOHELP as c_int);
         // SAFETY: a live window's buffer.
         unsafe { buf_copy_options(buf, flags) };
     }
     if !curwin_invalid {
-        prevwin.set(curwin.get()); // remember for CTRL-W p
+        prevwin.set(Win::current_raw()); // remember for CTRL-W p
         cur_win().w_redr_status = true;
     }
     window.make_current();

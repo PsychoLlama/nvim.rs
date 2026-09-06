@@ -192,7 +192,7 @@ use crate::ui::{ui_cursor_shape, ui_flush, ui_has, vim_beep};
 use crate::undo::u_sync_once;
 use crate::undo::{u_clearallandblockfree, u_save, u_save_cursor, u_sync};
 use crate::window::{goto_tabpage, may_trigger_win_scrolled_resized};
-use crate::winlayer::graph::{cmdwin_result, cmdwin_type, curbuf, curwin};
+use crate::winlayer::graph::{cmdwin_result, cmdwin_type};
 
 // The carve of the transpiled module; see each child's docs.
 mod bs;

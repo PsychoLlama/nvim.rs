@@ -11,6 +11,7 @@
 use super::*;
 use crate::cstr;
 use crate::grid::{default_grid_ref, default_gridview};
+use crate::winlayer::Win;
 use core::ffi::{c_char, c_int, c_uint};
 use core::ptr;
 
@@ -65,7 +66,7 @@ pub(crate) unsafe fn ui_ext_msg_set_pos(row: c_int, scrolled: bool) {
     // reads; `schar_get` writes at most `MAX_SCHAR_SIZE` bytes plus a NUL.
     // `sep` outlives the call below, which copies the separator out.
     let sep = unsafe {
-        let size = schar_get(sep.as_mut_ptr(), (*curwin.get()).w_p_fcs_chars.msgsep);
+        let size = schar_get(sep.as_mut_ptr(), Win::current().w_p_fcs_chars.msgsep);
         String_0::from_raw_parts(sep.as_mut_ptr(), size)
     };
     ui_call_msg_set_pos(

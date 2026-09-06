@@ -376,7 +376,7 @@ pub unsafe fn op_yank_reg(op: *mut OpArg, message: bool, mut reg: *mut YankReg, 
             // SAFETY: the mark is a position in the current buffer, and the
             // borrow is taken through the root because `dec` reads `curbuf`
             // itself -- handing it a borrow of the whole `Buffer` would alias.
-            unsafe { decl(&mut (*curbuf.get()).b_op_end) };
+            unsafe { decl(&mut (*Buf::current_raw()).b_op_end) };
         }
     }
 }
@@ -490,7 +490,8 @@ pub unsafe fn do_autocmd_textyankpost(op: *mut OpArg, reg: *mut YankReg) {
     let none = ::core::ptr::null_mut();
     // SAFETY: main thread, with a current buffer; null pattern and file name
     // ask for the event's own defaults.
-    unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, curbuf.get()) };
+    let buffer = Buf::current_raw();
+    unsafe { apply_autocmds(AutoEvent::TextYankPost, none, none, false, buffer) };
     drop(locked);
 
     // SAFETY: `save_v_event` is the one `get_v_event` was given.

@@ -133,7 +133,7 @@ use crate::window::{
     check_can_set_curbuf_forceit, check_lnums, goto_tabpage_win, win_close, win_enter, win_goto,
     win_setheight, win_split, win_valid,
 };
-use crate::winlayer::graph::{curbuf, curtab, curwin, firstwin, lastwin, prevwin};
+use crate::winlayer::graph::{firstwin, lastwin, prevwin};
 use ::libc::{__errno_location, abort, abs, atoi, atol, fclose, fdopen, ferror, fgets, time};
 use core::ffi::{CStr, c_char, c_int, c_uint};
 

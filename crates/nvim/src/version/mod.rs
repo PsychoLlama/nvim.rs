@@ -9,6 +9,7 @@
 
 mod vim_patches;
 
+use crate::winlayer::{Buf, Win};
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
@@ -38,7 +39,7 @@ use crate::ui::state::{Columns, Rows};
 use crate::ui::ui_has;
 use crate::window::{LOWEST_WIN_ID, one_window};
 use crate::winlayer::first_window;
-use crate::winlayer::graph::{curbuf, curwin, topframe};
+use crate::winlayer::graph::topframe;
 
 pub(crate) const NVIM_VERSION_MAJOR: c_int = 0;
 pub(crate) const NVIM_VERSION_MINOR: c_int = 12;
@@ -388,12 +389,12 @@ pub(crate) unsafe fn list_version() {
 pub(crate) unsafe fn may_show_intro() -> bool {
     // SAFETY: the caller's obligation -- the globals are live, so each of
     // these reads a live buffer or window.
-    let empty = unsafe { buf_is_empty(curbuf.get()) };
+    let empty = unsafe { buf_is_empty(Buf::current_raw()) };
     empty
-        && unsafe { (*curbuf.get()).b_fname }.is_null()
-        && unsafe { (*curbuf.get()).handle } == 1
-        && unsafe { (*curwin.get()).handle } == LOWEST_WIN_ID as c_int
-        && unsafe { one_window(curwin.get(), ptr::null_mut::<Tabpage>()) }
+        && Buf::current().b_fname.is_null()
+        && Buf::current().handle == 1
+        && Win::current().handle == LOWEST_WIN_ID as c_int
+        && unsafe { one_window(Win::current_raw(), ptr::null_mut::<Tabpage>()) }
         && !ShmFlag::INTRO.is_in(unsafe { CStr::from_ptr(p_shm.get()) })
 }
 

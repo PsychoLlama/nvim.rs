@@ -33,6 +33,7 @@
 // The globals here keep upstream's spelling; upper-casing them is a per-module rewrite.
 #![allow(non_upper_case_globals)]
 
+use crate::winlayer::Buf;
 use core::ffi::{c_char, c_int};
 
 pub mod arith;
@@ -68,7 +69,7 @@ use crate::types::{ColNr, CpoFlag, LineNr, MotionType, NUL, WLine, Window, int64
 use crate::window::win_fdccol_count;
 use crate::winfloat::win_check_anchored_floats;
 use crate::winlayer::Win;
-use crate::winlayer::graph::{cmdwin_win, curbuf};
+use crate::winlayer::graph::cmdwin_win;
 
 pub const kMTCharWise: MotionType = 0;
 
@@ -412,9 +413,9 @@ fn redraw_for_cursorcolumn(win: Win) {
         win.redraw_later(UPD_VALID);
     }
     // The current buffer's cursor moving in Visual mode changes the highlight.
-    if visual_active() && win.w_buffer == curbuf.get() {
+    if visual_active() && win.w_buffer == Buf::current_raw() {
         // SAFETY: `curbuf` is set from startup to exit.
-        unsafe { redraw_buf_later(curbuf.get(), UPD_INVERTED) };
+        unsafe { redraw_buf_later(Buf::current_raw(), UPD_INVERTED) };
     }
 }
 

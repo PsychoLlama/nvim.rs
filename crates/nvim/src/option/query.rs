@@ -38,7 +38,6 @@ use crate::types::{
     BsFlag, Callback, CpoFlag, Dict, ExArg, Failed, NUL, OptInt, OptVal, OptionSetFlags, ScriptId,
     ShmFlag, TypVal, VAR_STRING, int64_t, size_t, uint8_t,
 };
-use crate::winlayer::graph::curbuf;
 
 use super::{
     EOL_DOS, EOL_MAC, EOL_UNIX, FORCE_BIN, get_option, get_varp, kOptScopeBuf, kOptScopeWin,
@@ -346,7 +345,7 @@ pub(crate) fn set_fileformat(eol_style: c_int, opt_flags: OptionSetFlags) {
             0 as ScriptId,
         );
     }
-    unsafe { redraw_buf_status_later(curbuf.get()) };
+    unsafe { redraw_buf_status_later(Buf::current_raw()) };
     redraw_tabline.set(true);
     need_maketitle.set(true);
 }

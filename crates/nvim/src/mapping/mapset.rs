@@ -165,7 +165,7 @@ pub unsafe fn f_mapset(args: *mut TypVal, _result: *mut TypVal, _fptr: EvalFuncD
     // SAFETY: `curbuf` is set from startup to exit; `&raw` reads nothing, and
     // both addresses come off the one cell pointer rather than off a `&mut`.
     let (buf_maps, buf_abbrs) = unsafe {
-        let cur = curbuf.get();
+        let cur = Buf::current_raw();
         (
             (&raw mut (*cur).b_maphash).cast::<*mut MapBlock>(),
             &raw mut (*cur).b_first_abbr,

@@ -30,7 +30,7 @@ pub(crate) fn trigger_cmd_autocmd(typechar: ::core::ffi::c_int, evt: AutoEvent) 
 pub(crate) fn cmdline_autocmd(evt: AutoEvent, fname: *mut ::core::ffi::c_char) -> bool {
     // SAFETY: `fname` is a live NUL-terminated string of the caller's frame,
     // and `curbuf` is a live buffer.
-    unsafe { apply_autocmds(evt, fname, fname, false, curbuf.get()) }
+    unsafe { apply_autocmds(evt, fname, fname, false, Buf::current_raw()) }
 }
 
 /// Record everything about `window`'s view that an incremental search may scroll.
@@ -461,7 +461,7 @@ pub(crate) unsafe fn may_do_incsearch_highlighting(
         cur_win().w_redr_status = true;
     }
 
-    unsafe { redraw_later(curwin.get(), UPD_SOME_VALID) };
+    unsafe { redraw_later(Win::current_raw(), UPD_SOME_VALID) };
     let _ = unsafe { update_screen() };
     highlight_match.set(false);
     restore_last_search_pattern();
@@ -716,7 +716,7 @@ pub(crate) unsafe fn may_do_command_line_next_incsearch(
         validate_curwin_cursor();
         highlight_match.set(true);
         s.old_viewstate = save_viewstate(cur_win());
-        unsafe { redraw_later(curwin.get(), UPD_NOT_VALID) };
+        unsafe { redraw_later(Win::current_raw(), UPD_NOT_VALID) };
         let _ = unsafe { update_screen() };
         highlight_match.set(false);
         unsafe { redrawcmdline() };

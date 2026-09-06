@@ -28,7 +28,7 @@ use crate::highlight::state::{normal_bg, normal_fg, normal_sp};
 use crate::highlight_group::highlight_changed;
 use crate::option::vars::p_bg;
 use crate::types::{HlAttrs, HlEntry, RgbValue, int16_t};
-use crate::winlayer::graph::curwin;
+use crate::winlayer::Win;
 use core::ffi::c_int;
 
 /// Blends of a blank cell over another, by `(back, front)`.
@@ -52,7 +52,7 @@ pub unsafe fn hl_invalidate_blends() {
     clear_caches();
     // SAFETY: the editor's own globals.
     unsafe { highlight_changed() };
-    unsafe { update_window_hl(curwin.get(), true) };
+    unsafe { update_window_hl(Win::current_raw(), true) };
 }
 
 /// The attribute set `front_attr` blended over `back_attr`.

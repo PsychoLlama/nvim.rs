@@ -57,7 +57,6 @@ use crate::types::{
 use crate::ui::state::Columns;
 use crate::ui::{ui_call_set_icon, ui_call_set_title, ui_has};
 use crate::undo::{buf_is_changed, curbuf_is_changed, undo_fmt_time};
-use crate::winlayer::graph::curbuf;
 use crate::winlayer::{Buf, Win, buffers, first_buffer};
 use ::libc::{qsort, strcpy};
 
@@ -237,8 +236,8 @@ fn skip(buffer: Buf, arg: *const c_char, forceit: c_int) -> bool {
         || has_flag(arg, b'-') && buffer.b_p_ma != 0
         || has_flag(arg, b'=') && buffer.b_p_ro == 0
         || has_flag(arg, b'x') && !buffer.b_flags.has(BufFlags::READERR)
-        || has_flag(arg, b'%') && buffer.raw() != curbuf.get()
-        || has_flag(arg, b'#') && (buffer.raw() == curbuf.get() || alt_fnum != buffer.handle)
+        || has_flag(arg, b'%') && buffer.raw() != Buf::current_raw()
+        || has_flag(arg, b'#') && (buffer.raw() == Buf::current_raw() || alt_fnum != buffer.handle)
 }
 
 /// Put the name to show for `buffer` into `name`.
@@ -281,7 +280,7 @@ fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
     }
 
     let listed = if buffer.b_p_bl != 0 { b' ' } else { b'u' };
-    let current = if buffer.raw() == curbuf.get() {
+    let current = if buffer.raw() == Buf::current_raw() {
         b'%'
     } else if current_win().w_alt_fnum == buffer.handle {
         b'#'
@@ -295,7 +294,7 @@ fn show(buffer: Buf, by_time: bool, name: &[c_char; MAXPATHL as usize]) {
     } else {
         b'a'
     };
-    let lnum = if buffer.raw() == curbuf.get() {
+    let lnum = if buffer.raw() == Buf::current_raw() {
         current_win().w_cursor.lnum
     } else {
         remembered_lnum(buffer)
