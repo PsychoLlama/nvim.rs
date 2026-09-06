@@ -146,8 +146,10 @@ impl SavedBufferState {
     /// The all-zero state the two halves below start from — `AcoSave`'s
     /// own initial value, which `aucmd_prepbuf` overwrites in full.
     fn new() -> Self {
-        // SAFETY: every field is a raw pointer, an integer or a `bool`, for
-        // all of which all-zero is a valid value.
+        // SAFETY: every field is a raw pointer, an integer, a `bool` or a
+        // `Win` (one pointer), for all of which all-zero is a valid value.
+        // A null `Win` names no window and `prepare` overwrites it before
+        // anything reads it, exactly as the raw pointer it replaced was.
         unsafe { mem::zeroed() }
     }
 
